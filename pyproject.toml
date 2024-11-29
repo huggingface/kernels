@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "kernels"
+version = "0.1.0"
+description = ""
+authors = ["OlivierDehaene <olivier@huggingface.co>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+huggingface-hub = "^0.26.3"
+packaging = "^24.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

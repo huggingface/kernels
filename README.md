@@ -1,5 +1,7 @@
 # kernels
 
+Make sure you have `torch==2.5.1+cu124` installed.
+
 ```python
 import torch
 

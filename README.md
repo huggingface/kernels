@@ -8,12 +8,14 @@ import torch
 from kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
-layer_norm_kernels = get_kernel("kernels-community/layer-norm")
+activation = get_kernel("kernels-community/activation")
 
-# Initialize torch Module
-optimized_layer_norm_layer = layer_norm_kernels.DropoutAddLayerNorm(128).cuda()
+# Random tensor
+x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
 
-# Forward
-x = torch.randn(128).cuda()
-print(optimized_layer_norm_layer(x))
+# Run the kernel
+y = torch.empty_like(x)
+activation.gelu_fast(y, x)
+
+print(y)
 ```

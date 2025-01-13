@@ -1,0 +1,99 @@
+name: CUDA Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-cuda-linux:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04]
+        cuda-version: ["11.8.0", "12.1.0", "12.4.0"]
+        torch-version: ["2.0.0", "2.1.0", "2.2.0", "2.5.0"]
+        exclude:
+          # exclude incompatible CUDA/PyTorch combinations
+          - cuda-version: "12.4.0"
+            torch-version: "2.0.0"
+          - cuda-version: "12.4.0"
+            torch-version: "2.1.0"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Setup CUDA
+        uses: Jimver/cuda-toolkit@v0.2.14
+        with:
+          cuda: ${{ matrix.cuda-version }}
+          method: "network"
+          sub-packages: '["nvcc"]'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Create virtual environment and install dependencies
+        run: |
+          uv init
+          uv pip install torch==${{ matrix.torch-version }} --index-url https://download.pytorch.org/whl/cu${CUDA_VERSION/./}
+          uv pip install -e kernels/
+
+      - name: Run tests
+        run: |
+          nvidia-smi
+          uv run examples/basic.py
+
+  # test-cuda-windows:
+  #   runs-on: windows-latest
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       cuda-version: ["11.8.0", "12.1.0"]
+  #       torch-version: ["2.0.0", "2.1.0"]
+
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         lfs: true
+
+  #     - name: Setup Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.10"
+
+  #     - name: Setup CUDA
+  #       uses: Jimver/cuda-toolkit@v0.2.14
+  #       with:
+  #         cuda: ${{ matrix.cuda-version }}
+  #         method: "network"
+  #         sub-packages: '["nvcc"]'
+
+  #     - name: Install uv
+  #       shell: bash
+  #       run: |
+  #         curl -LsSf https://astral.sh/uv/install.sh | sh
+  #         echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+  #     - name: Create virtual environment and install dependencies
+  #       run: |
+  #         uv init
+  #         uv pip install torch==${{ matrix.torch-version }} --index-url https://download.pytorch.org/whl/cu${CUDA_VERSION/./}
+  #         uv pip install -e kernels/
+
+  #     - name: Run tests
+  #       run: |
+  #         nvidia-smi
+  #         uv run examples/basic.py

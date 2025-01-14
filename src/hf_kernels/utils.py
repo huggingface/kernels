@@ -32,10 +32,11 @@ def import_from_path(module_name: str, file_path):
 
 
 def install_kernel(repo_id: str, revision: str):
+    package_name = get_metadata(repo_id)["torch"]["name"]
     repo_path = snapshot_download(
         repo_id, allow_patterns=f"build/{build_variant()}/*", revision=revision
     )
-    return f"{repo_path}/build/{build_variant()}"
+    return package_name, f"{repo_path}/build/{build_variant()}"
 
 
 def get_metadata(repo_id: str):
@@ -44,8 +45,7 @@ def get_metadata(repo_id: str):
 
 
 def get_kernel(repo_id: str, revision: str = "main"):
-    package_name = get_metadata(repo_id)["torch"]["name"]
-    package_path = install_kernel(repo_id, revision=revision)
+    package_name, package_path = install_kernel(repo_id, revision=revision)
     return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")
 
 

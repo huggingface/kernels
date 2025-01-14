@@ -22,8 +22,8 @@ jobs:
       packages: write
     strategy:
       matrix:
-        ubuntu: ['18.04', '20.04']
-        cuda: ['11.8', '12.1.0', '12.2.0', '12.4.0', '12.6.0']
+        ubuntu: ['18.04', '20.04', '22.04']
+        cuda: ['11.8.0', '12.1.0', '12.2.0', '12.4.0', '12.6.0']
         torch: ['2.4.0', '2.5.0']
         exclude:
           # exclude cuda 12+ for ubuntu 18.04

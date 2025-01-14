@@ -5,11 +5,16 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened] # trigger on PRs
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build and Push Docker Image to ECR
+    name: Build and Test Docker Image
     runs-on:
       group: aws-g6-12xlarge-plus
     permissions:
@@ -40,5 +45,11 @@ jobs:
             CUDA_VERSION=${{ matrix.cuda }}
             TORCH_VERSION=${{ matrix.torch }}
           push: false
+          load: true
+          tags: kernels:${{ matrix.cuda }}-${{ matrix.torch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Run Tests
+        run: |
+          docker run --gpus all kernels:${{ matrix.cuda }}-${{ matrix.torch }}

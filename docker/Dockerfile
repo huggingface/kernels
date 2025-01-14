@@ -60,7 +60,7 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
     fi
 
 # add pytest for runtime tests
-RUN uv add pytest
+RUN uv add pytest pytest-benchmark
 
 # Copy application files
 COPY kernels ./kernels/kernels
@@ -72,5 +72,5 @@ COPY tests ./tests
 # Install the kernel library
 RUN uv pip install -e kernels
 
-# Set default command
-CMD [".venv/bin/pytest", "tests"]
+# Run tests and benchmarks
+CMD [".venv/bin/pytest", "tests", "-v"] 

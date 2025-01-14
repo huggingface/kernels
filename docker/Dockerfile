@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 ARG CUDA_VERSION=12.4.0
-ARG UBUNTU_VERSION=22.04
+ARG UBUNTU_VERSION=20.04
 ARG TORCH_VERSION=2.5.0
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} as base

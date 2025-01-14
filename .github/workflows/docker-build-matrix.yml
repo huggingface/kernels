@@ -22,12 +22,19 @@ jobs:
       packages: write
     strategy:
       matrix:
-        cuda: ['12.1.0', '12.2.0', '12.4.0', '12.6.0']
+        ubuntu: ['18.04', '20.04']
+        cuda: ['11.8', '12.1.0', '12.2.0', '12.4.0', '12.6.0']
         torch: ['2.4.0', '2.5.0']
         exclude:
-          # add any incompatible combinations here if needed
-          - cuda: '12.99.0' # dummy value so exclude is not empty
-            torch: '2.99.0'
+          # exclude cuda 12+ for ubuntu 18.04
+          - ubuntu: '18.04'
+            cuda: '12.1.0'
+          - ubuntu: '18.04'
+            cuda: '12.2.0'
+          - ubuntu: '18.04'
+            cuda: '12.4.0'
+          - ubuntu: '18.04'
+            cuda: '12.6.0'
 
     steps:
       - name: Checkout code
@@ -43,6 +50,7 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/amd64
           build-args: |
+            UBUNTU_VERSION=${{ matrix.ubuntu }}
             CUDA_VERSION=${{ matrix.cuda }}
             TORCH_VERSION=${{ matrix.torch }}
           push: false

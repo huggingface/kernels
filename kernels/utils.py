@@ -16,7 +16,7 @@ def build_variant():
     torch_version = parse(torch.__version__)
     cuda_version = parse(torch.version.cuda)
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
-    cpu = platform.processor()
+    cpu = platform.machine()
     os = platform.system().lower()
 
     return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-cu{cuda_version.major}{cuda_version.minor}-{cpu}-{os}"

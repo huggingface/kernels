@@ -45,6 +45,7 @@ ARG TORCH_VERSION
 
 RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
     case ${CUDA_MAJOR_MINOR} in \
+    "11.8") CUDA_TAG="cu118" ;; \
     "12.1") CUDA_TAG="cu121" ;; \
     "12.2") CUDA_TAG="cu122" ;; \
     "12.4") CUDA_TAG="cu124" ;; \

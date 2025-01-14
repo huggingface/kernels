@@ -1,0 +1,44 @@
+name: Docker Build Matrix
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Push Docker Image to ECR
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        cuda: ['12.1.0', '12.2.0', '12.4.0', '12.6.0']
+        torch: ['2.4.0', '2.5.0']
+        exclude:
+          # add any incompatible combinations here if needed
+          # - cuda: '12.99.0'
+          #   torch: '2.99.0'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          build-args: |
+            CUDA_VERSION=${{ matrix.cuda }}
+            TORCH_VERSION=${{ matrix.torch }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

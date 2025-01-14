@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.4
 ARG CUDA_VERSION=12.4.0
 ARG UBUNTU_VERSION=22.04
+ARG TORCH_VERSION=2.5.0
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} as base
 
@@ -27,25 +28,36 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Set working directory
 WORKDIR /app
 
-# Create a stage for each PyTorch version we want to test
-FROM base as torch-2.0.0
-ARG TORCH_VERSION=2.0.0
-RUN uv pip install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cu$(echo $CUDA_VERSION | cut -d'.' -f1,2 | tr -d '.')
+# Initialize uv and create virtual env
+RUN uv init --app kernel-test
 
-FROM base as torch-2.1.0
-ARG TORCH_VERSION=2.1.0
-RUN uv pip install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cu$(echo $CUDA_VERSION | cut -d'.' -f1,2 | tr -d '.')
+# Move into the app
+WORKDIR /app/kernel-test
 
-FROM base as torch-2.2.0
-ARG TORCH_VERSION=2.2.0
-RUN uv pip install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cu$(echo $CUDA_VERSION | cut -d'.' -f1,2 | tr -d '.')
+# Need to re-declare ARG after FROM for use in RUN
+ARG CUDA_VERSION
+ARG TORCH_VERSION
 
-FROM base as torch-2.5.0
-ARG TORCH_VERSION=2.5.0
-RUN uv pip install torch==${TORCH_VERSION} --index-url https://download.pytorch.org/whl/cu$(echo $CUDA_VERSION | cut -d'.' -f1,2 | tr -d '.')
+# Install PyTorch with the appropriate CUDA version
 
-# Final stage - choose your PyTorch version
-FROM torch-${TORCH_VERSION:-2.5.0}
+# NOTE: `markupsafe` must be installed first to avoid a conflict with the torch package. 
+# See: https://github.com/astral-sh/uv/issues/9647
+
+RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
+    case ${CUDA_MAJOR_MINOR} in \
+    "12.1") CUDA_TAG="cu121" ;; \
+    "12.2") CUDA_TAG="cu122" ;; \
+    "12.4") CUDA_TAG="cu124" ;; \
+    *) CUDA_TAG="" ;; \
+    esac && \
+    if [ -n "${CUDA_TAG}" ]; then \
+    echo "Installing PyTorch ${TORCH_VERSION} with CUDA ${CUDA_TAG}" && \
+    uv add markupsafe --default-index "https://pypi.org/simple" && \
+    uv add "torch==${TORCH_VERSION}" --index-url "https://download.pytorch.org/whl/${CUDA_TAG}"; \
+    else \
+    echo "Installing PyTorch ${TORCH_VERSION} without CUDA-specific index" && \
+    uv add "torch==${TORCH_VERSION}"; \
+    fi
 
 # Copy application files
 COPY kernels ./kernels/kernels

@@ -30,7 +30,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 WORKDIR /app
 
 # Initialize uv and create virtual env
-RUN uv init --app kernel-test --python ${PYTHON_VERSION}
+RUN uv init --app kernel-test --python "${PYTHON_VERSION}"
 
 # Move into the app
 WORKDIR /app/kernel-test

@@ -60,11 +60,12 @@ jobs:
             CUDA_VERSION=${{ matrix.cuda }}
             TORCH_VERSION=${{ matrix.torch }}
           push: false
-          load: true
+          load: false # should push instead of load
           tags: kernels:${{ matrix.cuda }}-${{ matrix.torch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Tests
-        run: |
-          docker run --gpus all kernels:${{ matrix.cuda }}-${{ matrix.torch }}
+      # TODO: re enable after pushing the images to a registry
+      # - name: Run Tests
+      #   run: |
+      #     docker run --gpus all kernels:${{ matrix.cuda }}-${{ matrix.torch }}

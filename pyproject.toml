@@ -1,17 +1,26 @@
-[tool.poetry]
-name = "kernels"
+[project]
+name = "hf-kernels"
 version = "0.1.0"
-description = ""
-authors = ["OlivierDehaene <olivier@huggingface.co>"]
+description = "Download cuda kernels"
+authors = [
+    {name = "OlivierDehaene", email = "olivier@huggingface.co"},
+    {name = "Daniel de Kok", email = "daniel@huggingface.co"},
+    {name = "David Holtz", email = "david@huggingface.co"},
+    {name = "Nicolas Patry", email = "nicolas@huggingface.co"}
+]
 readme = "README.md"
 
-[tool.poetry.dependencies]
+[dependencies]
 python = "^3.9"
 huggingface-hub = "^0.26.3"
 packaging = "^24.2"
 tomli = { version = "^2.0.1", python = "<3.11" }
 
+[tool.kernels.dependencies]
+"kernels-community/activation" = "^0.0.1"
+
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["torch", "huggingface_hub", "numpy"]
+build-backend = "hf_kernels.build"
+backend-path = ["src"]

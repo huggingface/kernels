@@ -59,14 +59,18 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
     uv add "torch==${TORCH_VERSION}"; \
     fi
 
+# add pytest for runtime tests
+RUN uv add pytest
+
 # Copy application files
 COPY kernels ./kernels/kernels
 COPY pyproject.toml ./kernels/pyproject.toml
 COPY README.md ./kernels/README.md
 COPY examples ./examples
+COPY tests ./tests
 
 # Install the kernel library
 RUN uv pip install -e kernels
 
 # Set default command
-CMD ["uv", "run", "examples/basic.py"]
+CMD [".venv/bin/pytest", "tests"]

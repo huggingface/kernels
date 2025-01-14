@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.4
+ARG PYTHON_VERSION=3.10
 ARG CUDA_VERSION=12.4.0
 ARG UBUNTU_VERSION=20.04
 ARG TORCH_VERSION=2.5.0
@@ -29,7 +30,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 WORKDIR /app
 
 # Initialize uv and create virtual env
-RUN uv init --app kernel-test
+RUN uv init --app kernel-test --python ${PYTHON_VERSION}
 
 # Move into the app
 WORKDIR /app/kernel-test

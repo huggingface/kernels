@@ -26,8 +26,8 @@ jobs:
         torch: ['2.4.0', '2.5.0']
         exclude:
           # add any incompatible combinations here if needed
-          # - cuda: '12.99.0'
-          #   torch: '2.99.0'
+          - cuda: '12.99.0' # dummy value so exclude is not empty
+            torch: '2.99.0'
 
     steps:
       - name: Checkout code

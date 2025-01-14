@@ -37,10 +37,22 @@ def call(
     import subprocess
     import sys
 
-    print(f" === Args {args}", file=sys.stderr)
-
     warn_config_settings(config_settings)
     # Unlike `find_uv_bin`, this mechanism must work according to PEP 517
+    import os
+    import tomllib
+
+    cwd = os.getcwd()
+    filename = os.path.join(cwd, "pyproject.toml")
+    with open(filename, "rb") as f:
+        data = tomllib.load(f)
+
+    for kernel, _ in (
+        data.get("tool", {}).get("kernels", {}).get("dependencies", {}).items()
+    ):
+        from hf_kernels.utils import install_kernel
+
+        install_kernel(kernel, revision="main")
     uv_bin = shutil.which("uv")
     if uv_bin is None:
         raise RuntimeError("uv was not properly installed")
@@ -109,21 +121,6 @@ def build_editable(
 ) -> str:
     """PEP 660 hook `build_editable`."""
     args = ["build-backend", "build-editable", wheel_directory]
-    import os
-    import sys
-    import tomllib
-
-    cwd = os.getcwd()
-    filename = os.path.join(cwd, "pyproject.toml")
-    with open(filename, "rb") as f:
-        data = tomllib.load(f)
-
-    for kernel, _ in (
-        data.get("tool", {}).get("kernels", {}).get("dependencies", {}).items()
-    ):
-        from hf_kernels.utils import install_kernel
-
-        install_kernel(kernel, revision="main")
 
     if metadata_directory:
         args.extend(["--metadata-directory", metadata_directory])

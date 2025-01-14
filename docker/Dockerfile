@@ -29,15 +29,18 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Set working directory
 WORKDIR /app
 
+# Need to re-declare ARG after FROM for use in RUN
+ARG CUDA_VERSION
+ARG TORCH_VERSION
+ARG PYTHON_VERSION
+
+RUN echo "Building with CUDA_VERSION=${CUDA_VERSION}, TORCH_VERSION=${TORCH_VERSION}, PYTHON_VERSION=${PYTHON_VERSION}"
+
 # Initialize uv and create virtual env
 RUN uv init --app kernel-test --python "${PYTHON_VERSION}"
 
 # Move into the app
 WORKDIR /app/kernel-test
-
-# Need to re-declare ARG after FROM for use in RUN
-ARG CUDA_VERSION
-ARG TORCH_VERSION
 
 # Install PyTorch with the appropriate CUDA version
 

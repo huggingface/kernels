@@ -65,7 +65,7 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
     fi
 
 # add pytest for runtime tests
-RUN uv add pytest pytest-benchmark
+RUN uv add pytest pytest-benchmark huggingface_hub
 
 # Copy application files
 COPY src ./hf_kernels/src
@@ -75,7 +75,7 @@ COPY examples ./examples
 COPY tests ./tests
 
 # Install the kernel library
-RUN uv pip install -e hf_kernels
+RUN uv pip install hf_kernels
 
 # Run tests and benchmarks
 CMD [".venv/bin/pytest", "tests", "-v"] 

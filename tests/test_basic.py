@@ -1,6 +1,6 @@
 import pytest
 import torch
-from kernels import get_kernel
+from hf_kernels import get_kernel
 
 
 @pytest.fixture

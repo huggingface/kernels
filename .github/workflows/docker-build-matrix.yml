@@ -1,0 +1,71 @@
+name: Docker Build Matrix
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and Test Docker Image
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        python: [
+            "3.10",
+            # avoid for debugging
+            # "3.11", "3.12"
+          ]
+        ubuntu: ["18.04", "20.04", "22.04"]
+        cuda: ["11.8.0", "12.1.0", "12.2.0", "12.4.0", "12.6.0"]
+        torch: ["2.4.0", "2.5.0"]
+        exclude:
+          # exclude cuda 12+ for ubuntu 18.04
+          - ubuntu: "18.04"
+            cuda: "12.1.0"
+          - ubuntu: "18.04"
+            cuda: "12.2.0"
+          - ubuntu: "18.04"
+            cuda: "12.4.0"
+          - ubuntu: "18.04"
+            cuda: "12.6.0"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            PYTHON_VERSION=${{ matrix.python }}
+            UBUNTU_VERSION=${{ matrix.ubuntu }}
+            CUDA_VERSION=${{ matrix.cuda }}
+            TORCH_VERSION=${{ matrix.torch }}
+          push: false
+          load: false # should push instead of load
+          tags: kernels:${{ matrix.cuda }}-${{ matrix.torch }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # TODO: re enable after pushing the images to a registry
+      # - name: Run Tests
+      #   run: |
+      #     docker run --gpus all kernels:${{ matrix.cuda }}-${{ matrix.torch }}

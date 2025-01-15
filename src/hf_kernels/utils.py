@@ -1,6 +1,7 @@
 import importlib
 import platform
 import sys
+import os
 
 import torch
 from huggingface_hub import hf_hub_download, snapshot_download
@@ -30,9 +31,12 @@ def import_from_path(module_name: str, file_path):
     return module
 
 
-def get_package_path(repo_id: str):
-    repo_path = snapshot_download(repo_id, allow_patterns=f"build/{build_variant()}/*")
-    return f"{repo_path}/build/{build_variant()}"
+def install_kernel(repo_id: str, revision: str):
+    package_name = get_metadata(repo_id)["torch"]["name"]
+    repo_path = snapshot_download(
+        repo_id, allow_patterns=f"build/{build_variant()}/*", revision=revision
+    )
+    return package_name, f"{repo_path}/build/{build_variant()}"
 
 
 def get_metadata(repo_id: str):
@@ -40,7 +44,18 @@ def get_metadata(repo_id: str):
         return tomllib.load(f)
 
 
-def get_kernel(repo_id: str):
-    package_name = get_metadata(repo_id)["torch"]["name"]
-    package_path = get_package_path(repo_id)
+def get_kernel(repo_id: str, revision: str = "main"):
+    package_name, package_path = install_kernel(repo_id, revision=revision)
+    return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")
+
+
+def load_kernel(repo_id: str, revision: str = "main"):
+    filename = hf_hub_download(
+        repo_id, "build.toml", local_files_only=True, revision=revision
+    )
+    with open(filename, "rb") as f:
+        metadata = tomllib.load(f)
+    package_name = metadata["torch"]["name"]
+    repo_path = os.path.dirname(filename)
+    package_path = f"{repo_path}/build/{build_variant()}"
     return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")

@@ -116,13 +116,14 @@ jobs:
       - name: Load and test Docker images
         run: |
           for image_tar in /tmp/docker-image-*.tar; do
-            echo "Processing artifact in $artifact_dir"
-            docker_tag=$(basename $image_tar .tar)
-            echo "Loading image $docker_tag from $image_tar with tag $docker_tag"
-            docker load -i $image_tar
-            echo "Loaded image $docker_tag"
-            docker run --gpus all \
-              -v ${{ github.workspace }}/tests:/workspace/tests \
-              ghcr.io/huggingface/hf-kernels/hf_kernels:$docker_tag
-            echo "Tested image $docker_tag"
+              echo "Processing image $image_tar"
+              # Extract the version tag from the filename without the 'docker-image-' prefix
+              docker_tag=$(basename $image_tar .tar | sed 's/^docker-image-//')
+              echo "Loading image with tag $docker_tag"
+              docker load -i $image_tar
+              echo "Loaded image $docker_tag"
+              docker run --gpus all \
+                  -v /home/runner/_work/hf-kernels/hf-kernels/tests:/workspace/tests \
+                  ghcr.io/huggingface/hf-kernels/hf_kernels:$docker_tag
+              echo "Tested image $docker_tag"
           done

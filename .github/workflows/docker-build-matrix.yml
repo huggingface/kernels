@@ -28,9 +28,21 @@ jobs:
             # avoid for debugging
             # "3.11", "3.12"
           ]
-        ubuntu: ["18.04", "20.04", "22.04"]
-        cuda: ["11.8.0", "12.1.0", "12.2.0", "12.4.0", "12.6.0"]
-        torch: ["2.4.0", "2.5.0"]
+        ubuntu: [
+          "18.04",
+          # avoid for debugging
+          # "20.04", "22.04"
+        ]
+        cuda: [
+          "11.8.0", 
+          # avoid for debugging
+          # "12.1.0", "12.2.0", "12.4.0", "12.6.0"
+        ]
+        torch: [
+          "2.4.0",
+          # avoid for debugging
+          # "2.5.0"
+        ]
         exclude:
           # exclude cuda 12+ for ubuntu 18.04
           - ubuntu: "18.04"
@@ -85,11 +97,6 @@ jobs:
           path: /tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar
           retention-days: 1
 
-      - name: Save image tags for testing
-        run: |
-          echo "${{ steps.meta.outputs.tags }}" | head -n 1 >> $GITHUB_WORKSPACE/image_tags.txt
-
-
   test:
     needs: build
     name: Test Docker Images
@@ -98,12 +105,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Download image tags
-        uses: actions/download-artifact@v4
-        with:
-          name: image-tags
-          path: ${{ github.workspace }}
 
       - name: Download all Docker images
         uses: actions/download-artifact@v4

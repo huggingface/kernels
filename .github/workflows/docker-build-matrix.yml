@@ -123,6 +123,6 @@ jobs:
             echo "Loaded image $docker_tag"
             docker run --gpus all \
               -v ${{ github.workspace }}/tests:/workspace/tests \
-              $docker_tag
+              ghcr.io/huggingface/hf-kernels/hf_kernels:$docker_tag
             echo "Tested image $docker_tag"
           done

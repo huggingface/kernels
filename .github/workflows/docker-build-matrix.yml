@@ -14,14 +14,14 @@ concurrency:
 
 jobs:
   build:
-    name: Build and Test Docker Image
+    name: Build Docker Image
     runs-on:
       group: aws-g6-12xlarge-plus
     permissions:
       contents: read
       packages: write
     strategy:
-      max-parallel: 2
+      max-parallel: 3
       matrix:
         python: [
             "3.10",
@@ -70,15 +70,31 @@ jobs:
             CUDA_VERSION=${{ matrix.cuda }}
             TORCH_VERSION=${{ matrix.torch }}
           push: false
-          load: true # attempt loading directly to the runner
+          outputs: type=docker,dest=/tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          
-      - name: Save image name for testing
+
+      # Note: recommended to upload images via artifacts to share acrross jobs
+      # https://docs.docker.com/build/ci/github-actions/share-image-jobs/
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}
+          path: /tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar
+          retention-days: 1
+
+      - name: Save image tags for testing
         run: |
           echo "${{ steps.meta.outputs.tags }}" | head -n 1 >> $GITHUB_WORKSPACE/image_tags.txt
+
+      - name: Upload image tags artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tags
+          path: ${{ github.workspace }}/image_tags.txt
+          retention-days: 1
 
   test:
     needs: build
@@ -89,12 +105,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests for all images
+      - name: Download image tags
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tags
+          path: ${{ github.workspace }}
+
+      - name: Download all Docker images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: docker-image-*
+          path: /tmp
+          merge-multiple: true
+
+      - name: Load Docker images
         run: |
-          # Read all image tags and test each one
+          for image_tar in /tmp/docker-image-*.tar; do
+            echo "Loading image from $image_tar"
+            docker load --input "$image_tar"
+          done
+
+      - name: Run Tests
+        run: |
           while IFS= read -r IMAGE_ID; do
             echo "Testing image: $IMAGE_ID"
             docker run --gpus all \
               -v ${{ github.workspace }}/tests:/workspace/tests \
               ${IMAGE_ID}
-          done < $GITHUB_WORKSPACE/image_tags.txt
+          done < ${{ github.workspace }}/image_tags.txt

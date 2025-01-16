@@ -21,7 +21,7 @@ jobs:
       contents: read
       packages: write
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         python: [
             "3.10",

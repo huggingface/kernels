@@ -21,7 +21,7 @@ jobs:
       contents: read
       packages: write
     strategy:
-      max-parallel: 1
+      max-parallel: 4
       matrix:
         python: [
             "3.10",
@@ -49,14 +49,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # - name: Login to GitHub Container Registry
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: ghcr.io
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
-
-      # metadata for images
       - name: Generate Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -66,7 +58,7 @@ jobs:
             type=raw,value=${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}
             type=sha,prefix=${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}-
 
-      - name: Build and push Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -83,17 +75,26 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # - name: Pull Docker image for testing
-      #   run: |
-      #     docker pull $(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-
-      - name: Run Tests
+          
+      - name: Save image name for testing
         run: |
-          # Set image ID from the first tag
-          IMAGE_ID=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "${{ steps.meta.outputs.tags }}" | head -n 1 >> $GITHUB_WORKSPACE/image_tags.txt
 
-          # Run tests with GPU support
-          docker run --gpus all \
-            -v ${{ github.workspace }}/tests:/workspace/tests \
-            ${IMAGE_ID}
+  test:
+    needs: build
+    name: Test Docker Images
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests for all images
+        run: |
+          # Read all image tags and test each one
+          while IFS= read -r IMAGE_ID; do
+            echo "Testing image: $IMAGE_ID"
+            docker run --gpus all \
+              -v ${{ github.workspace }}/tests:/workspace/tests \
+              ${IMAGE_ID}
+          done < $GITHUB_WORKSPACE/image_tags.txt

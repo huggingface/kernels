@@ -89,12 +89,6 @@ jobs:
         run: |
           echo "${{ steps.meta.outputs.tags }}" | head -n 1 >> $GITHUB_WORKSPACE/image_tags.txt
 
-      - name: Upload image tags artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: image-tags
-          path: ${{ github.workspace }}/image_tags.txt
-          retention-days: 1
 
   test:
     needs: build
@@ -118,18 +112,16 @@ jobs:
           path: /tmp
           merge-multiple: true
 
-      - name: Load Docker images
+      - name: Load and test Docker images
         run: |
           for image_tar in /tmp/docker-image-*.tar; do
-            echo "Loading image from $image_tar"
-            docker load --input "$image_tar"
-          done
-
-      - name: Run Tests
-        run: |
-          while IFS= read -r IMAGE_ID; do
-            echo "Testing image: $IMAGE_ID"
+            echo "Processing artifact in $artifact_dir"
+            docker_tag=$(basename $image_tar .tar)
+            echo "Loading image $docker_tag from $image_tar with tag $docker_tag"
+            docker load -i $image_tar
+            echo "Loaded image $docker_tag"
             docker run --gpus all \
               -v ${{ github.workspace }}/tests:/workspace/tests \
-              ${IMAGE_ID}
-          done < ${{ github.workspace }}/image_tags.txt
+              $docker_tag
+            echo "Tested image $docker_tag"
+          done

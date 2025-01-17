@@ -21,6 +21,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      max-parallel: 4
       matrix:
         python: ["3.10", "3.11", "3.12"]
         ubuntu: ["18.04", "20.04", "22.04"]

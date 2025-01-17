@@ -16,12 +16,11 @@ jobs:
   build:
     name: Build Docker Image
     runs-on:
-      group: aws-g6-12xlarge-plus
+      group: aws-g6-24xlarge
     permissions:
       contents: read
       packages: write
     strategy:
-      max-parallel: 2
       matrix:
         python: ["3.10", "3.11", "3.12"]
         ubuntu: ["18.04", "20.04", "22.04"]

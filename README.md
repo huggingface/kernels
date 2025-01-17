@@ -1,11 +1,11 @@
-# kernels
+# hf-kernels
 
 Make sure you have `torch==2.5.1+cu124` installed.
 
 ```python
 import torch
 
-from kernels import get_kernel
+from hf_kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
 activation = get_kernel("kernels-community/activation")

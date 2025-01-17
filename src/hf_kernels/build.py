@@ -48,7 +48,7 @@ def call(
         data = tomllib.load(f)
 
     for kernel, _ in (
-        data.get("tool", {}).get("kernels", {}).get("dependencies", {}).items()
+        data.get("tool", {}).get("hf-kernels", {}).get("dependencies", {}).items()
     ):
         from hf_kernels.utils import install_kernel
 

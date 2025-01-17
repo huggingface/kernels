@@ -3,12 +3,15 @@ name = "hf-kernels"
 version = "0.1.0"
 description = "Download cuda kernels"
 authors = [
-    {name = "OlivierDehaene", email = "olivier@huggingface.co"},
-    {name = "Daniel de Kok", email = "daniel@huggingface.co"},
-    {name = "David Holtz", email = "david@huggingface.co"},
-    {name = "Nicolas Patry", email = "nicolas@huggingface.co"}
+  { name = "OlivierDehaene", email = "olivier@huggingface.co" },
+  { name = "Daniel de Kok", email = "daniel@huggingface.co" },
+  { name = "David Holtz", email = "david@huggingface.co" },
+  { name = "Nicolas Patry", email = "nicolas@huggingface.co" },
 ]
 readme = "README.md"
+
+[project.entry-points."egg_info.writers"]
+"hf_kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
 
 [dependencies]
 python = "^3.9"

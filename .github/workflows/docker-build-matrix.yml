@@ -66,11 +66,18 @@ jobs:
             CUDA_VERSION=${{ matrix.cuda }}
             TORCH_VERSION=${{ matrix.torch }}
           push: false
-          outputs: type=docker,dest=/tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Save Docker image
+        run: |
+          IMAGE_TAG="${{ steps.meta.outputs.tags }}"
+          # Get the first tag if multiple tags are present
+          FIRST_TAG=$(echo "$IMAGE_TAG" | head -n 1)
+          docker save -o /tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar "$FIRST_TAG"
 
       # Note: recommended to upload images via artifacts to share acrross jobs
       # https://docs.docker.com/build/ci/github-actions/share-image-jobs/

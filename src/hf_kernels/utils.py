@@ -48,7 +48,12 @@ def install_kernel(repo_id: str, revision: str, local_files_only: bool = False):
 
 
 def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):
-    with open(hf_hub_download(repo_id, "build.toml", revision=revision), "rb") as f:
+    with open(
+        hf_hub_download(
+            repo_id, "build.toml", revision=revision, local_files_only=local_files_only
+        ),
+        "rb",
+    ) as f:
         return tomllib.load(f)
 
 

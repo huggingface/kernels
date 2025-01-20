@@ -1,19 +1,15 @@
-from pathlib import Path
-from typing import Any, Dict, List
-import json
-import argparse
-import dataclasses
-from dataclasses import dataclass
+import sys
 import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List
 
 from huggingface_hub import HfApi
 
-
-class _JSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 
 @dataclass
@@ -32,30 +28,6 @@ class KernelLock:
     def from_json(cls, o: Dict):
         files = [FileLock(**f) for f in o["files"]]
         return cls(repo_id=o["repo_id"], sha=o["sha"], files=files)
-
-
-def lock_kernels():
-    parser = argparse.ArgumentParser(
-        prog="hf-lock-kernels", description="Lock kernel revisions"
-    )
-    parser.add_argument(
-        "project_dir",
-        type=Path,
-        help="The project directory",
-    )
-    args = parser.parse_args()
-
-    with open(args.project_dir / "pyproject.toml", "rb") as f:
-        data = tomllib.load(f)
-
-    kernel_versions = data.get("tool", {}).get("kernels", {}).get("dependencies", None)
-
-    all_locks = []
-    for kernel, version in kernel_versions.items():
-        all_locks.append(get_kernel_locks(kernel, version))
-
-    with open(args.project_dir / "kernels.lock", "w") as f:
-        json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
 
 
 def get_kernel_locks(repo_id: str, revision: str):

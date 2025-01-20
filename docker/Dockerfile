@@ -65,17 +65,17 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
     fi
 
 # add pytest for runtime tests
-RUN uv add pytest pytest-benchmark
+RUN uv add pytest pytest-benchmark huggingface_hub
 
 # Copy application files
-COPY kernels ./kernels/kernels
-COPY pyproject.toml ./kernels/pyproject.toml
-COPY README.md ./kernels/README.md
+COPY src ./hf_kernels/src
+COPY pyproject.toml ./hf_kernels/pyproject.toml
+COPY README.md ./hf_kernels/README.md
 COPY examples ./examples
 COPY tests ./tests
 
 # Install the kernel library
-RUN uv pip install -e kernels
+RUN uv pip install hf_kernels
 
 # Run tests and benchmarks
 CMD [".venv/bin/pytest", "tests", "-v"] 

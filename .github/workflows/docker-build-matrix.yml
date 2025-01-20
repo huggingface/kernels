@@ -14,32 +14,28 @@ concurrency:
 
 jobs:
   build:
-    name: Build and Test Docker Image
+    name: Build Docker Image
     runs-on:
-      group: aws-g6-12xlarge-plus
+      group: aws-g6-24xlarge
     permissions:
       contents: read
       packages: write
     strategy:
+      max-parallel: 4
       matrix:
-        python: [
-            "3.10",
-            # avoid for debugging
-            # "3.11", "3.12"
-          ]
-        ubuntu: ["18.04", "20.04", "22.04"]
-        cuda: ["11.8.0", "12.1.0", "12.2.0", "12.4.0", "12.6.0"]
-        torch: ["2.4.0", "2.5.0"]
-        exclude:
-          # exclude cuda 12+ for ubuntu 18.04
+        # python: ["3.10", "3.11", "3.12"]
+        # ubuntu: ["18.04", "20.04", "22.04"]
+        # cuda: ["11.8.0", "12.1.0", "12.2.0", "12.4.0", "12.6.0"]
+        # torch: ["2.4.0", "2.5.0"]
+        include:
           - ubuntu: "18.04"
-            cuda: "12.1.0"
-          - ubuntu: "18.04"
-            cuda: "12.2.0"
-          - ubuntu: "18.04"
+            cuda: "11.8.0"
+            torch: "2.4.0"
+            python: "3.10"
+          - ubuntu: "22.04"
             cuda: "12.4.0"
-          - ubuntu: "18.04"
-            cuda: "12.6.0"
+            torch: "2.5.1"
+            python: "3.12"
 
     steps:
       - name: Checkout code
@@ -47,6 +43,15 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/hf_kernels
+          tags: |
+            type=raw,value=${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}
+            type=sha,prefix=${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}-
 
       - name: Build Docker image
         uses: docker/build-push-action@v5
@@ -60,12 +65,55 @@ jobs:
             CUDA_VERSION=${{ matrix.cuda }}
             TORCH_VERSION=${{ matrix.torch }}
           push: false
-          load: false # should push instead of load
-          tags: kernels:${{ matrix.cuda }}-${{ matrix.torch }}
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # TODO: re enable after pushing the images to a registry
-      # - name: Run Tests
-      #   run: |
-      #     docker run --gpus all kernels:${{ matrix.cuda }}-${{ matrix.torch }}
+      - name: Save Docker image
+        run: |
+          IMAGE_TAG="${{ steps.meta.outputs.tags }}"
+          # Get the first tag if multiple tags are present
+          FIRST_TAG=$(echo "$IMAGE_TAG" | head -n 1)
+          docker save -o /tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar "$FIRST_TAG"
+
+      # Note: recommended to upload images via artifacts to share acrross jobs
+      # https://docs.docker.com/build/ci/github-actions/share-image-jobs/
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}
+          path: /tmp/docker-image-${{ matrix.cuda }}-${{ matrix.torch }}-python${{ matrix.python }}-ubuntu${{ matrix.ubuntu }}.tar
+          retention-days: 1
+
+  test:
+    needs: build
+    name: Test Docker Images
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all Docker images
+        uses: actions/download-artifact@v4
+        with:
+          pattern: docker-image-*
+          path: /tmp
+          merge-multiple: true
+
+      - name: Load and test Docker images
+        run: |
+          for image_tar in /tmp/docker-image-*.tar; do
+              echo "Processing image $image_tar"
+              # Extract the version tag from the filename without the 'docker-image-' prefix
+              docker_tag=$(basename $image_tar .tar | sed 's/^docker-image-//')
+              echo "Loading image with tag $docker_tag"
+              docker load -i $image_tar
+              echo "Loaded image $docker_tag"
+              docker run --gpus all \
+                  -v /home/runner/_work/hf-kernels/hf-kernels/tests:/workspace/tests \
+                  ghcr.io/huggingface/hf-kernels/hf_kernels:$docker_tag
+              echo "Tested image $docker_tag"
+          done

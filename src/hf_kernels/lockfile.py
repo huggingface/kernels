@@ -1,15 +1,10 @@
-import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
 from huggingface_hub import HfApi
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
+from hf_kernels.compat import tomllib
 
 
 @dataclass

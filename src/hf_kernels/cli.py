@@ -4,13 +4,9 @@ import json
 import sys
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-
-from .lockfile import KernelLock, get_kernel_locks
-from .utils import install_kernel
+from hf_kernels.compat import tomllib
+from hf_kernels.lockfile import KernelLock, get_kernel_locks
+from hf_kernels.utils import install_kernel
 
 
 def main():

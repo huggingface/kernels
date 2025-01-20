@@ -16,17 +16,12 @@ don't require importing typing but then quote them so earlier Python version ign
 them while IDEs and type checker can see through the quotes.
 """
 
-import sys
+from hf_kernels.compat import tomllib
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence  # noqa:I001
     from typing import Any  # noqa:I001
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 
 def warn_config_settings(config_settings: "Mapping[Any, Any] | None" = None) -> None:

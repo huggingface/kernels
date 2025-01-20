@@ -1,23 +1,19 @@
-from types import ModuleType
-from typing import List, Optional
 import importlib
 import importlib.metadata
-from importlib.metadata import Distribution
 import inspect
 import json
 import platform
 import sys
+from importlib.metadata import Distribution
+from types import ModuleType
+from typing import List, Optional
 
 import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
 
+from hf_kernels.compat import tomllib
 from hf_kernels.lockfile import KernelLock
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 
 def build_variant():

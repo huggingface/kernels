@@ -1,3 +1,3 @@
-from hf_kernels.utils import get_kernel, load_kernel, install_kernel
+from hf_kernels.utils import get_kernel, install_kernel, load_kernel
 
 __all__ = ["get_kernel", "load_kernel", "install_kernel"]

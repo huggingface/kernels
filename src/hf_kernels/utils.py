@@ -13,6 +13,8 @@ import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
 
+from hf_kernels.lockfile import KernelLock
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -73,9 +75,12 @@ def load_kernel(repo_id: str, revision: str = "main"):
 
 def _get_caller_locked_kernel(name: str) -> Optional[str]:
     for dist in _get_caller_distributions():
-        lock_json = dist.read_text("hf_kernels.lock")
+        lock_json = dist.read_text("kernels.lock")
         if lock_json is not None:
-            return json.loads(lock_json).get(name)
+            for kernel_lock_json in json.loads(lock_json):
+                kernel_lock = KernelLock.from_json(kernel_lock_json)
+                if kernel_lock.repo_id == name:
+                    return kernel_lock.sha
     return None
 
 

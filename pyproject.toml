@@ -10,8 +10,11 @@ authors = [
 ]
 readme = "README.md"
 
+[project.scripts]
+hf-lock-kernels = "hf_kernels.lockfile:lock_kernels"
+
 [project.entry-points."egg_info.writers"]
-"hf_kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
+"kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
 
 [dependencies]
 python = "^3.9"

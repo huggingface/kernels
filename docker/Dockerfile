@@ -75,7 +75,7 @@ COPY examples ./examples
 COPY tests ./tests
 
 # Install the kernel library
-RUN uv pip install hf_kernels
+RUN uv pip install .
 
 # Run tests and benchmarks
 CMD [".venv/bin/pytest", "tests", "-v"] 

@@ -31,13 +31,13 @@ WORKDIR /app/kernel-test
 # install python depdencies
 RUN uv add torch==2.5.0 numpy
 
-# copy kernels lib
-COPY kernels ./kernels/kernels
-COPY pyproject.toml ./kernels/pyproject.toml
-COPY README.md ./kernels/README.md
+# copy hf-kernels lib
+COPY src ./hf-kernels/src
+COPY pyproject.toml ./hf-kernels/pyproject.toml
+COPY README.md ./hf-kernels/README.md
 
 # install library
-RUN uv pip install -e kernels
+RUN uv pip install -e hf-kernels
 
 # copy examples
 COPY examples ./examples
@@ -48,4 +48,4 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # command to run the script
 CMD ["uv", "run", "examples/basic.py"]
-# CMD ["ls", "kernels"]
+# CMD ["ls", "hf-kernels"]

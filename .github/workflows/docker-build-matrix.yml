@@ -68,8 +68,8 @@ jobs:
           load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,name=hf-kernels-cache-${{ matrix.ubuntu }}-${{ matrix.python }}-${{ matrix.cuda }}-${{ matrix.torch }}
+          cache-to: type=gha,name=hf-kernels-cache-${{ matrix.ubuntu }}-${{ matrix.python }}-${{ matrix.cuda }}-${{ matrix.torch }}
 
       - name: Save Docker image
         run: |

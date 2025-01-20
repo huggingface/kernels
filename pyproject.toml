@@ -14,7 +14,7 @@ readme = "README.md"
 hf-kernels = "hf_kernels.cli:main"
 
 [project.entry-points."egg_info.writers"]
-"kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
+"hf-kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
 
 [dependencies]
 python = "^3.9"

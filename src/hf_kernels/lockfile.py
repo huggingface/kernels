@@ -66,7 +66,7 @@ def write_egg_lockfile(cmd, basename, filename):
     if kernel_versions is None:
         return
 
-    lock_path = cwd / "kernels.lock"
+    lock_path = cwd / "hf-kernels.lock"
     if not lock_path.exists():
         logging.warning(f"Lock file {lock_path} does not exist")
         # Ensure that the file gets deleted in editable installs.

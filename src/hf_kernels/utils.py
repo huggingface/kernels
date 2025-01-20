@@ -2,6 +2,7 @@ import importlib
 import importlib.metadata
 import inspect
 import json
+import os
 import platform
 import sys
 from importlib.metadata import Distribution
@@ -64,7 +65,21 @@ def get_kernel(repo_id: str, revision: str = "main"):
 
 def load_kernel(repo_id: str):
     """Get a pre-downloaded, locked kernel."""
-    return get_locked_kernel(repo_id, local_files_only=True)
+    locked_sha = _get_caller_locked_kernel(repo_id)
+
+    if locked_sha is None:
+        raise ValueError(f"Kernel `{repo_id}` is not locked")
+
+    filename = hf_hub_download(
+        repo_id, "build.toml", local_files_only=True, revision=locked_sha
+    )
+    with open(filename, "rb") as f:
+        metadata = tomllib.load(f)
+    package_name = metadata["torch"]["name"]
+
+    repo_path = os.path.dirname(filename)
+    package_path = f"{repo_path}/build/{build_variant()}"
+    return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")
 
 
 def get_locked_kernel(repo_id: str, local_files_only: bool = False):

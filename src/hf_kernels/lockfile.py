@@ -48,7 +48,7 @@ def lock_kernels():
     with open(args.project_dir / "pyproject.toml", "rb") as f:
         data = tomllib.load(f)
 
-    kernel_versions = _get_nested_attr(data, ["tool", "kernels", "dependencies"])
+    kernel_versions = data.get("tool", {}).get("kernels", {}).get("dependencies", None)
 
     all_locks = []
     for kernel, version in kernel_versions.items():
@@ -65,6 +65,11 @@ def get_kernel_locks(repo_id: str, revision: str):
             f"Cannot get commit SHA for repo {repo_id} at revision {revision}"
         )
 
+    if r.siblings is None:
+        raise ValueError(
+            f"Cannot get sibling information for {repo_id} at revision {revision}"
+        )
+
     file_locks = []
     for sibling in r.siblings:
         if sibling.rfilename.startswith("build/torch"):
@@ -78,14 +83,6 @@ def get_kernel_locks(repo_id: str, revision: str):
     return KernelLock(repo_id=repo_id, sha=r.sha, files=file_locks)
 
 
-def _get_nested_attr(d, attr: List[str]) -> Any:
-    for a in attr:
-        d = d.get(a)
-        if d is None:
-            break
-    return d
-
-
 def write_egg_lockfile(cmd, basename, filename):
     import logging
 
@@ -93,7 +90,7 @@ def write_egg_lockfile(cmd, basename, filename):
     with open(cwd / "pyproject.toml", "rb") as f:
         data = tomllib.load(f)
 
-    kernel_versions = _get_nested_attr(data, ["tool", "kernels", "dependencies"])
+    kernel_versions = data.get("tool", {}).get("kernels", {}).get("dependencies", None)
     if kernel_versions is None:
         return
 

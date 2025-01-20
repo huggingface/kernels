@@ -22,7 +22,7 @@ huggingface-hub = "^0.26.3"
 packaging = "^24.2"
 tomli = { version = "^2.0.1", python = "<3.11" }
 
-[build-system]
-requires = ["torch", "huggingface_hub", "numpy", "tomli;python_version<='3.10'"]
-build-backend = "hf_kernels.build"
-backend-path = ["src"]
+#[build-system]
+#requires = ["torch", "huggingface_hub", "numpy", "tomli;python_version<='3.10'"]
+#build-backend = "hf_kernels.build"
+#backend-path = ["src"]

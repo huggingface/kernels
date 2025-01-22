@@ -9,18 +9,30 @@ authors = [
   { name = "Nicolas Patry", email = "nicolas@huggingface.co" },
 ]
 readme = "README.md"
+requires-python = ">= 3.8"
+dependencies = [
+  "huggingface-hub>=0.26.3",
+  "packaging>=24.2",
+  "tomli>=2.0.1; python_version<'3.11'",
+  "torch>=2.4",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+  "pytest >=8",
+  # Whatever version is compatible with pytest.
+  "pytest-benchmark",
+]
 
 [project.scripts]
 hf-kernels = "hf_kernels.cli:main"
 
 [project.entry-points."egg_info.writers"]
 "hf-kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
-
-[dependencies]
-python = "^3.9"
-huggingface-hub = "^0.26.3"
-packaging = "^24.2"
-tomli = { version = "^2.0.1", python = "<3.11" }
 
 #[build-system]
 #requires = ["torch", "huggingface_hub", "numpy", "tomli;python_version<='3.10'"]

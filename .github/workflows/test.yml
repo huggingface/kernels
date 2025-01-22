@@ -1,0 +1,42 @@
+name: Test hf-kernels
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Run tests
+    runs-on:
+      group: aws-g6-24xlarge
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      max-parallel: 4
+      matrix:
+        python: ["3.10", "3.12"]
+        torch: ["2.4.0", "2.5.0"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Run tests
+        run: uv run pytest tests

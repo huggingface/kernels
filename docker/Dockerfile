@@ -36,6 +36,9 @@ ARG PYTHON_VERSION
 
 RUN echo "Building with CUDA_VERSION=${CUDA_VERSION}, TORCH_VERSION=${TORCH_VERSION}, PYTHON_VERSION=${PYTHON_VERSION}"
 
+# Install requested Python version
+RUN uv python install "${PYTHON_VERSION}"
+
 # Initialize uv and create virtual env
 RUN uv init --app kernel-test --python "${PYTHON_VERSION}"
 

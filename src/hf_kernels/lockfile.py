@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Dict, List
 
 from huggingface_hub import HfApi
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
 
 from hf_kernels.compat import tomllib
 
@@ -25,16 +27,49 @@ class KernelLock:
         return cls(repo_id=o["repo_id"], sha=o["sha"], files=files)
 
 
-def get_kernel_locks(repo_id: str, revision: str):
-    r = HfApi().repo_info(repo_id=repo_id, revision=revision, files_metadata=True)
+def _get_available_versions(repo_id: str):
+    """Get kernel versions that are available in the repository."""
+    versions = {}
+    for tag in HfApi().list_repo_refs(repo_id).tags:
+        if not tag.name.startswith("v"):
+            continue
+        try:
+            versions[Version(tag.name[1:])] = tag
+        except InvalidVersion:
+            continue
+
+    return versions
+
+
+def get_kernel_locks(repo_id: str, version_spec: str):
+    """
+    Get the locks for a kernel with the given version spec.
+
+    The version specifier can be any valid Python version specifier:
+    https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
+    """
+    versions = _get_available_versions(repo_id)
+    requirement = SpecifierSet(version_spec)
+    accepted_versions = sorted(requirement.filter(versions.keys()))
+
+    if len(accepted_versions) == 0:
+        raise ValueError(
+            f"No version of `{repo_id}` satisfies requirement: {version_spec}"
+        )
+
+    tag_for_newest = versions[accepted_versions[-1]]
+
+    r = HfApi().repo_info(
+        repo_id=repo_id, revision=tag_for_newest.target_commit, files_metadata=True
+    )
     if r.sha is None:
         raise ValueError(
-            f"Cannot get commit SHA for repo {repo_id} at revision {revision}"
+            f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
         )
 
     if r.siblings is None:
         raise ValueError(
-            f"Cannot get sibling information for {repo_id} at revision {revision}"
+            f"Cannot get sibling information for {repo_id} for tag {tag_for_newest.name}"
         )
 
     file_locks = []

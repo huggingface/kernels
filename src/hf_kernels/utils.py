@@ -48,6 +48,17 @@ def install_kernel(repo_id: str, revision: str, local_files_only: bool = False):
     return package_name, f"{repo_path}/build/{build_variant()}"
 
 
+def install_kernel_all_variants(
+    repo_id: str, revision: str, local_files_only: bool = False
+):
+    snapshot_download(
+        repo_id,
+        allow_patterns="build/*",
+        revision=revision,
+        local_files_only=local_files_only,
+    )
+
+
 def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):
     with open(
         hf_hub_download(

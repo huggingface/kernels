@@ -6,20 +6,25 @@ from pathlib import Path
 
 from hf_kernels.compat import tomllib
 from hf_kernels.lockfile import KernelLock, get_kernel_locks
-from hf_kernels.utils import install_kernel
+from hf_kernels.utils import install_kernel, install_kernel_all_variants
 
 
 def main():
     parser = argparse.ArgumentParser(
         prog="hf-kernel", description="Manage compute kernels"
     )
-    subparsers = parser.add_subparsers()
+    subparsers = parser.add_subparsers(required=True)
 
     download_parser = subparsers.add_parser("download", help="Download locked kernels")
     download_parser.add_argument(
         "project_dir",
         type=Path,
         help="The project directory",
+    )
+    download_parser.add_argument(
+        "--all-variants",
+        action="store_true",
+        help="Download all build variants of the kernel",
     )
     download_parser.set_defaults(func=download_kernels)
 
@@ -51,7 +56,10 @@ def download_kernels(args):
             f"Downloading `{kernel_lock.repo_id}` at with SHA: {kernel_lock.sha}",
             file=sys.stderr,
         )
-        install_kernel(kernel_lock.repo_id, kernel_lock.sha)
+        if args.all_variants:
+            install_kernel_all_variants(kernel_lock.repo_id, kernel_lock.sha)
+        else:
+            install_kernel(kernel_lock.repo_id, kernel_lock.sha)
 
 
 def lock_kernels(args):

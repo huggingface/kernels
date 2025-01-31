@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Torch
+      - name: Lock Torch version
         run: uv lock --upgrade-package "torch==${{ matrix.torch-version }}"
 
       - name: Install the project

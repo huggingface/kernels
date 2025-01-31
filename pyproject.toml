@@ -9,7 +9,7 @@ authors = [
   { name = "Nicolas Patry", email = "nicolas@huggingface.co" },
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.9"
 dependencies = [
   "huggingface-hub>=0.26.3",
   "packaging>=24.2",

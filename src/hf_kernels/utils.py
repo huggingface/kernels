@@ -9,7 +9,6 @@ from importlib.metadata import Distribution
 from types import ModuleType
 from typing import List, Optional
 
-import torch
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
 
@@ -18,6 +17,8 @@ from hf_kernels.lockfile import KernelLock
 
 
 def build_variant():
+    import torch
+
     torch_version = parse(torch.__version__)
     cuda_version = parse(torch.version.cuda)
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"

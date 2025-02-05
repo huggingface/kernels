@@ -89,7 +89,12 @@ def write_egg_lockfile(cmd, basename, filename):
     import logging
 
     cwd = Path.cwd()
-    with open(cwd / "pyproject.toml", "rb") as f:
+    pyproject_path = cwd / "pyproject.toml"
+    if not pyproject_path.exists():
+        # Nothing to do if the project doesn't have pyproject.toml.
+        return
+
+    with open(pyproject_path, "rb") as f:
         data = tomllib.load(f)
 
     kernel_versions = data.get("tool", {}).get("kernels", {}).get("dependencies", None)

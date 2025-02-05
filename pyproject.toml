@@ -1,6 +1,6 @@
 [project]
 name = "hf-kernels"
-version = "0.1.4"
+version = "0.1.5"
 description = "Download cuda kernels"
 authors = [
   { name = "OlivierDehaene", email = "olivier@huggingface.co" },

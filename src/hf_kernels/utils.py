@@ -1,3 +1,4 @@
+import ctypes
 import importlib
 import importlib.metadata
 import inspect
@@ -31,6 +32,12 @@ def build_variant():
 
 
 def import_from_path(module_name: str, file_path):
+    # We cannot use the module name as-is, after adding it to `sys.modules`,
+    # it would also be used for other imports. So, we make a module name that
+    # depends on the path for it to be unique using the hex-encoded hash of
+    # the path.
+    path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
+    module_name = f"{module_name}_{path_hash}"
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module

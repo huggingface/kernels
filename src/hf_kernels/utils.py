@@ -4,11 +4,12 @@ import importlib.metadata
 import inspect
 import json
 import os
+from pathlib import Path
 import platform
 import sys
 from importlib.metadata import Distribution
 from types import ModuleType
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
@@ -45,7 +46,10 @@ def import_from_path(module_name: str, file_path):
     return module
 
 
-def install_kernel(repo_id: str, revision: str, local_files_only: bool = False):
+def install_kernel(
+    repo_id: str, revision: str, local_files_only: bool = False
+) -> Tuple[str, str]:
+    """Download a kernel for the current environment to the cache."""
     package_name = get_metadata(repo_id, revision, local_files_only=local_files_only)[
         "torch"
     ]["name"]
@@ -56,7 +60,16 @@ def install_kernel(repo_id: str, revision: str, local_files_only: bool = False):
         revision=revision,
         local_files_only=local_files_only,
     )
-    return package_name, f"{repo_path}/build/{build_variant()}"
+
+    variant_path = f"{repo_path}/build/{build_variant()}"
+    module_init_path = f"{variant_path}/{package_name}/__init__.py"
+
+    if not os.path.exists(module_init_path):
+        raise FileNotFoundError(
+            f"Kernel `{repo_id}` at revision {revision} does not have build: {build_variant()}"
+        )
+
+    return package_name, variant_path
 
 
 def install_kernel_all_variants(

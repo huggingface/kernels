@@ -50,6 +50,8 @@ def download_kernels(args):
     with open(args.project_dir / "hf-kernels.lock", "r") as f:
         lock_json = json.load(f)
 
+    all_successful = True
+
     for kernel_lock_json in lock_json:
         kernel_lock = KernelLock.from_json(kernel_lock_json)
         print(
@@ -59,7 +61,14 @@ def download_kernels(args):
         if args.all_variants:
             install_kernel_all_variants(kernel_lock.repo_id, kernel_lock.sha)
         else:
-            install_kernel(kernel_lock.repo_id, kernel_lock.sha)
+            try:
+                install_kernel(kernel_lock.repo_id, kernel_lock.sha)
+            except FileNotFoundError as e:
+                print(e, file=sys.stderr)
+                all_successful = False
+
+    if not all_successful:
+        sys.exit(1)
 
 
 def lock_kernels(args):

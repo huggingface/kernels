@@ -1,30 +1,34 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, snapshot_download
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from hf_kernels.compat import tomllib
+from hf_kernels.cache import CACHE_DIR
+from hf_kernels.hash import content_hash
 
 
 @dataclass
-class FileLock:
-    filename: str
-    blob_id: str
+class VariantLock:
+    hash: str
+    hash_type: str = "recursive_file_hash"
 
 
 @dataclass
 class KernelLock:
     repo_id: str
     sha: str
-    files: List[FileLock]
+    variants: Dict[str, VariantLock]
 
     @classmethod
     def from_json(cls, o: Dict):
-        files = [FileLock(**f) for f in o["files"]]
-        return cls(repo_id=o["repo_id"], sha=o["sha"], files=files)
+        variants = {
+            variant: VariantLock(**lock) for variant, lock in o["variants"].items()
+        }
+        return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
 def _get_available_versions(repo_id: str):
@@ -59,30 +63,23 @@ def get_kernel_locks(repo_id: str, version_spec: str):
 
     tag_for_newest = versions[accepted_versions[-1]]
 
-    r = HfApi().repo_info(
-        repo_id=repo_id, revision=tag_for_newest.target_commit, files_metadata=True
+    repo_path = Path(
+        snapshot_download(
+            repo_id,
+            allow_patterns="build/*",
+            cache_dir=CACHE_DIR,
+            revision=tag_for_newest.target_commit,
+        )
     )
-    if r.sha is None:
-        raise ValueError(
-            f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
-        )
 
-    if r.siblings is None:
-        raise ValueError(
-            f"Cannot get sibling information for {repo_id} for tag {tag_for_newest.name}"
-        )
+    variant_hashes = {}
+    for entry in (repo_path / "build").iterdir():
+        variant = entry.parts[-1]
+        variant_hashes[variant] = VariantLock(hash=content_hash(entry))
 
-    file_locks = []
-    for sibling in r.siblings:
-        if sibling.rfilename.startswith("build/torch"):
-            if sibling.blob_id is None:
-                raise ValueError(f"Cannot get blob ID for {sibling.rfilename}")
-
-            file_locks.append(
-                FileLock(filename=sibling.rfilename, blob_id=sibling.blob_id)
-            )
-
-    return KernelLock(repo_id=repo_id, sha=r.sha, files=file_locks)
+    return KernelLock(
+        repo_id=repo_id, sha=tag_for_newest.target_commit, variants=variant_hashes
+    )
 
 
 def write_egg_lockfile(cmd, basename, filename):

@@ -1,0 +1,56 @@
+[
+  {
+    "repo_id": "kernels-community/activation",
+    "sha": "6a030420d0dd33ffdc1281afc8ae8e94b4f4f9d0",
+    "variants": {
+      "torch25-cxx98-cu124-x86_64-linux": {
+        "hash": "sha256-fc465a135358badf9670792fff90b171623cad84989e2397d9edd2c3c2b036f0",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch25-cxx11-cu121-x86_64-linux": {
+        "hash": "sha256-c9aae75c623e20c16c19fc0d6bf7b9b67823d03dd502c80e39d9c0534fbf0fc0",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch26-cxx11-cu118-x86_64-linux": {
+        "hash": "sha256-dcc1141a70845c5ae20b953cbc8496c265b158ebed8d31c037119f286ff62e06",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch25-cxx98-cu118-x86_64-linux": {
+        "hash": "sha256-8ab0577ecf1a96ea6b55b60ed95bc3c02595fdefedf67967b68b93a22c5978d5",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch25-cxx11-cu124-x86_64-linux": {
+        "hash": "sha256-d0cb59cb5cda691f212004e59a89168d5756ae75888be2cd5ca7b470402d5927",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch26-cxx11-cu124-x86_64-linux": {
+        "hash": "sha256-e3f4adcb205fa00c6a16e2c07dd21f037d31165c1b92fdcf70b9038852e2a8ad",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch26-cxx98-cu126-x86_64-linux": {
+        "hash": "sha256-6ebc15cccd9c61eef186ba6d288c72839f7d5a51bf1a46fafec5d673417c040f",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch25-cxx98-cu121-x86_64-linux": {
+        "hash": "sha256-075bf0f2e208ffd76d219c4f6cea80ba5e1ee2fd9f172786b5e681cbf4d494f7",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch26-cxx98-cu118-x86_64-linux": {
+        "hash": "sha256-51edd32659cef0640ee128228c0478e1b7068b4182075a41047ee288bcaa05a0",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch26-cxx98-cu124-x86_64-linux": {
+        "hash": "sha256-6dddf50d68b9f94bdf101571080b74fa50d084a1e3ac10f7e1b4ff959cb2685f",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch26-cxx11-cu126-x86_64-linux": {
+        "hash": "sha256-a9cac68d9722bb809267777f481522efc81980e237207e5b998926f1c5c88108",
+        "hash_type": "recursive_file_hash"
+      },
+      "torch25-cxx11-cu118-x86_64-linux": {
+        "hash": "sha256-cdc3b4142939f1ad8ac18865c83ac69fc0450f46d3dcb5507f2a69b6a292fb70",
+        "hash_type": "recursive_file_hash"
+      }
+    }
+  }
+]

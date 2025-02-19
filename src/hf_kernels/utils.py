@@ -9,15 +9,15 @@ import platform
 import sys
 from importlib.metadata import Distribution
 from types import ModuleType
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
 
+from hf_kernels.cache import CACHE_DIR
 from hf_kernels.compat import tomllib
-from hf_kernels.lockfile import KernelLock
-
-CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)
+from hf_kernels.hash import content_hash
+from hf_kernels.lockfile import KernelLock, VariantLock
 
 
 def build_variant():
@@ -47,41 +47,82 @@ def import_from_path(module_name: str, file_path):
 
 
 def install_kernel(
-    repo_id: str, revision: str, local_files_only: bool = False
+    repo_id: str,
+    revision: str,
+    local_files_only: bool = False,
+    variant_locks: Optional[Dict[str, VariantLock]] = None,
 ) -> Tuple[str, str]:
     """Download a kernel for the current environment to the cache."""
     package_name = get_metadata(repo_id, revision, local_files_only=local_files_only)[
         "torch"
     ]["name"]
+    variant = build_variant()
+
     repo_path = snapshot_download(
         repo_id,
-        allow_patterns=f"build/{build_variant()}/*",
+        allow_patterns=f"build/{variant}/*",
         cache_dir=CACHE_DIR,
         revision=revision,
         local_files_only=local_files_only,
     )
 
-    variant_path = f"{repo_path}/build/{build_variant()}"
+    variant_path = f"{repo_path}/build/{variant}"
+
+    if variant_locks is not None:
+        variant_lock = variant_locks.get(variant)
+        if variant_lock is None:
+            raise ValueError(f"No lock found for build variant: {variant}")
+
+        hash = variant_lock.hash
+
+        found_hash = content_hash(Path(variant_path))
+        if found_hash != hash:
+            raise ValueError(
+                f"Expected hash {hash} for path {variant_path}, but got: {found_hash}"
+            )
+
     module_init_path = f"{variant_path}/{package_name}/__init__.py"
 
     if not os.path.exists(module_init_path):
         raise FileNotFoundError(
-            f"Kernel `{repo_id}` at revision {revision} does not have build: {build_variant()}"
+            f"Kernel `{repo_id}` at revision {revision} does not have build: {variant}"
         )
 
     return package_name, variant_path
 
 
 def install_kernel_all_variants(
-    repo_id: str, revision: str, local_files_only: bool = False
-):
-    snapshot_download(
-        repo_id,
-        allow_patterns="build/*",
-        cache_dir=CACHE_DIR,
-        revision=revision,
-        local_files_only=local_files_only,
+    repo_id: str,
+    revision: str,
+    local_files_only: bool = False,
+    variant_locks: Optional[Dict[str, VariantLock]] = None,
+) -> str:
+    repo_path = Path(
+        snapshot_download(
+            repo_id,
+            allow_patterns="build/*",
+            cache_dir=CACHE_DIR,
+            revision=revision,
+            local_files_only=local_files_only,
+        )
     )
+
+    for entry in (repo_path / "build").iterdir():
+        variant = entry.parts[-1]
+
+        if variant_locks is not None:
+            variant_lock = variant_locks.get(variant)
+            if variant_lock is None:
+                raise ValueError(f"No lock found for build variant: {variant}")
+
+            hash = variant_lock.hash
+            found_hash = content_hash(entry)
+            if found_hash != hash:
+                raise ValueError(
+                    f"Expected hash {hash} for path {entry}, but got: {found_hash}"
+                )
+
+    return f"{repo_path}/build"
 
 
 def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):

@@ -50,9 +50,8 @@ def install_kernel(
     repo_id: str, revision: str, local_files_only: bool = False
 ) -> Tuple[str, str]:
     """Download a kernel for the current environment to the cache."""
-    package_name = get_metadata(repo_id, revision, local_files_only=local_files_only)[
-        "torch"
-    ]["name"]
+    package_name = repo_id.split('/')[-1]
+    package_name = package_name.replace('-', '_')
     repo_path = snapshot_download(
         repo_id,
         allow_patterns=f"build/{build_variant()}/*",

@@ -23,6 +23,9 @@ CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)
 def build_variant():
     import torch
 
+    if torch.version.cuda is None:
+        raise AssertionError("This kernel requires CUDA to be installed. Torch was not compiled with CUDA enabled.")
+
     torch_version = parse(torch.__version__)
     cuda_version = parse(torch.version.cuda)
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"

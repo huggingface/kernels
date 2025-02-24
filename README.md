@@ -14,7 +14,7 @@ packages in that they are made to be:
 
 ## Usage
 
-Kernels depends on `torch>=2.5` and CUDA (`cu118`, `cu121`, `cu124`) for now. 
+Kernels depends on `torch>=2.5` and CUDA for now. 
 
 Here is how you would use the [activation](https://huggingface.co/kernels-community/activation) kernels from the Hugging Face Hub:
 

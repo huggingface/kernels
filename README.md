@@ -1,6 +1,22 @@
 # hf-kernels
 
-Make sure you have `torch==2.5.1+cu124` installed.
+The Kernel Hub allows Python libraries and applications to load compute
+kernels directly from the [Hub](https://hf.co/). To support this kind
+of dynamic loading, Hub kernels differ from traditional Python kernel
+packages in that they are made to be:
+
+- Portable: a kernel can be loaded from paths outside `PYTHONPATH`.
+- Unique: multiple versions of the same kernel can be loaded in the
+  same Python process.
+- Compatible: kernels must support all recent versions of Python and
+  the different PyTorch build configurations (various CUDA versions
+  and C++ ABIs). Furthermore, older C library versions must be supported.
+
+## Usage
+
+Kernels depends on `torch>=2.5` and CUDA (`cu118`, `cu121`, `cu124`) for now. 
+
+Here is how you would use the [activation](https://huggingface.co/kernels-community/activation) kernels from the Hugging Face Hub:
 
 ```python
 import torch
@@ -18,6 +34,25 @@ y = torch.empty_like(x)
 activation.gelu_fast(y, x)
 
 print(y)
+```
+
+These kernels can be built from the [kernel-builder library](https://github.com/huggingface/kernel-builder). 
+
+If you're looking to better understand how these kernels are structured, or looking to build your own kernels, 
+please take a look at the following guide: 
+[writing kernels](https://github.com/huggingface/kernel-builder/blob/main/docs/writing-kernels.md).
+
+## Installation
+
+To install `hf-kernels`, we recommend installing from the pypi package:
+
+```bash
+pip install hf-kernels
+```
+
+You should then be able to run the script above (also in [examples/basic.py](examples/basic.py)):
+```bash
+python examples/basic.py
 ```
 
 ## Docker Reference
@@ -68,9 +103,8 @@ The pre-downloaded kernels are used by the `get_locked_kernel` function.
 want kernel loading to error when a kernel is not pre-downloaded, you can use
 the `load_kernel` function instead:
 
-````python
 ```python
 from hf_kernels import load_kernel
 
 activation = load_kernel("kernels-community/activation")
-````
+```

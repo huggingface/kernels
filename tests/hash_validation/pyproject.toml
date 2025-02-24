@@ -1,0 +1,2 @@
+[tool.kernels.dependencies]
+"kernels-community/activation" = ">=0.0.2"

@@ -1,0 +1,56 @@
+[
+  {
+    "repo_id": "kernels-community/activation",
+    "sha": "6a030420d0dd33ffdc1281afc8ae8e94b4f4f9d0",
+    "variants": {
+      "torch25-cxx11-cu118-x86_64-linux": {
+        "hash": "sha256-3e39de10721a6b21806834fc95c96526b9cfe2c2052829184f2d3fa48ef5849d",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch25-cxx11-cu121-x86_64-linux": {
+        "hash": "sha256-b0dee22c65bb277fa8150f9ea3fc90e2b1c11f84b5d760bbf4ab9c7a4b102e58",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch25-cxx11-cu124-x86_64-linux": {
+        "hash": "sha256-8960cf857d641d591a7c2d4264925cc2bf7b4a6f9d738b74082b2fb0806db19a",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch25-cxx98-cu118-x86_64-linux": {
+        "hash": "sha256-0496e04c2900a2dc7ab0f3b95fe8ce9da69faab6b5ca3f55ddd62c26c81268d0",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch25-cxx98-cu121-x86_64-linux": {
+        "hash": "sha256-172b793b24dfed3dcb9adc7d3487f260c05b310c598fc6ee8abb3e230c59a0a8",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch25-cxx98-cu124-x86_64-linux": {
+        "hash": "sha256-12f5e66f32dc4cf4b21f43f76efad198556024da67a1ce28e88ea2d49ad8bdcc",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch26-cxx11-cu118-x86_64-linux": {
+        "hash": "sha256-bb70e2f36f0b4d12868956c2ad713c756570ff0e0eb4cf7fc3a78ebde617975b",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch26-cxx11-cu124-x86_64-linux": {
+        "hash": "sha256-a745732eb9ec5d6a54565dbeec5b3c983cc6aa072a4a2576ab2fef9b2a600005",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch26-cxx11-cu126-x86_64-linux": {
+        "hash": "sha256-1160684ca09c065864f27c5c110281807a1ec31d603bf05fcb974e9e7cfe35cc",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch26-cxx98-cu118-x86_64-linux": {
+        "hash": "sha256-24459d068943b93e4d55e94811469bf7e850d7958785132b108f1240724b846f",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch26-cxx98-cu124-x86_64-linux": {
+        "hash": "sha256-5b009ba63ab6d52ac1aaf70057a2d0fa6ea5d1788a2416111be02103c6bcaaaf",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch26-cxx98-cu126-x86_64-linux": {
+        "hash": "sha256-05128889b4bdaf9ef58f3c07d93218deaa08e06f9121931b47efef8826482e4a",
+        "hash_type": "git_lfs_concat"
+      }
+    }
+  }
+]

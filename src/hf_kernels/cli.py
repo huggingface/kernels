@@ -6,7 +6,7 @@ from pathlib import Path
 
 from hf_kernels.compat import tomllib
 from hf_kernels.lockfile import KernelLock, get_kernel_locks
-from hf_kernels.utils import install_kernel, install_kernel_all_variants
+from hf_kernels.utils import build_variant, install_kernel, install_kernel_all_variants
 
 
 def main():
@@ -59,10 +59,16 @@ def download_kernels(args):
             file=sys.stderr,
         )
         if args.all_variants:
-            install_kernel_all_variants(kernel_lock.repo_id, kernel_lock.sha)
+            install_kernel_all_variants(
+                kernel_lock.repo_id, kernel_lock.sha, variant_locks=kernel_lock.variants
+            )
         else:
             try:
-                install_kernel(kernel_lock.repo_id, kernel_lock.sha)
+                install_kernel(
+                    kernel_lock.repo_id,
+                    kernel_lock.sha,
+                    variant_lock=kernel_lock.variants[build_variant()],
+                )
             except FileNotFoundError as e:
                 print(e, file=sys.stderr)
                 all_successful = False

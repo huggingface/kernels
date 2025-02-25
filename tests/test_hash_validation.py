@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from hf_kernels.cli import download_kernels
+from kernels.cli import download_kernels
 
 
 # Mock download arguments class.

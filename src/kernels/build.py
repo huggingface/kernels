@@ -16,7 +16,7 @@ don't require importing typing but then quote them so earlier Python version ign
 them while IDEs and type checker can see through the quotes.
 """
 
-from hf_kernels.compat import tomllib
+from kernels.compat import tomllib
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -49,9 +49,9 @@ def call(
         data = tomllib.load(f)
 
     for kernel, _ in (
-        data.get("tool", {}).get("hf-kernels", {}).get("dependencies", {}).items()
+        data.get("tool", {}).get("kernels", {}).get("dependencies", {}).items()
     ):
-        from hf_kernels.utils import install_kernel
+        from kernels.utils import install_kernel
 
         install_kernel(kernel, revision="main")
     uv_bin = shutil.which("uv")

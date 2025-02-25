@@ -1,4 +1,4 @@
-name: Test hf-kernels
+name: Test kernels
 
 on:
   push:

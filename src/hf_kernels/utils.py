@@ -1,4 +1,5 @@
 import ctypes
+import hashlib
 import importlib
 import importlib.metadata
 import inspect
@@ -9,13 +10,13 @@ import platform
 import sys
 from importlib.metadata import Distribution
 from types import ModuleType
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
 
 from hf_kernels.compat import tomllib
-from hf_kernels.lockfile import KernelLock
+from hf_kernels.lockfile import KernelLock, VariantLock
 
 CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)
 
@@ -24,7 +25,9 @@ def build_variant():
     import torch
 
     if torch.version.cuda is None:
-        raise AssertionError("This kernel requires CUDA to be installed. Torch was not compiled with CUDA enabled.")
+        raise AssertionError(
+            "This kernel requires CUDA to be installed. Torch was not compiled with CUDA enabled."
+        )
 
     torch_version = parse(torch.__version__)
     cuda_version = parse(torch.version.cuda)
@@ -50,40 +53,70 @@ def import_from_path(module_name: str, file_path):
 
 
 def install_kernel(
-    repo_id: str, revision: str, local_files_only: bool = False
+    repo_id: str,
+    revision: str,
+    local_files_only: bool = False,
+    variant_lock: Optional[VariantLock] = None,
 ) -> Tuple[str, str]:
-    """Download a kernel for the current environment to the cache."""
-    package_name = repo_id.split('/')[-1]
-    package_name = package_name.replace('-', '_')
+    """
+    Download a kernel for the current environment to the cache.
+
+    The output path is validated againt `hash` when set.
+    """
+    package_name = repo_id.split("/")[-1]
+    package_name = package_name.replace("-", "_")
+    variant = build_variant()
     repo_path = snapshot_download(
         repo_id,
-        allow_patterns=f"build/{build_variant()}/*",
+        allow_patterns=f"build/{variant}/*",
         cache_dir=CACHE_DIR,
         revision=revision,
         local_files_only=local_files_only,
     )
 
-    variant_path = f"{repo_path}/build/{build_variant()}"
+    if variant_lock is not None:
+        validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
+
+    variant_path = f"{repo_path}/build/{variant}"
     module_init_path = f"{variant_path}/{package_name}/__init__.py"
 
     if not os.path.exists(module_init_path):
         raise FileNotFoundError(
-            f"Kernel `{repo_id}` at revision {revision} does not have build: {build_variant()}"
+            f"Kernel `{repo_id}` at revision {revision} does not have build: {variant}"
         )
 
     return package_name, variant_path
 
 
 def install_kernel_all_variants(
-    repo_id: str, revision: str, local_files_only: bool = False
-):
-    snapshot_download(
-        repo_id,
-        allow_patterns="build/*",
-        cache_dir=CACHE_DIR,
-        revision=revision,
-        local_files_only=local_files_only,
+    repo_id: str,
+    revision: str,
+    local_files_only: bool = False,
+    variant_locks: Optional[Dict[str, VariantLock]] = None,
+) -> str:
+    repo_path = Path(
+        snapshot_download(
+            repo_id,
+            allow_patterns="build/*",
+            cache_dir=CACHE_DIR,
+            revision=revision,
+            local_files_only=local_files_only,
+        )
     )
+
+    if variant_locks is not None:
+        for entry in (repo_path / "build").iterdir():
+            variant = entry.parts[-1]
+
+            variant_lock = variant_locks.get(variant)
+            if variant_lock is None:
+                raise ValueError(f"No lock found for build variant: {variant}")
+
+            validate_kernel(
+                repo_path=repo_path, variant=variant, hash=variant_lock.hash
+            )
+
+    return f"{repo_path}/build"
 
 
 def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):
@@ -176,3 +209,56 @@ def _get_caller_module() -> Optional[ModuleType]:
         if module is not None and module != first_module:
             return module
     return first_module
+
+
+def validate_kernel(*, repo_path: str, variant: str, hash: str):
+    """Validate the given build variant of a kernel against a hasht."""
+    variant_path = Path(repo_path) / "build" / variant
+
+    # Get the file paths. The first element is a byte-encoded relative path
+    # used for sorting. The second element is the absolute path.
+    files: List[Tuple[bytes, Path]] = []
+    # Ideally we'd use Path.walk, but it's only available in Python 3.12.
+    for dirpath, _, filenames in os.walk(variant_path):
+        for filename in filenames:
+            file_abs = Path(dirpath) / filename
+
+            # Python likes to create files when importing modules from the
+            # cache, only hash files that are symlinked blobs.
+            if file_abs.is_symlink():
+                files.append(
+                    (
+                        file_abs.relative_to(variant_path).as_posix().encode("utf-8"),
+                        file_abs,
+                    )
+                )
+
+    m = hashlib.sha256()
+
+    for filename, full_path in sorted(files):
+        m.update(filename)
+
+        blob_filename = full_path.resolve().name
+        if len(blob_filename) == 40:
+            # SHA-1 hashed, so a Git blob.
+            m.update(git_hash_object(full_path.read_bytes()))
+        elif len(blob_filename) == 64:
+            # SHA-256 hashed, so a Git LFS blob.
+            m.update(hashlib.sha256(full_path.read_bytes()).digest())
+        else:
+            raise ValueError(f"Unexpected blob filename length: {len(blob_filename)}")
+
+    computedHash = f"sha256-{m.hexdigest()}"
+    if computedHash != hash:
+        raise ValueError(
+            f"Lock file specifies kernel with hash {hash}, but downloaded kernel has hash: {computedHash}"
+        )
+
+
+def git_hash_object(data: bytes, object_type: str = "blob"):
+    """Calculate git SHA1 of data."""
+    header = f"{object_type} {len(data)}\0".encode()
+    m = hashlib.sha1()
+    m.update(header)
+    m.update(data)
+    return m.digest()

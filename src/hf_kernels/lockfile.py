@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 from huggingface_hub import HfApi
 from packaging.specifiers import SpecifierSet
@@ -10,21 +11,23 @@ from hf_kernels.compat import tomllib
 
 
 @dataclass
-class FileLock:
-    filename: str
-    blob_id: str
+class VariantLock:
+    hash: str
+    hash_type: str = "git_lfs_concat"
 
 
 @dataclass
 class KernelLock:
     repo_id: str
     sha: str
-    files: List[FileLock]
+    variants: Dict[str, VariantLock]
 
     @classmethod
     def from_json(cls, o: Dict):
-        files = [FileLock(**f) for f in o["files"]]
-        return cls(repo_id=o["repo_id"], sha=o["sha"], files=files)
+        variants = {
+            variant: VariantLock(**lock) for variant, lock in o["variants"].items()
+        }
+        return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
 def _get_available_versions(repo_id: str):
@@ -72,17 +75,36 @@ def get_kernel_locks(repo_id: str, version_spec: str):
             f"Cannot get sibling information for {repo_id} for tag {tag_for_newest.name}"
         )
 
-    file_locks = []
+    variant_files = {}
     for sibling in r.siblings:
         if sibling.rfilename.startswith("build/torch"):
             if sibling.blob_id is None:
                 raise ValueError(f"Cannot get blob ID for {sibling.rfilename}")
 
-            file_locks.append(
-                FileLock(filename=sibling.rfilename, blob_id=sibling.blob_id)
-            )
+            path = Path(sibling.rfilename)
+            variant = path.parts[1]
+            filename = Path(*path.parts[2:])
 
-    return KernelLock(repo_id=repo_id, sha=r.sha, files=file_locks)
+            hash = sibling.lfs.sha256 if sibling.lfs is not None else sibling.blob_id
+
+            files = variant_files.setdefault(variant, [])
+
+            # Encode as posix for consistent slash handling, then encode
+            # as utf-8 for byte-wise sorting later.
+            files.append((filename.as_posix().encode("utf-8"), hash))
+
+    variant_locks = {}
+    for variant, files in variant_files.items():
+        m = hashlib.sha256()
+        for filename, hash in sorted(files):
+            # Filename as bytes.
+            m.update(filename)
+            # Git blob or LFS file hash as bytes.
+            m.update(bytes.fromhex(hash))
+
+        variant_locks[variant] = VariantLock(hash=f"sha256-{m.hexdigest()}")
+
+    return KernelLock(repo_id=repo_id, sha=r.sha, variants=variant_locks)
 
 
 def write_egg_lockfile(cmd, basename, filename):

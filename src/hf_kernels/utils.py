@@ -15,8 +15,8 @@ from typing import Dict, List, Optional, Tuple
 from huggingface_hub import hf_hub_download, snapshot_download
 from packaging.version import parse
 
-from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, VariantLock
+from hf_kernels.compat import tomllib
+from hf_kernels.lockfile import KernelLock, VariantLock
 
 CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)
 
@@ -177,7 +177,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False):
 
 def _get_caller_locked_kernel(repo_id: str) -> Optional[str]:
     for dist in _get_caller_distributions():
-        lock_json = dist.read_text("kernels.lock")
+        lock_json = dist.read_text("hf-kernels.lock")
         if lock_json is not None:
             for kernel_lock_json in json.loads(lock_json):
                 kernel_lock = KernelLock.from_json(kernel_lock_json)

@@ -4,14 +4,14 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, get_kernel_locks
-from kernels.utils import build_variant, install_kernel, install_kernel_all_variants
+from hf_kernels.compat import tomllib
+from hf_kernels.lockfile import KernelLock, get_kernel_locks
+from hf_kernels.utils import build_variant, install_kernel, install_kernel_all_variants
 
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="kernel", description="Manage compute kernels"
+        prog="hf-kernel", description="Manage compute kernels"
     )
     subparsers = parser.add_subparsers(required=True)
 
@@ -41,13 +41,13 @@ def main():
 
 
 def download_kernels(args):
-    lock_path = args.project_dir / "kernels.lock"
+    lock_path = args.project_dir / "hf-kernels.lock"
 
     if not lock_path.exists():
-        print(f"No kernels.lock file found in: {args.project_dir}", file=sys.stderr)
+        print(f"No hf-kernels.lock file found in: {args.project_dir}", file=sys.stderr)
         sys.exit(1)
 
-    with open(args.project_dir / "kernels.lock", "r") as f:
+    with open(args.project_dir / "hf-kernels.lock", "r") as f:
         lock_json = json.load(f)
 
     all_successful = True
@@ -87,7 +87,7 @@ def lock_kernels(args):
     for kernel, version in kernel_versions.items():
         all_locks.append(get_kernel_locks(kernel, version))
 
-    with open(args.project_dir / "kernels.lock", "w") as f:
+    with open(args.project_dir / "hf-kernels.lock", "w") as f:
         json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
 
 

@@ -7,7 +7,7 @@ from huggingface_hub import HfApi
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from kernels.compat import tomllib
+from hf_kernels.compat import tomllib
 
 
 @dataclass
@@ -123,7 +123,7 @@ def write_egg_lockfile(cmd, basename, filename):
     if kernel_versions is None:
         return
 
-    lock_path = cwd / "kernels.lock"
+    lock_path = cwd / "hf-kernels.lock"
     if not lock_path.exists():
         logging.warning(f"Lock file {lock_path} does not exist")
         # Ensure that the file gets deleted in editable installs.

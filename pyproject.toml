@@ -1,5 +1,5 @@
 [project]
-name = "hf-kernels"
+name = "kernels"
 version = "0.1.6"
 description = "Download cuda kernels"
 authors = [
@@ -29,12 +29,12 @@ dev = [
 ]
 
 [project.scripts]
-hf-kernels = "hf_kernels.cli:main"
+kernels = "kernels.cli:main"
 
 [project.entry-points."egg_info.writers"]
-"hf-kernels.lock" = "hf_kernels.lockfile:write_egg_lockfile"
+"kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
 #[build-system]
 #requires = ["torch", "huggingface_hub", "numpy", "tomli;python_version<='3.10'"]
-#build-backend = "hf_kernels.build"
+#build-backend = "kernels.build"
 #backend-path = ["src"]

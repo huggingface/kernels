@@ -1,6 +1,6 @@
 import torch
 
-from hf_kernels import get_kernel
+from kernels import get_kernel
 
 print("Starting examples/basic.py demo")
 

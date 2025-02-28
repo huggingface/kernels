@@ -143,7 +143,7 @@ def load_kernel(repo_id: str):
     locked_sha = _get_caller_locked_kernel(repo_id)
 
     if locked_sha is None:
-        raise ValueError(f"Kernel `{repo_id}` is not locked")
+        raise ValueError(f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project.")
 
     filename = hf_hub_download(
         repo_id,

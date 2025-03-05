@@ -38,6 +38,11 @@ def build_variant():
     return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-cu{cuda_version.major}{cuda_version.minor}-{cpu}-{os}"
 
 
+def noarch_build_variant():
+    # Once we support other frameworks, detection goes here.
+    return "torch-noarch"
+
+
 def import_from_path(module_name: str, file_path):
     # We cannot use the module name as-is, after adding it to `sys.modules`,
     # it would also be used for other imports. So, we make a module name that
@@ -56,28 +61,37 @@ def install_kernel(
     repo_id: str,
     revision: str,
     local_files_only: bool = False,
-    variant_lock: Optional[VariantLock] = None,
+    variant_locks: Optional[Dict[str, VariantLock]] = None,
 ) -> Tuple[str, str]:
     """
     Download a kernel for the current environment to the cache.
 
     The output path is validated againt `hash` when set.
     """
-    package_name = repo_id.split("/")[-1]
-    package_name = package_name.replace("-", "_")
+    package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
+    noarch_variant = noarch_build_variant()
     repo_path = snapshot_download(
         repo_id,
-        allow_patterns=f"build/{variant}/*",
+        allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
         cache_dir=CACHE_DIR,
         revision=revision,
         local_files_only=local_files_only,
     )
 
-    if variant_lock is not None:
+    variant_path = f"{repo_path}/build/{variant}"
+    noarch_variant_path = f"{repo_path}/build/{noarch_variant}"
+    if not os.path.exists(variant_path) and os.path.exists(noarch_variant_path):
+        # Fall back to noarch variant.
+        variant = noarch_variant
+        variant_path = noarch_variant_path
+
+    if variant_locks is not None:
+        variant_lock = variant_locks.get(variant)
+        if variant_lock is None:
+            raise ValueError(f"No lock found for build variant: {variant}")
         validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
 
-    variant_path = f"{repo_path}/build/{variant}"
     module_init_path = f"{variant_path}/{package_name}/__init__.py"
 
     if not os.path.exists(module_init_path):
@@ -143,22 +157,36 @@ def load_kernel(repo_id: str):
     locked_sha = _get_caller_locked_kernel(repo_id)
 
     if locked_sha is None:
-        raise ValueError(f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project.")
+        raise ValueError(
+            f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
+        )
 
-    filename = hf_hub_download(
+    package_name = package_name_from_repo_id(repo_id)
+
+    variant = build_variant()
+    noarch_variant = noarch_build_variant()
+
+    repo_path = snapshot_download(
         repo_id,
-        "build.toml",
+        allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
         cache_dir=CACHE_DIR,
         local_files_only=True,
-        revision=locked_sha,
     )
-    with open(filename, "rb") as f:
-        metadata = tomllib.load(f)
-    package_name = metadata["torch"]["name"]
 
-    repo_path = os.path.dirname(filename)
-    package_path = f"{repo_path}/build/{build_variant()}"
-    return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")
+    variant_path = f"{repo_path}/build/{variant}"
+    noarch_variant_path = f"{repo_path}/build/{noarch_variant}"
+    if not os.path.exists(variant_path) and os.path.exists(noarch_variant_path):
+        # Fall back to noarch variant.
+        variant = noarch_variant
+        variant_path = noarch_variant_path
+
+    module_init_path = f"{variant_path}/{package_name}/__init__.py"
+    if not os.path.exists(module_init_path):
+        raise FileNotFoundError(
+            f"Locked kernel `{repo_id}` does not have build `{variant}` or was not downloaded with `kernels download <project>`"
+        )
+
+    return import_from_path(package_name, f"{variant_path}/{package_name}/__init__.py")
 
 
 def get_locked_kernel(repo_id: str, local_files_only: bool = False):
@@ -262,3 +290,7 @@ def git_hash_object(data: bytes, object_type: str = "blob"):
     m.update(header)
     m.update(data)
     return m.digest()
+
+
+def package_name_from_repo_id(repo_id: str) -> str:
+    return repo_id.split("/")[-1].replace("-", "_")

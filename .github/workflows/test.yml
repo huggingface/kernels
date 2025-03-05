@@ -41,5 +41,8 @@ jobs:
       - name: Install the project
         run: uv sync --all-extras --dev
 
+      - name: Install setuptools for Triton-based test
+        run: uv pip install setuptools
+
       - name: Run tests
         run: uv run pytest tests

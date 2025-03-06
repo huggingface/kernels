@@ -140,20 +140,6 @@ def install_kernel_all_variants(
     return repo_path / "build"
 
 
-def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):
-    with open(
-        hf_hub_download(
-            repo_id,
-            "build.toml",
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
-        ),
-        "rb",
-    ) as f:
-        return tomllib.load(f)
-
-
 def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
     package_name, package_path = install_kernel(repo_id, revision=revision)
     return import_from_path(package_name, package_path / package_name / "__init__.py")

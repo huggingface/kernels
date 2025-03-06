@@ -47,5 +47,8 @@ jobs:
       - name: Install setuptools for Triton-based test
         run: uv pip install setuptools
 
+      - name: Check typing
+        run: uv run mypy src/kernels
+
       - name: Run tests
         run: uv run pytest tests

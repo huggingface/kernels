@@ -21,7 +21,7 @@ from kernels.lockfile import KernelLock, VariantLock
 CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)
 
 
-def build_variant():
+def build_variant() -> str:
     import torch
 
     if torch.version.cuda is None:
@@ -38,12 +38,12 @@ def build_variant():
     return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-cu{cuda_version.major}{cuda_version.minor}-{cpu}-{os}"
 
 
-def noarch_build_variant():
+def noarch_build_variant() -> str:
     # Once we support other frameworks, detection goes here.
     return "torch-noarch"
 
 
-def import_from_path(module_name: str, file_path):
+def import_from_path(module_name: str, file_path: Path) -> ModuleType:
     # We cannot use the module name as-is, after adding it to `sys.modules`,
     # it would also be used for other imports. So, we make a module name that
     # depends on the path for it to be unique using the hex-encoded hash of
@@ -51,9 +51,13 @@ def import_from_path(module_name: str, file_path):
     path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
     module_name = f"{module_name}_{path_hash}"
     spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None:
+        raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
+    if module is None:
+        raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    spec.loader.exec_module(module)  # type: ignore
     return module
 
 
@@ -62,7 +66,7 @@ def install_kernel(
     revision: str,
     local_files_only: bool = False,
     variant_locks: Optional[Dict[str, VariantLock]] = None,
-) -> Tuple[str, str]:
+) -> Tuple[str, Path]:
     """
     Download a kernel for the current environment to the cache.
 
@@ -71,17 +75,20 @@ def install_kernel(
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
     noarch_variant = noarch_build_variant()
-    repo_path = snapshot_download(
-        repo_id,
-        allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
-        cache_dir=CACHE_DIR,
-        revision=revision,
-        local_files_only=local_files_only,
+    repo_path = Path(
+        snapshot_download(
+            repo_id,
+            allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
+            cache_dir=CACHE_DIR,
+            revision=revision,
+            local_files_only=local_files_only,
+        )
     )
 
-    variant_path = f"{repo_path}/build/{variant}"
-    noarch_variant_path = f"{repo_path}/build/{noarch_variant}"
-    if not os.path.exists(variant_path) and os.path.exists(noarch_variant_path):
+    variant_path = repo_path / "build" / variant
+    noarch_variant_path = repo_path / "build" / noarch_variant
+
+    if not variant_path.exists() and noarch_variant_path.exists():
         # Fall back to noarch variant.
         variant = noarch_variant
         variant_path = noarch_variant_path
@@ -92,7 +99,7 @@ def install_kernel(
             raise ValueError(f"No lock found for build variant: {variant}")
         validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
 
-    module_init_path = f"{variant_path}/{package_name}/__init__.py"
+    module_init_path = variant_path / package_name / "__init__.py"
 
     if not os.path.exists(module_init_path):
         raise FileNotFoundError(
@@ -107,7 +114,7 @@ def install_kernel_all_variants(
     revision: str,
     local_files_only: bool = False,
     variant_locks: Optional[Dict[str, VariantLock]] = None,
-) -> str:
+) -> Path:
     repo_path = Path(
         snapshot_download(
             repo_id,
@@ -130,7 +137,7 @@ def install_kernel_all_variants(
                 repo_path=repo_path, variant=variant, hash=variant_lock.hash
             )
 
-    return f"{repo_path}/build"
+    return repo_path / "build"
 
 
 def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):
@@ -147,12 +154,12 @@ def get_metadata(repo_id: str, revision: str, local_files_only: bool = False):
         return tomllib.load(f)
 
 
-def get_kernel(repo_id: str, revision: str = "main"):
+def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
     package_name, package_path = install_kernel(repo_id, revision=revision)
-    return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")
+    return import_from_path(package_name, package_path / package_name / "__init__.py")
 
 
-def load_kernel(repo_id: str):
+def load_kernel(repo_id: str) -> ModuleType:
     """Get a pre-downloaded, locked kernel."""
     locked_sha = _get_caller_locked_kernel(repo_id)
 
@@ -166,30 +173,32 @@ def load_kernel(repo_id: str):
     variant = build_variant()
     noarch_variant = noarch_build_variant()
 
-    repo_path = snapshot_download(
-        repo_id,
-        allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
-        cache_dir=CACHE_DIR,
-        local_files_only=True,
+    repo_path = Path(
+        snapshot_download(
+            repo_id,
+            allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
+            cache_dir=CACHE_DIR,
+            local_files_only=True,
+        )
     )
 
-    variant_path = f"{repo_path}/build/{variant}"
-    noarch_variant_path = f"{repo_path}/build/{noarch_variant}"
-    if not os.path.exists(variant_path) and os.path.exists(noarch_variant_path):
+    variant_path = repo_path / "build" / variant
+    noarch_variant_path = repo_path / "build" / noarch_variant
+    if not variant_path.exists() and noarch_variant_path.exists():
         # Fall back to noarch variant.
         variant = noarch_variant
         variant_path = noarch_variant_path
 
-    module_init_path = f"{variant_path}/{package_name}/__init__.py"
+    module_init_path = variant_path / package_name / "__init__.py"
     if not os.path.exists(module_init_path):
         raise FileNotFoundError(
             f"Locked kernel `{repo_id}` does not have build `{variant}` or was not downloaded with `kernels download <project>`"
         )
 
-    return import_from_path(package_name, f"{variant_path}/{package_name}/__init__.py")
+    return import_from_path(package_name, variant_path / package_name / "__init__.py")
 
 
-def get_locked_kernel(repo_id: str, local_files_only: bool = False):
+def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
     """Get a kernel using a lock file."""
     locked_sha = _get_caller_locked_kernel(repo_id)
 
@@ -200,7 +209,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False):
         repo_id, locked_sha, local_files_only=local_files_only
     )
 
-    return import_from_path(package_name, f"{package_path}/{package_name}/__init__.py")
+    return import_from_path(package_name, package_path / package_name / "__init__.py")
 
 
 def _get_caller_locked_kernel(repo_id: str) -> Optional[str]:
@@ -239,9 +248,9 @@ def _get_caller_module() -> Optional[ModuleType]:
     return first_module
 
 
-def validate_kernel(*, repo_path: str, variant: str, hash: str):
+def validate_kernel(*, repo_path: Path, variant: str, hash: str):
     """Validate the given build variant of a kernel against a hasht."""
-    variant_path = Path(repo_path) / "build" / variant
+    variant_path = repo_path / "build" / variant
 
     # Get the file paths. The first element is a byte-encoded relative path
     # used for sorting. The second element is the absolute path.
@@ -263,8 +272,8 @@ def validate_kernel(*, repo_path: str, variant: str, hash: str):
 
     m = hashlib.sha256()
 
-    for filename, full_path in sorted(files):
-        m.update(filename)
+    for filename_bytes, full_path in sorted(files):
+        m.update(filename_bytes)
 
         blob_filename = full_path.resolve().name
         if len(blob_filename) == 40:

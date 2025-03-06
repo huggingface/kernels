@@ -23,6 +23,7 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+  "mypy == 1.14.1",
   "pytest >=8",
   # Whatever version is compatible with pytest.
   "pytest-benchmark",

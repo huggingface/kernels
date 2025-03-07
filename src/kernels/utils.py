@@ -38,9 +38,9 @@ def build_variant() -> str:
     return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-cu{cuda_version.major}{cuda_version.minor}-{cpu}-{os}"
 
 
-def noarch_build_variant() -> str:
+def universal_build_variant() -> str:
     # Once we support other frameworks, detection goes here.
-    return "torch-noarch"
+    return "torch-universal"
 
 
 def import_from_path(module_name: str, file_path: Path) -> ModuleType:
@@ -74,11 +74,11 @@ def install_kernel(
     """
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
-    noarch_variant = noarch_build_variant()
+    universal_variant = universal_build_variant()
     repo_path = Path(
         snapshot_download(
             repo_id,
-            allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
+            allow_patterns=[f"build/{variant}/*", f"build/{universal_variant}/*"],
             cache_dir=CACHE_DIR,
             revision=revision,
             local_files_only=local_files_only,
@@ -86,12 +86,12 @@ def install_kernel(
     )
 
     variant_path = repo_path / "build" / variant
-    noarch_variant_path = repo_path / "build" / noarch_variant
+    universal_variant_path = repo_path / "build" / universal_variant
 
-    if not variant_path.exists() and noarch_variant_path.exists():
-        # Fall back to noarch variant.
-        variant = noarch_variant
-        variant_path = noarch_variant_path
+    if not variant_path.exists() and universal_variant_path.exists():
+        # Fall back to universal variant.
+        variant = universal_variant
+        variant_path = universal_variant_path
 
     if variant_locks is not None:
         variant_lock = variant_locks.get(variant)
@@ -157,23 +157,23 @@ def load_kernel(repo_id: str) -> ModuleType:
     package_name = package_name_from_repo_id(repo_id)
 
     variant = build_variant()
-    noarch_variant = noarch_build_variant()
+    universal_variant = universal_build_variant()
 
     repo_path = Path(
         snapshot_download(
             repo_id,
-            allow_patterns=[f"build/{variant}/*", f"build/{noarch_variant}/*"],
+            allow_patterns=[f"build/{variant}/*", f"build/{universal_variant}/*"],
             cache_dir=CACHE_DIR,
             local_files_only=True,
         )
     )
 
     variant_path = repo_path / "build" / variant
-    noarch_variant_path = repo_path / "build" / noarch_variant
-    if not variant_path.exists() and noarch_variant_path.exists():
-        # Fall back to noarch variant.
-        variant = noarch_variant
-        variant_path = noarch_variant_path
+    universal_variant_path = repo_path / "build" / universal_variant
+    if not variant_path.exists() and universal_variant_path.exists():
+        # Fall back to universal variant.
+        variant = universal_variant
+        variant_path = universal_variant_path
 
     module_init_path = variant_path / package_name / "__init__.py"
     if not os.path.exists(module_init_path):

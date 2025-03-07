@@ -26,8 +26,13 @@ recommended build variants are:
 - `torch26-cxx98-cu124-x86_64-linux`
 - `torch26-cxx98-cu126-x86_64-linux`
 
-This list will be updated as new PyTorch versions are released. Each
-variant directory should contain a single directory with the same name
+This list will be updated as new PyTorch versions are released. Kernels
+that are in pure Python (e.g. Triton kernels) only need to provide a
+single build variant:
+
+- `torch-universal`
+
+Each variant directory should contain a single directory with the same name
 as the repository (replacing `-` by `_`). For instance, kernels in the
 `kernels-community/activation` repository have a directories like
 `build/<variant>/activation`. This directory

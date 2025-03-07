@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 import hashlib
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Tuple
 
 from huggingface_hub import HfApi
+from huggingface_hub.hf_api import GitRefInfo
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
@@ -30,7 +31,7 @@ class KernelLock:
         return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
-def _get_available_versions(repo_id: str):
+def _get_available_versions(repo_id: str) -> Dict[Version, GitRefInfo]:
     """Get kernel versions that are available in the repository."""
     versions = {}
     for tag in HfApi().list_repo_refs(repo_id).tags:
@@ -44,7 +45,7 @@ def _get_available_versions(repo_id: str):
     return versions
 
 
-def get_kernel_locks(repo_id: str, version_spec: str):
+def get_kernel_locks(repo_id: str, version_spec: str) -> KernelLock:
     """
     Get the locks for a kernel with the given version spec.
 
@@ -75,7 +76,7 @@ def get_kernel_locks(repo_id: str, version_spec: str):
             f"Cannot get sibling information for {repo_id} for tag {tag_for_newest.name}"
         )
 
-    variant_files = {}
+    variant_files: Dict[str, List[Tuple[bytes, str]]] = {}
     for sibling in r.siblings:
         if sibling.rfilename.startswith("build/torch"):
             if sibling.blob_id is None:
@@ -96,9 +97,9 @@ def get_kernel_locks(repo_id: str, version_spec: str):
     variant_locks = {}
     for variant, files in variant_files.items():
         m = hashlib.sha256()
-        for filename, hash in sorted(files):
+        for filename_bytes, hash in sorted(files):
             # Filename as bytes.
-            m.update(filename)
+            m.update(filename_bytes)
             # Git blob or LFS file hash as bytes.
             m.update(bytes.fromhex(hash))
 

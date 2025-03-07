@@ -23,6 +23,7 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+  "mypy == 1.14.1",
   "pytest >=8",
   # Whatever version is compatible with pytest.
   "pytest-benchmark",
@@ -34,7 +35,3 @@ kernels = "kernels.cli:main"
 [project.entry-points."egg_info.writers"]
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
-#[build-system]
-#requires = ["torch", "huggingface_hub", "numpy", "tomli;python_version<='3.10'"]
-#build-backend = "kernels.build"
-#backend-path = ["src"]

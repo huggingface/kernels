@@ -1,0 +1,10 @@
+name: Lints
+on: [push, pull_request]
+jobs:
+  lint:
+    name: Run lints
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ruff
+        uses: astral-sh/ruff-action@v3

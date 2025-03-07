@@ -35,3 +35,30 @@ kernels = "kernels.cli:main"
 [project.entry-points."egg_info.writers"]
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
+
+[tool.ruff]
+exclude = [
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".venv*",
+    "__pypackages__",
+    "_build",
+    "build",
+    "dist",
+    "venv",
+]
+line-length = 119
+# Ignored rules:
+# "E501" -> line length violation
+lint.ignore = ["E501"]
+lint.select = ["E", "F", "I", "W"]

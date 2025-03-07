@@ -5,17 +5,16 @@ import importlib.metadata
 import inspect
 import json
 import os
-from pathlib import Path
 import platform
 import sys
 from importlib.metadata import Distribution
+from pathlib import Path
 from types import ModuleType
 from typing import Dict, List, Optional, Tuple
 
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import snapshot_download
 from packaging.version import parse
 
-from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, VariantLock
 
 CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)

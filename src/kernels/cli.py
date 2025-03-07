@@ -6,7 +6,7 @@ from pathlib import Path
 
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
-from kernels.utils import build_variant, install_kernel, install_kernel_all_variants
+from kernels.utils import install_kernel, install_kernel_all_variants
 
 
 def main():

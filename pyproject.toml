@@ -14,7 +14,7 @@ dependencies = [
   "huggingface-hub>=0.26.3",
   "packaging>=24.2",
   "tomli>=2.0.1; python_version<'3.11'",
-  "torch>=2.4",
+  "torch>=2.5",
 ]
 
 [build-system]

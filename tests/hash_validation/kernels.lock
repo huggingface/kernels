@@ -55,9 +55,9 @@
   },
   {
     "repo_id": "kernels-community/triton-scaled-mm",
-    "sha": "9baccbeb763fe5f1b8fbdb9c1e5699548c46632c",
+    "sha": "af10d8c1affe8efce93d228c3e6e64ff673d493f",
     "variants": {
-      "torch-noarch": {
+      "torch-universal": {
         "hash": "sha256-b843c5f30b52b6c1c56fca28cb0cf453be71d6ce7d308f383dce71a8050f7b52",
         "hash_type": "git_lfs_concat"
       }

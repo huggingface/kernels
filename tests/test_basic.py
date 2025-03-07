@@ -9,7 +9,7 @@ def kernel():
 
 
 @pytest.fixture
-def noarch_kernel():
+def universal_kernel():
     return get_kernel("kernels-community/triton-scaled-mm")
 
 
@@ -35,14 +35,14 @@ def test_gelu_fast(kernel, device):
     assert torch.allclose(y, expected)
 
 
-def test_noarch_kernel(noarch_kernel):
+def test_universal_kernel(universal_kernel):
     torch.manual_seed(0)
     A = torch.randint(-10, 10, (64, 128), dtype=torch.int8, device="cuda")
     B = torch.randint(-10, 10, (128, 96), dtype=torch.int8, device="cuda")
     scale_a = torch.tensor(0.4, dtype=torch.float16, device="cuda")
     scale_b = torch.tensor(0.6, dtype=torch.float16, device="cuda")
 
-    out = noarch_kernel.triton_scaled_mm(A, B, scale_a, scale_b, torch.float16)
+    out = universal_kernel.triton_scaled_mm(A, B, scale_a, scale_b, torch.float16)
     out_check = (A * scale_a) @ (B * scale_b)
     out_check = out_check.to(torch.float16)
 

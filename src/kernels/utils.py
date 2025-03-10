@@ -144,9 +144,18 @@ def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
     return import_from_path(package_name, package_path / package_name / "__init__.py")
 
 
-def load_kernel(repo_id: str) -> ModuleType:
-    """Get a pre-downloaded, locked kernel."""
-    locked_sha = _get_caller_locked_kernel(repo_id)
+def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
+    """
+    Get a pre-downloaded, locked kernel.
+
+    If `lockfile` is not specified, the lockfile will be loaded from the
+    caller's package metadata.
+    """
+    if lockfile is None:
+        locked_sha = _get_caller_locked_kernel(repo_id)
+    else:
+        with open(lockfile, "r") as f:
+            locked_sha = _get_locked_kernel(repo_id, f.read())
 
     if locked_sha is None:
         raise ValueError(
@@ -163,6 +172,7 @@ def load_kernel(repo_id: str) -> ModuleType:
             repo_id,
             allow_patterns=[f"build/{variant}/*", f"build/{universal_variant}/*"],
             cache_dir=CACHE_DIR,
+            revision=locked_sha,
             local_files_only=True,
         )
     )
@@ -200,11 +210,19 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
 def _get_caller_locked_kernel(repo_id: str) -> Optional[str]:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
-        if lock_json is not None:
-            for kernel_lock_json in json.loads(lock_json):
-                kernel_lock = KernelLock.from_json(kernel_lock_json)
-                if kernel_lock.repo_id == repo_id:
-                    return kernel_lock.sha
+        if lock_json is None:
+            continue
+        locked_sha = _get_locked_kernel(repo_id, lock_json)
+        if locked_sha is not None:
+            return locked_sha
+    return None
+
+
+def _get_locked_kernel(repo_id: str, lock_json: str) -> Optional[str]:
+    for kernel_lock_json in json.loads(lock_json):
+        kernel_lock = KernelLock.from_json(kernel_lock_json)
+        if kernel_lock.repo_id == repo_id:
+            return kernel_lock.sha
     return None
 
 

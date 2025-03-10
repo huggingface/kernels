@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.1.7"
+version = "0.2.0"
 description = "Download cuda kernels"
 authors = [
   { name = "OlivierDehaene", email = "olivier@huggingface.co" },
@@ -38,24 +38,24 @@ kernels = "kernels.cli:main"
 
 [tool.ruff]
 exclude = [
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    ".venv*",
-    "__pypackages__",
-    "_build",
-    "build",
-    "dist",
-    "venv",
+  ".eggs",
+  ".git",
+  ".git-rewrite",
+  ".hg",
+  ".mypy_cache",
+  ".nox",
+  ".pants.d",
+  ".pytype",
+  ".ruff_cache",
+  ".svn",
+  ".tox",
+  ".venv",
+  ".venv*",
+  "__pypackages__",
+  "_build",
+  "build",
+  "dist",
+  "venv",
 ]
 line-length = 119
 # Ignored rules:

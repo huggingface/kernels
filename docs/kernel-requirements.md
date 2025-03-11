@@ -76,6 +76,26 @@ might use two different commits that happen to have the same version
 number. Git tags are not stable, so they do not provide a good way
 of guaranteeing uniqueness of the namespace.
 
+## Layers
+
+Kernels can provide a `layers` attribute containing a Python module with
+layers. Such layers can be used directly by downstream users or through
+the `use_hub_kernel` decorator. For Torch, layers must be a subclass of
+[`nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html).
+
+To accommodate portable loading, `layers` must be defined in the main
+`__init__.py` file. For example:
+
+```python
+from . import layers
+
+__all__ = [
+  # ...
+  "layers"
+  # ...
+]
+```
+
 ## Python requirements
 
 - Python code must be compatible with Python 3.9 and later.

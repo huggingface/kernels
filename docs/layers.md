@@ -72,23 +72,3 @@ with use_kernel_mapping(kernel_layer_mapping):
 
 This ensures that the mapping is not active anymore outside the
 `with`-scope.
-
-## Using a kernel layer as a replacement for an existing layer
-
-An existing layer in a library can be Kernel Hub-enabled using the
-`use_hub_kernel` decorator. This decorator will replace the existing
-layer if the kernel layer could be loaded successfully.
-
-For example:
-
-```python
-@use_hub_kernel(
-    "kernels-community/activation",
-    layer_name="SiluAndMul",
-    revision="layers",
-)
-class SiluAndMul(nn.Module):
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        d = input.shape[-1] // 2
-        return F.silu(input[..., :d]) * input[..., d:]
-```

@@ -76,6 +76,80 @@ might use two different commits that happen to have the same version
 number. Git tags are not stable, so they do not provide a good way
 of guaranteeing uniqueness of the namespace.
 
+## Layers
+
+A kernel can provide layers in addition to kernel functions. A layer from
+the Hub can replace the `forward` method of an existing layer for a certain
+device type. This makes it possible to provide more performant kernels for
+existing layers. See the [layers documentation](layers.md) for more information
+on how to use layers.
+
+### Writing layers
+
+To make the extension of layers safe, the layers must fulfill the following
+requirements:
+
+- The layers are subclasses of `torch.nn.Module`.
+- The layers are pure, meaning that they do not have their own state. This
+  means that:
+  - The layer must not define its own constructor.
+  - The layer must not use class variables.
+- No other methods must be defined than `forward`.
+- The `forward` method has a signature that is compatible with the
+  `forward` method that it is extending.
+
+This is an example of a pure layer:
+
+```python
+class SiluAndMul(nn.Module):
+    def forward(self, x: torch.Tensor):
+        d = x.shape[-1] // 2
+        output_shape = x.shape[:-1] + (d,)
+        out = torch.empty(output_shape, dtype=x.dtype, device=x.device)
+        ops.silu_and_mul(out, x)
+        return out
+```
+
+For some layers, the `forward` method has to use state from the adopting class.
+In these cases, we recommend to use type annotations to indicate what member
+variables are expected. For instance:
+
+```python
+class LlamaRMSNorm(nn.Module):
+    weight: torch.Tensor
+    variance_epsilon: float
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return rms_norm_fn(
+            hidden_states,
+            self.weight,
+            bias=None,
+            residual=None,
+            eps=self.variance_epsilon,
+            dropout_p=0.0,
+            prenorm=False,
+            residual_in_fp32=False,
+        )
+```
+
+This layer expects the adopting layer to have `weight` and `variance_epsilon`
+member variables and uses them in the `forward` method.
+
+### Exporting layers
+
+To accommodate portable loading, `layers` must be defined in the main
+`__init__.py` file. For example:
+
+```python
+from . import layers
+
+__all__ = [
+  # ...
+  "layers"
+  # ...
+]
+```
+
 ## Python requirements
 
 - Python code must be compatible with Python 3.9 and later.

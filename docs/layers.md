@@ -1,17 +1,12 @@
 # Layers
 
 A kernel can provide layers in addition to kernel functions. A layer from
-the hub can replace the `forward` method of an existing layer for a certain
+the Hub can replace the `forward` method of an existing layer for a certain
 device type. This makes it possible to provide more performant kernels for
 existing layers.
 
-For Torch kernels, layers are subclasses of [`torch.nn.Module`](https://pytorch.org/docs/stable/generated/torch.nn.Module.html)
-with the following requirements:
-
-- They do not have their own state, but layers can use the state of the
-  layer that they are extending.
-- The `forward` method has a signature that is compatible with the
-  `forward` method that it is extending.
+See [Kernel requirements](kernel-requirements.md) for more information the
+requirements of Hub layers.
 
 ## Making a layer extensible with kernels from the hub
 

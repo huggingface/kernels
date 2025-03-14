@@ -65,6 +65,19 @@ kernel_layer_mapping = {
 register_kernel_mapping(kernel_layer_mapping)
 ```
 
+This will register the kernel mapping in the current context, which is
+normally global. It is recommended to scope the mapping to where it is
+used with the `use_kernel_mapping` context manager:
+
+```python
+with use_kernel_mapping(kernel_layer_mapping):
+    # Use the layer for which the mapping is applied.
+    ...
+```
+
+This ensures that the mapping is not active anymore outside the
+`with`-scope.
+
 ## Using a kernel layer as a replacement for an existing layer
 
 An existing layer in a library can be Kernel Hub-enabled using the

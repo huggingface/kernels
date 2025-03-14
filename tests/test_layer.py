@@ -9,7 +9,7 @@ from kernels import (
     register_kernel_mapping,
     use_kernel_forward_from_hub,
 )
-from kernels.layer import _validate_layer
+from kernels.layer import _validate_layer, _KERNEL_MAPPING, use_kernel_mapping
 
 kernel_layer_mapping = {
     "SiluAndMul": {
@@ -68,6 +68,48 @@ def test_layer_fallback_works():
 
     # Check that we don't raise an exception for a non-existing kernel.
     SiluAndMulWithKernelFallback()
+
+
+def test_mapping_contexts():
+    assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul"}
+
+    extra_mapping1 = {
+        "TestKernel": {
+            Device(type="cuda"): LayerRepository(
+                repo_id="kernels-community/activation",
+                layer_name="SiluAndMul",
+                revision="layers",
+            )
+        }
+    }
+
+    with use_kernel_mapping(extra_mapping1):
+        assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "TestKernel"}
+
+        extra_mapping2 = {
+            "SiluAndMul": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-community/non-existing",
+                    layer_name="SiluAndMul",
+                    revision="layers",
+                )
+            }
+        }
+
+        with use_kernel_mapping(extra_mapping2):
+            assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "TestKernel"}
+            assert (
+                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+                == "kernels-community/non-existing"
+            )
+
+        assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "TestKernel"}
+        assert (
+            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+            == "kernels-community/activation"
+        )
+
+    assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul"}
 
 
 def test_validate_kernel_layer():

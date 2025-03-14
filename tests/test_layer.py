@@ -9,7 +9,7 @@ from kernels import (
     register_kernel_mapping,
     use_kernel_forward_from_hub,
 )
-from kernels.layer import _validate_layer, _KERNEL_MAPPING, use_kernel_mapping
+from kernels.layer import _KERNEL_MAPPING, _validate_layer, use_kernel_mapping
 
 kernel_layer_mapping = {
     "SiluAndMul": {

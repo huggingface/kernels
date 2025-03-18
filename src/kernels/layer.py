@@ -2,7 +2,7 @@ import inspect
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict
+from typing import TYPE_CHECKING, Callable, Dict, Union
 
 from .utils import get_kernel
 
@@ -54,7 +54,7 @@ _KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, LayerRepository]]] = ContextV
 )
 
 
-def use_kernel_mapping(mapping: Dict[str, Dict[Device, LayerRepository]]):
+def use_kernel_mapping(mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]):
     class ContextManager:
         def __enter__(self):
             # Mappings always stack on previous mappings.
@@ -67,12 +67,14 @@ def use_kernel_mapping(mapping: Dict[str, Dict[Device, LayerRepository]]):
     return ContextManager()
 
 
-def register_kernel_mapping(mapping: Dict[str, Dict[Device, LayerRepository]]):
+def register_kernel_mapping(
+    mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]
+):
     """
-    Allows one to register a mapping between a layer name the corresponding kernel to use, depending on the device. 
-    This should be use in conjunction with `use_kernel_hub_forward` decorator on the classname. 
+    Allows one to register a mapping between a layer name the corresponding kernel to use, depending on the device.
+    This should be use in conjunction with `use_kernel_hub_forward` decorator on the classname.
     Exemple usage:
-    
+
     ```python
     from kernels import LayerRepository, register_kernel_mapping
 
@@ -92,7 +94,10 @@ def register_kernel_mapping(mapping: Dict[str, Dict[Device, LayerRepository]]):
     for new_kernel, new_device_repos in mapping.items():
         device_repo = _KERNEL_MAPPING.get().setdefault(new_kernel, {})
         for new_device, new_repo in new_device_repos.items():
-            device_repo[new_device] = new_repo
+            if isinstance(new_device, str):
+                device_repo[Device(type=new_device)] = new_repo
+            else:
+                device_repo[new_device] = new_repo
 
 
 def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool = True):

@@ -18,7 +18,14 @@ kernel_layer_mapping = {
             layer_name="SiluAndMul",
             revision="layers",
         )
-    }
+    },
+    "SiluAndMulStringDevice": {
+        "cuda": LayerRepository(
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
+            revision="layers",
+        )
+    },
 }
 
 register_kernel_mapping(kernel_layer_mapping)
@@ -41,15 +48,21 @@ class SiluAndMulWithKernel(SiluAndMul):
     pass
 
 
+@use_kernel_forward_from_hub("SiluAndMulStringDevice")
+class SiluAndMulStringDevice(SiluAndMul):
+    pass
+
+
+@pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_hub_forward(device):
+def test_hub_forward(cls, device):
     torch.random.manual_seed(0)
 
     silu_and_mul = SiluAndMul()
     X = torch.randn((32, 64), device=device)
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = SiluAndMulWithKernel()
+    silu_and_mul_with_kernel = cls()
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -71,7 +84,7 @@ def test_layer_fallback_works():
 
 
 def test_mapping_contexts():
-    assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul"}
+    assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "SiluAndMulStringDevice"}
 
     extra_mapping1 = {
         "TestKernel": {
@@ -84,7 +97,11 @@ def test_mapping_contexts():
     }
 
     with use_kernel_mapping(extra_mapping1):
-        assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "TestKernel"}
+        assert set(_KERNEL_MAPPING.get().keys()) == {
+            "SiluAndMul",
+            "SiluAndMulStringDevice",
+            "TestKernel",
+        }
 
         extra_mapping2 = {
             "SiluAndMul": {
@@ -97,19 +114,30 @@ def test_mapping_contexts():
         }
 
         with use_kernel_mapping(extra_mapping2):
-            assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "TestKernel"}
+            assert set(_KERNEL_MAPPING.get().keys()) == {
+                "SiluAndMul",
+                "SiluAndMulStringDevice",
+                "TestKernel",
+            }
             assert (
                 _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
                 == "kernels-community/non-existing"
             )
 
-        assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "TestKernel"}
+        assert set(_KERNEL_MAPPING.get().keys()) == {
+            "SiluAndMul",
+            "SiluAndMulStringDevice",
+            "TestKernel",
+        }
         assert (
             _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
             == "kernels-community/activation"
         )
 
-    assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul"}
+    assert set(_KERNEL_MAPPING.get().keys()) == {
+        "SiluAndMul",
+        "SiluAndMulStringDevice",
+    }
 
 
 def test_validate_kernel_layer():

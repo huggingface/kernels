@@ -54,7 +54,7 @@ by name using the `register_kernel_mapping` function. For example:
 ```python
 kernel_layer_mapping = {
     "SiluAndMul": {
-        Device(type="cuda"): LayerRepository(
+        "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
             revision="layers",

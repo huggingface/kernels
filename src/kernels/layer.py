@@ -69,10 +69,24 @@ def use_kernel_mapping(mapping: Dict[str, Dict[Device, LayerRepository]]):
 
 def register_kernel_mapping(mapping: Dict[str, Dict[Device, LayerRepository]]):
     """
-    Register a layer mapping.
+    Allows one to register a mapping between a layer name the corresponding kernel to use, depending on the device. 
+    This should be use in conjunction with `use_kernel_hub_forward` decorator on the classname. 
+    Exemple usage:
+    
+    ```python
+    from kernels import LayerRepository, register_kernel_mapping
 
-    This function registers a mapping from a layer identifier and device type
-    to a layer in a kernel repository.
+    kernel_layer_mapping = {
+      "LlamaRMSNorm": {
+          "cuda": LayerRepository(
+              repo_id="kernels-community/activation",
+              layer_name="RmsNorm",
+              revision="layers",
+          ),
+      },
+    }
+    register_kernel_mapping(kernel_layer_mapping)
+    ```
     """
     # Merge with existing mappings.
     for new_kernel, new_device_repos in mapping.items():

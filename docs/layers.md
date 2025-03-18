@@ -35,7 +35,12 @@ decorator can be made extensible by by monkeypatching it using the `replace_kern
 from somelibrary import SiluAndMul
 
 replace_kernel_forward_from_hub(SiluAndMul, "SiluAndMul")
+register_kernel_mapping(kernel_layer_mapping)
 ```
+
+The `register_kernel_mapping` call maps the name `SiluAndMul` to actual
+hub kernels. See the [Registering a hub kernel for a layer](#registering-a-hub-kernel-for-a-layer)
+section for more information.
 
 **Warning:** we strongly recommend using layers with a decorator, since
 it signifies that the maintainer intends to keep the `forward` signature

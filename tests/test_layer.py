@@ -53,6 +53,24 @@ class SiluAndMulStringDevice(SiluAndMul):
     pass
 
 
+def test_arg_kinds():
+    @use_kernel_forward_from_hub("ArgKind")
+    class ArgKind(nn.Module):
+        def forward(
+            self,
+            arg1,
+            arg2,
+            *,
+            kwarg1,
+            kwarg2=42,
+        ):
+            return (arg1, arg2, kwarg1, kwarg2)
+
+    arg_kind = ArgKind()
+    assert arg_kind("foo", "bar", kwarg1="baz") == ("foo", "bar", "baz", 42)
+    assert arg_kind("foo", "bar", kwarg1="baz", kwarg2=5) == ("foo", "bar", "baz", 5)
+
+
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_hub_forward(cls, device):

@@ -2,6 +2,7 @@ from kernels.layer import (
     Device,
     LayerRepository,
     register_kernel_mapping,
+    replace_kernel_forward_from_hub,
     use_kernel_forward_from_hub,
 )
 from kernels.utils import (
@@ -18,6 +19,7 @@ __all__ = [
     "install_kernel",
     "use_kernel_forward_from_hub",
     "register_kernel_mapping",
+    "replace_kernel_forward_from_hub",
     "LayerRepository",
     "Device",
 ]

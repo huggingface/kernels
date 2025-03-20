@@ -11,9 +11,9 @@ authors = [
 readme = "README.md"
 requires-python = ">= 3.9"
 dependencies = [
-  "huggingface-hub>=0.26.3",
-  "packaging>=24.2",
-  "tomli>=2.0.1; python_version<'3.11'",
+  "huggingface_hub>=0.26.0,<1.0",
+  "packaging>=20.0",
+  "tomli>=2.0; python_version<'3.11'",
 ]
 
 [build-system]

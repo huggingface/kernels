@@ -52,3 +52,8 @@ jobs:
 
       - name: Run tests
         run: uv run pytest tests
+
+      - name: Import check without torch
+        run: |
+          uv pip uninstall torch
+          python -c "import kernels"

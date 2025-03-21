@@ -152,6 +152,25 @@ def test_mapping_contexts():
             == "kernels-community/activation"
         )
 
+        with use_kernel_mapping(extra_mapping2, inherit_mapping=False):
+            assert set(_KERNEL_MAPPING.get().keys()) == {
+                "SiluAndMul",
+            }
+            assert (
+                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+                == "kernels-community/non-existing"
+            )
+
+        assert set(_KERNEL_MAPPING.get().keys()) == {
+            "SiluAndMul",
+            "SiluAndMulStringDevice",
+            "TestKernel",
+        }
+        assert (
+            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+            == "kernels-community/activation"
+        )
+
     assert set(_KERNEL_MAPPING.get().keys()) == {
         "SiluAndMul",
         "SiluAndMulStringDevice",

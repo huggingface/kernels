@@ -54,11 +54,26 @@ _KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, LayerRepository]]] = ContextV
 )
 
 
-def use_kernel_mapping(mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]):
+def use_kernel_mapping(
+    mapping: Dict[str, Dict[Union[Device, str], LayerRepository]],
+    *,
+    inherit_mapping: bool = True,
+):
+    """
+    Context manager that sets a mapping for a duration of the context.
+
+    When `inherit_mapping` is set to `True` the current mapping will be
+    extended by `mapping` inside the context. If it is `False`, only
+    `mapping` is used inside the context.
+    """
+
     class ContextManager:
         def __enter__(self):
             # Mappings always stack on previous mappings.
-            self.token = _KERNEL_MAPPING.set(deepcopy(_KERNEL_MAPPING.get()))
+            if inherit_mapping:
+                self.token = _KERNEL_MAPPING.set(deepcopy(_KERNEL_MAPPING.get()))
+            else:
+                self.token = _KERNEL_MAPPING.set({})
             register_kernel_mapping(mapping)
 
         def __exit__(self, exc_type, exc_value, traceback):

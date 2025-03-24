@@ -4,6 +4,7 @@ from kernels.layer import (
     register_kernel_mapping,
     replace_kernel_forward_from_hub,
     use_kernel_forward_from_hub,
+    use_kernel_mapping,
 )
 from kernels.utils import (
     get_kernel,
@@ -18,6 +19,7 @@ __all__ = [
     "load_kernel",
     "install_kernel",
     "use_kernel_forward_from_hub",
+    "use_kernel_mapping",
     "register_kernel_mapping",
     "replace_kernel_forward_from_hub",
     "LayerRepository",

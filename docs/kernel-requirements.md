@@ -38,6 +38,12 @@ as the repository (replacing `-` by `_`). For instance, kernels in the
 `build/<variant>/activation`. This directory
 must be a Python package with an `__init__.py` file.
 
+## Versioning
+
+Kernels are versioned on the Hub using Git tags. Version tags must be of
+the form `v<major>.<minor>.<patch>`. Versions are used by [locking](./locking.md)
+to resolve the version constraints.
+
 ## Native Python module
 
 Kernels will typically contain a native Python module with precompiled

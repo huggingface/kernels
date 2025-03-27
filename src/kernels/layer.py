@@ -3,6 +3,7 @@ from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Dict, Union
+import warnings
 
 from .utils import get_kernel
 
@@ -132,6 +133,12 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
     def forward(self, x, *args, **kwargs):
         kernel = _KERNEL_MAPPING.get().get(layer_name)
         if kernel is None:
+            warnings.warn(
+                "\n"
+                f"No kernel mapping found for layer `{layer_name}`. "
+                f"Check if the layer name matches one of the kernels in the mapping or add the kernel "
+                f"you want to use to the mapping. Defaulting to original forward implementation."
+            )
             if not use_fallback:
                 raise ValueError(f"No layer mapping for `{layer_name}`")
             return fallback_forward(self, x, *args, **kwargs)

@@ -1,9 +1,9 @@
 import inspect
+import warnings
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Dict, Union
-import warnings
 
 from .utils import get_kernel
 

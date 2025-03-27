@@ -80,15 +80,15 @@ def install_kernel(
     repo_path = Path(
         snapshot_download(
             repo_id,
-            allow_patterns=[f"build/{variant}/*", f"build/{universal_variant}/*"],
+            allow_patterns=[f"build-output/{variant}/*", f"build-output/{universal_variant}/*"],
             cache_dir=CACHE_DIR,
             revision=revision,
             local_files_only=local_files_only,
         )
     )
 
-    variant_path = repo_path / "build" / variant
-    universal_variant_path = repo_path / "build" / universal_variant
+    variant_path = repo_path / "build-output" / variant
+    universal_variant_path = repo_path / "build-output" / universal_variant
 
     if not variant_path.exists() and universal_variant_path.exists():
         # Fall back to universal variant.
@@ -120,7 +120,7 @@ def install_kernel_all_variants(
     repo_path = Path(
         snapshot_download(
             repo_id,
-            allow_patterns="build/*",
+            allow_patterns="build-output/*",
             cache_dir=CACHE_DIR,
             revision=revision,
             local_files_only=local_files_only,
@@ -128,7 +128,7 @@ def install_kernel_all_variants(
     )
 
     if variant_locks is not None:
-        for entry in (repo_path / "build").iterdir():
+        for entry in (repo_path / "build-output").iterdir():
             variant = entry.parts[-1]
 
             variant_lock = variant_locks.get(variant)
@@ -139,7 +139,7 @@ def install_kernel_all_variants(
                 repo_path=repo_path, variant=variant, hash=variant_lock.hash
             )
 
-    return repo_path / "build"
+    return repo_path / "build-output"
 
 
 def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
@@ -173,15 +173,15 @@ def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
     repo_path = Path(
         snapshot_download(
             repo_id,
-            allow_patterns=[f"build/{variant}/*", f"build/{universal_variant}/*"],
+            allow_patterns=[f"build-output/{variant}/*", f"build-output/{universal_variant}/*"],
             cache_dir=CACHE_DIR,
             revision=locked_sha,
             local_files_only=True,
         )
     )
 
-    variant_path = repo_path / "build" / variant
-    universal_variant_path = repo_path / "build" / universal_variant
+    variant_path = repo_path / "build-output" / variant
+    universal_variant_path = repo_path / "build-output" / universal_variant
     if not variant_path.exists() and universal_variant_path.exists():
         # Fall back to universal variant.
         variant = universal_variant
@@ -256,7 +256,7 @@ def _get_caller_module() -> Optional[ModuleType]:
 
 def validate_kernel(*, repo_path: Path, variant: str, hash: str):
     """Validate the given build variant of a kernel against a hasht."""
-    variant_path = repo_path / "build" / variant
+    variant_path = repo_path / "build-output" / variant
 
     # Get the file paths. The first element is a byte-encoded relative path
     # used for sorting. The second element is the absolute path.

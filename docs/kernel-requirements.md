@@ -52,16 +52,31 @@ requirements:
 
 - Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
   for compatibility with Python 3.9 and later.
-- Compatible with glibc 2.27 or later. This means that no symbols
-  from later versions must be used. To archive this, the module should
-  be built against this glibc version. **Warning:** libgcc must also be
-  built against glibc 2.27 to avoid leaking symbols.
-- No dynamic linkage against libstdc++/libc++. Linkage for C++ symbols
-  must be static.
-- No dynamic library dependencies outside Torch or CUDA libraries
-  installed as dependencies of Torch.
+- Compatible with Ubuntu 20.04 or later. This means that the extension
+  **must not** use symbols versions higher than:
 
-(These requirements will be updated as new PyTorch versions are released.)
+  - `GLIBC_2.31`
+  - `GLIBCXX_3.4.28`
+
+  These requirement can be checked with the ABI checker (see below).
+  **Warning:** libgcc must also be built against glibc 2.31 to avoid
+  leaking symbols.
+
+- No dynamic library dependencies outside:
+
+  - Torch;
+  - CUDA/ROCm libraries installed as dependencies of Torch.
+
+The glibc/libstdc++ version requirements can be checked with
+[`kernel-abi-check`](https://crates.io/crates/kernel-abi-check):
+
+```bash
+
+$ cargo install kernel-abi-check
+$ kernel-abi-check ubuntu-20.04 result/relu/_relu_e87e0ca_dirty.abi3.so
+✅ glibc symbol version max: 2.31, found: 2.14
+✅ libstdc++ symbol version max: 3.4.28, found: none
+```
 
 ## Torch extension
 

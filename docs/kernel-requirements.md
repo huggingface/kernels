@@ -52,30 +52,30 @@ requirements:
 
 - Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
   for compatibility with Python 3.9 and later.
-- Compatible with Ubuntu 20.04 or later. This means that the extension
-  **must not** use symbols versions higher than:
+- Compatible with [`manylinux_2_28`](https://github.com/pypa/manylinux?tab=readme-ov-file#manylinux_2_28-almalinux-8-based).
+  This means that the extension **must not** use symbols versions higher than:
 
-  - `GLIBC_2.31`
-  - `GLIBCXX_3.4.28`
+  - GLIBC 2.28
+  - GLIBCXX 3.4.24
+  - CXXABI 1.3.11
+  - GCC 7.0.0
 
   These requirement can be checked with the ABI checker (see below).
-  **Warning:** libgcc must also be built against glibc 2.31 to avoid
-  leaking symbols.
 
 - No dynamic library dependencies outside:
 
   - Torch;
   - CUDA/ROCm libraries installed as dependencies of Torch.
 
-The glibc/libstdc++ version requirements can be checked with
+The manylinux_2_28 and Python ABI 3.9 version requirements can be checked with
 [`kernel-abi-check`](https://crates.io/crates/kernel-abi-check):
 
 ```bash
 
 $ cargo install kernel-abi-check
-$ kernel-abi-check ubuntu-20.04 result/relu/_relu_e87e0ca_dirty.abi3.so
-✅ glibc symbol version max: 2.31, found: 2.14
-✅ libstdc++ symbol version max: 3.4.28, found: none
+$ kernel-abi-check result/relu/_relu_e87e0ca_dirty.abi3.so
+🐍 Checking for compatibility with manylinux_2_28 and Python ABI version 3.9
+✅ No compatibility issues found
 ```
 
 ## Torch extension

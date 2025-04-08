@@ -203,3 +203,75 @@ def test_validate_kernel_layer():
 
     with pytest.raises(TypeError, match="different kind of arguments"):
         _validate_layer(cls=BadLayer4, check_cls=SiluAndMul)
+
+
+def test_fallback_used_when_training():
+    @use_kernel_forward_from_hub("Linear")
+    class TorchLinear(nn.Linear):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            # Used to check that we called hub kernel.
+            self.n_calls = 0
+
+        def forward(self, input: torch.Tensor) -> torch.Tensor:
+            self.n_calls += 1
+            return super().forward(input)
+
+    linear = TorchLinear(32, 32).to("cuda")
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-community/kernels-test",
+                    layer_name="LinearImplicitBackward",
+                )
+            }
+        }
+    ):
+        linear.train()
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 0
+
+        linear.eval()
+        linear(X)
+        assert linear.n_calls == 0
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-community/kernels-test",
+                    layer_name="LinearBackward",
+                )
+            }
+        }
+    ):
+        linear.train()
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 0
+
+        linear.eval()
+        linear(X)
+        assert linear.n_calls == 0
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-community/kernels-test",
+                    layer_name="LinearNoBackward",
+                )
+            }
+        }
+    ):
+        linear.train()
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 1
+
+        linear.eval()
+        linear(X)
+        assert linear.n_calls == 1

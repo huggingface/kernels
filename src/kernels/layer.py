@@ -4,7 +4,7 @@ import warnings
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Dict, Union
+from typing import TYPE_CHECKING, Dict, Union
 
 from .utils import get_kernel
 
@@ -131,12 +131,13 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
 
     fallback_forward = cls.forward
 
-    cached_forward: Dict[LayerRepository, Callable] = {}
+    cached_layer: Dict[LayerRepository, nn.Module] = {}
 
     def forward(self, x, *args, **kwargs):
         if _DISABLE_KERNEL_MAPPING:
             return fallback_forward(self, x, *args, **kwargs)
 
+        needs_backward = self.training
         kernel = _KERNEL_MAPPING.get().get(layer_name)
         if kernel is None:
             warnings.warn(
@@ -162,9 +163,11 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
             return fallback_forward(self, x, *args, **kwargs)
 
         # Short-circuit if we already loaded the layer.
-        layer_forward = cached_forward.get(repo, None)
-        if layer_forward is not None:
-            return layer_forward(self, x, *args, **kwargs)
+        layer = cached_layer.get(repo, None)
+        if layer is not None:
+            if needs_backward and not getattr(layer, "has_backward", True):
+                return fallback_forward(self, x, *args, **kwargs)
+            return layer.forward(self, x, *args, **kwargs)
 
         layer = _get_kernel_layer(
             repo_id=repo.repo_id,
@@ -180,10 +183,11 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
         finally:
             cls.forward = orig_forward
 
-        layer_forward = layer.forward
-        cached_forward[repo] = layer_forward
+        cached_layer[repo] = layer
 
-        return layer_forward(self, x, *args, **kwargs)
+        if needs_backward and not getattr(layer, "has_backward", True):
+            return fallback_forward(self, x, *args, **kwargs)
+        return layer.forward(self, x, *args, **kwargs)
 
     cls.forward = forward
 
@@ -240,7 +244,8 @@ def _validate_layer(*, check_cls, cls):
     # ... or predefined member variables.
     torch_module_members = {name for name, _ in inspect.getmembers(nn.Module)}
     cls_members = {name for name, _ in inspect.getmembers(cls)}
-    if cls_members - torch_module_members != set():
+    difference = cls_members - torch_module_members
+    if difference != set() and difference != {"has_backward"}:
         raise TypeError("Layer must not contain additional members.")
 
     # Check whether the forward signatures are similar.

@@ -41,6 +41,9 @@ def test_gelu_fast(kernel, device):
     [
         ("kernels-community/activation", "main", True),
         ("kernels-community/triton-layer-norm", "main", True),
+        # Repo only contains Torch 2.4 kernels (and we don't
+        # support/test against this version).
+        ("kernels-test/only-torch-2.4", "main", False),
         ("google-bert/bert-base-uncased", "87565a309", False),
     ],
 )

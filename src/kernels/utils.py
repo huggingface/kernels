@@ -12,7 +12,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict, List, Optional, Tuple
 
-from huggingface_hub import snapshot_download
+from huggingface_hub import file_exists, snapshot_download
 from packaging.version import parse
 
 from kernels.lockfile import KernelLock, VariantLock
@@ -145,6 +145,29 @@ def install_kernel_all_variants(
 def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
     package_name, package_path = install_kernel(repo_id, revision=revision)
     return import_from_path(package_name, package_path / package_name / "__init__.py")
+
+
+def has_kernel(repo_id: str, revision: str = "main") -> bool:
+    """
+    Check whether a kernel build exists for the current environment
+    (Torch version and compute framework).
+    """
+    package_name = package_name_from_repo_id(repo_id)
+    variant = build_variant()
+    universal_variant = universal_build_variant()
+
+    if file_exists(
+        repo_id,
+        revision=revision,
+        filename=f"build/{universal_variant}/{package_name}/__init__.py",
+    ):
+        return True
+
+    return file_exists(
+        repo_id,
+        revision=revision,
+        filename=f"build/{variant}/{package_name}/__init__.py",
+    )
 
 
 def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:

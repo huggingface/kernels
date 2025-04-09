@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from kernels import get_kernel
+from kernels import get_kernel, has_kernel
 
 
 @pytest.fixture
@@ -34,6 +34,19 @@ def test_gelu_fast(kernel, device):
     )
 
     assert torch.allclose(y, expected)
+
+
+@pytest.mark.parametrize(
+    "kernel_exists",
+    [
+        ("kernels-community/activation", "main", True),
+        ("kernels-community/triton-layer-norm", "main", True),
+        ("google-bert/bert-base-uncased", "87565a309", False),
+    ],
+)
+def test_has_kernel(kernel_exists):
+    repo_id, revision, kernel = kernel_exists
+    assert has_kernel(repo_id, revision=revision) == kernel
 
 
 def test_universal_kernel(universal_kernel):

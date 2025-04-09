@@ -9,6 +9,7 @@ from kernels.layer import (
 from kernels.utils import (
     get_kernel,
     get_locked_kernel,
+    has_kernel,
     install_kernel,
     load_kernel,
 )
@@ -16,6 +17,7 @@ from kernels.utils import (
 __all__ = [
     "get_kernel",
     "get_locked_kernel",
+    "has_kernel",
     "load_kernel",
     "install_kernel",
     "use_kernel_forward_from_hub",

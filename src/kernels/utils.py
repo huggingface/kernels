@@ -4,6 +4,7 @@ import importlib
 import importlib.metadata
 import inspect
 import json
+import logging
 import os
 import platform
 import sys
@@ -17,7 +18,20 @@ from packaging.version import parse
 
 from kernels.lockfile import KernelLock, VariantLock
 
-CACHE_DIR: Optional[str] = os.environ.get("HF_KERNELS_CACHE", None)
+
+def _get_cache_dir() -> Optional[str]:
+    """Returns the kernels cache directory."""
+    cache_dir = os.environ.get("HF_KERNELS_CACHE", None)
+    if cache_dir is not None:
+        logging.warning(
+            "HF_KERNELS_CACHE will be removed in the future, use KERNELS_CACHE instead"
+        )
+        return cache_dir
+
+    return os.environ.get("KERNELS_CACHE", None)
+
+
+CACHE_DIR: Optional[str] = _get_cache_dir()
 
 
 def build_variant() -> str:

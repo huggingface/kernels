@@ -1,4 +1,5 @@
 import inspect
+import os
 import warnings
 from contextvars import ContextVar
 from copy import deepcopy
@@ -9,6 +10,8 @@ from .utils import get_kernel
 
 if TYPE_CHECKING:
     from torch import nn
+
+_DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
 
 
 @dataclass(frozen=True)
@@ -131,6 +134,9 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
     cached_forward: Dict[LayerRepository, Callable] = {}
 
     def forward(self, x, *args, **kwargs):
+        if _DISABLE_KERNEL_MAPPING:
+            return fallback_forward(self, x, *args, **kwargs)
+
         kernel = _KERNEL_MAPPING.get().get(layer_name)
         if kernel is None:
             warnings.warn(

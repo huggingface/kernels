@@ -119,10 +119,17 @@ requirements:
 - The `forward` method has a signature that is compatible with the
   `forward` method that it is extending.
 
+The only exception to the _no class variables rule_ is addition of a
+`has_backward` class variable. This variable is used to indicate whether
+the layer has a backward pass implemented (`True` when absent).
+
 This is an example of a pure layer:
 
 ```python
 class SiluAndMul(nn.Module):
+    # This layer does not implement backward.
+    has_backward: bool = False
+
     def forward(self, x: torch.Tensor):
         d = x.shape[-1] // 2
         output_shape = x.shape[:-1] + (d,)

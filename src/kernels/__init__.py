@@ -1,3 +1,5 @@
+import importlib.metadata
+
 from kernels.layer import (
     Device,
     LayerRepository,
@@ -27,3 +29,5 @@ __all__ = [
     "LayerRepository",
     "Device",
 ]
+
+__version__ = importlib.metadata.version("kernels")

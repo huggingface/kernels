@@ -157,6 +157,27 @@ def install_kernel_all_variants(
 
 
 def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
+    """
+    Load a kernel from the kernel hub.
+
+    This function downloads a kernel to the local Hugging Face Hub cache
+    directory (if it was not downloaded before) and then loads the kernel.
+
+    Args:
+        repo_id (`str`): The Hub repository containing the kernel.
+        revision (`str`, *optional*, defaults to `"main"`): The specific
+            revision (branch, tag, or commit) to download.
+
+    Returns:
+        `ModuleType`: The imported kernel module.
+
+    Example:
+        ```python
+        from kernels import get_kernel
+        kernel = get_kernel("username/my-kernel")
+        result = kernel.kernel_function(input_data)
+        ```
+    """
     package_name, package_path = install_kernel(repo_id, revision=revision)
     return import_from_path(package_name, package_path / package_name / "__init__.py")
 
@@ -164,7 +185,20 @@ def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
 def has_kernel(repo_id: str, revision: str = "main") -> bool:
     """
     Check whether a kernel build exists for the current environment
-    (Torch version and compute framework).
+
+    This function checks whether there exists a kernel build for the current
+    environment (Torch version, compute framework and architecture).
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        revision (`str`, *optional*, defaults to `"main"`):
+            The kernel revision.
+
+    Returns:
+        `bool`:
+            `True` if a compatible kernel build exists for the current environment,
+            `False` otherwise.
     """
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
@@ -186,10 +220,25 @@ def has_kernel(repo_id: str, revision: str = "main") -> bool:
 
 def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
     """
-    Get a pre-downloaded, locked kernel.
+    Loads a pre-downloaded, locked kernel module from the local cache.
 
-    If `lockfile` is not specified, the lockfile will be loaded from the
-    caller's package metadata.
+    This function retrieves a kernel that was locked at a specific revision with
+    `kernels lock <project>` and then downloaded with `kernels download <project>`.
+
+    This function will fail if the kernel was not locked or downloaded. If you want
+    the kernel to be downloaded when it is not in the cache, use [`get_locked_kernel`]
+    instead.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        lockfile (`Optional[Path]`, *optional*, defaults to `None`):
+            Path to a lockfile containing the commit SHA for the kernel. If `None`,
+            the lock information is automatically retrieved from the metadata of the
+            calling package.
+
+    Returns:
+        `ModuleType`: The imported kernel module corresponding to the locked version.
     """
     if lockfile is None:
         locked_sha = _get_caller_locked_kernel(repo_id)
@@ -234,7 +283,27 @@ def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
 
 
 def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
-    """Get a kernel using a lock file."""
+    """
+    Loads a locked kernel module.
+
+    This function retrieves a kernel that was locked at a specific revision with
+    `kernels lock <project>`.
+
+    This function will download the locked kernel when it is not available in the
+    cache. If you want loading to fail if the kernel is not in the cache, use
+    [`load_kernel`] instead.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        lockfile (`Optional[Path]`, *optional*, defaults to `None`):
+            Path to a lockfile containing the commit SHA for the kernel. If `None`,
+            the lock information is automatically retrieved from the metadata of the
+            calling package.
+
+    Returns:
+        `ModuleType`: The imported kernel module corresponding to the locked version.
+    """
     locked_sha = _get_caller_locked_kernel(repo_id)
 
     if locked_sha is None:

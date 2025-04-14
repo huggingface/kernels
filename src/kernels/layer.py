@@ -64,11 +64,18 @@ def use_kernel_mapping(
     inherit_mapping: bool = True,
 ):
     """
-    Context manager that sets a mapping for a duration of the context.
+    Context manager that sets a kernel mapping for the duration of the context.
 
-    When `inherit_mapping` is set to `True` the current mapping will be
-    extended by `mapping` inside the context. If it is `False`, only
-    `mapping` is used inside the context.
+    Args:
+        mapping (`Dict[str, Dict[Union[Device, str], LayerRepository]]`):
+            A mapping between layer names and their corresponding kernel repositories.
+        inherit_mapping (`bool`, *optional*, defaults to `True`):
+            The current mapping will be extended by `mapping` when set to `True`.
+            When set to `False`, the current mapping will be replaced by `mapping`
+            for the duration of the context.
+
+    Returns:
+        `ContextManager`: Context manager that sets up the mapping.
     """
 
     class ContextManager:
@@ -87,27 +94,31 @@ def use_kernel_mapping(
 
 
 def register_kernel_mapping(
-    mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]
+    mapping: Dict[str, Dict[Union[Device, str], LayerRepository]],
 ):
     """
-    Allows one to register a mapping between a layer name the corresponding kernel to use, depending on the device.
+    Register a mapping between a layer name the corresponding kernel to use, depending on the device.
     This should be use in conjunction with `use_kernel_hub_forward` decorator on the classname.
-    Exemple usage:
 
-    ```python
-    from kernels import LayerRepository, register_kernel_mapping
+    Args:
+        mapping (`Dict[str, Dict[Union[Device, str], LayerRepository]]`):
+            A mapping between layer names and their corresponding kernel repositories.
 
-    kernel_layer_mapping = {
-      "LlamaRMSNorm": {
-          "cuda": LayerRepository(
-              repo_id="kernels-community/activation",
-              layer_name="RmsNorm",
-              revision="layers",
-          ),
-      },
-    }
-    register_kernel_mapping(kernel_layer_mapping)
-    ```
+    Example:
+        ```python
+        from kernels import LayerRepository, register_kernel_mapping
+
+        kernel_layer_mapping = {
+        "LlamaRMSNorm": {
+            "cuda": LayerRepository(
+                repo_id="kernels-community/activation",
+                layer_name="RmsNorm",
+                revision="layers",
+            ),
+        },
+        }
+        register_kernel_mapping(kernel_layer_mapping)
+        ```
     """
     # Merge with existing mappings.
     for new_kernel, new_device_repos in mapping.items():
@@ -125,8 +136,18 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
     This function monkeypatches a layer, replacing the `forward` method
     of the layer with that of a layer from the hub. The replacement is done
     when a layer matching `layer_name` and device type is registered through
-    `register_layer_mapping`. The device type is inferred from the first
+    [`register_layer_mapping`]. The device type is inferred from the first
     argument to `forward`.
+
+    Args:
+        cls (`nn.Module`):
+            The layer class to replace the forward function of.
+        layer_name (`str`):
+            The name to assign to the layer.
+        use_fallback (`bool`, *optional*, defaults to `True`):
+            Whether to use the fallback forward function if no kernel mapping
+            is found. If set to `False`, a `ValueError` will be raised if no kernel
+            mapping is found.
     """
 
     fallback_forward = cls.forward
@@ -195,11 +216,34 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
 def use_kernel_forward_from_hub(layer_name: str, *, use_fallback: bool = True):
     """
     Replace the forward function of a layer using a layer from the kernel hub.
+
     This decorator can be applied to a layer and replaces the forward method
     of the layer with that of a layer from the hub. The replacement is done
     when a layer matching `layer_name` and device type is registered through
-    `register_layer_mapping`. The device type is inferred from the first
+    [`register_layer_mapping`]. The device type is inferred from the first
     argument to `forward`.
+
+    Args:
+        layer_name (`str`):
+            The name to assign to the layer.
+        use_fallback (`bool`, *optional*, defaults to `True`):
+            Whether to use the fallback forward function if no kernel mapping
+            is found. If set to `False`, a `ValueError` will be raised if no kernel
+            mapping is found.
+
+    Example:
+        ```python
+        from kernels import use_kernel_forward_from_hub
+
+        @use_kernel_forward_from_hub(layer_name="LlamaRMSNorm")
+        class LlamaRMSNorm(nn.Module):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+
+            def forward(self, x):
+                # Original forward implementation
+                pass
+        ```
     """
 
     def decorator(cls):

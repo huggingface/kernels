@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 "kernels-community/activation" = ">=0.0.1"
 ```
 
-Then run `kernel lock .` in the project directory. This generates a `kernels.lock` file with
+Then run `kernels lock .` in the project directory. This generates a `kernels.lock` file with
 the locked revisions. The locked revision will be used when loading a kernel with
 `get_locked_kernel`:
 
@@ -28,7 +28,7 @@ to `kernels` after doing an (editable or regular) installation of your project.
 
 ## Pre-downloading locked kernels
 
-Locked kernels can be pre-downloaded by running `kernel download .` in your
+Locked kernels can be pre-downloaded by running `kernels download .` in your
 project directory. This will download the kernels to your local Hugging Face
 Hub cache.
 

@@ -1,8 +1,11 @@
 # Kernel requirements
 
-Kernels on the Hub must fulfill the requirements outlined on this page.
+Kernels on the Hub must fulfill the requirements outlined on this page. By
+ensuring kernels are compliant, they can be used on a wide range of Linux
+systems and Torch builds. 
+
 You can use [kernel-builder](https://github.com/huggingface/kernel-builder/)
-to build conforming kernels.
+to build compliant kernels.
 
 ## Directory layout
 
@@ -10,33 +13,52 @@ A kernel repository on the Hub must contain a `build` directory. This
 directory contains build variants of a kernel in the form of directories
 following the template
 `<framework><version>-cxx<abiver>-<cu><cudaver>-<arch>-<os>`.
-For example `build/torch26-cxx98-cu118-x86_64-linux`. The currently
-recommended build variants are:
+For example `build/torch26-cxx98-cu118-x86_64-linux`.
 
-- `torch25-cxx11-cu118-x86_64-linux`
-- `torch25-cxx11-cu121-x86_64-linux`
-- `torch25-cxx11-cu124-x86_64-linux`
-- `torch25-cxx98-cu118-x86_64-linux`
-- `torch25-cxx98-cu121-x86_64-linux`
-- `torch25-cxx98-cu124-x86_64-linux`
+Each variant directory must contain a single directory with the same name
+as the repository (replacing `-` by `_`). For instance, kernels in the
+`kernels-community/activation` repository have a directories like
+`build/<variant>/activation`. This directory
+must be a Python package with an `__init__.py` file.
+
+## Build variants
+
+A kernel can be compliant for a specific compute framework (e.g. CUDA) or
+architecture (e.g. x86_64). For compliance with a compute framework and
+architecture combination, all the build variants listed below must be available.
+This list will be updated as new PyTorch versions are released. 
+
+### CUDA x86_64
+
+- `torch25-cxx11-cu118-x86_64-linux` (deprecated when Torch 2.7.0 is released)
+- `torch25-cxx11-cu121-x86_64-linux` (deprecated when Torch 2.7.0 is released)
+- `torch25-cxx11-cu124-x86_64-linux` (deprecated when Torch 2.7.0 is released)
+- `torch25-cxx98-cu118-x86_64-linux` (deprecated when Torch 2.7.0 is released)
+- `torch25-cxx98-cu121-x86_64-linux` (deprecated when Torch 2.7.0 is released)
+- `torch25-cxx98-cu124-x86_64-linux` (deprecated when Torch 2.7.0 is released)
 - `torch26-cxx11-cu118-x86_64-linux`
 - `torch26-cxx11-cu124-x86_64-linux`
 - `torch26-cxx11-cu126-x86_64-linux`
 - `torch26-cxx98-cu118-x86_64-linux`
 - `torch26-cxx98-cu124-x86_64-linux`
 - `torch26-cxx98-cu126-x86_64-linux`
+- `torch27-cxx11-cu118-x86_64-linux` (required when Torch 2.7.0 is released)
+- `torch27-cxx11-cu126-x86_64-linux` (required when Torch 2.7.0 is released)
+- `torch27-cxx11-cu128-x86_64-linux` (required when Torch 2.7.0 is released)
 
-This list will be updated as new PyTorch versions are released. Kernels
-that are in pure Python (e.g. Triton kernels) only need to provide a
+### CUDA aarch64
+
+- `torch26-cxx11-cu126-aarch64-linux`
+- `torch26-cxx98-cu126-aarch64-linux`
+- `torch27-cxx11-cu126-aarch64-linux` (required when Torch 2.7.0 is released)
+- `torch27-cxx11-cu128-aarch64-linux` (required when Torch 2.7.0 is released)
+
+### Universal
+
+Kernels that are in pure Python (e.g. Triton kernels) only need to provide a
 single build variant:
 
 - `torch-universal`
-
-Each variant directory should contain a single directory with the same name
-as the repository (replacing `-` by `_`). For instance, kernels in the
-`kernels-community/activation` repository have a directories like
-`build/<variant>/activation`. This directory
-must be a Python package with an `__init__.py` file.
 
 ## Versioning
 

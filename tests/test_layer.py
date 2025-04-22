@@ -73,7 +73,8 @@ def test_arg_kinds():
 
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_hub_forward(cls, device):
+@pytest.mark.parametrize("torch_compile", [False, True])
+def test_hub_forward(cls, device, torch_compile):
     torch.random.manual_seed(0)
 
     silu_and_mul = SiluAndMul()
@@ -81,6 +82,8 @@ def test_hub_forward(cls, device):
     Y = silu_and_mul(X)
 
     silu_and_mul_with_kernel = cls()
+    if torch_compile:
+        silu_and_mul_with_kernel = torch.compile(silu_and_mul_with_kernel)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)

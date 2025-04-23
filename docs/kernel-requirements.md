@@ -109,9 +109,12 @@ requirements:
 - The `forward` method has a signature that is compatible with the
   `forward` method that it is extending.
 
-The only exception to the _no class variables rule_ is addition of a
-`has_backward` class variable. This variable is used to indicate whether
-the layer has a backward pass implemented (`True` when absent).
+There are two exceptions to the _no class variables rule_:
+
+1. The `has_backward` variable can be used to indicate whether the layer has
+   a backward pass implemented (`True` when absent).
+2. The `can_torch_compile` variable can be used to indicate whether the layer
+   supports `torch.compile` (`False` when absent).
 
 This is an example of a pure layer:
 

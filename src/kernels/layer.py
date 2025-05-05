@@ -135,7 +135,6 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
     cached_layer: Dict[LayerRepository, nn.Module] = {}
 
     def forward(self, x, *args, **kwargs):
-        print("disable kernel mapping", _DISABLE_KERNEL_MAPPING())
         if _DISABLE_KERNEL_MAPPING():
             return fallback_forward(self, x, *args, **kwargs)
 

@@ -11,7 +11,8 @@ from .utils import get_kernel
 if TYPE_CHECKING:
     from torch import nn
 
-_DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
+def _DISABLE_KERNEL_MAPPING():
+    return bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
 
 
 @dataclass(frozen=True)
@@ -134,7 +135,8 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
     cached_layer: Dict[LayerRepository, nn.Module] = {}
 
     def forward(self, x, *args, **kwargs):
-        if _DISABLE_KERNEL_MAPPING:
+        print("disable kernel mapping", _DISABLE_KERNEL_MAPPING())
+        if _DISABLE_KERNEL_MAPPING():
             return fallback_forward(self, x, *args, **kwargs)
 
         needs_backward = self.training

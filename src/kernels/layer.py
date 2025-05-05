@@ -167,8 +167,9 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
         # Short-circuit if we already loaded the layer.
         layer = cached_layer.get(repo, None)
         if layer is not None:
-            # Switch to fallback when the layer does not support
+            # Switch to fallback when the layer does not support:
             # compilation/compile when needed.
+            # backward when needed
             needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
             needs_fallback |= is_compiling and not getattr(
                 layer, "can_torch_compile", False
@@ -260,6 +261,7 @@ def _validate_layer(*, check_cls, cls):
     torch_module_members = {name for name, _ in inspect.getmembers(nn.Module)}
     cls_members = {name for name, _ in inspect.getmembers(cls)}
     difference = cls_members - torch_module_members
+    # verify if : difference ⊄ {"can_torch_compile", "has_backward"}
     if not difference <= {"can_torch_compile", "has_backward"}:
         raise TypeError("Layer must not contain additional members.")
 

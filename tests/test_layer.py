@@ -19,6 +19,12 @@ kernel_layer_mapping = {
             revision="layers",
         )
     },
+    "SiluAndMulNoCompile": {
+        "cuda": LayerRepository(
+            repo_id="kernels-test/op-without-fake-test",
+            layer_name="SiluAndMul",
+        )
+    },
     "SiluAndMulStringDevice": {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
@@ -41,6 +47,11 @@ class SiluAndMul(nn.Module):
         self.n_calls += 1
         d = input.shape[-1] // 2
         return F.silu(input[..., :d]) * input[..., d:]
+
+
+@use_kernel_forward_from_hub("SiluAndMulNoCompile")
+class SiluAndMulNoCompileKernel(SiluAndMul):
+    pass
 
 
 @use_kernel_forward_from_hub("SiluAndMul")
@@ -101,8 +112,29 @@ def test_layer_fallback_works():
     SiluAndMulWithKernelFallback()
 
 
+@pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
+@pytest.mark.parametrize("device", ["cuda", "cpu"])
+def test_torch_compile_layer(cls, device):
+    silu_and_mul = SiluAndMul()
+
+    X = torch.randn((32, 64), dtype=torch.float32, device=device)
+    Y = silu_and_mul(X)
+
+    silu_and_mul_with_kernel = cls()
+    silu_and_mul_with_kernel.eval()
+    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel)
+
+    Y_compiled = silu_and_mul_compiled(X)
+
+    torch.testing.assert_close(Y_compiled, Y)
+
+
 def test_mapping_contexts():
-    assert set(_KERNEL_MAPPING.get().keys()) == {"SiluAndMul", "SiluAndMulStringDevice"}
+    assert set(_KERNEL_MAPPING.get().keys()) == {
+        "SiluAndMul",
+        "SiluAndMulStringDevice",
+        "SiluAndMulNoCompile",
+    }
 
     extra_mapping1 = {
         "TestKernel": {
@@ -118,6 +150,7 @@ def test_mapping_contexts():
         assert set(_KERNEL_MAPPING.get().keys()) == {
             "SiluAndMul",
             "SiluAndMulStringDevice",
+            "SiluAndMulNoCompile",
             "TestKernel",
         }
 
@@ -135,6 +168,7 @@ def test_mapping_contexts():
             assert set(_KERNEL_MAPPING.get().keys()) == {
                 "SiluAndMul",
                 "SiluAndMulStringDevice",
+                "SiluAndMulNoCompile",
                 "TestKernel",
             }
             assert (
@@ -145,6 +179,7 @@ def test_mapping_contexts():
         assert set(_KERNEL_MAPPING.get().keys()) == {
             "SiluAndMul",
             "SiluAndMulStringDevice",
+            "SiluAndMulNoCompile",
             "TestKernel",
         }
         assert (
@@ -164,6 +199,7 @@ def test_mapping_contexts():
         assert set(_KERNEL_MAPPING.get().keys()) == {
             "SiluAndMul",
             "SiluAndMulStringDevice",
+            "SiluAndMulNoCompile",
             "TestKernel",
         }
         assert (
@@ -174,6 +210,7 @@ def test_mapping_contexts():
     assert set(_KERNEL_MAPPING.get().keys()) == {
         "SiluAndMul",
         "SiluAndMulStringDevice",
+        "SiluAndMulNoCompile",
     }
 
 

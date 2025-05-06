@@ -138,6 +138,8 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
             return fallback_forward(self, x, *args, **kwargs)
 
         needs_backward = self.training
+        is_compiling = _is_torchdynamo_compiling()
+
         kernel = _KERNEL_MAPPING.get().get(layer_name)
         if kernel is None:
             warnings.warn(
@@ -165,7 +167,14 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
         # Short-circuit if we already loaded the layer.
         layer = cached_layer.get(repo, None)
         if layer is not None:
-            if needs_backward and not getattr(layer, "has_backward", True):
+            # Switch to fallback when the layer does not support:
+            # compilation/compile when needed.
+            # backward when needed
+            needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
+            needs_fallback |= is_compiling and not getattr(
+                layer, "can_torch_compile", False
+            )
+            if needs_fallback:
                 return fallback_forward(self, x, *args, **kwargs)
             return layer.forward(self, x, *args, **kwargs)
 
@@ -185,8 +194,15 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
 
         cached_layer[repo] = layer
 
-        if needs_backward and not getattr(layer, "has_backward", True):
+        # Switch to fallback when the layer does not support
+        # compilation/compile when needed.
+        needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
+        needs_fallback |= is_compiling and not getattr(
+            layer, "can_torch_compile", False
+        )
+        if needs_fallback:
             return fallback_forward(self, x, *args, **kwargs)
+
         return layer.forward(self, x, *args, **kwargs)
 
     cls.forward = forward
@@ -245,7 +261,8 @@ def _validate_layer(*, check_cls, cls):
     torch_module_members = {name for name, _ in inspect.getmembers(nn.Module)}
     cls_members = {name for name, _ in inspect.getmembers(cls)}
     difference = cls_members - torch_module_members
-    if difference != set() and difference != {"has_backward"}:
+    # verify if : difference ⊄ {"can_torch_compile", "has_backward"}
+    if not difference <= {"can_torch_compile", "has_backward"}:
         raise TypeError("Layer must not contain additional members.")
 
     # Check whether the forward signatures are similar.
@@ -262,3 +279,19 @@ def _validate_layer(*, check_cls, cls):
             raise TypeError(
                 f"Forward signature does not match: different kind of arguments ({param} ({param.kind}) and {ref_param} ({ref_param.kind})"
             )
+
+
+def _is_torchdynamo_compiling():
+    # Importing torch._dynamo causes issues with PyTorch profiler (https://github.com/pytorch/pytorch/issues/130622)
+    # hence rather relying on `torch.compiler.is_compiling()` when possible (torch>=2.3)
+    try:
+        import torch
+
+        return torch.compiler.is_compiling()
+    except Exception:
+        try:
+            import torch._dynamo as dynamo  # noqa: F401
+
+            return dynamo.is_compiling()
+        except Exception:
+            return False

@@ -21,11 +21,16 @@ def device():
     return "cuda"
 
 
-def test_gelu_fast(kernel, device):
+@pytest.mark.parametrize("torch_compile", [False, True])
+def test_gelu_fast(kernel, device, torch_compile):
     x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
     y = torch.empty_like(x)
 
-    kernel.gelu_fast(y, x)
+    op = kernel.gelu_fast
+    if torch_compile:
+        op = torch.compile(op)
+
+    op(y, x)
 
     expected = torch.tensor(
         [[0.8408, 1.9551, 2.9961], [4.0000, 5.0000, 6.0000], [7.0000, 8.0000, 9.0000]],

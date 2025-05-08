@@ -53,6 +53,13 @@ jobs:
       - name: Run tests
         run: uv run pytest tests
 
+      - name: Check kernel conversion
+        run: |
+          uv pip install wheel
+          uv run kernels to-wheel kernels-community/triton-layer-norm 0.0.1
+          uv pip install triton_layer_norm-0.0.1*.whl
+          uv run python -c "import triton_layer_norm"
+
       - name: Import check without torch
         run: |
           uv pip uninstall torch

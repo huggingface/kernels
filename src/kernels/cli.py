@@ -8,6 +8,8 @@ from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import install_kernel, install_kernel_all_variants
 
+from .wheel import build_variant_to_wheel
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -35,6 +37,25 @@ def main():
         help="The project directory",
     )
     lock_parser.set_defaults(func=lock_kernels)
+
+    to_wheel_parser = subparsers.add_parser(
+        "to-wheel", help="Convert a kernel to a wheel file"
+    )
+    to_wheel_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    to_wheel_parser.add_argument("version", type=str, help="The kernel version")
+    to_wheel_parser.add_argument(
+        "--python-version",
+        type=str,
+        default="3.9",
+        help="The minimum Python version. Must match the Python version that the kernel was compiled for.",
+    )
+    to_wheel_parser.add_argument(
+        "--manylinux-version",
+        type=str,
+        default="2.28",
+        help="The manylinux version. Must match the manylinux version that the kernel was compiled for.",
+    )
+    to_wheel_parser.set_defaults(func=kernels_to_wheel)
 
     args = parser.parse_args()
     args.func(args)
@@ -75,6 +96,24 @@ def download_kernels(args):
 
     if not all_successful:
         sys.exit(1)
+
+
+def kernels_to_wheel(args):
+    variants_path = install_kernel_all_variants(
+        repo_id=args.repo_id, revision=f"v{args.version}"
+    )
+    for variant_path in variants_path.iterdir():
+        if not variant_path.is_dir():
+            continue
+        wheel_path = build_variant_to_wheel(
+            manylinux_version=args.manylinux_version,
+            python_version=args.python_version,
+            repo_id=args.repo_id,
+            version=args.version,
+            variant_path=variant_path,
+            wheel_dir=Path("."),
+        )
+        print(f"☸️ {wheel_path.name}", file=sys.stderr)
 
 
 def lock_kernels(args):

@@ -101,7 +101,7 @@ def build_wheel(
     Build the wheel file.
     """
     try:
-        from wheel.wheelfile import WheelFile
+        from wheel.wheelfile import WheelFile  # type: ignore
     except ImportError:
         raise ImportError(
             "The 'wheel' package is required to build wheels. Please install it with: `pip install wheel`"

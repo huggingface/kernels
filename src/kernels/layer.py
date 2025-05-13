@@ -119,96 +119,110 @@ def register_kernel_mapping(
                 device_repo[new_device] = new_repo
 
 
-def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool = True):
-    """
-    Replace the forward function of a layer using a layer from the kernel hub.
-    This function monkeypatches a layer, replacing the `forward` method
-    of the layer with that of a layer from the hub. The replacement is done
-    when a layer matching `layer_name` and device type is registered through
-    `register_layer_mapping`. The device type is inferred from the first
-    argument to `forward`.
-    """
+def replace_kernel_forward_from_hub(cls, layer_name: str, *, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True):
+    cls.kernel_layer_name = layer_name
+    kernelize(cls, traverse_graph=False, device=device, needs_backward=needs_backward, use_fallback=use_fallback)
 
-    fallback_forward = cls.forward
+import torch.nn as nn
+def kernelize(module_: nn.Module, traverse_graph: bool = True, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True):
+    """
+    Iterate over all modules in the model and replace the forward method of modules
+    that have a kernel_layer_name attribute with the corresponding kernel layer.
+    
+    Args:
+        model: The PyTorch model to kernelize
+        
+    Returns:
+        The kernelized model
+    """
+    import torch.nn as nn
 
+    # We assume only one Module per repository.
     cached_layer: Dict[LayerRepository, nn.Module] = {}
+    is_compiling = _is_torchdynamo_compiling()
+    # If we don't traverse the graph, we stop after the first module 
 
-    def forward(self, x, *args, **kwargs):
-        if _DISABLE_KERNEL_MAPPING:
-            return fallback_forward(self, x, *args, **kwargs)
+    modules_list = [("", module_)] if not traverse_graph else module_.named_modules()
 
-        needs_backward = self.training
-        is_compiling = _is_torchdynamo_compiling()
+    for _ , module in modules_list:
+        if hasattr(module, "kernel_layer_name"):
+            layer_name = module.kernel_layer_name
+            fallback_forward = module.forward
 
-        kernel = _KERNEL_MAPPING.get().get(layer_name)
-        if kernel is None:
-            warnings.warn(
-                "\n"
-                f"No kernel mapping found for layer `{layer_name}`. "
-                f"Check if the layer name matches one of the kernels in the mapping or add the kernel "
-                f"you want to use to the mapping. Defaulting to original forward implementation."
-            )
-            if not use_fallback:
-                raise ValueError(f"No layer mapping for `{layer_name}`")
-            return fallback_forward(self, x, *args, **kwargs)
+            if _DISABLE_KERNEL_MAPPING:
+                module.forward = fallback_forward
+                continue
 
-        device = getattr(x, "device", None)
-        if device is None:
-            return fallback_forward(self, x, *args, **kwargs)
+            kernel = _KERNEL_MAPPING.get().get(str(layer_name))
 
-        repo = kernel.get(Device(type=device.type))
-        if repo is None:
-            if not use_fallback:
-                raise ValueError(
-                    f"No layer mapping for `{layer_name}` with device type `{device.type}`"
+            if kernel is None:
+                warnings.warn(
+                    "\n"
+                    f"No kernel mapping found for layer `{layer_name}`. "
+                    f"Check if the layer name matches one of the kernels in the mapping or add the kernel "
+                    f"you want to use to the mapping. Defaulting to original forward implementation."
                 )
-            return fallback_forward(self, x, *args, **kwargs)
+                if not use_fallback:
+                    raise ValueError(f"No layer mapping for `{layer_name}`")
+                module.forward = fallback_forward
+                continue
 
-        # Short-circuit if we already loaded the layer.
-        layer = cached_layer.get(repo, None)
-        if layer is not None:
-            # Switch to fallback when the layer does not support:
+            device_type = device.type
+            # Use device type string directly instead of Device object
+            repo = kernel.get(device)
+
+            if repo is None:
+                if not use_fallback:
+                    raise ValueError(
+                        f"No layer mapping for `{layer_name}` with device type `{device_type}`"
+                    )
+                module.forward = fallback_forward
+                continue
+            # Short-circuit if we already loaded the layer.
+            layer = cached_layer.get(repo, None)
+            if layer is not None:
+                # Switch to fallback when the layer does not support:
+                # compilation/compile when needed.
+                # backward when needed
+                needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
+                needs_fallback |= is_compiling and not getattr(
+                    layer, "can_torch_compile", False
+                )
+                if needs_fallback:
+                    module.forward = fallback_forward
+                    continue
+                module.forward = layer.forward
+                continue
+
+            layer = _get_kernel_layer(
+                repo_id=repo.repo_id,
+                layer_name=repo.layer_name,
+                revision=repo.revision,
+            )
+
+            # We have to validate against the original signature.
+            orig_forward = module.forward
+            try:
+                module.forward = fallback_forward
+                _validate_layer(check_cls=module, cls=layer)
+            finally:
+                module.forward = orig_forward
+
+            cached_layer[repo] = layer
+
+            # Switch to fallback when the layer does not support
             # compilation/compile when needed.
-            # backward when needed
             needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
             needs_fallback |= is_compiling and not getattr(
                 layer, "can_torch_compile", False
             )
             if needs_fallback:
-                return fallback_forward(self, x, *args, **kwargs)
-            return layer.forward(self, x, *args, **kwargs)
+                module.forward = fallback_forward
+                continue
+            module.forward = layer.forward
+        
 
-        layer = _get_kernel_layer(
-            repo_id=repo.repo_id,
-            layer_name=repo.layer_name,
-            revision=repo.revision,
-        )
-
-        # We have to validate against the original signature.
-        orig_forward = cls.forward
-        try:
-            cls.forward = fallback_forward
-            _validate_layer(check_cls=cls, cls=layer)
-        finally:
-            cls.forward = orig_forward
-
-        cached_layer[repo] = layer
-
-        # Switch to fallback when the layer does not support
-        # compilation/compile when needed.
-        needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
-        needs_fallback |= is_compiling and not getattr(
-            layer, "can_torch_compile", False
-        )
-        if needs_fallback:
-            return fallback_forward(self, x, *args, **kwargs)
-
-        return layer.forward(self, x, *args, **kwargs)
-
-    cls.forward = forward
-
-
-def use_kernel_forward_from_hub(layer_name: str, *, use_fallback: bool = True):
+def use_kernel_forward_from_hub(layer_name: str, *, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True):
     """
     Replace the forward function of a layer using a layer from the kernel hub.
     This decorator can be applied to a layer and replaces the forward method
@@ -219,7 +233,7 @@ def use_kernel_forward_from_hub(layer_name: str, *, use_fallback: bool = True):
     """
 
     def decorator(cls):
-        replace_kernel_forward_from_hub(cls, layer_name, use_fallback=use_fallback)
+        replace_kernel_forward_from_hub(cls, layer_name, device=device, needs_backward=needs_backward, use_fallback=use_fallback)
         return cls
 
     return decorator

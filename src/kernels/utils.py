@@ -8,6 +8,7 @@ import logging
 import os
 import platform
 import sys
+import torch
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
@@ -32,10 +33,9 @@ def _get_cache_dir() -> Optional[str]:
 
 
 CACHE_DIR: Optional[str] = _get_cache_dir()
-
+CXXABI_VARIANT = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
 
 def build_variant() -> str:
-    import torch
 
     if torch.version.cuda is not None:
         cuda_version = parse(torch.version.cuda)
@@ -47,7 +47,7 @@ def build_variant() -> str:
         raise AssertionError("Torch was not compiled with CUDA or ROCm enabled.")
 
     torch_version = parse(torch.__version__)
-    cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
+    cxxabi = CXXABI_VARIANT
     cpu = platform.machine()
     os = platform.system().lower()
 

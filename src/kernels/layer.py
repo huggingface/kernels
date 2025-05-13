@@ -1,5 +1,6 @@
 import inspect
 import os
+import threading
 import warnings
 from contextvars import ContextVar
 from copy import deepcopy
@@ -53,9 +54,9 @@ class LayerRepository:
         return hash((self.layer_name, self.repo_id, self.revision))
 
 
-_KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, LayerRepository]]] = ContextVar(
-    "_KERNEL_MAPPING", default={}
-)
+# Use a simple dictionary for each thread
+_thread_local = threading.local()
+_thread_local.kernel_mapping = {}
 
 
 def use_kernel_mapping(
@@ -74,14 +75,17 @@ def use_kernel_mapping(
     class ContextManager:
         def __enter__(self):
             # Mappings always stack on previous mappings.
+            if not hasattr(_thread_local, "kernel_mapping"):
+                _thread_local.kernel_mapping = {}
+            self.previous_mapping = _thread_local.kernel_mapping
             if inherit_mapping:
-                self.token = _KERNEL_MAPPING.set(deepcopy(_KERNEL_MAPPING.get()))
+                _thread_local.kernel_mapping = deepcopy(self.previous_mapping)
             else:
-                self.token = _KERNEL_MAPPING.set({})
+                _thread_local.kernel_mapping = {}
             register_kernel_mapping(mapping)
 
         def __exit__(self, exc_type, exc_value, traceback):
-            _KERNEL_MAPPING.reset(self.token)
+            _thread_local.kernel_mapping = self.previous_mapping
 
     return ContextManager()
 
@@ -109,9 +113,13 @@ def register_kernel_mapping(
     register_kernel_mapping(kernel_layer_mapping)
     ```
     """
+    # Ensure the thread-local mapping exists
+    if not hasattr(_thread_local, "kernel_mapping"):
+        _thread_local.kernel_mapping = {}
+        
     # Merge with existing mappings.
     for new_kernel, new_device_repos in mapping.items():
-        device_repo = _KERNEL_MAPPING.get().setdefault(new_kernel, {})
+        device_repo = _thread_local.kernel_mapping.setdefault(new_kernel, {})
         for new_device, new_repo in new_device_repos.items():
             if isinstance(new_device, str):
                 device_repo[Device(type=new_device)] = new_repo
@@ -128,84 +136,92 @@ def replace_kernel_forward_from_hub(cls, layer_name: str, *, use_fallback: bool 
     `register_layer_mapping`. The device type is inferred from the first
     argument to `forward`.
     """
+    import torch
 
     fallback_forward = cls.forward
 
     cached_layer: Dict[LayerRepository, nn.Module] = {}
+    
+    if _DISABLE_KERNEL_MAPPING:
+        cls.forward = fallback_forward
+        return
+    needs_backward = False #self.training
+    is_compiling = _is_torchdynamo_compiling()
 
-    def forward(self, x, *args, **kwargs):
-        if _DISABLE_KERNEL_MAPPING:
-            return fallback_forward(self, x, *args, **kwargs)
+    if not hasattr(_thread_local, "kernel_mapping"):
+        _thread_local.kernel_mapping = {}
+        
+    kernel = _thread_local.kernel_mapping.get(layer_name)
 
-        needs_backward = self.training
-        is_compiling = _is_torchdynamo_compiling()
-
-        kernel = _KERNEL_MAPPING.get().get(layer_name)
-        if kernel is None:
-            warnings.warn(
-                "\n"
-                f"No kernel mapping found for layer `{layer_name}`. "
-                f"Check if the layer name matches one of the kernels in the mapping or add the kernel "
-                f"you want to use to the mapping. Defaulting to original forward implementation."
-            )
-            if not use_fallback:
-                raise ValueError(f"No layer mapping for `{layer_name}`")
-            return fallback_forward(self, x, *args, **kwargs)
-
-        device = getattr(x, "device", None)
-        if device is None:
-            return fallback_forward(self, x, *args, **kwargs)
-
-        repo = kernel.get(Device(type=device.type))
-        if repo is None:
-            if not use_fallback:
-                raise ValueError(
-                    f"No layer mapping for `{layer_name}` with device type `{device.type}`"
-                )
-            return fallback_forward(self, x, *args, **kwargs)
-
-        # Short-circuit if we already loaded the layer.
-        layer = cached_layer.get(repo, None)
-        if layer is not None:
-            # Switch to fallback when the layer does not support:
-            # compilation/compile when needed.
-            # backward when needed
-            needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
-            needs_fallback |= is_compiling and not getattr(
-                layer, "can_torch_compile", False
-            )
-            if needs_fallback:
-                return fallback_forward(self, x, *args, **kwargs)
-            return layer.forward(self, x, *args, **kwargs)
-
-        layer = _get_kernel_layer(
-            repo_id=repo.repo_id,
-            layer_name=repo.layer_name,
-            revision=repo.revision,
+    if kernel is None:
+        warnings.warn(
+            "\n"
+            f"No kernel mapping found for layer `{layer_name}`. "
+            f"Check if the layer name matches one of the kernels in the mapping or add the kernel "
+            f"you want to use to the mapping. Defaulting to original forward implementation."
         )
+        if not use_fallback:
+            raise ValueError(f"No layer mapping for `{layer_name}`")
+        cls.forward = fallback_forward
+        return
 
-        # We have to validate against the original signature.
-        orig_forward = cls.forward
-        try:
-            cls.forward = fallback_forward
-            _validate_layer(check_cls=cls, cls=layer)
-        finally:
-            cls.forward = orig_forward
+    device = Device(type="cuda") #getattr(x, "device", None)
+    device_type = device.type
+    if device is None:
+        cls.forward = fallback_forward
+        return
+    # Use device type string directly instead of Device object
+    repo = kernel.get(device)
 
-        cached_layer[repo] = layer
-
-        # Switch to fallback when the layer does not support
+    if repo is None:
+        if not use_fallback:
+            raise ValueError(
+                f"No layer mapping for `{layer_name}` with device type `{device_type}`"
+            )
+        cls.forward = fallback_forward
+        return
+    # Short-circuit if we already loaded the layer.
+    layer = cached_layer.get(repo, None)
+    if layer is not None:
+        # Switch to fallback when the layer does not support:
         # compilation/compile when needed.
+        # backward when needed
         needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
         needs_fallback |= is_compiling and not getattr(
             layer, "can_torch_compile", False
         )
         if needs_fallback:
-            return fallback_forward(self, x, *args, **kwargs)
+            cls.forward = fallback_forward
+            return
+        cls.forward = layer.forward
+        return
 
-        return layer.forward(self, x, *args, **kwargs)
+    layer = _get_kernel_layer(
+        repo_id=repo.repo_id,
+        layer_name=repo.layer_name,
+        revision=repo.revision,
+    )
 
-    cls.forward = forward
+    # We have to validate against the original signature.
+    orig_forward = cls.forward
+    try:
+        cls.forward = fallback_forward
+        _validate_layer(check_cls=cls, cls=layer)
+    finally:
+        cls.forward = orig_forward
+
+    cached_layer[repo] = layer
+
+    # Switch to fallback when the layer does not support
+    # compilation/compile when needed.
+    needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
+    needs_fallback |= is_compiling and not getattr(
+        layer, "can_torch_compile", False
+    )
+    if needs_fallback:
+        cls.forward = fallback_forward
+        return
+    cls.forward = layer.forward
 
 
 def use_kernel_forward_from_hub(layer_name: str, *, use_fallback: bool = True):

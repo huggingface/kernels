@@ -33,13 +33,9 @@ class LayerRepository:
     Repository and name of a layer.
     """
 
-    layer_name: str = field(
-        metadata={"help": "The name of the layer in the kernel repository."}
-    )
+    layer_name: str = field(metadata={"help": "The name of the layer in the kernel repository."})
     repo_id: str = field(metadata={"help": "The kernel hub repository with the layer."})
-    revision: str = field(
-        default="main", metadata={"help": "The revision of the layer."}
-    )
+    revision: str = field(default="main", metadata={"help": "The revision of the layer."})
 
     def __eq__(self, other):
         return (
@@ -53,9 +49,7 @@ class LayerRepository:
         return hash((self.layer_name, self.repo_id, self.revision))
 
 
-_KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, LayerRepository]]] = ContextVar(
-    "_KERNEL_MAPPING", default={}
-)
+_KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, LayerRepository]]] = ContextVar("_KERNEL_MAPPING", default={})
 
 
 def use_kernel_mapping(
@@ -86,9 +80,7 @@ def use_kernel_mapping(
     return ContextManager()
 
 
-def register_kernel_mapping(
-    mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]
-):
+def register_kernel_mapping(mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]):
     """
     Allows one to register a mapping between a layer name the corresponding kernel to use, depending on the device.
     This should be use in conjunction with `use_kernel_hub_forward` decorator on the classname.
@@ -119,19 +111,35 @@ def register_kernel_mapping(
                 device_repo[new_device] = new_repo
 
 
-def replace_kernel_forward_from_hub(cls, layer_name: str, *, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True):
+def replace_kernel_forward_from_hub(
+    cls,
+    layer_name: str,
+    *,
+    device: Device = Device(type="cuda"),
+    needs_backward: bool = False,
+    use_fallback: bool = True,
+):
     cls.kernel_layer_name = layer_name
     kernelize(cls, traverse_graph=False, device=device, needs_backward=needs_backward, use_fallback=use_fallback)
 
+
 import torch.nn as nn
-def kernelize(module_: nn.Module, traverse_graph: bool = True, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True):
+
+
+def kernelize(
+    module_: nn.Module,
+    traverse_graph: bool = True,
+    device: Device = Device(type="cuda"),
+    needs_backward: bool = False,
+    use_fallback: bool = True,
+):
     """
     Iterate over all modules in the model and replace the forward method of modules
     that have a kernel_layer_name attribute with the corresponding kernel layer.
-    
+
     Args:
         model: The PyTorch model to kernelize
-        
+
     Returns:
         The kernelized model
     """
@@ -140,11 +148,11 @@ def kernelize(module_: nn.Module, traverse_graph: bool = True, device: Device = 
     # We assume only one Module per repository.
     cached_layer: Dict[LayerRepository, nn.Module] = {}
     is_compiling = _is_torchdynamo_compiling()
-    # If we don't traverse the graph, we stop after the first module 
+    # If we don't traverse the graph, we stop after the first module
 
     modules_list = [("", module_)] if not traverse_graph else module_.named_modules()
 
-    for _ , module in modules_list:
+    for _, module in modules_list:
         if hasattr(module, "kernel_layer_name"):
             layer_name = module.kernel_layer_name
             fallback_forward = module.forward
@@ -173,9 +181,7 @@ def kernelize(module_: nn.Module, traverse_graph: bool = True, device: Device = 
 
             if repo is None:
                 if not use_fallback:
-                    raise ValueError(
-                        f"No layer mapping for `{layer_name}` with device type `{device_type}`"
-                    )
+                    raise ValueError(f"No layer mapping for `{layer_name}` with device type `{device_type}`")
                 module.forward = fallback_forward
                 continue
             # Short-circuit if we already loaded the layer.
@@ -185,9 +191,7 @@ def kernelize(module_: nn.Module, traverse_graph: bool = True, device: Device = 
                 # compilation/compile when needed.
                 # backward when needed
                 needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
-                needs_fallback |= is_compiling and not getattr(
-                    layer, "can_torch_compile", False
-                )
+                needs_fallback |= is_compiling and not getattr(layer, "can_torch_compile", False)
                 if needs_fallback:
                     module.forward = fallback_forward
                     continue
@@ -213,16 +217,16 @@ def kernelize(module_: nn.Module, traverse_graph: bool = True, device: Device = 
             # Switch to fallback when the layer does not support
             # compilation/compile when needed.
             needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
-            needs_fallback |= is_compiling and not getattr(
-                layer, "can_torch_compile", False
-            )
+            needs_fallback |= is_compiling and not getattr(layer, "can_torch_compile", False)
             if needs_fallback:
                 module.forward = fallback_forward
                 continue
             module.forward = layer.forward
-        
 
-def use_kernel_forward_from_hub(layer_name: str, *, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True):
+
+def use_kernel_forward_from_hub(
+    layer_name: str, *, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True
+):
     """
     Replace the forward function of a layer using a layer from the kernel hub.
     This decorator can be applied to a layer and replaces the forward method
@@ -233,7 +237,9 @@ def use_kernel_forward_from_hub(layer_name: str, *, device: Device = Device(type
     """
 
     def decorator(cls):
-        replace_kernel_forward_from_hub(cls, layer_name, device=device, needs_backward=needs_backward, use_fallback=use_fallback)
+        replace_kernel_forward_from_hub(
+            cls, layer_name, device=device, needs_backward=needs_backward, use_fallback=use_fallback
+        )
         return cls
 
     return decorator
@@ -245,9 +251,7 @@ def _get_kernel_layer(*, repo_id: str, layer_name: str, revision: str) -> "nn.Mo
     kernel = get_kernel(repo_id, revision=revision)
 
     if getattr(kernel, "layers", None) is None:
-        raise ValueError(
-            f"Kernel `{repo_id}` at revision `{revision}` does not define any layers."
-        )
+        raise ValueError(f"Kernel `{repo_id}` at revision `{revision}` does not define any layers.")
 
     layer = getattr(kernel.layers, layer_name, None)
     if layer is None:
@@ -284,9 +288,7 @@ def _validate_layer(*, check_cls, cls):
     ref_params = inspect.signature(check_cls.forward).parameters
 
     if len(params) != len(ref_params):
-        raise TypeError(
-            "Forward signature does not match: different number of arguments."
-        )
+        raise TypeError("Forward signature does not match: different number of arguments.")
 
     for param, ref_param in zip(params.values(), ref_params.values()):
         if param.kind != ref_param.kind:

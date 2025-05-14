@@ -149,7 +149,7 @@ def kernelize(
     modules_list = [("", module_)] if not traverse_graph else module_.named_modules()
 
     for _, module in modules_list:
-        if hasattr(module, "kernel_layer_name"):
+        if hasattr(module, "kernel_layer_name") or not traverse_graph:
             layer_name = module.kernel_layer_name
             fallback_forward = module.forward
 

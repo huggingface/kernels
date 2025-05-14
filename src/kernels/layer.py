@@ -123,11 +123,8 @@ def replace_kernel_forward_from_hub(
     kernelize(cls, traverse_graph=False, device=device, needs_backward=needs_backward, use_fallback=use_fallback)
 
 
-import torch.nn as nn
-
-
 def kernelize(
-    module_: nn.Module,
+    module_,
     traverse_graph: bool = True,
     device: Device = Device(type="cuda"),
     needs_backward: bool = False,
@@ -149,7 +146,6 @@ def kernelize(
     cached_layer: Dict[LayerRepository, nn.Module] = {}
     is_compiling = _is_torchdynamo_compiling()
     # If we don't traverse the graph, we stop after the first module
-
     modules_list = [("", module_)] if not traverse_graph else module_.named_modules()
 
     for _, module in modules_list:

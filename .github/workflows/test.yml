@@ -60,6 +60,11 @@ jobs:
           uv pip install triton_layer_norm-0.0.1*.whl
           uv run python -c "import triton_layer_norm"
 
+      - name: Check README generation
+        # For now, just checks that generation doesn't fail.
+        run: |
+          uv run kernels generate-readme kernels-community/triton-layer-norm --revision docs
+
       - name: Import check without torch
         run: |
           uv pip uninstall torch

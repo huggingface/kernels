@@ -8,6 +8,7 @@ from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import install_kernel, install_kernel_all_variants
 
+from .doc import generate_readme_for_kernel
 from .wheel import build_variant_to_wheel
 
 
@@ -56,6 +57,28 @@ def main():
         help="The manylinux version. Must match the manylinux version that the kernel was compiled for.",
     )
     to_wheel_parser.set_defaults(func=kernels_to_wheel)
+
+    # Add generate-readme subcommand parser
+    generate_readme_parser = subparsers.add_parser(
+        "generate-readme",
+        help="Generate README snippets for a kernel's public functions",
+    )
+    generate_readme_parser.add_argument(
+        "repo_id",
+        type=str,
+        help="The kernel repo ID (e.g., kernels-community/activation)",
+    )
+    generate_readme_parser.add_argument(
+        "--revision",
+        type=str,
+        default="main",
+        help="The kernel revision (branch, tag, or commit SHA, defaults to 'main')",
+    )
+    generate_readme_parser.set_defaults(
+        func=lambda args: generate_readme_for_kernel(
+            repo_id=args.repo_id, revision=args.revision
+        )
+    )
 
     args = parser.parse_args()
     args.func(args)

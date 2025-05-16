@@ -40,7 +40,7 @@ def generate_metadata(module: ModuleType):
 
 
 def generate_kernel_doc(module: ModuleType, kernel_name: str):
-    docstring = module.__doc__.strip()
+    docstring = module.__doc__.strip() if module.__doc__ is not None else None
     if docstring:
         title, rest = docstring.split("\n", 1)
         print(f"# {title.strip()}")

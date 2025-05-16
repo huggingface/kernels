@@ -38,7 +38,9 @@
                 huggingface-hub
                 pytest
                 pytest-benchmark
+                pyyaml
                 torch
+                types-pyyaml
                 venvShellHook
               ]);
 

@@ -8,8 +8,7 @@ from typing import TYPE_CHECKING, Dict, Union
 
 from .utils import get_kernel
 
-if TYPE_CHECKING:
-    from torch import nn
+from torch import nn
 
 _DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
 
@@ -115,19 +114,27 @@ def replace_kernel_forward_from_hub(
     cls,
     layer_name: str,
     *,
-    device: Device = Device(type="cuda"),
-    needs_backward: bool = False,
-    use_fallback: bool = True,
 ):
+    """
+    Decorator that prepares a layer class to use a kernel from the Hugging Face Hub.
+    
+    This decorator stores the layer name and original forward method, which will be used
+    by the kernelize function to replace the forward implementation with the appropriate
+    kernel from the hub.
+    
+    Args:
+        cls: The layer class to decorate
+        layer_name: The name of the layer to use for kernel lookup
+    """
     cls.kernel_layer_name = layer_name
-    kernelize(cls, traverse_graph=False, device=device, needs_backward=needs_backward, use_fallback=use_fallback)
+    cls.fallback_forward = cls.forward
 
+
+cached_layer: ContextVar[Dict[LayerRepository, nn.Module]] = ContextVar("cached_layer", default={})
 
 def kernelize(
-    module_,
-    traverse_graph: bool = True,
+    model: nn.Module,
     device: Device = Device(type="cuda"),
-    needs_backward: bool = False,
     use_fallback: bool = True,
 ):
     """
@@ -140,21 +147,18 @@ def kernelize(
     Returns:
         The kernelized model
     """
-    import torch.nn as nn
-
-    # We assume only one Module per repository.
-    cached_layer: Dict[LayerRepository, nn.Module] = {}
     is_compiling = _is_torchdynamo_compiling()
+    needs_backward = model.training
     # If we don't traverse the graph, we stop after the first module
-    modules_list = [("", module_)] if not traverse_graph else module_.named_modules()
+    for _ , module in model.named_modules():
+        module_class = type(module)
+        if hasattr(module_class, "kernel_layer_name"):
+            layer_name = module_class.kernel_layer_name
 
-    for _, module in modules_list:
-        if hasattr(module, "kernel_layer_name") or not traverse_graph:
-            layer_name = module.kernel_layer_name
-            fallback_forward = module.forward
+            fallback_forward = module_class.forward
 
             if _DISABLE_KERNEL_MAPPING:
-                module.forward = fallback_forward
+                module_class.forward = fallback_forward
                 continue
 
             kernel = _KERNEL_MAPPING.get().get(str(layer_name))
@@ -168,7 +172,7 @@ def kernelize(
                 )
                 if not use_fallback:
                     raise ValueError(f"No layer mapping for `{layer_name}`")
-                module.forward = fallback_forward
+                module_class.forward = fallback_forward
                 continue
 
             device_type = device.type
@@ -178,10 +182,10 @@ def kernelize(
             if repo is None:
                 if not use_fallback:
                     raise ValueError(f"No layer mapping for `{layer_name}` with device type `{device_type}`")
-                module.forward = fallback_forward
+                module_class.forward = fallback_forward
                 continue
             # Short-circuit if we already loaded the layer.
-            layer = cached_layer.get(repo, None)
+            layer = cached_layer.get().get(repo, None)
             if layer is not None:
                 # Switch to fallback when the layer does not support:
                 # compilation/compile when needed.
@@ -189,9 +193,9 @@ def kernelize(
                 needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
                 needs_fallback |= is_compiling and not getattr(layer, "can_torch_compile", False)
                 if needs_fallback:
-                    module.forward = fallback_forward
+                    module_class.forward = fallback_forward
                     continue
-                module.forward = layer.forward
+                module_class.forward = layer.forward
                 continue
 
             layer = _get_kernel_layer(
@@ -201,27 +205,29 @@ def kernelize(
             )
 
             # We have to validate against the original signature.
-            orig_forward = module.forward
+            orig_forward = module_class.forward
             try:
-                module.forward = fallback_forward
-                _validate_layer(check_cls=module, cls=layer)
+                module_class.forward = fallback_forward
+                _validate_layer(check_cls=module_class, cls=layer)
             finally:
-                module.forward = orig_forward
+                module_class.forward = orig_forward
 
-            cached_layer[repo] = layer
+            cached_layer.set({**cached_layer.get(), repo: layer})
 
             # Switch to fallback when the layer does not support
             # compilation/compile when needed.
             needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
             needs_fallback |= is_compiling and not getattr(layer, "can_torch_compile", False)
             if needs_fallback:
-                module.forward = fallback_forward
+                module_class.forward = fallback_forward
                 continue
-            module.forward = layer.forward
+                
+            module_class.forward = layer.forward
 
+    return model
 
 def use_kernel_forward_from_hub(
-    layer_name: str, *, device: Device = Device(type="cuda"), needs_backward: bool = False, use_fallback: bool = True
+    layer_name: str, *, device: Device = Device(type="cuda"), use_fallback: bool = True
 ):
     """
     Replace the forward function of a layer using a layer from the kernel hub.
@@ -234,7 +240,7 @@ def use_kernel_forward_from_hub(
 
     def decorator(cls):
         replace_kernel_forward_from_hub(
-            cls, layer_name, device=device, needs_backward=needs_backward, use_fallback=use_fallback
+            cls, layer_name
         )
         return cls
 
@@ -260,8 +266,6 @@ def _validate_layer(*, check_cls, cls):
     # must be stateless; (2) the forward signature should correspond to
     # the signature it is replacing; (3) forward should not call other
     # methods.
-
-    from torch import nn
 
     if not issubclass(cls, nn.Module):
         raise TypeError(f"Layer `{cls}` is not a Torch layer.")

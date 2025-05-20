@@ -5,6 +5,7 @@ from kernels.layer import (
     replace_kernel_forward_from_hub,
     use_kernel_forward_from_hub,
     use_kernel_mapping,
+    kernelize,
 )
 from kernels.utils import (
     get_kernel,
@@ -26,4 +27,5 @@ __all__ = [
     "replace_kernel_forward_from_hub",
     "LayerRepository",
     "Device",
+    "kernelize",
 ]

@@ -14,6 +14,7 @@ requires-python = ">= 3.9"
 dependencies = [
   "huggingface_hub>=0.26.0,<1.0",
   "packaging>=20.0",
+  "pyyaml>=6",
   "tomli>=2.0; python_version<'3.11'",
 ]
 
@@ -28,6 +29,7 @@ dev = [
   # Whatever version is compatible with pytest.
   "pytest-benchmark",
   "torch >=2.5",
+  "types-pyyaml"
 ]
 
 [project.optional-dependencies]

@@ -34,10 +34,13 @@
                 ruff
               ]
               ++ (with python3.pkgs; [
+                docutils
                 huggingface-hub
                 pytest
                 pytest-benchmark
+                pyyaml
                 torch
+                types-pyyaml
                 venvShellHook
               ]);
 

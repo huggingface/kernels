@@ -10,6 +10,11 @@ def kernel():
 
 
 @pytest.fixture
+def metal_kernel():
+    return get_kernel("kernels-test/relu-metal")
+
+
+@pytest.fixture
 def universal_kernel():
     return get_kernel("kernels-community/triton-scaled-mm")
 
@@ -21,6 +26,7 @@ def device():
     return "cuda"
 
 
+@pytest.mark.linux_only
 def test_gelu_fast(kernel, device):
     x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
     y = torch.empty_like(x)
@@ -36,6 +42,15 @@ def test_gelu_fast(kernel, device):
     assert torch.allclose(y, expected)
 
 
+@pytest.mark.darwin_only
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
+def test_relu_metal(metal_kernel, dtype):
+    x = torch.arange(-10, 10, dtype=dtype, device="mps")
+    y = metal_kernel.relu(x)
+    assert torch.allclose(y, torch.relu(x))
+
+
+@pytest.mark.linux_only
 @pytest.mark.parametrize(
     "kernel_exists",
     [
@@ -52,6 +67,7 @@ def test_has_kernel(kernel_exists):
     assert has_kernel(repo_id, revision=revision) == kernel
 
 
+@pytest.mark.linux_only
 def test_universal_kernel(universal_kernel):
     torch.manual_seed(0)
     A = torch.randint(-10, 10, (64, 128), dtype=torch.int8, device="cuda")

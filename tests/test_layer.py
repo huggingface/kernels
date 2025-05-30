@@ -82,6 +82,7 @@ def test_arg_kinds():
     assert arg_kind("foo", "bar", kwarg1="baz", kwarg2=5) == ("foo", "bar", "baz", 5)
 
 
+@pytest.mark.linux_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_hub_forward(cls, device):
@@ -112,6 +113,7 @@ def test_layer_fallback_works():
     SiluAndMulWithKernelFallback()
 
 
+@pytest.mark.linux_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_torch_compile_layer(cls, device):
@@ -242,6 +244,7 @@ def test_validate_kernel_layer():
         _validate_layer(cls=BadLayer4, check_cls=SiluAndMul)
 
 
+@pytest.mark.linux_only
 def test_fallback_used_when_training():
     @use_kernel_forward_from_hub("Linear")
     class TorchLinear(nn.Linear):

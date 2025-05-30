@@ -43,13 +43,21 @@ def build_variant() -> str:
     elif torch.version.hip is not None:
         rocm_version = parse(torch.version.hip.split("-")[0])
         compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
+    elif torch.backends.mps.is_available():
+        compute_framework = "metal"
     else:
-        raise AssertionError("Torch was not compiled with CUDA or ROCm enabled.")
+        raise AssertionError(
+            "Torch was not compiled with CUDA, Metal, or ROCm enabled."
+        )
 
     torch_version = parse(torch.__version__)
-    cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
     cpu = platform.machine()
     os = platform.system().lower()
+
+    if os == "darwin":
+        return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
+
+    cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
 
     return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{compute_framework}-{cpu}-{os}"
 

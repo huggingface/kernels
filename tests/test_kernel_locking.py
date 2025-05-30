@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from kernels import load_kernel
 from kernels.cli import download_kernels
 
@@ -17,6 +19,7 @@ def test_download_all_hash_validation():
     download_kernels(DownloadArgs(all_variants=True, project_dir=project_dir))
 
 
+@pytest.mark.linux_only
 def test_load_locked():
     project_dir = Path(__file__).parent / "kernel_locking"
     # Also validates that hashing works correctly.

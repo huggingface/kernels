@@ -1,11 +1,11 @@
 from kernels.layer import (
     Device,
     LayerRepository,
+    kernelize,
     register_kernel_mapping,
     replace_kernel_forward_from_hub,
     use_kernel_forward_from_hub,
     use_kernel_mapping,
-    kernelize,
 )
 from kernels.utils import (
     get_kernel,

@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from kernels import (
     Device,
     LayerRepository,
+    kernelize,
     register_kernel_mapping,
     use_kernel_forward_from_hub,
 )
@@ -92,7 +93,7 @@ def test_hub_forward(cls, device):
     X = torch.randn((32, 64), device=device)
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = cls()
+    silu_and_mul_with_kernel = kernelize(cls(), device=device)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -110,7 +111,8 @@ def test_layer_fallback_works():
         pass
 
     # Check that we don't raise an exception for a non-existing kernel.
-    SiluAndMulWithKernelFallback()
+    silu_and_mul = SiluAndMulWithKernelFallback()
+    kernelize(silu_and_mul, device="cuda")
 
 
 @pytest.mark.linux_only
@@ -270,6 +272,7 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
+        kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 0
@@ -289,6 +292,7 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
+        kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 0
@@ -308,10 +312,32 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
+        # Kernel goes to fallback, the model is in training and
+        # the mapped kernel does not support backward.
+        kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 1
 
         linear.eval()
         linear(X)
-        assert linear.n_calls == 1
+        assert linear.n_calls == 2
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/backward-marker-test",
+                    layer_name="LinearNoBackward",
+                )
+            }
+        }
+    ):
+        linear.eval()
+        kernelize(linear)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 2
+
+        linear(X)
+        assert linear.n_calls == 2

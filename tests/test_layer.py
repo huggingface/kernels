@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import pytest
 import torch
 import torch.nn as nn
@@ -17,7 +19,6 @@ kernel_layer_mapping = {
         Device(type="cuda"): LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-            revision="layers",
         )
     },
     "SiluAndMulNoCompile": {
@@ -30,7 +31,6 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-            revision="layers",
         )
     },
 }
@@ -117,8 +117,8 @@ def test_layer_fallback_works():
 
 @pytest.mark.linux_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
-@pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_torch_compile_layer(cls, device):
+@pytest.mark.parametrize("device", ["cuda"])
+def test_torch_compile_layer_without_fallback(cls, device):
     silu_and_mul = SiluAndMul()
 
     X = torch.randn((32, 64), dtype=torch.float32, device=device)
@@ -126,7 +126,43 @@ def test_torch_compile_layer(cls, device):
 
     silu_and_mul_with_kernel = cls()
     silu_and_mul_with_kernel.eval()
-    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel)
+
+    ctx = (
+        pytest.raises(ValueError, match="does not fulfill requirements")
+        if cls is SiluAndMulNoCompileKernel
+        else nullcontext()
+    )
+    with ctx:
+        silu_and_mul_with_kernel = kernelize(
+            silu_and_mul_with_kernel,
+            device=device,
+            needs_torch_compile=True,
+            use_fallback=False,
+        )
+    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
+
+    Y_compiled = silu_and_mul_compiled(X)
+
+    torch.testing.assert_close(Y_compiled, Y)
+
+
+@pytest.mark.linux_only
+@pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
+@pytest.mark.parametrize("device", ["cuda"])
+def test_torch_compile_layer_with_fallback(cls, device):
+    silu_and_mul = SiluAndMul()
+
+    X = torch.randn((32, 64), dtype=torch.float32, device=device)
+    Y = silu_and_mul(X)
+
+    silu_and_mul_with_kernel = cls()
+    silu_and_mul_with_kernel.eval()
+    silu_and_mul_with_kernel = kernelize(
+        silu_and_mul_with_kernel,
+        device=device,
+        needs_torch_compile=True,
+    )
+    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
 
     Y_compiled = silu_and_mul_compiled(X)
 

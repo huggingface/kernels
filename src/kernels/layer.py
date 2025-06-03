@@ -5,7 +5,7 @@ from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from types import MethodType
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Union
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Type, Union
 
 from .utils import get_kernel
 
@@ -56,7 +56,7 @@ class LayerRepository:
         return hash((self.layer_name, self.repo_id, self.revision))
 
 
-_CACHED_LAYER: Dict[LayerRepository, "nn.Module"] = {}
+_CACHED_LAYER: Dict[LayerRepository, Type["nn.Module"]] = {}
 
 
 _KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, LayerRepository]]] = ContextVar(
@@ -147,6 +147,7 @@ def kernelize(
     model: "nn.Module",
     device: Optional[Union[str, "torch.device"]] = None,
     needs_backward: Optional[bool] = None,
+    needs_torch_compile: bool = False,
     use_fallback: bool = True,
 ):
     """
@@ -155,6 +156,18 @@ def kernelize(
 
     Args:
         model: The PyTorch model to kernelize
+        device: The device type to load kernels for. The device type will be inferred
+            from the parameters of the model when not provided.
+        needs_backward: Whether only kernels with backward support should be loaded.
+            should be set to `True` if the model will be trained. Use `False` when
+            the model will only be used for inference, since this enables a wider
+            range of kernels. If this argument is not provided, the choice will be
+            based on whether the model is currently in training mode or not.
+        needs_torch_compile: When set to `true`, only kernels that support
+            `torch.compile` will be loaded.
+        use_fallback: Whether to use the original forward method of modules when no
+            compatible kernel could be found. If set to `False`, an exception will
+            be raised in such cases.
 
     Returns:
         The kernelized model
@@ -205,17 +218,17 @@ def kernelize(
                 )
             _replace_forward(module, module_class.forward)
             continue
+
         # Short-circuit if we already loaded the layer.
         layer = _CACHED_LAYER.get(repo, None)
         if layer is not None:
-            # Switch to fallback when the layer does not support:
-            # compilation/compile when needed.
-            # backward when needed
-            needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
-            if needs_fallback:
-                _replace_forward(module, module_class.forward)
-            else:
-                _replace_forward(module, layer.forward)
+            _conditionally_replace_forward(
+                module=module,
+                layer=layer,
+                needs_backward=needs_backward,
+                needs_torch_compile=needs_torch_compile,
+                use_fallback=use_fallback,
+            )
             continue
 
         layer = _get_kernel_layer(
@@ -229,13 +242,13 @@ def kernelize(
 
         _CACHED_LAYER[repo] = layer
 
-        # Switch to fallback when the layer does not support
-        # compilation/compile when needed.
-        needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
-        if needs_fallback:
-            _replace_forward(module, module_class.forward)
-        else:
-            _replace_forward(module, layer.forward)
+        _conditionally_replace_forward(
+            module=module,
+            layer=layer,
+            needs_backward=needs_backward,
+            needs_torch_compile=needs_torch_compile,
+            use_fallback=use_fallback,
+        )
 
     return model
 
@@ -259,7 +272,9 @@ def use_kernel_forward_from_hub(
     return decorator
 
 
-def _get_kernel_layer(*, repo_id: str, layer_name: str, revision: str) -> "nn.Module":
+def _get_kernel_layer(
+    *, repo_id: str, layer_name: str, revision: str
+) -> Type["nn.Module"]:
     """Get a layer from a kernel."""
 
     kernel = get_kernel(repo_id, revision=revision)
@@ -340,6 +355,34 @@ def _find_device(model: "nn.Module") -> Device:
         )
 
     return Device(type=param.device.type)
+
+
+def _conditionally_replace_forward(
+    *,
+    module: "nn.Module",
+    layer: Type["nn.Module"],
+    needs_backward: bool,
+    needs_torch_compile: bool,
+    use_fallback: bool,
+):
+    module_class = type(module)
+
+    # Switch to fallback when the layer does not support:
+    # compilation/compile when needed.
+    # backward when needed
+    needs_fallback = needs_backward and not getattr(layer, "has_backward", True)
+    needs_fallback |= needs_torch_compile and not getattr(
+        layer, "can_torch_compile", False
+    )
+    if needs_fallback:
+        if use_fallback:
+            _replace_forward(module, module_class.forward)
+        else:
+            raise ValueError(
+                f"Available kernel does not fulfill requirements: needs_backward={needs_backward}, needs_torch_compile={needs_torch_compile}"
+            )
+    else:
+        _replace_forward(module, layer.forward)
 
 
 def _replace_forward(module: "nn.Module", forward: Callable):

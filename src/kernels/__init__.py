@@ -1,6 +1,7 @@
 from kernels.layer import (
     Device,
     LayerRepository,
+    kernelize,
     register_kernel_mapping,
     replace_kernel_forward_from_hub,
     use_kernel_forward_from_hub,
@@ -26,4 +27,5 @@ __all__ = [
     "replace_kernel_forward_from_hub",
     "LayerRepository",
     "Device",
+    "kernelize",
 ]

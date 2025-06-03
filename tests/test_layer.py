@@ -1,3 +1,5 @@
+from contextlib import nullcontext
+
 import pytest
 import torch
 import torch.nn as nn
@@ -6,6 +8,7 @@ from torch.nn import functional as F
 from kernels import (
     Device,
     LayerRepository,
+    kernelize,
     register_kernel_mapping,
     use_kernel_forward_from_hub,
 )
@@ -16,7 +19,6 @@ kernel_layer_mapping = {
         Device(type="cuda"): LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-            revision="layers",
         )
     },
     "SiluAndMulNoCompile": {
@@ -29,7 +31,6 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-            revision="layers",
         )
     },
 }
@@ -92,7 +93,7 @@ def test_hub_forward(cls, device):
     X = torch.randn((32, 64), device=device)
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = cls()
+    silu_and_mul_with_kernel = kernelize(cls(), device=device)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -110,13 +111,14 @@ def test_layer_fallback_works():
         pass
 
     # Check that we don't raise an exception for a non-existing kernel.
-    SiluAndMulWithKernelFallback()
+    silu_and_mul = SiluAndMulWithKernelFallback()
+    kernelize(silu_and_mul, device="cuda")
 
 
 @pytest.mark.linux_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
-@pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_torch_compile_layer(cls, device):
+@pytest.mark.parametrize("device", ["cuda"])
+def test_torch_compile_layer_without_fallback(cls, device):
     silu_and_mul = SiluAndMul()
 
     X = torch.randn((32, 64), dtype=torch.float32, device=device)
@@ -124,7 +126,43 @@ def test_torch_compile_layer(cls, device):
 
     silu_and_mul_with_kernel = cls()
     silu_and_mul_with_kernel.eval()
-    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel)
+
+    ctx = (
+        pytest.raises(ValueError, match="does not fulfill requirements")
+        if cls is SiluAndMulNoCompileKernel
+        else nullcontext()
+    )
+    with ctx:
+        silu_and_mul_with_kernel = kernelize(
+            silu_and_mul_with_kernel,
+            device=device,
+            needs_torch_compile=True,
+            use_fallback=False,
+        )
+    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
+
+    Y_compiled = silu_and_mul_compiled(X)
+
+    torch.testing.assert_close(Y_compiled, Y)
+
+
+@pytest.mark.linux_only
+@pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
+@pytest.mark.parametrize("device", ["cuda"])
+def test_torch_compile_layer_with_fallback(cls, device):
+    silu_and_mul = SiluAndMul()
+
+    X = torch.randn((32, 64), dtype=torch.float32, device=device)
+    Y = silu_and_mul(X)
+
+    silu_and_mul_with_kernel = cls()
+    silu_and_mul_with_kernel.eval()
+    silu_and_mul_with_kernel = kernelize(
+        silu_and_mul_with_kernel,
+        device=device,
+        needs_torch_compile=True,
+    )
+    silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
 
     Y_compiled = silu_and_mul_compiled(X)
 
@@ -270,6 +308,7 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
+        kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 0
@@ -289,6 +328,7 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
+        kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 0
@@ -308,10 +348,32 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
+        # Kernel goes to fallback, the model is in training and
+        # the mapped kernel does not support backward.
+        kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 1
 
         linear.eval()
         linear(X)
-        assert linear.n_calls == 1
+        assert linear.n_calls == 2
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/backward-marker-test",
+                    layer_name="LinearNoBackward",
+                )
+            }
+        }
+    ):
+        linear.eval()
+        kernelize(linear)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 2
+
+        linear(X)
+        assert linear.n_calls == 2

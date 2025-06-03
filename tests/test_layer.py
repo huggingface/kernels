@@ -297,26 +297,8 @@ def test_fallback_used_when_training():
 
     linear = TorchLinear(32, 32).to("cuda")
 
-    with use_kernel_mapping(
-        {
-            "Linear": {
-                Device(type="cuda"): LayerRepository(
-                    repo_id="kernels-test/backward-marker-test",
-                    layer_name="LinearImplicitBackward",
-                )
-            }
-        }
-    ):
-        linear.train()
-        kernelize(linear)
-        X = torch.randn(10, 32, device="cuda")
-        linear(X)
-        assert linear.n_calls == 0
-
-        linear.eval()
-        linear(X)
-        assert linear.n_calls == 0
-
+    # Case 1: kernel with explicit backward support should always
+    #         use the kernel.
     with use_kernel_mapping(
         {
             "Linear": {
@@ -337,6 +319,31 @@ def test_fallback_used_when_training():
         linear(X)
         assert linear.n_calls == 0
 
+    # Case 2: kernel with implicit backward support should always
+    #         use the kernel.
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/backward-marker-test",
+                    layer_name="LinearImplicitBackward",
+                )
+            }
+        }
+    ):
+        linear.train()
+        kernelize(linear)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 0
+
+        linear.eval()
+        linear(X)
+        assert linear.n_calls == 0
+
+    # Case 3: kernel out backward support should use the kernel in
+    #         eval mode and the fallback in training. Test train ->
+    #         eval -> train.
     with use_kernel_mapping(
         {
             "Linear": {
@@ -348,17 +355,23 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
-        # Kernel goes to fallback, the model is in training and
-        # the mapped kernel does not support backward.
         kernelize(linear)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 1
 
+        # When switching the kernel to eval, forward gets replaced by
+        # the kernel.
         linear.eval()
+        linear(X)
+        assert linear.n_calls == 1
+
+        ## Let's do it in the other direction to make sure it works as well.
+        linear.train()
         linear(X)
         assert linear.n_calls == 2
 
+    # Case 4: same as case 3, but test eval -> train -> eval.
     with use_kernel_mapping(
         {
             "Linear": {
@@ -375,5 +388,10 @@ def test_fallback_used_when_training():
         linear(X)
         assert linear.n_calls == 2
 
+        linear.train()
         linear(X)
-        assert linear.n_calls == 2
+        assert linear.n_calls == 3
+
+        linear.eval()
+        linear(X)
+        assert linear.n_calls == 3

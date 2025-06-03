@@ -72,19 +72,6 @@ model = MyModel(...)
 model = kernelize(model, device="cuda")
 ```
 
-### Backprop
-
-Not all Hub kernels support backprop. If a model is going to be used with
-backprop for training, then we want to avoid that `kernelize` uses such
-kernels. By default, `kernelize` will exclude inference-only kernels when
-the kernelized model is set to training (`Model.train()`). You can override
-this behavior using the `needs_backwards`:
-
-```python
-model = MyModel(...)
-model = kernelize(model, needs_backward=False)
-```
-
 ### `torch.compile`
 
 Not all Hub kernels support `torch.compile`. If you want to compile a model
@@ -98,10 +85,9 @@ model = kernelize(model, needs_torch_compile=True)
 
 ### Fallback forward
 
-The `needs_backwards`/`needs_torch_compile` arguments will fall back to
-the layer's original `forward` if the registered kernels do not support
-backprop/`torch.compile`. You can let `kernelize` raise an exception
-instead by using `use_fallback=False`:
+The `needs_torch_compile` argument will fall back to the layer's original
+`forward` if the registered kernels does not support `torch.compile`. You
+can let `kernelize` raise an exception instead by using `use_fallback=False`:
 
 ```python
 model = MyModel(...)

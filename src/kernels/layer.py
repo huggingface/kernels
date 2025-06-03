@@ -96,8 +96,10 @@ def register_kernel_mapping(
     mapping: Dict[str, Dict[Union[Device, str], LayerRepository]]
 ):
     """
-    Allows one to register a mapping between a layer name the corresponding kernel to use, depending on the device.
-    This should be use in conjunction with `use_kernel_hub_forward` decorator on the classname.
+    Allows one to register a mapping between a layer name the corresponding
+    kernel to use, depending on the device. This should be use in conjunction
+    with `kernelize`.
+
     Exemple usage:
 
     ```python
@@ -151,8 +153,9 @@ def kernelize(
     use_fallback: bool = True,
 ):
     """
-    Iterate over all modules in the model and replace the forward method of modules
-    that have a kernel_layer_name attribute with the corresponding kernel layer.
+    Iterate over all modules in the model and replace the `forward` method of
+    extensible layers for which kernels are registered using `register_kernel_mapping`
+    or `use_kernel_mapping`.
 
     Args:
         model: The PyTorch model to kernelize
@@ -255,12 +258,7 @@ def kernelize(
 
 def use_kernel_forward_from_hub(layer_name: str):
     """
-    Replace the forward function of a layer using a layer from the kernel hub.
-    This decorator can be applied to a layer and replaces the forward method
-    of the layer with that of a layer from the hub. The replacement is done
-    when a layer matching `layer_name` and device type is registered through
-    `register_layer_mapping`. The device type is inferred from the first
-    argument to `forward`.
+    Make a layer extensible using the name `layer_name`.
     """
 
     def decorator(cls):

@@ -61,4 +61,5 @@ the Hub.
 - [Environment variables](docs/env.md)
 - [Using kernels in a Docker container](docs/docker.md)
 - [Kernel requirements](docs/kernel-requirements.md)
+- [Frequently Asked questions](docs/faq.md)
 - [Writing kernels](https://github.com/huggingface/kernel-builder/blob/main/docs/writing-kernels.md) using [kernel-builder](https://github.com/huggingface/kernel-builder/)

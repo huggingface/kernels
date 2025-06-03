@@ -253,9 +253,7 @@ def kernelize(
     return model
 
 
-def use_kernel_forward_from_hub(
-    layer_name: str, *, device: Device = Device(type="cuda"), use_fallback: bool = True
-):
+def use_kernel_forward_from_hub(layer_name: str):
     """
     Replace the forward function of a layer using a layer from the kernel hub.
     This decorator can be applied to a layer and replaces the forward method
@@ -328,22 +326,6 @@ def _validate_layer(*, check_cls, cls):
             raise TypeError(
                 f"Forward signature does not match: different kind of arguments ({param} ({param.kind}) and {ref_param} ({ref_param.kind})"
             )
-
-
-def _is_torchdynamo_compiling():
-    # Importing torch._dynamo causes issues with PyTorch profiler (https://github.com/pytorch/pytorch/issues/130622)
-    # hence rather relying on `torch.compiler.is_compiling()` when possible (torch>=2.3)
-    try:
-        import torch
-
-        return torch.compiler.is_compiling()
-    except Exception:
-        try:
-            import torch._dynamo as dynamo  # noqa: F401
-
-            return dynamo.is_compiling()
-        except Exception:
-            return False
 
 
 def _find_device(model: "nn.Module") -> Device:

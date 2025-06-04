@@ -51,18 +51,39 @@
         "type": "github"
       }
     },
+    "hf-nix": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1749025620,
+        "narHash": "sha256-V/r5KOp8FRC5n3MINDzTeS3pZz57SasFVzx12WQRQ8U=",
+        "owner": "huggingface",
+        "repo": "hf-nix",
+        "rev": "7ab84ffad440c530162f528a96fa062530a6c8e4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "huggingface",
+        "ref": "torch-cxx11",
+        "repo": "hf-nix",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1737453259,
-        "narHash": "sha256-5LaFI9SQwCZmJDasMoYMdzNouWXNk3BvjKcO19tq1Rs=",
+        "lastModified": 1747820358,
+        "narHash": "sha256-fTqsZsUX6M3yeEvgyQvXcbGmT2CaRVyVwsi8eK29Oj4=",
         "owner": "danieldk",
         "repo": "nixpkgs",
-        "rev": "e0372dbcfd19ddd783b7c3b3868f19322f83318e",
+        "rev": "d3c1681180717528068082103bf323147de6ab0b",
         "type": "github"
       },
       "original": {
         "owner": "danieldk",
-        "ref": "outlines-v0.1.4-tgi",
+        "ref": "cudatoolkit-12.9-kernel-builder",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -70,11 +91,11 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "hf-nix": "hf-nix",
         "nixpkgs": [
-          "tgi-nix",
+          "hf-nix",
           "nixpkgs"
-        ],
-        "tgi-nix": "tgi-nix"
+        ]
       }
     },
     "systems": {
@@ -104,27 +125,6 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
-        "type": "github"
-      }
-    },
-    "tgi-nix": {
-      "inputs": {
-        "flake-compat": "flake-compat",
-        "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1741617161,
-        "narHash": "sha256-cwKYAsIVSLtoLbG48+oi3NkSrvuZRLYs8lkJmpDsTw0=",
-        "owner": "huggingface",
-        "repo": "text-generation-inference-nix",
-        "rev": "5946021ec6cb6aae18158a9dc27f893cfbab2925",
-        "type": "github"
-      },
-      "original": {
-        "owner": "huggingface",
-        "ref": "kernels-0.2.0",
-        "repo": "text-generation-inference-nix",
         "type": "github"
       }
     }

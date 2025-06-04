@@ -1,7 +1,7 @@
 {
   inputs = {
-    tgi-nix.url = "github:huggingface/text-generation-inference-nix/kernels-0.2.0";
-    nixpkgs.follows = "tgi-nix/nixpkgs";
+    hf-nix.url = "github:huggingface/hf-nix/torch-cxx11";
+    nixpkgs.follows = "hf-nix/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
   };
   outputs =
@@ -9,16 +9,16 @@
       self,
       nixpkgs,
       flake-utils,
-      tgi-nix,
+      hf-nix,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          inherit (tgi-nix.lib) config;
+          inherit (hf-nix.lib) config;
           overlays = [
-            tgi-nix.overlays.default
+            hf-nix.overlays.default
           ];
         };
       in

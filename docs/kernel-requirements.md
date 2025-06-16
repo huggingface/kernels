@@ -37,8 +37,14 @@ to resolve the version constraints.
 ## Native Python module
 
 Kernels will typically contain a native Python module with precompiled
-compute kernels and bindings. This module must fulfill the following
-requirements:
+compute kernels and bindings. This module must fulfill the requirements
+outlined in this section. For all operating systems, a kernel must not
+have dynamic library dependencies outside:
+
+- Torch;
+- CUDA/ROCm libraries installed as dependencies of Torch.
+
+### Linux
 
 - Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
   for compatibility with Python 3.9 and later.
@@ -50,12 +56,18 @@ requirements:
   - CXXABI 1.3.11
   - GCC 7.0.0
 
-  These requirement can be checked with the ABI checker (see below).
+These requirement can be checked with the ABI checker (see below).
 
-- No dynamic library dependencies outside:
+### macOS
 
-  - Torch;
-  - CUDA/ROCm libraries installed as dependencies of Torch.
+- Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
+  for compatibility with Python 3.9 and later.
+- macOS deployment target 15.0.
+- Metal 3.0 (`-std=metal3.0`).
+
+The ABI3 requirement can be checked with the ABI checker (see below).
+
+### ABI checker
 
 The manylinux_2_28 and Python ABI 3.9 version requirements can be checked with
 [`kernel-abi-check`](https://crates.io/crates/kernel-abi-check):

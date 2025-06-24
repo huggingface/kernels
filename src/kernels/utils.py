@@ -55,6 +55,7 @@ def build_variant() -> str:
     os = platform.system().lower()
 
     if os == "darwin":
+        cpu = "aarch64" if cpu == "arm64" else cpu
         return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
 
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"

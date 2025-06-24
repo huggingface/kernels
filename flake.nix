@@ -1,6 +1,6 @@
 {
   inputs = {
-    hf-nix.url = "github:huggingface/hf-nix/torch-cxx11";
+    hf-nix.url = "github:huggingface/hf-nix";
     nixpkgs.follows = "hf-nix/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
   };
@@ -16,7 +16,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          inherit (hf-nix.lib) config;
+          config = hf-nix.lib.config system;
           overlays = [
             hf-nix.overlays.default
           ];

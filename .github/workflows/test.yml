@@ -63,7 +63,7 @@ jobs:
       - name: Check README generation
         # For now, just checks that generation doesn't fail.
         run: |
-          uv run kernels generate-readme kernels-community/triton-layer-norm --revision docs
+          uv run kernels generate-readme kernels-community/triton-layer-norm
 
       - name: Import check without torch
         run: |

@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.6.2.dev0"
+version = "0.6.2"
 description = "Download compute kernels"
 authors = [
   { name = "OlivierDehaene", email = "olivier@huggingface.co" },

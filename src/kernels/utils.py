@@ -110,6 +110,23 @@ def install_kernel(
         )
     )
 
+    try:
+        return _load_kernel_from_path(repo_path, package_name, variant_locks)
+    except FileNotFoundError:
+        # Redo with more specific error message.
+        raise FileNotFoundError(
+            f"Kernel `{repo_id}` at revision {revision} does not have build: {variant}"
+        )
+
+
+def _load_kernel_from_path(
+    repo_path: Path,
+    package_name: str,
+    variant_locks: Optional[Dict[str, VariantLock]] = None,
+) -> Tuple[str, Path]:
+    variant = build_variant()
+    universal_variant = universal_build_variant()
+
     variant_path = repo_path / "build" / variant
     universal_variant_path = repo_path / "build" / universal_variant
 
@@ -128,7 +145,7 @@ def install_kernel(
 
     if not os.path.exists(module_init_path):
         raise FileNotFoundError(
-            f"Kernel `{repo_id}` at revision {revision} does not have build: {variant}"
+            f"Kernel at path `{repo_path}` does not have build: {variant}"
         )
 
     return package_name, variant_path
@@ -166,7 +183,21 @@ def install_kernel_all_variants(
 
 
 def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
+    """
+    Download and import a kernel from the Hugging Face Hub.
+
+    The kernel is downloaded from the repository `repo_id` at
+    branch/commit/tag `revision`.
+    """
     package_name, package_path = install_kernel(repo_id, revision=revision)
+    return import_from_path(package_name, package_path / package_name / "__init__.py")
+
+
+def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
+    """
+    Import a kernel from a local kernel repository path.
+    """
+    package_name, package_path = _load_kernel_from_path(repo_path, package_name)
     return import_from_path(package_name, package_path / package_name / "__init__.py")
 
 

@@ -56,6 +56,9 @@ class Mode(Flag):
         if Mode.INFERENCE in union and Mode.TRAINING in union:
             raise ValueError("Mode.INFERENCE and Mode.TRAINING are mutually exclusive.")
 
+        if len(union) > 1 and Mode.DEFAULT in union:
+            raise ValueError("Mode.DEFAULT cannot be combined with other modes.")
+
         return union
 
 
@@ -242,6 +245,9 @@ def kernelize(
 
     if mode == Mode.DEFAULT:
         raise ValueError("Mode.DEFAULT can only be used to register kernel mappings.")
+
+    if Mode.INFERENCE not in mode and Mode.TRAINING not in mode:
+        raise ValueError("kernelize mode must contain Mode.INFERENCE or Mode.TRAINING.")
 
     if device is None:
         device_type = _find_device(model)

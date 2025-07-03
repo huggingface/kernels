@@ -149,7 +149,7 @@ def test_torch_compile_layer_without_fallback(cls, device):
         silu_and_mul_with_kernel = kernelize(
             silu_and_mul_with_kernel,
             device=device,
-            mode=Mode.TORCH_COMPILE,
+            mode=Mode.INFERENCE | Mode.TORCH_COMPILE,
             use_fallback=False,
         )
     silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
@@ -173,7 +173,7 @@ def test_torch_compile_layer_with_fallback(cls, device):
     silu_and_mul_with_kernel = kernelize(
         silu_and_mul_with_kernel,
         device=device,
-        mode=Mode.TORCH_COMPILE,
+        mode=Mode.INFERENCE | Mode.TORCH_COMPILE,
     )
     silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
 
@@ -496,8 +496,13 @@ def test_invalid_mode_rejected():
     with pytest.raises(ValueError, match="mutually exclusive"):
         mode = Mode.INFERENCE | Mode.TRAINING
 
-    mode = Mode.DEFAULT
+    with pytest.raises(ValueError, match="cannot be combined with other modes"):
+        mode = Mode.DEFAULT | Mode.TORCH_COMPILE
+
     with pytest.raises(
         ValueError, match="can only be used to register kernel mappings"
     ):
-        kernelize(torch.nn.Linear(32, 32), mode=mode)
+        kernelize(torch.nn.Linear(32, 32), mode=Mode.DEFAULT)
+
+    with pytest.raises(ValueError, match="mode must contain"):
+        kernelize(torch.nn.Linear(32, 32), mode=Mode.TORCH_COMPILE)

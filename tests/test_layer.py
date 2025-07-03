@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from kernels import (
     Device,
     LayerRepository,
+    Mode,
     kernelize,
     register_kernel_mapping,
     use_kernel_forward_from_hub,
@@ -65,6 +66,18 @@ class SiluAndMulStringDevice(SiluAndMul):
     pass
 
 
+@use_kernel_forward_from_hub("Linear")
+class TorchLinearWithCounter(nn.Linear):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Used to check that we called hub kernel.
+        self.n_calls = 0
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        self.n_calls += 1
+        return super().forward(input)
+
+
 def test_arg_kinds():
     @use_kernel_forward_from_hub("ArgKind")
     class ArgKind(nn.Module):
@@ -93,7 +106,7 @@ def test_hub_forward(cls, device):
     X = torch.randn((32, 64), device=device)
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = kernelize(cls(), device=device)
+    silu_and_mul_with_kernel = kernelize(cls(), device=device, mode=Mode.INFERENCE)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -112,7 +125,7 @@ def test_layer_fallback_works():
 
     # Check that we don't raise an exception for a non-existing kernel.
     silu_and_mul = SiluAndMulWithKernelFallback()
-    kernelize(silu_and_mul, device="cuda")
+    kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
 @pytest.mark.linux_only
@@ -128,7 +141,7 @@ def test_torch_compile_layer_without_fallback(cls, device):
     silu_and_mul_with_kernel.eval()
 
     ctx = (
-        pytest.raises(ValueError, match="does not fulfill requirements")
+        pytest.raises(ValueError, match="does not support mode")
         if cls is SiluAndMulNoCompileKernel
         else nullcontext()
     )
@@ -136,7 +149,7 @@ def test_torch_compile_layer_without_fallback(cls, device):
         silu_and_mul_with_kernel = kernelize(
             silu_and_mul_with_kernel,
             device=device,
-            needs_torch_compile=True,
+            mode=Mode.TORCH_COMPILE,
             use_fallback=False,
         )
     silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
@@ -160,7 +173,7 @@ def test_torch_compile_layer_with_fallback(cls, device):
     silu_and_mul_with_kernel = kernelize(
         silu_and_mul_with_kernel,
         device=device,
-        needs_torch_compile=True,
+        mode=Mode.TORCH_COMPILE,
     )
     silu_and_mul_compiled = torch.compile(silu_and_mul_with_kernel, fullgraph=True)
 
@@ -212,7 +225,9 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
+                    Mode.DEFAULT
+                ].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -223,7 +238,9 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
+                Mode.DEFAULT
+            ].repo_id
             == "kernels-community/activation"
         )
 
@@ -232,7 +249,9 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
+                    Mode.DEFAULT
+                ].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -243,7 +262,9 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
+                Mode.DEFAULT
+            ].repo_id
             == "kernels-community/activation"
         )
 
@@ -282,20 +303,149 @@ def test_validate_kernel_layer():
         _validate_layer(cls=BadLayer4, check_cls=SiluAndMul)
 
 
+def test_invalid_mode_for_mapping_rejected():
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearNoBackward",
+                    )
+                }
+            }
+        }
+    ):
+        with pytest.raises(ValueError, match="does not support backward"):
+            kernelize(linear, mode=Mode.TRAINING)
+
+
+def test_kernel_modes():
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    # Case 1: layer without further specification, becomes the
+    #         base layer.
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": LayerRepository(
+                    repo_id="kernels-test/backward-marker-test",
+                    layer_name="LinearBackward",
+                )
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        assert linear.n_calls == 0
+
+    # Case 2: register a kernel just for training. If no base kernel
+    #         layer is registered, we fall back to the original layer.
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 1
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # Training has a kernel, so fallback.
+        assert linear.n_calls == 1
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # No kernel for training + torch.compile, so fallback.
+        assert linear.n_calls == 2
+
+    # Case 3: register a kernel just for training and one for fallback.
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.DEFAULT: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # Uses the base kernel.
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # Uses the training kernel.
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # Uses the base kernel.
+        assert linear.n_calls == 2
+
+    # Case 4: register a kernel with two preferences.
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.TRAINING
+                    | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # No inference kernel, so fallback.
+        assert linear.n_calls == 3
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # No training kernel, so fallback.
+        assert linear.n_calls == 4
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # We do have a training + torch.compile kernel.
+        assert linear.n_calls == 4
+
+
 @pytest.mark.linux_only
 def test_fallback_used_when_training():
-    @use_kernel_forward_from_hub("Linear")
-    class TorchLinear(nn.Linear):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            # Used to check that we called hub kernel.
-            self.n_calls = 0
-
-        def forward(self, input: torch.Tensor) -> torch.Tensor:
-            self.n_calls += 1
-            return super().forward(input)
-
-    linear = TorchLinear(32, 32).to("cuda")
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
 
     # Case 1: kernel with explicit backward support should always
     #         use the kernel.
@@ -310,7 +460,7 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
-        kernelize(linear)
+        kernelize(linear, mode=Mode.INFERENCE)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 0
@@ -332,7 +482,7 @@ def test_fallback_used_when_training():
         }
     ):
         linear.train()
-        kernelize(linear)
+        kernelize(linear, mode=Mode.INFERENCE)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         assert linear.n_calls == 0
@@ -341,57 +491,13 @@ def test_fallback_used_when_training():
         linear(X)
         assert linear.n_calls == 0
 
-    # Case 3: kernel out backward support should use the kernel in
-    #         eval mode and the fallback in training. Test train ->
-    #         eval -> train.
-    with use_kernel_mapping(
-        {
-            "Linear": {
-                Device(type="cuda"): LayerRepository(
-                    repo_id="kernels-test/backward-marker-test",
-                    layer_name="LinearNoBackward",
-                )
-            }
-        }
+
+def test_invalid_mode_rejected():
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        mode = Mode.INFERENCE | Mode.TRAINING
+
+    mode = Mode.DEFAULT
+    with pytest.raises(
+        ValueError, match="can only be used to register kernel mappings"
     ):
-        linear.train()
-        kernelize(linear)
-        X = torch.randn(10, 32, device="cuda")
-        linear(X)
-        assert linear.n_calls == 1
-
-        # When switching the kernel to eval, forward gets replaced by
-        # the kernel.
-        linear.eval()
-        linear(X)
-        assert linear.n_calls == 1
-
-        ## Let's do it in the other direction to make sure it works as well.
-        linear.train()
-        linear(X)
-        assert linear.n_calls == 2
-
-    # Case 4: same as case 3, but test eval -> train -> eval.
-    with use_kernel_mapping(
-        {
-            "Linear": {
-                Device(type="cuda"): LayerRepository(
-                    repo_id="kernels-test/backward-marker-test",
-                    layer_name="LinearNoBackward",
-                )
-            }
-        }
-    ):
-        linear.eval()
-        kernelize(linear)
-        X = torch.randn(10, 32, device="cuda")
-        linear(X)
-        assert linear.n_calls == 2
-
-        linear.train()
-        linear(X)
-        assert linear.n_calls == 3
-
-        linear.eval()
-        linear(X)
-        assert linear.n_calls == 3
+        kernelize(torch.nn.Linear(32, 32), mode=mode)

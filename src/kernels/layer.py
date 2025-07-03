@@ -56,7 +56,7 @@ class Mode(Flag):
         if Mode.INFERENCE in union and Mode.TRAINING in union:
             raise ValueError("Mode.INFERENCE and Mode.TRAINING are mutually exclusive.")
 
-        if len(union) > 1 and Mode.DEFAULT in union:
+        if union != Mode.DEFAULT and Mode.DEFAULT in union:
             raise ValueError("Mode.DEFAULT cannot be combined with other modes.")
 
         return union

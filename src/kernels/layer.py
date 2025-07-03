@@ -411,8 +411,11 @@ def _conditionally_replace_forward(
 ):
     module_class = type(module)
 
-    # Switch to fallback if the mode is not supported
-    # by the given layer.
+    # Switch to fallback if the mode is not supported by the layer.
+    # Note that this is useful even after _validate_layer_has_mode because
+    # layers registered with the DEFAULT mode never get rejected by
+    # _validate_layer_has_mode. For such layers, we want to fall back in
+    # case the layer does not support the given mode.
     needs_fallback = Mode.TORCH_COMPILE in mode and not getattr(
         layer, "can_torch_compile", False
     )

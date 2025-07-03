@@ -37,7 +37,7 @@ class Mode(Flag):
     * `INFERENCE`: The kernel is used for inference.
     * `TRAINING`: The kernel is used for training.
     * `TORCH_COMPILE`: The kernel is used with `torch.compile`.
-    * `DEFAULT`: In a kernel mapping, this kernel that is used when no other mode
+    * `DEFAULT`: In a kernel mapping, this kernel is used when no other mode
        matches.
 
     Different modes can be combined. For instance, `INFERENCE | TORCH_COMPILE`

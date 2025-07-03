@@ -164,9 +164,9 @@ kernel_layer_mapping = {
 }
 ```
 
-The kernels will matched exactly on the mode. So, for instance, no kernel
-layer is used when the `mode` passed to `kernelized` is
-`Mode.INFERENCE | Mode.TORCH_COMPILE` or `Mode.TRAINING`. If you want to
+The kernels will match exactly on the mode. So, for instance in the example above, no kernel
+layer is used when the `mode` passed to `kernelize` is
+`Mode.INFERENCE | Mode.TORCH_COMPILE` or `Mode.TRAINING`. However, if you want to
 register a kernel to be used when the mode does not match any of the
 modes in the mapping, you can use the special `Mode.DEFAULT` mode to do
 so. For example:

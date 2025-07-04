@@ -494,10 +494,10 @@ def test_fallback_used_when_training():
 
 def test_invalid_mode_rejected():
     with pytest.raises(ValueError, match="mutually exclusive"):
-        Mode.INFERENCE | Mode.TRAINING
+        _ = Mode.INFERENCE | Mode.TRAINING
 
     with pytest.raises(ValueError, match="cannot be combined with other modes"):
-        Mode.DEFAULT | Mode.TORCH_COMPILE
+        _ = Mode.DEFAULT | Mode.TORCH_COMPILE
 
     with pytest.raises(
         ValueError, match="can only be used to register kernel mappings"

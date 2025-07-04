@@ -246,7 +246,10 @@ def kernelize(
     if mode == Mode.DEFAULT:
         raise ValueError("Mode.DEFAULT can only be used to register kernel mappings.")
 
-    if Mode.INFERENCE not in mode and Mode.TRAINING not in mode:
+    # Type check ignored because this causes a false negative on Python < 3.11.
+    # Looks similar to: https://github.com/python/mypy/issues/9642
+    # Remove once we start doing typing checks on >= 3.11.
+    if Mode.INFERENCE not in mode and Mode.TRAINING not in mode:  # type: ignore[operator]
         raise ValueError("kernelize mode must contain Mode.INFERENCE or Mode.TRAINING.")
 
     if device is None:

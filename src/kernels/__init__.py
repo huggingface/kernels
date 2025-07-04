@@ -1,6 +1,7 @@
 from kernels.layer import (
     Device,
     LayerRepository,
+    Mode,
     kernelize,
     register_kernel_mapping,
     replace_kernel_forward_from_hub,
@@ -17,17 +18,18 @@ from kernels.utils import (
 )
 
 __all__ = [
+    "Device",
+    "LayerRepository",
+    "Mode",
     "get_kernel",
     "get_local_kernel",
     "get_locked_kernel",
     "has_kernel",
-    "load_kernel",
     "install_kernel",
-    "use_kernel_forward_from_hub",
-    "use_kernel_mapping",
+    "kernelize",
+    "load_kernel",
     "register_kernel_mapping",
     "replace_kernel_forward_from_hub",
-    "LayerRepository",
-    "Device",
-    "kernelize",
+    "use_kernel_forward_from_hub",
+    "use_kernel_mapping",
 ]

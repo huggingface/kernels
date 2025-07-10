@@ -303,6 +303,7 @@ def test_validate_kernel_layer():
         _validate_layer(cls=BadLayer4, check_cls=SiluAndMul)
 
 
+@pytest.mark.linux_only
 def test_invalid_mode_for_mapping_rejected():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
 
@@ -322,6 +323,7 @@ def test_invalid_mode_for_mapping_rejected():
             kernelize(linear, mode=Mode.TRAINING)
 
 
+@pytest.mark.linux_only
 def test_kernel_modes():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
 

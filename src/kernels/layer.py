@@ -76,7 +76,7 @@ class Device:
             if self.type != "cuda":
                 raise ValueError("CUDAProperties is only supported for 'cuda' devices.")
 
-    def create_repo(self) -> _Repos:
+    def create_repo(self) -> _DeviceRepos:
         """Create an appropriate repository set for this device type."""
         if self.type == "cuda":
             return _CUDARepos()
@@ -140,46 +140,54 @@ class LayerRepository:
 _CACHED_LAYER: Dict[LayerRepository, Type["nn.Module"]] = {}
 
 
-class _Repos(ABC):
+class _DeviceRepos(ABC):
+    """
+    Device-specific kernel layer repositories.
+    """
+
+    @property
     @abstractmethod
-    def find_repos(
+    def repos(
         self,
     ) -> Optional[Dict[Mode, LayerRepository]]: ...
 
     @abstractmethod
-    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]): ...
-
-
-class _MPSRepos(_Repos):
-    repos: Dict[Mode, LayerRepository]
-
-    def __init__(self):
-        super().__init__()
-        self.repos = {}
-
-    def find_repos(
-        self,
-    ) -> Optional[Dict[Mode, LayerRepository]]:
-        return self.repos
-
     def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
         """
         Insert a repository for a specific device and mode.
         """
+        ...
+
+
+class _MPSRepos(_DeviceRepos):
+    _repos: Dict[Mode, LayerRepository]
+
+    def __init__(self):
+        super().__init__()
+        self._repos = {}
+
+    @property
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, LayerRepository]]:
+        return self._repos
+
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
         if device.type != "mps":
             raise ValueError(f"Device type must be 'mps', got {device.type}")
 
-        self.repos = repos
+        self._repos = repos
 
 
-class _CUDARepos(_Repos):
-    repos: IntervalTree[Dict[Mode, LayerRepository]]
+class _CUDARepos(_DeviceRepos):
+    _repos: IntervalTree[Dict[Mode, LayerRepository]]
 
     def __init__(self):
         super().__init__()
         self.repos_by_capability = IntervalTree()
 
-    def find_repos(
+    @property
+    def repos(
         self,
     ) -> Optional[Dict[Mode, LayerRepository]]:
         capability = _find_capability()
@@ -202,8 +210,8 @@ class _CUDARepos(_Repos):
         self.repos_by_capability.insert(min_capability, max_capability, repos)
 
 
-_KERNEL_MAPPING: ContextVar[Dict[str, Dict[str, Union[_CUDARepos, _MPSRepos]]]] = (
-    ContextVar("_KERNEL_MAPPING", default={})
+_KERNEL_MAPPING: ContextVar[Dict[str, Dict[str, _DeviceRepos]]] = ContextVar(
+    "_KERNEL_MAPPING", default={}
 )
 
 
@@ -395,7 +403,7 @@ def kernelize(
             _replace_forward(module, module_class)
             continue
 
-        repos = property_repos.find_repos()
+        repos = property_repos.repos
 
         if repos is None:
             if not use_fallback:

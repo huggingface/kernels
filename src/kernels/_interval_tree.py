@@ -26,8 +26,10 @@ class _Node(Generic[T]):
 class IntervalTree(Generic[T]):
     """A data structure to hold and query (unique) intervals."""
 
+    root: Optional[_Node[T]]
+
     def __init__(self):
-        self.root: Optional[_Node[T]] = None
+        self.root = None
 
     def insert(self, start: int, end: int, data: T) -> None:
         """

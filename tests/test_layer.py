@@ -281,9 +281,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
-                .find_repos()[Mode.DEFAULT]
-                .repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -294,9 +292,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
-            .find_repos()[Mode.DEFAULT]
-            .repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
             == "kernels-community/activation"
         )
 
@@ -305,9 +301,7 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
-                .find_repos()[Mode.DEFAULT]
-                .repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -318,9 +312,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
-            .find_repos()[Mode.DEFAULT]
-            .repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
             == "kernels-community/activation"
         )
 

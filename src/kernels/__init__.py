@@ -1,4 +1,5 @@
 from kernels.layer import (
+    CUDAProperties,
     Device,
     LayerRepository,
     Mode,
@@ -18,6 +19,7 @@ from kernels.utils import (
 )
 
 __all__ = [
+    "CUDAProperties",
     "Device",
     "LayerRepository",
     "Mode",

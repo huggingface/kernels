@@ -1,3 +1,4 @@
+import sys
 from contextlib import nullcontext
 
 import pytest
@@ -13,7 +14,12 @@ from kernels import (
     register_kernel_mapping,
     use_kernel_forward_from_hub,
 )
-from kernels.layer import _KERNEL_MAPPING, _validate_layer, use_kernel_mapping
+from kernels.layer import (
+    _KERNEL_MAPPING,
+    CUDAProperties,
+    _validate_layer,
+    use_kernel_mapping,
+)
 
 kernel_layer_mapping = {
     "SiluAndMul": {
@@ -118,6 +124,55 @@ def test_hub_forward(cls, device):
         assert silu_and_mul_with_kernel.n_calls == 1
 
 
+@pytest.mark.linux_only
+def test_capability():
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(
+                    type="cuda",
+                    properties=CUDAProperties(
+                        min_capability=75, max_capability=sys.maxsize
+                    ),
+                ): LayerRepository(
+                    repo_id="kernels-test/backward-marker-test",
+                    layer_name="LinearBackward",
+                )
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+
+        # Check that we called out to the kernel.
+        assert linear.n_calls == 0
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                Device(
+                    type="cuda",
+                    properties=CUDAProperties(
+                        min_capability=sys.maxsize, max_capability=sys.maxsize
+                    ),
+                ): LayerRepository(
+                    repo_id="kernels-test/backward-marker-test",
+                    layer_name="LinearBackward",
+                )
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+
+        # Check that we didn't call out to the kernel because there is
+        # is no kernel with a matching capability..
+        assert linear.n_calls == 1
+
+
 def test_layer_fallback_works():
     @use_kernel_forward_from_hub("SiluAndMulNonExisting")
     class SiluAndMulWithKernelFallback(SiluAndMul):
@@ -182,6 +237,7 @@ def test_torch_compile_layer_with_fallback(cls, device):
     torch.testing.assert_close(Y_compiled, Y)
 
 
+@pytest.mark.linux_only
 def test_mapping_contexts():
     assert set(_KERNEL_MAPPING.get().keys()) == {
         "SiluAndMul",
@@ -225,9 +281,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
-                    Mode.DEFAULT
-                ].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -238,9 +292,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
-                Mode.DEFAULT
-            ].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
             == "kernels-community/activation"
         )
 
@@ -249,9 +301,7 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
-                    Mode.DEFAULT
-                ].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -262,9 +312,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"][Device(type="cuda")][
-                Mode.DEFAULT
-            ].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
             == "kernels-community/activation"
         )
 

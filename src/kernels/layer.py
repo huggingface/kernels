@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import inspect
 import os
+import sys
 import warnings
+from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Flag, auto
+from functools import lru_cache
 from types import MethodType
 from typing import (
     TYPE_CHECKING,
@@ -17,6 +20,7 @@ from typing import (
     Union,
 )
 
+from ._interval_tree import IntervalTree
 from .utils import get_kernel
 
 if TYPE_CHECKING:
@@ -65,14 +69,46 @@ class Mode(Flag):
 @dataclass(frozen=True)
 class Device:
     type: str
+    properties: Optional[CUDAProperties] = None
 
-    # In the future we might add compute capabilities, etc.
+    def __post_init__(self):
+        if self.properties is not None and isinstance(self.properties, CUDAProperties):
+            if self.type != "cuda":
+                raise ValueError("CUDAProperties is only supported for 'cuda' devices.")
+
+    def create_repo(self) -> _DeviceRepos:
+        """Create an appropriate repository set for this device type."""
+        if self.type == "cuda":
+            return _CUDARepos()
+        elif self.type == "mps":
+            return _MPSRepos()
+        else:
+            raise ValueError(f"Unknown device type: {self.type}")
 
     def __eq__(self, other):
-        return isinstance(other, Device) and self.type == other.type
+        if not isinstance(other, Device):
+            return NotImplemented
+        return self.type == other.type and self.properties == other.properties
 
     def __hash__(self):
-        return hash(self.type)
+        return hash((self.type, self.properties))
+
+
+@dataclass(frozen=True)
+class CUDAProperties:
+    min_capability: int
+    max_capability: int
+
+    def __eq__(self, other):
+        if not isinstance(other, CUDAProperties):
+            return NotImplemented
+        return (
+            self.min_capability == other.min_capability
+            and self.max_capability == other.max_capability
+        )
+
+    def __hash__(self):
+        return hash((self.min_capability, self.max_capability))
 
 
 @dataclass
@@ -104,8 +140,78 @@ class LayerRepository:
 _CACHED_LAYER: Dict[LayerRepository, Type["nn.Module"]] = {}
 
 
-_KERNEL_MAPPING: ContextVar[Dict[str, Dict[Device, Dict[Mode, LayerRepository]]]] = (
-    ContextVar("_KERNEL_MAPPING", default={})
+class _DeviceRepos(ABC):
+    """
+    Device-specific kernel layer repositories.
+    """
+
+    @property
+    @abstractmethod
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, LayerRepository]]: ...
+
+    @abstractmethod
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
+        """
+        Insert a repository for a specific device and mode.
+        """
+        ...
+
+
+class _MPSRepos(_DeviceRepos):
+    _repos: Dict[Mode, LayerRepository]
+
+    def __init__(self):
+        super().__init__()
+        self._repos = {}
+
+    @property
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, LayerRepository]]:
+        return self._repos
+
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
+        if device.type != "mps":
+            raise ValueError(f"Device type must be 'mps', got {device.type}")
+
+        self._repos = repos
+
+
+class _CUDARepos(_DeviceRepos):
+    _repos: IntervalTree[Dict[Mode, LayerRepository]]
+
+    def __init__(self):
+        super().__init__()
+        self.repos_by_capability = IntervalTree()
+
+    @property
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, LayerRepository]]:
+        capability = _find_capability()
+        return self.repos_by_capability.find_smallest_interval(capability)
+
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
+        assert device.properties is None or isinstance(
+            device.properties, CUDAProperties
+        )
+
+        min_capability = (
+            0 if device.properties is None else device.properties.min_capability
+        )
+        max_capability = (
+            sys.maxsize
+            if device.properties is None
+            else device.properties.max_capability
+        )
+
+        self.repos_by_capability.insert(min_capability, max_capability, repos)
+
+
+_KERNEL_MAPPING: ContextVar[Dict[str, Dict[str, _DeviceRepos]]] = ContextVar(
+    "_KERNEL_MAPPING", default={}
 )
 
 
@@ -181,7 +287,8 @@ def register_kernel_mapping(
             else:
                 kernel_options = new_repo
 
-            device_repo[device] = kernel_options
+            feature_repos = device_repo.setdefault(device.type, device.create_repo())
+            feature_repos.insert(device, kernel_options)
 
 
 def replace_kernel_forward_from_hub(
@@ -258,6 +365,7 @@ def kernelize(
         device_type = Device(type=torch.device(device).type)
     else:
         device_type = Device(device.type)
+
     assert isinstance(device_type, Device)
 
     for _, module in model.named_modules():
@@ -285,12 +393,22 @@ def kernelize(
             continue
 
         # Get kernel options for the device
-        repos = kernel.get(device_type)
+        property_repos = kernel.get(device_type.type)
+
+        if property_repos is None:
+            if not use_fallback:
+                raise ValueError(
+                    f"No layer mapping for `{layer_name}` with device type `{device_type}`"
+                )
+            _replace_forward(module, module_class)
+            continue
+
+        repos = property_repos.repos
 
         if repos is None:
             if not use_fallback:
                 raise ValueError(
-                    f"No layer mapping for `{layer_name}` with device type `{device_type}`"
+                    f"No layer mapping for `{layer_name}` device `{device_type}` with the right properties"
                 )
             _replace_forward(module, module_class)
             continue
@@ -409,6 +527,14 @@ def _find_device(model: "nn.Module") -> Device:
         )
 
     return Device(type=param.device.type)
+
+
+@lru_cache
+def _find_capability() -> int:
+    import torch
+
+    major, minor = torch.cuda.get_device_capability(device=None)
+    return major * 10 + minor
 
 
 def _conditionally_replace_forward(

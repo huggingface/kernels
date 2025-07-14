@@ -175,19 +175,19 @@ so. For example:
 kernel_layer_mapping = {
     "SiluAndMul": {
         "cuda": {
-          Mode.DEFAULT: LayerRepository(
-              repo_id="kernels-community/activation",
-              layer_name="SiluAndMul",
-          ),
-          Mode.INFERENCE: LayerRepository(
-              repo_id="kernels-community/activation-inference-optimized",
-              layer_name="SiluAndMul",
-          ),
-          Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
-              repo_id="kernels-community/activation-training-optimized",
-              layer_name="SiluAndMul",
-          ),
-      }
+            Mode.DEFAULT: LayerRepository(
+                repo_id="kernels-community/activation",
+                layer_name="SiluAndMul",
+            ),
+            Mode.INFERENCE: LayerRepository(
+                repo_id="kernels-community/activation-inference-optimized",
+                layer_name="SiluAndMul",
+            ),
+            Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
+                repo_id="kernels-community/activation-training-optimized",
+                layer_name="SiluAndMul",
+            ),
+        }
     }
 }
 ```
@@ -195,3 +195,53 @@ kernel_layer_mapping = {
 In this case, modes other than `Mode.INFERENCE` and
 `Mode.TRAINING | Mode.TORCH_COMPILE` will be kernelized using
 `kernels-community/activation`.
+
+### Registering kernels for specific CUDA capabilities
+
+Some kernels only work with newer CUDA architectures. For instance, some
+kernels require capability 9.0 for the TMA unit on Hopper GPUs. `kernels`
+supports registering layers for a range of CUDA capabilities. To do so,
+you need to register the layer for a `Device` with type `cuda` and
+set the supported range of CUDA capabilities with using `CUDAProperties`:
+
+```python
+kernel_layer_mapping = {
+    "SiluAndMul": {
+        Device(
+            type="cuda",
+            properties=CUDAProperties(
+                min_capability=75, max_capability=89
+            ),
+        ): LayerRepository(
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
+        ),
+        Device(
+            type="cuda",
+            properties=CUDAProperties(
+                min_capability=90, max_capability=sys.maxsize
+            ),
+        ): LayerRepository(
+            repo_id="kernels-community/activation-hopper",
+            layer_name="SiluAndMul",
+        ),
+    }
+}
+```
+
+Capabilities behave as follows:
+
+- The minimum and maximum capabilities are inclusive.
+- When a new kernel is registered with the same min/max capabilities as
+  an existing kernel, the new kernel will replace the old kernel.
+- When there are multiple kernels that support a capability, the kernel
+  with the smaller capability interval will be used. E.g. given:
+
+  - `KernelA` with `min_capability=80` and `max_capability=89`;
+  - `KernelB` with `min_capability=75` and `max_capability=89`;
+  - `kernelize` runs on a system with capability 8.6.
+
+  Then `KernelA` will be used because the interval 80..89 is smaller
+  than 75..89. The motivation is that kernels with smaller ranges
+  tend to be more optimized for a specific set of GPUs. **This behavior
+  might still change in the future.**

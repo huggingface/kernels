@@ -67,7 +67,8 @@ model = kernelize(model, mode=Mode.TRAINING)
 ```
 
 A model that is kernelized for training can also be used for inference, but
-not the other way around.
+not the other way around. If you want to change the mode of the kernelized
+model, you can just run `kernelize` on the model again with the new mode.
 
 If you want to compile a model with `torch.compile`, this should be indicated
 in the mode as well. You can do this by combining `Mode.INFERENCE` or

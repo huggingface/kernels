@@ -281,7 +281,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -292,7 +292,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
             == "kernels-community/activation"
         )
 
@@ -301,7 +301,7 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -312,7 +312,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
             == "kernels-community/activation"
         )
 
@@ -445,7 +445,7 @@ def test_kernel_modes():
         {
             "Linear": {
                 "cuda": {
-                    Mode.DEFAULT: LayerRepository(
+                    Mode.FALLBACK: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
@@ -569,12 +569,12 @@ def test_invalid_mode_rejected():
         _ = Mode.INFERENCE | Mode.TRAINING
 
     with pytest.raises(ValueError, match="cannot be combined with other modes"):
-        _ = Mode.DEFAULT | Mode.TORCH_COMPILE
+        _ = Mode.FALLBACK | Mode.TORCH_COMPILE
 
     with pytest.raises(
         ValueError, match="can only be used to register kernel mappings"
     ):
-        kernelize(torch.nn.Linear(32, 32), mode=Mode.DEFAULT)
+        kernelize(torch.nn.Linear(32, 32), mode=Mode.FALLBACK)
 
     with pytest.raises(ValueError, match="mode must contain"):
         kernelize(torch.nn.Linear(32, 32), mode=Mode.TORCH_COMPILE)

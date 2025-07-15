@@ -174,14 +174,14 @@ The kernels will match exactly on the mode. So, for instance in the example abov
 layer is used when the `mode` passed to `kernelize` is
 `Mode.INFERENCE | Mode.TORCH_COMPILE` or `Mode.TRAINING`. However, if you want to
 register a kernel to be used when the mode does not match any of the
-modes in the mapping, you can use the special `Mode.DEFAULT` mode to do
+modes in the mapping, you can use the special `Mode.FALLBACK` mode to do
 so. For example:
 
 ```python
 kernel_layer_mapping = {
     "SiluAndMul": {
         "cuda": {
-            Mode.DEFAULT: LayerRepository(
+            Mode.FALLBACK: LayerRepository(
                 repo_id="kernels-community/activation",
                 layer_name="SiluAndMul",
             ),
@@ -205,13 +205,13 @@ In this case, modes other than `Mode.INFERENCE` and
 ### Mode fallback behavior
 
 As described above, if there is no exact match for the mode given to
-`kernelize`, it will try to use the kernel registered for `Mode.DEFAULT`.
-If the `Mode.DEFAULT` kernel does not support the `kernelize` mode, the
+`kernelize`, it will try to use the kernel registered for `Mode.FALLBACK`.
+If the `Mode.FALLBACK` kernel does not support the `kernelize` mode, the
 original layer's `forward` method will be used instead.
 
 As an example, suppose that two kernels were registered for a layer:
 
-1. Kernel `A` is registered for `Mode.DEFAULT`. This kernel supports training
+1. Kernel `A` is registered for `Mode.FALLBACK`. This kernel supports training
    (backward), but not `torch.compile`.
 2. Kernel `B` is registered for `Mode.INFERENCE | Mode.COMPILE` and supports
    `torch.compile`.
@@ -220,11 +220,11 @@ As an example, suppose that two kernels were registered for a layer:
 
 - `Mode.INFERENCE | Mode.COMPILE`` uses kernel `B`: exact match.
 - `Mode.INFERENCE` uses kernel `A`: no exact match, so fall back to
-  `Mode.DEFAULT`.
+  `Mode.FALLBACK`.
 - `Mode.TRAIN` uses kernel `A`: no exact match, so fall back to
-  `Mode.DEFAULT`, which supports training.
+  `Mode.FALLBACK`, which supports training.
 - `Mode.TRAIN | Mode.COMPILE`: uses the original layer's
-  `forward`: no exact match, falling back to `Mode.DEFAULT` is not possible
+  `forward`: no exact match, falling back to `Mode.FALLBACK` is not possible
   because kernel `A` does not support `torch.compile`.
 
 ### Registering kernels for specific CUDA capabilities

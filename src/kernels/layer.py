@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import os
 import sys
 import warnings
@@ -460,6 +461,11 @@ def kernelize(
             continue
 
         repo, repo_mode = repo_with_mode
+
+        logging.info(
+            f"Using layer `{repo.layer_name}` from repo `{repo.repo_id}` (revision: {repo.revision}) for layer `{layer_name}`"
+        )
+        logging.debug(f"kernelize mode: {mode}, repo mode: {repo_mode}")
 
         layer = _get_layer_memoize(repo, module_class)
 

@@ -49,12 +49,15 @@ A model will not use Hub kernels by default, even if it contains extensible
 layers. To enable the use of Hub kernels in the model, it needs to be
 'kernelized' using the `kernelize` function. This function traverses the
 model graph and replaces the `forward` methods of extensible layers for which
-Hub kernels are registered. Kernelize can be used as follows:
+Hub kernels are registered. `kernelize` can be used as follows:
 
 ```python
 model = MyModel(...)
 model = kernelize(model, mode=Mode.INFERENCE)
 ```
+
+The `kernelize` function modifies the model in-place, the model
+itself is returned as a convenience.
 
 The `mode` specifies that the model will be used in inference. Similarly,
 you can ask `kernelize` to prepare the model for training:
@@ -64,8 +67,11 @@ model = MyModel(...)
 model = kernelize(model, mode=Mode.TRAINING)
 ```
 
-**Note:** the `kernelize` function modifies the model in-place, the model
-itself is returned as a convenience.
+When the `mode` argument is not specified, the
+`Mode.TRAINING | Mode.TORCH_COMPILE` mode is used as the default. This mode
+aligns most closely with pure PyTorch layers (which generally support backward
+passes and `torch.compile`). However, this mode can also lead to fewer
+kernels being used, since not all kernels support training or `torch.compile`.
 
 ### Kernel device
 
@@ -195,6 +201,31 @@ kernel_layer_mapping = {
 In this case, modes other than `Mode.INFERENCE` and
 `Mode.TRAINING | Mode.TORCH_COMPILE` will be kernelized using
 `kernels-community/activation`.
+
+### Mode fallback behavior
+
+As described above, if there is no exact match for the mode given to
+`kernelize`, it will try to use the kernel registered for `Mode.DEFAULT`.
+If the `Mode.DEFAULT` kernel does not support the `kernelize` mode, the
+original layer's `forward` method will be used instead.
+
+As an example, suppose that two kernels were registered for a layer:
+
+1. Kernel `A` is registered for `Mode.DEFAULT`. This kernel supports training
+   (backward), but not `torch.compile`.
+2. Kernel `B` is registered for `Mode.INFERENCE | Mode.COMPILE` and supports
+   `torch.compile`.
+
+`kernelize` modes will then behave as follows:
+
+- `Mode.INFERENCE | Mode.COMPILE`` uses kernel `B`: exact match.
+- `Mode.INFERENCE` uses kernel `A`: no exact match, so fall back to
+  `Mode.DEFAULT`.
+- `Mode.TRAIN` uses kernel `A`: no exact match, so fall back to
+  `Mode.DEFAULT`, which supports training.
+- `Mode.TRAIN | Mode.COMPILE`: uses the original layer's
+  `forward`: no exact match, falling back to `Mode.DEFAULT` is not possible
+  because kernel `A` does not support `torch.compile`.
 
 ### Registering kernels for specific CUDA capabilities
 

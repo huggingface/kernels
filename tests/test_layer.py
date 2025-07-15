@@ -400,6 +400,11 @@ def test_kernel_modes():
         linear(X)
         assert linear.n_calls == 0
 
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        assert linear.n_calls == 0
+
     # Case 2: register a kernel just for training. If no base kernel
     #         layer is registered, we fall back to the original layer.
     with use_kernel_mapping(
@@ -429,6 +434,12 @@ def test_kernel_modes():
         # No kernel for training + torch.compile, so fallback.
         assert linear.n_calls == 2
 
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        # No kernel for training + torch.compile, so fallback.
+        assert linear.n_calls == 3
+
     # Case 3: register a kernel just for training and one for fallback.
     with use_kernel_mapping(
         {
@@ -450,17 +461,23 @@ def test_kernel_modes():
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         # Uses the base kernel.
-        assert linear.n_calls == 2
+        assert linear.n_calls == 3
 
         kernelize(linear, mode=Mode.TRAINING)
         linear(X)
         # Uses the training kernel.
-        assert linear.n_calls == 2
+        assert linear.n_calls == 3
 
         kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         linear(X)
         # Uses the base kernel.
-        assert linear.n_calls == 2
+        assert linear.n_calls == 3
+
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        # Uses the base kernel.
+        assert linear.n_calls == 3
 
     # Case 4: register a kernel with two preferences.
     with use_kernel_mapping(
@@ -480,17 +497,22 @@ def test_kernel_modes():
         X = torch.randn(10, 32, device="cuda")
         linear(X)
         # No inference kernel, so fallback.
-        assert linear.n_calls == 3
+        assert linear.n_calls == 4
 
         kernelize(linear, mode=Mode.TRAINING)
         linear(X)
         # No training kernel, so fallback.
-        assert linear.n_calls == 4
+        assert linear.n_calls == 5
 
         kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         linear(X)
         # We do have a training + torch.compile kernel.
-        assert linear.n_calls == 4
+        assert linear.n_calls == 5
+
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        assert linear.n_calls == 5
 
 
 @pytest.mark.linux_only

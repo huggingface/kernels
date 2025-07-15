@@ -49,23 +49,46 @@ A model will not use Hub kernels by default, even if it contains extensible
 layers. To enable the use of Hub kernels in the model, it needs to be
 'kernelized' using the `kernelize` function. This function traverses the
 model graph and replaces the `forward` methods of extensible layers for which
-Hub kernels are registered. Kernelize can be used as follows:
+Hub kernels are registered. `kernelize` can be used as follows:
 
 ```python
 model = MyModel(...)
 model = kernelize(model, mode=Mode.INFERENCE)
 ```
 
-The `mode` specifies that the model will be used in inference. Similarly,
-you can ask `kernelize` to prepare the model for training:
+The `kernelize` function modifies the model in-place, the model itself is
+returned as a convenience. The `mode` specifies that the model will be used
+in inference. Similarly, you can ask `kernelize` to prepare the model for
+training:
 
 ```python
 model = MyModel(...)
 model = kernelize(model, mode=Mode.TRAINING)
 ```
 
-**Note:** the `kernelize` function modifies the model in-place, the model
-itself is returned as a convenience.
+A model that is kernelized for training can also be used for inference, but
+not the other way around. If you want to change the mode of the kernelized
+model, you can just run `kernelize` on the model again with the new mode.
+
+If you want to compile a model with `torch.compile`, this should be indicated
+in the mode as well. You can do this by combining `Mode.INFERENCE` or
+`Mode.TRAINING` with `Mode.TORCH_COMPILE` using the set union (`|`) operator:
+
+```python
+model = MyModel(...)
+
+# Inference
+model = kernelize(model, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+
+# Training
+model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+```
+
+When the `mode` argument is not specified,
+`Mode.TRAINING | Mode.TORCH_COMPILE` is used as the default. This mode
+aligns most closely with pure PyTorch layers which also support training
+and `torch.compile`. However, to select the most performant kernels, it
+is often good to make the mode specific as possible.
 
 ### Kernel device
 
@@ -78,17 +101,6 @@ inferred (e.g. because the model has no parameters):
 ```python
 model = MyModel(...)
 model = kernelize(model, device="cuda", mode=Mode.INFERENCE)
-```
-
-### `torch.compile`
-
-Not all Hub kernels support `torch.compile`. If you want to compile a model
-after kernelizing it, you need to add this to the mode. You can use the
-set union (`|`) operator to add `TORCH_COMPILE` to the mode:
-
-```python
-model = MyModel(...)
-model = kernelize(model, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
 ```
 
 ### Fallback `forward`
@@ -164,18 +176,25 @@ kernel_layer_mapping = {
 }
 ```
 
-The kernels will match exactly on the mode. So, for instance in the example above, no kernel
-layer is used when the `mode` passed to `kernelize` is
-`Mode.INFERENCE | Mode.TORCH_COMPILE` or `Mode.TRAINING`. However, if you want to
-register a kernel to be used when the mode does not match any of the
-modes in the mapping, you can use the special `Mode.DEFAULT` mode to do
-so. For example:
+The `kernelize` function will attempt to use the following registered
+kernels for a given mode:
+
+- `INFERENCE`: `INFERENCE` → `INFERENCE | TORCH_COMPILE` → `TRAINING` →
+  `TRAINING | TORCH_COMPILE` → `FALLBACK`
+- `INFERENCE | TORCH_COMPILE`: `INFERENCE | TORCH_COMPILE` →
+  `TRAINING | TORCH_COMPILE` → `FALLBACK`
+- `TRAINING`: `TRAINING` → `TRAINING | TORCH_COMPILE` → `FALLBACK`
+- `TRAINING | TORCH_COMPILE`: `TRAINING | TORCH_COMPILE` → `FALLBACK`
+
+`Mode.FALLBACK` is a special mode that is used when no other mode matches. It
+is also used when a kernel is registered without a mode, as described in the
+previous section.
 
 ```python
 kernel_layer_mapping = {
     "SiluAndMul": {
         "cuda": {
-            Mode.DEFAULT: LayerRepository(
+            Mode.FALLBACK: LayerRepository(
                 repo_id="kernels-community/activation",
                 layer_name="SiluAndMul",
             ),
@@ -183,7 +202,7 @@ kernel_layer_mapping = {
                 repo_id="kernels-community/activation-inference-optimized",
                 layer_name="SiluAndMul",
             ),
-            Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
+            Mode.TRAINING: LayerRepository(
                 repo_id="kernels-community/activation-training-optimized",
                 layer_name="SiluAndMul",
             ),
@@ -192,9 +211,9 @@ kernel_layer_mapping = {
 }
 ```
 
-In this case, modes other than `Mode.INFERENCE` and
-`Mode.TRAINING | Mode.TORCH_COMPILE` will be kernelized using
-`kernels-community/activation`.
+In this case, both `Mode.INFERENCE | Mode.TORCH_COMPILE` and
+`Mode.TRAINING | Mode.TORCH_COMPILE` will use the `Mode.FALLBACK` kernel,
+since the other kernels do not support `torch.compile`.
 
 ### Registering kernels for specific CUDA capabilities
 

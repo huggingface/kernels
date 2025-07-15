@@ -281,7 +281,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -292,7 +292,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
             == "kernels-community/activation"
         )
 
@@ -301,7 +301,7 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -312,7 +312,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.DEFAULT].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
             == "kernels-community/activation"
         )
 
@@ -400,6 +400,11 @@ def test_kernel_modes():
         linear(X)
         assert linear.n_calls == 0
 
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        assert linear.n_calls == 0
+
     # Case 2: register a kernel just for training. If no base kernel
     #         layer is registered, we fall back to the original layer.
     with use_kernel_mapping(
@@ -417,16 +422,22 @@ def test_kernel_modes():
         kernelize(linear, mode=Mode.INFERENCE)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
-        assert linear.n_calls == 1
+        assert linear.n_calls == 0
 
         kernelize(linear, mode=Mode.TRAINING)
         linear(X)
         # Training has a kernel, so fallback.
-        assert linear.n_calls == 1
+        assert linear.n_calls == 0
 
         kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         linear(X)
-        # No kernel for training + torch.compile, so fallback.
+        # TRAINING | TORCH_COMPILE cannot fall back to TRAINING kernel, so uses original.
+        assert linear.n_calls == 1
+
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        # TRAINING | TORCH_COMPILE cannot fall back to TRAINING kernel, so uses original.
         assert linear.n_calls == 2
 
     # Case 3: register a kernel just for training and one for fallback.
@@ -434,7 +445,7 @@ def test_kernel_modes():
         {
             "Linear": {
                 "cuda": {
-                    Mode.DEFAULT: LayerRepository(
+                    Mode.FALLBACK: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
@@ -449,17 +460,23 @@ def test_kernel_modes():
         kernelize(linear, mode=Mode.INFERENCE)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
-        # Uses the base kernel.
+        # Falls back to TRAINING.
         assert linear.n_calls == 2
 
         kernelize(linear, mode=Mode.TRAINING)
         linear(X)
-        # Uses the training kernel.
+        # Falls back to the TRAINING kernel.
         assert linear.n_calls == 2
 
         kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         linear(X)
-        # Uses the base kernel.
+        # TRAINING | TORCH_COMPILE falls back to FALLBACK kernel.
+        assert linear.n_calls == 2
+
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        kernelize(linear)
+        linear(X)
+        # TRAINING | TORCH_COMPILE falls back to FALLBACK kernel.
         assert linear.n_calls == 2
 
     # Case 4: register a kernel with two preferences.
@@ -479,18 +496,23 @@ def test_kernel_modes():
         kernelize(linear, mode=Mode.INFERENCE)
         X = torch.randn(10, 32, device="cuda")
         linear(X)
-        # No inference kernel, so fallback.
-        assert linear.n_calls == 3
+        # Falls back to the TRAINING | TORCH_COMPILE kernel.
+        assert linear.n_calls == 2
 
         kernelize(linear, mode=Mode.TRAINING)
         linear(X)
-        # No training kernel, so fallback.
-        assert linear.n_calls == 4
+        # TRAINING can fall back to TRAINING | TORCH_COMPILE kernel.
+        assert linear.n_calls == 2
 
         kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         linear(X)
-        # We do have a training + torch.compile kernel.
-        assert linear.n_calls == 4
+        # Uses TRAINING | TORCH_COMPILE kernel.
+        assert linear.n_calls == 2
+
+        kernelize(linear)
+        linear(X)
+        # Same as previous, since TRAINING | TORCH_COMPILE is the default.
+        assert linear.n_calls == 2
 
 
 @pytest.mark.linux_only
@@ -547,12 +569,291 @@ def test_invalid_mode_rejected():
         _ = Mode.INFERENCE | Mode.TRAINING
 
     with pytest.raises(ValueError, match="cannot be combined with other modes"):
-        _ = Mode.DEFAULT | Mode.TORCH_COMPILE
+        _ = Mode.FALLBACK | Mode.TORCH_COMPILE
 
     with pytest.raises(
         ValueError, match="can only be used to register kernel mappings"
     ):
-        kernelize(torch.nn.Linear(32, 32), mode=Mode.DEFAULT)
+        kernelize(torch.nn.Linear(32, 32), mode=Mode.FALLBACK)
 
     with pytest.raises(ValueError, match="mode must contain"):
         kernelize(torch.nn.Linear(32, 32), mode=Mode.TORCH_COMPILE)
+
+
+@pytest.mark.linux_only
+def test_kernel_modes_inference():
+    """Test inference-specific fallback scenarios."""
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    # Case 1: register a kernel just for inference
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.INFERENCE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+        linear(X)
+        # INFERENCE | TORCH_COMPILE cannot fall back to INFERENCE kernel, so uses original
+        assert linear.n_calls == 1
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # No training kernel, so fallback to original
+        assert linear.n_calls == 2
+
+    # Case 2: register a kernel just for inference + torch.compile
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.INFERENCE
+                    | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.INFERENCE)
+        linear(X)
+        # INFERENCE falls back to INFERENCE | TORCH_COMPILE kernel
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # No training kernel, so fallback to original
+        assert linear.n_calls == 3
+
+    # Case 3: register both inference kernels
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.INFERENCE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.INFERENCE
+                    | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # Uses exact INFERENCE kernel
+        assert linear.n_calls == 3
+
+        kernelize(linear, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+        linear(X)
+        # Uses exact INFERENCE | TORCH_COMPILE kernel
+        assert linear.n_calls == 3
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # No training kernel, so fallback to original
+        assert linear.n_calls == 4
+
+
+@pytest.mark.linux_only
+def test_kernel_modes_mixed():
+    """Test mixed training and inference kernel scenarios."""
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    # Case 1: register both base inference and training kernels
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.INFERENCE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+        linear(X)
+        # INFERENCE | TORCH_COMPILE cannot fall back to INFERENCE kernel, so uses original
+        assert linear.n_calls == 1
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # TRAINING | TORCH_COMPILE cannot fall back to TRAINING kernel, so uses original
+        assert linear.n_calls == 2
+
+    # Case 2: register all four kernel modes
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.INFERENCE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.INFERENCE
+                    | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.TRAINING
+                    | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # Uses exact INFERENCE kernel
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # Uses exact TRAINING kernel
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+        linear(X)
+        # Uses exact INFERENCE | TORCH_COMPILE kernel
+        assert linear.n_calls == 2
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # Uses exact TRAINING | TORCH_COMPILE kernel
+        assert linear.n_calls == 2
+
+
+@pytest.mark.linux_only
+def test_kernel_modes_cross_fallback():
+    """Test cross-mode fallback scenarios from inference to training modes."""
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    # Case 1: Only training kernel registered - inference should fall back to training
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # INFERENCE falls back to TRAINING kernel
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # TRAINING uses the kernel directly
+        assert linear.n_calls == 0
+
+    # Case 2: Only training + torch.compile kernel registered
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    )
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # INFERENCE falls back to TRAINING | TORCH_COMPILE kernel
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
+        linear(X)
+        # INFERENCE | TORCH_COMPILE falls back to TRAINING | TORCH_COMPILE kernel
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.TRAINING)
+        linear(X)
+        # TRAINING falls back to TRAINING | TORCH_COMPILE kernel
+        assert linear.n_calls == 0
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # TRAINING | TORCH_COMPILE uses the kernel directly
+        assert linear.n_calls == 0
+
+    # Case 3: Test that training modes don't fall back to inference modes
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": {
+                    Mode.INFERENCE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                    Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
+                        repo_id="kernels-test/backward-marker-test",
+                        layer_name="LinearBackward",
+                    ),
+                }
+            }
+        }
+    ):
+        kernelize(linear, mode=Mode.TRAINING)
+        X = torch.randn(10, 32, device="cuda")
+        linear(X)
+        # TRAINING should NOT fall back to inference kernels, use original
+        assert linear.n_calls == 1
+
+        kernelize(linear, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        linear(X)
+        # TRAINING | TORCH_COMPILE should NOT fall back to inference kernels, use original
+        assert linear.n_calls == 2

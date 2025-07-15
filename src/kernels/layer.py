@@ -41,7 +41,7 @@ class Mode(Flag):
     * `INFERENCE`: The kernel is used for inference.
     * `TRAINING`: The kernel is used for training.
     * `TORCH_COMPILE`: The kernel is used with `torch.compile`.
-    * `DEFAULT`: In a kernel mapping, this kernel is used when no other mode
+    * `FALLBACK`: In a kernel mapping, this kernel is used when no other mode
        matches.
 
     Different modes can be combined. For instance, `INFERENCE | TORCH_COMPILE`
@@ -49,7 +49,7 @@ class Mode(Flag):
     """
 
     _NONE = 0
-    DEFAULT = auto()
+    FALLBACK = auto()
     TRAINING = auto()
     INFERENCE = auto()
     TORCH_COMPILE = auto()
@@ -60,8 +60,8 @@ class Mode(Flag):
         if Mode.INFERENCE in union and Mode.TRAINING in union:
             raise ValueError("Mode.INFERENCE and Mode.TRAINING are mutually exclusive.")
 
-        if Mode.DEFAULT in union and union != Mode.DEFAULT:
-            raise ValueError("Mode.DEFAULT cannot be combined with other modes.")
+        if Mode.FALLBACK in union and union != Mode.FALLBACK:
+            raise ValueError("Mode.FALLBACK cannot be combined with other modes.")
 
         return union
 
@@ -283,7 +283,7 @@ def register_kernel_mapping(
             )
 
             if isinstance(new_repo, LayerRepository):
-                kernel_options = {Mode.DEFAULT: new_repo}
+                kernel_options = {Mode.FALLBACK: new_repo}
             else:
                 kernel_options = new_repo
 
@@ -309,23 +309,56 @@ def replace_kernel_forward_from_hub(
     cls.kernel_layer_name = layer_name
 
 
+_MODE_FALLBACK_PRIORITY = {
+    Mode.INFERENCE: [
+        Mode.INFERENCE,
+        Mode.INFERENCE | Mode.TORCH_COMPILE,
+        Mode.TRAINING,
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+    Mode.TRAINING: [
+        Mode.TRAINING,
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+    Mode.INFERENCE
+    | Mode.TORCH_COMPILE: [
+        Mode.INFERENCE | Mode.TORCH_COMPILE,
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+    Mode.TRAINING
+    | Mode.TORCH_COMPILE: [
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+}
+
+
 def _select_repository(
     repositories: Dict[Mode, LayerRepository],
     *,
     mode: Mode,
 ) -> Optional[Tuple[LayerRepository, Mode]]:
-    if mode in repositories:
-        return (repositories[mode], mode)
-    elif Mode.DEFAULT in repositories:
-        return (repositories[Mode.DEFAULT], Mode.DEFAULT)
-    else:
-        return None
+    # Get the fallback priority list for the requested mode
+    if mode not in _MODE_FALLBACK_PRIORITY:
+        raise ValueError(f"Unsupported mode: {mode}")
+
+    fallback_modes = _MODE_FALLBACK_PRIORITY[mode]
+
+    # Try each mode in priority order
+    for fallback_mode in fallback_modes:
+        if fallback_mode in repositories:
+            return (repositories[fallback_mode], fallback_mode)
+
+    return None
 
 
 def kernelize(
     model: "nn.Module",
     *,
-    mode: Mode,
+    mode: Mode = Mode.TRAINING | Mode.TORCH_COMPILE,
     device: Optional[Union[str, "torch.device"]] = None,
     use_fallback: bool = True,
 ):
@@ -350,8 +383,8 @@ def kernelize(
     """
     import torch
 
-    if mode == Mode.DEFAULT:
-        raise ValueError("Mode.DEFAULT can only be used to register kernel mappings.")
+    if mode == Mode.FALLBACK:
+        raise ValueError("Mode.FALLBACK can only be used to register kernel mappings.")
 
     # Type check ignored because this causes a false negative on Python < 3.11.
     # Looks similar to: https://github.com/python/mypy/issues/9642
@@ -548,7 +581,7 @@ def _conditionally_replace_forward(
 
     # Switch to fallback if the mode is not supported by the layer.
     # Note that this is useful even after _validate_layer_has_mode because
-    # layers registered with the DEFAULT mode never get rejected by
+    # layers registered with the FALLBACK mode never get rejected by
     # _validate_layer_has_mode. For such layers, we want to fall back in
     # case the layer does not support the given mode.
     needs_fallback = Mode.TORCH_COMPILE in mode and not getattr(

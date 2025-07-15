@@ -309,17 +309,50 @@ def replace_kernel_forward_from_hub(
     cls.kernel_layer_name = layer_name
 
 
+_MODE_FALLBACK_PRIORITY = {
+    Mode.INFERENCE: [
+        Mode.INFERENCE,
+        Mode.INFERENCE | Mode.TORCH_COMPILE,
+        Mode.TRAINING,
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+    Mode.TRAINING: [
+        Mode.TRAINING,
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+    Mode.INFERENCE
+    | Mode.TORCH_COMPILE: [
+        Mode.INFERENCE | Mode.TORCH_COMPILE,
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+    Mode.TRAINING
+    | Mode.TORCH_COMPILE: [
+        Mode.TRAINING | Mode.TORCH_COMPILE,
+        Mode.FALLBACK,
+    ],
+}
+
+
 def _select_repository(
     repositories: Dict[Mode, LayerRepository],
     *,
     mode: Mode,
 ) -> Optional[Tuple[LayerRepository, Mode]]:
-    if mode in repositories:
-        return (repositories[mode], mode)
-    elif Mode.FALLBACK in repositories:
-        return (repositories[Mode.FALLBACK], Mode.FALLBACK)
-    else:
-        return None
+    # Get the fallback priority list for the requested mode
+    if mode not in _MODE_FALLBACK_PRIORITY:
+        raise ValueError(f"Unsupported mode: {mode}")
+
+    fallback_modes = _MODE_FALLBACK_PRIORITY[mode]
+
+    # Try each mode in priority order
+    for fallback_mode in fallback_modes:
+        if fallback_mode in repositories:
+            return (repositories[fallback_mode], fallback_mode)
+
+    return None
 
 
 def kernelize(

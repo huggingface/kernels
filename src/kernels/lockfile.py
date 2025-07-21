@@ -4,10 +4,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from huggingface_hub import HfApi
-from huggingface_hub.hf_api import GitRefInfo
-from packaging.specifiers import SpecifierSet
-from packaging.version import InvalidVersion, Version
 
+from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
 
 
@@ -31,20 +29,6 @@ class KernelLock:
         return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
-def _get_available_versions(repo_id: str) -> Dict[Version, GitRefInfo]:
-    """Get kernel versions that are available in the repository."""
-    versions = {}
-    for tag in HfApi().list_repo_refs(repo_id).tags:
-        if not tag.name.startswith("v"):
-            continue
-        try:
-            versions[Version(tag.name[1:])] = tag
-        except InvalidVersion:
-            continue
-
-    return versions
-
-
 def get_kernel_locks(repo_id: str, version_spec: str) -> KernelLock:
     """
     Get the locks for a kernel with the given version spec.
@@ -52,16 +36,7 @@ def get_kernel_locks(repo_id: str, version_spec: str) -> KernelLock:
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
     """
-    versions = _get_available_versions(repo_id)
-    requirement = SpecifierSet(version_spec)
-    accepted_versions = sorted(requirement.filter(versions.keys()))
-
-    if len(accepted_versions) == 0:
-        raise ValueError(
-            f"No version of `{repo_id}` satisfies requirement: {version_spec}"
-        )
-
-    tag_for_newest = versions[accepted_versions[-1]]
+    tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 
     r = HfApi().repo_info(
         repo_id=repo_id, revision=tag_for_newest.target_commit, files_metadata=True

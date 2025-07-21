@@ -91,6 +91,25 @@ def test_has_kernel(kernel_exists):
     assert has_kernel(repo_id, revision=revision) == kernel
 
 
+def test_version():
+    kernel = get_kernel("kernels-test/versions")
+    assert kernel.version() == "0.2.0"
+    kernel = get_kernel("kernels-test/versions", version="<1.0.0")
+    assert kernel.version() == "0.2.0"
+    kernel = get_kernel("kernels-test/versions", version="<0.2.0")
+    assert kernel.version() == "0.1.1"
+    kernel = get_kernel("kernels-test/versions", version=">0.1.0,<0.2.0")
+    assert kernel.version() == "0.1.1"
+
+    with pytest.raises(ValueError, match=r"No version.*satisfies requirement"):
+        get_kernel("kernels-test/versions", version=">0.2.0")
+
+    with pytest.raises(ValueError, match=r"Either a revision or a version.*not both"):
+        kernel = get_kernel(
+            "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
+        )
+
+
 @pytest.mark.linux_only
 def test_universal_kernel(universal_kernel):
     torch.manual_seed(0)

@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from huggingface_hub import file_exists, snapshot_download
 from packaging.version import parse
 
+from kernels._versions import resolve_version_spec_as_ref
 from kernels.lockfile import KernelLock, VariantLock
 
 
@@ -182,13 +183,31 @@ def install_kernel_all_variants(
     return repo_path / "build"
 
 
-def get_kernel(repo_id: str, revision: str = "main") -> ModuleType:
+def get_kernel(
+    repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
+) -> ModuleType:
     """
-    Download and import a kernel from the Hugging Face Hub.
-
-    The kernel is downloaded from the repository `repo_id` at
-    branch/commit/tag `revision`.
+    Load a kernel from the kernel hub.
+    This function downloads a kernel to the local Hugging Face Hub cache
+    directory (if it was not downloaded before) and then loads the kernel.
+    Args:
+        repo_id (`str`): The Hub repository containing the kernel.
+        revision (`str`, *optional*, defaults to `"main"`): The specific
+            revision (branch, tag, or commit) to download.
+            Cannot be used together with `version`.
+        version (`str`, *optional*): The kernel version to download. This
+            can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
+            Cannot be used together with `revision`.
+    Returns:
+        `ModuleType`: The imported kernel module.
+    Example:
+        ```python
+        from kernels import get_kernel
+        kernel = get_kernel("username/my-kernel")
+        result = kernel.kernel_function(input_data)
+        ```
     """
+    revision = _revision_or_version(repo_id, revision, version)
     package_name, package_path = install_kernel(repo_id, revision=revision)
     return import_from_path(package_name, package_path / package_name / "__init__.py")
 
@@ -201,11 +220,26 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
     return import_from_path(package_name, package_path / package_name / "__init__.py")
 
 
-def has_kernel(repo_id: str, revision: str = "main") -> bool:
+def has_kernel(
+    repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
+) -> bool:
     """
     Check whether a kernel build exists for the current environment
     (Torch version and compute framework).
+
+    Args:
+        repo_id (`str`): The Hub repository containing the kernel.
+        revision (`str`, *optional*, defaults to `"main"`): The specific
+            revision (branch, tag, or commit) to download.
+            Cannot be used together with `version`.
+        version (`str`, *optional*): The kernel version to download. This
+            can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
+            Cannot be used together with `revision`.
+    Returns:
+        `bool`: `true` if a kernel is avaialble for the current environment.
     """
+    revision = _revision_or_version(repo_id, revision, version)
+
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
     universal_variant = universal_build_variant()
@@ -386,3 +420,16 @@ def git_hash_object(data: bytes, object_type: str = "blob"):
 
 def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
+
+
+def _revision_or_version(
+    repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
+) -> str:
+    if revision is not None and version is not None:
+        raise ValueError("Either a revision or a version must be specified, not both.")
+    elif revision is None and version is None:
+        revision = "main"
+    elif version is not None:
+        revision = resolve_version_spec_as_ref(repo_id, version).target_commit
+    assert revision is not None
+    return revision

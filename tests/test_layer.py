@@ -801,7 +801,8 @@ def test_kernel_modes_cross_fallback():
         {
             "Linear": {
                 "cuda": {
-                    Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.TRAINING
+                    | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     )
@@ -839,7 +840,8 @@ def test_kernel_modes_cross_fallback():
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
-                    Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.INFERENCE
+                    | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
@@ -857,3 +859,95 @@ def test_kernel_modes_cross_fallback():
         linear(X)
         # TRAINING | TORCH_COMPILE should NOT fall back to inference kernels, use original
         assert linear.n_calls == 2
+
+
+def test_layer_versions():
+    @use_kernel_forward_from_hub("Version")
+    class Version(nn.Module):
+        def forward(self) -> str:
+            return "0.0.0"
+
+    version = Version()
+
+    with use_kernel_mapping(
+        {
+            "Version": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/versions",
+                    layer_name="Version",
+                )
+            }
+        }
+    ):
+        version = kernelize(version, device="cuda", mode=Mode.INFERENCE)
+        assert version() == "0.2.0"
+
+    with use_kernel_mapping(
+        {
+            "Version": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/versions",
+                    layer_name="Version",
+                    version="<1.0.0",
+                )
+            }
+        }
+    ):
+        version = kernelize(version, device="cuda", mode=Mode.INFERENCE)
+        assert version() == "0.2.0"
+
+    with use_kernel_mapping(
+        {
+            "Version": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/versions",
+                    layer_name="Version",
+                    version="<0.2.0",
+                )
+            }
+        }
+    ):
+        version = kernelize(version, device="cuda", mode=Mode.INFERENCE)
+        assert version() == "0.1.1"
+
+    with use_kernel_mapping(
+        {
+            "Version": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/versions",
+                    layer_name="Version",
+                    version=">0.1.0,<0.2.0",
+                )
+            }
+        }
+    ):
+        version = kernelize(version, device="cuda", mode=Mode.INFERENCE)
+        assert version() == "0.1.1"
+
+    with use_kernel_mapping(
+        {
+            "Version": {
+                Device(type="cuda"): LayerRepository(
+                    repo_id="kernels-test/versions",
+                    layer_name="Version",
+                    version=">0.2.0",
+                )
+            }
+        }
+    ):
+        with pytest.raises(ValueError, match=r"No version.*satisfies requirement"):
+            kernelize(version, device="cuda", mode=Mode.INFERENCE)
+
+    with pytest.raises(ValueError, match=r"Either a revision or a version.*not both"):
+        use_kernel_mapping(
+            {
+                "Version": {
+                    Device(type="cuda"): LayerRepository(
+                        repo_id="kernels-test/versions",
+                        layer_name="Version",
+                        revision="v0.1.0",
+                        version="<1.0.0",
+                    )
+                }
+            }
+        )

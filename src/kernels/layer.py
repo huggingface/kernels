@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import inspect
 import logging
 import os
@@ -8,7 +9,7 @@ import warnings
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Flag, auto
 from functools import lru_cache
 from types import MethodType
@@ -22,6 +23,7 @@ from typing import (
 )
 
 from ._interval_tree import IntervalTree
+from ._versions import select_revision_or_version
 from .utils import get_kernel
 
 if TYPE_CHECKING:
@@ -112,30 +114,63 @@ class CUDAProperties:
         return hash((self.min_capability, self.max_capability))
 
 
-@dataclass
 class LayerRepository:
     """
     Repository and name of a layer.
     """
 
-    layer_name: str = field(
-        metadata={"help": "The name of the layer in the kernel repository."}
-    )
-    repo_id: str = field(metadata={"help": "The kernel hub repository with the layer."})
-    revision: str = field(
-        default="main", metadata={"help": "The revision of the layer."}
-    )
+    def __init__(
+        self,
+        repo_id: str,
+        *,
+        layer_name: str,
+        revision: Optional[str] = None,
+        version: Optional[str] = None,
+    ):
+        """
+        Construct a layer repository.
+
+        Args:
+            repo_id (`str`): The Hub repository containing the layer.
+            revision (`str`, *optional*, defaults to `"main"`): The specific
+                revision (branch, tag, or commit) to download.
+                Cannot be used together with `version`.
+            version (`str`, *optional*): The kernel version to download. This
+                can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
+                Cannot be used together with `revision`.
+        """
+
+        if revision is not None and version is not None:
+            raise ValueError(
+                "Either a revision or a version must be specified, not both."
+            )
+
+        self.repo_id = repo_id
+        self.layer_name = layer_name
+
+        # We are going to resolve these lazily, since we do not want
+        # to do a network request for every registered LayerRepository.
+        self._revision = revision
+        self._version = version
+
+    @property
+    @functools.lru_cache()
+    def revision(self) -> str:
+        return select_revision_or_version(
+            repo_id=self.repo_id, revision=self._revision, version=self._version
+        )
 
     def __eq__(self, other):
         return (
             isinstance(other, LayerRepository)
             and self.layer_name == other.layer_name
             and self.repo_id == other.repo_id
-            and self.revision == other.revision
+            and self._revision == other._revision
+            and self._version == other._version
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self.repo_id, self.revision))
+        return hash((self.layer_name, self.repo_id, self._revision, self._version))
 
 
 _CACHED_LAYER: Dict[LayerRepository, Type["nn.Module"]] = {}

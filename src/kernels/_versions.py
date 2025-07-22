@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 from huggingface_hub import HfApi
 from huggingface_hub.hf_api import GitRefInfo
@@ -37,3 +37,16 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: str) -> GitRefInfo:
         )
 
     return versions[accepted_versions[-1]]
+
+
+def select_revision_or_version(
+    repo_id: str, revision: Optional[str], version: Optional[str]
+) -> str:
+    if revision is not None and version is not None:
+        raise ValueError("Either a revision or a version must be specified, not both.")
+    elif revision is None and version is None:
+        revision = "main"
+    elif version is not None:
+        revision = resolve_version_spec_as_ref(repo_id, version).target_commit
+    assert revision is not None
+    return revision

@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from huggingface_hub import file_exists, snapshot_download
 from packaging.version import parse
 
-from kernels._versions import resolve_version_spec_as_ref
+from kernels._versions import select_revision_or_version
 from kernels.lockfile import KernelLock, VariantLock
 
 
@@ -209,7 +209,7 @@ def get_kernel(
         result = kernel.kernel_function(input_data)
         ```
     """
-    revision = _revision_or_version(repo_id, revision, version)
+    revision = select_revision_or_version(repo_id, revision, version)
     package_name, package_path = install_kernel(repo_id, revision=revision)
     return import_from_path(package_name, package_path / package_name / "__init__.py")
 
@@ -240,7 +240,7 @@ def has_kernel(
     Returns:
         `bool`: `true` if a kernel is avaialble for the current environment.
     """
-    revision = _revision_or_version(repo_id, revision, version)
+    revision = select_revision_or_version(repo_id, revision, version)
 
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
@@ -422,16 +422,3 @@ def git_hash_object(data: bytes, object_type: str = "blob"):
 
 def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
-
-
-def _revision_or_version(
-    repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
-) -> str:
-    if revision is not None and version is not None:
-        raise ValueError("Either a revision or a version must be specified, not both.")
-    elif revision is None and version is None:
-        revision = "main"
-    elif version is not None:
-        revision = resolve_version_spec_as_ref(repo_id, version).target_commit
-    assert revision is not None
-    return revision

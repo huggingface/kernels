@@ -1,4 +1,4 @@
-# Locking kernel versions
+# Locking kernel/layer versions
 
 Projects that use `setuptools` can lock the kernel versions that should be
 used. First specify the accepted versions in `pyproject.toml` and make
@@ -25,6 +25,24 @@ activation = get_locked_kernel("kernels-community/activation")
 
 **Note:** the lock file is included in the package metadata, so it will only be visible
 to `kernels` after doing an (editable or regular) installation of your project.
+
+## Locked kernel layers
+
+Locking is also supported for kernel layers. To use locked layers, register them
+with the `LockedLayerRepository` class:
+
+```python
+kernel_layer_mapping = {
+    "SiluAndMul": {
+        "cuda": LockedLayerRepository(
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
+        )
+    }
+}
+
+register_kernel_mapping(kernel_layer_mapping)
+```
 
 ## Pre-downloading locked kernels
 

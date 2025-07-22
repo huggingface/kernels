@@ -57,7 +57,7 @@ the Hub.
 ## 📚 Documentation
 
 - [Using layers](docs/layers.md)
-- [Locking kernel versions](docs/locking.md)
+- [Locking kernel/layer versions](docs/locking.md)
 - [Environment variables](docs/env.md)
 - [Using kernels in a Docker container](docs/docker.md)
 - [Kernel requirements](docs/kernel-requirements.md)

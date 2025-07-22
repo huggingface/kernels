@@ -153,8 +153,6 @@ class LayerRepository:
         self._revision = revision
         self._version = version
 
-        self._cached_revision = None
-
     @property
     @functools.lru_cache()
     def revision(self) -> str:

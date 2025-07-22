@@ -138,14 +138,6 @@ class LayerRepository:
             version (`str`, *optional*): The kernel version to download. This
                 can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
                 Cannot be used together with `revision`.
-        Returns:
-            `ModuleType`: The imported kernel module.
-        Example:
-            ```python
-            from kernels import get_kernel
-            kernel = get_kernel("username/my-kernel")
-            result = kernel.kernel_function(input_data)
-            ```
         """
 
         if revision is not None and version is not None:

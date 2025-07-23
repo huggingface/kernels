@@ -12,11 +12,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 from enum import Flag, auto
 from functools import lru_cache
+from pathlib import Path
 from types import MethodType
 from typing import (
     TYPE_CHECKING,
     Dict,
     Optional,
+    Protocol,
     Tuple,
     Type,
     Union,
@@ -24,7 +26,7 @@ from typing import (
 
 from ._interval_tree import IntervalTree
 from ._versions import select_revision_or_version
-from .utils import get_kernel
+from .utils import _get_caller_locked_kernel, _get_locked_kernel, get_kernel
 
 if TYPE_CHECKING:
     import torch
@@ -114,6 +116,17 @@ class CUDAProperties:
         return hash((self.min_capability, self.max_capability))
 
 
+class LayerRepositoryProtocol(Protocol):
+    @property
+    def layer_name(self) -> str: ...
+
+    @property
+    def repo_id(self) -> str: ...
+
+    @property
+    def revision(self) -> str: ...
+
+
 class LayerRepository:
     """
     Repository and name of a layer.
@@ -173,7 +186,57 @@ class LayerRepository:
         return hash((self.layer_name, self.repo_id, self._revision, self._version))
 
 
-_CACHED_LAYER: Dict[LayerRepository, Type["nn.Module"]] = {}
+class LockedLayerRepository:
+    """
+    Repository and name of a layer.
+
+    In contrast to `LayerRepository`, this class uses repositories that
+    are locked inside a project.
+    """
+
+    def __init__(
+        self,
+        repo_id: str,
+        *,
+        lockfile: Optional[Path] = None,
+        layer_name: str,
+    ):
+        """
+        Construct a layer repository.
+
+        Args:
+            repo_id (`str`): The Hub repository containing the layer.
+        """
+        self.repo_id = repo_id
+        self.lockfile = lockfile
+        self.layer_name = layer_name
+
+    @property
+    @functools.lru_cache()
+    def revision(self) -> str:
+        if self.lockfile is None:
+            locked_sha = _get_caller_locked_kernel(self.repo_id)
+        else:
+            with open(self.lockfile, "r") as f:
+                locked_sha = _get_locked_kernel(self.repo_id, f.read())
+
+        if locked_sha is None:
+            raise ValueError(f"Kernel `{self.repo_id}` is not locked")
+
+        return locked_sha
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, LockedLayerRepository)
+            and self.layer_name == other.layer_name
+            and self.repo_id == other.repo_id
+        )
+
+    def __hash__(self):
+        return hash((self.layer_name, self.repo_id))
+
+
+_CACHED_LAYER: Dict[LayerRepositoryProtocol, Type["nn.Module"]] = {}
 
 
 class _DeviceRepos(ABC):
@@ -185,10 +248,10 @@ class _DeviceRepos(ABC):
     @abstractmethod
     def repos(
         self,
-    ) -> Optional[Dict[Mode, LayerRepository]]: ...
+    ) -> Optional[Dict[Mode, LayerRepositoryProtocol]]: ...
 
     @abstractmethod
-    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepositoryProtocol]):
         """
         Insert a repository for a specific device and mode.
         """
@@ -196,7 +259,7 @@ class _DeviceRepos(ABC):
 
 
 class _MPSRepos(_DeviceRepos):
-    _repos: Dict[Mode, LayerRepository]
+    _repos: Dict[Mode, LayerRepositoryProtocol]
 
     def __init__(self):
         super().__init__()
@@ -205,10 +268,10 @@ class _MPSRepos(_DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, LayerRepository]]:
+    ) -> Optional[Dict[Mode, LayerRepositoryProtocol]]:
         return self._repos
 
-    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepositoryProtocol]):
         if device.type != "mps":
             raise ValueError(f"Device type must be 'mps', got {device.type}")
 
@@ -216,7 +279,7 @@ class _MPSRepos(_DeviceRepos):
 
 
 class _CUDARepos(_DeviceRepos):
-    _repos: IntervalTree[Dict[Mode, LayerRepository]]
+    _repos: IntervalTree[Dict[Mode, LayerRepositoryProtocol]]
 
     def __init__(self):
         super().__init__()
@@ -225,11 +288,11 @@ class _CUDARepos(_DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, LayerRepository]]:
+    ) -> Optional[Dict[Mode, LayerRepositoryProtocol]]:
         capability = _find_capability()
         return self.repos_by_capability.find_smallest_interval(capability)
 
-    def insert(self, device: Device, repos: Dict[Mode, LayerRepository]):
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepositoryProtocol]):
         assert device.properties is None or isinstance(
             device.properties, CUDAProperties
         )
@@ -254,7 +317,10 @@ _KERNEL_MAPPING: ContextVar[Dict[str, Dict[str, _DeviceRepos]]] = ContextVar(
 def use_kernel_mapping(
     mapping: Dict[
         str,
-        Dict[Union[Device, str], Union[LayerRepository, Dict[Mode, LayerRepository]]],
+        Dict[
+            Union[Device, str],
+            Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]],
+        ],
     ],
     *,
     inherit_mapping: bool = True,
@@ -285,7 +351,10 @@ def use_kernel_mapping(
 def register_kernel_mapping(
     mapping: Dict[
         str,
-        Dict[Union[Device, str], Union[LayerRepository, Dict[Mode, LayerRepository]]],
+        Dict[
+            Union[Device, str],
+            Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]],
+        ],
     ],
 ):
     """
@@ -318,10 +387,10 @@ def register_kernel_mapping(
                 Device(type=new_device) if isinstance(new_device, str) else new_device
             )
 
-            if isinstance(new_repo, LayerRepository):
-                kernel_options = {Mode.FALLBACK: new_repo}
-            else:
+            if isinstance(new_repo, dict):
                 kernel_options = new_repo
+            else:
+                kernel_options = {Mode.FALLBACK: new_repo}
 
             feature_repos = device_repo.setdefault(device.type, device.create_repo())
             feature_repos.insert(device, kernel_options)
@@ -373,10 +442,10 @@ _MODE_FALLBACK_PRIORITY = {
 
 
 def _select_repository(
-    repositories: Dict[Mode, LayerRepository],
+    repositories: Dict[Mode, LayerRepositoryProtocol],
     *,
     mode: Mode,
-) -> Optional[Tuple[LayerRepository, Mode]]:
+) -> Optional[Tuple[LayerRepositoryProtocol, Mode]]:
     # Get the fallback priority list for the requested mode
     if mode not in _MODE_FALLBACK_PRIORITY:
         raise ValueError(f"Unsupported mode: {mode}")
@@ -647,7 +716,7 @@ def _validate_layer_has_mode(
     *,
     layer_name: str,
     module: Type["nn.Module"],
-    repo: LayerRepository,
+    repo: LayerRepositoryProtocol,
     repo_mode: Mode,
 ):
     """
@@ -672,7 +741,7 @@ def _validate_layer_has_mode(
 
 
 def _get_layer_memoize(
-    repo: LayerRepository, module_class: Type["nn.Module"]
+    repo: LayerRepositoryProtocol, module_class: Type["nn.Module"]
 ) -> Type["nn.Module"]:
     layer = _CACHED_LAYER.get(repo, None)
     if layer is not None:

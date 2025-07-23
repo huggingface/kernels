@@ -107,7 +107,7 @@ model = kernelize(model, device="cuda", mode=Mode.INFERENCE)
 
 If the `TRAINING` and/or `TORCH_COMPILE` modes are used, but a registered
 kernel does not support backward passes or `torch.compile` respectively,
-`kernenize` will fall back to the original, non-kernelized, layer. You
+`kernelize` will fall back to the original, non-kernelized, layer. You
 can let `kernelize` raise an exception instead by using `use_fallback=False`:
 
 ```python

@@ -34,6 +34,9 @@ dev = [
 
 [project.optional-dependencies]
 torch = ["torch"]
+docs = [
+  "hf-doc-builder",
+]
 
 [project.scripts]
 kernels = "kernels.cli:main"

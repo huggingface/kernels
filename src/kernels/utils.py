@@ -98,7 +98,20 @@ def install_kernel(
     """
     Download a kernel for the current environment to the cache.
 
-    The output path is validated againt `hash` when set.
+    The output path is validated against the hashes in `variant_locks` when provided.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        revision (`str`):
+            The specific revision (branch, tag, or commit) to download.
+        local_files_only (`bool`, *optional*, defaults to `False`):
+            Whether to only use local files and not download from the Hub.
+        variant_locks (`Dict[str, VariantLock]`, *optional*):
+            Optional dictionary of variant locks for validation.
+
+    Returns:
+        `Tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
@@ -190,18 +203,22 @@ def get_kernel(
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
-    This function downloads a kernel to the local Hugging Face Hub cache
-    directory (if it was not downloaded before) and then loads the kernel.
+
+    This function downloads a kernel to the local Hugging Face Hub cache directory (if it was not downloaded before)
+    and then loads the kernel.
+
     Args:
-        repo_id (`str`): The Hub repository containing the kernel.
-        revision (`str`, *optional*, defaults to `"main"`): The specific
-            revision (branch, tag, or commit) to download.
-            Cannot be used together with `version`.
-        version (`str`, *optional*): The kernel version to download. This
-            can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        revision (`str`, *optional*, defaults to `"main"`):
+            The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
+        version (`str`, *optional*):
+            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
             Cannot be used together with `revision`.
+
     Returns:
         `ModuleType`: The imported kernel module.
+
     Example:
         ```python
         from kernels import get_kernel
@@ -217,6 +234,15 @@ def get_kernel(
 def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
     """
     Import a kernel from a local kernel repository path.
+
+    Args:
+        repo_path (`Path`):
+            The local path to the kernel repository.
+        package_name (`str`):
+            The name of the package to import from the repository.
+
+    Returns:
+        `ModuleType`: The imported kernel module.
     """
     package_name, package_path = _load_kernel_from_path(repo_path, package_name)
     return import_from_path(package_name, package_path / package_name / "__init__.py")
@@ -226,19 +252,19 @@ def has_kernel(
     repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
 ) -> bool:
     """
-    Check whether a kernel build exists for the current environment
-    (Torch version and compute framework).
+    Check whether a kernel build exists for the current environment (Torch version and compute framework).
 
     Args:
-        repo_id (`str`): The Hub repository containing the kernel.
-        revision (`str`, *optional*, defaults to `"main"`): The specific
-            revision (branch, tag, or commit) to download.
-            Cannot be used together with `version`.
-        version (`str`, *optional*): The kernel version to download. This
-            can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        revision (`str`, *optional*, defaults to `"main"`):
+            The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
+        version (`str`, *optional*):
+            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
             Cannot be used together with `revision`.
+
     Returns:
-        `bool`: `true` if a kernel is avaialble for the current environment.
+        `bool`: `True` if a kernel is available for the current environment.
     """
     revision = select_revision_or_version(repo_id, revision, version)
 
@@ -264,8 +290,16 @@ def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
 
-    If `lockfile` is not specified, the lockfile will be loaded from the
-    caller's package metadata.
+    If `lockfile` is not specified, the lockfile will be loaded from the caller's package metadata.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        lockfile (`Path`, *optional*):
+            Path to the lockfile. If not provided, the lockfile will be loaded from the caller's package metadata.
+
+    Returns:
+        `ModuleType`: The imported kernel module.
     """
     if lockfile is None:
         locked_sha = _get_caller_locked_kernel(repo_id)
@@ -310,7 +344,18 @@ def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
 
 
 def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
-    """Get a kernel using a lock file."""
+    """
+    Get a kernel using a lock file.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        local_files_only (`bool`, *optional*, defaults to `False`):
+            Whether to only use local files and not download from the Hub.
+
+    Returns:
+        `ModuleType`: The imported kernel module.
+    """
     locked_sha = _get_caller_locked_kernel(repo_id)
 
     if locked_sha is None:

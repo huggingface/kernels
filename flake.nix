@@ -26,6 +26,10 @@
         formatter = pkgs.nixfmt-tree;
         devShells = with pkgs; rec {
           default = mkShell {
+            nativeBuildInputs = [
+              # For hf-doc-builder.
+              nodejs
+            ];
             buildInputs =
               [
                 black

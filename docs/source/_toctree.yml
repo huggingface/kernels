@@ -1,0 +1,28 @@
+- sections:
+    - local: index
+      title: Introduction
+    - local: installation
+      title: Installation
+  title: Getting started
+- sections:
+    - local: basic-usage
+      title: Basic Usage
+    - local: layers
+      title: Using Layers
+    - local: locking
+      title: Locking Kernel Versions
+    - local: env
+      title: Environment Variables
+    - local: faq
+      title: FAQ
+  title: Usage Guide
+- sections:
+    - local: api/kernels
+      title: Kernels
+    - local: api/layers
+      title: Layers
+  title: API Reference
+- sections:
+    - local: kernel-requirements
+      title: Kernel Requirements
+  title: Developer Guide

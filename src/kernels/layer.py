@@ -40,17 +40,19 @@ class Mode(Flag):
     """
     Kernelize mode
 
-    The `Mode` flag is used by `kernelize` to select kernels for the given
-    mode. Mappings can be registered for specific modes.
+    The `Mode` flag is used by [`kernelize`] to select kernels for the given mode. Mappings can be registered for
+    specific modes.
 
-    * `INFERENCE`: The kernel is used for inference.
-    * `TRAINING`: The kernel is used for training.
-    * `TORCH_COMPILE`: The kernel is used with `torch.compile`.
-    * `FALLBACK`: In a kernel mapping, this kernel is used when no other mode
-       matches.
+    Attributes:
+        INFERENCE: The kernel is used for inference.
+        TRAINING: The kernel is used for training.
+        TORCH_COMPILE: The kernel is used with `torch.compile`.
+        FALLBACK: In a kernel mapping, this kernel is used when no other mode matches.
 
-    Different modes can be combined. For instance, `INFERENCE | TORCH_COMPILE`
-    should be used for layers that are used for inference *with* `torch.compile`.
+    Note:
+        Different modes can be combined. For instance, `INFERENCE | TORCH_COMPILE` should be used for layers that
+        are used for inference *with* `torch.compile`.
+
     """
 
     _NONE = 0
@@ -73,6 +75,36 @@ class Mode(Flag):
 
 @dataclass(frozen=True)
 class Device:
+    """
+    Represents a compute device with optional properties.
+
+    This class encapsulates device information including device type and optional device-specific properties
+    like CUDA capabilities.
+
+    Args:
+        type (`str`):
+            The device type (e.g., "cuda", "mps", "cpu").
+        properties ([`CUDAProperties`], *optional*):
+            Device-specific properties. Currently only [`CUDAProperties`] is supported for CUDA devices.
+
+    Example:
+        ```python
+        from kernels import Device, CUDAProperties
+
+        # Basic CUDA device
+        cuda_device = Device(type="cuda")
+
+        # CUDA device with specific capability requirements
+        cuda_device_with_props = Device(
+            type="cuda",
+            properties=CUDAProperties(min_capability=75, max_capability=90)
+        )
+
+        # MPS device for Apple Silicon
+        mps_device = Device(type="mps")
+        ```
+    """
+
     type: str
     properties: Optional[CUDAProperties] = None
 
@@ -101,6 +133,34 @@ class Device:
 
 @dataclass(frozen=True)
 class CUDAProperties:
+    """
+    CUDA-specific device properties for capability-based kernel selection.
+
+    This class defines CUDA compute capability constraints for kernel selection, allowing kernels to specify
+    minimum and maximum CUDA compute capabilities they support.
+
+    Args:
+        min_capability (`int`):
+            Minimum CUDA compute capability required (e.g., 75 for compute capability 7.5).
+        max_capability (`int`):
+            Maximum CUDA compute capability supported (e.g., 90 for compute capability 9.0).
+
+    Example:
+        ```python
+        from kernels import CUDAProperties, Device
+
+        # Define CUDA properties for modern GPUs (compute capability 7.5 to 9.0)
+        cuda_props = CUDAProperties(min_capability=75, max_capability=90)
+
+        # Create a device with these properties
+        device = Device(type="cuda", properties=cuda_props)
+        ```
+
+    Note:
+        CUDA compute capabilities are represented as integers where the major and minor versions are concatenated.
+        For example, compute capability 7.5 is represented as 75, and 8.6 is represented as 86.
+    """
+
     min_capability: int
     max_capability: int
 
@@ -129,7 +189,36 @@ class LayerRepositoryProtocol(Protocol):
 
 class LayerRepository:
     """
-    Repository and name of a layer.
+    Repository and name of a layer for kernel mapping.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the layer.
+        layer_name (`str`):
+            The name of the layer within the kernel repository.
+        revision (`str`, *optional*, defaults to `"main"`):
+            The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
+        version (`str`, *optional*):
+            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
+            Cannot be used together with `revision`.
+
+    Example:
+        ```python
+        from kernels import LayerRepository
+
+        # Reference a specific layer by revision
+        layer_repo = LayerRepository(
+            repo_id="username/my-kernel",
+            layer_name="MyLayer",
+        )
+
+        # Reference a layer by version constraint
+        layer_repo_versioned = LayerRepository(
+            repo_id="username/my-kernel",
+            layer_name="MyLayer",
+            version=">=1.0.0,<2.0.0"
+        )
+        ```
     """
 
     def __init__(
@@ -140,19 +229,6 @@ class LayerRepository:
         revision: Optional[str] = None,
         version: Optional[str] = None,
     ):
-        """
-        Construct a layer repository.
-
-        Args:
-            repo_id (`str`): The Hub repository containing the layer.
-            revision (`str`, *optional*, defaults to `"main"`): The specific
-                revision (branch, tag, or commit) to download.
-                Cannot be used together with `version`.
-            version (`str`, *optional*): The kernel version to download. This
-                can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-                Cannot be used together with `revision`.
-        """
-
         if revision is not None and version is not None:
             raise ValueError(
                 "Either a revision or a version must be specified, not both."
@@ -326,11 +402,42 @@ def use_kernel_mapping(
     inherit_mapping: bool = True,
 ):
     """
-    Context manager that sets a mapping for a duration of the context.
+    Context manager that sets a kernel mapping for the duration of the context.
 
-    When `inherit_mapping` is set to `True` the current mapping will be
-    extended by `mapping` inside the context. If it is `False`, only
-    `mapping` is used inside the context.
+    This function allows temporary kernel mappings to be applied within a specific context, enabling different
+    kernel configurations for different parts of your code.
+
+    Args:
+        mapping (`Dict[str, Dict[Union[Device, str], Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]]]]`):
+            The kernel mapping to apply. Maps layer names to device-specific kernel configurations.
+        inherit_mapping (`bool`, *optional*, defaults to `True`):
+            When `True`, the current mapping will be extended by `mapping` inside the context. When `False`,
+            only `mapping` is used inside the context.
+
+    Returns:
+        Context manager that handles the temporary kernel mapping.
+
+    Example:
+        ```python
+        from kernels import use_kernel_mapping, LayerRepository, Device
+
+        # Define a mapping
+        mapping = {
+            "LayerNorm": {
+                "cuda": LayerRepository(
+                    repo_id="username/experimental-kernels",
+                    layer_name="FastLayerNorm"
+                )
+            }
+        }
+
+        # Use the mapping for the duration of the context.
+        with use_kernel_mapping(mapping):
+            # kernelize uses the temporary mapping
+            model = kernelize(model)
+
+        # Outside the context, original mappings are restored
+        ```
     """
 
     class ContextManager:
@@ -358,26 +465,49 @@ def register_kernel_mapping(
     ],
 ):
     """
-    Allows one to register a mapping between a layer name and the corresponding
-    kernel(s) to use, depending on the device. This should be used in conjunction
-    with `kernelize`.
+    Register a global mapping between layer names and their corresponding kernel implementations.
 
-    Example usage:
+    This function allows you to register a mapping between a layer name and the corresponding kernel(s) to use,
+    depending on the device and mode. This should be used in conjunction with [`kernelize`].
 
-    ```python
-    from kernels import LayerRepository, register_kernel_mapping
+    Args:
+        mapping (`Dict[str, Dict[Union[Device, str], Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]]]]`):
+            The kernel mapping to register globally. Maps layer names to device-specific kernels.
+            The mapping can specify different kernels for different modes (training, inference, etc.).
 
-    kernel_layer_mapping = {
-      "LlamaRMSNorm": {
-          "cuda": LayerRepository(
-              repo_id="kernels-community/activation",
-              layer_name="RmsNorm",
-              revision="layers",
-          ),
-      },
-    }
-    register_kernel_mapping(kernel_layer_mapping)
-    ```
+    Example:
+        ```python
+        from kernels import LayerRepository, register_kernel_mapping, Mode
+
+        # Simple mapping for a single kernel per device
+        kernel_layer_mapping = {
+            "LlamaRMSNorm": {
+                "cuda": LayerRepository(
+                    repo_id="kernels-community/activation",
+                    layer_name="RmsNorm",
+                    revision="layers",
+                ),
+            },
+        }
+        register_kernel_mapping(kernel_layer_mapping)
+
+        # Advanced mapping with mode-specific kernels
+        advanced_mapping = {
+            "MultiHeadAttention": {
+                "cuda": {
+                    Mode.TRAINING: LayerRepository(
+                        repo_id="username/training-kernels",
+                        layer_name="TrainingAttention"
+                    ),
+                    Mode.INFERENCE: LayerRepository(
+                        repo_id="username/inference-kernels",
+                        layer_name="FastAttention"
+                    ),
+                }
+            }
+        }
+        register_kernel_mapping(advanced_mapping)
+        ```
     """
     # Merge with existing mappings.
     for new_kernel, new_device_repos in mapping.items():
@@ -401,15 +531,20 @@ def replace_kernel_forward_from_hub(
     layer_name: str,
 ):
     """
-    Decorator that prepares a layer class to use a kernel from the Hugging Face Hub.
+    Function that prepares a layer class to use kernels from the Hugging Face Hub.
 
-    This decorator stores the layer name and original forward method, which will be used
-    by the kernelize function to replace the forward implementation with the appropriate
-    kernel from the hub.
+    It is recommended to use [`use_kernel_forward_from_hub`] decorator instead.
+    This function should only be used as a last resort to extend third-party layers,
+    it is inherently fragile since the member variables and `forward` signature
+    of usch a layer can change.
 
-    Args:
-        cls: The layer class to decorate
-        layer_name: The name of the layer to use for kernel lookup
+    Example:
+        ```python
+        from kernels import replace_kernel_forward_from_hub
+        import torch.nn as nn
+
+        replace_kernel_forward_from_hub(nn.LayerNorm, "LayerNorm")
+        ```
     """
     cls.kernel_layer_name = layer_name
 
@@ -468,23 +603,57 @@ def kernelize(
     use_fallback: bool = True,
 ):
     """
-    Iterate over all modules in the model and replace the `forward` method of
-    extensible layers for which kernels are registered using `register_kernel_mapping`
-    or `use_kernel_mapping`.
+    Replace layer forward methods with optimized kernel implementations.
+
+    This function iterates over all modules in the model and replaces the `forward` method of extensible layers
+    for which kernels are registered using [`register_kernel_mapping`] or [`use_kernel_mapping`].
 
     Args:
-        model: The PyTorch model to kernelize
-        mode: the mode that the kernel is going to be used in (e.g.
-            `Mode.TRAINING | Mode.TORCH_COMPILE` kernelizes the model for training
-            and `torch.compile`).
-        device: The device type to load kernels for. The device type will be inferred
-            from the parameters of the model when not provided.
-        use_fallback: Whether to use the original forward method of modules when no
-            compatible kernel could be found. If set to `False`, an exception will
-            be raised in such cases.
+        model (`nn.Module`):
+            The PyTorch model to kernelize.
+        mode ([`Mode`], *optional*, defaults to `Mode.TRAINING | Mode.TORCH_COMPILE`):
+            The mode that the kernel is going to be used in. For example, `Mode.TRAINING | Mode.TORCH_COMPILE`
+            kernelizes the model for training with `torch.compile`.
+        device (`Union[str, torch.device]`, *optional*):
+            The device type to load kernels for. The device type will be inferred from the model parameters
+            when not provided.
+        use_fallback (`bool`, *optional*, defaults to `True`):
+            Whether to use the original forward method of modules when no compatible kernel could be found.
+            If set to `False`, an exception will be raised in such cases.
 
     Returns:
-        The kernelized model
+        `nn.Module`: The kernelized model with optimized kernel implementations.
+
+    Example:
+        ```python
+        from kernels import kernelize, Mode, register_kernel_mapping, LayerRepository
+        import torch.nn as nn
+
+        @use_kernel_forward_from_hub("LayerNorm")
+        class LayerNorm(nn.Module):
+            ...
+
+        # First register some kernel mappings
+        mapping = {
+            "LayerNorm": {
+                "cuda": LayerRepository(
+                    repo_id="username/fast-kernels",
+                    layer_name="FastLayerNorm"
+                )
+            }
+        }
+        register_kernel_mapping(mapping)
+
+        # Create and kernelize a model
+        model = nn.Sequential(
+            nn.Linear(768, 768),
+            LayerNorm(768),
+            nn.Linear(768, 768)
+        )
+
+        # Kernelize for inference
+        kernelized_model = kernelize(model)
+        ```
     """
     import torch
 
@@ -593,7 +762,37 @@ def kernelize(
 
 def use_kernel_forward_from_hub(layer_name: str):
     """
-    Make a layer extensible using the name `layer_name`.
+    Decorator factory that makes a layer extensible using the specified layer name.
+
+    This is a decorator factory that returns a decorator which prepares a layer class to use kernels from the
+    Hugging Face Hub.
+
+    Args:
+        layer_name (`str`):
+            The name of the layer to use for kernel lookup in registered mappings.
+
+    Returns:
+        `Callable`: A decorator function that can be applied to layer classes.
+
+    Example:
+        ```python
+        from kernels import use_kernel_forward_from_hub
+        import torch.nn as nn
+
+        @use_kernel_forward_from_hub("MyCustomLayer")
+        class MyCustomLayer(nn.Module):
+            def __init__(self, hidden_size):
+                super().__init__()
+                self.hidden_size = hidden_size
+
+            def forward(self, x):
+                # original implementation
+                return x
+
+        # The layer can now be kernelized
+        model = MyCustomLayer(768)
+        kernelized_model = kernelize(model)
+        ```
     """
 
     def decorator(cls):

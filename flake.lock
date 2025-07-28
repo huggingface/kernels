@@ -58,32 +58,33 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1750775451,
-        "narHash": "sha256-HiGqtwzIgUH7Xkh+wgpvHRZGooqrW0z663E6nauczA4=",
+        "lastModified": 1753693795,
+        "narHash": "sha256-bKT2Alrbo9wPMINaKVkgnnp/5dp6TpQe80OgpHOz2jI=",
         "owner": "huggingface",
         "repo": "hf-nix",
-        "rev": "5943c3169e861618a6634bc8dbdb498e413ab9b7",
+        "rev": "168df9452b3e6c961fdce0115899a1f8b0947a73",
         "type": "github"
       },
       "original": {
         "owner": "huggingface",
+        "ref": "mktestdocs-0.2.5",
         "repo": "hf-nix",
         "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1747820358,
-        "narHash": "sha256-fTqsZsUX6M3yeEvgyQvXcbGmT2CaRVyVwsi8eK29Oj4=",
-        "owner": "danieldk",
+        "lastModified": 1752785354,
+        "narHash": "sha256-Y33ryUz7MPqKrZwlbQcsYCUz2jAJCacRf8jbs0tYUlA=",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "d3c1681180717528068082103bf323147de6ab0b",
+        "rev": "d38025438a6ee456758dc03188ca6873a415463b",
         "type": "github"
       },
       "original": {
-        "owner": "danieldk",
-        "ref": "cudatoolkit-12.9-kernel-builder",
+        "owner": "nixos",
         "repo": "nixpkgs",
+        "rev": "d38025438a6ee456758dc03188ca6873a415463b",
         "type": "github"
       }
     },

@@ -24,11 +24,12 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
-  "mypy >= 1.15.0",
-  "pytest >=8",
+  "mktestdocs>=0.2.5",
+  "mypy>=1.15.0",
+  "pytest>=8",
   # Whatever version is compatible with pytest.
   "pytest-benchmark",
-  "torch >=2.5",
+  "torch>=2.5",
   "types-pyyaml"
 ]
 

@@ -221,9 +221,13 @@ def get_kernel(
 
     Example:
         ```python
+        import torch
         from kernels import get_kernel
-        kernel = get_kernel("username/my-kernel")
-        result = kernel.kernel_function(input_data)
+
+        activation = get_kernel("kernels-community/activation")
+        x = torch.randn(10, 20, device="cuda")
+        out = torch.empty_like(x)
+        result = activation.silu_and_mul(out, x)
         ```
     """
     revision = select_revision_or_version(repo_id, revision, version)

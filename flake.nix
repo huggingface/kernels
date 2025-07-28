@@ -1,6 +1,6 @@
 {
   inputs = {
-    hf-nix.url = "github:huggingface/hf-nix";
+    hf-nix.url = "github:huggingface/hf-nix/mktestdocs-0.2.5";
     nixpkgs.follows = "hf-nix/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
   };
@@ -40,6 +40,7 @@
               ++ (with python3.pkgs; [
                 docutils
                 huggingface-hub
+                mktestdocs
                 pytest
                 pytest-benchmark
                 pyyaml

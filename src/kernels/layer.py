@@ -208,15 +208,15 @@ class LayerRepository:
 
         # Reference a specific layer by revision
         layer_repo = LayerRepository(
-            repo_id="username/my-kernel",
-            layer_name="MyLayer",
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
         )
 
         # Reference a layer by version constraint
         layer_repo_versioned = LayerRepository(
-            repo_id="username/my-kernel",
-            layer_name="MyLayer",
-            version=">=1.0.0,<2.0.0"
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
+            version=">=0.0.3,<0.1"
         )
         ```
     """
@@ -419,22 +419,36 @@ def use_kernel_mapping(
 
     Example:
         ```python
+        import torch
+        import torch.nn as nn
+        from torch.nn import functional as F
+
+        from kernels import use_kernel_forward_from_hub
         from kernels import use_kernel_mapping, LayerRepository, Device
+        from kernels import kernelize
 
         # Define a mapping
         mapping = {
-            "LayerNorm": {
+            "SiluAndMul": {
                 "cuda": LayerRepository(
-                    repo_id="username/experimental-kernels",
-                    layer_name="FastLayerNorm"
+                    repo_id="kernels-community/activation",
+                    layer_name="SiluAndMul",
                 )
             }
         }
 
+        @use_kernel_forward_from_hub("SiluAndMul")
+        class SiluAndMul(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                d = x.shape[-1] // 2
+                return F.silu(x[..., :d]) * x[..., d:]
+
+        model = SiluAndMul()
+
         # Use the mapping for the duration of the context.
         with use_kernel_mapping(mapping):
             # kernelize uses the temporary mapping
-            model = kernelize(model)
+            model = kernelize(model, device="cuda")
 
         # Outside the context, original mappings are restored
         ```
@@ -463,6 +477,7 @@ def register_kernel_mapping(
             Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]],
         ],
     ],
+    inherit_mapping: bool = True,
 ):
     """
     Register a global mapping between layer names and their corresponding kernel implementations.
@@ -474,6 +489,9 @@ def register_kernel_mapping(
         mapping (`Dict[str, Dict[Union[Device, str], Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]]]]`):
             The kernel mapping to register globally. Maps layer names to device-specific kernels.
             The mapping can specify different kernels for different modes (training, inference, etc.).
+        inherit_mapping (`bool`, *optional*, defaults to `True`):
+            When `True`, the current mapping will be extended by `mapping`. When `False`, the existing mappings
+            are erased before adding `mapping`.
 
     Example:
         ```python
@@ -509,6 +527,9 @@ def register_kernel_mapping(
         register_kernel_mapping(advanced_mapping)
         ```
     """
+    if not inherit_mapping:
+        _KERNEL_MAPPING.set({})
+
     # Merge with existing mappings.
     for new_kernel, new_device_repos in mapping.items():
         device_repo = _KERNEL_MAPPING.get().setdefault(new_kernel, {})
@@ -626,19 +647,23 @@ def kernelize(
 
     Example:
         ```python
-        from kernels import kernelize, Mode, register_kernel_mapping, LayerRepository
+        import torch
         import torch.nn as nn
 
-        @use_kernel_forward_from_hub("LayerNorm")
-        class LayerNorm(nn.Module):
-            ...
+        from kernels import kernelize, Mode, register_kernel_mapping, LayerRepository
+        from kernels import use_kernel_forward_from_hub
 
-        # First register some kernel mappings
+        @use_kernel_forward_from_hub("SiluAndMul")
+        class SiluAndMul(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                d = x.shape[-1] // 2
+                return F.silu(x[..., :d]) * x[..., d:]
+
         mapping = {
             "LayerNorm": {
                 "cuda": LayerRepository(
-                    repo_id="username/fast-kernels",
-                    layer_name="FastLayerNorm"
+                    repo_id="kernels-community/activation",
+                    layer_name="SiluAndMul",
                 )
             }
         }
@@ -646,9 +671,8 @@ def kernelize(
 
         # Create and kernelize a model
         model = nn.Sequential(
-            nn.Linear(768, 768),
-            LayerNorm(768),
-            nn.Linear(768, 768)
+            nn.Linear(1024, 2048, device="cuda"),
+            SiluAndMul(),
         )
 
         # Kernelize for inference
@@ -776,8 +800,10 @@ def use_kernel_forward_from_hub(layer_name: str):
 
     Example:
         ```python
-        from kernels import use_kernel_forward_from_hub
+        import torch
         import torch.nn as nn
+
+        from kernels import use_kernel_forward_from_hub, kernelize
 
         @use_kernel_forward_from_hub("MyCustomLayer")
         class MyCustomLayer(nn.Module):
@@ -785,13 +811,14 @@ def use_kernel_forward_from_hub(layer_name: str):
                 super().__init__()
                 self.hidden_size = hidden_size
 
-            def forward(self, x):
+            def forward(self, x: torch.Tensor):
                 # original implementation
                 return x
 
-        # The layer can now be kernelized
         model = MyCustomLayer(768)
-        kernelized_model = kernelize(model)
+
+        # The layer can now be kernelized:
+        # model = kernelize(model, device="cuda")
         ```
     """
 

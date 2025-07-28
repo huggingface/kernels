@@ -13,12 +13,12 @@ from kernels import (
     kernelize,
     register_kernel_mapping,
     use_kernel_forward_from_hub,
+    use_kernel_mapping,
 )
 from kernels.layer import (
     _KERNEL_MAPPING,
     CUDAProperties,
     _validate_layer,
-    use_kernel_mapping,
 )
 
 kernel_layer_mapping = {
@@ -102,7 +102,7 @@ def test_arg_kinds():
     assert arg_kind("foo", "bar", kwarg1="baz", kwarg2=5) == ("foo", "bar", "baz", 5)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
 @pytest.mark.parametrize("device", ["cuda", "cpu"])
 def test_hub_forward(cls, device):
@@ -124,7 +124,7 @@ def test_hub_forward(cls, device):
         assert silu_and_mul_with_kernel.n_calls == 1
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_capability():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
     with use_kernel_mapping(
@@ -183,7 +183,7 @@ def test_layer_fallback_works():
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
 @pytest.mark.parametrize("device", ["cuda"])
 def test_torch_compile_layer_without_fallback(cls, device):
@@ -214,7 +214,7 @@ def test_torch_compile_layer_without_fallback(cls, device):
     torch.testing.assert_close(Y_compiled, Y)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
 @pytest.mark.parametrize("device", ["cuda"])
 def test_torch_compile_layer_with_fallback(cls, device):
@@ -237,8 +237,11 @@ def test_torch_compile_layer_with_fallback(cls, device):
     torch.testing.assert_close(Y_compiled, Y)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_mapping_contexts():
+    # Make sure we start from scratch.
+    register_kernel_mapping(kernel_layer_mapping, inherit_mapping=False)
+
     assert set(_KERNEL_MAPPING.get().keys()) == {
         "SiluAndMul",
         "SiluAndMulStringDevice",
@@ -351,7 +354,7 @@ def test_validate_kernel_layer():
         _validate_layer(cls=BadLayer4, check_cls=SiluAndMul)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_invalid_mode_for_mapping_rejected():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
 
@@ -371,7 +374,7 @@ def test_invalid_mode_for_mapping_rejected():
             kernelize(linear, mode=Mode.TRAINING)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_kernel_modes():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
 
@@ -515,7 +518,7 @@ def test_kernel_modes():
         assert linear.n_calls == 2
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_fallback_used_when_training():
     linear = TorchLinearWithCounter(32, 32).to("cuda")
 
@@ -580,7 +583,7 @@ def test_invalid_mode_rejected():
         kernelize(torch.nn.Linear(32, 32), mode=Mode.TORCH_COMPILE)
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_kernel_modes_inference():
     """Test inference-specific fallback scenarios."""
     linear = TorchLinearWithCounter(32, 32).to("cuda")
@@ -677,7 +680,7 @@ def test_kernel_modes_inference():
         assert linear.n_calls == 4
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_kernel_modes_mixed():
     """Test mixed training and inference kernel scenarios."""
     linear = TorchLinearWithCounter(32, 32).to("cuda")
@@ -767,7 +770,7 @@ def test_kernel_modes_mixed():
         assert linear.n_calls == 2
 
 
-@pytest.mark.linux_only
+@pytest.mark.cuda_only
 def test_kernel_modes_cross_fallback():
     """Test cross-mode fallback scenarios from inference to training modes."""
     linear = TorchLinearWithCounter(32, 32).to("cuda")

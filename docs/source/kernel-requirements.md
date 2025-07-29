@@ -56,7 +56,7 @@ have dynamic library dependencies outside:
   - CXXABI 1.3.11
   - GCC 7.0.0
 
-These requirement can be checked with the ABI checker (see below).
+These requirements can be checked with the ABI checker (see below).
 
 ### macOS
 

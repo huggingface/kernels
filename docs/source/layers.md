@@ -5,7 +5,7 @@ the Hub can replace the `forward` method of an existing layer for a certain
 device type. This makes it possible to provide more performant kernels for
 existing layers.
 
-See [Kernel requirements](kernel-requirements.md) for more information the
+See [Kernel requirements](kernel-requirements.md) for more information on the
 requirements of Hub layers.
 
 ## Making a layer extensible with kernels from the hub
@@ -117,7 +117,7 @@ model = kernelize(model, mode=Mode.INFERENCE | Mode.TORCH_COMPILE, use_fallback=
 
 This can be useful if you want to guarantee that Hub kernels are used.
 
-### Inspecting kernels which kernels are used
+### Inspecting which kernels are used
 
 The kernels that are used are logged at the `INFO` level by `kernelize`.
 See the [Python logging](https://docs.python.org/3/library/logging.html)

@@ -122,6 +122,8 @@ class Device:
         """Create an appropriate repository set for this device type."""
         if self.type == "cuda":
             return _CUDARepos()
+        elif self.type == "rocm":
+            return _ROCMRepos()
         elif self.type == "mps":
             return _MPSRepos()
         else:
@@ -171,6 +173,51 @@ class CUDAProperties:
 
     def __eq__(self, other):
         if not isinstance(other, CUDAProperties):
+            return NotImplemented
+        return (
+            self.min_capability == other.min_capability
+            and self.max_capability == other.max_capability
+        )
+
+    def __hash__(self):
+        return hash((self.min_capability, self.max_capability))
+    
+    
+@dataclass(frozen=True)
+class ROCMProperties:
+    """
+    ROCM-specific device properties for capability-based kernel selection.
+
+    This class defines ROCM compute capability constraints for kernel selection, allowing kernels to specify
+    minimum and maximum ROCM compute capabilities they support.
+
+    Args:
+        min_capability (`int`):
+            Minimum ROCM compute capability required (e.g., 75 for compute capability 7.5).
+        max_capability (`int`):
+            Maximum ROCM compute capability supported (e.g., 90 for compute capability 9.0).
+
+    Example:
+        ```python
+        from kernels import ROCMProperties, Device
+
+        # Define ROCM properties for modern GPUs (compute capability 7.5 to 9.0)
+        rocm_props = ROCMProperties(min_capability=75, max_capability=90)
+
+        # Create a device with these properties
+        device = Device(type="rocm", properties=rocm_props)
+        ```
+
+    Note:
+        ROCM compute capabilities are represented as integers where the major and minor versions are concatenated.
+        For example, compute capability 7.5 is represented as 75, and 8.6 is represented as 86.
+    """
+
+    min_capability: int
+    max_capability: int
+
+    def __eq__(self, other):
+        if not isinstance(other, ROCMProperties):
             return NotImplemented
         return (
             self.min_capability == other.min_capability
@@ -438,6 +485,36 @@ class _CUDARepos(_DeviceRepos):
     def insert(self, device: Device, repos: Dict[Mode, LayerRepositoryProtocol]):
         assert device.properties is None or isinstance(
             device.properties, CUDAProperties
+        )
+
+        min_capability = (
+            0 if device.properties is None else device.properties.min_capability
+        )
+        max_capability = (
+            sys.maxsize
+            if device.properties is None
+            else device.properties.max_capability
+        )
+
+        self.repos_by_capability.insert(min_capability, max_capability, repos)
+        
+class _ROCMRepos(_DeviceRepos):
+    _repos: IntervalTree[Dict[Mode, LayerRepositoryProtocol]]
+
+    def __init__(self):
+        super().__init__()
+        self.repos_by_capability = IntervalTree()
+
+    @property
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, LayerRepositoryProtocol]]:
+        capability = _find_capability()
+        return self.repos_by_capability.find_smallest_interval(capability)
+
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepositoryProtocol]):
+        assert device.properties is None or isinstance(
+            device.properties, ROCMProperties
         )
 
         min_capability = (
@@ -756,6 +833,31 @@ def kernelize(
     # Remove once we start doing typing checks on >= 3.11.
     if Mode.INFERENCE not in mode and Mode.TRAINING not in mode:  # type: ignore[operator]
         raise ValueError("kernelize mode must contain Mode.INFERENCE or Mode.TRAINING.")
+    
+    def _is_cuda_platform():
+        return torch.version.cuda is not None
+
+
+    def _is_rocm_platform():
+        return torch.version.hip is not None
+
+    def _find_device(model: "nn.Module") -> Device:
+        try:
+            param = next(model.parameters())
+        except StopIteration:
+            raise ValueError(
+                "Cannot determine model device, provide as `device` argument to `kernelize`."
+            )
+
+        dev_type = param.device.type
+        if dev_type == "cuda":
+            # Refine based on actual platform
+            if _is_rocm_platform():
+                return Device(type="rocm")
+            elif _is_cuda_platform():
+                return Device(type="cuda")
+
+        return Device(type=dev_type)
 
     if device is None:
         device_type = _find_device(model)
@@ -946,17 +1048,6 @@ def _validate_layer(*, check_cls, cls):
             raise TypeError(
                 f"Forward signature does not match: different kind of arguments ({param} ({param.kind}) and {ref_param} ({ref_param.kind})"
             )
-
-
-def _find_device(model: "nn.Module") -> Device:
-    try:
-        param = next(model.parameters())
-    except StopIteration:
-        raise ValueError(
-            "Cannot determine model device, provide as `device` argument to `kernelize`."
-        )
-
-    return Device(type=param.device.type)
 
 
 @lru_cache

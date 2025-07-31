@@ -181,8 +181,8 @@ class CUDAProperties:
 
     def __hash__(self):
         return hash((self.min_capability, self.max_capability))
-    
-    
+
+
 @dataclass(frozen=True)
 class ROCMProperties:
     """
@@ -497,7 +497,7 @@ class _CUDARepos(_DeviceRepos):
         )
 
         self.repos_by_capability.insert(min_capability, max_capability, repos)
-        
+
 class _ROCMRepos(_DeviceRepos):
     _repos: IntervalTree[Dict[Mode, LayerRepositoryProtocol]]
 
@@ -833,7 +833,7 @@ def kernelize(
     # Remove once we start doing typing checks on >= 3.11.
     if Mode.INFERENCE not in mode and Mode.TRAINING not in mode:  # type: ignore[operator]
         raise ValueError("kernelize mode must contain Mode.INFERENCE or Mode.TRAINING.")
-    
+
     def _is_cuda_platform():
         return torch.version.cuda is not None
 

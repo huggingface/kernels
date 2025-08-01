@@ -24,9 +24,6 @@ from typing import (
     Union,
 )
 
-import torch
-from torch import nn
-
 from ._interval_tree import IntervalTree
 from ._versions import select_revision_or_version
 from .utils import (

@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import MethodType, ModuleType
 from typing import (
+    TYPE_CHECKING,
     Dict,
     Optional,
     Protocol,
@@ -34,6 +35,10 @@ from .utils import (
     get_kernel,
     get_local_kernel,
 )
+
+if TYPE_CHECKING:
+    import torch
+    from torch import nn
 
 _DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
 
@@ -757,10 +762,12 @@ def _select_repository(
     return None
 
 def _is_cuda_platform():
+    import torch
     return torch.version.cuda is not None
 
 
 def _is_rocm_platform():
+    import torch
     return torch.version.hip is not None
 
 def _find_device(model: "nn.Module") -> Device:

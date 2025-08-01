@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Flag, auto
 from functools import lru_cache
 from pathlib import Path
-from types import MethodType
+from types import MethodType, ModuleType
 from typing import (
     TYPE_CHECKING,
     Dict,
@@ -26,7 +26,12 @@ from typing import (
 
 from ._interval_tree import IntervalTree
 from ._versions import select_revision_or_version
-from .utils import _get_caller_locked_kernel, _get_locked_kernel, get_kernel
+from .utils import (
+    _get_caller_locked_kernel,
+    _get_locked_kernel,
+    get_kernel,
+    get_local_kernel,
+)
 
 if TYPE_CHECKING:
     import torch
@@ -180,11 +185,7 @@ class LayerRepositoryProtocol(Protocol):
     @property
     def layer_name(self) -> str: ...
 
-    @property
-    def repo_id(self) -> str: ...
-
-    @property
-    def revision(self) -> str: ...
+    def load(self) -> ModuleType: ...
 
 
 class LayerRepository:
@@ -234,7 +235,7 @@ class LayerRepository:
                 "Either a revision or a version must be specified, not both."
             )
 
-        self.repo_id = repo_id
+        self._repo_id = repo_id
         self.layer_name = layer_name
 
         # We are going to resolve these lazily, since we do not want
@@ -242,24 +243,85 @@ class LayerRepository:
         self._revision = revision
         self._version = version
 
-    @property
     @functools.lru_cache()
-    def revision(self) -> str:
+    def _resolve_revision(self) -> str:
         return select_revision_or_version(
-            repo_id=self.repo_id, revision=self._revision, version=self._version
+            repo_id=self._repo_id, revision=self._revision, version=self._version
         )
+
+    def load(self) -> ModuleType:
+        return get_kernel(self._repo_id, revision=self._resolve_revision())
 
     def __eq__(self, other):
         return (
             isinstance(other, LayerRepository)
             and self.layer_name == other.layer_name
-            and self.repo_id == other.repo_id
+            and self._repo_id == other._repo_id
             and self._revision == other._revision
             and self._version == other._version
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self.repo_id, self._revision, self._version))
+        return hash((self.layer_name, self._repo_id, self._revision, self._version))
+
+    def __str__(self) -> str:
+        return f"`{self._repo_id}` (revision: {self._resolve_revision()}) for layer `{self.layer_name}`"
+
+
+class LocalLayerRepository:
+    """
+    Repository from a local directory for kernel mapping.
+
+    Args:
+        repo_path (`Path`):
+            The local repository containing the layer.
+        package_name (`str`):
+            Package name of the kernel.
+        layer_name (`str`):
+            The name of the layer within the kernel repository.
+
+    Example:
+        ```python
+        from pathlib import Path
+
+        from kernels import LocalLayerRepository
+
+        # Reference a specific layer by revision
+        layer_repo = LocalLayerRepository(
+            repo_path=Path("/home/daniel/kernels/activation"),
+            package_name="activation",
+            layer_name="SiluAndMul",
+        )
+        ```
+    """
+
+    def __init__(
+        self,
+        repo_path: Path,
+        *,
+        package_name: str,
+        layer_name: str,
+    ):
+        self._repo_path = repo_path
+        self._package_name = package_name
+        self.layer_name = layer_name
+
+    def load(self) -> ModuleType:
+        return get_local_kernel(self._repo_path, self._package_name)
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, LocalLayerRepository)
+            and self.layer_name == other.layer_name
+            and self._repo_path == other._repo_path
+            and self._package_name == other._package_name
+        )
+
+    def __hash__(self):
+        return hash((self.layer_name, self._repo_path, self._package_name))
+
+    def __str__(self) -> str:
+        return f"`{self._repo_path}` (package: {self._package_name}) for layer `{self.layer_name}`"
 
 
 class LockedLayerRepository:
@@ -283,33 +345,38 @@ class LockedLayerRepository:
         Args:
             repo_id (`str`): The Hub repository containing the layer.
         """
-        self.repo_id = repo_id
-        self.lockfile = lockfile
+        self._repo_id = repo_id
+        self._lockfile = lockfile
         self.layer_name = layer_name
 
-    @property
     @functools.lru_cache()
-    def revision(self) -> str:
-        if self.lockfile is None:
-            locked_sha = _get_caller_locked_kernel(self.repo_id)
+    def _resolve_revision(self) -> str:
+        if self._lockfile is None:
+            locked_sha = _get_caller_locked_kernel(self._repo_id)
         else:
-            with open(self.lockfile, "r") as f:
-                locked_sha = _get_locked_kernel(self.repo_id, f.read())
+            with open(self._lockfile, "r") as f:
+                locked_sha = _get_locked_kernel(self._repo_id, f.read())
 
         if locked_sha is None:
-            raise ValueError(f"Kernel `{self.repo_id}` is not locked")
+            raise ValueError(f"Kernel `{self._repo_id}` is not locked")
 
         return locked_sha
+
+    def load(self) -> ModuleType:
+        return get_kernel(repo_id=self._repo_id, revision=self._resolve_revision())
 
     def __eq__(self, other):
         return (
             isinstance(other, LockedLayerRepository)
             and self.layer_name == other.layer_name
-            and self.repo_id == other.repo_id
+            and self._repo_id == other._repo_id
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self.repo_id))
+        return hash((self.layer_name, self._repo_id))
+
+    def __str__(self) -> str:
+        return f"`{self._repo_id}` (revision: {self._resolve_revision()}) for layer `{self.layer_name}`"
 
 
 _CACHED_LAYER: Dict[LayerRepositoryProtocol, Type["nn.Module"]] = {}
@@ -759,9 +826,7 @@ def kernelize(
 
         repo, repo_mode = repo_with_mode
 
-        logging.info(
-            f"Using layer `{repo.layer_name}` from repo `{repo.repo_id}` (revision: {repo.revision}) for layer `{layer_name}`"
-        )
+        logging.info(f"Using layer `{repo.layer_name}` from repo {repo}")
         logging.debug(f"kernelize mode: {mode}, repo mode: {repo_mode}")
 
         layer = _get_layer_memoize(repo, module_class)
@@ -829,21 +894,17 @@ def use_kernel_forward_from_hub(layer_name: str):
     return decorator
 
 
-def _get_kernel_layer(
-    *, repo_id: str, layer_name: str, revision: str
-) -> Type["nn.Module"]:
+def _get_kernel_layer(repo: LayerRepositoryProtocol) -> Type["nn.Module"]:
     """Get a layer from a kernel."""
 
-    kernel = get_kernel(repo_id, revision=revision)
+    kernel = repo.load()
 
     if getattr(kernel, "layers", None) is None:
-        raise ValueError(
-            f"Kernel `{repo_id}` at revision `{revision}` does not define any layers."
-        )
+        raise ValueError(f"Kernel repo {repo} does not define any layers.")
 
-    layer = getattr(kernel.layers, layer_name, None)
+    layer = getattr(kernel.layers, repo.layer_name, None)
     if layer is None:
-        raise ValueError(f"Layer `{layer_name}` not found in kernel `{repo_id}`.")
+        raise ValueError(f"Layer `{repo.layer_name}` not found in kernel repo {repo}.")
     return layer
 
 
@@ -957,7 +1018,7 @@ def _validate_layer_has_mode(
 
     if Mode.TRAINING in repo_mode and not getattr(module, "has_backward", True):
         raise ValueError(
-            f"Layer `{repo.layer_name}` ({repo.repo_id}, revision: {repo.revision}) does not support backward.\n"
+            f"Layer `{repo.layer_name}` from repo {repo} does not support backward.\n"
             f"Was registered for `{layer_name}` with mode `{repo_mode}`"
         )
 
@@ -965,7 +1026,7 @@ def _validate_layer_has_mode(
         module, "can_torch_compile", False
     ):
         raise ValueError(
-            f"Layer `{repo.layer_name}` ({repo.repo_id}, revision: {repo.revision}) does not support torch.compile.\n"
+            f"Layer `{repo.layer_name}` from repo {repo} does not support torch.compile.\n"
             f"Was registered for `{layer_name}` with mode `{repo_mode}`"
         )
 
@@ -979,11 +1040,7 @@ def _get_layer_memoize(
     if layer is not None:
         return layer
 
-    layer = _get_kernel_layer(
-        repo_id=repo.repo_id,
-        layer_name=repo.layer_name,
-        revision=repo.revision,
-    )
+    layer = _get_kernel_layer(repo)
     _validate_layer(check_cls=module_class, cls=layer)
     _CACHED_LAYER[repo] = layer
 

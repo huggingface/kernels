@@ -270,3 +270,25 @@ Capabilities behave as follows:
   than 75..89. The motivation is that kernels with smaller ranges
   tend to be more optimized for a specific set of GPUs. **This behavior
   might still change in the future.**
+
+### Loading from a local repository for testing
+
+The `LocalLayerRepository` class is provided to load a repository from
+a local directory. For example:
+
+```
+with use_kernel_mapping(
+    {
+        "SiluAndMul": {
+            "cuda": LocalLayerRepository(
+                # install_kernel will give the fully-resolved path.
+                repo_path="/home/daniel/kernels/activation",
+                package_name="activation",
+                layer_name="SiluAndMul",
+            )
+        }
+    },
+    inherit_mapping=False,
+):
+    kernelize(linear, mode=Mode.INFERENCE)
+```

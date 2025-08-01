@@ -276,9 +276,9 @@ Capabilities behave as follows:
 
 ### Registering kernels for specific ROCm capabilities
 
-Registering kernels for the ROCm arhitecture follows the exact same
-pattern as CUDA kernels, including the selective compute capability
-with the respective ROCm version numbers.
+Registering kernels for the ROCm architecture follows the exact same
+pattern as CUDA kernels, using `min_capability` and `max_capability` to restrict
+a kernel to a range of ROCm capabilities.
 
 ### Loading from a local repository for testing
 

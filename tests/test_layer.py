@@ -173,7 +173,9 @@ def test_rocm_kernel_mapping():
         # Verify the repository is correctly stored
         rocm_repos = mapping["SiluAndMul"]["rocm"]
         assert rocm_repos is not None
-        assert rocm_repos.repos[Mode.FALLBACK]._repo_id == "kernels-community/activation"
+        assert (
+            rocm_repos.repos[Mode.FALLBACK]._repo_id == "kernels-community/activation"
+        )
         assert rocm_repos.repos[Mode.FALLBACK].layer_name == "SiluAndMul"
 
 

@@ -3,8 +3,16 @@ import sys
 import pytest
 import torch
 
-has_cuda = hasattr(torch.version, 'cuda') and torch.version.cuda is not None and torch.cuda.device_count() > 0
-has_rocm = hasattr(torch.version, 'hip') and torch.version.hip is not None and torch.cuda.device_count() > 0
+has_cuda = (
+    hasattr(torch.version, "cuda")
+    and torch.version.cuda is not None
+    and torch.cuda.device_count() > 0
+)
+has_rocm = (
+    hasattr(torch.version, "hip")
+    and torch.version.hip is not None
+    and torch.cuda.device_count() > 0
+)
 
 
 def pytest_runtest_setup(item):

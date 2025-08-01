@@ -497,6 +497,7 @@ class _CUDARepos(_DeviceRepos):
 
         self.repos_by_capability.insert(min_capability, max_capability, repos)
 
+
 class _ROCMRepos(_DeviceRepos):
     _repos: IntervalTree[Dict[Mode, LayerRepositoryProtocol]]
 
@@ -757,33 +758,6 @@ def _select_repository(
             return (repositories[fallback_mode], fallback_mode)
 
     return None
-
-def _is_cuda_platform():
-    import torch
-    return torch.version.cuda is not None
-
-
-def _is_rocm_platform():
-    import torch
-    return torch.version.hip is not None
-
-def _find_device(model: "nn.Module") -> Device:
-    try:
-        param = next(model.parameters())
-    except StopIteration:
-        raise ValueError(
-            "Cannot determine model device, provide as `device` argument to `kernelize`."
-        )
-
-    dev_type = param.device.type
-    if dev_type == "cuda":
-        # Refine based on actual platform
-        if _is_rocm_platform():
-            return Device(type="rocm")
-        elif _is_cuda_platform():
-            return Device(type="cuda")
-
-    return Device(type=dev_type)
 
 
 def kernelize(
@@ -1056,6 +1030,37 @@ def _find_capability() -> int:
 
     major, minor = torch.cuda.get_device_capability(device=None)
     return major * 10 + minor
+
+
+def _is_cuda_platform():
+    import torch
+
+    return torch.version.cuda is not None
+
+
+def _is_rocm_platform():
+    import torch
+
+    return torch.version.hip is not None
+
+
+def _find_device(model: "nn.Module") -> Device:
+    try:
+        param = next(model.parameters())
+    except StopIteration:
+        raise ValueError(
+            "Cannot determine model device, provide as `device` argument to `kernelize`."
+        )
+
+    dev_type = param.device.type
+    if dev_type == "cuda":
+        # Refine based on actual platform
+        if _is_rocm_platform():
+            return Device(type="rocm")
+        elif _is_cuda_platform():
+            return Device(type="cuda")
+
+    return Device(type=dev_type)
 
 
 def _conditionally_replace_forward(

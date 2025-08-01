@@ -38,7 +38,7 @@ kernel_layer_mapping = {
         "rocm": LayerRepository(
             repo_id="kernels-test/op-without-fake-test",
             layer_name="SiluAndMul",
-        )
+        ),
     },
     "SiluAndMulStringDevice": {
         "cuda": LayerRepository(
@@ -135,10 +135,12 @@ def test_hub_forward_rocm():
     torch.manual_seed(0)
 
     silu_and_mul = SiluAndMul()
-    X = torch.randn((32, 64), device="cpu")  # Use CPU tensor since ROCm might not be available for tensor creation
+    X = torch.randn((32, 64))
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = kernelize(SiluAndMulNoCompileKernel(), device="rocm", mode=Mode.INFERENCE)
+    silu_and_mul_with_kernel = kernelize(
+        SiluAndMulNoCompileKernel(), device="rocm", mode=Mode.INFERENCE
+    )
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -1035,6 +1037,3 @@ def test_layer_versions():
                 }
             }
         )
-
-
-

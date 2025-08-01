@@ -118,7 +118,7 @@ class Device:
                 raise ValueError("CUDAProperties is only supported for 'cuda' devices.")
 
     def create_repo(self) -> _DeviceRepos:
-        """Create an appropriate repository set for this device type."""        
+        """Create an appropriate repository set for this device type."""
         if self.type == "cuda":
             return _CUDARepos()
         elif self.type == "rocm":
@@ -789,7 +789,7 @@ def kernelize(
             The mode that the kernel is going to be used in. For example, `Mode.TRAINING | Mode.TORCH_COMPILE`
             kernelizes the model for training with `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. Supported device types are: "cuda", "rocm", "mps", "cpu". 
+            The device type to load kernels for. Supported device types are: "cuda", "rocm", "mps", "cpu".
             The device type will be inferred from the model parameters when not provided.
         use_fallback (`bool`, *optional*, defaults to `True`):
             Whether to use the original forward method of modules when no compatible kernel could be found.
@@ -1033,6 +1033,7 @@ def _validate_layer(*, check_cls, cls):
                 f"Forward signature does not match: different kind of arguments ({param} ({param.kind}) and {ref_param} ({ref_param.kind})"
             )
 
+
 def _is_cuda_platform():
     import torch
 
@@ -1063,12 +1064,14 @@ def _find_device(model: "nn.Module") -> Device:
 
     return Device(type=dev_type)
 
+
 @lru_cache
 def _find_capability() -> int:
     import torch
 
     major, minor = torch.cuda.get_device_capability(device=None)
     return major * 10 + minor
+
 
 def _conditionally_replace_forward(
     *,

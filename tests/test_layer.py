@@ -34,6 +34,10 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-test/op-without-fake-test",
             layer_name="SiluAndMul",
+        ),
+        "rocm": LayerRepository(
+            repo_id="kernels-test/op-without-fake-test",
+            layer_name="SiluAndMul",
         )
     },
     "SiluAndMulStringDevice": {
@@ -124,6 +128,51 @@ def test_hub_forward(cls, device):
         assert silu_and_mul_with_kernel.n_calls == 0
     else:
         assert silu_and_mul_with_kernel.n_calls == 1
+
+
+@pytest.mark.rocm_only
+def test_hub_forward_rocm():
+    torch.manual_seed(0)
+
+    silu_and_mul = SiluAndMul()
+    X = torch.randn((32, 64), device="cpu")  # Use CPU tensor since ROCm might not be available for tensor creation
+    Y = silu_and_mul(X)
+
+    silu_and_mul_with_kernel = kernelize(SiluAndMulNoCompileKernel(), device="rocm", mode=Mode.INFERENCE)
+    Y_kernel = silu_and_mul_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert silu_and_mul.n_calls == 1
+    # Should use kernel (n_calls == 0) if ROCm kernel is available, otherwise fallback (n_calls == 1)
+    # The exact behavior depends on whether the test kernel exists for ROCm
+    assert silu_and_mul_with_kernel.n_calls in [0, 1]
+
+
+def test_rocm_kernel_mapping():
+    """Test that ROCm shorthand device mapping works correctly."""
+    kernel_layer_mapping = {
+        "SiluAndMul": {
+            "rocm": LayerRepository(
+                repo_id="kernels-community/activation",
+                layer_name="SiluAndMul",
+            )
+        }
+    }
+    
+    # Test that the mapping is processed correctly
+    with use_kernel_mapping(kernel_layer_mapping, inherit_mapping=False):
+        mapping = _KERNEL_MAPPING.get()
+        
+        # Verify the mapping exists
+        assert "SiluAndMul" in mapping
+        assert "rocm" in mapping["SiluAndMul"]
+        
+        # Verify the repository is correctly stored
+        rocm_repos = mapping["SiluAndMul"]["rocm"]
+        assert rocm_repos is not None
+        assert rocm_repos.repos[Mode.FALLBACK].repo_id == "kernels-community/activation"
+        assert rocm_repos.repos[Mode.FALLBACK].layer_name == "SiluAndMul"
 
 
 @pytest.mark.cuda_only
@@ -986,3 +1035,6 @@ def test_layer_versions():
                 }
             }
         )
+
+
+

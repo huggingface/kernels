@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
+import torch
 import os
 import sys
 import warnings
@@ -32,10 +33,6 @@ from .utils import (
     get_kernel,
     get_local_kernel,
 )
-
-if TYPE_CHECKING:
-    import torch
-    from torch import nn
 
 
 _DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
@@ -759,6 +756,31 @@ def _select_repository(
 
     return None
 
+def _is_cuda_platform():
+    return torch.version.cuda is not None
+
+
+def _is_rocm_platform():
+    return torch.version.hip is not None
+
+def _find_device(model: "nn.Module") -> Device:
+    try:
+        param = next(model.parameters())
+    except StopIteration:
+        raise ValueError(
+            "Cannot determine model device, provide as `device` argument to `kernelize`."
+        )
+
+    dev_type = param.device.type
+    if dev_type == "cuda":
+        # Refine based on actual platform
+        if _is_rocm_platform():
+            return Device(type="rocm")
+        elif _is_cuda_platform():
+            return Device(type="cuda")
+
+    return Device(type=dev_type)
+
 
 def kernelize(
     model: "nn.Module",
@@ -823,7 +845,6 @@ def kernelize(
         kernelized_model = kernelize(model)
         ```
     """
-    import torch
 
     if mode == Mode.FALLBACK:
         raise ValueError("Mode.FALLBACK can only be used to register kernel mappings.")
@@ -834,35 +855,10 @@ def kernelize(
     if Mode.INFERENCE not in mode and Mode.TRAINING not in mode:  # type: ignore[operator]
         raise ValueError("kernelize mode must contain Mode.INFERENCE or Mode.TRAINING.")
 
-    def _is_cuda_platform():
-        return torch.version.cuda is not None
-
-
-    def _is_rocm_platform():
-        return torch.version.hip is not None
-
-    def _find_device(model: "nn.Module") -> Device:
-        try:
-            param = next(model.parameters())
-        except StopIteration:
-            raise ValueError(
-                "Cannot determine model device, provide as `device` argument to `kernelize`."
-            )
-
-        dev_type = param.device.type
-        if dev_type == "cuda":
-            # Refine based on actual platform
-            if _is_rocm_platform():
-                return Device(type="rocm")
-            elif _is_cuda_platform():
-                return Device(type="cuda")
-
-        return Device(type=dev_type)
-
     if device is None:
         device_type = _find_device(model)
     elif isinstance(device, str):
-        device_type = Device(type=torch.device(device).type)
+        device_type = Device(type=device)
     else:
         device_type = Device(device.type)
 

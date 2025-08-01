@@ -1033,15 +1033,6 @@ def _validate_layer(*, check_cls, cls):
                 f"Forward signature does not match: different kind of arguments ({param} ({param.kind}) and {ref_param} ({ref_param.kind})"
             )
 
-
-@lru_cache
-def _find_capability() -> int:
-    import torch
-
-    major, minor = torch.cuda.get_device_capability(device=None)
-    return major * 10 + minor
-
-
 def _is_cuda_platform():
     import torch
 
@@ -1072,6 +1063,12 @@ def _find_device(model: "nn.Module") -> Device:
 
     return Device(type=dev_type)
 
+@lru_cache
+def _find_capability() -> int:
+    import torch
+
+    major, minor = torch.cuda.get_device_capability(device=None)
+    return major * 10 + minor
 
 def _conditionally_replace_forward(
     *,

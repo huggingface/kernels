@@ -7,8 +7,10 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from kernels import (
+    CUDAProperties,
     Device,
     LayerRepository,
+    LocalLayerRepository,
     Mode,
     kernelize,
     register_kernel_mapping,
@@ -17,9 +19,9 @@ from kernels import (
 )
 from kernels.layer import (
     _KERNEL_MAPPING,
-    CUDAProperties,
     _validate_layer,
 )
+from kernels.utils import install_kernel
 
 kernel_layer_mapping = {
     "SiluAndMul": {
@@ -183,6 +185,32 @@ def test_layer_fallback_works():
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
+def test_local_layer_repo():
+    # Fetch a kernel to the local cache.
+    package_name, path = install_kernel("kernels-test/backward-marker-test", "main")
+
+    linear = TorchLinearWithCounter(32, 32).to("cuda")
+
+    with use_kernel_mapping(
+        {
+            "Linear": {
+                "cuda": LocalLayerRepository(
+                    # install_kernel will give the fully-resolved path.
+                    repo_path=path.parent.parent,
+                    package_name=package_name,
+                    layer_name="LinearBackward",
+                )
+            }
+        },
+        inherit_mapping=False,
+    ):
+        kernelize(linear, mode=Mode.INFERENCE)
+
+    X = torch.randn(10, 32, device="cuda")
+    linear(X)
+    assert linear.n_calls == 0
+
+
 @pytest.mark.cuda_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulNoCompileKernel])
 @pytest.mark.parametrize("device", ["cuda"])
@@ -284,7 +312,9 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
+                .repos[Mode.FALLBACK]
+                ._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -295,7 +325,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
             == "kernels-community/activation"
         )
 
@@ -304,7 +334,9 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
+                .repos[Mode.FALLBACK]
+                ._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -315,7 +347,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK].repo_id
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
             == "kernels-community/activation"
         )
 

@@ -118,7 +118,7 @@ class Device:
                 raise ValueError("CUDAProperties is only supported for 'cuda' devices.")
 
     def create_repo(self) -> _DeviceRepos:
-        """Create an appropriate repository set for this device type."""
+        """Create an appropriate repository set for this device type."""        
         if self.type == "cuda":
             return _CUDARepos()
         elif self.type == "rocm":
@@ -529,6 +529,15 @@ class _ROCMRepos(_DeviceRepos):
         self.repos_by_capability.insert(min_capability, max_capability, repos)
 
 
+def _validate_device_type(device_type: str) -> None:
+    """Validate that the device type is supported."""
+    supported_devices = {"cuda", "rocm", "mps", "cpu"}
+    if device_type not in supported_devices:
+        raise ValueError(
+            f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"
+        )
+
+
 _KERNEL_MAPPING: ContextVar[Dict[str, Dict[str, _DeviceRepos]]] = ContextVar(
     "_KERNEL_MAPPING", default={}
 )
@@ -780,8 +789,8 @@ def kernelize(
             The mode that the kernel is going to be used in. For example, `Mode.TRAINING | Mode.TORCH_COMPILE`
             kernelizes the model for training with `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. The device type will be inferred from the model parameters
-            when not provided.
+            The device type to load kernels for. Supported device types are: "cuda", "rocm", "mps", "cpu". 
+            The device type will be inferred from the model parameters when not provided.
         use_fallback (`bool`, *optional*, defaults to `True`):
             Whether to use the original forward method of modules when no compatible kernel could be found.
             If set to `False`, an exception will be raised in such cases.
@@ -836,6 +845,7 @@ def kernelize(
     if device is None:
         device_type = _find_device(model)
     elif isinstance(device, str):
+        _validate_device_type(device)
         device_type = Device(type=device)
     else:
         device_type = Device(device.type)

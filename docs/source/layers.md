@@ -265,6 +265,7 @@ Capabilities behave as follows:
   an existing kernel, the new kernel will replace the old kernel.
 - When there are multiple kernels that support a capability, the kernel
   with the smaller capability interval will be used. E.g. given:
+
   - `KernelA` with `min_capability=80` and `max_capability=89`;
   - `KernelB` with `min_capability=75` and `max_capability=89`;
   - `kernelize` runs on a system with capability 8.6.
@@ -285,12 +286,11 @@ a kernel to a range of ROCm capabilities.
 The `LocalLayerRepository` class is provided to load a repository from
 a local directory. For example:
 
-```
+```python
 with use_kernel_mapping(
     {
         "SiluAndMul": {
             "cuda": LocalLayerRepository(
-                # install_kernel will give the fully-resolved path.
                 repo_path="/home/daniel/kernels/activation",
                 package_name="activation",
                 layer_name="SiluAndMul",

@@ -135,6 +135,10 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+        ),
+        "rocm": LayerRepository(
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
         )
     }
 }
@@ -261,7 +265,6 @@ Capabilities behave as follows:
   an existing kernel, the new kernel will replace the old kernel.
 - When there are multiple kernels that support a capability, the kernel
   with the smaller capability interval will be used. E.g. given:
-
   - `KernelA` with `min_capability=80` and `max_capability=89`;
   - `KernelB` with `min_capability=75` and `max_capability=89`;
   - `kernelize` runs on a system with capability 8.6.
@@ -270,6 +273,12 @@ Capabilities behave as follows:
   than 75..89. The motivation is that kernels with smaller ranges
   tend to be more optimized for a specific set of GPUs. **This behavior
   might still change in the future.**
+
+### Registering kernels for specific ROCm capabilities
+
+Registering kernels for the ROCm architecture follows the exact same
+pattern as CUDA kernels, using `min_capability` and `max_capability` to restrict
+a kernel to a range of ROCm capabilities.
 
 ### Loading from a local repository for testing
 

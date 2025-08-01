@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
-import torch
 import os
 import sys
 import warnings
@@ -16,7 +15,6 @@ from functools import lru_cache
 from pathlib import Path
 from types import MethodType, ModuleType
 from typing import (
-    TYPE_CHECKING,
     Dict,
     Optional,
     Protocol,
@@ -24,6 +22,9 @@ from typing import (
     Type,
     Union,
 )
+
+import torch
+from torch import nn
 
 from ._interval_tree import IntervalTree
 from ._versions import select_revision_or_version
@@ -33,7 +34,6 @@ from .utils import (
     get_kernel,
     get_local_kernel,
 )
-
 
 _DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
 

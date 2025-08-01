@@ -159,15 +159,15 @@ def test_rocm_kernel_mapping():
             )
         }
     }
-    
+
     # Test that the mapping is processed correctly
     with use_kernel_mapping(kernel_layer_mapping, inherit_mapping=False):
         mapping = _KERNEL_MAPPING.get()
-        
+
         # Verify the mapping exists
         assert "SiluAndMul" in mapping
         assert "rocm" in mapping["SiluAndMul"]
-        
+
         # Verify the repository is correctly stored
         rocm_repos = mapping["SiluAndMul"]["rocm"]
         assert rocm_repos is not None

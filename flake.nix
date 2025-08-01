@@ -1,6 +1,6 @@
 {
   inputs = {
-    hf-nix.url = "github:huggingface/hf-nix/mktestdocs-0.2.5";
+    hf-nix.url = "github:huggingface/hf-nix";
     nixpkgs.follows = "hf-nix/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
   };

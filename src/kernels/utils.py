@@ -259,7 +259,7 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
             if package_path.exists():
                 return import_from_path(package_name, package_path)
 
-    # If we didn't find the package in the repo we may have a explicit 
+    # If we didn't find the package in the repo we may have a explicit
     # package path.
     package_path = repo_path / package_name / "__init__.py"
     if package_path.exists():

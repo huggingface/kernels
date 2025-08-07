@@ -73,7 +73,7 @@ def universal_build_variant() -> str:
 
 # Custom module type to identify dynamically loaded kernel modules.
 # Using a subclass lets us distinguish these from regular imports.
-class _KernelModule(ModuleType):
+class _KernelModuleType(ModuleType):
     """Marker class for modules loaded dynamically from a path."""
     module_name: str
     is_kernel: bool = True
@@ -95,7 +95,7 @@ def import_from_path(module_name: str, file_path: Path) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
-    module.__class__ = _KernelModule
+    module.__class__ = _KernelModuleType
     module.module_name = module_name
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore

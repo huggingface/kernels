@@ -103,7 +103,7 @@ def import_from_path(module_name: str, file_path: Path) -> ModuleType:
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
     module.__class__ = _KernelModuleType
-    assert isinstance(module, _KernelModuleType) # for mypy type checking
+    assert isinstance(module, _KernelModuleType)  # for mypy type checking
     module.module_name = module_name
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore

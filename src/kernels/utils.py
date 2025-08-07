@@ -71,10 +71,17 @@ def universal_build_variant() -> str:
     return "torch-universal"
 
 
+# Metaclass to allow overriding the `__repr__` method for kernel modules.
+class _KernelModuleMeta(type):
+    def __repr__(self):
+        return "<class 'kernel_module'>"
+
+
 # Custom module type to identify dynamically loaded kernel modules.
 # Using a subclass lets us distinguish these from regular imports.
-class _KernelModuleType(ModuleType):
+class _KernelModuleType(ModuleType, metaclass=_KernelModuleMeta):
     """Marker class for modules loaded dynamically from a path."""
+
     module_name: str
     is_kernel: bool = True
 

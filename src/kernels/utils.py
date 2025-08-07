@@ -248,8 +248,24 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    package_name, package_path = _load_kernel_from_path(repo_path, package_name)
-    return import_from_path(package_name, package_path / package_name / "__init__.py")
+    variant = build_variant()
+    universal_variant = universal_build_variant()
+
+    # Presume we were given the top level path of the kernel repository.
+    for base_path in [repo_path, repo_path / "build"]:
+        # Prefer the universal variant if it exists.
+        for v in [universal_variant, variant]:
+            package_path = base_path / v / package_name / "__init__.py"
+            if package_path.exists():
+                return import_from_path(package_name, package_path)
+
+    # If we didn't find the package in the repo we may have a explicit 
+    # package path.
+    package_path = repo_path / package_name / "__init__.py"
+    if package_path.exists():
+        return import_from_path(package_name, package_path)
+
+    raise FileNotFoundError(f"Could not find package '{package_name}' in {repo_path}")
 
 
 def has_kernel(

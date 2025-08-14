@@ -87,7 +87,7 @@ class Device:
 
     Args:
         type (`str`):
-            The device type (e.g., "cuda", "mps", "cpu").
+            The device type (e.g., "cuda", "mps", "rocm").
         properties ([`CUDAProperties`], *optional*):
             Device-specific properties. Currently only [`CUDAProperties`] is supported for CUDA devices.
 
@@ -531,7 +531,7 @@ class _ROCMRepos(_DeviceRepos):
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cuda", "rocm", "mps", "cpu"}
+    supported_devices = {"cuda", "rocm", "mps"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"
@@ -789,7 +789,7 @@ def kernelize(
             The mode that the kernel is going to be used in. For example, `Mode.TRAINING | Mode.TORCH_COMPILE`
             kernelizes the model for training with `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. Supported device types are: "cuda", "rocm", "mps", "cpu".
+            The device type to load kernels for. Supported device types are: "cuda", "mps", "rocm".
             The device type will be inferred from the model parameters when not provided.
         use_fallback (`bool`, *optional*, defaults to `True`):
             Whether to use the original forward method of modules when no compatible kernel could be found.

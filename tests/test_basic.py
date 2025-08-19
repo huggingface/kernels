@@ -10,10 +10,16 @@ def kernel():
 
 
 @pytest.fixture
-def local_kernel():
+def local_kernel_path():
     package_name, path = install_kernel("kernels-community/activation", "main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
+    return package_name, path
+
+
+@pytest.fixture
+def local_kernel(local_kernel_path):
+    package_name, path = local_kernel_path
     return get_local_kernel(path.parent.parent, package_name)
 
 
@@ -66,6 +72,41 @@ def test_local_kernel(local_kernel, device):
     assert torch.allclose(y, expected)
 
 
+@pytest.mark.cuda_only
+def test_local_kernel_path_types(local_kernel_path, device):
+    package_name, path = local_kernel_path
+
+    # Top-level repo path
+    print(path.parent.parent)
+    kernel = get_local_kernel(path.parent.parent, package_name)
+    x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
+    y = torch.empty_like(x)
+
+    kernel.gelu_fast(y, x)
+    expected = torch.tensor(
+        [[0.8408, 1.9551, 2.9961], [4.0000, 5.0000, 6.0000], [7.0000, 8.0000, 9.0000]],
+        device=device,
+        dtype=torch.float16,
+    )
+    assert torch.allclose(y, expected)
+
+    # Build directory path
+    print(path.parent.parent / "build")
+    kernel = get_local_kernel(path.parent.parent / "build", package_name)
+    y = torch.empty_like(x)
+    kernel.gelu_fast(y, x)
+    assert torch.allclose(y, expected)
+
+    # Explicit package path
+    print(path.parent)
+    kernel = get_local_kernel(path.parent, package_name)
+    y = torch.empty_like(x)
+    kernel.gelu_fast(y, x)
+    assert torch.allclose(y, expected)
+
+    assert False  # TODO: remove
+
+
 @pytest.mark.darwin_only
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 def test_relu_metal(metal_kernel, dtype):
@@ -105,9 +146,7 @@ def test_version():
         get_kernel("kernels-test/versions", version=">0.2.0")
 
     with pytest.raises(ValueError, match=r"Either a revision or a version.*not both"):
-        kernel = get_kernel(
-            "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
-        )
+        kernel = get_kernel("kernels-test/versions", revision="v0.1.0", version="<1.0.0")
 
 
 @pytest.mark.cuda_only

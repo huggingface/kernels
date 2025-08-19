@@ -77,7 +77,7 @@ def test_local_kernel_path_types(local_kernel_path, device):
     package_name, path = local_kernel_path
 
     # Top-level repo path
-    print(path.parent.parent)
+    # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071
     kernel = get_local_kernel(path.parent.parent, package_name)
     x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
     y = torch.empty_like(x)
@@ -91,20 +91,18 @@ def test_local_kernel_path_types(local_kernel_path, device):
     assert torch.allclose(y, expected)
 
     # Build directory path
-    print(path.parent.parent / "build")
+    # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build
     kernel = get_local_kernel(path.parent.parent / "build", package_name)
     y = torch.empty_like(x)
     kernel.gelu_fast(y, x)
     assert torch.allclose(y, expected)
 
     # Explicit package path
-    print(path.parent)
-    kernel = get_local_kernel(path.parent, package_name)
+    # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build/torch28-cxx11-cu128-x86_64-linux
+    kernel = get_local_kernel(path, package_name)
     y = torch.empty_like(x)
     kernel.gelu_fast(y, x)
     assert torch.allclose(y, expected)
-
-    assert False  # TODO: remove
 
 
 @pytest.mark.darwin_only

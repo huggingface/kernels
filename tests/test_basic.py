@@ -10,10 +10,16 @@ def kernel():
 
 
 @pytest.fixture
-def local_kernel():
+def local_kernel_path():
     package_name, path = install_kernel("kernels-community/activation", "main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
+    return package_name, path
+
+
+@pytest.fixture
+def local_kernel(local_kernel_path):
+    package_name, path = local_kernel_path
     return get_local_kernel(path.parent.parent, package_name)
 
 
@@ -63,6 +69,39 @@ def test_local_kernel(local_kernel, device):
         dtype=torch.float16,
     )
 
+    assert torch.allclose(y, expected)
+
+
+@pytest.mark.cuda_only
+def test_local_kernel_path_types(local_kernel_path, device):
+    package_name, path = local_kernel_path
+
+    # Top-level repo path
+    # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071
+    kernel = get_local_kernel(path.parent.parent, package_name)
+    x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
+    y = torch.empty_like(x)
+
+    kernel.gelu_fast(y, x)
+    expected = torch.tensor(
+        [[0.8408, 1.9551, 2.9961], [4.0000, 5.0000, 6.0000], [7.0000, 8.0000, 9.0000]],
+        device=device,
+        dtype=torch.float16,
+    )
+    assert torch.allclose(y, expected)
+
+    # Build directory path
+    # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build
+    kernel = get_local_kernel(path.parent.parent / "build", package_name)
+    y = torch.empty_like(x)
+    kernel.gelu_fast(y, x)
+    assert torch.allclose(y, expected)
+
+    # Explicit package path
+    # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build/torch28-cxx11-cu128-x86_64-linux
+    kernel = get_local_kernel(path, package_name)
+    y = torch.empty_like(x)
+    kernel.gelu_fast(y, x)
     assert torch.allclose(y, expected)
 
 

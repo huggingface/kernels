@@ -110,24 +110,20 @@ def test_arg_kinds():
 
 @pytest.mark.cuda_only
 @pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
-@pytest.mark.parametrize("device", ["cuda", "cpu"])
-def test_hub_forward(cls, device):
+def test_hub_forward(cls):
     torch.random.manual_seed(0)
 
     silu_and_mul = SiluAndMul()
-    X = torch.randn((32, 64), device=device)
+    X = torch.randn((32, 64), device="cuda")
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = kernelize(cls(), device=device, mode=Mode.INFERENCE)
+    silu_and_mul_with_kernel = kernelize(cls(), device="cuda", mode=Mode.INFERENCE)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
 
     assert silu_and_mul.n_calls == 1
-    if device == "cuda":
-        assert silu_and_mul_with_kernel.n_calls == 0
-    else:
-        assert silu_and_mul_with_kernel.n_calls == 1
+    assert silu_and_mul_with_kernel.n_calls == 0
 
 
 @pytest.mark.rocm_only

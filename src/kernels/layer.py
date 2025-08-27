@@ -772,7 +772,7 @@ def _select_repository(
 def kernelize(
     model: "nn.Module",
     *,
-    mode: Mode = Mode.TRAINING | Mode.TORCH_COMPILE,
+    mode: Mode = Mode.TRAINING,
     device: Optional[Union[str, "torch.device"]] = None,
     use_fallback: bool = True,
 ):

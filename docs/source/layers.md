@@ -84,12 +84,6 @@ model = kernelize(model, mode=Mode.INFERENCE | Mode.TORCH_COMPILE)
 model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
 ```
 
-When the `mode` argument is not specified,
-`Mode.TRAINING | Mode.TORCH_COMPILE` is used as the default. This mode
-aligns most closely with pure PyTorch layers which also support training
-and `torch.compile`. However, to select the most performant kernels, it
-is often good to make the mode specific as possible.
-
 ### Kernel device
 
 Kernels can be registered per device type. For instance, separate `cuda` and
@@ -157,7 +151,7 @@ used with the `use_kernel_mapping` context manager:
 ```python
 with use_kernel_mapping(kernel_layer_mapping):
     # Use the layer for which the mapping is applied.
-    model = kernelize(model)
+    model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
 ```
 
 This ensures that the mapping is not active anymore outside the
@@ -265,7 +259,6 @@ Capabilities behave as follows:
   an existing kernel, the new kernel will replace the old kernel.
 - When there are multiple kernels that support a capability, the kernel
   with the smaller capability interval will be used. E.g. given:
-
   - `KernelA` with `min_capability=80` and `max_capability=89`;
   - `KernelB` with `min_capability=75` and `max_capability=89`;
   - `kernelize` runs on a system with capability 8.6.

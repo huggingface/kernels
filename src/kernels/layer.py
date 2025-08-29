@@ -578,7 +578,7 @@ def use_kernel_mapping(
 
         from kernels import use_kernel_forward_from_hub
         from kernels import use_kernel_mapping, LayerRepository, Device
-        from kernels import kernelize
+        from kernels import Mode, kernelize
 
         # Define a mapping
         mapping = {
@@ -601,7 +601,7 @@ def use_kernel_mapping(
         # Use the mapping for the duration of the context.
         with use_kernel_mapping(mapping):
             # kernelize uses the temporary mapping
-            model = kernelize(model, device="cuda")
+            model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
 
         # Outside the context, original mappings are restored
         ```
@@ -772,7 +772,7 @@ def _select_repository(
 def kernelize(
     model: "nn.Module",
     *,
-    mode: Mode = Mode.TRAINING | Mode.TORCH_COMPILE,
+    mode: Mode,
     device: Optional[Union[str, "torch.device"]] = None,
     use_fallback: bool = True,
 ):
@@ -785,9 +785,9 @@ def kernelize(
     Args:
         model (`nn.Module`):
             The PyTorch model to kernelize.
-        mode ([`Mode`], *optional*, defaults to `Mode.TRAINING | Mode.TORCH_COMPILE`):
-            The mode that the kernel is going to be used in. For example, `Mode.TRAINING | Mode.TORCH_COMPILE`
-            kernelizes the model for training with `torch.compile`.
+        mode ([`Mode`]): The mode that the kernel is going to be used in. For example,
+            `Mode.TRAINING | Mode.TORCH_COMPILE` kernelizes the model for training with
+            `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
             The device type to load kernels for. Supported device types are: "cuda", "mps", "rocm".
             The device type will be inferred from the model parameters when not provided.
@@ -829,7 +829,7 @@ def kernelize(
         )
 
         # Kernelize for inference
-        kernelized_model = kernelize(model)
+        kernelized_model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         ```
     """
 
@@ -954,7 +954,8 @@ def use_kernel_forward_from_hub(layer_name: str):
         import torch
         import torch.nn as nn
 
-        from kernels import use_kernel_forward_from_hub, kernelize
+        from kernels import use_kernel_forward_from_hub
+        from kernels import Mode, kernelize
 
         @use_kernel_forward_from_hub("MyCustomLayer")
         class MyCustomLayer(nn.Module):
@@ -969,7 +970,7 @@ def use_kernel_forward_from_hub(layer_name: str):
         model = MyCustomLayer(768)
 
         # The layer can now be kernelized:
-        # model = kernelize(model, device="cuda")
+        # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
         ```
     """
 

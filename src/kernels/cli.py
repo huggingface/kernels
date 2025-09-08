@@ -170,14 +170,15 @@ def lock_kernels(args):
     with open(args.project_dir / "kernels.lock", "w") as f:
         json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
 
+
 def upload_kernels(args):
     repo_id = create_repo(
         repo_id=args.repo_type, private=args.private, exist_ok=True
     ).repo_id
     upload_folder(
-        repo_id=repo_id, 
+        repo_id=repo_id,
         folder_path=args.kernel_dir,
-        commit_message="Uploaded from `kernels`."
+        commit_message="Uploaded from `kernels`.",
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
 

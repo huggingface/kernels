@@ -7,7 +7,7 @@ from pathlib import Path
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import install_kernel, install_kernel_all_variants
-
+from huggingface_hub import create_repo, upload_folder
 from .doc import generate_readme_for_kernel
 from .wheel import build_variant_to_wheel
 
@@ -30,6 +30,24 @@ def main():
         help="Download all build variants of the kernel",
     )
     download_parser.set_defaults(func=download_kernels)
+
+    upload_parser = subparsers.add_parser("upload", help="Upload kernels to the Hub")
+    upload_parser.add_argument(
+        "kernel-dir",
+        type=Path,
+        help="Directory of the kernel build",
+    )
+    upload_parser.add_argument(
+        "repo-id",
+        type=Path,
+        help="Repository ID to use to upload to the Hugging Face Hub",
+    )
+    upload_parser.add_argument(
+        "private",
+        action="store_true",
+        help="If the repository should be private.",
+    )
+    upload_parser.set_defaults(func=upload_kernels)
 
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
     lock_parser.add_argument(
@@ -151,6 +169,17 @@ def lock_kernels(args):
 
     with open(args.project_dir / "kernels.lock", "w") as f:
         json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
+
+def upload_kernels(args):
+    repo_id = create_repo(
+        repo_id=args.repo_type, private=args.private, exist_ok=True
+    ).repo_id
+    upload_folder(
+        repo_id=repo_id, 
+        folder_path=args.kernel_dir,
+        commit_message="Uploaded from `kernels`."
+    )
+    print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
 
 
 class _JSONEncoder(json.JSONEncoder):

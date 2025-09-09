@@ -46,8 +46,9 @@ def build_variant() -> str:
         compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
     elif torch.backends.mps.is_available():
         compute_framework = "metal"
-    elif hasattr(torch, "xpu") and torch.xpu.is_available():
-        compute_framework = "xpu"
+    elif torch.version.xpu is not None:
+        version = torch.version.xpu
+        compute_framework = f"xpu{version[0:4]}{version[5:6]}"
     else:
         raise AssertionError(
             "Torch was not compiled with CUDA, Metal, XPU, or ROCm enabled."

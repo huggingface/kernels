@@ -12,6 +12,7 @@ from .doc import generate_readme_for_kernel
 from .wheel import build_variant_to_wheel
 from .utils import _get_filenames_from_a_repo
 
+
 def main():
     parser = argparse.ArgumentParser(
         prog="kernel", description="Manage compute kernels"
@@ -177,14 +178,14 @@ def upload_kernels(args):
     ).repo_id
     repo_filenames = _get_filenames_from_a_repo(repo_id)
     repo_build_filenames = [f for f in repo_filenames if "build/" in f]
-    
+
     delete_patterns = []
     for folder in os.listdir(args.kernel_dir):
         folder_path = os.path.join(args.kernel_dir, folder)
         # skip files
         if not os.path.isdir(folder_path):
-            continue 
-        
+            continue
+
         # remove stale files
         matching_repo_files = [
             f for f in repo_build_filenames if f.startswith(f"build/{folder}/")

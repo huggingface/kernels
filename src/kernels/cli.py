@@ -1,16 +1,19 @@
 import argparse
 import dataclasses
 import json
+import os
 import sys
 from pathlib import Path
-import os
+
+from huggingface_hub import create_repo, upload_folder
+
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import install_kernel, install_kernel_all_variants
-from huggingface_hub import create_repo, upload_folder
+
 from .doc import generate_readme_for_kernel
-from .wheel import build_variant_to_wheel
 from .utils import _get_filenames_from_a_repo
+from .wheel import build_variant_to_wheel
 
 
 def main():

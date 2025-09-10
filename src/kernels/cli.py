@@ -3,14 +3,14 @@ import dataclasses
 import json
 import sys
 from pathlib import Path
-
+import os
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import install_kernel, install_kernel_all_variants
 from huggingface_hub import create_repo, upload_folder
 from .doc import generate_readme_for_kernel
 from .wheel import build_variant_to_wheel
-
+from .utils import _get_filenames_from_a_repo
 
 def main():
     parser = argparse.ArgumentParser(
@@ -175,9 +175,27 @@ def upload_kernels(args):
     repo_id = create_repo(
         repo_id=args.repo_type, private=args.private, exist_ok=True
     ).repo_id
+    repo_filenames = _get_filenames_from_a_repo(repo_id)
+    repo_build_filenames = [f for f in repo_filenames if "build/" in f]
+    
+    delete_patterns = []
+    for folder in os.listdir(args.kernel_dir):
+        folder_path = os.path.join(args.kernel_dir, folder)
+        # skip files
+        if not os.path.isdir(folder_path):
+            continue 
+        
+        # remove stale files
+        matching_repo_files = [
+            f for f in repo_build_filenames if f.startswith(f"build/{folder}/")
+        ]
+        if matching_repo_files:
+            delete_patterns.extend(matching_repo_files)
+
     upload_folder(
         repo_id=repo_id,
         folder_path=args.kernel_dir,
+        delete_patterns=delete_patterns,
         commit_message="Uploaded from `kernels`.",
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")

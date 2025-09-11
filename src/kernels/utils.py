@@ -490,6 +490,13 @@ def package_name_from_repo_id(repo_id: str) -> str:
 
 
 def _get_filenames_from_a_repo(repo_id: str):
-    repo_metadata = model_info(repo_id=repo_id, files_metadata=True)
-    filenames = [f.rfilename for f in repo_metadata.siblings]
-    return filenames
+    try:
+        repo_info = model_info(repo_id=repo_id, files_metadata=True)
+        repo_siblings = repo_info.siblings
+        if repo_siblings is not None:
+            filenames = [f.rfilename for f in repo_siblings]
+            return filenames
+        else:
+            raise ValueError("No repo siblings found.")
+    except Exception as e:
+        logging.error(f"Error connecting to the Hub: {e}.")

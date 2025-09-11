@@ -49,7 +49,7 @@ kernel_layer_mapping = {
     "LigerRMSNorm": {
         "xpu": LayerRepository(
             repo_id="kernels-community/liger_kernels",
-            layer_name="LigerRMSNorm", # Triton
+            layer_name="LigerRMSNorm",  # Triton
         )
     },
 }
@@ -193,7 +193,9 @@ def test_hub_forward_xpu():
     X = torch.randn(4, 16, hidden_size, device="xpu", dtype=torch.float32)
     Y = rms_norm(X)
 
-    rms_norm_with_kernel = kernelize(RMSNormWithKernel(weight), mode=Mode.INFERENCE, device="xpu")
+    rms_norm_with_kernel = kernelize(
+        RMSNormWithKernel(weight), mode=Mode.INFERENCE, device="xpu"
+    )
     Y_kernel = rms_norm_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)

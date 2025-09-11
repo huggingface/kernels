@@ -37,17 +37,17 @@ def main():
 
     upload_parser = subparsers.add_parser("upload", help="Upload kernels to the Hub")
     upload_parser.add_argument(
-        "kernel-dir",
+        "kernel_dir",
         type=Path,
         help="Directory of the kernel build",
     )
     upload_parser.add_argument(
-        "repo-id",
-        type=Path,
+        "--repo_id",
+        type=str,
         help="Repository ID to use to upload to the Hugging Face Hub",
     )
     upload_parser.add_argument(
-        "private",
+        "--private",
         action="store_true",
         help="If the repository should be private.",
     )
@@ -175,34 +175,41 @@ def lock_kernels(args):
         json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
 
 
-def upload_kernels(args):
-    repo_id = create_repo(
-        repo_id=args.repo_type, private=args.private, exist_ok=True
-    ).repo_id
-    repo_filenames = _get_filenames_from_a_repo(repo_id)
-    repo_build_filenames = [f for f in repo_filenames if "build/" in f]
+import os
+from pathlib import Path
+from huggingface_hub import create_repo, upload_folder  # assuming these are the ones you use
 
-    delete_patterns = []
-    for folder in os.listdir(args.kernel_dir):
-        folder_path = os.path.join(args.kernel_dir, folder)
-        # skip files
-        if not os.path.isdir(folder_path):
+def upload_kernels(args):
+    kernel_dir = Path(args.kernel_dir).resolve()
+    if not kernel_dir.is_dir():
+        raise ValueError(f"{kernel_dir} is not a directory")
+
+    base_in_repo = kernel_dir.name
+    repo_id = create_repo(
+        repo_id=args.repo_id, private=args.private, exist_ok=True
+    ).repo_id
+
+    repo_filenames = _get_filenames_from_a_repo(repo_id)
+    repo_base_filenames = [f for f in repo_filenames if f.startswith(f"{base_in_repo}/")]
+
+    delete_patterns: set[str] = set()
+    for folder in os.listdir(kernel_dir):
+        folder_path = kernel_dir / folder
+        if not folder_path.is_dir():
             continue
 
-        # remove stale files
-        matching_repo_files = [
-            f for f in repo_build_filenames if f.startswith(f"build/{folder}/")
-        ]
-        if matching_repo_files:
-            delete_patterns.extend(matching_repo_files)
+        if any(f.startswith(f"{base_in_repo}/{folder}/") for f in repo_base_filenames):
+            delete_patterns.add(f"{folder}/**")
 
     upload_folder(
         repo_id=repo_id,
-        folder_path=args.kernel_dir,
-        delete_patterns=delete_patterns,
+        folder_path=str(kernel_dir),
+        path_in_repo=base_in_repo,
+        delete_patterns=list(delete_patterns),
         commit_message="Uploaded from `kernels`.",
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
+
 
 
 class _JSONEncoder(json.JSONEncoder):

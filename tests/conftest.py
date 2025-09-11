@@ -13,6 +13,11 @@ has_rocm = (
     and torch.version.hip is not None
     and torch.cuda.device_count() > 0
 )
+has_xpu = (
+    hasattr(torch.version, "xpu")
+    and torch.version.xpu is not None
+    and torch.xpu.device_count() > 0
+)
 
 
 def pytest_runtest_setup(item):
@@ -22,3 +27,5 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping ROCm-only test on host without ROCm")
     if "darwin_only" in item.keywords and not sys.platform.startswith("darwin"):
         pytest.skip("skipping macOS-only test on non-macOS platform")
+    if "xpu_only" in item.keywords and not has_xpu:
+        pytest.skip("skipping XPU-only test on host without XPU")

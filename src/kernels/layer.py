@@ -87,7 +87,7 @@ class Device:
 
     Args:
         type (`str`):
-            The device type (e.g., "cuda", "mps", "rocm").
+            The device type (e.g., "cuda", "mps", "rocm", "xpu").
         properties ([`CUDAProperties`], *optional*):
             Device-specific properties. Currently only [`CUDAProperties`] is supported for CUDA devices.
 
@@ -106,6 +106,9 @@ class Device:
 
         # MPS device for Apple Silicon
         mps_device = Device(type="mps")
+
+        # XPU device (e.g., Intel(R) Data Center GPU Max 1550)
+        xpu_device = Device(type="xpu")
         ```
     """
 
@@ -125,6 +128,8 @@ class Device:
             return _ROCMRepos()
         elif self.type == "mps":
             return _MPSRepos()
+        elif self.type == "xpu":
+            return _XPURepos()
         else:
             raise ValueError(f"Unknown device type: {self.type}")
 
@@ -447,6 +452,26 @@ class _DeviceRepos(ABC):
         ...
 
 
+class _XPURepos(_DeviceRepos):
+    _repos: Dict[Mode, LayerRepositoryProtocol]
+
+    def __init__(self):
+        super().__init__()
+        self._repos = {}
+
+    @property
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, LayerRepositoryProtocol]]:
+        return self._repos
+
+    def insert(self, device: Device, repos: Dict[Mode, LayerRepositoryProtocol]):
+        if device.type != "xpu":
+            raise ValueError(f"Device type must be 'xpu', got {device.type}")
+
+        self._repos = repos
+
+
 class _MPSRepos(_DeviceRepos):
     _repos: Dict[Mode, LayerRepositoryProtocol]
 
@@ -531,7 +556,7 @@ class _ROCMRepos(_DeviceRepos):
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cuda", "rocm", "mps"}
+    supported_devices = {"cuda", "rocm", "mps", "xpu"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"
@@ -789,7 +814,7 @@ def kernelize(
             `Mode.TRAINING | Mode.TORCH_COMPILE` kernelizes the model for training with
             `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. Supported device types are: "cuda", "mps", "rocm".
+            The device type to load kernels for. Supported device types are: "cuda", "mps", "rocm", "xpu".
             The device type will be inferred from the model parameters when not provided.
         use_fallback (`bool`, *optional*, defaults to `True`):
             Whether to use the original forward method of modules when no compatible kernel could be found.

@@ -1,14 +1,17 @@
+import logging
 import os
 import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
+
+from huggingface_hub import model_info
 
 from kernels.cli import upload_kernels
 from kernels.utils import _get_filenames_from_a_repo
 
-# TODO: host this somewhere else.
-REPO_ID = "sayakpaul/kernels-upload-test"
+REPO_ID = "kernels-test/kernels-upload-test"
 
 PY_CONTENT = """\
 #!/usr/bin/env python3
@@ -50,6 +53,18 @@ def get_filename_to_change(repo_filenames):
             break
     assert filename_to_change
     return filename_to_change
+
+
+def _get_filenames_from_a_repo(repo_id: str) -> List[str]:
+    try:
+        repo_info = model_info(repo_id=repo_id, files_metadata=True)
+        repo_siblings = repo_info.siblings
+        if repo_siblings is not None:
+            return [f.rfilename for f in repo_siblings]
+        else:
+            raise ValueError("No repo siblings found.")
+    except Exception as e:
+        logging.error(f"Error connecting to the Hub: {e}.")
 
 
 def test_kernel_upload_deletes_as_expected():

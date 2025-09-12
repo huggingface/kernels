@@ -13,7 +13,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict, List, Optional, Tuple
 
-from huggingface_hub import file_exists, model_info, snapshot_download
+from huggingface_hub import file_exists, snapshot_download
 from packaging.version import parse
 
 from kernels._versions import select_revision_or_version
@@ -487,16 +487,3 @@ def git_hash_object(data: bytes, object_type: str = "blob"):
 
 def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
-
-
-def _get_filenames_from_a_repo(repo_id: str) -> List[str]:
-    try:
-        repo_info = model_info(repo_id=repo_id, files_metadata=True)
-        repo_siblings = repo_info.siblings
-        if repo_siblings is not None:
-            return [f.rfilename for f in repo_siblings]
-        else:
-            raise ValueError("No repo siblings found.")
-    except Exception as e:
-        logging.error(f"Error connecting to the Hub: {e}.")
-        raise

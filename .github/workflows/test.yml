@@ -51,7 +51,9 @@ jobs:
         run: uv run mypy src/kernels
 
       - name: Run tests
-        run: uv run pytest tests
+        run: |
+          export HF_TOKEN=${{ secrets.HF_TOKEN }}
+          uv run pytest tests
 
       - name: Check kernel conversion
         run: |

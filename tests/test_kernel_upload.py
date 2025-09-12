@@ -9,7 +9,7 @@ from typing import List
 from huggingface_hub import model_info
 
 from kernels.cli import upload_kernels
-from kernels.utils import _get_filenames_from_a_repo
+
 
 REPO_ID = "kernels-test/kernels-upload-test"
 
@@ -55,7 +55,7 @@ def get_filename_to_change(repo_filenames):
     return filename_to_change
 
 
-def _get_filenames_from_a_repo(repo_id: str) -> List[str]:
+def get_filenames_from_a_repo(repo_id: str) -> List[str]:
     try:
         repo_info = model_info(repo_id=repo_id, files_metadata=True)
         repo_siblings = repo_info.siblings
@@ -68,7 +68,7 @@ def _get_filenames_from_a_repo(repo_id: str) -> List[str]:
 
 
 def test_kernel_upload_deletes_as_expected():
-    repo_filenames = _get_filenames_from_a_repo(REPO_ID)
+    repo_filenames = get_filenames_from_a_repo(REPO_ID)
     filename_to_change = get_filename_to_change(repo_filenames)
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -80,7 +80,7 @@ def test_kernel_upload_deletes_as_expected():
         script_path.write_text(PY_CONTENT)
         upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
 
-    repo_filenames = _get_filenames_from_a_repo(REPO_ID)
+    repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(changed_filename) in k for k in repo_filenames), f"{repo_filenames=}"
     assert not any(
         str(filename_to_change) in k for k in repo_filenames

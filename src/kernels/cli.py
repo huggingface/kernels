@@ -175,10 +175,6 @@ def lock_kernels(args):
         json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
 
 
-import os
-from pathlib import Path
-from huggingface_hub import create_repo, upload_folder  # assuming these are the ones you use
-
 def upload_kernels(args):
     kernel_dir = Path(args.kernel_dir).resolve()
     if not kernel_dir.is_dir():

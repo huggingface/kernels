@@ -500,3 +500,4 @@ def _get_filenames_from_a_repo(repo_id: str):
             raise ValueError("No repo siblings found.")
     except Exception as e:
         logging.error(f"Error connecting to the Hub: {e}.")
+        raise

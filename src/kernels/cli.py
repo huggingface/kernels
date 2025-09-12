@@ -1,7 +1,6 @@
 import argparse
 import dataclasses
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -12,7 +11,6 @@ from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import install_kernel, install_kernel_all_variants
 
 from .doc import generate_readme_for_kernel
-from .utils import _get_filenames_from_a_repo
 from .wheel import build_variant_to_wheel
 
 
@@ -177,33 +175,29 @@ def lock_kernels(args):
 
 def upload_kernels(args):
     kernel_dir = Path(args.kernel_dir).resolve()
+    build_dir = kernel_dir / "build"
     if not kernel_dir.is_dir():
         raise ValueError(f"{kernel_dir} is not a directory")
+    if not build_dir.is_dir():
+        raise ValueError(f"Couldn't find `build` directory inside `kernel_dir`")
 
-    base_in_repo = kernel_dir.name
     repo_id = create_repo(
         repo_id=args.repo_id, private=args.private, exist_ok=True
     ).repo_id
 
-    repo_filenames = _get_filenames_from_a_repo(repo_id)
-    repo_base_filenames = [f for f in repo_filenames if f.startswith(f"{base_in_repo}/")]
-
-    build_dir = kernel_dir / "build"
-
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
         if build_variant.is_dir():
-            delete_patterns.add(f"{"build" / build_variant}/**")
+            delete_patterns.add(f"{build_variant}/**")
 
     upload_folder(
         repo_id=repo_id,
-        folder_path=str(kernel_dir),
-        path_in_repo=base_in_repo,
+        folder_path=build_dir,
+        path_in_repo="build",
         delete_patterns=list(delete_patterns),
         commit_message="Build uploaded using `kernels`.",
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
-
 
 
 class _JSONEncoder(json.JSONEncoder):

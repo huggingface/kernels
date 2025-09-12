@@ -10,7 +10,6 @@ from huggingface_hub import model_info
 
 from kernels.cli import upload_kernels
 
-
 REPO_ID = "kernels-test/kernels-upload-test"
 
 PY_CONTENT = """\

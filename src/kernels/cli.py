@@ -188,21 +188,19 @@ def upload_kernels(args):
     repo_filenames = _get_filenames_from_a_repo(repo_id)
     repo_base_filenames = [f for f in repo_filenames if f.startswith(f"{base_in_repo}/")]
 
-    delete_patterns: set[str] = set()
-    for folder in os.listdir(kernel_dir):
-        folder_path = kernel_dir / folder
-        if not folder_path.is_dir():
-            continue
+    build_dir = kernel_dir / "build"
 
-        if any(f.startswith(f"{base_in_repo}/{folder}/") for f in repo_base_filenames):
-            delete_patterns.add(f"{folder}/**")
+    delete_patterns: set[str] = set()
+    for build_variant in build_dir.iterdir():
+        if build_variant.is_dir():
+            delete_patterns.add(f"{"build" / build_variant}/**")
 
     upload_folder(
         repo_id=repo_id,
         folder_path=str(kernel_dir),
         path_in_repo=base_in_repo,
         delete_patterns=list(delete_patterns),
-        commit_message="Uploaded from `kernels`.",
+        commit_message="Build uploaded using `kernels`.",
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
 

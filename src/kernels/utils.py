@@ -489,13 +489,12 @@ def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
 
 
-def _get_filenames_from_a_repo(repo_id: str):
+def _get_filenames_from_a_repo(repo_id: str) -> List[str]:
     try:
         repo_info = model_info(repo_id=repo_id, files_metadata=True)
         repo_siblings = repo_info.siblings
         if repo_siblings is not None:
-            filenames = [f.rfilename for f in repo_siblings]
-            return filenames
+            return [f.rfilename for f in repo_siblings]
         else:
             raise ValueError("No repo siblings found.")
     except Exception as e:

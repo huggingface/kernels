@@ -62,7 +62,8 @@ def test_kernel_upload_deletes_as_expected():
         changed_filename = next_filename(Path(filename_to_change))
         script_path = build_dir / changed_filename
         script_path.write_text(PY_CONTENT)
-        upload_kernels(UploadArgs(f"{tmpdir}/build", REPO_ID, False))
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
 
     repo_filenames = _get_filenames_from_a_repo(REPO_ID)
     assert any(str(changed_filename) in k for k in repo_filenames), f"{repo_filenames=}"
+    assert not any(str(filename_to_change) in k for k in repo_filenames), f"{repo_filenames=}"

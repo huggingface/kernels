@@ -188,7 +188,7 @@ def upload_kernels(args):
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
         if build_variant.is_dir():
-            delete_patterns.add(f"{build_variant}/**")
+            delete_patterns.add(f"{build_variant.name}/**")
 
     upload_folder(
         repo_id=repo_id,

@@ -179,7 +179,7 @@ def upload_kernels(args):
     if not kernel_dir.is_dir():
         raise ValueError(f"{kernel_dir} is not a directory")
     if not build_dir.is_dir():
-        raise ValueError(f"Couldn't find `build` directory inside `kernel_dir`")
+        raise ValueError("Couldn't find `build` directory inside `kernel_dir`")
 
     repo_id = create_repo(
         repo_id=args.repo_id, private=args.private, exist_ok=True

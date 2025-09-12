@@ -13,7 +13,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict, List, Optional, Tuple
 
-from huggingface_hub import file_exists, snapshot_download, model_info
+from huggingface_hub import file_exists, model_info, snapshot_download
 from packaging.version import parse
 
 from kernels._versions import select_revision_or_version

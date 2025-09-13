@@ -49,9 +49,14 @@ def build_variant() -> str:
     elif torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
+    elif torch.npu.is_available():
+        import torch_npu
+        torch_npu_version = parse(torch_npu.__version__[:5])
+        compute_framework = "cann"
+        
     else:
         raise AssertionError(
-            "Torch was not compiled with CUDA, Metal, XPU, or ROCm enabled."
+            "Torch was not compiled with CUDA, Metal, XPU, NPU, or ROCm enabled."
         )
 
     torch_version = parse(torch.__version__)
@@ -61,6 +66,9 @@ def build_variant() -> str:
     if os == "darwin":
         cpu = "aarch64" if cpu == "arm64" else cpu
         return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
+    
+    if torch.npu.is_available():
+        return f"torch{torch_version}-torch_npu{torch_npu_version}-{compute_framework}-{cpu}-{os}"       
 
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
 

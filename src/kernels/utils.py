@@ -49,7 +49,7 @@ def build_variant() -> str:
     elif torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
-    elif torch.npu.is_available():
+    elif torch._C._get_privateuse1_backend_name() == "npu":
         import torch_npu
         torch_npu_version = parse(torch_npu.__version__)
         tn_major, tn_minor = torch_npu_version.major, torch_npu_version.minor
@@ -67,7 +67,7 @@ def build_variant() -> str:
         cpu = "aarch64" if cpu == "arm64" else cpu
         return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
     
-    if torch.npu.is_available():
+    if torch._C._get_privateuse1_backend_name() == "npu":
         t_major, t_minor = torch_version.major, torch_version.minor
         return f"torch{t_major}{t_minor}-torch_npu{tn_major}{tn_minor}-{compute_framework}-{cpu}-{os}"       
 

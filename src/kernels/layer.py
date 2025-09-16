@@ -863,7 +863,7 @@ def kernelize(
                 return F.silu(x[..., :d]) * x[..., d:]
 
         mapping = {
-            "LayerNorm": {
+            "SiluAndMul": {
                 "cuda": LayerRepository(
                     repo_id="kernels-community/activation",
                     layer_name="SiluAndMul",

@@ -18,6 +18,9 @@ has_xpu = (
     and torch.version.xpu is not None
     and torch.xpu.device_count() > 0
 )
+has_npu = (
+    torch._C._get_privateuse1_backend_name() == "npu"
+)
 
 
 def pytest_runtest_setup(item):
@@ -29,3 +32,5 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping macOS-only test on non-macOS platform")
     if "xpu_only" in item.keywords and not has_xpu:
         pytest.skip("skipping XPU-only test on host without XPU")
+    if "npu_only" in item.keywords and not has_npu:
+        pytest.skip("skipping NPU-only test on host without NPU")

@@ -52,6 +52,12 @@ kernel_layer_mapping = {
             layer_name="LigerRMSNorm",  # Triton
         )
     },
+    "SwiGlu": {
+        "npu": LayerRepository(
+            repo_id="kernels-ext-npu/SwiGlu",
+            layer_name="SwiGlu",
+        )
+    },
 }
 
 register_kernel_mapping(kernel_layer_mapping)
@@ -104,6 +110,11 @@ class SiluAndMulStringDevice(SiluAndMul):
     pass
 
 
+@use_kernel_forward_from_hub("SwiGlu")
+class SiluAndMulNPU(SiluAndMul):
+    pass
+
+
 @use_kernel_forward_from_hub("Linear")
 class TorchLinearWithCounter(nn.Linear):
     def __init__(self, *args, **kwargs):
@@ -122,8 +133,10 @@ def device():
         return "cuda"
     elif hasattr(torch, "xpu") and torch.xpu.is_available():
         return "xpu"
+    elif torch._C._get_privateuse1_backend_name() == "npu":
+        return "npu"
 
-    pytest.skip("No CUDA or XPU")
+    pytest.skip("No CUDA, NPU or XPU")
 
 
 def test_arg_kinds():
@@ -204,9 +217,32 @@ def test_hub_forward_xpu():
     assert rms_norm_with_kernel.n_calls == 0
 
 
+@pytest.mark.npu_only
+def test_hub_forward_npu():
+    torch.manual_seed(0)
+
+    silu_and_mul = SiluAndMul()
+    X = torch.randn((32, 64), device="npu")
+    Y = silu_and_mul(X)
+
+    silu_and_mul_with_kernel = kernelize(
+        SiluAndMulNPU(), device="npu", mode=Mode.INFERENCE
+    )
+    Y_kernel = silu_and_mul_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert silu_and_mul.n_calls == 1
+    assert silu_and_mul_with_kernel.n_calls == 0
+
+
 @pytest.mark.skipif(
     hasattr(torch, "xpu") and getattr(torch.xpu, "is_available", lambda: False)(),
     reason="Skip on xpu devices",
+)
+@pytest.mark.skipif(
+    torch._C._get_privateuse1_backend_name() == "npu",
+    reason="Skip on npu devices",
 )
 def test_rocm_kernel_mapping():
     """Test that ROCm shorthand device mapping works correctly."""

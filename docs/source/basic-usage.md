@@ -21,6 +21,22 @@ activation.gelu_fast(y, x)
 print(y)
 ```
 
+### Using version bounds
+
+Kernels are versioned using tags of the form `v<major>.<minor>.<patch>`.
+You can specify which version to download using Python version specifiers:
+
+```python
+import torch
+from kernels import get_kernel
+
+activation = get_kernel("kernels-community/activation", version=">=0.0.4,<0.1.0")
+```
+
+This will get the latest kernel tagged `v0.0.z` where `z` is at least 4. It
+is strongly recommended to specify a version bound, since a kernel author
+might push incompatible changes to the `main` branch.
+
 ## Checking Kernel Availability
 
 You can check if a specific kernel is available for your environment:

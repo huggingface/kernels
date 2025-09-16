@@ -34,6 +34,8 @@ Kernels are versioned on the Hub using Git tags. Version tags must be of
 the form `v<major>.<minor>.<patch>`. Versions are used by [locking](./locking.md)
 to resolve the version constraints.
 
+We recommend using [semver](https://semver.org/) to version kernels.
+
 ## Native Python module
 
 Kernels will typically contain a native Python module with precompiled
@@ -50,7 +52,6 @@ have dynamic library dependencies outside:
   for compatibility with Python 3.9 and later.
 - Compatible with [`manylinux_2_28`](https://github.com/pypa/manylinux?tab=readme-ov-file#manylinux_2_28-almalinux-8-based).
   This means that the extension **must not** use symbols versions higher than:
-
   - GLIBC 2.28
   - GLIBCXX 3.4.24
   - CXXABI 1.3.11

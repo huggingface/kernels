@@ -67,6 +67,7 @@ def get_filenames_from_a_repo(repo_id: str) -> List[str]:
         logging.error(f"Error connecting to the Hub: {e}.")
 
 
+@pytest.mark.token
 def test_kernel_upload_deletes_as_expected():
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     filename_to_change = get_filename_to_change(repo_filenames)

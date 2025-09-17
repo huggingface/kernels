@@ -62,7 +62,6 @@ the Hub.
 - [Using layers](docs/source/layers.md)
 - [Locking kernel/layer versions](docs/source/locking.md)
 - [Environment variables](docs/source/env.md)
-- [Using kernels in a Docker container](docs/source/docker.md)
 - [Kernel requirements](docs/source/kernel-requirements.md)
 - [Frequently Asked Questions](docs/source/faq.md)
 - [Writing kernels](https://github.com/huggingface/kernel-builder/blob/main/docs/writing-kernels.md) using [kernel-builder](https://github.com/huggingface/kernel-builder/)

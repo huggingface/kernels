@@ -23,6 +23,14 @@ has_npu = (
 )
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--token",
+        action="store_true",
+        help="run tests that require a token with write permissions",
+    )
+
+
 def pytest_runtest_setup(item):
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")
@@ -34,3 +42,5 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping XPU-only test on host without XPU")
     if "npu_only" in item.keywords and not has_npu:
         pytest.skip("skipping NPU-only test on host without NPU")
+    if "token" in item.keywords and not item.config.getoption("--token"):
+        pytest.skip("need --token option to run this test")

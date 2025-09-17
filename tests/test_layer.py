@@ -516,26 +516,43 @@ def test_validate_kernel_layer():
             super().__init__(*args, **kwargs)
             self.foo = 42
 
-    with pytest.raises(TypeError, match="not override"):
-        _validate_layer(cls=BadLayer, check_cls=SiluAndMul)
+    def stub_repo(layer):
+        return LayerRepository(
+            repo_id="kernels-test/nonexisting", layer_name=layer.__name__
+        )
+
+    with pytest.raises(
+        TypeError,
+        match="`kernels-test/nonexisting`.*layer `BadLayer` must not override",
+    ):
+        _validate_layer(cls=BadLayer, check_cls=SiluAndMul, repo=stub_repo(BadLayer))
 
     class BadLayer2(nn.Module):
         foo: int = 42
 
-    with pytest.raises(TypeError, match="not contain additional members"):
-        _validate_layer(cls=BadLayer2, check_cls=SiluAndMul)
+    with pytest.raises(
+        TypeError,
+        match="`kernels-test/nonexisting`.*layer `BadLayer2` must not contain.*SiluAndMul",
+    ):
+        _validate_layer(cls=BadLayer2, check_cls=SiluAndMul, repo=stub_repo(BadLayer2))
 
     class BadLayer3(nn.Module):
         def forward(self, x: torch.Tensor, foo: int) -> torch.Tensor: ...
 
-    with pytest.raises(TypeError, match="different number of arguments"):
-        _validate_layer(cls=BadLayer3, check_cls=SiluAndMul)
+    with pytest.raises(
+        TypeError,
+        match="Forward.*`kernels-test/nonexisting`.*layer `BadLayer3` does not match `SiluAndMul`: different number of arguments",
+    ):
+        _validate_layer(cls=BadLayer3, check_cls=SiluAndMul, repo=stub_repo(BadLayer3))
 
     class BadLayer4(nn.Module):
         def forward(self, *, x: torch.Tensor) -> torch.Tensor: ...
 
-    with pytest.raises(TypeError, match="different kind of arguments"):
-        _validate_layer(cls=BadLayer4, check_cls=SiluAndMul)
+    with pytest.raises(
+        TypeError,
+        match="Forward.*`kernels-test/nonexisting`.*layer `BadLayer4` does not match `SiluAndMul`: different kind of arguments",
+    ):
+        _validate_layer(cls=BadLayer4, check_cls=SiluAndMul, repo=stub_repo(BadLayer4))
 
 
 @pytest.mark.cuda_only

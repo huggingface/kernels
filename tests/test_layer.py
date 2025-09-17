@@ -52,12 +52,6 @@ kernel_layer_mapping = {
             layer_name="LigerRMSNorm",  # Triton
         )
     },
-    "SwiGlu": {
-        "npu": LayerRepository(
-            repo_id="kernels-ext-npu/SwiGlu",
-            layer_name="SwiGlu",
-        )
-    },
 }
 
 register_kernel_mapping(kernel_layer_mapping)
@@ -219,6 +213,17 @@ def test_hub_forward_xpu():
 
 @pytest.mark.npu_only
 def test_hub_forward_npu():
+    npu_kernel_layer_mapping = {
+        "SwiGlu": {
+            "npu": LayerRepository(
+                repo_id="kernels-ext-npu/SwiGlu",
+                layer_name="SwiGlu",
+            )
+        }
+    }
+
+    register_kernel_mapping(npu_kernel_layer_mapping)
+
     torch.manual_seed(0)
 
     silu_and_mul = SiluAndMul()

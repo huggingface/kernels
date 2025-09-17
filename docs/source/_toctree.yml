@@ -22,7 +22,7 @@
     - local: api/layers
       title: Layers
     - local: cli
-      title: kernels CLI
+      title: Kernels CLI
   title: API Reference
 - sections:
     - local: kernel-requirements

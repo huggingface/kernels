@@ -21,14 +21,21 @@ from kernels.layer import (
     _KERNEL_MAPPING,
     _validate_layer,
 )
-from kernels.utils import install_kernel
+from kernels.utils import (
+    _get_privateuse_backend_name,
+    install_kernel,
+)
 
 kernel_layer_mapping = {
     "SiluAndMul": {
         Device(type="cuda"): LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-        )
+        ),
+        "npu": LayerRepository(
+            repo_id="kernels-ext-npu/SwiGlu",
+            layer_name="SwiGlu",
+        ),
     },
     "SiluAndMulNoCompile": {
         "cuda": LayerRepository(
@@ -104,11 +111,6 @@ class SiluAndMulStringDevice(SiluAndMul):
     pass
 
 
-@use_kernel_forward_from_hub("SwiGlu")
-class SiluAndMulNPU(SiluAndMul):
-    pass
-
-
 @use_kernel_forward_from_hub("Linear")
 class TorchLinearWithCounter(nn.Linear):
     def __init__(self, *args, **kwargs):
@@ -127,7 +129,7 @@ def device():
         return "cuda"
     elif hasattr(torch, "xpu") and torch.xpu.is_available():
         return "xpu"
-    elif torch._C._get_privateuse1_backend_name() == "npu":
+    elif _get_privateuse_backend_name() == "npu":
         return "npu"
 
     pytest.skip("No CUDA, NPU or XPU")
@@ -213,17 +215,6 @@ def test_hub_forward_xpu():
 
 @pytest.mark.npu_only
 def test_hub_forward_npu():
-    npu_kernel_layer_mapping = {
-        "SwiGlu": {
-            "npu": LayerRepository(
-                repo_id="kernels-ext-npu/SwiGlu",
-                layer_name="SwiGlu",
-            )
-        }
-    }
-
-    register_kernel_mapping(npu_kernel_layer_mapping)
-
     torch.manual_seed(0)
 
     silu_and_mul = SiluAndMul()
@@ -231,7 +222,7 @@ def test_hub_forward_npu():
     Y = silu_and_mul(X)
 
     silu_and_mul_with_kernel = kernelize(
-        SiluAndMulNPU(), device="npu", mode=Mode.INFERENCE
+        SiluAndMulWithKernel(), device="npu", mode=Mode.INFERENCE
     )
     Y_kernel = silu_and_mul_with_kernel(X)
 
@@ -246,7 +237,7 @@ def test_hub_forward_npu():
     reason="Skip on xpu devices",
 )
 @pytest.mark.skipif(
-    torch._C._get_privateuse1_backend_name() == "npu",
+    _get_privateuse_backend_name() == "npu",
     reason="Skip on npu devices",
 )
 def test_rocm_kernel_mapping():

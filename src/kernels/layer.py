@@ -87,7 +87,7 @@ class Device:
 
     Args:
         type (`str`):
-            The device type (e.g., "cuda", "mps", "rocm", "xpu", "npu").
+            The device type (e.g., "cuda", "mps", "npu", "rocm", "xpu").
         properties ([`CUDAProperties`], *optional*):
             Device-specific properties. Currently only [`CUDAProperties`] is supported for CUDA devices.
 
@@ -110,7 +110,7 @@ class Device:
         # XPU device (e.g., Intel(R) Data Center GPU Max 1550)
         xpu_device = Device(type="xpu")
 
-        # NPU device (e.g., Huawei Ascend Atlas A2)
+        # NPU device (Huawei Ascend)
         npu_device = Device(type="npu")
         ```
     """
@@ -581,7 +581,7 @@ class _ROCMRepos(_DeviceRepos):
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cuda", "rocm", "mps", "xpu", "npu"}
+    supported_devices = {"cuda", "mps", "npu", "rocm", "xpu"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"
@@ -839,7 +839,7 @@ def kernelize(
             `Mode.TRAINING | Mode.TORCH_COMPILE` kernelizes the model for training with
             `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. Supported device types are: "cuda", "mps", "rocm", "xpu", "npu".
+            The device type to load kernels for. Supported device types are: "cuda", "mps", "npu", "rocm", "xpu".
             The device type will be inferred from the model parameters when not provided.
         use_fallback (`bool`, *optional*, defaults to `True`):
             Whether to use the original forward method of modules when no compatible kernel could be found.

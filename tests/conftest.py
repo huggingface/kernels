@@ -3,6 +3,8 @@ import sys
 import pytest
 import torch
 
+from kernels.utils import _get_privateuse_backend_name
+
 has_cuda = (
     hasattr(torch.version, "cuda")
     and torch.version.cuda is not None
@@ -19,7 +21,7 @@ has_xpu = (
     and torch.xpu.device_count() > 0
 )
 has_npu = (
-    torch._C._get_privateuse1_backend_name() == "npu"
+    _get_privateuse_backend_name() == "npu"
 )
 
 

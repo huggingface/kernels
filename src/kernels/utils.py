@@ -35,6 +35,13 @@ def _get_cache_dir() -> Optional[str]:
 CACHE_DIR: Optional[str] = _get_cache_dir()
 
 
+def _get_privateuse_backend_name() -> Optional[str]:
+    import torch
+    if hasattr(torch._C, "_get_privateuse1_backend_name"):
+        return torch._C._get_privateuse1_backend_name()
+    return None
+
+
 def build_variant() -> str:
     import torch
 
@@ -49,11 +56,10 @@ def build_variant() -> str:
     elif torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
-    elif torch._C._get_privateuse1_backend_name() == "npu":
-        import torch_npu
-        torch_npu_version = parse(torch_npu.__version__)
-        tn_major, tn_minor = torch_npu_version.major, torch_npu_version.minor
-        compute_framework = "cann"
+    elif _get_privateuse_backend_name() == "npu":
+        from torch_npu.utils.collect_env import get_cann_version
+        cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
+        compute_framework = f"cann{cann_major}{cann_minor}"
     else:
         raise AssertionError(
             "Torch was not compiled with CUDA, Metal, XPU, NPU, or ROCm enabled."
@@ -66,10 +72,6 @@ def build_variant() -> str:
     if os == "darwin":
         cpu = "aarch64" if cpu == "arm64" else cpu
         return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
-    
-    if torch._C._get_privateuse1_backend_name() == "npu":
-        t_major, t_minor = torch_version.major, torch_version.minor
-        return f"torch{t_major}{t_minor}-torch_npu{tn_major}{tn_minor}-{compute_framework}-{cpu}-{os}"       
 
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
 

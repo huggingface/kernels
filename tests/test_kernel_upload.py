@@ -13,6 +13,7 @@ from kernels.cli import upload_kernels
 
 REPO_ID = "kernels-test/kernels-upload-test"
 
+
 PY_CONTENT = """\
 #!/usr/bin/env python3
 
@@ -68,6 +69,14 @@ def get_filenames_from_a_repo(repo_id: str) -> List[str]:
 
 
 @pytest.mark.token
+@pytest.mark.is_staging_test
+def test_kernel_upload_works_as_expected():
+    # TODO
+    pass
+
+
+@pytest.mark.token
+@pytest.mark.is_staging_test
 def test_kernel_upload_deletes_as_expected():
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     filename_to_change = get_filename_to_change(repo_filenames)

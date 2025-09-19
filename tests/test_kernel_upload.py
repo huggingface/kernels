@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import List
 
 import pytest
-from huggingface_hub import model_info
+from huggingface_hub import delete_repo, model_info
 
 from kernels.cli import upload_kernels
 
-REPO_ID = "kernels-test/kernels-upload-test"
+REPO_ID = "valid_org/kernels-upload-test"
+
 
 PY_CONTENT = """\
 #!/usr/bin/env python3
@@ -68,7 +69,32 @@ def get_filenames_from_a_repo(repo_id: str) -> List[str]:
 
 
 @pytest.mark.token
+@pytest.mark.is_staging_test
+def test_kernel_upload_works_as_expected():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = f"{tmpdir}/build/torch-universal/upload_test"
+        build_dir = Path(path)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        script_path = build_dir / "foo.py"
+        script_path.write_text(PY_CONTENT)
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
+
+    repo_filenames = get_filenames_from_a_repo(REPO_ID)
+    assert any(str(script_path.name) for f in repo_filenames)
+    delete_repo(repo_id=REPO_ID)
+
+
+@pytest.mark.token
+@pytest.mark.is_staging_test
 def test_kernel_upload_deletes_as_expected():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = f"{tmpdir}/build/torch-universal/upload_test"
+        build_dir = Path(path)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        script_path = build_dir / "foo_2025.py"
+        script_path.write_text(PY_CONTENT)
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
+
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     filename_to_change = get_filename_to_change(repo_filenames)
 
@@ -86,3 +112,4 @@ def test_kernel_upload_deletes_as_expected():
     assert not any(
         str(filename_to_change) in k for k in repo_filenames
     ), f"{repo_filenames=}"
+    delete_repo(repo_id=REPO_ID)

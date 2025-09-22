@@ -51,10 +51,14 @@ jobs:
         run: uv run mypy src/kernels
 
       - name: Run tests
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           uv run pytest tests
+
+      - name: Run staging tests
+        env: 
+          HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
+        run: |
+          HUGGINGFACE_CO_STAGING=true uv run pytest --token -m "is_staging_test" tests/
 
       - name: Check kernel conversion
         run: |

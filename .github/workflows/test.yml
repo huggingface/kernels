@@ -55,10 +55,11 @@ jobs:
           uv run pytest tests
 
       - name: Run staging tests
-        env: 
+        env:
           HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
         run: |
           HUGGINGFACE_CO_STAGING=true uv run pytest --token -m "is_staging_test" tests/
+        if: matrix.python_version == '3.10' && matrix.torch-version == '2.7.0'
 
       - name: Check kernel conversion
         run: |

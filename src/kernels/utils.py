@@ -37,6 +37,7 @@ CACHE_DIR: Optional[str] = _get_cache_dir()
 
 def _get_privateuse_backend_name() -> Optional[str]:
     import torch
+
     if hasattr(torch._C, "_get_privateuse1_backend_name"):
         return torch._C._get_privateuse1_backend_name()
     return None
@@ -58,6 +59,7 @@ def build_variant() -> str:
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
     elif _get_privateuse_backend_name() == "npu":
         from torch_npu.utils.collect_env import get_cann_version
+
         cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
         compute_framework = f"cann{cann_major}{cann_minor}"
     else:

@@ -20,9 +20,7 @@ has_xpu = (
     and torch.version.xpu is not None
     and torch.xpu.device_count() > 0
 )
-has_npu = (
-    _get_privateuse_backend_name() == "npu"
-)
+has_npu = _get_privateuse_backend_name() == "npu"
 
 
 def pytest_addoption(parser):

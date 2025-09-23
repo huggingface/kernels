@@ -58,7 +58,7 @@ def build_variant() -> str:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
     elif _get_privateuse_backend_name() == "npu":
-        from torch_npu.utils.collect_env import get_cann_version
+        from torch_npu.utils.collect_env import get_cann_version  # type: ignore[import-not-found]
 
         cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
         compute_framework = f"cann{cann_major}{cann_minor}"

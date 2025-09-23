@@ -35,6 +35,7 @@ def test_load_locked():
     load_kernel("kernels-community/activation", lockfile=project_dir / "kernels.lock")
 
 
+@pytest.mark.cuda_only
 def test_layer_locked():
     project_dir = Path(__file__).parent / "layer_locking"
 

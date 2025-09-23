@@ -3,6 +3,8 @@ import sys
 import pytest
 import torch
 
+from kernels.utils import _get_privateuse_backend_name
+
 has_cuda = (
     hasattr(torch.version, "cuda")
     and torch.version.cuda is not None
@@ -18,6 +20,7 @@ has_xpu = (
     and torch.version.xpu is not None
     and torch.xpu.device_count() > 0
 )
+has_npu = _get_privateuse_backend_name() == "npu"
 
 
 def pytest_addoption(parser):
@@ -37,5 +40,7 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping macOS-only test on non-macOS platform")
     if "xpu_only" in item.keywords and not has_xpu:
         pytest.skip("skipping XPU-only test on host without XPU")
+    if "npu_only" in item.keywords and not has_npu:
+        pytest.skip("skipping NPU-only test on host without NPU")
     if "token" in item.keywords and not item.config.getoption("--token"):
         pytest.skip("need --token option to run this test")

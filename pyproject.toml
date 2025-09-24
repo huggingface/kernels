@@ -45,6 +45,9 @@ kernels = "kernels.cli:main"
 [project.entry-points."egg_info.writers"]
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
+[tool.isort]
+profile = "black"
+line_length = 119
 
 [tool.ruff]
 exclude = [
@@ -71,4 +74,4 @@ line-length = 119
 # Ignored rules:
 # "E501" -> line length violation
 lint.ignore = ["E501"]
-lint.select = ["E", "F", "I", "W"]
+lint.select = ["E", "F", "W"]

@@ -32,6 +32,11 @@ def check_kernel(
     has_issues = False
     for variant_path in variants_path.iterdir():
         if not variant_path.is_dir():
+            print(
+                f"⛔ `build/` must only contain directories, found: {variant_path.name}",
+                file=sys.stderr,
+            )
+            has_issues = True
             continue
 
         print(f"Checking variant: {variant_path.name}", file=sys.stderr)

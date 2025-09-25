@@ -73,6 +73,11 @@ jobs:
         run: |
           uv run kernels generate-readme kernels-community/triton-layer-norm
 
+      - name: Check kernel check
+        run: |
+          uv pip install kernel-abi-check
+          kernels check kernels-community/activation
+
       - name: Import check without torch
         run: |
           uv pip uninstall torch

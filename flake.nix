@@ -24,6 +24,7 @@
       in
       {
         formatter = pkgs.nixfmt-tree;
+        packages.kernel-abi-check = pkgs.python3.pkgs.callPackage ./nix/kernel-abi-check.nix {};
         devShells = with pkgs; rec {
           default = mkShell {
             nativeBuildInputs = [
@@ -40,6 +41,7 @@
               ++ (with python3.pkgs; [
                 docutils
                 huggingface-hub
+                (callPackage ./nix/kernel-abi-check.nix {})
                 mktestdocs
                 pytest
                 pytest-benchmark

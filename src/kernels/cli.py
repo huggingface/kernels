@@ -20,6 +20,31 @@ def main():
     )
     subparsers = parser.add_subparsers(required=True)
 
+    check_parser = subparsers.add_parser("check", help="Check a kernel for compliance")
+    check_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    check_parser.add_argument(
+        "--revision",
+        type=str,
+        default="main",
+        help="The kernel revision (branch, tag, or commit SHA, defaults to 'main')",
+    )
+    check_parser.add_argument("--macos", type=str, help="macOS version", default="15.0")
+    check_parser.add_argument(
+        "--manylinux", type=str, help="Manylinux version", default="manylinux_2_28"
+    )
+    check_parser.add_argument(
+        "--python-abi", type=str, help="Python ABI version", default="3.9"
+    )
+    check_parser.set_defaults(
+        func=lambda args: check_kernel(
+            macos=args.macos,
+            manylinux=args.manylinux,
+            python_abi=args.python_abi,
+            repo_id=args.repo_id,
+            revision=args.revision,
+        )
+    )
+
     download_parser = subparsers.add_parser("download", help="Download locked kernels")
     download_parser.add_argument(
         "project_dir",
@@ -205,3 +230,24 @@ class _JSONEncoder(json.JSONEncoder):
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)
+
+
+def check_kernel(
+    *, macos: str, manylinux: str, python_abi: str, repo_id: str, revision: str
+):
+    try:
+        import kernels.check
+    except ImportError:
+        print(
+            "`kernels check` requires the `kernel-abi-check` package: pip install kernel-abi-check",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    kernels.check.check_kernel(
+        macos=macos,
+        manylinux=manylinux,
+        python_abi=python_abi,
+        repo_id=repo_id,
+        revision=revision,
+    )

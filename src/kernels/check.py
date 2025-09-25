@@ -54,9 +54,9 @@ def check_kernel(
 
             # TODO: also check operating system
             if o.format() == BinaryFormat.ELF:
-                check_manylinux(o, manylinux, indent + 2)
+                has_issues |= check_manylinux(o, manylinux, indent + 2)
             elif o.format() == BinaryFormat.MACH_O:
-                check_macos(o, macos, indent + 2)
+                has_issues |= check_macos(o, macos, indent + 2)
 
     if has_issues:
         sys.exit(1)

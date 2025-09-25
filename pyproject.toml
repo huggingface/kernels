@@ -34,6 +34,7 @@ dev = [
 ]
 
 [project.optional-dependencies]
+abi-check = ["kernel-abi-check>=0.6.2,<0.7.0"]
 torch = ["torch"]
 docs = [
   "hf-doc-builder",

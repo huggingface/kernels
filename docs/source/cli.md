@@ -2,6 +2,24 @@
 
 ## Main Functions
 
+### kernels check
+
+You can use `kernels check` to test compliance of a kernel on the Hub.
+This currently checks that the kernel:
+
+- Supports the currently-required Python ABI version.
+- Works on supported operating system versions.
+
+For example:
+
+```bash
+$ kernels check kernels-community/flash-attn3
+Checking variant: torch28-cxx11-cu128-aarch64-linux
+  🐍 Python ABI 3.9 compatible
+  🐧 manylinux_2_28 compatible
+[...]
+```
+
 ### kernels to-wheel
 
 We strongly recommend downloading kernels from the Hub using the `kernels`
@@ -38,4 +56,3 @@ your kernel builds to the Hub.
 - If a repo with the `repo_id` already exists and if it contains a `build` with the build variant
   being uploaded, it will attempt to delete the files existing under it.
 - Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
-

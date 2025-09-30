@@ -46,6 +46,16 @@ have dynamic library dependencies outside:
 - Torch;
 - CUDA/ROCm libraries installed as dependencies of Torch.
 
+## Compatibility with torch.compile
+
+The Kernel Hub also encourages to write the kernels in a `torch.compile`
+compliant way. This helps to ensure that the kernels are compatible with
+`torch.compile` without introducing any graph breaks and triggering 
+recompilation which can limit the benefits of compilation.
+
+[Here](https://github.com/huggingface/kernel-builder/blob/d1ee9bf9301ac8c5199099d90ee1c9d5c789d5ba/examples/relu-backprop-compile/tests/test_relu.py#L162) is a simple test example which checks for graph breaks and 
+recompilation triggers during `torch.compile`.
+
 ### Linux
 
 - Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)

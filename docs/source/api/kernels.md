@@ -6,6 +6,10 @@
 
 [[autodoc]] kernels.get_kernel
 
+### get_local_kernel
+
+[[autodoc]] kernels.get_local_kernel
+
 ### has_kernel
 
 [[autodoc]] kernels.has_kernel

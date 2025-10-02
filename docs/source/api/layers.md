@@ -39,3 +39,11 @@
 ### LayerRepository
 
 [[autodoc]] kernels.LayerRepository
+
+### LocalLayerRepository
+
+[[autodoc]] kernels.LocalLayerRepository
+
+### LockedLayerRepository
+
+[[autodoc]] kernels.LockedLayerRepository

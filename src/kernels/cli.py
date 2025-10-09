@@ -70,7 +70,7 @@ def main():
         help="Repository ID to use to upload to the Hugging Face Hub",
     )
     upload_parser.add_argument(
-        "--revision",
+        "--branch",
         type=None,
         help="If set, the upload will be made to a particular branch of the provided `repo_id`.",
     )
@@ -223,7 +223,7 @@ def upload_kernels(args):
     upload_folder(
         repo_id=repo_id,
         folder_path=build_dir,
-        revision=args.revision,
+        revision=args.branch,
         path_in_repo="build",
         delete_patterns=list(delete_patterns),
         commit_message="Build uploaded using `kernels`.",

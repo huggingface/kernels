@@ -30,6 +30,7 @@ class UploadArgs:
     kernel_dir: None
     repo_id: None
     private: False
+    branch: None
 
 
 def next_filename(path: Path) -> Path:
@@ -70,14 +71,15 @@ def get_filenames_from_a_repo(repo_id: str) -> List[str]:
 
 @pytest.mark.token
 @pytest.mark.is_staging_test
-def test_kernel_upload_works_as_expected():
+@pytest.mark.parametrize("branch", (None, "foo"))
+def test_kernel_upload_works_as_expected(branch):
     with tempfile.TemporaryDirectory() as tmpdir:
         path = f"{tmpdir}/build/torch-universal/upload_test"
         build_dir = Path(path)
         build_dir.mkdir(parents=True, exist_ok=True)
         script_path = build_dir / "foo.py"
         script_path.write_text(PY_CONTENT)
-        upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False, branch))
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(script_path.name) for f in repo_filenames)

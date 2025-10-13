@@ -1,17 +1,18 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from huggingface_hub import snapshot_download
-from kernels.utils import CACHE_DIR
 from kernel_abi_check import (
     BinaryFormat,
-    IncompatibleMacOSVersion,
-    ObjectFile,
     IncompatibleAbi3Symbol,
-    NonAbi3Symbol,
+    IncompatibleMacOSVersion,
     IncompatibleManylinuxSymbol,
     MissingMacOSVersion,
+    NonAbi3Symbol,
+    ObjectFile,
 )
+
+from kernels.utils import CACHE_DIR
 
 
 def check_kernel(

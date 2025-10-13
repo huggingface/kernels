@@ -48,7 +48,7 @@ $ kernels to-wheel drbh/img2grey 1.1.2
 ### kernels upload
 
 Use `kernels upload <dir_containing_build> --repo_id="hub-username/kernel"` to upload
-your kernel builds to the Hub.
+your kernel builds to the Hub. To know the supported arguments run: `kernels upload -h`.
 
 **Notes**:
 

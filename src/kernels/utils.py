@@ -524,9 +524,8 @@ def _get_user_agent(
 
     from . import __version__
 
-    disable_telemetry = (
-        os.getenv("DISABLE_TELEMETRY", "false").upper() in ENV_VARS_TRUE_VALUES
-    )
+    if os.getenv("DISABLE_TELEMETRY", "false").upper() in ENV_VARS_TRUE_VALUES:
+        return None
 
     if user_agent is None:
         user_agent = {
@@ -535,8 +534,5 @@ def _get_user_agent(
             "build_variant": build_variant(),
             "file_type": "kernel",
         }
-
-    if disable_telemetry:
-        user_agent = None
 
     return user_agent

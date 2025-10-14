@@ -54,7 +54,7 @@ def build_variant() -> str:
         compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
     elif torch.backends.mps.is_available():
         compute_framework = "metal"
-    elif torch.version.xpu is not None:
+    elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
     elif _get_privateuse_backend_name() == "npu":

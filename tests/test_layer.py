@@ -5,6 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from torch.testing import assert_close
 
 from kernels import (
     CUDAProperties,
@@ -351,6 +352,47 @@ def test_local_layer_repo(device):
     X = torch.randn(10, 32, device=device)
     linear(X)
     assert linear.n_calls == 0
+
+
+def test_stateful_layer(device):
+    @use_kernel_forward_from_hub("ReluWithHiddenSize")
+    class ReluWithHiddenSize(nn.Module):
+        hidden_size: int
+
+        def __init__(self, hidden_size: int):
+            super().__init__()
+            self.hidden_size = hidden_size
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return F.relu(x)
+
+    model = ReluWithHiddenSize(hidden_size=64).to(device)
+    x = torch.randn((32, 64), device=device)
+    y_ref = model(x)
+
+    with use_kernel_mapping(
+        {
+            "ReluWithHiddenSize": {
+                "cuda": LayerRepository(
+                    repo_id="kernels-test/state-test",
+                    layer_name="StatefulReLU",
+                ),
+                "xpu": LayerRepository(
+                    repo_id="kernels-test/state-test",
+                    layer_name="StatefulReLU",
+                ),
+            }
+        },
+        inherit_mapping=False,
+    ):
+        model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device=device)
+
+    y = model(x)
+    assert_close(y, y_ref)
+
+    model = torch.compile(model, fullgraph=True)
+    y = model(x)
+    assert_close(y, y_ref)
 
 
 @pytest.mark.cuda_only

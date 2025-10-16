@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from huggingface_hub import create_repo, upload_folder
+from huggingface_hub import create_repo, upload_folder, create_branch
 
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
@@ -204,6 +204,7 @@ def lock_kernels(args):
 
 
 def upload_kernels(args):
+    # Resolve `kernel_dir` to be uploaded.
     kernel_dir = Path(args.kernel_dir).resolve()
     build_dir = kernel_dir / "build"
     if not kernel_dir.is_dir():
@@ -211,15 +212,22 @@ def upload_kernels(args):
     if not build_dir.is_dir():
         raise ValueError("Couldn't find `build` directory inside `kernel_dir`")
 
+    # Create repo.
     repo_id = create_repo(
         repo_id=args.repo_id, private=args.private, exist_ok=True
     ).repo_id
 
+    # Create a repo branch if needed. Raise error if it already exists.
+    if args.branch is not None:
+        create_branch(repo_id=repo_id, branch=args.branch)
+
+    # Determine the files that shouldn't be uploaded.
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
         if build_variant.is_dir():
             delete_patterns.add(f"{build_variant.name}/**")
 
+    # Upload.
     upload_folder(
         repo_id=repo_id,
         folder_path=build_dir,

@@ -39,3 +39,13 @@ The approach of `forward`-replacement is the least invasive, because
 it preserves the original model graph. It is also reversible, since
 even though the `forward` of a layer _instance_ might be replaced,
 the corresponding class still has the original `forward`.
+
+## Misc
+
+### How can I disable kernel reporting in the user-agent?
+
+By default, we collect telemetry when a call to `get_kernel()` is made.
+This only includes the `kernels` version, `torch` version, and the build
+information for the kernel being requested.
+
+You can disable this by setting `export DISABLE_TELEMETRY=yes`.

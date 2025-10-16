@@ -212,22 +212,18 @@ def upload_kernels(args):
     if not build_dir.is_dir():
         raise ValueError("Couldn't find `build` directory inside `kernel_dir`")
 
-    # Create repo.
     repo_id = create_repo(
         repo_id=args.repo_id, private=args.private, exist_ok=True
     ).repo_id
 
-    # Create a repo branch if needed. Raise error if it already exists.
     if args.branch is not None:
-        create_branch(repo_id=repo_id, branch=args.branch)
+        create_branch(repo_id=repo_id, branch=args.branch, exist_ok=True)
 
-    # Determine the files that shouldn't be uploaded.
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
         if build_variant.is_dir():
             delete_patterns.add(f"{build_variant.name}/**")
 
-    # Upload.
     upload_folder(
         repo_id=repo_id,
         folder_path=build_dir,

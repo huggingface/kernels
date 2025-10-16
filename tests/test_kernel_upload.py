@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List
 
 import pytest
-from huggingface_hub import delete_repo, model_info
+from huggingface_hub import delete_repo, model_info, list_repo_refs
 
 from kernels.cli import upload_kernels
 
@@ -83,6 +83,11 @@ def test_kernel_upload_works_as_expected(branch):
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(script_path.name) for f in repo_filenames)
+
+    if branch is not None:
+        refs = list_repo_refs(repo_id=REPO_ID)
+        assert any(ref_branch.name == branch for ref_branch in refs.branches)
+
     delete_repo(repo_id=REPO_ID)
 
 
@@ -95,7 +100,7 @@ def test_kernel_upload_deletes_as_expected():
         build_dir.mkdir(parents=True, exist_ok=True)
         script_path = build_dir / "foo_2025.py"
         script_path.write_text(PY_CONTENT)
-        upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False, None))
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     filename_to_change = get_filename_to_change(repo_filenames)
@@ -107,7 +112,7 @@ def test_kernel_upload_deletes_as_expected():
         changed_filename = next_filename(Path(filename_to_change))
         script_path = build_dir / changed_filename
         script_path.write_text(PY_CONTENT)
-        upload_kernels(UploadArgs(tmpdir, REPO_ID, False))
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False, None))
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(changed_filename) in k for k in repo_filenames), f"{repo_filenames=}"

@@ -1,6 +1,7 @@
 import argparse
 import dataclasses
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from kernels.utils import install_kernel, install_kernel_all_variants
 
 from .doc import generate_readme_for_kernel
 from .wheel import build_variant_to_wheel
+
+BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-universal)")
 
 
 def main():
@@ -206,11 +209,21 @@ def lock_kernels(args):
 def upload_kernels(args):
     # Resolve `kernel_dir` to be uploaded.
     kernel_dir = Path(args.kernel_dir).resolve()
-    build_dir = kernel_dir / "build"
-    if not kernel_dir.is_dir():
-        raise ValueError(f"{kernel_dir} is not a directory")
-    if not build_dir.is_dir():
-        raise ValueError("Couldn't find `build` directory inside `kernel_dir`")
+
+    build_dir = None
+    for candidate in [kernel_dir / "build", kernel_dir]:
+        variants = [
+            variant_path
+            for variant_path in candidate.glob("torch*")
+            if BUILD_VARIANT_REGEX.match(variant_path.name) is not None
+        ]
+        if variants:
+            build_dir = candidate
+            break
+    if build_dir is None:
+        raise ValueError(
+            f"Couldn't find any build variants in: {kernel_dir.absolute()} or {(kernel_dir / 'build').absolute()}"
+        )
 
     repo_id = create_repo(
         repo_id=args.repo_id, private=args.private, exist_ok=True

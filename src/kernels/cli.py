@@ -65,14 +65,14 @@ def main():
         help="Directory of the kernel build",
     )
     upload_parser.add_argument(
-        "--repo_id",
+        "--repo-id",
         type=str,
         help="Repository ID to use to upload to the Hugging Face Hub",
     )
     upload_parser.add_argument(
         "--branch",
         type=None,
-        help="If set, the upload will be made to a particular branch of the provided `repo_id`.",
+        help="If set, the upload will be made to a particular branch of the provided `repo-id`.",
     )
     upload_parser.add_argument(
         "--private",

@@ -528,11 +528,16 @@ def _get_user_agent(
         return None
 
     if user_agent is None:
-        user_agent = {
-            "kernels": __version__,
-            "torch": torch.__version__,
-            "build_variant": build_variant(),
-            "file_type": "kernel",
-        }
-
+        user_agent = {}
+    if isinstance(user_agent, dict):
+        user_agent.update(
+            {
+                "kernels": __version__,
+                "torch": torch.__version__,
+                "build_variant": build_variant(),
+                "file_type": "kernel",
+            }
+        )
+    elif isinstance(user_agent, str):
+        user_agent += f"; kernels/{__version__}; torch/{torch.__version__}; build_variant/{build_variant()}; file_type/kernel"
     return user_agent

@@ -16,5 +16,5 @@ packages in that they are made to be:
   the different PyTorch build configurations (various CUDA versions
   and C++ ABIs). Furthermore, older C library versions must be supported.
 
-You can [search for kernels](https://huggingface.co/models?other=kernel) on
+You can [search for kernels](https://huggingface.co/models?other=kernels) on
 the Hub.

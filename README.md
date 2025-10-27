@@ -51,7 +51,7 @@ activation.gelu_fast(y, x)
 print(y)
 ```
 
-You can [search for kernels](https://huggingface.co/models?other=kernel) on
+You can [search for kernels](https://huggingface.co/models?other=kernels) on
 the Hub.
 
 ## 📚 Documentation

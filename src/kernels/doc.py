@@ -111,10 +111,10 @@ def generate_readme_for_kernel(repo_id: str, *, revision: str = "main") -> None:
 def generate_metadata(module: ModuleType) -> None:
     metadata = getattr(module, "__kernel_metadata__", {})
     if "tags" not in metadata:
-        metadata["tags"] = ["kernel"]
+        metadata["tags"] = ["kernels"]
     else:
-        if "kernel" not in metadata["tags"]:
-            metadata["tags"].append("kernel")
+        if "kernels" not in metadata["tags"]:
+            metadata["tags"].append("kernels")
 
     print("---")
     print(yaml.dump(metadata), end="")

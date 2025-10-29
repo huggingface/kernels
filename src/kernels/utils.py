@@ -65,9 +65,7 @@ def build_variant() -> str:
         cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
         compute_framework = f"cann{cann_major}{cann_minor}"
     else:
-        raise AssertionError(
-            "Torch was not compiled with CUDA, Metal, XPU, NPU, or ROCm enabled."
-        )
+        compute_framework = "cpu"
 
     torch_version = parse(torch.__version__)
     cpu = platform.machine()

@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from huggingface_hub import file_exists, snapshot_download
 from packaging.version import parse
 
+from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
 from kernels.lockfile import KernelLock, VariantLock
 
@@ -527,17 +528,28 @@ def _get_user_agent(
     if os.getenv("DISABLE_TELEMETRY", "false").upper() in ENV_VARS_TRUE_VALUES:
         return None
 
+    glibc = glibc_version()
+    python = ".".join(platform.python_version_tuple()[:2])
+
     if user_agent is None:
         user_agent = {}
+
     if isinstance(user_agent, dict):
         user_agent.update(
             {
                 "kernels": __version__,
+                "python": python,
                 "torch": torch.__version__,
                 "build_variant": build_variant(),
                 "file_type": "kernel",
             }
         )
+        if glibc is not None:
+            user_agent["glibc"] = glibc
+
     elif isinstance(user_agent, str):
-        user_agent += f"; kernels/{__version__}; torch/{torch.__version__}; build_variant/{build_variant()}; file_type/kernel"
+        user_agent += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{build_variant()}; file_type/kernel"
+        if glibc is not None:
+            user_agent += f"; glibc/{glibc}"
+
     return user_agent

@@ -16,7 +16,6 @@ from .wheel import build_variant_to_wheel
 
 BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-universal)")
 
-
 def main():
     parser = argparse.ArgumentParser(
         prog="kernel", description="Manage compute kernels"
@@ -209,7 +208,7 @@ def lock_kernels(args):
 def upload_kernels(args):
     # Resolve `kernel_dir` to be uploaded.
     kernel_dir = Path(args.kernel_dir).resolve()
-
+    print(kernel_dir)
     build_dir = None
     for candidate in [kernel_dir / "build", kernel_dir]:
         variants = [
@@ -217,6 +216,8 @@ def upload_kernels(args):
             for variant_path in candidate.glob("torch*")
             if BUILD_VARIANT_REGEX.match(variant_path.name) is not None
         ]
+        print(variants)
+
         if variants:
             build_dir = candidate
             break
@@ -232,10 +233,14 @@ def upload_kernels(args):
     if args.branch is not None:
         create_branch(repo_id=repo_id, branch=args.branch, exist_ok=True)
 
+    print("Build:", build_dir)
+
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
-        if build_variant.is_dir():
+        if build_variant.is_dir() :
             delete_patterns.add(f"{build_variant.name}/**")
+    print("Delete:", delete_patterns)
+    # exit(0)
 
     upload_folder(
         repo_id=repo_id,
@@ -244,6 +249,7 @@ def upload_kernels(args):
         path_in_repo="build",
         delete_patterns=list(delete_patterns),
         commit_message="Build uploaded using `kernels`.",
+        allow_patterns=["torch*"],
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
 

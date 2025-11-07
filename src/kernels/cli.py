@@ -16,6 +16,7 @@ from .wheel import build_variant_to_wheel
 
 BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-universal)")
 
+
 def main():
     parser = argparse.ArgumentParser(
         prog="kernel", description="Manage compute kernels"
@@ -208,7 +209,6 @@ def lock_kernels(args):
 def upload_kernels(args):
     # Resolve `kernel_dir` to be uploaded.
     kernel_dir = Path(args.kernel_dir).resolve()
-    print(kernel_dir)
     build_dir = None
     for candidate in [kernel_dir / "build", kernel_dir]:
         variants = [
@@ -233,14 +233,10 @@ def upload_kernels(args):
     if args.branch is not None:
         create_branch(repo_id=repo_id, branch=args.branch, exist_ok=True)
 
-    print("Build:", build_dir)
-
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
         if build_variant.is_dir() :
             delete_patterns.add(f"{build_variant.name}/**")
-    print("Delete:", delete_patterns)
-    # exit(0)
 
     upload_folder(
         repo_id=repo_id,

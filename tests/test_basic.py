@@ -1,5 +1,6 @@
 import pytest
 import torch
+import torch.nn.functional as F
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
@@ -72,37 +73,33 @@ def test_local_kernel(local_kernel, device):
     assert torch.allclose(y, expected)
 
 
-@pytest.mark.cuda_only
-def test_local_kernel_path_types(local_kernel_path, device):
-    package_name, path = local_kernel_path
+@pytest.mark.parametrize(
+    "repo_revision",
+    [
+        ("kernels-test/flattened-build", "pre-flattening"),
+        ("kernels-test/flattened-build", "main"),
+        ("kernels-test/flattened-build", "without-compat-module"),
+    ],
+)
+def test_local_kernel_path_types(repo_revision, device):
+    repo_id, revision = repo_revision
+    package_name, path = install_kernel(repo_id, revision)
 
     # Top-level repo path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071
     kernel = get_local_kernel(path.parent.parent, package_name)
-    x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
-    y = torch.empty_like(x)
-
-    kernel.gelu_fast(y, x)
-    expected = torch.tensor(
-        [[0.8408, 1.9551, 2.9961], [4.0000, 5.0000, 6.0000], [7.0000, 8.0000, 9.0000]],
-        device=device,
-        dtype=torch.float16,
-    )
-    assert torch.allclose(y, expected)
+    x = torch.arange(0, 32, dtype=torch.float16, device=device).view(2, 16)
+    torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
 
     # Build directory path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build
     kernel = get_local_kernel(path.parent.parent / "build", package_name)
-    y = torch.empty_like(x)
-    kernel.gelu_fast(y, x)
-    assert torch.allclose(y, expected)
+    torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
 
     # Explicit package path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build/torch28-cxx11-cu128-x86_64-linux
     kernel = get_local_kernel(path, package_name)
-    y = torch.empty_like(x)
-    kernel.gelu_fast(y, x)
-    assert torch.allclose(y, expected)
+    torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
 
 
 @pytest.mark.darwin_only
@@ -123,6 +120,8 @@ def test_relu_metal(metal_kernel, dtype):
         # support/test against this version).
         ("kernels-test/only-torch-2.4", "main", False),
         ("google-bert/bert-base-uncased", "87565a309", False),
+        ("kernels-test/flattened-build", "main", True),
+        ("kernels-test/flattened-build", "without-compat-module", True),
     ],
 )
 def test_has_kernel(kernel_exists):
@@ -162,3 +161,24 @@ def test_universal_kernel(universal_kernel):
     out_check = out_check.to(torch.float16)
 
     torch.testing.assert_close(out, out_check, rtol=1e-1, atol=1e-1)
+
+
+@pytest.mark.parametrize(
+    "repo_revision",
+    [
+        ("kernels-test/flattened-build", "pre-flattening"),
+        ("kernels-test/flattened-build", "main"),
+        ("kernels-test/flattened-build", "without-compat-module"),
+    ],
+)
+def test_flattened_build(repo_revision, device):
+    repo_id, revision = repo_revision
+    kernel = get_kernel(repo_id, revision=revision)
+
+    x = torch.arange(0, 32, dtype=torch.float16, device=device).view(2, 16)
+    torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
+
+
+def silu_and_mul_torch(x: torch.Tensor):
+    d = x.shape[-1] // 2
+    return F.silu(x[..., :d]) * x[..., d:]

@@ -54,6 +54,11 @@ jobs:
         run: |
           uv run pytest tests
 
+      - name: Run dependency test with dependency installed
+        run: |
+          uv pip install nvidia-cutlass-dsl
+          uv run pytest tests/test_deps.py
+
       - name: Run staging tests
         env:
           HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}

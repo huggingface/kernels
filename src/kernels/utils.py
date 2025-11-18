@@ -95,8 +95,7 @@ def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
         with open(metadata_path, "r") as f:
             metadata = json.load(f)
             deps = metadata.get("python-depends", [])
-            if deps is not None:
-                validate_dependencies(deps)
+            validate_dependencies(deps)
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():

@@ -19,6 +19,7 @@ from packaging.version import parse
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
 from kernels.lockfile import KernelLock, VariantLock
+from kernels.deps import validate_dependencies
 
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 
@@ -89,6 +90,13 @@ def universal_build_variant() -> str:
 
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
+    metadata_path = variant_path / "metadata.json"
+    if metadata_path.exists():
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+            deps = metadata.get("python-depends", [])
+            validate_dependencies(deps)
+
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
         file_path = variant_path / module_name / "__init__.py"

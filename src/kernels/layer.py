@@ -436,6 +436,7 @@ class LockedLayerRepository:
 
 
 _CACHED_LAYER: Dict[LayerRepositoryProtocol, Type["nn.Module"]] = {}
+_CACHED_KERNEL_MODULE: Dict[LayerRepositoryProtocol, ModuleType] = {}
 
 
 class _DeviceRepos(ABC):
@@ -1172,14 +1173,26 @@ def _get_kernel_layer(repo: LayerRepositoryProtocol) -> Type["nn.Module"]:
 def _get_kernel_function(repo: LayerRepositoryProtocol, func_name: str):
     """Get a function from a kernel."""
 
-    kernel = repo.load()
+    # Check cache first to avoid re-downloading
+    kernel = _CACHED_KERNEL_MODULE.get(repo)
+    if kernel is None:
+        kernel = repo.load()
+        _CACHED_KERNEL_MODULE[repo] = kernel
+    
+    # Use the layer_name from repo as the actual function name in the kernel
+    actual_func_name = repo.layer_name
 
-    if getattr(kernel, "functions", None) is None:
-        raise ValueError(f"Kernel repo {repo} does not define any functions.")
-
-    func = getattr(kernel.functions, func_name, None)
+    # Try to get function from kernel.functions first (if it exists)
+    if hasattr(kernel, "functions"):
+        func = getattr(kernel.functions, actual_func_name, None)
+        if func is not None:
+            return func
+    
+    # Fall back to looking for the function directly in the kernel module
+    func = getattr(kernel, actual_func_name, None)
     if func is None:
-        raise ValueError(f"Function `{func_name}` not found in kernel repo {repo}.")
+        raise ValueError(f"Function `{actual_func_name}` not found in kernel repo {repo}.")
+    
     return func
 
 

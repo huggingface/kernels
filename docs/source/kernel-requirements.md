@@ -20,11 +20,12 @@ The kernel is in the build variant directory and must contain a
 `kernels` package, each variant directory must also contain a single
 directory with the same name as the repository (replacing `-` by `_`).
 For instance, kernels in the `kernels-community/activation` repository
-have a directories like `build/<variant>/activation`. This directory
+have a directory like `build/<variant>/activation`. This directory
 must contain an `__init__.py` file that exports the same symbols as
 `__init__.py` in the build variant directory `build/<variant>`.
 [This example](https://huggingface.co/kernels-test/flattened-build/blob/main/build/torch-universal/flattened_build/__init__.py)
-shows how this can be done.
+shows how this can be done. This compatibility directory is
+automatically created by `kernel-builder`.
 
 ## Build variants
 
@@ -36,14 +37,13 @@ must be available for that combination.
 ## Kernel metadata
 
 The build variant directory can optionally contain a `metadata.json` file.
-Currently the only purpose of the metadata is to specify kernel
-dependencies, for example:
+Currently the only purpose of the metadata is to specify the kernel python dependencies, for example:
 
 ```json
 { "python-depends": ["nvidia-cutlass-dsl"] }
 ```
 
-The following dependencies are allowed: `einops` and `nvidia-cutlass-dsl`
+The following dependencies are the only ones allowed at this stage: `einops` and `nvidia-cutlass-dsl`
 
 ## Versioning
 

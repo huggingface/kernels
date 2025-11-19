@@ -15,11 +15,16 @@ following the template
 `<framework><version>-cxx<abiver>-<cu><cudaver>-<arch>-<os>`.
 For example `build/torch26-cxx98-cu118-x86_64-linux`.
 
-Each variant directory must contain a single directory with the same name
-as the repository (replacing `-` by `_`). For instance, kernels in the
-`kernels-community/activation` repository have a directories like
-`build/<variant>/activation`. This directory
-must be a Python package with an `__init__.py` file.
+The kernel is in the build variant directory and must contain a
+`__init__.py` file. For compatibility with older versions of the
+`kernels` package, each variant directory must also contain a single
+directory with the same name as the repository (replacing `-` by `_`).
+For instance, kernels in the `kernels-community/activation` repository
+have a directories like `build/<variant>/activation`. This directory
+must contain an `__init__.py` file that exports the same symbols as
+`__init__.py` in the build variant directory `build/<variant>`.
+[This example](https://huggingface.co/kernels-test/flattened-build/blob/main/build/torch-universal/flattened_build/__init__.py)
+shows how this can be done.
 
 ## Build variants
 
@@ -27,6 +32,18 @@ A kernel can be compliant for a specific compute framework (e.g. CUDA) or
 architecture (e.g. x86_64). For compliance with a compute framework and
 architecture combination, all the variants from the [build variant list](https://github.com/huggingface/kernel-builder/blob/main/docs/build-variants.md)
 must be available for that combination.
+
+## Kernel metadata
+
+The build variant directory can optionally contain a `metadata.json` file.
+Currently the only purpose of the metadata is to specify kernel
+dependencies, for example:
+
+```json
+{ "python-depends": ["nvidia-cutlass-dsl"] }
+```
+
+The following dependencies are allowed: `einops` and `nvidia-cutlass-dsl`
 
 ## Versioning
 
@@ -50,10 +67,10 @@ have dynamic library dependencies outside:
 
 The Kernel Hub also encourages to write the kernels in a `torch.compile`
 compliant way. This helps to ensure that the kernels are compatible with
-`torch.compile` without introducing any graph breaks and triggering 
+`torch.compile` without introducing any graph breaks and triggering
 recompilation which can limit the benefits of compilation.
 
-[Here](https://github.com/huggingface/kernel-builder/blob/d1ee9bf9301ac8c5199099d90ee1c9d5c789d5ba/examples/relu-backprop-compile/tests/test_relu.py#L162) is a simple test example which checks for graph breaks and 
+[Here](https://github.com/huggingface/kernel-builder/blob/d1ee9bf9301ac8c5199099d90ee1c9d5c789d5ba/examples/relu-backprop-compile/tests/test_relu.py#L162) is a simple test example which checks for graph breaks and
 recompilation triggers during `torch.compile`.
 
 ### Linux

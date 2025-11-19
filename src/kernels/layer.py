@@ -1039,7 +1039,6 @@ def kernelize(
             repo, repo_mode = repo_with_mode
 
             logging.info(f"Using function `{func_name}` from repo {repo}")
-            logging.debug(f"kernelize mode: {mode}, repo mode: {repo_mode}")
 
             try:
                 kernel_func = _get_kernel_function(repo, func_name)

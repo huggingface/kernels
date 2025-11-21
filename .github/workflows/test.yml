@@ -73,6 +73,12 @@ jobs:
           uv pip install triton_layer_norm-0.0.1*.whl
           uv run python -c "import triton_layer_norm"
 
+      - name: Check kernel conversion (flat build)
+        run: |
+          uv run kernels to-wheel kernels-test/flattened-build 0.0.1
+          uv pip install flattened_build-0.0.1*.whl
+          uv run python -c "import flattened_build"
+
       - name: Check README generation
         # For now, just checks that generation doesn't fail.
         run: |

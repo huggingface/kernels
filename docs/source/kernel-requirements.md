@@ -7,6 +7,9 @@ systems and Torch builds.
 You can use [kernel-builder](https://github.com/huggingface/kernel-builder/)
 to build compliant kernels.
 
+[Join us on Discord](https://discord.gg/H6Tkmd88N3) for questions and discussions
+about building kernels!
+
 ## Directory layout
 
 A kernel repository on the Hub must contain a `build` directory. This

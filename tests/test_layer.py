@@ -17,7 +17,7 @@ from kernels import (
     use_kernel_forward_from_hub,
     use_kernel_mapping,
 )
-from kernels.layer import (
+from kernels.layer.layer import (
     _KERNEL_MAPPING,
     _validate_layer,
 )

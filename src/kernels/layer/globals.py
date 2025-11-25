@@ -1,10 +1,10 @@
 import os
+from contextvars import ContextVar
 from typing import (
     Dict,
 )
-from contextvars import ContextVar
-from .repos import DeviceRepos
 
+from .repos import DeviceRepos
 
 _DISABLE_KERNEL_MAPPING: bool = bool(int(os.environ.get("DISABLE_KERNEL_MAPPING", "0")))
 

@@ -11,7 +11,7 @@ from typing import (
 from .repos import DeviceRepos
 from .globals import _KERNEL_MAPPING
 from .layer import kernelize_layer
-from .repos import LayerRepositoryProtocol
+from .repos import RepositoryProtocol
 from .mode import Mode
 from .device import Device
 
@@ -25,7 +25,7 @@ def use_kernel_mapping(
         str,
         Dict[
             Union[Device, str],
-            Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]],
+            Union[RepositoryProtocol, Dict[Mode, RepositoryProtocol]],
         ],
     ],
     *,
@@ -104,7 +104,7 @@ def register_kernel_mapping(
         str,
         Dict[
             Union[Device, str],
-            Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]],
+            Union[RepositoryProtocol, Dict[Mode, RepositoryProtocol]],
         ],
     ],
     inherit_mapping: bool = True,
@@ -116,7 +116,7 @@ def register_kernel_mapping(
     depending on the device and mode. This should be used in conjunction with [`kernelize`].
 
     Args:
-        mapping (`Dict[str, Dict[Union[Device, str], Union[LayerRepositoryProtocol, Dict[Mode, LayerRepositoryProtocol]]]]`):
+        mapping (`Dict[str, Dict[Union[Device, str], Union[RepositoryProtocol, Dict[Mode, RepositoryProtocol]]]]`):
             The kernel mapping to register globally. Maps layer names to device-specific kernels.
             The mapping can specify different kernels for different modes (training, inference, etc.).
         inherit_mapping (`bool`, *optional*, defaults to `True`):

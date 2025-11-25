@@ -6,6 +6,10 @@
 
 [[autodoc]] kernels.use_kernel_forward_from_hub
 
+### use_kernel_func_from_hub
+
+[[autodoc]] kernels.use_kernel_func_from_hub
+
 ### replace_kernel_forward_from_hub
 
 [[autodoc]] kernels.replace_kernel_forward_from_hub
@@ -36,13 +40,25 @@
 
 [[autodoc]] kernels.Mode
 
+### FuncRepository
+
+[[autodoc]] kernels.FuncRepository
+
 ### LayerRepository
 
 [[autodoc]] kernels.LayerRepository
 
+### LocalFuncRepository
+
+[[autodoc]] kernels.LocalFuncRepository
+
 ### LocalLayerRepository
 
 [[autodoc]] kernels.LocalLayerRepository
+
+### LocalFuncRepository
+
+[[autodoc]] kernels.LockedFuncRepository
 
 ### LockedLayerRepository
 

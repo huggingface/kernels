@@ -9,6 +9,7 @@ from torch.nn import functional as F
 from kernels import (
     CUDAProperties,
     Device,
+    FuncRepository,
     LayerRepository,
     LocalLayerRepository,
     Mode,
@@ -123,18 +124,6 @@ class TorchLinearWithCounter(nn.Linear):
         return super().forward(input)
 
 
-@pytest.fixture
-def device():
-    if torch.cuda.is_available():
-        return "cuda"
-    elif hasattr(torch, "xpu") and torch.xpu.is_available():
-        return "xpu"
-    elif _get_privateuse_backend_name() == "npu":
-        return "npu"
-
-    pytest.skip("No CUDA, NPU or XPU")
-
-
 def test_arg_kinds():
     @use_kernel_forward_from_hub("ArgKind")
     class ArgKind(nn.Module):
@@ -163,6 +152,35 @@ def test_hub_forward(cls):
     Y = silu_and_mul(X)
 
     silu_and_mul_with_kernel = kernelize(cls(), device="cuda", mode=Mode.INFERENCE)
+    Y_kernel = silu_and_mul_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert silu_and_mul.n_calls == 1
+    assert silu_and_mul_with_kernel.n_calls == 0
+
+
+@pytest.mark.cuda_only
+@pytest.mark.parametrize("cls", [SiluAndMulWithKernel, SiluAndMulStringDevice])
+def test_hub_func(cls):
+    torch.random.manual_seed(0)
+
+    silu_and_mul = SiluAndMul()
+    X = torch.randn((32, 64), device="cuda")
+    Y = silu_and_mul(X)
+
+    # SiluAndMul is pure, so we can also use a function.
+    with use_kernel_mapping(
+        {
+            "surprise_me": {
+                "cuda": FuncRepository(
+                    "kernels-test/flattened-build",
+                    func_name="silu_and_mul",
+                )
+            }
+        }
+    ):
+        silu_and_mul_with_kernel = kernelize(cls(), device="cuda", mode=Mode.INFERENCE)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)

@@ -10,6 +10,7 @@ from typing import (
     TYPE_CHECKING,
     Dict,
     Optional,
+    Protocol,
     Type,
 )
 
@@ -23,10 +24,15 @@ from ..utils import (
     get_local_kernel,
 )
 from .mode import Mode
-from .repos import _select_repository, LayerRepositoryProtocol
+from .repos import _select_repository, RepositoryProtocol
 
 if TYPE_CHECKING:
     from torch import nn
+
+
+class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
+    @property
+    def layer_name(self) -> str: ...
 
 
 class LayerRepository:
@@ -90,8 +96,9 @@ class LayerRepository:
             repo_id=self._repo_id, revision=self._revision, version=self._version
         )
 
-    def load(self) -> ModuleType:
-        return get_kernel(self._repo_id, revision=self._resolve_revision())
+    def load(self) -> Type["nn.Module"]:
+        kernel = get_kernel(self._repo_id, revision=self._resolve_revision())
+        return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
         return (
@@ -147,8 +154,9 @@ class LocalLayerRepository:
         self._package_name = package_name
         self.layer_name = layer_name
 
-    def load(self) -> ModuleType:
-        return get_local_kernel(self._repo_path, self._package_name)
+    def load(self) -> Type["nn.Module"]:
+        kernel = get_local_kernel(self._repo_path, self._package_name)
+        return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
         return (
@@ -203,8 +211,9 @@ class LockedLayerRepository:
 
         return locked_sha
 
-    def load(self) -> ModuleType:
-        return get_kernel(repo_id=self._repo_id, revision=self._resolve_revision())
+    def load(self) -> Type["nn.Module"]:
+        kernel = get_kernel(repo_id=self._repo_id, revision=self._resolve_revision())
+        return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
         return (
@@ -220,7 +229,7 @@ class LockedLayerRepository:
         return f"`{self._repo_id}` (revision: {self._resolve_revision()}), layer `{self.layer_name}`"
 
 
-_CACHED_LAYER: Dict[LayerRepositoryProtocol, Type["nn.Module"]] = {}
+_CACHED_LAYER: Dict[RepositoryProtocol, Type["nn.Module"]] = {}
 
 
 def replace_kernel_forward_from_hub(
@@ -352,7 +361,7 @@ def kernelize_layer(
 
     repo, repo_mode = repo_with_mode
 
-    logging.info(f"Using layer `{repo.layer_name}` from repo {repo}")
+    logging.info(f"Using function/layer from repo {repo}")
     logging.debug(f"kernelize mode: {mode}, repo mode: {repo_mode}")
 
     layer = _get_layer_memoize(repo, module_class)
@@ -373,10 +382,10 @@ def kernelize_layer(
     )
 
 
-def _get_kernel_layer(repo: LayerRepositoryProtocol) -> Type["nn.Module"]:
+def _get_kernel_layer(
+    repo: LayerRepositoryProtocol, kernel: ModuleType
+) -> Type["nn.Module"]:
     """Get a layer from a kernel."""
-
-    kernel = repo.load()
 
     if getattr(kernel, "layers", None) is None:
         raise ValueError(f"Kernel repo {repo} does not define any layers.")
@@ -387,7 +396,7 @@ def _get_kernel_layer(repo: LayerRepositoryProtocol) -> Type["nn.Module"]:
     return layer
 
 
-def _validate_layer(*, check_cls, cls, repo: LayerRepositoryProtocol):
+def _validate_layer(*, check_cls, cls, repo: RepositoryProtocol):
     import torch.nn as nn
 
     # The layer must have at least have the following properties: (1) it
@@ -471,7 +480,7 @@ def _validate_layer_has_mode(
     *,
     layer_name: str,
     module: Type["nn.Module"],
-    repo: LayerRepositoryProtocol,
+    repo: RepositoryProtocol,
     repo_mode: Mode,
 ):
     """
@@ -480,7 +489,7 @@ def _validate_layer_has_mode(
 
     if Mode.TRAINING in repo_mode and not getattr(module, "has_backward", True):
         raise ValueError(
-            f"Layer `{repo.layer_name}` from repo {repo} does not support backward.\n"
+            f"Function/layer from repo {repo} does not support backward.\n"
             f"Was registered for `{layer_name}` with mode `{repo_mode}`"
         )
 
@@ -488,7 +497,7 @@ def _validate_layer_has_mode(
         module, "can_torch_compile", False
     ):
         raise ValueError(
-            f"Layer `{repo.layer_name}` from repo {repo} does not support torch.compile.\n"
+            f"Function/layer from repo {repo} does not support torch.compile.\n"
             f"Was registered for `{layer_name}` with mode `{repo_mode}`"
         )
 
@@ -496,13 +505,13 @@ def _validate_layer_has_mode(
 
 
 def _get_layer_memoize(
-    repo: LayerRepositoryProtocol, module_class: Type["nn.Module"]
+    repo: RepositoryProtocol, module_class: Type["nn.Module"]
 ) -> Type["nn.Module"]:
     layer = _CACHED_LAYER.get(repo, None)
     if layer is not None:
         return layer
 
-    layer = _get_kernel_layer(repo)
+    layer = repo.load()
     _validate_layer(check_cls=module_class, cls=layer, repo=repo)
     _CACHED_LAYER[repo] = layer
 

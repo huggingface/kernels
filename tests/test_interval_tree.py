@@ -177,7 +177,7 @@ def test_property_based_interval_tree():
                 simple_result = simple.find_smallest_interval(point)
 
                 assert tree_result == simple_result, (
-                    f"Mismatch for point {point} after inserting {i+1} intervals. "
+                    f"Mismatch for point {point} after inserting {i + 1} intervals. "
                     f"Tree: {tree_result}, Simple: {simple_result}. "
                     f"Last inserted: ({start}, {end})"
                 )

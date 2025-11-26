@@ -43,6 +43,36 @@ replace_kernel_forward_from_hub(SiluAndMul, "SiluAndMul")
 it signifies that the maintainer intends to keep the `forward` signature
 compatible with layers from the hub.
 
+### Using a function as a layer
+
+Sometimes it can be useful to make a function extensible, for example
+because the function cannot be replaced by a layer. In such cases, you
+can annotate the function with the `use_kernel_func_from_hub` decorator:
+
+```python
+@use_kernel_func_from_hub("silu_and_mul")
+def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
+    d = x.shape[-1] // 2
+    return F.silu(x[..., :d]) * x[..., d:]
+```
+
+This will replace the function by an instantiated `torch.nn.Module`
+(singleton) that calls the function itself in its forward method.
+
+**Note:** for kernelization to see the function, it must be a member of
+another `torch.nn.Module` that is part of the model. For example:
+
+```python
+class FeedForward(nn.Module):
+  def __init__(self, in_features: int, out_features: int):
+      self.linear = nn.Linear(in_features, out_features)
+      # Note: silu_and_mul is a Torch module.
+      self.silu_and_mul = silu_and_mul
+
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+      return self.silu_and_mul(self.linear(x))
+```
+
 ## Kernelizing a model
 
 A model will not use Hub kernels by default, even if it contains extensible
@@ -156,6 +186,21 @@ with use_kernel_mapping(kernel_layer_mapping):
 
 This ensures that the mapping is not active anymore outside the
 `with`-scope.
+
+If the layer is stateless (it does not use member variables in its forward _or_ it was
+originally a function that was converted into a kernel layer with
+`use_kernel_func_from_hub`), it can also be mapped to a kernel function:
+
+```python
+kernel_layer_mapping = {
+    "SiluAndMul": {
+        "cuda": FuncRepository(
+            repo_id="kernels-community/activation",
+            func_name="silu_and_mul",
+        ),
+    }
+}
+```
 
 ### Using version bounds
 

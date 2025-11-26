@@ -31,6 +31,18 @@ def pytest_addoption(parser):
     )
 
 
+@pytest.fixture
+def device():
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch, "xpu") and torch.xpu.is_available():
+        return "xpu"
+    elif _get_privateuse_backend_name() == "npu":
+        return "npu"
+
+    pytest.skip("No CUDA, NPU or XPU")
+
+
 def pytest_runtest_setup(item):
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")

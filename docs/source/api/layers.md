@@ -56,7 +56,7 @@
 
 [[autodoc]] kernels.LocalLayerRepository
 
-### LocalFuncRepository
+### LockedFuncRepository
 
 [[autodoc]] kernels.LockedFuncRepository
 

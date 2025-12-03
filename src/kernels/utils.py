@@ -317,7 +317,6 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
     """
     # Presume we were given the top level path of the kernel repository.
     for base_path in [repo_path, repo_path / "build"]:
-        # Prefer the universal variant if it exists.
         for v in build_variants():
             variant_path = base_path / v
             if variant_path.exists():

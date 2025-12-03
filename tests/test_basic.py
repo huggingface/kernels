@@ -80,3 +80,10 @@ def test_universal_kernel(universal_kernel):
     out_check = out_check.to(torch.float16)
 
     torch.testing.assert_close(out, out_check, rtol=1e-1, atol=1e-1)
+
+
+def test_noarch_kernel(device):
+    supported_devices = ["cpu", "cuda"]
+    if device not in supported_devices:
+        pytest.skip(f"Device is not one of: {','.join(supported_devices)}")
+    get_kernel("kernels-test/silu-and-mul-noarch")

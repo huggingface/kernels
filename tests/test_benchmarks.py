@@ -6,7 +6,7 @@ from kernels import get_kernel
 
 @pytest.fixture
 def kernel():
-    return get_kernel("kernels-community/activation")
+    return get_kernel("kernels-community/activation", revision="v0.0.3")
 
 
 @pytest.fixture

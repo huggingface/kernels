@@ -40,7 +40,7 @@ def device():
     elif _get_privateuse_backend_name() == "npu":
         return "npu"
 
-    pytest.skip("No CUDA, NPU or XPU")
+    return "cpu"
 
 
 def pytest_runtest_setup(item):

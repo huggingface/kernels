@@ -23,7 +23,6 @@ from kernels.layer.layer import (
     _validate_layer,
 )
 from kernels.utils import (
-    _get_privateuse_backend_name,
     install_kernel,
 )
 
@@ -250,16 +249,13 @@ def test_hub_forward_npu():
     assert silu_and_mul_with_kernel.n_calls == 0
 
 
-@pytest.mark.skipif(
-    hasattr(torch, "xpu") and getattr(torch.xpu, "is_available", lambda: False)(),
-    reason="Skip on xpu devices",
-)
-@pytest.mark.skipif(
-    _get_privateuse_backend_name() == "npu",
-    reason="Skip on npu devices",
-)
-def test_rocm_kernel_mapping():
+def test_rocm_kernel_mapping(device):
     """Test that ROCm shorthand device mapping works correctly."""
+
+    # Lookup uses the GPU capability, so it fails for non-ROCm/CUDA.
+    if device not in ["cuda", "rocm"]:
+        pytest.skip("Test only applicable to CUDA and ROCM devices")
+
     kernel_layer_mapping = {
         "SiluAndMul": {
             "rocm": LayerRepository(

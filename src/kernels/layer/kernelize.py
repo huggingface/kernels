@@ -276,7 +276,7 @@ def kernelize(
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cuda", "mps", "npu", "rocm", "xpu"}
+    supported_devices = {"cpu", "cuda", "mps", "npu", "rocm", "xpu"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"

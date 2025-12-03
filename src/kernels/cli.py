@@ -14,7 +14,7 @@ from kernels.utils import install_kernel, install_kernel_all_variants
 from .doc import generate_readme_for_kernel
 from .wheel import build_variant_to_wheel
 
-BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-universal)")
+BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-)")
 
 
 def main():

@@ -24,7 +24,9 @@ class DeviceRepos(ABC):
     @staticmethod
     def create_repo(device: Device) -> "DeviceRepos":
         """Create an appropriate repository set for this device type."""
-        if device.type == "cuda":
+        if device.type == "cpu":
+            return _CPURepos()
+        elif device.type == "cuda":
             return _CUDARepos()
         elif device.type == "rocm":
             return _ROCMRepos()
@@ -49,6 +51,26 @@ class DeviceRepos(ABC):
         Insert a repository for a specific device and mode.
         """
         ...
+
+
+class _CPURepos(DeviceRepos):
+    _repos: Dict[Mode, RepositoryProtocol]
+
+    def __init__(self):
+        super().__init__()
+        self._repos = {}
+
+    @property
+    def repos(
+        self,
+    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+        return self._repos
+
+    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+        if device.type != "cpu":
+            raise ValueError(f"Device type must be 'cpu', got {device.type}")
+
+        self._repos = repos
 
 
 class _XPURepos(DeviceRepos):

@@ -6,7 +6,7 @@ from kernels import get_kernel, has_kernel
 
 @pytest.fixture
 def kernel():
-    return get_kernel("kernels-community/activation")
+    return get_kernel("kernels-community/activation", revision="v0.0.3")
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def test_gelu_fast(kernel, device):
 @pytest.mark.parametrize(
     "kernel_exists",
     [
-        ("kernels-community/activation", "main", True),
+        ("kernels-community/activation", "v0.0.3", True),
         ("kernels-community/triton-layer-norm", "main", True),
         # Repo only contains Torch 2.4 kernels (and we don't
         # support/test against this version).
@@ -64,3 +64,10 @@ def test_universal_kernel(universal_kernel):
     out_check = out_check.to(torch.float16)
 
     torch.testing.assert_close(out, out_check, rtol=1e-1, atol=1e-1)
+
+
+def test_noarch_kernel(device):
+    supported_devices = ["cpu", "cuda"]
+    if device not in supported_devices:
+        pytest.skip(f"Device is not one of: {','.join(supported_devices)}")
+    get_kernel("kernels-test/silu-and-mul-noarch")

@@ -224,6 +224,7 @@ def test_fallback_used_when_training():
             "Linear": {
                 Device(type="cuda"): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
+                    revision="c6d6c2e62ea1cc289954b8ff5ff19b1e8b8e857c",
                     layer_name="LinearImplicitBackward",
                 )
             }
@@ -243,6 +244,7 @@ def test_fallback_used_when_training():
             "Linear": {
                 Device(type="cuda"): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
+                    revision="c6d6c2e62ea1cc289954b8ff5ff19b1e8b8e857c",
                     layer_name="LinearBackward",
                 )
             }
@@ -262,6 +264,7 @@ def test_fallback_used_when_training():
             "Linear": {
                 Device(type="cuda"): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
+                    revision="c6d6c2e62ea1cc289954b8ff5ff19b1e8b8e857c",
                     layer_name="LinearNoBackward",
                 )
             }

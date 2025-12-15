@@ -18,8 +18,8 @@ from packaging.version import parse
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
-from kernels.lockfile import KernelLock, VariantLock
 from kernels.deps import validate_dependencies
+from kernels.lockfile import KernelLock, VariantLock
 
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 
@@ -45,6 +45,23 @@ def _get_privateuse_backend_name() -> Optional[str]:
     if hasattr(torch._C, "_get_privateuse1_backend_name"):
         return torch._C._get_privateuse1_backend_name()
     return None
+
+
+def backend() -> str:
+    import torch
+
+    if torch.version.cuda is not None:
+        return "cuda"
+    elif torch.version.hip is not None:
+        return "hip"
+    elif torch.backends.mps.is_available():
+        return "metal"
+    elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
+        return "xpu"
+    elif _get_privateuse_backend_name() == "npu":
+        return "cann"
+    else:
+        return "cpu"
 
 
 def build_variant() -> str:
@@ -117,7 +134,7 @@ def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
         with open(metadata_path, "r") as f:
             metadata = json.load(f)
             deps = metadata.get("python-depends", [])
-            validate_dependencies(deps)
+            validate_dependencies(deps, backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():

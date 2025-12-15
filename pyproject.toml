@@ -46,6 +46,9 @@ kernels = "kernels.cli:main"
 [project.entry-points."egg_info.writers"]
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
+[tool.setuptools.package-data]
+kernels = ["python_depends.json"]
+
 [tool.isort]
 profile = "black"
 line_length = 119

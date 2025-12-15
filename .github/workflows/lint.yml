@@ -29,3 +29,22 @@ jobs:
         run: |
           uv run black --check src
           uv run black --check tests
+
+  validate-dependencies:
+    name: Validate python_depends.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate python_depends.json is up-to-date
+        run: |
+          python update_python_depends.py --validate || {
+            echo "Error: python_depends.json is out of date."
+            echo "Please run: python update_python_depends.py"
+            exit 1
+          }

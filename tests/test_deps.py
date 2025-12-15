@@ -5,11 +5,13 @@ import pytest
 from kernels import get_kernel
 
 
-def test_python_deps():
-    must_raise = find_spec("nvidia_cutlass_dsl") is None
+@pytest.mark.parametrize("dependency", ["einops", "nvidia-cutlass-dsl"])
+def test_python_deps(dependency):
+    must_raise = find_spec(dependency.replace("-", "_")) is None
     if must_raise:
         with pytest.raises(
-            ImportError, match=r"Kernel requires dependency `nvidia-cutlass-dsl`"
+            ImportError,
+            match=r"Kernel requires Python dependency `(einops|nvidia-cutlass-dsl)`",
         ):
             get_kernel("kernels-test/python-dep")
     else:

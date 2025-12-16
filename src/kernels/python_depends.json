@@ -1,0 +1,35 @@
+{
+  "general": {
+    "einops": {
+      "nix": [
+        "einops"
+      ],
+      "python": [
+        "einops"
+      ]
+    }
+  },
+  "backends": {
+    "cpu": {},
+    "cuda": {
+      "nvidia-cutlass-dsl": {
+        "nix": [
+          "nvidia-cutlass-dsl"
+        ],
+        "python": [
+          "nvidia-cutlass-dsl"
+        ]
+      }
+    },
+    "metal": {},
+    "rocm": {},
+    "xpu": {
+      "onednn": {
+        "nix": [],
+        "python": [
+          "onednn-devel"
+        ]
+      }
+    }
+  }
+}

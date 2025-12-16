@@ -16,7 +16,6 @@ class RepositoryProtocol(Protocol):
     def load(self) -> Type["nn.Module"]: ...
 
 
-
 class DeviceRepos(ABC):
     """
     Device-specific kernel layer repositories.
@@ -44,8 +43,7 @@ class DeviceRepos(ABC):
     @abstractmethod
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
-        ...
+    ) -> Optional[Dict[Mode, RepositoryProtocol]]: ...
 
     @abstractmethod
     def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):

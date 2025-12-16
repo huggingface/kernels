@@ -35,7 +35,6 @@ class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
     def layer_name(self) -> str: ...
 
 
-
 class LayerRepository:
     """
     Repository and name of a layer for kernel mapping.

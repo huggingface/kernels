@@ -21,8 +21,7 @@ if TYPE_CHECKING:
 
 class FuncRepositoryProtocol(RepositoryProtocol, Protocol):
     @property
-    def func_name(self) -> str:
-        ...
+    def func_name(self) -> str: ...
 
 
 class FuncRepository:

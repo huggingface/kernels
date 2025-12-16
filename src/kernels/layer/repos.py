@@ -13,8 +13,8 @@ if TYPE_CHECKING:
 
 
 class RepositoryProtocol(Protocol):
-    def load(self) -> Type["nn.Module"]:
-        ...
+    def load(self) -> Type["nn.Module"]: ...
+
 
 
 class DeviceRepos(ABC):

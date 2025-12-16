@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
 class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
     @property
-    def layer_name(self) -> str:
-        ...
+    def layer_name(self) -> str: ...
+
 
 
 class LayerRepository:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict
 from urllib.request import Request, urlopen
 
-URL = "https://raw.githubusercontent.com/huggingface/kernel-builder/refs/heads/backend-deps/build2cmake/src/python_dependencies.json"
+URL = "https://raw.githubusercontent.com/huggingface/kernel-builder/refs/heads/main/build2cmake/src/python_dependencies.json"
 TARGET_DIR = Path(__file__).parent / "src" / "kernels"
 TARGET_FILE = TARGET_DIR / "python_depends.json"
 
@@ -50,7 +50,9 @@ def validate_file(url: str, target_path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download or validate python_depends.json")
+    parser = argparse.ArgumentParser(
+        description="Download or validate python_depends.json"
+    )
     parser.add_argument(
         "--validate",
         action="store_true",

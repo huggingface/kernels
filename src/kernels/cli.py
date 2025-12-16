@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-from huggingface_hub import create_repo, upload_folder, create_branch
+from huggingface_hub import create_branch, create_repo, upload_folder
 
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
@@ -55,7 +55,7 @@ backend = "rocm"
 # rocm-archs = ["gfx906", "gfx908", "gfx90a", "gfx940", "gfx941", "gfx942", "gfx1030", "gfx1100", "gfx1101"] # if not specified, all architectures will be used
 depends = ["torch"]
 src = [
-    "%(kernel_name)s_cuda/kernel.cu", 
+    "%(kernel_name)s_cuda/kernel.cu",
     "%(kernel_name)s_cuda/kernel.h",
 ]
 
@@ -147,6 +147,7 @@ DEFAULT_TORCH_BINDING_H = """\
 
 torch::Tensor kernel_function(torch::Tensor input);
 """
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -400,19 +401,21 @@ def init_kernel_project(args):
     """Initialize a new kernel project with the standard structure."""
     kernel_name = args.kernel_name
     if "/" in kernel_name or "\\" in kernel_name:
-        raise ValueError("Kernel name cannot contain path separators, to specify an output directory use the --output-dir argument")
+        raise ValueError(
+            "Kernel name cannot contain path separators, to specify an output directory use the --output-dir argument"
+        )
     # Normalize kernel name (replace hyphens with underscores for Python compatibility)
     kernel_name_normalized = kernel_name.replace("-", "_")
-    
+
     # Determine output directory
     if args.output_dir is not None:
         output_dir = (Path(args.output_dir) / kernel_name).resolve()
     else:
         output_dir = Path.cwd() / kernel_name
-    
+
     # Determine repo_id
     repo_id = args.repo_id if args.repo_id else f"your-username/{kernel_name}"
-    
+
     # Check if directory already exists
     if output_dir.exists() and any(output_dir.iterdir()):
         print(
@@ -420,7 +423,7 @@ def init_kernel_project(args):
             file=sys.stderr,
         )
         sys.exit(1)
-    
+
     # Create directory structure
     dirs_to_create = [
         output_dir,
@@ -431,33 +434,34 @@ def init_kernel_project(args):
         output_dir / "torch-ext",
         output_dir / "torch-ext" / kernel_name_normalized,
     ]
-    
+
     for dir_path in dirs_to_create:
         dir_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Template substitution values
     template_values = {
         "kernel_name": kernel_name_normalized,
         "repo_id": repo_id,
     }
-    
+
     # Create files
     files_to_create = {
         "flake.nix": DEFAULT_FLAKE_NIX % template_values,
         "build.toml": DEFAULT_BUILD_TOML % template_values,
         ".gitattributes": DEFAULT_GITATTRIBUTES,
         "README.md": DEFAULT_README % template_values,
-        f"torch-ext/{kernel_name_normalized}/__init__.py": DEFAULT_INIT_PY % template_values,
-        f"torch-ext/torch_binding.cpp": DEFAULT_TORCH_BINDING_CPP % template_values,
-        f"torch-ext/torch_binding.h": DEFAULT_TORCH_BINDING_H % template_values,
+        f"torch-ext/{kernel_name_normalized}/__init__.py": DEFAULT_INIT_PY
+        % template_values,
+        "torch-ext/torch_binding.cpp": DEFAULT_TORCH_BINDING_CPP % template_values,
+        "torch-ext/torch_binding.h": DEFAULT_TORCH_BINDING_H % template_values,
     }
-    
+
     for file_path, content in files_to_create.items():
         full_path = output_dir / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, "w") as f:
             f.write(content)
-    
+
     # Print success message
     print(f"✅ Kernel project '{kernel_name}' initialized successfully at: {output_dir}")
     print()
@@ -467,9 +471,11 @@ def init_kernel_project(args):
     print("Next steps:")
     print(f"  1. cd {output_dir}")
     print(f"  2. Add your kernel implementation in {kernel_name_normalized}/")
-    print("  3. Update torch-ext/{kernel_name}/__init__.py to export your functions".format(
-        kernel_name=kernel_name_normalized
-    ))
+    print(
+        "  3. Update torch-ext/{kernel_name}/__init__.py to export your functions".format(
+            kernel_name=kernel_name_normalized
+        )
+    )
     print("  4. Build with: nix run .#build-and-copy ")
     print(f"  5. Upload with: kernels upload . --repo-id {repo_id}")
 
@@ -477,13 +483,17 @@ def init_kernel_project(args):
 def _print_tree(directory: Path, prefix: str = ""):
     """Print a directory tree structure."""
     entries = sorted(directory.iterdir(), key=lambda x: (x.is_file(), x.name))
-    entries = [e for e in entries if not e.name.startswith(".git") or e.name == ".gitattributes"]
-    
+    entries = [
+        e
+        for e in entries
+        if not e.name.startswith(".git") or e.name == ".gitattributes"
+    ]
+
     for i, entry in enumerate(entries):
         is_last = i == len(entries) - 1
         connector = "└── " if is_last else "├── "
         print(f"{prefix}{connector}{entry.name}")
-        
+
         if entry.is_dir():
             extension = "    " if is_last else "│   "
             _print_tree(entry, prefix + extension)

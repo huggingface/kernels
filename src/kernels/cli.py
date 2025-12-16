@@ -463,7 +463,9 @@ def init_kernel_project(args):
             f.write(content)
 
     # Print success message
-    print(f"✅ Kernel project '{kernel_name}' initialized successfully at: {output_dir}")
+    print(
+        f"✅ Kernel project '{kernel_name}' initialized successfully at: {output_dir}"
+    )
     print()
     print("Project structure:")
     _print_tree(output_dir, prefix="")

@@ -206,7 +206,7 @@ def upload_kernels(args):
         path_in_repo="build",
         delete_patterns=list(delete_patterns),
         commit_message="Build uploaded using `kernels`.",
-        allow_patterns=["torch-*"],
+        allow_patterns=["torch*"],
     )
     print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
 

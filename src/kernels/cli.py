@@ -113,6 +113,55 @@ def main():
         )
     )
 
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Run and submit benchmark results for a kernel",
+    )
+    benchmark_parser.add_argument(
+        "repo_id",
+        type=str,
+        help="Kernel repo ID (e.g., kernels-community/activation)",
+    )
+    benchmark_parser.add_argument(
+        "--central",
+        action="store_true",
+        help="Use well-known benchmark from huggingface/kernels-benchmarks",
+    )
+    benchmark_parser.add_argument(
+        "--script",
+        type=str,
+        default=None,
+        help="Custom benchmark script path (overrides auto-discovery)",
+    )
+    benchmark_parser.add_argument(
+        "--revision",
+        type=str,
+        default="main",
+        help="Kernel revision (default: main)",
+    )
+    benchmark_parser.add_argument(
+        "--local-dir",
+        type=str,
+        default=None,
+        help="Use local directory instead of downloading",
+    )
+    benchmark_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run without submitting results",
+    )
+    benchmark_parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Save JSON results to file",
+    )
+    benchmark_parser.add_argument("--iterations", type=int, default=100)
+    benchmark_parser.add_argument("--warmup", type=int, default=10)
+    benchmark_parser.add_argument("--api-url", type=str, default=None)
+    benchmark_parser.add_argument("--token", type=str, default=None)
+    benchmark_parser.set_defaults(func=run_benchmark)
+
     args = parser.parse_args()
     args.func(args)
 
@@ -236,4 +285,22 @@ def check_kernel(
         python_abi=python_abi,
         repo_id=repo_id,
         revision=revision,
+    )
+
+
+def run_benchmark(args):
+    from kernels import benchmark
+
+    benchmark.run_benchmark(
+        repo_id=args.repo_id,
+        script=args.script,
+        use_central=args.central,
+        revision=args.revision,
+        local_dir=args.local_dir,
+        iterations=args.iterations,
+        warmup=args.warmup,
+        api_url=args.api_url,
+        token=args.token,
+        dry_run=args.dry_run,
+        output=args.output,
     )

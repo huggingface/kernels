@@ -41,7 +41,9 @@ def _percentile(sorted_data: list[float], p: float) -> float:
     return sorted_data[lower] * (1 - weight) + sorted_data[upper] * weight
 
 
-def _calculate_iqr_and_outliers(times_ms: list[float]) -> tuple[float, float, float, int]:
+def _calculate_iqr_and_outliers(
+    times_ms: list[float],
+) -> tuple[float, float, float, int]:
     """Calculate Q1, Q3, IQR, and count outliers.
 
     Returns:
@@ -105,7 +107,9 @@ class TimingResults:
     q3_ms: float = 0.0  # 75th percentile
     iqr_ms: float = 0.0  # Interquartile range (Q3 - Q1)
     outliers: int = 0  # Count of outliers (outside Q1-1.5*IQR to Q3+1.5*IQR)
-    verified: Optional[bool] = None  # None = no verify fn, True = passed, False = failed
+    verified: Optional[bool] = (
+        None  # None = no verify fn, True = passed, False = failed
+    )
 
 
 @dataclass
@@ -185,7 +189,17 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
 
     # Build format strings
     def border(l, m, r):
-        cols = [cls_w + 2, method_w + 2, num_w + 2, num_w + 2, num_w + 2, num_w + 2, num_w + 2, out_w + 2, 11]
+        cols = [
+            cls_w + 2,
+            method_w + 2,
+            num_w + 2,
+            num_w + 2,
+            num_w + 2,
+            num_w + 2,
+            num_w + 2,
+            out_w + 2,
+            11,
+        ]
         return l + m.join("─" * w for w in cols) + r
 
     print(file=sys.stderr)
@@ -330,7 +344,9 @@ def run_benchmark_class(
 
     # Find all benchmark_* methods
     benchmark_methods = [
-        name for name in dir(benchmark_cls) if name.startswith("benchmark_") and callable(getattr(benchmark_cls, name))
+        name
+        for name in dir(benchmark_cls)
+        if name.startswith("benchmark_") and callable(getattr(benchmark_cls, name))
     ]
 
     if not benchmark_methods:
@@ -441,7 +457,11 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
     classes = []
     for name in dir(module):
         obj = getattr(module, name)
-        if isinstance(obj, type) and issubclass(obj, Benchmark) and obj is not Benchmark:
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, Benchmark)
+            and obj is not Benchmark
+        ):
             classes.append(obj)
 
     return classes
@@ -463,7 +483,9 @@ def discover_benchmark_script(
     if custom_script:
         script_path = repo_path / custom_script
         if not script_path.exists():
-            print(f"Error: Benchmark script not found: {custom_script}", file=sys.stderr)
+            print(
+                f"Error: Benchmark script not found: {custom_script}", file=sys.stderr
+            )
             sys.exit(1)
         return script_path, repo_path
 
@@ -546,10 +568,14 @@ def _run_benchmark_script_subprocess(
             )
         }
     except (json.JSONDecodeError, KeyError) as e:
-        raise RuntimeError(f"Error parsing benchmark output: {e}\nStdout: {result.stdout}")
+        raise RuntimeError(
+            f"Error parsing benchmark output: {e}\nStdout: {result.stdout}"
+        )
 
 
-def run_benchmark_script(script_path: Path, *, iterations: int, warmup: int, cwd: Path) -> dict[str, TimingResults]:
+def run_benchmark_script(
+    script_path: Path, *, iterations: int, warmup: int, cwd: Path
+) -> dict[str, TimingResults]:
     """Run a benchmark script and return timing results.
 
     Automatically detects whether the script uses the class-based format
@@ -580,7 +606,9 @@ def run_benchmark_script(script_path: Path, *, iterations: int, warmup: int, cwd
         return all_results
     else:
         # Legacy subprocess-based execution
-        return _run_benchmark_script_subprocess(script_path, iterations=iterations, warmup=warmup, cwd=cwd)
+        return _run_benchmark_script_subprocess(
+            script_path, iterations=iterations, warmup=warmup, cwd=cwd
+        )
 
 
 def submit_benchmark(
@@ -593,7 +621,9 @@ def submit_benchmark(
     if token is None:
         token = get_token()
     if token is None:
-        raise ValueError("No HuggingFace token. Run `huggingface-cli login` or use --token")
+        raise ValueError(
+            "No HuggingFace token. Run `huggingface-cli login` or use --token"
+        )
 
     endpoint = f"{api_url or 'https://huggingface.co'}/api/models/{repo_id}/benchmarks"
     response = requests.post(
@@ -644,7 +674,9 @@ def run_benchmark(
     )
 
     try:
-        timing_results = run_benchmark_script(script_full_path, iterations=iterations, warmup=warmup, cwd=cwd)
+        timing_results = run_benchmark_script(
+            script_full_path, iterations=iterations, warmup=warmup, cwd=cwd
+        )
     except RuntimeError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)

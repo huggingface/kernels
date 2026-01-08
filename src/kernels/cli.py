@@ -156,6 +156,11 @@ def main():
         default=None,
         help="Save JSON results to file",
     )
+    benchmark_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print full JSON results to stdout (in addition to table)",
+    )
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)
     benchmark_parser.add_argument("--api-url", type=str, default=None)
@@ -301,6 +306,7 @@ def run_benchmark(args):
         warmup=args.warmup,
         api_url=args.api_url,
         token=args.token,
-        dry_run=not args.upload,
+        upload=args.upload,
         output=args.output,
+        print_json=args.json,
     )

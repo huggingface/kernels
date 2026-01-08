@@ -187,20 +187,12 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
     num_w = 10
     out_w = 8
 
-    # Build format strings
-    def border(l, m, r):
-        cols = [
-            cls_w + 2,
-            method_w + 2,
-            num_w + 2,
-            num_w + 2,
-            num_w + 2,
-            num_w + 2,
-            num_w + 2,
-            out_w + 2,
-            11,
-        ]
-        return l + m.join("─" * w for w in cols) + r
+    # Build table border
+    ref_w = 11  # "Ref Match" column
+    col_widths = [cls_w, method_w, num_w, num_w, num_w, num_w, num_w, out_w, ref_w - 2]
+
+    def border(left, sep, right):
+        return left + sep.join("─" * (w + 2) for w in col_widths) + right
 
     print(file=sys.stderr)
     print(border("┌", "┬", "┐"), file=sys.stderr)

@@ -23,12 +23,12 @@ except ImportError:
     torch = None  # type: ignore[assignment]
     TORCH_AVAILABLE = False
 
+# TODO: handle the central repo case for 'well known' benchmarks
 CENTRAL_BENCHMARKS_REPO = "huggingface/kernels-benchmarks"
 BENCHMARK_PATHS = ["benchmarks/bench.py", "benchmark.py"]
 
 
 def _percentile(sorted_data: list[float], p: float) -> float:
-    """Calculate percentile from sorted data using linear interpolation."""
     n = len(sorted_data)
     if n == 0:
         return 0.0
@@ -44,11 +44,6 @@ def _percentile(sorted_data: list[float], p: float) -> float:
 def _calculate_iqr_and_outliers(
     times_ms: list[float],
 ) -> tuple[float, float, float, int]:
-    """Calculate Q1, Q3, IQR, and count outliers.
-
-    Returns:
-        Tuple of (q1, q3, iqr, outlier_count)
-    """
     sorted_times = sorted(times_ms)
     q1 = _percentile(sorted_times, 25)
     q3 = _percentile(sorted_times, 75)
@@ -169,7 +164,6 @@ class BenchmarkResult:
 
 
 def _print_results_table(results: dict[str, TimingResults]) -> None:
-    """Print a formatted table of benchmark results to stderr."""
     # Parse workload names into (class, method) tuples
     parsed: list[tuple[str, str, str]] = []  # (full_name, class_name, method_name)
     for name in sorted(results.keys()):
@@ -322,16 +316,6 @@ def run_benchmark_class(
     iterations: int,
     warmup: int,
 ) -> dict[str, TimingResults]:
-    """Run all benchmark_* methods in a Benchmark subclass.
-
-    Args:
-        benchmark_cls: A subclass of Benchmark
-        iterations: Number of timed iterations
-        warmup: Number of warmup iterations
-
-    Returns:
-        Dict mapping workload names to TimingResults
-    """
     results = {}
 
     # Find all benchmark_* methods
@@ -422,15 +406,6 @@ def run_benchmark_class(
 
 
 def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchmark]]:
-    """Import a script and find all Benchmark subclasses.
-
-    Args:
-        script_path: Path to the benchmark script
-        cwd: Working directory for script execution
-
-    Returns:
-        List of Benchmark subclasses found in the script
-    """
     spec = importlib.util.spec_from_file_location("benchmark_module", script_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load benchmark script: {script_path}")
@@ -481,7 +456,8 @@ def discover_benchmark_script(
             sys.exit(1)
         return script_path, repo_path
 
-    if use_central:
+    # TODO: handle the central repo case for 'well known' benchmarks
+    if use_central and False:
         kernel_name = repo_id.split("/")[-1]
         central_path = Path(
             snapshot_download(
@@ -568,15 +544,6 @@ def _run_benchmark_script_subprocess(
 def run_benchmark_script(
     script_path: Path, *, iterations: int, warmup: int, cwd: Path
 ) -> dict[str, TimingResults]:
-    """Run a benchmark script and return timing results.
-
-    Automatically detects whether the script uses the class-based format
-    (subclassing Benchmark) or the legacy subprocess format.
-
-    Returns:
-        Dict mapping workload names to TimingResults.
-        For legacy scripts, returns {"default": timing}.
-    """
     print(f"Running {script_path.name}...", file=sys.stderr)
 
     # Check if script uses class-based format

@@ -247,7 +247,19 @@ def run_benchmark_script(
         raise RuntimeError(f"Benchmark script failed:\n{result.stderr}")
 
     try:
-        output = json.loads(result.stdout)
+        # Find JSON in output - benchmark scripts may print debug info before JSON
+        stdout = result.stdout.strip()
+        json_str = None
+        for line in reversed(stdout.split("\n")):
+            line = line.strip()
+            if line.startswith("{"):
+                json_str = line
+                break
+
+        if json_str is None:
+            raise RuntimeError(f"No JSON found in benchmark output:\n{result.stdout}")
+
+        output = json.loads(json_str)
         timing = output["timing_results"]
         return TimingResults(
             mean_ms=timing["mean_ms"],

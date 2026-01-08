@@ -146,9 +146,9 @@ def main():
         help="Use local directory instead of downloading",
     )
     benchmark_parser.add_argument(
-        "--dry-run",
+        "--upload",
         action="store_true",
-        help="Run without submitting results",
+        help="Submit results to the Hub (default: dry run only)",
     )
     benchmark_parser.add_argument(
         "--output",
@@ -301,6 +301,6 @@ def run_benchmark(args):
         warmup=args.warmup,
         api_url=args.api_url,
         token=args.token,
-        dry_run=args.dry_run,
+        dry_run=not args.upload,
         output=args.output,
     )

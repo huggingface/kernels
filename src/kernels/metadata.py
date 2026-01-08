@@ -17,7 +17,7 @@ class Metadata:
                 metadata_dict = json.load(f)
                 return Metadata(
                     metadata_dict.get("channel", None),
-                    metadata_dict.get("python_depends", []),
+                    metadata_dict.get("python-depends", []),
                 )
 
         return Metadata(channel=None, python_depends=[])

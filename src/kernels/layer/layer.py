@@ -14,8 +14,6 @@ from typing import (
     Type,
 )
 
-from .device import Device
-from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .._versions import select_revision_or_version
 from ..utils import (
     _get_caller_locked_kernel,
@@ -23,8 +21,10 @@ from ..utils import (
     get_kernel,
     get_local_kernel,
 )
+from .device import Device
+from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
-from .repos import _select_repository, RepositoryProtocol
+from .repos import RepositoryProtocol, _select_repository
 
 if TYPE_CHECKING:
     from torch import nn
@@ -44,6 +44,8 @@ class LayerRepository:
             The Hub repository containing the layer.
         layer_name (`str`):
             The name of the layer within the kernel repository.
+        channel (`str`, *optional*, defaults to `"main"`):
+            The version channel to download the layer from.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`str`, *optional*):
@@ -74,6 +76,7 @@ class LayerRepository:
         repo_id: str,
         *,
         layer_name: str,
+        channel: Optional[str] = None,
         revision: Optional[str] = None,
         version: Optional[str] = None,
     ):
@@ -87,13 +90,17 @@ class LayerRepository:
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered LayerRepository.
+        self._channel = channel
         self._revision = revision
         self._version = version
 
     @functools.lru_cache()
     def _resolve_revision(self) -> str:
         return select_revision_or_version(
-            repo_id=self._repo_id, revision=self._revision, version=self._version
+            repo_id=self._repo_id,
+            channel=self._channel,
+            revision=self._revision,
+            version=self._version,
         )
 
     def load(self) -> Type["nn.Module"]:

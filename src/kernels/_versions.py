@@ -47,7 +47,7 @@ def select_revision_or_version(
     revision: Optional[str],
     version: Optional[str],
 ) -> str:
-    if [channel, revision, version].count(None) != 2:
+    if [channel, revision, version].count(None) < 2:
         raise ValueError(
             "Exactly one of `channel`, `revision`, or `version` must be specified."
         )

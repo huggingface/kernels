@@ -33,6 +33,8 @@ class FuncRepository:
             The Hub repository containing the layer.
         func_name (`str`):
             The name of the function within the kernel repository.
+        channel (`str`, *optional*):
+            The version channel to download from.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`str`, *optional*):
@@ -49,11 +51,11 @@ class FuncRepository:
             func_name="silu_and_mul",
         )
 
-        # Reference a layer by version constraint
+        # Reference a layer by channel
         layer_repo_versioned = FuncRepository(
-            repo_id="kernels-community/activation",
-            func_name="silu_and_mul",
-            version=">=0.0.3,<0.1"
+            repo_id="kernels-community/relu",
+            func_name="relu",
+            channel="1"
         )
         ```
     """
@@ -63,6 +65,7 @@ class FuncRepository:
         repo_id: str,
         *,
         func_name: str,
+        channel: Optional[str] = None,
         revision: Optional[str] = None,
         version: Optional[str] = None,
     ):
@@ -76,13 +79,17 @@ class FuncRepository:
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered FuncRepository.
+        self._channel = channel
         self._revision = revision
         self._version = version
 
     @functools.lru_cache()
     def _resolve_revision(self) -> str:
         return select_revision_or_version(
-            repo_id=self._repo_id, revision=self._revision, version=self._version
+            repo_id=self._repo_id,
+            channel=self._channel,
+            revision=self._revision,
+            version=self._version,
         )
 
     def load(self) -> Type["nn.Module"]:

@@ -306,10 +306,10 @@ def get_kernel(
         import torch
         from kernels import get_kernel
 
-        activation = get_kernel("kernels-community/relu", channel="0")
+        activation = get_kernel("kernels-community/relu", channel="1")
         x = torch.randn(10, 20, device="cuda")
         out = torch.empty_like(x)
-        result = activation.silu_and_mul(out, x)
+        result = activation.relu(out, x)
         ```
     """
     revision = select_revision_or_version(

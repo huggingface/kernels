@@ -1,3 +1,4 @@
+import warnings
 from typing import Dict, Optional
 
 from huggingface_hub import HfApi
@@ -40,13 +41,23 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: str) -> GitRefInfo:
 
 
 def select_revision_or_version(
-    repo_id: str, revision: Optional[str], version: Optional[str]
+    repo_id: str,
+    *,
+    channel: Optional[str],
+    revision: Optional[str],
+    version: Optional[str],
 ) -> str:
-    if revision is not None and version is not None:
-        raise ValueError("Either a revision or a version must be specified, not both.")
-    elif revision is None and version is None:
-        revision = "main"
+    if [channel, revision, version].count(None) != 2:
+        raise ValueError(
+            "Exactly one of `channel`, `revision`, or `version` must be specified."
+        )
+
+    if channel is not None:
+        return f"channel-{channel}"
+    elif revision is not None:
+        return revision
     elif version is not None:
-        revision = resolve_version_spec_as_ref(repo_id, version).target_commit
-    assert revision is not None
-    return revision
+        warnings.warn("Version specifiers are deprecated, use a channel instead.")
+        return resolve_version_spec_as_ref(repo_id, version).target_commit
+
+    return "main"

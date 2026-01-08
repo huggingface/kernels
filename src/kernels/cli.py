@@ -123,11 +123,6 @@ def main():
         help="Kernel repo ID (e.g., kernels-community/activation)",
     )
     benchmark_parser.add_argument(
-        "--central",
-        action="store_true",
-        help="Use well-known benchmark from huggingface/kernels-benchmarks",
-    )
-    benchmark_parser.add_argument(
         "--script",
         type=str,
         default=None,
@@ -299,7 +294,6 @@ def run_benchmark(args):
     benchmark.run_benchmark(
         repo_id=args.repo_id,
         script=args.script,
-        use_central=args.central,
         revision=args.revision,
         local_dir=args.local_dir,
         iterations=args.iterations,

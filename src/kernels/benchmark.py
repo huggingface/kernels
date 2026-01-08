@@ -23,8 +23,6 @@ except ImportError:
     torch = None  # type: ignore[assignment]
     TORCH_AVAILABLE = False
 
-# TODO: handle the central repo case for 'well known' benchmarks
-CENTRAL_BENCHMARKS_REPO = "huggingface/kernels-benchmarks"
 BENCHMARK_PATHS = ["benchmarks/bench.py", "benchmark.py"]
 
 
@@ -312,7 +310,6 @@ def get_kernel_commit_sha(repo_id: str, revision: str) -> str:
 
 def run_benchmark_class(
     benchmark_cls: type[Benchmark],
-    *,
     iterations: int,
     warmup: int,
 ) -> dict[str, TimingResults]:
@@ -437,8 +434,6 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
 def discover_benchmark_script(
     repo_id: str,
     repo_path: Path,
-    *,
-    use_central: bool = False,
     custom_script: Optional[str] = None,
 ) -> tuple[Path, Path]:
     """
@@ -456,26 +451,7 @@ def discover_benchmark_script(
             sys.exit(1)
         return script_path, repo_path
 
-    # TODO: handle the central repo case for 'well known' benchmarks
-    if use_central and False:
-        kernel_name = repo_id.split("/")[-1]
-        central_path = Path(
-            snapshot_download(
-                repo_id=CENTRAL_BENCHMARKS_REPO,
-                allow_patterns=[f"benchmarks/{kernel_name}/*"],
-            )
-        )
-        script_path = central_path / "benchmarks" / kernel_name / "bench.py"
-        if not script_path.exists():
-            print(f"Error: No central benchmark for '{kernel_name}'", file=sys.stderr)
-            print(
-                "Try running without --central to use kernel's own benchmarks",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        return script_path, central_path / "benchmarks" / kernel_name
-
-    # Default: search in kernel repo
+    # Search in kernel repo
     for rel_path in BENCHMARK_PATHS:
         script_path = repo_path / rel_path
         if script_path.exists():
@@ -491,7 +467,7 @@ def discover_benchmark_script(
 
 
 def _run_benchmark_script_subprocess(
-    script_path: Path, *, iterations: int, warmup: int, cwd: Path
+    script_path: Path, iterations: int, warmup: int, cwd: Path
 ) -> dict[str, TimingResults]:
     """Run a legacy benchmark script as a subprocess."""
     result = subprocess.run(
@@ -542,7 +518,7 @@ def _run_benchmark_script_subprocess(
 
 
 def run_benchmark_script(
-    script_path: Path, *, iterations: int, warmup: int, cwd: Path
+    script_path: Path, iterations: int, warmup: int, cwd: Path
 ) -> dict[str, TimingResults]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
@@ -573,7 +549,6 @@ def run_benchmark_script(
 def submit_benchmark(
     repo_id: str,
     result: BenchmarkResult,
-    *,
     api_url: Optional[str] = None,
     token: Optional[str] = None,
 ) -> None:
@@ -602,7 +577,6 @@ def run_benchmark(
     repo_id: str,
     *,
     script: Optional[str] = None,
-    use_central: bool = False,
     revision: str = "main",
     local_dir: Optional[str] = None,
     iterations: int = 100,
@@ -629,7 +603,7 @@ def run_benchmark(
         kernel_sha = get_kernel_commit_sha(repo_id, revision)
 
     script_full_path, cwd = discover_benchmark_script(
-        repo_id, repo_path, use_central=use_central, custom_script=script
+        repo_id, repo_path, custom_script=script
     )
 
     try:

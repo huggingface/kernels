@@ -274,9 +274,8 @@ def install_kernel_all_variants(
 
 def get_kernel(
     repo_id: str,
-    channel: Optional[str] = None,
     revision: Optional[str] = None,
-    version: Optional[str] = None,
+    version: Optional[int | str] = None,
     user_agent: Optional[Union[str, dict]] = None,
 ) -> ModuleType:
     """
@@ -288,13 +287,11 @@ def get_kernel(
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        channel (`str`, *optional*):
-            The version channel to download the kernel from.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
@@ -306,15 +303,13 @@ def get_kernel(
         import torch
         from kernels import get_kernel
 
-        activation = get_kernel("kernels-community/relu", channel="1")
+        activation = get_kernel("kernels-community/relu", version=1)
         x = torch.randn(10, 20, device="cuda")
         out = torch.empty_like(x)
         result = activation.relu(out, x)
         ```
     """
-    revision = select_revision_or_version(
-        repo_id, channel=channel, revision=revision, version=version
-    )
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
     package_name, variant_path = install_kernel(
         repo_id, revision=revision, user_agent=user_agent
     )
@@ -352,9 +347,8 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
 
 def has_kernel(
     repo_id: str,
-    channel: Optional[str] = None,
     revision: Optional[str] = None,
-    version: Optional[str] = None,
+    version: Optional[int | str] = None,
 ) -> bool:
     """
     Check whether a kernel build exists for the current environment (Torch version and compute framework).
@@ -362,20 +356,16 @@ def has_kernel(
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        channel (`str`, *optional*):
-            The version channel to download the kernel from.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
 
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
     """
-    revision = select_revision_or_version(
-        repo_id, channel=channel, revision=revision, version=version
-    )
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
 
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()

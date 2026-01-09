@@ -44,13 +44,11 @@ class LayerRepository:
             The Hub repository containing the layer.
         layer_name (`str`):
             The name of the layer within the kernel repository.
-        channel (`str`, *optional*, defaults to `"main"`):
-            The version channel to download the layer from.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
 
     Example:
         ```python
@@ -76,9 +74,8 @@ class LayerRepository:
         repo_id: str,
         *,
         layer_name: str,
-        channel: Optional[str] = None,
         revision: Optional[str] = None,
-        version: Optional[str] = None,
+        version: Optional[int | str] = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -90,7 +87,6 @@ class LayerRepository:
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered LayerRepository.
-        self._channel = channel
         self._revision = revision
         self._version = version
 
@@ -98,7 +94,6 @@ class LayerRepository:
     def _resolve_revision(self) -> str:
         return select_revision_or_version(
             repo_id=self._repo_id,
-            channel=self._channel,
             revision=self._revision,
             version=self._version,
         )

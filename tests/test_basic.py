@@ -142,7 +142,7 @@ def test_version():
     with pytest.raises(ValueError, match=r"No version.*satisfies requirement"):
         get_kernel("kernels-test/versions", version=">0.2.0")
 
-    with pytest.raises(ValueError, match=r"Exactly one of `channel`,"):
+    with pytest.raises(ValueError, match=r"Only one of"):
         kernel = get_kernel("kernels-test/versions", revision="v0.1.0", version="<1.0.0")
 
 

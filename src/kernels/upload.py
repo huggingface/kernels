@@ -31,26 +31,21 @@ def upload_kernels_dir(
             f"Couldn't find any build variants in: {kernel_dir.absolute()} or {(kernel_dir / 'build').absolute()}"
         )
 
-    print(build_dir)
-
     if branch is None:
         assert variants is not None
-        channels = set()
+        versions = set()
         for variant in variants:
-            print(variant)
             metadata = Metadata.load_from_variant(variant)
-            channels.add(metadata.channel)
+            versions.add(metadata.version)
 
-        if len(channels) > 1:
+        if len(versions) > 1:
             raise ValueError(
-                f"Found multiple channels in build variants: {', '.join(channels)}"
+                f"Found multiple versions in build variants: {', '.join(str(version) for version in versions)}"
             )
 
-        print(channels)
-
-        channel = channels.pop()
-        if channel is not None:
-            branch = f"channel-{channel}"
+        version = versions.pop()
+        if version is not None:
+            branch = f"v{version}"
 
     repo_id = create_repo(repo_id=repo_id, private=private, exist_ok=True).repo_id
 
@@ -71,4 +66,4 @@ def upload_kernels_dir(
         commit_message="Build uploaded using `kernels`.",
         allow_patterns=["torch*"],
     )
-    print(f"✅ Kernel upload successful. Find the kernel in https://hf.co/{repo_id}.")
+    print(f"✅ Kernel upload successful. Find the kernel in: https://hf.co/{repo_id}")

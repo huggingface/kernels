@@ -33,13 +33,11 @@ class FuncRepository:
             The Hub repository containing the layer.
         func_name (`str`):
             The name of the function within the kernel repository.
-        channel (`str`, *optional*):
-            The version channel to download from.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
 
     Example:
         ```python
@@ -51,11 +49,11 @@ class FuncRepository:
             func_name="silu_and_mul",
         )
 
-        # Reference a layer by channel
+        # Reference a layer by version
         layer_repo_versioned = FuncRepository(
             repo_id="kernels-community/relu",
             func_name="relu",
-            channel="1"
+            version=1
         )
         ```
     """
@@ -65,9 +63,8 @@ class FuncRepository:
         repo_id: str,
         *,
         func_name: str,
-        channel: Optional[str] = None,
         revision: Optional[str] = None,
-        version: Optional[str] = None,
+        version: Optional[int | str] = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -79,7 +76,6 @@ class FuncRepository:
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered FuncRepository.
-        self._channel = channel
         self._revision = revision
         self._version = version
 
@@ -87,7 +83,6 @@ class FuncRepository:
     def _resolve_revision(self) -> str:
         return select_revision_or_version(
             repo_id=self._repo_id,
-            channel=self._channel,
             revision=self._revision,
             version=self._version,
         )

@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import os
@@ -575,7 +576,6 @@ def submit_benchmark(
 
 def run_benchmark(
     repo_id: str,
-    *,
     script: Optional[str] = None,
     revision: str = "main",
     local_dir: Optional[str] = None,
@@ -623,11 +623,18 @@ def run_benchmark(
     except ValueError:
         script_rel_path = str(script_full_path)
 
+    # Compute SHA256 of benchmark script for reproducibility
+    script_sha = hashlib.sha256(script_full_path.read_bytes()).hexdigest()
+
+    # Show identifiers
+    print(f"Kernel: {kernel_sha[:7]}  Benchmark: {script_sha[:7]}", file=sys.stderr)
+
     result = BenchmarkResult(
         timing_results=timing_results,
         machine_info=collect_machine_info(),
         kernel_commit_sha=kernel_sha,
         benchmark_script_path=script_rel_path,
+        benchmark_script_sha=script_sha,
     )
 
     if output:

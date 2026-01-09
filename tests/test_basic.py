@@ -143,7 +143,9 @@ def test_version():
         get_kernel("kernels-test/versions", version=">0.2.0")
 
     with pytest.raises(ValueError, match=r"Only one of"):
-        kernel = get_kernel("kernels-test/versions", revision="v0.1.0", version="<1.0.0")
+        kernel = get_kernel(
+            "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
+        )
 
 
 @pytest.mark.cuda_only

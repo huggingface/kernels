@@ -40,21 +40,30 @@ must be available for that combination.
 ## Kernel metadata
 
 The build variant directory can optionally contain a `metadata.json` file.
-Currently the only purpose of the metadata is to specify the kernel python dependencies, for example:
+Currently the metadata specifies the kernel's versin and Python dependencies,
+for example:
 
 ```json
-{ "python-depends": ["nvidia-cutlass-dsl"] }
+{
+  "python-depends": ["nvidia-cutlass-dsl"],
+  "version": 1
+}
 ```
 
 The following dependencies are the only ones allowed at this stage: `einops` and `nvidia-cutlass-dsl`
 
 ## Versioning
 
-Kernels are versioned on the Hub using Git tags. Version tags must be of
-the form `v<major>.<minor>.<patch>`. Versions are used by [locking](./locking.md)
-to resolve the version constraints.
+Kernels are versioned using a major version. The kernel revisions of a
+version are stored in a branch of the form `v<version>`. Each build
+variant will also have the kernel version in `metadata.json`.
 
-We recommend using [semver](https://semver.org/) to version kernels.
+The version **must** be bumped in the following cases:
+
+- The kernel API is changed in an incompatible way.
+- Support for one or more PyTorch version is dropped. This is usually done
+  when the API is extended and the builds for older PyTorch versions are not
+  updated anymore to have the new extensions.
 
 ## Native Python module
 

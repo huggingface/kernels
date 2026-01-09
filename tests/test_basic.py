@@ -129,7 +129,8 @@ def test_has_kernel(kernel_exists):
     assert has_kernel(repo_id, revision=revision) == kernel
 
 
-def test_version():
+def test_version_old():
+    # Remove once we drop support for version specs.
     kernel = get_kernel("kernels-test/versions")
     assert kernel.version() == "0.2.0"
     kernel = get_kernel("kernels-test/versions", version="<1.0.0")
@@ -146,6 +147,15 @@ def test_version():
         kernel = get_kernel(
             "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
         )
+
+def test_version():
+    kernel = get_kernel("kernels-test/versions", version=1)
+    assert kernel.version() == "1"
+    kernel = get_kernel("kernels-test/versions", version=2)
+    assert kernel.version() == "2"
+
+    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
+        kernel = get_kernel("kernels-test/versions", version=0)
 
 
 @pytest.mark.cuda_only

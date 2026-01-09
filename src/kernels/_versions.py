@@ -51,7 +51,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRef
         ref = versions.get(version_spec, None)
         if ref is None:
             raise ValueError(
-                f"Version {version_spec} not found, available versions: {', '.join(str(v) for v in versions.keys())}"
+                f"Version {version_spec} not found, available versions: {', '.join(sorted(str(v) for v in versions.keys()))}"
             )
         return ref
     else:

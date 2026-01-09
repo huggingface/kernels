@@ -96,11 +96,7 @@ def test_func_locked(device):
 
     assert version() == "0.1.1"
 
-    print(model.version.forward)
-
     with use_kernel_mapping({"version": {}}):
         model = kernelize(model, mode=Mode.INFERENCE, device=device)
 
     assert version() == "0.0.0"
-
-    print(model.version.forward)

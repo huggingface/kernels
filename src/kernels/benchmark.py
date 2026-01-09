@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-import requests
+import requests  # type: ignore[import-untyped]
 from huggingface_hub import HfApi, get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 

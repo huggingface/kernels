@@ -197,8 +197,8 @@ class LockedLayerRepository:
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.layer_name = layer_name
+        self._revision = self._resolve_revision()
 
-    @functools.lru_cache()
     def _resolve_revision(self) -> str:
         if self._lockfile is None:
             locked_sha = _get_caller_locked_kernel(self._repo_id)
@@ -212,7 +212,7 @@ class LockedLayerRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._resolve_revision())
+        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision)
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
@@ -220,13 +220,16 @@ class LockedLayerRepository:
             isinstance(other, LockedLayerRepository)
             and self.layer_name == other.layer_name
             and self._repo_id == other._repo_id
+            and self._revision == other._revision
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id))
+        return hash((self.layer_name, self._repo_id, self._revision))
 
     def __str__(self) -> str:
-        return f"`{self._repo_id}` (revision: {self._resolve_revision()}), layer `{self.layer_name}`"
+        return (
+            f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
+        )
 
 
 _CACHED_LAYER: Dict[RepositoryProtocol, Type["nn.Module"]] = {}

@@ -61,6 +61,22 @@ def test_layer_locked(device):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
         assert version() == "0.1.1"
 
+    with pytest.raises(ValueError, match="Kernel.* is not locked"):
+        # Must fail, because our project does not have a lock for it. However,
+        # if layer caching is too aggressive (i.e. does not take the revision into
+        # account), this may incorrectly pass.
+        with use_kernel_mapping(
+            {
+                "Version": {
+                    device: LockedLayerRepository(
+                        repo_id="kernels-test/versions",
+                        layer_name="Version",
+                    )
+                },
+            }
+        ):
+            kernelize(version, device=device, mode=Mode.INFERENCE)
+
 
 def test_func_locked(device):
     project_dir = Path(__file__).parent / "layer_locking"
@@ -79,8 +95,6 @@ def test_func_locked(device):
 
     model = Version()
 
-    print(model.version.forward)
-
     with use_kernel_mapping(
         {
             "version": {
@@ -96,11 +110,23 @@ def test_func_locked(device):
 
     assert version() == "0.1.1"
 
-    print(model.version.forward)
+    with pytest.raises(ValueError, match="Kernel.* is not locked"):
+        # Must fail, because our project does not have a lock for it. However,
+        # if layer caching is too aggressive (i.e. does not take the revision into
+        # account), this may incorrectly pass.
+        with use_kernel_mapping(
+            {
+                "version": {
+                    device: LockedFuncRepository(
+                        repo_id="kernels-test/versions",
+                        func_name="version",
+                    )
+                },
+            }
+        ):
+            kernelize(model, device=device, mode=Mode.INFERENCE)
 
     with use_kernel_mapping({"version": {}}):
         model = kernelize(model, mode=Mode.INFERENCE, device=device)
 
     assert version() == "0.0.0"
-
-    print(model.version.forward)

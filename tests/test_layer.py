@@ -1205,7 +1205,9 @@ def test_layer_versions(device):
             }
         }
     ):
-        with pytest.raises(ValueError, match=r"Version 0 not found, available versions: 1, 2.*"):
+        with pytest.raises(
+            ValueError, match=r"Version 0 not found, available versions: 1, 2.*"
+        ):
             kernelize(version, device=device, mode=Mode.INFERENCE)
 
     with pytest.raises(ValueError, match=r"Either a revision or a version.*not both"):

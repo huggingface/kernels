@@ -148,13 +148,16 @@ def test_version_old():
             "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
         )
 
+
 def test_version():
     kernel = get_kernel("kernels-test/versions", version=1)
     assert kernel.version() == "1"
     kernel = get_kernel("kernels-test/versions", version=2)
     assert kernel.version() == "2"
 
-    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
+    with pytest.raises(
+        ValueError, match="Version 0 not found, available versions: 1, 2.*"
+    ):
         kernel = get_kernel("kernels-test/versions", version=0)
 
 

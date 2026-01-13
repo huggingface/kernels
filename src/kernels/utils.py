@@ -20,6 +20,7 @@ from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
+from kernels.metadata import Metadata
 
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 
@@ -129,12 +130,8 @@ def build_variants() -> List[str]:
 
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
-    metadata_path = variant_path / "metadata.json"
-    if metadata_path.exists():
-        with open(metadata_path, "r") as f:
-            metadata = json.load(f)
-            deps = metadata.get("python-depends", [])
-            validate_dependencies(deps, backend())
+    metadata = Metadata.load_from_variant(variant_path)
+    validate_dependencies(metadata.python_depends, backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
@@ -278,7 +275,7 @@ def install_kernel_all_variants(
 def get_kernel(
     repo_id: str,
     revision: Optional[str] = None,
-    version: Optional[str] = None,
+    version: Optional[int | str] = None,
     user_agent: Optional[Union[str, dict]] = None,
 ) -> ModuleType:
     """
@@ -292,9 +289,9 @@ def get_kernel(
             The Hub repository containing the kernel.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
@@ -306,13 +303,13 @@ def get_kernel(
         import torch
         from kernels import get_kernel
 
-        activation = get_kernel("kernels-community/activation")
+        activation = get_kernel("kernels-community/relu", version=1)
         x = torch.randn(10, 20, device="cuda")
         out = torch.empty_like(x)
-        result = activation.silu_and_mul(out, x)
+        result = activation.relu(out, x)
         ```
     """
-    revision = select_revision_or_version(repo_id, revision, version)
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
     package_name, variant_path = install_kernel(
         repo_id, revision=revision, user_agent=user_agent
     )
@@ -349,7 +346,9 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
 
 
 def has_kernel(
-    repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
+    repo_id: str,
+    revision: Optional[str] = None,
+    version: Optional[int | str] = None,
 ) -> bool:
     """
     Check whether a kernel build exists for the current environment (Torch version and compute framework).
@@ -359,14 +358,14 @@ def has_kernel(
             The Hub repository containing the kernel.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
 
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
     """
-    revision = select_revision_or_version(repo_id, revision, version)
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
 
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()

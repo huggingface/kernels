@@ -160,6 +160,14 @@ def main():
     benchmark_parser.add_argument("--warmup", type=int, default=10)
     benchmark_parser.add_argument("--api-url", type=str, default=None)
     benchmark_parser.add_argument("--token", type=str, default=None)
+    # TODO: remove in future, only for testing
+    benchmark_parser.add_argument(
+        "--force",
+        type=str,
+        action="append",
+        default=[],
+        help="Force override fields (e.g., --force=machineInfo.gpu=H100)",
+    )
     benchmark_parser.set_defaults(func=run_benchmark)
 
     args = parser.parse_args()
@@ -303,4 +311,5 @@ def run_benchmark(args):
         upload=args.upload,
         output=args.output,
         print_json=args.json,
+        force_overrides=args.force,
     )

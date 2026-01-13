@@ -10,9 +10,9 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-import requests  # type: ignore[import-untyped]
+import requests
 from huggingface_hub import HfApi, get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
@@ -84,6 +84,7 @@ class Benchmark:
 
     def __init__(self):
         self.kernel = None
+        self.out: Any = None  # Output tensor, set by setup methods
 
     def setup(self):
         """Override to set up tensors as instance attributes."""
@@ -104,6 +105,7 @@ class TimingResults:
     verified: Optional[bool] = (
         None  # None = no verify fn, True = passed, False = failed
     )
+    ref_mean_ms: Optional[float] = None  # Reference implementation mean time
 
 
 @dataclass
@@ -179,33 +181,119 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
     method_w = max(method_w, 8)  # minimum "Workload" header
     num_w = 10
     out_w = 8
+    n_w = 5  # "N" column width
+
+    # Check if we have any ref times to show
+    has_ref = any(results[name].ref_mean_ms is not None for name in results)
 
     # Build table border
-    ref_w = 11  # "Ref Match" column
-    col_widths = [cls_w, method_w, num_w, num_w, num_w, num_w, num_w, out_w, ref_w - 2]
+    match_w = 5  # "Match" column
+    speedup_w = 7  # "Speedup" column
+    if has_ref:
+        col_widths = [
+            cls_w,
+            method_w,
+            n_w,
+            speedup_w,
+            num_w,
+            num_w,
+            num_w,
+            num_w,
+            num_w,
+            out_w,
+            num_w,
+            match_w,
+        ]
+    else:
+        col_widths = [
+            cls_w,
+            method_w,
+            n_w,
+            num_w,
+            num_w,
+            num_w,
+            num_w,
+            num_w,
+            out_w,
+            match_w,
+        ]
 
     def border(left, sep, right):
         return left + sep.join("─" * (w + 2) for w in col_widths) + right
 
     print(file=sys.stderr)
     print(border("┌", "┬", "┐"), file=sys.stderr)
-    print(
-        f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
-        f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ Ref Match │",
-        file=sys.stderr,
-    )
+    if has_ref:
+        print(
+            f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'N':>{n_w}} │ {'Speedup':>{speedup_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
+            f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ {'Ref(ms)':>{num_w}} │ {'Match':^{match_w}} │",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'N':>{n_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
+            f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ {'Match':^{match_w}} │",
+            file=sys.stderr,
+        )
     print(border("├", "┼", "┤"), file=sys.stderr)
 
     for full_name, cls, method in parsed:
         t = results[full_name]
         check = "✓" if t.verified else ("✗" if t.verified is False else "·")
-        print(
-            f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
-            f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │     {check}     │",
-            file=sys.stderr,
-        )
+        if has_ref:
+            ref_str = (
+                f"{t.ref_mean_ms:>{num_w}.4f}"
+                if t.ref_mean_ms is not None
+                else " " * num_w
+            )
+            if t.ref_mean_ms is not None and t.mean_ms > 0:
+                speedup = t.ref_mean_ms / t.mean_ms
+                speedup_str = f"{speedup:.2f}x"
+            else:
+                speedup_str = ""
+            print(
+                f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.iterations:>{n_w}} │ {speedup_str:>{speedup_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
+                f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │ {ref_str} │ {check:^{match_w}} │",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.iterations:>{n_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
+                f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │ {check:^{match_w}} │",
+                file=sys.stderr,
+            )
 
     print(border("└", "┴", "┘"), file=sys.stderr)
+
+    # Print statistical significance analysis if we have ref times
+    if has_ref:
+        print(file=sys.stderr)
+        for full_name, cls, method in parsed:
+            t = results[full_name]
+            if t.ref_mean_ms is None or t.mean_ms <= 0:
+                continue
+
+            # 95% confidence interval: mean ± 1.96 * (std / sqrt(n))
+            n = t.iterations
+            margin = 1.96 * t.std_ms / (n**0.5)
+            ci_lower = t.mean_ms - margin
+            ci_upper = t.mean_ms + margin
+
+            speedup = t.ref_mean_ms / t.mean_ms
+            # Statistically significant if kernel's upper CI bound < ref mean
+            significant = ci_upper < t.ref_mean_ms
+
+            if significant:
+                print(
+                    f"  {method}: {speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms) ✓ significant",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"  {method}: {speedup:.2f}x faster (95% CI: {ci_lower:.4f}-{ci_upper:.4f}ms vs ref {t.ref_mean_ms:.4f}ms)",
+                    file=sys.stderr,
+                )
+
     print(file=sys.stderr)
 
 
@@ -359,13 +447,33 @@ def run_benchmark_class(
         verify_name = f"verify_{workload_name}"
         verify_fn = getattr(instance, verify_name, None)
 
-        # Run verification if present
+        # Run verification and time reference if verify exists
         verified: Optional[bool] = None
+        ref_mean_ms: Optional[float] = None
         if verify_fn is not None:
             benchmark_fn()  # Populate output
             torch.cuda.synchronize()
-            verified = verify_fn()
-            if not verified:
+
+            # Warmup the verify/reference computation
+            for _ in range(warmup):
+                verify_fn()
+                torch.cuda.synchronize()
+
+            # Time the verify/reference computation
+            start = time.perf_counter()
+            verify_result = verify_fn()
+            torch.cuda.synchronize()
+            ref_mean_ms = round((time.perf_counter() - start) * 1000, 4)
+
+            if isinstance(verify_result, torch.Tensor):
+                # New style: verify returns reference tensor, runner compares
+                verified = torch.allclose(instance.out, verify_result, atol=1e-3)
+            elif isinstance(verify_result, bool):
+                # Old style: verify returns bool
+                verified = verify_result
+            # else: None means skip verification
+
+            if verified is False:
                 raise RuntimeError(f"Verification failed for {workload_name}")
 
         # Warmup
@@ -398,6 +506,7 @@ def run_benchmark_class(
             iqr_ms=round(iqr, 4),
             outliers=outlier_count,
             verified=verified,
+            ref_mean_ms=ref_mean_ms,
         )
 
     return results
@@ -418,7 +527,7 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
     finally:
         os.chdir(old_cwd)
 
-    # Find all Benchmark subclasses
+    # Find all Benchmark subclasses defined in this script (not imported)
     classes = []
     for name in dir(module):
         obj = getattr(module, name)
@@ -426,6 +535,7 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
             isinstance(obj, type)
             and issubclass(obj, Benchmark)
             and obj is not Benchmark
+            and obj.__module__ == "benchmark_module"  # Only classes defined in script
         ):
             classes.append(obj)
 
@@ -523,28 +633,23 @@ def run_benchmark_script(
 ) -> dict[str, TimingResults]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
-    # Check if script uses class-based format
-    script_content = script_path.read_text()
-    uses_class = "class " in script_content and "(Benchmark)" in script_content
-
-    if uses_class:
+    # Try class-based discovery first
+    try:
         classes = discover_benchmark_classes(script_path, cwd)
-        if not classes:
-            raise RuntimeError("No Benchmark subclasses found in script")
+        if classes:
+            all_results = {}
+            for cls in classes:
+                results = run_benchmark_class(cls, iterations=iterations, warmup=warmup)
+                for name, timing in results.items():
+                    all_results[f"{cls.__name__}.{name}"] = timing
+            return all_results
+    except Exception:
+        pass  # Fall through to subprocess
 
-        # Run all benchmarks from all classes
-        all_results = {}
-        for cls in classes:
-            results = run_benchmark_class(cls, iterations=iterations, warmup=warmup)
-            for name, timing in results.items():
-                all_results[f"{cls.__name__}.{name}"] = timing
-
-        return all_results
-    else:
-        # Legacy subprocess-based execution
-        return _run_benchmark_script_subprocess(
-            script_path, iterations=iterations, warmup=warmup, cwd=cwd
-        )
+    # Fall back to legacy subprocess-based execution
+    return _run_benchmark_script_subprocess(
+        script_path, iterations=iterations, warmup=warmup, cwd=cwd
+    )
 
 
 def submit_benchmark(
@@ -573,6 +678,46 @@ def submit_benchmark(
         print(f"Error {response.status_code}: {response.text}", file=sys.stderr)
     response.raise_for_status()
 
+# TODO: remove in future, only for testing
+def _apply_machine_info_overrides(
+    machine_info: MachineInfo, overrides: list[str]
+) -> MachineInfo:
+    """Apply force overrides to machine info.
+
+    Accepts overrides in format: machineInfo.field=value
+    Supported fields: gpu, cudaVersion, pytorchVersion, os, cpu
+    """
+    # Map camelCase API names to snake_case dataclass fields
+    field_map = {
+        "gpu": "gpu",
+        "cudaVersion": "cuda_version",
+        "pytorchVersion": "pytorch_version",
+        "os": "os",
+        "cpu": "cpu",
+    }
+
+    for override in overrides:
+        if "=" not in override:
+            print(
+                f"Warning: Invalid override format '{override}', expected key=value",
+                file=sys.stderr,
+            )
+            continue
+
+        key, value = override.split("=", 1)
+
+        # Handle machineInfo.field format
+        if key.startswith("machineInfo."):
+            key = key[len("machineInfo.") :]
+
+        if key in field_map:
+            setattr(machine_info, field_map[key], value)
+            print(f"Override: {key} = {value}", file=sys.stderr)
+        else:
+            print(f"Warning: Unknown machineInfo field '{key}'", file=sys.stderr)
+
+    return machine_info
+
 
 def run_benchmark(
     repo_id: str,
@@ -586,6 +731,8 @@ def run_benchmark(
     upload: bool = False,
     output: Optional[str] = None,
     print_json: bool = False,
+    # TODO: remove in future, only for testing
+    force_overrides: Optional[list[str]] = None,
 ) -> BenchmarkResult:
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
@@ -629,9 +776,14 @@ def run_benchmark(
     # Show identifiers
     print(f"Kernel: {kernel_sha[:7]}  Benchmark: {script_sha[:7]}", file=sys.stderr)
 
+    machine_info = collect_machine_info()
+    # TODO: remove in future, only for testing
+    if force_overrides:
+        machine_info = _apply_machine_info_overrides(machine_info, force_overrides)
+
     result = BenchmarkResult(
         timing_results=timing_results,
-        machine_info=collect_machine_info(),
+        machine_info=machine_info,
         kernel_commit_sha=kernel_sha,
         benchmark_script_path=script_rel_path,
         benchmark_script_sha=script_sha,

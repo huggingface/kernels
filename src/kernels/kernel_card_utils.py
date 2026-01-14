@@ -159,7 +159,9 @@ def _update_model_card_usage(
     return model_card
 
 
-def _update_model_card_backends(model_card: ModelCard, local_path: str | Path) -> ModelCard:
+def _update_model_card_backends(
+    model_card: ModelCard, local_path: str | Path
+) -> ModelCard:
     config = _parse_build_toml(local_path).get("general", {})
     if not config:
         return model_card

@@ -21,7 +21,7 @@ kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
 
 is_jinja_available = False
 try:
-    import jinja2 # noqa
+    import jinja2  # noqa
 
     is_jinja_available = True
 except ImportError:
@@ -132,7 +132,9 @@ def _extract_function_from_all(init_file_path: Path) -> str | None:
 
 
 def _update_model_card_usage(
-    model_card: ModelCard, local_path: str | Path, repo_id: str = "REPO_ID",
+    model_card: ModelCard,
+    local_path: str | Path,
+    repo_id: str = "REPO_ID",
 ) -> ModelCard:
     init_file = _find_torch_ext_init(local_path)
 

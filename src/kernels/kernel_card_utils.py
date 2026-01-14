@@ -50,7 +50,7 @@ def _load_or_create_model_card(
         model_card = ModelCard.from_template(
             # Card metadata object that will be converted to YAML block
             card_data=ModelCardData(license=license, library_name="kernels"),
-            template_path=MODEL_CARD_TEMPLATE_PATH,
+            template_path=str(MODEL_CARD_TEMPLATE_PATH),
             model_description=kernel_description,
         )
 
@@ -117,7 +117,7 @@ def _extract_function_from_all(init_file_path: Path) -> str | None:
                         if isinstance(node.value, ast.List):
                             for elt in node.value.elts:
                                 if isinstance(elt, ast.Constant):
-                                    func_name = elt.value
+                                    func_name = str(elt.value)
                                     # Skip module names, return the first function-like name
                                     if not func_name.endswith("s") or "_" in func_name:
                                         return func_name
@@ -125,7 +125,7 @@ def _extract_function_from_all(init_file_path: Path) -> str | None:
                             if node.value.elts:
                                 first_elt = node.value.elts[0]
                                 if isinstance(first_elt, ast.Constant):
-                                    return first_elt.value
+                                    return str(first_elt.value)
         return None
     except Exception:
         return None
@@ -162,9 +162,11 @@ def _update_model_card_usage(
 def _update_model_card_backends(
     model_card: ModelCard, local_path: str | Path
 ) -> ModelCard:
-    config = _parse_build_toml(local_path).get("general", {})
+    config = _parse_build_toml(local_path)
     if not config:
         return model_card
+
+    config = config.get("general", {})
 
     card_content = str(model_card.content)
 

@@ -678,6 +678,7 @@ def submit_benchmark(
         print(f"Error {response.status_code}: {response.text}", file=sys.stderr)
     response.raise_for_status()
 
+
 # TODO: remove in future, only for testing
 def _apply_machine_info_overrides(
     machine_info: MachineInfo, overrides: list[str]

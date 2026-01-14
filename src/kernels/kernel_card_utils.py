@@ -2,6 +2,7 @@ import ast
 import re
 from pathlib import Path
 
+from .compat import tomllib
 from huggingface_hub import ModelCard, ModelCardData
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 
@@ -65,12 +66,6 @@ def _parse_build_toml(local_path: str | Path) -> dict | None:
         return None
 
     try:
-        # Import tomli for parsing TOML (Python 3.11+ has tomllib in stdlib)
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib
-
         with open(build_toml_path, "rb") as f:
             return tomllib.load(f)
     except Exception:

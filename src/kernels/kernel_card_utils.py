@@ -34,7 +34,6 @@ def _load_or_create_model_card(
     kernel_description: str | None = None,
     license: str | None = None,
 ) -> ModelCard:
-    """TODO"""
     if not is_jinja_available:
         raise ValueError(
             "Modelcard rendering is based on Jinja templates."
@@ -58,10 +57,10 @@ def _load_or_create_model_card(
     return model_card
 
 
-def _find_torch_ext_init(local_path: str | Path) -> Path | None:
+def _parse_build_toml(local_path: str | Path) -> dict | None:
     local_path = Path(local_path)
-
     build_toml_path = local_path / "build.toml"
+
     if not build_toml_path.exists():
         return None
 
@@ -73,8 +72,19 @@ def _find_torch_ext_init(local_path: str | Path) -> Path | None:
             import tomli as tomllib
 
         with open(build_toml_path, "rb") as f:
-            config = tomllib.load(f)
+            return tomllib.load(f)
+    except Exception:
+        return None
 
+
+def _find_torch_ext_init(local_path: str | Path) -> Path | None:
+    local_path = Path(local_path)
+
+    config = _parse_build_toml(local_path)
+    if not config:
+        return None
+
+    try:
         # Get kernel name from general.name
         kernel_name = config.get("general", {}).get("name")
         if not kernel_name:
@@ -122,11 +132,8 @@ def _extract_function_from_all(init_file_path: Path) -> str | None:
 
 
 def _update_model_card_usage(
-    model_card: ModelCard,
-    local_path: str | Path,
-    repo_id: str = "REPO_ID",
+    model_card: ModelCard, local_path: str | Path, repo_id: str = "REPO_ID",
 ) -> ModelCard:
-    """TODO"""
     init_file = _find_torch_ext_init(local_path)
 
     if not init_file:
@@ -147,4 +154,31 @@ def _update_model_card_usage(
         updated_content = re.sub(pattern, r"\1" + example_code, card_content)
         model_card.content = updated_content
 
+    return model_card
+
+
+def _update_model_card_backends(model_card: ModelCard, local_path: str | Path) -> ModelCard:
+    config = _parse_build_toml(local_path).get("general", {})
+    if not config:
+        return model_card
+
+    card_content = str(model_card.content)
+
+    backends = config.get("backends")
+    if backends:
+        backends_list = "\n".join(f"- {backend}" for backend in backends)
+        pattern = r"(## Supported backends\s*\n\n)\[TODO: add the backends this kernel supports\]"
+        if re.search(pattern, card_content):
+            card_content = re.sub(pattern, r"\1" + backends_list, card_content)
+
+    # TODO: should we consider making it a separate utility?
+    cuda_capabilities = config.get("cuda-capabilities")
+    if cuda_capabilities:
+        cuda_list = "\n".join(f"- {cap}" for cap in cuda_capabilities)
+        cuda_section = f"## CUDA Capabilities\n\n{cuda_list}\n\n"
+        pattern = r"(## Benchmarks)"
+        if re.search(pattern, card_content):
+            card_content = re.sub(pattern, cuda_section + r"\1", card_content)
+
+    model_card.content = card_content
     return model_card

@@ -1,5 +1,5 @@
 from pathlib import Path
-from kernels.kernel_card_utils import _load_or_create_model_card, _update_model_card_usage
+from kernels.kernel_card_utils import _load_or_create_model_card, _update_model_card_usage, _update_model_card_backends
 import argparse
 
 
@@ -11,6 +11,7 @@ def main(args):
     )
 
     updated_card = _update_model_card_usage(model_card=model_card, local_path=kernel_dir)
+    updated_card = _update_model_card_backends(model_card=updated_card, local_path=kernel_dir)
 
     card_path = args.card_path or "README.md"
     updated_card.save(card_path)

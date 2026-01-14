@@ -13,7 +13,7 @@ EXAMPLE_CODE = """```python
 # make sure `kernels` is installed: `pip install -U kernels`
 from kernels import get_kernel
 
-kernel_module = get_kernel("{repo_id}")
+kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
 {func_name} = kernel_module.{func_name}
 
 {func_name}(...)
@@ -29,7 +29,7 @@ except ImportError:
 
 
 def _load_or_create_model_card(
-    repo_id_or_path: str = None,
+    repo_id_or_path: str = "REPO_ID",
     token: str | None = None,
     kernel_description: str | None = None,
     license: str | None = None,

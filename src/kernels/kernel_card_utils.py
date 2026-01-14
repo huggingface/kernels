@@ -21,7 +21,7 @@ kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
 
 is_jinja_available = False
 try:
-    import jinja2
+    import jinja2 # noqa
 
     is_jinja_available = True
 except ImportError:
@@ -61,20 +61,34 @@ def _load_or_create_model_card(
 def _find_torch_ext_init(local_path: str | Path) -> Path | None:
     local_path = Path(local_path)
 
-    torch_ext_dirs = list(local_path.rglob("torch-ext"))
-
-    if not torch_ext_dirs:
+    build_toml_path = local_path / "build.toml"
+    if not build_toml_path.exists():
         return None
 
-    for torch_ext_dir in torch_ext_dirs:
-        init_files = list(torch_ext_dir.rglob("__init__.py"))
-        # Filter to get the kernel's __init__.py (not nested test files, etc.)
-        for init_file in init_files:
-            # Should be directly under torch-ext/kernel_name/__init__.py
-            if init_file.parent.parent == torch_ext_dir:
-                return init_file
+    try:
+        # Import tomli for parsing TOML (Python 3.11+ has tomllib in stdlib)
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
 
-    return None
+        with open(build_toml_path, "rb") as f:
+            config = tomllib.load(f)
+
+        # Get kernel name from general.name
+        kernel_name = config.get("general", {}).get("name")
+        if not kernel_name:
+            return None
+
+        module_name = kernel_name.replace("-", "_")
+        init_file = local_path / "torch-ext" / module_name / "__init__.py"
+
+        if init_file.exists():
+            return init_file
+
+        return None
+    except Exception:
+        return None
 
 
 def _extract_function_from_all(init_file_path: Path) -> str | None:

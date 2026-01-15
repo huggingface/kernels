@@ -720,7 +720,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
-    { name = "torch", specifier = ">=2.8.0" },
+    { name = "torch" },
     { name = "torch", marker = "extra == 'torch'" },
 ]
 provides-extras = ["abi-check", "torch", "docs"]

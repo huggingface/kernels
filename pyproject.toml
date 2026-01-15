@@ -18,7 +18,7 @@ dependencies = [
   "pyyaml>=6",
   "requests>=2.32.5",
   "tomli>=2.0; python_version<'3.11'",
-  "torch>=2.8.0",
+  "torch",
 ]
 
 [build-system]

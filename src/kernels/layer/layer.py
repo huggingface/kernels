@@ -58,13 +58,7 @@ class LayerRepository:
         layer_repo = LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-        )
-
-        # Reference a layer by version constraint
-        layer_repo_versioned = LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=">=0.0.3,<0.1"
+            version=1,
         )
         ```
     """

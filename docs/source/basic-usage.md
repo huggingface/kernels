@@ -23,13 +23,10 @@ print(y)
 
 This fetches version `1` of the kernel `kernels-community/activation`.
 Kernels are versioned using a major version number. Using `version=1` will
-get the latest kernel build from the `v1` branch. The kernel version is
-bumped is bumped in the following circumstances:
+get the latest kernel build from the `v1` branch.
 
-* The kernel API changes in an incompatible way.
-* Support for an older PyTorch version is dropped.
-
-In this way, you can ensure that your code will continue to work.
+Kernels within a version branch must never break the API or remove builds
+for older PyTorch versions. This ensures that your code will continue to work.
 
 ## Checking Kernel Availability
 

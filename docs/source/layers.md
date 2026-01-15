@@ -159,10 +159,12 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         ),
         "rocm": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         )
     }
 }
@@ -364,7 +366,6 @@ with use_kernel_mapping(
                 repo_path="/home/daniel/kernels/activation",
                 package_name="activation",
                 layer_name="SiluAndMul",
-                version=1,
             )
         }
     },

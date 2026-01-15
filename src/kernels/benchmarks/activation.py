@@ -1,5 +1,3 @@
-"""Well-known benchmarks for activation kernels."""
-
 import torch
 import torch.nn.functional as F
 
@@ -7,15 +5,6 @@ from kernels.benchmark import Benchmark
 
 
 class SiluAndMulBenchmark(Benchmark):
-    """Ready-to-use benchmark for silu_and_mul activation kernels.
-
-    Usage:
-        from kernels.benchmarks import SiluAndMulBenchmark
-
-        class MyBenchmark(SiluAndMulBenchmark):
-            kernel_id = "my-org/my-activation-kernel"
-    """
-
     seed: int = 42
 
     # Workload: small

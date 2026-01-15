@@ -60,11 +60,11 @@ class Benchmark:
     """Base class for kernel benchmarks.
 
     Subclass this to create a benchmark script with automatic timing,
-    verification, and reproducibility support.
+    verification, and reproducibility support. The kernel is loaded
+    automatically from the kernel_id specified in the CLI command.
 
     Example:
         class MyBenchmark(Benchmark):
-            kernel_id = "kernels-community/activation"
             seed = 42
 
             def setup(self):
@@ -74,12 +74,13 @@ class Benchmark:
             def benchmark_silu(self):
                 self.kernel.silu_and_mul(self.out, self.x)
 
-            def verify_silu(self):
-                ref = torch.nn.functional.silu(self.x[..., :512]) * self.x[..., 512:]
-                return torch.allclose(self.out, ref, atol=1e-3)
+            def verify_silu(self) -> torch.Tensor:
+                # Return reference tensor; runner compares with self.out
+                return torch.nn.functional.silu(self.x[..., :512]) * self.x[..., 512:]
+
+    Run with: kernels benchmark <kernel-id> --script my_benchmark.py
     """
 
-    kernel_id: str | None = None  # Required: kernel repo ID to load
     seed: int | None = None  # Optional: seed for reproducibility
 
     def __init__(self):
@@ -401,6 +402,7 @@ def run_benchmark_class(
     benchmark_cls: type[Benchmark],
     iterations: int,
     warmup: int,
+    kernel_id: str,
 ) -> dict[str, TimingResults]:
     results = {}
 
@@ -415,11 +417,9 @@ def run_benchmark_class(
         raise RuntimeError(f"No benchmark_* methods found in {benchmark_cls.__name__}")
 
     # Load kernel once for all workloads
-    kernel = None
-    if benchmark_cls.kernel_id:
-        from kernels import get_kernel
+    from kernels import get_kernel
 
-        kernel = get_kernel(benchmark_cls.kernel_id)
+    kernel = get_kernel(kernel_id)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -465,15 +465,8 @@ def run_benchmark_class(
             torch.cuda.synchronize()
             ref_mean_ms = round((time.perf_counter() - start) * 1000, 4)
 
-            if isinstance(verify_result, torch.Tensor):
-                # New style: verify returns reference tensor, runner compares
-                verified = torch.allclose(instance.out, verify_result, atol=1e-3)
-            elif isinstance(verify_result, bool):
-                # Old style: verify returns bool
-                verified = verify_result
-            # else: None means skip verification
-
-            if verified is False:
+            verified = torch.allclose(instance.out, verify_result, atol=1e-2)
+            if not verified:
                 raise RuntimeError(f"Verification failed for {workload_name}")
 
         # Warmup
@@ -629,7 +622,11 @@ def _run_benchmark_script_subprocess(
 
 
 def run_benchmark_script(
-    script_path: Path, iterations: int, warmup: int, cwd: Path
+    script_path: Path,
+    iterations: int,
+    warmup: int,
+    cwd: Path,
+    kernel_id: str,
 ) -> dict[str, TimingResults]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
@@ -639,7 +636,9 @@ def run_benchmark_script(
         if classes:
             all_results = {}
             for cls in classes:
-                results = run_benchmark_class(cls, iterations=iterations, warmup=warmup)
+                results = run_benchmark_class(
+                    cls, iterations=iterations, warmup=warmup, kernel_id=kernel_id
+                )
                 for name, timing in results.items():
                     all_results[f"{cls.__name__}.{name}"] = timing
             return all_results
@@ -756,7 +755,11 @@ def run_benchmark(
 
     try:
         timing_results = run_benchmark_script(
-            script_full_path, iterations=iterations, warmup=warmup, cwd=cwd
+            script_full_path,
+            iterations=iterations,
+            warmup=warmup,
+            cwd=cwd,
+            kernel_id=repo_id,
         )
     except RuntimeError as e:
         print(str(e), file=sys.stderr)

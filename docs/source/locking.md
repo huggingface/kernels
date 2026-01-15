@@ -44,6 +44,28 @@ kernel_layer_mapping = {
 register_kernel_mapping(kernel_layer_mapping)
 ```
 
+### Locked kernel functions
+
+Locked functions can also be used with `LockedFuncRepository`. This is useful for stateless
+layers or functions that were converted with `use_kernel_func_from_hub`:
+
+```python
+from kernels import LockedFuncRepository, use_kernel_mapping
+
+kernel_func_mapping = {
+    "silu_and_mul": {
+        "cuda": LockedFuncRepository(
+            repo_id="kernels-community/activation",
+            func_name="silu_and_mul",
+        )
+    }
+}
+
+with use_kernel_mapping(kernel_func_mapping):
+    # Your model code here
+    model = kernelize(model, device="cuda", mode=Mode.INFERENCE)
+```
+
 ## Pre-downloading locked kernels
 
 Locked kernels can be pre-downloaded by running `kernels download .` in your

@@ -159,14 +159,21 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=">=0.1.0,<0.2.0",
         ),
         "rocm": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=">=0.1.0,<0.2.0",
         )
     }
 }
 ```
+
+> [!WARNING] Strongly recommended to specify version bounds
+> Loading kernels without specifying a version will fetch from the `main` branch.
+> The `main` branch may contain breaking changes or incompatible updates at any time.
+> Always specify version bounds to ensure reproducible builds and avoid unexpected issues.
 
 You can register such a mapping using `register_kernel_mapping`:
 
@@ -197,6 +204,7 @@ kernel_layer_mapping = {
         "cuda": FuncRepository(
             repo_id="kernels-community/activation",
             func_name="silu_and_mul",
+            version=">=0.1.0,<0.2.0",
         ),
     }
 }
@@ -214,19 +222,19 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-            version=">=0.0.4,<0.1.0",
+            version=">=0.1.0,<0.2.0",
         ),
         "rocm": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-            version=">=0.0.4,<0.1.0",
+            version=">=0.1.0,<0.2.0",
         )
     }
 }
 ```
 
-This will get the layer from latest kernel tagged `v0.0.z` where `z` is at
-least 4. It is strongly recommended to specify a version bound, since a
+This will get the layer from the latest kernel tagged `v0.1.z` where `z` is at
+least 0. It is strongly recommended to specify a version bound, since a
 kernel author might push incompatible changes to the `main` branch.
 
 ### Registering kernels for specific modes

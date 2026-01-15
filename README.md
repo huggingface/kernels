@@ -39,7 +39,7 @@ import torch
 from kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
-activation = get_kernel("kernels-community/activation")
+activation = get_kernel("kernels-community/activation", version=">=0.1.0,<0.2.0")
 
 # Random tensor
 x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
@@ -50,6 +50,11 @@ activation.gelu_fast(y, x)
 
 print(y)
 ```
+
+> [!WARNING] Strongly recommended to specify version bounds
+> Loading kernels without specifying a version will fetch from the `main` branch.
+> The `main` branch may contain breaking changes or incompatible updates at any time.
+> Always specify version bounds to ensure reproducible builds and avoid unexpected issues.
 
 You can [search for kernels](https://huggingface.co/models?other=kernels) on
 the Hub.

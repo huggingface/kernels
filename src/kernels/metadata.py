@@ -1,13 +1,12 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 
 @dataclass
 class Metadata:
-    python_depends: List[str]
-    version: Optional[int]
+    python_depends: list[str]
+    version: int | None
 
     @staticmethod
     def load_from_variant(variant_path: Path) -> "Metadata":

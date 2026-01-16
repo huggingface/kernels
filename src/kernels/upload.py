@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 from huggingface_hub import create_branch, create_repo, upload_folder
 
@@ -8,7 +7,7 @@ from kernels.variants import BUILD_VARIANT_REGEX
 
 
 def upload_kernels_dir(
-    kernel_dir: Path, *, repo_id: str, branch: Optional[str], private: bool
+    kernel_dir: Path, *, repo_id: str, branch: str | None, private: bool
 ):
     kernel_dir = Path(kernel_dir).resolve()
 

@@ -6,13 +6,7 @@ import logging
 import warnings
 from pathlib import Path
 from types import MethodType, ModuleType
-from typing import (
-    TYPE_CHECKING,
-    Dict,
-    Optional,
-    Protocol,
-    Type,
-)
+from typing import TYPE_CHECKING, Protocol, Type
 
 from .._versions import select_revision_or_version
 from ..utils import (
@@ -68,8 +62,8 @@ class LayerRepository:
         repo_id: str,
         *,
         layer_name: str,
-        revision: Optional[str] = None,
-        version: Optional[int | str] = None,
+        revision: str | None = None,
+        version: int | str | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -181,7 +175,7 @@ class LockedLayerRepository:
         self,
         repo_id: str,
         *,
-        lockfile: Optional[Path] = None,
+        lockfile: Path | None = None,
         layer_name: str,
     ):
         """
@@ -193,8 +187,8 @@ class LockedLayerRepository:
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.layer_name = layer_name
+        self._revision = self._resolve_revision()
 
-    @functools.lru_cache()
     def _resolve_revision(self) -> str:
         if self._lockfile is None:
             locked_sha = _get_caller_locked_kernel(self._repo_id)
@@ -208,7 +202,7 @@ class LockedLayerRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._resolve_revision())
+        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision)
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
@@ -216,16 +210,19 @@ class LockedLayerRepository:
             isinstance(other, LockedLayerRepository)
             and self.layer_name == other.layer_name
             and self._repo_id == other._repo_id
+            and self._revision == other._revision
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id))
+        return hash((self.layer_name, self._repo_id, self._revision))
 
     def __str__(self) -> str:
-        return f"`{self._repo_id}` (revision: {self._resolve_revision()}), layer `{self.layer_name}`"
+        return (
+            f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
+        )
 
 
-_CACHED_LAYER: Dict[RepositoryProtocol, Type["nn.Module"]] = {}
+_CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}
 
 
 def replace_kernel_forward_from_hub(

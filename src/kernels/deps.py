@@ -1,23 +1,22 @@
 import importlib.util
 import json
 from pathlib import Path
-from typing import Dict, List
 
 try:
     with open(Path(__file__).parent / "python_depends.json", "r") as f:
-        DEPENDENCY_DATA: Dict = json.load(f)
+        DEPENDENCY_DATA: dict = json.load(f)
 except FileNotFoundError:
     raise FileNotFoundError(
         "Cannot load dependency data, is `kernels` correctly installed?"
     )
 
 
-def validate_dependencies(dependencies: List[str], backend: str):
+def validate_dependencies(dependencies: list[str], backend: str):
     """
     Validate a list of dependencies to ensure they are installed.
 
     Args:
-        dependencies (`List[str]`): A list of dependency strings to validate.
+        dependencies (`list[str]`): A list of dependency strings to validate.
         backend (`str`): The backend to validate dependencies for.
     """
     general_deps = DEPENDENCY_DATA.get("general", {})

@@ -1,5 +1,5 @@
 import random
-from typing import Generic, List, Optional, Tuple, TypeVar
+from typing import Generic, TypeVar
 
 import pytest
 
@@ -12,7 +12,7 @@ class SimpleIntervalStore(Generic[T]):
     """A simple O(n) implementation that stores intervals in a list."""
 
     def __init__(self):
-        self.intervals: List[Tuple[int, int, T]] = []
+        self.intervals: list[tuple[int, int, T]] = []
 
     def insert(self, start: int, end: int, data: T) -> None:
         """Insert an interval into the store."""
@@ -26,7 +26,7 @@ class SimpleIntervalStore(Generic[T]):
 
         self.intervals.append((start, end, data))
 
-    def find_smallest_interval(self, point: int) -> Optional[T]:
+    def find_smallest_interval(self, point: int) -> T | None:
         """Find the best match using linear search."""
         matches = []
         for start, end, data in self.intervals:
@@ -46,7 +46,7 @@ class SimpleIntervalStore(Generic[T]):
 def is_balanced(tree: IntervalTree[T]) -> bool:
     """Check if the AVL tree is properly balanced."""
 
-    def check_balance(node: Optional[_Node[T]]) -> Tuple[bool, int]:
+    def check_balance(node: _Node[T] | None) -> tuple[bool, int]:
         if node is None:
             return True, 0
 

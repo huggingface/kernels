@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Dict, Optional, Protocol, Tuple, Type
+from typing import TYPE_CHECKING, Protocol, Type
 import sys
 from functools import lru_cache
 
@@ -43,10 +43,10 @@ class DeviceRepos(ABC):
     @abstractmethod
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]: ...
+    ) -> dict[Mode, RepositoryProtocol] | None: ...
 
     @abstractmethod
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         """
         Insert a repository for a specific device and mode.
         """
@@ -54,7 +54,7 @@ class DeviceRepos(ABC):
 
 
 class _CPURepos(DeviceRepos):
-    _repos: Dict[Mode, RepositoryProtocol]
+    _repos: dict[Mode, RepositoryProtocol]
 
     def __init__(self):
         super().__init__()
@@ -63,10 +63,10 @@ class _CPURepos(DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+    ) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         if device.type != "cpu":
             raise ValueError(f"Device type must be 'cpu', got {device.type}")
 
@@ -74,7 +74,7 @@ class _CPURepos(DeviceRepos):
 
 
 class _XPURepos(DeviceRepos):
-    _repos: Dict[Mode, RepositoryProtocol]
+    _repos: dict[Mode, RepositoryProtocol]
 
     def __init__(self):
         super().__init__()
@@ -83,10 +83,10 @@ class _XPURepos(DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+    ) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         if device.type != "xpu":
             raise ValueError(f"Device type must be 'xpu', got {device.type}")
 
@@ -94,7 +94,7 @@ class _XPURepos(DeviceRepos):
 
 
 class _NPURepos(DeviceRepos):
-    _repos: Dict[Mode, RepositoryProtocol]
+    _repos: dict[Mode, RepositoryProtocol]
 
     def __init__(self):
         super().__init__()
@@ -103,10 +103,10 @@ class _NPURepos(DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+    ) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         if device.type != "npu":
             raise ValueError(f"Device type must be 'npu', got {device.type}")
 
@@ -114,7 +114,7 @@ class _NPURepos(DeviceRepos):
 
 
 class _MPSRepos(DeviceRepos):
-    _repos: Dict[Mode, RepositoryProtocol]
+    _repos: dict[Mode, RepositoryProtocol]
 
     def __init__(self):
         super().__init__()
@@ -123,10 +123,10 @@ class _MPSRepos(DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+    ) -> dict[Mode, RepositoryProtocol] | None:
         return self._repos
 
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         if device.type != "mps":
             raise ValueError(f"Device type must be 'mps', got {device.type}")
 
@@ -134,7 +134,7 @@ class _MPSRepos(DeviceRepos):
 
 
 class _CUDARepos(DeviceRepos):
-    _repos: IntervalTree[Dict[Mode, RepositoryProtocol]]
+    _repos: IntervalTree[dict[Mode, RepositoryProtocol]]
 
     def __init__(self):
         super().__init__()
@@ -143,11 +143,11 @@ class _CUDARepos(DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+    ) -> dict[Mode, RepositoryProtocol] | None:
         capability = _find_capability()
         return self.repos_by_capability.find_smallest_interval(capability)
 
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         assert device.properties is None or isinstance(
             device.properties, CUDAProperties
         )
@@ -165,7 +165,7 @@ class _CUDARepos(DeviceRepos):
 
 
 class _ROCMRepos(DeviceRepos):
-    _repos: IntervalTree[Dict[Mode, RepositoryProtocol]]
+    _repos: IntervalTree[dict[Mode, RepositoryProtocol]]
 
     def __init__(self):
         super().__init__()
@@ -174,11 +174,11 @@ class _ROCMRepos(DeviceRepos):
     @property
     def repos(
         self,
-    ) -> Optional[Dict[Mode, RepositoryProtocol]]:
+    ) -> dict[Mode, RepositoryProtocol] | None:
         capability = _find_capability()
         return self.repos_by_capability.find_smallest_interval(capability)
 
-    def insert(self, device: Device, repos: Dict[Mode, RepositoryProtocol]):
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         assert device.properties is None or isinstance(
             device.properties, ROCMProperties
         )
@@ -223,10 +223,10 @@ _MODE_FALLBACK_PRIORITY = {
 
 
 def _select_repository(
-    repositories: Dict[Mode, RepositoryProtocol],
+    repositories: dict[Mode, RepositoryProtocol],
     *,
     mode: Mode,
-) -> Optional[Tuple[RepositoryProtocol, Mode]]:
+) -> tuple[RepositoryProtocol, Mode] | None:
     # Get the fallback priority list for the requested mode
     if mode not in _MODE_FALLBACK_PRIORITY:
         raise ValueError(f"Unsupported mode: {mode}")

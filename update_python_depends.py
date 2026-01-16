@@ -6,7 +6,6 @@ Download python_depends.json from the kernel-builder repository.
 import argparse
 import json
 from pathlib import Path
-from typing import Dict
 from urllib.request import Request, urlopen
 
 URL = "https://raw.githubusercontent.com/huggingface/kernel-builder/refs/heads/main/build2cmake/src/python_dependencies.json"
@@ -14,7 +13,7 @@ TARGET_DIR = Path(__file__).parent / "src" / "kernels"
 TARGET_FILE = TARGET_DIR / "python_depends.json"
 
 
-def download_json(url: str) -> Dict:
+def download_json(url: str) -> dict:
     """Download JSON from URL and return parsed dict."""
     request = Request(url)
 
@@ -50,9 +49,7 @@ def validate_file(url: str, target_path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Download or validate python_depends.json"
-    )
+    parser = argparse.ArgumentParser(description="Download or validate python_depends.json")
     parser.add_argument(
         "--validate",
         action="store_true",

@@ -569,57 +569,6 @@ def discover_benchmark_script(
     sys.exit(1)
 
 
-def _run_benchmark_script_subprocess(
-    script_path: Path, iterations: int, warmup: int, cwd: Path
-) -> dict[str, TimingResults]:
-    """Run a legacy benchmark script as a subprocess."""
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script_path),
-            "--iterations",
-            str(iterations),
-            "--warmup",
-            str(warmup),
-        ],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"Benchmark script failed:\n{result.stderr}")
-
-    try:
-        # Find JSON in output - benchmark scripts may print debug info before JSON
-        stdout = result.stdout.strip()
-        json_str = None
-        for line in reversed(stdout.split("\n")):
-            line = line.strip()
-            if line.startswith("{"):
-                json_str = line
-                break
-
-        if json_str is None:
-            raise RuntimeError(f"No JSON found in benchmark output:\n{result.stdout}")
-
-        output = json.loads(json_str)
-        timing = output["timing_results"]
-        return {
-            "default": TimingResults(
-                mean_ms=timing["mean_ms"],
-                std_ms=timing["std_ms"],
-                min_ms=timing["min_ms"],
-                max_ms=timing["max_ms"],
-                iterations=timing["iterations"],
-            )
-        }
-    except (json.JSONDecodeError, KeyError) as e:
-        raise RuntimeError(
-            f"Error parsing benchmark output: {e}\nStdout: {result.stdout}"
-        )
-
-
 def run_benchmark_script(
     script_path: Path,
     iterations: int,
@@ -630,29 +579,22 @@ def run_benchmark_script(
 ) -> dict[str, TimingResults]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
-    # Try class-based discovery first
-    try:
-        classes = discover_benchmark_classes(script_path, cwd)
-        if classes:
-            all_results = {}
-            for cls in classes:
-                results = run_benchmark_class(
-                    cls,
-                    iterations=iterations,
-                    warmup=warmup,
-                    repo_id=repo_id,
-                    revision=revision,
-                )
-                for name, timing in results.items():
-                    all_results[f"{cls.__name__}.{name}"] = timing
-            return all_results
-    except Exception:
-        pass  # Fall through to subprocess
+    classes = discover_benchmark_classes(script_path, cwd)
+    if not classes:
+        raise RuntimeError(f"No Benchmark subclasses found in {script_path}")
 
-    # Fall back to legacy subprocess-based execution
-    return _run_benchmark_script_subprocess(
-        script_path, iterations=iterations, warmup=warmup, cwd=cwd
-    )
+    all_results = {}
+    for cls in classes:
+        results = run_benchmark_class(
+            cls,
+            iterations=iterations,
+            warmup=warmup,
+            repo_id=repo_id,
+            revision=revision,
+        )
+        for name, timing in results.items():
+            all_results[f"{cls.__name__}.{name}"] = timing
+    return all_results
 
 
 def submit_benchmark(

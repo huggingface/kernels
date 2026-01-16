@@ -78,7 +78,7 @@ class Benchmark:
                 # Return reference tensor; runner compares with self.out
                 return torch.nn.functional.silu(self.x[..., :512]) * self.x[..., 512:]
 
-    Run with: kernels benchmark <repo_id> --script my_benchmark.py
+    Run with: kernels benchmark <repo_id>
     """
 
     seed: int | None = None  # Optional: seed for reproducibility
@@ -331,19 +331,6 @@ def _get_macos_gpu() -> str | None:
     return None
 
 
-def _get_local_commit_sha(repo_path: Path) -> str:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=repo_path,
-        )
-        return result.stdout.strip() if result.returncode == 0 else "local"
-    except FileNotFoundError:
-        return "local"
-
-
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
     cuda_version = "N/A"
@@ -537,7 +524,6 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
 def discover_benchmark_script(
     repo_id: str,
     repo_path: Path,
-    custom_script: str | None = None,
 ) -> tuple[Path, Path]:
     """
     Discover the benchmark script to run.
@@ -545,16 +531,6 @@ def discover_benchmark_script(
     Returns:
         Tuple of (script_path, working_directory)
     """
-    if custom_script:
-        script_path = repo_path / custom_script
-        if not script_path.exists():
-            print(
-                f"Error: Benchmark script not found: {custom_script}", file=sys.stderr
-            )
-            sys.exit(1)
-        return script_path, repo_path
-
-    # Search in kernel repo
     for rel_path in BENCHMARK_PATHS:
         script_path = repo_path / rel_path
         if script_path.exists():
@@ -562,10 +538,6 @@ def discover_benchmark_script(
 
     print(f"Error: No benchmark found in '{repo_id}'", file=sys.stderr)
     print("Tried: benchmarks/bench.py, benchmark.py", file=sys.stderr)
-    print(
-        "Add benchmarks/bench.py or use --central for well-known benchmarks",
-        file=sys.stderr,
-    )
     sys.exit(1)
 
 
@@ -600,17 +572,15 @@ def run_benchmark_script(
 def submit_benchmark(
     repo_id: str,
     result: BenchmarkResult,
-    api_url: str | None = None,
-    token: str | None = None,
 ) -> None:
-    if token is None:
-        token = get_token()
+    token = get_token()
     if token is None:
         raise ValueError(
-            "No HuggingFace token. Run `huggingface-cli login` or use --token"
+            "No HuggingFace token. Run `huggingface-cli login` or set HF_TOKEN"
         )
 
-    endpoint = f"{api_url or 'https://huggingface.co'}/api/models/{repo_id}/benchmarks"
+    # TODO: follow up on API design for benchmark submission
+    endpoint = f"https://huggingface.co/api/kernels/{repo_id}/benchmarks"
     response = requests.post(
         endpoint,
         json=result.to_payload(),
@@ -624,81 +594,24 @@ def submit_benchmark(
     response.raise_for_status()
 
 
-# TODO: remove in future, only for testing
-def _apply_machine_info_overrides(
-    machine_info: MachineInfo, overrides: list[str]
-) -> MachineInfo:
-    """Apply force overrides to machine info.
-
-    Accepts overrides in format: machineInfo.field=value
-    Supported fields: gpu, cudaVersion, pytorchVersion, os, cpu
-    """
-    # Map camelCase API names to snake_case dataclass fields
-    field_map = {
-        "gpu": "gpu",
-        "cudaVersion": "cuda_version",
-        "pytorchVersion": "pytorch_version",
-        "os": "os",
-        "cpu": "cpu",
-    }
-
-    for override in overrides:
-        if "=" not in override:
-            print(
-                f"Warning: Invalid override format '{override}', expected key=value",
-                file=sys.stderr,
-            )
-            continue
-
-        key, value = override.split("=", 1)
-
-        # Handle machineInfo.field format
-        if key.startswith("machineInfo."):
-            key = key[len("machineInfo.") :]
-
-        if key in field_map:
-            setattr(machine_info, field_map[key], value)
-            print(f"Override: {key} = {value}", file=sys.stderr)
-        else:
-            print(f"Warning: Unknown machineInfo field '{key}'", file=sys.stderr)
-
-    return machine_info
-
-
 def run_benchmark(
     repo_id: str,
-    script: str | None = None,
     # TODO: change default to 1 in the future
     revision: str = "main",
-    local_dir: str | None = None,
     iterations: int = 100,
     warmup: int = 10,
-    api_url: str | None = None,
-    token: str | None = None,
     upload: bool = False,
     output: str | None = None,
     print_json: bool = False,
-    # TODO: remove in future, only for testing
-    force_overrides: list[str] | None = None,
 ) -> BenchmarkResult:
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
 
-    if local_dir:
-        repo_path = Path(local_dir)
-        if not repo_path.exists():
-            print(f"Error: Local directory not found: {local_dir}", file=sys.stderr)
-            sys.exit(1)
-        print(f"Using local directory: {repo_path}", file=sys.stderr)
-        kernel_sha = _get_local_commit_sha(repo_path)
-    else:
-        print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
-        repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
-        kernel_sha = get_kernel_commit_sha(repo_id, revision)
+    print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
+    repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
+    kernel_sha = get_kernel_commit_sha(repo_id, revision)
 
-    script_full_path, cwd = discover_benchmark_script(
-        repo_id, repo_path, custom_script=script
-    )
+    script_full_path, cwd = discover_benchmark_script(repo_id, repo_path)
 
     try:
         timing_results = run_benchmark_script(
@@ -729,9 +642,6 @@ def run_benchmark(
     print(f"Kernel: {kernel_sha[:7]}  Benchmark: {script_sha[:7]}", file=sys.stderr)
 
     machine_info = collect_machine_info()
-    # TODO: remove in future, only for testing
-    if force_overrides:
-        machine_info = _apply_machine_info_overrides(machine_info, force_overrides)
 
     result = BenchmarkResult(
         timing_results=timing_results,
@@ -750,9 +660,7 @@ def run_benchmark(
         print(json.dumps(result.to_payload(), indent=2))
 
     if upload:
-        submit_benchmark(repo_id=repo_id, result=result, api_url=api_url, token=token)
+        submit_benchmark(repo_id=repo_id, result=result)
         print("Benchmark submitted successfully!", file=sys.stderr)
-    else:
-        print("Dry run - use --upload to submit results", file=sys.stderr)
 
     return result

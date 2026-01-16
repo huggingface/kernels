@@ -123,27 +123,10 @@ def main():
         help="Kernel repo ID (e.g., kernels-community/activation)",
     )
     benchmark_parser.add_argument(
-        "--script",
-        type=str,
-        default=None,
-        help="Custom benchmark script path (overrides auto-discovery)",
-    )
-    benchmark_parser.add_argument(
         "--revision",
         type=str,
         default="main",
         help="Kernel revision (default: main)",
-    )
-    benchmark_parser.add_argument(
-        "--local-dir",
-        type=str,
-        default=None,
-        help="Use local directory instead of downloading",
-    )
-    benchmark_parser.add_argument(
-        "--upload",
-        action="store_true",
-        help="Submit results to the Hub (default: dry run only)",
     )
     benchmark_parser.add_argument(
         "--output",
@@ -158,16 +141,6 @@ def main():
     )
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)
-    benchmark_parser.add_argument("--api-url", type=str, default=None)
-    benchmark_parser.add_argument("--token", type=str, default=None)
-    # TODO: remove in future, only for testing
-    benchmark_parser.add_argument(
-        "--force",
-        type=str,
-        action="append",
-        default=[],
-        help="Force override fields (e.g., --force=machineInfo.gpu=H100)",
-    )
     benchmark_parser.set_defaults(func=run_benchmark)
 
     args = parser.parse_args()
@@ -301,15 +274,9 @@ def run_benchmark(args):
 
     benchmark.run_benchmark(
         repo_id=args.repo_id,
-        script=args.script,
         revision=args.revision,
-        local_dir=args.local_dir,
         iterations=args.iterations,
         warmup=args.warmup,
-        api_url=args.api_url,
-        token=args.token,
-        upload=args.upload,
         output=args.output,
         print_json=args.json,
-        force_overrides=args.force,
     )

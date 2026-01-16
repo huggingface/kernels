@@ -4,7 +4,6 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 import pytest
 from huggingface_hub import delete_repo, model_info, list_repo_refs
@@ -57,7 +56,7 @@ def get_filename_to_change(repo_filenames):
     return filename_to_change
 
 
-def get_filenames_from_a_repo(repo_id: str) -> List[str]:
+def get_filenames_from_a_repo(repo_id: str) -> list[str]:
     try:
         repo_info = model_info(repo_id=repo_id, files_metadata=True)
         repo_siblings = repo_info.siblings

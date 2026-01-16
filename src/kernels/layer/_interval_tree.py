@@ -2,7 +2,7 @@
 # packages, but it seems unmaintained and does not have type
 # annotations.
 
-from typing import Generic, List, Optional, Tuple, TypeVar
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -15,8 +15,8 @@ class _Node(Generic[T]):
         self.end: int = end
         self.data: T = data
         self.max_end: int = end
-        self.left: Optional["_Node[T]"] = None
-        self.right: Optional["_Node[T]"] = None
+        self.left: "_Node[T]" | None = None
+        self.right: "_Node[T]" | None = None
         self.height: int = 1
 
     def __repr__(self) -> str:
@@ -26,7 +26,7 @@ class _Node(Generic[T]):
 class IntervalTree(Generic[T]):
     """A data structure to hold and query (unique) intervals."""
 
-    root: Optional[_Node[T]]
+    root: _Node[T] | None
 
     def __init__(self):
         self.root = None
@@ -42,12 +42,12 @@ class IntervalTree(Generic[T]):
         """
         self.root = self._insert(self.root, start, end, data)
 
-    def _get_height(self, node: Optional[_Node[T]]) -> int:
+    def _get_height(self, node: _Node[T] | None) -> int:
         if not node:
             return 0
         return node.height
 
-    def _get_balance(self, node: Optional[_Node[T]]) -> int:
+    def _get_balance(self, node: _Node[T] | None) -> int:
         if not node:
             return 0
         return self._get_height(node.left) - self._get_height(node.right)
@@ -88,9 +88,7 @@ class IntervalTree(Generic[T]):
 
         return y
 
-    def _insert(
-        self, node: Optional[_Node[T]], start: int, end: int, data: T
-    ) -> _Node[T]:
+    def _insert(self, node: _Node[T] | None, start: int, end: int, data: T) -> _Node[T]:
         """Recursive helper to insert a new node and balance the tree."""
         if not node:
             return _Node(start, end, data)
@@ -129,7 +127,7 @@ class IntervalTree(Generic[T]):
 
         return node
 
-    def search(self, point: int) -> List[T]:
+    def search(self, point: int) -> list[T]:
         """
         Searches for all intervals that contain the given point.
 
@@ -139,11 +137,11 @@ class IntervalTree(Generic[T]):
         Returns:
             A list of data items from all matching intervals.
         """
-        results: List[T] = []
+        results: list[T] = []
         self._search(self.root, point, results)
         return results
 
-    def _search(self, node: Optional[_Node[T]], point: int, results: List[T]) -> None:
+    def _search(self, node: _Node[T] | None, point: int, results: list[T]) -> None:
         """Recursive helper to find all overlapping intervals."""
         if node is None or point > node.max_end:
             return
@@ -157,7 +155,7 @@ class IntervalTree(Generic[T]):
         if point >= node.start and node.right:
             self._search(node.right, point, results)
 
-    def find_smallest_interval(self, point: int) -> Optional[T]:
+    def find_smallest_interval(self, point: int) -> T | None:
         """
         Finds the item with the most specific (smallest) range for a given point.
 
@@ -167,7 +165,7 @@ class IntervalTree(Generic[T]):
         Returns:
             The data of the best-matching item, or None if no match is found.
         """
-        matches: List[Tuple[int, int, T]] = []
+        matches: list[tuple[int, int, T]] = []
         self._find_with_intervals(self.root, point, matches)
 
         if not matches:
@@ -182,9 +180,9 @@ class IntervalTree(Generic[T]):
 
     def _find_with_intervals(
         self,
-        node: Optional[_Node[T]],
+        node: _Node[T] | None,
         point: int,
-        results: List[Tuple[int, int, T]],
+        results: list[tuple[int, int, T]],
     ) -> None:
         """A modified search that collects interval ranges along with data."""
         if node is None or point > node.max_end:

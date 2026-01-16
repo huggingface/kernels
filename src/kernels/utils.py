@@ -11,7 +11,6 @@ import sys
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, List, Optional, Tuple, Union
 
 from huggingface_hub import file_exists, snapshot_download
 from packaging.version import parse
@@ -24,7 +23,7 @@ from kernels.lockfile import KernelLock, VariantLock
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 
 
-def _get_cache_dir() -> Optional[str]:
+def _get_cache_dir() -> str | None:
     """Returns the kernels cache directory."""
     cache_dir = os.environ.get("HF_KERNELS_CACHE", None)
     if cache_dir is not None:
@@ -36,10 +35,10 @@ def _get_cache_dir() -> Optional[str]:
     return os.environ.get("KERNELS_CACHE", None)
 
 
-CACHE_DIR: Optional[str] = _get_cache_dir()
+CACHE_DIR: str | None = _get_cache_dir()
 
 
-def _get_privateuse_backend_name() -> Optional[str]:
+def _get_privateuse_backend_name() -> str | None:
     import torch
 
     if hasattr(torch._C, "_get_privateuse1_backend_name"):
@@ -123,7 +122,7 @@ def build_variant_universal() -> str:
     return "torch-universal"
 
 
-def build_variants() -> List[str]:
+def build_variants() -> list[str]:
     """Return compatible build variants in preferred order."""
     return [build_variant(), build_variant_noarch(), build_variant_universal()]
 
@@ -161,9 +160,9 @@ def install_kernel(
     repo_id: str,
     revision: str,
     local_files_only: bool = False,
-    variant_locks: Optional[Dict[str, VariantLock]] = None,
-    user_agent: Optional[Union[str, dict]] = None,
-) -> Tuple[str, Path]:
+    variant_locks: dict[str, VariantLock] | None = None,
+    user_agent: str | dict | None = None,
+) -> tuple[str, Path]:
     """
     Download a kernel for the current environment to the cache.
 
@@ -176,13 +175,13 @@ def install_kernel(
             The specific revision (branch, tag, or commit) to download.
         local_files_only (`bool`, *optional*, defaults to `False`):
             Whether to only use local files and not download from the Hub.
-        variant_locks (`Dict[str, VariantLock]`, *optional*):
+        variant_locks (`dict[str, VariantLock]`, *optional*):
             Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
     Returns:
-        `Tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
+        `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
     package_name = package_name_from_repo_id(repo_id)
     allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
@@ -209,8 +208,8 @@ def install_kernel(
 def _find_kernel_in_repo_path(
     repo_path: Path,
     package_name: str,
-    variant_locks: Optional[Dict[str, VariantLock]] = None,
-) -> Tuple[str, Path]:
+    variant_locks: dict[str, VariantLock] | None = None,
+) -> tuple[str, Path]:
     variants = build_variants()
     variant = None
     variant_path = None
@@ -248,7 +247,7 @@ def install_kernel_all_variants(
     repo_id: str,
     revision: str,
     local_files_only: bool = False,
-    variant_locks: Optional[Dict[str, VariantLock]] = None,
+    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     repo_path = Path(
         snapshot_download(
@@ -277,9 +276,9 @@ def install_kernel_all_variants(
 
 def get_kernel(
     repo_id: str,
-    revision: Optional[str] = None,
-    version: Optional[str] = None,
-    user_agent: Optional[Union[str, dict]] = None,
+    revision: str | None = None,
+    version: str | None = None,
+    user_agent: str | dict | None = None,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -349,7 +348,7 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
 
 
 def has_kernel(
-    repo_id: str, revision: Optional[str] = None, version: Optional[str] = None
+    repo_id: str, revision: str | None = None, version: str | None = None
 ) -> bool:
     """
     Check whether a kernel build exists for the current environment (Torch version and compute framework).
@@ -383,7 +382,7 @@ def has_kernel(
     return False
 
 
-def load_kernel(repo_id: str, *, lockfile: Optional[Path] = None) -> ModuleType:
+def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
 
@@ -458,7 +457,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     return _import_from_path(package_name, variant_path)
 
 
-def _get_caller_locked_kernel(repo_id: str) -> Optional[str]:
+def _get_caller_locked_kernel(repo_id: str) -> str | None:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
         if lock_json is None:
@@ -469,7 +468,7 @@ def _get_caller_locked_kernel(repo_id: str) -> Optional[str]:
     return None
 
 
-def _get_locked_kernel(repo_id: str, lock_json: str) -> Optional[str]:
+def _get_locked_kernel(repo_id: str, lock_json: str) -> str | None:
     for kernel_lock_json in json.loads(lock_json):
         kernel_lock = KernelLock.from_json(kernel_lock_json)
         if kernel_lock.repo_id == repo_id:
@@ -477,7 +476,7 @@ def _get_locked_kernel(repo_id: str, lock_json: str) -> Optional[str]:
     return None
 
 
-def _get_caller_distributions() -> List[Distribution]:
+def _get_caller_distributions() -> list[Distribution]:
     module = _get_caller_module()
     if module is None:
         return []
@@ -491,7 +490,7 @@ def _get_caller_distributions() -> List[Distribution]:
     return [importlib.metadata.distribution(dist_name) for dist_name in dist_names]
 
 
-def _get_caller_module() -> Optional[ModuleType]:
+def _get_caller_module() -> ModuleType | None:
     stack = inspect.stack()
     # Get first module in the stack that is not the current module.
     first_module = inspect.getmodule(stack[0][0])
@@ -508,7 +507,7 @@ def validate_kernel(*, repo_path: Path, variant: str, hash: str):
 
     # Get the file paths. The first element is a byte-encoded relative path
     # used for sorting. The second element is the absolute path.
-    files: List[Tuple[bytes, Path]] = []
+    files: list[tuple[bytes, Path]] = []
     # Ideally we'd use Path.walk, but it's only available in Python 3.12.
     for dirpath, _, filenames in os.walk(variant_path):
         for filename in filenames:
@@ -560,8 +559,8 @@ def package_name_from_repo_id(repo_id: str) -> str:
 
 
 def _get_user_agent(
-    user_agent: Optional[Union[dict, str]] = None,
-) -> Union[None, dict, str]:
+    user_agent: str | dict | None = None,
+) -> dict | str | None:
     import torch
 
     from . import __version__

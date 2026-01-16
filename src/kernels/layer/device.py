@@ -1,7 +1,4 @@
 from dataclasses import dataclass
-from typing import (
-    Optional,
-)
 
 
 @dataclass(frozen=True)
@@ -133,7 +130,7 @@ class Device:
     """
 
     type: str
-    properties: Optional[CUDAProperties] = None
+    properties: CUDAProperties | None = None
 
     def __post_init__(self):
         if self.properties is not None and isinstance(self.properties, CUDAProperties):

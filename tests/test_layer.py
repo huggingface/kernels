@@ -196,9 +196,7 @@ def test_hub_forward_rocm():
     X = torch.randn((32, 64))
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = kernelize(
-        SiluAndMulNoCompileKernel(), device="rocm", mode=Mode.INFERENCE
-    )
+    silu_and_mul_with_kernel = kernelize(SiluAndMulNoCompileKernel(), device="rocm", mode=Mode.INFERENCE)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -219,9 +217,7 @@ def test_hub_forward_xpu():
     X = torch.randn(4, 16, hidden_size, device="xpu", dtype=torch.float32)
     Y = rms_norm(X)
 
-    rms_norm_with_kernel = kernelize(
-        RMSNormWithKernel(weight), mode=Mode.INFERENCE, device="xpu"
-    )
+    rms_norm_with_kernel = kernelize(RMSNormWithKernel(weight), mode=Mode.INFERENCE, device="xpu")
     Y_kernel = rms_norm_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -238,9 +234,7 @@ def test_hub_forward_npu():
     X = torch.randn((32, 64), device="npu")
     Y = silu_and_mul(X)
 
-    silu_and_mul_with_kernel = kernelize(
-        SiluAndMulWithKernel(), device="npu", mode=Mode.INFERENCE
-    )
+    silu_and_mul_with_kernel = kernelize(SiluAndMulWithKernel(), device="npu", mode=Mode.INFERENCE)
     Y_kernel = silu_and_mul_with_kernel(X)
 
     torch.testing.assert_close(Y_kernel, Y)
@@ -276,9 +270,7 @@ def test_rocm_kernel_mapping(device):
         # Verify the repository is correctly stored
         rocm_repos = mapping["SiluAndMul"]["rocm"]
         assert rocm_repos is not None
-        assert (
-            rocm_repos.repos[Mode.FALLBACK]._repo_id == "kernels-community/activation"
-        )
+        assert rocm_repos.repos[Mode.FALLBACK]._repo_id == "kernels-community/activation"
         assert rocm_repos.repos[Mode.FALLBACK].layer_name == "SiluAndMul"
 
 
@@ -290,9 +282,7 @@ def test_capability():
             "Linear": {
                 Device(
                     type="cuda",
-                    properties=CUDAProperties(
-                        min_capability=75, max_capability=sys.maxsize
-                    ),
+                    properties=CUDAProperties(min_capability=75, max_capability=sys.maxsize),
                 ): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearBackward",
@@ -312,9 +302,7 @@ def test_capability():
             "Linear": {
                 Device(
                     type="cuda",
-                    properties=CUDAProperties(
-                        min_capability=sys.maxsize, max_capability=sys.maxsize
-                    ),
+                    properties=CUDAProperties(min_capability=sys.maxsize, max_capability=sys.maxsize),
                 ): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearBackward",
@@ -380,9 +368,7 @@ def test_torch_compile_layer_without_fallback(cls, device):
     silu_and_mul_with_kernel.eval()
 
     ctx = (
-        pytest.raises(ValueError, match="does not support mode")
-        if cls is SiluAndMulNoCompileKernel
-        else nullcontext()
+        pytest.raises(ValueError, match="does not support mode") if cls is SiluAndMulNoCompileKernel else nullcontext()
     )
     with ctx:
         silu_and_mul_with_kernel = kernelize(
@@ -471,9 +457,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
-                .repos[Mode.FALLBACK]
-                ._repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -485,8 +469,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
-            == "kernels-community/activation"
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id == "kernels-community/activation"
         )
 
         with use_kernel_mapping(extra_mapping2, inherit_mapping=False):
@@ -494,9 +477,7 @@ def test_mapping_contexts():
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"]
-                .repos[Mode.FALLBACK]
-                ._repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -508,8 +489,7 @@ def test_mapping_contexts():
             "TestKernel",
         }
         assert (
-            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
-            == "kernels-community/activation"
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id == "kernels-community/activation"
         )
 
     assert set(_KERNEL_MAPPING.get().keys()) == {
@@ -527,9 +507,7 @@ def test_validate_kernel_layer():
             self.foo = 42
 
     def stub_repo(layer):
-        return LayerRepository(
-            repo_id="kernels-test/nonexisting", layer_name=layer.__name__
-        )
+        return LayerRepository(repo_id="kernels-test/nonexisting", layer_name=layer.__name__)
 
     with pytest.raises(
         TypeError,
@@ -681,8 +659,7 @@ def test_kernel_modes():
         {
             "Linear": {
                 "cuda": {
-                    Mode.TRAINING
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     )
@@ -763,9 +740,7 @@ def test_invalid_mode_rejected():
     with pytest.raises(ValueError, match="cannot be combined with other modes"):
         _ = Mode.FALLBACK | Mode.TORCH_COMPILE
 
-    with pytest.raises(
-        ValueError, match="can only be used to register kernel mappings"
-    ):
+    with pytest.raises(ValueError, match="can only be used to register kernel mappings"):
         kernelize(torch.nn.Linear(32, 32), mode=Mode.FALLBACK)
 
     with pytest.raises(ValueError, match="mode must contain"):
@@ -810,8 +785,7 @@ def test_kernel_modes_inference():
         {
             "Linear": {
                 "cuda": {
-                    Mode.INFERENCE
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     )
@@ -843,8 +817,7 @@ def test_kernel_modes_inference():
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
-                    Mode.INFERENCE
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
@@ -923,13 +896,11 @@ def test_kernel_modes_mixed():
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
-                    Mode.INFERENCE
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
-                    Mode.TRAINING
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
@@ -993,8 +964,7 @@ def test_kernel_modes_cross_fallback():
         {
             "Linear": {
                 "cuda": {
-                    Mode.TRAINING
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     )
@@ -1032,8 +1002,7 @@ def test_kernel_modes_cross_fallback():
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),
-                    Mode.INFERENCE
-                    | Mode.TORCH_COMPILE: LayerRepository(
+                    Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
                     ),

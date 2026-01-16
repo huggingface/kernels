@@ -3,7 +3,7 @@ import inspect
 from inspect import Parameter, Signature
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Callable, Optional, Protocol, Type
+from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from kernels.layer.repos import RepositoryProtocol
 
@@ -63,8 +63,8 @@ class FuncRepository:
         repo_id: str,
         *,
         func_name: str,
-        revision: Optional[str] = None,
-        version: Optional[str] = None,
+        revision: str | None = None,
+        version: str | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -229,7 +229,7 @@ class LockedFuncRepository:
         self,
         repo_id: str,
         *,
-        lockfile: Optional[Path] = None,
+        lockfile: Path | None,
         func_name: str,
     ):
         """

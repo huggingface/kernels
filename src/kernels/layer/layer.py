@@ -6,13 +6,7 @@ import logging
 import warnings
 from pathlib import Path
 from types import MethodType, ModuleType
-from typing import (
-    TYPE_CHECKING,
-    Dict,
-    Optional,
-    Protocol,
-    Type,
-)
+from typing import TYPE_CHECKING, Protocol, Type
 
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
@@ -74,8 +68,8 @@ class LayerRepository:
         repo_id: str,
         *,
         layer_name: str,
-        revision: Optional[str] = None,
-        version: Optional[str] = None,
+        revision: str | None = None,
+        version: str | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -185,7 +179,7 @@ class LockedLayerRepository:
         self,
         repo_id: str,
         *,
-        lockfile: Optional[Path] = None,
+        lockfile: Path | None,
         layer_name: str,
     ):
         """
@@ -232,7 +226,7 @@ class LockedLayerRepository:
         )
 
 
-_CACHED_LAYER: Dict[RepositoryProtocol, Type["nn.Module"]] = {}
+_CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}
 
 
 def replace_kernel_forward_from_hub(

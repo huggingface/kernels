@@ -1,12 +1,10 @@
-from typing import Dict, Optional
-
 from huggingface_hub import HfApi
 from huggingface_hub.hf_api import GitRefInfo
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 
-def _get_available_versions(repo_id: str) -> Dict[Version, GitRefInfo]:
+def _get_available_versions(repo_id: str) -> dict[Version, GitRefInfo]:
     """Get kernel versions that are available in the repository."""
     versions = {}
     for tag in HfApi().list_repo_refs(repo_id).tags:
@@ -40,7 +38,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: str) -> GitRefInfo:
 
 
 def select_revision_or_version(
-    repo_id: str, revision: Optional[str], version: Optional[str]
+    repo_id: str, revision: str | None, version: str | None
 ) -> str:
     if revision is not None and version is not None:
         raise ValueError("Either a revision or a version must be specified, not both.")

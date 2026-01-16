@@ -1,5 +1,5 @@
 import random
-from typing import Generic, List, Optional, Tuple, TypeVar
+from typing import Generic, TypeVar
 
 import pytest
 
@@ -12,21 +12,19 @@ class SimpleIntervalStore(Generic[T]):
     """A simple O(n) implementation that stores intervals in a list."""
 
     def __init__(self):
-        self.intervals: List[Tuple[int, int, T]] = []
+        self.intervals: list[tuple[int, int, T]] = []
 
     def insert(self, start: int, end: int, data: T) -> None:
         """Insert an interval into the store."""
         # Replace data if the interval already exists.
-        for i, (existing_start, existing_end, existing_data) in enumerate(
-            self.intervals
-        ):
+        for i, (existing_start, existing_end, existing_data) in enumerate(self.intervals):
             if existing_start == start and existing_end == end:
                 self.intervals[i] = (start, end, data)
                 return
 
         self.intervals.append((start, end, data))
 
-    def find_smallest_interval(self, point: int) -> Optional[T]:
+    def find_smallest_interval(self, point: int) -> T | None:
         """Find the best match using linear search."""
         matches = []
         for start, end, data in self.intervals:
@@ -46,7 +44,7 @@ class SimpleIntervalStore(Generic[T]):
 def is_balanced(tree: IntervalTree[T]) -> bool:
     """Check if the AVL tree is properly balanced."""
 
-    def check_balance(node: Optional[_Node[T]]) -> Tuple[bool, int]:
+    def check_balance(node: _Node[T] | None) -> tuple[bool, int]:
         if node is None:
             return True, 0
 
@@ -168,9 +166,7 @@ def test_property_based_interval_tree():
             simple.insert(start, end, data)
 
             # Check that tree is still balanced
-            assert is_balanced(
-                tree
-            ), f"Tree became unbalanced after inserting interval {i}: ({start}, {end})"
+            assert is_balanced(tree), f"Tree became unbalanced after inserting interval {i}: ({start}, {end})"
 
             for point in test_points:
                 tree_result = tree.find_smallest_interval(point)
@@ -196,9 +192,7 @@ def test_property_based_edge_cases():
         tree.insert(point, point, data)
         simple.insert(point, point, data)
 
-        assert is_balanced(
-            tree
-        ), f"Tree unbalanced after inserting single point {point}"
+        assert is_balanced(tree), f"Tree unbalanced after inserting single point {point}"
 
         # Test the exact point and neighbors
         for test_point in [point - 1, point, point + 1]:

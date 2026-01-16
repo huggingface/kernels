@@ -4,7 +4,6 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 import pytest
 from huggingface_hub import delete_repo, model_info, list_repo_refs
@@ -39,9 +38,7 @@ def next_filename(path: Path) -> Path:
     """
     m = re.match(r"^(.*?)(\d+)(\.py)$", path.name)
     if not m:
-        raise ValueError(
-            f"Filename {path.name!r} does not match pattern <prefix>_<number>.py"
-        )
+        raise ValueError(f"Filename {path.name!r} does not match pattern <prefix>_<number>.py")
 
     prefix, number, suffix = m.groups()
     new_number = str(int(number) + 1).zfill(len(number))
@@ -57,7 +54,7 @@ def get_filename_to_change(repo_filenames):
     return filename_to_change
 
 
-def get_filenames_from_a_repo(repo_id: str) -> List[str]:
+def get_filenames_from_a_repo(repo_id: str) -> list[str]:
     try:
         repo_info = model_info(repo_id=repo_id, files_metadata=True)
         repo_siblings = repo_info.siblings
@@ -116,7 +113,5 @@ def test_kernel_upload_deletes_as_expected():
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(changed_filename) in k for k in repo_filenames), f"{repo_filenames=}"
-    assert not any(
-        str(filename_to_change) in k for k in repo_filenames
-    ), f"{repo_filenames=}"
+    assert not any(str(filename_to_change) in k for k in repo_filenames), f"{repo_filenames=}"
     delete_repo(repo_id=REPO_ID)

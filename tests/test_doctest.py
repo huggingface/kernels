@@ -42,8 +42,6 @@ def test_class_docstring(cls):
 
 
 @pytest.mark.cuda_only
-@pytest.mark.parametrize(
-    "member", all_public_class_members(), ids=lambda d: d.__qualname__
-)
+@pytest.mark.parametrize("member", all_public_class_members(), ids=lambda d: d.__qualname__)
 def test_member_docstring(member):
     check_docstring(member)

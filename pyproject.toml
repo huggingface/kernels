@@ -13,12 +13,9 @@ readme = "README.md"
 requires-python = ">= 3.9"
 dependencies = [
   "huggingface_hub>=0.26.0,<2.0",
-  "numpy>=2.0.2",
   "packaging>=20.0",
   "pyyaml>=6",
-  "requests>=2.32.5",
   "tomli>=2.0; python_version<'3.11'",
-  "torch",
 ]
 
 [build-system]
@@ -39,6 +36,11 @@ dev = [
 
 [project.optional-dependencies]
 abi-check = ["kernel-abi-check>=0.6.2,<0.7.0"]
+benchmark = [
+  "numpy>=2.0.2",
+  "requests>=2.32.5",
+  "torch",
+]
 torch = ["torch"]
 docs = [
   "hf-doc-builder",

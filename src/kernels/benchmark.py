@@ -12,9 +12,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import requests
 from huggingface_hub import HfApi, get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
+
+MISSING_DEPS: list[str] = []
+
+try:
+    import requests
+except ImportError:
+    requests = None  # type: ignore[assignment]
+    MISSING_DEPS.append("requests")
 
 try:
     import torch
@@ -23,6 +30,7 @@ try:
 except ImportError:
     torch = None  # type: ignore[assignment]
     TORCH_AVAILABLE = False
+    MISSING_DEPS.append("torch")
 
 
 def _percentile(sorted_data: list[float], p: float) -> float:
@@ -608,6 +616,14 @@ def run_benchmark(
     output: str | None = None,
     print_json: bool = False,
 ) -> BenchmarkResult:
+    if MISSING_DEPS:
+        print(
+            f"Error: Missing dependencies for benchmark: {', '.join(MISSING_DEPS)}",
+            file=sys.stderr,
+        )
+        print("Install with: pip install 'kernels[benchmark]'", file=sys.stderr)
+        sys.exit(1)
+
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
 

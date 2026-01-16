@@ -1,21 +1,22 @@
 from pathlib import Path
-from kernels.kernel_card_utils import _load_or_create_model_card, _update_model_card_usage, _update_model_card_backends
+from kernels.kernel_card_utils import _update_kernel_card_license, _load_or_create_kernel_card, _update_kernel_card_usage, _update_kernel_card_backends
 import argparse
 
 
 def main(args):
     kernel_dir = Path(args.kernels_dir)
 
-    model_card = _load_or_create_model_card(
+    kernel_card = _load_or_create_kernel_card(
         kernel_description=args.description, license="apache-2.0"
     )
 
-    updated_card = _update_model_card_usage(model_card=model_card, local_path=kernel_dir)
-    updated_card = _update_model_card_backends(model_card=updated_card, local_path=kernel_dir)
+    updated_card = _update_kernel_card_usage(kernel_card=kernel_card, local_path=kernel_dir)
+    updated_card = _update_kernel_card_backends(kernel_card=updated_card, local_path=kernel_dir)
+    updated_card = _update_kernel_card_license(kernel_card, kernel_dir)
 
     card_path = args.card_path or "README.md"
     updated_card.save(card_path)
-    print("Model card updated successfully!")
+    print("Kernel card updated successfully!")
     print("\nUpdated content preview:")
     print(updated_card.content[:500] + "...")
 

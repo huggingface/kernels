@@ -6,7 +6,7 @@ from .compat import tomllib
 from huggingface_hub import ModelCard, ModelCardData
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 
-MODEL_CARD_TEMPLATE_PATH = Path(__file__).parent / "card_template.md"
+KERNEL_CARD_TEMPLATE_PATH = Path(__file__).parent / "card_template.md"
 DESCRIPTION = """
 This is the repository card of {repo_id} that has been pushed on the Hub. It was built to be used with the [`kernels` library](https://github.com/huggingface/kernels). This card was automatically generated.
 """
@@ -19,6 +19,7 @@ kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
 
 {func_name}(...)
 ```"""
+LIBRARY_NAME = "kernels"
 
 is_jinja_available = False
 try:
@@ -29,7 +30,7 @@ except ImportError:
     pass
 
 
-def _load_or_create_model_card(
+def _load_or_create_kernel_card(
     repo_id_or_path: str = "REPO_ID",
     token: str | None = None,
     kernel_description: str | None = None,
@@ -43,24 +44,24 @@ def _load_or_create_model_card(
             " To install it, please run `pip install Jinja2`."
         )
 
-    model_card = None
+    kernel_card = None
 
     if not force_update_content:
         try:
-            model_card = ModelCard.load(repo_id_or_path, token=token)
+            kernel_card = ModelCard.load(repo_id_or_path, token=token)
         except (EntryNotFoundError, RepositoryNotFoundError):
             pass  # Will create from template below
 
-    if model_card is None:
+    if kernel_card is None:
         kernel_description = kernel_description or DESCRIPTION
-        model_card = ModelCard.from_template(
+        kernel_card = ModelCard.from_template(
             # Card metadata object that will be converted to YAML block
-            card_data=ModelCardData(license=license, library_name="kernels"),
-            template_path=str(MODEL_CARD_TEMPLATE_PATH),
+            card_data=ModelCardData(license=license, library_name=LIBRARY_NAME),
+            template_path=str(KERNEL_CARD_TEMPLATE_PATH),
             model_description=kernel_description,
         )
 
-    return model_card
+    return kernel_card
 
 
 def _parse_build_toml(local_path: str | Path) -> dict | None:
@@ -131,42 +132,42 @@ def _extract_function_from_all(init_file_path: Path) -> str | None:
         return None
 
 
-def _update_model_card_usage(
-    model_card: ModelCard,
+def _update_kernel_card_usage(
+    kernel_card: ModelCard,
     local_path: str | Path,
     repo_id: str = "REPO_ID",
 ) -> ModelCard:
     init_file = _find_torch_ext_init(local_path)
 
     if not init_file:
-        return model_card
+        return kernel_card
 
     func_name = _extract_function_from_all(init_file)
 
     if not func_name:
-        return model_card
+        return kernel_card
 
     example_code = EXAMPLE_CODE.format(repo_id=repo_id, func_name=func_name)
 
     # Update the model card content
-    card_content = str(model_card.content)
+    card_content = str(kernel_card.content)
     pattern = r"(## How to use\s*\n\n)```python\n# TODO: add an example code snippet for running this kernel\n```"
 
     if re.search(pattern, card_content):
         updated_content = re.sub(pattern, r"\1" + example_code, card_content)
-        model_card.content = updated_content
+        kernel_card.content = updated_content
 
-    return model_card
+    return kernel_card
 
 
-def _update_model_card_backends(model_card: ModelCard, local_path: str | Path) -> ModelCard:
+def _update_kernel_card_backends(kernel_card: ModelCard, local_path: str | Path) -> ModelCard:
     config = _parse_build_toml(local_path)
     if not config:
-        return model_card
+        return kernel_card
 
     config = config.get("general", {})
 
-    card_content = str(model_card.content)
+    card_content = str(kernel_card.content)
 
     backends = config.get("backends")
     if backends:
@@ -184,5 +185,17 @@ def _update_model_card_backends(model_card: ModelCard, local_path: str | Path) -
         if re.search(pattern, card_content):
             card_content = re.sub(pattern, cuda_section + r"\1", card_content)
 
-    model_card.content = card_content
-    return model_card
+    kernel_card.content = card_content
+    return kernel_card
+
+
+def _update_kernel_card_license(kernel_card: ModelCard, local_path: str | Path) -> ModelCard:
+    config = _parse_build_toml(local_path)
+    if not config:
+        return kernel_card
+
+    existing_license = kernel_card.data.get("license", None)
+    license_from_config = config.get("license", None)
+    final_license = license_from_config or existing_license
+    kernel_card.data["license"] = final_license
+    return kernel_card

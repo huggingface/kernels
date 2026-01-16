@@ -157,7 +157,9 @@ def _update_kernel_card_usage(
     return kernel_card
 
 
-def _update_kernel_card_available_funcs(kernel_card: ModelCard, local_path: str | Path) -> ModelCard:
+def _update_kernel_card_available_funcs(
+    kernel_card: ModelCard, local_path: str | Path
+) -> ModelCard:
     init_file = _find_torch_ext_init(local_path)
 
     if not init_file:
@@ -182,7 +184,9 @@ def _update_kernel_card_available_funcs(kernel_card: ModelCard, local_path: str 
     return kernel_card
 
 
-def _update_kernel_card_backends(kernel_card: ModelCard, local_path: str | Path) -> ModelCard:
+def _update_kernel_card_backends(
+    kernel_card: ModelCard, local_path: str | Path
+) -> ModelCard:
     config = _parse_build_toml(local_path)
     if not config:
         return kernel_card
@@ -211,7 +215,9 @@ def _update_kernel_card_backends(kernel_card: ModelCard, local_path: str | Path)
     return kernel_card
 
 
-def _update_kernel_card_license(kernel_card: ModelCard, local_path: str | Path) -> ModelCard:
+def _update_kernel_card_license(
+    kernel_card: ModelCard, local_path: str | Path
+) -> ModelCard:
     config = _parse_build_toml(local_path)
     if not config:
         return kernel_card

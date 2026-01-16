@@ -179,7 +179,7 @@ class LockedLayerRepository:
         self,
         repo_id: str,
         *,
-        lockfile: Path | None,
+        lockfile: Path | None = None,
         layer_name: str,
     ):
         """

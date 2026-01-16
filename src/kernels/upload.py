@@ -1,12 +1,10 @@
-import re
 from pathlib import Path
 from typing import Optional
 
 from huggingface_hub import create_branch, create_repo, upload_folder
 
 from kernels.metadata import Metadata
-
-BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-(cpu|cuda|metal|rocm|xpu))")
+from kernels.variants import BUILD_VARIANT_REGEX
 
 
 def upload_kernels_dir(

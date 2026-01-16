@@ -4,11 +4,11 @@ import json
 import sys
 from pathlib import Path
 
-
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.upload import upload_kernels_dir
 from kernels.utils import install_kernel, install_kernel_all_variants
+from kernels.versions_cli import print_kernel_versions
 
 from .doc import generate_readme_for_kernel
 
@@ -56,6 +56,10 @@ def main():
         help="Download all build variants of the kernel",
     )
     download_parser.set_defaults(func=download_kernels)
+
+    versions_parser = subparsers.add_parser("versions", help="Show kernel versions")
+    versions_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    versions_parser.set_defaults(func=kernel_versions)
 
     upload_parser = subparsers.add_parser("upload", help="Upload kernels to the Hub")
     upload_parser.add_argument(
@@ -151,6 +155,10 @@ def download_kernels(args):
 
     if not all_successful:
         sys.exit(1)
+
+
+def kernel_versions(args):
+    print_kernel_versions(args.repo_id)
 
 
 def lock_kernels(args):

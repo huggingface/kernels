@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import HfApi, get_token, snapshot_download
+from huggingface_hub import get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
 MISSING_DEPS: list[str] = []
@@ -380,12 +380,10 @@ def collect_machine_info() -> MachineInfo:
     )
 
 
-def get_kernel_commit_sha(repo_id: str, revision: str) -> str:
-    if re.match(r"^[0-9a-f]{40}$", revision):
-        return revision
-    sha = HfApi().repo_info(repo_id=repo_id, revision=revision).sha
-    if sha is None:
-        raise ValueError(f"Could not get commit SHA for {repo_id}@{revision}")
+def get_kernel_sha_from_ops(kernel: Any) -> str:
+    ops_name = kernel.ops.__name__
+    # Format is torch.ops._<name>_<sha>, extract the last part after underscore
+    sha = ops_name.rsplit("_", 1)[-1]
     return sha
 
 
@@ -395,7 +393,7 @@ def run_benchmark_class(
     warmup: int,
     repo_id: str,
     revision: str,
-) -> dict[str, TimingResults]:
+) -> tuple[dict[str, TimingResults], str]:
     results = {}
 
     # Find all benchmark_* methods
@@ -412,6 +410,7 @@ def run_benchmark_class(
     from kernels import get_kernel
 
     kernel = get_kernel(repo_id, revision=revision)
+    kernel_sha = get_kernel_sha_from_ops(kernel)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -494,7 +493,7 @@ def run_benchmark_class(
             ref_mean_ms=ref_mean_ms,
         )
 
-    return results
+    return results, kernel_sha
 
 
 def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchmark]]:
@@ -560,7 +559,7 @@ def run_benchmark_script(
     cwd: Path,
     repo_id: str,
     revision: str,
-) -> dict[str, TimingResults]:
+) -> tuple[dict[str, TimingResults], str]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
     classes = discover_benchmark_classes(script_path, cwd)
@@ -568,8 +567,9 @@ def run_benchmark_script(
         raise RuntimeError(f"No Benchmark subclasses found in {script_path}")
 
     all_results = {}
+    kernel_sha = ""
     for cls in classes:
-        results = run_benchmark_class(
+        results, kernel_sha = run_benchmark_class(
             cls,
             iterations=iterations,
             warmup=warmup,
@@ -578,7 +578,7 @@ def run_benchmark_script(
         )
         for name, timing in results.items():
             all_results[f"{cls.__name__}.{name}"] = timing
-    return all_results
+    return all_results, kernel_sha
 
 
 def submit_benchmark(
@@ -629,14 +629,14 @@ def run_benchmark(
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
     repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
-    kernel_sha = get_kernel_commit_sha(repo_id, revision)
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 
     timing_results: dict[str, TimingResults] = {}
+    kernel_sha = ""
     for script_path in scripts:
         try:
-            results = run_benchmark_script(
+            results, kernel_sha = run_benchmark_script(
                 script_path,
                 iterations=iterations,
                 warmup=warmup,

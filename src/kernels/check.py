@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
-from kernel_abi_check import (  # type: ignore[import-not-found]
+from kernel_abi_check import (
     BinaryFormat,
     IncompatibleAbi3Symbol,
     IncompatibleMacOSVersion,

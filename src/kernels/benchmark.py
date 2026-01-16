@@ -61,7 +61,7 @@ class Benchmark:
 
     Subclass this to create a benchmark script with automatic timing,
     verification, and reproducibility support. The kernel is loaded
-    automatically from the kernel_id specified in the CLI command.
+    automatically from the repo_id specified in the CLI command.
 
     Example:
         class MyBenchmark(Benchmark):
@@ -78,7 +78,7 @@ class Benchmark:
                 # Return reference tensor; runner compares with self.out
                 return torch.nn.functional.silu(self.x[..., :512]) * self.x[..., 512:]
 
-    Run with: kernels benchmark <kernel-id> --script my_benchmark.py
+    Run with: kernels benchmark <repo_id> --script my_benchmark.py
     """
 
     seed: int | None = None  # Optional: seed for reproducibility
@@ -402,7 +402,7 @@ def run_benchmark_class(
     benchmark_cls: type[Benchmark],
     iterations: int,
     warmup: int,
-    kernel_id: str,
+    repo_id: str,
 ) -> dict[str, TimingResults]:
     results = {}
 
@@ -419,7 +419,7 @@ def run_benchmark_class(
     # Load kernel once for all workloads
     from kernels import get_kernel
 
-    kernel = get_kernel(kernel_id)
+    kernel = get_kernel(repo_id)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -626,7 +626,7 @@ def run_benchmark_script(
     iterations: int,
     warmup: int,
     cwd: Path,
-    kernel_id: str,
+    repo_id: str,
 ) -> dict[str, TimingResults]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
@@ -637,7 +637,7 @@ def run_benchmark_script(
             all_results = {}
             for cls in classes:
                 results = run_benchmark_class(
-                    cls, iterations=iterations, warmup=warmup, kernel_id=kernel_id
+                    cls, iterations=iterations, warmup=warmup, repo_id=repo_id
                 )
                 for name, timing in results.items():
                     all_results[f"{cls.__name__}.{name}"] = timing
@@ -759,7 +759,7 @@ def run_benchmark(
             iterations=iterations,
             warmup=warmup,
             cwd=cwd,
-            kernel_id=repo_id,
+            repo_id=repo_id,
         )
     except RuntimeError as e:
         print(str(e), file=sys.stderr)

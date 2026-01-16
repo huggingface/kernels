@@ -15,6 +15,8 @@
       title: Environment Variables
     - local: faq
       title: FAQ
+    - local: migration
+      title: Migrating from older versions
   title: Usage Guide
 - sections:
     - local: api/kernels

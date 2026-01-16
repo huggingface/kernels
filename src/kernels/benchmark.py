@@ -152,7 +152,7 @@ class BenchmarkResult:
                 entry["verified"] = timing.verified
             results.append(entry)
 
-        machine_info = {
+        machine_info: dict[str, str | int] = {
             "gpu": self.machine_info.gpu,
             "backend": self.machine_info.backend,
             "pytorchVersion": self.machine_info.pytorch_version,

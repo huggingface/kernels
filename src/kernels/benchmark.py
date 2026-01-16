@@ -401,6 +401,7 @@ def run_benchmark_class(
     iterations: int,
     warmup: int,
     repo_id: str,
+    revision: str,
 ) -> dict[str, TimingResults]:
     results = {}
 
@@ -417,7 +418,7 @@ def run_benchmark_class(
     # Load kernel once for all workloads
     from kernels import get_kernel
 
-    kernel = get_kernel(repo_id)
+    kernel = get_kernel(repo_id, revision=revision)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -625,6 +626,7 @@ def run_benchmark_script(
     warmup: int,
     cwd: Path,
     repo_id: str,
+    revision: str,
 ) -> dict[str, TimingResults]:
     print(f"Running {script_path.name}...", file=sys.stderr)
 
@@ -635,7 +637,11 @@ def run_benchmark_script(
             all_results = {}
             for cls in classes:
                 results = run_benchmark_class(
-                    cls, iterations=iterations, warmup=warmup, repo_id=repo_id
+                    cls,
+                    iterations=iterations,
+                    warmup=warmup,
+                    repo_id=repo_id,
+                    revision=revision,
                 )
                 for name, timing in results.items():
                     all_results[f"{cls.__name__}.{name}"] = timing
@@ -720,6 +726,7 @@ def _apply_machine_info_overrides(
 def run_benchmark(
     repo_id: str,
     script: str | None = None,
+    # TODO: change default to 1 in the future
     revision: str = "main",
     local_dir: str | None = None,
     iterations: int = 100,
@@ -758,6 +765,7 @@ def run_benchmark(
             warmup=warmup,
             cwd=cwd,
             repo_id=repo_id,
+            revision=revision,
         )
     except RuntimeError as e:
         print(str(e), file=sys.stderr)

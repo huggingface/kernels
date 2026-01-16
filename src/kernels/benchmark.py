@@ -116,7 +116,7 @@ class TimingResults:
 @dataclass
 class MachineInfo:
     gpu: str
-    cuda_version: str
+    backend: str
     pytorch_version: str
     os: str
     cpu: str
@@ -156,7 +156,7 @@ class BenchmarkResult:
             "results": results,
             "machineInfo": {
                 "gpu": self.machine_info.gpu,
-                "cudaVersion": self.machine_info.cuda_version,
+                "backend": self.machine_info.backend,
                 "pytorchVersion": self.machine_info.pytorch_version,
                 "os": self.machine_info.os,
                 "cpu": self.machine_info.cpu,
@@ -339,7 +339,7 @@ def _get_macos_gpu() -> str | None:
 
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
-    cuda_version = "N/A"
+    backend = "N/A"
     pytorch_version = "N/A"
     system = platform.system()
     os_info = f"{system} {platform.release()}"
@@ -353,10 +353,10 @@ def collect_machine_info() -> MachineInfo:
         pytorch_version = torch.__version__
         if torch.cuda.is_available():
             gpu = torch.cuda.get_device_name(0)
-            cuda_version = torch.version.cuda or "N/A"
+            backend = torch.version.cuda or "N/A"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             gpu = _get_macos_gpu() or "Apple MPS"
-            cuda_version = "MPS"
+            backend = "MPS"
 
     if system == "Linux" and gpu == "N/A":
         try:
@@ -373,7 +373,7 @@ def collect_machine_info() -> MachineInfo:
 
     return MachineInfo(
         gpu=gpu,
-        cuda_version=cuda_version,
+        backend=backend,
         pytorch_version=pytorch_version,
         os=os_info,
         cpu=cpu,

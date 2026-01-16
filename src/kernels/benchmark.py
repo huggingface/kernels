@@ -4,7 +4,6 @@ import json
 import os
 import platform
 import random
-import re
 import subprocess
 import sys
 import time

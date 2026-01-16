@@ -5,9 +5,21 @@ import torch
 
 from kernels.utils import _get_privateuse_backend_name
 
-has_cuda = hasattr(torch.version, "cuda") and torch.version.cuda is not None and torch.cuda.device_count() > 0
-has_rocm = hasattr(torch.version, "hip") and torch.version.hip is not None and torch.cuda.device_count() > 0
-has_xpu = hasattr(torch.version, "xpu") and torch.version.xpu is not None and torch.xpu.device_count() > 0
+has_cuda = (
+    hasattr(torch.version, "cuda")
+    and torch.version.cuda is not None
+    and torch.cuda.device_count() > 0
+)
+has_rocm = (
+    hasattr(torch.version, "hip")
+    and torch.version.hip is not None
+    and torch.cuda.device_count() > 0
+)
+has_xpu = (
+    hasattr(torch.version, "xpu")
+    and torch.version.xpu is not None
+    and torch.xpu.device_count() > 0
+)
 has_npu = _get_privateuse_backend_name() == "npu"
 
 

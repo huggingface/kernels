@@ -38,7 +38,9 @@ def next_filename(path: Path) -> Path:
     """
     m = re.match(r"^(.*?)(\d+)(\.py)$", path.name)
     if not m:
-        raise ValueError(f"Filename {path.name!r} does not match pattern <prefix>_<number>.py")
+        raise ValueError(
+            f"Filename {path.name!r} does not match pattern <prefix>_<number>.py"
+        )
 
     prefix, number, suffix = m.groups()
     new_number = str(int(number) + 1).zfill(len(number))
@@ -113,5 +115,7 @@ def test_kernel_upload_deletes_as_expected():
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(changed_filename) in k for k in repo_filenames), f"{repo_filenames=}"
-    assert not any(str(filename_to_change) in k for k in repo_filenames), f"{repo_filenames=}"
+    assert not any(
+        str(filename_to_change) in k for k in repo_filenames
+    ), f"{repo_filenames=}"
     delete_repo(repo_id=REPO_ID)

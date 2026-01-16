@@ -10,7 +10,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from huggingface_hub import HfApi, get_token, snapshot_download
@@ -103,10 +103,8 @@ class TimingResults:
     q3_ms: float = 0.0  # 75th percentile
     iqr_ms: float = 0.0  # Interquartile range (Q3 - Q1)
     outliers: int = 0  # Count of outliers (outside Q1-1.5*IQR to Q3+1.5*IQR)
-    verified: Optional[bool] = (
-        None  # None = no verify fn, True = passed, False = failed
-    )
-    ref_mean_ms: Optional[float] = None  # Reference implementation mean time
+    verified: bool | None = None  # None = no verify fn, True = passed, False = failed
+    ref_mean_ms: float | None = None  # Reference implementation mean time
 
 
 @dataclass
@@ -124,7 +122,7 @@ class BenchmarkResult:
     machine_info: MachineInfo
     kernel_commit_sha: str
     benchmark_script_path: str
-    benchmark_script_sha: Optional[str] = None
+    benchmark_script_sha: str | None = None
 
     def to_payload(self) -> dict:
         # Build results array for multiple workloads
@@ -298,7 +296,7 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
     print(file=sys.stderr)
 
 
-def _get_macos_chip() -> Optional[str]:
+def _get_macos_chip() -> str | None:
     try:
         result = subprocess.run(
             ["sysctl", "-n", "machdep.cpu.brand_string"],
@@ -313,7 +311,7 @@ def _get_macos_chip() -> Optional[str]:
     return None
 
 
-def _get_macos_gpu() -> Optional[str]:
+def _get_macos_gpu() -> str | None:
     try:
         result = subprocess.run(
             ["system_profiler", "SPDisplaysDataType", "-json"],
@@ -448,8 +446,8 @@ def run_benchmark_class(
         verify_fn = getattr(instance, verify_name, None)
 
         # Run verification and time reference if verify exists
-        verified: Optional[bool] = None
-        ref_mean_ms: Optional[float] = None
+        verified: bool | None = None
+        ref_mean_ms: float | None = None
         if verify_fn is not None:
             benchmark_fn()  # Populate output
             torch.cuda.synchronize()
@@ -538,7 +536,7 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
 def discover_benchmark_script(
     repo_id: str,
     repo_path: Path,
-    custom_script: Optional[str] = None,
+    custom_script: str | None = None,
 ) -> tuple[Path, Path]:
     """
     Discover the benchmark script to run.
@@ -654,8 +652,8 @@ def run_benchmark_script(
 def submit_benchmark(
     repo_id: str,
     result: BenchmarkResult,
-    api_url: Optional[str] = None,
-    token: Optional[str] = None,
+    api_url: str | None = None,
+    token: str | None = None,
 ) -> None:
     if token is None:
         token = get_token()
@@ -721,18 +719,18 @@ def _apply_machine_info_overrides(
 
 def run_benchmark(
     repo_id: str,
-    script: Optional[str] = None,
+    script: str | None = None,
     revision: str = "main",
-    local_dir: Optional[str] = None,
+    local_dir: str | None = None,
     iterations: int = 100,
     warmup: int = 10,
-    api_url: Optional[str] = None,
-    token: Optional[str] = None,
+    api_url: str | None = None,
+    token: str | None = None,
     upload: bool = False,
-    output: Optional[str] = None,
+    output: str | None = None,
     print_json: bool = False,
     # TODO: remove in future, only for testing
-    force_overrides: Optional[list[str]] = None,
+    force_overrides: list[str] | None = None,
 ) -> BenchmarkResult:
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()

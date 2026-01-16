@@ -353,23 +353,17 @@ def collect_machine_info() -> MachineInfo:
         pytorch_version = torch.__version__
         if torch.cuda.is_available():
             gpu = torch.cuda.get_device_name(0)
-            backend = torch.version.cuda or "N/A"
+            # ROCm uses the CUDA API but has torch.version.hip
+            if hasattr(torch.version, "hip") and torch.version.hip:
+                backend = f"ROCm {torch.version.hip}"
+            else:
+                backend = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+        elif hasattr(torch, "xpu") and torch.xpu.is_available():
+            gpu = torch.xpu.get_device_name(0)
+            backend = "XPU"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             gpu = _get_macos_gpu() or "Apple MPS"
             backend = "MPS"
-
-    if system == "Linux" and gpu == "N/A":
-        try:
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                gpu = result.stdout.strip().split("\n")[0]
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
 
     return MachineInfo(
         gpu=gpu,
@@ -385,6 +379,15 @@ def get_kernel_sha_from_ops(kernel: Any) -> str:
     # Format is torch.ops._<name>_<sha>, extract the last part after underscore
     sha = ops_name.rsplit("_", 1)[-1]
     return sha
+
+
+def _synchronize() -> None:
+    if torch.cuda.is_available():
+        _synchronize()
+    elif hasattr(torch, "xpu") and torch.xpu.is_available():
+        torch.xpu.synchronize()
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        torch.mps.synchronize()
 
 
 def run_benchmark_class(
@@ -443,17 +446,17 @@ def run_benchmark_class(
         ref_mean_ms: float | None = None
         if verify_fn is not None:
             benchmark_fn()  # Populate output
-            torch.cuda.synchronize()
+            _synchronize()
 
             # Warmup the verify/reference computation
             for _ in range(warmup):
                 verify_fn()
-                torch.cuda.synchronize()
+                _synchronize()
 
             # Time the verify/reference computation
             start = time.perf_counter()
             verify_result = verify_fn()
-            torch.cuda.synchronize()
+            _synchronize()
             ref_mean_ms = round((time.perf_counter() - start) * 1000, 4)
 
             verified = torch.allclose(instance.out, verify_result, atol=1e-2)
@@ -463,14 +466,14 @@ def run_benchmark_class(
         # Warmup
         for _ in range(warmup):
             benchmark_fn()
-            torch.cuda.synchronize()
+            _synchronize()
 
         # Timing
         times_ms = []
         for _ in range(iterations):
             start = time.perf_counter()
             benchmark_fn()
-            torch.cuda.synchronize()
+            _synchronize()
             end = time.perf_counter()
             times_ms.append((end - start) * 1000)
 

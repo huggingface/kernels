@@ -34,6 +34,7 @@ def _load_or_create_model_card(
     token: str | None = None,
     kernel_description: str | None = None,
     license: str | None = None,
+    force_update_content: bool = False,
 ) -> ModelCard:
     if not is_jinja_available:
         raise ValueError(
@@ -42,11 +43,15 @@ def _load_or_create_model_card(
             " To install it, please run `pip install Jinja2`."
         )
 
-    try:
-        # Check if the model card is present on the remote repo
-        model_card = ModelCard.load(repo_id_or_path, token=token)
-    except (EntryNotFoundError, RepositoryNotFoundError):
-        # Otherwise create a model card from template
+    model_card = None
+
+    if not force_update_content:
+        try:
+            model_card = ModelCard.load(repo_id_or_path, token=token)
+        except (EntryNotFoundError, RepositoryNotFoundError):
+            pass  # Will create from template below
+
+    if model_card is None:
         kernel_description = kernel_description or DESCRIPTION
         model_card = ModelCard.from_template(
             # Card metadata object that will be converted to YAML block
@@ -154,9 +159,7 @@ def _update_model_card_usage(
     return model_card
 
 
-def _update_model_card_backends(
-    model_card: ModelCard, local_path: str | Path
-) -> ModelCard:
+def _update_model_card_backends(model_card: ModelCard, local_path: str | Path) -> ModelCard:
     config = _parse_build_toml(local_path)
     if not config:
         return model_card

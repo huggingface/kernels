@@ -24,8 +24,6 @@ except ImportError:
     torch = None  # type: ignore[assignment]
     TORCH_AVAILABLE = False
 
-BENCHMARK_PATHS = ["benchmarks/bench.py", "benchmark.py"]
-
 
 def _percentile(sorted_data: list[float], p: float) -> float:
     n = len(sorted_data)
@@ -521,24 +519,30 @@ def discover_benchmark_classes(script_path: Path, cwd: Path) -> list[type[Benchm
     return classes
 
 
-def discover_benchmark_script(
+def discover_benchmark_scripts(
     repo_id: str,
     repo_path: Path,
-) -> tuple[Path, Path]:
+) -> list[Path]:
     """
-    Discover the benchmark script to run.
+    Discover all benchmark scripts in the benchmarks directory.
 
     Returns:
-        Tuple of (script_path, working_directory)
+        List of benchmark script paths
     """
-    for rel_path in BENCHMARK_PATHS:
-        script_path = repo_path / rel_path
-        if script_path.exists():
-            return script_path, repo_path
+    benchmarks_dir = repo_path / "benchmarks"
+    if not benchmarks_dir.exists() or not benchmarks_dir.is_dir():
+        print(f"Error: No benchmarks directory found in '{repo_id}'", file=sys.stderr)
+        sys.exit(1)
 
-    print(f"Error: No benchmark found in '{repo_id}'", file=sys.stderr)
-    print("Tried: benchmarks/bench.py, benchmark.py", file=sys.stderr)
-    sys.exit(1)
+    scripts = sorted(benchmarks_dir.glob("benchmark*.py"))
+    if not scripts:
+        print(
+            f"Error: No benchmark scripts found in '{repo_id}/benchmarks'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return scripts
 
 
 def run_benchmark_script(
@@ -611,32 +615,35 @@ def run_benchmark(
     repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
     kernel_sha = get_kernel_commit_sha(repo_id, revision)
 
-    script_full_path, cwd = discover_benchmark_script(repo_id, repo_path)
+    scripts = discover_benchmark_scripts(repo_id, repo_path)
 
-    try:
-        timing_results = run_benchmark_script(
-            script_full_path,
-            iterations=iterations,
-            warmup=warmup,
-            cwd=cwd,
-            repo_id=repo_id,
-            revision=revision,
-        )
-    except RuntimeError as e:
-        print(str(e), file=sys.stderr)
-        sys.exit(1)
+    timing_results: dict[str, TimingResults] = {}
+    for script_path in scripts:
+        try:
+            results = run_benchmark_script(
+                script_path,
+                iterations=iterations,
+                warmup=warmup,
+                cwd=repo_path,
+                repo_id=repo_id,
+                revision=revision,
+            )
+            timing_results.update(results)
+        except RuntimeError as e:
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
 
     # Print results table
     _print_results_table(timing_results)
 
-    # Store relative path for the result (or absolute if outside cwd)
-    try:
-        script_rel_path = str(script_full_path.relative_to(cwd))
-    except ValueError:
-        script_rel_path = str(script_full_path)
+    # Store relative path for the result
+    script_rel_path = "benchmarks"
 
-    # Compute SHA256 of benchmark script for reproducibility
-    script_sha = hashlib.sha256(script_full_path.read_bytes()).hexdigest()
+    # Compute combined SHA256 of all benchmark scripts for reproducibility
+    hasher = hashlib.sha256()
+    for script_path in scripts:
+        hasher.update(script_path.read_bytes())
+    script_sha = hasher.hexdigest()
 
     # Show identifiers
     print(f"Kernel: {kernel_sha[:7]}  Benchmark: {script_sha[:7]}", file=sys.stderr)

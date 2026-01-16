@@ -229,7 +229,7 @@ class LockedFuncRepository:
         self,
         repo_id: str,
         *,
-        lockfile: Path | None,
+        lockfile: Path | None = None,
         func_name: str,
     ):
         """

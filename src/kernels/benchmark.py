@@ -120,6 +120,7 @@ class MachineInfo:
     pytorch_version: str
     os: str
     cpu: str
+    gpu_cores: int | None = None
 
 
 @dataclass
@@ -152,15 +153,19 @@ class BenchmarkResult:
                 entry["verified"] = timing.verified
             results.append(entry)
 
+        machine_info = {
+            "gpu": self.machine_info.gpu,
+            "backend": self.machine_info.backend,
+            "pytorchVersion": self.machine_info.pytorch_version,
+            "os": self.machine_info.os,
+            "cpu": self.machine_info.cpu,
+        }
+        if self.machine_info.gpu_cores is not None:
+            machine_info["gpuCores"] = self.machine_info.gpu_cores
+
         payload = {
             "results": results,
-            "machineInfo": {
-                "gpu": self.machine_info.gpu,
-                "backend": self.machine_info.backend,
-                "pytorchVersion": self.machine_info.pytorch_version,
-                "os": self.machine_info.os,
-                "cpu": self.machine_info.cpu,
-            },
+            "machineInfo": machine_info,
             "kernelCommitSha": self.kernel_commit_sha,
             "benchmarkScriptPath": self.benchmark_script_path,
         }
@@ -317,28 +322,97 @@ def _get_macos_chip() -> str | None:
     return None
 
 
-def _get_macos_gpu() -> str | None:
+def _get_macos_gpu() -> tuple[str | None, int | None]:
     try:
-        result = subprocess.run(
-            ["system_profiler", "SPDisplaysDataType", "-json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
+        import ctypes
+        from ctypes import POINTER, byref, c_char_p, c_int, c_int64, c_uint32, c_void_p
+
+        iokit = ctypes.CDLL("/System/Library/Frameworks/IOKit.framework/IOKit")
+        cf = ctypes.CDLL(
+            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
         )
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            displays = data.get("SPDisplaysDataType", [])
-            if displays:
-                gpu_name = displays[0].get("sppci_model", "")
-                if gpu_name:
-                    return gpu_name
-    except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
-        pass
-    return None
+
+        iokit.IOServiceMatching.restype = c_void_p
+        iokit.IOServiceMatching.argtypes = [c_char_p]
+        iokit.IOServiceGetMatchingServices.restype = c_int
+        iokit.IOServiceGetMatchingServices.argtypes = [
+            c_uint32,
+            c_void_p,
+            POINTER(c_uint32),
+        ]
+        iokit.IOIteratorNext.restype = c_uint32
+        iokit.IOIteratorNext.argtypes = [c_uint32]
+        iokit.IOObjectRelease.restype = c_int
+        iokit.IOObjectRelease.argtypes = [c_uint32]
+        iokit.IORegistryEntryCreateCFProperty.restype = c_void_p
+        iokit.IORegistryEntryCreateCFProperty.argtypes = [
+            c_uint32,
+            c_void_p,
+            c_void_p,
+            c_uint32,
+        ]
+
+        cf.CFStringCreateWithCString.restype = c_void_p
+        cf.CFStringCreateWithCString.argtypes = [c_void_p, c_char_p, c_uint32]
+        cf.CFStringGetCString.restype = c_int
+        cf.CFStringGetCString.argtypes = [c_void_p, c_char_p, c_int, c_uint32]
+        cf.CFNumberGetValue.restype = c_int
+        cf.CFNumberGetValue.argtypes = [c_void_p, c_int, c_void_p]
+        cf.CFRelease.restype = None
+        cf.CFRelease.argtypes = [c_void_p]
+
+        kCFStringEncodingUTF8 = 0x08000100
+        kCFNumberSInt64Type = 4
+
+        matching = iokit.IOServiceMatching(b"AGXAccelerator")
+        if not matching:
+            return None, None
+
+        iterator = c_uint32()
+        if iokit.IOServiceGetMatchingServices(0, matching, byref(iterator)) != 0:
+            return None, None
+
+        service = iokit.IOIteratorNext(iterator.value)
+        if not service:
+            iokit.IOObjectRelease(iterator.value)
+            return None, None
+
+        model, cores = None, None
+
+        # Get model name
+        key = cf.CFStringCreateWithCString(None, b"model", kCFStringEncodingUTF8)
+        if key:
+            prop = iokit.IORegistryEntryCreateCFProperty(service, key, None, 0)
+            if prop:
+                buf = ctypes.create_string_buffer(128)
+                if cf.CFStringGetCString(prop, buf, 128, kCFStringEncodingUTF8):
+                    model = buf.value.decode()
+                cf.CFRelease(prop)
+            cf.CFRelease(key)
+
+        # Get GPU core count
+        key = cf.CFStringCreateWithCString(
+            None, b"gpu-core-count", kCFStringEncodingUTF8
+        )
+        if key:
+            prop = iokit.IORegistryEntryCreateCFProperty(service, key, None, 0)
+            if prop:
+                num = c_int64()
+                if cf.CFNumberGetValue(prop, kCFNumberSInt64Type, byref(num)):
+                    cores = num.value
+                cf.CFRelease(prop)
+            cf.CFRelease(key)
+
+        iokit.IOObjectRelease(service)
+        iokit.IOObjectRelease(iterator.value)
+        return model, cores
+    except (OSError, AttributeError):
+        return None, None
 
 
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
+    gpu_cores = None
     backend = "N/A"
     pytorch_version = "N/A"
     system = platform.system()
@@ -347,7 +421,9 @@ def collect_machine_info() -> MachineInfo:
 
     if system == "Darwin":
         cpu = _get_macos_chip() or cpu
-        gpu = _get_macos_gpu() or gpu
+        macos_gpu, macos_cores = _get_macos_gpu()
+        gpu = macos_gpu or gpu
+        gpu_cores = macos_cores
 
     if TORCH_AVAILABLE:
         pytorch_version = torch.__version__
@@ -362,11 +438,14 @@ def collect_machine_info() -> MachineInfo:
             gpu = torch.xpu.get_device_name(0)
             backend = "XPU"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            gpu = _get_macos_gpu() or "Apple MPS"
+            macos_gpu, macos_cores = _get_macos_gpu()
+            gpu = macos_gpu or "Apple MPS"
+            gpu_cores = macos_cores
             backend = "MPS"
 
     return MachineInfo(
         gpu=gpu,
+        gpu_cores=gpu_cores,
         backend=backend,
         pytorch_version=pytorch_version,
         os=os_info,

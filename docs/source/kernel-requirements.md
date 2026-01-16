@@ -61,9 +61,12 @@ variant will also have the kernel version in `metadata.json`.
 The version **must** be bumped in the following cases:
 
 - The kernel API is changed in an incompatible way.
-- Support for one or more PyTorch version is dropped. This is usually done
-  when the API is extended and the builds for older PyTorch versions are not
-  updated anymore to have the new extensions.
+- The API is extended in a compatible way, but not all build variants
+  receive the extension (e.g. because they are for older Torch versions
+  that are not supported by `kernel-builder` anymore).
+
+In both cases, build variants that are not updated must be removed from
+the new version's branch.
 
 ## Native Python module
 

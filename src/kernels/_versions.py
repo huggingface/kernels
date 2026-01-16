@@ -56,7 +56,8 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRef
         return ref
     else:
         warnings.warn(
-            "Version specifiers are deprecated, support will be removed in a future `kernels` version,\na concrete version instead."
+            """Version specifiers are deprecated, support will be removed in a future `kernels` version.
+            "For more information on migrating to versions, see: https://huggingface.co/docs/kernels/migration"""
         )
         versions_old = _get_available_versions_old(repo_id)
         requirement = SpecifierSet(version_spec)
@@ -83,5 +84,10 @@ def select_revision_or_version(
         return revision
     elif version is not None:
         return resolve_version_spec_as_ref(repo_id, version).target_commit
+
+    warnings.warn(
+        "Future versions of `kernels` will require specifying a kernel version or revision."
+        "See: https://huggingface.co/docs/kernels/migration"
+    )
 
     return "main"

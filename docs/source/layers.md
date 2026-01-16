@@ -204,31 +204,6 @@ kernel_layer_mapping = {
 }
 ```
 
-### Using version bounds
-
-Kernels are versioned using tags of the form `v<major>.<minor>.<patch>`.
-You can specify which version of the kernel to download using Python version
-specifiers:
-
-```python
-kernel_layer_mapping = {
-    "SiluAndMul": {
-        "cuda": LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=1,
-        ),
-        "rocm": LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=1,
-        )
-    }
-}
-```
-
-This will get the layer from lates version on the version 1 branch.
-
 ### Registering kernels for specific modes
 
 You might want to register two different kernels for a particular layer,

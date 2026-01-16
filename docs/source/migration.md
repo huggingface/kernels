@@ -31,6 +31,7 @@ Code that uses a kernel can be updated as follows:
 ```python
 # Old:
 activation = get_kernel("kernels-community/activation")
+activation = get_kernel("kernels-community/activation", version=">=0.0.2 && <0.1.0")
 
 # New:
 activation = get_kernel("kernels-community/activation", version=1)
@@ -41,6 +42,15 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+        ),
+    }
+}
+kernel_layer_mapping = {
+    "SiluAndMul": {
+        "cuda": LayerRepository(
+            repo_id="kernels-community/activation",
+            layer_name="SiluAndMul",
+            version=">=0.0.2 && <0.1.0",
         ),
     }
 }

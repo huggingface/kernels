@@ -102,7 +102,7 @@ def _find_torch_ext_init(local_path: str | Path) -> Path | None:
         return None
 
 
-def _extract_function_from_all(init_file_path: Path) -> str | None:
+def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
     try:
         content = init_file_path.read_text()
 
@@ -114,19 +114,14 @@ def _extract_function_from_all(init_file_path: Path) -> str | None:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id == "__all__":
-                        # Extract the list values
+                        # Extract all list values
                         if isinstance(node.value, ast.List):
+                            functions = []
                             for elt in node.value.elts:
                                 if isinstance(elt, ast.Constant):
                                     func_name = str(elt.value)
-                                    # Skip module names, return the first function-like name
-                                    if not func_name.endswith("s") or "_" in func_name:
-                                        return func_name
-                            # Fallback: return the first item if no function found
-                            if node.value.elts:
-                                first_elt = node.value.elts[0]
-                                if isinstance(first_elt, ast.Constant):
-                                    return str(first_elt.value)
+                                    functions.append(func_name)
+                            return functions if functions else None
         return None
     except Exception:
         return None
@@ -142,11 +137,13 @@ def _update_kernel_card_usage(
     if not init_file:
         return kernel_card
 
-    func_name = _extract_function_from_all(init_file)
+    func_names = _extract_functions_from_all(init_file)
 
-    if not func_name:
+    if not func_names:
         return kernel_card
 
+    # Use the first function as an example
+    func_name = func_names[0]
     example_code = EXAMPLE_CODE.format(repo_id=repo_id, func_name=func_name)
 
     # Update the model card content
@@ -155,6 +152,31 @@ def _update_kernel_card_usage(
 
     if re.search(pattern, card_content):
         updated_content = re.sub(pattern, r"\1" + example_code, card_content)
+        kernel_card.content = updated_content
+
+    return kernel_card
+
+
+def _update_kernel_card_available_funcs(kernel_card: ModelCard, local_path: str | Path) -> ModelCard:
+    init_file = _find_torch_ext_init(local_path)
+
+    if not init_file:
+        return kernel_card
+
+    func_names = _extract_functions_from_all(init_file)
+
+    if not func_names:
+        return kernel_card
+
+    # Format functions as a bulleted list
+    functions_list = "\n".join(f"- `{func}`" for func in func_names)
+
+    # Update the model card content
+    card_content = str(kernel_card.content)
+    pattern = r"(## Available functions\s*\n\n)\[TODO: add the functions available through this kernel\]"
+
+    if re.search(pattern, card_content):
+        updated_content = re.sub(pattern, r"\1" + functions_list, card_content)
         kernel_card.content = updated_content
 
     return kernel_card

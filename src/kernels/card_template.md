@@ -13,6 +13,10 @@ should probably proofread and complete it, then remove this comment. -->
 # TODO: add an example code snippet for running this kernel
 ```
 
+## Available functions
+
+[TODO: add the functions available through this kernel]
+
 ## Supported backends
 
 [TODO: add the backends this kernel supports]

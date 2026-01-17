@@ -1,0 +1,82 @@
+[
+  {
+    "repo_id": "kernels-community/activation",
+    "sha": "83046852be158d525114f68513cd79fd88911b37",
+    "variants": {
+      "torch27-cxx11-cu118-x86_64-linux": {
+        "hash": "sha256-e34965c814c4c092fcb634ebadefe82ea9a05b98343f8ebdefa7305dcc05359e",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch27-cxx11-cu126-x86_64-linux": {
+        "hash": "sha256-5f92b35922b37224a416398a39a29b7e5f1aca1df17d5c69f1b9e9cdb7033561",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch27-cxx11-cu128-aarch64-linux": {
+        "hash": "sha256-125967cb23bacd2cec443799f184ac08247dfff33f5027e54ee16d3779ca5986",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch27-cxx11-cu128-x86_64-linux": {
+        "hash": "sha256-496a84c99d7035a1b6f0ea1c026b751c3a2677956f4c1be546d3cc1505a5fdbb",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch28-cxx11-cu126-aarch64-linux": {
+        "hash": "sha256-f0775a30ffa290c90aba3a41037e3ca91edb15b4a9367561fafd5f25455e117a",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch28-cxx11-cu126-x86_64-linux": {
+        "hash": "sha256-081995e6230f306bdf6111186618794f2411cf0ffd9b4800330df60b4ebe1927",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch28-cxx11-cu128-aarch64-linux": {
+        "hash": "sha256-b937fef62a0c1cd71ab98490b651c473577af209b9a3e2a6b452350283d8812c",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch28-cxx11-cu128-x86_64-linux": {
+        "hash": "sha256-a3915686cc58641a3361ece63ab77b33e9d30315dea12547e4bda008d8810a01",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch28-cxx11-cu129-aarch64-linux": {
+        "hash": "sha256-a24dca8e998f88be42491921c9df89d88a6112ca630acd2efc2dd34a64b91fcb",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch28-cxx11-cu129-x86_64-linux": {
+        "hash": "sha256-df6c70a70f425db2f68b86561c6f93c5675c1d5e5d058766d88ab17472229907",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu126-aarch64-linux": {
+        "hash": "sha256-c120011c201072b4cfd70c2ba2d45c2f05337feaf604ddec3c6c4987def33ab3",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu126-x86_64-linux": {
+        "hash": "sha256-765a7f3279009979be4001a23c5c70e5e6ab9553098d67886731a5275a6d4b32",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu128-aarch64-linux": {
+        "hash": "sha256-266d057a9cd82b872a0e02f09ac5e2660fcffcf9a7b7fa1fa8ff33dc19c0f5c2",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu128-x86_64-linux": {
+        "hash": "sha256-6850e594ba4588f289b5904eb88eda5a41870ee20a3bf1586f3268307caf4b53",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu130-aarch64-linux": {
+        "hash": "sha256-23741b935462b53bdf868f8d1c9c8cff5f02f71ea3b0550df41dc8b030b0b474",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu130-x86_64-linux": {
+        "hash": "sha256-b884ae792dc1eada071f31645add0c2c76d479864f25aebcdd8318b675aaaf29",
+        "hash_type": "git_lfs_concat"
+      }
+    }
+  },
+  {
+    "repo_id": "kernels-community/triton-scaled-mm",
+    "sha": "af10d8c1affe8efce93d228c3e6e64ff673d493f",
+    "variants": {
+      "torch-universal": {
+        "hash": "sha256-b843c5f30b52b6c1c56fca28cb0cf453be71d6ce7d308f383dce71a8050f7b52",
+        "hash_type": "git_lfs_concat"
+      }
+    }
+  }
+]

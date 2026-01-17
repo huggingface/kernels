@@ -8,8 +8,6 @@ from pathlib import Path
 from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Protocol, Type
 
-from .device import Device
-from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .._versions import select_revision_or_version
 from ..utils import (
     _get_caller_locked_kernel,
@@ -17,8 +15,10 @@ from ..utils import (
     get_kernel,
     get_local_kernel,
 )
+from .device import Device
+from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
-from .repos import _select_repository, RepositoryProtocol
+from .repos import RepositoryProtocol, _select_repository
 
 if TYPE_CHECKING:
     from torch import nn
@@ -40,9 +40,9 @@ class LayerRepository:
             The name of the layer within the kernel repository.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
 
     Example:
         ```python
@@ -52,13 +52,7 @@ class LayerRepository:
         layer_repo = LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
-        )
-
-        # Reference a layer by version constraint
-        layer_repo_versioned = LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=">=0.0.3,<0.1"
+            version=1,
         )
         ```
     """
@@ -69,7 +63,7 @@ class LayerRepository:
         *,
         layer_name: str,
         revision: str | None = None,
-        version: str | None = None,
+        version: int | str | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -87,7 +81,9 @@ class LayerRepository:
     @functools.lru_cache()
     def _resolve_revision(self) -> str:
         return select_revision_or_version(
-            repo_id=self._repo_id, revision=self._revision, version=self._version
+            repo_id=self._repo_id,
+            revision=self._revision,
+            version=self._version,
         )
 
     def load(self) -> Type["nn.Module"]:

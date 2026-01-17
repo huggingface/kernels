@@ -1,0 +1,12 @@
+[
+  {
+    "repo_id": "kernels-test/versions",
+    "sha": "dc142fd6c9920c993d32be6358b78957c58681c3",
+    "variants": {
+      "torch-universal": {
+        "hash": "sha256-35ce0ccfe68e392cbc06feef72268f4c41a74b9920496a2c6ee8978db7f7c17c",
+        "hash_type": "git_lfs_concat"
+      }
+    }
+  }
+]

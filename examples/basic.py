@@ -5,7 +5,7 @@ from kernels import get_kernel
 print("Starting examples/basic.py demo")
 
 # Download optimized kernels from the Hugging Face hub
-activation = get_kernel("kernels-community/activation")
+activation = get_kernel("kernels-community/activation", version=1)
 
 print("Activation kernel fetched")
 

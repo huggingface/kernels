@@ -1,0 +1,2 @@
+[tool.kernels.dependencies]
+"kernels-test/versions" = ">=0.1.0,<0.2.0"

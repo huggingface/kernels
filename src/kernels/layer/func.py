@@ -35,9 +35,9 @@ class FuncRepository:
             The name of the function within the kernel repository.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`str`, *optional*):
-            The kernel version to download. This can be a Python version specifier, such as `">=1.0.0,<2.0.0"`.
-            Cannot be used together with `revision`.
+        version (`int|str`, *optional*):
+            The kernel version to download as an integer. The `str` variant is deprecated and will be
+            removed in a future release. Cannot be used together with `revision`.
 
     Example:
         ```python
@@ -49,11 +49,11 @@ class FuncRepository:
             func_name="silu_and_mul",
         )
 
-        # Reference a layer by version constraint
+        # Reference a layer by version
         layer_repo_versioned = FuncRepository(
-            repo_id="kernels-community/activation",
-            func_name="silu_and_mul",
-            version=">=0.0.3,<0.1"
+            repo_id="kernels-community/relu",
+            func_name="relu",
+            version=1
         )
         ```
     """
@@ -64,7 +64,7 @@ class FuncRepository:
         *,
         func_name: str,
         revision: str | None = None,
-        version: str | None = None,
+        version: int | str | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError(
@@ -82,7 +82,9 @@ class FuncRepository:
     @functools.lru_cache()
     def _resolve_revision(self) -> str:
         return select_revision_or_version(
-            repo_id=self._repo_id, revision=self._revision, version=self._version
+            repo_id=self._repo_id,
+            revision=self._revision,
+            version=self._version,
         )
 
     def load(self) -> Type["nn.Module"]:

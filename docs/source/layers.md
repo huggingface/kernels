@@ -348,7 +348,7 @@ a kernel to a range of ROCm capabilities.
 
 ### Loading from a local repository for testing
 
-The `LocalLayerRepository` class is provided to load a repository from
+The `LocalLayerRepository` class is provided to load a layer repository from
 a local directory. For example:
 
 ```python
@@ -366,3 +366,28 @@ with use_kernel_mapping(
 ):
     kernelize(linear, mode=Mode.INFERENCE)
 ```
+
+Similarly, `LocalFuncRepository` can be used to load a function repository from
+a local directory for testing. This is useful when developing or testing kernel
+functions locally before publishing them to the Hub:
+
+```python
+with use_kernel_mapping(
+    {
+        "silu_and_mul": {
+            "cuda": LocalFuncRepository(
+                repo_path="/home/daniel/kernels/activation",
+                package_name="activation",
+                func_name="silu_and_mul",
+            )
+        }
+    },
+    inherit_mapping=False,
+):
+    kernelize(model, mode=Mode.INFERENCE)
+```
+
+The parameters are:
+- `repo_path`: Path to the local kernel repository directory
+- `package_name`: The Python package name of the kernel
+- `func_name`: The name of the function within the kernel repository

@@ -203,7 +203,14 @@ def _update_kernel_card_backends(
             card_content = re.sub(pattern, r"\1" + backends_list, card_content)
 
     # TODO: should we consider making it a separate utility?
-    cuda_capabilities = config.get("cuda-capabilities")
+    kernel_configs = config.get("kernel", {})
+    cuda_capabilities = []
+    if kernel_configs:
+        for k in kernel_configs:
+            cuda_cap_for_config = kernel_configs[k].get("cuda-capabilities")
+            if cuda_cap_for_config:
+                cuda_capabilities.extend(cuda_cap_for_config)
+    cuda_capabilities = set(cuda_capabilities)
     if cuda_capabilities:
         cuda_list = "\n".join(f"- {cap}" for cap in cuda_capabilities)
         cuda_section = f"## CUDA Capabilities\n\n{cuda_list}\n\n"

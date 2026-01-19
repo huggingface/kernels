@@ -191,11 +191,11 @@ def _update_kernel_card_backends(
     if not config:
         return kernel_card
 
-    config = config.get("general", {})
+    general_config = config.get("general", {})
 
     card_content = str(kernel_card.content)
 
-    backends = config.get("backends")
+    backends = general_config.get("backends")
     if backends:
         backends_list = "\n".join(f"- {backend}" for backend in backends)
         pattern = r"(## Supported backends\s*\n\n)\[TODO: add the backends this kernel supports\]"
@@ -223,7 +223,7 @@ def _update_kernel_card_license(
         return kernel_card
 
     existing_license = kernel_card.data.get("license", None)
-    license_from_config = config.get("license", None)
+    license_from_config = config.get("general", {}).get("license", None)
     final_license = license_from_config or existing_license
     kernel_card.data["license"] = final_license
     return kernel_card

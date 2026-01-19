@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 from .compat import tomllib
+from typing import Any
 from huggingface_hub import ModelCard, ModelCardData
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 
@@ -210,7 +211,7 @@ def _update_kernel_card_backends(
             cuda_cap_for_config = kernel_configs[k].get("cuda-capabilities")
             if cuda_cap_for_config:
                 cuda_capabilities.extend(cuda_cap_for_config)
-    cuda_capabilities = set(cuda_capabilities)
+    cuda_capabilities: set[Any] = set(cuda_capabilities)
     if cuda_capabilities:
         cuda_list = "\n".join(f"- {cap}" for cap in cuda_capabilities)
         cuda_section = f"## CUDA Capabilities\n\n{cuda_list}\n\n"

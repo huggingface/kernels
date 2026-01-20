@@ -40,13 +40,62 @@ must be available for that combination.
 ## Kernel metadata
 
 The build variant directory can optionally contain a `metadata.json` file.
-Currently the only purpose of the metadata is to specify the kernel python dependencies, for example:
+Currently the only purpose of the metadata is to specify the kernel Python dependencies.
+
+### Python dependencies
+
+You can specify Python dependencies that your kernel requires. Dependencies can be either general (required for all backends) or backend-specific (required only for certain compute backends like CUDA, ROCm, XPU, Metal, or CPU).
+
+#### General dependencies
+
+For dependencies required regardless of the backend, use the `python-depends` field:
 
 ```json
-{ "python-depends": ["nvidia-cutlass-dsl"] }
+{
+  "python-depends": ["einops"]
+}
 ```
 
-The following dependencies are the only ones allowed at this stage: `einops` and `nvidia-cutlass-dsl`
+#### Backend-specific dependencies
+
+For dependencies that are only needed for specific backends, use the `python-depends-backends` field:
+
+```json
+{
+  "python-depends-backends": {
+    "cuda": ["nvidia-cutlass-dsl"],
+    "xpu": ["onednn"]
+  }
+}
+```
+
+#### Combined example
+
+You can specify both general and backend-specific dependencies:
+
+```json
+{
+  "python-depends": ["einops"],
+  "python-depends-backends": {
+    "cuda": ["nvidia-cutlass-dsl"]
+  }
+}
+```
+
+#### Allowed dependencies
+
+The following dependencies are currently allowed:
+
+**General dependencies:**
+- `einops`
+
+**Backend-specific dependencies:**
+- CUDA: `nvidia-cutlass-dsl`
+- XPU: `onednn`
+
+Dependencies are validated based on the backend being used. When a kernel is loaded, only the dependencies relevant to the active backend are checked.
+
+**Note:** The list of allowed dependencies is synchronized with [kernel-builder](https://github.com/huggingface/kernel-builder/) to ensure consistency across the ecosystem.
 
 ## Versioning
 

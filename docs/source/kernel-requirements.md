@@ -40,7 +40,7 @@ must be available for that combination.
 ## Kernel metadata
 
 The build variant directory can optionally contain a `metadata.json` file.
-Currently the metadata specifies the kernel's versin and Python dependencies,
+Currently the metadata specifies the kernel's version and Python dependencies,
 for example:
 
 ```json

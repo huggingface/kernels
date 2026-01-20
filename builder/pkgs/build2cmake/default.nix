@@ -7,7 +7,7 @@
 }:
 
 let
-  version = (builtins.fromTOML (builtins.readFile ../../build2cmake/Cargo.toml)).package.version;
+  version = (builtins.fromTOML (builtins.readFile ../../../build2cmake/Cargo.toml)).package.version;
 in
 rustPlatform.buildRustPackage {
   inherit version;
@@ -30,12 +30,12 @@ rustPlatform.buildRustPackage {
         ]);
     in
     lib.fileset.toSource {
-      root = ../../build2cmake;
-      fileset = lib.fileset.fileFilter sourceFiles ../../build2cmake;
+      root = ../../../build2cmake;
+      fileset = lib.fileset.fileFilter sourceFiles ../../../build2cmake;
     };
 
   cargoLock = {
-    lockFile = ../../build2cmake/Cargo.lock;
+    lockFile = ../../../build2cmake/Cargo.lock;
   };
 
   nativeBuildInputs = [ pkg-config ];

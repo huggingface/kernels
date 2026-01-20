@@ -8,6 +8,9 @@ jobs:
       - uses: actions/checkout@v6
       - name: Run ruff
         uses: astral-sh/ruff-action@v3
+        src: >-
+          src
+          tests
 
   black:
     name: Run black check

@@ -1,0 +1,54 @@
+use eyre::{Context, Result};
+use itertools::Itertools;
+use minijinja::{context, Environment};
+
+use crate::config::{Backend, General};
+use crate::metadata::Metadata;
+use crate::FileSet;
+
+pub fn write_pyproject_toml(
+    env: &Environment,
+    backend: Backend,
+    general: &General,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    let writer = file_set.entry("pyproject.toml");
+
+    let python_dependencies = itertools::process_results(
+        general
+            .python_depends()
+            .chain(general.backend_python_depends(backend)),
+        |iter| iter.map(|d| format!("\"{d}\"")).join(", "),
+    )?;
+
+    env.get_template("pyproject.toml")
+        .wrap_err("Cannot get pyproject.toml template")?
+        .render_to_write(
+            context! {
+                python_dependencies => python_dependencies,
+            },
+            writer,
+        )
+        .wrap_err("Cannot render kernel template")?;
+
+    Ok(())
+}
+
+pub fn write_metadata(backend: Backend, general: &General, file_set: &mut FileSet) -> Result<()> {
+    let writer = file_set.entry("metadata.json");
+
+    let python_depends = general
+        .python_depends()
+        .chain(general.backend_python_depends(backend))
+        .collect::<Result<Vec<_>>>()?;
+
+    let metadata = Metadata {
+        version: general.version,
+        license: general.license.clone(),
+        python_depends,
+    };
+
+    serde_json::to_writer_pretty(writer, &metadata)?;
+
+    Ok(())
+}

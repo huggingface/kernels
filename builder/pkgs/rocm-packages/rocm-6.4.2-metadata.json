@@ -1,0 +1,3484 @@
+{
+  "amd-smi-lib": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "amd-smi-lib",
+        "sha256": "87f56697da91f0d1f6404a6d4097380b23e2f92260cbf22ecd6c403d3e6477df",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/amd-smi-lib-25.5.1.60402-120.el8.x86_64.rpm",
+        "version": "25.5.1.60402"
+      },
+      {
+        "name": "amd-smi-lib-rpath",
+        "sha256": "9ad575d4d05ad143fb967adbbd87aa39e105d5824a5636b986aec87de336417a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/amd-smi-lib-rpath6.4.2-25.5.1.60402-120.el8.x86_64.rpm",
+        "version": "25.5.1.60402"
+      }
+    ],
+    "version": "25.5.1.60402"
+  },
+  "amd-smi-lib-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "amd-smi-lib-asan",
+        "sha256": "8a7c709bb55b285f20e7c94e5879c4a1dfc9a81392d3521f66e2efe7f66eae98",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/amd-smi-lib-asan-25.5.1.60402-120.el8.x86_64.rpm",
+        "version": "25.5.1.60402"
+      },
+      {
+        "name": "amd-smi-lib-asan-rpath",
+        "sha256": "137895a3cb8da2951c14bb43fdd4bc27b93cd4bbfc1e82c973252a676da567f5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/amd-smi-lib-asan-rpath6.4.2-25.5.1.60402-120.el8.x86_64.rpm",
+        "version": "25.5.1.60402"
+      }
+    ],
+    "version": "25.5.1.60402"
+  },
+  "comgr": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "comgr",
+        "sha256": "5c22541c0e13d3763cbe784377ea4f5e59e23e01715242ec66958f946ded8445",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/comgr-3.0.0.60402-120.el8.x86_64.rpm",
+        "version": "3.0.0.60402"
+      },
+      {
+        "name": "comgr-rpath",
+        "sha256": "0e0e1975bb25e246ee81d7efacf5745f0532fb5bdd89dcbcb60f1ea248fa7756",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/comgr-rpath6.4.2-3.0.0.60402-120.el8.x86_64.rpm",
+        "version": "3.0.0.60402"
+      }
+    ],
+    "version": "3.0.0.60402"
+  },
+  "comgr-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "comgr-asan",
+        "sha256": "6a35224999a40de680fc41604dc6eee4697127bde44094a51d76a695ffd96a49",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/comgr-asan-3.0.0.60402-120.el8.x86_64.rpm",
+        "version": "3.0.0.60402"
+      },
+      {
+        "name": "comgr-asan-rpath",
+        "sha256": "280fdc88552c773dad0af440b6e7d1aff2643fe434a0a21d2ff1aba4e9dd28de",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/comgr-asan-rpath6.4.2-3.0.0.60402-120.el8.x86_64.rpm",
+        "version": "3.0.0.60402"
+      }
+    ],
+    "version": "3.0.0.60402"
+  },
+  "composablekernel-ckprofiler": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "composablekernel-ckprofiler",
+        "sha256": "b69be6dfa8a6c41c89810ecc9e62e2f675d5b9924eb404dbd452d7ce913f5c31",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/composablekernel-ckprofiler-1.1.0.60402-120.el8.x86_64.rpm",
+        "version": "1.1.0.60402"
+      },
+      {
+        "name": "composablekernel-ckprofiler-rpath",
+        "sha256": "24671f6d0827eb38aabfa34331a5f2d6aa7c7d2c7e4168e8d79f62d4eb0fda9f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/composablekernel-ckprofiler-rpath6.4.2-1.1.0.60402-120.el8.x86_64.rpm",
+        "version": "1.1.0.60402"
+      }
+    ],
+    "version": "1.1.0.60402"
+  },
+  "composablekernel-devel": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "composablekernel-devel",
+        "sha256": "1e75767b8f079883e24fe0847784f3c782edf952fc8da8eb4e7561a00a524133",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/composablekernel-devel-1.1.0.60402-120.el8.x86_64.rpm",
+        "version": "1.1.0.60402"
+      },
+      {
+        "name": "composablekernel-devel-rpath",
+        "sha256": "75226652814dc0e2b6da4713710c626fca8293a697039f2695d0489f29b7409a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/composablekernel-devel-rpath6.4.2-1.1.0.60402-120.el8.x86_64.rpm",
+        "version": "1.1.0.60402"
+      }
+    ],
+    "version": "1.1.0.60402"
+  },
+  "half": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "half",
+        "sha256": "8bdd5e70712637e0cccf1c6b8e18127fd1d7f7e5cbe7dab262a80aaaad8ec968",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/half-1.12.0.60402-120.el8.x86_64.rpm",
+        "version": "1.12.0.60402"
+      },
+      {
+        "name": "half-rpath",
+        "sha256": "00086ea9802652731d9fc960cbecd90ea01b80ebe87aabf25139099223e6e835",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/half-rpath6.4.2-1.12.0.60402-120.el8.x86_64.rpm",
+        "version": "1.12.0.60402"
+      }
+    ],
+    "version": "1.12.0.60402"
+  },
+  "hip-devel": {
+    "deps": [
+      "hip-runtime-amd",
+      "hipcc",
+      "hsa-rocr",
+      "rocm-core",
+      "rocm-llvm"
+    ],
+    "components": [
+      {
+        "name": "hip-devel",
+        "sha256": "9c612b220577b6e241cb6af2b42c32f45ee14a9cb0a71137c19fbf99913c7d26",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-devel-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      },
+      {
+        "name": "hip-devel-rpath",
+        "sha256": "26e8b24bb8ca26c407ab9e2f09935054474bd76ac9249a4a5da9ce51ab336f7c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-devel-rpath6.4.2-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      }
+    ],
+    "version": "6.4.43484.60402"
+  },
+  "hip-doc": {
+    "deps": [
+      "hip-devel",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hip-doc",
+        "sha256": "097d59ee32cd2f0b03e49085b95ffaffc2cfddd8f3685ef44a0b007e13f40c25",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-doc-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      },
+      {
+        "name": "hip-doc-rpath",
+        "sha256": "fb085fd5fc81a3c87a244ff0e66feea264f00e823e8ad70f9bf6d756852d6eec",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-doc-rpath6.4.2-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      }
+    ],
+    "version": "6.4.43484.60402"
+  },
+  "hip-runtime-amd": {
+    "deps": [
+      "comgr",
+      "hsa-rocr",
+      "rocm-core",
+      "rocminfo",
+      "rocprofiler-register"
+    ],
+    "components": [
+      {
+        "name": "hip-runtime-amd",
+        "sha256": "9b615ba08bbe7678055c039edc11307e553fa409d55a2c2f653fc7277e5d4d94",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-runtime-amd-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      },
+      {
+        "name": "hip-runtime-amd-rpath",
+        "sha256": "161b98e2b6fa9b11f6c87c2a8f7f7610d7ad2a7bc66983f7736ba56aa8929229",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-runtime-amd-rpath6.4.2-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      }
+    ],
+    "version": "6.4.43484.60402"
+  },
+  "hip-runtime-amd-asan": {
+    "deps": [
+      "comgr-asan",
+      "hsa-rocr-asan",
+      "rocm-core-asan",
+      "rocm-llvm",
+      "rocminfo"
+    ],
+    "components": [
+      {
+        "name": "hip-runtime-amd-asan",
+        "sha256": "a415cf874cd3b66d8c42d01cf43a822d714f85083def58938f86515f18351b53",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-runtime-amd-asan-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      },
+      {
+        "name": "hip-runtime-amd-asan-rpath",
+        "sha256": "b1acb65a02b7afdbe5ba6240474d989c697d3ea9b8bfcba86b06b0b22e64e4df",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-runtime-amd-asan-rpath6.4.2-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      }
+    ],
+    "version": "6.4.43484.60402"
+  },
+  "hip-runtime-nvidia": {
+    "deps": [
+      "hipcc-nvidia",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hip-runtime-nvidia",
+        "sha256": "20f7ef7b6303eb90d2c680dee41e1236417fe6a961b461f4dba9a8249395f4c2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-runtime-nvidia-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      },
+      {
+        "name": "hip-runtime-nvidia-rpath",
+        "sha256": "85ed70d821955e8c5ad8d5ef1f7f46a117a7bbbcbcd3b6013d55a62a073ea3ab",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-runtime-nvidia-rpath6.4.2-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      }
+    ],
+    "version": "6.4.43484.60402"
+  },
+  "hip-samples": {
+    "deps": [
+      "hip-devel",
+      "hipcc",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hip-samples",
+        "sha256": "356f7d1d6d80076a102559a19f42f790e804a31331a5d02fc09981852ee0500b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-samples-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      },
+      {
+        "name": "hip-samples-rpath",
+        "sha256": "4a6338f1adf268a6b2702d443fab43571ec9b06f45a10a0fede8ee2b19124ed5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hip-samples-rpath6.4.2-6.4.43484.60402-120.el8.x86_64.rpm",
+        "version": "6.4.43484.60402"
+      }
+    ],
+    "version": "6.4.43484.60402"
+  },
+  "hipblas": {
+    "deps": [
+      "hipblas-common-devel",
+      "rocblas",
+      "rocm-core",
+      "rocsolver"
+    ],
+    "components": [
+      {
+        "name": "hipblas",
+        "sha256": "ed2cd1240f7b37eb8c26a1e42aa03f58344e41a633eba8146080d6fd03f0d563",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipblas-devel",
+        "sha256": "f0b4551158e98830087768ab843bbd7198be4d84cf01d4754e505a8b7f5ffa27",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-devel-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipblas-devel-rpath",
+        "sha256": "c470f816e11a647006aaf1dfbb5968b1be6754cd56ce12a0f7369228003749d7",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-devel-rpath6.4.2-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipblas-rpath",
+        "sha256": "f5658269633e9ea790a24090c7b5a3381c09893ff6bcca886a1c4d915f1d4b91",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-rpath6.4.2-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      }
+    ],
+    "version": "2.4.0.60402"
+  },
+  "hipblas-asan": {
+    "deps": [
+      "rocblas",
+      "rocm-core-asan",
+      "rocsolver"
+    ],
+    "components": [
+      {
+        "name": "hipblas-asan",
+        "sha256": "3f10ee90c3350bc3edfaf4d9ed24194f3a76eb1cc91d8f457d9626cc5621d23d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-asan-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipblas-asan-rpath",
+        "sha256": "be844d429c41b8a4f3330760390eb8c449b97355dc394347d59e051b150faaab",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-asan-rpath6.4.2-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      }
+    ],
+    "version": "2.4.0.60402"
+  },
+  "hipblas-common-devel": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hipblas-common-devel",
+        "sha256": "e4abf6b51101d184cde52dd68ed2649ca01f9a9da7f7035a677fd2ce2247cd6a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-common-devel-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      },
+      {
+        "name": "hipblas-common-devel-rpath",
+        "sha256": "70830ca87b22d8434c9b57368a75e232000adca1d276e05716b88b2bad1d75d3",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblas-common-devel-rpath6.4.2-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      }
+    ],
+    "version": "1.0.0.60402"
+  },
+  "hipblaslt": {
+    "deps": [
+      "hipblas-common-devel",
+      "rocm-core",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "hipblaslt",
+        "sha256": "4beded47f8834df3e2c6b8db40fe90ea8017ab1c2354a40af94771d8dae372bf",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblaslt-0.12.1.60402-120.el8.x86_64.rpm",
+        "version": "0.12.1.60402"
+      },
+      {
+        "name": "hipblaslt-devel",
+        "sha256": "bafdeed732092626d33773d40fb5a3917a7b31f894a997fc8fc8aa370bd7d99d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblaslt-devel-0.12.1.60402-120.el8.x86_64.rpm",
+        "version": "0.12.1.60402"
+      },
+      {
+        "name": "hipblaslt-devel-rpath",
+        "sha256": "3258c84b47e6e69ecd578cca4fb046e6505006ee1c753360d266b06dc191ff73",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblaslt-devel-rpath6.4.2-0.12.1.60402-120.el8.x86_64.rpm",
+        "version": "0.12.1.60402"
+      },
+      {
+        "name": "hipblaslt-rpath",
+        "sha256": "f1bb03bb805a9e8dec54454a5b9c54c1fe367b326419d2d11bcc593423dcd5e7",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblaslt-rpath6.4.2-0.12.1.60402-120.el8.x86_64.rpm",
+        "version": "0.12.1.60402"
+      }
+    ],
+    "version": "0.12.1.60402"
+  },
+  "hipblaslt-asan": {
+    "deps": [
+      "rocm-core-asan",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "hipblaslt-asan",
+        "sha256": "ea0fe19b0ab4f91266273170d14e14b4ddfe446f0f854af0e68b78612eed109d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblaslt-asan-0.12.1.60402-120.el8.x86_64.rpm",
+        "version": "0.12.1.60402"
+      },
+      {
+        "name": "hipblaslt-asan-rpath",
+        "sha256": "e56164bf88d3ac740944595a219087b0a39943fc6c92665ec1c576309b145c49",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipblaslt-asan-rpath6.4.2-0.12.1.60402-120.el8.x86_64.rpm",
+        "version": "0.12.1.60402"
+      }
+    ],
+    "version": "0.12.1.60402"
+  },
+  "hipcc": {
+    "deps": [
+      "rocm-core",
+      "rocm-llvm"
+    ],
+    "components": [
+      {
+        "name": "hipcc",
+        "sha256": "116d78c65463208c3eb0cde76c0ed7ab359e6fff8ceab479bc51b2ad44cb6edb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipcc-1.1.1.60402-120.el8.x86_64.rpm",
+        "version": "1.1.1.60402"
+      },
+      {
+        "name": "hipcc-rpath",
+        "sha256": "0dec00e1c3bfc02704892ee63ea33e906996bcbd1264ff6048aa227c5442d559",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipcc-rpath6.4.2-1.1.1.60402-120.el8.x86_64.rpm",
+        "version": "1.1.1.60402"
+      }
+    ],
+    "version": "1.1.1.60402"
+  },
+  "hipcc-nvidia": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hipcc-nvidia",
+        "sha256": "c9af8fff42f609f81bc2b3cfbc0b933cb4a942064171b04cebb6c1e6efbec201",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipcc-nvidia-1.1.1.60402-120.el8.x86_64.rpm",
+        "version": "1.1.1.60402"
+      },
+      {
+        "name": "hipcc-nvidia-rpath",
+        "sha256": "df230ba6b5fc6eca55415ba0b312d3d0b9f4a5569ec8694ab8815697529c7499",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipcc-nvidia-rpath6.4.2-1.1.1.60402-120.el8.x86_64.rpm",
+        "version": "1.1.1.60402"
+      }
+    ],
+    "version": "1.1.1.60402"
+  },
+  "hipcub-devel": {
+    "deps": [
+      "rocm-core",
+      "rocprim-devel"
+    ],
+    "components": [
+      {
+        "name": "hipcub-devel",
+        "sha256": "a703c8eb31091bfbd9a1b7fefb2ab39ded87ff46b42d7179104e96a5de626a11",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipcub-devel-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "hipcub-devel-rpath",
+        "sha256": "771134d85e18d3c351943476e0bd0e69459b64749d93af591e895609cc2421a1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipcub-devel-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "hipfft": {
+    "deps": [
+      "rocfft",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hipfft",
+        "sha256": "29d82494f531c86aa7306e5251da35e662a1531340772bc42aec7061fa416afb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfft-1.0.18.60402-120.el8.x86_64.rpm",
+        "version": "1.0.18.60402"
+      },
+      {
+        "name": "hipfft-devel",
+        "sha256": "745fb06dee32f4f8ae7542b8ce1f0718e6be000406fdb3c23b795be942d83905",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfft-devel-1.0.18.60402-120.el8.x86_64.rpm",
+        "version": "1.0.18.60402"
+      },
+      {
+        "name": "hipfft-devel-rpath",
+        "sha256": "d2e1d02b46c3905a628d6fcfb43cbb40d19ebb1263d18ca42a6ed7e0d7b37314",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfft-devel-rpath6.4.2-1.0.18.60402-120.el8.x86_64.rpm",
+        "version": "1.0.18.60402"
+      },
+      {
+        "name": "hipfft-rpath",
+        "sha256": "89861e3e384e4a4349ba76cfd43741baddadcbfc7ca29358212f7822cb32a3af",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfft-rpath6.4.2-1.0.18.60402-120.el8.x86_64.rpm",
+        "version": "1.0.18.60402"
+      }
+    ],
+    "version": "1.0.18.60402"
+  },
+  "hipfft-asan": {
+    "deps": [
+      "rocfft",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "hipfft-asan",
+        "sha256": "63d5f1238ac5cd47c441c3435cc70561e7a957a93c6842db3e6bb52b46747621",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfft-asan-1.0.18.60402-120.el8.x86_64.rpm",
+        "version": "1.0.18.60402"
+      },
+      {
+        "name": "hipfft-asan-rpath",
+        "sha256": "054949f4239614a69f0d37ffbbdc2f4c87c96b12de49dab971e2ae236b56b9a7",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfft-asan-rpath6.4.2-1.0.18.60402-120.el8.x86_64.rpm",
+        "version": "1.0.18.60402"
+      }
+    ],
+    "version": "1.0.18.60402"
+  },
+  "hipfort-devel": {
+    "deps": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hipfort-devel",
+        "sha256": "00aed9e81f8969e92b7d6360e8cb299546b811a73657a0f15b8223c3c717ee79",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfort-devel-0.6.0.60402-120.el8.x86_64.rpm",
+        "version": "0.6.0.60402"
+      },
+      {
+        "name": "hipfort-devel-rpath",
+        "sha256": "b95d28e6f20116e0283b8d3e7d9c5a58005e35dacc9369ccdf86d3bc27270002",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipfort-devel-rpath6.4.2-0.6.0.60402-120.el8.x86_64.rpm",
+        "version": "0.6.0.60402"
+      }
+    ],
+    "version": "0.6.0.60402"
+  },
+  "hipify-clang": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hipify-clang",
+        "sha256": "c8cbbb30082b677fdf67f77bcfa3febcef829b9b2122de9fa72027a154ba17dd",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipify-clang-19.0.0.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.60402"
+      },
+      {
+        "name": "hipify-clang-rpath",
+        "sha256": "8b118832ffbdb0c9bd6c2d569ab783b063314559fc9b21ba0c667cead90905cb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipify-clang-rpath6.4.2-19.0.0.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.60402"
+      }
+    ],
+    "version": "19.0.0.60402"
+  },
+  "hiprand": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hiprand",
+        "sha256": "daf8f817c63f8eba1ed027acbbbfa25afc857086c354f0fc35987476080e29bc",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiprand-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "hiprand-devel",
+        "sha256": "7fb2fe0bd3575749e11464aaf06c2a9ff0eebbd2ec7661b97ea7d6d14e91428f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiprand-devel-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "hiprand-devel-rpath",
+        "sha256": "6a8d775c04b324dcc4cd09540cec11e69e17c17c9780dbd1ed6e063869010bd8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiprand-devel-rpath6.4.2-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "hiprand-rpath",
+        "sha256": "bcdb66313b489e06bbb4d1c32963f8a49edc5a9fd6dd2be442a110393a73d813",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiprand-rpath6.4.2-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      }
+    ],
+    "version": "2.12.0.60402"
+  },
+  "hiprand-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "hiprand-asan",
+        "sha256": "5e3c821d1901bbc34bf67ed215ba151cc3931391b29279edc4cc6f2eb7601ef8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiprand-asan-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "hiprand-asan-rpath",
+        "sha256": "3f445dd094a394757211c4016eaa97faecc1656b2e09300b5501ab341f4e4160",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiprand-asan-rpath6.4.2-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      }
+    ],
+    "version": "2.12.0.60402"
+  },
+  "hipsolver": {
+    "deps": [
+      "rocblas",
+      "rocm-core",
+      "rocsolver"
+    ],
+    "components": [
+      {
+        "name": "hipsolver",
+        "sha256": "a6c55369587c753b3d457df6dbf8f3d5a7249ae92ad41b66f48697f158f1178c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsolver-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipsolver-devel",
+        "sha256": "9db44a8db9031c88b2a8da9be07a3c136be56f3befd5b94cd9d1abcad434b6da",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsolver-devel-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipsolver-devel-rpath",
+        "sha256": "83a89e7259c4d9929aab07c9f54b7868bf85f23ccf521b5c4a2de09f85ada074",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsolver-devel-rpath6.4.2-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipsolver-rpath",
+        "sha256": "8662b91c036384b0ac307ef8be1b3f8ff395306f9a7f1b9e954f899ad6269579",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsolver-rpath6.4.2-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      }
+    ],
+    "version": "2.4.0.60402"
+  },
+  "hipsolver-asan": {
+    "deps": [
+      "rocblas",
+      "rocm-core-asan",
+      "rocsolver"
+    ],
+    "components": [
+      {
+        "name": "hipsolver-asan",
+        "sha256": "aef68f317dbc2a7ce512e07c489defe8304f58ec9f4533bb95cfd490afcf02e8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsolver-asan-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      },
+      {
+        "name": "hipsolver-asan-rpath",
+        "sha256": "10376e64dbecd4e3822da493df944668db4eb1bcfab7272e37a48ba6722fc6be",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsolver-asan-rpath6.4.2-2.4.0.60402-120.el8.x86_64.rpm",
+        "version": "2.4.0.60402"
+      }
+    ],
+    "version": "2.4.0.60402"
+  },
+  "hipsparse": {
+    "deps": [
+      "rocm-core",
+      "rocsparse"
+    ],
+    "components": [
+      {
+        "name": "hipsparse",
+        "sha256": "10da104565726154ba8d50ed7fac97aac188a7f414591cc602b8d00a574c212f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparse-3.2.0.60402-120.el8.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "hipsparse-devel",
+        "sha256": "4a13ce92825206f5ae27d67d4719f8e40ae7c5e674ef41b00b164af8b3a8f63b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparse-devel-3.2.0.60402-120.el8.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "hipsparse-devel-rpath",
+        "sha256": "c9946672a5b9d62513bbc0cccef75984fcc26d1175ad057929073173137adf2f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparse-devel-rpath6.4.2-3.2.0.60402-120.el8.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "hipsparse-rpath",
+        "sha256": "ec8f5c363d5d32a45633706b3b1d0a77aad9c7cae084aedeb4ca4137eba0a4e6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparse-rpath6.4.2-3.2.0.60402-120.el8.x86_64.rpm",
+        "version": "3.2.0.60402"
+      }
+    ],
+    "version": "3.2.0.60402"
+  },
+  "hipsparse-asan": {
+    "deps": [
+      "rocm-core-asan",
+      "rocsparse"
+    ],
+    "components": [
+      {
+        "name": "hipsparse-asan",
+        "sha256": "5df3105b83a203df270d10872ee7b3dda4dbf4bb75ad10252cb5f7ebd1efc85e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparse-asan-3.2.0.60402-120.el8.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "hipsparse-asan-rpath",
+        "sha256": "3c444fea9d2d21342a373507c2e7e93d87ac7967c24e05bea3dac557e6b9b05a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparse-asan-rpath6.4.2-3.2.0.60402-120.el8.x86_64.rpm",
+        "version": "3.2.0.60402"
+      }
+    ],
+    "version": "3.2.0.60402"
+  },
+  "hipsparselt": {
+    "deps": [
+      "hipsparse",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hipsparselt",
+        "sha256": "c30b90c1e6a05ec71af7c09144b310799b9eea67ce25d394028bb18833c4cebb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparselt-0.2.3.60402-120.el8.x86_64.rpm",
+        "version": "0.2.3.60402"
+      },
+      {
+        "name": "hipsparselt-devel",
+        "sha256": "e7575bf74087c2baede28b50b14672ac53284756d9a08cb05df0d4f72a824b72",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparselt-devel-0.2.3.60402-120.el8.x86_64.rpm",
+        "version": "0.2.3.60402"
+      },
+      {
+        "name": "hipsparselt-devel-rpath",
+        "sha256": "29165ff54a1980ca6f3c11f2d36d6981e3aad37b878c8e7ca80092160aba4992",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparselt-devel-rpath6.4.2-0.2.3.60402-120.el8.x86_64.rpm",
+        "version": "0.2.3.60402"
+      },
+      {
+        "name": "hipsparselt-rpath",
+        "sha256": "93137fc90c62bb75ce8b78c9c967b4ce681fde72dd04877adb46edfab432ad3a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparselt-rpath6.4.2-0.2.3.60402-120.el8.x86_64.rpm",
+        "version": "0.2.3.60402"
+      }
+    ],
+    "version": "0.2.3.60402"
+  },
+  "hipsparselt-asan": {
+    "deps": [
+      "hipsparse",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "hipsparselt-asan",
+        "sha256": "1d787de300fc34e25a1bcf705e9bd608941606d0ca40fe0d0a764dbe08609fbe",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparselt-asan-0.2.3.60402-120.el8.x86_64.rpm",
+        "version": "0.2.3.60402"
+      },
+      {
+        "name": "hipsparselt-asan-rpath",
+        "sha256": "60218e74cdebc3cd8ad7c17fe43d22acb71f323a74d3f571464c050c2d9aa6ce",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hipsparselt-asan-rpath6.4.2-0.2.3.60402-120.el8.x86_64.rpm",
+        "version": "0.2.3.60402"
+      }
+    ],
+    "version": "0.2.3.60402"
+  },
+  "hiptensor": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hiptensor",
+        "sha256": "d9e55fcf48d843ee4d47f4ae7fdd8907c69d95af75648968075e04560a6dfa5d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiptensor-1.5.0.60402-120.el8.x86_64.rpm",
+        "version": "1.5.0.60402"
+      },
+      {
+        "name": "hiptensor-devel",
+        "sha256": "fb9e113996b4a9e859c86359a90bed7907b2607de17034fdfc315f36ec56e39e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiptensor-devel-1.5.0.60402-120.el8.x86_64.rpm",
+        "version": "1.5.0.60402"
+      },
+      {
+        "name": "hiptensor-devel-rpath",
+        "sha256": "48a926b3b0ac76a3ffd8de27343559d11f1a96f20ff4a9527a021349183b5707",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiptensor-devel-rpath6.4.2-1.5.0.60402-120.el8.x86_64.rpm",
+        "version": "1.5.0.60402"
+      },
+      {
+        "name": "hiptensor-rpath",
+        "sha256": "00563bd994207b84164bf3a8f609f0c2965ab03f45541d12d73ee38ac3cac194",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiptensor-rpath6.4.2-1.5.0.60402-120.el8.x86_64.rpm",
+        "version": "1.5.0.60402"
+      }
+    ],
+    "version": "1.5.0.60402"
+  },
+  "hiptensor-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "hiptensor-asan",
+        "sha256": "3fb8db23d78ab365a04871778d8158f720f4eaf4ffc724697224253bdedeb5e8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiptensor-asan-1.5.0.60402-120.el8.x86_64.rpm",
+        "version": "1.5.0.60402"
+      },
+      {
+        "name": "hiptensor-asan-rpath",
+        "sha256": "e8508b65a69da5bc65f25764e21433cf3ec8374c698ca0d466f673f3964a2e20",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hiptensor-asan-rpath6.4.2-1.5.0.60402-120.el8.x86_64.rpm",
+        "version": "1.5.0.60402"
+      }
+    ],
+    "version": "1.5.0.60402"
+  },
+  "hsa-amd-aqlprofile": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "hsa-amd-aqlprofile",
+        "sha256": "87201f122f27e1d6a8caaaa44b654e39aac41b46d63c44546c2aca3dfec3b8db",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-amd-aqlprofile-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      },
+      {
+        "name": "hsa-amd-aqlprofile-rpath",
+        "sha256": "3494e83e66fa4b1e4130e67b503478672b60b940f1eebaa683f79bf4c21905c2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-amd-aqlprofile-rpath6.4.2-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      }
+    ],
+    "version": "1.0.0.60402"
+  },
+  "hsa-amd-aqlprofile-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "hsa-amd-aqlprofile-asan",
+        "sha256": "868995de802980d111caf4acde790cb96c363036b56c422eab3ac8adbb4db3ab",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-amd-aqlprofile-asan-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      },
+      {
+        "name": "hsa-amd-aqlprofile-asan-rpath",
+        "sha256": "c02eb1ac2408ffb43abc94ca209e9852a75b8a04a246d18633577207433081ff",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-amd-aqlprofile-asan-rpath6.4.2-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      }
+    ],
+    "version": "1.0.0.60402"
+  },
+  "hsa-rocr": {
+    "deps": [
+      "rocm-core",
+      "rocprofiler-register"
+    ],
+    "components": [
+      {
+        "name": "hsa-rocr",
+        "sha256": "e41cf0a9f561314902beb7e82125b0a627c74d25813b476658a8af2696781ddf",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-rocr-1.15.0.60402-120.el8.x86_64.rpm",
+        "version": "1.15.0.60402"
+      },
+      {
+        "name": "hsa-rocr-devel",
+        "sha256": "740899ae4683bf26bed991f72ab852f02fffd3b6fa0226fda03a305f8f613c7f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-rocr-devel-1.15.0.60402-120.el8.x86_64.rpm",
+        "version": "1.15.0.60402"
+      },
+      {
+        "name": "hsa-rocr-devel-rpath",
+        "sha256": "419a22aa4fc5b0c67e5d534d1d50a0c5751b031bf6a7577335194fd7b6798c41",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-rocr-devel-rpath6.4.2-1.15.0.60402-120.el8.x86_64.rpm",
+        "version": "1.15.0.60402"
+      },
+      {
+        "name": "hsa-rocr-rpath",
+        "sha256": "4cb3ca0f4130bcb39b544abd460d2523f119df6d817c6fdd730919c68fb86676",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-rocr-rpath6.4.2-1.15.0.60402-120.el8.x86_64.rpm",
+        "version": "1.15.0.60402"
+      }
+    ],
+    "version": "1.15.0.60402"
+  },
+  "hsa-rocr-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "hsa-rocr-asan",
+        "sha256": "ecd0f2dc0ceea522835d16623b6318b55c25564cd3e9d434de4ba5ce0464fefa",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-rocr-asan-1.15.0.60402-120.el8.x86_64.rpm",
+        "version": "1.15.0.60402"
+      },
+      {
+        "name": "hsa-rocr-asan-rpath",
+        "sha256": "40f74a8f1e8f17c180ccff8ff6cf353d2ec397b723a359a67cd778b2b376127b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/hsa-rocr-asan-rpath6.4.2-1.15.0.60402-120.el8.x86_64.rpm",
+        "version": "1.15.0.60402"
+      }
+    ],
+    "version": "1.15.0.60402"
+  },
+  "migraphx": {
+    "deps": [
+      "half",
+      "hip-devel",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "miopen-hip",
+      "rocblas",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "migraphx",
+        "sha256": "e548068101b3c68d0f9b1d219ef230a3ac24e90445e24da63c9de42b88dff85c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/migraphx-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "migraphx-devel",
+        "sha256": "b487406b74a349864c67e7940c3ebb9ec54e459bcf902e7cce42215b0a4d6f96",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/migraphx-devel-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "migraphx-devel-rpath",
+        "sha256": "8b055c3b5b3c5f6f9bd3bec785047f8f821b30eaae9915d6570f94d35162dd31",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/migraphx-devel-rpath6.4.2-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "migraphx-rpath",
+        "sha256": "c9285b7bae90d0edf80c30e1e8e53093c9d774414272a54615acef64cb09ca57",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/migraphx-rpath6.4.2-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      }
+    ],
+    "version": "2.12.0.60402"
+  },
+  "migraphx-asan": {
+    "deps": [
+      "half",
+      "hip-devel",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "miopen-hip",
+      "rocblas",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "migraphx-asan",
+        "sha256": "35405ea07d70445c8929343657b5c3a82de4cc9fb7dd941a33b6e6b33c1a0049",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/migraphx-asan-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      },
+      {
+        "name": "migraphx-asan-rpath",
+        "sha256": "b3a2ca7a402d5d0c68226738cf93728b831cb613010d127e725237760a544e4b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/migraphx-asan-rpath6.4.2-2.12.0.60402-120.el8.x86_64.rpm",
+        "version": "2.12.0.60402"
+      }
+    ],
+    "version": "2.12.0.60402"
+  },
+  "miopen-hip": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip",
+        "sha256": "6a47440410123ad2da0adcc66d0e023e840b8beb2480fd686753742123e311ef",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-devel",
+        "sha256": "d1e32040b015720a9b9be679548a037321f20b9f1d1dfa1e710a7b711b907079",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-devel-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-devel-rpath",
+        "sha256": "de4160b8d9aff43aa4d2a3d07d486911d5bb7c57af118796628dc66c0cbeb49a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-devel-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-rpath",
+        "sha256": "65273ce2177a5bfb1431af256546151b52ca78671e530fd4bdb26861dc92c1c6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-asan": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd-asan",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocm-core-asan",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-asan",
+        "sha256": "6f92140e2308be50f0ffd3701b1fbcedb762196751b39ad8d206f2361613c8c1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-asan-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-asan-rpath",
+        "sha256": "06e6b03bdf3dc4aa2812e17e41599d550d3abf1ef6b1af6ea4b6896a03cd35c2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-asan-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-gfx1030kdb": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-gfx1030kdb",
+        "sha256": "98dad3ba0cf53de2db6ae86bc059868312834655d6c0c35293d278bace3ce8e6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx1030kdb-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-gfx1030kdb-rpath",
+        "sha256": "030a3420136fc1196a6d202e487a75209538fad8dda78321aed8fb0f86e337b5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx1030kdb-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-gfx900kdb": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-gfx900kdb",
+        "sha256": "13b462a94bebf203e84c58e49754c42642845b2dad0408eb0f1f4d1de75ee3e2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx900kdb-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-gfx900kdb-rpath",
+        "sha256": "06ad62c9f196793c6d8b220bbdadfcc3e7f2825e6c3e91e974200c533853bc79",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx900kdb-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-gfx906kdb": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-gfx906kdb",
+        "sha256": "8608f9ee504c2c5779b4fdfbf13f90aef445841c02311673a5925f6faeeffc8e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx906kdb-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-gfx906kdb-rpath",
+        "sha256": "3e8d762b66c85d25719e563659090fcc24548972920160e29617f252eff5608b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx906kdb-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-gfx908kdb": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-gfx908kdb",
+        "sha256": "1c15700199020018f82a2ca5a2d5e63c236181eac1018278f42d7965809e4009",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx908kdb-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-gfx908kdb-rpath",
+        "sha256": "f99168844dcad032a2ae074ab59d2af5ec60659fc16ef7c3ab81c6476be999b0",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx908kdb-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-gfx90akdb": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-gfx90akdb",
+        "sha256": "cb3f62812958fe0a77cf9ab552b7b4145f230bc2843e94e751f15ca51b811a96",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx90akdb-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-gfx90akdb-rpath",
+        "sha256": "d602144b0f1fefe89a6aafb398ba277f1e2772fafac4e7d9c3f406d1e1fe3cb7",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx90akdb-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "miopen-hip-gfx942kdb": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "miopen-hip-gfx942kdb",
+        "sha256": "b50d4afd47e3feda37589f94920209023253c6ecfa9e7baae86a3665e4322972",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx942kdb-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "miopen-hip-gfx942kdb-rpath",
+        "sha256": "4ca2fbf831dd6dfbd3733ec545eddd989871600da12fcca228ba43fe9713a31a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/miopen-hip-gfx942kdb-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "mivisionx": {
+    "deps": [
+      "half",
+      "migraphx",
+      "miopen-hip",
+      "openmp-extras-devel",
+      "openmp-extras-runtime",
+      "rocblas",
+      "rocm-core",
+      "rocm-hip-runtime",
+      "rpp"
+    ],
+    "components": [
+      {
+        "name": "mivisionx",
+        "sha256": "57d47bc76521b291f264e610aa8732bf0ee44cfafe40b5c2ce76f12f3e9c2c9a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "mivisionx-devel",
+        "sha256": "120598a11aa68652a3fc06596ea7820a8910dc4c98f83759705a7d2ba1fded37",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-devel-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "mivisionx-devel-rpath",
+        "sha256": "52d8668d41c21407045d0e2ae383c76c1f9193a7505546d8a458786b4219b215",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-devel-rpath6.4.2-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "mivisionx-rpath",
+        "sha256": "e615ecd5ce815cfe1ab2f35d8ba04d305f2f2b8dd02b2f98c7422366e9fbebd8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-rpath6.4.2-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      }
+    ],
+    "version": "3.2.0.60402"
+  },
+  "mivisionx-asan": {
+    "deps": [
+      "migraphx",
+      "miopen-hip",
+      "openmp-extras-runtime",
+      "rocblas",
+      "rocm-core-asan",
+      "rocm-hip-runtime",
+      "rpp"
+    ],
+    "components": [
+      {
+        "name": "mivisionx-asan",
+        "sha256": "7e74f0bf8419cbee6d81c6bd15c6bbf3128be2e3767d9abe68198bf5c3cefadd",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-asan-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "mivisionx-asan-rpath",
+        "sha256": "de270e980f6e7da0c7cb95ac13fd9bc17116cfcf99f8e752b35e3a74e26be850",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-asan-rpath6.4.2-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      }
+    ],
+    "version": "3.2.0.60402"
+  },
+  "mivisionx-test": {
+    "deps": [
+      "mivisionx",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "mivisionx-test",
+        "sha256": "96d270d366bf3ecc7742f00e7b73a6ff34e316a59f1cc4f9de1d1da6f8ea3792",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-test-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      },
+      {
+        "name": "mivisionx-test-rpath",
+        "sha256": "b6d53b74e5ff53fe67fecc848bf7b072e7470fd18447fca79709ac193523000a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/mivisionx-test-rpath6.4.2-3.2.0.60402-120.x86_64.rpm",
+        "version": "3.2.0.60402"
+      }
+    ],
+    "version": "3.2.0.60402"
+  },
+  "openmp-extras-asan": {
+    "deps": [
+      "hsa-rocr-asan",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "openmp-extras-asan",
+        "sha256": "9e1d7507dac2d601932daab61d41c562aae0568e6335a97aeef2a08b60843772",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/openmp-extras-asan-18.63.0.60402-120.el8.x86_64.rpm",
+        "version": "18.63.0.60402"
+      },
+      {
+        "name": "openmp-extras-asan-rpath",
+        "sha256": "7f4227f1960068f46bc49e3e8fd2d9425aac22eb660d0822e79d29830de16e7a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/openmp-extras-asan-rpath6.4.2-18.63.0.60402-120.el8.x86_64.rpm",
+        "version": "18.63.0.60402"
+      }
+    ],
+    "version": "18.63.0.60402"
+  },
+  "openmp-extras-devel": {
+    "deps": [
+      "hsa-rocr",
+      "openmp-extras-runtime",
+      "rocm-core",
+      "rocm-device-libs",
+      "rocm-llvm"
+    ],
+    "components": [
+      {
+        "name": "openmp-extras-devel",
+        "sha256": "805f03367811158926def924bdd277a5b3f1c469a39dd2a52659ae39389edf99",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/openmp-extras-devel-18.63.0.60402-120.el8.x86_64.rpm",
+        "version": "18.63.0.60402"
+      },
+      {
+        "name": "openmp-extras-devel-rpath",
+        "sha256": "237685f2a2ac805a76302a147bb3c771b8b04550222258b49c509b78876e8fd2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/openmp-extras-devel-rpath6.4.2-18.63.0.60402-120.el8.x86_64.rpm",
+        "version": "18.63.0.60402"
+      }
+    ],
+    "version": "18.63.0.60402"
+  },
+  "openmp-extras-runtime": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "openmp-extras-runtime",
+        "sha256": "6a7c13792716c7114a54045ff327e4a0cede4fbe0ca358209a5a3b72fe448de1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/openmp-extras-runtime-18.63.0.60402-120.el8.x86_64.rpm",
+        "version": "18.63.0.60402"
+      },
+      {
+        "name": "openmp-extras-runtime-rpath",
+        "sha256": "2cddb8a4e1951fa6463b817a752b4a55b31cfa1415dffe45b36de417abbf9b61",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/openmp-extras-runtime-rpath6.4.2-18.63.0.60402-120.el8.x86_64.rpm",
+        "version": "18.63.0.60402"
+      }
+    ],
+    "version": "18.63.0.60402"
+  },
+  "rccl": {
+    "deps": [
+      "hip-runtime-amd",
+      "rocm-core",
+      "rocm-smi-lib"
+    ],
+    "components": [
+      {
+        "name": "rccl",
+        "sha256": "fbe943f047bc371218656c8e61cc668f8d3b59ec65e0fd4489c156ae79b34ed1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      },
+      {
+        "name": "rccl-devel",
+        "sha256": "cee09c36f8f043532f9c6a59ed7e3bfde5e7c0507d7af4324c6bbc473a6b7db7",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-devel-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      },
+      {
+        "name": "rccl-devel-rpath",
+        "sha256": "8c91fc036e9dc6c97aa2d75e7fa887bb06c0d3aaabe4a53ad58ef2156cdaf9d2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-devel-rpath6.4.2-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      },
+      {
+        "name": "rccl-rpath",
+        "sha256": "7b90d5e7a69cbf6692dc0c88b6d045c00e8ce4fd5713e2d393e07537863c0092",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-rpath6.4.2-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      }
+    ],
+    "version": "2.22.3.60402"
+  },
+  "rccl-asan": {
+    "deps": [
+      "hip-runtime-amd-asan",
+      "rocm-core-asan",
+      "rocm-smi-lib"
+    ],
+    "components": [
+      {
+        "name": "rccl-asan",
+        "sha256": "a290d1544b564e3ef9eb62034ac96b64738f6d7774c08c9b86ffac2afb9c78e9",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-asan-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      },
+      {
+        "name": "rccl-asan-rpath",
+        "sha256": "42e6273830858fa06f8da32178983884667f3049ad3daad8aa8d8a460f720e20",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-asan-rpath6.4.2-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      }
+    ],
+    "version": "2.22.3.60402"
+  },
+  "rccl-unittests": {
+    "deps": [
+      "rccl"
+    ],
+    "components": [
+      {
+        "name": "rccl-unittests",
+        "sha256": "5dc6bcc8ff91cce5d8a1c06e3549b7435ffeff22be48ed94f6d6416abf1eb99f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-unittests-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      },
+      {
+        "name": "rccl-unittests-rpath",
+        "sha256": "f8512cd45cbc710bbc4f76d64688bb157f7a421dec64e598a4fb213ba61d2ffc",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rccl-unittests-rpath6.4.2-2.22.3.60402-120.el8.x86_64.rpm",
+        "version": "2.22.3.60402"
+      }
+    ],
+    "version": "2.22.3.60402"
+  },
+  "rdc": {
+    "deps": [
+      "amd-smi-lib"
+    ],
+    "components": [
+      {
+        "name": "rdc",
+        "sha256": "c2f8cabdd4688f3a698f1c8a16aeadaae04cea6a33bc3e0ca21b592a529f387c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rdc-0.3.0.60402-120.el8.x86_64.rpm",
+        "version": "0.3.0.60402"
+      },
+      {
+        "name": "rdc-rpath",
+        "sha256": "4994dd320b4aee487d8770d91cd0b8fad7801df66c616b370a129aec5bd55030",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rdc-rpath6.4.2-0.3.0.60402-120.el8.x86_64.rpm",
+        "version": "0.3.0.60402"
+      }
+    ],
+    "version": "0.3.0.60402"
+  },
+  "rocal": {
+    "deps": [
+      "mivisionx",
+      "rpp"
+    ],
+    "components": [
+      {
+        "name": "rocal",
+        "sha256": "97bfd9a785df21e7f36903c4c3ebc1166e709ece48e8f59b27a1e23ac045da7c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocal-2.2.0.60402-120.x86_64.rpm",
+        "version": "2.2.0.60402"
+      },
+      {
+        "name": "rocal-devel",
+        "sha256": "c3ad488247ac1985276e866927d91bb28cdc40fb5c1274e91ee0f0db9f101914",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocal-devel-2.2.0.60402-120.x86_64.rpm",
+        "version": "2.2.0.60402"
+      },
+      {
+        "name": "rocal-devel-rpath",
+        "sha256": "2e2ed5820ab7989b66124f2d579e6a844212a1b094fd25ff93d96c52034b44b4",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocal-devel-rpath6.4.2-2.2.0.60402-120.x86_64.rpm",
+        "version": "2.2.0.60402"
+      },
+      {
+        "name": "rocal-rpath",
+        "sha256": "89be2bfff67dee99e73a674d6448d5151dbe5280467334f39d62831e48f296a4",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocal-rpath6.4.2-2.2.0.60402-120.x86_64.rpm",
+        "version": "2.2.0.60402"
+      }
+    ],
+    "version": "2.2.0.60402"
+  },
+  "rocal-test": {
+    "deps": [
+      "rocal"
+    ],
+    "components": [
+      {
+        "name": "rocal-test",
+        "sha256": "784b7b4427b33d21da26ca29a6fa2a687f5180ba411e4518f302df6491a09549",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocal-test-2.2.0.60402-120.x86_64.rpm",
+        "version": "2.2.0.60402"
+      },
+      {
+        "name": "rocal-test-rpath",
+        "sha256": "ad6587cd1f9f9c7d4d68a2ad4bce8a4e0c710a9a2e0aa50761f74ac00dd759c2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocal-test-rpath6.4.2-2.2.0.60402-120.x86_64.rpm",
+        "version": "2.2.0.60402"
+      }
+    ],
+    "version": "2.2.0.60402"
+  },
+  "rocalution": {
+    "deps": [
+      "hip-runtime-amd",
+      "rocblas",
+      "rocm-core",
+      "rocrand",
+      "rocsparse"
+    ],
+    "components": [
+      {
+        "name": "rocalution",
+        "sha256": "95ca986453d48466ca20f1e197522b021986f7f32d4f08eed9c063cc6ff08501",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocalution-3.2.3.60402-120.el8.x86_64.rpm",
+        "version": "3.2.3.60402"
+      },
+      {
+        "name": "rocalution-devel",
+        "sha256": "369e44bb1061f8e1623a6143672a0b3ec5372b6576f1ac72b26b6d56cd8de253",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocalution-devel-3.2.3.60402-120.el8.x86_64.rpm",
+        "version": "3.2.3.60402"
+      },
+      {
+        "name": "rocalution-devel-rpath",
+        "sha256": "429aa144a8b1a7ff08fb3361847e8b5522d2292fc04eaeaa632bacfcb1eeb91c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocalution-devel-rpath6.4.2-3.2.3.60402-120.el8.x86_64.rpm",
+        "version": "3.2.3.60402"
+      },
+      {
+        "name": "rocalution-rpath",
+        "sha256": "5d99f12b5451e2b61451d5554f680fcc78446188f5ee20422a8bc69f668cec23",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocalution-rpath6.4.2-3.2.3.60402-120.el8.x86_64.rpm",
+        "version": "3.2.3.60402"
+      }
+    ],
+    "version": "3.2.3.60402"
+  },
+  "rocalution-asan": {
+    "deps": [
+      "hip-runtime-amd-asan",
+      "rocblas",
+      "rocm-core-asan",
+      "rocrand",
+      "rocsparse"
+    ],
+    "components": [
+      {
+        "name": "rocalution-asan",
+        "sha256": "52d4c4a802a6111e9108894461c3aae65efb52433d0241d826f820eb3de94815",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocalution-asan-3.2.3.60402-120.el8.x86_64.rpm",
+        "version": "3.2.3.60402"
+      },
+      {
+        "name": "rocalution-asan-rpath",
+        "sha256": "9f91dd5a0fca0746bb8a3e7dee78b05a53690019354f34b90be62c37f6c33b59",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocalution-asan-rpath6.4.2-3.2.3.60402-120.el8.x86_64.rpm",
+        "version": "3.2.3.60402"
+      }
+    ],
+    "version": "3.2.3.60402"
+  },
+  "rocblas": {
+    "deps": [
+      "hip-runtime-amd",
+      "hipblaslt",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocblas",
+        "sha256": "4ac5f2c5f7b1819ad49878a89cf129ef1b424a5556694dc5b185ab01891506eb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocblas-4.4.1.60402-120.el8.x86_64.rpm",
+        "version": "4.4.1.60402"
+      },
+      {
+        "name": "rocblas-devel",
+        "sha256": "52b964dc4fb22c12699f9622fc87e95ba85ae590885e8b9142f1f3a532c73cac",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocblas-devel-4.4.1.60402-120.el8.x86_64.rpm",
+        "version": "4.4.1.60402"
+      },
+      {
+        "name": "rocblas-devel-rpath",
+        "sha256": "2c110e2f1fe6298d8af0879825fd0d5f63310585028eab63057d02b3189c417e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocblas-devel-rpath6.4.2-4.4.1.60402-120.el8.x86_64.rpm",
+        "version": "4.4.1.60402"
+      },
+      {
+        "name": "rocblas-rpath",
+        "sha256": "841257a569a18d6f57b873f559a71db67fbc59e8696dfb7ec8cc18aa18483f7f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocblas-rpath6.4.2-4.4.1.60402-120.el8.x86_64.rpm",
+        "version": "4.4.1.60402"
+      }
+    ],
+    "version": "4.4.1.60402"
+  },
+  "rocblas-asan": {
+    "deps": [
+      "hip-runtime-amd-asan",
+      "hipblaslt",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocblas-asan",
+        "sha256": "7106f9b7d6a61407440bfcdba1930e89a020dca27b0cd01aee45fdc4861c971f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocblas-asan-4.4.1.60402-120.el8.x86_64.rpm",
+        "version": "4.4.1.60402"
+      },
+      {
+        "name": "rocblas-asan-rpath",
+        "sha256": "79fe7f906d233905368b1bc0423ae2c1a43d4f1287afc563614a1e9bf53c1af4",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocblas-asan-rpath6.4.2-4.4.1.60402-120.el8.x86_64.rpm",
+        "version": "4.4.1.60402"
+      }
+    ],
+    "version": "4.4.1.60402"
+  },
+  "rocdecode": {
+    "deps": [
+      "rocm-core",
+      "rocm-hip-runtime",
+      "rocprofiler-register"
+    ],
+    "components": [
+      {
+        "name": "rocdecode",
+        "sha256": "c325cc4f0c28400262c2c15d016cb5bb59eb42e20d1720cdfdedf46bf1a86a11",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocdecode-0.10.0.60402-120.x86_64.rpm",
+        "version": "0.10.0.60402"
+      },
+      {
+        "name": "rocdecode-devel",
+        "sha256": "0cb857e7ad59a06ab94c06aa746d289abd440047c39e21bb13ac5bedcf6436e9",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocdecode-devel-0.10.0.60402-120.x86_64.rpm",
+        "version": "0.10.0.60402"
+      },
+      {
+        "name": "rocdecode-devel-rpath",
+        "sha256": "83421ac2647365ad361c584dc7a8846c8a39b6c5914daec42a9a6294428eaca6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocdecode-devel-rpath6.4.2-0.10.0.60402-120.x86_64.rpm",
+        "version": "0.10.0.60402"
+      },
+      {
+        "name": "rocdecode-rpath",
+        "sha256": "46722e8c55abaa8aac0a806e80e753789a1755467e3d84122a5a53a9078d69e6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocdecode-rpath6.4.2-0.10.0.60402-120.x86_64.rpm",
+        "version": "0.10.0.60402"
+      }
+    ],
+    "version": "0.10.0.60402"
+  },
+  "rocdecode-test": {
+    "deps": [
+      "rocdecode",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocdecode-test",
+        "sha256": "65354428af75fd03ed1ca99f71b57d6c3b582bee5bf82152bb3d727c07f23a9f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocdecode-test-0.10.0.60402-120.x86_64.rpm",
+        "version": "0.10.0.60402"
+      },
+      {
+        "name": "rocdecode-test-rpath",
+        "sha256": "f6d495922057179c903fb09bc5475257be17200e73d4242648ea9161d21e4a0d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocdecode-test-rpath6.4.2-0.10.0.60402-120.x86_64.rpm",
+        "version": "0.10.0.60402"
+      }
+    ],
+    "version": "0.10.0.60402"
+  },
+  "rocfft": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocfft",
+        "sha256": "e27a49870fc674bbf58132cfc865ddc5b6b8775053418a0f837276dd775644fd",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocfft-1.0.32.60402-120.el8.x86_64.rpm",
+        "version": "1.0.32.60402"
+      },
+      {
+        "name": "rocfft-devel",
+        "sha256": "2fa1abf3601cb19e87c02aea2b0016824da43b0d6e0c64df6dbb201a2b6555c5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocfft-devel-1.0.32.60402-120.el8.x86_64.rpm",
+        "version": "1.0.32.60402"
+      },
+      {
+        "name": "rocfft-devel-rpath",
+        "sha256": "becbdd30d967c6131c51e9735be12f0badd231f3a482b4750c3a278dd3755061",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocfft-devel-rpath6.4.2-1.0.32.60402-120.el8.x86_64.rpm",
+        "version": "1.0.32.60402"
+      },
+      {
+        "name": "rocfft-rpath",
+        "sha256": "b4d12e712d5b152358bc79d4b1dd3b8ca48524b18ca5688c4b5d493b34e47433",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocfft-rpath6.4.2-1.0.32.60402-120.el8.x86_64.rpm",
+        "version": "1.0.32.60402"
+      }
+    ],
+    "version": "1.0.32.60402"
+  },
+  "rocfft-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocfft-asan",
+        "sha256": "19bcf6f2ea2ece33fbf3505350867a6a2d3b9804c12089d8e3882fcfd5a8d577",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocfft-asan-1.0.32.60402-120.el8.x86_64.rpm",
+        "version": "1.0.32.60402"
+      },
+      {
+        "name": "rocfft-asan-rpath",
+        "sha256": "6f494442db3b0f2db65fb4e158e12c2d0e8c41d67cef4a9a2fdca40059a588b2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocfft-asan-rpath6.4.2-1.0.32.60402-120.el8.x86_64.rpm",
+        "version": "1.0.32.60402"
+      }
+    ],
+    "version": "1.0.32.60402"
+  },
+  "rocjpeg": {
+    "deps": [
+      "rocm-core",
+      "rocm-hip-runtime",
+      "rocprofiler-register"
+    ],
+    "components": [
+      {
+        "name": "rocjpeg",
+        "sha256": "0e80717252d92cced86a2988de220298cbdab90b2b1624d781d492cf77d9e560",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocjpeg-0.8.0.60402-120.x86_64.rpm",
+        "version": "0.8.0.60402"
+      },
+      {
+        "name": "rocjpeg-devel",
+        "sha256": "989b8b8c348a8150ede78c4ba2982c6b67de28dbbeb05843d16e914e23f14318",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocjpeg-devel-0.8.0.60402-120.x86_64.rpm",
+        "version": "0.8.0.60402"
+      },
+      {
+        "name": "rocjpeg-devel-rpath",
+        "sha256": "0640479461543b9336735e4552df6fd962f164a4569eb86b4ad1cb7f33df6c06",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocjpeg-devel-rpath6.4.2-0.8.0.60402-120.x86_64.rpm",
+        "version": "0.8.0.60402"
+      },
+      {
+        "name": "rocjpeg-rpath",
+        "sha256": "70e04a939304186d7b82989e84093cd5d60e40bdc658bb1ac6cf0c4cad168052",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocjpeg-rpath6.4.2-0.8.0.60402-120.x86_64.rpm",
+        "version": "0.8.0.60402"
+      }
+    ],
+    "version": "0.8.0.60402"
+  },
+  "rocjpeg-test": {
+    "deps": [
+      "rocjpeg",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocjpeg-test",
+        "sha256": "479f8a75d3d6cce72ccd68f00079bf3fcfa22f336fb68ae01802c3841fdff26b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocjpeg-test-0.8.0.60402-120.x86_64.rpm",
+        "version": "0.8.0.60402"
+      },
+      {
+        "name": "rocjpeg-test-rpath",
+        "sha256": "3ba8b800e3e7081fd4ad3ac203b76c504a1aff2a62f7e1aecb7fb58af669aa84",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocjpeg-test-rpath6.4.2-0.8.0.60402-120.x86_64.rpm",
+        "version": "0.8.0.60402"
+      }
+    ],
+    "version": "0.8.0.60402"
+  },
+  "rocm": {
+    "deps": [
+      "migraphx",
+      "mivisionx",
+      "rocm-core",
+      "rocm-developer-tools",
+      "rocm-ml-sdk",
+      "rocm-opencl-sdk",
+      "rocm-openmp-sdk",
+      "rocm-utils",
+      "rpp"
+    ],
+    "components": [
+      {
+        "name": "rocm",
+        "sha256": "ba433f2e9d81b23b7d4314c9be7c656daa89e6da3044c052dd740bc7398e3395",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-rpath",
+        "sha256": "522b3ab93ec16e7f410adc36b55e5db648732110179ff298727bd5d8f86879b1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-asan": {
+    "deps": [
+      "migraphx-asan",
+      "mivisionx-asan",
+      "rocm",
+      "rocm-core-asan",
+      "rocm-developer-tools-asan",
+      "rocm-language-runtime-asan",
+      "rocm-ml-libraries-asan",
+      "rocm-opencl-runtime-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-asan",
+        "sha256": "dcc9b1ee3f69372c548719101383a5bd668684a67fdf54c5db22104a6072ce21",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-asan-rpath",
+        "sha256": "99c777e8d9d214d543ad7192434aab64da8a03c7d412ca20907301891651f732",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-bandwidth-test": {
+    "deps": [
+      "hsa-rocr"
+    ],
+    "components": [
+      {
+        "name": "rocm-bandwidth-test",
+        "sha256": "f0a236554ed206400686273d24543777d0f684751e9504fc26417f8b8239e04e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-bandwidth-test-1.4.0.60402-120.el8.x86_64.rpm",
+        "version": "1.4.0.60402"
+      },
+      {
+        "name": "rocm-bandwidth-test-rpath",
+        "sha256": "8c473b2dedaaa8da41bd5fec8a002325e58b5cfa286748de7ddb2c50039d0599",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-bandwidth-test-rpath6.4.2-1.4.0.60402-120.el8.x86_64.rpm",
+        "version": "1.4.0.60402"
+      }
+    ],
+    "version": "1.4.0.60402"
+  },
+  "rocm-cmake": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-cmake",
+        "sha256": "a7cc2be7c2711f9d2fdc393597e9de889b9b1f20455d02b2c3edacd0bbbc8ba7",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-cmake-0.14.0.60402-120.el8.x86_64.rpm",
+        "version": "0.14.0.60402"
+      },
+      {
+        "name": "rocm-cmake-rpath",
+        "sha256": "380b6162018a027b999622534956914cbc5bf95255f3897eb76d1b798f4a8dcf",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-cmake-rpath6.4.2-0.14.0.60402-120.el8.x86_64.rpm",
+        "version": "0.14.0.60402"
+      }
+    ],
+    "version": "0.14.0.60402"
+  },
+  "rocm-core": {
+    "deps": [],
+    "components": [
+      {
+        "name": "rocm-core",
+        "sha256": "2186ba03274e63a2934798fd3f280b61e4df4ff09543a583e13e591a5d247057",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-core-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-core-rpath",
+        "sha256": "dee90e54ca1cacdc20a789e7595647b749b163be9f25126423e737f58e504775",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-core-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-core-asan": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-core-asan",
+        "sha256": "26c0451fb397a295b9635d14f02054fb0e10072eb832eb887b037b76da83c49d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-core-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-core-asan-rpath",
+        "sha256": "9898d9296ba8706198702b3b61eec9012507bc449ab02e860ecdcda85ee57c9e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-core-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-dbgapi": {
+    "deps": [
+      "comgr",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-dbgapi",
+        "sha256": "490dbb669070ce1c9888dd4bd1b00364aea0689111740c64869042fc90d2731d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dbgapi-0.77.2.60402-120.el8.x86_64.rpm",
+        "version": "0.77.2.60402"
+      },
+      {
+        "name": "rocm-dbgapi-rpath",
+        "sha256": "e0bfdab75908ddf877d7e96123f03bdc59dd2f65d8b0a2a6a2525727ac51443a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dbgapi-rpath6.4.2-0.77.2.60402-120.el8.x86_64.rpm",
+        "version": "0.77.2.60402"
+      }
+    ],
+    "version": "0.77.2.60402"
+  },
+  "rocm-dbgapi-asan": {
+    "deps": [
+      "comgr-asan",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-dbgapi-asan",
+        "sha256": "149891f9a81b5b589a7c30f4904c94c1b206a5155db9edf20ebe2eaec3d2b906",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dbgapi-asan-0.77.2.60402-120.el8.x86_64.rpm",
+        "version": "0.77.2.60402"
+      },
+      {
+        "name": "rocm-dbgapi-asan-rpath",
+        "sha256": "2cf0f0dce8e98b86d7d836b5cae123ab914bcae3c203300540a8a39f9bc31920",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dbgapi-asan-rpath6.4.2-0.77.2.60402-120.el8.x86_64.rpm",
+        "version": "0.77.2.60402"
+      }
+    ],
+    "version": "0.77.2.60402"
+  },
+  "rocm-debug-agent": {
+    "deps": [
+      "rocm-core",
+      "rocm-dbgapi"
+    ],
+    "components": [
+      {
+        "name": "rocm-debug-agent",
+        "sha256": "4568e06b5f595b8aa2b327b899e9c51079fba4a3b916a47e676871ea0d651e36",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-debug-agent-2.0.4.60402-120.el8.x86_64.rpm",
+        "version": "2.0.4.60402"
+      },
+      {
+        "name": "rocm-debug-agent-rpath",
+        "sha256": "5c38aa58e9fb664c729d7b5fe926d569c99e7f8ca6c684582a1f27b4e15f2c8c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-debug-agent-rpath6.4.2-2.0.4.60402-120.el8.x86_64.rpm",
+        "version": "2.0.4.60402"
+      }
+    ],
+    "version": "2.0.4.60402"
+  },
+  "rocm-debug-agent-asan": {
+    "deps": [
+      "rocm-core-asan",
+      "rocm-dbgapi-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-debug-agent-asan",
+        "sha256": "a9e5cb0d50e0ee4b7e21e2a431f4b15ea2fc49cb046b9c3a4edd087112ef1ba1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-debug-agent-asan-2.0.4.60402-120.el8.x86_64.rpm",
+        "version": "2.0.4.60402"
+      },
+      {
+        "name": "rocm-debug-agent-asan-rpath",
+        "sha256": "89e51d4fa748842c4c5fcf91707d95ced2d6ab3c75428476a9cfb839bd45a123",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-debug-agent-asan-rpath6.4.2-2.0.4.60402-120.el8.x86_64.rpm",
+        "version": "2.0.4.60402"
+      }
+    ],
+    "version": "2.0.4.60402"
+  },
+  "rocm-dev": {
+    "deps": [
+      "amd-smi-lib",
+      "comgr",
+      "hip-devel",
+      "hip-doc",
+      "hip-runtime-amd",
+      "hip-samples",
+      "hipcc",
+      "hipify-clang",
+      "hsa-amd-aqlprofile",
+      "hsa-rocr",
+      "openmp-extras-devel",
+      "openmp-extras-runtime",
+      "rocm-cmake",
+      "rocm-core",
+      "rocm-dbgapi",
+      "rocm-debug-agent",
+      "rocm-device-libs",
+      "rocm-gdb",
+      "rocm-llvm",
+      "rocm-opencl",
+      "rocm-smi-lib",
+      "rocm-utils",
+      "rocprofiler",
+      "rocprofiler-plugins",
+      "rocprofiler-register",
+      "rocprofiler-sdk",
+      "rocprofiler-sdk-roctx",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "rocm-dev",
+        "sha256": "c3ce6d7dcc28c5a4adfe5f1c84f3e9e70811507c28dda7081501812c0ce23f96",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dev-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-dev-rpath",
+        "sha256": "8c26349c92d391bea0bb1c21c4e05a5fbfc128b4c9d9d3fc98732d7fee53b074",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dev-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-dev-asan": {
+    "deps": [
+      "amd-smi-lib-asan",
+      "comgr-asan",
+      "hip-runtime-amd-asan",
+      "hsa-amd-aqlprofile-asan",
+      "hsa-rocr-asan",
+      "openmp-extras-asan",
+      "rocm-core-asan",
+      "rocm-dbgapi-asan",
+      "rocm-debug-agent-asan",
+      "rocm-dev",
+      "rocm-opencl-asan",
+      "rocm-smi-lib-asan",
+      "rocprofiler-asan",
+      "roctracer-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-dev-asan",
+        "sha256": "6d46697df766c2ef64dabab2c87d06f60a9e1c57ed3a10f899337a6e48960876",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dev-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-dev-asan-rpath",
+        "sha256": "43714ecd7507fefc0443f3fb543d5b0965f81ac8187b0ceed5f3f8711d9d6471",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-dev-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-developer-tools": {
+    "deps": [
+      "amd-smi-lib",
+      "hsa-amd-aqlprofile",
+      "rocm-core",
+      "rocm-dbgapi",
+      "rocm-debug-agent",
+      "rocm-gdb",
+      "rocm-language-runtime",
+      "rocm-smi-lib",
+      "rocprofiler",
+      "rocprofiler-compute",
+      "rocprofiler-plugins",
+      "rocprofiler-register",
+      "rocprofiler-sdk",
+      "rocprofiler-sdk-roctx",
+      "rocprofiler-systems",
+      "roctracer"
+    ],
+    "components": [
+      {
+        "name": "rocm-developer-tools",
+        "sha256": "6ffd92718f77d052fa6e91750d633ea20ed84d6c916a18f05c3306985b711837",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-developer-tools-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-developer-tools-rpath",
+        "sha256": "ccb67ea3850125401be5c91e5835126ef162e540179469c16303b51042f03c3c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-developer-tools-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-developer-tools-asan": {
+    "deps": [
+      "amd-smi-lib-asan",
+      "hsa-amd-aqlprofile-asan",
+      "rocm-core-asan",
+      "rocm-dbgapi-asan",
+      "rocm-debug-agent-asan",
+      "rocm-developer-tools",
+      "rocm-language-runtime-asan",
+      "rocm-smi-lib-asan",
+      "rocprofiler-asan",
+      "roctracer-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-developer-tools-asan",
+        "sha256": "329ccfb23354ec2b8f953c4be0b06f3fb39e312ddab2550cf4c42a2edba2b0f5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-developer-tools-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-developer-tools-asan-rpath",
+        "sha256": "27de40da9a3a74301c7c1c4122a76b02131a2283fee5704f71f7ffcc2977d082",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-developer-tools-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-device-libs": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-device-libs",
+        "sha256": "ec3425f777c0f76c78b5eaaa3dc4300b5c5f6bd2bda2806903f04d7f2435433c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-device-libs-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      },
+      {
+        "name": "rocm-device-libs-rpath",
+        "sha256": "57ee4d6c8c2844c64b81cc733b3440880e61a15d7c618de16f80dd0ec419b06e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-device-libs-rpath6.4.2-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      }
+    ],
+    "version": "1.0.0.60402"
+  },
+  "rocm-gdb": {
+    "deps": [
+      "rocm-core",
+      "rocm-dbgapi"
+    ],
+    "components": [
+      {
+        "name": "rocm-gdb",
+        "sha256": "9d2f18049672940ef0df49283799586f661ec70914295ea496f5936242b556fd",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-gdb-15.2.60402-120.el8.x86_64.rpm",
+        "version": "15.2.60402"
+      },
+      {
+        "name": "rocm-gdb-rpath",
+        "sha256": "fdcb432f127ae5895017b1c80e272ef5f7cd2aea7ce4142d261f6eefecf21676",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-gdb-rpath6.4.2-15.2.60402-120.el8.x86_64.rpm",
+        "version": "15.2.60402"
+      }
+    ],
+    "version": "15.2.60402"
+  },
+  "rocm-hip-libraries": {
+    "deps": [
+      "hipblas",
+      "hipblaslt",
+      "hipfft",
+      "hiprand",
+      "hipsolver",
+      "hipsparse",
+      "hipsparselt",
+      "hiptensor",
+      "rccl",
+      "rocalution",
+      "rocblas",
+      "rocfft",
+      "rocm-core",
+      "rocm-hip-runtime",
+      "rocm-smi-lib",
+      "rocrand",
+      "rocsolver",
+      "rocsparse"
+    ],
+    "components": [
+      {
+        "name": "rocm-hip-libraries",
+        "sha256": "9f5c84ff3596a8a01941d61ffbfcd23ef18e8ff09c67869ed1cdfc039cdabb07",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-libraries-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-libraries-rpath",
+        "sha256": "f826ba22cc835fb66342760f2d7cdc42a9930e526bd04ed7313f1cd2c90f0b9f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-libraries-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-hip-libraries-asan": {
+    "deps": [
+      "hipblas-asan",
+      "hipblaslt-asan",
+      "hipfft-asan",
+      "hiprand-asan",
+      "hipsolver-asan",
+      "hipsparse-asan",
+      "hipsparselt-asan",
+      "hiptensor-asan",
+      "rccl-asan",
+      "rocalution-asan",
+      "rocblas-asan",
+      "rocfft-asan",
+      "rocm-core-asan",
+      "rocm-hip-libraries",
+      "rocm-hip-runtime-asan",
+      "rocm-smi-lib-asan",
+      "rocrand-asan",
+      "rocsolver-asan",
+      "rocsparse-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-hip-libraries-asan",
+        "sha256": "e4f2e314a1834b98f5c77598a8cae5158fcba13c0e78e5b37d522f88ac4f3e2b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-libraries-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-libraries-asan-rpath",
+        "sha256": "f58a2c4c6952b4cec079e8c83847613ec3c4d7d4f00b7b76bf7866ccea22eb1d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-libraries-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-hip-runtime": {
+    "deps": [
+      "hip-devel",
+      "hip-doc",
+      "hip-runtime-amd",
+      "hip-samples",
+      "hipcc",
+      "hipify-clang",
+      "hsa-rocr",
+      "rocm-cmake",
+      "rocm-core",
+      "rocm-device-libs",
+      "rocm-language-runtime",
+      "rocm-llvm",
+      "rocminfo"
+    ],
+    "components": [
+      {
+        "name": "rocm-hip-runtime",
+        "sha256": "244ad9077c98daefa41d04458a344392a60c9f9f8d6c8f7dbba0331280c020e1",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-runtime-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-runtime-devel",
+        "sha256": "1a7ee61aeb144f5f6a612ef639c463ae57551c9d95faed37929d809870b4b0e9",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-runtime-devel-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-runtime-devel-rpath",
+        "sha256": "fd6072d7b9411cc7a2f45f2519779839c2d195053312a679e85fd4c73b905845",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-runtime-devel-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-runtime-rpath",
+        "sha256": "536c93ec9c9eb4b915a452e96ac74ca65f02b4f2b2ab056d12c2e4075f5a9f5b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-runtime-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-hip-runtime-asan": {
+    "deps": [
+      "hip-runtime-amd-asan",
+      "rocm-core-asan",
+      "rocm-hip-runtime",
+      "rocm-language-runtime-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-hip-runtime-asan",
+        "sha256": "913f31d9f3a0532fae3546ed7d73cb25ae143e03135e18dfdb541ec3c534687e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-runtime-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-runtime-asan-rpath",
+        "sha256": "7e9820d73e50d53d6dc43b08c922d8b633b9ba6632d1f8ce3c89678f5e2021ae",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-runtime-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-hip-sdk": {
+    "deps": [
+      "composablekernel-devel",
+      "hipblas",
+      "hipblas-common-devel",
+      "hipblaslt",
+      "hipcub-devel",
+      "hipfft",
+      "hipfort-devel",
+      "hiprand",
+      "hipsolver",
+      "hipsparse",
+      "hipsparselt",
+      "hiptensor",
+      "rccl",
+      "rocalution",
+      "rocblas",
+      "rocfft",
+      "rocm-core",
+      "rocm-hip-libraries",
+      "rocm-hip-runtime",
+      "rocprim-devel",
+      "rocrand",
+      "rocsolver",
+      "rocsparse",
+      "rocthrust-devel",
+      "rocwmma-devel"
+    ],
+    "components": [
+      {
+        "name": "rocm-hip-sdk",
+        "sha256": "3c8b8988a1bfcd579d678fac1c7f5ef8e106b970bf820150cbc958ca2980079f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-sdk-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-hip-sdk-rpath",
+        "sha256": "eec8e7c53782ff439fdafc2911734f9ec4706619ac99b6836cfb370ed180f772",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-hip-sdk-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-language-runtime": {
+    "deps": [
+      "comgr",
+      "hsa-rocr",
+      "openmp-extras-runtime",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-language-runtime",
+        "sha256": "ef562cb7b2d7380f8ea217ef0506d3c8546a3b5a1d0b152e4df4eede83a85070",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-language-runtime-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-language-runtime-rpath",
+        "sha256": "288faa50877df756811ba6021fa1a3642c3c2184639798b166bd903a8bc51120",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-language-runtime-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-language-runtime-asan": {
+    "deps": [
+      "comgr-asan",
+      "hsa-rocr-asan",
+      "openmp-extras-asan",
+      "rocm-core-asan",
+      "rocm-language-runtime"
+    ],
+    "components": [
+      {
+        "name": "rocm-language-runtime-asan",
+        "sha256": "325561504ee8cdb8efd9741baebb1ae8e9ab55604066a03fdac7b05bf090deea",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-language-runtime-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-language-runtime-asan-rpath",
+        "sha256": "ff2301bde2c5d218a42639514952a14c74c52b5c8a84851026007164210c51c3",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-language-runtime-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-libs": {
+    "deps": [
+      "composablekernel-devel",
+      "half",
+      "hipblas",
+      "hipblas-common-devel",
+      "hipblaslt",
+      "hipcub-devel",
+      "hipfft",
+      "hiprand",
+      "hipsolver",
+      "hipsparse",
+      "hipsparselt",
+      "hiptensor",
+      "miopen-hip",
+      "rccl",
+      "rocalution",
+      "rocblas",
+      "rocfft",
+      "rocm-core",
+      "rocprim-devel",
+      "rocrand",
+      "rocsolver",
+      "rocsparse",
+      "rocthrust-devel",
+      "rocwmma-devel"
+    ],
+    "components": [
+      {
+        "name": "rocm-libs",
+        "sha256": "aaf195641037752999533a3dc3549af9b94e01672b02deffe0a8f8caee4db441",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-libs-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-libs-rpath",
+        "sha256": "7faf38619345b67d46685ab021b21774e70d7d5ac617873bc16036227678b18e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-libs-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-llvm": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-llvm",
+        "sha256": "6931f8c25c8ef9ec5474ce6e3db42d0300bcacfd242c9a8a2dca19c6362265cb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-llvm-19.0.0.25224.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.25224.60402"
+      },
+      {
+        "name": "rocm-llvm-devel",
+        "sha256": "0b1648bedf7b1cf6581e8a77e2f3f9c79b3166950d1a03c9e1aad08d28ea2832",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-llvm-devel-19.0.0.25224.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.25224.60402"
+      },
+      {
+        "name": "rocm-llvm-devel-rpath",
+        "sha256": "39e5737c5b378da4f3df665f4ffec43c5606793bd602f73d24b347b23c9c7ee6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-llvm-devel-rpath6.4.2-19.0.0.25224.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.25224.60402"
+      },
+      {
+        "name": "rocm-llvm-rpath",
+        "sha256": "bc100342e868c29464601b2b66cd9becba8348503a7c5e871a9f31341e8de43e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-llvm-rpath6.4.2-19.0.0.25224.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.25224.60402"
+      }
+    ],
+    "version": "19.0.0.25224.60402"
+  },
+  "rocm-llvm-docs": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-llvm-docs",
+        "sha256": "e99ee96db49ababed3c420239cc099a8e5e2b958c4b959dc40db43312918d062",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-llvm-docs-19.0.0.25224.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.25224.60402"
+      },
+      {
+        "name": "rocm-llvm-docs-rpath",
+        "sha256": "2f06be57ef7d6bce63e39b2d30169d54ccbdd7e90f5b43d0819f3346a3493e9a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-llvm-docs-rpath6.4.2-19.0.0.25224.60402-120.el8.x86_64.rpm",
+        "version": "19.0.0.25224.60402"
+      }
+    ],
+    "version": "19.0.0.25224.60402"
+  },
+  "rocm-ml-libraries": {
+    "deps": [
+      "half",
+      "miopen-hip",
+      "rocm-core",
+      "rocm-hip-libraries",
+      "rocm-llvm"
+    ],
+    "components": [
+      {
+        "name": "rocm-ml-libraries",
+        "sha256": "6976fd6d797d72278ea09aa2d0d9fc283aabf7e82216a42ad085152e54f23166",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-libraries-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-ml-libraries-rpath",
+        "sha256": "e3b8013b730b3cbdf218ad87d0b21d54048ffb79a258096652e0029a1e853c4e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-libraries-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-ml-libraries-asan": {
+    "deps": [
+      "miopen-hip-asan",
+      "rocm-core-asan",
+      "rocm-hip-libraries-asan",
+      "rocm-ml-libraries"
+    ],
+    "components": [
+      {
+        "name": "rocm-ml-libraries-asan",
+        "sha256": "e815e1e76c91e982bc87069b7cc414167d3c54f759827f46b1a899e44d978e9a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-libraries-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-ml-libraries-asan-rpath",
+        "sha256": "729367b7938fc143178522ed8d6381461a75489b6e645d7cbce896018d5aec4a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-libraries-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-ml-sdk": {
+    "deps": [
+      "miopen-hip",
+      "rocm-core",
+      "rocm-hip-sdk",
+      "rocm-ml-libraries"
+    ],
+    "components": [
+      {
+        "name": "rocm-ml-sdk",
+        "sha256": "2adc91c4ba7b8e1dd5b0920fe44c104a833092adcb648c9e451c0fc1d9818ed8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-sdk-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-ml-sdk-rpath",
+        "sha256": "57d5e4ca21c909a9a5a1318b70dac0120140ff7f8af1871e10ca87210643c277",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-sdk-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-ml-sdk-asan": {
+    "deps": [
+      "rocm-core-asan",
+      "rocm-ml-libraries-asan",
+      "rocm-ml-sdk"
+    ],
+    "components": [
+      {
+        "name": "rocm-ml-sdk-asan",
+        "sha256": "349337ea54ecfa4ee045811567ee343e1b0d67f83781af9065663d92bd39659b",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-sdk-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-ml-sdk-asan-rpath",
+        "sha256": "1fc010e667e8fc03afa315fbdfd8f95ea64ae1ce8520426d8d8505a1b5b55d52",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ml-sdk-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-ocltst": {
+    "deps": [],
+    "components": [
+      {
+        "name": "rocm-ocltst",
+        "sha256": "e695be91a98a176fac2d8640c8dcce9d554755fc7abe87f5a8c984e3901ad61e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ocltst-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      },
+      {
+        "name": "rocm-ocltst-rpath",
+        "sha256": "57d69e772dacec0da4310930339a5ca7b827acd097b0f63fbf63e986063ce7e5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-ocltst-rpath6.4.2-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      }
+    ],
+    "version": "2.0.0.60402"
+  },
+  "rocm-opencl": {
+    "deps": [
+      "comgr",
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-opencl",
+        "sha256": "a4d208b07a076e359c07bca71e3ae18b2fe2285674aab806598b2ceebc6243f6",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      },
+      {
+        "name": "rocm-opencl-devel",
+        "sha256": "b6581680a3cd68dd020363139fd116bd6799dedea6907bfcb0f5413b07396b11",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-devel-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      },
+      {
+        "name": "rocm-opencl-devel-rpath",
+        "sha256": "d80525f5f19eb4a24f3cbc495cf11626422da097cedf30e96251424631508a6f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-devel-rpath6.4.2-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      },
+      {
+        "name": "rocm-opencl-rpath",
+        "sha256": "96c753990e34a43043a4bf607386a2d4225716c02aca305d575187e61379e697",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-rpath6.4.2-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      }
+    ],
+    "version": "2.0.0.60402"
+  },
+  "rocm-opencl-asan": {
+    "deps": [
+      "comgr-asan",
+      "hsa-rocr-asan",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-opencl-asan",
+        "sha256": "35e5e6c04483caf870464c559d5bfb985ebb4bc5fb72595b5f9df2289cf24d4d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-asan-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      },
+      {
+        "name": "rocm-opencl-asan-rpath",
+        "sha256": "18fca3c30e3a775b1de6a15c10b33933a849acd178a87a9e70cecb3277321a1e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-asan-rpath6.4.2-2.0.0.60402-120.el8.x86_64.rpm",
+        "version": "2.0.0.60402"
+      }
+    ],
+    "version": "2.0.0.60402"
+  },
+  "rocm-opencl-runtime": {
+    "deps": [
+      "rocm-core",
+      "rocm-language-runtime",
+      "rocm-opencl"
+    ],
+    "components": [
+      {
+        "name": "rocm-opencl-runtime",
+        "sha256": "f57e8cf1c4bb99633c7e6f71a45a240367a1b406ab339af9e759e6a69bc6e510",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-runtime-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-opencl-runtime-rpath",
+        "sha256": "cde45a6a367602e138b198e91254d3b708cdeb5709eca8a43c75f5faa392f497",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-runtime-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-opencl-runtime-asan": {
+    "deps": [
+      "rocm-core-asan",
+      "rocm-language-runtime-asan",
+      "rocm-opencl-asan",
+      "rocm-opencl-runtime"
+    ],
+    "components": [
+      {
+        "name": "rocm-opencl-runtime-asan",
+        "sha256": "fb0f5d69aa1ba3b4fa2cdedd764fe00803ff6ee7c0c9ff04a85a17c9293c5edb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-runtime-asan-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-opencl-runtime-asan-rpath",
+        "sha256": "df29fafe6709228b96806d4200c168635435749ff3a0852ceedf2e0f32dad833",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-runtime-asan-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-opencl-sdk": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core",
+      "rocm-opencl",
+      "rocm-opencl-runtime"
+    ],
+    "components": [
+      {
+        "name": "rocm-opencl-sdk",
+        "sha256": "edd2d94b65212965d7966c6dfd00e2db058f9a50c697f6560d00f37390e54e66",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-sdk-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-opencl-sdk-rpath",
+        "sha256": "40a37abbdf01b8a9f97edf6c97c94974168199d92c43eee41edb495dd3336c9f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-opencl-sdk-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-openmp-sdk": {
+    "deps": [
+      "hsa-rocr",
+      "openmp-extras-devel",
+      "rocm-core",
+      "rocm-device-libs",
+      "rocm-language-runtime",
+      "rocm-llvm"
+    ],
+    "components": [
+      {
+        "name": "rocm-openmp-sdk",
+        "sha256": "ac820a2d84d6ce1ba5a380c9556d7dc5e867487c48dcd40b4b939586744bbf94",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-openmp-sdk-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-openmp-sdk-rpath",
+        "sha256": "ae243eb499ce312c0baceb5a136f47ab0fa1ab25a97404f98344e6c18ef9fd83",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-openmp-sdk-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-smi-lib": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocm-smi-lib",
+        "sha256": "e0b09a4a2b91e0effb0ca42ce64e335dc3188b276272d854e60e41da8f81fa79",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-smi-lib-7.5.0.60402-120.el8.x86_64.rpm",
+        "version": "7.5.0.60402"
+      },
+      {
+        "name": "rocm-smi-lib-rpath",
+        "sha256": "9cba021e14c399f225196faf23a08e19f1241bffd076b03bfbcaff4789659354",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-smi-lib-rpath6.4.2-7.5.0.60402-120.el8.x86_64.rpm",
+        "version": "7.5.0.60402"
+      }
+    ],
+    "version": "7.5.0.60402"
+  },
+  "rocm-smi-lib-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocm-smi-lib-asan",
+        "sha256": "99d42a5ccea1fd3f78d30ba0eb109c258aac8a4e26671996b25dcb2f5f310041",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-smi-lib-asan-7.5.0.60402-120.el8.x86_64.rpm",
+        "version": "7.5.0.60402"
+      },
+      {
+        "name": "rocm-smi-lib-asan-rpath",
+        "sha256": "ef98058d6dd9f5d23babdf8eba293c450991fd8fb38270f7f9b746dd744f8dc0",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-smi-lib-asan-rpath6.4.2-7.5.0.60402-120.el8.x86_64.rpm",
+        "version": "7.5.0.60402"
+      }
+    ],
+    "version": "7.5.0.60402"
+  },
+  "rocm-utils": {
+    "deps": [
+      "rocm-cmake",
+      "rocm-core",
+      "rocminfo"
+    ],
+    "components": [
+      {
+        "name": "rocm-utils",
+        "sha256": "7b05a0db681061f73ee72f4b6821e6fa86e74122bd8bca13e1037204dd1d4d57",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-utils-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      },
+      {
+        "name": "rocm-utils-rpath",
+        "sha256": "19c0b1e3fc5d351ebecf18a6a9f753718ff62a945927f35f88609dd6ab9d6406",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-utils-rpath6.4.2-6.4.2.60402-120.el8.x86_64.rpm",
+        "version": "6.4.2.60402"
+      }
+    ],
+    "version": "6.4.2.60402"
+  },
+  "rocm-validation-suite": {
+    "deps": [
+      "comgr",
+      "hip-runtime-amd",
+      "hipblaslt",
+      "hiprand",
+      "hsa-rocr",
+      "rocblas",
+      "rocm-core",
+      "rocm-smi-lib"
+    ],
+    "components": [
+      {
+        "name": "rocm-validation-suite",
+        "sha256": "240f2a153d70520309f029aa0f11950393f2bf50ef307b25f3112a1f97ea3629",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-validation-suite-1.1.0.60402-120.el8.x86_64.rpm",
+        "version": "1.1.0.60402"
+      },
+      {
+        "name": "rocm-validation-suite-rpath",
+        "sha256": "55cd8c64198eaea775406b04b4c58017fdf755b317476ed0f7b54e551a3a6abd",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocm-validation-suite-rpath6.4.2-1.1.0.60402-120.el8.x86_64.rpm",
+        "version": "1.1.0.60402"
+      }
+    ],
+    "version": "1.1.0.60402"
+  },
+  "rocminfo": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocminfo",
+        "sha256": "a771a721bf7ddc4878a76c0bf71124a7791a6e726da9a39b7123a0f35886afce",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocminfo-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      },
+      {
+        "name": "rocminfo-rpath",
+        "sha256": "485676922bc927591a448ede6065a6bf80bbce58aa32b8eb46262b4d930aafdd",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocminfo-rpath6.4.2-1.0.0.60402-120.el8.x86_64.rpm",
+        "version": "1.0.0.60402"
+      }
+    ],
+    "version": "1.0.0.60402"
+  },
+  "rocprim-devel": {
+    "deps": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocprim-devel",
+        "sha256": "7211fa586ca72046c5165548283fd8f95eabc08801e33325d5d62e29188cfcdb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprim-devel-3.4.1.60402-120.el8.x86_64.rpm",
+        "version": "3.4.1.60402"
+      },
+      {
+        "name": "rocprim-devel-rpath",
+        "sha256": "6a86f946a52577e82c2cf28be88a78e701b882d6a6533a528a8efa517b0b7b7e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprim-devel-rpath6.4.2-3.4.1.60402-120.el8.x86_64.rpm",
+        "version": "3.4.1.60402"
+      }
+    ],
+    "version": "3.4.1.60402"
+  },
+  "rocprofiler": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core",
+      "rocminfo"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler",
+        "sha256": "4b34b5172c7134d32c3abb60cc988cd74257e700aa73a5d2bbddf9ac42ed9eb9",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      },
+      {
+        "name": "rocprofiler-devel",
+        "sha256": "150c02994f94d15eb1b85da256cfb1569e2a56b26cf2cc692d998eab92f87725",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-devel-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      },
+      {
+        "name": "rocprofiler-devel-rpath",
+        "sha256": "6d805fd5c6ef607e05aa7fd32df4c60515f9646cd6e41b8cec04078c8b5cca1e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-devel-rpath6.4.2-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      },
+      {
+        "name": "rocprofiler-rpath",
+        "sha256": "ed8eee9249b758497c14cfe02605d4d5fb869beafd173c73db0f54a81cdea9e9",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-rpath6.4.2-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      }
+    ],
+    "version": "2.0.60402.60402"
+  },
+  "rocprofiler-asan": {
+    "deps": [
+      "hsa-rocr-asan",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-asan",
+        "sha256": "1386c8a5d164e622ccd56826ba492ed84d12bde63114a6ef4444ace0ff67df78",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-asan-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      },
+      {
+        "name": "rocprofiler-asan-rpath",
+        "sha256": "dcc8ba61c32d7c377c4c4e65836ec23fab59b570e41f78f1b130ff0de3baf30a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-asan-rpath6.4.2-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      }
+    ],
+    "version": "2.0.60402.60402"
+  },
+  "rocprofiler-compute": {
+    "deps": [
+      "rocprofiler"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-compute",
+        "sha256": "2a4390cf53112f4de5c7073eb6dfb95428049f8b4a407d02cae6dc4876b59095",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-compute-3.1.1.60402-120.el8.x86_64.rpm",
+        "version": "3.1.1.60402"
+      },
+      {
+        "name": "rocprofiler-compute-rpath",
+        "sha256": "27cd0f54bc540a11e777d9d9c714bed95ec0e660aba8a3b362ffe94d4e0996de",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-compute-rpath6.4.2-3.1.1.60402-120.el8.x86_64.rpm",
+        "version": "3.1.1.60402"
+      }
+    ],
+    "version": "3.1.1.60402"
+  },
+  "rocprofiler-docs": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core",
+      "rocprofiler"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-docs",
+        "sha256": "bcaa583248ca4c9519bcb6594b42b90a1c746f64c3160e9e36f0bbce19099c72",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-docs-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      },
+      {
+        "name": "rocprofiler-docs-rpath",
+        "sha256": "0cad06bd8d1b4f9054edce3e9ac665b4f33f3c3348de16480343f847c87adec5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-docs-rpath6.4.2-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      }
+    ],
+    "version": "2.0.60402.60402"
+  },
+  "rocprofiler-plugins": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core",
+      "rocprofiler"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-plugins",
+        "sha256": "23163d60617a05e2a92e9ac791a6f412e5a645b2980f507ab80cb92eed06307a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-plugins-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      },
+      {
+        "name": "rocprofiler-plugins-rpath",
+        "sha256": "f90b6c5baa5f2db06b9b276cd7789a34cab5c304d57f58e4331d4923b9ab2011",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-plugins-rpath6.4.2-2.0.60402.60402-120.el8.x86_64.rpm",
+        "version": "2.0.60402.60402"
+      }
+    ],
+    "version": "2.0.60402.60402"
+  },
+  "rocprofiler-register": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-register",
+        "sha256": "c1d796e22cf29829f235735e826e992e8e09586f8a5fea67525a497c64eacf0e",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-register-0.4.0.60402-120.el8.x86_64.rpm",
+        "version": "0.4.0.60402"
+      },
+      {
+        "name": "rocprofiler-register-rpath",
+        "sha256": "bf7e532627ad592c01a84cb9b5c536954af8ab6978c2fe88ef588c900e44fb74",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-register-rpath6.4.2-0.4.0.60402-120.el8.x86_64.rpm",
+        "version": "0.4.0.60402"
+      }
+    ],
+    "version": "0.4.0.60402"
+  },
+  "rocprofiler-sdk": {
+    "deps": [
+      "rocm-core",
+      "rocprofiler-sdk-roctx"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-sdk",
+        "sha256": "edec82afc7f9d98603fa0241f2b42b7de6c429ae14bc6e6f8c62c130a1e44694",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-sdk-0.6.0.60402-120.el8.x86_64.rpm",
+        "version": "0.6.0.60402"
+      },
+      {
+        "name": "rocprofiler-sdk-rpath",
+        "sha256": "63e39d64d5d03376eafed941ee31d1fffd7f6caa1353711c6a2d166328105a93",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-sdk-rpath6.4.2-0.6.0.60402-120.el8.x86_64.rpm",
+        "version": "0.6.0.60402"
+      }
+    ],
+    "version": "0.6.0.60402"
+  },
+  "rocprofiler-sdk-roctx": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocprofiler-sdk-roctx",
+        "sha256": "b7347512ba97f120c35798c676d8048a67b56dfdd742c6d329cae38f65e05364",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-sdk-roctx-0.6.0.60402-120.el8.x86_64.rpm",
+        "version": "0.6.0.60402"
+      },
+      {
+        "name": "rocprofiler-sdk-roctx-rpath",
+        "sha256": "734ba1bbf79f91a15004f6af4e4dfa6cbccebe1d0947eff2b04ddc927f46bf50",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-sdk-roctx-rpath6.4.2-0.6.0.60402-120.el8.x86_64.rpm",
+        "version": "0.6.0.60402"
+      }
+    ],
+    "version": "0.6.0.60402"
+  },
+  "rocprofiler-systems": {
+    "deps": [],
+    "components": [
+      {
+        "name": "rocprofiler-systems",
+        "sha256": "53a3d4c052126e7634af1c715161f7075e8a2b8795c82c5e27dee452ad8b7d22",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-systems-1.0.2.60402-120.el8.x86_64.rpm",
+        "version": "1.0.2.60402"
+      },
+      {
+        "name": "rocprofiler-systems-rpath",
+        "sha256": "903b9a2a531eb7fb70ea52fd7f44444298ffbaca7bc41a8189e23aa821fd4c58",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocprofiler-systems-rpath6.4.2-1.0.2.60402-120.el8.x86_64.rpm",
+        "version": "1.0.2.60402"
+      }
+    ],
+    "version": "1.0.2.60402"
+  },
+  "rocrand": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocrand",
+        "sha256": "b3ccb654f8a3ac88077c5bb4d196b8abe1be1c9ab7090f4f170f86a210530fdb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocrand-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      },
+      {
+        "name": "rocrand-devel",
+        "sha256": "2dd99507aabdfd293a566a696f6cdc798d5d6a6ba4f494a85a1bbc5d1073786d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocrand-devel-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      },
+      {
+        "name": "rocrand-devel-rpath",
+        "sha256": "e0e7e59ca59d35e33a30e11d91c78577a9b1147e4a43472261d0d890260b8b5a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocrand-devel-rpath6.4.2-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      },
+      {
+        "name": "rocrand-rpath",
+        "sha256": "f68f2ba4ed00ffafba31c416926824ed4eba2f0a5dffaf88a43d0b6a9b29a979",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocrand-rpath6.4.2-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      }
+    ],
+    "version": "3.3.0.60402"
+  },
+  "rocrand-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocrand-asan",
+        "sha256": "b7a0ce70207c15343b49f7d9d2f00adadd60ec3cd73cfbc4d51231a25272162f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocrand-asan-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      },
+      {
+        "name": "rocrand-asan-rpath",
+        "sha256": "8bfc2b551e8523f1ae71d9f562a9e328cdadc8c54e29ecec2f5cf10d89ab8b2c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocrand-asan-rpath6.4.2-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      }
+    ],
+    "version": "3.3.0.60402"
+  },
+  "rocshmem-devel": {
+    "deps": [
+      "hip-runtime-amd",
+      "hsa-rocr",
+      "rocm-core",
+      "rocm-dev"
+    ],
+    "components": [
+      {
+        "name": "rocshmem-devel",
+        "sha256": "e1dde70a5dee76a45d4d93af83eb93ec578091dd8f7a58f23bfcb2667fe2b7df",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocshmem-devel-2.0.1.60402-120.el8.x86_64.rpm",
+        "version": "2.0.1.60402"
+      },
+      {
+        "name": "rocshmem-devel-rpath",
+        "sha256": "348d2fbd4ee17a34c94c1012c16330385f3675d0e56f23396674b47190024f4f",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocshmem-devel-rpath6.4.2-2.0.1.60402-120.el8.x86_64.rpm",
+        "version": "2.0.1.60402"
+      }
+    ],
+    "version": "2.0.1.60402"
+  },
+  "rocsolver": {
+    "deps": [
+      "rocblas",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocsolver",
+        "sha256": "60db9f703316ca99da494463e3c2ce8a325b18f077bd170db96cfef0118e07ca",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsolver-3.28.2.60402-120.el8.x86_64.rpm",
+        "version": "3.28.2.60402"
+      },
+      {
+        "name": "rocsolver-devel",
+        "sha256": "dbfb18fb8b1992e8e7b53893bea7d4e8b9d168f3f0c71c746cb4ac4eb1e41a86",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsolver-devel-3.28.2.60402-120.el8.x86_64.rpm",
+        "version": "3.28.2.60402"
+      },
+      {
+        "name": "rocsolver-devel-rpath",
+        "sha256": "7993fc0ac8045c4fe5177b7c74b87fe2fd73fa183fd31b52ae74fa3da62ae1c4",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsolver-devel-rpath6.4.2-3.28.2.60402-120.el8.x86_64.rpm",
+        "version": "3.28.2.60402"
+      },
+      {
+        "name": "rocsolver-rpath",
+        "sha256": "0e5ba5fe9e4327598193fe3ce94f0613ca69161781d5bb5e055d4b819c3a4b93",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsolver-rpath6.4.2-3.28.2.60402-120.el8.x86_64.rpm",
+        "version": "3.28.2.60402"
+      }
+    ],
+    "version": "3.28.2.60402"
+  },
+  "rocsolver-asan": {
+    "deps": [
+      "rocblas",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocsolver-asan",
+        "sha256": "024c8d0467c8718d14b4e569a97dcdb24ea4e360f843b79d4e13ddfbcc902b55",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsolver-asan-3.28.2.60402-120.el8.x86_64.rpm",
+        "version": "3.28.2.60402"
+      },
+      {
+        "name": "rocsolver-asan-rpath",
+        "sha256": "a05c8e86c051aeea1c3b3dc4b9ba164e4a5b0ab2123e45589d0a5b68510f33c8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsolver-asan-rpath6.4.2-3.28.2.60402-120.el8.x86_64.rpm",
+        "version": "3.28.2.60402"
+      }
+    ],
+    "version": "3.28.2.60402"
+  },
+  "rocsparse": {
+    "deps": [
+      "hip-runtime-amd",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocsparse",
+        "sha256": "ab4cf9a1ae016d493d3941d00d1510830cf8686f1526edf350bcc7966d033f3c",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsparse-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "rocsparse-devel",
+        "sha256": "d01d7dcb1f15133648998c38d6d26f7ebc5bc04256b49362efa004de9ed705e5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsparse-devel-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "rocsparse-devel-rpath",
+        "sha256": "146a972e33bb9d253981d36247d735964edcf01d8c4c7382b10b12632deca79d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsparse-devel-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "rocsparse-rpath",
+        "sha256": "a2aca8486adcb9ac4a5050204f55bc4bd8d8a37eb19044d381ca84ade5c295fb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsparse-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "rocsparse-asan": {
+    "deps": [
+      "hip-runtime-amd-asan",
+      "rocblas",
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rocsparse-asan",
+        "sha256": "322efd8bc4f4336a4c6d8d83971d8a5d245d99967118120a6bb95ce03838119d",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsparse-asan-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      },
+      {
+        "name": "rocsparse-asan-rpath",
+        "sha256": "f7085b5c791ff5f93bf0a2546bdfb787dbe4cdb1c6387edeccd1eaea481d633a",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocsparse-asan-rpath6.4.2-3.4.0.60402-120.el8.x86_64.rpm",
+        "version": "3.4.0.60402"
+      }
+    ],
+    "version": "3.4.0.60402"
+  },
+  "rocthrust-devel": {
+    "deps": [
+      "rocm-core",
+      "rocprim-devel"
+    ],
+    "components": [
+      {
+        "name": "rocthrust-devel",
+        "sha256": "96cd68d0bbc5d3753bb4bf096b0ba482199d6dd87c403685dd26c64ce0323158",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocthrust-devel-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      },
+      {
+        "name": "rocthrust-devel-rpath",
+        "sha256": "c96b06b7c824dcd6cbdd48b7d5a0cf970485bc69d5da85af4c92f32958be58e5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocthrust-devel-rpath6.4.2-3.3.0.60402-120.el8.x86_64.rpm",
+        "version": "3.3.0.60402"
+      }
+    ],
+    "version": "3.3.0.60402"
+  },
+  "roctracer": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "roctracer",
+        "sha256": "ad2ca268f4ee930701d55dd15a022c1659720f177fcf8dffd648d0e4346f7bb8",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/roctracer-4.1.60402.60402-120.el8.x86_64.rpm",
+        "version": "4.1.60402.60402"
+      },
+      {
+        "name": "roctracer-devel",
+        "sha256": "d1e19e65fbfc7fd44f34a129111ded2bcf1d16915ac15605a7e28071e158bea5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/roctracer-devel-4.1.60402.60402-120.el8.x86_64.rpm",
+        "version": "4.1.60402.60402"
+      },
+      {
+        "name": "roctracer-devel-rpath",
+        "sha256": "094de273a46d458f4172de6fbd1f94bdb9e0e31e029118e9a78d46519b9a3545",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/roctracer-devel-rpath6.4.2-4.1.60402.60402-120.el8.x86_64.rpm",
+        "version": "4.1.60402.60402"
+      },
+      {
+        "name": "roctracer-rpath",
+        "sha256": "131980f5e34ae322c4dc7584205fa80979cf7deea153a1e5ee3d9db20425e235",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/roctracer-rpath6.4.2-4.1.60402.60402-120.el8.x86_64.rpm",
+        "version": "4.1.60402.60402"
+      }
+    ],
+    "version": "4.1.60402.60402"
+  },
+  "roctracer-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "roctracer-asan",
+        "sha256": "2dab01c3cbda649228a89dc28015a388c64971807aa19cc1925c2b8b12b02f84",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/roctracer-asan-4.1.60402.60402-120.el8.x86_64.rpm",
+        "version": "4.1.60402.60402"
+      },
+      {
+        "name": "roctracer-asan-rpath",
+        "sha256": "7ddd3b284c96b2d945f88ea5bd338962031c0866b0d817d4a949f803a52b3819",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/roctracer-asan-rpath6.4.2-4.1.60402.60402-120.el8.x86_64.rpm",
+        "version": "4.1.60402.60402"
+      }
+    ],
+    "version": "4.1.60402.60402"
+  },
+  "rocwmma-devel": {
+    "deps": [
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "rocwmma-devel",
+        "sha256": "9d58b91ace830ca353a7bc453375c9f5132a82ca86e381b8b6a6faecb086aa69",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocwmma-devel-1.7.0.60402-120.el8.x86_64.rpm",
+        "version": "1.7.0.60402"
+      },
+      {
+        "name": "rocwmma-devel-rpath",
+        "sha256": "b75e709e2a104cf90a5ea71de4b14b7a46e17025e4822fe3ddf6757fc248e525",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rocwmma-devel-rpath6.4.2-1.7.0.60402-120.el8.x86_64.rpm",
+        "version": "1.7.0.60402"
+      }
+    ],
+    "version": "1.7.0.60402"
+  },
+  "rpp": {
+    "deps": [
+      "half",
+      "openmp-extras-devel",
+      "openmp-extras-runtime",
+      "rocm-hip-runtime"
+    ],
+    "components": [
+      {
+        "name": "rpp",
+        "sha256": "ad3ff6c37dde307115ad8616705440b00e3ad1e550c5d710bc75edcfb32cd2a2",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      },
+      {
+        "name": "rpp-devel",
+        "sha256": "a5701f9f072213ba07bae5a31be3789e44c57c201582e906c7c0b8ce42f3d808",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-devel-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      },
+      {
+        "name": "rpp-devel-rpath",
+        "sha256": "d878e267d8a580db8f89bbfb9b304b2533eb1047038f5fc0a1ae2a3f792e47f5",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-devel-rpath6.4.2-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      },
+      {
+        "name": "rpp-rpath",
+        "sha256": "5cc80cca9c30cc37d4683cfecd362970b3087afff7a3018c4f2d93e159170f51",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-rpath6.4.2-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      }
+    ],
+    "version": "1.9.10.60402"
+  },
+  "rpp-asan": {
+    "deps": [
+      "rocm-core-asan"
+    ],
+    "components": [
+      {
+        "name": "rpp-asan",
+        "sha256": "1ccf09b4f98301ce8353a343ad82fcb127cf395701510179fdb1e38fdb575692",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-asan-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      },
+      {
+        "name": "rpp-asan-rpath",
+        "sha256": "be818b75aa412d1a0f5c72b10f58986e697d2282724de6839847ae497ac45d74",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-asan-rpath6.4.2-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      }
+    ],
+    "version": "1.9.10.60402"
+  },
+  "rpp-test": {
+    "deps": [
+      "rpp"
+    ],
+    "components": [
+      {
+        "name": "rpp-test",
+        "sha256": "7254a85a5057882298da4883b42b682a3426b3b44832419dce7874c1b6aa3319",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-test-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      },
+      {
+        "name": "rpp-test-rpath",
+        "sha256": "b2176936b225eee76fb0b18614ff129d0328d34b4c7a21d57284e0f1bce55a25",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/rpp-test-rpath6.4.2-1.9.10.60402-120.el8.x86_64.rpm",
+        "version": "1.9.10.60402"
+      }
+    ],
+    "version": "1.9.10.60402"
+  },
+  "transferbench-devel": {
+    "deps": [
+      "hsa-rocr",
+      "rocm-core"
+    ],
+    "components": [
+      {
+        "name": "transferbench-devel",
+        "sha256": "6d43bc469e66211b1efeb6d0dacd3fe26c14f5829f22ac511221ec94bbca65cb",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/transferbench-devel-1.62.0.60402-120.el8.x86_64.rpm",
+        "version": "1.62.0.60402"
+      },
+      {
+        "name": "transferbench-devel-rpath",
+        "sha256": "1a4d421855bad45ccca1c53741e0119645f191f84dc5973a24f91f8e177cd547",
+        "url": "https://repo.radeon.com/rocm/rhel8/6.4.2/main/transferbench-devel-rpath6.4.2-1.62.0.60402-120.el8.x86_64.rpm",
+        "version": "1.62.0.60402"
+      }
+    ],
+    "version": "1.62.0.60402"
+  }
+}

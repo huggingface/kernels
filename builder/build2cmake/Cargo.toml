@@ -1,0 +1,27 @@
+[package]
+name = "build2cmake"
+version = "0.8.0-dev0"
+edition = "2021"
+description = "Generate CMake files for kernel-builder projects"
+homepage = "https://github.com/huggingface/kernel-builder"
+license = "Apache-2.0"
+documentation = "https://docs.rs/build2cmake"
+repository = "https://github.com/huggingface/kernel-builder"
+
+[dependencies]
+base32 = "0.5"
+clap = { version = "4", features = ["derive"] }
+eyre = "0.6.12"
+git2 = "0.20"
+itertools = "0.13"
+minijinja = "2.5"
+minijinja-embed = "2.5"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-value = "0.7"
+thiserror = "1"
+toml = "0.8"
+
+[build-dependencies]
+minijinja-embed = "2.5"

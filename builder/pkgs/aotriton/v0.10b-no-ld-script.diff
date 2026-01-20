@@ -1,0 +1,30 @@
+diff --git a/v2src/CMakeLists.txt b/v2src/CMakeLists.txt
+index a3eda3f..3f4ff9d 100644
+--- a/v2src/CMakeLists.txt
++++ b/v2src/CMakeLists.txt
+@@ -218,8 +218,8 @@ execute_process(
+   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_PARENT_DIR}"
+   COMMAND_ERROR_IS_FATAL ANY
+ )
+-target_link_options(aotriton_v2 PRIVATE
+-                    -T "${AOTRITON_V2_BUILD_DIR}/set_aotriton_version.ld")
++#target_link_options(aotriton_v2 PRIVATE
++#                    -T "${AOTRITON_V2_BUILD_DIR}/set_aotriton_version.ld")
+ # Otherwise the binary size blows up
+ # FIXME: Properly export symbols
+ set_target_properties(aotriton_v2 PROPERTIES CXX_VISIBILITY_PRESET hidden)
+diff --git a/v3src/CMakeLists.txt b/v3src/CMakeLists.txt
+index 1ccb7ca..2cc3035 100644
+--- a/v3src/CMakeLists.txt
++++ b/v3src/CMakeLists.txt
+@@ -212,8 +212,8 @@ execute_process(
+   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_PARENT_DIR}"
+   COMMAND_ERROR_IS_FATAL ANY
+ )
+-target_link_options(aotriton_v2 PRIVATE
+-                    -T "${AOTRITON_V2_BUILD_DIR}/set_aotriton_version.ld")
++#target_link_options(aotriton_v2 PRIVATE
++#                    -T "${AOTRITON_V2_BUILD_DIR}/set_aotriton_version.ld")
+ # Otherwise the binary size blows up
+ # FIXME: Properly export symbols
+ set_target_properties(aotriton_v2 PROPERTIES CXX_VISIBILITY_PRESET hidden)

@@ -1,0 +1,37 @@
+name: "Build and test kernel (XPU)"
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build kernel
+    runs-on:
+      group: aws-highmemory-32-plus-nix
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            max-jobs = 4
+            cores = 12
+            sandbox-fallback = false
+      - uses: cachix/cachix-action@v16
+        with:
+          name: huggingface
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+        env:
+          USER: runner
+      - name: Nix info
+        run: nix-shell -p nix-info --run "nix-info -m"
+      # For now we only test that there are no regressions in building XPU
+      # kernels. Also run tests once we have a XPU runner.
+      - name: Build relu kernel
+        run: ( cd examples/relu && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux -L )
+
+      - name: Build relu kernel (compiler flags)
+        run: ( cd examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux )

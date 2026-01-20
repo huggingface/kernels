@@ -1,6 +1,5 @@
 import importlib.metadata
 
-
 __version__ = importlib.metadata.version("kernels")
 
 from kernels.layer import (

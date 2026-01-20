@@ -116,6 +116,36 @@ def main():
         )
     )
 
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Run and submit benchmark results for a kernel",
+    )
+    benchmark_parser.add_argument(
+        "repo_id",
+        type=str,
+        help="Kernel repo ID (e.g., kernels-community/activation)",
+    )
+    benchmark_parser.add_argument(
+        "--revision",
+        type=str,
+        default="main",
+        help="Kernel revision (default: main)",
+    )
+    benchmark_parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Save JSON results to file",
+    )
+    benchmark_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print full JSON results to stdout (in addition to table)",
+    )
+    benchmark_parser.add_argument("--iterations", type=int, default=100)
+    benchmark_parser.add_argument("--warmup", type=int, default=10)
+    benchmark_parser.set_defaults(func=run_benchmark)
+
     args = parser.parse_args()
     args.func(args)
 
@@ -209,4 +239,17 @@ def check_kernel(
         python_abi=python_abi,
         repo_id=repo_id,
         revision=revision,
+    )
+
+
+def run_benchmark(args):
+    from kernels import benchmark
+
+    benchmark.run_benchmark(
+        repo_id=args.repo_id,
+        revision=args.revision,
+        iterations=args.iterations,
+        warmup=args.warmup,
+        output=args.output,
+        print_json=args.json,
     )

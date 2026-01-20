@@ -44,6 +44,22 @@ kernel_layer_mapping = {
 register_kernel_mapping(kernel_layer_mapping)
 ```
 
+Similarly, you can use the `LockedFuncRepository` class to lock kernel function
+versions:
+
+```python
+kernel_layer_mapping = {
+    "silu_and_mul": {
+        "cuda": LockedFuncRepository(
+            repo_id="kernels-community/activation",
+            func_name="silu_and_mul",
+        )
+    }
+}
+
+register_kernel_mapping(kernel_layer_mapping)
+```
+
 ## Pre-downloading locked kernels
 
 Locked kernels can be pre-downloaded by running `kernels download .` in your

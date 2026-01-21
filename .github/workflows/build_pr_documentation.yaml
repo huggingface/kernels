@@ -1,6 +1,11 @@
 name: Build PR Documentation
 
-on: pull_request
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "kernels/**"
+      - ".github/workflows/build_pr_documentation.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -12,4 +17,5 @@ jobs:
     with:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
+      package_path: kernels/kernels/
       package: kernels

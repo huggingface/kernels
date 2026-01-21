@@ -9,8 +9,7 @@ jobs:
       - name: Run ruff
         uses: astral-sh/ruff-action@v3
         src: >-
-          src
-          tests
+          kernels
 
   black:
     name: Run black check
@@ -30,8 +29,7 @@ jobs:
 
       - name: Check formatting
         run: |
-          uv run black --check src
-          uv run black --check tests
+          uv run black --check kernels
 
   validate-dependencies:
     name: Validate python_depends.json
@@ -46,7 +44,7 @@ jobs:
 
       - name: Validate python_depends.json is up-to-date
         run: |
-          python update_python_depends.py --validate || {
+          python ( cd kernels && update_python_depends.py --validate ) || {
             echo "Error: python_depends.json is out of date."
             echo "Please run: python update_python_depends.py"
             exit 1

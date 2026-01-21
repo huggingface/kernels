@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    name: Run tests
+    name: Run kernels tests
     runs-on:
       group: aws-g6-24xlarge
     permissions:
@@ -39,27 +39,34 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Lock Torch version
+        working-directory: ./kernels
         run: uv lock --upgrade-package "torch==${{ matrix.torch-version }}"
 
       - name: Install the project
+        working-directory: ./kernels
         run: uv sync --all-extras --dev
 
       - name: Install setuptools for Triton-based test
+        working-directory: ./kernels
         run: uv pip install setuptools
 
       - name: Check typing
+        working-directory: ./kernels
         run: uv run mypy src/kernels
 
       - name: Run tests
+        working-directory: ./kernels
         run: |
           uv run pytest tests
 
       - name: Re-run dependency test with dependencies installed
+        working-directory: ./kernels
         run: |
           uv pip install einops nvidia-cutlass-dsl
           uv run pytest tests/test_deps.py
 
       - name: Run staging tests
+        working-directory: ./kernels
         env:
           HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
         run: |
@@ -67,16 +74,19 @@ jobs:
         if: matrix.python_version == '3.10' && matrix.torch-version == '2.7.0'
 
       - name: Check README generation
+        working-directory: ./kernels
         # For now, just checks that generation doesn't fail.
         run: |
           uv run kernels generate-readme kernels-community/triton-layer-norm
 
       - name: Check kernel check
+        working-directory: ./kernels
         run: |
-          uv pip install kernel-abi-check
-          kernels check kernels-community/activation
+          uv pip install ../kernel-abi-check/bindings/python
+          uv run kernels check kernels-community/activation
 
       - name: Import check without torch
+        working-directory: ./kernels
         run: |
           uv pip uninstall torch
-          python -c "import kernels"
+          uv run python -c "import kernels"

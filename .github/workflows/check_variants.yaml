@@ -30,8 +30,8 @@ jobs:
         run: nix run nixpkgs#python3 builder/scripts/gen_variants_markdown.py
       - name: Check if variants Markdown is up-to-date
         run: |
-          if git diff --exit-code builder/docs/build-variants.md; then
-            echo "✅ docs/build-variants.md is up-to-date"
+          if git diff --exit-code docs/source/builder/build-variants.md; then
+            echo "✅ docs/source/buidler/build-variants.md is up-to-date"
           else
             echo "🛑 regenerate docs/build-variants: nix run nixpkgs#python3 builder/scripts/gen_variants_markdown.py"
             exit 1

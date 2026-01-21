@@ -2,7 +2,7 @@
   description = "Flake for kernels tests";
 
   inputs = {
-    kernel-builder.url = "path:../..";
+    kernel-builder.url = "path:../../..";
   };
 
   outputs =

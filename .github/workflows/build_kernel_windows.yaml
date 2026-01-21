@@ -61,23 +61,13 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cu${{ matrix.torch.wheel }}
 
       - name: Build cutlass GEMM kernel
-        run: ( scripts\windows\builder.ps1 -SourceFolder examples/cutlass-gemm -BuildConfig Release -Backend cuda -Build -Force )
-#      - name: Copy cutlass GEMM kernel
-#        run: cp -rL examples/cutlass-gemm/result cutlass-gemm-kernel
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/cutlass-gemm -BuildConfig Release -Backend cuda -Build -Force )
 
       - name: Build relu kernel
-        run: ( scripts\windows\builder.ps1 -SourceFolder examples/relu -BuildConfig Release -Backend cuda -Build -Force )
-#      - name: Copy relu kernel
-#        run: cp -rL examples/relu/result relu-kernel
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/relu -BuildConfig Release -Backend cuda -Build -Force )
 
       - name: Build relu-backprop-compile kernel
-        run: ( scripts\windows\builder.ps1 -SourceFolder examples/relu-backprop-compile -BuildConfig Release -Backend cuda -Build -Force  )
-#      - name: Copy relu-backprop-compile kernel
-#        run: cp -rL examples/relu-backprop-compile/result relu-backprop-compile-kernel
-
-      # Just test that we build with the extra torchVersions argument.
-#      - name: Build relu kernel (specific Torch version)
-#        run: ( cd examples/relu-specific-torch && nix build . )
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/relu-backprop-compile -BuildConfig Release -Backend cuda -Build -Force  )
 
       - name: Build silu-and-mul kernel
-        run: ( scripts\windows\builder.ps1 -SourceFolder examples/silu-and-mul -BuildConfig Release -Backend cuda -Build -Force)
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/silu-and-mul -BuildConfig Release -Backend cuda -Build -Force)

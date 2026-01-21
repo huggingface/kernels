@@ -6,8 +6,8 @@ on:
       - main
     paths:
       # Only run on changes to the Dockerfile or workflow file
-      - "Dockerfile"
-      - "dockerfiles/**"
+      - "buidler/Dockerfile"
+      - "builder/dockerfiles/**"
       - ".github/workflows/docker-build-push.yaml"
   workflow_dispatch: # Allow manual triggering
 
@@ -56,7 +56,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./dockerfiles/Dockerfile.user
+          file: ./builder/dockerfiles/Dockerfile.user
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -107,7 +107,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./dockerfiles/Dockerfile
+          file: ./builder/dockerfiles/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-root.outputs.tags }}

@@ -6,7 +6,7 @@
 
 let
   version =
-    (builtins.fromTOML (builtins.readFile ../../../kernel-abi-check/kernel-abi-check/Cargo.toml))
+    (builtins.fromTOML (builtins.readFile ../../../../kernel-abi-check/kernel-abi-check/Cargo.toml))
     .package.version;
 in
 buildPythonPackage {
@@ -27,12 +27,12 @@ buildPythonPackage {
         || file.name == "stable_abi.toml";
     in
     lib.fileset.toSource {
-      root = ../../../kernel-abi-check;
-      fileset = lib.fileset.fileFilter sourceFiles ../../../kernel-abi-check;
+      root = ../../../../kernel-abi-check;
+      fileset = lib.fileset.fileFilter sourceFiles ../../../../kernel-abi-check;
     };
 
   cargoDeps = rustPlatform.importCargoLock {
-    lockFile = ../../../kernel-abi-check/bindings/python/Cargo.lock;
+    lockFile = ../../../../kernel-abi-check/bindings/python/Cargo.lock;
   };
 
   sourceRoot = "source/bindings/python";

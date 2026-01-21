@@ -13,7 +13,7 @@
 
 let
   supportedCudaCapabilities = builtins.fromJSON (
-    builtins.readFile ../build2cmake/src/cuda_supported_archs.json
+    builtins.readFile ../../build2cmake/src/cuda_supported_archs.json
   );
 in
 rec {

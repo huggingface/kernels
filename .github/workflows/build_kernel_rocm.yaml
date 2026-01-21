@@ -1,4 +1,4 @@
-name: "Build and test kernel (XPU)"
+name: "Build and test kernel (ROCm)"
 on:
   push:
     branches: [main]
@@ -20,7 +20,7 @@ jobs:
             max-jobs = 4
             cores = 12
             sandbox-fallback = false
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@v14
         with:
           name: huggingface
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
@@ -28,10 +28,10 @@ jobs:
           USER: runner
       - name: Nix info
         run: nix-shell -p nix-info --run "nix-info -m"
-      # For now we only test that there are no regressions in building XPU
-      # kernels. Also run tests once we have a XPU runner.
+      # For now we only test that there are no regressions in building ROCm
+      # kernels. Also run tests once we have a ROCm runner.
       - name: Build relu kernel
-        run: ( cd examples/relu && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux -L )
+        run: ( cd buidler/examples/relu && nix build .\#redistributable.torch29-cxx11-rocm63-x86_64-linux -L )
 
       - name: Build relu kernel (compiler flags)
-        run: ( cd examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux )
+        run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-rocm63-x86_64-linux )

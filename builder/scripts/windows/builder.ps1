@@ -183,8 +183,8 @@ function Find-Build2Cmake {
 
     # Search common locations
     $searchPaths = @(
-        (Join-Path $PSScriptRoot '..' '..' 'build2cmake' 'target' 'release' 'build2cmake.exe'),
-        (Join-Path $PSScriptRoot '..' '..' 'build2cmake' 'target' 'debug' 'build2cmake.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'build2cmake' 'target' 'release' 'build2cmake.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'build2cmake' 'target' 'debug' 'build2cmake.exe'),
         'build2cmake.exe',
         'build2cmake'
     )

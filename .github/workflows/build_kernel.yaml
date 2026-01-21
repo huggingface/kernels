@@ -29,39 +29,39 @@ jobs:
       - name: Nix info
         run: nix-shell -p nix-info --run "nix-info -m"
       - name: Build relu kernel
-        run: ( cd examples/relu && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
       - name: Copy relu kernel
-        run: cp -rL examples/relu/result relu-kernel
+        run: cp -rL builder/examples/relu/result relu-kernel
 
       - name: Build relu kernel (CPU)
-        run: ( cd examples/relu && nix build .\#redistributable.torch29-cxx11-cpu-x86_64-linux )
+        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cpu-x86_64-linux )
       - name: Copy relu kernel (CPU)
-        run: cp -rL examples/relu/result relu-kernel-cpu
+        run: cp -rL builder/examples/relu/result relu-kernel-cpu
 
       - name: Build cutlass GEMM kernel
-        run: ( cd examples/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
       - name: Copy cutlass GEMM kernel
-        run: cp -rL examples/cutlass-gemm/result cutlass-gemm-kernel
+        run: cp -rL builder/examples/cutlass-gemm/result cutlass-gemm-kernel
 
       - name: Build relu-backprop-compile kernel
-        run: ( cd examples/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
       - name: Copy relu-backprop-compile kernel
-        run: cp -rL examples/relu-backprop-compile/result relu-backprop-compile-kernel
+        run: cp -rL builder/examples/relu-backprop-compile/result relu-backprop-compile-kernel
 
       # Just test that we build with the extra torchVersions argument.
       - name: Build relu kernel (specific Torch version)
-        run: ( cd examples/relu-specific-torch && nix build . )
+        run: ( cd builder/examples/relu-specific-torch && nix build . )
 
       - name: Build relu kernel (compiler flags)
-        run: ( cd examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
 
       - name: Test that we can build a test shell (e.g. that gcc corresponds to CUDA-required)
-        run: ( cd examples/relu && nix build .#devShells.x86_64-linux.test )
+        run: ( cd builder/examples/relu && nix build .#devShells.x86_64-linux.test )
 
       - name: Build silu-and-mul kernel
-        run: ( cd examples/silu-and-mul && nix build .\#redistributable.torch-cuda )
+        run: ( cd builder/examples/silu-and-mul && nix build .\#redistributable.torch-cuda )
       - name: Copy silu-and-mul kernel
-        run: cp -rL examples/silu-and-mul/result silu-and-mul-kernel
+        run: cp -rL builder/examples/silu-and-mul/result silu-and-mul-kernel
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v6

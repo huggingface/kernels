@@ -2,7 +2,7 @@
   description = "Flake for ReLU metal cpp kernel";
 
   inputs = {
-    kernel-builder.url = "path:../..";
+    kernel-builder.url = "path:../../..";
   };
 
   outputs =

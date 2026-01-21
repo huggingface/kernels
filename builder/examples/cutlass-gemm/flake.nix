@@ -2,7 +2,7 @@
   description = "Flake for CUTLASS gemm test kernel";
 
   inputs = {
-    kernel-builder.url = "path:../..";
+    kernel-builder.url = "path:../../..";
   };
 
   outputs =

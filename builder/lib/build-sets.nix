@@ -7,7 +7,7 @@
 let
   inherit (nixpkgs) lib;
 
-  overlay = import ../overlay.nix;
+  overlay = import ../../nix/overlay.nix;
 
   inherit (import ./torch-version-utils.nix { inherit lib; })
     backend

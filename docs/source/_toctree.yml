@@ -15,7 +15,25 @@
       title: Environment Variables
     - local: faq
       title: FAQ
-  title: Usage Guide
+  title: Using kernels
+- sections:
+    - local: builder/writing-kernels
+      title: Writing Kernels
+    - local: builder/nix
+      title: Building Kernels with Nix
+    - local: builder/docker
+      title: Building Kernels with Docker
+    - local: builder/local-dev
+      title: Local Kernel Development
+    - local: builder/security
+      title: Kernel Security
+    - local: builder/security
+      title: Kernel Security
+    - local: builder/why-nix
+      title: Why Nix?
+    - local: building/metal
+      title: Metal Framework Notes
+  title: Building kernels
 - sections:
     - local: api/kernels
       title: Kernels

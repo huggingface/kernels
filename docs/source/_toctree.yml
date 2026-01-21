@@ -31,8 +31,10 @@
       title: Kernel Security
     - local: builder/why-nix
       title: Why Nix?
-    - local: building/metal
+    - local: builder/metal
       title: Metal Framework Notes
+    - local: builder/build-variants
+      title: Build Variants
   title: Building kernels
 - sections:
     - local: api/kernels

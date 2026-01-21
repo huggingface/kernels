@@ -27,12 +27,14 @@ one or more of the following variants:\n
 
 
 def json_to_markdown():
-    project_root = Path(__file__).parent.parent
+    project_root = Path(__file__).parent.parent.parent
 
-    with open(project_root / "build-variants.json", "r") as f:
+    with open(project_root / "builder" / "build-variants.json", "r") as f:
         data = json.load(f)
 
-    with open(project_root / "docs" / "build-variants.md", "w") as f:
+    with open(
+        project_root / "docs" / "source" / "builder" / "build-variants.md", "w"
+    ) as f:
         f.write(SPECIFIC_VARIANTS)
         for arch, platforms in data.items():
             for platform, variants in platforms.items():
@@ -43,7 +45,9 @@ def json_to_markdown():
 
                 f.write("\n")
         f.write(NOARCH_VARIANTS)
-        backends = { backend for platforms in data.values() for backend in platforms.keys() }
+        backends = {
+            backend for platforms in data.values() for backend in platforms.keys()
+        }
         for backend in sorted(backends):
             f.write(f"- `torch-{backend}`\n")
 

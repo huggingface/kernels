@@ -56,12 +56,4 @@ the Hub.
 
 ## 📚 Documentation
 
-- [Introduction](docs/source/index.md)
-- [Installation](docs/source/installation.md)
-- [Basic usage](docs/source/basic-usage.md)
-- [Using layers](docs/source/layers.md)
-- [Locking kernel/layer versions](docs/source/locking.md)
-- [Environment variables](docs/source/env.md)
-- [Kernel requirements](docs/source/kernel-requirements.md)
-- [Frequently Asked Questions](docs/source/faq.md)
-- [Writing kernels](https://github.com/huggingface/kernel-builder/blob/main/docs/writing-kernels.md) using [kernel-builder](https://github.com/huggingface/kernel-builder/)
+Read the [documentation of kernels and kernel-builder](https://huggingface.co/docs/kernels/).

@@ -17,21 +17,21 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Generate variants JSON
-        run: nix eval --raw .#lib.allBuildVariantsJSON | nix run nixpkgs#jq 'walk(if type == "array" then sort else . end)' > build-variants.json
+        run: nix eval --raw .#lib.allBuildVariantsJSON | nix run nixpkgs#jq 'walk(if type == "array" then sort else . end)' > builder/build-variants.json
       - name: Check if variants JSON is up-to-date
         run: |
-          if git diff --exit-code build-variants.json; then
+          if git diff --exit-code builder/build-variants.json; then
             echo "✅ variants.json is up-to-date"
           else
-            echo "🛑 regenerate variants.json: nix eval --raw .#lib.allBuildVariantsJSON | nix run nixpkgs#jq 'walk(if type == "array" then sort else . end)' > build-variants.json"
+            echo "🛑 regenerate variants.json: nix eval --raw .#lib.allBuildVariantsJSON | nix run nixpkgs#jq 'walk(if type == "array" then sort else . end)' > builder/build-variants.json"
             exit 1
           fi
       - name: Generate variants Markdown
         run: nix run nixpkgs#python3 builder/scripts/gen_variants_markdown.py
       - name: Check if variants Markdown is up-to-date
         run: |
-          if git diff --exit-code builder/docs/build-variants.md; then
-            echo "✅ docs/build-variants.md is up-to-date"
+          if git diff --exit-code docs/source/builder/build-variants.md; then
+            echo "✅ docs/source/buidler/build-variants.md is up-to-date"
           else
             echo "🛑 regenerate docs/build-variants: nix run nixpkgs#python3 builder/scripts/gen_variants_markdown.py"
             exit 1

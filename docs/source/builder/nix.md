@@ -109,15 +109,15 @@ the kernel's `flake.nix` to use the `pythonCheckInputs` option:
   description = "Flake for my kernel";
 
   inputs = {
-    kernel-builder.url = "github:huggingface/kernel-builder";
+    builder.url = "github:huggingface/kernels";
   };
 
   outputs =
     {
       self,
-      kernel-builder,
+      builder,
     }:
-    kernel-builder.lib.genFlakeOutputs {
+    builder.lib.genFlakeOutputs {
       inherit self;
       path = ./.;
 

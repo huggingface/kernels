@@ -27,8 +27,6 @@
       title: Local Kernel Development
     - local: builder/security
       title: Kernel Security
-    - local: builder/security
-      title: Kernel Security
     - local: builder/why-nix
       title: Why Nix?
     - local: builder/metal

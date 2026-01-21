@@ -1,0 +1,26 @@
+[project]
+name = "kernel-abi-check"
+requires-python = '>=3.8'
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+dynamic = [
+  'description',
+  'readme',
+  'version',
+]
+
+[build-system]
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+]
+
+[tool.maturin]
+module-name = "kernel_abi_check"
+bindings = 'pyo3'
+features = ["pyo3/extension-module"]

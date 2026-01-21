@@ -15,7 +15,12 @@ buildPythonPackage rec {
   };
 
   cargoDeps = rustPlatform.fetchCargoVendor {
-    inherit pname version src sourceRoot;
+    inherit
+      pname
+      version
+      src
+      sourceRoot
+      ;
     hash = "sha256-+1jdbKsDKmG+bf0NEVYMv8t7Meuge1z2cgYfbdB9q8A=";
   };
 
@@ -23,5 +28,8 @@ buildPythonPackage rec {
 
   pyproject = true;
 
-  nativeBuildInputs = with rustPlatform; [ cargoSetupHook maturinBuildHook ];
+  nativeBuildInputs = with rustPlatform; [
+    cargoSetupHook
+    maturinBuildHook
+  ];
 }

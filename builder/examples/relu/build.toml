@@ -1,0 +1,55 @@
+[general]
+name = "relu"
+backends = [
+    "cpu",
+    "cuda",
+    "metal",
+    "rocm",
+    "xpu",
+]
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.relu]
+backend = "cuda"
+depends = ["torch"]
+src = ["relu_cuda/relu.cu"]
+
+[kernel.relu_metal]
+backend = "metal"
+src = [
+  "relu_metal/relu.mm",
+  "relu_metal/relu.metal",
+  "relu_metal/common.h",
+]
+depends = [ "torch" ]
+
+[kernel.relu_rocm]
+backend = "rocm"
+rocm-archs = [
+    "gfx906",
+    "gfx908",
+    "gfx90a",
+    "gfx940",
+    "gfx941",
+    "gfx942",
+    "gfx1030",
+    "gfx1100",
+    "gfx1101",
+]
+depends = ["torch"]
+src = ["relu_cuda/relu.cu"]
+
+[kernel.relu_xpu]
+backend = "xpu"
+depends = ["torch"]
+src = ["relu_xpu/relu.cpp"]
+
+[kernel.relu_cpu]
+backend = "cpu"
+depends = ["torch"]
+src = ["relu_cpu/relu_cpu.cpp"]

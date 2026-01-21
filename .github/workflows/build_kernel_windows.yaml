@@ -1,0 +1,73 @@
+name: "Build and test kernel - Windows"
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ windows-2022 ]
+        python: [ 3.12 ]
+        torch: [
+#          { version: '2.9.1', cuda: '12.6.3', wheel: '126' },
+          { version: '2.9.1', cuda: '12.8.1', wheel: '128' },
+#          { version: '2.9.1', cuda: '13.0.1', wheel: '130' }
+        ]
+
+    name: Build kernel
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/cache@v5
+        with:
+          key: cuda-toolkit-v${{ matrix.cuda }}-${{ matrix.os }}
+          path: |
+            C:\Program Files\NVIDIA GPU Computing Toolkit
+            ~/.cargo/registry
+            ~/.cargo/git
+
+      - uses: actions/checkout@v6
+
+      # CUDA environment setup
+      - uses: Jimver/cuda-toolkit@v0.2.29
+        id: setup-cuda-toolkit
+        with:
+          cuda: ${{ matrix.torch.cuda }}  # TODO(mfuntowicz): How can we test multiple CUDA versions than align with torch?
+      - name: "NVCC checks"
+        run: nvcc -V
+
+      # Rust build environment setup
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Build build2cmake
+        run: ( cd build2cmake && cargo build --release )
+
+      # Python environment setup
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: 'pip'
+
+      - name: Install PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cu${{ matrix.torch.wheel }}
+
+      - name: Build cutlass GEMM kernel
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/cutlass-gemm -BuildConfig Release -Backend cuda -Build -Force )
+
+      - name: Build relu kernel
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/relu -BuildConfig Release -Backend cuda -Build -Force )
+
+      - name: Build relu-backprop-compile kernel
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/relu-backprop-compile -BuildConfig Release -Backend cuda -Build -Force  )
+
+      - name: Build silu-and-mul kernel
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/silu-and-mul -BuildConfig Release -Backend cuda -Build -Force)

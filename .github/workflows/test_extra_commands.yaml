@@ -1,0 +1,28 @@
+name: "Test kernel flake commands"
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            max-jobs = 4
+            cores = 12
+            sandbox-fallback = false
+      - uses: cachix/cachix-action@v14
+        with:
+          name: huggingface
+        env:
+          USER: runner
+      - name: Test nix run .#kernels
+        run: ( cd builder/examples/relu ; nix run .#kernels -- lock ../../tests/run-kernels )

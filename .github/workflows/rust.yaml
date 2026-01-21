@@ -1,0 +1,43 @@
+name: Rust
+
+on: [push, pull_request]
+
+jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Cargo fmt (kernel-abi-check)
+        run: |
+          ( cd kernel-abi-check/kernel-abi-check && cargo fmt --all -- --check )
+          ( cd kernel-abi-check/bindings/python && cargo fmt --all -- --check )
+      - name: Cargo fmt (build2cmake)
+        run: ( cd build2cmake && cargo fmt --all -- --check )
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Clippy (kernel-abi-check)
+        run: |
+          ( cd kernel-abi-check/kernel-abi-check && cargo clippy -- -D warnings )
+          ( cd kernel-abi-check/bindings/python && cargo clippy -- -D warnings )
+      - name: Clippy (build2cmake)
+        run: ( cd build2cmake && cargo clippy -- -D warnings )

@@ -1,0 +1,20 @@
+[project]
+name = "{{ name }}"
+version = "0.0.1"
+requires-python = ">= 3.9"
+dependencies = [
+  "torch>=2.8",
+  {{python_dependencies}}
+]
+
+[tool.setuptools]
+package-dir = { "" = "torch-ext" }
+
+[tool.setuptools.packages.find]
+where = ["torch-ext"]
+include = ["{{name}}*"]
+
+{% if data_globs %}
+[tool.setuptools.package-data]
+{{ name }} = [ {{ data_globs }} ]
+{% endif %}

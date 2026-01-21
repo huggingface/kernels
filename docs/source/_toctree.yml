@@ -20,17 +20,19 @@
     - local: builder/writing-kernels
       title: Writing Kernels
     - local: builder/nix
-      title: Building Kernels with Nix
+      title: Building with Nix
     - local: builder/docker
-      title: Building Kernels with Docker
+      title: Building with Docker
     - local: builder/local-dev
-      title: Local Kernel Development
+      title: Local Development
+    - local: kernel-requirements
+      title: Kernel Requirements
     - local: builder/security
-      title: Kernel Security
+      title: Security
     - local: builder/why-nix
       title: Why Nix?
     - local: builder/metal
-      title: Metal Framework Notes
+      title: Metal Notes
     - local: builder/build-variants
       title: Build Variants
   title: Building kernels
@@ -42,7 +44,3 @@
     - local: cli
       title: Kernels CLI
   title: API Reference
-- sections:
-    - local: kernel-requirements
-      title: Kernel Requirements
-  title: Developer Guide

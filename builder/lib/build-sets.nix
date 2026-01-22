@@ -1,5 +1,6 @@
 {
   nixpkgs,
+  rust-overlay,
   torchVersions,
 }:
 
@@ -24,7 +25,7 @@ let
     in
     builtins.map (buildConfig: buildConfig // { backend = backend buildConfig; }) systemBuildConfigs;
 
-  mkBuildSet = import ./mk-build-set.nix { inherit nixpkgs; };
+  mkBuildSet = import ./mk-build-set.nix { inherit nixpkgs rust-overlay; };
 
 in
 rec {

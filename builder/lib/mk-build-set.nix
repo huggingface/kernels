@@ -1,5 +1,6 @@
 {
   nixpkgs,
+  rust-overlay,
 }:
 
 let
@@ -102,6 +103,7 @@ let
     inherit config system;
     overlays = [
       overlay
+      rust-overlay.overlays.default
     ]
     ++ backendOverlay
     ++ [ (overlayForTorchVersion torchVersion sourceBuild) ];

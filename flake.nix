@@ -5,6 +5,10 @@
     flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     flake-compat.url = "github:edolstra/flake-compat";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -13,11 +17,12 @@
       flake-compat,
       flake-utils,
       nixpkgs,
+      rust-overlay,
     }:
     let
       inherit
         (import ./builder/lib/build-sets.nix {
-          inherit nixpkgs;
+          inherit nixpkgs rust-overlay;
           torchVersions = torchVersions';
         })
         mkBuildSets
@@ -114,11 +119,67 @@
         buildSets = defaultBuildSetsPerSystem.${system};
         buildSetsByBackend = (partitionBuildSetsBySystemBackend defaultBuildSets).${system};
         buildSet = builtins.head buildSetsByBackend.cuda;
+
+        # Dev shells per framework.
+        devShellByBackend = lib.mapAttrs (
+          backend: buildSet:
+          with (builtins.head buildSet).pkgs;
+          let
+            rust = rust-bin.stable.latest.default.override {
+              extensions = [
+                "rust-analyzer"
+                "rust-src"
+              ];
+            };
+          in
+          mkShell {
+            nativeBuildInputs = [
+              build2cmake
+              kernel-abi-check
+              nodejs # For hf-doc-builder.
+              pkg-config
+              rust
+            ];
+            buildInputs = [
+              black
+              mypy
+              pyright
+              ruff
+            ]
+            ++ (with python3.pkgs; [
+              docutils
+              huggingface-hub
+              kernel-abi-check
+              mktestdocs
+              openssl.dev
+              pytest
+              pytest-benchmark
+              pyyaml
+              torch
+              types-pyyaml
+              venvShellHook
+            ]);
+
+            RUST_SRC_PATH = "${rust}/lib/rustlib/src/rust/library";
+
+            venvDir = "./.venv";
+
+            postVenvCreation = ''
+              unset SOURCE_DATE_EPOCH
+              ( python -m pip install --no-build-isolation --no-dependencies -e kernels )
+            '';
+
+          }
+        ) buildSetsByBackend;
       in
       rec {
         checks.default = pkgs.callPackage ./builder/lib/checks.nix {
           inherit buildSets;
           build = defaultBuildPerSystem.${system};
+        };
+
+        devShells = devShellByBackend // {
+          default = devShellByBackend.${if system == "aarch64-darwin" then "metal" else "cuda"};
         };
 
         formatter = pkgs.nixfmt-tree;

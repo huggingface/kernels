@@ -1,0 +1,31 @@
+name: "Build and test kernel (macOS)"
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build kernel
+    runs-on: macos-26
+    steps:
+      - name: "Select Xcode"
+        run: sudo xcrun xcode-select -s /Applications/Xcode_26.0.app
+      - name: "Install Metal Toolchain"
+        run: xcodebuild -downloadComponent metalToolchain
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v15
+        with:
+          name: huggingface
+          #authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      # For now we only test that there are no regressions in building macOS
+      # kernels. Also run tests once we have a macOS runner.
+      - name: Build relu kernel
+        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-metal-aarch64-darwin -L )
+
+      - name: Build relu metal cpp kernel
+        run: ( cd builder/examples/relu-metal-cpp && nix build .\#redistributable.torch29-metal-aarch64-darwin -L )

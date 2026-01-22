@@ -4,9 +4,6 @@ Kernels on the Hub must fulfill the requirements outlined on this page. By
 ensuring kernels are compliant, they can be used on a wide range of Linux
 systems and Torch builds.
 
-You can use [kernel-builder](https://github.com/huggingface/kernel-builder/)
-to build compliant kernels.
-
 [Join us on Discord](https://discord.gg/H6Tkmd88N3) for questions and discussions
 about building kernels!
 
@@ -34,19 +31,66 @@ automatically created by `kernel-builder`.
 
 A kernel can be compliant for a specific compute framework (e.g. CUDA) or
 architecture (e.g. x86_64). For compliance with a compute framework and
-architecture combination, all the variants from the [build variant list](https://github.com/huggingface/kernel-builder/blob/main/docs/build-variants.md)
+architecture combination, all the variants from the [build variant list](builder/build-variants)
 must be available for that combination.
 
 ## Kernel metadata
 
 The build variant directory can optionally contain a `metadata.json` file.
-Currently the only purpose of the metadata is to specify the kernel python dependencies, for example:
+Currently the only purpose of the metadata is to specify the kernel Python dependencies.
+
+### Python dependencies
+
+You can specify Python dependencies that your kernel requires. Dependencies can be either general (required for all backends) or backend-specific (required only for certain compute backends like CUDA, ROCm, XPU, Metal, or CPU).
+
+#### General dependencies
+
+For dependencies required regardless of the backend, use the `python-depends` field:
 
 ```json
-{ "python-depends": ["nvidia-cutlass-dsl"] }
+{
+  "python-depends": ["einops"]
+}
 ```
 
-The following dependencies are the only ones allowed at this stage: `einops` and `nvidia-cutlass-dsl`
+#### Backend-specific dependencies
+
+For dependencies that are only needed for specific backends, use the `python-depends-backends` field:
+
+```json
+{
+  "python-depends-backends": {
+    "cuda": ["nvidia-cutlass-dsl"],
+    "xpu": ["onednn"]
+  }
+}
+```
+
+#### Combined example
+
+You can specify both general and backend-specific dependencies:
+
+```json
+{
+  "python-depends": ["einops"],
+  "python-depends-backends": {
+    "cuda": ["nvidia-cutlass-dsl"]
+  }
+}
+```
+
+#### Allowed dependencies
+
+The following dependencies are currently allowed:
+
+**General dependencies:**
+- `einops`
+
+**Backend-specific dependencies:**
+- CUDA: `nvidia-cutlass-dsl`
+- XPU: `onednn`
+
+Dependencies are validated based on the backend being used. When a kernel is loaded, only the dependencies relevant to the active backend are checked.
 
 ## Versioning
 
@@ -73,7 +117,8 @@ compliant way. This helps to ensure that the kernels are compatible with
 `torch.compile` without introducing any graph breaks and triggering
 recompilation which can limit the benefits of compilation.
 
-[Here](https://github.com/huggingface/kernel-builder/blob/d1ee9bf9301ac8c5199099d90ee1c9d5c789d5ba/examples/relu-backprop-compile/tests/test_relu.py#L162) is a simple test example which checks for graph breaks and
+[Here](https://github.com/huggingface/kernels/blob/f83b4da6b7f6b171b47bb9bf96271ae2273bc9d3/builder/examples/relu-backprop-compile/tests/test_relu.py#L162)
+is a simple test example which checks for graph breaks and
 recompilation triggers during `torch.compile`.
 
 ### Linux

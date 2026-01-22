@@ -1,0 +1,20 @@
+[general]
+name = "relu"
+backends = ["metal"]
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+
+[kernel.relu_metal]
+backend = "metal"
+src = [
+  "relu/relu.cpp",
+  "relu/metallib_loader.mm",
+  "relu/relu_cpp.metal",
+  "relu/common.h",
+]
+depends = [ "torch", "metal-cpp" ]

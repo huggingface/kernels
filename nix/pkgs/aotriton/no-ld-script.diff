@@ -1,0 +1,15 @@
+diff --git a/v2src/CMakeLists.txt b/v2src/CMakeLists.txt
+index 7cc1e3b..90c8d66 100644
+--- a/v2src/CMakeLists.txt
++++ b/v2src/CMakeLists.txt
+@@ -200,8 +200,8 @@ execute_process(
+   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_PARENT_DIR}"
+   COMMAND_ERROR_IS_FATAL ANY
+ )
+-target_link_options(aotriton_v2 PRIVATE
+-                    -T "${AOTRITON_V2_BUILD_DIR}/set_aotriton_version.ld")
++#target_link_options(aotriton_v2 PRIVATE
++#                    -T "${AOTRITON_V2_BUILD_DIR}/set_aotriton_version.ld")
+ 
+ include(GNUInstallDirs)
+ message("CMAKE_INSTALL_INCLUDEDIR ${CMAKE_INSTALL_INCLUDEDIR}")

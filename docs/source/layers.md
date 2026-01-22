@@ -366,3 +366,22 @@ with use_kernel_mapping(
 ):
     kernelize(linear, mode=Mode.INFERENCE)
 ```
+
+Similarly, the `LocalFuncRepository` class can be used to load a kernel
+function from a local directory:
+
+```python
+with use_kernel_mapping(
+    {
+        "silu_and_mul": {
+            "cuda": LocalFuncRepository(
+                repo_path="/home/daniel/kernels/activation",
+                package_name="activation",
+                func_name="silu_and_mul",
+            )
+        }
+    },
+    inherit_mapping=False,
+):
+    kernelize(model, mode=Mode.INFERENCE)
+```

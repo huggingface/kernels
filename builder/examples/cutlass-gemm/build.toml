@@ -1,0 +1,29 @@
+[general]
+name = "cutlass-gemm"
+backends = [
+    "cuda",
+    "xpu",
+]
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.gemm]
+backend = "cuda"
+depends = [
+    "torch",
+    "cutlass_3_6",
+]
+src = ["gemm.cu"]
+
+[kernel.gemm_xpu]
+backend = "xpu"
+depends = [
+    "torch",
+    "cutlass_sycl",
+]
+src = ["gemm_sycl.cpp"]
+

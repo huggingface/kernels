@@ -1,0 +1,39 @@
+name: Test Python bindings
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Run tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the project
+        run: ( cd kernel-abi-check/bindings/python && uv sync --all-extras --dev)
+
+      - name: Run tests
+        run: ( cd kernel-abi-check/bindings/python && uv run pytest tests )

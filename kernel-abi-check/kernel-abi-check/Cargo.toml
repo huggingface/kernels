@@ -1,0 +1,22 @@
+[package]
+name = "kernel-abi-check"
+version = "0.8.0-dev0"
+edition = "2021"
+description = "Check the ABI of Hub Kernels"
+homepage = "https://github.com/huggingface/kernel-builder"
+license = "Apache-2.0"
+documentation = "https://docs.rs/kernel-abi-check"
+repository = "https://github.com/huggingface/kernel-builder"
+
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+color-eyre = "0.6"
+eyre = "0.6"
+itertools = "0.14.0"
+object = "0.36.7"
+once_cell = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+

@@ -1,0 +1,88 @@
+diff --git a/v3src/flash/attn_bwd.cc b/v3src/flash/attn_bwd.cc
+index 9331dc9..f70367c 100644
+--- a/v3src/flash/attn_bwd.cc
++++ b/v3src/flash/attn_bwd.cc
+@@ -125,7 +125,7 @@ attn_bwd(const attn_bwd_params& in,
+     .CAUSAL_TYPE = in.causal_type,
+     .ENABLE_DROPOUT = in.dropout_p > 0.0,
+     .PADDED_HEAD = head_dim != head_dim_rounded,
+-    .BIAS_TYPE = bool(in.B) ? 1 : 0,
++    .BIAS_TYPE = static_cast<int8_t>(bool(in.B) ? 1 : 0),
+   };
+   OpAttnBwdContext context;
+   context.params = &params;
+diff --git a/v3src/flash/attn_bwd_fused.cc b/v3src/flash/attn_bwd_fused.cc
+index e46aa81..cbdcdba 100644
+--- a/v3src/flash/attn_bwd_fused.cc
++++ b/v3src/flash/attn_bwd_fused.cc
+@@ -116,11 +116,11 @@ _bwd_kernel_fuse(T4 q,
+     .philox_offset2 = static_cast<uint64_t>(philox_offset2),
+     .Window_left = WindowValue::TopLeftAligned,
+     .Window_right = WindowValue::TopLeftAligned,
+-    .BLOCK_DMODEL = head_size_rounded,
++    .BLOCK_DMODEL = static_cast<int16_t>(head_size_rounded),
+     .CAUSAL_TYPE = is_causal ? CausalType::WindowedAttention : CausalType::None,
+     .ENABLE_DROPOUT = dropout_p > 0.0,
+     .PADDED_HEAD = head_size_rounded != head_size,
+-    .BIAS_TYPE = bias_type,
++    .BIAS_TYPE = static_cast<int8_t>(bias_type),
+   };
+   BwdKernelFuseContext context;
+   context.params = &params;
+diff --git a/v3src/packed_kernel.cc b/v3src/packed_kernel.cc
+index 7e6c85f..241cd98 100644
+--- a/v3src/packed_kernel.cc
++++ b/v3src/packed_kernel.cc
+@@ -217,7 +217,7 @@ PackedKernel::filter(std::string_view stem_name) const {
+   }
+   return { kernel_start_ + meta->offset,
+            meta->image_size,
+-           meta->shared_memory,
++           static_cast<int>(meta->shared_memory),
+            dim3 { meta->number_of_threads, 1, 1 } };
+ }
+ 
+diff --git a/v2src/flash/attn_fwd.cc b/v2src/flash/attn_fwd.cc
+index 64c191f..2f98f47 100644
+--- a/v2src/flash/attn_fwd.cc
++++ b/v2src/flash/attn_fwd.cc
+@@ -61,7 +61,7 @@ _attn_fwd_common(T4 q,
+       dim3 grid {
+         nblocks,
+         uint32_t(params.Q->size(1)),
+-        params.Batch,
++        static_cast<uint32_t>(params.Batch),
+       };
+ #if AOTRITON_VERBOSE
+       std::cerr << "Grid conf " << grid.x << " " << grid.y << " " << grid.z << std::endl;
+@@ -74,7 +74,7 @@ _attn_fwd_common(T4 q,
+     int from_cu = params.Num_CU * params.GRID_CU_MULTIP;
+     int from_in = nblocks * params.Num_head_q * params.Batch;
+     dim3 grid {
+-      std::min(from_cu, from_in),
++      static_cast<uint32_t>(std::min(from_cu, from_in)),
+       1,
+       1,
+     };
+@@ -140,7 +140,7 @@ _attn_fwd_common(T4 q,
+     .USE_P_SCALE = false,
+     .persistent_atomic_counter = &persistent_atomic_counter,
+     .Num_CU = is_causal ? getMultiProcessorCount(stream) : 80,
+-    .Batch = num_seqlens == 0 ? q.size(0) : num_seqlens,
++    .Batch = num_seqlens == 0 ? static_cast<int32_t>(q.size(0)) : num_seqlens,
+   };
+ #if AOTRITON_BUILD_FOR_TUNING
+   if (extargs) {
+diff --git a/v2src/packed_kernel.cc b/v2src/packed_kernel.cc
+index 68be9cb..30a49e6 100644
+--- a/v2src/packed_kernel.cc
++++ b/v2src/packed_kernel.cc
+@@ -219,7 +219,7 @@ PackedKernel::filter(const char* stem_name) const {
+   }
+   return { kernel_start_ + meta->offset,
+            meta->image_size,
+-           meta->shared_memory,
++           static_cast<int>(meta->shared_memory),
+            dim3 { meta->number_of_threads, 1, 1 } };
+ }
+ 

@@ -1,0 +1,19 @@
+[package]
+name = "kernel-abi-check-python"
+version = "0.8.0-dev0"
+edition = "2024"
+description = "Check the ABI of Hub Kernels"
+homepage = "https://github.com/huggingface/kernel-builder"
+license = "Apache-2.0"
+repository = "https://github.com/huggingface/kernel-builder"
+
+[lib]
+name = "kernel_abi_check"
+crate-type = ["cdylib"]
+
+[dependencies]
+object = "0.36.7"
+pyo3 = { version = "0.26", features = ["abi3", "abi3-py38"] }
+
+[dependencies.kernel-abi-check]
+path = "../../kernel-abi-check"

@@ -1,0 +1,33 @@
+[general]
+name = "relu-backprop-compile"
+backends = [
+    "cuda",
+    "rocm",
+]
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.relu]
+backend = "cuda"
+depends = ["torch"]
+src = ["relu_cuda/relu.cu"]
+
+[kernel.relu_rocm]
+backend = "rocm"
+rocm-archs = [
+    "gfx906",
+    "gfx908",
+    "gfx90a",
+    "gfx940",
+    "gfx941",
+    "gfx942",
+    "gfx1030",
+    "gfx1100",
+    "gfx1101",
+]
+depends = ["torch"]
+src = ["relu_cuda/relu.cu"]

@@ -15,6 +15,17 @@
       nixpkgs,
     }:
     let
+      inherit
+        (import ./builder/lib/build-sets.nix {
+          inherit nixpkgs;
+          torchVersions = torchVersions';
+        })
+        mkBuildSets
+        partitionBuildSetsBySystem
+        partitionBuildSetsBySystemBackend
+        ;
+      inherit (import ./builder/lib/cache.nix) mkForCache;
+
       systems = with flake-utils.lib.system; [
         aarch64-darwin
         aarch64-linux
@@ -23,19 +34,8 @@
 
       torchVersions' = import ./builder/versions.nix;
 
-      # Create an attrset { "<system>" = [ <buildset> ...]; ... }.
-      mkBuildSetsPerSystem =
-        torchVersions:
-        builtins.listToAttrs (
-          builtins.map (system: {
-            name = system;
-            value = import ./builder/lib/build-sets.nix {
-              inherit nixpkgs system torchVersions;
-            };
-          }) systems
-        );
-
-      defaultBuildSetsPerSystem = mkBuildSetsPerSystem torchVersions';
+      defaultBuildSets = mkBuildSets systems;
+      defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
 
       mkBuildPerSystem =
         buildSetPerSystem:
@@ -81,7 +81,8 @@
             (builtins.isFunction torchVersions)
             || abort "`torchVersions` must be a function taking one argument (the default version set)";
           let
-            buildSetPerSystem = mkBuildSetsPerSystem (torchVersions torchVersions');
+            buildSets = mkBuildSets systems;
+            buildSetPerSystem = partitionBuildSetsBySystem buildSets;
             buildPerSystem = mkBuildPerSystem buildSetPerSystem;
           in
           flake-utils.lib.eachSystem systems (
@@ -111,7 +112,8 @@
         inherit (nixpkgs) lib;
 
         buildSets = defaultBuildSetsPerSystem.${system};
-
+        buildSetsByBackend = (partitionBuildSetsBySystemBackend defaultBuildSets).${system};
+        buildSet = builtins.head buildSetsByBackend.cuda;
       in
       rec {
         checks.default = pkgs.callPackage ./builder/lib/checks.nix {
@@ -121,68 +123,30 @@
 
         formatter = pkgs.nixfmt-tree;
 
-        packages =
-          let
-            # Dependencies that should be cached, the structure of the output
-            # path is: <build variant>/<dependency>-<output>
-            mkForCache =
-              buildSets:
-              let
-                filterDist = lib.filter (output: output != "dist");
-                # Get all outputs except for `dist` (which is the built wheel for Torch).
-                allOutputs =
-                  drv:
-                  map (output: {
-                    name = "${drv.pname or drv.name}-${output}";
-                    path = drv.${output};
-                  }) (filterDist drv.outputs or [ "out" ]);
-                buildSetOutputs =
-                  buildSet:
-                  with buildSet.pkgs;
-                  (
-                    allOutputs buildSet.torch
-                    ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
-                    ++ allOutputs build2cmake
-                    ++ allOutputs kernel-abi-check
-                    ++ allOutputs python3Packages.kernels
-                    ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)
-                  );
-                buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.torch.variant (buildSetOutputs buildSet);
-              in
-              pkgs.linkFarm "packages-for-cache" (
-                map (buildSet: {
-                  name = buildSet.torch.variant;
-                  path = buildSetLinkFarm buildSet;
-                }) buildSets
-              );
+        packages = rec {
+          inherit (buildSet.pkgs) build2cmake kernel-abi-check;
 
-          in
-          rec {
-            build2cmake = pkgs.callPackage ./nix/pkgs/build2cmake { };
+          update-build = pkgs.writeShellScriptBin "update-build" ''
+            ${build2cmake}/bin/build2cmake update-build ''${1:-build.toml}
+          '';
 
-            kernel-abi-check = pkgs.callPackage ./nix/pkgs/kernel-abi-check { };
+          forCache = mkForCache pkgs (
+            builtins.filter (buildSet: buildSet.buildConfig.bundleBuild or false) buildSets
+          );
 
-            update-build = pkgs.writeShellScriptBin "update-build" ''
-              ${build2cmake}/bin/build2cmake update-build ''${1:-build.toml}
-            '';
+          forCacheNonBundle = mkForCache (
+            builtins.filter (buildSet: !(buildSet.buildConfig.bundleBuild or false)) buildSets
+          );
 
-            forCache = mkForCache (
-              builtins.filter (buildSet: buildSet.buildConfig.bundleBuild or false) buildSets
-            );
+          # This package set is exposed so that we can prebuild the Torch versions.
+          torch = builtins.listToAttrs (
+            map (buildSet: {
+              name = buildSet.torch.variant;
+              value = buildSet.torch;
+            }) buildSets
+          );
 
-            forCacheNonBundle = mkForCache (
-              builtins.filter (buildSet: !(buildSet.buildConfig.bundleBuild or false)) buildSets
-            );
-
-            # This package set is exposed so that we can prebuild the Torch versions.
-            torch = builtins.listToAttrs (
-              map (buildSet: {
-                name = buildSet.torch.variant;
-                value = buildSet.torch;
-              }) buildSets
-            );
-
-          };
+        };
       }
     )
     // {

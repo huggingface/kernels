@@ -58,6 +58,7 @@ def use_kernel_mapping(
                 "cuda": LayerRepository(
                     repo_id="kernels-community/activation",
                     layer_name="SiluAndMul",
+                    version=1
                 )
             }
         }
@@ -126,9 +127,9 @@ def register_kernel_mapping(
         kernel_layer_mapping = {
             "LlamaRMSNorm": {
                 "cuda": LayerRepository(
-                    repo_id="kernels-community/activation",
-                    layer_name="RmsNorm",
-                    revision="layers",
+                    repo_id="kernels-community/layer_norm",
+                    layer_name="LlamaRMSNorm",
+                    version=1,
                 ),
             },
         }
@@ -140,11 +141,13 @@ def register_kernel_mapping(
                 "cuda": {
                     Mode.TRAINING: LayerRepository(
                         repo_id="username/training-kernels",
-                        layer_name="TrainingAttention"
+                        layer_name="TrainingAttention",
+                        version=1,
                     ),
                     Mode.INFERENCE: LayerRepository(
                         repo_id="username/inference-kernels",
-                        layer_name="FastAttention"
+                        layer_name="FastAttention",
+                        version=1,
                     ),
                 }
             }

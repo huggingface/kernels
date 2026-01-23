@@ -159,10 +159,12 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         ),
         "rocm": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         )
     }
 }
@@ -202,33 +204,6 @@ kernel_layer_mapping = {
 }
 ```
 
-### Using version bounds
-
-Kernels are versioned using tags of the form `v<major>.<minor>.<patch>`.
-You can specify which version of the kernel to download using Python version
-specifiers:
-
-```python
-kernel_layer_mapping = {
-    "SiluAndMul": {
-        "cuda": LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=">=0.0.4,<0.1.0",
-        ),
-        "rocm": LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=">=0.0.4,<0.1.0",
-        )
-    }
-}
-```
-
-This will get the layer from latest kernel tagged `v0.0.z` where `z` is at
-least 4. It is strongly recommended to specify a version bound, since a
-kernel author might push incompatible changes to the `main` branch.
-
 ### Registering kernels for specific modes
 
 You might want to register two different kernels for a particular layer,
@@ -242,10 +217,12 @@ kernel_layer_mapping = {
           Mode.INFERENCE: LayerRepository(
               repo_id="kernels-community/activation-inference-optimized",
               layer_name="SiluAndMul",
+              version=1,
           ),
           Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
               repo_id="kernels-community/activation-training-optimized",
               layer_name="SiluAndMul",
+              version=1,
           ),
       }
     }
@@ -273,14 +250,17 @@ kernel_layer_mapping = {
             Mode.FALLBACK: LayerRepository(
                 repo_id="kernels-community/activation",
                 layer_name="SiluAndMul",
+                version=1,
             ),
             Mode.INFERENCE: LayerRepository(
                 repo_id="kernels-community/activation-inference-optimized",
                 layer_name="SiluAndMul",
+                version=1,
             ),
             Mode.TRAINING: LayerRepository(
                 repo_id="kernels-community/activation-training-optimized",
                 layer_name="SiluAndMul",
+                version=1,
             ),
         }
     }
@@ -310,6 +290,7 @@ kernel_layer_mapping = {
         ): LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         ),
         Device(
             type="cuda",
@@ -319,6 +300,7 @@ kernel_layer_mapping = {
         ): LayerRepository(
             repo_id="kernels-community/activation-hopper",
             layer_name="SiluAndMul",
+            version=1,
         ),
     }
 }

@@ -56,7 +56,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRef
     else:
         warnings.warn(
             """Version specifiers are deprecated, support will be removed in a future `kernels` version.
-            "For more information on migrating to versions, see: https://huggingface.co/docs/kernels/migration"""
+            For more information on migrating to versions, see: https://huggingface.co/docs/kernels/migration"""
         )
         versions_old = _get_available_versions_old(repo_id)
         requirement = SpecifierSet(version_spec)

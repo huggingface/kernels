@@ -84,6 +84,18 @@ def main():
         action="store_true",
         help="If the repository should be private.",
     )
+    # by default dont include benchmarks, but enable with flag or
+    # only upload benchmarks with separate flag
+    upload_parser.add_argument(
+        "--benchmarks",
+        action="store_true",
+        help="If set, upload both benchmarks and build variants (default).",
+    )
+    upload_parser.add_argument(
+        "--benchmarks-only",
+        action="store_true",
+        help="If set, only upload the benchmarks directory.",
+    )
     upload_parser.set_defaults(func=upload_kernels)
 
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
@@ -211,6 +223,8 @@ def upload_kernels(args):
         repo_id=args.repo_id,
         branch=args.branch,
         private=args.private,
+        benchmarks=args.benchmarks,
+        benchmarks_only=args.benchmarks_only,
     )
 
 

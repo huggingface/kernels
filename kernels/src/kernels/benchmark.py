@@ -452,16 +452,16 @@ def collect_machine_info() -> MachineInfo:
     )
 
 
-def get_kernel_sha_from_ops(kernel: Any) -> str:
-    ops_name = kernel.ops.__name__
-    # Format is torch.ops._<name>_<sha>, extract the last part after underscore
+def get_kernel_sha_from_build_name(kernel: Any) -> str:
+    ops_name = kernel.__name__
+    # Format is <name>_<sha>, extract the last part after underscore
     sha = ops_name.rsplit("_", 1)[-1]
     return sha
 
 
 def _synchronize() -> None:
     if torch.cuda.is_available():
-        _synchronize()
+        torch.cuda.synchronize()
     elif hasattr(torch, "xpu") and torch.xpu.is_available():
         torch.xpu.synchronize()
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -491,7 +491,7 @@ def run_benchmark_class(
     from kernels import get_kernel
 
     kernel = get_kernel(repo_id, revision=revision)
-    kernel_sha = get_kernel_sha_from_ops(kernel)
+    kernel_sha = get_kernel_sha_from_build_name(kernel)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")

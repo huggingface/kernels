@@ -7,9 +7,38 @@ from kernels.variants import BUILD_VARIANT_REGEX
 
 
 def upload_kernels_dir(
-    kernel_dir: Path, *, repo_id: str, branch: str | None, private: bool
+    kernel_dir: Path,
+    *,
+    repo_id: str,
+    branch: str | None,
+    private: bool,
+    benchmarks: bool = False,
+    benchmarks_only: bool = False,
 ):
     kernel_dir = Path(kernel_dir).resolve()
+
+    repo_id = create_repo(repo_id=repo_id, private=private, exist_ok=True).repo_id
+
+    if branch is not None:
+        create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
+
+    # benchmarks directory upload (doesn't require build variants)
+    if benchmarks or benchmarks_only:
+        upload_folder(
+            repo_id=repo_id,
+            folder_path=kernel_dir / "benchmarks",
+            revision=branch,
+            path_in_repo="benchmarks",
+            delete_patterns=["benchmark*.py"],
+            commit_message="Benchmarks uploaded using `kernels`.",
+            allow_patterns=["benchmark*.py"],
+        )
+
+    if benchmarks_only:
+        print(
+            f"✅ Benchmarks upload successful. Find the kernel in: https://hf.co/{repo_id}"
+        )
+        return  # Exit if only benchmarks are to be uploaded
 
     build_dir = None
     variants = None
@@ -43,11 +72,7 @@ def upload_kernels_dir(
         version = versions.pop()
         if version is not None:
             branch = f"v{version}"
-
-    repo_id = create_repo(repo_id=repo_id, private=private, exist_ok=True).repo_id
-
-    if branch is not None:
-        create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
+            create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
 
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():

@@ -1,62 +1,4 @@
 {
-  "2.8": {
-    "x86_64-linux": {
-      "cu126": {
-        "url": "https://download.pytorch.org/whl/cu126/torch-2.8.0%2Bcu126-cp313-cp313-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-0IFEAR5BC50VkU5yVuGxcIqQSEyywDcSGZ4CkYVtQXc=",
-        "version": "2.8.0"
-      },
-      "cu128": {
-        "url": "https://download.pytorch.org/whl/cu128/torch-2.8.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-OoUjaaON7DQ9RezQvDZg95uIoj4Mh40YcH98E79JU48=",
-        "version": "2.8.0"
-      },
-      "cu129": {
-        "url": "https://download.pytorch.org/whl/cu129/torch-2.8.0%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-VjdAFnviGJtxUwtQPwyKjXqCZ91J1N5vnF8dI/viN98=",
-        "version": "2.8.0"
-      },
-      "rocm63": {
-        "url": "https://download.pytorch.org/whl/rocm6.3/torch-2.8.0%2Brocm6.3-cp313-cp313-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-LNqsVUXWbxEDCRSuA8hdFh8ksUBTtn9JUAqPUmOO8QQ=",
-        "version": "2.8.0"
-      },
-      "rocm64": {
-        "url": "https://download.pytorch.org/whl/rocm6.4/torch-2.8.0%2Brocm6.4-cp313-cp313-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-Ji6+rGkF34AZafttvcCFx1whxWCdyDVzNOwLCiQuUOs=",
-        "version": "2.8.0"
-      },
-      "cpu": {
-        "url": "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-j4He20xgduwyWsw7R1JfnFUOUoShjq4dkGHFQ/e2594=",
-        "version": "2.8.0"
-      },
-      "xpu": {
-        "url": "https://download.pytorch.org/whl/xpu/torch-2.8.0%2Bxpu-cp313-cp313-linux_x86_64.whl",
-        "hash": "sha256-ZZkiWk6DcU2MM7a/3q+9hTiQJ9KScGNbtzhdYiFL7p4=",
-        "version": "2.8.0"
-      }
-    },
-    "aarch64-linux": {
-      "cu129": {
-        "url": "https://download.pytorch.org/whl/cu129/torch-2.8.0%2Bcu129-cp313-cp313-manylinux_2_28_aarch64.whl",
-        "hash": "sha256-rS1kMWY156sG9slzolJSbVmpKiBFglwQL4dpFKcjBNA=",
-        "version": "2.8.0"
-      },
-      "cpu": {
-        "url": "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl",
-        "hash": "sha256-pQZLXiN3LI0WQGjMfBLgGnX697lI7NlaDUAH10h+XyU=",
-        "version": "2.8.0"
-      }
-    },
-    "aarch64-darwin": {
-      "cpu": {
-        "url": "https://download.pytorch.org/whl/cpu/torch-2.8.0-cp313-none-macosx_11_0_arm64.whl",
-        "hash": "sha256-BX79MKZ3jS7l4jdM1jpj9jMRqm8zMh5ifGVd9gq905A=",
-        "version": "2.8.0"
-      }
-    }
-  },
   "2.9": {
     "x86_64-linux": {
       "cu126": {
@@ -128,61 +70,61 @@
   "2.10": {
     "x86_64-linux": {
       "cu126": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcu126-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/cu126/torch-2.10.0%2Bcu126-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-hWgFIlNTSr4ns6xW0wH2nTXvXOFkeeaj14CPsFIxCRk=",
         "version": "2.10.0"
       },
       "cu128": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-e0vSPtY96XRW/MgcJv6p8C7gLOERIRHE2sDYz+V0sj4=",
         "version": "2.10.0"
       },
       "cu130": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-fg2ZIunpH3gLJ2GgxeusPBXJdAurBC4bWRSa+m1kdOs=",
         "version": "2.10.0"
       },
       "rocm70": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Brocm7.0-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/rocm7.0/torch-2.10.0%2Brocm7.0-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-s1YZho9ffiVeKpwQCR+fSGPzkvVO00cjX2UTe9rfl9k=",
         "version": "2.10.0"
       },
       "rocm71": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Brocm7.1-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/rocm7.1/torch-2.10.0%2Brocm7.1-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-PxiwbyM9SHG6qv24umYq5p/5HsEaob92ynbd4xtD6c0=",
         "version": "2.10.0"
       },
       "cpu": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/cpu/torch-2.10.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-jTFuW/Eh8eqxFH5JrQURqdkuTEXMNX0asL7kQNpxoJU=",
         "version": "2.10.0"
       },
       "xpu": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bxpu-cp313-cp313-linux_x86_64.whl",
+        "url": "https://download.pytorch.org/whl/xpu/torch-2.10.0%2Bxpu-cp313-cp313-linux_x86_64.whl",
         "hash": "sha256-O8ZKdG/yWpPeFAkCxgyegZ10E/XOoeiNgJmcJ6WQHpw=",
         "version": "2.10.0"
       }
     },
     "aarch64-linux": {
       "cu126": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcu126-cp313-cp313-manylinux_2_28_aarch64.whl",
+        "url": "https://download.pytorch.org/whl/cu126/torch-2.10.0%2Bcu126-cp313-cp313-manylinux_2_28_aarch64.whl",
         "hash": "sha256-n/vyQLwZOEG6CnmXZRCqnsFMlaV2mSV7WBvHgjFrWS8=",
         "version": "2.10.0"
       },
       "cu128": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_aarch64.whl",
+        "url": "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_aarch64.whl",
         "hash": "sha256-vbzHAzgvlI6VHAY0SMlAa/OM5mxB3WmNnicz/PlsA3o=",
         "version": "2.10.0"
       },
       "cpu": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl",
+        "url": "https://download.pytorch.org/whl/cpu/torch-2.10.0%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl",
         "hash": "sha256-5RmUSSzbdu3OKdqI3jZyowIvnvD/2QNFQ2lI1Jkr4sc=",
         "version": "2.10.0"
       }
     },
     "aarch64-darwin": {
       "cpu": {
-        "url": "https://huggingface.co/danieldk/pytorch-rc/resolve/main/rc7/torch-2.10.0-cp313-none-macosx_11_0_arm64.whl",
+        "url": "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp313-none-macosx_11_0_arm64.whl",
         "hash": "sha256-hANR2lnO23vLxRmBiABQgTwZ72uJin/s9zo6/HGv8/4=",
         "version": "2.10.0"
       }

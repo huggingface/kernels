@@ -52,7 +52,7 @@ let
     if cudaSupport then
       triton-cuda
     else if xpuSupport then
-      python.pkgs.triton-xpu_2_8
+      python.pkgs.triton-xpu_2_9
     else
       triton;
 

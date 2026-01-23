@@ -88,11 +88,11 @@ class Benchmark:
 
     seed: int | None = None  # Optional: seed for reproducibility
 
-    def __init__(self):
-        self.kernel = None
+    def __init__(self) -> None:
+        self.kernel: Any = None
         self.out: Any = None  # Output tensor, set by setup methods
 
-    def setup(self):
+    def setup(self) -> None:
         """Override to set up tensors as instance attributes."""
         pass
 

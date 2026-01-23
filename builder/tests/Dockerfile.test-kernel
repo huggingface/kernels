@@ -67,9 +67,9 @@ COPY relu-kernel ./relu-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
-COPY examples/relu/tests ./relu_tests
-COPY examples/cutlass-gemm/tests ./cutlass_gemm_tests
+COPY builder/examples/relu/tests ./relu_tests
+COPY builder/examples/cutlass-gemm/tests ./cutlass_gemm_tests
 
 # Run tests
-ADD tests/run-tests.sh ./run-tests.sh
+ADD builder/tests/run-tests.sh ./run-tests.sh
 CMD ["sh", "run-tests.sh"]

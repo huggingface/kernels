@@ -31,7 +31,7 @@ jobs:
       # For now we only test that there are no regressions in building ROCm
       # kernels. Also run tests once we have a ROCm runner.
       - name: Build relu kernel
-        run: ( cd buidler/examples/relu && nix build .\#redistributable.torch29-cxx11-rocm63-x86_64-linux -L )
+        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-rocm63-x86_64-linux -L )
 
       - name: Build relu kernel (compiler flags)
         run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-rocm63-x86_64-linux )

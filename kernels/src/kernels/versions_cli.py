@@ -16,7 +16,7 @@ def print_kernel_versions(repo_id: str):
         print(f"Repository does not support kernel versions: {repo_id}")
         return
 
-    for version, ref in _get_available_versions(repo_id).items():
+    for version, ref in versions:
         print(f"Version {version}: ", end="")
         variants = [
             f"{variant} ✅" if variant in compatible_variants else f"{variant}"

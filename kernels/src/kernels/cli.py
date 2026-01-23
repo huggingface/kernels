@@ -84,13 +84,6 @@ def main():
         action="store_true",
         help="If the repository should be private.",
     )
-    # by default dont include benchmarks, but enable with flag or
-    # only upload benchmarks with separate flag
-    upload_parser.add_argument(
-        "--benchmarks",
-        action="store_true",
-        help="If set, upload both benchmarks and build variants (default).",
-    )
     upload_parser.add_argument(
         "--benchmarks-only",
         action="store_true",
@@ -138,10 +131,10 @@ def main():
         help="Kernel repo ID (e.g., kernels-community/activation)",
     )
     benchmark_parser.add_argument(
-        "--revision",
-        type=str,
-        default="main",
-        help="Kernel revision (default: main)",
+        "--branch", type=str, help="Kernel branch to benchmark"
+    )
+    benchmark_parser.add_argument(
+        "--version", type=int, help="Kernel version to benchmark"
     )
     benchmark_parser.add_argument(
         "--output",
@@ -223,7 +216,6 @@ def upload_kernels(args):
         repo_id=args.repo_id,
         branch=args.branch,
         private=args.private,
-        benchmarks=args.benchmarks,
         benchmarks_only=args.benchmarks_only,
     )
 
@@ -261,7 +253,8 @@ def run_benchmark(args):
 
     benchmark.run_benchmark(
         repo_id=args.repo_id,
-        revision=args.revision,
+        branch=args.branch,
+        version=args.version,
         iterations=args.iterations,
         warmup=args.warmup,
         output=args.output,

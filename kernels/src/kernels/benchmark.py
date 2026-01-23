@@ -689,8 +689,8 @@ def submit_benchmark(
 
 def run_benchmark(
     repo_id: str,
-    # TODO: change default to 1 in the future
-    revision: str = "main",
+    branch: str | None,
+    version: int | None,
     iterations: int = 100,
     warmup: int = 10,
     upload: bool = False,
@@ -707,6 +707,27 @@ def run_benchmark(
 
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
+
+    # Requires either branch or version or parses from repo_id
+    if branch is None and version is None:
+        if "@" not in repo_id:
+            print("Error: must specify either branch or version", file=sys.stderr)
+            sys.exit(1)
+
+        # Parse from repo_id
+        repo_id, rev = repo_id.split("@", 1)
+
+        if rev.startswith("v") and rev[1:].isdigit():
+            version = int(rev[1:])
+        elif rev.isdigit():
+            print("Error: version must be prefixed with 'v'", file=sys.stderr)
+            sys.exit(1)
+        else:
+            branch = rev
+
+    # Move version or branch into revision
+    revision = f"v{version}" if version is not None else branch
+    assert revision is not None  # Guaranteed by parsing logic above
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
     repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))

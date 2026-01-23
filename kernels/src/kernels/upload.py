@@ -12,8 +12,7 @@ def upload_kernels_dir(
     repo_id: str,
     branch: str | None,
     private: bool,
-    benchmarks: bool = False,
-    benchmarks_only: bool = False,
+    benchmarks_only: bool,
 ):
     kernel_dir = Path(kernel_dir).resolve()
 
@@ -22,8 +21,17 @@ def upload_kernels_dir(
     if branch is not None:
         create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
 
-    # benchmarks directory upload (doesn't require build variants)
-    if benchmarks or benchmarks_only:
+    # if uploading benchmarks read the version from build.toml
+    # as to not depend on build variants
+    if benchmarks_only:
+        metadata = Metadata.load_from_build_toml(kernel_dir / "build.toml")
+        if metadata.version is None:
+            raise ValueError(
+                f"Cannot upload benchmarks only without a version specified in build.toml at: {(kernel_dir / 'build.toml').absolute()}"
+            )
+
+        branch = f"v{metadata.version}"
+
         upload_folder(
             repo_id=repo_id,
             folder_path=kernel_dir / "benchmarks",
@@ -34,7 +42,6 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    if benchmarks_only:
         print(
             f"✅ Benchmarks upload successful. Find the kernel in: https://hf.co/{repo_id}"
         )
@@ -79,6 +86,17 @@ def upload_kernels_dir(
         if build_variant.is_dir():
             delete_patterns.add(f"{build_variant.name}/**")
 
+    # in the case we have variants, upload to the same as the kernel_dir
+    upload_folder(
+        repo_id=repo_id,
+        folder_path=kernel_dir / "benchmarks",
+        revision=branch,
+        path_in_repo="benchmarks",
+        delete_patterns=["benchmark*.py"],
+        commit_message="Benchmarks uploaded using `kernels`.",
+        allow_patterns=["benchmark*.py"],
+    )
+
     upload_folder(
         repo_id=repo_id,
         folder_path=build_dir,
@@ -88,4 +106,6 @@ def upload_kernels_dir(
         commit_message="Build uploaded using `kernels`.",
         allow_patterns=["torch*"],
     )
-    print(f"✅ Kernel upload successful. Find the kernel in: https://hf.co/{repo_id}")
+    print(
+        f"✅ Kernel and benchmarks upload successful. Find the kernel in: https://hf.co/{repo_id}"
+    )

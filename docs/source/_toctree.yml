@@ -17,7 +17,6 @@
       title: FAQ
     - local: migration
       title: Migrating from older versions
-  title: Usage Guide
   title: Using kernels
 - sections:
     - local: builder/writing-kernels

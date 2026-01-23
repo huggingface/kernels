@@ -190,6 +190,7 @@
 
         packages = rec {
           inherit (buildSet.pkgs) build2cmake kernel-abi-check;
+          inherit (buildSet.pkgs.python3.pkgs) kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
             ${build2cmake}/bin/build2cmake update-build ''${1:-build.toml}
@@ -210,7 +211,6 @@
               value = buildSet.torch;
             }) buildSets
           );
-
         };
       }
     )

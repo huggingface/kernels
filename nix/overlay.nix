@@ -104,11 +104,6 @@ in
           }
         );
 
-        torch-bin_2_8 = mkTorch {
-          version = "2.8";
-          xpuPackages = final.xpuPackages_2025_1;
-        };
-
         torch-bin_2_9 = mkTorch {
           version = "2.9";
           xpuPackages = final.xpuPackages_2025_2;
@@ -117,11 +112,6 @@ in
         torch-bin_2_10 = mkTorch {
           version = "2.10";
           xpuPackages = final.xpuPackages_2025_3;
-        };
-
-        triton-xpu_2_8 = callPackage ./pkgs/python-modules/triton-xpu {
-          torchVersion = "2.8";
-          xpuPackages = final.xpuPackages_2025_1;
         };
 
         triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {

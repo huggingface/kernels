@@ -30,7 +30,7 @@ import torch
 from kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
-activation = get_kernel("kernels-community/activation")
+activation = get_kernel("kernels-community/activation", version=1)
 
 # Random tensor
 x = torch.randn((10, 10), dtype=torch.float16, device="cuda")

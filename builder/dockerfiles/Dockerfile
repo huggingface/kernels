@@ -58,7 +58,7 @@ function ensure_flake_exists {
     kernel-builder.url = "github:huggingface/kernel-builder";
   };
   outputs = { self, kernel-builder, }:
-    kernel-builder.lib.genFlakeOutputs {
+    kernel-builder.lib.genKernelFlakeOutputs {
       inherit self;
       path = ./.;
     };

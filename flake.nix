@@ -55,7 +55,7 @@
       # - Per-system build functions.
       # - `genFlakeOutputs`, which can be used by downstream flakes to make
       #   standardized outputs (for all supported systems).
-      lib = {
+      lib = rec {
         allBuildVariantsJSON =
           let
             buildVariants =
@@ -65,7 +65,11 @@
                 torchVersions';
           in
           builtins.toJSON buildVariants;
-        genFlakeOutputs =
+        genFlakeOutputs = builtins.warn ''
+          `genFlakeOutputs` was renamed to `genKernelFlakeOutputs` and will be removed
+          in kernel-builder 0.14.
+        '' genKernelFlakeOutputs;
+        genKernelFlakeOutputs =
           {
             path,
             rev ? null,

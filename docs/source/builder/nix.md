@@ -117,7 +117,7 @@ the kernel's `flake.nix` to use the `pythonCheckInputs` option:
       self,
       builder,
     }:
-    builder.lib.genFlakeOutputs {
+    builder.lib.genKernelFlakeOutputs {
       inherit self;
       path = ./.;
 
@@ -137,7 +137,7 @@ the Nix shells, not the final kernel uploaded to the Hub.
 `kernel-builder` verifies that a kernel can be
 imported with the [`kernels`](https://github.com/huggingface/kernels)
 package. This check can be disabled by passing `doGetKernelCheck = false`
-to `genFlakeOutputs`. **Warning:** it is strongly recommended to keep
+to `genKernelFlakeOutputs`. **Warning:** it is strongly recommended to keep
 this check enabled, as it is one of the checks that validates that a kernel
 is compliant. This option is primarily intended for kernels with
 `triton.autotune` decorators, which can fail because there is no GPU available

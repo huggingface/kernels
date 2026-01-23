@@ -81,16 +81,7 @@ in
 
         kernel-abi-check = callPackage ./pkgs/python-modules/kernel-abi-check { };
 
-        kernels = python-super.kernels.overrideAttrs (oldAttrs: rec {
-          version = "0.11.6";
-
-          src = final.fetchFromGitHub {
-            owner = "huggingface";
-            repo = "kernels";
-            rev = "ff4de4eafdfe5c2346b252cf09c6c412e13f3135";
-            hash = "sha256-hn9PZsGnd2BsBejjDQXVKye8abnS5K9jWga7YVkvXOg=";
-          };
-        });
+        kernels = callPackage ./pkgs/python-modules/kernels { };
 
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 

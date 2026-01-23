@@ -34,5 +34,5 @@ def _get_build_variants(api: HfApi, repo_id: str, revision: str) -> list[str]:
 
         match = BUILD_VARIANT_REGEX.match(path.parts[1])
         if match:
-            variants.add(match.group(1))
+            variants.add(path.parts[1])
     return sorted(variants)

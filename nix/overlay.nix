@@ -81,16 +81,7 @@ in
 
         kernel-abi-check = callPackage ./pkgs/python-modules/kernel-abi-check { };
 
-        kernels = python-super.kernels.overrideAttrs (oldAttrs: rec {
-          version = "0.11.6";
-
-          src = final.fetchFromGitHub {
-            owner = "huggingface";
-            repo = "kernels";
-            rev = "ff4de4eafdfe5c2346b252cf09c6c412e13f3135";
-            hash = "sha256-hn9PZsGnd2BsBejjDQXVKye8abnS5K9jWga7YVkvXOg=";
-          };
-        });
+        kernels = callPackage ./pkgs/python-modules/kernels { };
 
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
@@ -104,11 +95,6 @@ in
           }
         );
 
-        torch-bin_2_8 = mkTorch {
-          version = "2.8";
-          xpuPackages = final.xpuPackages_2025_1;
-        };
-
         torch-bin_2_9 = mkTorch {
           version = "2.9";
           xpuPackages = final.xpuPackages_2025_2;
@@ -117,11 +103,6 @@ in
         torch-bin_2_10 = mkTorch {
           version = "2.10";
           xpuPackages = final.xpuPackages_2025_3;
-        };
-
-        triton-xpu_2_8 = callPackage ./pkgs/python-modules/triton-xpu {
-          torchVersion = "2.8";
-          xpuPackages = final.xpuPackages_2025_1;
         };
 
         triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {

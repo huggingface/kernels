@@ -18,7 +18,7 @@
 
 let
   supportedFormat = ''
-    kernel-builder.lib.genFlakeOutputs {
+    kernel-builder.lib.genKernelFlakeOutputs {
       inherit self;
       path = ./.;
     };
@@ -30,9 +30,9 @@ let
         This will not be supported in the future.
       '' self.lastModifiedDate)
     else if rev != null then
-      builtins.warn "`rev` argument of `genFlakeOutputs` is deprecated, pass `self` as follows:\n\n${supportedFormat}" rev
+      builtins.warn "`rev` argument of `genKernelFlakeOutputs` is deprecated, pass `self` as follows:\n\n${supportedFormat}" rev
     else
-      throw "Flake's `self` must be passed to `genFlakeOutputs` as follows:\n\n${supportedFormat}";
+      throw "Flake's `self` must be passed to `genKernelFlakeOutputs` as follows:\n\n${supportedFormat}";
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
 

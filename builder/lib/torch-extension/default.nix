@@ -31,7 +31,7 @@ let
   );
 
   cuda_nvcc = cudaPackages.cuda_nvcc.override {
-    backendStdenv = import ../../pkgs/cuda/backendStdenv {
+    backendStdenv = import ../../../nix/pkgs/cuda/backendStdenv {
       inherit (pkgs)
         _cuda
         config

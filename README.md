@@ -23,9 +23,15 @@ packages in that they are made to be:
   the different PyTorch build configurations (various CUDA versions
   and C++ ABIs). Furthermore, older C library versions must be supported.
 
+## Components
+
+- You can load kernels from the Hub using the [`kernels`](kernels/) Python package.
+- If you are a kernel author, you can build your kernels with [kernel-builder](builder/).
+- Hugging Face maintains a set of kernels in [kernels-community](https://huggingface.co/kernels-community).
+
 ## 🚀 Quick Start
 
-Install the `kernels` package with `pip` (requires `torch>=2.5` and CUDA):
+Install the `kernels` Python package with `pip` (requires `torch>=2.5` and CUDA):
 
 ```bash
 pip install kernels
@@ -39,7 +45,7 @@ import torch
 from kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
-activation = get_kernel("kernels-community/activation")
+activation = get_kernel("kernels-community/activation", version=1)
 
 # Random tensor
 x = torch.randn((10, 10), dtype=torch.float16, device="cuda")

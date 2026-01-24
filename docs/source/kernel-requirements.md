@@ -37,7 +37,14 @@ must be available for that combination.
 ## Kernel metadata
 
 The build variant directory can optionally contain a `metadata.json` file.
-Currently the only purpose of the metadata is to specify the kernel Python dependencies.
+Currently the metadata specifies the kernel's version and Python dependencies,
+for example:
+
+```json
+{
+  "python-depends": ["einops"],
+  "version": 1
+```
 
 ### Python dependencies
 
@@ -75,7 +82,8 @@ You can specify both general and backend-specific dependencies:
   "python-depends": ["einops"],
   "python-depends-backends": {
     "cuda": ["nvidia-cutlass-dsl"]
-  }
+  },
+  "version": 1
 }
 ```
 
@@ -84,9 +92,11 @@ You can specify both general and backend-specific dependencies:
 The following dependencies are currently allowed:
 
 **General dependencies:**
+
 - `einops`
 
 **Backend-specific dependencies:**
+
 - CUDA: `nvidia-cutlass-dsl`
 - XPU: `onednn`
 
@@ -94,11 +104,19 @@ Dependencies are validated based on the backend being used. When a kernel is loa
 
 ## Versioning
 
-Kernels are versioned on the Hub using Git tags. Version tags must be of
-the form `v<major>.<minor>.<patch>`. Versions are used by [locking](./locking.md)
-to resolve the version constraints.
+Kernels are versioned using a major version. The kernel revisions of a
+version are stored in a branch of the form `v<version>`. Each build
+variant will also have the kernel version in `metadata.json`.
 
-We recommend using [semver](https://semver.org/) to version kernels.
+The version **must** be bumped in the following cases:
+
+- The kernel API is changed in an incompatible way.
+- The API is extended in a compatible way, but not all build variants
+  receive the extension (e.g. because they are for older Torch versions
+  that are not supported by `kernel-builder` anymore).
+
+In both cases, build variants that are not updated must be removed from
+the new version's branch.
 
 ## Native Python module
 

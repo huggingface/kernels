@@ -10,7 +10,7 @@ requires = ["kernels", "setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.kernels.dependencies]
-"kernels-community/activation" = ">=0.0.1"
+"kernels-community/activation" = 1
 ```
 
 Then run `kernels lock .` in the project directory. This generates a `kernels.lock` file with

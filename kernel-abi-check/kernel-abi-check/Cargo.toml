@@ -1,6 +1,6 @@
 [package]
 name = "kernel-abi-check"
-version = "0.8.0-dev0"
+version = "0.12.0-dev0"
 edition = "2021"
 description = "Check the ABI of Hub Kernels"
 homepage = "https://github.com/huggingface/kernel-builder"

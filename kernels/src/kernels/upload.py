@@ -7,7 +7,11 @@ from kernels.variants import BUILD_VARIANT_REGEX
 
 
 def upload_kernels_dir(
-    kernel_dir: Path, *, repo_id: str, branch: str | None, private: bool
+    kernel_dir: Path,
+    *,
+    repo_id: str,
+    branch: str | None,
+    private: bool,
 ):
     kernel_dir = Path(kernel_dir).resolve()
 
@@ -53,6 +57,17 @@ def upload_kernels_dir(
     for build_variant in build_dir.iterdir():
         if build_variant.is_dir():
             delete_patterns.add(f"{build_variant.name}/**")
+
+    # in the case we have variants, upload to the same as the kernel_dir
+    upload_folder(
+        repo_id=repo_id,
+        folder_path=kernel_dir / "benchmarks",
+        revision=branch,
+        path_in_repo="benchmarks",
+        delete_patterns=["benchmark*.py"],
+        commit_message="Benchmarks uploaded using `kernels`.",
+        allow_patterns=["benchmark*.py"],
+    )
 
     upload_folder(
         repo_id=repo_id,

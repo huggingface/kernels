@@ -126,10 +126,10 @@ def main():
         help="Kernel repo ID (e.g., kernels-community/activation)",
     )
     benchmark_parser.add_argument(
-        "--revision",
-        type=str,
-        default="main",
-        help="Kernel revision (default: main)",
+        "--branch", type=str, help="Kernel branch to benchmark"
+    )
+    benchmark_parser.add_argument(
+        "--version", type=int, help="Kernel version to benchmark"
     )
     benchmark_parser.add_argument(
         "--output",
@@ -247,7 +247,8 @@ def run_benchmark(args):
 
     benchmark.run_benchmark(
         repo_id=args.repo_id,
-        revision=args.revision,
+        branch=args.branch,
+        version=args.version,
         iterations=args.iterations,
         warmup=args.warmup,
         output=args.output,

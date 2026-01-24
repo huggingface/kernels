@@ -88,11 +88,11 @@ class Benchmark:
 
     seed: int | None = None  # Optional: seed for reproducibility
 
-    def __init__(self):
-        self.kernel = None
+    def __init__(self) -> None:
+        self.kernel: Any = None
         self.out: Any = None  # Output tensor, set by setup methods
 
-    def setup(self):
+    def setup(self) -> None:
         """Override to set up tensors as instance attributes."""
         pass
 
@@ -452,16 +452,16 @@ def collect_machine_info() -> MachineInfo:
     )
 
 
-def get_kernel_sha_from_ops(kernel: Any) -> str:
-    ops_name = kernel.ops.__name__
-    # Format is torch.ops._<name>_<sha>, extract the last part after underscore
+def get_kernel_sha_from_build_name(kernel: Any) -> str:
+    ops_name = kernel.__name__
+    # Format is <name>_<sha>, extract the last part after underscore
     sha = ops_name.rsplit("_", 1)[-1]
     return sha
 
 
 def _synchronize() -> None:
     if torch.cuda.is_available():
-        _synchronize()
+        torch.cuda.synchronize()
     elif hasattr(torch, "xpu") and torch.xpu.is_available():
         torch.xpu.synchronize()
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -491,7 +491,7 @@ def run_benchmark_class(
     from kernels import get_kernel
 
     kernel = get_kernel(repo_id, revision=revision)
-    kernel_sha = get_kernel_sha_from_ops(kernel)
+    kernel_sha = get_kernel_sha_from_build_name(kernel)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -689,8 +689,8 @@ def submit_benchmark(
 
 def run_benchmark(
     repo_id: str,
-    # TODO: change default to 1 in the future
-    revision: str = "main",
+    branch: str | None,
+    version: int | None,
     iterations: int = 100,
     warmup: int = 10,
     upload: bool = False,
@@ -707,6 +707,27 @@ def run_benchmark(
 
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
+
+    # Requires either branch or version or parses from repo_id
+    if branch is None and version is None:
+        if "@" not in repo_id:
+            print("Error: must specify either branch or version", file=sys.stderr)
+            sys.exit(1)
+
+        # Parse from repo_id
+        repo_id, rev = repo_id.split("@", 1)
+
+        if rev.startswith("v") and rev[1:].isdigit():
+            version = int(rev[1:])
+        elif rev.isdigit():
+            print("Error: version must be prefixed with 'v'", file=sys.stderr)
+            sys.exit(1)
+        else:
+            branch = rev
+
+    # Move version or branch into revision
+    revision = f"v{version}" if version is not None else branch
+    assert revision is not None  # Guaranteed by parsing logic above
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
     repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))

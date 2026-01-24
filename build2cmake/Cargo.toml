@@ -1,6 +1,6 @@
 [package]
 name = "build2cmake"
-version = "0.12.0-dev0"
+version = "0.12.0"
 edition = "2021"
 description = "Generate CMake files for kernel-builder projects"
 homepage = "https://github.com/huggingface/kernel-builder"

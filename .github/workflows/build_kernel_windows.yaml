@@ -42,7 +42,7 @@ jobs:
         run: nvcc -V
 
       # Rust build environment setup
-      - uses: actions-rs/toolchain@v1.0.6
+      - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal

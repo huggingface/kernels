@@ -59,15 +59,16 @@ def upload_kernels_dir(
             delete_patterns.add(f"{build_variant.name}/**")
 
     # in the case we have variants, upload to the same as the kernel_dir
-    upload_folder(
-        repo_id=repo_id,
-        folder_path=kernel_dir / "benchmarks",
-        revision=branch,
-        path_in_repo="benchmarks",
-        delete_patterns=["benchmark*.py"],
-        commit_message="Benchmarks uploaded using `kernels`.",
-        allow_patterns=["benchmark*.py"],
-    )
+    if (kernel_dir / "benchmarks").is_dir():
+        upload_folder(
+            repo_id=repo_id,
+            folder_path=kernel_dir / "benchmarks",
+            revision=branch,
+            path_in_repo="benchmarks",
+            delete_patterns=["benchmark*.py"],
+            commit_message="Benchmarks uploaded using `kernels`.",
+            allow_patterns=["benchmark*.py"],
+        )
 
     upload_folder(
         repo_id=repo_id,

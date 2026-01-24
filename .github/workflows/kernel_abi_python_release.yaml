@@ -42,14 +42,14 @@ jobs:
         with:
           python-version: 3.x
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml -i python3.13t
@@ -80,14 +80,14 @@ jobs:
         with:
           python-version: 3.x
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml -i python3.13t
@@ -115,7 +115,7 @@ jobs:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml
@@ -125,7 +125,7 @@ jobs:
           python-version: 3.13t
           architecture: ${{ matrix.platform.target }}
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml -i python3.13t
@@ -149,13 +149,13 @@ jobs:
         with:
           python-version: 3.x
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml -i python3.13t
@@ -171,7 +171,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build sdist
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           command: sdist
           args: --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml
@@ -199,12 +199,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3.1.0
         with:
           subject-path: "wheels-*/*"
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@v1.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4.49.4
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*

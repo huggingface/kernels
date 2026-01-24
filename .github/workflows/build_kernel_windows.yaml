@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # CUDA environment setup
-      - uses: Jimver/cuda-toolkit@v0.2.29
+      - uses: Jimver/cuda-toolkit@v0.2.30
         id: setup-cuda-toolkit
         with:
           cuda: ${{ matrix.torch.cuda }}  # TODO(mfuntowicz): How can we test multiple CUDA versions than align with torch?
@@ -42,7 +42,7 @@ jobs:
         run: nvcc -V
 
       # Rust build environment setup
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1.0.6
         with:
           toolchain: stable
           profile: minimal

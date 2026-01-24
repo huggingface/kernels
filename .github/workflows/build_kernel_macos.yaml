@@ -18,7 +18,7 @@ jobs:
         run: xcodebuild -downloadComponent metalToolchain
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         with:
           name: huggingface
           #authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"

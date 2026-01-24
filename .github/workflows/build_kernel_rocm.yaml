@@ -20,7 +20,7 @@ jobs:
             max-jobs = 4
             cores = 12
             sandbox-fallback = false
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v16
         with:
           name: huggingface
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"

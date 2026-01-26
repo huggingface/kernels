@@ -670,7 +670,7 @@ wheels = [
 
 [[package]]
 name = "kernels"
-version = "0.12.1.dev0"
+version = "0.12.2.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },

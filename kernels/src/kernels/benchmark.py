@@ -71,10 +71,11 @@ class Benchmark:
     Example:
         class MyBenchmark(Benchmark):
             seed = 42
+            device = "cpu"
 
             def setup(self):
-                self.x = torch.randn(128, 1024, device="cuda", dtype=torch.float16)
-                self.out = torch.empty(128, 512, device="cuda", dtype=torch.float16)
+                self.x = torch.randn(128, 1024, device=self.device, dtype=torch.float16)
+                self.out = torch.empty(128, 512, device=self.device, dtype=torch.float16)
 
             def benchmark_silu(self):
                 self.kernel.silu_and_mul(self.out, self.x)
@@ -87,6 +88,7 @@ class Benchmark:
     """
 
     seed: int | None = None  # Optional: seed for reproducibility
+    device: str | None = None  # Optional: override auto-detected device (cuda, mps, xpu, cpu)
 
     def __init__(self) -> None:
         self.kernel: Any = None
@@ -468,12 +470,24 @@ def _synchronize() -> None:
         torch.mps.synchronize()
 
 
+def _device_from_backend(backend: str) -> str:
+    backend_lower = backend.lower()
+    if backend_lower.startswith("cuda") or backend_lower.startswith("rocm"):
+        return "cuda"
+    elif backend_lower == "mps":
+        return "mps"
+    elif backend_lower == "xpu":
+        return "xpu"
+    return "cpu"
+
+
 def run_benchmark_class(
     benchmark_cls: type[Benchmark],
     iterations: int,
     warmup: int,
     repo_id: str,
     revision: str,
+    machine_info: MachineInfo,
 ) -> tuple[dict[str, TimingResults], str]:
     results = {}
 
@@ -493,12 +507,18 @@ def run_benchmark_class(
     kernel = get_kernel(repo_id, revision=revision)
     kernel_sha = get_kernel_sha_from_build_name(kernel)
 
+    # Use class-level device override if specified, otherwise derive from backend
+    device = benchmark_cls.device if benchmark_cls.device else _device_from_backend(machine_info.backend)
+    override_note = " (override)" if benchmark_cls.device else ""
+    print(f"  Running {benchmark_cls.__name__} on {device}{override_note}", file=sys.stderr)
+
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
 
         # Create fresh instance for each workload
         instance = benchmark_cls()
         instance.kernel = kernel
+        instance.device = device
 
         # Apply seed for reproducibility
         if instance.seed is not None:
@@ -647,6 +667,15 @@ def run_benchmark_script(
     if not classes:
         raise RuntimeError(f"No Benchmark subclasses found in {script_path}")
 
+    machine_info = collect_machine_info()
+    gpu_cores_str = f" ({machine_info.gpu_cores} cores)" if machine_info.gpu_cores else ""
+    print(file=sys.stderr)
+    print(f"  GPU      {machine_info.gpu}{gpu_cores_str}", file=sys.stderr)
+    print(f"  CPU      {machine_info.cpu}", file=sys.stderr)
+    print(f"  OS       {machine_info.os}", file=sys.stderr)
+    print(f"  PyTorch  {machine_info.pytorch_version}", file=sys.stderr)
+    print(file=sys.stderr)
+
     all_results = {}
     kernel_sha = ""
     for cls in classes:
@@ -656,6 +685,7 @@ def run_benchmark_script(
             warmup=warmup,
             repo_id=repo_id,
             revision=revision,
+            machine_info=machine_info,
         )
         for name, timing in results.items():
             all_results[f"{cls.__name__}.{name}"] = timing

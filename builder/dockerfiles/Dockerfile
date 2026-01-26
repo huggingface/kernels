@@ -105,7 +105,7 @@ function build_extension {
   # check if using a local path for kernel-builder
   is_using_path=$(grep -q 'kernel-builder.url *= *"path:' flake.nix && echo "yes" || echo "no")
   if [ "$is_using_path" = "yes" ]; then
-    override="--override-input kernel-builder github:huggingface/kernel-builder"
+    override="--override-input kernel-builder github:huggingface/kernels"
     echo "Detected local path for kernel-builder in flake.nix, overriding to use GitHub source."
   else
     echo "No local path for kernel-builder detected in flake.nix."

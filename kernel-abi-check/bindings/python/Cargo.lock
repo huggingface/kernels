@@ -271,7 +271,7 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "kernel-abi-check"
-version = "0.12.1-dev0"
+version = "0.12.1"
 dependencies = [
  "clap",
  "color-eyre",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "kernel-abi-check-python"
-version = "0.12.1-dev0"
+version = "0.12.1"
 dependencies = [
  "kernel-abi-check",
  "object",

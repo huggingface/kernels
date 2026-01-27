@@ -15,6 +15,7 @@ use crate::version::Version;
 use crate::FileSet;
 
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
@@ -142,6 +143,13 @@ fn write_cmake(
     file_set
         .entry(utils_path.clone())
         .extend_from_slice(CMAKE_UTILS.as_bytes());
+
+    let mut kernel_path = PathBuf::new();
+    kernel_path.push("cmake");
+    kernel_path.push("kernel.cmake");
+    file_set
+        .entry(kernel_path.clone())
+        .extend_from_slice(CMAKE_KERNEL.as_bytes());
 
     let mut windows_utils_path = PathBuf::new();
     windows_utils_path.push("cmake");

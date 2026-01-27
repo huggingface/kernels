@@ -10,6 +10,7 @@ file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
 message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 
 if(DEFINED Python3_EXECUTABLE)
   # Allow passing through the interpreter (e.g. from setup.py).
@@ -42,3 +43,6 @@ endif()
 {% endif %}
 
 add_compile_definitions(CPU_KERNEL)
+
+# Initialize SRC list for kernel and binding sources
+set(SRC "")

@@ -14,4 +14,3 @@ set_source_files_properties(
 {% endif %}
 
 list(APPEND SRC {{'"${TORCH_' + name + '_SRC}"'}})
-

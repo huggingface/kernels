@@ -32,6 +32,7 @@ dev = [
   "torch>=2.5",
   "types-pyyaml",
   "types-requests",
+  "types-tabulate",
 ]
 
 [project.optional-dependencies]

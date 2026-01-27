@@ -15,6 +15,7 @@ use crate::FileSet;
 
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
+static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
 
 pub fn write_torch_ext_xpu(
     env: &Environment,
@@ -136,6 +137,14 @@ fn write_cmake(
     file_set
         .entry(utils_path.clone())
         .extend_from_slice(CMAKE_UTILS.as_bytes());
+
+    // Add windows.cmake for Windows-specific install targets
+    let mut windows_utils_path = PathBuf::new();
+    windows_utils_path.push("cmake");
+    windows_utils_path.push("windows.cmake");
+    file_set
+        .entry(windows_utils_path.clone())
+        .extend_from_slice(WINDOWS_UTILS.as_bytes());
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
@@ -296,6 +305,7 @@ pub fn render_preamble(
                 name => name,
                 torch_minver => torch_minver.map(|v| v.to_string()),
                 torch_maxver => torch_maxver.map(|v| v.to_string()),
+                platform => std::env::consts::OS,
             },
             &mut *write,
         )

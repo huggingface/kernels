@@ -446,11 +446,11 @@ function Invoke-CMakeBuild {
 
         # Run install target if requested
         if ($RunLocalInstall) {
-            Invoke-CMakeTarget -Target 'INSTALL' -BuildConfig $BuildConfig -DisplayName 'install target (local development layout)'
+            Invoke-CMakeTarget -Target 'install' -BuildConfig $BuildConfig -DisplayName 'install target (local development layout)'
         }
 
         if ($RunKernelsInstall) {
-            Invoke-CMakeTarget -Target 'INSTALL' -BuildConfig $BuildConfig -DisplayName 'install target'
+            Invoke-CMakeTarget -Target 'install' -BuildConfig $BuildConfig -DisplayName 'install target'
         }
     }
     finally {

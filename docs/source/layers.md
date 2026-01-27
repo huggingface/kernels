@@ -170,7 +170,18 @@ kernel_layer_mapping = {
 }
 ```
 
-You can register such a mapping using `register_kernel_mapping`:
+This uses version `1` of the `SiluAndMul` kernel layer from
+`kernels-community/activation` for the `cuda` and `rocm` backends. Kernel
+layers are versioned using a major version number. Using `version=1`
+will get the latest kernel build from the `v1` branch. Kernel layers
+within a version branch must never break the API or remove builds for
+older PyTorch versions. This ensures that your code will continue to
+work.
+
+Some kernels have not yet been updated to use versioning yet. In these cases,
+you can use `LayerRepository` without the `version` argument.
+
+You can register a mapping, like the one above, using `register_kernel_mapping`:
 
 ```python
 register_kernel_mapping(kernel_layer_mapping)

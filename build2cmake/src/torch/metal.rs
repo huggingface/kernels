@@ -13,6 +13,7 @@ use crate::{
 };
 
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
@@ -74,6 +75,13 @@ fn write_cmake(
     file_set
         .entry(utils_path.clone())
         .extend_from_slice(CMAKE_UTILS.as_bytes());
+
+    let mut kernel_path = PathBuf::new();
+    kernel_path.push("cmake");
+    kernel_path.push("kernel.cmake");
+    file_set
+        .entry(kernel_path.clone())
+        .extend_from_slice(CMAKE_KERNEL.as_bytes());
 
     let mut compile_metal_path = PathBuf::new();
     compile_metal_path.push("cmake");

@@ -12,7 +12,7 @@ if(ICX_COMPILER AND ICPX_COMPILER)
     string(REGEX MATCH "[0-9]+\\.[0-9]+" DPCPP_VERSION "${ICPX_VERSION_OUTPUT}")
     set(DPCPP_VERSION "${DPCPP_VERSION}" CACHE STRING "DPCPP major.minor version")
     set(CMAKE_C_COMPILER ${ICX_COMPILER})
-    
+
     # On Windows, use icx (MSVC-compatible) for C++ to work with Ninja generator
     # On Linux, use icpx (GNU-compatible) for C++
     if(WIN32)
@@ -33,6 +33,7 @@ file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
 message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
 include("cmake/utils.cmake")
+include("cmake/kernel.cmake")
 
 # Find Python with all necessary components for building extensions
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module Development.SABIModule)
@@ -88,3 +89,6 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/windows.cmake)
 # Generate build variant name for XPU (e.g., torch291-xpu-x86_64-windows)
 generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "xpu" "${DPCPP_VERSION}")
 {% endif %}
+
+# Initialize SRC list for kernel and binding sources
+set(SRC "")

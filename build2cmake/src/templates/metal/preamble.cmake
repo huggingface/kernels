@@ -10,6 +10,7 @@ file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
 message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 
 if(DEFINED Python3_EXECUTABLE)
   # Allow passing through the interpreter (e.g. from setup.py).
@@ -43,5 +44,9 @@ endif()
 
 add_compile_definitions(METAL_KERNEL)
 
-# Initialize list for Metal shader sources
+# Initialize SRC list for kernel and binding sources
+set(SRC "")
+
+# Initialize lists for Metal shader sources and their include directories
 set(ALL_METAL_SOURCES)
+set(METAL_INCLUDE_DIRS)

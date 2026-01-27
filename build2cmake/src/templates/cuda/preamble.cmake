@@ -12,6 +12,7 @@ message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201")
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 
 if(DEFINED Python3_EXECUTABLE)
   # Allow passing through the interpreter (e.g. from setup.py).
@@ -128,6 +129,8 @@ else()
     "${${GPU_LANG}_SUPPORTED_ARCHS}")
 endif()
 
+# Initialize SRC list for kernel and binding sources
+set(SRC "")
 
 message(STATUS "Rendered for platform {{ platform }}")
 {% if platform == 'windows' %}

@@ -12,7 +12,7 @@ We recommend installing Nix in the following way:
 
 The easiest way get all the Nix functionality is by putting a
 `flake.nix` in your kernel repository. To do so, copy
-[`examples/relu/flake.nix`](../examples/relu/flake.nix) into the
+[`examples/relu/flake.nix`](https://github.com/huggingface/kernels/blob/main/builder/examples/relu/flake.nix) into the
 same directory as your `build.toml` file. Then run `nix flake update`.
 This generates a `flake.lock` file that pins the kernel builder
 and _all_ its transitive dependencies. Commit both `flake.nix`

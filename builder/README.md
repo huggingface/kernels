@@ -1,14 +1,10 @@
 # kernel-builder
 
-<div align="center">
-<img src="https://github.com/user-attachments/assets/4b5175f3-1d60-455b-8664-43b2495ee1c3" width="450" height="450" alt="kernel-builder logo">
-<p align="center">
-    <a href="https://github.com/huggingface/kernel-builder/actions/workflows/docker-build-push.yaml"><img alt="Build and Push Docker Image" src="https://img.shields.io/github/actions/workflow/status/huggingface/kernel-builder/docker-build-push.yaml?label=docker"></a>
-    <a href="https://github.com/huggingface/kernel-builder/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/huggingface/kernel-builder"></a>
-    <a href="https://github.com/huggingface/kernel-builder/pkgs/container/kernel-builder"><img alt="GitHub package" src="https://img.shields.io/badge/container-ghcr.io-blue"></a>
-</p>
-</div>
-<hr/>
+The kernel-builder is a build system for creating Hub-compatible compute kernels. It handles the complexity of building kernels that are:
+
+- Portable: kernels can be loaded from paths outside `PYTHONPATH`.
+- Unique: multiple versions of the same kernel can be loaded in the same Python process.
+- Compatible: kernels support all recent versions of Python and the different PyTorch build configurations (various CUDA versions and C++ ABIs).
 
 **Note:** Torch 2.10 builds are still based on PyTorch release candidates.
 Typically the ABI does not break during release candidates. If it does,
@@ -70,14 +66,14 @@ See [dockerfiles/README.md](./dockerfiles/README.md) for more options, including
 
 # 📚 Documentation
 
-- [Writing Hub kernels](./docs/writing-kernels.md)
-- [Building kernels with Nix](./docs/nix.md)
+- [Writing Hub kernels](../docs/source/builder/writing-kernels.md)
+- [Building kernels with Nix](../docs/source/builder/nix.md)
 - Framework-specific notes:
-  - [Metal](docs/metal.md)
-- [Building kernels with Docker](./docs/docker.md) (for systems without Nix)
-- [Local kernel development](docs/local-dev.md) (IDE integration)
-- [Kernel security](./docs/security.md)
-- [Why Nix?](./docs/why-nix.md)
+  - [Metal](../docs/source/builder/metal.md)
+- [Building kernels with Docker](../docs/source/builder/docker.md) (for systems without Nix)
+- [Local kernel development](../docs/source/builder/local-dev.md) (IDE integration)
+- [Kernel security](../docs/source/builder/security.md)
+- [Why Nix?](../docs/source/builder/why-nix.md)
 
 ## Credits
 

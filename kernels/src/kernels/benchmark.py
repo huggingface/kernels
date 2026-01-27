@@ -31,6 +31,12 @@ except ImportError:
     TORCH_AVAILABLE = False
     MISSING_DEPS.append("torch")
 
+try:
+    from tabulate import tabulate
+except ImportError:
+    tabulate = None  # type: ignore[assignment]
+    MISSING_DEPS.append("tabulate")
+
 
 def _percentile(sorted_data: list[float], p: float) -> float:
     n = len(sorted_data)
@@ -185,96 +191,65 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
             cls, method = "", name
         parsed.append((name, cls, method))
 
-    # Calculate column widths
-    cls_w = max((len(p[1]) for p in parsed), default=9)
-    cls_w = max(cls_w, 9)  # minimum "Benchmark" header
-    method_w = max((len(p[2]) for p in parsed), default=8)
-    method_w = max(method_w, 8)  # minimum "Workload" header
-    num_w = 10
-    out_w = 8
-    n_w = 5  # "N" column width
-
     # Check if we have any ref times to show
     has_ref = any(results[name].ref_mean_ms is not None for name in results)
 
-    # Build table border
-    match_w = 5  # "Match" column
-    speedup_w = 7  # "Speedup" column
-    if has_ref:
-        col_widths = [
-            cls_w,
-            method_w,
-            n_w,
-            speedup_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            out_w,
-            num_w,
-            match_w,
-        ]
-    else:
-        col_widths = [
-            cls_w,
-            method_w,
-            n_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            out_w,
-            match_w,
-        ]
-
-    def border(left, sep, right):
-        return left + sep.join("─" * (w + 2) for w in col_widths) + right
-
-    print(file=sys.stderr)
-    print(border("┌", "┬", "┐"), file=sys.stderr)
-    if has_ref:
-        print(
-            f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'N':>{n_w}} │ {'Speedup':>{speedup_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
-            f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ {'Ref(ms)':>{num_w}} │ {'Match':^{match_w}} │",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'N':>{n_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
-            f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ {'Match':^{match_w}} │",
-            file=sys.stderr,
-        )
-    print(border("├", "┼", "┤"), file=sys.stderr)
-
+    # Build table data
+    rows = []
     for full_name, cls, method in parsed:
         t = results[full_name]
         check = "✓" if t.verified else ("✗" if t.verified is False else "·")
+
         if has_ref:
-            ref_str = (
-                f"{t.ref_mean_ms:>{num_w}.4f}"
-                if t.ref_mean_ms is not None
-                else " " * num_w
-            )
+            ref_str = f"{t.ref_mean_ms:.4f}" if t.ref_mean_ms is not None else ""
             if t.ref_mean_ms is not None and t.mean_ms > 0:
-                speedup = t.ref_mean_ms / t.mean_ms
-                speedup_str = f"{speedup:.2f}x"
+                speedup_str = f"{t.ref_mean_ms / t.mean_ms:.2f}x"
             else:
                 speedup_str = ""
-            print(
-                f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.iterations:>{n_w}} │ {speedup_str:>{speedup_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
-                f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │ {ref_str} │ {check:^{match_w}} │",
-                file=sys.stderr,
-            )
+            rows.append([
+                cls,
+                method,
+                t.iterations,
+                speedup_str,
+                f"{t.mean_ms:.4f}",
+                f"{t.std_ms:.4f}",
+                f"{t.min_ms:.4f}",
+                f"{t.max_ms:.4f}",
+                f"{t.iqr_ms:.4f}",
+                t.outliers,
+                ref_str,
+                check,
+            ])
         else:
-            print(
-                f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.iterations:>{n_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
-                f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │ {check:^{match_w}} │",
-                file=sys.stderr,
-            )
+            rows.append([
+                cls,
+                method,
+                t.iterations,
+                f"{t.mean_ms:.4f}",
+                f"{t.std_ms:.4f}",
+                f"{t.min_ms:.4f}",
+                f"{t.max_ms:.4f}",
+                f"{t.iqr_ms:.4f}",
+                t.outliers,
+                check,
+            ])
 
-    print(border("└", "┴", "┘"), file=sys.stderr)
+    # Define headers
+    if has_ref:
+        headers = [
+            "Benchmark", "Workload", "N", "Speedup",
+            "Mean(ms)", "Std(ms)", "Min(ms)", "Max(ms)", "IQR(ms)",
+            "Outliers", "Ref(ms)", "Match"
+        ]
+    else:
+        headers = [
+            "Benchmark", "Workload", "N",
+            "Mean(ms)", "Std(ms)", "Min(ms)", "Max(ms)", "IQR(ms)",
+            "Outliers", "Match"
+        ]
+
+    print(file=sys.stderr)
+    print(tabulate(rows, headers=headers, tablefmt="simple_outline"), file=sys.stderr)
 
     # Print statistical significance analysis if we have ref times
     if has_ref:

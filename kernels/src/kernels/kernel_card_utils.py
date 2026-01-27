@@ -211,7 +211,7 @@ def _update_kernel_card_backends(
             cuda_cap_for_config = kernel_configs[k].get("cuda-capabilities")
             if cuda_cap_for_config:
                 cuda_capabilities.extend(cuda_cap_for_config)
-    cuda_capabilities: set[Any] = set(cuda_capabilities) # type: ignore[no-redef]
+    cuda_capabilities: set[Any] = set(cuda_capabilities)  # type: ignore[no-redef]
     if cuda_capabilities:
         cuda_list = "\n".join(f"- {cap}" for cap in cuda_capabilities)
         cuda_section = f"## CUDA Capabilities\n\n{cuda_list}\n\n"
@@ -234,4 +234,22 @@ def _update_kernel_card_license(
     license_from_config = config.get("general", {}).get("license", None)
     final_license = license_from_config or existing_license
     kernel_card.data["license"] = final_license
+    return kernel_card
+
+
+def _update_benchmark(kernel_card: ModelCard, local_path: str | Path):
+    local_path = Path(local_path)
+
+    benchmark_file = local_path / "benchmarks" / "benchmark.py"
+    if not benchmark_file.exists():
+        return kernel_card
+
+    card_content = str(kernel_card.content)
+    benchmark_text = '\n\nBenchmarking script is available for this kernel. Make sure to run `kernels benchmark org-id/repo-id` (replace "org-id" and "repo-id" with actual values).'
+
+    pattern = r"(## Benchmarks)"
+    if re.search(pattern, card_content):
+        updated_content = re.sub(pattern, r"\1" + benchmark_text, card_content)
+        kernel_card.content = updated_content
+
     return kernel_card

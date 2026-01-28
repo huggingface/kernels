@@ -93,6 +93,7 @@ class Benchmark:
     """
 
     seed: int | None = None  # Optional: seed for reproducibility
+    device: str = "cpu"  # Set automatically by runner
 
     def __init__(self) -> None:
         self.kernel: Any = None

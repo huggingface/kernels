@@ -6,6 +6,8 @@ pub use cuda::write_torch_ext_cuda;
 
 pub mod common;
 
+pub mod kernel;
+
 mod metal;
 pub use metal::write_torch_ext_metal;
 

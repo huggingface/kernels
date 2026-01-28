@@ -23,7 +23,6 @@
       inherit
         (import ./builder/lib/build-sets.nix {
           inherit nixpkgs rust-overlay;
-          torchVersions = torchVersions';
         })
         mkBuildSets
         partitionBuildSetsBySystem
@@ -48,7 +47,7 @@
           system: buildSet: nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { }
         ) buildSetPerSystem;
 
-      defaultBuildPerSystem = mkBuildPerSystem defaultBuildSetsPerSystem;
+      defaultBuildPerSystem = mkBuildPerSystem torchVersions' defaultBuildSetsPerSystem;
 
       # The lib output consists of two parts:
       #
@@ -90,7 +89,7 @@
             (builtins.isFunction torchVersions)
             || abort "`torchVersions` must be a function taking one argument (the default version set)";
           let
-            buildSets = mkBuildSets systems;
+            buildSets = mkBuildSets (torchVersions torchVersions') systems;
             buildSetPerSystem = partitionBuildSetsBySystem buildSets;
             buildPerSystem = mkBuildPerSystem buildSetPerSystem;
           in

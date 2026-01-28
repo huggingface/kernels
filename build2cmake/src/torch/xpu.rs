@@ -8,6 +8,7 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Dependency, Torch};
 use crate::torch::common::write_metadata;
+use crate::torch::common::write_ops_py;
 use crate::torch::common::write_pyproject_toml;
 use crate::torch::common::write_torch_registration_macros;
 use crate::torch::kernel::render_kernel_components;
@@ -85,31 +86,6 @@ fn write_setup_py(
             writer,
         )
         .wrap_err("Cannot render setup.py template")?;
-
-    Ok(())
-}
-
-fn write_ops_py(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    file_set: &mut FileSet,
-) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("torch-ext");
-    path.push(name);
-    path.push("_ops.py");
-    let writer = file_set.entry(path);
-
-    env.get_template("_ops.py")
-        .wrap_err("Cannot get _ops.py template")?
-        .render_to_write(
-            context! {
-                ops_name => ops_name,
-            },
-            writer,
-        )
-        .wrap_err("Cannot render _ops.py template")?;
 
     Ok(())
 }

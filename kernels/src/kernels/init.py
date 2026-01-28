@@ -61,6 +61,7 @@ def run_init(args: Namespace) -> None:
     _print_tree(target_dir)
     print("\nNext steps:")
     print(f"  cd {kernel_name}")
+    print("  cachix use huggingface")
     print("  nix run .#build-and-copy -L")
     print("  uv run example.py")
 

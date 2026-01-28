@@ -4,13 +4,14 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
-use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use super::common::write_pyproject_toml;
-use super::kernel_ops_identifier;
-use crate::config::{Backend, Build, Dependency, Kernel, Torch};
+use crate::config::{Backend, Build, Dependency, Torch};
+use crate::torch::common::prefix_and_join_includes;
 use crate::torch::common::write_metadata;
+use crate::torch::common::write_pyproject_toml;
+use crate::torch::kernel::render_kernel_components;
+use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
 use crate::FileSet;
 
@@ -181,13 +182,7 @@ fn write_cmake(
 
     render_binding(env, torch, name, cmake_writer)?;
 
-    for (kernel_name, kernel) in build
-        .kernels
-        .iter()
-        .filter(|(_, kernel)| kernel.backend() == backend)
-    {
-        render_kernel(env, kernel_name, kernel, cmake_writer)?;
-    }
+    render_kernel_components(env, build, cmake_writer)?;
 
     render_extension(env, name, ops_name, cmake_writer)?;
 
@@ -312,71 +307,6 @@ fn render_deps(
     Ok(())
 }
 
-pub fn render_kernel(
-    env: &Environment,
-    kernel_name: &str,
-    kernel: &Kernel,
-    write: &mut impl Write,
-) -> Result<()> {
-    // Easier to do in Rust than Jinja.
-    let sources = kernel
-        .src()
-        .iter()
-        .map(|src| format!("\"{src}\""))
-        .collect_vec()
-        .join("\n");
-
-    let (cuda_capabilities, rocm_archs, cuda_flags, hip_flags, cuda_minver) = match kernel {
-        Kernel::Cuda {
-            cuda_capabilities,
-            cuda_flags,
-            cuda_minver,
-            ..
-        } => (
-            cuda_capabilities.as_deref(),
-            None,
-            cuda_flags.as_deref(),
-            None,
-            cuda_minver.as_ref(),
-        ),
-        Kernel::Rocm {
-            rocm_archs,
-            hip_flags,
-            ..
-        } => (
-            None,
-            rocm_archs.as_deref(),
-            None,
-            hip_flags.as_deref(),
-            None,
-        ),
-        _ => unreachable!("Unsupported kernel type for CUDA rendering"),
-    };
-
-    env.get_template("cuda/kernel.cmake")
-        .wrap_err("Cannot get kernel template")?
-        .render_to_write(
-            context! {
-                cuda_capabilities => cuda_capabilities,
-                cuda_flags => cuda_flags.map(|flags| flags.join(";")),
-                cuda_minver => cuda_minver.map(ToString::to_string),
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                rocm_archs => rocm_archs,
-                hip_flags => hip_flags.map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
-                kernel_name => kernel_name,
-                supports_hipify => matches!(kernel, Kernel::Rocm{ .. }),
-                sources => sources,
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render kernel template")?;
-
-    write.write_all(b"\n")?;
-
-    Ok(())
-}
-
 pub fn render_extension(
     env: &Environment,
     name: &str,
@@ -427,16 +357,4 @@ pub fn render_preamble(
     write.write_all(b"\n")?;
 
     Ok(())
-}
-
-fn prefix_and_join_includes<S>(includes: impl AsRef<[S]>) -> String
-where
-    S: AsRef<str>,
-{
-    includes
-        .as_ref()
-        .iter()
-        .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
-        .collect_vec()
-        .join(";")
 }

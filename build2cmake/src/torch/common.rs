@@ -52,3 +52,15 @@ pub fn write_metadata(backend: Backend, general: &General, file_set: &mut FileSe
 
     Ok(())
 }
+
+pub fn prefix_and_join_includes<S>(includes: impl AsRef<[S]>) -> String
+where
+    S: AsRef<str>,
+{
+    includes
+        .as_ref()
+        .iter()
+        .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
+        .collect_vec()
+        .join(";")
+}

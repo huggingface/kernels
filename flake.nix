@@ -38,7 +38,7 @@
 
       torchVersions' = import ./builder/versions.nix;
 
-      defaultBuildSets = mkBuildSets systems;
+      defaultBuildSets = mkBuildSets torchVersions' systems;
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
 
       mkBuildPerSystem =
@@ -47,7 +47,7 @@
           system: buildSet: nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { }
         ) buildSetPerSystem;
 
-      defaultBuildPerSystem = mkBuildPerSystem torchVersions' defaultBuildSetsPerSystem;
+      defaultBuildPerSystem = mkBuildPerSystem defaultBuildSetsPerSystem;
 
       # The lib output consists of two parts:
       #

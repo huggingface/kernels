@@ -6,6 +6,7 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Torch};
 use crate::fileset::FileSet;
+use crate::torch::common::write_cmake_helpers;
 use crate::torch::common::write_metadata;
 use crate::torch::common::write_ops_py;
 use crate::torch::common::write_pyproject_toml;
@@ -13,9 +14,6 @@ use crate::torch::common::write_torch_registration_macros;
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
-
-static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
-static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 
 pub fn write_torch_ext_cpu(
     env: &Environment,
@@ -68,19 +66,7 @@ fn write_cmake(
     ops_name: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
-    let mut utils_path = PathBuf::new();
-    utils_path.push("cmake");
-    utils_path.push("utils.cmake");
-    file_set
-        .entry(utils_path.clone())
-        .extend_from_slice(CMAKE_UTILS.as_bytes());
-
-    let mut kernel_path = PathBuf::new();
-    kernel_path.push("cmake");
-    kernel_path.push("kernel.cmake");
-    file_set
-        .entry(kernel_path.clone())
-        .extend_from_slice(CMAKE_KERNEL.as_bytes());
+    write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 

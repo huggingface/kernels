@@ -77,7 +77,6 @@ class Benchmark:
     Example:
         class MyBenchmark(Benchmark):
             seed = 42
-            device = "cpu"
 
             def setup(self):
                 self.x = torch.randn(128, 1024, device=self.device, dtype=torch.float16)
@@ -94,7 +93,6 @@ class Benchmark:
     """
 
     seed: int | None = None  # Optional: seed for reproducibility
-    device: str | None = None  # Optional: override auto-detected device (cuda, mps, xpu, cpu)
 
     def __init__(self) -> None:
         self.kernel: Any = None
@@ -206,46 +204,66 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
                 speedup_str = f"{t.ref_mean_ms / t.mean_ms:.2f}x"
             else:
                 speedup_str = ""
-            rows.append([
-                cls,
-                method,
-                t.iterations,
-                speedup_str,
-                f"{t.mean_ms:.4f}",
-                f"{t.std_ms:.4f}",
-                f"{t.min_ms:.4f}",
-                f"{t.max_ms:.4f}",
-                f"{t.iqr_ms:.4f}",
-                t.outliers,
-                ref_str,
-                check,
-            ])
+            rows.append(
+                [
+                    cls,
+                    method,
+                    t.iterations,
+                    speedup_str,
+                    f"{t.mean_ms:.4f}",
+                    f"{t.std_ms:.4f}",
+                    f"{t.min_ms:.4f}",
+                    f"{t.max_ms:.4f}",
+                    f"{t.iqr_ms:.4f}",
+                    t.outliers,
+                    ref_str,
+                    check,
+                ]
+            )
         else:
-            rows.append([
-                cls,
-                method,
-                t.iterations,
-                f"{t.mean_ms:.4f}",
-                f"{t.std_ms:.4f}",
-                f"{t.min_ms:.4f}",
-                f"{t.max_ms:.4f}",
-                f"{t.iqr_ms:.4f}",
-                t.outliers,
-                check,
-            ])
+            rows.append(
+                [
+                    cls,
+                    method,
+                    t.iterations,
+                    f"{t.mean_ms:.4f}",
+                    f"{t.std_ms:.4f}",
+                    f"{t.min_ms:.4f}",
+                    f"{t.max_ms:.4f}",
+                    f"{t.iqr_ms:.4f}",
+                    t.outliers,
+                    check,
+                ]
+            )
 
     # Define headers
     if has_ref:
         headers = [
-            "Benchmark", "Workload", "N", "Speedup",
-            "Mean(ms)", "Std(ms)", "Min(ms)", "Max(ms)", "IQR(ms)",
-            "Outliers", "Ref(ms)", "Match"
+            "Benchmark",
+            "Workload",
+            "N",
+            "Speedup",
+            "Mean(ms)",
+            "Std(ms)",
+            "Min(ms)",
+            "Max(ms)",
+            "IQR(ms)",
+            "Outliers",
+            "Ref(ms)",
+            "Match",
         ]
     else:
         headers = [
-            "Benchmark", "Workload", "N",
-            "Mean(ms)", "Std(ms)", "Min(ms)", "Max(ms)", "IQR(ms)",
-            "Outliers", "Match"
+            "Benchmark",
+            "Workload",
+            "N",
+            "Mean(ms)",
+            "Std(ms)",
+            "Min(ms)",
+            "Max(ms)",
+            "IQR(ms)",
+            "Outliers",
+            "Match",
         ]
 
     print(file=sys.stderr)
@@ -386,6 +404,17 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
         return None, None
 
 
+def get_device() -> str:
+    if TORCH_AVAILABLE:
+        if torch.cuda.is_available():
+            return "cuda"
+        elif hasattr(torch, "xpu") and torch.xpu.is_available():
+            return "xpu"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+    return "cpu"
+
+
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
     gpu_cores = None
@@ -403,21 +432,24 @@ def collect_machine_info() -> MachineInfo:
 
     if TORCH_AVAILABLE:
         pytorch_version = torch.__version__
-        if torch.cuda.is_available():
+        device = get_device()
+        if device == "cuda":
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
             if hasattr(torch.version, "hip") and torch.version.hip:
                 backend = f"ROCm {torch.version.hip}"
             else:
                 backend = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
-        elif hasattr(torch, "xpu") and torch.xpu.is_available():
+        elif device == "xpu":
             gpu = torch.xpu.get_device_name(0)
             backend = "XPU"
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        elif device == "mps":
             macos_gpu, macos_cores = _get_macos_gpu()
             gpu = macos_gpu or "Apple MPS"
             gpu_cores = macos_cores
             backend = "MPS"
+        else:
+            backend = "CPU"
 
     return MachineInfo(
         gpu=gpu,
@@ -445,17 +477,6 @@ def _synchronize() -> None:
         torch.mps.synchronize()
 
 
-def _device_from_backend(backend: str) -> str:
-    backend_lower = backend.lower()
-    if backend_lower.startswith("cuda") or backend_lower.startswith("rocm"):
-        return "cuda"
-    elif backend_lower == "mps":
-        return "mps"
-    elif backend_lower == "xpu":
-        return "xpu"
-    return "cpu"
-
-
 def run_benchmark_class(
     benchmark_cls: type[Benchmark],
     iterations: int,
@@ -481,11 +502,8 @@ def run_benchmark_class(
 
     kernel = get_kernel(repo_id, revision=revision)
     kernel_sha = get_kernel_sha_from_build_name(kernel)
-
-    # Use class-level device override if specified, otherwise derive from backend
-    device = benchmark_cls.device if benchmark_cls.device else _device_from_backend(machine_info.backend)
-    override_note = " (override)" if benchmark_cls.device else ""
-    print(f"  Running {benchmark_cls.__name__} on {device}{override_note}", file=sys.stderr)
+    device = get_device()
+    print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -643,7 +661,9 @@ def run_benchmark_script(
         raise RuntimeError(f"No Benchmark subclasses found in {script_path}")
 
     machine_info = collect_machine_info()
-    gpu_cores_str = f" ({machine_info.gpu_cores} cores)" if machine_info.gpu_cores else ""
+    gpu_cores_str = (
+        f" ({machine_info.gpu_cores} cores)" if machine_info.gpu_cores else ""
+    )
     print(file=sys.stderr)
     print(f"  GPU      {machine_info.gpu}{gpu_cores_str}", file=sys.stderr)
     print(f"  CPU      {machine_info.cpu}", file=sys.stderr)

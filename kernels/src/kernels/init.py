@@ -62,7 +62,7 @@ def run_init(args: Namespace) -> None:
     print("\nNext steps:")
     print(f"  cd {kernel_name}")
     print("  cachix use huggingface")
-    print("  nix run .#build-and-copy -L")
+    print("  nix run -L --max-jobs 1 --cores 8 .#build-and-copy")
     print("  uv run example.py")
 
 

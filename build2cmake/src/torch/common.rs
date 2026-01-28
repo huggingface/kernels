@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use eyre::{Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
@@ -5,6 +7,8 @@ use minijinja::{context, Environment};
 use crate::config::{Backend, General};
 use crate::metadata::Metadata;
 use crate::FileSet;
+
+static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 
 pub fn write_pyproject_toml(
     env: &Environment,
@@ -63,4 +67,15 @@ where
         .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
         .collect_vec()
         .join(";")
+}
+
+pub fn write_torch_registration_macros(file_set: &mut FileSet) -> Result<()> {
+    let mut path = PathBuf::new();
+    path.push("torch-ext");
+    path.push("registration.h");
+    file_set
+        .entry(path)
+        .extend_from_slice(REGISTRATION_H.as_bytes());
+
+    Ok(())
 }

@@ -8,13 +8,13 @@ use crate::config::{Backend, Build, Torch};
 use crate::fileset::FileSet;
 use crate::torch::common::write_metadata;
 use crate::torch::common::write_pyproject_toml;
+use crate::torch::common::write_torch_registration_macros;
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
 
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
-static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 
 pub fn write_torch_ext_cpu(
     env: &Environment,
@@ -220,17 +220,6 @@ fn write_setup_py(
             writer,
         )
         .wrap_err("Cannot render kernel template")?;
-
-    Ok(())
-}
-
-fn write_torch_registration_macros(file_set: &mut FileSet) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("torch-ext");
-    path.push("registration.h");
-    file_set
-        .entry(path)
-        .extend_from_slice(REGISTRATION_H.as_bytes());
 
     Ok(())
 }

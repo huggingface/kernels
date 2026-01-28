@@ -10,6 +10,7 @@ use crate::config::{Backend, Build, Dependency, Torch};
 use crate::torch::common::prefix_and_join_includes;
 use crate::torch::common::write_metadata;
 use crate::torch::common::write_pyproject_toml;
+use crate::torch::common::write_torch_registration_macros;
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -18,7 +19,6 @@ use crate::FileSet;
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
-static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 
 pub fn write_torch_ext_cuda(
@@ -64,17 +64,6 @@ pub fn write_torch_ext_cuda(
     write_metadata(backend, &build.general, &mut file_set)?;
 
     Ok(file_set)
-}
-
-fn write_torch_registration_macros(file_set: &mut FileSet) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("torch-ext");
-    path.push("registration.h");
-    file_set
-        .entry(path)
-        .extend_from_slice(REGISTRATION_H.as_bytes());
-
-    Ok(())
 }
 
 fn write_setup_py(

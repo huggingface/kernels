@@ -9,6 +9,7 @@ from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.upload import upload_kernels_dir
 from kernels.utils import install_kernel, install_kernel_all_variants
 from kernels.versions_cli import print_kernel_versions
+from kernels.init import run_init
 
 from .doc import generate_readme_for_kernel
 
@@ -145,6 +146,23 @@ def main():
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)
     benchmark_parser.set_defaults(func=run_benchmark)
+
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize a new kernel project from template",
+    )
+    init_parser.add_argument(
+        "kernel_name",
+        type=str,
+        help="Name of the kernel repo (e.g., drbh/my-kernel)",
+    )
+    init_parser.add_argument(
+        "--template-repo",
+        type=str,
+        default="drbh/template",
+        help="HuggingFace repo ID for the template",
+    )
+    init_parser.set_defaults(func=run_init)
 
     args = parser.parse_args()
     args.func(args)

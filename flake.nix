@@ -109,8 +109,8 @@
               buildSets = buildSetPerSystem.${system};
             }
           );
-      }
-      // defaultBuildPerSystem;
+      };
+      #// defaultBuildPerSystem;
     in
     flake-utils.lib.eachSystem systems (
       system:

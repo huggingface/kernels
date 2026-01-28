@@ -6,6 +6,7 @@ from argparse import Namespace
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
+from huggingface_hub.utils import disable_progress_bars
 
 
 def run_init(args: Namespace) -> None:
@@ -42,10 +43,12 @@ def run_init(args: Namespace) -> None:
 
     # Download template from HuggingFace
     template_repo = args.template_repo
+
+    # Suppress progress bars for cleaner output (files are often cached)
+    disable_progress_bars()
+
     print(f"Downloading template from {template_repo}...", file=sys.stderr)
-    template_dir = Path(
-        snapshot_download(repo_id=template_repo, repo_type="model")
-    )
+    template_dir = Path(snapshot_download(repo_id=template_repo, repo_type="model"))
     _init_from_local_template(
         template_dir, target_dir, kernel_name, kernel_name_normalized, repo_id
     )

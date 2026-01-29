@@ -7,12 +7,10 @@ use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Dependency, Torch};
-use crate::torch::common::prefix_and_join_includes;
-use crate::torch::common::write_cmake_helpers;
-use crate::torch::common::write_metadata;
-use crate::torch::common::write_ops_py;
-use crate::torch::common::write_pyproject_toml;
-use crate::torch::common::write_torch_registration_macros;
+use crate::torch::common::{
+    render_binding, render_extension, write_cmake_helpers, write_metadata, write_ops_py,
+    write_pyproject_toml, write_setup_py, write_torch_registration_macros,
+};
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -63,33 +61,6 @@ pub fn write_torch_ext_cuda(
     Ok(file_set)
 }
 
-fn write_setup_py(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    ops_name: &str,
-    file_set: &mut FileSet,
-) -> Result<()> {
-    let writer = file_set.entry("setup.py");
-
-    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
-
-    env.get_template("cuda/setup.py")
-        .wrap_err("Cannot get setup.py template")?
-        .render_to_write(
-            context! {
-                data_globs => data_globs,
-                ops_name => ops_name,
-                name => name,
-                version => "0.1.0",
-            },
-            writer,
-        )
-        .wrap_err("Cannot render kernel template")?;
-
-    Ok(())
-}
-
 fn write_cmake(
     env: &Environment,
     backend: Backend,
@@ -120,29 +91,6 @@ fn write_cmake(
     render_kernel_components(env, build, cmake_writer)?;
 
     render_extension(env, name, ops_name, cmake_writer)?;
-
-    Ok(())
-}
-
-pub fn render_binding(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("cuda/torch-binding.cmake")
-        .wrap_err("Cannot get Torch binding template")?
-        .render_to_write(
-            context! {
-                includes => torch.include.as_ref().map(prefix_and_join_includes),
-                name => name,
-                src => torch.src
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch binding template")?;
-
-    write.write_all(b"\n")?;
 
     Ok(())
 }
@@ -238,29 +186,6 @@ fn render_deps(
         };
         write.write_all(b"\n")?;
     }
-
-    Ok(())
-}
-
-pub fn render_extension(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("cuda/torch-extension.cmake")
-        .wrap_err("Cannot get Torch extension template")?
-        .render_to_write(
-            context! {
-                name => name,
-                ops_name => ops_name,
-                platform => std::env::consts::OS,
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch extension template")?;
-
-    write.write_all(b"\n")?;
 
     Ok(())
 }

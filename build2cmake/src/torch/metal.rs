@@ -1,16 +1,14 @@
 use std::{io::Write, path::PathBuf};
 
 use eyre::{bail, Context, Result};
-use itertools::Itertools;
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Torch};
 use crate::fileset::FileSet;
-use crate::torch::common::write_cmake_helpers;
-use crate::torch::common::write_metadata;
-use crate::torch::common::write_ops_py;
-use crate::torch::common::write_pyproject_toml;
-use crate::torch::common::write_torch_registration_macros;
+use crate::torch::common::{
+    render_binding, render_extension, write_cmake_helpers, write_metadata, write_ops_py,
+    write_pyproject_toml, write_setup_py, write_torch_registration_macros,
+};
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -90,51 +88,6 @@ fn write_cmake(
     Ok(())
 }
 
-fn render_binding(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("metal/torch-binding.cmake")
-        .wrap_err("Cannot get Torch binding template")?
-        .render_to_write(
-            context! {
-                includes => torch.include.as_ref().map(prefix_and_join_includes),
-                name => name,
-                src => torch.src
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch binding template")?;
-
-    write.write_all(b"\n")?;
-
-    Ok(())
-}
-
-pub fn render_extension(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("metal/torch-extension.cmake")
-        .wrap_err("Cannot get Torch extension template")?
-        .render_to_write(
-            context! {
-                name => name,
-                ops_name => ops_name,
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch extension template")?;
-
-    write.write_all(b"\n")?;
-
-    Ok(())
-}
-
 fn render_preamble(
     env: &Environment,
     name: &str,
@@ -157,43 +110,4 @@ fn render_preamble(
     write.write_all(b"\n")?;
 
     Ok(())
-}
-
-fn write_setup_py(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    ops_name: &str,
-    file_set: &mut FileSet,
-) -> Result<()> {
-    let writer = file_set.entry("setup.py");
-
-    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
-
-    env.get_template("metal/setup.py")
-        .wrap_err("Cannot get setup.py template")?
-        .render_to_write(
-            context! {
-                data_globs => data_globs,
-                ops_name => ops_name,
-                name => name,
-                version => "0.1.0",
-            },
-            writer,
-        )
-        .wrap_err("Cannot render kernel template")?;
-
-    Ok(())
-}
-
-fn prefix_and_join_includes<S>(includes: impl AsRef<[S]>) -> String
-where
-    S: AsRef<str>,
-{
-    includes
-        .as_ref()
-        .iter()
-        .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
-        .collect_vec()
-        .join(";")
 }

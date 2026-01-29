@@ -1,10 +1,11 @@
+use std::io::Write;
 use std::path::PathBuf;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, General};
+use crate::config::{Backend, General, Torch};
 use crate::metadata::Metadata;
 use crate::FileSet;
 
@@ -15,6 +16,33 @@ static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
+
+pub fn write_setup_py(
+    env: &Environment,
+    torch: &crate::config::Torch,
+    name: &str,
+    ops_name: &str,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    let writer = file_set.entry("setup.py");
+
+    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
+
+    env.get_template("setup.py")
+        .wrap_err("Cannot get setup.py template")?
+        .render_to_write(
+            context! {
+                data_globs => data_globs,
+                ops_name => ops_name,
+                name => name,
+                version => "0.1.0",
+            },
+            writer,
+        )
+        .wrap_err("Cannot render setup.py template")?;
+
+    Ok(())
+}
 
 pub fn write_pyproject_toml(
     env: &Environment,
@@ -86,6 +114,29 @@ pub fn write_torch_registration_macros(file_set: &mut FileSet) -> Result<()> {
     Ok(())
 }
 
+pub fn render_binding(
+    env: &Environment,
+    torch: &Torch,
+    name: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("torch-binding.cmake")
+        .wrap_err("Cannot get Torch binding template")?
+        .render_to_write(
+            context! {
+                includes => torch.include.as_ref().map(prefix_and_join_includes),
+                name => name,
+                src => torch.src
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render Torch binding template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
+}
+
 pub fn write_ops_py(
     env: &Environment,
     name: &str,
@@ -136,4 +187,27 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
         "metallib_to_header.py",
         METALLIB_TO_HEADER_PY.as_bytes(),
     );
+}
+
+pub fn render_extension(
+    env: &Environment,
+    name: &str,
+    ops_name: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("torch-extension.cmake")
+        .wrap_err("Cannot get Torch extension template")?
+        .render_to_write(
+            context! {
+                name => name,
+                ops_name => ops_name,
+                platform => std::env::consts::OS,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render Torch extension template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
 }

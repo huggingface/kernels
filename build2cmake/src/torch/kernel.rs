@@ -51,7 +51,7 @@ fn render_kernel_component(
     Ok(())
 }
 
-pub fn render_kernel_component_cpu(
+fn render_kernel_component_cpu(
     env: &Environment,
     kernel_name: &str,
     kernel: &Kernel,
@@ -134,7 +134,7 @@ fn render_kernel_component_cuda(
     Ok(())
 }
 
-pub fn render_kernel_component_metal(
+fn render_kernel_component_metal(
     env: &Environment,
     kernel_name: &str,
     kernel: &Kernel,
@@ -159,7 +159,7 @@ pub fn render_kernel_component_metal(
     Ok(())
 }
 
-pub fn render_kernel_component_xpu(
+fn render_kernel_component_xpu(
     env: &Environment,
     kernel_name: &str,
     kernel: &Kernel,

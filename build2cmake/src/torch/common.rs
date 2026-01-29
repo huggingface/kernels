@@ -8,6 +8,33 @@ use crate::config::{Backend, General, Torch};
 use crate::metadata::Metadata;
 use crate::FileSet;
 
+pub fn write_setup_py(
+    env: &Environment,
+    torch: &crate::config::Torch,
+    name: &str,
+    ops_name: &str,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    let writer = file_set.entry("setup.py");
+
+    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
+
+    env.get_template("setup.py")
+        .wrap_err("Cannot get setup.py template")?
+        .render_to_write(
+            context! {
+                data_globs => data_globs,
+                ops_name => ops_name,
+                name => name,
+                version => "0.1.0",
+            },
+            writer,
+        )
+        .wrap_err("Cannot render setup.py template")?;
+
+    Ok(())
+}
+
 pub fn write_pyproject_toml(
     env: &Environment,
     backend: Backend,

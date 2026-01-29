@@ -67,6 +67,7 @@ class CMakeBuild(build_ext):
             cmake_args += [
                 "-DCMAKE_C_COMPILER_LAUNCHER=sccache",
                 "-DCMAKE_CXX_COMPILER_LAUNCHER=sccache",
+                "-DCMAKE_CUDA_COMPILER_LAUNCHER=sccache",
                 "-DCMAKE_HIP_COMPILER_LAUNCHER=sccache",
                 "-DCMAKE_OBJC_COMPILER_LAUNCHER=sccache",
                 "-DCMAKE_OBJCXX_COMPILER_LAUNCHER=sccache",
@@ -75,6 +76,7 @@ class CMakeBuild(build_ext):
             cmake_args += [
                 "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
                 "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+                "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache",
                 "-DCMAKE_HIP_COMPILER_LAUNCHER=ccache",
                 "-DCMAKE_OBJC_COMPILER_LAUNCHER=ccache",
                 "-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache",
@@ -92,6 +94,19 @@ class CMakeBuild(build_ext):
             except AttributeError:
                 num_jobs = os.cpu_count()
 
+        nvcc_threads = os.getenv("NVCC_THREADS", None)
+        if nvcc_threads is not None:
+            nvcc_threads = int(nvcc_threads)
+            logger.info(
+                "Using NVCC_THREADS=%d as the number of nvcc threads.", nvcc_threads
+            )
+            num_jobs = max(1, num_jobs // nvcc_threads)
+            cmake_args += ["-DNVCC_THREADS={}".format(nvcc_threads)]
+
+        build_args += [f"-j{num_jobs}"]
+        if sys.platform == "win32":
+            build_args += ["--config", cfg]
+
         build_temp = Path(self.build_temp) / ext.name
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
@@ -102,6 +117,11 @@ class CMakeBuild(build_ext):
         subprocess.run(
             ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
         )
+
+        if sys.platform == "win32":
+            # Move the dylib one folder up for discovery.
+            for filename in os.listdir(extdir / cfg):
+                move(extdir / cfg / filename, extdir / filename)
 
 
 {% set python_name = name | replace('-', '_') %}

@@ -7,17 +7,13 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Dependency, Torch};
 use crate::torch::common::{
-    render_binding, render_extension, write_metadata, write_pyproject_toml, write_setup_py,
+    render_binding, render_extension, write_cmake_helpers, write_metadata, write_ops_py,
+    write_pyproject_toml, write_setup_py, write_torch_registration_macros,
 };
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
 use crate::FileSet;
-
-static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
-static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
-static REGISTRATION_H: &str = include_str!("../templates/registration.h");
-static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
 
 pub fn write_torch_ext_xpu(
     env: &Environment,
@@ -62,42 +58,6 @@ pub fn write_torch_ext_xpu(
     Ok(file_set)
 }
 
-fn write_torch_registration_macros(file_set: &mut FileSet) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("torch-ext");
-    path.push("registration.h");
-    file_set
-        .entry(path)
-        .extend_from_slice(REGISTRATION_H.as_bytes());
-
-    Ok(())
-}
-
-fn write_ops_py(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    file_set: &mut FileSet,
-) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("torch-ext");
-    path.push(name);
-    path.push("_ops.py");
-    let writer = file_set.entry(path);
-
-    env.get_template("_ops.py")
-        .wrap_err("Cannot get _ops.py template")?
-        .render_to_write(
-            context! {
-                ops_name => ops_name,
-            },
-            writer,
-        )
-        .wrap_err("Cannot render _ops.py template")?;
-
-    Ok(())
-}
-
 fn write_cmake(
     env: &Environment,
     build: &Build,
@@ -106,27 +66,7 @@ fn write_cmake(
     ops_name: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
-    let mut utils_path = PathBuf::new();
-    utils_path.push("cmake");
-    utils_path.push("utils.cmake");
-    file_set
-        .entry(utils_path.clone())
-        .extend_from_slice(CMAKE_UTILS.as_bytes());
-
-    // Add windows.cmake for Windows-specific install targets
-    let mut windows_utils_path = PathBuf::new();
-    windows_utils_path.push("cmake");
-    windows_utils_path.push("windows.cmake");
-    file_set
-        .entry(windows_utils_path.clone())
-        .extend_from_slice(WINDOWS_UTILS.as_bytes());
-
-    let mut kernel_path = PathBuf::new();
-    kernel_path.push("cmake");
-    kernel_path.push("kernel.cmake");
-    file_set
-        .entry(kernel_path.clone())
-        .extend_from_slice(CMAKE_KERNEL.as_bytes());
+    write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 

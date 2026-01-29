@@ -14,6 +14,8 @@ from typing import Any
 from huggingface_hub import get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
+from kernels.utils import backend
+
 MISSING_DEPS: list[str] = []
 
 try:
@@ -405,21 +407,10 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
         return None, None
 
 
-def get_device() -> str:
-    if TORCH_AVAILABLE:
-        if torch.cuda.is_available():
-            return "cuda"
-        elif hasattr(torch, "xpu") and torch.xpu.is_available():
-            return "xpu"
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
-    return "cpu"
-
-
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
     gpu_cores = None
-    backend = "N/A"
+    backend_type = "N/A"
     pytorch_version = "N/A"
     system = platform.system()
     os_info = f"{system} {platform.release()}"
@@ -433,29 +424,33 @@ def collect_machine_info() -> MachineInfo:
 
     if TORCH_AVAILABLE:
         pytorch_version = torch.__version__
-        device = get_device()
-        if device == "cuda":
+        backend_name = backend()
+        if backend_name in {"cuda", "hip"}:
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
             if hasattr(torch.version, "hip") and torch.version.hip:
-                backend = f"ROCm {torch.version.hip}"
+                backend_type = f"ROCm {torch.version.hip}"
             else:
-                backend = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
-        elif device == "xpu":
+                backend_type = (
+                    f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+                )
+        elif backend_name == "xpu":
             gpu = torch.xpu.get_device_name(0)
-            backend = "XPU"
-        elif device == "mps":
+            backend_type = "XPU"
+        elif backend_name == "metal":
             macos_gpu, macos_cores = _get_macos_gpu()
             gpu = macos_gpu or "Apple MPS"
             gpu_cores = macos_cores
-            backend = "MPS"
+            backend_type = "MPS"
+        elif backend_name == "cann":
+            backend_type = "NPU"
         else:
-            backend = "CPU"
+            backend_type = "CPU"
 
     return MachineInfo(
         gpu=gpu,
         gpu_cores=gpu_cores,
-        backend=backend,
+        backend=backend_type,
         pytorch_version=pytorch_version,
         os=os_info,
         cpu=cpu,
@@ -484,7 +479,6 @@ def run_benchmark_class(
     warmup: int,
     repo_id: str,
     revision: str,
-    machine_info: MachineInfo,
 ) -> tuple[dict[str, TimingResults], str]:
     results = {}
 
@@ -503,7 +497,14 @@ def run_benchmark_class(
 
     kernel = get_kernel(repo_id, revision=revision)
     kernel_sha = get_kernel_sha_from_build_name(kernel)
-    device = get_device()
+    backend_name = backend() if TORCH_AVAILABLE else "cpu"
+    # Map backend names to torch device names
+    device_map = {
+        "hip": "cuda",
+        "metal": "mps",
+        "cann": "npu",
+    }
+    device = device_map.get(backend_name, backend_name)
     print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
 
     for method_name in benchmark_methods:
@@ -681,7 +682,6 @@ def run_benchmark_script(
             warmup=warmup,
             repo_id=repo_id,
             revision=revision,
-            machine_info=machine_info,
         )
         for name, timing in results.items():
             all_results[f"{cls.__name__}.{name}"] = timing

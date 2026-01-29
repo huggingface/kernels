@@ -23,7 +23,6 @@
       inherit
         (import ./builder/lib/build-sets.nix {
           inherit nixpkgs rust-overlay;
-          torchVersions = torchVersions';
         })
         mkBuildSets
         partitionBuildSetsBySystem
@@ -39,7 +38,7 @@
 
       torchVersions' = import ./builder/versions.nix;
 
-      defaultBuildSets = mkBuildSets systems;
+      defaultBuildSets = mkBuildSets torchVersions' systems;
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
 
       mkBuildPerSystem =
@@ -90,7 +89,7 @@
             (builtins.isFunction torchVersions)
             || abort "`torchVersions` must be a function taking one argument (the default version set)";
           let
-            buildSets = mkBuildSets systems;
+            buildSets = mkBuildSets (torchVersions torchVersions') systems;
             buildSetPerSystem = partitionBuildSetsBySystem buildSets;
             buildPerSystem = mkBuildPerSystem buildSetPerSystem;
           in
@@ -110,8 +109,8 @@
               buildSets = buildSetPerSystem.${system};
             }
           );
-      }
-      // defaultBuildPerSystem;
+      };
+      #// defaultBuildPerSystem;
     in
     flake-utils.lib.eachSystem systems (
       system:

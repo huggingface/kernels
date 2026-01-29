@@ -6,7 +6,7 @@ use minijinja::{context, Environment};
 use crate::config::{Backend, Build, Torch};
 use crate::fileset::FileSet;
 use crate::torch::common::{
-    render_binding, render_extension, write_metadata, write_pyproject_toml,
+    render_binding, render_extension, write_metadata, write_pyproject_toml, write_setup_py,
 };
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
@@ -160,33 +160,6 @@ fn write_ops_py(
         .render_to_write(
             context! {
                 ops_name => ops_name,
-            },
-            writer,
-        )
-        .wrap_err("Cannot render kernel template")?;
-
-    Ok(())
-}
-
-fn write_setup_py(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    ops_name: &str,
-    file_set: &mut FileSet,
-) -> Result<()> {
-    let writer = file_set.entry("setup.py");
-
-    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
-
-    env.get_template("metal/setup.py")
-        .wrap_err("Cannot get setup.py template")?
-        .render_to_write(
-            context! {
-                data_globs => data_globs,
-                ops_name => ops_name,
-                name => name,
-                version => "0.1.0",
             },
             writer,
         )

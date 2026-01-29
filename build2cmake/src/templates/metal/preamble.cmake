@@ -42,6 +42,8 @@ if (TORCH_VERSION VERSION_GREATER {{ torch_maxver }})
 endif()
 {% endif %}
 
+set(GPU_LANG "METAL")
+
 add_compile_definitions(METAL_KERNEL)
 
 # Initialize SRC list for kernel and binding sources

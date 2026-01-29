@@ -4,13 +4,13 @@ use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use super::{common::write_pyproject_toml, kernel_ops_identifier};
-use crate::{
-    config::{Backend, Build, Kernel, Torch},
-    fileset::FileSet,
-    torch::common::write_metadata,
-    version::Version,
-};
+use crate::config::{Backend, Build, Torch};
+use crate::fileset::FileSet;
+use crate::torch::common::write_metadata;
+use crate::torch::common::write_pyproject_toml;
+use crate::torch::kernel::render_kernel_components;
+use crate::torch::kernel_ops_identifier;
+use crate::version::Version;
 
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
@@ -96,13 +96,7 @@ fn write_cmake(
 
     render_binding(env, torch, name, cmake_writer)?;
 
-    for (kernel_name, kernel) in build
-        .kernels
-        .iter()
-        .filter(|(_, kernel)| matches!(kernel, Kernel::Cpu { .. }))
-    {
-        render_kernel(env, kernel_name, kernel, cmake_writer)?;
-    }
+    render_kernel_components(env, build, cmake_writer)?;
 
     render_extension(env, name, ops_name, cmake_writer)?;
 
@@ -148,38 +142,6 @@ pub fn render_extension(
             &mut *write,
         )
         .wrap_err("Cannot render Torch extension template")?;
-
-    write.write_all(b"\n")?;
-
-    Ok(())
-}
-
-pub fn render_kernel(
-    env: &Environment,
-    kernel_name: &str,
-    kernel: &Kernel,
-    write: &mut impl Write,
-) -> Result<()> {
-    // Easier to do in Rust than Jinja.
-    let sources = kernel
-        .src()
-        .iter()
-        .map(|src| format!("\"{src}\""))
-        .collect_vec()
-        .join("\n");
-
-    env.get_template("cpu/kernel.cmake")
-        .wrap_err("Cannot get kernel template")?
-        .render_to_write(
-            context! {
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
-                kernel_name => kernel_name,
-                sources => sources,
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render kernel template")?;
 
     write.write_all(b"\n")?;
 

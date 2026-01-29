@@ -3,12 +3,10 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
-use itertools::Itertools;
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Dependency, Torch};
-use crate::torch::common::write_metadata;
-use crate::torch::common::write_pyproject_toml;
+use crate::torch::common::{render_binding, write_metadata, write_pyproject_toml};
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -176,29 +174,6 @@ fn write_cmake(
     Ok(())
 }
 
-fn render_binding(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("xpu/torch-binding.cmake")
-        .wrap_err("Cannot get Torch binding template")?
-        .render_to_write(
-            context! {
-                includes => torch.include.as_ref().map(prefix_and_join_includes),
-                name => name,
-                src => torch.src
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch binding template")?;
-
-    write.write_all(b"\n")?;
-
-    Ok(())
-}
-
 fn render_deps(
     env: &Environment,
     backend: Backend,
@@ -279,16 +254,4 @@ pub fn render_preamble(
     write.write_all(b"\n")?;
 
     Ok(())
-}
-
-fn prefix_and_join_includes<S>(includes: impl AsRef<[S]>) -> String
-where
-    S: AsRef<str>,
-{
-    includes
-        .as_ref()
-        .iter()
-        .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
-        .collect_vec()
-        .join(";")
 }

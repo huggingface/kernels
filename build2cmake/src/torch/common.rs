@@ -1,8 +1,10 @@
+use std::io::Write;
+
 use eyre::{Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, General};
+use crate::config::{Backend, General, Torch};
 use crate::metadata::Metadata;
 use crate::FileSet;
 
@@ -63,4 +65,50 @@ where
         .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
         .collect_vec()
         .join(";")
+}
+
+pub fn render_binding(
+    env: &Environment,
+    torch: &Torch,
+    name: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("torch-binding.cmake")
+        .wrap_err("Cannot get Torch binding template")?
+        .render_to_write(
+            context! {
+                includes => torch.include.as_ref().map(prefix_and_join_includes),
+                name => name,
+                src => torch.src
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render Torch binding template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
+}
+
+pub fn render_extension(
+    env: &Environment,
+    name: &str,
+    ops_name: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("torch-extension.cmake")
+        .wrap_err("Cannot get Torch extension template")?
+        .render_to_write(
+            context! {
+                name => name,
+                ops_name => ops_name,
+                platform => std::env::consts::OS,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render Torch extension template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
 }

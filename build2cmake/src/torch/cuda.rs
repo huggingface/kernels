@@ -7,9 +7,9 @@ use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Dependency, Torch};
-use crate::torch::common::prefix_and_join_includes;
-use crate::torch::common::write_metadata;
-use crate::torch::common::write_pyproject_toml;
+use crate::torch::common::{
+    render_binding, render_extension, write_metadata, write_pyproject_toml,
+};
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -189,29 +189,6 @@ fn write_cmake(
     Ok(())
 }
 
-pub fn render_binding(
-    env: &Environment,
-    torch: &Torch,
-    name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("cuda/torch-binding.cmake")
-        .wrap_err("Cannot get Torch binding template")?
-        .render_to_write(
-            context! {
-                includes => torch.include.as_ref().map(prefix_and_join_includes),
-                name => name,
-                src => torch.src
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch binding template")?;
-
-    write.write_all(b"\n")?;
-
-    Ok(())
-}
-
 fn render_deps(
     env: &Environment,
     backend: Backend,
@@ -303,29 +280,6 @@ fn render_deps(
         };
         write.write_all(b"\n")?;
     }
-
-    Ok(())
-}
-
-pub fn render_extension(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("cuda/torch-extension.cmake")
-        .wrap_err("Cannot get Torch extension template")?
-        .render_to_write(
-            context! {
-                name => name,
-                ops_name => ops_name,
-                platform => std::env::consts::OS,
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch extension template")?;
-
-    write.write_all(b"\n")?;
 
     Ok(())
 }

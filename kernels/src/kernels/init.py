@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -8,9 +9,40 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
+from kernels.compat import tomllib
+from kernels.utils import KNOWN_BACKENDS
+
 
 def run_init(args: Namespace) -> None:
     kernel_name = args.kernel_name
+    if args.backends is None:
+        backends = ["metal"] if sys.platform == "darwin" else ["cuda"]
+    else:
+        backends = [
+            v.strip().lower()
+            for item in args.backends
+            for v in item.split(",")
+            if v.strip()
+        ]
+        if "all" in backends:
+            if len(backends) > 1:
+                print(
+                    "Error: --backends must be either 'all' or a list of backends.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            backends = []
+        else:
+            valid = set(KNOWN_BACKENDS)
+            invalid = sorted(set(backends) - valid)
+            if invalid:
+                print(
+                    f"Error: invalid backend(s): {', '.join(invalid)}. Valid values are: {', '.join(sorted(valid))}.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            seen: set[str] = set()
+            backends = [b for b in backends if not (b in seen or seen.add(b))]
     # must be fully qualified repo name <owner>/<repo>
     owner_repo = kernel_name.split("/")
     if len(owner_repo) != 2:
@@ -52,6 +84,9 @@ def run_init(args: Namespace) -> None:
     _init_from_local_template(
         template_dir, target_dir, kernel_name, kernel_name_normalized, repo_id
     )
+    if backends:
+        _update_build_backends(target_dir / "build.toml", backends)
+        _remove_backend_dirs(target_dir, backends)
 
     # Initialize git repo (required for Nix flakes)
     subprocess.run(["git", "init"], cwd=target_dir, check=True, capture_output=True)
@@ -140,3 +175,58 @@ def _print_tree(directory: Path, prefix: str = "") -> None:
         if entry.is_dir():
             extension = "    " if is_last else "│   "
             _print_tree(entry, prefix + extension)
+
+
+def _update_build_backends(build_toml_path: Path, backends: list[str]) -> None:
+    if not build_toml_path.exists():
+        return
+    text = build_toml_path.read_text()
+    with open(build_toml_path, "rb") as f:
+        data = tomllib.load(f)
+        if "general" not in data:
+            return
+    kernel_table = data.get("kernel", {})
+    if not isinstance(kernel_table, dict):
+        kernel_table = {}
+    remove_kernels = {
+        name
+        for name, cfg in kernel_table.items()
+        if isinstance(cfg, dict) and cfg.get("backend") not in set(backends)
+    }
+    backends_list = ", ".join(f'"{b}"' for b in backends)
+    new_line = f"backends = [{backends_list}]"
+    pattern = r"(\[general\][\s\S]*?)^\s*backends\s*=\s*\[[^\]]*\]"
+    new_text, count = re.subn(pattern, r"\1" + new_line, text, count=1, flags=re.M)
+    if remove_kernels:
+        new_text = _remove_kernel_sections(new_text, remove_kernels)
+    if count or remove_kernels:
+        build_toml_path.write_text(new_text)
+
+
+def _remove_kernel_sections(text: str, remove_kernels: set[str]) -> str:
+    lines = text.splitlines(keepends=True)
+    output: list[str] = []
+    skip = False
+    for line in lines:
+        match = re.match(r"^\s*\[kernel\.([^\]]+)\]\s*$", line)
+        if match:
+            skip = match.group(1).strip() in remove_kernels
+            if skip:
+                continue
+        if skip and re.match(r"^\s*\[[^\]]+\]\s*$", line):
+            skip = False
+        if not skip:
+            output.append(line)
+    return "".join(output)
+
+
+def _remove_backend_dirs(target_dir: Path, backends: list[str]) -> None:
+    keep = set(backends)
+    known = set(KNOWN_BACKENDS)
+    for entry in target_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        for backend in known - keep:
+            if entry.name.endswith(f"_{backend}"):
+                shutil.rmtree(entry)
+                break

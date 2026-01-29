@@ -162,6 +162,12 @@ def main():
         default="drbh/template",
         help="HuggingFace repo ID for the template",
     )
+    init_parser.add_argument(
+        "--backends",
+        nargs="+",
+        default=None,
+        help="Backends to include ('all' or list like: cpu cuda metal rocm xpu). Defaults: cuda on Linux/Windows, metal on macOS.",
+    )
     init_parser.set_defaults(func=run_init)
 
     args = parser.parse_args()

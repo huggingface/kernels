@@ -1,15 +1,15 @@
-use std::collections::HashSet;
 use std::io::Write;
 use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, Build, Dependency, Torch};
+use crate::config::{Backend, Build, Torch};
 use crate::torch::common::{
     render_binding, render_extension, write_cmake_helpers, write_metadata, write_ops_py,
     write_pyproject_toml, write_setup_py, write_torch_registration_macros,
 };
+use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -85,40 +85,6 @@ fn write_cmake(
     render_kernel_components(env, build, cmake_writer)?;
 
     render_extension(env, name, ops_name, cmake_writer)?;
-
-    Ok(())
-}
-
-fn render_deps(
-    env: &Environment,
-    backend: Backend,
-    build: &Build,
-    write: &mut impl Write,
-) -> Result<()> {
-    let mut deps = HashSet::new();
-
-    for kernel in build
-        .kernels
-        .values()
-        .filter(|kernel| kernel.backend() == backend)
-    {
-        deps.extend(kernel.depends());
-    }
-
-    for dep in deps {
-        match dep {
-            Dependency::CutlassSycl => {
-                env.get_template("xpu/dep-cutlass-sycl.cmake")?
-                    .render_to_write(context! {}, &mut *write)?;
-            }
-            Dependency::Torch => (),
-            _ => {
-                // XPU supports CUTLASS-SYCL instead of CUTLASS
-                eprintln!("Warning: XPU backend doesn't need/support dependency: {dep:?}");
-            }
-        }
-        write.write_all(b"\n")?;
-    }
 
     Ok(())
 }

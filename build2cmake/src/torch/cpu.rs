@@ -5,7 +5,9 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, Torch};
 use crate::fileset::FileSet;
-use crate::torch::common::{render_binding, write_metadata, write_pyproject_toml};
+use crate::torch::common::{
+    render_binding, render_extension, write_metadata, write_pyproject_toml,
+};
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
 use crate::version::Version;
@@ -97,28 +99,6 @@ fn write_cmake(
     render_kernel_components(env, build, cmake_writer)?;
 
     render_extension(env, name, ops_name, cmake_writer)?;
-
-    Ok(())
-}
-
-pub fn render_extension(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("cpu/torch-extension.cmake")
-        .wrap_err("Cannot get Torch extension template")?
-        .render_to_write(
-            context! {
-                name => name,
-                ops_name => ops_name,
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render Torch extension template")?;
-
-    write.write_all(b"\n")?;
 
     Ok(())
 }

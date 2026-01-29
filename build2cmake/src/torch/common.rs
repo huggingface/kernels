@@ -89,3 +89,26 @@ pub fn render_binding(
 
     Ok(())
 }
+
+pub fn render_extension(
+    env: &Environment,
+    name: &str,
+    ops_name: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("torch-extension.cmake")
+        .wrap_err("Cannot get Torch extension template")?
+        .render_to_write(
+            context! {
+                name => name,
+                ops_name => ops_name,
+                platform => std::env::consts::OS,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render Torch extension template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
+}

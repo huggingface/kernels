@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.26)
 project({{name}} LANGUAGES CXX)
 
-set(TARGET_DEVICE "cuda" CACHE STRING "Target device backend for kernel")
-
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
 
 include(FetchContent)
@@ -13,6 +11,7 @@ set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/get_gpu_lang.cmake)
 
 if(DEFINED Python3_EXECUTABLE)
   # Allow passing through the interpreter (e.g. from setup.py).
@@ -30,6 +29,10 @@ find_package(Torch REQUIRED)
 
 run_python(TORCH_VERSION "import torch; print(torch.__version__.split('+')[0])" "Failed to get Torch version")
 
+get_gpu_lang(DETECTED_GPU_LANG)
+set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
+message(STATUS "Using GPU language: ${GPU_LANG}")
+
 {% if torch_minver %}
 if (TORCH_VERSION VERSION_LESS {{ torch_minver }})
   message(FATAL_ERROR "Torch version ${TORCH_VERSION} is too old. "
@@ -44,11 +47,6 @@ if (TORCH_VERSION VERSION_GREATER {{ torch_maxver }})
 endif()
 {% endif %}
 
-if (NOT TARGET_DEVICE STREQUAL "cuda" AND
-    NOT TARGET_DEVICE STREQUAL "rocm")
-    return()
-endif()
-
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 
 if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
@@ -61,8 +59,12 @@ else()
   set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0+PTX")
 endif()
 
-if (NOT HIP_FOUND AND CUDA_FOUND)
-  set(GPU_LANG "CUDA")
+
+# Basic checks for each GPU language.
+if(GPU_LANG STREQUAL "CUDA")
+  if(NOT CUDA_FOUND)
+    message(FATAL_ERROR "GPU language is set to CUDA, but cannot find CUDA toolkit")
+  endif()
 
   {% if cuda_minver %}
     if (CUDA_VERSION VERSION_LESS {{ cuda_minver }})
@@ -78,18 +80,42 @@ if (NOT HIP_FOUND AND CUDA_FOUND)
     endif()
   {% endif %}
 
-elseif(HIP_FOUND)
-  set(GPU_LANG "HIP")
+  # TODO: deprecate one of these settings.
+  add_compile_definitions(USE_CUDA=1)
+  add_compile_definitions(CUDA_KERNEL)
+elseif(GPU_LANG STREQUAL "HIP")
+  if(NOT HIP_FOUND)
+    message(FATAL_ERROR "GPU language is set to HIP, but cannot find ROCm toolkit")
+  endif()
 
   # Importing torch recognizes and sets up some HIP/ROCm configuration but does
   # not let cmake recognize .hip files. In order to get cmake to understand the
   # .hip extension automatically, HIP must be enabled explicitly.
   enable_language(HIP)
+
+  # TODO: deprecate one of these settings.
+  add_compile_definitions(USE_ROCM=1)
+  add_compile_definitions(ROCM_KERNEL)
+elseif(GPU_LANG STREQUAL "CPU")
+  add_compile_definitions(CPU_KERNEL)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
+elseif(GPU_LANG STREQUAL "METAL")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS deployment version")
+  enable_language(C OBJC OBJCXX)
+
+  add_compile_definitions(METAL_KERNEL)
+
+  # Initialize lists for Metal shader sources and their include directories
+  set(ALL_METAL_SOURCES)
+  set(METAL_INCLUDE_DIRS)
+elseif(GPU_LANG STREQUAL "SYCL")
+  add_compile_definitions(XPU_KERNEL)
+  add_compile_definitions(USE_XPU)
 else()
-  message(FATAL_ERROR "Can't find CUDA or HIP installation.")
+  message(FATAL_ERROR "Unsupported GPU language: ${GPU_LANG}")
 endif()
 
-
+# CUDA build options.
 if(GPU_LANG STREQUAL "CUDA")
   # This clears out -gencode arguments from `CMAKE_CUDA_FLAGS`, which we need
   # to set our own set of capabilities.
@@ -116,13 +142,40 @@ if(GPU_LANG STREQUAL "CUDA")
     list(APPEND GPU_FLAGS "--threads=${NVCC_THREADS}")
   endif()
 
-  add_compile_definitions(CUDA_KERNEL)
 elseif(GPU_LANG STREQUAL "HIP")
   override_gpu_arches(GPU_ARCHES HIP ${HIP_SUPPORTED_ARCHS})
   set(ROCM_ARCHS ${GPU_ARCHES})
   message(STATUS "ROCM supported target architectures: ${ROCM_ARCHS}")
+elseif(GPU_LANG STREQUAL "SYCL")
+  find_program(ICX_COMPILER icx)
+  find_program(ICPX_COMPILER icpx)
 
-  add_compile_definitions(ROCM_KERNEL)
+  if(NOT ICX_COMPILER AND NOT ICPX_COMPILER)
+    message(FATAL_ERROR "Intel SYCL C++ compiler (icpx) and/or C compiler (icx) not found. Please install Intel oneAPI toolkit.")
+  endif()
+
+  execute_process(
+    COMMAND ${ICPX_COMPILER} --version
+    OUTPUT_VARIABLE ICPX_VERSION_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "[0-9]+\\.[0-9]+" DPCPP_VERSION "${ICPX_VERSION_OUTPUT}")
+  set(DPCPP_VERSION "${DPCPP_VERSION}" CACHE STRING "DPCPP major.minor version")
+  set(CMAKE_C_COMPILER ${ICX_COMPILER})
+
+  # On Windows, use icx (MSVC-compatible) for C++ to work with Ninja generator
+  # On Linux, use icpx (GNU-compatible) for C++
+  if(WIN32)
+    set(CMAKE_CXX_COMPILER ${ICX_COMPILER})
+    message(STATUS "Using Intel SYCL C++ compiler: ${ICX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION} (Windows MSVC-compatible mode)")
+  else()
+    set(CMAKE_CXX_COMPILER ${ICPX_COMPILER})
+    message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
+  endif()
+
+  set(sycl_link_flags "-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
+  set(GPU_FLAGS "-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  set(GPU_ARCHES "")
 else()
   override_gpu_arches(GPU_ARCHES
     ${GPU_LANG}
@@ -133,17 +186,11 @@ endif()
 set(SRC "")
 
 message(STATUS "Rendered for platform {{ platform }}")
+
 {% if platform == 'windows' %}
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/windows.cmake)
 
-if(GPU_LANG STREQUAL "CUDA")
-  add_compile_definitions(USE_CUDA=1)
-elseif(GPU STREQUAL "HIP")
-  add_compile_definitions(USE_ROCM=1)
-endif()
-
 # Generate standardized build name
-run_python(TORCH_VERSION "import torch; print(torch.__version__.split('+')[0])" "Failed to get Torch version")
 cmake_host_system_information(RESULT HOST_ARCH QUERY OS_PLATFORM)
 
 set(SYSTEM_STRING "${HOST_ARCH}-windows")
@@ -153,5 +200,9 @@ if(GPU_LANG STREQUAL "CUDA")
 elseif(GPU_LANG STREQUAL "HIP")
   run_python(ROCM_VERSION "import torch.version; print(torch.version.hip.split('.')[0] + '.' + torch.version.hip.split('.')[1])" "Failed to get ROCm version")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "rocm" "${ROCM_VERSION}" "${SYSTEM_STRING}")
+elseif(GPU_LANG STREQUAL "SYCL")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "xpu" "${DPCPP_VERSION}")
+else()
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cpu" "${SYSTEM_STRING}")
 endif()
 {% endif %}

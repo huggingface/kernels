@@ -7,6 +7,7 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, General, Torch};
 use crate::metadata::Metadata;
+use crate::version::Version;
 use crate::FileSet;
 
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
@@ -16,6 +17,8 @@ static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
+static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
+static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
 
 pub fn write_setup_py(
     env: &Environment,
@@ -187,6 +190,8 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
         "metallib_to_header.py",
         METALLIB_TO_HEADER_PY.as_bytes(),
     );
+    write_cmake_file(file_set, "get_gpu_lang.cmake", GET_GPU_LANG.as_bytes());
+    write_cmake_file(file_set, "get_gpu_lang.py", GET_GPU_LANG_PY.as_bytes());
 }
 
 pub fn render_extension(
@@ -206,6 +211,35 @@ pub fn render_extension(
             &mut *write,
         )
         .wrap_err("Cannot render Torch extension template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
+}
+
+pub fn render_preamble(
+    env: &Environment,
+    name: &str,
+    cuda_minver: Option<&Version>,
+    cuda_maxver: Option<&Version>,
+    torch_minver: Option<&Version>,
+    torch_maxver: Option<&Version>,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("preamble.cmake")
+        .wrap_err("Cannot get CMake prelude template")?
+        .render_to_write(
+            context! {
+                name => name,
+                cuda_minver => cuda_minver.map(|v| v.to_string()),
+                cuda_maxver => cuda_maxver.map(|v| v.to_string()),
+                torch_minver => torch_minver.map(|v| v.to_string()),
+                torch_maxver => torch_maxver.map(|v| v.to_string()),
+                platform => std::env::consts::OS
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render CMake prelude template")?;
 
     write.write_all(b"\n")?;
 

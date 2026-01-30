@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.26)
 project({{name}} LANGUAGES CXX)
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
-
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
 
 include(FetchContent)
@@ -100,6 +98,16 @@ elseif(GPU_LANG STREQUAL "HIP")
   add_compile_definitions(ROCM_KERNEL)
 elseif(GPU_LANG STREQUAL "CPU")
   add_compile_definitions(CPU_KERNEL)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
+elseif(GPU_LANG STREQUAL "METAL")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS deployment version")
+  enable_language(C OBJC OBJCXX)
+
+  add_compile_definitions(METAL_KERNEL)
+
+  # Initialize lists for Metal shader sources and their include directories
+  set(ALL_METAL_SOURCES)
+  set(METAL_INCLUDE_DIRS)
 elseif(GPU_LANG STREQUAL "SYCL")
   add_compile_definitions(XPU_KERNEL)
   add_compile_definitions(USE_XPU)

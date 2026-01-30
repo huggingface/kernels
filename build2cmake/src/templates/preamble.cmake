@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.26)
 project({{name}} LANGUAGES CXX)
 
-set(TARGET_DEVICE "cuda" CACHE STRING "Target device backend for kernel")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
 
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
 
@@ -48,11 +48,6 @@ if (TORCH_VERSION VERSION_GREATER {{ torch_maxver }})
     "Maximum supported version is {{ torch_maxver }}.")
 endif()
 {% endif %}
-
-if (NOT TARGET_DEVICE STREQUAL "cuda" AND
-    NOT TARGET_DEVICE STREQUAL "rocm")
-    return()
-endif()
 
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 
@@ -103,6 +98,10 @@ elseif(GPU_LANG STREQUAL "HIP")
   # TODO: deprecate one of these settings.
   add_compile_definitions(USE_ROCM=1)
   add_compile_definitions(ROCM_KERNEL)
+elseif(GPU_LANG STREQUAL "CPU")
+  add_compile_definitions(CPU_KERNEL)
+else()
+  message(FATAL_ERROR "Unsupported GPU language: ${GPU_LANG}")
 endif()
 
 # CUDA build options.

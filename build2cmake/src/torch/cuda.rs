@@ -1,19 +1,16 @@
-use std::env;
-use std::io::Write;
 use std::path::PathBuf;
 
-use eyre::{bail, Context, Result};
-use minijinja::{context, Environment};
+use eyre::{bail, Result};
+use minijinja::Environment;
 
 use crate::config::{Backend, Build, Torch};
 use crate::torch::common::{
-    render_binding, render_extension, write_cmake_helpers, write_metadata, write_ops_py,
-    write_pyproject_toml, write_setup_py, write_torch_registration_macros,
+    render_binding, render_extension, render_preamble, write_cmake_helpers, write_metadata,
+    write_ops_py, write_pyproject_toml, write_setup_py, write_torch_registration_macros,
 };
 use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
 use crate::torch::kernel_ops_identifier;
-use crate::version::Version;
 use crate::FileSet;
 
 pub fn write_torch_ext_cuda(
@@ -91,35 +88,6 @@ fn write_cmake(
     render_kernel_components(env, build, cmake_writer)?;
 
     render_extension(env, name, ops_name, cmake_writer)?;
-
-    Ok(())
-}
-
-pub fn render_preamble(
-    env: &Environment,
-    name: &str,
-    cuda_minver: Option<&Version>,
-    cuda_maxver: Option<&Version>,
-    torch_minver: Option<&Version>,
-    torch_maxver: Option<&Version>,
-    write: &mut impl Write,
-) -> Result<()> {
-    env.get_template("preamble.cmake")
-        .wrap_err("Cannot get CMake prelude template")?
-        .render_to_write(
-            context! {
-                name => name,
-                cuda_minver => cuda_minver.map(|v| v.to_string()),
-                cuda_maxver => cuda_maxver.map(|v| v.to_string()),
-                torch_minver => torch_minver.map(|v| v.to_string()),
-                torch_maxver => torch_maxver.map(|v| v.to_string()),
-                platform => env::consts::OS
-            },
-            &mut *write,
-        )
-        .wrap_err("Cannot render CMake prelude template")?;
-
-    write.write_all(b"\n")?;
 
     Ok(())
 }

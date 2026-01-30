@@ -16,6 +16,8 @@ static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
+static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
+static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
 
 pub fn write_setup_py(
     env: &Environment,
@@ -187,6 +189,8 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
         "metallib_to_header.py",
         METALLIB_TO_HEADER_PY.as_bytes(),
     );
+    write_cmake_file(file_set, "get_gpu_lang.cmake", GET_GPU_LANG.as_bytes());
+    write_cmake_file(file_set, "get_gpu_lang.py", GET_GPU_LANG_PY.as_bytes());
 }
 
 pub fn render_extension(

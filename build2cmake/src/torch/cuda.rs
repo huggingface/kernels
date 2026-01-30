@@ -104,7 +104,7 @@ pub fn render_preamble(
     torch_maxver: Option<&Version>,
     write: &mut impl Write,
 ) -> Result<()> {
-    env.get_template("cuda/preamble.cmake")
+    env.get_template("preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
         .render_to_write(
             context! {

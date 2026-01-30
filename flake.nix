@@ -92,8 +92,7 @@
             || abort "`torchVersions` must be a function taking one argument (the default version set)";
           let
             buildSets = mkBuildSets (torchVersions torchVersions') systems;
-            buildSetPerSystem = partitionBuildSetsBySystem buildSets;
-            buildPerSystem = mkBuildPerSystem buildSetPerSystem;
+            buildSetsPerSystem = partitionBuildSetsBySystem buildSets;
           in
           flake-utils.lib.eachSystem systems (
             system:
@@ -108,11 +107,10 @@
                 pythonNativeCheckInputs
                 ;
               build = buildPerSystem.${system};
-              buildSets = buildSetPerSystem.${system};
+              buildSets = buildSetsPerSystem.${system} or [ ];
             }
           );
       };
-      #// defaultBuildPerSystem;
     in
     flake-utils.lib.eachSystem systems (
       system:

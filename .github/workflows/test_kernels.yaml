@@ -56,11 +56,15 @@ jobs:
 
       - name: Run tests
         working-directory: ./kernels
+        env:
+          HF_HUB_DOWNLOAD_TIMEOUT: 60
         run: |
           uv run pytest tests
 
       - name: Re-run dependency test with dependencies installed
         working-directory: ./kernels
+        env:
+          HF_HUB_DOWNLOAD_TIMEOUT: 60
         run: |
           uv pip install einops nvidia-cutlass-dsl
           uv run pytest tests/test_deps.py
@@ -68,6 +72,7 @@ jobs:
       - name: Run staging tests
         working-directory: ./kernels
         env:
+          HF_HUB_DOWNLOAD_TIMEOUT: 60
           HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
         run: |
           HUGGINGFACE_CO_STAGING=true uv run pytest --token -m "is_staging_test" tests/

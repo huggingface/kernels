@@ -42,12 +42,14 @@
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
 
       mkBuildPerSystem =
-        buildSetPerSystem:
-        builtins.mapAttrs (
-          system: buildSet: nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { }
-        ) buildSetPerSystem;
-
-      defaultBuildPerSystem = mkBuildPerSystem defaultBuildSetsPerSystem;
+        systems:
+        builtins.listToAttrs (
+          builtins.map (system: {
+            name = system;
+            value = nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { };
+          }) systems
+        );
+      buildPerSystem = mkBuildPerSystem systems;
 
       # The lib output consists of two parts:
       #
@@ -90,8 +92,7 @@
             || abort "`torchVersions` must be a function taking one argument (the default version set)";
           let
             buildSets = mkBuildSets (torchVersions torchVersions') systems;
-            buildSetPerSystem = partitionBuildSetsBySystem buildSets;
-            buildPerSystem = mkBuildPerSystem buildSetPerSystem;
+            buildSetsPerSystem = partitionBuildSetsBySystem buildSets;
           in
           flake-utils.lib.eachSystem systems (
             system:
@@ -106,11 +107,10 @@
                 pythonNativeCheckInputs
                 ;
               build = buildPerSystem.${system};
-              buildSets = buildSetPerSystem.${system};
+              buildSets = buildSetsPerSystem.${system} or [ ];
             }
           );
       };
-      #// defaultBuildPerSystem;
     in
     flake-utils.lib.eachSystem systems (
       system:
@@ -178,7 +178,7 @@
       rec {
         checks.default = pkgs.callPackage ./builder/lib/checks.nix {
           inherit buildSets;
-          build = defaultBuildPerSystem.${system};
+          build = buildPerSystem.${system};
         };
 
         devShells = devShellByBackend // {

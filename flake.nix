@@ -42,12 +42,14 @@
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
 
       mkBuildPerSystem =
-        buildSetPerSystem:
-        builtins.mapAttrs (
-          system: buildSet: nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { }
-        ) buildSetPerSystem;
-
-      defaultBuildPerSystem = mkBuildPerSystem defaultBuildSetsPerSystem;
+        systems:
+        builtins.listToAttrs (
+          builtins.map (system: {
+            name = system;
+            value = nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { };
+          }) systems
+        );
+      buildPerSystem = mkBuildPerSystem systems;
 
       # The lib output consists of two parts:
       #
@@ -178,7 +180,7 @@
       rec {
         checks.default = pkgs.callPackage ./builder/lib/checks.nix {
           inherit buildSets;
-          build = defaultBuildPerSystem.${system};
+          build = buildPerSystem.${system};
         };
 
         devShells = devShellByBackend // {

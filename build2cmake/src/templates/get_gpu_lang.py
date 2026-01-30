@@ -13,8 +13,8 @@ if torch.version.cuda is not None:
 elif torch.version.hip is not None:
     print("HIP")
 elif torch.backends.mps.is_available():
-    print("METAL")
+    print("Metal")
 elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
-    print("XPU")
+    print("SYCL")
 else:
     print("CPU")

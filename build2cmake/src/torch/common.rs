@@ -5,8 +5,10 @@ use eyre::{Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, General, Torch};
+use crate::config::{Backend, Build, General, Torch};
 use crate::metadata::Metadata;
+use crate::torch::deps::render_deps;
+use crate::torch::kernel::render_kernel_components;
 use crate::version::Version;
 use crate::FileSet;
 
@@ -242,6 +244,48 @@ pub fn render_preamble(
         .wrap_err("Cannot render CMake prelude template")?;
 
     write.write_all(b"\n")?;
+
+    Ok(())
+}
+
+pub fn write_cmake(
+    env: &Environment,
+    backend: Backend,
+    build: &Build,
+    torch: &Torch,
+    name: &str,
+    ops_name: &str,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    write_cmake_helpers(file_set);
+
+    let cmake_writer = file_set.entry("CMakeLists.txt");
+
+    let (cuda_minver, cuda_maxver) = match backend {
+        Backend::Cuda => (
+            build.general.cuda.as_ref().and_then(|c| c.minver.as_ref()),
+            build.general.cuda.as_ref().and_then(|c| c.maxver.as_ref()),
+        ),
+        _ => (None, None),
+    };
+
+    render_preamble(
+        env,
+        name,
+        cuda_minver,
+        cuda_maxver,
+        torch.minver.as_ref(),
+        torch.maxver.as_ref(),
+        cmake_writer,
+    )?;
+
+    render_deps(env, backend, build, cmake_writer)?;
+
+    render_binding(env, torch, name, cmake_writer)?;
+
+    render_kernel_components(env, build, cmake_writer)?;
+
+    render_extension(env, name, ops_name, cmake_writer)?;
 
     Ok(())
 }

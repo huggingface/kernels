@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use eyre::{Context, Result};
+use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
@@ -288,4 +288,53 @@ pub fn write_cmake(
     render_extension(env, name, ops_name, cmake_writer)?;
 
     Ok(())
+}
+
+pub fn write_torch_ext(
+    env: &Environment,
+    backend: Backend,
+    build: &Build,
+    target_dir: PathBuf,
+    ops_id: Option<String>,
+) -> Result<FileSet> {
+    let torch_ext = match build.torch.as_ref() {
+        Some(torch_ext) => torch_ext,
+        None => bail!("Build configuration does not have `torch` section"),
+    };
+
+    let mut file_set = FileSet::default();
+
+    let ops_name = crate::torch::ops_identifier::kernel_ops_identifier(
+        &target_dir,
+        &build.general.python_name(),
+        ops_id,
+    );
+
+    write_cmake(
+        env,
+        backend,
+        build,
+        torch_ext,
+        &build.general.name,
+        &ops_name,
+        &mut file_set,
+    )?;
+
+    write_setup_py(
+        env,
+        torch_ext,
+        &build.general.name,
+        &ops_name,
+        &mut file_set,
+    )?;
+
+    write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
+
+    write_pyproject_toml(env, backend, &build.general, &mut file_set)?;
+
+    write_torch_registration_macros(&mut file_set)?;
+
+    write_metadata(backend, &build.general, &mut file_set)?;
+
+    Ok(file_set)
 }

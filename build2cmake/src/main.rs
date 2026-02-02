@@ -9,10 +9,7 @@ use eyre::{bail, ensure, Context, Result};
 use minijinja::Environment;
 
 mod torch;
-use torch::{
-    write_torch_ext_cpu, write_torch_ext_cuda, write_torch_ext_metal, write_torch_ext_noarch,
-    write_torch_ext_xpu,
-};
+use torch::{write_torch_ext, write_torch_ext_noarch};
 
 mod config;
 use config::{v3, Backend, Build, BuildCompat};
@@ -176,14 +173,7 @@ fn generate_torch(
     let file_set = if build.is_noarch() {
         write_torch_ext_noarch(&env, backend, &build, target_dir.clone(), ops_id)?
     } else {
-        match backend {
-            Backend::Cpu => write_torch_ext_cpu(&env, &build, target_dir.clone(), ops_id)?,
-            Backend::Cuda | Backend::Rocm => {
-                write_torch_ext_cuda(&env, backend, &build, target_dir.clone(), ops_id)?
-            }
-            Backend::Metal => write_torch_ext_metal(&env, &build, target_dir.clone(), ops_id)?,
-            Backend::Xpu => write_torch_ext_xpu(&env, &build, target_dir.clone(), ops_id)?,
-        }
+        write_torch_ext(&env, backend, &build, target_dir.clone(), ops_id)?
     };
     file_set.write(&target_dir, force)?;
 
@@ -382,20 +372,7 @@ fn get_generated_files(
         let set = if build.is_noarch() {
             write_torch_ext_noarch(env, *backend, build, target_dir.clone(), ops_id.clone())?
         } else {
-            match backend {
-                Backend::Cpu => {
-                    write_torch_ext_cpu(env, build, target_dir.clone(), ops_id.clone())?
-                }
-                Backend::Cuda | Backend::Rocm => {
-                    write_torch_ext_cuda(env, *backend, build, target_dir.clone(), ops_id.clone())?
-                }
-                Backend::Metal => {
-                    write_torch_ext_metal(env, build, target_dir.clone(), ops_id.clone())?
-                }
-                Backend::Xpu => {
-                    write_torch_ext_xpu(env, build, target_dir.clone(), ops_id.clone())?
-                }
-            }
+            write_torch_ext(env, *backend, build, target_dir.clone(), ops_id.clone())?
         };
         all_set.extend(set);
     }

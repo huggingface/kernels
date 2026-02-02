@@ -1,3 +1,5 @@
+if(GPU_LANG STREQUAL "SYCL")
+
 find_package(CutlassSycl)
 
 if(DPCPP_VERSION STREQUAL "2025.3")
@@ -74,3 +76,4 @@ if(DPCPP_VERSION STREQUAL "2025.2" OR DPCPP_VERSION STREQUAL "2025.3" OR CUTLASS
 endif()
 string(REPLACE "-fsycl-targets=spir64_gen,spir64" "-fsycl-targets=spir64" sycl_flags "${sycl_flags}")
 
+endif(GPU_LANG STREQUAL "SYCL")

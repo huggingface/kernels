@@ -81,7 +81,6 @@ stdenv.mkDerivation (prevAttrs: {
   # we run it anyway.
   postPatch = ''
     build2cmake generate-torch \
-      --backend ${buildConfig.backend} \
       --ops-id ${rev} build.toml
   '';
 
@@ -90,7 +89,7 @@ stdenv.mkDerivation (prevAttrs: {
     cp -r torch-ext/${moduleName}/* $out/
     mkdir $out/${moduleName}
     cp ${./compat.py} $out/${moduleName}/__init__.py
-    cp metadata.json $out/
+    cp metadata-${buildConfig.backend}.json $out/
   '';
 
   doInstallCheck = true;

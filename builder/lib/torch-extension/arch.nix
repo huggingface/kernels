@@ -108,7 +108,6 @@ stdenv.mkDerivation (prevAttrs: {
   # Generate build files.
   postPatch = ''
     build2cmake generate-torch \
-      --backend ${buildConfig.backend} \
       --ops-id ${rev} build.toml
   '';
 
@@ -250,7 +249,7 @@ stdenv.mkDerivation (prevAttrs: {
     mkdir $out/${moduleName}
     cp ${./compat.py} $out/${moduleName}/__init__.py
 
-    cp ../metadata.json $out/
+    cp ../metadata-${buildConfig.backend}.json $out/
   ''
   + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
     find $out/ -name '*.so' \

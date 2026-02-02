@@ -483,7 +483,6 @@ function Invoke-Backend {
     if ($Target) { $kwargs += $Target }
     if ($Options.Force) { $kwargs += '--force' }
     if ($Options.OpsId) { $kwargs += '--ops-id', $Options.OpsId }
-    if ($Backend -and $Backend -ne 'universal') { $kwargs += '--backend', $Backend }
 
     Invoke-Build2Cmake -Build2CmakeExe $Build2CmakeExe -Arguments $kwargs
 }

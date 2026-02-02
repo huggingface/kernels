@@ -27,10 +27,6 @@ impl Build {
     pub fn is_noarch(&self) -> bool {
         self.kernels.is_empty()
     }
-
-    pub fn supports_backend(&self, backend: &Backend) -> bool {
-        self.general.backends.contains(backend)
-    }
 }
 
 pub struct General {

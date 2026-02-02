@@ -1,3 +1,6 @@
+if(GPU_LANG STREQUAL "CUDA")
+  message(STATUS "Including CUTLASS dependency")
+
 find_package(NvidiaCutlass)
 
 if (NOT NvidiaCutlass_FOUND)
@@ -37,3 +40,5 @@ if (NOT NvidiaCutlass_FOUND)
 else()
   message(STATUS "Using system cutlass with version: ${NvidiaCutlass_VERSION}")
 endif(NOT NvidiaCutlass_FOUND)
+
+endif(GPU_LANG STREQUAL "CUDA")

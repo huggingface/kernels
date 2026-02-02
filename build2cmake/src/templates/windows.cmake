@@ -151,6 +151,21 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Installing files to local directory..."
     )
 
+  
+    if (${GPU_LANG} STREQUAL "CPU")
+      set(_BACKEND "cpu")
+    elseif (${GPU_LANG} STREQUAL "CUDA")
+      set(_BACKEND "cuda")
+    elseif (${GPU_LANG} STREQUAL "ROCM")
+      set(_BACKEND "rocm")
+    elseif (${GPU_LANG} STREQUAL "METAL")
+      set(_BACKEND "metal")
+    elseif (${GPU_LANG} STREQUAL "XPU")
+      set(_BACKEND "xpu")
+    else()
+      message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
+    endif()
+
     # Add custom commands to copy files
     add_custom_command(TARGET local_install POST_BUILD
             # Copy the shared library
@@ -165,8 +180,8 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
 
             # Copy metadata.json if it exists
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/metadata.json
-            ${VARIANT_DIR}/
+            ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
+            ${VARIANT_DIR}/metadata.json
 
             COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
             COMMAND_EXPAND_LISTS

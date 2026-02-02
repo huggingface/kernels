@@ -77,21 +77,29 @@ pub fn write_pyproject_toml(
     Ok(())
 }
 
-pub fn write_metadata(backend: Backend, general: &General, file_set: &mut FileSet) -> Result<()> {
-    let writer = file_set.entry("metadata.json");
+pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
+    for backend in &[
+        Backend::Cpu,
+        Backend::Cuda,
+        Backend::Metal,
+        Backend::Rocm,
+        Backend::Xpu,
+    ] {
+        let writer = file_set.entry(format!("metadata-{}.json", backend.to_string()));
 
-    let python_depends = general
-        .python_depends()
-        .chain(general.backend_python_depends(backend))
-        .collect::<Result<Vec<_>>>()?;
+        let python_depends = general
+            .python_depends()
+            .chain(general.backend_python_depends(*backend))
+            .collect::<Result<Vec<_>>>()?;
 
-    let metadata = Metadata {
-        version: general.version,
-        license: general.license.clone(),
-        python_depends,
-    };
+        let metadata = Metadata {
+            version: general.version,
+            license: general.license.clone(),
+            python_depends,
+        };
 
-    serde_json::to_writer_pretty(writer, &metadata)?;
+        serde_json::to_writer_pretty(writer, &metadata)?;
+    }
 
     Ok(())
 }
@@ -250,7 +258,6 @@ pub fn render_preamble(
 
 pub fn write_cmake(
     env: &Environment,
-    backend: Backend,
     build: &Build,
     torch: &Torch,
     name: &str,
@@ -261,25 +268,17 @@ pub fn write_cmake(
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    let (cuda_minver, cuda_maxver) = match backend {
-        Backend::Cuda => (
-            build.general.cuda.as_ref().and_then(|c| c.minver.as_ref()),
-            build.general.cuda.as_ref().and_then(|c| c.maxver.as_ref()),
-        ),
-        _ => (None, None),
-    };
-
     render_preamble(
         env,
         name,
-        cuda_minver,
-        cuda_maxver,
+        build.general.cuda.as_ref().and_then(|c| c.minver.as_ref()),
+        build.general.cuda.as_ref().and_then(|c| c.maxver.as_ref()),
         torch.minver.as_ref(),
         torch.maxver.as_ref(),
         cmake_writer,
     )?;
 
-    render_deps(env, backend, build, cmake_writer)?;
+    render_deps(env, build, cmake_writer)?;
 
     render_binding(env, torch, name, cmake_writer)?;
 
@@ -312,7 +311,6 @@ pub fn write_torch_ext(
 
     write_cmake(
         env,
-        backend,
         build,
         torch_ext,
         &build.general.name,
@@ -334,7 +332,7 @@ pub fn write_torch_ext(
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(backend, &build.general, &mut file_set)?;
+    write_metadata(&build.general, &mut file_set)?;
 
     Ok(file_set)
 }

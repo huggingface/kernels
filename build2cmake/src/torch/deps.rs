@@ -4,22 +4,13 @@ use std::io::Write;
 use eyre::{Context, Result};
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, Build, Dependency};
+use crate::config::{Build, Dependency};
 
-pub fn render_deps(
-    env: &Environment,
-    backend: Backend,
-    build: &Build,
-    write: &mut impl Write,
-) -> Result<()> {
+pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> Result<()> {
+    // Collect all dependencies.
     let mut deps = HashSet::new();
-
-    for kernel in build
-        .kernels
-        .values()
-        .filter(|kernel| kernel.backend() == backend)
-    {
-        deps.extend(kernel.depends());
+    for kernel in build.kernels.values() {
+        deps.extend(kernel.depends())
     }
 
     for dep in deps {
@@ -94,10 +85,11 @@ pub fn render_deps(
                 env.get_template("xpu/dep-cutlass-sycl.cmake")?
                     .render_to_write(context! {}, &mut *write)?;
             }
-            Dependency::Torch => (),
-            _ => {
-                eprintln!("Warning: {backend:?} backend doesn't need/support dependency: {dep:?}");
+            Dependency::MetalCpp => {
+                // TODO: add CMake dependency.
+                ()
             }
+            Dependency::Torch => (),
         }
         write.write_all(b"\n")?;
     }

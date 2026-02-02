@@ -30,7 +30,7 @@ pub fn write_torch_ext_noarch(
         &mut file_set,
     )?;
 
-    write_metadata(backend, &build.general, &mut file_set)?;
+    write_metadata(&build.general, &mut file_set)?;
 
     Ok(file_set)
 }

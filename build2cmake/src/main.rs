@@ -173,7 +173,7 @@ fn generate_torch(
     let file_set = if build.is_noarch() {
         write_torch_ext_noarch(&env, backend, &build, target_dir.clone(), ops_id)?
     } else {
-        write_torch_ext(&env, backend, &build, target_dir.clone(), ops_id)?
+        write_torch_ext(&env, &build, target_dir.clone(), ops_id)?
     };
     file_set.write(&target_dir, force)?;
 
@@ -372,7 +372,7 @@ fn get_generated_files(
         let set = if build.is_noarch() {
             write_torch_ext_noarch(env, *backend, build, target_dir.clone(), ops_id.clone())?
         } else {
-            write_torch_ext(env, *backend, build, target_dir.clone(), ops_id.clone())?
+            write_torch_ext(env, build, target_dir.clone(), ops_id.clone())?
         };
         all_set.extend(set);
     }

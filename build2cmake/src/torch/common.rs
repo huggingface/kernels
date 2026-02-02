@@ -51,24 +51,34 @@ pub fn write_setup_py(
 
 pub fn write_pyproject_toml(
     env: &Environment,
-    backend: Backend,
     general: &General,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let writer = file_set.entry("pyproject.toml");
 
-    let python_dependencies = itertools::process_results(
-        general
-            .python_depends()
-            .chain(general.backend_python_depends(backend)),
-        |iter| iter.map(|d| format!("\"{d}\"")).join(", "),
-    )?;
+    // Common python dependencies (no backend-specific ones)
+    let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
+        iter.map(|d| format!("\"{d}\"")).join(", ")
+    })?;
+
+    // Collect backend-specific dependencies for all backends
+    let mut backend_dependencies = Vec::new();
+    for backend in &Backend::all() {
+        let deps = itertools::process_results(general.backend_python_depends(*backend), |iter| {
+            iter.map(|d| format!("\"{d}\"")).collect::<Vec<_>>()
+        })?;
+
+        if !deps.is_empty() {
+            backend_dependencies.push((backend.to_string(), deps));
+        }
+    }
 
     env.get_template("pyproject.toml")
         .wrap_err("Cannot get pyproject.toml template")?
         .render_to_write(
             context! {
                 python_dependencies => python_dependencies,
+                backend_dependencies => backend_dependencies,
             },
             writer,
         )
@@ -78,13 +88,7 @@ pub fn write_pyproject_toml(
 }
 
 pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
-    for backend in &[
-        Backend::Cpu,
-        Backend::Cuda,
-        Backend::Metal,
-        Backend::Rocm,
-        Backend::Xpu,
-    ] {
+    for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{}.json", backend.to_string()));
 
         let python_depends = general
@@ -291,7 +295,6 @@ pub fn write_cmake(
 
 pub fn write_torch_ext(
     env: &Environment,
-    backend: Backend,
     build: &Build,
     target_dir: PathBuf,
     ops_id: Option<String>,
@@ -328,7 +331,7 @@ pub fn write_torch_ext(
 
     write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
 
-    write_pyproject_toml(env, backend, &build.general, &mut file_set)?;
+    write_pyproject_toml(env, &build.general, &mut file_set)?;
 
     write_torch_registration_macros(&mut file_set)?;
 

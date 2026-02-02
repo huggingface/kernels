@@ -247,6 +247,18 @@ pub enum Backend {
     Xpu,
 }
 
+impl Backend {
+    pub const fn all() -> [Backend; 5] {
+        [
+            Backend::Cpu,
+            Backend::Cuda,
+            Backend::Metal,
+            Backend::Rocm,
+            Backend::Xpu,
+        ]
+    }
+}
+
 impl Display for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

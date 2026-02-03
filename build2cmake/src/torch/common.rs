@@ -215,7 +215,7 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
 
 pub fn render_extension(
     env: &Environment,
-    name: &str,
+    general: &General,
     ops_name: &str,
     write: &mut impl Write,
 ) -> Result<()> {
@@ -223,7 +223,7 @@ pub fn render_extension(
         .wrap_err("Cannot get Torch extension template")?
         .render_to_write(
             context! {
-                name => name,
+                python_name => general.python_name(),
                 ops_name => ops_name,
             },
             &mut *write,
@@ -291,7 +291,7 @@ pub fn write_cmake(
 
     render_kernel_components(env, build, cmake_writer)?;
 
-    render_extension(env, name, ops_name, cmake_writer)?;
+    render_extension(env, &build.general, ops_name, cmake_writer)?;
 
     Ok(())
 }

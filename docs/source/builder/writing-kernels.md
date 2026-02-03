@@ -30,9 +30,9 @@ of CMake or setuptools.
 
 This page describes the directory layout of a kernel-builder project, the
 format of the `build.toml` file, and some additional Python glue that
-`kernel-builder` provides. We will use a [simple ReLU kernel](../examples/relu)
+`kernel-builder` provides. We will use a [simple ReLU kernel](https://github.com/huggingface/kernels/tree/main/builder/examples/relu)
 as the running example. After reading this page, you may also want to have
-a look at the more realistic [ReLU kernel with backprop and `torch.compile`](../examples/relu-backprop-compile)
+a look at the more realistic [ReLU kernel with backprop and `torch.compile`](https://github.com/huggingface/kernels/tree/main/builder/examples/relu-backprop-compile)
 support.
 
 ## Kernel project layout
@@ -107,12 +107,12 @@ depends = [ "torch" ]
 
 - `maxver`: the maximum CUDA toolkit version (inclusive). This option
   _must not_ be set under normal circumstances, since it can exclude Torch
-  build variants that are [required for compliant kernels](https://github.com/huggingface/kernels/blob/main/docs/kernel-requirements.md).
+  build variants that are [required for compliant kernels](../kernel-requirements.md).
   This option is provided for kernels that cause compiler errors on
   newer CUDA toolkit versions.
 - `minver`: the minimum required CUDA toolkit version. This option
   _must not_ be set under normal circumstances, since it can exclude Torch
-  build variants that are [required for compliant kernels](https://github.com/huggingface/kernels/blob/main/docs/kernel-requirements.md).
+  build variants that are [required for compliant kernels](../kernel-requirements.md).
   This option is provided for kernels that require functionality only
   provided by newer CUDA toolkits.
 
@@ -145,7 +145,7 @@ The following options can be set for a kernel:
   supported backends are `cpu`, `cuda`, `metal`, `rocm`, and `xpu`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
-  are listed in [`deps.nix`](../lib/deps.nix).
+  are listed in [`deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/deps.nix).
 - `src` (required): a list of source files and headers.
 - `include` (optional): include directories relative to the project root.
   Default: `[]`.

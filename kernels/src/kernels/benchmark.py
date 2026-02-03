@@ -14,6 +14,8 @@ from typing import Any
 from huggingface_hub import get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
+from kernels.utils import backend
+
 MISSING_DEPS: list[str] = []
 
 try:
@@ -30,6 +32,12 @@ except ImportError:
     torch = None  # type: ignore[assignment]
     TORCH_AVAILABLE = False
     MISSING_DEPS.append("torch")
+
+try:
+    from tabulate import tabulate
+except ImportError:
+    tabulate = None  # type: ignore[assignment]
+    MISSING_DEPS.append("tabulate")
 
 
 def _percentile(sorted_data: list[float], p: float) -> float:
@@ -73,8 +81,8 @@ class Benchmark:
             seed = 42
 
             def setup(self):
-                self.x = torch.randn(128, 1024, device="cuda", dtype=torch.float16)
-                self.out = torch.empty(128, 512, device="cuda", dtype=torch.float16)
+                self.x = torch.randn(128, 1024, device=self.device, dtype=torch.float16)
+                self.out = torch.empty(128, 512, device=self.device, dtype=torch.float16)
 
             def benchmark_silu(self):
                 self.kernel.silu_and_mul(self.out, self.x)
@@ -87,6 +95,7 @@ class Benchmark:
     """
 
     seed: int | None = None  # Optional: seed for reproducibility
+    device: str = "cpu"  # Set automatically by runner
 
     def __init__(self) -> None:
         self.kernel: Any = None
@@ -183,96 +192,85 @@ def _print_results_table(results: dict[str, TimingResults]) -> None:
             cls, method = "", name
         parsed.append((name, cls, method))
 
-    # Calculate column widths
-    cls_w = max((len(p[1]) for p in parsed), default=9)
-    cls_w = max(cls_w, 9)  # minimum "Benchmark" header
-    method_w = max((len(p[2]) for p in parsed), default=8)
-    method_w = max(method_w, 8)  # minimum "Workload" header
-    num_w = 10
-    out_w = 8
-    n_w = 5  # "N" column width
-
     # Check if we have any ref times to show
     has_ref = any(results[name].ref_mean_ms is not None for name in results)
 
-    # Build table border
-    match_w = 5  # "Match" column
-    speedup_w = 7  # "Speedup" column
-    if has_ref:
-        col_widths = [
-            cls_w,
-            method_w,
-            n_w,
-            speedup_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            out_w,
-            num_w,
-            match_w,
-        ]
-    else:
-        col_widths = [
-            cls_w,
-            method_w,
-            n_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            num_w,
-            out_w,
-            match_w,
-        ]
-
-    def border(left, sep, right):
-        return left + sep.join("─" * (w + 2) for w in col_widths) + right
-
-    print(file=sys.stderr)
-    print(border("┌", "┬", "┐"), file=sys.stderr)
-    if has_ref:
-        print(
-            f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'N':>{n_w}} │ {'Speedup':>{speedup_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
-            f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ {'Ref(ms)':>{num_w}} │ {'Match':^{match_w}} │",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            f"│ {'Benchmark':<{cls_w}} │ {'Workload':<{method_w}} │ {'N':>{n_w}} │ {'Mean(ms)':>{num_w}} │ {'Std(ms)':>{num_w}} │ "
-            f"{'Min(ms)':>{num_w}} │ {'Max(ms)':>{num_w}} │ {'IQR(ms)':>{num_w}} │ {'Outliers':>{out_w}} │ {'Match':^{match_w}} │",
-            file=sys.stderr,
-        )
-    print(border("├", "┼", "┤"), file=sys.stderr)
-
+    # Build table data
+    rows = []
     for full_name, cls, method in parsed:
         t = results[full_name]
         check = "✓" if t.verified else ("✗" if t.verified is False else "·")
+
         if has_ref:
-            ref_str = (
-                f"{t.ref_mean_ms:>{num_w}.4f}"
-                if t.ref_mean_ms is not None
-                else " " * num_w
-            )
+            ref_str = f"{t.ref_mean_ms:.4f}" if t.ref_mean_ms is not None else ""
             if t.ref_mean_ms is not None and t.mean_ms > 0:
-                speedup = t.ref_mean_ms / t.mean_ms
-                speedup_str = f"{speedup:.2f}x"
+                speedup_str = f"{t.ref_mean_ms / t.mean_ms:.2f}x"
             else:
                 speedup_str = ""
-            print(
-                f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.iterations:>{n_w}} │ {speedup_str:>{speedup_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
-                f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │ {ref_str} │ {check:^{match_w}} │",
-                file=sys.stderr,
+            rows.append(
+                [
+                    cls,
+                    method,
+                    t.iterations,
+                    speedup_str,
+                    f"{t.mean_ms:.4f}",
+                    f"{t.std_ms:.4f}",
+                    f"{t.min_ms:.4f}",
+                    f"{t.max_ms:.4f}",
+                    f"{t.iqr_ms:.4f}",
+                    t.outliers,
+                    ref_str,
+                    check,
+                ]
             )
         else:
-            print(
-                f"│ {cls:<{cls_w}} │ {method:<{method_w}} │ {t.iterations:>{n_w}} │ {t.mean_ms:>{num_w}.4f} │ {t.std_ms:>{num_w}.4f} │ "
-                f"{t.min_ms:>{num_w}.4f} │ {t.max_ms:>{num_w}.4f} │ {t.iqr_ms:>{num_w}.4f} │ {t.outliers:>{out_w}} │ {check:^{match_w}} │",
-                file=sys.stderr,
+            rows.append(
+                [
+                    cls,
+                    method,
+                    t.iterations,
+                    f"{t.mean_ms:.4f}",
+                    f"{t.std_ms:.4f}",
+                    f"{t.min_ms:.4f}",
+                    f"{t.max_ms:.4f}",
+                    f"{t.iqr_ms:.4f}",
+                    t.outliers,
+                    check,
+                ]
             )
 
-    print(border("└", "┴", "┘"), file=sys.stderr)
+    # Define headers
+    if has_ref:
+        headers = [
+            "Benchmark",
+            "Workload",
+            "N",
+            "Speedup",
+            "Mean(ms)",
+            "Std(ms)",
+            "Min(ms)",
+            "Max(ms)",
+            "IQR(ms)",
+            "Outliers",
+            "Ref(ms)",
+            "Match",
+        ]
+    else:
+        headers = [
+            "Benchmark",
+            "Workload",
+            "N",
+            "Mean(ms)",
+            "Std(ms)",
+            "Min(ms)",
+            "Max(ms)",
+            "IQR(ms)",
+            "Outliers",
+            "Match",
+        ]
+
+    print(file=sys.stderr)
+    print(tabulate(rows, headers=headers, tablefmt="simple_outline"), file=sys.stderr)
 
     # Print statistical significance analysis if we have ref times
     if has_ref:
@@ -412,7 +410,7 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
 def collect_machine_info() -> MachineInfo:
     gpu = "N/A"
     gpu_cores = None
-    backend = "N/A"
+    backend_type = "N/A"
     pytorch_version = "N/A"
     system = platform.system()
     os_info = f"{system} {platform.release()}"
@@ -426,26 +424,33 @@ def collect_machine_info() -> MachineInfo:
 
     if TORCH_AVAILABLE:
         pytorch_version = torch.__version__
-        if torch.cuda.is_available():
+        backend_name = backend()
+        if backend_name in {"cuda", "hip"}:
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
             if hasattr(torch.version, "hip") and torch.version.hip:
-                backend = f"ROCm {torch.version.hip}"
+                backend_type = f"ROCm {torch.version.hip}"
             else:
-                backend = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
-        elif hasattr(torch, "xpu") and torch.xpu.is_available():
+                backend_type = (
+                    f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+                )
+        elif backend_name == "xpu":
             gpu = torch.xpu.get_device_name(0)
-            backend = "XPU"
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            backend_type = "XPU"
+        elif backend_name == "metal":
             macos_gpu, macos_cores = _get_macos_gpu()
             gpu = macos_gpu or "Apple MPS"
             gpu_cores = macos_cores
-            backend = "MPS"
+            backend_type = "MPS"
+        elif backend_name == "cann":
+            backend_type = "NPU"
+        else:
+            backend_type = "CPU"
 
     return MachineInfo(
         gpu=gpu,
         gpu_cores=gpu_cores,
-        backend=backend,
+        backend=backend_type,
         pytorch_version=pytorch_version,
         os=os_info,
         cpu=cpu,
@@ -492,6 +497,15 @@ def run_benchmark_class(
 
     kernel = get_kernel(repo_id, revision=revision)
     kernel_sha = get_kernel_sha_from_build_name(kernel)
+    backend_name = backend() if TORCH_AVAILABLE else "cpu"
+    # Map backend names to torch device names
+    device_map = {
+        "hip": "cuda",
+        "metal": "mps",
+        "cann": "npu",
+    }
+    device = device_map.get(backend_name, backend_name)
+    print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")
@@ -499,6 +513,7 @@ def run_benchmark_class(
         # Create fresh instance for each workload
         instance = benchmark_cls()
         instance.kernel = kernel
+        instance.device = device
 
         # Apply seed for reproducibility
         if instance.seed is not None:
@@ -646,6 +661,17 @@ def run_benchmark_script(
     classes = discover_benchmark_classes(script_path, cwd)
     if not classes:
         raise RuntimeError(f"No Benchmark subclasses found in {script_path}")
+
+    machine_info = collect_machine_info()
+    gpu_cores_str = (
+        f" ({machine_info.gpu_cores} cores)" if machine_info.gpu_cores else ""
+    )
+    print(file=sys.stderr)
+    print(f"  GPU      {machine_info.gpu}{gpu_cores_str}", file=sys.stderr)
+    print(f"  CPU      {machine_info.cpu}", file=sys.stderr)
+    print(f"  OS       {machine_info.os}", file=sys.stderr)
+    print(f"  PyTorch  {machine_info.pytorch_version}", file=sys.stderr)
+    print(file=sys.stderr)
 
     all_results = {}
     kernel_sha = ""

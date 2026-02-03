@@ -140,6 +140,8 @@ endfunction()
 function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     # Define your local, folder based, installation directory
     set(LOCAL_INSTALL_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}/${PACKAGE_NAME}")
+    # Variant directory is where metadata.json should go (for kernels upload discovery)
+    set(VARIANT_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
 
     # Glob Python files at configure time
     file(GLOB PYTHON_FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
@@ -164,12 +166,14 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             # Copy metadata.json if it exists
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/metadata.json
-            ${LOCAL_INSTALL_DIR}/
+            ${VARIANT_DIR}/
 
             COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
             COMMAND_EXPAND_LISTS
     )
 
+    # Create both directories: variant dir for metadata.json, package dir for binaries
+    file(MAKE_DIRECTORY ${VARIANT_DIR})
     file(MAKE_DIRECTORY ${LOCAL_INSTALL_DIR})
     message(STATUS "Added install rules for ${TARGET_NAME} -> build/${BUILD_VARIANT_NAME}/${PACKAGE_NAME}")
 endfunction()

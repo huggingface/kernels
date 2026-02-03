@@ -1,5 +1,7 @@
-get_torch_gpu_compiler_flags(TORCH_GPU_FLAGS ${GPU_LANG})
-list(APPEND GPU_FLAGS ${TORCH_GPU_FLAGS})
+if(GPU_LANG STREQUAL "CUDA")
+  get_torch_gpu_compiler_flags(TORCH_GPU_FLAGS ${GPU_LANG})
+  list(APPEND GPU_FLAGS ${TORCH_GPU_FLAGS})
+endif()
 
 set(TORCH_{{name}}_SRC
   {{ src|join(' ') }}
@@ -14,4 +16,3 @@ set_source_files_properties(
 {% endif %}
 
 list(APPEND SRC {{'"${TORCH_' + name + '_SRC}"'}})
-

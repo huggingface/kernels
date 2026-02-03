@@ -1,7 +1,6 @@
 {
   nixpkgs,
   rust-overlay,
-  torchVersions,
 }:
 
 let
@@ -16,7 +15,7 @@ let
 
   # All build configurations supported by Torch.
   buildConfigs =
-    system:
+    torchVersions: system:
     let
       filterMap = f: xs: builtins.filter (x: x != null) (builtins.map f xs);
       systemBuildConfigs = filterMap (version: if version.system == system then version else null) (
@@ -30,7 +29,8 @@ let
 in
 rec {
   mkBuildSets =
-    systems: lib.concatMap (system: builtins.map mkBuildSet (buildConfigs system)) systems;
+    torchVersions: systems:
+    lib.concatMap (system: builtins.map mkBuildSet (buildConfigs torchVersions system)) systems;
 
   # Partition into an attrset { <system> = [ <buildset> ...]; ... }.
   partitionBuildSetsBySystem = lib.foldl (

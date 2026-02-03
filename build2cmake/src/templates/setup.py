@@ -124,7 +124,6 @@ class CMakeBuild(build_ext):
                 move(extdir / cfg / filename, extdir / filename)
 
 
-{% set python_name = name | replace('-', '_') %}
 setup(
     name="{{ python_name }}",
     # The version is just a stub, it's not used by the final build artefact.

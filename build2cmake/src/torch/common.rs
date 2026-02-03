@@ -24,8 +24,8 @@ static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
 
 pub fn write_setup_py(
     env: &Environment,
+    general: &General,
     torch: &crate::config::Torch,
-    name: &str,
     ops_name: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
@@ -39,7 +39,7 @@ pub fn write_setup_py(
             context! {
                 data_globs => data_globs,
                 ops_name => ops_name,
-                name => name,
+                python_name => general.python_name(),
                 version => "0.1.0",
             },
             writer,
@@ -77,6 +77,7 @@ pub fn write_pyproject_toml(
         .wrap_err("Cannot get pyproject.toml template")?
         .render_to_write(
             context! {
+                python_name => general.python_name(),
                 python_dependencies => python_dependencies,
                 backend_dependencies => backend_dependencies,
             },
@@ -321,13 +322,7 @@ pub fn write_torch_ext(
         &mut file_set,
     )?;
 
-    write_setup_py(
-        env,
-        torch_ext,
-        &build.general.name,
-        &ops_name,
-        &mut file_set,
-    )?;
+    write_setup_py(env, &build.general, torch_ext, &ops_name, &mut file_set)?;
 
     write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
 

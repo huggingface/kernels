@@ -3,8 +3,8 @@ args@{
 
   name,
 
-  # Attribute set with names to paths.
-  namePaths,
+  # Package paths.
+  contents,
 
   preferLocalBuild ? true,
   allowSubstitutes ? false,
@@ -18,14 +18,11 @@ let
   ];
   # Iterating over pairs in bash sucks, so let's generate
   # the commands in Nix instead.
-  copyPath = path: pkg: ''
-    mkdir -p ${placeholder "out"}/${path}
-    cp -r ${pkg}/* ${placeholder "out"}/${path}
+  copyPkg = pkg: ''
+    cp -r ${pkg}/* ${placeholder "out"}/
   '';
   prelude = ''
     mkdir -p ${placeholder "out"}
   '';
 in
-pkgs.runCommand name args_ (
-  prelude + lib.concatStringsSep "\n" (lib.mapAttrsToList copyPath namePaths)
-)
+pkgs.runCommand name args_ (prelude + lib.concatStringsSep "\n" (builtins.map copyPkg contents))

@@ -236,33 +236,30 @@ stdenv.mkDerivation (prevAttrs: {
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
   ];
 
-  postInstall = ''
-    (
-      cd ..
-      cp -r torch-ext/${moduleName}/* $out/
-    )
-    mv $out/_${moduleName}_*/* $out/
-    rm -d $out/_${moduleName}_${rev}
+  postInstall =
+    let
+      buildVariant = torch.variant;
+    in
+    ''
+      rm -rf $out/_${moduleName}_${rev}
 
-    # Set up a compatibility module for older kernels versions, remove when
-    # the updated kernels has been around for a while.
-    mkdir $out/${moduleName}
-    cp ${./compat.py} $out/${moduleName}/__init__.py
+      # Set up a compatibility module for older kernels versions, remove when
+      # the updated kernels has been around for a while.
+      mkdir $out/${buildVariant}/${moduleName}
+      cp ${./compat.py} $out/${buildVariant}/${moduleName}/__init__.py
+    ''
+    + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
+      find $out/ -name '*.so' \
+        -exec patchelf --set-rpath "" {} \;
+    ''
+    + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
+      find $out/ -name '*.so' \
+        -exec rewrite-nix-paths-macho {} \;
 
-    cp ../metadata-${buildConfig.backend}.json $out/
-  ''
-  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
-    find $out/ -name '*.so' \
-      -exec patchelf --set-rpath "" {} \;
-  ''
-  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
-    find $out/ -name '*.so' \
-      -exec rewrite-nix-paths-macho {} \;
-
-    # Stub some rpath.
-    find $out/ -name '*.so' \
-      -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
-  '';
+      # Stub some rpath.
+      find $out/ -name '*.so' \
+        -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
+    '';
 
   doInstallCheck = true;
 

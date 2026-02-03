@@ -84,13 +84,16 @@ stdenv.mkDerivation (prevAttrs: {
       --ops-id ${rev} build.toml
   '';
 
-  installPhase = ''
-    mkdir -p $out
-    cp -r torch-ext/${moduleName}/* $out/
-    mkdir $out/${moduleName}
-    cp ${./compat.py} $out/${moduleName}/__init__.py
-    cp metadata-${buildConfig.backend}.json $out/
-  '';
+  installPhase =
+    let
+      noarchVariant = torch.noarchVariant;
+    in
+    ''
+      mkdir -p $out/${noarchVariant}/${moduleName}
+      cp -r torch-ext/${moduleName}/* $out/${noarchVariant}
+      cp ${./compat.py} $out/${noarchVariant}/${moduleName}/__init__.py
+      cp metadata-${buildConfig.backend}.json $out/${noarchVariant}
+    '';
 
   doInstallCheck = true;
 

@@ -110,7 +110,7 @@ endfunction()
 #
 # Create a custom install target for the huggingface/kernels library layout.
 # This installs the extension into a directory structure suitable for kernel hub discovery:
-#   <PREFIX>/<BUILD_VARIANT_NAME>/<PACKAGE_NAME>/
+#   <PREFIX>/<BUILD_VARIANT_NAME>
 #
 # Arguments:
 #   TARGET_NAME - Name of the target to create the install rule for
@@ -126,8 +126,22 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         set(ARG_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     endif()
 
+    if (${GPU_LANG} STREQUAL "CPU")
+      set(_BACKEND "cpu")
+    elseif (${GPU_LANG} STREQUAL "CUDA")
+      set(_BACKEND "cuda")
+    elseif (${GPU_LANG} STREQUAL "HIP")
+      set(_BACKEND "rocm")
+    elseif (${GPU_LANG} STREQUAL "METAL")
+      set(_BACKEND "metal")
+    elseif (${GPU_LANG} STREQUAL "SYCL")
+      set(_BACKEND "xpu")
+    else()
+      message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
+    endif()
+
     # Set the installation directory
-    set(KERNEL_INSTALL_DIR "${ARG_INSTALL_PREFIX}/${BUILD_VARIANT_NAME}/${PACKAGE_NAME}")
+    set(KERNEL_INSTALL_DIR "${ARG_INSTALL_PREFIX}/${BUILD_VARIANT_NAME}")
 
     message(STATUS "Using PACKAGE_NAME: ${PACKAGE_NAME}")
 
@@ -146,13 +160,18 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         DESTINATION "${KERNEL_INSTALL_DIR}"
         COMPONENT ${TARGET_NAME})
 
-    message(STATUS "Added install rules for ${TARGET_NAME} -> ${BUILD_VARIANT_NAME}/${PACKAGE_NAME}")
+    install(FILES ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
+        DESTINATION "${KERNEL_INSTALL_DIR}"
+        RENAME "metadata.json"
+        COMPONENT ${TARGET_NAME})
+
+    message(STATUS "Added install rules for ${TARGET_NAME} -> ${BUILD_VARIANT_NAME}")
 endfunction()
 
 #
 # Add install rules for local development with huggingface/kernels.
 # This installs the extension into the layout expected by get_local_kernel():
-#   ${CMAKE_SOURCE_DIR}/build/<BUILD_VARIANT_NAME>/<PACKAGE_NAME>/
+#   ${CMAKE_SOURCE_DIR}/build/<BUILD_VARIANT_NAME>/
 #
 # This allows developers to use get_local_kernel() from the kernels library to load
 # locally built kernels without needing to publish to the hub.
@@ -167,7 +186,7 @@ endfunction()
 #
 function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     # Define your local, folder based, installation directory
-    set(LOCAL_INSTALL_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}/${PACKAGE_NAME}")
+    set(LOCAL_INSTALL_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
     # Variant directory is where metadata.json should go (for kernels upload discovery)
     set(VARIANT_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
 
@@ -179,16 +198,15 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Installing files to local directory..."
     )
 
-
     if (${GPU_LANG} STREQUAL "CPU")
       set(_BACKEND "cpu")
     elseif (${GPU_LANG} STREQUAL "CUDA")
       set(_BACKEND "cuda")
-    elseif (${GPU_LANG} STREQUAL "ROCM")
+    elseif (${GPU_LANG} STREQUAL "HIP")
       set(_BACKEND "rocm")
     elseif (${GPU_LANG} STREQUAL "METAL")
       set(_BACKEND "metal")
-    elseif (${GPU_LANG} STREQUAL "XPU")
+    elseif (${GPU_LANG} STREQUAL "SYCL")
       set(_BACKEND "xpu")
     else()
       message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
@@ -218,5 +236,5 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     # Create both directories: variant dir for metadata.json, package dir for binaries
     file(MAKE_DIRECTORY ${VARIANT_DIR})
     file(MAKE_DIRECTORY ${LOCAL_INSTALL_DIR})
-    message(STATUS "Added install rules for ${TARGET_NAME} -> build/${BUILD_VARIANT_NAME}/${PACKAGE_NAME}")
+    message(STATUS "Added install rules for ${TARGET_NAME} -> build/${BUILD_VARIANT_NAME}")
 endfunction()

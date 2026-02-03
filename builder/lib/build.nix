@@ -217,12 +217,10 @@ rec {
         bundleOnly = true;
       };
       buildToml = readBuildConfig path;
-      namePaths =
-        # TODO: treat kernels without compiled parts differently.
-        lib.mapAttrs (name: pkg: toString pkg) extensions;
+      contents = builtins.map (pkg: toString pkg) (builtins.attrValues extensions);
     in
     import ./join-paths {
-      inherit pkgs namePaths;
+      inherit pkgs contents;
       name = "torch-ext-bundle";
     };
 

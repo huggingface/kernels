@@ -10,7 +10,7 @@ requires = ["kernels", "setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.kernels.dependencies]
-"kernels-community/activation" = ">=0.0.1"
+"kernels-community/activation" = 1
 ```
 
 Then run `kernels lock .` in the project directory. This generates a `kernels.lock` file with
@@ -37,6 +37,22 @@ kernel_layer_mapping = {
         "cuda": LockedLayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+        )
+    }
+}
+
+register_kernel_mapping(kernel_layer_mapping)
+```
+
+Similarly, you can use the `LockedFuncRepository` class to lock kernel function
+versions:
+
+```python
+kernel_layer_mapping = {
+    "silu_and_mul": {
+        "cuda": LockedFuncRepository(
+            repo_id="kernels-community/activation",
+            func_name="silu_and_mul",
         )
     }
 }

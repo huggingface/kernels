@@ -15,7 +15,29 @@
       title: Environment Variables
     - local: faq
       title: FAQ
-  title: Usage Guide
+    - local: migration
+      title: Migrating from older versions
+  title: Using kernels
+- sections:
+    - local: builder/writing-kernels
+      title: Writing Kernels
+    - local: builder/nix
+      title: Building with Nix
+    - local: builder/docker
+      title: Building with Docker
+    - local: builder/local-dev
+      title: Local Development
+    - local: kernel-requirements
+      title: Kernel Requirements
+    - local: builder/security
+      title: Security
+    - local: builder/why-nix
+      title: Why Nix?
+    - local: builder/metal
+      title: Metal Notes
+    - local: builder/build-variants
+      title: Build Variants
+  title: Building kernels
 - sections:
     - local: api/kernels
       title: Kernels
@@ -24,7 +46,3 @@
     - local: cli
       title: Kernels CLI
   title: API Reference
-- sections:
-    - local: kernel-requirements
-      title: Kernel Requirements
-  title: Developer Guide

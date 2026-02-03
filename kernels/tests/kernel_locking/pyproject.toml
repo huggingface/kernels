@@ -1,0 +1,3 @@
+[tool.kernels.dependencies]
+"kernels-community/relu" = 1
+"kernels-test/versions" = 2

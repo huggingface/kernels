@@ -159,16 +159,29 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         ),
         "rocm": LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         )
     }
 }
 ```
 
-You can register such a mapping using `register_kernel_mapping`:
+This uses version `1` of the `SiluAndMul` kernel layer from
+`kernels-community/activation` for the `cuda` and `rocm` backends. Kernel
+layers are versioned using a major version number. Using `version=1`
+will get the latest kernel build from the `v1` branch. Kernel layers
+within a version branch must never break the API or remove builds for
+older PyTorch versions. This ensures that your code will continue to
+work.
+
+Some kernels have not yet been updated to use versioning yet. In these cases,
+you can use `LayerRepository` without the `version` argument.
+
+You can register a mapping, like the one above, using `register_kernel_mapping`:
 
 ```python
 register_kernel_mapping(kernel_layer_mapping)
@@ -202,33 +215,6 @@ kernel_layer_mapping = {
 }
 ```
 
-### Using version bounds
-
-Kernels are versioned using tags of the form `v<major>.<minor>.<patch>`.
-You can specify which version of the kernel to download using Python version
-specifiers:
-
-```python
-kernel_layer_mapping = {
-    "SiluAndMul": {
-        "cuda": LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=">=0.0.4,<0.1.0",
-        ),
-        "rocm": LayerRepository(
-            repo_id="kernels-community/activation",
-            layer_name="SiluAndMul",
-            version=">=0.0.4,<0.1.0",
-        )
-    }
-}
-```
-
-This will get the layer from latest kernel tagged `v0.0.z` where `z` is at
-least 4. It is strongly recommended to specify a version bound, since a
-kernel author might push incompatible changes to the `main` branch.
-
 ### Registering kernels for specific modes
 
 You might want to register two different kernels for a particular layer,
@@ -242,10 +228,12 @@ kernel_layer_mapping = {
           Mode.INFERENCE: LayerRepository(
               repo_id="kernels-community/activation-inference-optimized",
               layer_name="SiluAndMul",
+              version=1,
           ),
           Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
               repo_id="kernels-community/activation-training-optimized",
               layer_name="SiluAndMul",
+              version=1,
           ),
       }
     }
@@ -273,14 +261,17 @@ kernel_layer_mapping = {
             Mode.FALLBACK: LayerRepository(
                 repo_id="kernels-community/activation",
                 layer_name="SiluAndMul",
+                version=1,
             ),
             Mode.INFERENCE: LayerRepository(
                 repo_id="kernels-community/activation-inference-optimized",
                 layer_name="SiluAndMul",
+                version=1,
             ),
             Mode.TRAINING: LayerRepository(
                 repo_id="kernels-community/activation-training-optimized",
                 layer_name="SiluAndMul",
+                version=1,
             ),
         }
     }
@@ -310,6 +301,7 @@ kernel_layer_mapping = {
         ): LayerRepository(
             repo_id="kernels-community/activation",
             layer_name="SiluAndMul",
+            version=1,
         ),
         Device(
             type="cuda",
@@ -319,6 +311,7 @@ kernel_layer_mapping = {
         ): LayerRepository(
             repo_id="kernels-community/activation-hopper",
             layer_name="SiluAndMul",
+            version=1,
         ),
     }
 }
@@ -365,4 +358,23 @@ with use_kernel_mapping(
     inherit_mapping=False,
 ):
     kernelize(linear, mode=Mode.INFERENCE)
+```
+
+Similarly, the `LocalFuncRepository` class can be used to load a kernel
+function from a local directory:
+
+```python
+with use_kernel_mapping(
+    {
+        "silu_and_mul": {
+            "cuda": LocalFuncRepository(
+                repo_path="/home/daniel/kernels/activation",
+                package_name="activation",
+                func_name="silu_and_mul",
+            )
+        }
+    },
+    inherit_mapping=False,
+):
+    kernelize(model, mode=Mode.INFERENCE)
 ```

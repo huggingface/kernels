@@ -1,11 +1,11 @@
 # kernels
 
 <div align="center">
-<img src="https://github.com/user-attachments/assets/64a652f3-0cd3-4829-b3c1-df13f7933569" width="450" height="450" alt="kernel-builder logo">
+<img src="https://github.com/user-attachments/assets/4b5175f3-1d60-455b-8664-43b2495ee1c3" width="450" height="450" alt="kernel-builder logo">
 <p align="center">
     <a href="https://pypi.org/project/kernels"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/kernels"></a>
     <a href="https://github.com/huggingface/kernels/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/huggingface/kernels"></a>
-    <a href="https://github.com/huggingface/kernels/actions/workflows/docker-build-push.yaml"><img alt="Test kernels" src="https://img.shields.io/github/actions/workflow/status/huggingface/kernels/test.yml?label=test"></a>
+    <a href="https://github.com/huggingface/kernels/actions/workflows/test_kernels.yaml"><img alt="Test kernels" src="https://img.shields.io/github/actions/workflow/status/huggingface/kernels/test_kernels.yaml?label=test"></a>
   
 </p>
 </div>
@@ -23,9 +23,15 @@ packages in that they are made to be:
   the different PyTorch build configurations (various CUDA versions
   and C++ ABIs). Furthermore, older C library versions must be supported.
 
+## Components
+
+- You can load kernels from the Hub using the [`kernels`](kernels/) Python package.
+- If you are a kernel author, you can build your kernels with [kernel-builder](builder/).
+- Hugging Face maintains a set of kernels in [kernels-community](https://huggingface.co/kernels-community).
+
 ## 🚀 Quick Start
 
-Install the `kernels` package with `pip` (requires `torch>=2.5` and CUDA):
+Install the `kernels` Python package with `pip` (requires `torch>=2.5` and CUDA):
 
 ```bash
 pip install kernels
@@ -39,7 +45,7 @@ import torch
 from kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
-activation = get_kernel("kernels-community/activation")
+activation = get_kernel("kernels-community/activation", version=1)
 
 # Random tensor
 x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
@@ -56,12 +62,4 @@ the Hub.
 
 ## 📚 Documentation
 
-- [Introduction](docs/source/index.md)
-- [Installation](docs/source/installation.md)
-- [Basic usage](docs/source/basic-usage.md)
-- [Using layers](docs/source/layers.md)
-- [Locking kernel/layer versions](docs/source/locking.md)
-- [Environment variables](docs/source/env.md)
-- [Kernel requirements](docs/source/kernel-requirements.md)
-- [Frequently Asked Questions](docs/source/faq.md)
-- [Writing kernels](https://github.com/huggingface/kernel-builder/blob/main/docs/writing-kernels.md) using [kernel-builder](https://github.com/huggingface/kernel-builder/)
+Read the [documentation of kernels and kernel-builder](https://huggingface.co/docs/kernels/).

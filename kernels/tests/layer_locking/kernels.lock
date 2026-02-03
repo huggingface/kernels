@@ -1,0 +1,28 @@
+[
+  {
+    "repo_id": "kernels-test/versions",
+    "sha": "7dc0217a6c2e9eb7d7470aa32554dadbbf619b02",
+    "variants": {
+      "torch-cpu": {
+        "hash": "sha256-e1e60c9e2c69f1b60614f5867e22e9147a2419984b4ef77041ae920c7abc4a73",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch-cuda": {
+        "hash": "sha256-e1e60c9e2c69f1b60614f5867e22e9147a2419984b4ef77041ae920c7abc4a73",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch-rocm": {
+        "hash": "sha256-e1e60c9e2c69f1b60614f5867e22e9147a2419984b4ef77041ae920c7abc4a73",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch-universal": {
+        "hash": "sha256-57de77a9bde54f52d0a67eb9e5d259d223cae66963f644ed2b7386f59f7e2d23",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch-xpu": {
+        "hash": "sha256-e1e60c9e2c69f1b60614f5867e22e9147a2419984b4ef77041ae920c7abc4a73",
+        "hash_type": "git_lfs_concat"
+      }
+    }
+  }
+]

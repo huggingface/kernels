@@ -16,7 +16,7 @@ dependencies = [
   "packaging>=20.0",
   "pyyaml>=6",
   "tomli>=2.0; python_version<'3.11'",
-  "tomlkit>=0.14.0",
+  "tomlkit==0.13.3",
 ]
 
 [build-system]

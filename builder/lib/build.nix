@@ -224,9 +224,11 @@ rec {
       # Include benchmarks directory if it exists in the source
       benchmarksPath = path + "/benchmarks";
       hasBenchmarks = builtins.pathExists benchmarksPath;
-      allPaths = namePaths // lib.optionalAttrs hasBenchmarks {
-        benchmarks = benchmarksPath;
-      };
+      allPaths =
+        namePaths
+        // lib.optionalAttrs hasBenchmarks {
+          benchmarks = benchmarksPath;
+        };
     in
     import ./join-paths {
       inherit pkgs;

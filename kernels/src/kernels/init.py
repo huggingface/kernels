@@ -1,71 +1,45 @@
+import argparse
 import os
-import re
 import shutil
 import subprocess
 import sys
 from argparse import Namespace
 from pathlib import Path
+from typing import NamedTuple
 
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
-from kernels.compat import tomllib
+import tomlkit
 from kernels.utils import KNOWN_BACKENDS
 
 
-def run_init(args: Namespace) -> None:
-    kernel_name = args.kernel_name
-    if args.backends is None:
-        backends = ["metal"] if sys.platform == "darwin" else ["cuda"]
-    else:
-        backends = [
-            v.strip().lower()
-            for item in args.backends
-            for v in item.split(",")
-            if v.strip()
-        ]
-        if "all" in backends:
-            if len(backends) > 1:
-                print(
-                    "Error: --backends must be either 'all' or a list of backends.",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-            backends = []
-        else:
-            valid = set(KNOWN_BACKENDS)
-            invalid = sorted(set(backends) - valid)
-            if invalid:
-                print(
-                    f"Error: invalid backend(s): {', '.join(invalid)}. Valid values are: {', '.join(sorted(valid))}.",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-            seen: set[str] = set()
-            backends = [b for b in backends if not (b in seen or seen.add(b))]
-    # must be fully qualified repo name <owner>/<repo>
-    owner_repo = kernel_name.split("/")
-    if len(owner_repo) != 2:
-        print(
-            f"Error: kernel_name must be in the format <owner>/<repo> (e.g., drbh/my-kernel)",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    owner, kernel_name = owner_repo
-    kernel_name_normalized = kernel_name.replace("-", "_")
-    repo_id = f"{owner}/{kernel_name}"
-    output_dir = Path.cwd()
+def parse_kernel_name(value: str) -> NamedTuple:
+    parts = value.split("/")
+    if len(parts) != 2 or not all(parts):  # validate format
+        raise argparse.ArgumentTypeError("must be <owner>/<repo>")
+    owner, name = parts
 
-    # Validate kernel name
-    if "/" in kernel_name or "\\" in kernel_name:
-        print(
-            f"Error: Kernel name cannot contain path separators: {kernel_name}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    if "/" in name or "\\" in name:  # validate kernel name
+        raise argparse.ArgumentTypeError("repo name cannot contain path separators")
+
+    name = name.lower().replace("-", "_")  # normalize name
+    RepoInfo = NamedTuple("RepoInfo", [("name", str), ("owner", str), ("repo_id", str)])
+    return RepoInfo(name=name, owner=owner, repo_id=f"{owner}/{name}")
+
+
+def run_init(args: Namespace) -> None:
+    kernel_name = args.kernel_name.name
+    repo_id = args.kernel_name.repo_id
+    backends = KNOWN_BACKENDS if "all" in args.backends else set(args.backends)
 
     # Target directory
-    target_dir = output_dir / kernel_name
+    target_dir = Path.cwd() / kernel_name
+
+    if args.overwrite:
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
+
     if target_dir.exists() and any(target_dir.iterdir()):
         print(
             f"Error: Directory already exists and is not empty: {target_dir}",
@@ -73,19 +47,24 @@ def run_init(args: Namespace) -> None:
         )
         sys.exit(1)
 
-    # Download template from HuggingFace
-    template_repo = args.template_repo
-
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
 
-    print(f"Downloading template from {template_repo}...", file=sys.stderr)
-    template_dir = Path(snapshot_download(repo_id=template_repo, repo_type="model"))
-    _init_from_local_template(
-        template_dir, target_dir, kernel_name, kernel_name_normalized, repo_id
+    print(f"Downloading template from {args.template_repo}...", file=sys.stderr)
+    template_dir = Path(
+        snapshot_download(repo_id=args.template_repo, repo_type="model")
     )
+    _init_from_local_template(template_dir, target_dir, kernel_name, repo_id)
+
     if backends:
         _update_build_backends(target_dir / "build.toml", backends)
+
+        # replacement logic
+        # - rocm uses cuda source so we need to replace the rocm with cuda
+        if "rocm" in backends:
+            backends.remove("rocm")
+            backends.add("cuda")
+
         _remove_backend_dirs(target_dir, backends)
 
     # Initialize git repo (required for Nix flakes)
@@ -94,24 +73,23 @@ def run_init(args: Namespace) -> None:
 
     print(f"Initialized kernel project: {target_dir}")
     _print_tree(target_dir)
-    print("\nNext steps:")
-    print(f"  cd {kernel_name}")
-    print("  cachix use huggingface")
-    print("  nix run -L --max-jobs 1 --cores 8 .#build-and-copy")
-    print("  uv run example.py")
+    print("\nNext steps:\n")
+    print(f"cd {kernel_name}")
+    print("cachix use huggingface")
+    print("nix run -L --max-jobs 1 --cores 8 .#build-and-copy")
+    print("uv run example.py")
 
 
 def _init_from_local_template(
     template_dir: Path,
     target_dir: Path,
     kernel_name: str,
-    kernel_name_normalized: str,
     repo_id: str,
 ) -> None:
     # Placeholder mappings
     replacements = {
         "__KERNEL_NAME__": kernel_name,
-        "__KERNEL_NAME_NORMALIZED__": kernel_name_normalized,
+        "__KERNEL_NAME_NORMALIZED__": kernel_name,
         "__REPO_ID__": repo_id,
     }
 
@@ -177,50 +155,34 @@ def _print_tree(directory: Path, prefix: str = "") -> None:
             _print_tree(entry, prefix + extension)
 
 
-def _update_build_backends(build_toml_path: Path, backends: list[str]) -> None:
+def _update_build_backends(build_toml_path: Path, backends: set[str]) -> None:
     if not build_toml_path.exists():
         return
-    text = build_toml_path.read_text()
+
     with open(build_toml_path, "rb") as f:
-        data = tomllib.load(f)
-        if "general" not in data:
-            return
-    kernel_table = data.get("kernel", {})
-    if not isinstance(kernel_table, dict):
-        kernel_table = {}
-    remove_kernels = {
-        name
-        for name, cfg in kernel_table.items()
-        if isinstance(cfg, dict) and cfg.get("backend") not in set(backends)
-    }
-    backends_list = ", ".join(f'"{b}"' for b in backends)
-    new_line = f"backends = [{backends_list}]"
-    pattern = r"(\[general\][\s\S]*?)^\s*backends\s*=\s*\[[^\]]*\]"
-    new_text, count = re.subn(pattern, r"\1" + new_line, text, count=1, flags=re.M)
-    if remove_kernels:
-        new_text = _remove_kernel_sections(new_text, remove_kernels)
-    if count or remove_kernels:
-        build_toml_path.write_text(new_text)
+        build_contents = tomlkit.parse(f.read())
+
+    # update backends
+    if "general" not in build_contents:
+        return
+    build_contents["general"]["backends"] = list(backends)
+
+    # update kernel sections
+    if "kernel" in build_contents:
+        kernel_table = build_contents["kernel"]
+        remove_kernels = []
+        for name, cfg in kernel_table.items():
+            if isinstance(cfg, dict) and cfg.get("backend") not in set(backends):
+                remove_kernels.append(name)
+        for name in remove_kernels:
+            del kernel_table[name]
+
+    # write back to file
+    with open(build_toml_path, "wb") as f:
+        f.write(tomlkit.dumps(build_contents).encode("utf-8"))
 
 
-def _remove_kernel_sections(text: str, remove_kernels: set[str]) -> str:
-    lines = text.splitlines(keepends=True)
-    output: list[str] = []
-    skip = False
-    for line in lines:
-        match = re.match(r"^\s*\[kernel\.([^\]]+)\]\s*$", line)
-        if match:
-            skip = match.group(1).strip() in remove_kernels
-            if skip:
-                continue
-        if skip and re.match(r"^\s*\[[^\]]+\]\s*$", line):
-            skip = False
-        if not skip:
-            output.append(line)
-    return "".join(output)
-
-
-def _remove_backend_dirs(target_dir: Path, backends: list[str]) -> None:
+def _remove_backend_dirs(target_dir: Path, backends: set[str]) -> None:
     keep = set(backends)
     known = set(KNOWN_BACKENDS)
     for entry in target_dir.iterdir():

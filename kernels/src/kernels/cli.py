@@ -7,9 +7,13 @@ from pathlib import Path
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.upload import upload_kernels_dir
-from kernels.utils import install_kernel, install_kernel_all_variants
+from kernels.utils import (
+    install_kernel,
+    install_kernel_all_variants,
+    KNOWN_BACKENDS,
+)
 from kernels.versions_cli import print_kernel_versions
-from kernels.init import run_init
+from kernels.init import run_init, parse_kernel_name
 
 from .doc import generate_readme_for_kernel
 
@@ -153,7 +157,7 @@ def main():
     )
     init_parser.add_argument(
         "kernel_name",
-        type=str,
+        type=parse_kernel_name,
         help="Name of the kernel repo (e.g., drbh/my-kernel)",
     )
     init_parser.add_argument(
@@ -165,8 +169,15 @@ def main():
     init_parser.add_argument(
         "--backends",
         nargs="+",
-        default=None,
-        help="Backends to include ('all' or list like: cpu cuda metal rocm xpu). Defaults: cuda on Linux/Windows, metal on macOS.",
+        choices={"all"} | KNOWN_BACKENDS,
+        default=["metal"] if sys.platform == "darwin" else ["cuda"],
+        metavar="BACKEND",
+        help=f"Backends to enable (all, {', '.join(KNOWN_BACKENDS)}). Defaults: cuda on Linux/Windows, metal on macOS.",
+    )
+    init_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing directory if it exists",
     )
     init_parser.set_defaults(func=run_init)
 

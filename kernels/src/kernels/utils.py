@@ -22,7 +22,7 @@ from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
-KNOWN_BACKENDS = ("cpu", "cuda", "metal", "rocm", "xpu", "npu")
+KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
 
 
 def _get_cache_dir() -> str | None:

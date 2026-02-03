@@ -165,17 +165,17 @@ def _update_build_backends(build_toml_path: Path, backends: set[str]) -> None:
     # update backends
     if "general" not in build_contents:
         return
-    build_contents["general"]["backends"] = list(backends)
+    build_contents["general"]["backends"] = list(backends)  # type: ignore[index]
 
     # update kernel sections
     if "kernel" in build_contents:
         kernel_table = build_contents["kernel"]
         remove_kernels = []
-        for name, cfg in kernel_table.items():
+        for name, cfg in kernel_table.items():  # type: ignore[union-attr]
             if isinstance(cfg, dict) and cfg.get("backend") not in set(backends):
                 remove_kernels.append(name)
         for name in remove_kernels:
-            del kernel_table[name]
+            del kernel_table[name]  # type: ignore[union-attr]
 
     # write back to file
     with open(build_toml_path, "wb") as f:

@@ -15,7 +15,7 @@ use crate::FileSet;
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
-static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
+static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/build-variants.cmake");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
@@ -193,7 +193,11 @@ pub fn write_cmake_file(file_set: &mut FileSet, filename: &str, content: &[u8]) 
 pub fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
-    write_cmake_file(file_set, "windows.cmake", WINDOWS_UTILS.as_bytes());
+    write_cmake_file(
+        file_set,
+        "build-variants.cmake",
+        BUILD_VARIANTS_UTILS.as_bytes(),
+    );
     write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(
         file_set,
@@ -250,7 +254,6 @@ pub fn render_preamble(
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
                 torch_minver => torch_minver.map(|v| v.to_string()),
                 torch_maxver => torch_maxver.map(|v| v.to_string()),
-                platform => std::env::consts::OS
             },
             &mut *write,
         )

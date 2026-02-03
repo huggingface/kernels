@@ -1,12 +1,15 @@
 # Generate a standardized build variant name following the pattern:
-# torch<VERSION>-<ABI>-<COMPUTE>-windows
+# torch<VERSION>-[cxx11-]<COMPUTE>-<ARCH>-<OS>
 #
 # Arguments:
 #   OUT_BUILD_NAME - Output variable name
 #   TORCH_VERSION - PyTorch version (e.g., "2.7.1")
-#   COMPUTE_FRAMEWORK - One of: cuda, rocm, metal, xpu
+#   COMPUTE_FRAMEWORK - One of: cuda, rocm, metal, xpu, cpu
 #   COMPUTE_VERSION - Version of compute framework (e.g., "12.4" for CUDA, "6.0" for ROCm)
-# Example output: torch271-cxx11-cu124-x86_64-windows
+#                     Optional for CPU-only builds (pass empty string or omit)
+# Example output: torch271-cxx11-cu124-x86_64-linux (Linux)
+#                 torch271-cu124-x86_64-windows (Windows)
+#                 torch271-metal-aarch64-darwin (macOS)
 #
 function(generate_build_name OUT_BUILD_NAME TORCH_VERSION COMPUTE_FRAMEWORK COMPUTE_VERSION)
     # Flatten version by removing dots and padding to 2 components
@@ -60,20 +63,45 @@ function(generate_build_name OUT_BUILD_NAME TORCH_VERSION COMPUTE_FRAMEWORK COMP
             list(GET COMPUTE_VERSION_LIST 0 COMPUTE_MAJOR)
             set(COMPUTE_STRING "xpu${COMPUTE_MAJOR}0")
         endif()
+    elseif(COMPUTE_FRAMEWORK STREQUAL "metal")
+        set(COMPUTE_STRING "metal")
+    elseif(COMPUTE_FRAMEWORK STREQUAL "cpu")
+        set(COMPUTE_STRING "cpu")
     else()
         message(FATAL_ERROR "Unknown compute framework: ${COMPUTE_FRAMEWORK}")
     endif()
 
-    if(CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
+    # Detect from target system (CMAKE_SYSTEM_* variables refer to target, not host)
+    # Normalize architecture name
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
         set(CPU_ARCH "x86_64")
-    elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
         set(CPU_ARCH "aarch64")
     else()
-        message(ERROR "Unsupported Windows platform ${CMAKE_SYSTEM_PROCESSOR}")
+        message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
     endif()
 
+    # Normalize OS name
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        set(OS_NAME "windows")
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(OS_NAME "linux")
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        set(OS_NAME "darwin")
+    else()
+        message(WARNING "Unknown OS ${CMAKE_SYSTEM_NAME}, using as-is")
+        string(TOLOWER "${CMAKE_SYSTEM_NAME}" OS_NAME)
+    endif()
+
+    set(ARCH_OS_STRING "${CPU_ARCH}-${OS_NAME}")
+
     # Assemble the final build name
-    set(BUILD_NAME "torch${FLATTENED_TORCH}-${COMPUTE_STRING}-${CPU_ARCH}-windows")
+    # For Linux, include cxx11 ABI indicator for compatibility
+    if(ARCH_OS_STRING MATCHES "-linux$")
+        set(BUILD_NAME "torch${FLATTENED_TORCH}-cxx11-${COMPUTE_STRING}-${ARCH_OS_STRING}")
+    else()
+        set(BUILD_NAME "torch${FLATTENED_TORCH}-${COMPUTE_STRING}-${ARCH_OS_STRING}")
+    endif()
 
     set(${OUT_BUILD_NAME} "${BUILD_NAME}" PARENT_SCOPE)
     message(STATUS "Generated build name: ${BUILD_NAME}")
@@ -151,7 +179,7 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Installing files to local directory..."
     )
 
-  
+
     if (${GPU_LANG} STREQUAL "CPU")
       set(_BACKEND "cpu")
     elseif (${GPU_LANG} STREQUAL "CUDA")

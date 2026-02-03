@@ -163,3 +163,6 @@ eetq/
 mamba/
 
 poetry.lock
+
+# Nix
+builder/examples/**/flake.lock

@@ -1,4 +1,19 @@
 cmake_minimum_required(VERSION 3.26)
+
+# Set Intel SYCL compiler before project() call
+find_program(ICX_COMPILER icx)
+find_program(ICPX_COMPILER icpx)
+
+if(ICX_COMPILER OR ICPX_COMPILER)
+  set(CMAKE_C_COMPILER ${ICX_COMPILER})
+
+ if(WIN32)
+    set(CMAKE_CXX_COMPILER ${ICX_COMPILER})
+  else()
+    set(CMAKE_CXX_COMPILER ${ICPX_COMPILER})
+  endif()
+endif()
+
 project({{name}} LANGUAGES CXX)
 
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
@@ -23,15 +38,15 @@ else()
   find_package(Python3 REQUIRED COMPONENTS Development Development.SABIModule Interpreter)
 endif()
 
+get_gpu_lang(DETECTED_GPU_LANG)
+set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
+message(STATUS "Using GPU language: ${GPU_LANG}")
+
 append_cmake_prefix_path("torch" "torch.utils.cmake_prefix_path")
 
 find_package(Torch REQUIRED)
 
 run_python(TORCH_VERSION "import torch; print(torch.__version__.split('+')[0])" "Failed to get Torch version")
-
-get_gpu_lang(DETECTED_GPU_LANG)
-set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
-message(STATUS "Using GPU language: ${GPU_LANG}")
 
 {% if torch_minver %}
 if (TORCH_VERSION VERSION_LESS {{ torch_minver }})
@@ -109,6 +124,10 @@ elseif(GPU_LANG STREQUAL "METAL")
   set(ALL_METAL_SOURCES)
   set(METAL_INCLUDE_DIRS)
 elseif(GPU_LANG STREQUAL "SYCL")
+  if(NOT ICX_COMPILER AND NOT ICPX_COMPILER)
+    message(FATAL_ERROR "Intel SYCL C++ compiler (icpx) and/or C compiler (icx) not found. Please install Intel oneAPI toolkit.")
+  endif()
+
   add_compile_definitions(XPU_KERNEL)
   add_compile_definitions(USE_XPU)
 else()
@@ -147,13 +166,6 @@ elseif(GPU_LANG STREQUAL "HIP")
   set(ROCM_ARCHS ${GPU_ARCHES})
   message(STATUS "ROCM supported target architectures: ${ROCM_ARCHS}")
 elseif(GPU_LANG STREQUAL "SYCL")
-  find_program(ICX_COMPILER icx)
-  find_program(ICPX_COMPILER icpx)
-
-  if(NOT ICX_COMPILER AND NOT ICPX_COMPILER)
-    message(FATAL_ERROR "Intel SYCL C++ compiler (icpx) and/or C compiler (icx) not found. Please install Intel oneAPI toolkit.")
-  endif()
-
   execute_process(
     COMMAND ${ICPX_COMPILER} --version
     OUTPUT_VARIABLE ICPX_VERSION_OUTPUT
@@ -161,20 +173,19 @@ elseif(GPU_LANG STREQUAL "SYCL")
   )
   string(REGEX MATCH "[0-9]+\\.[0-9]+" DPCPP_VERSION "${ICPX_VERSION_OUTPUT}")
   set(DPCPP_VERSION "${DPCPP_VERSION}" CACHE STRING "DPCPP major.minor version")
-  set(CMAKE_C_COMPILER ${ICX_COMPILER})
 
   # On Windows, use icx (MSVC-compatible) for C++ to work with Ninja generator
   # On Linux, use icpx (GNU-compatible) for C++
   if(WIN32)
-    set(CMAKE_CXX_COMPILER ${ICX_COMPILER})
     message(STATUS "Using Intel SYCL C++ compiler: ${ICX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION} (Windows MSVC-compatible mode)")
   else()
-    set(CMAKE_CXX_COMPILER ${ICPX_COMPILER})
     message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
   endif()
 
+
   set(sycl_link_flags "-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
-  set(GPU_FLAGS "-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  set(sycl_flags "-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  set(GPU_FLAGS "${sycl_flags}")
   set(GPU_ARCHES "")
 else()
   override_gpu_arches(GPU_ARCHES

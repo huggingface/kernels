@@ -18,13 +18,8 @@ from kernels import (
     use_kernel_forward_from_hub,
     use_kernel_mapping,
 )
-from kernels.layer.layer import (
-    _KERNEL_MAPPING,
-    _validate_layer,
-)
-from kernels.utils import (
-    install_kernel,
-)
+from kernels.layer.layer import _KERNEL_MAPPING, _validate_layer
+from kernels.utils import install_kernel
 
 kernel_layer_mapping = {
     "SiluAndMul": {
@@ -547,7 +542,8 @@ def test_validate_kernel_layer():
         _validate_layer(cls=BadLayer2, check_cls=SiluAndMul, repo=stub_repo(BadLayer2))
 
     class BadLayer3(nn.Module):
-        def forward(self, x: torch.Tensor, foo: int) -> torch.Tensor: ...
+        def forward(self, x: torch.Tensor, foo: int) -> torch.Tensor:
+            ...
 
     with pytest.raises(
         TypeError,
@@ -556,7 +552,8 @@ def test_validate_kernel_layer():
         _validate_layer(cls=BadLayer3, check_cls=SiluAndMul, repo=stub_repo(BadLayer3))
 
     class BadLayer4(nn.Module):
-        def forward(self, *, x: torch.Tensor) -> torch.Tensor: ...
+        def forward(self, *, x: torch.Tensor) -> torch.Tensor:
+            ...
 
     with pytest.raises(
         TypeError,

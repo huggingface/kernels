@@ -11,18 +11,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import get_token, snapshot_download
-from huggingface_hub.utils import disable_progress_bars
+from huggingface_hub.utils import build_hf_headers, disable_progress_bars, get_session, hf_raise_for_status
 
-from kernels.utils import backend
+from kernels.utils import _get_hf_api, backend
 
 MISSING_DEPS: list[str] = []
-
-try:
-    import requests
-except ImportError:
-    requests = None  # type: ignore[assignment]
-    MISSING_DEPS.append("requests")
 
 try:
     import torch
@@ -692,25 +685,15 @@ def submit_benchmark(
     repo_id: str,
     result: BenchmarkResult,
 ) -> None:
-    token = get_token()
-    if token is None:
-        raise ValueError(
-            "No HuggingFace token. Run `huggingface-cli login` or set HF_TOKEN"
-        )
-
     # TODO: follow up on API design for benchmark submission
-    endpoint = f"https://huggingface.co/api/kernels/{repo_id}/benchmarks"
-    response = requests.post(
-        endpoint,
+    response = get_session().post(
+        f"https://huggingface.co/api/kernels/{repo_id}/benchmarks",
         json=result.to_payload(),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
+        headers=build_hf_headers(headers={"Content-Type": "application/json"}),
     )
     if not response.ok:
         print(f"Error {response.status_code}: {response.text}", file=sys.stderr)
-    response.raise_for_status()
+    hf_raise_for_status(response)
 
 
 def run_benchmark(
@@ -756,7 +739,9 @@ def run_benchmark(
     assert revision is not None  # Guaranteed by parsing logic above
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
-    repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
+    repo_path = Path(
+        _get_hf_api().snapshot_download(repo_id=repo_id, revision=revision)
+    )
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 

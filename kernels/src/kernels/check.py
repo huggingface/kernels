@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 
-from huggingface_hub import snapshot_download
 from kernel_abi_check import (  # type: ignore[import-not-found]
     BinaryFormat,
     IncompatibleAbi3Symbol,
@@ -12,7 +11,7 @@ from kernel_abi_check import (  # type: ignore[import-not-found]
     ObjectFile,
 )
 
-from kernels.utils import CACHE_DIR
+from kernels.utils import CACHE_DIR, _get_hf_api
 
 
 def check_kernel(
@@ -20,7 +19,7 @@ def check_kernel(
 ):
     variants_path = (
         Path(
-            snapshot_download(
+            _get_hf_api().snapshot_download(
                 repo_id,
                 allow_patterns=["build/*"],
                 cache_dir=CACHE_DIR,

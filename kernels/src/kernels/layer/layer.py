@@ -9,12 +9,7 @@ from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Protocol, Type
 
 from .._versions import select_revision_or_version
-from ..utils import (
-    _get_caller_locked_kernel,
-    _get_locked_kernel,
-    get_kernel,
-    get_local_kernel,
-)
+from ..utils import _get_caller_locked_kernel, _get_locked_kernel, get_kernel, get_local_kernel
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
@@ -26,7 +21,8 @@ if TYPE_CHECKING:
 
 class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
     @property
-    def layer_name(self) -> str: ...
+    def layer_name(self) -> str:
+        ...
 
 
 class LayerRepository:

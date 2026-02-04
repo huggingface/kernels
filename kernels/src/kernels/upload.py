@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from huggingface_hub import create_branch, create_repo, upload_folder
-
 from kernels.metadata import Metadata
+from kernels.utils import _get_hf_api
 from kernels.variants import BUILD_VARIANT_REGEX
 
 
@@ -13,6 +12,7 @@ def upload_kernels_dir(
     branch: str | None,
     private: bool,
 ):
+    api = _get_hf_api()
     kernel_dir = Path(kernel_dir).resolve()
 
     build_dir = None
@@ -48,10 +48,10 @@ def upload_kernels_dir(
         if version is not None:
             branch = f"v{version}"
 
-    repo_id = create_repo(repo_id=repo_id, private=private, exist_ok=True).repo_id
+    repo_id = api.create_repo(repo_id=repo_id, private=private, exist_ok=True).repo_id
 
     if branch is not None:
-        create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
+        api.create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
 
     delete_patterns: set[str] = set()
     for build_variant in build_dir.iterdir():
@@ -60,7 +60,7 @@ def upload_kernels_dir(
 
     # in the case we have variants, upload to the same as the kernel_dir
     if (kernel_dir / "benchmarks").is_dir():
-        upload_folder(
+        api.upload_folder(
             repo_id=repo_id,
             folder_path=kernel_dir / "benchmarks",
             revision=branch,
@@ -70,7 +70,7 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    upload_folder(
+    api.upload_folder(
         repo_id=repo_id,
         folder_path=build_dir,
         revision=branch,

@@ -35,3 +35,6 @@ jobs:
 
       - name: Build relu kernel (compiler flags)
         run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux )
+
+      - name: Build cutlass-gemm kernel
+        run: ( cd builder/examples/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux -L )

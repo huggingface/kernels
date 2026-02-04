@@ -7,7 +7,10 @@ use minijinja::{context, Environment};
 use crate::{
     config::{Backend, Build, General, Torch},
     fileset::FileSet,
-    torch::{common::write_metadata, kernel_ops_identifier},
+    torch::{
+        common::{write_compat_py, write_metadata},
+        kernel_ops_identifier,
+    },
 };
 
 pub fn write_torch_ext_noarch(
@@ -20,9 +23,9 @@ pub fn write_torch_ext_noarch(
 
     let ops_name = kernel_ops_identifier(&target_dir, &build.general.python_name(), ops_id);
 
+    write_compat_py(&mut file_set)?;
     write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
     write_pyproject_toml(env, build.torch.as_ref(), &build.general, &mut file_set)?;
-
     write_metadata(&build.general, &mut file_set)?;
 
     Ok(file_set)

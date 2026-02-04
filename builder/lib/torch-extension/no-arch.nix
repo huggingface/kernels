@@ -91,7 +91,7 @@ stdenv.mkDerivation (prevAttrs: {
     ''
       mkdir -p $out/${noarchVariant}/${moduleName}
       cp -r torch-ext/${moduleName}/* $out/${noarchVariant}
-      cp ${./compat.py} $out/${noarchVariant}/${moduleName}/__init__.py
+      cp compat.py $out/${noarchVariant}/${moduleName}/__init__.py
       cp metadata-${buildConfig.backend}.json $out/${noarchVariant}
     '';
 

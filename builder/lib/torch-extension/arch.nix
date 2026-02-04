@@ -242,11 +242,6 @@ stdenv.mkDerivation (prevAttrs: {
     in
     ''
       rm -rf $out/_${moduleName}_${rev}
-
-      # Set up a compatibility module for older kernels versions, remove when
-      # the updated kernels has been around for a while.
-      mkdir $out/${buildVariant}/${moduleName}
-      cp ${./compat.py} $out/${buildVariant}/${moduleName}/__init__.py
     ''
     + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
       find $out/ -name '*.so' \

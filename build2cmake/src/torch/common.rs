@@ -12,15 +12,16 @@ use crate::torch::kernel::render_kernel_components;
 use crate::version::Version;
 use crate::FileSet;
 
-static REGISTRATION_H: &str = include_str!("../templates/registration.h");
-static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
-static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/build-variants.cmake");
-static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
+static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
+static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static COMPAT_PY: &str = include_str!("../templates/compat.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
-static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
 static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
 static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
+static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
+static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
+static REGISTRATION_H: &str = include_str!("../templates/registration.h");
 
 pub fn write_setup_py(
     env: &Environment,
@@ -45,6 +46,14 @@ pub fn write_setup_py(
             writer,
         )
         .wrap_err("Cannot render setup.py template")?;
+
+    Ok(())
+}
+
+pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
+    let mut path = PathBuf::new();
+    path.push("compat.py");
+    file_set.entry(path).extend_from_slice(COMPAT_PY.as_bytes());
 
     Ok(())
 }
@@ -325,6 +334,8 @@ pub fn write_torch_ext(
     )?;
 
     write_setup_py(env, &build.general, torch_ext, &ops_name, &mut file_set)?;
+
+    write_compat_py(&mut file_set)?;
 
     write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
 

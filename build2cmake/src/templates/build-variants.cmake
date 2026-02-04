@@ -166,6 +166,12 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         RENAME "metadata.json"
         COMPONENT ${TARGET_NAME})
 
+    # Compatibility with older kernels and direct Python imports.
+    install(FILES ${CMAKE_SOURCE_DIR}/compat.py
+      DESTINATION "${KERNEL_INSTALL_DIR}/${PACKAGE_NAME}"
+        RENAME "__init__.py"
+        COMPONENT ${TARGET_NAME})
+
     message(STATUS "Added install rules for ${TARGET_NAME} -> ${BUILD_VARIANT_NAME}")
 endfunction()
 
@@ -224,6 +230,11 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
             ${VARIANT_DIR}/metadata.json
+
+            # Compatibility with older kernels and direct Python imports.
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/compat.py
+            ${VARIANT_DIR}/${PACKAGE_NAME}/__init__.py
 
             COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
             COMMAND_EXPAND_LISTS

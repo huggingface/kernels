@@ -152,13 +152,14 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         RUNTIME DESTINATION "${KERNEL_INSTALL_DIR}"
         COMPONENT ${TARGET_NAME})
 
-    # Glob Python files to install
-    file(GLOB PYTHON_FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
-
-    # Install Python files (__init__.py and _ops.py)
-    install(FILES ${PYTHON_FILES}
-        DESTINATION "${KERNEL_INSTALL_DIR}"
-        COMPONENT ${TARGET_NAME})
+    # Glob Python files to install recursively.
+    file(GLOB_RECURSE PYTHON_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
+    foreach(python_file IN LISTS PYTHON_FILES)
+      get_filename_component(python_file_dir "${python_file}" DIRECTORY)
+      install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${python_file}"
+          DESTINATION "${KERNEL_INSTALL_DIR}/${python_file_dir}"
+          COMPONENT ${TARGET_NAME})
+    endforeach()
 
     install(FILES ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
         DESTINATION "${KERNEL_INSTALL_DIR}"
@@ -190,8 +191,8 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     # Variant directory is where metadata.json should go (for kernels upload discovery)
     set(VARIANT_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
 
-    # Glob Python files at configure time
-    file(GLOB PYTHON_FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
+    # Glob Python files to install recursively.
+    file(GLOB_RECURSE PYTHON_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
 
     # Create a custom target for local installation
     add_custom_target(local_install
@@ -219,11 +220,6 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             $<TARGET_FILE:${TARGET_NAME}>
             ${LOCAL_INSTALL_DIR}/
 
-            # Copy each Python file
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${PYTHON_FILES}
-            ${LOCAL_INSTALL_DIR}/
-
             # Copy metadata.json if it exists
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
@@ -232,6 +228,19 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
             COMMAND_EXPAND_LISTS
     )
+
+    # Copy each Python file preserving directory structure
+    foreach(python_file IN LISTS PYTHON_FILES)
+      get_filename_component(python_file_dir "${python_file}" DIRECTORY)
+      add_custom_command(TARGET local_install POST_BUILD
+              COMMAND ${CMAKE_COMMAND} -E make_directory
+              ${LOCAL_INSTALL_DIR}/${python_file_dir}
+              COMMAND ${CMAKE_COMMAND} -E copy_if_different
+              ${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${python_file}
+              ${LOCAL_INSTALL_DIR}/${python_file_dir}/
+              COMMENT "Copying ${python_file} to ${LOCAL_INSTALL_DIR}/${python_file_dir}"
+      )
+    endforeach()
 
     # Create both directories: variant dir for metadata.json, package dir for binaries
     file(MAKE_DIRECTORY ${VARIANT_DIR})

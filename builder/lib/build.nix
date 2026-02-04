@@ -264,8 +264,11 @@ rec {
               ))
             ];
             shellHook = ''
-              export PYTHONPATH=''${PYTHONPATH}:${extension}
+              # This is run from `nix develop`, which provides the existing
+              # environment. We clear the LD_LIBRARY_PATH and PYTHONPATH to
+              # make testing as pure as possible.
               unset LD_LIBRARY_PATH
+              export PYTHONPATH=${extension}/${buildSet.torch.variant}
             '';
           };
         };

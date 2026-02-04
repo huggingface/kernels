@@ -2,26 +2,26 @@
 
 ## Loading Kernels
 
-Here is how you would use the [activation](https://huggingface.co/kernels-community/activation) kernels from the Hugging Face Hub:
+Here is how you would use the [relu](https://huggingface.co/kernels-community/relu) kernels from the Hugging Face Hub:
 
 ```python
 import torch
 from kernels import get_kernel
 
 # Download optimized kernels from the Hugging Face hub
-activation = get_kernel("kernels-community/activation", version=1)
+relu = get_kernel("kernels-community/relu", version=1)
 
 # Create a random tensor
-x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
+x = torch.randn((10, 10), dtype=torch.float, device="cuda")
 
 # Run the kernel
 y = torch.empty_like(x)
-activation.gelu_fast(y, x)
+relu.relu(x, y)
 
 print(y)
 ```
 
-This fetches version `1` of the kernel `kernels-community/activation`.
+This fetches version `1` of the kernel `kernels-community/relu`.
 Kernels are versioned using a major version number. Using `version=1` will
 get the latest kernel build from the `v1` branch.
 
@@ -40,6 +40,6 @@ that the program is running on:
 from kernels import has_kernel
 
 # Check if kernel is available for current environment
-is_available = has_kernel("kernels-community/activation", version=1)
+is_available = has_kernel("kernels-community/relu", version=1)
 print(f"Kernel available: {is_available}")
 ```

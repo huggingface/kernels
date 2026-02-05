@@ -87,7 +87,6 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             }
             Dependency::MetalCpp => {
                 // TODO: add CMake dependency.
-                ()
             }
             Dependency::Torch => (),
         }

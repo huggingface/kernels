@@ -99,7 +99,7 @@ pub fn write_pyproject_toml(
 
 pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
     for backend in &Backend::all() {
-        let writer = file_set.entry(format!("metadata-{}.json", backend.to_string()));
+        let writer = file_set.entry(format!("metadata-{}.json", backend));
 
         let python_depends = general
             .python_depends()

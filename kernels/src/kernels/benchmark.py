@@ -493,9 +493,14 @@ def run_benchmark_class(
         raise RuntimeError(f"No benchmark_* methods found in {benchmark_cls.__name__}")
 
     # Load kernel once for all workloads
-    from kernels import get_kernel
+    from kernels import get_local_kernel, get_kernel
 
-    kernel = get_kernel(repo_id, revision=revision)
+    if repo_id.startswith("path:"):
+        _, path_str = repo_id.split(":", 1)
+        kernel = get_local_kernel(Path(path_str), "activation")
+    else:
+        kernel = get_kernel(repo_id, revision=revision)
+
     kernel_sha = get_kernel_sha_from_build_name(kernel)
     backend_name = backend() if TORCH_AVAILABLE else "cpu"
     # Map backend names to torch device names
@@ -734,6 +739,10 @@ def run_benchmark(
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
 
+    if repo_id.startswith("path:"):
+        branch = "local"
+        version = None
+
     # Requires either branch or version or parses from repo_id
     if branch is None and version is None:
         if "@" not in repo_id:
@@ -756,7 +765,10 @@ def run_benchmark(
     assert revision is not None  # Guaranteed by parsing logic above
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
-    repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
+    if branch == "local":
+        repo_path = Path(repo_id.split("path:", 1)[1])
+    else:
+        repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 

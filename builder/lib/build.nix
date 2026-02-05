@@ -220,9 +220,19 @@ rec {
       namePaths =
         # TODO: treat kernels without compiled parts differently.
         lib.mapAttrs (name: pkg: toString pkg) extensions;
+
+      # Include benchmarks directory if it exists in the source
+      benchmarksPath = path + "/benchmarks";
+      hasBenchmarks = builtins.pathExists benchmarksPath;
+      allPaths =
+        namePaths
+        // lib.optionalAttrs hasBenchmarks {
+          benchmarks = benchmarksPath;
+        };
     in
     import ./join-paths {
-      inherit pkgs namePaths;
+      inherit pkgs;
+      namePaths = allPaths;
       name = "torch-ext-bundle";
     };
 

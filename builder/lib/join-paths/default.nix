@@ -16,8 +16,6 @@ let
     "pkgs"
     "namePaths"
   ];
-  # Iterating over pairs in bash sucks, so let's generate
-  # the commands in Nix instead.
   copyPkg = pkg: ''
     cp -r ${pkg}/* ${placeholder "out"}/
   '';

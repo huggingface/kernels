@@ -217,7 +217,17 @@ rec {
         bundleOnly = true;
       };
       buildToml = readBuildConfig path;
-      contents = builtins.map (pkg: toString pkg) (builtins.attrValues extensions);
+      benchmarksPath = path + "/benchmarks";
+      hasBenchmarks = builtins.pathExists benchmarksPath;
+      benchmarks =
+        with lib.fileset;
+        toSource {
+          root = path;
+          fileset = maybeMissing benchmarksPath;
+        };
+      contents =
+        builtins.map (pkg: toString pkg) (builtins.attrValues extensions)
+        ++ lib.optionals hasBenchmarks [ (toString benchmarks) ];
     in
     import ./join-paths {
       inherit pkgs contents;

@@ -3,10 +3,8 @@ name = "kernels"
 version = "0.12.2.dev0"
 description = "Download compute kernels"
 authors = [
-  { name = "OlivierDehaene", email = "olivier@huggingface.co" },
   { name = "Daniel de Kok", email = "daniel@huggingface.co" },
   { name = "David Holtz", email = "david@huggingface.co" },
-  { name = "Nicolas Patry", email = "nicolas@huggingface.co" },
 ]
 license = { text = "Apache-2.0" }
 readme = "README.md"

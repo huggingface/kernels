@@ -32,7 +32,9 @@ pub fn write_setup_py(
 ) -> Result<()> {
     let writer = file_set.entry("setup.py");
 
-    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
+    let data_globs = torch
+        .data_extensions()
+        .map(|exts| exts.iter().map(|ext| format!("\"**/*.{ext}\"")).join(", "));
 
     env.get_template("setup.py")
         .wrap_err("Cannot get setup.py template")?
@@ -225,6 +227,7 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
 pub fn render_extension(
     env: &Environment,
     general: &General,
+    torch: &Torch,
     ops_name: &str,
     write: &mut impl Write,
 ) -> Result<()> {
@@ -234,6 +237,7 @@ pub fn render_extension(
             context! {
                 python_name => general.python_name(),
                 ops_name => ops_name,
+                data_extensions => torch.data_extensions(),
             },
             &mut *write,
         )
@@ -300,7 +304,7 @@ pub fn write_cmake(
 
     render_kernel_components(env, build, cmake_writer)?;
 
-    render_extension(env, &build.general, ops_name, cmake_writer)?;
+    render_extension(env, &build.general, torch, ops_name, cmake_writer)?;
 
     Ok(())
 }

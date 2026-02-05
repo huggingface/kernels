@@ -65,7 +65,11 @@ fn write_pyproject_toml(
     let writer = file_set.entry("pyproject.toml");
 
     let name = &general.name;
-    let data_globs = torch.and_then(|torch| torch.data_globs().map(|globs| globs.join(", ")));
+    let data_globs = torch.and_then(|torch| {
+        torch
+            .data_extensions()
+            .map(|exts| exts.iter().map(|ext| format!("\"**/*.{ext}\"")).join(", "))
+    });
 
     // Common python dependencies (no backend-specific ones)
     let python_dependencies = itertools::process_results(general.python_depends(), |iter| {

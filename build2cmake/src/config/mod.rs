@@ -122,18 +122,18 @@ pub struct Torch {
 }
 
 impl Torch {
-    pub fn data_globs(&self) -> Option<Vec<String>> {
+    pub fn data_extensions(&self) -> Option<Vec<String>> {
         match self.pyext.as_ref() {
             Some(exts) => {
-                let globs = exts
+                let extensions = exts
                     .iter()
                     .filter(|&ext| ext != "py" && ext != "pyi")
-                    .map(|ext| format!("\"**/*.{ext}\""))
+                    .cloned()
                     .collect_vec();
-                if globs.is_empty() {
+                if extensions.is_empty() {
                     None
                 } else {
-                    Some(globs)
+                    Some(extensions)
                 }
             }
 

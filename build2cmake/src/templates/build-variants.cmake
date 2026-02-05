@@ -120,24 +120,25 @@ endfunction()
 #
 function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     set(oneValueArgs INSTALL_PREFIX)
-    cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
+    set(multiValueArgs DATA_EXTENSIONS)
+    cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT ARG_INSTALL_PREFIX)
         set(ARG_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     endif()
 
     if (${GPU_LANG} STREQUAL "CPU")
-      set(_BACKEND "cpu")
+        set(_BACKEND "cpu")
     elseif (${GPU_LANG} STREQUAL "CUDA")
-      set(_BACKEND "cuda")
+        set(_BACKEND "cuda")
     elseif (${GPU_LANG} STREQUAL "HIP")
-      set(_BACKEND "rocm")
+        set(_BACKEND "rocm")
     elseif (${GPU_LANG} STREQUAL "METAL")
-      set(_BACKEND "metal")
+        set(_BACKEND "metal")
     elseif (${GPU_LANG} STREQUAL "SYCL")
-      set(_BACKEND "xpu")
+        set(_BACKEND "xpu")
     else()
-      message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
+        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
     endif()
 
     # Set the installation directory
@@ -155,8 +156,8 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     # Glob Python files to install recursively.
     file(GLOB_RECURSE PYTHON_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
     foreach(python_file IN LISTS PYTHON_FILES)
-      get_filename_component(python_file_dir "${python_file}" DIRECTORY)
-      install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${python_file}"
+        get_filename_component(python_file_dir "${python_file}" DIRECTORY)
+        install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${python_file}"
           DESTINATION "${KERNEL_INSTALL_DIR}/${python_file_dir}"
           COMPONENT ${TARGET_NAME})
     endforeach()
@@ -171,6 +172,17 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
       DESTINATION "${KERNEL_INSTALL_DIR}/${PACKAGE_NAME}"
         RENAME "__init__.py"
         COMPONENT ${TARGET_NAME})
+
+    # Install data files with specified extensions
+    foreach(ext IN LISTS ARG_DATA_EXTENSIONS)
+        file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
+        foreach(data_file IN LISTS DATA_FILES)
+            get_filename_component(data_file_dir "${data_file}" DIRECTORY)
+            install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${data_file}"
+                DESTINATION "${KERNEL_INSTALL_DIR}/${data_file_dir}"
+                COMPONENT ${TARGET_NAME})
+        endforeach()
+    endforeach()
 
     message(STATUS "Added install rules for ${TARGET_NAME} -> ${BUILD_VARIANT_NAME}")
 endfunction()
@@ -192,6 +204,9 @@ endfunction()
 #   BUILD_VARIANT_NAME - Build variant name (e.g., "torch271-cxx11-cu124-x86_64-linux")
 #
 function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
+    set(multiValueArgs DATA_EXTENSIONS)
+    cmake_parse_arguments(ARG "" "" "${multiValueArgs}" ${ARGN})
+
     # Define your local, folder based, installation directory
     set(LOCAL_INSTALL_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
     # Variant directory is where metadata.json should go (for kernels upload discovery)
@@ -206,17 +221,17 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     )
 
     if (${GPU_LANG} STREQUAL "CPU")
-      set(_BACKEND "cpu")
+        set(_BACKEND "cpu")
     elseif (${GPU_LANG} STREQUAL "CUDA")
-      set(_BACKEND "cuda")
+        set(_BACKEND "cuda")
     elseif (${GPU_LANG} STREQUAL "HIP")
-      set(_BACKEND "rocm")
+        set(_BACKEND "rocm")
     elseif (${GPU_LANG} STREQUAL "METAL")
-      set(_BACKEND "metal")
+        set(_BACKEND "metal")
     elseif (${GPU_LANG} STREQUAL "SYCL")
-      set(_BACKEND "xpu")
+        set(_BACKEND "xpu")
     else()
-      message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
+        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
     endif()
 
     # Add custom commands to copy files
@@ -242,8 +257,8 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
 
     # Copy each Python file preserving directory structure
     foreach(python_file IN LISTS PYTHON_FILES)
-      get_filename_component(python_file_dir "${python_file}" DIRECTORY)
-      add_custom_command(TARGET local_install POST_BUILD
+        get_filename_component(python_file_dir "${python_file}" DIRECTORY)
+        add_custom_command(TARGET local_install POST_BUILD
               COMMAND ${CMAKE_COMMAND} -E make_directory
               ${LOCAL_INSTALL_DIR}/${python_file_dir}
               COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -251,6 +266,22 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
               ${LOCAL_INSTALL_DIR}/${python_file_dir}/
               COMMENT "Copying ${python_file} to ${LOCAL_INSTALL_DIR}/${python_file_dir}"
       )
+    endforeach()
+
+    # Copy data files with specified extensions
+    foreach(ext IN LISTS ARG_DATA_EXTENSIONS)
+        file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
+        foreach(data_file IN LISTS DATA_FILES)
+            get_filename_component(data_file_dir "${data_file}" DIRECTORY)
+            add_custom_command(TARGET local_install POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${LOCAL_INSTALL_DIR}/${data_file_dir}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${data_file}
+                ${LOCAL_INSTALL_DIR}/${data_file_dir}/
+                COMMENT "Copying ${data_file} to ${LOCAL_INSTALL_DIR}/${data_file_dir}"
+            )
+        endforeach()
     endforeach()
 
     # Create both directories: variant dir for metadata.json, package dir for binaries

@@ -1,12 +1,18 @@
 #!/bin/bash
 
-PYTHONPATH="relu-kernel:cutlass-gemm-kernel:$PYTHONPATH" \
+# Expand to build variant directories.
+RELU_PATH=$(echo relu-kernel/torch*)
+CUTLASS_PATH=$(echo cutlass-gemm-kernel/torch*)
+SILU_MUL_PATH=$(echo silu-and-mul-kernel/torch*)
+RELU_CPU_PATH=$(echo relu-kernel-cpu/torch*)
+
+PYTHONPATH="$RELU_PATH:$CUTLASS_PATH:$PYTHONPATH" \
   .venv/bin/pytest relu_tests cutlass_gemm_tests
 
 # We only care about importing, the kernel is trivial.
-PYTHONPATH="silu-and-mul-kernel:$PYTHONPATH" \
+PYTHONPATH="$SILU_MUL_PATH:$PYTHONPATH" \
   .venv/bin/python -c "import silu_and_mul"
 
-PYTHONPATH="relu-kernel-cpu:$PYTHONPATH" \
+PYTHONPATH="$RELU_CPU_PATH:$PYTHONPATH" \
    CUDA_VISIBLE_DEVICES="" \
   .venv/bin/pytest relu_tests

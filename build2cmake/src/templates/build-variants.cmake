@@ -129,6 +129,24 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
 
     gpu_lang_to_backend(_BACKEND ${GPU_LANG})
 
+    # Always include 'py' extension for Python files
+    set(ALL_EXTENSIONS ${ARG_DATA_EXTENSIONS})
+    list(APPEND ALL_EXTENSIONS "py")
+
+    if (${GPU_LANG} STREQUAL "CPU")
+        set(_BACKEND "cpu")
+    elseif (${GPU_LANG} STREQUAL "CUDA")
+        set(_BACKEND "cuda")
+    elseif (${GPU_LANG} STREQUAL "HIP")
+        set(_BACKEND "rocm")
+    elseif (${GPU_LANG} STREQUAL "METAL")
+        set(_BACKEND "metal")
+    elseif (${GPU_LANG} STREQUAL "SYCL")
+        set(_BACKEND "xpu")
+    else()
+        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
+    endif()
+
     # Set the installation directory
     set(KERNEL_INSTALL_DIR "${ARG_INSTALL_PREFIX}/${BUILD_VARIANT_NAME}")
 
@@ -141,13 +159,15 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         RUNTIME DESTINATION "${KERNEL_INSTALL_DIR}"
         COMPONENT ${TARGET_NAME})
 
-    # Glob Python files to install recursively.
-    file(GLOB_RECURSE PYTHON_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
-    foreach(python_file IN LISTS PYTHON_FILES)
-        get_filename_component(python_file_dir "${python_file}" DIRECTORY)
-        install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${python_file}"
-          DESTINATION "${KERNEL_INSTALL_DIR}/${python_file_dir}"
-          COMPONENT ${TARGET_NAME})
+    # Install data files with specified extensions
+    foreach(ext IN LISTS ALL_EXTENSIONS)
+        file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
+        foreach(data_file IN LISTS DATA_FILES)
+            get_filename_component(data_file_dir "${data_file}" DIRECTORY)
+            install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${data_file}"
+                DESTINATION "${KERNEL_INSTALL_DIR}/${data_file_dir}"
+                COMPONENT ${TARGET_NAME})
+        endforeach()
     endforeach()
 
     install(FILES ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
@@ -160,17 +180,6 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
       DESTINATION "${KERNEL_INSTALL_DIR}/${PACKAGE_NAME}"
         RENAME "__init__.py"
         COMPONENT ${TARGET_NAME})
-
-    # Install data files with specified extensions
-    foreach(ext IN LISTS ARG_DATA_EXTENSIONS)
-        file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
-        foreach(data_file IN LISTS DATA_FILES)
-            get_filename_component(data_file_dir "${data_file}" DIRECTORY)
-            install(FILES "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${data_file}"
-                DESTINATION "${KERNEL_INSTALL_DIR}/${data_file_dir}"
-                COMPONENT ${TARGET_NAME})
-        endforeach()
-    endforeach()
 
     message(STATUS "Added install rules for ${TARGET_NAME} -> ${BUILD_VARIANT_NAME}")
 endfunction()
@@ -195,13 +204,14 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     set(multiValueArgs DATA_EXTENSIONS)
     cmake_parse_arguments(ARG "" "" "${multiValueArgs}" ${ARGN})
 
+    # Always include 'py' extension for Python files
+    set(ALL_EXTENSIONS ${ARG_DATA_EXTENSIONS})
+    list(APPEND ALL_EXTENSIONS "py")
+
     # Define your local, folder based, installation directory
     set(LOCAL_INSTALL_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
     # Variant directory is where metadata.json should go (for kernels upload discovery)
     set(VARIANT_DIR "${CMAKE_SOURCE_DIR}/build/${BUILD_VARIANT_NAME}")
-
-    # Glob Python files to install recursively.
-    file(GLOB_RECURSE PYTHON_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.py")
 
     # Create a custom target for local installation
     add_custom_target(local_install
@@ -209,6 +219,22 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     )
 
     gpu_lang_to_backend(_BACKEND ${GPU_LANG})
+
+    # Copy data files with specified extensions
+    foreach(ext IN LISTS ALL_EXTENSIONS)
+        file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
+        foreach(data_file IN LISTS DATA_FILES)
+            get_filename_component(data_file_dir "${data_file}" DIRECTORY)
+            add_custom_command(TARGET local_install POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${LOCAL_INSTALL_DIR}/${data_file_dir}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${data_file}
+                ${LOCAL_INSTALL_DIR}/${data_file_dir}/
+                COMMENT "Copying ${data_file} to ${LOCAL_INSTALL_DIR}/${data_file_dir}"
+            )
+        endforeach()
+    endforeach()
 
     # Add custom commands to copy files
     add_custom_command(TARGET local_install POST_BUILD
@@ -230,35 +256,6 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
             COMMAND_EXPAND_LISTS
     )
-
-    # Copy each Python file preserving directory structure
-    foreach(python_file IN LISTS PYTHON_FILES)
-        get_filename_component(python_file_dir "${python_file}" DIRECTORY)
-        add_custom_command(TARGET local_install POST_BUILD
-              COMMAND ${CMAKE_COMMAND} -E make_directory
-              ${LOCAL_INSTALL_DIR}/${python_file_dir}
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different
-              ${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${python_file}
-              ${LOCAL_INSTALL_DIR}/${python_file_dir}/
-              COMMENT "Copying ${python_file} to ${LOCAL_INSTALL_DIR}/${python_file_dir}"
-      )
-    endforeach()
-
-    # Copy data files with specified extensions
-    foreach(ext IN LISTS ARG_DATA_EXTENSIONS)
-        file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
-        foreach(data_file IN LISTS DATA_FILES)
-            get_filename_component(data_file_dir "${data_file}" DIRECTORY)
-            add_custom_command(TARGET local_install POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                ${LOCAL_INSTALL_DIR}/${data_file_dir}
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/${data_file}
-                ${LOCAL_INSTALL_DIR}/${data_file_dir}/
-                COMMENT "Copying ${data_file} to ${LOCAL_INSTALL_DIR}/${data_file_dir}"
-            )
-        endforeach()
-    endforeach()
 
     # Create both directories: variant dir for metadata.json, package dir for binaries
     file(MAKE_DIRECTORY ${VARIANT_DIR})

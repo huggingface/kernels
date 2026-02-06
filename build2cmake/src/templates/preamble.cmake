@@ -40,7 +40,11 @@ endif()
 
 get_gpu_lang(DETECTED_GPU_LANG)
 set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
-message(STATUS "Using GPU language: ${GPU_LANG}")
+gpu_lang_to_backend(BACKEND "${GPU_LANG}")
+message(STATUS "Using backend: ${BACKEND}, GPU language: ${GPU_LANG}")
+
+set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
+set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")
 
 append_cmake_prefix_path("torch" "torch.utils.cmake_prefix_path")
 
@@ -213,3 +217,9 @@ elseif(GPU_LANG STREQUAL "CPU")
 else()
   message(FATAL_ERROR "Cannot generate build name for unknown GPU_LANG: ${GPU_LANG}")
 endif()
+
+configure_file(
+  ${CMAKE_CURRENT_LIST_DIR}/cmake/_ops.py.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/torch-ext/{{python_name}}/_ops.py
+  @ONLY
+)

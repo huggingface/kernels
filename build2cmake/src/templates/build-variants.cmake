@@ -127,19 +127,7 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         set(ARG_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     endif()
 
-    if (${GPU_LANG} STREQUAL "CPU")
-        set(_BACKEND "cpu")
-    elseif (${GPU_LANG} STREQUAL "CUDA")
-        set(_BACKEND "cuda")
-    elseif (${GPU_LANG} STREQUAL "HIP")
-        set(_BACKEND "rocm")
-    elseif (${GPU_LANG} STREQUAL "METAL")
-        set(_BACKEND "metal")
-    elseif (${GPU_LANG} STREQUAL "SYCL")
-        set(_BACKEND "xpu")
-    else()
-        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
-    endif()
+    gpu_lang_to_backend(_BACKEND ${GPU_LANG})
 
     # Set the installation directory
     set(KERNEL_INSTALL_DIR "${ARG_INSTALL_PREFIX}/${BUILD_VARIANT_NAME}")
@@ -220,19 +208,7 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Installing files to local directory..."
     )
 
-    if (${GPU_LANG} STREQUAL "CPU")
-        set(_BACKEND "cpu")
-    elseif (${GPU_LANG} STREQUAL "CUDA")
-        set(_BACKEND "cuda")
-    elseif (${GPU_LANG} STREQUAL "HIP")
-        set(_BACKEND "rocm")
-    elseif (${GPU_LANG} STREQUAL "METAL")
-        set(_BACKEND "metal")
-    elseif (${GPU_LANG} STREQUAL "SYCL")
-        set(_BACKEND "xpu")
-    else()
-        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
-    endif()
+    gpu_lang_to_backend(_BACKEND ${GPU_LANG})
 
     # Add custom commands to copy files
     add_custom_command(TARGET local_install POST_BUILD

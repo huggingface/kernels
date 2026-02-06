@@ -230,17 +230,6 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
     endif()
 
-    # Add custom commands to copy files
-    add_custom_command(TARGET local_install POST_BUILD
-            # Copy the shared library
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:${TARGET_NAME}>
-            ${LOCAL_INSTALL_DIR}/
-
-            COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
-            COMMAND_EXPAND_LISTS
-    )
-
     # Copy data files with specified extensions
     foreach(ext IN LISTS ALL_EXTENSIONS)
         file(GLOB_RECURSE DATA_FILES RELATIVE "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}" "${CMAKE_SOURCE_DIR}/torch-ext/${PACKAGE_NAME}/*.${ext}")
@@ -257,7 +246,13 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         endforeach()
     endforeach()
 
+    # Add custom commands to copy files
     add_custom_command(TARGET local_install POST_BUILD
+            # Copy the shared library
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:${TARGET_NAME}>
+            ${LOCAL_INSTALL_DIR}/
+
             # Copy metadata.json if it exists
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
@@ -268,6 +263,7 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             ${CMAKE_SOURCE_DIR}/compat.py
             ${VARIANT_DIR}/${PACKAGE_NAME}/__init__.py
 
+            COMMENT "Copying shared library and Python files to ${LOCAL_INSTALL_DIR}"
             COMMAND_EXPAND_LISTS
     )
 

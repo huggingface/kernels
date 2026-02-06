@@ -7,6 +7,15 @@ dependencies = [
   {{python_dependencies}}
 ]
 
+[project.optional-dependencies]
+{% for backend_name, deps in backend_dependencies %}
+{{backend_name}} = [
+  {% for dep in deps %}
+  {{dep}},
+  {% endfor %}
+]
+{% endfor %}
+
 [tool.setuptools]
 package-dir = { "" = "torch-ext" }
 

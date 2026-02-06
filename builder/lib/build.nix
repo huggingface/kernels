@@ -217,22 +217,20 @@ rec {
         bundleOnly = true;
       };
       buildToml = readBuildConfig path;
-      namePaths =
-        # TODO: treat kernels without compiled parts differently.
-        lib.mapAttrs (name: pkg: toString pkg) extensions;
-
-      # Include benchmarks directory if it exists in the source
       benchmarksPath = path + "/benchmarks";
       hasBenchmarks = builtins.pathExists benchmarksPath;
-      allPaths =
-        namePaths
-        // lib.optionalAttrs hasBenchmarks {
-          benchmarks = benchmarksPath;
+      benchmarks =
+        with lib.fileset;
+        toSource {
+          root = path;
+          fileset = maybeMissing benchmarksPath;
         };
+      contents =
+        builtins.map (pkg: toString pkg) (builtins.attrValues extensions)
+        ++ lib.optionals hasBenchmarks [ (toString benchmarks) ];
     in
     import ./join-paths {
-      inherit pkgs;
-      namePaths = allPaths;
+      inherit pkgs contents;
       name = "torch-ext-bundle";
     };
 
@@ -276,8 +274,11 @@ rec {
               ))
             ];
             shellHook = ''
-              export PYTHONPATH=''${PYTHONPATH}:${extension}
+              # This is run from `nix develop`, which provides the existing
+              # environment. We clear the LD_LIBRARY_PATH and PYTHONPATH to
+              # make testing as pure as possible.
               unset LD_LIBRARY_PATH
+              export PYTHONPATH=${extension}/${buildSet.torch.variant}
             '';
           };
         };

@@ -53,7 +53,7 @@ def _backend() -> str:
     if torch.version.cuda is not None:
         return "cuda"
     elif torch.version.hip is not None:
-        return "hip"
+        return "rocm"
     elif torch.backends.mps.is_available():
         return "metal"
     elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
@@ -69,15 +69,15 @@ def _build_variant(backend: str | None) -> str:
 
     import torch
 
-    if backend == "cuda":
+    if backend == "cuda" and torch.version.cuda is not None:
         cuda_version = parse(torch.version.cuda)
         compute_framework = f"cu{cuda_version.major}{cuda_version.minor}"
-    elif backend == "hip":
+    elif backend == "rocm" and torch.version.hip is not None:
         rocm_version = parse(torch.version.hip.split("-")[0])
         compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
     elif backend == "metal":
         compute_framework = "metal"
-    elif backend == "xpu":
+    elif backend == "xpu" and torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
     elif backend == "cann":
@@ -125,7 +125,7 @@ def _build_variant_noarch(backend: str | None) -> str:
 
     if backend == "cuda":
         return "torch-cuda"
-    elif backend == "hip":
+    elif backend == "rocm":
         return "torch-rocm"
     elif backend == "metal":
         return "torch-metal"
@@ -640,7 +640,7 @@ def _get_user_agent(
             user_agent["glibc"] = glibc
 
     elif isinstance(user_agent, str):
-        user_agent += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{_build_variant()}; file_type/kernel"
+        user_agent += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{_build_variant(None)}; file_type/kernel"
         if glibc is not None:
             user_agent += f"; glibc/{glibc}"
 

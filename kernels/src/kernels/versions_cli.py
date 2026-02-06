@@ -3,13 +3,13 @@ from pathlib import Path
 from huggingface_hub import HfApi
 
 from kernels._versions import _get_available_versions
-from kernels.utils import build_variants
+from kernels.utils import _build_variants
 from kernels.variants import BUILD_VARIANT_REGEX
 
 
 def print_kernel_versions(repo_id: str):
     api = HfApi()
-    compatible_variants = set(build_variants())
+    compatible_variants = set(_build_variants())
 
     versions = _get_available_versions(repo_id).items()
     if not versions:

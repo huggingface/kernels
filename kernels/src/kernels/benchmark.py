@@ -14,7 +14,7 @@ from typing import Any
 from huggingface_hub import get_token, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
-from kernels.utils import backend
+from kernels.utils import _backend
 
 MISSING_DEPS: list[str] = []
 
@@ -424,7 +424,7 @@ def collect_machine_info() -> MachineInfo:
 
     if TORCH_AVAILABLE:
         pytorch_version = torch.__version__
-        backend_name = backend()
+        backend_name = _backend()
         if backend_name in {"cuda", "hip"}:
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
@@ -497,7 +497,7 @@ def run_benchmark_class(
 
     kernel = get_kernel(repo_id, revision=revision)
     kernel_sha = get_kernel_sha_from_build_name(kernel)
-    backend_name = backend() if TORCH_AVAILABLE else "cpu"
+    backend_name = _backend() if TORCH_AVAILABLE else "cpu"
     # Map backend names to torch device names
     device_map = {
         "hip": "cuda",

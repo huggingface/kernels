@@ -11,6 +11,22 @@ from setuptools.command.build_ext import build_ext
 logger = logging.getLogger(__name__)
 
 
+def get_backend() -> str:
+    """Detect the backend by inspecting torch."""
+    import torch
+
+    if torch.version.cuda is not None:
+        return "cuda"
+    elif torch.version.hip is not None:
+        return "rocm"
+    elif torch.backends.mps.is_available():
+        return "metal"
+    elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
+        return "xpu"
+    else:
+        return "cpu"
+
+
 def is_sccache_available() -> bool:
     return which("sccache") is not None
 
@@ -124,11 +140,14 @@ class CMakeBuild(build_ext):
                 move(extdir / cfg / filename, extdir / filename)
 
 
+backend = get_backend()
+ops_name = f"_{{ python_name }}_{backend}_{{ revision }}"
+
 setup(
     name="{{ python_name }}",
     # The version is just a stub, it's not used by the final build artefact.
     version="0.1.0",
-    ext_modules=[CMakeExtension("{{ python_name }}.{{ ops_name }}")],
+    ext_modules=[CMakeExtension(f"{{ python_name }}.{ops_name}")],
     cmdclass={"build_ext": CMakeBuild},
     packages=find_packages(where="torch-ext", include=["{{ python_name }}*"]),
     package_dir={"": "torch-ext"},

@@ -127,6 +127,8 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         set(ARG_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     endif()
 
+    gpu_lang_to_backend(_BACKEND ${GPU_LANG})
+
     # Always include 'py' extension for Python files
     set(ALL_EXTENSIONS ${ARG_DATA_EXTENSIONS})
     list(APPEND ALL_EXTENSIONS "py")
@@ -216,19 +218,7 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             COMMENT "Installing files to local directory..."
     )
 
-    if (${GPU_LANG} STREQUAL "CPU")
-        set(_BACKEND "cpu")
-    elseif (${GPU_LANG} STREQUAL "CUDA")
-        set(_BACKEND "cuda")
-    elseif (${GPU_LANG} STREQUAL "HIP")
-        set(_BACKEND "rocm")
-    elseif (${GPU_LANG} STREQUAL "METAL")
-        set(_BACKEND "metal")
-    elseif (${GPU_LANG} STREQUAL "SYCL")
-        set(_BACKEND "xpu")
-    else()
-        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
-    endif()
+    gpu_lang_to_backend(_BACKEND ${GPU_LANG})
 
     # Copy data files with specified extensions
     foreach(ext IN LISTS ALL_EXTENSIONS)

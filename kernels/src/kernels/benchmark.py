@@ -691,7 +691,7 @@ def submit_benchmark(
         json=result.to_payload(),
         headers=build_hf_headers(headers={"Content-Type": "application/json"}),
     )
-    if not response.ok:
+    if response.status_code != 200:
         print(f"Error {response.status_code}: {response.text}", file=sys.stderr)
     hf_raise_for_status(response)
 
@@ -739,9 +739,7 @@ def run_benchmark(
     assert revision is not None  # Guaranteed by parsing logic above
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
-    repo_path = Path(
-        _get_hf_api().snapshot_download(repo_id=repo_id, revision=revision)
-    )
+    repo_path = Path(str(_get_hf_api().snapshot_download(repo_id=repo_id, revision=revision)))
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 

@@ -246,12 +246,14 @@ def install_kernel_all_variants(
 ) -> Path:
     api = _get_hf_api()
     repo_path = Path(
-        api.snapshot_download(
-            repo_id,
-            allow_patterns="build/*",
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns="build/*",
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=local_files_only,
+            )
         )
     )
 
@@ -408,12 +410,14 @@ def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
     api = _get_hf_api()
     allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
     repo_path = Path(
-        api.snapshot_download(
-            repo_id,
-            allow_patterns=allow_patterns,
-            cache_dir=CACHE_DIR,
-            revision=locked_sha,
-            local_files_only=True,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=locked_sha,
+                local_files_only=True,
+            )
         )
     )
 

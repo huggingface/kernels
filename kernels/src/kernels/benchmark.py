@@ -478,6 +478,7 @@ def run_benchmark_class(
     iterations: int,
     warmup: int,
     repo_id: str,
+    is_local: bool,
     revision: str,
 ) -> tuple[dict[str, TimingResults], str]:
     results = {}
@@ -495,9 +496,8 @@ def run_benchmark_class(
     # Load kernel once for all workloads
     from kernels import get_local_kernel, get_kernel
 
-    if repo_id.startswith("path:"):
-        _, path_str = repo_id.split(":", 1)
-        kernel = get_local_kernel(Path(path_str), "activation")
+    if is_local:
+        kernel = get_local_kernel(Path(repo_id), "activation")
     else:
         kernel = get_kernel(repo_id, revision=revision)
 
@@ -659,6 +659,7 @@ def run_benchmark_script(
     warmup: int,
     cwd: Path,
     repo_id: str,
+    is_local: bool,
     revision: str,
 ) -> tuple[dict[str, TimingResults], str]:
     print(f"Running {script_path.name}...", file=sys.stderr)
@@ -686,6 +687,7 @@ def run_benchmark_script(
             iterations=iterations,
             warmup=warmup,
             repo_id=repo_id,
+            is_local=is_local,
             revision=revision,
         )
         for name, timing in results.items():
@@ -739,7 +741,21 @@ def run_benchmark(
     # Suppress progress bars for cleaner output (files are often cached)
     disable_progress_bars()
 
-    if repo_id.startswith("path:"):
+    repo_id_path = Path(repo_id)
+
+    if repo_id_path.is_absolute():
+        is_local = repo_id_path.exists()
+    else:
+        is_local = (Path.cwd() / repo_id_path).exists()
+        repo_id_path = Path.cwd() / repo_id_path
+
+    if is_local:
+        if repo_id.count("/") == 1 and not repo_id.startswith(("./", "../")):
+            print(
+                f"Warning: '{repo_id}' exists locally but looks like a repo_id. "
+                f"Use './{repo_id}' to be explicit.",
+                file=sys.stderr,
+            )
         branch = "local"
         version = None
 
@@ -765,8 +781,8 @@ def run_benchmark(
     assert revision is not None  # Guaranteed by parsing logic above
 
     print(f"Downloading {repo_id}@{revision}...", file=sys.stderr)
-    if branch == "local":
-        repo_path = Path(repo_id.split("path:", 1)[1])
+    if is_local:
+        repo_path = repo_id_path.resolve()
     else:
         repo_path = Path(snapshot_download(repo_id=repo_id, revision=revision))
 
@@ -782,6 +798,7 @@ def run_benchmark(
                 warmup=warmup,
                 cwd=repo_path,
                 repo_id=repo_id,
+                is_local=is_local,
                 revision=revision,
             )
             timing_results.update(results)

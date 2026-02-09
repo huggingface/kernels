@@ -67,6 +67,7 @@ COPY relu-kernel ./relu-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
+COPY builder/examples/extra-data/tests ./extra_data_tests
 COPY builder/examples/relu/tests ./relu_tests
 COPY builder/examples/cutlass-gemm/tests ./cutlass_gemm_tests
 

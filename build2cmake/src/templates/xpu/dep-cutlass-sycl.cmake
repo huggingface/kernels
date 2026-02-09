@@ -1,3 +1,5 @@
+if(GPU_LANG STREQUAL "SYCL")
+
 find_package(CutlassSycl)
 
 if(DPCPP_VERSION STREQUAL "2025.3")
@@ -27,16 +29,20 @@ if (NOT CutlassSycl_FOUND)
     message(STATUS "The CUTLASS_SYCL_SRC_DIR is set, using ${CUTLASS_SYCL_SRC_DIR} for compilation")
     FetchContent_Declare(cutlass SOURCE_DIR ${CUTLASS_SYCL_SRC_DIR})
   else()
+    # Speed up CUTLASS download by retrieving only the specified GIT_TAG instead of the history.
+    # Important: If GIT_SHALLOW is enabled then GIT_TAG works only with branch names and tags.
+    # So if the GIT_TAG above is updated to a commit hash, GIT_SHALLOW must be set to FALSE
+    if(CUTLASS_SYCL_REVISION MATCHES "^v")
+      set(CUTLASS_GIT_SHALLOW TRUE)
+    else()
+      set(CUTLASS_GIT_SHALLOW FALSE)
+    endif()
     FetchContent_Declare(
         cutlass
         GIT_REPOSITORY https://github.com/intel/sycl-tla.git
         GIT_TAG ${CUTLASS_SYCL_REVISION}
         GIT_PROGRESS TRUE
-
-        # Speed up CUTLASS download by retrieving only the specified GIT_TAG instead of the history.
-        # Important: If GIT_SHALLOW is enabled then GIT_TAG works only with branch names and tags.
-        # So if the GIT_TAG above is updated to a commit hash, GIT_SHALLOW must be set to FALSE
-        GIT_SHALLOW $<IF:$<MATCHES:${CUTLASS_SYCL_REVISION},^v>,TRUE,FALSE>
+        GIT_SHALLOW ${CUTLASS_GIT_SHALLOW}
     )
   endif()
 
@@ -74,3 +80,4 @@ if(DPCPP_VERSION STREQUAL "2025.2" OR DPCPP_VERSION STREQUAL "2025.3" OR CUTLASS
 endif()
 string(REPLACE "-fsycl-targets=spir64_gen,spir64" "-fsycl-targets=spir64" sycl_flags "${sycl_flags}")
 
+endif(GPU_LANG STREQUAL "SYCL")

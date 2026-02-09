@@ -21,23 +21,12 @@ _getKernelCheckHook() {
     export DYLD_LIBRARY_PATH="${TORCH_DIR}/lib:${DYLD_LIBRARY_PATH}"
   fi
 
-  TMPDIR=$(mktemp -d -t test.XXXXXX) || exit 1
-  trap "rm -rf '$TMPDIR'" EXIT
-
   # Some kernels want to write stuff (especially when they use Triton).
   HOME=$(mktemp -d -t test.XXXXXX) || exit 1
   trap "rm -rf '$HOME'" EXIT
 
-  # Emulate the bundle layout that kernels expects. This even works
-  # for universal kernels, since kernels checks the non-universal
-  # path first.
   PYTHONPATH="@kernels@" \
-    BUILD_VARIANT=$(@python3@ -c "from kernels.utils import build_variant; print(build_variant())")
-  mkdir -p "${TMPDIR}/build"
-  ln -s "$out" "${TMPDIR}/build/${BUILD_VARIANT}"
-
-  PYTHONPATH="@kernels@" \
-    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${TMPDIR}'), '${moduleName}')"
+    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'), '${moduleName}')"
 }
 
 postInstallCheckHooks+=(_getKernelCheckHook)

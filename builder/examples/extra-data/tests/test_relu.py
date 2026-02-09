@@ -3,7 +3,7 @@ import platform
 import torch
 import torch.nn.functional as F
 
-import relu
+import extra_data
 
 
 def test_relu():
@@ -16,7 +16,7 @@ def test_relu():
     else:
         device = torch.device("cpu")
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
-    torch.testing.assert_allclose(F.relu(x), relu.relu(x))
+    torch.testing.assert_allclose(F.relu(x), extra_data.relu(x))
 
 
 def test_relu_layer():
@@ -29,5 +29,9 @@ def test_relu_layer():
     else:
         device = torch.device("cpu")
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
-    layer = relu.layers.ReLU()
+    layer = extra_data.layers.ReLU()
     torch.testing.assert_allclose(F.relu(x), layer(x))
+
+
+def test_data():
+    assert extra_data.EASTER_EGG == 42

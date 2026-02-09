@@ -56,7 +56,6 @@ def _load_or_create_kernel_card(
     if kernel_card is None:
         kernel_description = kernel_description or DESCRIPTION
         kernel_card = ModelCard.from_template(
-            # Card metadata object that will be converted to YAML block
             card_data=ModelCardData(license=license, library_name=LIBRARY_NAME),
             template_path=str(KERNEL_CARD_TEMPLATE_PATH),
             model_description=kernel_description,
@@ -87,7 +86,6 @@ def _find_torch_ext_init(local_path: str | Path) -> Path | None:
         return None
 
     try:
-        # Get kernel name from general.name
         kernel_name = config.get("general", {}).get("name")
         if not kernel_name:
             return None
@@ -107,15 +105,12 @@ def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
     try:
         content = init_file_path.read_text()
 
-        # Parse the file as an AST
         tree = ast.parse(content)
 
-        # Find the __all__ assignment
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id == "__all__":
-                        # Extract all list values
                         if isinstance(node.value, ast.List):
                             functions = []
                             for elt in node.value.elts:
@@ -143,11 +138,9 @@ def _update_kernel_card_usage(
     if not func_names:
         return kernel_card
 
-    # Use the first function as an example
     func_name = func_names[0]
     example_code = EXAMPLE_CODE.format(repo_id=repo_id, func_name=func_name)
 
-    # Update the model card content
     card_content = str(kernel_card.content)
     pattern = r"(## How to use\s*\n\n)```python\n# TODO: add an example code snippet for running this kernel\n```"
 
@@ -171,10 +164,8 @@ def _update_kernel_card_available_funcs(
     if not func_names:
         return kernel_card
 
-    # Format functions as a bulleted list
     functions_list = "\n".join(f"- `{func}`" for func in func_names)
 
-    # Update the model card content
     card_content = str(kernel_card.content)
     pattern = r"(## Available functions\s*\n\n)\[TODO: add the functions available through this kernel\]"
 

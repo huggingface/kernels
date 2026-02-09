@@ -2,7 +2,7 @@
 {{ card_data }}
 ---
 
-<!-- This model card has been generated automatically according to the information the training script had access to. You
+<!-- This model card has automatically been generated. You
 should probably proofread and complete it, then remove this comment. -->
 
 {{ model_description }}

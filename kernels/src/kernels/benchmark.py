@@ -7,6 +7,7 @@ import random
 import subprocess
 import sys
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -751,10 +752,10 @@ def run_benchmark(
 
     if is_local:
         if repo_id.count("/") == 1 and not repo_id.startswith(("./", "../")):
-            print(
-                f"Warning: '{repo_id}' exists locally but looks like a repo_id. "
+            warnings.warn(
+                f"'{repo_id}' exists locally but looks like a repo_id. "
                 f"Use './{repo_id}' to be explicit.",
-                file=sys.stderr,
+                stacklevel=2,
             )
         branch = "local"
         version = None

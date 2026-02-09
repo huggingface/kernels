@@ -183,12 +183,14 @@ def install_kernel(
     allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
     api = _get_hf_api(user_agent=user_agent)
     repo_path = Path(
-        api.snapshot_download(
-            repo_id,
-            allow_patterns=allow_patterns,
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=local_files_only,
+            )
         )
     )
 

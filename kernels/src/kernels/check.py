@@ -19,11 +19,13 @@ def check_kernel(
 ):
     variants_path = (
         Path(
-            _get_hf_api().snapshot_download(
-                repo_id,
-                allow_patterns=["build/*"],
-                cache_dir=CACHE_DIR,
-                revision=revision,
+            str(
+                _get_hf_api().snapshot_download(
+                    repo_id,
+                    allow_patterns=["build/*"],
+                    cache_dir=CACHE_DIR,
+                    revision=revision,
+                )
             )
         )
         / "build"

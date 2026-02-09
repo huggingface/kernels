@@ -4,7 +4,6 @@ from pathlib import Path
 
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
-from kernels.utils import _get_hf_api
 
 
 @dataclass
@@ -34,6 +33,8 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
     """
+    from kernels.utils import _get_hf_api
+
     tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 
     r = _get_hf_api().repo_info(

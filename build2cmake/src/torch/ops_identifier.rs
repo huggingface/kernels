@@ -4,7 +4,7 @@ use eyre::{Result, WrapErr};
 use git2::Repository;
 use rand::Rng;
 
-fn random_identifier() -> String {
+pub fn random_identifier() -> String {
     // Generate a random string when no ops_id is provided
     let mut rng = rand::thread_rng();
     let build_id: u64 = rng.gen();
@@ -14,7 +14,7 @@ fn random_identifier() -> String {
     )
 }
 
-fn git_identifier(target_dir: impl AsRef<Path>) -> Result<String> {
+pub fn git_identifier(target_dir: impl AsRef<Path>) -> Result<String> {
     let repo = Repository::discover(target_dir.as_ref()).context("Cannot open git repository")?;
     let head = repo.head()?;
     let commit = head.peel_to_commit()?;

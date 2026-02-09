@@ -4,9 +4,15 @@ import torch
 
 from ._ops import ops
 
+from . import layers
+
 
 def relu(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor:
     if out is None:
         out = torch.empty_like(x)
     ops.relu(out, x)
     return out
+
+
+__all__ = ["relu", "layers"]
+

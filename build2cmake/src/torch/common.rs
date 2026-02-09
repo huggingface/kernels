@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
@@ -9,37 +9,41 @@ use crate::config::{Backend, Build, General, Torch};
 use crate::metadata::Metadata;
 use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
-use crate::version::Version;
+use crate::torch::ops_identifier::{git_identifier, random_identifier};
 use crate::FileSet;
 
-static REGISTRATION_H: &str = include_str!("../templates/registration.h");
-static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
-static WINDOWS_UTILS: &str = include_str!("../templates/windows.cmake");
-static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
+static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static COMPAT_PY: &str = include_str!("../templates/compat.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
-static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
 static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
 static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
+static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
+static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
+static REGISTRATION_H: &str = include_str!("../templates/registration.h");
+static OPS_PY_IN: &str = include_str!("../templates/_ops.py.in");
 
 pub fn write_setup_py(
     env: &Environment,
+    general: &General,
     torch: &crate::config::Torch,
-    name: &str,
-    ops_name: &str,
+    revision: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let writer = file_set.entry("setup.py");
 
-    let data_globs = torch.data_globs().map(|globs| globs.join(", "));
+    let data_globs = torch
+        .data_extensions()
+        .map(|exts| exts.iter().map(|ext| format!("\"**/*.{ext}\"")).join(", "));
 
     env.get_template("setup.py")
         .wrap_err("Cannot get setup.py template")?
         .render_to_write(
             context! {
                 data_globs => data_globs,
-                ops_name => ops_name,
-                name => name,
+                revision => revision,
+                python_name => general.python_name(),
                 version => "0.1.0",
             },
             writer,
@@ -49,26 +53,45 @@ pub fn write_setup_py(
     Ok(())
 }
 
+pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
+    let mut path = PathBuf::new();
+    path.push("compat.py");
+    file_set.entry(path).extend_from_slice(COMPAT_PY.as_bytes());
+
+    Ok(())
+}
+
 pub fn write_pyproject_toml(
     env: &Environment,
-    backend: Backend,
     general: &General,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let writer = file_set.entry("pyproject.toml");
 
-    let python_dependencies = itertools::process_results(
-        general
-            .python_depends()
-            .chain(general.backend_python_depends(backend)),
-        |iter| iter.map(|d| format!("\"{d}\"")).join(", "),
-    )?;
+    // Common python dependencies (no backend-specific ones)
+    let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
+        iter.map(|d| format!("\"{d}\"")).join(", ")
+    })?;
+
+    // Collect backend-specific dependencies for all backends
+    let mut backend_dependencies = Vec::new();
+    for backend in &Backend::all() {
+        let deps = itertools::process_results(general.backend_python_depends(*backend), |iter| {
+            iter.map(|d| format!("\"{d}\"")).collect::<Vec<_>>()
+        })?;
+
+        if !deps.is_empty() {
+            backend_dependencies.push((backend.to_string(), deps));
+        }
+    }
 
     env.get_template("pyproject.toml")
         .wrap_err("Cannot get pyproject.toml template")?
         .render_to_write(
             context! {
+                python_name => general.python_name(),
                 python_dependencies => python_dependencies,
+                backend_dependencies => backend_dependencies,
             },
             writer,
         )
@@ -77,21 +100,23 @@ pub fn write_pyproject_toml(
     Ok(())
 }
 
-pub fn write_metadata(backend: Backend, general: &General, file_set: &mut FileSet) -> Result<()> {
-    let writer = file_set.entry("metadata.json");
+pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
+    for backend in &Backend::all() {
+        let writer = file_set.entry(format!("metadata-{}.json", backend));
 
-    let python_depends = general
-        .python_depends()
-        .chain(general.backend_python_depends(backend))
-        .collect::<Result<Vec<_>>>()?;
+        let python_depends = general
+            .python_depends()
+            .chain(general.backend_python_depends(*backend))
+            .collect::<Result<Vec<_>>>()?;
 
-    let metadata = Metadata {
-        version: general.version,
-        license: general.license.clone(),
-        python_depends,
-    };
+        let metadata = Metadata {
+            version: general.version,
+            license: general.license.clone(),
+            python_depends,
+        };
 
-    serde_json::to_writer_pretty(writer, &metadata)?;
+        serde_json::to_writer_pretty(writer, &metadata)?;
+    }
 
     Ok(())
 }
@@ -142,31 +167,6 @@ pub fn render_binding(
     Ok(())
 }
 
-pub fn write_ops_py(
-    env: &Environment,
-    name: &str,
-    ops_name: &str,
-    file_set: &mut FileSet,
-) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("torch-ext");
-    path.push(name);
-    path.push("_ops.py");
-    let writer = file_set.entry(path);
-
-    env.get_template("_ops.py")
-        .wrap_err("Cannot get _ops.py template")?
-        .render_to_write(
-            context! {
-                ops_name => ops_name,
-            },
-            writer,
-        )
-        .wrap_err("Cannot render kernel template")?;
-
-    Ok(())
-}
-
 /// Helper function to write a file to the cmake subdirectory
 pub fn write_cmake_file(file_set: &mut FileSet, filename: &str, content: &[u8]) {
     let mut path = PathBuf::new();
@@ -180,7 +180,11 @@ pub fn write_cmake_file(file_set: &mut FileSet, filename: &str, content: &[u8]) 
 pub fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
-    write_cmake_file(file_set, "windows.cmake", WINDOWS_UTILS.as_bytes());
+    write_cmake_file(
+        file_set,
+        "build-variants.cmake",
+        BUILD_VARIANTS_UTILS.as_bytes(),
+    );
     write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(
         file_set,
@@ -194,21 +198,21 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
     );
     write_cmake_file(file_set, "get_gpu_lang.cmake", GET_GPU_LANG.as_bytes());
     write_cmake_file(file_set, "get_gpu_lang.py", GET_GPU_LANG_PY.as_bytes());
+    write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
 }
 
 pub fn render_extension(
     env: &Environment,
-    name: &str,
-    ops_name: &str,
+    general: &General,
+    torch: &Torch,
     write: &mut impl Write,
 ) -> Result<()> {
     env.get_template("torch-extension.cmake")
         .wrap_err("Cannot get Torch extension template")?
         .render_to_write(
             context! {
-                name => name,
-                ops_name => ops_name,
-                platform => std::env::consts::OS,
+                python_name => general.python_name(),
+                data_extensions => torch.data_extensions(),
             },
             &mut *write,
         )
@@ -221,23 +225,26 @@ pub fn render_extension(
 
 pub fn render_preamble(
     env: &Environment,
-    name: &str,
-    cuda_minver: Option<&Version>,
-    cuda_maxver: Option<&Version>,
-    torch_minver: Option<&Version>,
-    torch_maxver: Option<&Version>,
+    general: &General,
+    torch: &Torch,
+    target_dir: impl AsRef<Path>,
     write: &mut impl Write,
 ) -> Result<()> {
+    let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
+    let cuda_maxver = general.cuda.as_ref().and_then(|c| c.maxver.as_ref());
+    let revision = git_identifier(&target_dir).unwrap_or_else(|_| random_identifier());
+
     env.get_template("preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
         .render_to_write(
             context! {
-                name => name,
+                name => &general.name,
+                python_name => general.python_name(),
+                revision => revision,
                 cuda_minver => cuda_minver.map(|v| v.to_string()),
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
-                torch_minver => torch_minver.map(|v| v.to_string()),
-                torch_maxver => torch_maxver.map(|v| v.to_string()),
-                platform => std::env::consts::OS
+                torch_minver => torch.minver.as_ref().map(|v| v.to_string()),
+                torch_maxver => torch.maxver.as_ref().map(|v| v.to_string()),
             },
             &mut *write,
         )
@@ -250,49 +257,31 @@ pub fn render_preamble(
 
 pub fn write_cmake(
     env: &Environment,
-    backend: Backend,
     build: &Build,
+    target_dir: impl AsRef<Path>,
     torch: &Torch,
     name: &str,
-    ops_name: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
     write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    let (cuda_minver, cuda_maxver) = match backend {
-        Backend::Cuda => (
-            build.general.cuda.as_ref().and_then(|c| c.minver.as_ref()),
-            build.general.cuda.as_ref().and_then(|c| c.maxver.as_ref()),
-        ),
-        _ => (None, None),
-    };
+    render_preamble(env, &build.general, torch, &target_dir, cmake_writer)?;
 
-    render_preamble(
-        env,
-        name,
-        cuda_minver,
-        cuda_maxver,
-        torch.minver.as_ref(),
-        torch.maxver.as_ref(),
-        cmake_writer,
-    )?;
-
-    render_deps(env, backend, build, cmake_writer)?;
+    render_deps(env, build, cmake_writer)?;
 
     render_binding(env, torch, name, cmake_writer)?;
 
     render_kernel_components(env, build, cmake_writer)?;
 
-    render_extension(env, name, ops_name, cmake_writer)?;
+    render_extension(env, &build.general, torch, cmake_writer)?;
 
     Ok(())
 }
 
 pub fn write_torch_ext(
     env: &Environment,
-    backend: Backend,
     build: &Build,
     target_dir: PathBuf,
     ops_id: Option<String>,
@@ -304,37 +293,27 @@ pub fn write_torch_ext(
 
     let mut file_set = FileSet::default();
 
-    let ops_name = crate::torch::ops_identifier::kernel_ops_identifier(
-        &target_dir,
-        &build.general.python_name(),
-        ops_id,
-    );
+    let revision = ops_id
+        .unwrap_or_else(|| git_identifier(&target_dir).unwrap_or_else(|_| random_identifier()));
 
     write_cmake(
         env,
-        backend,
         build,
+        &target_dir,
         torch_ext,
         &build.general.name,
-        &ops_name,
         &mut file_set,
     )?;
 
-    write_setup_py(
-        env,
-        torch_ext,
-        &build.general.name,
-        &ops_name,
-        &mut file_set,
-    )?;
+    write_setup_py(env, &build.general, torch_ext, &revision, &mut file_set)?;
 
-    write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
+    write_compat_py(&mut file_set)?;
 
-    write_pyproject_toml(env, backend, &build.general, &mut file_set)?;
+    write_pyproject_toml(env, &build.general, &mut file_set)?;
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(backend, &build.general, &mut file_set)?;
+    write_metadata(&build.general, &mut file_set)?;
 
     Ok(file_set)
 }

@@ -12,7 +12,7 @@ mod torch;
 use torch::{write_torch_ext, write_torch_ext_noarch};
 
 mod config;
-use config::{v3, Backend, Build, BuildCompat};
+use config::{v3, Build, BuildCompat};
 
 mod fileset;
 use fileset::FileSet;
@@ -48,9 +48,6 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         ops_id: Option<String>,
-
-        #[arg(long)]
-        backend: Option<Backend>,
     },
 
     /// Update a `build.toml` to the current format.
@@ -93,12 +90,11 @@ fn main() -> Result<()> {
     let args = Cli::parse();
     match args.command {
         Commands::GenerateTorch {
-            backend,
             build_toml,
             force,
             target_dir,
             ops_id,
-        } => generate_torch(backend, build_toml, target_dir, force, ops_id),
+        } => generate_torch(build_toml, target_dir, force, ops_id),
         Commands::UpdateBuild { build_toml } => update_build(build_toml),
         Commands::Validate { build_toml } => {
             parse_and_validate(build_toml)?;
@@ -115,7 +111,6 @@ fn main() -> Result<()> {
 }
 
 fn generate_torch(
-    backend: Option<Backend>,
     build_toml: PathBuf,
     target_dir: Option<PathBuf>,
     force: bool,
@@ -139,41 +134,10 @@ fn generate_torch(
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
-    let backend = match backend {
-        Some(backend) => {
-            if !build.supports_backend(&backend) {
-                bail!("Kernel does not support backend: {}", backend);
-            }
-
-            backend
-        }
-        None => {
-            let kernel_backends = &build.general.backends;
-
-            if kernel_backends.len() > 1 {
-                let mut kernel_backends = kernel_backends
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>();
-                kernel_backends.sort();
-                bail!(
-                    "Multiple supported backends found in build.toml: {}. Please specify one with --backend.",
-                    kernel_backends.join(", ")
-                );
-            }
-
-            if let Some(backend) = kernel_backends.first() {
-                *backend
-            } else {
-                bail!("No backends are specified in build.toml");
-            }
-        }
-    };
-
     let file_set = if build.is_noarch() {
-        write_torch_ext_noarch(&env, backend, &build, target_dir.clone(), ops_id)?
+        write_torch_ext_noarch(&env, &build, target_dir.clone(), ops_id)?
     } else {
-        write_torch_ext(&env, backend, &build, target_dir.clone(), ops_id)?
+        write_torch_ext(&env, &build, target_dir.clone(), ops_id)?
     };
     file_set.write(&target_dir, force)?;
 
@@ -368,14 +332,12 @@ fn get_generated_files(
 ) -> Result<Vec<PathBuf>> {
     let mut all_set = FileSet::new();
 
-    for backend in &build.general.backends {
-        let set = if build.is_noarch() {
-            write_torch_ext_noarch(env, *backend, build, target_dir.clone(), ops_id.clone())?
-        } else {
-            write_torch_ext(env, *backend, build, target_dir.clone(), ops_id.clone())?
-        };
-        all_set.extend(set);
-    }
+    let set = if build.is_noarch() {
+        write_torch_ext_noarch(env, build, target_dir.clone(), ops_id.clone())?
+    } else {
+        write_torch_ext(env, build, target_dir.clone(), ops_id.clone())?
+    };
+    all_set.extend(set);
 
     Ok(all_set.into_names())
 }

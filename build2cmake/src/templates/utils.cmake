@@ -594,3 +594,27 @@ function (define_gpu_extension_target GPU_MOD_NAME)
 
   install(TARGETS ${GPU_MOD_NAME} LIBRARY DESTINATION ${GPU_DESTINATION} COMPONENT ${GPU_MOD_NAME})
 endfunction()
+
+# Map a GPU language to its backend name.
+#
+# Arguments:
+#   OUT_BACKEND - Output variable name for the backend string
+#   GPU_LANG - The GPU language (CPU, CUDA, HIP, METAL, SYCL)
+#
+function(gpu_lang_to_backend OUT_BACKEND GPU_LANG)
+    if (${GPU_LANG} STREQUAL "CPU")
+        set(_BACKEND "cpu")
+    elseif (${GPU_LANG} STREQUAL "CUDA")
+        set(_BACKEND "cuda")
+    elseif (${GPU_LANG} STREQUAL "HIP")
+        set(_BACKEND "rocm")
+    elseif (${GPU_LANG} STREQUAL "METAL")
+        set(_BACKEND "metal")
+    elseif (${GPU_LANG} STREQUAL "SYCL")
+        set(_BACKEND "xpu")
+    else()
+        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
+    endif()
+
+    set(${OUT_BACKEND} "${_BACKEND}" PARENT_SCOPE)
+endfunction()

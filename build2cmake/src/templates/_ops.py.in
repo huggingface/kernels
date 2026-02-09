@@ -1,0 +1,9 @@
+import torch
+from . import @OPS_NAME@
+ops = torch.ops.@OPS_NAME@
+
+def add_op_namespace_prefix(op_name: str):
+    """
+    Prefix op by namespace.
+    """
+    return f"@OPS_NAME@::{op_name}"

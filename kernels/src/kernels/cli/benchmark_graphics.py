@@ -2,7 +2,7 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from kernels.benchmark import TimingResults
+    from kernels.cli.benchmark import TimingResults
 
 try:
     import matplotlib

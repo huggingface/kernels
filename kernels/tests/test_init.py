@@ -3,8 +3,9 @@ from pathlib import Path
 import argparse
 import os
 
-from kernels.init import run_init, parse_kernel_name
+from kernels.cli.init import run_init, parse_kernel_name
 from kernels.utils import KNOWN_BACKENDS
+
 
 def e2e_init(backends: list[str]) -> None:
     kernel_name = "testuser/test-kernel"
@@ -16,7 +17,9 @@ def e2e_init(backends: list[str]) -> None:
         overwrite=False,
     )
     expected_normalized_name = "test_kernel"
-    expected_backend_dirs = {Path(f"{expected_normalized_name}_{backend}") for backend in args.backends}
+    expected_backend_dirs = {
+        Path(f"{expected_normalized_name}_{backend}") for backend in args.backends
+    }
 
     # Replacement logic
     # special case for "rocm" backend since it uses "cuda" source

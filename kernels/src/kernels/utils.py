@@ -1,4 +1,5 @@
 import ctypes
+import functools
 import hashlib
 import importlib
 import importlib.metadata
@@ -34,6 +35,29 @@ def _get_cache_dir() -> str | None:
         return cache_dir
 
     return os.environ.get("KERNELS_CACHE", None)
+
+
+def _get_local_kernel_overrides() -> dict[str, Path]:
+    """Returns list local overrides for kernels."""
+    local_kerels = os.environ.get("LOCAL_KERNELS", None)
+    if local_kerels is None:
+        return dict()
+    return _parse_local_kernel_overrides(local_kerels)
+
+
+@functools.lru_cache(maxsize=1)
+def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
+    """Parse the LOCAL_KERNELS environment variable into a dictionary."""
+    overrides = {}
+    for entry in local_kernels.split(":"):
+        if "=" not in entry:
+            raise ValueError(
+                f"Invalid LOCAL_KERNELS entry: {entry}. Expected format: repo_id_1=path_1:repo_id_2=path_2"
+            )
+        repo_id, path = entry.split("=", 1)
+        overrides[repo_id] = Path(path)
+
+    return overrides
 
 
 CACHE_DIR: str | None = _get_cache_dir()
@@ -312,6 +336,10 @@ def get_kernel(
         result = activation.relu(out, x)
         ```
     """
+    override = _get_local_kernel_overrides().get(repo_id, None)
+    if override is not None:
+        return get_local_kernel(override, package_name_from_repo_id(repo_id))
+
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
     package_name, variant_path = install_kernel(
         repo_id, revision=revision, user_agent=user_agent

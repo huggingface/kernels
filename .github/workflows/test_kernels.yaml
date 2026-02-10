@@ -95,3 +95,9 @@ jobs:
         run: |
           uv pip uninstall torch
           uv run python -c "import kernels"
+
+      - name: Run command-line tools without Torch
+        working-directory: ./kernels
+        run: |
+          uv run kernels check kernels-community/activation
+          uv run kernels versions kernels-community/activation

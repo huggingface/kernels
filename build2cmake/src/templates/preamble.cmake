@@ -78,7 +78,6 @@ else()
   set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0+PTX")
 endif()
 
-
 # Basic checks for each GPU language.
 if(GPU_LANG STREQUAL "CUDA")
   if(NOT CUDA_FOUND)
@@ -99,47 +98,6 @@ if(GPU_LANG STREQUAL "CUDA")
     endif()
   {% endif %}
 
-  # TODO: deprecate one of these settings.
-  add_compile_definitions(USE_CUDA=1)
-  add_compile_definitions(CUDA_KERNEL)
-elseif(GPU_LANG STREQUAL "HIP")
-  if(NOT HIP_FOUND)
-    message(FATAL_ERROR "GPU language is set to HIP, but cannot find ROCm toolkit")
-  endif()
-
-  # Importing torch recognizes and sets up some HIP/ROCm configuration but does
-  # not let cmake recognize .hip files. In order to get cmake to understand the
-  # .hip extension automatically, HIP must be enabled explicitly.
-  enable_language(HIP)
-
-  # TODO: deprecate one of these settings.
-  add_compile_definitions(USE_ROCM=1)
-  add_compile_definitions(ROCM_KERNEL)
-elseif(GPU_LANG STREQUAL "CPU")
-  add_compile_definitions(CPU_KERNEL)
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
-elseif(GPU_LANG STREQUAL "METAL")
-  set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS deployment version")
-  enable_language(C OBJC OBJCXX)
-
-  add_compile_definitions(METAL_KERNEL)
-
-  # Initialize lists for Metal shader sources and their include directories
-  set(ALL_METAL_SOURCES)
-  set(METAL_INCLUDE_DIRS)
-elseif(GPU_LANG STREQUAL "SYCL")
-  if(NOT ICX_COMPILER AND NOT ICPX_COMPILER)
-    message(FATAL_ERROR "Intel SYCL C++ compiler (icpx) and/or C compiler (icx) not found. Please install Intel oneAPI toolkit.")
-  endif()
-
-  add_compile_definitions(XPU_KERNEL)
-  add_compile_definitions(USE_XPU)
-else()
-  message(FATAL_ERROR "Unsupported GPU language: ${GPU_LANG}")
-endif()
-
-# CUDA build options.
-if(GPU_LANG STREQUAL "CUDA")
   # This clears out -gencode arguments from `CMAKE_CUDA_FLAGS`, which we need
   # to set our own set of capabilities.
   clear_gencode_flags()
@@ -165,11 +123,43 @@ if(GPU_LANG STREQUAL "CUDA")
     list(APPEND GPU_FLAGS "--threads=${NVCC_THREADS}")
   endif()
 
+  # TODO: deprecate one of these settings.
+  add_compile_definitions(USE_CUDA=1)
+  add_compile_definitions(CUDA_KERNEL)
 elseif(GPU_LANG STREQUAL "HIP")
+  if(NOT HIP_FOUND)
+    message(FATAL_ERROR "GPU language is set to HIP, but cannot find ROCm toolkit")
+  endif()
+
+  # Importing torch recognizes and sets up some HIP/ROCm configuration but does
+  # not let cmake recognize .hip files. In order to get cmake to understand the
+  # .hip extension automatically, HIP must be enabled explicitly.
+  enable_language(HIP)
+
   override_gpu_arches(GPU_ARCHES HIP ${HIP_SUPPORTED_ARCHS})
   set(ROCM_ARCHS ${GPU_ARCHES})
   message(STATUS "ROCM supported target architectures: ${ROCM_ARCHS}")
+
+  # TODO: deprecate one of these settings.
+  add_compile_definitions(USE_ROCM=1)
+  add_compile_definitions(ROCM_KERNEL)
+elseif(GPU_LANG STREQUAL "CPU")
+  add_compile_definitions(CPU_KERNEL)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
+elseif(GPU_LANG STREQUAL "METAL")
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "26.0" CACHE STRING "Minimum macOS deployment version")
+  enable_language(C OBJC OBJCXX)
+
+  add_compile_definitions(METAL_KERNEL)
+
+  # Initialize lists for Metal shader sources and their include directories
+  set(ALL_METAL_SOURCES)
+  set(METAL_INCLUDE_DIRS)
 elseif(GPU_LANG STREQUAL "SYCL")
+  if(NOT ICX_COMPILER AND NOT ICPX_COMPILER)
+    message(FATAL_ERROR "Intel SYCL C++ compiler (icpx) and/or C compiler (icx) not found. Please install Intel oneAPI toolkit.")
+  endif()
+
   execute_process(
     COMMAND ${ICPX_COMPILER} --version
     OUTPUT_VARIABLE ICPX_VERSION_OUTPUT
@@ -191,10 +181,12 @@ elseif(GPU_LANG STREQUAL "SYCL")
   set(sycl_flags "-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
   set(GPU_FLAGS "${sycl_flags}")
   set(GPU_ARCHES "")
+
+
+  add_compile_definitions(XPU_KERNEL)
+  add_compile_definitions(USE_XPU)
 else()
-  override_gpu_arches(GPU_ARCHES
-    ${GPU_LANG}
-    "${${GPU_LANG}_SUPPORTED_ARCHS}")
+  message(FATAL_ERROR "Unsupported GPU language: ${GPU_LANG}")
 endif()
 
 # Initialize SRC list for kernel and binding sources

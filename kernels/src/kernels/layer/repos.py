@@ -1,19 +1,19 @@
-import sys
 from abc import ABC, abstractmethod
-from functools import lru_cache
 from typing import TYPE_CHECKING, Protocol, Type
+import sys
+from functools import lru_cache
 
-from ._interval_tree import IntervalTree
-from .device import CUDAProperties, Device, ROCMProperties
+from .device import Device
 from .mode import Mode
+from ._interval_tree import IntervalTree
+from .device import CUDAProperties, ROCMProperties
 
 if TYPE_CHECKING:
     from torch import nn
 
 
 class RepositoryProtocol(Protocol):
-    def load(self) -> Type["nn.Module"]:
-        ...
+    def load(self) -> Type["nn.Module"]: ...
 
 
 class DeviceRepos(ABC):
@@ -43,8 +43,7 @@ class DeviceRepos(ABC):
     @abstractmethod
     def repos(
         self,
-    ) -> dict[Mode, RepositoryProtocol] | None:
-        ...
+    ) -> dict[Mode, RepositoryProtocol] | None: ...
 
     @abstractmethod
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):

@@ -23,6 +23,7 @@ from kernels.metadata import Metadata
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
 
+
 def _get_cache_dir() -> str | None:
     """Returns the kernels cache directory."""
     cache_dir = os.environ.get("HF_KERNELS_CACHE", None)

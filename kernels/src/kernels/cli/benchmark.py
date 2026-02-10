@@ -12,7 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub.utils import build_hf_headers, disable_progress_bars, get_session, hf_raise_for_status
+from huggingface_hub.utils import (
+    build_hf_headers,
+    disable_progress_bars,
+    get_session,
+    hf_raise_for_status,
+)
 
 from kernels.benchmark import Benchmark
 from kernels.utils import _get_hf_api, backend
@@ -732,7 +737,9 @@ def run_benchmark(
     if is_local:
         repo_path = repo_id_path.resolve()
     else:
-        repo_path = Path(str(_get_hf_api().snapshot_download(repo_id=repo_id, revision=revision)))
+        repo_path = Path(
+            str(_get_hf_api().snapshot_download(repo_id=repo_id, revision=revision))
+        )
 
     scripts = discover_benchmark_scripts(repo_id, repo_path)
 

@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Callable, Protocol, Type
 from kernels.layer.repos import RepositoryProtocol
 
 from .._versions import select_revision_or_version
-from ..utils import _get_caller_locked_kernel, _get_locked_kernel, get_kernel, get_local_kernel
+from ..utils import (
+    _get_caller_locked_kernel,
+    _get_locked_kernel,
+    get_kernel,
+    get_local_kernel,
+)
 
 if TYPE_CHECKING:
     from torch import nn
@@ -16,8 +21,7 @@ if TYPE_CHECKING:
 
 class FuncRepositoryProtocol(RepositoryProtocol, Protocol):
     @property
-    def func_name(self) -> str:
-        ...
+    def func_name(self) -> str: ...
 
 
 class FuncRepository:

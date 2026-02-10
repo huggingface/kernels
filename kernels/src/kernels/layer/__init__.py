@@ -1,6 +1,15 @@
 from .device import CUDAProperties, Device
-from .func import FuncRepository, LocalFuncRepository, LockedFuncRepository, use_kernel_func_from_hub
-from .kernelize import kernelize, register_kernel_mapping, use_kernel_mapping
+from .func import (
+    FuncRepository,
+    LocalFuncRepository,
+    LockedFuncRepository,
+    use_kernel_func_from_hub,
+)
+from .kernelize import (
+    kernelize,
+    register_kernel_mapping,
+    use_kernel_mapping,
+)
 from .layer import (
     LayerRepository,
     LocalLayerRepository,

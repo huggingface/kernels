@@ -283,7 +283,9 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
         from ctypes import POINTER, byref, c_char_p, c_int, c_int64, c_uint32, c_void_p
 
         iokit = ctypes.CDLL("/System/Library/Frameworks/IOKit.framework/IOKit")
-        cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        cf = ctypes.CDLL(
+            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+        )
 
         iokit.IOServiceMatching.restype = c_void_p
         iokit.IOServiceMatching.argtypes = [c_char_p]
@@ -344,7 +346,9 @@ def _get_macos_gpu() -> tuple[str | None, int | None]:
             cf.CFRelease(key)
 
         # Get GPU core count
-        key = cf.CFStringCreateWithCString(None, b"gpu-core-count", kCFStringEncodingUTF8)
+        key = cf.CFStringCreateWithCString(
+            None, b"gpu-core-count", kCFStringEncodingUTF8
+        )
         if key:
             prop = iokit.IORegistryEntryCreateCFProperty(service, key, None, 0)
             if prop:
@@ -385,7 +389,9 @@ def collect_machine_info() -> MachineInfo:
             if hasattr(torch.version, "hip") and torch.version.hip:
                 backend_type = f"ROCm {torch.version.hip}"
             else:
-                backend_type = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+                backend_type = (
+                    f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
+                )
         elif backend_name == "xpu":
             gpu = torch.xpu.get_device_name(0)
             backend_type = "XPU"
@@ -437,14 +443,16 @@ def run_benchmark_class(
 
     # Find all benchmark_* methods
     benchmark_methods = [
-        name for name in dir(benchmark_cls) if name.startswith("benchmark_") and callable(getattr(benchmark_cls, name))
+        name
+        for name in dir(benchmark_cls)
+        if name.startswith("benchmark_") and callable(getattr(benchmark_cls, name))
     ]
 
     if not benchmark_methods:
         raise RuntimeError(f"No benchmark_* methods found in {benchmark_cls.__name__}")
 
     # Load kernel once for all workloads
-    from kernels import get_kernel, get_local_kernel
+    from kernels import get_local_kernel, get_kernel
 
     if is_local:
         kernel = get_local_kernel(Path(repo_id), "activation")
@@ -619,7 +627,9 @@ def run_benchmark_script(
         raise RuntimeError(f"No Benchmark subclasses found in {script_path}")
 
     machine_info = collect_machine_info()
-    gpu_cores_str = f" ({machine_info.gpu_cores} cores)" if machine_info.gpu_cores else ""
+    gpu_cores_str = (
+        f" ({machine_info.gpu_cores} cores)" if machine_info.gpu_cores else ""
+    )
     print(file=sys.stderr)
     print(f"  GPU      {machine_info.gpu}{gpu_cores_str}", file=sys.stderr)
     print(f"  CPU      {machine_info.cpu}", file=sys.stderr)
@@ -690,7 +700,8 @@ def run_benchmark(
     if is_local:
         if repo_id.count("/") == 1 and not repo_id.startswith(("./", "../")):
             warnings.warn(
-                f"'{repo_id}' exists locally but looks like a repo_id. Use './{repo_id}' to be explicit.",
+                f"'{repo_id}' exists locally but looks like a repo_id. "
+                f"Use './{repo_id}' to be explicit.",
                 stacklevel=2,
             )
         branch = "local"

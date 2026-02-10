@@ -2,8 +2,6 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from huggingface_hub import HfApi
-
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
 
@@ -35,9 +33,11 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
     """
+    from kernels.utils import _get_hf_api
+
     tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 
-    r = HfApi().repo_info(
+    r = _get_hf_api().repo_info(
         repo_id=repo_id, revision=tag_for_newest.target_commit, files_metadata=True
     )
     if r.sha is None:

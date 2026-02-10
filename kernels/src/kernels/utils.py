@@ -13,7 +13,7 @@ from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
-from huggingface_hub import file_exists, snapshot_download
+from huggingface_hub import HfApi, constants
 from packaging.version import parse
 
 from kernels._system import glibc_version
@@ -22,7 +22,6 @@ from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 
-ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
 
 
@@ -207,15 +206,16 @@ def install_kernel(
     """
     package_name = package_name_from_repo_id(repo_id)
     allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
-    user_agent = _get_user_agent(user_agent=user_agent)
+    api = _get_hf_api(user_agent=user_agent)
     repo_path = Path(
-        snapshot_download(
-            repo_id,
-            allow_patterns=allow_patterns,
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
-            user_agent=user_agent,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=local_files_only,
+            )
         )
     )
 
@@ -271,13 +271,16 @@ def install_kernel_all_variants(
     local_files_only: bool = False,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
+    api = _get_hf_api()
     repo_path = Path(
-        snapshot_download(
-            repo_id,
-            allow_patterns="build/*",
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns="build/*",
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=local_files_only,
+            )
         )
     )
 
@@ -396,12 +399,11 @@ def has_kernel(
     package_name = package_name_from_repo_id(repo_id)
     variant = build_variant()
 
+    api = _get_hf_api()
     for variant in build_variants():
         for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
-            if file_exists(
-                repo_id,
-                revision=revision,
-                filename=f"build/{variant}/{init_file}",
+            if api.file_exists(
+                repo_id, revision=revision, filename=f"build/{variant}/{init_file}"
             ):
                 return True
 
@@ -436,14 +438,17 @@ def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
 
     package_name = package_name_from_repo_id(repo_id)
 
+    api = _get_hf_api()
     allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
     repo_path = Path(
-        snapshot_download(
-            repo_id,
-            allow_patterns=allow_patterns,
-            cache_dir=CACHE_DIR,
-            revision=locked_sha,
-            local_files_only=True,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=locked_sha,
+                local_files_only=True,
+            )
         )
     )
 
@@ -584,38 +589,29 @@ def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
 
 
-def _get_user_agent(
-    user_agent: str | dict | None = None,
-) -> dict | str | None:
+def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
+    """Returns an instance of HfApi with proper settings."""
     import torch
 
     from . import __version__
 
-    if os.getenv("DISABLE_TELEMETRY", "false").upper() in ENV_VARS_TRUE_VALUES:
-        return None
+    user_agent_str = ""
+    if not constants.HF_HUB_DISABLE_TELEMETRY:
+        # User-defined info
+        if isinstance(user_agent, dict):
+            user_agent_str = "; ".join(f"{k}/{v}" for k, v in user_agent.items())
+        if isinstance(user_agent, str):
+            user_agent_str = user_agent
 
-    glibc = glibc_version()
-    python = ".".join(platform.python_version_tuple()[:2])
+        # System info
+        python = ".".join(platform.python_version_tuple()[:2])
+        user_agent_str += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{build_variant()}; file_type/kernel"
 
-    if user_agent is None:
-        user_agent = {}
-
-    if isinstance(user_agent, dict):
-        user_agent.update(
-            {
-                "kernels": __version__,
-                "python": python,
-                "torch": torch.__version__,
-                "build_variant": build_variant(),
-                "file_type": "kernel",
-            }
-        )
+        # Add glibc version if available
+        glibc = glibc_version()
         if glibc is not None:
-            user_agent["glibc"] = glibc
+            user_agent_str += f"; glibc/{glibc}"
 
-    elif isinstance(user_agent, str):
-        user_agent += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{build_variant()}; file_type/kernel"
-        if glibc is not None:
-            user_agent += f"; glibc/{glibc}"
-
-    return user_agent
+    return HfApi(
+        library_name="kernels", library_version=__version__, user_agent=user_agent_str
+    )

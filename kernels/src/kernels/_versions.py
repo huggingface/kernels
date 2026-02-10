@@ -1,6 +1,5 @@
 import warnings
 
-from huggingface_hub import HfApi
 from huggingface_hub.hf_api import GitRefInfo
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -8,8 +7,10 @@ from packaging.version import InvalidVersion, Version
 
 def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
     """Get kernel versions that are available in the repository."""
+    from kernels.utils import _get_hf_api
+
     versions = {}
-    for branch in HfApi().list_repo_refs(repo_id).branches:
+    for branch in _get_hf_api().list_repo_refs(repo_id).branches:
         if not branch.name.startswith("v"):
             continue
         try:
@@ -26,8 +27,10 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
 
     This is for the old tag-based versioning scheme.
     """
+    from kernels.utils import _get_hf_api
+
     versions = {}
-    for tag in HfApi().list_repo_refs(repo_id).tags:
+    for tag in _get_hf_api().list_repo_refs(repo_id).tags:
         if not tag.name.startswith("v"):
             continue
         try:

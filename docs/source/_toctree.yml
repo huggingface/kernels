@@ -45,4 +45,8 @@
       title: Layers
     - local: cli
       title: Kernels CLI
+    - local: cli-init
+      title: cli init
+    - local: cli-benchmark
+      title: cli benchmark
   title: API Reference

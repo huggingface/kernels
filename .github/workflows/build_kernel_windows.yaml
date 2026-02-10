@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v6
 
       # CUDA environment setup
-      - uses: Jimver/cuda-toolkit@v0.2.29
+      - uses: Jimver/cuda-toolkit@v0.2.30
         id: setup-cuda-toolkit
         with:
           cuda: ${{ matrix.torch.cuda }}  # TODO(mfuntowicz): How can we test multiple CUDA versions than align with torch?

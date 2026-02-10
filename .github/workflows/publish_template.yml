@@ -1,0 +1,52 @@
+name: Publish Template to kernels-community/template
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'template/**'
+
+jobs:
+  publish-template:
+    name: Publish template to kernels-community/template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout target repository
+        uses: actions/checkout@v6
+        with:
+          repository: kernels-community/template
+          token: ${{ secrets.TEMPLATE_REPO_TOKEN }}
+          path: target-repo
+
+      - name: Sync template contents
+        run: |
+          # Remove all files in target repo (except .git)
+          find target-repo -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy template contents to target repo
+          cp -r template/* target-repo/
+          cp -r template/.* target-repo/ 2>/dev/null || true
+
+      - name: Commit and push changes
+        working-directory: target-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Sync template from huggingface/kernels@${{ github.sha }}"
+          git push

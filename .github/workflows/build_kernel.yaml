@@ -28,10 +28,16 @@ jobs:
           USER: runner
       - name: Nix info
         run: nix-shell -p nix-info --run "nix-info -m"
+
       - name: Build relu kernel
         run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
       - name: Copy relu kernel
         run: cp -rL builder/examples/relu/result relu-kernel
+
+      - name: Build extra-data kernel
+        run: ( cd builder/examples/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+      - name: Copy extra-data kernel
+        run: cp -rL builder/examples/extra-data/result extra-data
 
       - name: Build relu kernel (CPU)
         run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cpu-x86_64-linux )
@@ -70,6 +76,7 @@ jobs:
           path: |
             activation-kernel
             cutlass-gemm-kernel
+            extra-data
             relu-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel

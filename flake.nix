@@ -158,8 +158,12 @@
               pytest
               pytest-benchmark
               pyyaml
+              tabulate
+              tomlkit
               torch
               types-pyyaml
+              types-requests
+              types-tabulate
               venvShellHook
             ]);
 

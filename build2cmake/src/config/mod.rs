@@ -27,10 +27,6 @@ impl Build {
     pub fn is_noarch(&self) -> bool {
         self.kernels.is_empty()
     }
-
-    pub fn supports_backend(&self, backend: &Backend) -> bool {
-        self.general.backends.contains(backend)
-    }
 }
 
 pub struct General {
@@ -126,18 +122,18 @@ pub struct Torch {
 }
 
 impl Torch {
-    pub fn data_globs(&self) -> Option<Vec<String>> {
+    pub fn data_extensions(&self) -> Option<Vec<String>> {
         match self.pyext.as_ref() {
             Some(exts) => {
-                let globs = exts
+                let extensions = exts
                     .iter()
                     .filter(|&ext| ext != "py" && ext != "pyi")
-                    .map(|ext| format!("\"**/*.{ext}\""))
+                    .cloned()
                     .collect_vec();
-                if globs.is_empty() {
+                if extensions.is_empty() {
                     None
                 } else {
-                    Some(globs)
+                    Some(extensions)
                 }
             }
 
@@ -245,6 +241,18 @@ pub enum Backend {
     Metal,
     Rocm,
     Xpu,
+}
+
+impl Backend {
+    pub const fn all() -> [Backend; 5] {
+        [
+            Backend::Cpu,
+            Backend::Cuda,
+            Backend::Metal,
+            Backend::Rocm,
+            Backend::Xpu,
+        ]
+    }
 }
 
 impl Display for Backend {

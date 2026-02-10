@@ -40,7 +40,11 @@ endif()
 
 get_gpu_lang(DETECTED_GPU_LANG)
 set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
-message(STATUS "Using GPU language: ${GPU_LANG}")
+gpu_lang_to_backend(BACKEND "${GPU_LANG}")
+message(STATUS "Using backend: ${BACKEND}, GPU language: ${GPU_LANG}")
+
+set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
+set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")
 
 append_cmake_prefix_path("torch" "torch.utils.cmake_prefix_path")
 
@@ -196,24 +200,26 @@ endif()
 # Initialize SRC list for kernel and binding sources
 set(SRC "")
 
-message(STATUS "Rendered for platform {{ platform }}")
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/build-variants.cmake)
 
-{% if platform == 'windows' %}
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/windows.cmake)
-
-# Generate standardized build name
-cmake_host_system_information(RESULT HOST_ARCH QUERY OS_PLATFORM)
-
-set(SYSTEM_STRING "${HOST_ARCH}-windows")
-
+# Generate build variant name.
 if(GPU_LANG STREQUAL "CUDA")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}" "${SYSTEM_STRING}")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}")
 elseif(GPU_LANG STREQUAL "HIP")
   run_python(ROCM_VERSION "import torch.version; print(torch.version.hip.split('.')[0] + '.' + torch.version.hip.split('.')[1])" "Failed to get ROCm version")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "rocm" "${ROCM_VERSION}" "${SYSTEM_STRING}")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "rocm" "${ROCM_VERSION}")
 elseif(GPU_LANG STREQUAL "SYCL")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "xpu" "${DPCPP_VERSION}")
+elseif(GPU_LANG STREQUAL "METAL")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "metal" "")
+elseif(GPU_LANG STREQUAL "CPU")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cpu" "")
 else()
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cpu" "${SYSTEM_STRING}")
+  message(FATAL_ERROR "Cannot generate build name for unknown GPU_LANG: ${GPU_LANG}")
 endif()
-{% endif %}
+
+configure_file(
+  ${CMAKE_CURRENT_LIST_DIR}/cmake/_ops.py.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/torch-ext/{{python_name}}/_ops.py
+  @ONLY
+)

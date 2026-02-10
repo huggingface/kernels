@@ -6,6 +6,7 @@
   huggingface-hub,
   kernel-abi-check,
   pyyaml,
+  tomlkit,
   torch,
 }:
 
@@ -34,6 +35,7 @@ buildPythonPackage {
     huggingface-hub
     kernel-abi-check
     pyyaml
+    tomlkit
     torch
   ];
 

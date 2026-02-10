@@ -25,6 +25,7 @@ rustPlatform.buildRustPackage {
         || (builtins.any file.hasExt [
           "cmake"
           "h"
+          "in"
           "py"
           "rs"
         ]);

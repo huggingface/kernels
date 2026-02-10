@@ -6,11 +6,15 @@ from pathlib import Path
 
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
-from kernels.upload import upload_kernels_dir
-from kernels.utils import install_kernel, install_kernel_all_variants
-from kernels.versions_cli import print_kernel_versions
-
-from .doc import generate_readme_for_kernel
+from kernels.cli.upload import upload_kernels_dir
+from kernels.utils import (
+    install_kernel,
+    install_kernel_all_variants,
+    KNOWN_BACKENDS,
+)
+from kernels.cli.init import run_init, parse_kernel_name
+from kernels.cli.versions import print_kernel_versions
+from kernels.cli.doc import generate_readme_for_kernel
 
 
 def main():
@@ -146,6 +150,36 @@ def main():
     benchmark_parser.add_argument("--warmup", type=int, default=10)
     benchmark_parser.set_defaults(func=run_benchmark)
 
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize a new kernel project from template",
+    )
+    init_parser.add_argument(
+        "kernel_name",
+        type=parse_kernel_name,
+        help="Name of the kernel repo (e.g., drbh/my-kernel)",
+    )
+    init_parser.add_argument(
+        "--template-repo",
+        type=str,
+        default="drbh/template",
+        help="HuggingFace repo ID for the template",
+    )
+    init_parser.add_argument(
+        "--backends",
+        nargs="+",
+        choices={"all"} | KNOWN_BACKENDS,
+        default=["metal"] if sys.platform == "darwin" else ["cuda"],
+        metavar="BACKEND",
+        help=f"Backends to enable (all, {', '.join(KNOWN_BACKENDS)}). Defaults: cuda on Linux/Windows, metal on macOS.",
+    )
+    init_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing directory if it exists",
+    )
+    init_parser.set_defaults(func=run_init)
+
     args = parser.parse_args()
     args.func(args)
 
@@ -225,7 +259,7 @@ def check_kernel(
     *, macos: str, manylinux: str, python_abi: str, repo_id: str, revision: str
 ):
     try:
-        import kernels.check
+        from kernels.cli import check
     except ImportError:
         print(
             "`kernels check` requires the `kernel-abi-check` package: pip install kernel-abi-check",
@@ -233,7 +267,7 @@ def check_kernel(
         )
         sys.exit(1)
 
-    kernels.check.check_kernel(
+    check.check_kernel(
         macos=macos,
         manylinux=manylinux,
         python_abi=python_abi,
@@ -243,7 +277,7 @@ def check_kernel(
 
 
 def run_benchmark(args):
-    from kernels import benchmark
+    from kernels.cli import benchmark
 
     benchmark.run_benchmark(
         repo_id=args.repo_id,

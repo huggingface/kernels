@@ -148,6 +148,17 @@ def main():
     )
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)
+    benchmark_parser.add_argument(
+        "--visual",
+        type=str,
+        default=None,
+        help="Save visual outputs using this base path (e.g., --visual bench creates bench_light.svg and bench_dark.svg variants)",
+    )
+    benchmark_parser.add_argument(
+        "--rasterized",
+        action="store_true",
+        help="Output PNG and GIF formats instead of SVG",
+    )
     benchmark_parser.set_defaults(func=run_benchmark)
 
     init_parser = subparsers.add_parser(
@@ -287,4 +298,6 @@ def run_benchmark(args):
         warmup=args.warmup,
         output=args.output,
         print_json=args.json,
+        visual=args.visual,
+        rasterized=args.rasterized,
     )

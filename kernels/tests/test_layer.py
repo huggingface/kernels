@@ -1,6 +1,7 @@
 import sys
 from contextlib import nullcontext
 
+from huggingface_hub.errors import RepositoryNotFoundError
 import pytest
 import torch
 import torch.nn as nn
@@ -25,6 +26,15 @@ from kernels.layer.layer import (
 from kernels.utils import (
     install_kernel,
 )
+
+
+@pytest.fixture
+def local_kernel_path():
+    package_name, path = install_kernel("kernels-community/activation", "main")
+    # Path is the build variant path (build/torch-<...>), so the grandparent
+    # is the kernel repository path.
+    return package_name, path
+
 
 kernel_layer_mapping = {
     "SiluAndMul": {
@@ -1223,3 +1233,33 @@ def test_layer_versions(device):
                 }
             }
         )
+
+
+@pytest.mark.cuda_only
+def test_local_overrides_layer(monkeypatch, local_kernel_path):
+    # The primary validation is in the get_kernel tests. Here we just want
+    # to ensure that the lookups also happen in layers.
+
+    package_name, kernel_path = local_kernel_path
+
+    mapping = {
+        "SiluAndMul": {
+            Device(type="cuda"): LayerRepository(
+                repo_id="kernels-test/activation",
+                layer_name="SiluAndMul",
+            ),
+        },
+    }
+
+    model = SiluAndMulWithKernel()
+
+    with use_kernel_mapping(mapping, inherit_mapping=False):
+        with pytest.raises(RepositoryNotFoundError):
+            kernelize(model, device="cuda", mode=Mode.INFERENCE)
+
+    with monkeypatch.context() as m:
+        m.setenv(
+            "LOCAL_KERNELS",
+            f"kernels-test/{package_name}={str(kernel_path)}:kernels-test/non-existing2=/non/existing",
+        )
+        kernelize(model, device="cuda", mode=Mode.INFERENCE)

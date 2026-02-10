@@ -1,3 +1,4 @@
+from importlib.util import find_spec
 from pathlib import Path
 
 from huggingface_hub import HfApi
@@ -9,7 +10,12 @@ from kernels.variants import BUILD_VARIANT_REGEX
 
 def print_kernel_versions(repo_id: str):
     api = HfApi()
-    compatible_variants = set(build_variants())
+
+    if find_spec("torch") is None:
+        # Do not mark compatible variants when Torch is not available.
+        compatible_variants = set()
+    else:
+        compatible_variants = set(build_variants())
 
     versions = _get_available_versions(repo_id).items()
     if not versions:

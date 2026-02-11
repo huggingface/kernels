@@ -184,6 +184,27 @@ def test_noarch_kernel(device):
     get_kernel("kernels-test/silu-and-mul-noarch")
 
 
+def test_get_kernel_with_backend(device):
+    x = torch.randn((16, 16), device=device)
+    assert has_kernel("kernels-community/relu", version=1)
+    relu = get_kernel("kernels-community/relu", version=1)
+    torch.testing.assert_close(relu.relu(x), F.relu(x))
+
+    assert has_kernel("kernels-community/relu", version=1, backend=device)
+    relu = get_kernel("kernels-community/relu", version=1, backend=device)
+    torch.testing.assert_close(relu.relu(x), F.relu(x))
+
+    with pytest.raises(ValueError, match="Invalid backend 'xpu'"):
+        get_kernel("kernels-community/relu", version=1, backend="xpu")
+    with pytest.raises(ValueError, match="Invalid backend 'xpu'"):
+        has_kernel("kernels-community/relu", version=1, backend="xpu")
+
+    assert has_kernel("kernels-community/relu", version=1, backend="cpu")
+    relu = get_kernel("kernels-community/relu", version=1, backend="cpu")
+    x = x.cpu()
+    torch.testing.assert_close(relu.relu(x), F.relu(x))
+
+
 @pytest.mark.parametrize(
     "repo_revision",
     [

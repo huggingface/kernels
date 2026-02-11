@@ -24,7 +24,7 @@ jobs:
       max-parallel: 4
       matrix:
         python-version: ["3.10", "3.12"]
-        torch-version: ["2.7.0", "2.8.0"]
+        torch-version: ["2.9.0", "2.10.0"]
 
     env:
       UV_PYTHON_PREFERENCE: only-managed
@@ -38,13 +38,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Lock Torch version
-        working-directory: ./kernels
-        run: uv lock --upgrade-package "torch==${{ matrix.torch-version }}"
-
       - name: Install the project
         working-directory: ./kernels
         run: uv sync --all-extras --dev
+
+      - name: Install Torch version
+        working-directory: ./kernels
+        run: uv pip install "torch==${{ matrix.torch-version }}"
 
       - name: Install setuptools for Triton-based test
         working-directory: ./kernels
@@ -76,7 +76,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
         run: |
           HUGGINGFACE_CO_STAGING=true uv run pytest --token -m "is_staging_test" tests/
-        if: matrix.python_version == '3.10' && matrix.torch-version == '2.7.0'
+        if: matrix.python_version == '3.10' && matrix.torch-version == '2.9.0'
 
       - name: Check README generation
         working-directory: ./kernels

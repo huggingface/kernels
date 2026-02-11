@@ -20,7 +20,7 @@ from huggingface_hub.utils import (
 )
 
 from kernels.benchmark import Benchmark
-from kernels.utils import _get_hf_api, backend
+from kernels.utils import _get_hf_api, _backend
 
 MISSING_DEPS: list[str] = []
 
@@ -387,8 +387,8 @@ def collect_machine_info() -> MachineInfo:
 
     if TORCH_AVAILABLE:
         pytorch_version = torch.__version__
-        backend_name = backend()
-        if backend_name in {"cuda", "hip"}:
+        backend_name = _backend()
+        if backend_name in {"cuda", "rocm"}:
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
             if hasattr(torch.version, "hip") and torch.version.hip:
@@ -465,10 +465,10 @@ def run_benchmark_class(
         kernel = get_kernel(repo_id, revision=revision)
 
     kernel_sha = get_kernel_sha_from_build_name(kernel)
-    backend_name = backend() if TORCH_AVAILABLE else "cpu"
+    backend_name = _backend() if TORCH_AVAILABLE else "cpu"
     # Map backend names to torch device names
     device_map = {
-        "hip": "cuda",
+        "rocm": "cuda",
         "metal": "mps",
         "cann": "npu",
     }

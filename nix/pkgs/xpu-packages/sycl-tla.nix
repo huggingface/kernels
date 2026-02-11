@@ -34,7 +34,7 @@ let
 in
 
 stdenv.mkDerivation rec {
-  pname = "cutlass-sycl";
+  pname = "sycl-tla";
   inherit (cutlassVersion) version;
 
   src = fetchFromGitHub (
@@ -73,10 +73,10 @@ stdenv.mkDerivation rec {
   ];
 
   installPhase = ''
-        mkdir -p $out/lib $out/include $out/tools/util/include $out/lib/cmake/CutlassSycl
+        mkdir -p $out/lib $out/include $out/tools/util/include $out/lib/cmake/SyclTla
         cp -rn $src/include/* $out/include/
         cp -rn $src/tools/util/include/* $out/tools/util/include/
-        cat > $out/lib/cmake/CutlassSycl/CutlassSyclConfig.cmake <<EOF
+        cat > $out/lib/cmake/SyclTla/SyclTlaConfig.cmake <<EOF
     set(CUTLASS_INCLUDE_DIR  "$out/include")
     set(CUTLASS_TOOLS_UTIL_INCLUDE_DIR "$out/tools/util/include")
     add_compile_definitions(CUTLASS_ENABLE_SYCL)

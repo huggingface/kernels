@@ -81,8 +81,8 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     )
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
-            Dependency::CutlassSycl => {
-                env.get_template("xpu/dep-cutlass-sycl.cmake")?
+            Dependency::SyclTla => {
+                env.get_template("xpu/dep-sycl-tla.cmake")?
                     .render_to_write(context! {}, &mut *write)?;
             }
             Dependency::MetalCpp => {

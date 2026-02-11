@@ -133,7 +133,7 @@ def _supported_backends() -> set[str]:
 
 def _select_backend(backend: str | None) -> str:
     if backend is None:
-        backend = _backend()
+        return _backend()
 
     supported = _supported_backends()
     if backend in supported:

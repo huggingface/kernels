@@ -13,6 +13,7 @@ from kernels.utils import (
     KNOWN_BACKENDS,
 )
 from kernels.cli.init import run_init, parse_kernel_name
+from kernels.cli.skills import add_skill
 from kernels.cli.versions import print_kernel_versions
 from kernels.cli.doc import generate_readme_for_kernel
 
@@ -89,6 +90,53 @@ def main():
         help="If the repository should be private.",
     )
     upload_parser.set_defaults(func=upload_kernels)
+
+    skills_parser = subparsers.add_parser(
+        "skills",
+        help="Install kernels specific skills for agents like Claude, Codex, and OpenCode",
+    )
+    skills_subparsers = skills_parser.add_subparsers(required=True)
+    skills_add_parser = skills_subparsers.add_parser(
+        "add",
+        help="Install the cuda-kernels skill for an AI assistant",
+    )
+    skills_add_parser.add_argument(
+        "--claude",
+        action="store_true",
+        help="Install for Claude.",
+    )
+    skills_add_parser.add_argument(
+        "--codex",
+        action="store_true",
+        help="Install for Codex.",
+    )
+    skills_add_parser.add_argument(
+        "--opencode",
+        action="store_true",
+        help="Install for OpenCode.",
+    )
+    skills_add_parser.add_argument(
+        "--global",
+        "-g",
+        dest="global_",
+        action="store_true",
+        help=(
+            "Install globally (user-level) instead of in the current project "
+            "directory."
+        ),
+    )
+    skills_add_parser.add_argument(
+        "--dest",
+        type=Path,
+        default=None,
+        help="Install into a custom destination (path to skills directory).",
+    )
+    skills_add_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing skills in the destination.",
+    )
+    skills_add_parser.set_defaults(func=add_skill)
 
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
     lock_parser.add_argument(

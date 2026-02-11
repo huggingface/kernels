@@ -1,33 +1,83 @@
 # Kernels CLI Reference
 
-## Main Functions
-
-### kernels check
-
-You can use `kernels check` to test compliance of a kernel on the Hub.
-This currently checks that the kernel:
-
-- Supports the currently-required Python ABI version.
-- Works on supported operating system versions.
-
-For example:
+The `kernels` CLI provides commands for managing compute kernels.
 
 ```bash
-$ kernels check kernels-community/flash-attn3
-Checking variant: torch28-cxx11-cu128-aarch64-linux
-  🐍 Python ABI 3.9 compatible
-  🐧 manylinux_2_28 compatible
-[...]
+kernels [-h] {check,download,versions,upload,lock,generate-readme,benchmark,init} ...
 ```
 
-### kernels upload
+## Commands
 
-Use `kernels upload <dir_containing_build> --repo_id="hub-username/kernel"` to upload
-your kernel builds to the Hub. To know the supported arguments run: `kernels upload -h`.
+| Command                                   | Description                                              |
+| ----------------------------------------- | -------------------------------------------------------- |
+| [init](cli-init.md)                       | Initialize a new kernel project from template            |
+| [upload](cli-upload.md)                   | Upload kernels to the Hub                                |
+| [benchmark](cli-benchmark.md)             | Run benchmark results for a kernel                       |
+| [check](cli-check.md)                     | Check a kernel for compliance                            |
+| [versions](cli-versions.md)               | Show kernel versions                                     |
+| [generate-readme](cli-generate-readme.md) | Generate README snippets for a kernel's public functions |
+| [lock](cli-lock.md)                       | Lock kernel revisions                                    |
+| [download](cli-download.md)               | Download locked kernels                                  |
 
-**Notes**:
+## Quick Start
 
-- This will take care of creating a repository on the Hub with the `repo_id` provided.
-- If a repo with the `repo_id` already exists and if it contains a `build` with the build variant
-  being uploaded, it will attempt to delete the files existing under it.
-- Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
+### Create a new kernel project
+
+```bash
+kernels init my-username/my-kernel
+cd my-kernel
+```
+
+### Build and test locally
+
+```bash
+cachix use huggingface
+nix run -L --max-jobs 1 --cores 8 .#build-and-copy
+uv run example.py
+```
+
+### Upload to the Hub
+
+```bash
+kernels upload ./build --repo-id my-username/my-kernel
+```
+
+### Use kernels in your project
+
+#### Directly from the Hub
+
+```python
+import torch
+
+from kernels import get_kernel
+
+# Download optimized kernels from the Hugging Face hub
+my_kernel = get_kernel("my-username/my-kernel", version=1)
+
+# Random tensor
+x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
+
+# Run the kernel
+y = torch.empty_like(x)
+my_kernel.my_kernel_function(y, x)
+
+print(y)
+```
+
+or 
+
+#### Locked and downloaded
+
+Add to `pyproject.toml`:
+
+```toml
+[tool.kernels.dependencies]
+"my-username/my-kernel" = "1"
+```
+
+Then lock and download:
+
+```bash
+kernels lock .
+kernels download .
+```

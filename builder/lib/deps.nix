@@ -27,7 +27,7 @@ let
     "torch" = [
       torch
     ];
-    "cutlass_sycl" = [ torch.xpuPackages.cutlass-sycl ];
+    "sycl_tla" = [ torch.xpuPackages.sycl-tla ];
     "metal-cpp" = [
       pkgs.metal-cpp.dev
     ];

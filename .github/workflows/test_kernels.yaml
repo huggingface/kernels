@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -95,3 +95,9 @@ jobs:
         run: |
           uv pip uninstall torch
           uv run python -c "import kernels"
+
+      - name: Run command-line tools without Torch
+        working-directory: ./kernels
+        run: |
+          uv run kernels check kernels-community/activation
+          uv run kernels versions kernels-community/activation

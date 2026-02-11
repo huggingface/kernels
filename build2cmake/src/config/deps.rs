@@ -25,8 +25,8 @@ pub enum Dependency {
     Cutlass3_9,
     #[serde(rename = "cutlass_4_0")]
     Cutlass4_0,
-    #[serde(rename = "cutlass_sycl")]
-    CutlassSycl,
+    #[serde(rename = "sycl_tla")]
+    SyclTla,
     #[serde(rename = "metal-cpp")]
     MetalCpp,
     Torch,

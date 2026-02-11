@@ -618,7 +618,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "tabulate", marker = "extra == 'benchmark'", specifier = ">=0.9.0" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
-    { name = "tomlkit", specifier = ">=0.14.0" },
+    { name = "tomlkit", specifier = ">=0.13.3" },
     { name = "torch", marker = "extra == 'benchmark'" },
     { name = "torch", marker = "extra == 'torch'" },
 ]

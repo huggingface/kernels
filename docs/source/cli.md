@@ -35,7 +35,7 @@ your kernel builds to the Hub. To know the supported arguments run: `kernels upl
 ### kernels skills add
 
 Use `kernels skills add` to install the `cuda-kernels` skill for AI coding assistants.
-Skill files are downloaded from hidden docs pages in this repository.
+Skill files are downloaded from the `skills/cuda-kernels` directory in this repository.
 
 Examples:
 

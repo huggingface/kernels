@@ -9,11 +9,11 @@ from huggingface_hub.utils import get_session
 DEFAULT_SKILL_ID = "cuda-kernels"
 _GITHUB_RAW_BASE = (
     "https://raw.githubusercontent.com/huggingface/kernels/main/"
-    "docs/source/skills/cuda-kernels"
+    "skills/cuda-kernels"
 )
 _MANIFEST_URL = f"{_GITHUB_RAW_BASE}/manifest.txt"
-_LOCAL_DOCS_ROOT = (
-    Path(__file__).resolve().parents[4] / "docs" / "source" / "skills" / "cuda-kernels"
+_LOCAL_SKILLS_ROOT = (
+    Path(__file__).resolve().parents[4] / "skills" / "cuda-kernels"
 )
 
 GLOBAL_TARGETS = {
@@ -40,7 +40,7 @@ def _download_manifest() -> list[str]:
     try:
         raw_manifest = _download(_MANIFEST_URL)
     except Exception:
-        local_manifest = _LOCAL_DOCS_ROOT / "manifest.txt"
+        local_manifest = _LOCAL_SKILLS_ROOT / "manifest.txt"
         if not local_manifest.exists():
             raise
         raw_manifest = local_manifest.read_text(encoding="utf-8")
@@ -57,7 +57,7 @@ def _download_file(rel_path: str) -> str:
     try:
         return _download(f"{_GITHUB_RAW_BASE}/{rel_path}")
     except Exception:
-        local_file = _LOCAL_DOCS_ROOT / rel_path
+        local_file = _LOCAL_SKILLS_ROOT / rel_path
         if local_file.exists():
             return local_file.read_text(encoding="utf-8")
         raise

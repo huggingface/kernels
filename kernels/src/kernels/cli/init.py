@@ -24,7 +24,7 @@ def parse_kernel_name(value: str) -> NamedTuple:
         raise argparse.ArgumentTypeError("repo name cannot contain path separators")
 
     # Display name uses dashes (for repo name, directory, build.toml name)
-    display_name = name.lower().replace("_", "-")
+    display_name = name.replace("_", "-")
     # Normalized name uses underscores (for Python package names)
     normalized_name = name.lower().replace("-", "_")
 

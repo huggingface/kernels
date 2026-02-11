@@ -23,13 +23,26 @@ def parse_kernel_name(value: str) -> NamedTuple:
     if "/" in name or "\\" in name:  # validate kernel name
         raise argparse.ArgumentTypeError("repo name cannot contain path separators")
 
-    name = name.lower().replace("-", "_")  # normalize name
-    RepoInfo = NamedTuple("RepoInfo", [("name", str), ("owner", str), ("repo_id", str)])
-    return RepoInfo(name=name, owner=owner, repo_id=f"{owner}/{name}")
+    # Display name uses dashes (for repo name, directory, build.toml name)
+    display_name = name.replace("_", "-")
+    # Normalized name uses underscores (for Python package names)
+    normalized_name = name.lower().replace("-", "_")
+
+    RepoInfo = NamedTuple(
+        "RepoInfo",
+        [("name", str), ("normalized_name", str), ("owner", str), ("repo_id", str)],
+    )
+    return RepoInfo(
+        name=display_name,
+        normalized_name=normalized_name,
+        owner=owner,
+        repo_id=f"{owner}/{display_name}",
+    )
 
 
 def run_init(args: Namespace) -> None:
     kernel_name = args.kernel_name.name
+    normalized_name = args.kernel_name.normalized_name
     repo_id = args.kernel_name.repo_id
     backends = KNOWN_BACKENDS if "all" in args.backends else set(args.backends)
 
@@ -54,7 +67,9 @@ def run_init(args: Namespace) -> None:
     template_dir = Path(
         snapshot_download(repo_id=args.template_repo, repo_type="model")
     )
-    _init_from_local_template(template_dir, target_dir, kernel_name, repo_id)
+    _init_from_local_template(
+        template_dir, target_dir, kernel_name, normalized_name, repo_id
+    )
 
     if backends:
         _update_build_backends(target_dir / "build.toml", backends)
@@ -84,12 +99,13 @@ def _init_from_local_template(
     template_dir: Path,
     target_dir: Path,
     kernel_name: str,
+    normalized_name: str,
     repo_id: str,
 ) -> None:
     # Placeholder mappings
     replacements = {
         "__KERNEL_NAME__": kernel_name,
-        "__KERNEL_NAME_NORMALIZED__": kernel_name,
+        "__KERNEL_NAME_NORMALIZED__": normalized_name,
         "__REPO_ID__": repo_id,
     }
 

@@ -46,3 +46,21 @@
     - local: cli
       title: Kernels CLI
   title: API Reference
+- sections:
+    - local: cli-init
+      title: kernels init
+    - local: cli-upload
+      title: kernels upload
+    - local: cli-benchmark
+      title: kernels benchmark
+    - local: cli-check
+      title: kernels check
+    - local: cli-versions
+      title: kernels versions
+    - local: cli-generate-readme
+      title: kernels generate-readme
+    - local: cli-lock
+      title: kernels lock
+    - local: cli-download
+      title: kernels download
+  title: CLI Reference

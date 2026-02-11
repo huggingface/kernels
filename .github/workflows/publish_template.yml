@@ -1,0 +1,33 @@
+name: Publish Template to kernels-community/template
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'template/**'
+
+jobs:
+  publish-template:
+    name: Publish template to kernels-community/template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: Upload template to Hugging Face Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_DOC_BUILD_PUSH }}
+        run: |
+          huggingface-cli upload kernels-community/template template --repo-type space --delete "*"

@@ -14,7 +14,7 @@ The command:
 `kernels benchmark` requires extra dependencies:
 
 ```bash
-pip install 'kernels[benchmark]'
+uv pip install 'kernels[benchmark]' # or pip install 'kernels[benchmark]'
 ```
 
 ## Example

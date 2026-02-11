@@ -23,7 +23,7 @@ src = ["gemm.cu"]
 backend = "xpu"
 depends = [
     "torch",
-    "cutlass_sycl",
+    "sycl_tla",
 ]
 src = ["gemm_sycl.cpp"]
 

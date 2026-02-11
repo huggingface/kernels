@@ -1,0 +1,16 @@
+# Files for kernels skills add
+SKILL.md
+references/a100-optimization-guide.md
+references/diffusers-h100.md
+references/diffusers-integration.md
+references/h100-optimization-guide.md
+references/huggingface-kernels-integration.md
+references/kernel-templates.md
+references/t4-optimization-guide.md
+references/transformers-integration.md
+references/troubleshooting.md
+scripts/benchmark_example.py
+scripts/benchmark_rmsnorm.py
+scripts/huggingface_kernels_example.py
+scripts/ltx_kernel_injection_example.py
+scripts/transformers_injection_example.py

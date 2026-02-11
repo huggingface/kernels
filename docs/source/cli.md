@@ -31,3 +31,24 @@ your kernel builds to the Hub. To know the supported arguments run: `kernels upl
 - If a repo with the `repo_id` already exists and if it contains a `build` with the build variant
   being uploaded, it will attempt to delete the files existing under it.
 - Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
+
+### kernels skills add
+
+Use `kernels skills add` to install the `cuda-kernels` skill for AI coding assistants.
+Skill files are downloaded from hidden docs pages in this repository.
+
+Examples:
+
+```bash
+# install for Claude in the current project
+kernels skills add --claude
+
+# install globally for Codex
+kernels skills add --codex --global
+
+# install for multiple assistants
+kernels skills add --claude --codex --opencode
+
+# install to a custom destination and overwrite if already present
+kernels skills add --dest ~/my-skills --force
+```

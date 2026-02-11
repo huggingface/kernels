@@ -47,7 +47,7 @@ kernels init my-user/my-kernel --overwrite
 `kernels init` prints suggested next steps after creating the project. A typical flow looks like:
 
 ```bash
-cd my_kernel
+cd my-kernel
 cachix use huggingface
 nix run -L --max-jobs 1 --cores 8 .#build-and-copy
 uv run example.py
@@ -55,7 +55,8 @@ uv run example.py
 
 ## Notes
 
-- The `<repo>` part is normalized to lowercase, and `-` is replaced with `_`. For example, `my-user/My-Kernel` becomes a directory named `my_kernel` and a repo id `my-user/my_kernel`.
+- The `<repo>` part is normalized to lowercase with dashes preferred. For example, `my-user/My_Kernel` becomes a directory named `my-kernel` and a repo id `my-user/my-kernel`.
+- Python package names use underscores (e.g., `my_kernel`) since dashes are not valid in Python identifiers.
 - `--backends` can be one of: `cpu`, `cuda`, `metal`, `rocm`, `xpu`, `npu`, or `all`.
 - If the target directory already exists and is not empty, `kernels init` exits with an error unless `--overwrite` is set.
 - The project is initialized as a Git repo (via `git init`) because Nix flakes require it.

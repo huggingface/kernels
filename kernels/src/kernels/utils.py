@@ -1,4 +1,5 @@
 import ctypes
+import functools
 import hashlib
 import importlib
 import importlib.metadata
@@ -12,7 +13,7 @@ from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
-from huggingface_hub import file_exists, snapshot_download
+from huggingface_hub import HfApi, constants
 from packaging.version import parse
 
 from kernels._system import glibc_version
@@ -21,7 +22,6 @@ from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 
-ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
 
 
@@ -37,6 +37,29 @@ def _get_cache_dir() -> str | None:
     return os.environ.get("KERNELS_CACHE", None)
 
 
+def _get_local_kernel_overrides() -> dict[str, Path]:
+    """Returns list local overrides for kernels."""
+    local_kerels = os.environ.get("LOCAL_KERNELS", None)
+    if local_kerels is None:
+        return dict()
+    return _parse_local_kernel_overrides(local_kerels)
+
+
+@functools.lru_cache(maxsize=1)
+def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
+    """Parse the LOCAL_KERNELS environment variable into a dictionary."""
+    overrides = {}
+    for entry in local_kernels.split(":"):
+        if "=" not in entry:
+            raise ValueError(
+                f"Invalid LOCAL_KERNELS entry: {entry}. Expected format: repo_id_1=path_1:repo_id_2=path_2"
+            )
+        repo_id, path = entry.split("=", 1)
+        overrides[repo_id] = Path(path)
+
+    return overrides
+
+
 CACHE_DIR: str | None = _get_cache_dir()
 
 
@@ -48,13 +71,13 @@ def _get_privateuse_backend_name() -> str | None:
     return None
 
 
-def backend() -> str:
+def _backend() -> str:
     import torch
 
     if torch.version.cuda is not None:
         return "cuda"
     elif torch.version.hip is not None:
-        return "hip"
+        return "rocm"
     elif torch.backends.mps.is_available():
         return "metal"
     elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
@@ -65,21 +88,23 @@ def backend() -> str:
         return "cpu"
 
 
-def build_variant() -> str:
+def _build_variant(backend: str | None) -> str:
+    backend = _select_backend(backend)
+
     import torch
 
-    if torch.version.cuda is not None:
+    if backend == "cuda" and torch.version.cuda is not None:
         cuda_version = parse(torch.version.cuda)
         compute_framework = f"cu{cuda_version.major}{cuda_version.minor}"
-    elif torch.version.hip is not None:
+    elif backend == "rocm" and torch.version.hip is not None:
         rocm_version = parse(torch.version.hip.split("-")[0])
         compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
-    elif torch.backends.mps.is_available():
+    elif backend == "metal":
         compute_framework = "metal"
-    elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
+    elif backend == "xpu" and torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
-    elif _get_privateuse_backend_name() == "npu":
+    elif backend == "cann":
         from torch_npu.utils.collect_env import get_cann_version  # type: ignore[import-not-found]
 
         cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
@@ -102,36 +127,57 @@ def build_variant() -> str:
     return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{compute_framework}-{cpu}-{os}"
 
 
-def build_variant_noarch() -> str:
-    import torch
+def _supported_backends() -> set[str]:
+    return {"cpu", _backend()}
 
-    if torch.version.cuda is not None:
+
+def _select_backend(backend: str | None) -> str:
+    if backend is None:
+        return _backend()
+
+    supported = _supported_backends()
+    if backend in supported:
+        return backend
+
+    raise ValueError(
+        f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported))}"
+    )
+
+
+def _build_variant_noarch(backend: str | None) -> str:
+    backend = _select_backend(backend)
+
+    if backend == "cuda":
         return "torch-cuda"
-    elif torch.version.hip is not None:
+    elif backend == "rocm":
         return "torch-rocm"
-    elif torch.backends.mps.is_available():
+    elif backend == "metal":
         return "torch-metal"
-    elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
+    elif backend == "xpu":
         return "torch-xpu"
-    elif _get_privateuse_backend_name() == "npu":
+    elif backend == "cann":
         return "torch-npu"
     else:
         return "torch-cpu"
 
 
-def build_variant_universal() -> str:
+def _build_variant_universal() -> str:
     # Once we support other frameworks, detection goes here.
     return "torch-universal"
 
 
-def build_variants() -> list[str]:
+def _build_variants(backend: str | None) -> list[str]:
     """Return compatible build variants in preferred order."""
-    return [build_variant(), build_variant_noarch(), build_variant_universal()]
+    return [
+        _build_variant(backend),
+        _build_variant_noarch(backend),
+        _build_variant_universal(),
+    ]
 
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
     metadata = Metadata.load_from_variant(variant_path)
-    validate_dependencies(metadata.python_depends, backend())
+    validate_dependencies(metadata.python_depends, _backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
@@ -158,6 +204,7 @@ def install_kernel(
     repo_id: str,
     revision: str,
     local_files_only: bool = False,
+    backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
     user_agent: str | dict | None = None,
 ) -> tuple[str, Path]:
@@ -173,6 +220,9 @@ def install_kernel(
             The specific revision (branch, tag, or commit) to download.
         local_files_only (`bool`, *optional*, defaults to `False`):
             Whether to only use local files and not download from the Hub.
+        backend (`str`, *optional*):
+            The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
         variant_locks (`dict[str, VariantLock]`, *optional*):
             Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
@@ -182,21 +232,24 @@ def install_kernel(
         `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
     package_name = package_name_from_repo_id(repo_id)
-    allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
-    user_agent = _get_user_agent(user_agent=user_agent)
+    allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
+    api = _get_hf_api(user_agent=user_agent)
     repo_path = Path(
-        snapshot_download(
-            repo_id,
-            allow_patterns=allow_patterns,
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
-            user_agent=user_agent,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=local_files_only,
+            )
         )
     )
 
     try:
-        return _find_kernel_in_repo_path(repo_path, package_name, variant_locks)
+        return _find_kernel_in_repo_path(
+            repo_path, package_name, backend=backend, variant_locks=variant_locks
+        )
     except FileNotFoundError:
         raise FileNotFoundError(
             f"Cannot install kernel from repo {repo_id} (revision: {revision})"
@@ -206,9 +259,11 @@ def install_kernel(
 def _find_kernel_in_repo_path(
     repo_path: Path,
     package_name: str,
+    *,
+    backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> tuple[str, Path]:
-    variants = build_variants()
+    variants = _build_variants(backend)
     variant = None
     variant_path = None
     for candidate_variant in variants:
@@ -247,13 +302,16 @@ def install_kernel_all_variants(
     local_files_only: bool = False,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
+    api = _get_hf_api()
     repo_path = Path(
-        snapshot_download(
-            repo_id,
-            allow_patterns="build/*",
-            cache_dir=CACHE_DIR,
-            revision=revision,
-            local_files_only=local_files_only,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns="build/*",
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=local_files_only,
+            )
         )
     )
 
@@ -276,6 +334,7 @@ def get_kernel(
     repo_id: str,
     revision: str | None = None,
     version: int | str | None = None,
+    backend: str | None = None,
     user_agent: str | dict | None = None,
 ) -> ModuleType:
     """
@@ -292,6 +351,9 @@ def get_kernel(
         version (`int|str`, *optional*):
             The kernel version to download as an integer. The `str` variant is deprecated and will be
             removed in a future release. Cannot be used together with `revision`.
+        backend (`str`, *optional*):
+            The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
@@ -309,14 +371,22 @@ def get_kernel(
         result = activation.relu(out, x)
         ```
     """
+    override = _get_local_kernel_overrides().get(repo_id, None)
+    if override is not None:
+        return get_local_kernel(override, package_name_from_repo_id(repo_id))
+
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
     package_name, variant_path = install_kernel(
-        repo_id, revision=revision, user_agent=user_agent
+        repo_id, revision=revision, backend=backend, user_agent=user_agent
     )
     return _import_from_path(package_name, variant_path)
 
 
-def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
+def get_local_kernel(
+    repo_path: Path,
+    package_name: str,
+    backend: str | None = None,
+) -> ModuleType:
     """
     Import a kernel from a local kernel repository path.
 
@@ -325,13 +395,16 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
             The local path to the kernel repository.
         package_name (`str`):
             The name of the package to import from the repository.
+        backend (`str`, *optional*):
+            The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
 
     Returns:
         `ModuleType`: The imported kernel module.
     """
     # Presume we were given the top level path of the kernel repository.
     for base_path in [repo_path, repo_path / "build"]:
-        for v in build_variants():
+        for v in _build_variants(backend):
             variant_path = base_path / v
             if variant_path.exists():
                 return _import_from_path(package_name, variant_path)
@@ -346,7 +419,10 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
 
 
 def has_kernel(
-    repo_id: str, revision: str | None = None, version: int | str | None = None
+    repo_id: str,
+    revision: str | None = None,
+    version: int | str | None = None,
+    backend: str | None = None,
 ) -> bool:
     """
     Check whether a kernel build exists for the current environment (Torch version and compute framework).
@@ -359,6 +435,9 @@ def has_kernel(
         version (`int|str`, *optional*):
             The kernel version to download as an integer. The `str` variant is deprecated and will be
             removed in a future release. Cannot be used together with `revision`.
+        backend (`str`, *optional*):
+            The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
 
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
@@ -366,21 +445,24 @@ def has_kernel(
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
 
     package_name = package_name_from_repo_id(repo_id)
-    variant = build_variant()
 
-    for variant in build_variants():
+    api = _get_hf_api()
+    for variant in _build_variants(backend):
         for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
-            if file_exists(
-                repo_id,
-                revision=revision,
-                filename=f"build/{variant}/{init_file}",
+            if api.file_exists(
+                repo_id, revision=revision, filename=f"build/{variant}/{init_file}"
             ):
                 return True
 
     return False
 
 
-def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
+def load_kernel(
+    repo_id: str,
+    *,
+    lockfile: Path | None,
+    backend: str | None = None,
+) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
 
@@ -391,6 +473,9 @@ def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
             The Hub repository containing the kernel.
         lockfile (`Path`, *optional*):
             Path to the lockfile. If not provided, the lockfile will be loaded from the caller's package metadata.
+        backend (`str`, *optional*):
+            The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -408,20 +493,23 @@ def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
 
     package_name = package_name_from_repo_id(repo_id)
 
-    allow_patterns = [f"build/{variant}/*" for variant in build_variants()]
+    api = _get_hf_api()
+    allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
     repo_path = Path(
-        snapshot_download(
-            repo_id,
-            allow_patterns=allow_patterns,
-            cache_dir=CACHE_DIR,
-            revision=locked_sha,
-            local_files_only=True,
+        str(
+            api.snapshot_download(
+                repo_id,
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=locked_sha,
+                local_files_only=True,
+            )
         )
     )
 
     try:
         package_name, variant_path = _find_kernel_in_repo_path(
-            repo_path, package_name, variant_locks=None
+            repo_path, package_name, backend=backend, variant_locks=None
         )
         return _import_from_path(package_name, variant_path)
     except FileNotFoundError:
@@ -556,38 +644,29 @@ def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
 
 
-def _get_user_agent(
-    user_agent: str | dict | None = None,
-) -> dict | str | None:
+def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
+    """Returns an instance of HfApi with proper settings."""
     import torch
 
     from . import __version__
 
-    if os.getenv("DISABLE_TELEMETRY", "false").upper() in ENV_VARS_TRUE_VALUES:
-        return None
+    user_agent_str = ""
+    if not constants.HF_HUB_DISABLE_TELEMETRY:
+        # User-defined info
+        if isinstance(user_agent, dict):
+            user_agent_str = "; ".join(f"{k}/{v}" for k, v in user_agent.items())
+        if isinstance(user_agent, str):
+            user_agent_str = user_agent
 
-    glibc = glibc_version()
-    python = ".".join(platform.python_version_tuple()[:2])
+        # System info
+        python = ".".join(platform.python_version_tuple()[:2])
+        user_agent_str += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{_build_variant(None)}; file_type/kernel"
 
-    if user_agent is None:
-        user_agent = {}
-
-    if isinstance(user_agent, dict):
-        user_agent.update(
-            {
-                "kernels": __version__,
-                "python": python,
-                "torch": torch.__version__,
-                "build_variant": build_variant(),
-                "file_type": "kernel",
-            }
-        )
+        # Add glibc version if available
+        glibc = glibc_version()
         if glibc is not None:
-            user_agent["glibc"] = glibc
+            user_agent_str += f"; glibc/{glibc}"
 
-    elif isinstance(user_agent, str):
-        user_agent += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{build_variant()}; file_type/kernel"
-        if glibc is not None:
-            user_agent += f"; glibc/{glibc}"
-
-    return user_agent
+    return HfApi(
+        library_name="kernels", library_version=__version__, user_agent=user_agent_str
+    )

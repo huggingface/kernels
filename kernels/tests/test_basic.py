@@ -1,3 +1,4 @@
+from huggingface_hub.errors import RepositoryNotFoundError
 import pytest
 import torch
 import torch.nn.functional as F
@@ -183,6 +184,27 @@ def test_noarch_kernel(device):
     get_kernel("kernels-test/silu-and-mul-noarch")
 
 
+def test_get_kernel_with_backend(device):
+    x = torch.randn((16, 16), device=device)
+    assert has_kernel("kernels-community/relu", version=1)
+    relu = get_kernel("kernels-community/relu", version=1)
+    torch.testing.assert_close(relu.relu(x), F.relu(x))
+
+    assert has_kernel("kernels-community/relu", version=1, backend=device)
+    relu = get_kernel("kernels-community/relu", version=1, backend=device)
+    torch.testing.assert_close(relu.relu(x), F.relu(x))
+
+    with pytest.raises(ValueError, match="Invalid backend 'xpu'"):
+        get_kernel("kernels-community/relu", version=1, backend="xpu")
+    with pytest.raises(ValueError, match="Invalid backend 'xpu'"):
+        has_kernel("kernels-community/relu", version=1, backend="xpu")
+
+    assert has_kernel("kernels-community/relu", version=1, backend="cpu")
+    relu = get_kernel("kernels-community/relu", version=1, backend="cpu")
+    x = x.cpu()
+    torch.testing.assert_close(relu.relu(x), F.relu(x))
+
+
 @pytest.mark.parametrize(
     "repo_revision",
     [
@@ -197,6 +219,47 @@ def test_flattened_build(repo_revision, device):
 
     x = torch.arange(0, 32, dtype=torch.float16, device=device).view(2, 16)
     torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
+
+
+def test_local_overrides(monkeypatch, local_kernel_path):
+    package_name, kernel_path = local_kernel_path
+
+    # Ensure that we are testing with a non-existing kernel, so that we know
+    # that the kernel must be local.
+    with pytest.raises(RepositoryNotFoundError):
+        get_kernel(f"kernels-test/{package_name}")
+
+    with monkeypatch.context() as m:
+        m.setenv(
+            "LOCAL_KERNELS",
+            f"kernels-test/{package_name}={str(kernel_path)}:kernels-test/non-existing2=/non/existing",
+        )
+        get_kernel("kernels-test/activation")
+
+    with monkeypatch.context() as m:
+        m.setenv(
+            "LOCAL_KERNELS",
+            f"kernels-test/non-existing2=/non/existing:kernels-test/{package_name}={str(kernel_path)}",
+        )
+        get_kernel("kernels-test/activation")
+
+    with monkeypatch.context() as m:
+        # Using a non-existing path should error.
+        m.setenv(
+            "LOCAL_KERNELS",
+            f"kernels-test/non-existing2=/non/existing:kernels-test/{package_name}=/non/existing",
+        )
+        with pytest.raises(FileNotFoundError, match=r"Could not find.*activation"):
+            get_kernel("kernels-test/activation")
+
+    with monkeypatch.context() as m:
+        # Malformed entries must be rejected.
+        m.setenv(
+            "LOCAL_KERNELS",
+            f"kernels-test/non-existing2=/non/existing:kernels-test/{package_name}",
+        )
+        with pytest.raises(ValueError, match=r"Invalid LOCAL_KERNELS entry"):
+            get_kernel("kernels-test/activation")
 
 
 def silu_and_mul_torch(x: torch.Tensor):

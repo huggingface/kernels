@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from huggingface_hub import delete_repo, model_info, list_repo_refs
 
 from kernels.cli import upload_kernels
+from kernels.utils import _get_hf_api
 
 REPO_ID = "valid_org/kernels-upload-test"
 
@@ -58,7 +58,7 @@ def get_filename_to_change(repo_filenames):
 
 def get_filenames_from_a_repo(repo_id: str) -> list[str]:
     try:
-        repo_info = model_info(repo_id=repo_id, files_metadata=True)
+        repo_info = _get_hf_api().model_info(repo_id=repo_id, files_metadata=True)
         repo_siblings = repo_info.siblings
         if repo_siblings is not None:
             return [f.rfilename for f in repo_siblings]
@@ -83,11 +83,12 @@ def test_kernel_upload_works_as_expected(branch):
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     assert any(str(script_path.name) for f in repo_filenames)
 
+    api = _get_hf_api()
     if branch is not None:
-        refs = list_repo_refs(repo_id=REPO_ID)
+        refs = api.list_repo_refs(repo_id=REPO_ID)
         assert any(ref_branch.name == branch for ref_branch in refs.branches)
 
-    delete_repo(repo_id=REPO_ID)
+    api.delete_repo(repo_id=REPO_ID)
 
 
 @pytest.mark.token
@@ -118,4 +119,4 @@ def test_kernel_upload_deletes_as_expected():
     assert not any(
         str(filename_to_change) in k for k in repo_filenames
     ), f"{repo_filenames=}"
-    delete_repo(repo_id=REPO_ID)
+    _get_hf_api().delete_repo(repo_id=REPO_ID)

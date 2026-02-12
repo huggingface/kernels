@@ -1,0 +1,55 @@
+[general]
+backends = [
+  "cpu",
+  "cuda",
+  "metal",
+  "rocm",
+  "xpu",
+]
+name = "__KERNEL_NAME__"
+version = 1
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h",
+]
+
+[kernel.__KERNEL_NAME_NORMALIZED__]
+backend = "cuda"
+depends = ["torch"]
+src = ["__KERNEL_NAME_NORMALIZED___cuda/__KERNEL_NAME_NORMALIZED__.cu"]
+
+[kernel.__KERNEL_NAME_NORMALIZED___metal]
+backend = "metal"
+depends = ["torch"]
+src = [
+  "__KERNEL_NAME_NORMALIZED___metal/__KERNEL_NAME_NORMALIZED__.mm",
+  "__KERNEL_NAME_NORMALIZED___metal/__KERNEL_NAME_NORMALIZED__.metal",
+]
+
+[kernel.__KERNEL_NAME_NORMALIZED___rocm]
+backend = "rocm"
+depends = ["torch"]
+rocm-archs = [
+  "gfx906",
+  "gfx908",
+  "gfx90a",
+  "gfx940",
+  "gfx941",
+  "gfx942",
+  "gfx1030",
+  "gfx1100",
+  "gfx1101",
+]
+src = ["__KERNEL_NAME_NORMALIZED___cuda/__KERNEL_NAME_NORMALIZED__.cu"]
+
+[kernel.__KERNEL_NAME_NORMALIZED___xpu]
+backend = "xpu"
+depends = ["torch"]
+src = ["__KERNEL_NAME_NORMALIZED___xpu/__KERNEL_NAME_NORMALIZED__.cpp"]
+
+[kernel.__KERNEL_NAME_NORMALIZED___cpu]
+backend = "cpu"
+depends = ["torch"]
+src = ["__KERNEL_NAME_NORMALIZED___cpu/__KERNEL_NAME_NORMALIZED___cpu.cpp"]

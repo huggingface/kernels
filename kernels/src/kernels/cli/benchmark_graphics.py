@@ -520,7 +520,7 @@ def _save_speedup_gif(
         filter(None, [f"PyTorch {pytorch_version}" if pytorch_version else "", backend])
     )
 
-    ref_dur = 2.0
+    ref_dur = 4.0
     fps = 30
     total_frames = int(ref_dur * fps)
 
@@ -731,7 +731,7 @@ def _save_speedup_svg(
         filter(None, [f"PyTorch {pytorch_version}" if pytorch_version else "", backend])
     )
 
-    ref_dur = 2.0
+    ref_dur = 4.0
 
     svg_parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" style="background:{bg};font-family:{_HF_FONT},monospace">',

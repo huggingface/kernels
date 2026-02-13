@@ -1,6 +1,11 @@
 {
   description = "Kernels";
 
+  nixConfig = {
+    extra-substituters = [ "https://huggingface.cachix.org" ];
+    extra-trusted-public-keys = [ "huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o=" ];
+  };
+
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
@@ -121,7 +126,8 @@
 
         buildSets = defaultBuildSetsPerSystem.${system};
         buildSetsByBackend = (partitionBuildSetsBySystemBackend defaultBuildSets).${system};
-        buildSet = builtins.head buildSetsByBackend.cuda;
+        defaultBackend = if system == "aarch64-darwin" then "metal" else "cuda";
+        buildSet = builtins.head buildSetsByBackend.${defaultBackend};
 
         # Dev shells per framework.
         devShellByBackend = lib.mapAttrs (

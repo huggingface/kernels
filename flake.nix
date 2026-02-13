@@ -3,7 +3,9 @@
 
   nixConfig = {
     extra-substituters = [ "https://huggingface.cachix.org" ];
-    extra-trusted-public-keys = [ "huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o=" ];
+    extra-trusted-public-keys = [
+      "huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o="
+    ];
   };
 
   inputs = {

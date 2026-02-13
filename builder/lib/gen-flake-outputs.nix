@@ -74,7 +74,17 @@ let
         buildConfig // {
           bundleBuild = buildConfig.bundleBuild or false;
           framework = buildConfigBackend buildConfig;
-          frameworkOrder = if buildConfig ? cudaVersion then 0 else 1;
+          frameworkOrder =
+            if buildConfig ? cudaVersion then
+              0
+            else if buildConfig ? rocmVersion then
+              1
+            else if buildConfig ? xpuVersion then
+              2
+            else if buildConfig.metal or false then
+              3
+            else
+              4;
           frameworkVersion =
             buildConfig.cudaVersion or buildConfig.rocmVersion or buildConfig.xpuVersion or "0.0";
         };

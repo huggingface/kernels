@@ -300,11 +300,23 @@ def test_relu():
   ...
 ```
 
+We recommend that you to pick tests that together would catch most error
+cases while running within 60 seconds.
+
 You can run the tests (e.g. in CI) using:
 
 ```bash
 $ nix run .#ci-test
 ```
 
-On non-NixOS systems, make sure that
+If the kernel supports multiple backends, it will run the test for the
+first supported backend that was found, obeying the following order: CUDA,
+ROCm, XPU, Metal, CPU. If you would like to the tests for a specific build
+variant, you can use `nix run .#ciTests.<variant>`. For instance:
+
+```bash
+$ nix run .#ciTests.torch210-cxx11-cpu-x86_64-linux
+```
+
+When running the tests on a non-NixOS systems, make sure that
 [the CUDA driver library can be found](https://danieldk.eu/Software/Nix/Nix-CUDA-on-non-NixOS-systems#solutions).

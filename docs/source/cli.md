@@ -31,3 +31,25 @@ your kernel builds to the Hub. To know the supported arguments run: `kernels upl
 - If a repo with the `repo_id` already exists and if it contains a `build` with the build variant
   being uploaded, it will attempt to delete the files existing under it.
 - Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
+
+### kernels skills add
+
+Use `kernels skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode. For now, only the `cuda-kernels` skill is supported. Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/skills).
+
+Skills instruct agents how to deal with hardware-specific optimizations, integrate with libraries like diffusers and transformers, and benchmark kernel performance in consistent ways.
+
+Examples:
+
+```bash
+# install for Claude in the current project
+kernels skills add --claude
+
+# install globally for Codex
+kernels skills add --codex --global
+
+# install for multiple assistants
+kernels skills add --claude --codex --opencode
+
+# install to a custom destination and overwrite if already present
+kernels skills add --dest ~/my-skills --force
+```

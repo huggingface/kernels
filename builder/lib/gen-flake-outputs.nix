@@ -146,7 +146,7 @@ in
         rev = revUnderscored;
       };
     in
-    {
+    rec {
       inherit bundle;
 
       # Bundles by backend.
@@ -229,6 +229,14 @@ in
           buildSets = onePerFramework;
           rev = revUnderscored;
         };
+
+      ciTests = build.mkCiTests {
+        inherit path doGetKernelCheck pythonCheckInputs;
+        buildSets = applicableBuildSets;
+        rev = revUnderscored;
+      };
+
+      ci-test = ciTests.${shellTorch};
 
       kernels =
         pkgs.python3.withPackages (

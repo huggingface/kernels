@@ -380,7 +380,7 @@ def _get_kernel_layer(
 ) -> Type["nn.Module"]:
     """Get a layer from a kernel."""
 
-    if getattr(kernel, "layers", None) is None:
+    if getattr(repo, "layers", None) is None:
         raise ValueError(f"Kernel repo {repo} does not define any layers.")
 
     layer = getattr(kernel.layers, repo.layer_name, None)

@@ -37,6 +37,8 @@
       title: Metal Notes
     - local: builder/build-variants
       title: Build Variants
+    - local: builder/gb10-optimization-guide
+      title: GB10 (Blackwell) Optimization
   title: Building kernels
 - sections:
     - local: api/kernels

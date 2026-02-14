@@ -27,3 +27,8 @@ include = ["{{name}}*"]
 [tool.setuptools.package-data]
 {{ name }} = [ {{ data_globs }} ]
 {% endif %}
+
+[tool.pytest.ini_options]
+markers = [
+  "kernels_ci: mark a test as a kernel CI test"
+]

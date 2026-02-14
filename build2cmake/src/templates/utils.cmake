@@ -217,15 +217,15 @@ function(extract_unique_cuda_archs_ascending OUT_ARCHES CUDA_ARCH_FLAGS)
 endfunction()
 
 #
-# For a specific file set the `-gencode` flag in compile options conditionally
-# for the CUDA language.
+# For a specific file set the `-gencode` flag in compile options conditionally 
+# for the CUDA language. 
 #
 # Example:
 #   set_gencode_flag_for_srcs(
 #     SRCS "foo.cu"
 #     ARCH "compute_75"
 #     CODE "sm_75")
-#   adds: "-gencode arch=compute_75,code=sm_75" to the compile options for
+#   adds: "-gencode arch=compute_75,code=sm_75" to the compile options for 
 #    `foo.cu` (only for the CUDA language).
 #
 macro(set_gencode_flag_for_srcs)
@@ -344,13 +344,13 @@ function(cuda_archs_loose_intersection OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_AR
   list(REMOVE_DUPLICATES _PTX_ARCHS)
   list(REMOVE_DUPLICATES _SRC_CUDA_ARCHS)
 
-  # if x.0a is in SRC_CUDA_ARCHS and x.0 is in CUDA_ARCHS then we should
-  # remove x.0a from SRC_CUDA_ARCHS and add x.0a to _CUDA_ARCHS
+  # If x.0a or x.0f is in SRC_CUDA_ARCHS and x.0 is in CUDA_ARCHS then we should
+  # remove x.0a or x.0f from SRC_CUDA_ARCHS and add x.0a or x.0f to _CUDA_ARCHS
   set(_CUDA_ARCHS)
   foreach(_arch ${_SRC_CUDA_ARCHS})
-    if(_arch MATCHES "\\a$")
+    if(_arch MATCHES "[af]$")
       list(REMOVE_ITEM _SRC_CUDA_ARCHS "${_arch}")
-      string(REPLACE "a" "" _base "${_arch}")
+      string(REGEX REPLACE "[af]$" "" _base "${_arch}")
       if ("${_base}" IN_LIST TGT_CUDA_ARCHS)
         list(REMOVE_ITEM _TGT_CUDA_ARCHS "${_base}")
         list(APPEND _CUDA_ARCHS "${_arch}")

@@ -13,6 +13,7 @@ from kernels.utils import (
     KNOWN_BACKENDS,
 )
 from kernels.cli.init import run_init, parse_kernel_name
+from kernels.cli.skills import add_skill
 from kernels.cli.versions import print_kernel_versions
 from kernels.cli.doc import generate_readme_for_kernel
 from kernels.kernel_card_utils import (
@@ -98,6 +99,53 @@ def main():
     )
     upload_parser.set_defaults(func=upload_kernels)
 
+    skills_parser = subparsers.add_parser(
+        "skills",
+        help="Install kernels specific skills for agents like Claude, Codex, and OpenCode",
+    )
+    skills_subparsers = skills_parser.add_subparsers(required=True)
+    skills_add_parser = skills_subparsers.add_parser(
+        "add",
+        help="Install the cuda-kernels skill for an AI assistant",
+    )
+    skills_add_parser.add_argument(
+        "--claude",
+        action="store_true",
+        help="Install for Claude.",
+    )
+    skills_add_parser.add_argument(
+        "--codex",
+        action="store_true",
+        help="Install for Codex.",
+    )
+    skills_add_parser.add_argument(
+        "--opencode",
+        action="store_true",
+        help="Install for OpenCode.",
+    )
+    skills_add_parser.add_argument(
+        "--global",
+        "-g",
+        dest="global_",
+        action="store_true",
+        help=(
+            "Install globally (user-level) instead of in the current project "
+            "directory."
+        ),
+    )
+    skills_add_parser.add_argument(
+        "--dest",
+        type=Path,
+        default=None,
+        help="Install into a custom destination (path to skills directory).",
+    )
+    skills_add_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing skills in the destination.",
+    )
+    skills_add_parser.set_defaults(func=add_skill)
+
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
     lock_parser.add_argument(
         "project_dir",
@@ -156,6 +204,17 @@ def main():
     )
     benchmark_parser.add_argument("--iterations", type=int, default=100)
     benchmark_parser.add_argument("--warmup", type=int, default=10)
+    benchmark_parser.add_argument(
+        "--visual",
+        type=str,
+        default=None,
+        help="Save visual outputs using this base path (e.g., --visual bench creates bench_light.svg and bench_dark.svg variants)",
+    )
+    benchmark_parser.add_argument(
+        "--rasterized",
+        action="store_true",
+        help="Output PNG and GIF formats instead of SVG",
+    )
     benchmark_parser.set_defaults(func=run_benchmark)
 
     init_parser = subparsers.add_parser(
@@ -356,4 +415,6 @@ def run_benchmark(args):
         warmup=args.warmup,
         output=args.output,
         print_json=args.json,
+        visual=args.visual,
+        rasterized=args.rasterized,
     )

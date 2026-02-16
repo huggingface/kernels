@@ -310,6 +310,8 @@ def _is_cuda_platform():
 
 
 def _is_rocm_platform():
+    import torch
+
     return torch.version.hip is not None
 
 

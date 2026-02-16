@@ -274,7 +274,7 @@ def kernelize(
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cpu", "cuda", "mps", "npu", "rocm", "xpu"}
+    supported_devices = {"cpu", "cuda", "mps", "neuron", "npu", "rocm", "xpu"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"
@@ -296,6 +296,9 @@ def _find_device(model: "nn.Module") -> Device:
             return Device(type="rocm")
         elif _is_cuda_platform():
             return Device(type="cuda")
+    elif dev_type == "xla":
+        if _has_neuron_ops():
+            return Device(type="neuron")
 
     return Device(type=dev_type)
 
@@ -307,6 +310,10 @@ def _is_cuda_platform():
 
 
 def _is_rocm_platform():
+    return torch.version.hip is not None
+
+
+def _has_neuron_ops():
     import torch
 
-    return torch.version.hip is not None
+    return hasattr(torch.ops.neuron, "forward_v2")

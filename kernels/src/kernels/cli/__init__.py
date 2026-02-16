@@ -356,7 +356,7 @@ def create_and_upload_card(args):
     )
 
     updated_card = _update_kernel_card_usage(
-        kernel_card=kernel_card, local_path=kernel_dir
+        kernel_card=kernel_card, local_path=kernel_dir, repo_id=args.repo_id
     )
     updated_card = _update_kernel_card_available_funcs(
         kernel_card=kernel_card, local_path=kernel_dir

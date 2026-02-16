@@ -18,6 +18,14 @@ let
   pyFilter = file: builtins.any (ext: file.hasExt ext) pyExt;
   extSrc = extConfig.src or [ ] ++ [ "build.toml" ];
   pySrcSet = fileset.fileFilter pyFilter (path + "/torch-ext");
+  pyTestsSet =
+    let
+      testsPath = path + "/tests";
+    in
+    if builtins.pathExists testsPath then
+      fileset.fileFilter pyFilter (path + "/tests")
+    else
+      fileset.empty;
   kernelsSrc = fileset.unions (
     lib.flatten (lib.mapAttrsToList (name: buildConfig: map (nameToPath path) buildConfig.src) kernels)
   );
@@ -29,5 +37,6 @@ fileset.toSource {
     kernelsSrc
     srcSet
     pySrcSet
+    pyTestsSet
   ];
 }

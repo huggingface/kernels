@@ -23,3 +23,8 @@ build-backend = "setuptools.build_meta"
   {% endfor %}
 ]
 {% endfor %}
+
+[tool.pytest.ini_options]
+markers = [
+  "kernels_ci: mark a test as a kernel CI test"
+]

@@ -5,11 +5,20 @@ import torch
 
 from kernels.utils import _get_privateuse_backend_name
 
+try:
+    # Ensure torch.ops.neuron exists when the system supports it.
+    import torch_neuronx
+except:
+    pass
+
 has_cuda = (
     hasattr(torch.version, "cuda")
     and torch.version.cuda is not None
     and torch.cuda.device_count() > 0
 )
+
+has_neuron = hasattr(torch.ops.neuron, "forward_v2")
+
 has_rocm = (
     hasattr(torch.version, "hip")
     and torch.version.hip is not None
@@ -46,6 +55,8 @@ def device():
 def pytest_runtest_setup(item):
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")
+    if "neuron_only" in item.keywords and not has_neuron:
+        pytest.skip("skipping Neuron-only test on host without Neuron")
     if "rocm_only" in item.keywords and not has_rocm:
         pytest.skip("skipping ROCm-only test on host without ROCm")
     if "darwin_only" in item.keywords and not sys.platform.startswith("darwin"):

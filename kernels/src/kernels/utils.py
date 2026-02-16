@@ -22,7 +22,7 @@ from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 
-KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
+KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
 
 def _get_cache_dir() -> str | None:
@@ -74,7 +74,11 @@ def _get_privateuse_backend_name() -> str | None:
 def _backend() -> str:
     import torch
 
-    if torch.version.cuda is not None:
+    if hasattr(torch.ops.neuron, "forward_v2"):
+        # Needs to be sorted specific Torch builds, since Neuron extension
+        # can be loaded into e.g. CUDA Torch builds.
+        return "neuron"
+    elif torch.version.cuda is not None:
         return "cuda"
     elif torch.version.hip is not None:
         return "rocm"
@@ -88,7 +92,11 @@ def _backend() -> str:
         return "cpu"
 
 
-def _build_variant(backend: str | None) -> str:
+def _build_variant(backend: str | None) -> str | None:
+    """
+    Build vaariant for arch kernels, returns `None` when the backend
+    does not (yet) support arch kernels.
+    """
     backend = _select_backend(backend)
 
     import torch
@@ -101,6 +109,8 @@ def _build_variant(backend: str | None) -> str:
         compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
     elif backend == "metal":
         compute_framework = "metal"
+    elif backend == "neuron":
+        return None
     elif backend == "xpu" and torch.version.xpu is not None:
         version = torch.version.xpu
         compute_framework = f"xpu{version[0:4]}{version[5:6]}"
@@ -149,6 +159,8 @@ def _build_variant_noarch(backend: str | None) -> str:
 
     if backend == "cuda":
         return "torch-cuda"
+    elif backend == "neuron":
+        return "torch-neuron"
     elif backend == "rocm":
         return "torch-rocm"
     elif backend == "metal":
@@ -168,11 +180,15 @@ def _build_variant_universal() -> str:
 
 def _build_variants(backend: str | None) -> list[str]:
     """Return compatible build variants in preferred order."""
-    return [
-        _build_variant(backend),
-        _build_variant_noarch(backend),
-        _build_variant_universal(),
-    ]
+    arch_variant = _build_variant(backend)
+    variants = [arch_variant] if arch_variant is not None else []
+    variants.extend(
+        [
+            _build_variant_noarch(backend),
+            _build_variant_universal(),
+        ]
+    )
+    return variants
 
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:

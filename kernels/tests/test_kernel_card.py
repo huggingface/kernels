@@ -1,6 +1,7 @@
 import tempfile
 from pathlib import Path
 from dataclasses import dataclass
+from unittest.mock import patch
 
 import pytest
 
@@ -273,3 +274,23 @@ def test_create_and_upload_card_custom_description(mock_kernel_dir):
         card_content = card_path.read_text()
 
         assert custom_desc in card_content
+
+
+def test_create_and_upload_card_usage_with_repo_id(mock_kernel_dir):
+    """Test that usage code snippet includes the provided repo_id."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        card_path = Path(tmpdir) / "README.md"
+
+        args = CardArgs(
+            kernel_dir=str(mock_kernel_dir),
+            card_path=str(card_path),
+            repo_id="my-org/my-kernel",
+        )
+
+        with patch("huggingface_hub.ModelCard.push_to_hub"):
+            create_and_upload_card(args)
+
+        card_content = card_path.read_text()
+
+        assert "## How to use" in card_content
+        assert 'get_kernel("my-org/my-kernel")' in card_content

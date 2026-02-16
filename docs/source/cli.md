@@ -32,6 +32,12 @@ your kernel builds to the Hub. To know the supported arguments run: `kernels upl
   being uploaded, it will attempt to delete the files existing under it.
 - Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
 
+### kernels create-and-upload-card
+
+Use `kernels create-and-upload-card <kernel_source_dir> --card-path README.md` to generate a basic homepage
+for the kernel. Find an example [here](https://hf.co/kernels-community/kernel-card-template). You can
+optionally push it to the Hub by specifying a `--repo-id`.
+
 ### kernels skills add
 
 Use `kernels skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode. For now, only the `cuda-kernels` skill is supported. Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/skills).

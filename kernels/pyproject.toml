@@ -53,7 +53,7 @@ kernels = "kernels.cli:main"
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
 [tool.setuptools.package-data]
-kernels = ["python_depends.json"]
+kernels = ["python_depends.json", "card_template.md"]
 
 [tool.isort]
 profile = "black"

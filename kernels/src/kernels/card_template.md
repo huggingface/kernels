@@ -25,9 +25,9 @@ should probably proofread and complete it, then remove this comment. -->
 
 [TODO: provide benchmarks if available]
 
-## Code source
+## Source code
 
-[TODO: provide original code source and other relevant citations if available]
+[TODO: provide original source code and other relevant citations if available]
 
 ## Notes
 

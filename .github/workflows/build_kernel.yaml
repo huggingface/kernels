@@ -9,9 +9,16 @@ on:
 
 jobs:
   build:
-    name: Build kernels
+    name: Build kernels (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64-linux
+            runner: aws-highmemory-32-plus-nix
+          - arch: aarch64-linux
+            runner: aws-r8g-8xl-plus-nix
     runs-on:
-      group: aws-highmemory-32-plus-nix
+      group: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
@@ -30,27 +37,27 @@ jobs:
         run: nix-shell -p nix-info --run "nix-info -m"
 
       - name: Build relu kernel
-        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy relu kernel
         run: cp -rL builder/examples/relu/result relu-kernel
 
       - name: Build extra-data kernel
-        run: ( cd builder/examples/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy extra-data kernel
         run: cp -rL builder/examples/extra-data/result extra-data
 
       - name: Build relu kernel (CPU)
-        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cpu-x86_64-linux )
+        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cpu-${{ matrix.arch }} )
       - name: Copy relu kernel (CPU)
         run: cp -rL builder/examples/relu/result relu-kernel-cpu
 
       - name: Build cutlass GEMM kernel
-        run: ( cd builder/examples/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy cutlass GEMM kernel
         run: cp -rL builder/examples/cutlass-gemm/result cutlass-gemm-kernel
 
       - name: Build relu-backprop-compile kernel
-        run: ( cd builder/examples/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy relu-backprop-compile kernel
         run: cp -rL builder/examples/relu-backprop-compile/result relu-backprop-compile-kernel
 
@@ -59,10 +66,10 @@ jobs:
         run: ( cd builder/examples/relu-specific-torch && nix build . )
 
       - name: Build relu kernel (compiler flags)
-        run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-x86_64-linux )
+        run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
 
       - name: Test that we can build a test shell (e.g. that gcc corresponds to CUDA-required)
-        run: ( cd builder/examples/relu && nix build .#devShells.x86_64-linux.test )
+        run: ( cd builder/examples/relu && nix build .#devShells.${{ matrix.arch }}.test )
 
       - name: Build silu-and-mul kernel
         run: ( cd builder/examples/silu-and-mul && nix build .\#redistributable.torch-cuda )
@@ -72,7 +79,7 @@ jobs:
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: built-kernels
+          name: built-kernels-${{ matrix.arch }}
           path: |
             activation-kernel
             cutlass-gemm-kernel
@@ -93,7 +100,7 @@ jobs:
       - name: Download kernel artifacts
         uses: actions/download-artifact@v7
         with:
-          name: built-kernels
+          name: built-kernels-x86_64-linux
           path: .
 
       - name: Set up Docker Buildx

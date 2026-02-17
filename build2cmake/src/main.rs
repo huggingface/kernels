@@ -7,6 +7,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use eyre::{bail, ensure, Context, Result};
 use minijinja::Environment;
+use regex::Regex;
 
 mod torch;
 use torch::{write_torch_ext, write_torch_ext_noarch};
@@ -206,7 +207,27 @@ fn parse_and_validate(build_toml: impl AsRef<Path>) -> Result<BuildCompat> {
     let build_compat: BuildCompat = toml::from_str(&toml_data)
         .wrap_err_with(|| format!("Cannot parse TOML in {}", build_toml.to_string_lossy()))?;
 
+    validate_name(build_compat.name())?;
+
     Ok(build_compat)
+}
+
+fn validate_name(name: &str) -> Result<()> {
+    // Pattern requires at least 2 characters: start letter + end letter/digit
+    let pattern = Regex::new(r"^[a-z][-a-z0-9]*[a-z0-9]$").expect("Invalid regex pattern");
+
+    if !pattern.is_match(name) {
+        bail!(
+            "Invalid kernel name `{name}`. Name must:\n\
+             - Start with a lowercase letter (a-z)\n\
+             - Contain only lowercase letters, digits, and dashes\n\
+             - End with a lowercase letter or digit\n\
+             - Be at least 2 characters long\n\
+             Examples: `my-kernel`, `relu2d`, `flash-attention`"
+        );
+    }
+
+    Ok(())
 }
 
 fn clean(
@@ -349,4 +370,35 @@ fn is_empty_dir(dir: &Path) -> Result<bool> {
 
     let mut entries = fs::read_dir(dir)?;
     Ok(entries.next().is_none())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_name() {
+        // Valid names
+        assert!(validate_name("my-kernel").is_ok());
+        assert!(validate_name("relu2d").is_ok());
+        assert!(validate_name("flash-attention").is_ok());
+        assert!(validate_name("a1").is_ok());
+        assert!(validate_name("ab").is_ok());
+        assert!(validate_name("my--kernel").is_ok());
+
+        // Invalid: contains underscore
+        assert!(validate_name("my_kernel").is_err());
+        // Invalid: uppercase letters
+        assert!(validate_name("MyKernel").is_err());
+        // Invalid: single character
+        assert!(validate_name("a").is_err());
+        // Invalid: ends with dash
+        assert!(validate_name("my-kernel-").is_err());
+        // Invalid: starts with dash
+        assert!(validate_name("-my-kernel").is_err());
+        // Invalid: starts with digit
+        assert!(validate_name("1kernel").is_err());
+        // Invalid: empty string
+        assert!(validate_name("").is_err());
+    }
 }

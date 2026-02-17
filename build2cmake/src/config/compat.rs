@@ -26,6 +26,17 @@ impl<'de> Deserialize<'de> for BuildCompat {
     }
 }
 
+impl BuildCompat {
+    /// Get the kernel name from any build version.
+    pub fn name(&self) -> &str {
+        match self {
+            BuildCompat::V1(build) => &build.general.name,
+            BuildCompat::V2(build) => &build.general.name,
+            BuildCompat::V3(build) => &build.general.name,
+        }
+    }
+}
+
 impl TryFrom<BuildCompat> for Build {
     type Error = eyre::Error;
 

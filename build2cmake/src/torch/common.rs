@@ -43,7 +43,7 @@ pub fn write_setup_py(
             context! {
                 data_globs => data_globs,
                 revision => revision,
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 version => "0.1.0",
             },
             writer,
@@ -89,7 +89,7 @@ pub fn write_pyproject_toml(
         .wrap_err("Cannot get pyproject.toml template")?
         .render_to_write(
             context! {
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 python_dependencies => python_dependencies,
                 backend_dependencies => backend_dependencies,
             },
@@ -211,7 +211,7 @@ pub fn render_extension(
         .wrap_err("Cannot get Torch extension template")?
         .render_to_write(
             context! {
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 data_extensions => torch.data_extensions(),
             },
             &mut *write,
@@ -238,8 +238,8 @@ pub fn render_preamble(
         .wrap_err("Cannot get CMake prelude template")?
         .render_to_write(
             context! {
-                name => &general.name,
-                python_name => general.python_name(),
+                name => general.name.as_str(),
+                python_name => general.name.python_name(),
                 revision => revision,
                 cuda_minver => cuda_minver.map(|v| v.to_string()),
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
@@ -301,7 +301,7 @@ pub fn write_torch_ext(
         build,
         &target_dir,
         torch_ext,
-        &build.general.name,
+        build.general.name.as_str(),
         &mut file_set,
     )?;
 

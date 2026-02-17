@@ -244,7 +244,7 @@ stdenv.mkDerivation (prevAttrs: {
       buildVariant = torch.variant;
     in
     ''
-      rm -rf $out/_${moduleName}_${rev}
+      rm -rf $out/_${moduleName}_*_${rev}
     ''
     + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
       find $out/ -name '*.so' \

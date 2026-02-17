@@ -13,6 +13,8 @@ use crate::{
     },
 };
 
+static SETUP_PY: &str = include_str!("../templates/noarch/setup.py");
+
 pub fn write_torch_ext_noarch(
     env: &Environment,
     build: &Build,
@@ -26,6 +28,7 @@ pub fn write_torch_ext_noarch(
     write_compat_py(&mut file_set)?;
     write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
     write_pyproject_toml(env, build.torch.as_ref(), &build.general, &mut file_set)?;
+    write_setup_py(&mut file_set)?;
     write_metadata(&build.general, &mut file_set)?;
 
     Ok(file_set)
@@ -101,5 +104,12 @@ fn write_pyproject_toml(
         )
         .wrap_err("Cannot render kernel template")?;
 
+    Ok(())
+}
+
+fn write_setup_py(file_set: &mut FileSet) -> Result<()> {
+    file_set
+        .entry("setup.py")
+        .extend_from_slice(SETUP_PY.as_bytes());
     Ok(())
 }

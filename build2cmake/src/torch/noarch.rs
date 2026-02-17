@@ -21,10 +21,10 @@ pub fn write_torch_ext_noarch(
 ) -> Result<FileSet> {
     let mut file_set = FileSet::default();
 
-    let ops_name = kernel_ops_identifier(&target_dir, &build.general.python_name(), ops_id);
+    let ops_name = kernel_ops_identifier(&target_dir, &build.general.name.python_name(), ops_id);
 
     write_compat_py(&mut file_set)?;
-    write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
+    write_ops_py(env, &build.general.name.python_name(), &ops_name, &mut file_set)?;
     write_pyproject_toml(env, build.torch.as_ref(), &build.general, &mut file_set)?;
     write_metadata(&build.general, &mut file_set)?;
 

@@ -93,6 +93,28 @@ def main():
         help="If set, the upload will be made to a particular branch of the provided `repo-id`.",
     )
     upload_parser.add_argument(
+        "--create-card",
+        action="store_true",
+        help="If set, a templated system card will be generated from the kernel.",
+    )
+    upload_parser.add_argument(
+        "--card-path",
+        type=str,
+        default=None,
+        help="Path to save the generated card to (only used with --create-card).",
+    )
+    upload_parser.add_argument(
+        "--description",
+        type=str,
+        default=None,
+        help="Description to introduce the kernel (only used with --create-card).",
+    )
+    upload_parser.add_argument(
+        "--create-pr",
+        action="store_true",
+        help="If set, it will create a PR on the repo-id (only used with --create-card).",
+    )
+    upload_parser.add_argument(
         "--private",
         action="store_true",
         help="If the repository should be private.",
@@ -344,6 +366,10 @@ def upload_kernels(args):
         branch=args.branch,
         private=args.private,
     )
+    if args.create_card:
+        if args.card_path is None:
+            args.card_path = str(Path(args.kernel_dir).resolve() / "README.md")
+        create_and_upload_card(args)
 
 
 def create_and_upload_card(args):

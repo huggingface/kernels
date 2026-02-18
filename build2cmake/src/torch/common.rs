@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
@@ -227,12 +227,11 @@ pub fn render_preamble(
     env: &Environment,
     general: &General,
     torch: &Torch,
-    target_dir: impl AsRef<Path>,
+    revision: &str,
     write: &mut impl Write,
 ) -> Result<()> {
     let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
     let cuda_maxver = general.cuda.as_ref().and_then(|c| c.maxver.as_ref());
-    let revision = git_identifier(&target_dir).unwrap_or_else(|_| random_identifier());
 
     env.get_template("preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
@@ -258,16 +257,16 @@ pub fn render_preamble(
 pub fn write_cmake(
     env: &Environment,
     build: &Build,
-    target_dir: impl AsRef<Path>,
     torch: &Torch,
     name: &str,
+    revision: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
     write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    render_preamble(env, &build.general, torch, &target_dir, cmake_writer)?;
+    render_preamble(env, &build.general, torch, revision, cmake_writer)?;
 
     render_deps(env, build, cmake_writer)?;
 
@@ -299,9 +298,9 @@ pub fn write_torch_ext(
     write_cmake(
         env,
         build,
-        &target_dir,
         torch_ext,
         build.general.name.as_str(),
+        &revision,
         &mut file_set,
     )?;
 

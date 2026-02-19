@@ -16,26 +16,27 @@ def e2e_init(backends: list[str]) -> None:
         backends=backends,
         overwrite=False,
     )
-    expected_normalized_name = "test_kernel"
+    expected_dir_name = "test-kernel"  # directory uses original name (hyphenated)
+    expected_python_name = "test_kernel"  # backend dirs use python name (underscored)
     expected_backend_dirs = {
-        Path(f"{expected_normalized_name}_{backend}") for backend in args.backends
+        Path(f"{expected_python_name}_{backend}") for backend in args.backends
     }
 
     # Replacement logic
     # special case for "rocm" backend since it uses "cuda" source
     if "rocm" in args.backends:
-        expected_backend_dirs.remove(Path(f"{expected_normalized_name}_rocm"))
-        expected_backend_dirs.add(Path(f"{expected_normalized_name}_cuda"))
+        expected_backend_dirs.remove(Path(f"{expected_python_name}_rocm"))
+        expected_backend_dirs.add(Path(f"{expected_python_name}_cuda"))
     if "all" in args.backends:
         expected_backend_dirs = {
-            Path(f"{expected_normalized_name}_{backend}") for backend in KNOWN_BACKENDS
+            Path(f"{expected_python_name}_{backend}") for backend in KNOWN_BACKENDS
         }
         # special case for "rocm" backend since it uses "cuda" source
-        expected_backend_dirs.remove(Path(f"{expected_normalized_name}_rocm"))
-        expected_backend_dirs.add(Path(f"{expected_normalized_name}_cuda"))
+        expected_backend_dirs.remove(Path(f"{expected_python_name}_rocm"))
+        expected_backend_dirs.add(Path(f"{expected_python_name}_cuda"))
 
     # TODO: npu is not yet supported in the template
-    expected_backend_dirs.discard(Path(f"{expected_normalized_name}_npu"))
+    expected_backend_dirs.discard(Path(f"{expected_python_name}_npu"))
 
     with tempfile.TemporaryDirectory() as tmpdir:
         cwd = Path.cwd()
@@ -43,8 +44,8 @@ def e2e_init(backends: list[str]) -> None:
         try:
             run_init(args)
 
-            # make sure normalized dir was created
-            target_dir = Path(tmpdir) / expected_normalized_name
+            # make sure target dir was created
+            target_dir = Path(tmpdir) / expected_dir_name
             if not target_dir.exists():
                 raise AssertionError(f"Target directory was not created: {target_dir}")
 

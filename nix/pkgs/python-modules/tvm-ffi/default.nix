@@ -5,6 +5,7 @@
   cmake,
   cython,
   ninja,
+  python,
   scikit-build-core,
   setuptools-scm,
 }:
@@ -31,4 +32,8 @@ buildPythonPackage rec {
   ];
 
   dontUseCmakeConfigure = true;
+
+  postInstall = ''
+    ln -s $out/${python.sitePackages}/tvm_ffi/share $out/share
+  '';
 }

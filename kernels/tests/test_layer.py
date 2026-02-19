@@ -94,6 +94,23 @@ class RMSNormWithKernel(RMSNorm):
     pass
 
 
+class ReLU(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # Used to check that we called hub kernel.
+        self.n_calls = 0
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        self.n_calls += 1
+        d = input.shape[-1] // 2
+        return F.relu(input)
+
+
+@use_kernel_forward_from_hub("ReLU")
+class ReLUWithKernel(ReLU):
+    pass
+
+
 class SiluAndMul(nn.Module):
     def __init__(self):
         super().__init__()
@@ -196,6 +213,55 @@ def test_hub_func(cls):
 
     assert silu_and_mul.n_calls == 1
     assert silu_and_mul_with_kernel.n_calls == 0
+
+
+@pytest.mark.neuron_only
+def test_hub_forward_neuron():
+    torch.manual_seed(0)
+
+    mapping = {
+        "ReLU": {
+            "neuron": LayerRepository(
+                repo_id="kernels-test/relu-nki", version=1, layer_name="ReLU"
+            )
+        }
+    }
+
+    relu = ReLU()
+    X = torch.randn((16, 16), device="neuron")
+    Y = relu(X)
+
+    with use_kernel_mapping(mapping):
+        relu_with_kernel = kernelize(
+            ReLUWithKernel(), device="neuron", mode=Mode.INFERENCE
+        )
+    Y_kernel = relu_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert relu.n_calls == 1
+    assert relu_with_kernel.n_calls == 0
+
+    # Check that the device type can be determined automatically.
+    class SMOL(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(16, 16)
+            self.relu = ReLUWithKernel()
+
+        def forward(self, x):
+            return self.relu(self.linear(x))
+
+    smol = SMOL().to("neuron")
+
+    Y = smol(X)
+
+    with use_kernel_mapping(mapping):
+        smol = kernelize(smol, mode=Mode.INFERENCE)
+    Y_kernel = smol(X)
+
+    torch.testing.assert_close(Y, Y_kernel)
+    assert smol.relu.n_calls == 1
 
 
 @pytest.mark.rocm_only

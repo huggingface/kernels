@@ -34,7 +34,8 @@ def e2e_init(backends: list[str]) -> None:
         expected_backend_dirs.remove(Path(f"{expected_normalized_name}_rocm"))
         expected_backend_dirs.add(Path(f"{expected_normalized_name}_cuda"))
 
-    # TODO: npu is not yet supported in the template
+    # TODO: neuron/npu are not yet supported in the template
+    expected_backend_dirs.discard(Path(f"{expected_normalized_name}_neuron"))
     expected_backend_dirs.discard(Path(f"{expected_normalized_name}_npu"))
 
     with tempfile.TemporaryDirectory() as tmpdir:

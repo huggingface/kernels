@@ -10,6 +10,9 @@ has_cuda = (
     and torch.version.cuda is not None
     and torch.cuda.device_count() > 0
 )
+
+has_neuron = hasattr(torch, "neuron") and torch.neuron.device_count() > 0
+
 has_rocm = (
     hasattr(torch.version, "hip")
     and torch.version.hip is not None
@@ -46,6 +49,8 @@ def device():
 def pytest_runtest_setup(item):
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")
+    if "neuron_only" in item.keywords and not has_neuron:
+        pytest.skip("skipping Neuron-only test on host without Neuron")
     if "rocm_only" in item.keywords and not has_rocm:
         pytest.skip("skipping ROCm-only test on host without ROCm")
     if "darwin_only" in item.keywords and not sys.platform.startswith("darwin"):

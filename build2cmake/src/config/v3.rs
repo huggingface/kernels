@@ -31,6 +31,8 @@ pub struct General {
 
     pub hub: Option<Hub>,
 
+    pub neuron: Option<NeuronGeneral>,
+
     pub python_depends: Option<Vec<String>>,
 
     pub xpu: Option<XpuGeneral>,
@@ -41,6 +43,12 @@ pub struct General {
 pub struct CudaGeneral {
     pub minver: Option<Version>,
     pub maxver: Option<Version>,
+    pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct NeuronGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -121,6 +129,7 @@ pub enum Backend {
     Cpu,
     Cuda,
     Metal,
+    Neuron,
     Rocm,
     Xpu,
 }
@@ -150,6 +159,7 @@ impl From<General> for super::General {
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
+            neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
             xpu: general.xpu.map(Into::into),
         }
@@ -162,6 +172,14 @@ impl From<CudaGeneral> for super::CudaGeneral {
             minver: cuda.minver,
             maxver: cuda.maxver,
             python_depends: cuda.python_depends,
+        }
+    }
+}
+
+impl From<NeuronGeneral> for super::NeuronGeneral {
+    fn from(neuron: NeuronGeneral) -> Self {
+        Self {
+            python_depends: neuron.python_depends,
         }
     }
 }
@@ -201,6 +219,7 @@ impl From<Backend> for super::Backend {
             Backend::Cpu => super::Backend::Cpu,
             Backend::Cuda => super::Backend::Cuda,
             Backend::Metal => super::Backend::Metal,
+            Backend::Neuron => super::Backend::Neuron,
             Backend::Rocm => super::Backend::Rocm,
             Backend::Xpu => super::Backend::Xpu,
         }
@@ -304,6 +323,7 @@ impl From<super::General> for General {
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
+            neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
             xpu: general.xpu.map(Into::into),
         }
@@ -316,6 +336,14 @@ impl From<super::CudaGeneral> for CudaGeneral {
             minver: cuda.minver,
             maxver: cuda.maxver,
             python_depends: cuda.python_depends,
+        }
+    }
+}
+
+impl From<super::NeuronGeneral> for NeuronGeneral {
+    fn from(neuron: super::NeuronGeneral) -> Self {
+        Self {
+            python_depends: neuron.python_depends,
         }
     }
 }
@@ -355,6 +383,7 @@ impl From<super::Backend> for Backend {
             super::Backend::Cpu => Backend::Cpu,
             super::Backend::Cuda => Backend::Cuda,
             super::Backend::Metal => Backend::Metal,
+            super::Backend::Neuron => Backend::Neuron,
             super::Backend::Rocm => Backend::Rocm,
             super::Backend::Xpu => Backend::Xpu,
         }

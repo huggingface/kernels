@@ -1,0 +1,9 @@
+[general]
+name = "relu-nki"
+version = 1
+backends = [
+    "neuron",
+]
+
+[general.neuron]
+python-depends = ["nki"]

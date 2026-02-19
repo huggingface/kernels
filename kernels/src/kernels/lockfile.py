@@ -4,6 +4,7 @@ from pathlib import Path
 
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
+from kernels.redirect import resolve_redirect
 
 
 @dataclass
@@ -35,9 +36,14 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
     """
     from kernels.utils import _get_hf_api
 
+    api = _get_hf_api()
+
+    # Check for redirects before resolving version
+    repo_id, _ = resolve_redirect(api, repo_id, "main")
+
     tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 
-    r = _get_hf_api().repo_info(
+    r = api.repo_info(
         repo_id=repo_id, revision=tag_for_newest.target_commit, files_metadata=True
     )
     if r.sha is None:

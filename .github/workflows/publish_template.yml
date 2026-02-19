@@ -30,4 +30,4 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_DOC_BUILD_PUSH }}
         run: |
-          huggingface-cli upload kernels-community/template template --repo-type space --delete "*"
+          hf upload kernels-community/template template --repo-type model --delete "*"

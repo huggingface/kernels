@@ -320,7 +320,7 @@ rec {
               if [ -d ${extension.src}/tests ]; then
                 unset LD_LIBRARY_PATH
                 export PYTHONPATH=${extension}/${extension.variant}
-                ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci
+                ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci -p no:cacheprovider
               fi
             '';
         };

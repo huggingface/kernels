@@ -1,6 +1,7 @@
 name: Publish Template to kernels-community/template
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main

@@ -296,9 +296,6 @@ def _find_device(model: "nn.Module") -> Device:
             return Device(type="rocm")
         elif _is_cuda_platform():
             return Device(type="cuda")
-    elif dev_type == "xla":
-        if _has_neuron_ops():
-            return Device(type="neuron")
 
     return Device(type=dev_type)
 
@@ -318,4 +315,4 @@ def _is_rocm_platform():
 def _has_neuron_ops():
     import torch
 
-    return hasattr(torch.ops.neuron, "forward_v2")
+    return hasattr(torch, "neuron")

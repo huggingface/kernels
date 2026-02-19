@@ -228,7 +228,7 @@ def test_hub_forward_neuron():
     }
 
     relu = ReLU()
-    X = torch.randn((16, 16), device="xla")
+    X = torch.randn((16, 16), device="neuron")
     Y = relu(X)
 
     with use_kernel_mapping(mapping):
@@ -252,7 +252,7 @@ def test_hub_forward_neuron():
         def forward(self, x):
             return self.relu(self.linear(x))
 
-    smol = SMOL().to("xla")
+    smol = SMOL().to("neuron")
 
     Y = smol(X)
 

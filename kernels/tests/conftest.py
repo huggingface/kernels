@@ -5,19 +5,13 @@ import torch
 
 from kernels.utils import _get_privateuse_backend_name
 
-try:
-    # Ensure torch.ops.neuron exists when the system supports it.
-    import torch_neuronx
-except:
-    pass
-
 has_cuda = (
     hasattr(torch.version, "cuda")
     and torch.version.cuda is not None
     and torch.cuda.device_count() > 0
 )
 
-has_neuron = hasattr(torch.ops.neuron, "forward_v2")
+has_neuron = hasattr(torch, "neuron") and torch.neuron.device_count() > 0
 
 has_rocm = (
     hasattr(torch.version, "hip")

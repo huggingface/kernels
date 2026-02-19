@@ -74,9 +74,9 @@ def _get_privateuse_backend_name() -> str | None:
 def _backend() -> str:
     import torch
 
-    if hasattr(torch.ops.neuron, "forward_v2"):
-        # Needs to be sorted specific Torch builds, since Neuron extension
-        # can be loaded into e.g. CUDA Torch builds.
+    if hasattr(torch, "neuron"):
+        # Needs to be sorted before specific Torch builds, since Neuron
+        # extension can be loaded into e.g. CUDA Torch builds.
         return "neuron"
     elif torch.version.cuda is not None:
         return "cuda"

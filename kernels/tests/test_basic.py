@@ -264,11 +264,8 @@ def test_local_overrides(monkeypatch, local_kernel_path):
 
 @pytest.mark.neuron_only
 def test_neuron():
-    from torch_xla.core import xla_model as xm
-
     relu = get_kernel("kernels-test/relu-nki", version=1)
-    device = xm.xla_device()
-    x = torch.randn((16, 16), dtype=torch.float16).to(device=device)
+    x = torch.randn((16, 16), dtype=torch.float16).to(device="neuron")
     torch.testing.assert_close(relu.relu(x), x.relu())
 
 

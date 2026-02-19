@@ -29,6 +29,6 @@ jobs:
 
       - name: Upload template to Hugging Face Hub
         env:
-          HF_TOKEN: ${{ secrets.HF_DOC_BUILD_PUSH }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           hf upload kernels-community/template template --repo-type model --delete "*"

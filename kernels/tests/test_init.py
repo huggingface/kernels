@@ -9,7 +9,7 @@ from kernels.utils import KNOWN_BACKENDS
 
 def e2e_init(backends: list[str]) -> None:
     kernel_name = "testuser/test-kernel"
-    template_repo = "drbh/template"
+    template_repo = "kernels-community/template"
     args = argparse.Namespace(
         kernel_name=parse_kernel_name(kernel_name),
         template_repo=template_repo,

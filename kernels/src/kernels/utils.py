@@ -21,6 +21,7 @@ from kernels._versions import select_revision_or_version
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
+from kernels.redirect import resolve_redirect
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
 
@@ -207,6 +208,7 @@ def install_kernel(
     backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
     user_agent: str | dict | None = None,
+    follow_redirects: bool = True,
 ) -> tuple[str, Path]:
     """
     Download a kernel for the current environment to the cache.
@@ -227,13 +229,20 @@ def install_kernel(
             Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        follow_redirects (`bool`, *optional*, defaults to `True`):
+            Whether to follow REDIRECT files to the new repository location.
 
     Returns:
         `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
+    api = _get_hf_api(user_agent=user_agent)
+
+    # Check for redirects
+    if follow_redirects and not local_files_only:
+        repo_id, revision = resolve_redirect(api, repo_id, revision)
+
     package_name = package_name_from_repo_id(repo_id)
     allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
-    api = _get_hf_api(user_agent=user_agent)
     repo_path = Path(
         str(
             api.snapshot_download(
@@ -443,10 +452,9 @@ def has_kernel(
         `bool`: `True` if a kernel is available for the current environment.
     """
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-
+    api = _get_hf_api()
     package_name = package_name_from_repo_id(repo_id)
 
-    api = _get_hf_api()
     for variant in _build_variants(backend):
         for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
             if api.file_exists(

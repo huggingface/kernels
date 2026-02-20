@@ -320,6 +320,7 @@ rec {
               if [ -d ${extension.src}/tests ]; then
                 unset LD_LIBRARY_PATH
                 export PYTHONPATH=${extension}/${extension.variant}
+                # Accept exit code 5: no tests are selected
                 ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci -p no:cacheprovider || test $? -eq 5
               fi
             '';

@@ -320,3 +320,14 @@ $ nix run .#ciTests.torch210-cxx11-cpu-x86_64-linux
 
 When running the tests on a non-NixOS systems, make sure that
 [the CUDA driver library can be found](https://danieldk.eu/Software/Nix/Nix-CUDA-on-non-NixOS-systems#solutions).
+
+## Kernel docs
+
+We provide a utility to generate a system card for a given kernel, utilizing
+information from the `build.toml` and metadata. This system card provides a
+reasonable starting point and is meant to be edited afterward by the kernel
+developer.
+
+To generate the card, use the `kernels create-and-upload-card ...` command.
+Alternatively, specify `--create_card` while uploading the kernel builds
+through `kernels upload`. Refer to the [documentation](../cli.md) to know more.

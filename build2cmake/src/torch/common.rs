@@ -5,7 +5,7 @@ use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, Build, General, Torch};
+use crate::config::{Backend, Build, Dependency, General, Torch};
 use crate::metadata::Metadata;
 use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
@@ -201,18 +201,39 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
 }
 
+fn has_cutlass_dep(deps: &[Dependency]) -> bool {
+    deps.iter().any(|d| {
+        matches!(
+            d,
+            Dependency::Cutlass2_10
+                | Dependency::Cutlass3_5
+                | Dependency::Cutlass3_6
+                | Dependency::Cutlass3_8
+                | Dependency::Cutlass3_9
+                | Dependency::Cutlass4_0
+        )
+    })
+}
+
 pub fn render_extension(
     env: &Environment,
     general: &General,
     torch: &Torch,
     write: &mut impl Write,
 ) -> Result<()> {
+    let bundle_cutlass = torch
+        .bundle_dep_includes
+        .as_ref()
+        .map(|deps| has_cutlass_dep(deps))
+        .unwrap_or(false);
+
     env.get_template("torch-extension.cmake")
         .wrap_err("Cannot get Torch extension template")?
         .render_to_write(
             context! {
                 python_name => general.name.python_name(),
                 data_extensions => torch.data_extensions(),
+                bundle_cutlass => bundle_cutlass,
             },
             &mut *write,
         )

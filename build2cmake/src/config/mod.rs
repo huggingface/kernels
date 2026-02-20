@@ -20,6 +20,7 @@ use crate::version::Version;
 pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
+    pub tvm_ffi: Option<TvmFfi>,
     pub torch: Option<Torch>,
 }
 
@@ -121,25 +122,35 @@ pub struct Torch {
     pub src: Vec<PathBuf>,
 }
 
+fn data_extensions(py_ext: Option<&[String]>) -> Option<Vec<String>> {
+    match py_ext {
+        Some(exts) => {
+            let extensions = exts
+                .iter()
+                .filter(|&ext| ext != "py" && ext != "pyi")
+                .cloned()
+                .collect_vec();
+            if extensions.is_empty() {
+                None
+            } else {
+                Some(extensions)
+            }
+        }
+
+        None => None,
+    }
+}
+
 impl Torch {
     pub fn data_extensions(&self) -> Option<Vec<String>> {
-        match self.pyext.as_ref() {
-            Some(exts) => {
-                let extensions = exts
-                    .iter()
-                    .filter(|&ext| ext != "py" && ext != "pyi")
-                    .cloned()
-                    .collect_vec();
-                if extensions.is_empty() {
-                    None
-                } else {
-                    Some(extensions)
-                }
-            }
-
-            None => None,
-        }
+        data_extensions(self.pyext.as_deref())
     }
+}
+
+pub struct TvmFfi {
+    pub include: Option<Vec<String>>,
+    pub pyext: Option<Vec<String>>,
+    pub src: Vec<PathBuf>,
 }
 
 pub enum Kernel {

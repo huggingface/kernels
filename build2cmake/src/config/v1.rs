@@ -106,6 +106,7 @@ impl TryFrom<Build> for super::Build {
                 cuda: None,
                 xpu: None,
             },
+            tvm_ffi: None,
             torch: build.torch.map(Into::into),
             kernels,
         })

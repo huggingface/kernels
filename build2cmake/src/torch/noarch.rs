@@ -7,10 +7,8 @@ use minijinja::{context, Environment};
 use crate::{
     config::{Backend, Build, General, Torch},
     fileset::FileSet,
-    torch::{
-        common::{write_compat_py, write_metadata},
-        kernel_ops_identifier,
-    },
+    ops_identifier::kernel_ops_identifier,
+    torch::common::{write_compat_py, write_metadata},
 };
 
 pub fn write_torch_ext_noarch(

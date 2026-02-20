@@ -7,10 +7,13 @@ use super::Dependency;
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Build {
     pub general: General,
+
     pub torch: Option<Torch>,
+
+    pub tvm_ffi: Option<TvmFfi>,
 
     #[serde(rename = "kernel", default)]
     pub kernels: HashMap<String, Kernel>,
@@ -66,6 +69,14 @@ pub struct Torch {
     pub pyext: Option<Vec<String>>,
 
     #[serde(default)]
+    pub src: Vec<PathBuf>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TvmFfi {
+    pub include: Option<Vec<String>>,
+    pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
 }
 
@@ -136,6 +147,7 @@ impl From<Build> for super::Build {
         Self {
             general: build.general.into(),
             torch: build.torch.map(Into::into),
+            tvm_ffi: build.tvm_ffi.map(Into::into),
             kernels,
         }
     }
@@ -191,6 +203,16 @@ impl From<Torch> for super::Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+        }
+    }
+}
+
+impl From<TvmFfi> for super::TvmFfi {
+    fn from(tvm_ffi: TvmFfi) -> Self {
+        Self {
+            include: tvm_ffi.include,
+            pyext: tvm_ffi.pyext,
+            src: tvm_ffi.src,
         }
     }
 }
@@ -286,6 +308,7 @@ impl From<super::Build> for Build {
         Self {
             general: build.general.into(),
             torch: build.torch.map(Into::into),
+            tvm_ffi: build.tvm_ffi.map(Into::into),
             kernels: build
                 .kernels
                 .into_iter()
@@ -345,6 +368,16 @@ impl From<super::Torch> for Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+        }
+    }
+}
+
+impl From<super::TvmFfi> for TvmFfi {
+    fn from(tvm_ffi: super::TvmFfi) -> Self {
+        Self {
+            include: tvm_ffi.include,
+            pyext: tvm_ffi.pyext,
+            src: tvm_ffi.src,
         }
     }
 }

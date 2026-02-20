@@ -7,9 +7,9 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, General, Torch};
 use crate::metadata::Metadata;
+use crate::ops_identifier::{git_identifier, random_identifier};
 use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
-use crate::torch::ops_identifier::{git_identifier, random_identifier};
 use crate::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/build-variants.cmake");

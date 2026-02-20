@@ -11,6 +11,11 @@ use minijinja::Environment;
 mod torch;
 use torch::{write_torch_ext, write_torch_ext_noarch};
 
+mod ops_identifier;
+
+mod tvm_ffi;
+use tvm_ffi::write_tvm_ffi_ext;
+
 mod config;
 use config::{v3, Build, BuildCompat};
 
@@ -32,6 +37,26 @@ struct Cli {
 enum Commands {
     /// Generate CMake files for Torch extension builds.
     GenerateTorch {
+        #[arg(name = "BUILD_TOML")]
+        build_toml: PathBuf,
+
+        /// The directory to write the generated files to
+        /// (directory of `BUILD_TOML` when absent).
+        #[arg(name = "TARGET_DIR")]
+        target_dir: Option<PathBuf>,
+
+        /// Force-overwrite existing files.
+        #[arg(short, long)]
+        force: bool,
+
+        /// This is an optional unique identifier that is suffixed to the
+        /// kernel name to avoid name collisions. (e.g. Git SHA)
+        #[arg(long)]
+        ops_id: Option<String>,
+    },
+
+    /// Generate CMake files for tvm-ffi extension builds.
+    GenerateTvmFfi {
         #[arg(name = "BUILD_TOML")]
         build_toml: PathBuf,
 
@@ -95,6 +120,12 @@ fn main() -> Result<()> {
             target_dir,
             ops_id,
         } => generate_torch(build_toml, target_dir, force, ops_id),
+        Commands::GenerateTvmFfi {
+            build_toml,
+            force,
+            target_dir,
+            ops_id,
+        } => generate_tvm_ffi(build_toml, target_dir, force, ops_id),
         Commands::UpdateBuild { build_toml } => update_build(build_toml),
         Commands::Validate { build_toml } => {
             parse_and_validate(build_toml)?;
@@ -140,6 +171,36 @@ fn generate_torch(
         write_torch_ext(&env, &build, target_dir.clone(), ops_id)?
     };
     file_set.write(&target_dir, force)?;
+
+    Ok(())
+}
+
+fn generate_tvm_ffi(
+    build_toml: PathBuf,
+    target_dir: Option<PathBuf>,
+    force: bool,
+    ops_id: Option<String>,
+) -> Result<()> {
+    let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
+
+    let build_compat = parse_and_validate(build_toml)?;
+
+    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
+        eprintln!(
+            "build.toml is in the deprecated V1 or V2 format, use `build2cmake update-build` to update."
+        )
+    }
+
+    let build: Build = build_compat
+        .try_into()
+        .context("Cannot update build configuration")?;
+
+    let mut env = Environment::new();
+    env.set_trim_blocks(true);
+    minijinja_embed::load_templates!(&mut env);
+
+    let fileset = write_tvm_ffi_ext(&env, &build, target_dir.clone(), ops_id)?;
+    fileset.write(&target_dir, force)?;
 
     Ok(())
 }

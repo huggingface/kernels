@@ -144,6 +144,7 @@ impl TryFrom<Build> for super::Build {
         Ok(Self {
             general: General::from_v2(build.general, backends),
             torch: build.torch.map(Into::into),
+            tvm_ffi: None,
             kernels,
         })
     }

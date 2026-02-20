@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, Build, General, TvmFfi};
+use crate::config::{Build, General, TvmFfi};
 use crate::ops_identifier::{git_identifier, random_identifier};
-use crate::torch::common::write_cmake_file;
+use crate::torch::common::{prefix_and_join_includes, write_cmake_file};
 use crate::torch::kernel::render_kernel_components;
 use crate::FileSet;
 
@@ -43,10 +43,32 @@ pub fn write_tvm_ffi_ext(
     Ok(file_set)
 }
 
+pub fn render_binding(
+    env: &Environment,
+    tvm_ffi: &TvmFfi,
+    name: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("tvm_ffi/binding.cmake")
+        .wrap_err("Cannot get tvm_ffi binding template")?
+        .render_to_write(
+            context! {
+                includes => tvm_ffi.include.as_ref().map(prefix_and_join_includes),
+                name => name,
+                src => tvm_ffi.src,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render tvm_ffi binding template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
+}
+
 pub fn render_extension(
     env: &Environment,
     general: &General,
-    tvm_ffi: &TvmFfi,
     write: &mut impl Write,
 ) -> Result<()> {
     env.get_template("tvm_ffi/tvm-ffi-extension.cmake")
@@ -103,9 +125,11 @@ pub fn write_cmake(
 
     render_preamble(env, &build.general, &target_dir, cmake_writer)?;
 
+    render_binding(env, tvm_ffi, name, cmake_writer)?;
+
     render_kernel_components(env, build, cmake_writer)?;
 
-    render_extension(env, &build.general, tvm_ffi, cmake_writer)?;
+    render_extension(env, &build.general, cmake_writer)?;
 
     Ok(())
 }

@@ -117,6 +117,7 @@ pub struct Torch {
     pub maxver: Option<Version>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
+    pub bundle_dep_includes: Option<Vec<Dependency>>,
 }
 
 impl Torch {

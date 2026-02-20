@@ -67,6 +67,9 @@ pub struct Torch {
 
     #[serde(default)]
     pub src: Vec<PathBuf>,
+
+    #[serde(default, rename = "bundle-dep-includes")]
+    pub bundle_dep_includes: Option<Vec<super::Dependency>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -191,6 +194,7 @@ impl From<Torch> for super::Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+            bundle_dep_includes: torch.bundle_dep_includes,
         }
     }
 }
@@ -345,6 +349,7 @@ impl From<super::Torch> for Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+            bundle_dep_includes: torch.bundle_dep_includes,
         }
     }
 }

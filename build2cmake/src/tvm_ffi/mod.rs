@@ -2,9 +2,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use eyre::{bail, Context, Result};
+use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::config::{Build, General, TvmFfi};
+use crate::config::{Backend, Build, General, TvmFfi};
 use crate::ops_identifier::{git_identifier, random_identifier};
 use crate::torch::common::{prefix_and_join_includes, write_cmake_file};
 use crate::torch::kernel::render_kernel_components;
@@ -12,10 +13,12 @@ use crate::FileSet;
 
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 
 fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
+    write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
 }
 
 pub fn write_tvm_ffi_ext(
@@ -31,6 +34,9 @@ pub fn write_tvm_ffi_ext(
 
     let mut file_set = FileSet::default();
 
+    let revision = ops_id
+        .unwrap_or_else(|| git_identifier(&target_dir).unwrap_or_else(|_| random_identifier()));
+
     write_cmake(
         env,
         build,
@@ -40,7 +46,78 @@ pub fn write_tvm_ffi_ext(
         &mut file_set,
     )?;
 
+    write_setup_py(env, &build.general, tvm_ffi_ext, &revision, &mut file_set)?;
+
+    write_pyproject_toml(env, &build.general, &mut file_set)?;
+
     Ok(file_set)
+}
+
+pub fn write_setup_py(
+    env: &Environment,
+    general: &General,
+    tvm_ffi: &TvmFfi,
+    revision: &str,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    let writer = file_set.entry("setup.py");
+
+    let data_globs = tvm_ffi
+        .data_extensions()
+        .map(|exts| exts.iter().map(|ext| format!("\"**/*.{ext}\"")).join(", "));
+
+    env.get_template("tvm_ffi/setup.py")
+        .wrap_err("Cannot get tvm_ffi setup.py template")?
+        .render_to_write(
+            context! {
+                data_globs => data_globs,
+                revision => revision,
+                python_name => general.python_name(),
+            },
+            writer,
+        )
+        .wrap_err("Cannot render tvm_ffi setup.py template")?;
+
+    Ok(())
+}
+
+pub fn write_pyproject_toml(
+    env: &Environment,
+    general: &General,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    let writer = file_set.entry("pyproject.toml");
+
+    // Common python dependencies (no backend-specific ones)
+    let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
+        iter.map(|d| format!("\"{d}\"")).join(", ")
+    })?;
+
+    // Collect backend-specific dependencies for all backends
+    let mut backend_dependencies = Vec::new();
+    for backend in &Backend::all() {
+        let deps = itertools::process_results(general.backend_python_depends(*backend), |iter| {
+            iter.map(|d| format!("\"{d}\"")).collect::<Vec<_>>()
+        })?;
+
+        if !deps.is_empty() {
+            backend_dependencies.push((backend.to_string(), deps));
+        }
+    }
+
+    env.get_template("tvm_ffi/pyproject.toml")
+        .wrap_err("Cannot get tvm_ffi pyproject.toml template")?
+        .render_to_write(
+            context! {
+                python_name => general.python_name(),
+                python_dependencies => python_dependencies,
+                backend_dependencies => backend_dependencies,
+            },
+            writer,
+        )
+        .wrap_err("Cannot render tvm_ffi pyproject.toml template")?;
+
+    Ok(())
 }
 
 pub fn render_binding(

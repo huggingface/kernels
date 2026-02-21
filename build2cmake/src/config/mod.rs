@@ -153,6 +153,12 @@ pub struct TvmFfi {
     pub src: Vec<PathBuf>,
 }
 
+impl TvmFfi {
+    pub fn data_extensions(&self) -> Option<Vec<String>> {
+        data_extensions(self.pyext.as_deref())
+    }
+}
+
 pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,

@@ -49,8 +49,12 @@ if(GPU_LANG STREQUAL "CUDA")
   endif()
 endif()
 
-
-
 # Run `tvm-ffi-config --cmakedir` to set `tvm_ffi_ROOT`
 execute_process(COMMAND "${Python_EXECUTABLE}" -m tvm_ffi.config --cmakedir OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE tvm_ffi_ROOT)
 find_package(tvm_ffi CONFIG REQUIRED)
+
+configure_file(
+  ${CMAKE_CURRENT_LIST_DIR}/cmake/_ops.py.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/tvm-ffi-ext/{{python_name}}/_ops.py
+  @ONLY
+)

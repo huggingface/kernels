@@ -57,5 +57,3 @@ void relu_cuda(ffi::TensorView out, ffi::TensorView const input) {
     TVM_FFI_THROW(TypeError) << "Unsupported dtype: " << input.dtype();
   }
 }
-
-TVM_FFI_DLL_EXPORT_TYPED_FUNC(relu_cuda, relu_cuda);

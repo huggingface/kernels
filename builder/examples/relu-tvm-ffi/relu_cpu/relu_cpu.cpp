@@ -1,4 +1,6 @@
-#include <torch/all.h>
+#include <tvm/ffi/tvm_ffi.h>
+
+#include "../util.hh"
 
 #ifdef __SSE__
 #include <xmmintrin.h>
@@ -41,16 +43,25 @@ void relu_forward_neon(float* out, const float* input, size_t size) {
 }
 #endif
 
-void relu(torch::Tensor &out, torch::Tensor const &input) {
-    TORCH_CHECK(out.dtype() == torch::kFloat32, "Output tensor must be of dtype float");
-    TORCH_CHECK(input.dtype() == torch::kFloat32, "Input tensor must be of dtype float");
-    TORCH_CHECK(out.numel() == input.numel(), "Input and output tensors must have the same number of elements");
+using namespace tvm;
 
+void relu_cpu(ffi::TensorView out, ffi::TensorView const input) {
+    CHECK_INPUT(input);
+    CHECK_INPUT(out);
+    CHECK_DEVICE(input, out);
+
+    TVM_FFI_CHECK(input.dtype() == out.dtype(), ValueError) << "input/output dtype mismatch";
+    TVM_FFI_CHECK(input.numel() == out.numel(), ValueError) << "input/output size mismatch";
+
+    if (input.dtype() == dl_float32) {
 #if defined(__SSE__)
-    relu_forward_sse(out.data_ptr<float>(), input.data_ptr<float>(), input.numel());
+        relu_forward_sse(static_cast<float *>(out.data_ptr()), static_cast<float *>(input.data_ptr()), input.numel());
 #elif defined(__ARM_NEON)
-    relu_forward_neon(out.data_ptr<float>(), input.data_ptr<float>(), input.numel());
+        relu_forward_neon(static_cast<float *>(out.data_ptr()), static_cast<float *>(input.data_ptr()), input.numel());
 #else
-    #error "Unsupported architecture; please use a CPU with SSE or ARM NEON support."
+      #error "Unsupported architecture; please use a CPU with SSE or ARM NEON support."
 #endif
+    } else {
+        TVM_FFI_THROW(TypeError) << "Unsupported dtype: " << input.dtype();
+    }
 }

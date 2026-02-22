@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def get_backend() -> str:
-    # TODO: support non-CUDA
-    return "cuda"
+    if which("nvcc") is not None:
+        return "cuda"
+    return "cpu"
 
 
 backend = get_backend()

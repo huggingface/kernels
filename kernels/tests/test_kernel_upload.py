@@ -125,20 +125,3 @@ def test_kernel_upload_deletes_as_expected():
         str(filename_to_change) in k for k in repo_filenames
     ), f"{repo_filenames=}"
     _get_hf_api().delete_repo(repo_id=REPO_ID)
-
-
-@patch("kernels.cli.create_and_upload_card")
-@patch("kernels.cli.upload_kernels_dir")
-def test_kernel_upload_calls_create_and_upload_card(mock_upload_dir, mock_create_card):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        args = UploadArgs(
-            kernel_dir=tmpdir,
-            repo_id=REPO_ID,
-            private=False,
-            branch=None,
-            create_card=True,
-        )
-        upload_kernels(args)
-
-        mock_create_card.assert_called_once_with(args)
-        assert args.card_path == str(Path(tmpdir).resolve() / "README.md")

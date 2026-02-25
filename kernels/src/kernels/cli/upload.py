@@ -70,6 +70,15 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
+    card_path = build_dir / "CARD.md"
+    if (card_path).exists:
+        api.upload_file(
+            path_or_fileobj=card_path,
+            path_in_repo="README.md",
+            revision=branch,
+            commit_message="File uploaded using `kernels`.",
+        )
+
     api.upload_folder(
         repo_id=repo_id,
         folder_path=build_dir,

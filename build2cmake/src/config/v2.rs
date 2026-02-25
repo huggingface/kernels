@@ -7,7 +7,7 @@ use std::{
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use super::{Backend, Dependency};
+use super::{Backend, Dependency, KernelName};
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,7 +23,7 @@ pub struct Build {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
     #[serde(default)]
     pub universal: bool,
 

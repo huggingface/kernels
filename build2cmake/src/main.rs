@@ -300,7 +300,7 @@ fn clean(
         target_dir.join("cmake"),
         target_dir
             .join("torch-ext")
-            .join(build.general.python_name()),
+            .join(build.general.name.python_name()),
         target_dir.join("torch-ext"),
     ];
 

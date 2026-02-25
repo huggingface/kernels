@@ -9,6 +9,9 @@ pub use deps::Dependency;
 mod compat;
 pub use compat::BuildCompat;
 
+mod name;
+pub use name::KernelName;
+
 mod v1;
 mod v2;
 pub(crate) mod v3;
@@ -30,7 +33,7 @@ impl Build {
 }
 
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
     pub version: Option<usize>,
 
     /// Hugging Face Hub license identifier.
@@ -45,11 +48,6 @@ pub struct General {
 }
 
 impl General {
-    /// Name of the kernel as a Python extension.
-    pub fn python_name(&self) -> String {
-        self.name.replace("-", "_")
-    }
-
     pub fn python_depends(&self) -> Box<dyn Iterator<Item = Result<String>> + '_> {
         let general_python_deps = match self.python_depends.as_ref() {
             Some(deps) => deps,

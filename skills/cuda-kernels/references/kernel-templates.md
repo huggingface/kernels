@@ -322,7 +322,6 @@ void rmsnorm_forward_bf16(
         );
     }
 }
-```
 
 // C++ entry points
 extern "C" {

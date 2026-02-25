@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::Dependency;
+use super::{Dependency, KernelName};
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -19,7 +19,7 @@ pub struct Build {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
 
     pub version: Option<usize>,
 

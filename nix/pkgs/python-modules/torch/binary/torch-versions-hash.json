@@ -116,6 +116,11 @@
         "hash": "sha256-vbzHAzgvlI6VHAY0SMlAa/OM5mxB3WmNnicz/PlsA3o=",
         "version": "2.10.0"
       },
+      "cu130": {
+        "url": "https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp313-cp313-manylinux_2_28_aarch64.whl",
+        "hash": "sha256-dXgCgzCN+f7eNx7toB6WB8iGKhgDovLzGgiiwN6u00I=",
+        "version": "2.10.0"
+      },
       "cpu": {
         "url": "https://download.pytorch.org/whl/cpu/torch-2.10.0%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl",
         "hash": "sha256-5RmUSSzbdu3OKdqI3jZyowIvnvD/2QNFQ2lI1Jkr4sc=",

@@ -8,13 +8,10 @@ from huggingface_hub.utils import get_session
 
 DEFAULT_SKILL_ID = "cuda-kernels"
 _GITHUB_RAW_BASE = (
-    "https://raw.githubusercontent.com/huggingface/kernels/main/"
-    "skills/cuda-kernels"
+    "https://raw.githubusercontent.com/huggingface/kernels/main/" "skills/cuda-kernels"
 )
 _MANIFEST_URL = f"{_GITHUB_RAW_BASE}/manifest.txt"
-_LOCAL_SKILLS_ROOT = (
-    Path(__file__).resolve().parents[4] / "skills" / "cuda-kernels"
-)
+_LOCAL_SKILLS_ROOT = Path(__file__).resolve().parents[4] / "skills" / "cuda-kernels"
 
 GLOBAL_TARGETS = {
     "codex": Path("~/.codex/skills"),
@@ -79,8 +76,7 @@ def _install_to(target: Path, force: bool) -> Path:
     if dest.exists():
         if not force:
             raise SystemExit(
-                f"Skill already exists at {dest}.\n"
-                "Re-run with --force to overwrite."
+                f"Skill already exists at {dest}.\n" "Re-run with --force to overwrite."
             )
         _remove_existing(dest)
 

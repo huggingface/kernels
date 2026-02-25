@@ -7,7 +7,7 @@ use std::{
 use eyre::{bail, Result};
 use serde::Deserialize;
 
-use super::{Backend, Dependency};
+use super::{Backend, Dependency, KernelName};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -22,7 +22,7 @@ pub struct Build {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
 }
 
 #[derive(Debug, Deserialize, Clone)]

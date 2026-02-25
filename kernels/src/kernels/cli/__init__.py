@@ -231,7 +231,7 @@ def main():
     init_parser.add_argument(
         "--template-repo",
         type=str,
-        default="drbh/template",
+        default="kernels-community/template",
         help="HuggingFace repo ID for the template",
     )
     init_parser.add_argument(

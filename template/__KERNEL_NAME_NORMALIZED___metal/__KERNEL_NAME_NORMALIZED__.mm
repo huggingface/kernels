@@ -16,27 +16,27 @@ static inline id<MTLBuffer> getMTLBufferStorage(const torch::Tensor &tensor) {
 void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) {
   TORCH_CHECK(input.device().is_mps(), "input must be a MPS tensor");
   TORCH_CHECK(input.is_contiguous(), "input must be contiguous");
-  TORCH_CHECK(input.scalar_type() == torch::kFloat ||
-                  input.scalar_type() == torch::kHalf,
-              "only float32 and float16 supported");
+  TORCH_CHECK(input.scalar_type() == at::ScalarType::Float,
+              "__KERNEL_NAME_NORMALIZED__ only supports float32");
   TORCH_CHECK(input.sizes() == out.sizes(), "Tensors must have same shape");
-  TORCH_CHECK(input.scalar_type() == out.scalar_type(), "Tensors must have same dtype");
-  TORCH_CHECK(input.device() == out.device(), "Tensors must be on same device");
+  TORCH_CHECK(input.scalar_type() == out.scalar_type(),
+              "Tensors must have same dtype");
+  TORCH_CHECK(input.device() == out.device(),
+              "Tensors must be on same device");
 
   @autoreleasepool {
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     int numThreads = input.numel();
 
     NSError *error = nil;
-    id<MTLLibrary> library = EMBEDDED_METALLIB_NAMESPACE::createLibrary(device, &error);
+    id<MTLLibrary> library =
+        EMBEDDED_METALLIB_NAMESPACE::createLibrary(device, &error);
     TORCH_CHECK(library, "Failed to create Metal library: ",
                 error.localizedDescription.UTF8String);
 
-    std::string kernel_name = std::string("__KERNEL_NAME_NORMALIZED___forward_kernel_") +
-        (input.scalar_type() == torch::kFloat ? "float" : "half");
-    id<MTLFunction> func = [library newFunctionWithName:
-        [NSString stringWithUTF8String:kernel_name.c_str()]];
-    TORCH_CHECK(func, "Failed to create function: ", kernel_name.c_str());
+    id<MTLFunction> func =
+        [library newFunctionWithName:@"__KERNEL_NAME_NORMALIZED___kernel"];
+    TORCH_CHECK(func, "Failed to create function");
 
     id<MTLComputePipelineState> pso =
         [device newComputePipelineStateWithFunction:func error:&error];
@@ -53,9 +53,10 @@ void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) 
                   offset:out.storage_offset() * out.element_size()
                  atIndex:1];
 
-      NSUInteger tgSize = MIN(pso.maxTotalThreadsPerThreadgroup, (NSUInteger)numThreads);
+      NSUInteger tgSize =
+          MIN(pso.maxTotalThreadsPerThreadgroup, (NSUInteger)numThreads);
       [encoder dispatchThreads:MTLSizeMake(numThreads, 1, 1)
-         threadsPerThreadgroup:MTLSizeMake(tgSize, 1, 1)];
+          threadsPerThreadgroup:MTLSizeMake(tgSize, 1, 1)];
       [encoder endEncoding];
       torch::mps::commit();
     });

@@ -114,7 +114,7 @@ def test_fill_kernel_card_usage_with_repo_id(initialized_kernel_dir):
     args = CardArgs(kernel_dir=str(initialized_kernel_dir), repo_id=repo_id)
     fill_kernel_card(args)
     content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
-    assert "get_kernel(repo_id)" in content
+    assert f'get_kernel("{repo_id}")' in content
 
 
 def test_fill_kernel_card_license(initialized_kernel_dir):
@@ -133,3 +133,48 @@ def test_fill_kernel_card_benchmark(initialized_kernel_dir):
     content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
     assert "## Benchmarks" in content
     assert "Benchmarking script is available" in content
+
+
+def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
+    existing_description = "A hand-written description of this kernel."
+    existing_notes = "Custom notes that should not be overwritten."
+    existing_source = "https://github.com/example/kernel-source"
+
+    card_path = mock_kernel_dir / "build" / SYSTEM_CARD_PATH
+    card_path.write_text(
+        "---\n"
+        "license: mit\n"
+        "library_name: kernels\n"
+        "---\n\n"
+        f"{existing_description}\n\n"
+        "## How to use\n\n"
+        "```python\n"
+        "# TODO: add an example code snippet for running this kernel\n"
+        "```\n\n"
+        "## Available functions\n\n"
+        "[TODO: add the functions available through this kernel]\n\n"
+        "## Supported backends\n\n"
+        "[TODO: add the backends this kernel supports]\n\n"
+        "## Benchmarks\n\n"
+        "[TODO: provide benchmarks if available]\n\n"
+        f"## Source code\n\n{existing_source}\n\n"
+        f"## Notes\n\n{existing_notes}\n"
+    )
+
+    repo_id = "test-org/test-kernel"
+    args = CardArgs(kernel_dir=str(mock_kernel_dir), repo_id=repo_id)
+    fill_kernel_card(args)
+
+    content = card_path.read_text()
+
+    assert "- `func1`" in content
+    assert "- `func2`" in content
+    assert "- cuda" in content
+    assert "- metal" in content
+    assert f'get_kernel("{repo_id}")' in content
+    assert "[TODO: add the functions available through this kernel]" not in content
+    assert "[TODO: add the backends this kernel supports]" not in content
+
+    assert existing_description in content
+    assert existing_notes in content
+    assert existing_source in content

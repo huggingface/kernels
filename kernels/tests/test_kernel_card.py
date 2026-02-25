@@ -73,7 +73,8 @@ def test_initialize_card_creates_file(mock_kernel_dir):
 
 
 def test_initialize_card_with_description(mock_kernel_dir):
-    args = CardArgs(kernel_dir=str(mock_kernel_dir), description="A test kernel.")
+    description = "A test kernel."
+    args = CardArgs(kernel_dir=str(mock_kernel_dir), description=description)
     with patch(
         "huggingface_hub.ModelCard.load",
         side_effect=RepositoryNotFoundError("test", response=MagicMock()),
@@ -81,7 +82,7 @@ def test_initialize_card_with_description(mock_kernel_dir):
         initialize_card(args)
     content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
     assert "---" in content
-    assert "A test kernel." in content
+    assert description in content
 
 
 def test_fill_kernel_card_backends(initialized_kernel_dir):
@@ -109,12 +110,11 @@ def test_fill_kernel_card_available_funcs(initialized_kernel_dir):
 
 
 def test_fill_kernel_card_usage_with_repo_id(initialized_kernel_dir):
-    args = CardArgs(
-        kernel_dir=str(initialized_kernel_dir), repo_id="test-org/test-kernel"
-    )
+    repo_id = "test-org/test-kernel"
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir), repo_id=repo_id)
     fill_kernel_card(args)
     content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
-    assert 'get_kernel("test-org/test-kernel")' in content
+    assert "get_kernel(repo_id)" in content
 
 
 def test_fill_kernel_card_license(initialized_kernel_dir):

@@ -10,9 +10,10 @@ kernels upload <kernel_dir> --repo-id <repo_id> [--branch <branch>] [--private]
 
 ## What It Does
 
-- Creates a repository on the Hub if it doesn't exist
-- Uploads the kernel build artifacts from the specified directory
-- If a build variant already exists in the repo, replaces the existing files
+- This will take care of creating a repository on the Hub with the `repo_id` provided.
+- If a repo with the `repo_id` already exists and if it contains a `build` with the build variant
+  being uploaded, it will attempt to delete the files existing under it.
+- Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
 
 ## Examples
 

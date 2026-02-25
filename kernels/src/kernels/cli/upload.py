@@ -71,7 +71,7 @@ def upload_kernels_dir(
         )
 
     card_path = build_dir / "CARD.md"
-    if (card_path).exists:
+    if (card_path).exists():
         api.upload_file(
             path_or_fileobj=card_path,
             path_in_repo="README.md",

@@ -25,6 +25,8 @@ from kernels.kernel_card_utils import (
     _update_kernel_card_usage,
 )
 
+SYSTEM_CARD_PATH = "CARD.md"
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -247,36 +249,45 @@ def main():
     )
     init_parser.set_defaults(func=run_init)
 
-    repocard_parser = subparsers.add_parser(
-        "create-and-upload-card",
-        help="Create and optionally upload a kernel card.",
+    init_card_parser = subparsers.add_parser(
+        "init-card",
+        help="Initialize a kernel system card template inside the build directory of the kernel.",
     )
-    repocard_parser.add_argument(
+    init_card_parser.add_argument(
         "kernel_dir",
         type=str,
         help="Path to the kernels source.",
     )
-    repocard_parser.add_argument(
-        "--card-path", type=str, required=True, help="Path to save the card to."
+    init_card_parser.add_argument(
+        "--repo_id",
+        type=str,
+        default=None,
+        help="When specified, existing card content is reused. Specific parts are updated based on the build information.",
     )
-    repocard_parser.add_argument(
+    init_card_parser.set_defaults(func=initialize_card)
+
+    fill_card_parser = subparsers.add_parser(
+        "fill-card",
+        help="Fill a system card template based on the `build` information and save it.",
+    )
+    fill_card_parser.add_argument(
+        "kernel_dir",
+        type=str,
+        help="Path to the kernels source.",
+    )
+    fill_card_parser.add_argument(
         "--description",
         type=str,
         default=None,
         help="Description to introduce the kernel.",
     )
-    repocard_parser.add_argument(
+    fill_card_parser.add_argument(
         "--repo-id",
         type=str,
         default=None,
         help="If specified it will be pushed to a repository on the Hub.",
     )
-    repocard_parser.add_argument(
-        "--create-pr",
-        action="store_true",
-        help="If specified it will create a PR on the `repo_id`.",
-    )
-    repocard_parser.set_defaults(func=create_and_upload_card)
+    fill_card_parser.set_defaults(func=fill_kernel_card)
 
     args = parser.parse_args()
     args.func(args)
@@ -346,15 +357,24 @@ def upload_kernels(args):
     )
 
 
-def create_and_upload_card(args):
-    if not args.repo_id and args.create_pr:
-        raise ValueError("`create_pr` cannot be True when `repo_id` is None.")
-
+def initialize_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
     kernel_card = _load_or_create_kernel_card(
-        kernel_description=args.description, license="apache-2.0"
+        repo_id_or_path=args.repo_id,
+        kernel_description=args.description,
+        license="apache-2.0",
     )
+    kernel_card.save(kernel_dir / "build" / SYSTEM_CARD_PATH)
 
+
+def fill_kernel_card(args):
+    kernel_dir = Path(args.kernel_dir).resolve()
+    card_path_from_kernel_build = kernel_dir / "build" / SYSTEM_CARD_PATH
+    kernel_card = _load_or_create_kernel_card(
+        repo_id_or_path=card_path_from_kernel_build,
+        kernel_description=args.description,
+        license="apache-2.0",
+    )
     updated_card = _update_kernel_card_usage(
         kernel_card=kernel_card, local_path=kernel_dir, repo_id=args.repo_id
     )
@@ -368,12 +388,7 @@ def create_and_upload_card(args):
     updated_card = _update_kernel_card_license(
         kernel_card=kernel_card, local_path=kernel_dir
     )
-
-    card_path = args.card_path
-    updated_card.save(card_path)
-
-    if args.repo_id:
-        updated_card.push_to_hub(repo_id=args.repo_id, create_pr=args.create_pr)
+    updated_card.save(card_path_from_kernel_build)
 
 
 class _JSONEncoder(json.JSONEncoder):

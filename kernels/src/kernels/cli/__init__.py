@@ -333,7 +333,6 @@ def lock_kernels(args):
 
     all_locks = []
     for kernel, version in kernel_versions.items():
-        print(f"Locking `{kernel}` at version {version}", file=sys.stderr)
         all_locks.append(get_kernel_locks(kernel, version))
 
     with open(args.project_dir / "kernels.lock", "w") as f:

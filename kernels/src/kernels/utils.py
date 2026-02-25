@@ -448,9 +448,9 @@ def has_kernel(
         `bool`: `True` if a kernel is available for the current environment.
     """
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-    api = _get_hf_api()
     package_name = package_name_from_repo_id(repo_id)
 
+    api = _get_hf_api()
     for variant in _build_variants(backend):
         for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
             if api.file_exists(

@@ -31,9 +31,8 @@ class Redirect:
 KernelStatusKind = Union[Redirect]
 
 
-@dataclass
 class KernelStatus:
-
+    @staticmethod
     def from_toml(content: str) -> KernelStatusKind:
         data = tomllib.loads(content)
 
@@ -47,6 +46,7 @@ class KernelStatus:
         raise ValueError(f"Unknown kernel status kind: {kind!r}")
 
     # Fetch the kernel status from the repository, if it exists
+    @staticmethod
     def check_status(
         api: HfApi, repo_id: str, revision: str
     ) -> KernelStatusKind | None:

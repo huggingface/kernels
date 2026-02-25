@@ -4,7 +4,7 @@ from pathlib import Path
 
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
-from kernels.redirect import resolve_redirect
+from kernels.status import resolve_status
 
 
 @dataclass
@@ -38,8 +38,10 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
 
     api = _get_hf_api()
 
-    # Check for redirects before resolving version
-    repo_id, _ = resolve_redirect(api, repo_id, "main")
+    # NOTE: the destination of a redirect is respected but we still use
+    # resolve_version_spec_as_ref to resolve the version specifier of the
+    # final destination repo.
+    repo_id, _ = resolve_status(api, repo_id, "main")
 
     tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 

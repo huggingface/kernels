@@ -148,6 +148,7 @@ def test_upload_includes_card_as_readme():
             upload_kernels_dir(kernel_dir, repo_id=REPO_ID, branch=None, private=False)
 
         mock_api.upload_file.assert_called_once_with(
+            repo_id=REPO_ID,
             path_or_fileobj=card_path,
             path_in_repo="README.md",
             revision="v1",

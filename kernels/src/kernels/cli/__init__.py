@@ -281,12 +281,6 @@ def main():
         default=None,
         help="Description to introduce the kernel.",
     )
-    fill_card_parser.add_argument(
-        "--repo-id",
-        type=str,
-        default=None,
-        help="If specified it will be pushed to a repository on the Hub.",
-    )
     fill_card_parser.set_defaults(func=fill_kernel_card)
 
     args = parser.parse_args()
@@ -359,12 +353,16 @@ def upload_kernels(args):
 
 def initialize_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
+    build_dir = kernel_dir / "build"
+    if not build_dir.exists():
+        raise ValueError(
+            f"{str(build_dir)} doesn't exist. Make sure the the 'build' diectory exists within {str(kernel_dir)}."
+        )
+
     kernel_card = _load_or_create_kernel_card(
-        repo_id_or_path=args.repo_id,
-        kernel_description=args.description,
-        license="apache-2.0",
+        repo_id_or_path=args.repo_id, license="apache-2.0"
     )
-    kernel_card.save(kernel_dir / "build" / SYSTEM_CARD_PATH)
+    kernel_card.save(build_dir / SYSTEM_CARD_PATH)
 
 
 def fill_kernel_card(args):

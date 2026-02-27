@@ -47,7 +47,6 @@ cuda-capabilities = ["8.0", "8.9"]
             "def func1():\n    pass\n\ndef func2():\n    pass\n"
         )
 
-        (kernel_dir).mkdir()
         yield kernel_dir
 
 

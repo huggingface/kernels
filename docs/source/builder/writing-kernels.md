@@ -324,10 +324,12 @@ When running the tests on a non-NixOS systems, make sure that
 ## Kernel docs
 
 We provide a utility to generate a system card for a given kernel, utilizing
-information from the `build.toml` and metadata. This system card provides a
+information from its `build.toml` and metadata. This system card provides a
 reasonable starting point and is meant to be edited afterward by the kernel
 developer.
 
-To generate the card, use the `kernels create-and-upload-card ...` command.
-Alternatively, specify `--create_card` while uploading the kernel builds
-through `kernels upload`. Refer to the [documentation](../cli.md) to know more.
+To generate the card, first run `kernels init-card`, which will either
+instantiate a fresh kernel card or load an existing one. Then run
+`kernels fill-card` to update the card based on the build information.
+The existing user content is preserved. Refer to the [documentation](../cli.md)
+to know more.

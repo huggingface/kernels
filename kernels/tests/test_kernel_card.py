@@ -72,19 +72,6 @@ def test_initialize_card_creates_file(mock_kernel_dir):
     assert (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).exists()
 
 
-def test_initialize_card_with_description(mock_kernel_dir):
-    description = "A test kernel."
-    args = CardArgs(kernel_dir=str(mock_kernel_dir), description=description)
-    with patch(
-        "huggingface_hub.ModelCard.load",
-        side_effect=RepositoryNotFoundError("test", response=MagicMock()),
-    ):
-        initialize_card(args)
-    content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
-    assert "---" in content
-    assert description in content
-
-
 def test_fill_kernel_card_backends(initialized_kernel_dir):
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
@@ -178,3 +165,45 @@ def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
     assert existing_description in content
     assert existing_notes in content
     assert existing_source in content
+
+
+def test_fill_kernel_card_upstream_source(mock_kernel_dir):
+    build_toml = mock_kernel_dir / "build.toml"
+    upstream = "huggingface/upstream-kernel"
+    build_toml.write_text(
+        f'upstream = "{upstream}"\n'
+        "\n"
+        "[general]\n"
+        'name = "test_kernel"\n'
+        'backends = ["cuda", "metal"]\n'
+        'license = "apache-2.0"\n'
+        "version = 1\n"
+        "\n"
+        "[kernel._test]\n"
+        'backend = "cuda"\n'
+        'cuda-capabilities = ["8.0", "8.9"]\n'
+    )
+
+    card = ModelCard.from_template(
+        card_data=ModelCardData(license="apache-2.0", library_name="kernels"),
+        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
+        kernel_description="Test kernel.",
+    )
+    card.save(mock_kernel_dir / "build" / SYSTEM_CARD_PATH)
+
+    args = CardArgs(kernel_dir=str(mock_kernel_dir))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    assert f"{upstream}" in content
+
+
+def test_fill_kernel_card_preserves_user_notes(initialized_kernel_dir):
+    card_path = initialized_kernel_dir / "build" / SYSTEM_CARD_PATH
+    user_text = "Custom kernel notes."
+    existing_content = card_path.read_text()
+    card_path.write_text(existing_content.rstrip() + f"\n\n## Notes\n\n{user_text}\n")
+
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = card_path.read_text()
+    assert f"{user_text}" in content

@@ -50,7 +50,7 @@ def _load_or_create_kernel_card(
     if not force_update_content:
         try:
             kernel_card = ModelCard.load(repo_id_or_path, token=token)
-        except (EntryNotFoundError, RepositoryNotFoundError):
+        except (EntryNotFoundError, RepositoryNotFoundError, TypeError):
             pass  # Will create from template below
 
     if kernel_card is None:
@@ -58,7 +58,7 @@ def _load_or_create_kernel_card(
         kernel_card = ModelCard.from_template(
             card_data=ModelCardData(license=license, library_name=LIBRARY_NAME),
             template_path=str(KERNEL_CARD_TEMPLATE_PATH),
-            model_description=kernel_description,
+            modeld_description=kernel_description,
         )
 
     return kernel_card
@@ -123,95 +123,85 @@ def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
         return None
 
 
-def _update_kernel_card_usage(
-    kernel_card: ModelCard,
+def _extract_card_sections(card_content: str) -> dict:
+    """Extract named sections from a rendered kernel card markdown string."""
+    body = card_content
+    front_matter_match = re.match(r"^---\n.*?\n---\n", body, re.DOTALL)
+    if front_matter_match:
+        body = body[front_matter_match.end() :]
+
+    parts = re.split(r"\n## ", body)
+
+    result: dict[str, str] = {}
+
+    description = parts[0].strip()
+    description = re.sub(r"<!--.*?-->", "", description, flags=re.DOTALL).strip()
+    if description:
+        result["description"] = description
+
+    for part in parts[1:]:
+        newline = part.find("\n")
+        if newline == -1:
+            continue
+        section_name = part[:newline].strip().lower()
+        section_body = part[newline:].strip()
+        result[section_name] = section_body
+
+    return result
+
+
+def _build_kernel_card_vars(
     local_path: str | Path,
     repo_id: str = "REPO_ID",
-) -> ModelCard:
+) -> dict:
+    local_path = Path(local_path)
+    vars: dict[str, Any] = {}
+
+    # --- usage example + available interfaces ---
     init_file = _find_torch_ext_init(local_path)
+    func_names = _extract_functions_from_all(init_file) if init_file else None
+    if func_names:
+        vars["usage_example"] = EXAMPLE_CODE.format(
+            repo_id=repo_id, func_name=func_names[0]
+        )
+        vars["available_functions"] = "\n".join(f"- `{fn}`" for fn in func_names)
 
-    if not init_file:
-        return kernel_card
-
-    func_names = _extract_functions_from_all(init_file)
-
-    if not func_names:
-        return kernel_card
-
-    func_name = func_names[0]
-    example_code = EXAMPLE_CODE.format(repo_id=repo_id, func_name=func_name)
-
-    card_content = str(kernel_card.content)
-    pattern = r"(## How to use\s*\n\n)```python\n# TODO: add an example code snippet for running this kernel\n```"
-
-    if re.search(pattern, card_content):
-        updated_content = re.sub(pattern, r"\1" + example_code, card_content)
-        kernel_card.content = updated_content
-
-    return kernel_card
-
-
-def _update_kernel_card_available_funcs(
-    kernel_card: ModelCard, local_path: str | Path
-) -> ModelCard:
-    init_file = _find_torch_ext_init(local_path)
-
-    if not init_file:
-        return kernel_card
-
-    func_names = _extract_functions_from_all(init_file)
-
-    if not func_names:
-        return kernel_card
-
-    functions_list = "\n".join(f"- `{func}`" for func in func_names)
-
-    card_content = str(kernel_card.content)
-    pattern = r"(## Available functions\s*\n\n)\[TODO: add the functions available through this kernel\]"
-
-    if re.search(pattern, card_content):
-        updated_content = re.sub(pattern, r"\1" + functions_list, card_content)
-        kernel_card.content = updated_content
-
-    return kernel_card
-
-
-def _update_kernel_card_backends(
-    kernel_card: ModelCard, local_path: str | Path
-) -> ModelCard:
+    # --- backends, CUDA capabilities, upstream ---
     config = _parse_build_toml(local_path)
-    if not config:
-        return kernel_card
+    if config:
+        general_config = config.get("general", {})
+        backends = general_config.get("backends")
+        if backends:
+            vars["supported_backends"] = "\n".join(f"- {b}" for b in backends)
 
-    general_config = config.get("general", {})
-
-    card_content = str(kernel_card.content)
-
-    backends = general_config.get("backends")
-    if backends:
-        backends_list = "\n".join(f"- {backend}" for backend in backends)
-        pattern = r"(## Supported backends\s*\n\n)\[TODO: add the backends this kernel supports\]"
-        if re.search(pattern, card_content):
-            card_content = re.sub(pattern, r"\1" + backends_list, card_content)
-
-    # TODO: should we consider making it a separate utility?
-    kernel_configs = config.get("kernel", {})
-    cuda_capabilities = []
-    if kernel_configs:
+        kernel_configs = config.get("kernel", {})
+        cuda_capabilities: set[Any] = set()
         for k in kernel_configs:
-            cuda_cap_for_config = kernel_configs[k].get("cuda-capabilities")
-            if cuda_cap_for_config:
-                cuda_capabilities.extend(cuda_cap_for_config)
-    cuda_capabilities: set[Any] = set(cuda_capabilities)  # type: ignore[no-redef]
-    if cuda_capabilities:
-        cuda_list = "\n".join(f"- {cap}" for cap in cuda_capabilities)
-        cuda_section = f"## CUDA Capabilities\n\n{cuda_list}\n\n"
-        pattern = r"(## Benchmarks)"
-        if re.search(pattern, card_content):
-            card_content = re.sub(pattern, cuda_section + r"\1", card_content)
+            caps = kernel_configs[k].get("cuda-capabilities")
+            if caps:
+                cuda_capabilities.update(caps)
+        if cuda_capabilities:
+            vars["cuda_capabilities"] = "\n".join(
+                f"- {cap}" for cap in cuda_capabilities
+            )
 
-    kernel_card.content = card_content
-    return kernel_card
+        upstream_repo = config.get("upstream", None)
+        if upstream_repo:
+            vars["source_code"] = (
+                f"Source code of this kernel originally comes from {upstream_repo}"
+                " and it was repurposed for compatibility with `kernels`."
+            )
+
+    # --- benchmark ---
+    benchmark_file = local_path / "benchmarks" / "benchmark.py"
+    if benchmark_file.exists():
+        vars["benchmark_content"] = (
+            "Benchmarking script is available for this kernel. Make sure to run"
+            " `kernels benchmark org-id/repo-id`"
+            ' (replace "org-id" and "repo-id" with actual values).'
+        )
+
+    return vars
 
 
 def _update_kernel_card_license(
@@ -225,22 +215,4 @@ def _update_kernel_card_license(
     license_from_config = config.get("general", {}).get("license", None)
     final_license = license_from_config or existing_license
     kernel_card.data["license"] = final_license
-    return kernel_card
-
-
-def _update_benchmark(kernel_card: ModelCard, local_path: str | Path):
-    local_path = Path(local_path)
-
-    benchmark_file = local_path / "benchmarks" / "benchmark.py"
-    if not benchmark_file.exists():
-        return kernel_card
-
-    card_content = str(kernel_card.content)
-    benchmark_text = '\n\nBenchmarking script is available for this kernel. Make sure to run `kernels benchmark org-id/repo-id` (replace "org-id" and "repo-id" with actual values).'
-
-    pattern = r"(## Benchmarks)"
-    if re.search(pattern, card_content):
-        updated_content = re.sub(pattern, r"\1" + benchmark_text, card_content)
-        kernel_card.content = updated_content
-
     return kernel_card

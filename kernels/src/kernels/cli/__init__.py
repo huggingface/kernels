@@ -17,13 +17,14 @@ from kernels.cli.skills import add_skill
 from kernels.cli.versions import print_kernel_versions
 from kernels.cli.doc import generate_readme_for_kernel
 from kernels.kernel_card_utils import (
+    DESCRIPTION,
+    KERNEL_CARD_TEMPLATE_PATH,
+    _build_kernel_card_vars,
+    _extract_card_sections,
     _load_or_create_kernel_card,
-    _update_benchmark,
-    _update_kernel_card_available_funcs,
     _update_kernel_card_license,
-    _update_kernel_card_backends,
-    _update_kernel_card_usage,
 )
+from huggingface_hub import ModelCard
 
 SYSTEM_CARD_PATH = "CARD.md"
 
@@ -281,6 +282,12 @@ def main():
         default=None,
         help="Description to introduce the kernel.",
     )
+    fill_card_parser.add_argument(
+        "--repo_id",
+        type=str,
+        default=None,
+        help="When specified, the example code will incorporate this `repo_id` to create a custom example snippet.",
+    )
     fill_card_parser.set_defaults(func=fill_kernel_card)
 
     args = parser.parse_args()
@@ -353,40 +360,51 @@ def upload_kernels(args):
 
 def initialize_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
-    build_dir = kernel_dir / "build"
-    if not build_dir.exists():
-        raise ValueError(
-            f"{str(build_dir)} doesn't exist. Make sure the the 'build' diectory exists within {str(kernel_dir)}."
-        )
+    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
 
     kernel_card = _load_or_create_kernel_card(
         repo_id_or_path=args.repo_id, license="apache-2.0"
     )
-    kernel_card.save(build_dir / SYSTEM_CARD_PATH)
+    kernel_card.save(card_path)
 
 
 def fill_kernel_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
-    card_path_from_kernel_build = kernel_dir / "build" / SYSTEM_CARD_PATH
-    kernel_card = _load_or_create_kernel_card(
-        repo_id_or_path=card_path_from_kernel_build,
-        kernel_description=args.description,
+    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
+
+    existing_card = _load_or_create_kernel_card(
+        repo_id_or_path=card_path,
         license="apache-2.0",
     )
-    updated_card = _update_kernel_card_usage(
-        kernel_card=kernel_card, local_path=kernel_dir, repo_id=args.repo_id
+    existing_sections = _extract_card_sections(str(existing_card.content))
+    dynamic_vars = _build_kernel_card_vars(
+        kernel_dir, repo_id=args.repo_id or "REPO_ID"
     )
-    updated_card = _update_kernel_card_available_funcs(
-        kernel_card=kernel_card, local_path=kernel_dir
+    description = (
+        args.description or existing_sections.get("description") or DESCRIPTION
     )
-    updated_card = _update_kernel_card_backends(
-        kernel_card=kernel_card, local_path=kernel_dir
+
+    # Preserve any user-written section not already covered by `dynamic_vars`.
+    # Normalize heading.
+    preserved: dict = {}
+    for heading, body in existing_sections.items():
+        if heading == "description":
+            continue
+        var_name = heading.replace(" ", "_")
+        if var_name in dynamic_vars:
+            continue
+        if body:
+            preserved[var_name] = body
+
+    updated_card = ModelCard.from_template(
+        card_data=existing_card.data,
+        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
+        kernel_description=description,
+        **preserved,
+        **dynamic_vars,
     )
-    updated_card = _update_benchmark(kernel_card=kernel_card, local_path=kernel_dir)
-    updated_card = _update_kernel_card_license(
-        kernel_card=kernel_card, local_path=kernel_dir
-    )
-    updated_card.save(card_path_from_kernel_build)
+    _update_kernel_card_license(updated_card, kernel_dir)
+    updated_card.save(card_path)
 
 
 class _JSONEncoder(json.JSONEncoder):

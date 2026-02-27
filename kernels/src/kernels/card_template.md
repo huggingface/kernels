@@ -5,30 +5,34 @@
 <!-- This model card has automatically been generated. You
 should probably proofread and complete it, then remove this comment. -->
 
-{{ model_description }}
+{{ kernel_description }}
 
 ## How to use
 
-```python
-# TODO: add an example code snippet for running this kernel
-```
+{{ usage_example }}
 
 ## Available functions
 
-[TODO: add the functions available through this kernel]
+{{ available_functions }}
 
 ## Supported backends
 
-[TODO: add the backends this kernel supports]
+{{ supported_backends }}
+{% if cuda_capabilities %}
+
+## CUDA Capabilities
+
+{{ cuda_capabilities }}
+{% endif %}
 
 ## Benchmarks
 
-[TODO: provide benchmarks if available]
+{{ benchmark_content }}
 
 ## Source code
 
-[TODO: provide original source code and other relevant citations if available]
+{{ source_code }}
 
 ## Notes
 
-[TODO: provide additional notes about this kernel if needed]
+{{ notes }}

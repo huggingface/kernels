@@ -22,14 +22,6 @@ kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
 ```"""
 LIBRARY_NAME = "kernels"
 
-is_jinja_available = False
-try:
-    import jinja2  # noqa
-
-    is_jinja_available = True
-except ImportError:
-    pass
-
 
 def _load_or_create_kernel_card(
     repo_id_or_path: str = "REPO_ID",
@@ -38,13 +30,6 @@ def _load_or_create_kernel_card(
     license: str | None = None,
     force_update_content: bool = False,
 ) -> ModelCard:
-    if not is_jinja_available:
-        raise ValueError(
-            "Modelcard rendering is based on Jinja templates."
-            " Please make sure to have `jinja` installed before using `load_or_create_model_card`."
-            " To install it, please run `pip install Jinja2`."
-        )
-
     kernel_card = None
 
     if not force_update_content:

@@ -32,10 +32,6 @@ class UploadArgs:
     repo_id: None
     private: False
     branch: None
-    create_card: bool = False
-    card_path: str = None
-    description: str = None
-    create_pr: bool = False
 
 
 def next_filename(path: Path) -> Path:

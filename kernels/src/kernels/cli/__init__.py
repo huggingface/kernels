@@ -360,7 +360,7 @@ def upload_kernels(args):
 
 def initialize_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
-    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
+    card_path = kernel_dir / SYSTEM_CARD_PATH
 
     kernel_card = _load_or_create_kernel_card(
         repo_id_or_path=args.repo_id, license="apache-2.0"
@@ -370,7 +370,7 @@ def initialize_card(args):
 
 def fill_kernel_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
-    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
+    card_path = kernel_dir / SYSTEM_CARD_PATH
 
     existing_card = _load_or_create_kernel_card(
         repo_id_or_path=card_path,

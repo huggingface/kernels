@@ -128,13 +128,13 @@ def test_upload_includes_card_as_readme():
     with tempfile.TemporaryDirectory() as tmpdir:
         kernel_dir = Path(tmpdir).resolve()
 
-        variant_dir = kernel_dir / "build" / "torch-cuda"
+        variant_dir = kernel_dir / "torch-cuda"
         variant_dir.mkdir(parents=True)
         (variant_dir / "metadata.json").write_text(
             '{"version": 1, "python-depends": []}'
         )
 
-        card_path = kernel_dir / "build" / "CARD.md"
+        card_path = kernel_dir / "CARD.md"
         card_path.write_text("# Test Kernel\n")
 
         mock_api = MagicMock()

@@ -47,7 +47,7 @@ cuda-capabilities = ["8.0", "8.9"]
             "def func1():\n    pass\n\ndef func2():\n    pass\n"
         )
 
-        (kernel_dir / "build").mkdir()
+        (kernel_dir).mkdir()
         yield kernel_dir
 
 
@@ -58,7 +58,7 @@ def initialized_kernel_dir(mock_kernel_dir):
         template_path=str(KERNEL_CARD_TEMPLATE_PATH),
         model_description="Test kernel.",
     )
-    card.save(mock_kernel_dir / "build" / SYSTEM_CARD_PATH)
+    card.save(mock_kernel_dir / SYSTEM_CARD_PATH)
     return mock_kernel_dir
 
 
@@ -69,13 +69,13 @@ def test_initialize_card_creates_file(mock_kernel_dir):
         side_effect=RepositoryNotFoundError("test", response=MagicMock()),
     ):
         initialize_card(args)
-    assert (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).exists()
+    assert (mock_kernel_dir / SYSTEM_CARD_PATH).exists()
 
 
 def test_fill_kernel_card_backends(initialized_kernel_dir):
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
-    content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert "- cuda" in content
     assert "- metal" in content
 
@@ -83,7 +83,7 @@ def test_fill_kernel_card_backends(initialized_kernel_dir):
 def test_fill_kernel_card_cuda_capabilities(initialized_kernel_dir):
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
-    content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert "## CUDA Capabilities" in content
     assert "- 8.0" in content or "- 8.9" in content
 
@@ -91,7 +91,7 @@ def test_fill_kernel_card_cuda_capabilities(initialized_kernel_dir):
 def test_fill_kernel_card_available_funcs(initialized_kernel_dir):
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
-    content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert "- `func1`" in content
     assert "- `func2`" in content
 
@@ -100,14 +100,14 @@ def test_fill_kernel_card_usage_with_repo_id(initialized_kernel_dir):
     repo_id = "test-org/test-kernel"
     args = CardArgs(kernel_dir=str(initialized_kernel_dir), repo_id=repo_id)
     fill_kernel_card(args)
-    content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert f'get_kernel("{repo_id}")' in content
 
 
 def test_fill_kernel_card_license(initialized_kernel_dir):
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
-    content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert "license: apache-2.0" in content
 
 
@@ -117,7 +117,7 @@ def test_fill_kernel_card_benchmark(initialized_kernel_dir):
     (benchmarks_dir / "benchmark.py").write_text("def benchmark(): pass\n")
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
-    content = (initialized_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert "## Benchmarks" in content
     assert "Benchmarking script is available" in content
 
@@ -127,7 +127,7 @@ def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
     existing_notes = "Custom notes that should not be overwritten."
     existing_source = "https://github.com/example/kernel-source"
 
-    card_path = mock_kernel_dir / "build" / SYSTEM_CARD_PATH
+    card_path = mock_kernel_dir / SYSTEM_CARD_PATH
     card_path.write_text(
         "---\n"
         "license: mit\n"
@@ -189,16 +189,16 @@ def test_fill_kernel_card_upstream_source(mock_kernel_dir):
         template_path=str(KERNEL_CARD_TEMPLATE_PATH),
         kernel_description="Test kernel.",
     )
-    card.save(mock_kernel_dir / "build" / SYSTEM_CARD_PATH)
+    card.save(mock_kernel_dir / SYSTEM_CARD_PATH)
 
     args = CardArgs(kernel_dir=str(mock_kernel_dir))
     fill_kernel_card(args)
-    content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    content = (mock_kernel_dir / SYSTEM_CARD_PATH).read_text()
     assert f"{upstream}" in content
 
 
 def test_fill_kernel_card_preserves_user_notes(initialized_kernel_dir):
-    card_path = initialized_kernel_dir / "build" / SYSTEM_CARD_PATH
+    card_path = initialized_kernel_dir / SYSTEM_CARD_PATH
     user_text = "Custom kernel notes."
     existing_content = card_path.read_text()
     card_path.write_text(existing_content.rstrip() + f"\n\n## Notes\n\n{user_text}\n")

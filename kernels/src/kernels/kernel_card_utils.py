@@ -58,7 +58,7 @@ def _load_or_create_kernel_card(
         kernel_card = ModelCard.from_template(
             card_data=ModelCardData(license=license, library_name=LIBRARY_NAME),
             template_path=str(KERNEL_CARD_TEMPLATE_PATH),
-            modeld_description=kernel_description,
+            model_description=kernel_description,
         )
 
     return kernel_card

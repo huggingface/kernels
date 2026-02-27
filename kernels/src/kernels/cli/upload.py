@@ -70,13 +70,33 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    api.upload_folder(
-        repo_id=repo_id,
-        folder_path=build_dir,
-        revision=branch,
-        path_in_repo="build",
-        delete_patterns=list(delete_patterns),
-        commit_message="Build uploaded using `kernels`.",
-        allow_patterns=["torch*"],
+    file_count = sum(
+        1
+        for p in build_dir.rglob("*")
+        if p.is_file() and p.relative_to(build_dir).as_posix().startswith("torch")
     )
+
+    if file_count > 200:
+        print(
+            f"⚠️  Found {file_count} files to upload, which exceeds the 200 file limit for a single commit. Deleting old build files and re-uploading the whole build folder to avoid hitting file limits."
+        )
+        kernel_root_dir = build_dir.parent
+        api.upload_large_folder(
+            repo_id=repo_id,
+            folder_path=kernel_root_dir,
+            revision=branch,
+            repo_type="model",
+            allow_patterns=["build/torch*"],
+        )
+    else:
+        api.upload_folder(
+            repo_id=repo_id,
+            folder_path=build_dir,
+            revision=branch,
+            path_in_repo="build",
+            delete_patterns=list(delete_patterns),
+            commit_message="Build uploaded using `kernels`.",
+            allow_patterns=["torch*"],
+        )
+
     print(f"✅ Kernel upload successful. Find the kernel in: https://hf.co/{repo_id}")

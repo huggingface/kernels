@@ -16,7 +16,7 @@ from kernels.cli.init import run_init, parse_kernel_name
 from kernels.cli.skills import add_skill
 from kernels.cli.versions import print_kernel_versions
 from kernels.cli.doc import generate_readme_for_kernel
-from kernels.kernel_card_utils import (
+from kernels.cli.kernel_card_utils import (
     DESCRIPTION,
     KERNEL_CARD_TEMPLATE_PATH,
     _build_kernel_card_vars,

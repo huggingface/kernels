@@ -8,7 +8,7 @@ from huggingface_hub import ModelCard, ModelCardData
 from huggingface_hub.errors import RepositoryNotFoundError
 
 from kernels.cli import initialize_card, fill_kernel_card
-from kernels.kernel_card_utils import KERNEL_CARD_TEMPLATE_PATH
+from kernels.cli.kernel_card_utils import KERNEL_CARD_TEMPLATE_PATH
 
 SYSTEM_CARD_PATH = "CARD.md"
 

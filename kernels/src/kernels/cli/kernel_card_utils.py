@@ -2,7 +2,7 @@ import ast
 import re
 from pathlib import Path
 
-from .compat import tomllib
+from ..compat import tomllib
 from typing import Any
 from huggingface_hub import ModelCard, ModelCardData
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError

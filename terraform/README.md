@@ -73,18 +73,20 @@ ndc         # nix develop -c $SHELL  (enter the Nix dev shell)
 nbd         # nix build -L  (build with full logs)
 ```
 
-If you need a Nix dev shell **before** `amazon-init` finishes (i.e. before `nix-command` and `flakes` are enabled by the rebuild), pass the features explicitly:
-
-```bash
-nix --extra-experimental-features 'nix-command flakes' develop
-```
-
 Typical workflow for working on a kernel:
 
 ```bash
 ws
 git clone <your-kernel-repo> && cd <your-kernel-repo>
 nix develop   # or: ndc
+```
+
+`nix develop` must be run from inside a repo that has a `flake.nix` — running it from `/root` or any other directory without one will error.
+
+If you need a Nix dev shell **before** `amazon-init` finishes (i.e. before `nix-command` and `flakes` are enabled by the rebuild), pass the features explicitly from within the repo:
+
+```bash
+nix --extra-experimental-features 'nix-command flakes' develop
 ```
 
 `direnv` is also configured, so if the repo has a `.envrc` the dev shell activates automatically on `cd`.

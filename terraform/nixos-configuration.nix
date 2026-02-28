@@ -116,7 +116,6 @@
     ripgrep
     htop
     iotop
-    nvtop          # GPU/CPU monitor
     tree
     tmux
 

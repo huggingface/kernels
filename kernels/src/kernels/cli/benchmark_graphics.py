@@ -53,12 +53,9 @@ def _embed_logo_in_svg(svg_path: str, logo_size: int = 24) -> None:
     viewbox_match = re.search(r'viewBox="([^"]+)"', content)
     if viewbox_match:
         parts = viewbox_match.group(1).split()
-        width = float(parts[2])
         height = float(parts[3])
     else:
-        width_match = re.search(r'width="([0-9.]+)', content)
         height_match = re.search(r'height="([0-9.]+)', content)
-        width = float(width_match.group(1)) if width_match else 800
         height = float(height_match.group(1)) if height_match else 400
 
     svg_match = re.search(r"<svg[^>]*>(.*)</svg>", logo_svg, re.DOTALL)
@@ -481,8 +478,9 @@ def _save_speedup_gif(
         )
         return
 
-    from matplotlib.patches import FancyBboxPatch, Ellipse
     from urllib.request import urlopen
+
+    from matplotlib.patches import Ellipse, FancyBboxPatch
 
     matplotlib.use("Agg")
     plt.rcParams["font.family"] = _HF_FONT
@@ -753,10 +751,10 @@ def _save_speedup_svg(
                 f'<text x="{track_x+track_w+10}" y="{y+4}" font-size="10" font-weight="bold" fill="{text}">{speedup:.2f}x</text>',
                 f'<circle cx="{x_min}" cy="{y-6}" r="{ball_r}" fill="{_HF_ORANGE}" stroke="white" stroke-width="1.5">',
                 f'  <animate attributeName="cx" values="{x_min};{x_max};{x_min}" dur="{kernel_dur}s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1"/>',
-                f"</circle>",
+                "</circle>",
                 f'<circle cx="{x_min}" cy="{y+6}" r="{ball_r}" fill="{_HF_GRAY}" stroke="white" stroke-width="1.5">',
                 f'  <animate attributeName="cx" values="{x_min};{x_max};{x_min}" dur="{ref_dur}s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1"/>',
-                f"</circle>",
+                "</circle>",
             ]
         )
 

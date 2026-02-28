@@ -3,12 +3,11 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
-from .repos import DeviceRepos
+from .device import Device
 from .globals import _KERNEL_MAPPING
 from .layer import kernelize_layer
-from .repos import RepositoryProtocol
 from .mode import Mode
-from .device import Device
+from .repos import DeviceRepos, RepositoryProtocol
 
 if TYPE_CHECKING:
     import torch

@@ -1,12 +1,11 @@
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Protocol, Type
 import sys
+from abc import ABC, abstractmethod
 from functools import lru_cache
+from typing import TYPE_CHECKING, Protocol, Type
 
-from .device import Device
-from .mode import Mode
 from ._interval_tree import IntervalTree
-from .device import CUDAProperties, ROCMProperties
+from .device import CUDAProperties, Device, ROCMProperties
+from .mode import Mode
 
 if TYPE_CHECKING:
     from torch import nn

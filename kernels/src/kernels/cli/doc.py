@@ -5,8 +5,9 @@ from types import ModuleType
 
 import yaml
 
-from ._vendored.convert_rst_to_mdx import convert_rst_docstring_to_mdx
 from kernels.utils import get_kernel
+
+from ._vendored.convert_rst_to_mdx import convert_rst_docstring_to_mdx
 
 _RE_PARAMETERS = re.compile(
     r"<parameters>(((?!<parameters>).)*)</parameters>", re.DOTALL

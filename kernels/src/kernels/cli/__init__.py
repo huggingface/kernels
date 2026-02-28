@@ -375,6 +375,11 @@ def initialize_card(args):
 
 def fill_kernel_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
+    if not (kernel_dir / "build.toml").exists():
+        raise ValueError(
+            f"`build.toml` was not found in {str(kernel_dir)}. Cannot proceed."
+        )
+
     card_path = kernel_dir / SYSTEM_CARD_PATH
 
     dynamic_vars = _build_kernel_card_vars(

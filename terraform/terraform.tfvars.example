@@ -5,10 +5,11 @@
 # subnet_id              = "subnet-0123456789abcdef0"  # subnet used when launching manually
 # security_group_id      = "sg-0123456789abcdef0"      # existing SG that allows SSH (port 22)
 # key_pair_name          = "my-key-pair"               # existing EC2 key pair name
+# ssh_private_key_path   = "~/.ssh/id_rsa"             # local path to the corresponding private key (".pem"), 
+# this should correspond to the one being specified to `key_pair_name`
 
 # Optional overrides (all have sensible defaults):
 # instance_name          = "kernels-dev"
-# ssh_private_key_path   = "~/.ssh/id_rsa"          # local path to the key pair's private key
 # aws_region             = "us-east-1"
 # nixos_channel          = "25.11"         # or "24.11" for the stable LTS channel
 # instance_type          = "m7i.8xlarge"   # 32 vCPU / 128 GiB RAM

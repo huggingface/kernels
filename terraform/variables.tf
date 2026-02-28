@@ -69,10 +69,11 @@ variable "key_pair_name" {
 }
 
 variable "ssh_private_key_path" {
-  description = "Local path to the private key corresponding to key_pair_name, used by Terraform to provision the instance."
+  description = "Local path to the private key file corresponding to key_pair_name (used in the ssh_command output)."
   type        = string
   default     = "~/.ssh/id_rsa"
 }
+
 
 variable "cachix_auth_token" {
   description = "Cachix auth token for pushing to the huggingface cache (optional)"

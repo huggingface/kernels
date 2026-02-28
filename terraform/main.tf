@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.0"
-    }
   }
 }
 
@@ -42,6 +38,28 @@ locals {
     Project   = "hf-kernels-dev"
     ManagedBy = "terraform"
   })
+
+  # Encode the NixOS configuration as base64 so it can be safely embedded in
+  # the user-data script without escaping issues (Nix files contain ${ ... }).
+  user_data = base64encode(join("", [
+    "#!/bin/sh\n",
+    "set -e\n",
+    # Decode and write the NixOS configuration.
+    "base64 -d > /etc/nixos/configuration.nix << 'B64EOF'\n",
+    filebase64("${path.module}/nixos-configuration.nix"),
+    "\nB64EOF\n",
+    # Write the Cachix auth token if one was provided.
+    var.cachix_auth_token != "" ? join("", [
+      "mkdir -p /root/.config/cachix\n",
+      "printf '{\\n  authToken = \"${var.cachix_auth_token}\";\\n}\\n'",
+      " > /root/.config/cachix/cachix.dhall\n",
+      "chmod 600 /root/.config/cachix/cachix.dhall\n",
+    ]) : "",
+    # Apply the configuration (installs all packages including cachix).
+    "nixos-rebuild switch 2>&1 | tail -20\n",
+    # Register the huggingface Cachix binary cache — mirrors cachix-action@v16.
+    "cachix use huggingface\n",
+  ]))
 }
 
 # ---------------------------------------------------------------------------
@@ -50,11 +68,17 @@ locals {
 resource "aws_instance" "kernels_dev" {
   ami           = data.aws_ami.nixos.id
   instance_type = var.instance_type
-  key_name                    = var.key_pair_name
-  subnet_id                   = var.subnet_id
+  key_name      = var.key_pair_name
+  subnet_id     = var.subnet_id
+
   associate_public_ip_address = true
 
   vpc_security_group_ids = [var.security_group_id]
+
+  # NixOS configuration is applied on first boot via user data.
+  # Changing nixos-configuration.nix will replace the instance.
+  user_data                   = local.user_data
+  user_data_replace_on_change = true
 
   root_block_device {
     volume_size           = var.root_volume_size_gb
@@ -89,61 +113,4 @@ resource "aws_volume_attachment" "data" {
   volume_id    = aws_ebs_volume.data.id
   instance_id  = aws_instance.kernels_dev.id
   force_detach = false
-}
-
-# ---------------------------------------------------------------------------
-# Apply NixOS configuration
-#
-# Following the pattern from nix.dev:
-#   https://nix.dev/tutorials/nixos/deploying-nixos-using-terraform.html
-#
-# 1. Wait for SSH to be reachable.
-# 2. Upload nixos-configuration.nix to /etc/nixos/configuration.nix.
-# 3. Optionally write the Cachix auth token.
-# 4. Run nixos-rebuild switch to activate the configuration.
-# ---------------------------------------------------------------------------
-resource "null_resource" "nixos_config" {
-  # Re-apply whenever the configuration file changes.
-  triggers = {
-    config_sha256 = filesha256("${path.module}/nixos-configuration.nix")
-    instance_id   = aws_instance.kernels_dev.id
-  }
-
-  connection {
-    type        = "ssh"
-    host        = aws_instance.kernels_dev.public_ip
-    user        = "root"
-    private_key = file(pathexpand(var.ssh_private_key_path))
-    timeout     = "10m"
-  }
-
-  # Upload the NixOS configuration.
-  provisioner "file" {
-    source      = "${path.module}/nixos-configuration.nix"
-    destination = "/etc/nixos/configuration.nix"
-  }
-
-  # Write the Cachix auth token if one was provided.
-  provisioner "remote-exec" {
-    inline = [
-      var.cachix_auth_token != "" ? "mkdir -p /root/.config/cachix && printf '{\\n  authToken = \"${var.cachix_auth_token}\";\\n}\\n' > /root/.config/cachix/cachix.dhall && chmod 600 /root/.config/cachix/cachix.dhall" : "true"
-    ]
-  }
-
-  # Activate the configuration.
-  provisioner "remote-exec" {
-    inline = [
-      "nixos-rebuild switch 2>&1 | tail -20",
-    ]
-  }
-
-  # Register the huggingface Cachix binary cache — mirrors cachix-action@v16
-  # in the upstream build-pr.yaml.  cachix is now available (installed above).
-  provisioner "remote-exec" {
-    inline = [
-      "cachix use huggingface",
-    ]
-  }
-
-  depends_on = [aws_volume_attachment.data]
 }

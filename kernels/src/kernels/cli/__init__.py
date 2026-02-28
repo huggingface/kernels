@@ -1,30 +1,31 @@
 import argparse
 import dataclasses
 import json
+import shutil
 import sys
 from pathlib import Path
 
-from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, get_kernel_locks
-from kernels.cli.upload import upload_kernels_dir
-from kernels.utils import (
-    install_kernel,
-    install_kernel_all_variants,
-    KNOWN_BACKENDS,
-)
-from kernels.cli.init import run_init, parse_kernel_name
-from kernels.cli.skills import add_skill
-from kernels.cli.versions import print_kernel_versions
+from huggingface_hub import ModelCard, ModelCardData
+
 from kernels.cli.doc import generate_readme_for_kernel
+from kernels.cli.init import parse_kernel_name, run_init
 from kernels.cli.kernel_card_utils import (
     DESCRIPTION,
     KERNEL_CARD_TEMPLATE_PATH,
+    LIBRARY_NAME,
     _build_kernel_card_vars,
-    _extract_card_sections,
-    _load_or_create_kernel_card,
     _update_kernel_card_license,
 )
-from huggingface_hub import ModelCard
+from kernels.cli.skills import add_skill
+from kernels.cli.upload import upload_kernels_dir
+from kernels.cli.versions import print_kernel_versions
+from kernels.compat import tomllib
+from kernels.lockfile import KernelLock, get_kernel_locks
+from kernels.utils import (
+    KNOWN_BACKENDS,
+    install_kernel,
+    install_kernel_all_variants,
+)
 
 SYSTEM_CARD_PATH = "CARD.md"
 
@@ -362,45 +363,30 @@ def initialize_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
     card_path = kernel_dir / SYSTEM_CARD_PATH
 
-    kernel_card = _load_or_create_kernel_card(
-        repo_id_or_path=args.repo_id, license="apache-2.0"
-    )
-    kernel_card.save(card_path)
+    if args.repo_id:
+        try:
+            ModelCard.load(args.repo_id).save(card_path)
+            return
+        except Exception:
+            pass
+
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, card_path)
 
 
 def fill_kernel_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
     card_path = kernel_dir / SYSTEM_CARD_PATH
 
-    existing_card = _load_or_create_kernel_card(
-        repo_id_or_path=card_path,
-        license="apache-2.0",
-    )
-    existing_sections = _extract_card_sections(str(existing_card.content))
     dynamic_vars = _build_kernel_card_vars(
         kernel_dir, repo_id=args.repo_id or "REPO_ID"
     )
-    description = (
-        args.description or existing_sections.get("description") or DESCRIPTION
-    )
+    description = args.description or DESCRIPTION
 
-    # Preserve any user-written section not already covered by `dynamic_vars`.
-    # Normalize heading.
-    preserved: dict = {}
-    for heading, body in existing_sections.items():
-        if heading == "description":
-            continue
-        var_name = heading.replace(" ", "_")
-        if var_name in dynamic_vars:
-            continue
-        if body:
-            preserved[var_name] = body
-
+    card_data = ModelCardData(library_name=LIBRARY_NAME)
     updated_card = ModelCard.from_template(
-        card_data=existing_card.data,
-        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
+        card_data=card_data,
+        template_path=str(card_path),
         kernel_description=description,
-        **preserved,
         **dynamic_vars,
     )
     _update_kernel_card_license(updated_card, kernel_dir)

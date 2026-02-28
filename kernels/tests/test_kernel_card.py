@@ -1,13 +1,11 @@
+import shutil
 import tempfile
-from pathlib import Path
 from dataclasses import dataclass
-from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 import pytest
-from huggingface_hub import ModelCard, ModelCardData
-from huggingface_hub.errors import RepositoryNotFoundError
 
-from kernels.cli import initialize_card, fill_kernel_card
+from kernels.cli import fill_kernel_card, initialize_card
 from kernels.cli.kernel_card_utils import KERNEL_CARD_TEMPLATE_PATH
 
 SYSTEM_CARD_PATH = "CARD.md"
@@ -52,23 +50,19 @@ cuda-capabilities = ["8.0", "8.9"]
 
 @pytest.fixture
 def initialized_kernel_dir(mock_kernel_dir):
-    card = ModelCard.from_template(
-        card_data=ModelCardData(license="apache-2.0", library_name="kernels"),
-        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
-        model_description="Test kernel.",
-    )
-    card.save(mock_kernel_dir / SYSTEM_CARD_PATH)
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
     return mock_kernel_dir
 
 
 def test_initialize_card_creates_file(mock_kernel_dir):
     args = CardArgs(kernel_dir=str(mock_kernel_dir))
-    with patch(
-        "huggingface_hub.ModelCard.load",
-        side_effect=RepositoryNotFoundError("test", response=MagicMock()),
-    ):
-        initialize_card(args)
-    assert (mock_kernel_dir / SYSTEM_CARD_PATH).exists()
+    initialize_card(args)
+    card_path = mock_kernel_dir / SYSTEM_CARD_PATH
+    assert card_path.exists()
+
+    content = card_path.read_text()
+    assert "{{ kernel_description }}" in content
+    assert "{{ supported_backends }}" in content
 
 
 def test_fill_kernel_card_backends(initialized_kernel_dir):
@@ -129,21 +123,18 @@ def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
     card_path = mock_kernel_dir / SYSTEM_CARD_PATH
     card_path.write_text(
         "---\n"
-        "license: mit\n"
-        "library_name: kernels\n"
+        "{{ card_data }}\n"
         "---\n\n"
         f"{existing_description}\n\n"
+        "{{ kernel_description }}\n\n"
         "## How to use\n\n"
-        "```python\n"
-        "# TODO: add an example code snippet for running this kernel\n"
-        "```\n\n"
+        "{{ usage_example }}\n\n"
         "## Available functions\n\n"
-        "[TODO: add the functions available through this kernel]\n\n"
+        "{{ available_functions }}\n\n"
         "## Supported backends\n\n"
-        "[TODO: add the backends this kernel supports]\n\n"
-        "## Benchmarks\n\n"
-        "[TODO: provide benchmarks if available]\n\n"
+        "{{ supported_backends }}\n\n"
         f"## Source code\n\n{existing_source}\n\n"
+        "{{ source_code }}\n\n"
         f"## Notes\n\n{existing_notes}\n"
     )
 
@@ -153,14 +144,14 @@ def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
 
     content = card_path.read_text()
 
+    # Dynamic content
     assert "- `func1`" in content
     assert "- `func2`" in content
     assert "- cuda" in content
     assert "- metal" in content
     assert f'get_kernel("{repo_id}")' in content
-    assert "[TODO: add the functions available through this kernel]" not in content
-    assert "[TODO: add the backends this kernel supports]" not in content
 
+    # Static user content
     assert existing_description in content
     assert existing_notes in content
     assert existing_source in content
@@ -183,12 +174,7 @@ def test_fill_kernel_card_upstream_source(mock_kernel_dir):
         'cuda-capabilities = ["8.0", "8.9"]\n'
     )
 
-    card = ModelCard.from_template(
-        card_data=ModelCardData(license="apache-2.0", library_name="kernels"),
-        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
-        kernel_description="Test kernel.",
-    )
-    card.save(mock_kernel_dir / SYSTEM_CARD_PATH)
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
 
     args = CardArgs(kernel_dir=str(mock_kernel_dir))
     fill_kernel_card(args)
@@ -200,9 +186,9 @@ def test_fill_kernel_card_preserves_user_notes(initialized_kernel_dir):
     card_path = initialized_kernel_dir / SYSTEM_CARD_PATH
     user_text = "Custom kernel notes."
     existing_content = card_path.read_text()
-    card_path.write_text(existing_content.rstrip() + f"\n\n## Notes\n\n{user_text}\n")
+    card_path.write_text(existing_content.replace("{{ notes }}", user_text))
 
     args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
     content = card_path.read_text()
-    assert f"{user_text}" in content
+    assert user_text in content

@@ -1,11 +1,10 @@
 import ast
-import re
 from pathlib import Path
+from typing import Any
+
+from huggingface_hub import ModelCard
 
 from ..compat import tomllib
-from typing import Any
-from huggingface_hub import ModelCard, ModelCardData
-from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 
 KERNEL_CARD_TEMPLATE_PATH = Path(__file__).parent / "card_template.md"
 DESCRIPTION = """
@@ -21,32 +20,6 @@ kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
 {func_name}(...)
 ```"""
 LIBRARY_NAME = "kernels"
-
-
-def _load_or_create_kernel_card(
-    repo_id_or_path: str = "REPO_ID",
-    token: str | None = None,
-    kernel_description: str | None = None,
-    license: str | None = None,
-    force_update_content: bool = False,
-) -> ModelCard:
-    kernel_card = None
-
-    if not force_update_content:
-        try:
-            kernel_card = ModelCard.load(repo_id_or_path, token=token)
-        except (EntryNotFoundError, RepositoryNotFoundError, TypeError):
-            pass  # Will create from template below
-
-    if kernel_card is None:
-        kernel_description = kernel_description or DESCRIPTION
-        kernel_card = ModelCard.from_template(
-            card_data=ModelCardData(license=license, library_name=LIBRARY_NAME),
-            template_path=str(KERNEL_CARD_TEMPLATE_PATH),
-            model_description=kernel_description,
-        )
-
-    return kernel_card
 
 
 def _parse_build_toml(local_path: str | Path) -> dict | None:
@@ -106,33 +79,6 @@ def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
         return None
     except Exception:
         return None
-
-
-def _extract_card_sections(card_content: str) -> dict:
-    """Extract named sections from a rendered kernel card markdown string."""
-    body = card_content
-    front_matter_match = re.match(r"^---\n.*?\n---\n", body, re.DOTALL)
-    if front_matter_match:
-        body = body[front_matter_match.end() :]
-
-    parts = re.split(r"\n## ", body)
-
-    result: dict[str, str] = {}
-
-    description = parts[0].strip()
-    description = re.sub(r"<!--.*?-->", "", description, flags=re.DOTALL).strip()
-    if description:
-        result["description"] = description
-
-    for part in parts[1:]:
-        newline = part.find("\n")
-        if newline == -1:
-            continue
-        section_name = part[:newline].strip().lower()
-        section_body = part[newline:].strip()
-        result[section_name] = section_body
-
-    return result
 
 
 def _build_kernel_card_vars(

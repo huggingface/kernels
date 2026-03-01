@@ -34,13 +34,13 @@ if(GPU_LANG STREQUAL "CUDA")
   enable_language(CUDA)
 
   if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
-    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
-      set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0+PTX")
+      CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
+    set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0+PTX")
   elseif(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
-    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
-      set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;12.0+PTX")
+      CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+    set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;12.0+PTX")
   else()
-      set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0+PTX")
+    set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0+PTX")
   endif()
 
   # Get the capabilities without +PTX suffixes, so that we can use them as
@@ -64,6 +64,23 @@ endif()
 # Run `tvm-ffi-config --cmakedir` to set `tvm_ffi_ROOT`
 execute_process(COMMAND "${Python_EXECUTABLE}" -m tvm_ffi.config --cmakedir OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE tvm_ffi_ROOT)
 find_package(tvm_ffi CONFIG REQUIRED)
+
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/build-variants.cmake)
+
+# Generate build variant name.
+if(GPU_LANG STREQUAL "CUDA")
+  generate_build_name(BUILD_VARIANT_NAME "cuda" "${CMAKE_CUDA_COMPILER_VERSION}")
+elseif(GPU_LANG STREQUAL "HIP")
+  generate_build_name(BUILD_VARIANT_NAME "rocm" "${ROCM_VERSION}")
+elseif(GPU_LANG STREQUAL "SYCL")
+  generate_build_name(BUILD_VARIANT_NAME "xpu" "${DPCPP_VERSION}")
+elseif(GPU_LANG STREQUAL "METAL")
+  generate_build_name(BUILD_VARIANT_NAME "metal" "")
+elseif(GPU_LANG STREQUAL "CPU")
+  generate_build_name(BUILD_VARIANT_NAME "cpu" "")
+else()
+  message(FATAL_ERROR "Cannot generate build name for unknown GPU_LANG: ${GPU_LANG}")
+endif()
 
 configure_file(
   ${CMAKE_CURRENT_LIST_DIR}/cmake/_ops.py.in

@@ -11,6 +11,7 @@ use crate::torch::common::{prefix_and_join_includes, write_cmake_file};
 use crate::torch::kernel::render_kernel_components;
 use crate::FileSet;
 
+static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
@@ -18,6 +19,11 @@ static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
+    write_cmake_file(
+        file_set,
+        "build-variants.cmake",
+        BUILD_VARIANTS_UTILS.as_bytes(),
+    );
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
 }
 
@@ -146,6 +152,7 @@ pub fn render_binding(
 pub fn render_extension(
     env: &Environment,
     general: &General,
+    tvm_ffi: &TvmFfi,
     write: &mut impl Write,
 ) -> Result<()> {
     env.get_template("tvm_ffi/tvm-ffi-extension.cmake")
@@ -153,6 +160,7 @@ pub fn render_extension(
         .render_to_write(
             context! {
                 python_name => general.python_name(),
+                data_extensions => tvm_ffi.data_extensions(),
             },
             &mut *write,
         )
@@ -206,7 +214,7 @@ pub fn write_cmake(
 
     render_kernel_components(env, build, cmake_writer)?;
 
-    render_extension(env, &build.general, cmake_writer)?;
+    render_extension(env, &build.general, tvm_ffi, cmake_writer)?;
 
     Ok(())
 }

@@ -4,6 +4,8 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -168,3 +170,27 @@ def test_kernel_upload_deletes_as_expected():
         str(filename_to_change) in k for k in repo_filenames
     ), f"{repo_filenames=}"
     _get_hf_api().delete_repo(repo_id=REPO_ID)
+
+
+def test_large_kernel_upload_uses_kernel_root_path(monkeypatch, tmp_path):
+    kernel_root = tmp_path / "kernel"
+    build_variant = kernel_root / "build" / "torch-cpu"
+    build_variant.mkdir(parents=True, exist_ok=True)
+    (build_variant / "metadata.json").write_text("{}")
+    for i in range(1001):
+        (build_variant / f"file_{i}.py").touch()
+
+    api = Mock()
+    api.create_repo.return_value = SimpleNamespace(repo_id=REPO_ID)
+    monkeypatch.setattr("kernels.cli.upload._get_hf_api", lambda: api)
+
+    upload_kernels(UploadArgs(kernel_root, REPO_ID, False, "main"))
+
+    api.upload_large_folder.assert_called_once()
+    kwargs = api.upload_large_folder.call_args.kwargs
+    assert kwargs["repo_id"] == REPO_ID
+    assert kwargs["folder_path"] == kernel_root.resolve()
+    assert kwargs["revision"] == "main"
+    assert kwargs["repo_type"] == "model"
+    assert kwargs["allow_patterns"] == ["build/torch*"]
+    api.upload_folder.assert_not_called()

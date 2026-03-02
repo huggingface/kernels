@@ -5,6 +5,13 @@ from kernels.utils import _get_hf_api
 from kernels.variants import BUILD_VARIANT_REGEX
 
 
+def get_file_count_in_build(build_dir: Path) -> int:
+    return sum(
+        1
+        for p in build_dir.rglob("*")
+        if p.is_file() and p.relative_to(build_dir).as_posix().startswith("torch")
+    )
+
 def upload_kernels_dir(
     kernel_dir: Path,
     *,
@@ -70,15 +77,11 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    file_count = sum(
-        1
-        for p in build_dir.rglob("*")
-        if p.is_file() and p.relative_to(build_dir).as_posix().startswith("torch")
-    )
+    file_count = get_file_count_in_build(build_dir)
 
-    if file_count > 200:
+    if file_count > 1_000:
         print(
-            f"⚠️  Found {file_count} files to upload, which exceeds the 200 file limit for a single commit. Deleting old build files and re-uploading the whole build folder to avoid hitting file limits."
+            f"⚠️  Found {file_count} files to upload, which exceeds the 1,000 file limit for a single commit."
         )
         kernel_root_dir = build_dir.parent
         api.upload_large_folder(

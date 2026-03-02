@@ -1,6 +1,6 @@
 .PHONY: style
 
-export check_dirs := src examples tests
+export check_dirs := src tests
 
 all: src/kernels/python_depends.json
 

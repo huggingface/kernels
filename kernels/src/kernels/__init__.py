@@ -2,6 +2,8 @@ import importlib.metadata
 
 __version__ = importlib.metadata.version("kernels")
 
+from kernels._windows import _add_additional_dll_paths
+from kernels.benchmark import Benchmark
 from kernels.layer import (
     CUDAProperties,
     Device,
@@ -27,10 +29,6 @@ from kernels.utils import (
     install_kernel,
     load_kernel,
 )
-from kernels.benchmark import Benchmark
-
-
-from kernels._windows import _add_additional_dll_paths
 
 _add_additional_dll_paths()
 

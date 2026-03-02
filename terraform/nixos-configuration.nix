@@ -1,9 +1,11 @@
 # References:
 #   - https://github.com/huggingface/kernels-community/blob/main/.github/workflows/build-pr.yaml
-
-{ config, pkgs, lib, ... }:
-
 {
+  config,
+  pkgs,
+  lib,
+  ...
+}: {
   imports = [
     # Required for EC2 / AWS support (virtio drivers, cloud-init, EBS, etc.)
     <nixpkgs/nixos/modules/virtualisation/amazon-image.nix>
@@ -60,8 +62,8 @@
   # -------------------------------------------------------------------------
   systemd.services.format-data-volume = {
     description = "Format the EBS data volume on first boot if needed";
-    wantedBy = [ "multi-user.target" ];
-    before = [ "data.mount" ];
+    wantedBy = ["multi-user.target"];
+    before = ["data.mount"];
     # Only run if the device exists (attachment can lag by a few seconds).
     unitConfig.ConditionPathExists = "/dev/nvme1n1";
     script = ''
@@ -185,6 +187,6 @@
   # -------------------------------------------------------------------------
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 22 ];
+    allowedTCPPorts = [22];
   };
 }

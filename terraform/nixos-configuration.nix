@@ -19,10 +19,13 @@
   #   substituters = huggingface cachix
   # -------------------------------------------------------------------------
   nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
+    experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
     # Use every available core; individual flakes can override with their own settings.
-    max-jobs        = "auto";
-    cores           = 0;
+    max-jobs = "auto";
+    cores = 0;
     sandbox-fallback = false;
 
     substituters = [
@@ -36,14 +39,17 @@
     ];
 
     # Allow the main user to add extra substituters without sudo.
-    trusted-users = [ "root" "nixos" ];
+    trusted-users = [
+      "root"
+      "nixos"
+    ];
   };
 
   # Keep build outputs around so incremental rebuilds stay fast.
   nix.gc = {
     automatic = true;
-    dates     = "weekly";
-    options   = "--delete-older-than 30d";
+    dates = "weekly";
+    options = "--delete-older-than 30d";
   };
 
   # -------------------------------------------------------------------------
@@ -53,9 +59,9 @@
   # fill the root volume.
   # -------------------------------------------------------------------------
   systemd.services.format-data-volume = {
-    description   = "Format the EBS data volume on first boot if needed";
-    wantedBy      = [ "multi-user.target" ];
-    before        = [ "data.mount" ];
+    description = "Format the EBS data volume on first boot if needed";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "data.mount" ];
     # Only run if the device exists (attachment can lag by a few seconds).
     unitConfig.ConditionPathExists = "/dev/nvme1n1";
     script = ''
@@ -65,22 +71,29 @@
       fi
     '';
     serviceConfig = {
-      Type             = "oneshot";
-      RemainAfterExit  = true;
+      Type = "oneshot";
+      RemainAfterExit = true;
     };
   };
 
   fileSystems."/data" = {
-    device  = "/dev/nvme1n1";
-    fsType  = "ext4";
-    options = [ "nofail" "x-systemd.requires=format-data-volume.service" ];
+    device = "/dev/nvme1n1";
+    fsType = "ext4";
+    options = [
+      "nofail"
+      "x-systemd.requires=format-data-volume.service"
+    ];
   };
 
   # Bind /nix/store onto the data volume so builds land on the 1 TiB disk.
   fileSystems."/nix/store" = {
-    device  = "/data/nix-store";
-    fsType  = "none";
-    options = [ "bind" "nofail" "x-systemd.requires=data.mount" ];
+    device = "/data/nix-store";
+    fsType = "none";
+    options = [
+      "bind"
+      "nofail"
+      "x-systemd.requires=data.mount"
+    ];
   };
 
   # Ensure the bind-mount target exists before mounting.
@@ -120,11 +133,11 @@
     tmux
 
     # Nix ecosystem tooling
-    cachix          # binary cache management
-    nix-tree        # visualise the Nix store graph
-    nix-diff        # compare two derivations
-    direnv          # per-directory .envrc / nix develop auto-activation
-    nix-direnv      # fast direnv integration for Nix
+    cachix # binary cache management
+    nix-tree # visualise the Nix store graph
+    nix-diff # compare two derivations
+    direnv # per-directory .envrc / nix develop auto-activation
+    nix-direnv # fast direnv integration for Nix
 
     # Compression (used by the CI closure export/import steps)
     zstd
@@ -143,16 +156,16 @@
 
   # direnv hooks for bash and zsh so `nix develop` shells activate automatically.
   programs.direnv = {
-    enable          = true;
+    enable = true;
     nix-direnv.enable = true;
   };
 
   # Useful shell aliases for kernel dev workflow.
   environment.shellAliases = {
-    nbd  = "nix build -L";          # build with logs
+    nbd = "nix build -L"; # build with logs
     nbdt = "nix build -L .#ci-test"; # build the CI test output
-    ndc  = "nix develop -c $SHELL"; # enter dev shell
-    ws   = "cd /data/workspace";
+    ndc = "nix develop -c $SHELL"; # enter dev shell
+    ws = "cd /data/workspace";
   };
 
   # -------------------------------------------------------------------------
@@ -161,9 +174,9 @@
   services.openssh = {
     enable = true;
     settings = {
-      PermitRootLogin        = "prohibit-password"; # key-only root login
+      PermitRootLogin = "prohibit-password"; # key-only root login
       PasswordAuthentication = false;
-      X11Forwarding          = false;
+      X11Forwarding = false;
     };
   };
 
@@ -171,7 +184,7 @@
   # Firewall — allow SSH only
   # -------------------------------------------------------------------------
   networking.firewall = {
-    enable          = true;
+    enable = true;
     allowedTCPPorts = [ 22 ];
   };
 }

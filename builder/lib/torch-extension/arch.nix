@@ -107,7 +107,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   # Generate build files.
   postPatch = ''
-    build2cmake generate-torch \
+    build2cmake generate \
       --ops-id ${rev} build.toml
   '';
 

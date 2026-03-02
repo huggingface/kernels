@@ -35,28 +35,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Generate CMake files for Torch extension builds.
-    GenerateTorch {
-        #[arg(name = "BUILD_TOML")]
-        build_toml: PathBuf,
-
-        /// The directory to write the generated files to
-        /// (directory of `BUILD_TOML` when absent).
-        #[arg(name = "TARGET_DIR")]
-        target_dir: Option<PathBuf>,
-
-        /// Force-overwrite existing files.
-        #[arg(short, long)]
-        force: bool,
-
-        /// This is an optional unique identifier that is suffixed to the
-        /// kernel name to avoid name collisions. (e.g. Git SHA)
-        #[arg(long)]
-        ops_id: Option<String>,
-    },
-
-    /// Generate CMake files for tvm-ffi extension builds.
-    GenerateTvmFfi {
+    /// Generate CMake files for a kernel extension build.
+    #[command(alias = "generate-torch")]
+    Generate {
         #[arg(name = "BUILD_TOML")]
         build_toml: PathBuf,
 
@@ -114,18 +95,12 @@ enum Commands {
 fn main() -> Result<()> {
     let args = Cli::parse();
     match args.command {
-        Commands::GenerateTorch {
+        Commands::Generate {
             build_toml,
             force,
             target_dir,
             ops_id,
-        } => generate_torch(build_toml, target_dir, force, ops_id),
-        Commands::GenerateTvmFfi {
-            build_toml,
-            force,
-            target_dir,
-            ops_id,
-        } => generate_tvm_ffi(build_toml, target_dir, force, ops_id),
+        } => generate_and_write(build_toml, target_dir, force, ops_id),
         Commands::UpdateBuild { build_toml } => update_build(build_toml),
         Commands::Validate { build_toml } => {
             parse_and_validate(build_toml)?;
@@ -137,70 +112,19 @@ fn main() -> Result<()> {
             dry_run,
             force,
             ops_id,
-        } => clean(build_toml, target_dir, dry_run, force, ops_id),
+        } => generate_and_clean(build_toml, target_dir, dry_run, force, ops_id),
     }
 }
 
-fn generate_torch(
+fn generate_and_write(
     build_toml: PathBuf,
     target_dir: Option<PathBuf>,
     force: bool,
     ops_id: Option<String>,
 ) -> Result<()> {
     let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
-
-    let build_compat = parse_and_validate(build_toml)?;
-
-    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
-        eprintln!(
-            "build.toml is in the deprecated V1 or V2 format, use `build2cmake update-build` to update."
-        )
-    }
-
-    let build: Build = build_compat
-        .try_into()
-        .context("Cannot update build configuration")?;
-
-    let mut env = Environment::new();
-    env.set_trim_blocks(true);
-    minijinja_embed::load_templates!(&mut env);
-
-    let file_set = if build.is_noarch() {
-        write_torch_ext_noarch(&env, &build, target_dir.clone(), ops_id)?
-    } else {
-        write_torch_ext(&env, &build, target_dir.clone(), ops_id)?
-    };
+    let file_set = generate_file_set(build_toml, &target_dir, ops_id)?;
     file_set.write(&target_dir, force)?;
-
-    Ok(())
-}
-
-fn generate_tvm_ffi(
-    build_toml: PathBuf,
-    target_dir: Option<PathBuf>,
-    force: bool,
-    ops_id: Option<String>,
-) -> Result<()> {
-    let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
-
-    let build_compat = parse_and_validate(build_toml)?;
-
-    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
-        eprintln!(
-            "build.toml is in the deprecated V1 or V2 format, use `build2cmake update-build` to update."
-        )
-    }
-
-    let build: Build = build_compat
-        .try_into()
-        .context("Cannot update build configuration")?;
-
-    let mut env = Environment::new();
-    env.set_trim_blocks(true);
-    minijinja_embed::load_templates!(&mut env);
-
-    let fileset = write_tvm_ffi_ext(&env, &build, target_dir.clone(), ops_id)?;
-    fileset.write(&target_dir, force)?;
 
     Ok(())
 }
@@ -270,7 +194,7 @@ fn parse_and_validate(build_toml: impl AsRef<Path>) -> Result<BuildCompat> {
     Ok(build_compat)
 }
 
-fn clean(
+fn generate_and_clean(
     build_toml: PathBuf,
     target_dir: Option<PathBuf>,
     dry_run: bool,
@@ -279,23 +203,7 @@ fn clean(
 ) -> Result<()> {
     let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
 
-    let build_compat = parse_and_validate(build_toml)?;
-
-    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
-        eprintln!(
-            "build.toml is in the deprecated V1 or V2 format, use `build2cmake update-build` to update."
-        )
-    }
-
-    let build: Build = build_compat
-        .try_into()
-        .context("Cannot update build configuration")?;
-
-    let mut env = Environment::new();
-    env.set_trim_blocks(true);
-    minijinja_embed::load_templates!(&mut env);
-
-    let generated_files = get_generated_files(&env, &build, target_dir.clone(), ops_id)?;
+    let generated_files = generate_file_set(build_toml, target_dir.clone(), ops_id)?.into_names();
 
     if generated_files.is_empty() {
         eprintln!("No generated artifacts found to clean.");
@@ -357,13 +265,7 @@ fn clean(
     }
 
     // Clean up empty directories
-    let dirs_to_check = [
-        target_dir.join("cmake"),
-        target_dir
-            .join("torch-ext")
-            .join(build.general.python_name()),
-        target_dir.join("torch-ext"),
-    ];
+    let dirs_to_check = [target_dir.join("cmake")];
 
     for dir in dirs_to_check {
         if dir.exists() && is_empty_dir(&dir)? {
@@ -385,24 +287,36 @@ fn clean(
     Ok(())
 }
 
-fn get_generated_files(
-    env: &Environment,
-    build: &Build,
-    target_dir: PathBuf,
+fn generate_file_set(
+    build_toml: PathBuf,
+    target_dir: impl AsRef<Path>,
     ops_id: Option<String>,
-) -> Result<Vec<PathBuf>> {
-    let mut all_set = FileSet::new();
+) -> Result<FileSet> {
+    let build_compat = parse_and_validate(build_toml)?;
 
-    let set = if build.tvm_ffi.is_some() {
-        write_tvm_ffi_ext(env, build, target_dir.clone(), ops_id.clone())?
+    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
+        eprintln!(
+            "build.toml is in the deprecated V1 or V2 format, use `build2cmake update-build` to update."
+        )
+    }
+
+    let build: Build = build_compat
+        .try_into()
+        .context("Cannot update build configuration")?;
+
+    let mut env = Environment::new();
+    env.set_trim_blocks(true);
+    minijinja_embed::load_templates!(&mut env);
+
+    let file_set = if matches!(build.framework, crate::config::Framework::TvmFfi(_)) {
+        write_tvm_ffi_ext(&env, &build, target_dir, ops_id)?
     } else if build.is_noarch() {
-        write_torch_ext_noarch(env, build, target_dir.clone(), ops_id.clone())?
+        write_torch_ext_noarch(&env, &build, target_dir, ops_id)?
     } else {
-        write_torch_ext(env, build, target_dir.clone(), ops_id.clone())?
+        write_torch_ext(&env, &build, target_dir, ops_id)?
     };
-    all_set.extend(set);
 
-    Ok(all_set.into_names())
+    Ok(file_set)
 }
 
 fn is_empty_dir(dir: &Path) -> Result<bool> {

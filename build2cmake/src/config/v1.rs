@@ -95,6 +95,11 @@ impl TryFrom<Build> for super::Build {
             backend_set.into_iter().collect()
         };
 
+        let torch = match build.torch {
+            Some(torch) => torch,
+            None => bail!("Torch section is required build.toml v1"),
+        };
+
         Ok(Self {
             general: super::General {
                 name: build.general.name,
@@ -106,8 +111,7 @@ impl TryFrom<Build> for super::Build {
                 cuda: None,
                 xpu: None,
             },
-            tvm_ffi: None,
-            torch: build.torch.map(Into::into),
+            framework: super::Framework::Torch(torch.into()),
             kernels,
         })
     }

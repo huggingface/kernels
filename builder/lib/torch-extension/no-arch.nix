@@ -80,7 +80,7 @@ stdenv.mkDerivation (prevAttrs: {
   # build. But `build2cmake` does proper validation of the build.toml, so
   # we run it anyway.
   postPatch = ''
-    build2cmake generate-torch \
+    build2cmake generate \
       --ops-id ${rev} build.toml
   '';
 

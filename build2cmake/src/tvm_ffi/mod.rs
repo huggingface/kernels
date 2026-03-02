@@ -39,10 +39,10 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
 pub fn write_tvm_ffi_ext(
     env: &Environment,
     build: &Build,
-    target_dir: PathBuf,
+    target_dir: impl AsRef<Path>,
     ops_id: Option<String>,
 ) -> Result<FileSet> {
-    let tvm_ffi_ext = match build.tvm_ffi.as_ref() {
+    let tvm_ffi_ext = match build.framework.tvm_ffi() {
         Some(torch_ext) => torch_ext,
         None => bail!("Build configuration does not have `tvm-ffi` section"),
     };

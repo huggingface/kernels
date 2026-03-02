@@ -11,12 +11,18 @@ use crate::version::Version;
 pub struct Build {
     pub general: General,
 
-    pub torch: Option<Torch>,
-
-    pub tvm_ffi: Option<TvmFfi>,
+    #[serde(flatten)]
+    pub framework: Framework,
 
     #[serde(rename = "kernel", default)]
     pub kernels: HashMap<String, Kernel>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Framework {
+    Torch(Torch),
+    TvmFfi(TvmFfi),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -144,10 +150,14 @@ impl From<Build> for super::Build {
             .map(|(k, v)| (k, v.into()))
             .collect();
 
+        let framework = match build.framework {
+            Framework::Torch(torch) => super::Framework::Torch(torch.into()),
+            Framework::TvmFfi(tvm_ffi) => super::Framework::TvmFfi(tvm_ffi.into()),
+        };
+
         Self {
             general: build.general.into(),
-            torch: build.torch.map(Into::into),
-            tvm_ffi: build.tvm_ffi.map(Into::into),
+            framework,
             kernels,
         }
     }
@@ -305,10 +315,14 @@ impl From<Kernel> for super::Kernel {
 
 impl From<super::Build> for Build {
     fn from(build: super::Build) -> Self {
+        let framework = match build.framework {
+            super::Framework::Torch(torch) => Framework::Torch(torch.into()),
+            super::Framework::TvmFfi(tvm_ffi) => Framework::TvmFfi(tvm_ffi.into()),
+        };
+
         Self {
             general: build.general.into(),
-            torch: build.torch.map(Into::into),
-            tvm_ffi: build.tvm_ffi.map(Into::into),
+            framework,
             kernels: build
                 .kernels
                 .into_iter()

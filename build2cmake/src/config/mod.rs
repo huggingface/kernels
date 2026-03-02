@@ -20,8 +20,28 @@ use crate::version::Version;
 pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
-    pub tvm_ffi: Option<TvmFfi>,
-    pub torch: Option<Torch>,
+    pub framework: Framework,
+}
+
+pub enum Framework {
+    Torch(Torch),
+    TvmFfi(TvmFfi),
+}
+
+impl Framework {
+    pub fn torch(&self) -> Option<&Torch> {
+        match self {
+            Framework::Torch(torch) => Some(torch),
+            Framework::TvmFfi(_) => None,
+        }
+    }
+
+    pub fn tvm_ffi(&self) -> Option<&TvmFfi> {
+        match self {
+            Framework::Torch(_) => None,
+            Framework::TvmFfi(tvm_ffi) => Some(tvm_ffi),
+        }
+    }
 }
 
 impl Build {

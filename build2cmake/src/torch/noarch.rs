@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eyre::{Context, Result};
 use itertools::Itertools;
@@ -14,7 +14,7 @@ use crate::{
 pub fn write_torch_ext_noarch(
     env: &Environment,
     build: &Build,
-    target_dir: PathBuf,
+    target_dir: impl AsRef<Path>,
     ops_id: Option<String>,
 ) -> Result<FileSet> {
     let mut file_set = FileSet::default();
@@ -23,7 +23,7 @@ pub fn write_torch_ext_noarch(
 
     write_compat_py(&mut file_set)?;
     write_ops_py(env, &build.general.python_name(), &ops_name, &mut file_set)?;
-    write_pyproject_toml(env, build.torch.as_ref(), &build.general, &mut file_set)?;
+    write_pyproject_toml(env, build.framework.torch(), &build.general, &mut file_set)?;
     write_metadata(&build.general, &mut file_set)?;
 
     Ok(file_set)

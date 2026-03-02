@@ -283,10 +283,10 @@ pub fn write_cmake(
 pub fn write_torch_ext(
     env: &Environment,
     build: &Build,
-    target_dir: PathBuf,
+    target_dir: impl AsRef<Path>,
     ops_id: Option<String>,
 ) -> Result<FileSet> {
-    let torch_ext = match build.torch.as_ref() {
+    let torch_ext = match build.framework.torch() {
         Some(torch_ext) => torch_ext,
         None => bail!("Build configuration does not have `torch` section"),
     };

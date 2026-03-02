@@ -1,7 +1,14 @@
 # Terraform
 
-Spins up an EC2 instance running NixOS, mimicking the infra we
-use to develop and build the kernels ourselves.
+Terraform scripts to spin up an EC2 instance running NixOS, 
+mimicking the infra we use to develop and build the kernels
+ourselves. 
+
+An `m7i.8xlarge` NixOS instance (32 vCPUs, 128 GiB RAM) is provisioned
+with a 200 GiB encrypted root volume and a 1 TiB encrypted gp3 data
+volume mounted at `/data`. On first boot, the bundled NixOS configuration
+is applied via `nixos-rebuild switch` and the Hugging Face Cachix binary
+cache is registered.
 
 ## Prerequisites
 

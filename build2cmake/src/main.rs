@@ -393,7 +393,9 @@ fn get_generated_files(
 ) -> Result<Vec<PathBuf>> {
     let mut all_set = FileSet::new();
 
-    let set = if build.is_noarch() {
+    let set = if build.tvm_ffi.is_some() {
+        write_tvm_ffi_ext(env, build, target_dir.clone(), ops_id.clone())?
+    } else if build.is_noarch() {
         write_torch_ext_noarch(env, build, target_dir.clone(), ops_id.clone())?
     } else {
         write_torch_ext(env, build, target_dir.clone(), ops_id.clone())?

@@ -117,10 +117,13 @@ endfunction()
 #   PACKAGE_NAME - Python package name (e.g., "activation")
 #   BUILD_VARIANT_NAME - Build variant name (e.g., "torch271-cxx11-cu124-x86_64-linux")
 #   INSTALL_PREFIX - Base installation directory (defaults to CMAKE_INSTALL_PREFIX)
+#   GPU_ARCHS - List of GPU architectures that were compiled
+#               (optional; when provided for CUDA/ROCm, metadata.json will include
+#               a "backend" key with the type and arch list)
 #
 function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     set(oneValueArgs INSTALL_PREFIX)
-    set(multiValueArgs DATA_EXTENSIONS)
+    set(multiValueArgs DATA_EXTENSIONS GPU_ARCHS)
     cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT ARG_INSTALL_PREFIX)
@@ -132,20 +135,6 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     # Always include 'py' extension for Python files
     set(ALL_EXTENSIONS ${ARG_DATA_EXTENSIONS})
     list(APPEND ALL_EXTENSIONS "py")
-
-    if (${GPU_LANG} STREQUAL "CPU")
-        set(_BACKEND "cpu")
-    elseif (${GPU_LANG} STREQUAL "CUDA")
-        set(_BACKEND "cuda")
-    elseif (${GPU_LANG} STREQUAL "HIP")
-        set(_BACKEND "rocm")
-    elseif (${GPU_LANG} STREQUAL "METAL")
-        set(_BACKEND "metal")
-    elseif (${GPU_LANG} STREQUAL "SYCL")
-        set(_BACKEND "xpu")
-    else()
-        message(FATAL_ERROR "Unsupported GPU_LANG: ${GPU_LANG}")
-    endif()
 
     # Set the installation directory
     set(KERNEL_INSTALL_DIR "${ARG_INSTALL_PREFIX}/${BUILD_VARIANT_NAME}")
@@ -170,10 +159,33 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         endforeach()
     endforeach()
 
-    install(FILES ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
-        DESTINATION "${KERNEL_INSTALL_DIR}"
-        RENAME "metadata.json"
-        COMPONENT ${TARGET_NAME})
+    message(STATUS "GPU archs: ${ARG_GPU_ARCHS}")
+
+    # Add the GPU archs to matadata.json when applicable.
+    if((GPU_LANG STREQUAL "CUDA" OR GPU_LANG STREQUAL "HIP") AND ARG_GPU_ARCHS)
+        list(JOIN ARG_GPU_ARCHS ";" _GPU_ARCHS_STR)
+        install(CODE "
+            file(MAKE_DIRECTORY \"${KERNEL_INSTALL_DIR}\")
+            execute_process(
+                COMMAND \"${Python3_EXECUTABLE}\"
+                    \"${CMAKE_CURRENT_LIST_DIR}/cmake/add_gpu_arch_metadata.py\"
+                    \"${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json\"
+                    \"${KERNEL_INSTALL_DIR}/metadata.json\"
+                    --backend \"${_BACKEND}\"
+                    --archs \"${_GPU_ARCHS_STR}\"
+                RESULT_VARIABLE _METADATA_RESULT
+                ERROR_VARIABLE _METADATA_ERROR
+            )
+            if(NOT _METADATA_RESULT EQUAL 0)
+                message(WARNING \"Failed to add GPU arch metadata: \${_METADATA_ERROR}\")
+            endif()
+        " COMPONENT ${TARGET_NAME})
+    else()
+        install(FILES ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
+            DESTINATION "${KERNEL_INSTALL_DIR}"
+            RENAME "metadata.json"
+            COMPONENT ${TARGET_NAME})
+    endif()
 
     # Compatibility with older kernels and direct Python imports.
     install(FILES ${CMAKE_SOURCE_DIR}/compat.py
@@ -199,10 +211,14 @@ endfunction()
 #   TARGET_NAME - Name of the target to create the install rule for
 #   PACKAGE_NAME - Python package name (e.g., "activation")
 #   BUILD_VARIANT_NAME - Build variant name (e.g., "torch271-cxx11-cu124-x86_64-linux")
+#   GPU_ARCHS - List of GPU architectures that were compiled
+#               (optional; when provided for CUDA/ROCm, metadata.json will include
+#               a "backend" key with the type and arch list)
 #
 function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
-    set(multiValueArgs DATA_EXTENSIONS)
-    cmake_parse_arguments(ARG "" "" "${multiValueArgs}" ${ARGN})
+    set(oneValueArgs)
+    set(multiValueArgs DATA_EXTENSIONS GPU_ARCHS)
+    cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     # Always include 'py' extension for Python files
     set(ALL_EXTENSIONS ${ARG_DATA_EXTENSIONS})
@@ -236,17 +252,35 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         endforeach()
     endforeach()
 
-    # Add custom commands to copy files
+
+    # Add the GPU archs to matadata.json when applicable.
+    if((GPU_LANG STREQUAL "CUDA" OR GPU_LANG STREQUAL "HIP") AND ARG_GPU_ARCHS)
+        list(JOIN ARG_GPU_ARCHS ";" _GPU_ARCHS_STR)
+        add_custom_command(TARGET local_install POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${VARIANT_DIR}
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_LIST_DIR}/cmake/add_gpu_arch_metadata.py
+                ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
+                ${VARIANT_DIR}/metadata.json
+                --backend ${_BACKEND}
+                --archs "${_GPU_ARCHS_STR}"
+            COMMENT "Writing metadata.json with GPU arch info to ${VARIANT_DIR}"
+        )
+    else()
+        add_custom_command(TARGET local_install POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${VARIANT_DIR}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
+                ${VARIANT_DIR}/metadata.json
+            COMMENT "Copying metadata.json to ${VARIANT_DIR}"
+        )
+    endif()
+
     add_custom_command(TARGET local_install POST_BUILD
             # Copy the shared library
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:${TARGET_NAME}>
             ${LOCAL_INSTALL_DIR}/
-
-            # Copy metadata.json if it exists
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
-            ${VARIANT_DIR}/metadata.json
 
             # Compatibility with older kernels and direct Python imports.
             COMMAND ${CMAKE_COMMAND} -E copy_if_different

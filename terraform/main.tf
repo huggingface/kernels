@@ -44,6 +44,24 @@ locals {
   user_data = base64encode(join("", [
     "#!/bin/sh\n",
     "set -e\n",
+    # Wait for the EBS data volume to be attached.
+    # Terraform attaches it after instance creation, so it may not be present
+    # immediately at boot.  Poll for up to 5 minutes (30 x 10 s).
+    "echo 'Waiting for data volume /dev/nvme1n1...'\n",
+    "for i in $(seq 1 30); do\n",
+    "  [ -b /dev/nvme1n1 ] && break\n",
+    "  sleep 10\n",
+    "done\n",
+    # Format (first boot only) and mount the data volume, then create the
+    # directories that NixOS will later bind-mount over /nix/store.
+    "if [ -b /dev/nvme1n1 ]; then\n",
+    "  if ! blkid /dev/nvme1n1 | grep -q ext4; then\n",
+    "    mkfs.ext4 -L kernels-data /dev/nvme1n1\n",
+    "  fi\n",
+    "  mkdir -p /data\n",
+    "  mount /dev/nvme1n1 /data\n",
+    "  mkdir -p /data/nix-store /data/workspace\n",
+    "fi\n",
     # Decode and write the NixOS configuration.
     "base64 -d > /etc/nixos/configuration.nix << 'B64EOF'\n",
     filebase64("${path.module}/nixos-configuration.nix"),

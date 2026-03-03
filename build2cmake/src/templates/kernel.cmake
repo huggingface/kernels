@@ -1,3 +1,10 @@
+function(accumulate_gpu_archs OUT_ACC ACC EXTRA_ARCHS)
+    list(APPEND ACC ${EXTRA_ARCHS})
+    list(REMOVE_DUPLICATES ACC)
+    list(SORT ACC)
+    set(${OUT_ACC} ${ACC} PARENT_SCOPE)
+endfunction()
+
 function(cuda_kernel_component SRC_VAR)
     set(options SUPPORTS_HIPIFY)
     set(oneValueArgs CUDA_MINVER)
@@ -34,6 +41,9 @@ function(cuda_kernel_component SRC_VAR)
         endif()
         message(STATUS "CUDA kernel capabilities: ${_KERNEL_ARCHS}")
         set_gencode_flags_for_srcs(SRCS "${_KERNEL_SRC}" CUDA_ARCHS "${_KERNEL_ARCHS}")
+
+        accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
+        set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
 
         # Apply CUDA-specific compile flags
         if(KERNEL_CUDA_FLAGS)
@@ -96,6 +106,9 @@ function(cuda_kernel_component SRC_VAR)
             set(_KERNEL_ARCHS "${ROCM_ARCHS}")
         endif()
         message(STATUS "HIP kernel archs: ${_KERNEL_ARCHS}")
+
+        accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
+        set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
 
         foreach(_SRC ${_KERNEL_SRC})
             if(_SRC MATCHES ".*\\.(cu|hip)$")

@@ -19,6 +19,7 @@ static COMPAT_PY: &str = include_str!("../templates/compat.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
 static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
+static ADD_GPU_ARCH_METADATA_PY: &str = include_str!("../templates/add_gpu_arch_metadata.py");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
@@ -184,6 +185,11 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
         file_set,
         "build-variants.cmake",
         BUILD_VARIANTS_UTILS.as_bytes(),
+    );
+    write_cmake_file(
+        file_set,
+        "add_gpu_arch_metadata.py",
+        ADD_GPU_ARCH_METADATA_PY.as_bytes(),
     );
     write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(

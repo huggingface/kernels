@@ -1,7 +1,7 @@
-from huggingface_hub.errors import RepositoryNotFoundError
 import pytest
 import torch
 import torch.nn.functional as F
+from huggingface_hub.errors import RepositoryNotFoundError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 

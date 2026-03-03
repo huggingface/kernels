@@ -1,11 +1,12 @@
 import ast
 import re
 from pathlib import Path
-
-from .compat import tomllib
 from typing import Any
+
 from huggingface_hub import ModelCard, ModelCardData
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
+
+from .compat import tomllib
 
 KERNEL_CARD_TEMPLATE_PATH = Path(__file__).parent / "card_template.md"
 DESCRIPTION = """

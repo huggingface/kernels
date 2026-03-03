@@ -81,7 +81,7 @@ def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
         return None
 
 
-def _parse_repo_id(local_path: str | Path) -> str:
+def _parse_repo_id(local_path: str | Path) -> str | None:
     local_path = Path(local_path)
 
     config = _parse_build_toml(local_path)

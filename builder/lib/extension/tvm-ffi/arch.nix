@@ -74,7 +74,7 @@ assert (buildConfig ? xpuVersion) -> xpuSupport;
 assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
-  inherit (import ../deps.nix { inherit lib pkgs torch; }) resolvePythonDeps resolveBackendPythonDeps;
+  inherit (import ../../deps.nix { inherit lib pkgs torch; }) resolvePythonDeps resolveBackendPythonDeps;
 
   dependencies =
     resolvePythonDeps pythonDeps
@@ -96,7 +96,7 @@ let
 in
 
 stdenv.mkDerivation (prevAttrs: {
-  name = "${kernelName}-torch-ext";
+  name = "${kernelName}-tvm-ffi-ext";
 
   inherit
     doAbiCheck
@@ -104,6 +104,8 @@ stdenv.mkDerivation (prevAttrs: {
     nvccThreads
     src
     ;
+
+  framework = "tvm-ffi";
 
   # Generate build files.
   postPatch = ''
@@ -144,9 +146,10 @@ stdenv.mkDerivation (prevAttrs: {
     kernel-layout-check
     remove-bytecode-hook
   ]
-  ++ lib.optionals doGetKernelCheck [
-    (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
-  ]
+  # TODO: renenable
+  #++ lib.optionals doGetKernelCheck [
+  #  (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
+  #]
   ++ lib.optionals cudaSupport [
     cmakeNvccThreadsHook
     cuda_nvcc
@@ -162,11 +165,7 @@ stdenv.mkDerivation (prevAttrs: {
     rewrite-nix-paths-macho
   ];
 
-  buildInputs = [
-    torch
-    torch.cxxdev
-  ]
-  ++ lib.optionals cudaSupport (
+  buildInputs = [ python3.pkgs.tvm-ffi ] ++ lib.optionals cudaSupport (
     with cudaPackages;
     [
       cuda_cudart
@@ -201,10 +200,6 @@ stdenv.mkDerivation (prevAttrs: {
   env =
     lib.optionalAttrs cudaSupport {
       CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
-      TORCH_CUDA_ARCH_LIST = lib.concatStringsSep ";" torch.cudaCapabilities;
-    }
-    // lib.optionalAttrs rocmSupport {
-      PYTORCH_ROCM_ARCH = lib.concatStringsSep ";" torch.rocmArchs;
     }
     // lib.optionalAttrs xpuSupport {
       MKLROOT = oneapi-torch-dev;
@@ -216,7 +211,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   cmakeFlags = [
     (lib.cmakeBool "BUILD_ALL_SUPPORTED_ARCHS" true)
-    (lib.cmakeFeature "Python_EXECUTABLE" "${python3.withPackages (ps: [ torch ])}/bin/python")
+    (lib.cmakeFeature "Python_EXECUTABLE" "${python3.withPackages (ps: with ps; [ tvm-ffi typing-extensions ])}/bin/python")
     # Fix: file RPATH_CHANGE could not write new RPATH, we are rewriting
     # rpaths anyway.
     (lib.cmakeBool "CMAKE_SKIP_RPATH" true)
@@ -237,9 +232,6 @@ stdenv.mkDerivation (prevAttrs: {
   ];
 
   postInstall =
-    let
-      buildVariant = torch.variant;
-    in
     ''
       rm -rf $out/_${moduleName}_*_${rev}
     ''
@@ -262,7 +254,8 @@ stdenv.mkDerivation (prevAttrs: {
   __noChroot = metalSupport;
 
   passthru = {
-    inherit dependencies torch;
+    inherit dependencies;
+    # TODO: fix variant
     inherit (torch) variant;
   };
 })

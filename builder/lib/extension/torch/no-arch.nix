@@ -45,7 +45,7 @@ assert (buildConfig ? xpuVersion) -> xpuSupport;
 assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
-  inherit (import ../deps.nix { inherit lib pkgs torch; }) resolvePythonDeps resolveBackendPythonDeps;
+  inherit (import ../../deps.nix { inherit lib pkgs torch; }) resolvePythonDeps resolveBackendPythonDeps;
   dependencies =
     resolvePythonDeps pythonDeps
     ++ resolveBackendPythonDeps buildConfig.backend backendPythonDeps
@@ -58,6 +58,8 @@ stdenv.mkDerivation (prevAttrs: {
   name = "${kernelName}-torch-ext";
 
   inherit moduleName src;
+
+  framework = "torch";
 
   # Add Torch as a dependency, so that devshells for universal kernels
   # also get torch as a build input.

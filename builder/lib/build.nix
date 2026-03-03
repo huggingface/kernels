@@ -157,6 +157,24 @@ rec {
         kernelName = buildToml.general.name;
       }
     else
+      if buildToml ? "tvm-ffi" then
+      extension.mkTvmFfiExtension {
+        inherit
+          buildConfig
+          doGetKernelCheck
+          extraDeps
+          nvccThreads
+          src
+          stripRPath
+          rev
+          pythonDeps
+          backendPythonDeps
+          ;
+
+        kernelName = buildToml.general.name;
+        doAbiCheck = true;
+      }
+      else
       extension.mkExtension {
         inherit
           buildConfig

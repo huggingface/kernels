@@ -58,6 +58,7 @@ pub fn write_tvm_ffi_ext(
         &target_dir,
         tvm_ffi_ext,
         &build.general.name,
+        &revision,
         &mut file_set,
     )?;
 
@@ -187,11 +188,10 @@ pub fn render_extension(
 pub fn render_preamble(
     env: &Environment,
     general: &General,
+    revision: &str,
     target_dir: impl AsRef<Path>,
     write: &mut impl Write,
 ) -> Result<()> {
-    let revision = git_identifier(&target_dir).unwrap_or_else(|_| random_identifier());
-
     env.get_template("tvm_ffi/preamble.cmake")
         .wrap_err("Cannot get tvm_ffi preamble template")?
         .render_to_write(
@@ -215,13 +215,14 @@ pub fn write_cmake(
     target_dir: impl AsRef<Path>,
     tvm_ffi: &TvmFfi,
     name: &str,
+    revision: &str,
     file_set: &mut FileSet,
 ) -> Result<()> {
     write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    render_preamble(env, &build.general, &target_dir, cmake_writer)?;
+    render_preamble(env, &build.general, revision, &target_dir, cmake_writer)?;
 
     render_binding(env, tvm_ffi, name, cmake_writer)?;
 

@@ -9,7 +9,7 @@ let
   buildConfig = readBuildConfig path;
   nameToPath = path: name: path + "/${name}";
   kernels = buildConfig.kernel or { };
-  extConfig = buildConfig.torch or { };
+  extConfig = buildConfig.torch or buildConfig.tvm-ffi or { };
   pyExt =
     extConfig.pyext or [
       "py"
@@ -17,7 +17,8 @@ let
     ];
   pyFilter = file: builtins.any (ext: file.hasExt ext) pyExt;
   extSrc = extConfig.src or [ ] ++ [ "build.toml" ];
-  pySrcSet = fileset.fileFilter pyFilter (path + "/torch-ext");
+  torchPySrcSet = fileset.fileFilter pyFilter (path + "/torch-ext");
+  tvmFfiPySrcSet = fileset.fileFilter pyFilter (path + "/tvm-ffi-ext");
   kernelsSrc = fileset.unions (
     lib.flatten (lib.mapAttrsToList (name: buildConfig: map (nameToPath path) buildConfig.src) kernels)
   );
@@ -28,6 +29,7 @@ fileset.toSource {
   fileset = fileset.unions [
     kernelsSrc
     srcSet
-    pySrcSet
+    torchPySrcSet
+    tvmFfiPySrcSet
   ];
 }

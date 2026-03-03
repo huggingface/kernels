@@ -23,7 +23,7 @@ set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
 gpu_lang_to_backend(BACKEND "${GPU_LANG}")
 message(STATUS "Using backend: ${BACKEND}, GPU language: ${GPU_LANG}")
 
-find_package(Python COMPONENTS Interpreter REQUIRED)
+find_package(Python COMPONENTS Development Development.SABIModule Interpreter REQUIRED)
 
 set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
 set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")

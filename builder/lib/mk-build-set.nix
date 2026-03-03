@@ -111,7 +111,7 @@ let
 
   torch = pkgs.python3.pkgs.torch;
 
-  extension = pkgs.callPackage ./torch-extension { inherit torch; };
+  extension = pkgs.callPackage ./extension { inherit torch; };
 in
 {
   inherit

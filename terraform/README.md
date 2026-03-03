@@ -50,7 +50,8 @@ The instance is reachable via its **private IP** (the subnet does not auto-assig
 
 ### Waiting for first-boot setup
 
-After SSH-ing in, the NixOS configuration is applied in the background by the `amazon-init` service (downloading packages and running `nixos-rebuild switch`). This takes **10–30 minutes**. Run this **inside the VM** to follow progress:
+After SSH-ing in, the NixOS configuration is applied in the background by the `amazon-init` service (downloading packages and running `nixos-rebuild switch`). This takes
+**5-10 minutes**. Run this **inside the VM** to follow progress:
 
 ```bash
 journalctl -u amazon-init -f

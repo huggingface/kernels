@@ -310,12 +310,14 @@ def download_kernels(args):
     for kernel_lock_json in lock_json:
         kernel_lock = KernelLock.from_json(kernel_lock_json)
         print(
-            f"Downloading `{kernel_lock.repo_id}` at with SHA: {kernel_lock.sha}",
+            f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
             file=sys.stderr,
         )
         if args.all_variants:
             install_kernel_all_variants(
-                kernel_lock.repo_id, kernel_lock.sha, variant_locks=kernel_lock.variants
+                kernel_lock.repo_id,
+                kernel_lock.sha,
+                variant_locks=kernel_lock.variants,
             )
         else:
             try:

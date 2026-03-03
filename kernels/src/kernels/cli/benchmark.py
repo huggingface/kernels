@@ -20,7 +20,7 @@ from huggingface_hub.utils import (
 )
 
 from kernels.benchmark import Benchmark
-from kernels.utils import _get_hf_api, _backend
+from kernels.utils import _backend, _get_hf_api
 
 MISSING_DEPS: list[str] = []
 
@@ -457,7 +457,7 @@ def run_benchmark_class(
         raise RuntimeError(f"No benchmark_* methods found in {benchmark_cls.__name__}")
 
     # Load kernel once for all workloads
-    from kernels import get_local_kernel, get_kernel
+    from kernels import get_kernel, get_local_kernel
 
     if is_local:
         kernel = get_local_kernel(Path(repo_id), "activation")

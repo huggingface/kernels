@@ -8,10 +8,10 @@ from argparse import Namespace
 from pathlib import Path
 from typing import NamedTuple
 
+import tomlkit
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
-import tomlkit
 from kernels.utils import KNOWN_BACKENDS
 
 KERNEL_NAME_PATTERN = re.compile(r"^[a-z][-a-z0-9]*[a-z0-9]$")

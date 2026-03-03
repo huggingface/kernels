@@ -1,9 +1,9 @@
-import tempfile
-from pathlib import Path
 import argparse
 import os
+import tempfile
+from pathlib import Path
 
-from kernels.cli.init import run_init, parse_kernel_name
+from kernels.cli.init import parse_kernel_name, run_init
 from kernels.utils import KNOWN_BACKENDS
 
 

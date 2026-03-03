@@ -5,7 +5,6 @@ from pathlib import Path
 
 from huggingface_hub.utils import get_session
 
-
 DEFAULT_SKILL_ID = "cuda-kernels"
 _GITHUB_RAW_BASE = (
     "https://raw.githubusercontent.com/huggingface/kernels/main/" "skills/cuda-kernels"

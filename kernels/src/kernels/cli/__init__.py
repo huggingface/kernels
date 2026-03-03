@@ -4,25 +4,25 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, get_kernel_locks
-from kernels.cli.upload import upload_kernels_dir
-from kernels.utils import (
-    install_kernel,
-    install_kernel_all_variants,
-    KNOWN_BACKENDS,
-)
-from kernels.cli.init import run_init, parse_kernel_name
-from kernels.cli.skills import add_skill
-from kernels.cli.versions import print_kernel_versions
 from kernels.cli.doc import generate_readme_for_kernel
+from kernels.cli.init import parse_kernel_name, run_init
+from kernels.cli.skills import add_skill
+from kernels.cli.upload import upload_kernels_dir
+from kernels.cli.versions import print_kernel_versions
+from kernels.compat import tomllib
 from kernels.kernel_card_utils import (
     _load_or_create_kernel_card,
     _update_benchmark,
     _update_kernel_card_available_funcs,
-    _update_kernel_card_license,
     _update_kernel_card_backends,
+    _update_kernel_card_license,
     _update_kernel_card_usage,
+)
+from kernels.lockfile import KernelLock, get_kernel_locks
+from kernels.utils import (
+    KNOWN_BACKENDS,
+    install_kernel,
+    install_kernel_all_variants,
 )
 
 
@@ -297,12 +297,14 @@ def download_kernels(args):
     for kernel_lock_json in lock_json:
         kernel_lock = KernelLock.from_json(kernel_lock_json)
         print(
-            f"Downloading `{kernel_lock.repo_id}` at with SHA: {kernel_lock.sha}",
+            f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
             file=sys.stderr,
         )
         if args.all_variants:
             install_kernel_all_variants(
-                kernel_lock.repo_id, kernel_lock.sha, variant_locks=kernel_lock.variants
+                kernel_lock.repo_id,
+                kernel_lock.sha,
+                variant_locks=kernel_lock.variants,
             )
         else:
             try:

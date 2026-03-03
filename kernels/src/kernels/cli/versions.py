@@ -1,9 +1,10 @@
 from importlib.util import find_spec
 from pathlib import Path
+
 from huggingface_hub import HfApi
 
 from kernels._versions import _get_available_versions
-from kernels.utils import _get_hf_api, _build_variants
+from kernels.utils import _build_variants, _get_hf_api
 from kernels.variants import BUILD_VARIANT_REGEX
 
 

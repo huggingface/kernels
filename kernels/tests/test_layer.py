@@ -1,10 +1,10 @@
 import sys
 from contextlib import nullcontext
 
-from huggingface_hub.errors import RepositoryNotFoundError
 import pytest
 import torch
 import torch.nn as nn
+from huggingface_hub.errors import RepositoryNotFoundError
 from torch.nn import functional as F
 
 from kernels import (

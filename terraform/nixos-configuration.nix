@@ -5,7 +5,8 @@
   pkgs,
   lib,
   ...
-}: {
+}:
+{
   imports = [
     # Required for EC2 / AWS support (virtio drivers, cloud-init, EBS, etc.)
     <nixpkgs/nixos/modules/virtualisation/amazon-image.nix>
@@ -62,8 +63,8 @@
   # -------------------------------------------------------------------------
   systemd.services.format-data-volume = {
     description = "Format the EBS data volume on first boot if needed";
-    wantedBy = ["multi-user.target"];
-    before = ["data.mount"];
+    wantedBy = [ "multi-user.target" ];
+    before = [ "data.mount" ];
     # Only run if the device exists (attachment can lag by a few seconds).
     unitConfig.ConditionPathExists = "/dev/nvme1n1";
     script = ''
@@ -151,10 +152,10 @@
 
   # Useful shell aliases for kernel dev workflow.
   environment.shellAliases = {
-    nbd   = "nix build -L";                          # build with logs
-    nbdt  = "nix build -L .#ci-test";                # build the CI test output
-    ndc   = "nix develop -c $SHELL";                 # enter dev shell
-    ws    = "cd /data/workspace";
+    nbd = "nix build -L"; # build with logs
+    nbdt = "nix build -L .#ci-test"; # build the CI test output
+    ndc = "nix develop -c $SHELL"; # enter dev shell
+    ws = "cd /data/workspace";
     dinit = "echo 'use nix' > .envrc && direnv allow"; # init direnv for a flake dir
   };
 
@@ -175,6 +176,6 @@
   # -------------------------------------------------------------------------
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [22];
+    allowedTCPPorts = [ 22 ];
   };
 }

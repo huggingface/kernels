@@ -25,9 +25,9 @@
       "nix-command"
       "flakes"
     ];
-    # Use every available core; individual flakes can override with their own settings.
-    max-jobs = "auto";
-    cores = 0;
+    # Sufficient to cater to heavy kernels.
+    max-jobs = 4;
+    cores = 16;
     sandbox-fallback = false;
 
     substituters = [
@@ -108,20 +108,6 @@
   # Packages for kernel development
   # -------------------------------------------------------------------------
   environment.systemPackages = with pkgs; [
-    # Build toolchain
-    gcc
-    clang
-    cmake
-    ninja
-    pkg-config
-    gnumake
-    llvm
-
-    # Python (used for CI validation scripts and kernel tests)
-    python3
-    python3Packages.pip
-    python3Packages.virtualenv
-
     # Version control & productivity
     git
     git-lfs
@@ -131,6 +117,7 @@
     ripgrep
     htop
     iotop
+    btop
     tree
     tmux
 
@@ -164,10 +151,11 @@
 
   # Useful shell aliases for kernel dev workflow.
   environment.shellAliases = {
-    nbd = "nix build -L"; # build with logs
-    nbdt = "nix build -L .#ci-test"; # build the CI test output
-    ndc = "nix develop -c $SHELL"; # enter dev shell
-    ws = "cd /data/workspace";
+    nbd   = "nix build -L";                          # build with logs
+    nbdt  = "nix build -L .#ci-test";                # build the CI test output
+    ndc   = "nix develop -c $SHELL";                 # enter dev shell
+    ws    = "cd /data/workspace";
+    dinit = "echo 'use nix' > .envrc && direnv allow"; # init direnv for a flake dir
   };
 
   # -------------------------------------------------------------------------

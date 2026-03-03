@@ -11,7 +11,7 @@
 # Optional overrides (all have sensible defaults):
 # instance_name          = "kernels-dev"
 # aws_region             = "us-east-1"
-# nixos_channel          = "25.11"         # or "24.11" for the stable LTS channel
+# nixos_channel          = "25.11"
 # instance_type          = "m7i.8xlarge"   # 32 vCPU / 128 GiB RAM
 # root_volume_size_gb    = 200
 # data_volume_size_gb    = 1000            # 1 TiB gp3 for Nix store + builds

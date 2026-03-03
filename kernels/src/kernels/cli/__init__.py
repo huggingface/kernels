@@ -384,10 +384,9 @@ def fill_kernel_card(args):
 
     card_path = kernel_dir / SYSTEM_CARD_PATH
 
-    dynamic_vars = _build_kernel_card_vars(
-        kernel_dir, repo_id=args.repo_id or "REPO_ID"
-    )
-    description = args.description or DESCRIPTION
+    repo_id = args.repo_id or "REPO_ID"
+    dynamic_vars = _build_kernel_card_vars(kernel_dir, repo_id=repo_id)
+    description = (args.description or DESCRIPTION).format(repo_id=repo_id)
 
     card_data = ModelCardData(library_name=LIBRARY_NAME)
     updated_card = ModelCard.from_template(

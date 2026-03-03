@@ -14,6 +14,7 @@ from kernels.cli.kernel_card_utils import (
     KERNEL_CARD_TEMPLATE_PATH,
     LIBRARY_NAME,
     _build_kernel_card_vars,
+    _parse_repo_id,
     _update_kernel_card_license,
 )
 from kernels.cli.skills import add_skill
@@ -384,7 +385,9 @@ def fill_kernel_card(args):
 
     card_path = kernel_dir / SYSTEM_CARD_PATH
 
-    repo_id = args.repo_id or "REPO_ID"
+    repo_id_from_build = _parse_repo_id(kernel_dir)
+    repo_id = args.repo_id or repo_id_from_build or "REPO_ID"
+
     dynamic_vars = _build_kernel_card_vars(kernel_dir, repo_id=repo_id)
     description = (args.description or DESCRIPTION).format(repo_id=repo_id)
 

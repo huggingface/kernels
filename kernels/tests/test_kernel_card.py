@@ -30,6 +30,9 @@ backends = ["cuda", "metal"]
 license = "apache-2.0"
 version = 1
 
+[general.hub]
+repo-id = "my-org/my-kernel"
+
 [kernel._test]
 backend = "cuda"
 cuda-capabilities = ["8.0", "8.9"]
@@ -89,7 +92,14 @@ def test_fill_kernel_card_available_funcs(initialized_kernel_dir):
     assert "- `func2`" in content
 
 
-def test_fill_kernel_card_usage_with_repo_id(initialized_kernel_dir):
+def test_fill_kernel_card_usage_repo_id(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert 'get_kernel("my-org/my-kernel")' in content
+
+
+def test_fill_kernel_card_usage_with_custom_repo_id(initialized_kernel_dir):
     repo_id = "test-org/test-kernel"
     args = CardArgs(kernel_dir=str(initialized_kernel_dir), repo_id=repo_id)
     fill_kernel_card(args)

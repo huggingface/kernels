@@ -81,6 +81,17 @@ def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
         return None
 
 
+def _parse_repo_id(local_path: str | Path) -> str:
+    local_path = Path(local_path)
+
+    config = _parse_build_toml(local_path)
+    if not config:
+        return None
+
+    repo_id = config.get("general", {}).get("hub", {}).get("repo-id", None)
+    return repo_id
+
+
 def _build_kernel_card_vars(
     local_path: str | Path,
     repo_id: str = "REPO_ID",

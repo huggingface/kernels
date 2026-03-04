@@ -1,0 +1,20 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is git-ignored — never commit it.
+
+# Required:
+# subnet_id              = "subnet-0123456789abcdef0"  # subnet used when launching manually
+# security_group_id      = "sg-0123456789abcdef0"      # existing SG that allows SSH (port 22)
+# key_pair_name          = "my-key-pair"               # existing EC2 key pair name
+# ssh_private_key_path   = "~/.ssh/id_rsa"             # local path to the corresponding private key (".pem"), 
+# this should correspond to the one being specified to `key_pair_name`
+
+# Optional overrides (all have sensible defaults):
+# instance_name          = "kernels-dev"
+# aws_region             = "us-east-1"
+# nixos_channel          = "25.11"
+# instance_type          = "m7i.8xlarge"   # 32 vCPU / 128 GiB RAM
+# root_volume_size_gb    = 200
+# data_volume_size_gb    = 1000            # 1 TiB gp3 for Nix store + builds
+# data_volume_iops       = 6000
+# data_volume_throughput = 400
+# cachix_auth_token      = "your-cachix-token" # only needed for pushing to the cache

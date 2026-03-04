@@ -36,6 +36,8 @@ class DeviceRepos(ABC):
             return _XPURepos()
         elif device.type == "npu":
             return _NPURepos()
+        elif device.type == "neuron":
+            return _NeuronRepos()
         else:
             raise ValueError(f"Unknown device type: {device.type}")
 
@@ -89,6 +91,26 @@ class _XPURepos(DeviceRepos):
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         if device.type != "xpu":
             raise ValueError(f"Device type must be 'xpu', got {device.type}")
+
+        self._repos = repos
+
+
+class _NeuronRepos(DeviceRepos):
+    _repos: dict[Mode, RepositoryProtocol]
+
+    def __init__(self):
+        super().__init__()
+        self._repos = {}
+
+    @property
+    def repos(
+        self,
+    ) -> dict[Mode, RepositoryProtocol] | None:
+        return self._repos
+
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
+        if device.type != "neuron":
+            raise ValueError(f"Device type must be 'neuron', got {device.type}")
 
         self._repos = repos
 

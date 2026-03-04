@@ -95,7 +95,7 @@ def _backend() -> str:
 
 def _build_variant(backend: str | None) -> str | None:
     """
-    Build vaariant for arch kernels, returns `None` when the backend
+    Build variant for arch kernels, returns `None` when the backend
     does not (yet) support arch kernels.
     """
     backend = _select_backend(backend)

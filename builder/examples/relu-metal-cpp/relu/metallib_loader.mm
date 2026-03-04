@@ -37,4 +37,23 @@ extern "C" {
   void* getMPSCommandQueue() {
     return (__bridge void*)at::mps::getCurrentMPSStream()->commandQueue();
   }
+
+  // Get the MPS stream's command encoder (returns id<MTLComputeCommandEncoder> as void*).
+  // Uses PyTorch's encoder lifecycle management (kernel coalescing).
+  void* getMPSCommandEncoder() {
+    return (__bridge void*)at::mps::getCurrentMPSStream()->commandEncoder();
+  }
+
+  // Commit the current command buffer and continue with a new one.
+  void mpsSynchronize() {
+    at::mps::getCurrentMPSStream()->synchronize(at::mps::SyncType::COMMIT_AND_CONTINUE);
+  }
+
+  // Dispatch a block on the MPS stream's serial queue.
+  void mpsDispatchSync(void (*block)(void* ctx), void* ctx) {
+    at::mps::MPSStream* stream = at::mps::getCurrentMPSStream();
+    dispatch_sync(stream->queue(), ^{
+      block(ctx);
+    });
+  }
 }

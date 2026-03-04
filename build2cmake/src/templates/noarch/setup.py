@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-import shutil
-from pathlib import Path
 from typing import Any
+from pathlib import Path
+import shutil
+import sys
 
 from setuptools import setup
 from setuptools.command.build import build
@@ -30,7 +31,10 @@ class BuildKernel(build):
         """Execute the build command."""
         project_root = Path(__file__).parent
 
-        import tomllib
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:
+            import tomli as tomllib
 
         with open(project_root / "build.toml", "rb") as f:
             build_toml: dict[str, Any] = tomllib.load(f)

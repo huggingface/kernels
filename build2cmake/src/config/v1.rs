@@ -86,6 +86,7 @@ impl TryFrom<Build> for super::Build {
                 Backend::Cpu,
                 Backend::Cuda,
                 Backend::Metal,
+                Backend::Neuron,
                 Backend::Rocm,
                 Backend::Xpu,
             ]
@@ -102,6 +103,7 @@ impl TryFrom<Build> for super::Build {
                 license: None,
                 backends,
                 hub: None,
+                neuron: None,
                 python_depends: None,
                 cuda: None,
                 xpu: None,

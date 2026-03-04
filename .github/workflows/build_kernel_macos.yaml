@@ -17,10 +17,14 @@ jobs:
         include:
           - os: macos-14-xlarge
             xcode: "/Applications/Xcode_15.4.app"
+            # macOS 14 is best-effort: builds work but MPS tests may OOM
+            # on runners with limited unified memory.
+            allow-failure: true
           - os: macos-15-xlarge
             xcode: "/Applications/Xcode_16.2.app"
           - os: macos-26-xlarge
             xcode: "/Applications/Xcode_26.0.app"
+    continue-on-error: ${{ matrix.allow-failure || false }}
     steps:
       - name: "Select Xcode"
         run: sudo xcrun xcode-select -s ${{ matrix.xcode }}

@@ -86,9 +86,11 @@ let
   # On Darwin, we need the host's xcrun for `xcrun metal` to compile Metal shaders.
   # It's not supported by the nixpkgs shim.
   xcrunHost = writeScriptBin "xcrunHost" ''
-    # Use system SDK for Metal files.
+    # Use system SDK for Metal files. Clear Nix-set variables that
+    # interfere with xcrun/xcodebuild's SDK and toolchain resolution.
     unset DEVELOPER_DIR
-    /usr/bin/xcrun $@
+    unset SDKROOT
+    /usr/bin/xcrun "$@"
   '';
 
   metalSupport = buildConfig.metal or false;
@@ -123,13 +125,47 @@ stdenv.mkDerivation (prevAttrs: {
     # instead, we'll use showComponent (which will emit a lot of warnings due
     # to the above) to grab the path of the Metal toolchain.
     lib.optionalString metalSupport ''
-      METAL_PATH=$(${xcrunHost}/bin/xcrunHost xcodebuild -showComponent MetalToolchain 2> /dev/null | sed -rn "s/Toolchain Search Path: (.*)/\1/p")
-      if [ ! -d "$METAL_PATH" ]; then
-        >&2 echo "Cannot find Metal toolchain, use: xcodebuild -downloadComponent MetalToolchain"
-        exit 1
-      fi
+      # Try the separate Metal toolchain first (macOS 26+ with xcodebuild -downloadComponent).
+      # Use || true to prevent set -o pipefail from aborting on older macOS where
+      # -showComponent is unsupported.
+      METAL_PATH=$(${xcrunHost}/bin/xcrunHost xcodebuild -showComponent MetalToolchain 2> /dev/null | sed -rn "s/Toolchain Search Path: (.*)/\1/p" || true)
 
-      cmakeFlagsArray+=("-DMETAL_TOOLCHAIN=$METAL_PATH/Metal.xctoolchain")
+      if [ -d "$METAL_PATH/Metal.xctoolchain" ]; then
+        cmakeFlagsArray+=("-DMETAL_TOOLCHAIN=$METAL_PATH/Metal.xctoolchain")
+      else
+        # On macOS 14/15, xcrun and xcode-select may not work inside the Nix
+        # build environment (sandbox restrictions). Try them, then fall back
+        # to scanning /Applications for Xcode installations.
+        XCODE_DEV=$(${xcrunHost}/bin/xcrunHost xcode-select -p 2>/dev/null || true)
+        XCODE_TOOLCHAIN="$XCODE_DEV/Toolchains/XcodeDefault.xctoolchain"
+
+        XCRUN_METAL=$(${xcrunHost}/bin/xcrunHost xcrun -find metal 2>/dev/null || true)
+
+        if [ -d "$XCODE_TOOLCHAIN/usr/bin" ] && [ -f "$XCODE_TOOLCHAIN/usr/bin/metal" ]; then
+          cmakeFlagsArray+=("-DMETAL_TOOLCHAIN=$XCODE_TOOLCHAIN")
+        elif [ -n "$XCRUN_METAL" ] && [ -f "$XCRUN_METAL" ]; then
+          # Derive toolchain path from xcrun result
+          METAL_BIN_DIR=$(dirname "$XCRUN_METAL")
+          METAL_TC_DIR=$(dirname $(dirname "$METAL_BIN_DIR"))
+          cmakeFlagsArray+=("-DMETAL_TOOLCHAIN=$METAL_TC_DIR")
+        else
+          # Last resort: scan /Applications/Xcode*.app for metal compiler
+          FOUND_TC=""
+          for xcode_app in /Applications/Xcode*.app; do
+            TC="$xcode_app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain"
+            if [ -f "$TC/usr/bin/metal" ]; then
+              FOUND_TC="$TC"
+              break
+            fi
+          done
+          if [ -n "$FOUND_TC" ]; then
+            cmakeFlagsArray+=("-DMETAL_TOOLCHAIN=$FOUND_TC")
+          else
+            >&2 echo "Cannot find Metal toolchain. On macOS 26+, use: xcodebuild -downloadComponent metalToolchain"
+            exit 1
+          fi
+        fi
+      fi
     '';
 
   # hipify copies files, but its target is run in the CMake build and install

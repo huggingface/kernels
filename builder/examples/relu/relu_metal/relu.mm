@@ -1,3 +1,4 @@
+#include <ATen/mps/MPSStream.h>
 #include <torch/torch.h>
 
 #import <Foundation/Foundation.h>
@@ -18,8 +19,10 @@ static inline id<MTLBuffer> getMTLBufferStorage(const torch::Tensor &tensor) {
 torch::Tensor &dispatchReluKernel(torch::Tensor const &input,
                                   torch::Tensor &output) {
   @autoreleasepool {
-    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+    at::mps::MPSStream *stream = at::mps::getCurrentMPSStream();
+    TORCH_CHECK(stream, "Failed to get MPS stream");
 
+    id<MTLDevice> device = stream->device();
     int numThreads = input.numel();
 
     // Load the embedded Metal library from memory
@@ -44,14 +47,12 @@ torch::Tensor &dispatchReluKernel(torch::Tensor const &input,
                                               error:&error];
     TORCH_CHECK(reluPSO, error.localizedDescription.UTF8String);
 
-    id<MTLCommandBuffer> commandBuffer = torch::mps::get_command_buffer();
-    TORCH_CHECK(commandBuffer, "Failed to retrieve command buffer reference");
-
-    dispatch_queue_t serialQueue = torch::mps::get_dispatch_queue();
-
-    dispatch_sync(serialQueue, ^() {
-      id<MTLComputeCommandEncoder> computeEncoder =
-          [commandBuffer computeCommandEncoder];
+    // Use stream->commandEncoder() to properly integrate with PyTorch's
+    // MPS encoder lifecycle (kernel coalescing). Creating encoders directly
+    // via [commandBuffer computeCommandEncoder] bypasses this and crashes
+    // when the kernel is called twice in sequence.
+    dispatch_sync(stream->queue(), ^() {
+      id<MTLComputeCommandEncoder> computeEncoder = stream->commandEncoder();
       TORCH_CHECK(computeEncoder, "Failed to create compute command encoder");
 
       [computeEncoder setComputePipelineState:reluPSO];
@@ -72,11 +73,9 @@ torch::Tensor &dispatchReluKernel(torch::Tensor const &input,
 
       [computeEncoder dispatchThreads:gridSize
                 threadsPerThreadgroup:threadgroupSize];
-
-      [computeEncoder endEncoding];
-
-      torch::mps::commit();
     });
+
+    stream->synchronize(at::mps::SyncType::COMMIT_AND_CONTINUE);
   }
 
   return output;

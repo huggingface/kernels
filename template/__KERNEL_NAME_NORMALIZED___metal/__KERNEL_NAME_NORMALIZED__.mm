@@ -1,3 +1,4 @@
+#include <ATen/mps/MPSStream.h>
 #include <torch/torch.h>
 
 #import <Foundation/Foundation.h>
@@ -25,7 +26,10 @@ void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) 
               "Tensors must be on same device");
 
   @autoreleasepool {
-    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+    at::mps::MPSStream *stream = at::mps::getCurrentMPSStream();
+    TORCH_CHECK(stream, "Failed to get MPS stream");
+
+    id<MTLDevice> device = stream->device();
     int numThreads = input.numel();
 
     NSError *error = nil;
@@ -42,9 +46,12 @@ void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) 
         [device newComputePipelineStateWithFunction:func error:&error];
     TORCH_CHECK(pso, error.localizedDescription.UTF8String);
 
-    id<MTLCommandBuffer> cmdBuf = torch::mps::get_command_buffer();
-    dispatch_sync(torch::mps::get_dispatch_queue(), ^() {
-      id<MTLComputeCommandEncoder> encoder = [cmdBuf computeCommandEncoder];
+    // Use stream->commandEncoder() to properly integrate with PyTorch's
+    // MPS encoder lifecycle (kernel coalescing). Creating encoders directly
+    // via [commandBuffer computeCommandEncoder] bypasses this and crashes
+    // when the kernel is called twice in sequence.
+    dispatch_sync(stream->queue(), ^() {
+      id<MTLComputeCommandEncoder> encoder = stream->commandEncoder();
       [encoder setComputePipelineState:pso];
       [encoder setBuffer:getMTLBufferStorage(input)
                   offset:input.storage_offset() * input.element_size()
@@ -57,8 +64,8 @@ void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) 
           MIN(pso.maxTotalThreadsPerThreadgroup, (NSUInteger)numThreads);
       [encoder dispatchThreads:MTLSizeMake(numThreads, 1, 1)
           threadsPerThreadgroup:MTLSizeMake(tgSize, 1, 1)];
-      [encoder endEncoding];
-      torch::mps::commit();
     });
+
+    stream->synchronize(at::mps::SyncType::COMMIT_AND_CONTINUE);
   }
 }

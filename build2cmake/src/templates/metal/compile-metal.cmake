@@ -1,24 +1,37 @@
 # Metal shader compilation function
 function(compile_metal_shaders TARGET_NAME METAL_SOURCES EXTRA_INCLUDE_DIRS)
     if(NOT DEFINED METAL_TOOLCHAIN)
+      # Try the separate Metal toolchain first (macOS 26+ with downloadable component)
       execute_process(
         COMMAND "xcodebuild" "-showComponent" "MetalToolchain"
         OUTPUT_VARIABLE FIND_METAL_OUT
         RESULT_VARIABLE FIND_METAL_ERROR_CODE
-        ERROR_VARIABLE FIND_METAL_STDERR
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-      if(NOT FIND_METAL_ERROR_CODE EQUAL 0)
-        message(FATAL_ERROR "${ERR_MSG}: ${FIND_METAL_STDERR}")
-      endif()
+      if(FIND_METAL_ERROR_CODE EQUAL 0)
+        string(REGEX MATCH "Toolchain Search Path: ([^\n]+)" MATCH_RESULT "${FIND_METAL_OUT}")
+        set(METAL_TOOLCHAIN "${CMAKE_MATCH_1}/Metal.xctoolchain")
+      else()
+        # Fall back to the default Xcode toolchain (macOS 14/15 bundle metal in Xcode)
+        execute_process(
+          COMMAND "xcode-select" "-p"
+          OUTPUT_VARIABLE XCODE_DEV_DIR
+          RESULT_VARIABLE XCODE_SELECT_ERROR
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-      # Extract the Toolchain Search Path value and append Metal.xctoolchain
-      string(REGEX MATCH "Toolchain Search Path: ([^\n]+)" MATCH_RESULT "${FIND_METAL_OUT}")
-      set(METAL_TOOLCHAIN "${CMAKE_MATCH_1}/Metal.xctoolchain")
+        if(XCODE_SELECT_ERROR EQUAL 0)
+          set(METAL_TOOLCHAIN "${XCODE_DEV_DIR}/Toolchains/XcodeDefault.xctoolchain")
+        else()
+          message(FATAL_ERROR "Cannot find Metal toolchain. On macOS 26+, use: xcodebuild -downloadComponent metalToolchain")
+        endif()
+      endif()
     endif()
 
-    # Set Metal compiler flags
-    set(METAL_FLAGS "-std=metal4.0" "-O2")
+    # Set Metal compiler flags.
+    # metal3.1 → air64_v26, macOS 14+
+    # metal3.2 → air64_v27, macOS 15+
+    # metal4.0 → air64_v28, macOS 26+
+    set(METAL_FLAGS "-std=metal3.1" "-O2")
 
     # Output directory for compiled metallib
     set(METALLIB_OUTPUT_DIR "${CMAKE_BINARY_DIR}/metallib")

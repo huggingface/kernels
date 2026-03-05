@@ -81,6 +81,7 @@ buildConfig@{
   system,
   bundleBuild ? false,
   sourceBuild ? false,
+  tvmFfi ? false,
 }:
 let
   backendOverlay =

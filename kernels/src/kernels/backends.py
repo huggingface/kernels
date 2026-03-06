@@ -1,9 +1,10 @@
 import ctypes
-from packaging.version import parse, Version
-from dataclasses import dataclass
 import platform
 import warnings
+from dataclasses import dataclass
 from typing import Optional
+
+from packaging.version import Version, parse
 
 from kernels.compat import has_torch
 
@@ -22,7 +23,6 @@ class CANN:
 
 @dataclass
 class CPU:
-
     @property
     def name(self) -> str:
         return "cpu"
@@ -76,7 +76,7 @@ class XPU:
         return "xpu"
 
     def __str__(self) -> str:
-        f"xpu{self.version.major}{self.version.minor}"
+        return f"xpu{self.version.major}{self.version.minor}"
 
 
 Backend = CANN | CPU | CUDA | Metal | ROCm | XPU
@@ -128,9 +128,7 @@ def _select_backend(backend: str | None) -> Backend:
     if backend in supported:
         return supported[backend]
 
-    raise ValueError(
-        f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported.keys()))}"
-    )
+    raise ValueError(f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported.keys()))}")
 
 
 def _supported_backends() -> dict[str, Backend]:
@@ -179,9 +177,16 @@ def _get_cuda() -> Optional[CUDA]:
     if libcuda is None:
         return None
 
-    count = ctypes.c_int(0)
-    result = libcuda.cuDeviceGetCount(ctypes.byref(count))
+    driver_version = ctypes.c_int(0)
+    result = libcuda.cuDriverGetVersion(ctypes.byref(driver_version))
+    if result != 0:
+        warnings.warn("System has CUDA driver library, but cannot get driver version.")
+        return None
 
-    has_gpu = result == 0 and count.value > 0
+    # cuDriverGetVersion encodes the version as (major * 1000 + minor * 10),
+    # e.g. 12040 for CUDA 12.4.
+    version_int = driver_version.value
+    major = version_int // 1000
+    minor = (version_int % 1000) // 10
 
-    return CUDA()
+    return CUDA(version=Version(f"{major}.{minor}"))

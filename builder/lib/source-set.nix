@@ -29,7 +29,7 @@ let
         else
           throw "Kernel should have torch-ext or tvm-ffi-ext directory";
     in
-    fileset.fileFilter pyFilter (builtins.trace path path);
+    fileset.fileFilter pyFilter path;
   kernelsSrc = fileset.unions (
     lib.flatten (lib.mapAttrsToList (name: buildConfig: map (nameToPath path) buildConfig.src) kernels)
   );

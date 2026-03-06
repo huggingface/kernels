@@ -1,5 +1,5 @@
 import ctypes
-import platform
+import ctypes.util
 import warnings
 from dataclasses import dataclass
 from typing import Optional
@@ -128,7 +128,9 @@ def _select_backend(backend: str | None) -> Backend:
     if backend in supported:
         return supported[backend]
 
-    raise ValueError(f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported.keys()))}")
+    raise ValueError(
+        f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported.keys()))}"
+    )
 
 
 def _supported_backends() -> dict[str, Backend]:
@@ -138,54 +140,27 @@ def _supported_backends() -> dict[str, Backend]:
 
 def _get_cuda() -> Optional[CUDA]:
     """
-    Load the CUDA driver library using ctypes.
-
-    Returns a CUDA instance if the driver library was found and loaded
-    successfully, or None otherwise.
+    Get CUDA runtime library information.
     """
-    system = platform.system()
-
-    if system == "Linux":
-        lib_names = [
-            "libcuda.so.1",
-            "libcuda.so",
-            # NixOS exposes the CUDA driver at a well-known path outside
-            # of the ldconfig cache.
-            "/run/opengl-driver/lib/libcuda.so",
-        ]
-    elif system == "Windows":
-        lib_names = ["nvcuda.dll"]
-    else:
+    lib_name = ctypes.util.find_library("cudart")
+    if lib_name is None:
         return None
 
-    libcuda = None
-    for lib_name in lib_names:
-        try:
-            libcuda = ctypes.CDLL(lib_name)
-            # cuInit must be called before any other driver API function.
-            # Passing 0 is required by the API (flags must be 0).
-            result = libcuda.cuInit(0)
-            if result != 0:
-                warnings.warn(
-                    "System has CUDA driver library, but cannot be initialized. "
-                    "This usually means that no devices are visible."
-                )
-                return None
-        except OSError:
-            continue
-
-    if libcuda is None:
+    try:
+        libcudart = ctypes.CDLL(lib_name)
+    except OSError:
         return None
 
-    driver_version = ctypes.c_int(0)
-    result = libcuda.cuDriverGetVersion(ctypes.byref(driver_version))
+    runtime_version = ctypes.c_int(0)
+    result = libcudart.cudaRuntimeGetVersion(ctypes.byref(runtime_version))
     if result != 0:
-        warnings.warn("System has CUDA driver library, but cannot get driver version.")
+        warnings.warn(
+            "System has CUDA runtime library, but cannot get runtime version."
+        )
         return None
 
-    # cuDriverGetVersion encodes the version as (major * 1000 + minor * 10),
-    # e.g. 12040 for CUDA 12.4.
-    version_int = driver_version.value
+    # cudaRuntimeGetVersion encodes the version as (major * 1000 + minor * 10).
+    version_int = runtime_version.value
     major = version_int // 1000
     minor = (version_int % 1000) // 10
 

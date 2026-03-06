@@ -161,6 +161,7 @@
               tabulate
               tomlkit
               torch
+              tvm-ffi
               types-pyyaml
               types-requests
               types-tabulate

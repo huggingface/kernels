@@ -1,3 +1,4 @@
+from itertools import chain
 from pathlib import Path
 
 from kernels.metadata import Metadata
@@ -20,7 +21,9 @@ def upload_kernels_dir(
     for candidate in [kernel_dir / "build", kernel_dir]:
         variants = [
             variant_path
-            for variant_path in candidate.glob("torch*")
+            for variant_path in chain(
+                candidate.glob("torch*"), candidate.glob("tvm-ffi*")
+            )
             if BUILD_VARIANT_REGEX.match(variant_path.name) is not None
             and (variant_path / "metadata.json").is_file()
         ]
@@ -77,6 +80,6 @@ def upload_kernels_dir(
         path_in_repo="build",
         delete_patterns=list(delete_patterns),
         commit_message="Build uploaded using `kernels`.",
-        allow_patterns=["torch*"],
+        allow_patterns=["torch*", "tvm-ffi*"],
     )
     print(f"✅ Kernel upload successful. Find the kernel in: https://hf.co/{repo_id}")

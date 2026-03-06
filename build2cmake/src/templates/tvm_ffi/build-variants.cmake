@@ -1,5 +1,5 @@
 # Generate a standardized build variant name following the pattern:
-# tvm-<COMPUTE>-<ARCH>-<OS>
+# tvm-ffi-<COMPUTE>-<ARCH>-<OS>
 #
 # Arguments:
 #   OUT_BUILD_NAME - Output variable name
@@ -7,11 +7,24 @@
 #   COMPUTE_VERSION - Version of compute framework (e.g., "12.4" for CUDA, "6.0" for ROCm)
 #                     Optional for CPU/Metal builds (pass empty string or omit)
 #
-# Example output: tvm-cu124-x86_64-linux (Linux)
-#                 tvm-cu124-x86_64-windows (Windows)
-#                 tvm-metal-aarch64-darwin (macOS)
+# Example output: tvm-ffi-cu124-x86_64-linux (Linux)
+#                 tvm-ffi-cu124-x86_64-windows (Windows)
+#                 tvm-ffi-metal-aarch64-darwin (macOS)
 #
-function(generate_build_name OUT_BUILD_NAME COMPUTE_FRAMEWORK COMPUTE_VERSION)
+function(generate_build_name OUT_BUILD_NAME TVM_FFI_VERSION COMPUTE_FRAMEWORK COMPUTE_VERSION)
+  string(REPLACE "." ";" VERSION_LIST "${TVM_FFI_VERSION}")
+    list(LENGTH VERSION_LIST VERSION_COMPONENTS)
+
+    # Pad to at least 2 components
+    if(VERSION_COMPONENTS LESS 2)
+        list(APPEND VERSION_LIST "0")
+    endif()
+
+    # Take first 2 components and join without dots
+    list(GET VERSION_LIST 0 MAJOR)
+    list(GET VERSION_LIST 1 MINOR)
+    set(FLATTENED_TVM_FFI "${MAJOR}${MINOR}")
+
     # Generate compute string
     if(COMPUTE_FRAMEWORK STREQUAL "cuda")
         # Flatten CUDA version (e.g., "12.4" -> "124")
@@ -79,7 +92,7 @@ function(generate_build_name OUT_BUILD_NAME COMPUTE_FRAMEWORK COMPUTE_VERSION)
         string(TOLOWER "${CMAKE_SYSTEM_NAME}" OS_NAME)
     endif()
 
-    set(BUILD_NAME "tvm-${COMPUTE_STRING}-${CPU_ARCH}-${OS_NAME}")
+    set(BUILD_NAME "tvm-ffi${FLATTENED_TVM_FFI}-${COMPUTE_STRING}-${CPU_ARCH}-${OS_NAME}")
 
     set(${OUT_BUILD_NAME} "${BUILD_NAME}" PARENT_SCOPE)
     message(STATUS "Generated build name: ${BUILD_NAME}")
@@ -93,7 +106,7 @@ endfunction()
 # Arguments:
 #   TARGET_NAME - Name of the target to create the install rule for
 #   PACKAGE_NAME - Python package name (e.g., "activation")
-#   BUILD_VARIANT_NAME - Build variant name (e.g., "tvm-cu124-x86_64-linux")
+#   BUILD_VARIANT_NAME - Build variant name (e.g., "tvm-ffi-cu124-x86_64-linux")
 #   INSTALL_PREFIX - Base installation directory (defaults to CMAKE_INSTALL_PREFIX)
 #
 function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
@@ -176,7 +189,7 @@ endfunction()
 # Arguments:
 #   TARGET_NAME - Name of the target to create the install rule for
 #   PACKAGE_NAME - Python package name (e.g., "activation")
-#   BUILD_VARIANT_NAME - Build variant name (e.g., "tvm-cu124-x86_64-linux")
+#   BUILD_VARIANT_NAME - Build variant name (e.g., "tvm-ffi-cu124-x86_64-linux")
 #
 function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
     set(multiValueArgs DATA_EXTENSIONS)

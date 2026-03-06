@@ -1,5 +1,6 @@
 [general]
 name = "relu-tvm-ffi"
+version = 1
 
 backends = [
     "cpu",

@@ -1,20 +1,21 @@
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-from kernels.cli import create_and_upload_card
+from kernels.cli import fill_kernel_card, initialize_card
+from kernels.cli.kernel_card_utils import KERNEL_CARD_TEMPLATE_PATH
+
+SYSTEM_CARD_PATH = "CARD.md"
 
 
 @dataclass
 class CardArgs:
     kernel_dir: str
-    card_path: str
-    description: str | None = None
     repo_id: str | None = None
-    create_pr: bool = False
+    description: str | None = None
 
 
 @pytest.fixture
@@ -22,8 +23,7 @@ def mock_kernel_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         kernel_dir = Path(tmpdir)
 
-        build_toml = kernel_dir / "build.toml"
-        build_toml.write_text(
+        (kernel_dir / "build.toml").write_text(
             """[general]
 name = "test_kernel"
 backends = ["cuda", "metal"]
@@ -31,7 +31,7 @@ license = "apache-2.0"
 version = 1
 
 [general.hub]
-repo-id = "test-org/test-kernel"
+repo-id = "my-org/my-kernel"
 
 [kernel._test]
 backend = "cuda"
@@ -41,256 +41,164 @@ cuda-capabilities = ["8.0", "8.9"]
 
         torch_ext_dir = kernel_dir / "torch-ext" / "test_kernel"
         torch_ext_dir.mkdir(parents=True)
-
-        init_file = torch_ext_dir / "__init__.py"
-        init_file.write_text(
-            """from .core import func1, func2
-
-__all__ = ["func1", "func2", "func3"]
-"""
+        (torch_ext_dir / "__init__.py").write_text(
+            'from .core import func1, func2\n\n__all__ = ["func1", "func2"]\n'
         )
-
-        core_file = torch_ext_dir / "core.py"
-        core_file.write_text(
-            """def func1():
-    pass
-
-def func2():
-    pass
-
-def func3():
-    pass
-"""
+        (torch_ext_dir / "core.py").write_text(
+            "def func1():\n    pass\n\ndef func2():\n    pass\n"
         )
 
         yield kernel_dir
 
 
 @pytest.fixture
-def mock_kernel_dir_with_benchmark(mock_kernel_dir):
-    benchmarks_dir = mock_kernel_dir / "benchmarks"
-    benchmarks_dir.mkdir()
-
-    benchmark_file = benchmarks_dir / "benchmark.py"
-    benchmark_file.write_text(
-        """import time
-
-def benchmark():
-    # Simple benchmark
-    start = time.time()
-    # ... benchmark code ...
-    end = time.time()
-    return end - start
-"""
-    )
-
+def initialized_kernel_dir(mock_kernel_dir):
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
     return mock_kernel_dir
 
 
-@pytest.fixture
-def mock_kernel_dir_minimal():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        kernel_dir = Path(tmpdir)
-
-        build_toml = kernel_dir / "build.toml"
-        build_toml.write_text(
-            """[general]
-name = "minimal_kernel"
-backends = ["cuda"]
-"""
-        )
-
-        yield kernel_dir
-
-
-def test_create_and_upload_card_basic(mock_kernel_dir):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-            description="This is a test kernel for testing purposes.",
-        )
-
-        create_and_upload_card(args)
-
-        assert card_path.exists()
-
-        card_content = card_path.read_text()
-
-        assert "---" in card_content
-        assert "This is a test kernel for testing purposes." in card_content
-
-
-def test_create_and_upload_card_updates_usage(mock_kernel_dir):
-    """Test that usage code snippet is properly generated."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "## How to use" in card_content
-        assert "from kernels import get_kernel" in card_content
-        assert "func1" in card_content
-        assert "TODO: add an example code snippet" not in card_content
-
-
-def test_create_and_upload_card_updates_available_functions(mock_kernel_dir):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "## Available functions" in card_content
-        assert "- `func1`" in card_content
-        assert "- `func2`" in card_content
-        assert "- `func3`" in card_content
-        assert (
-            "[TODO: add the functions available through this kernel]"
-            not in card_content
-        )
-
-
-def test_create_and_upload_card_updates_backends(mock_kernel_dir):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "## Supported backends" in card_content
-        assert "- cuda" in card_content
-        assert "- metal" in card_content
-        assert "[TODO: add the backends this kernel supports]" not in card_content
-
-
-def test_create_and_upload_card_updates_cuda_capabilities(mock_kernel_dir):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "## CUDA Capabilities" in card_content
-        assert "- 8.0" in card_content or "- 8.9" in card_content
-
-
-def test_create_and_upload_card_updates_license(mock_kernel_dir):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "license: apache-2.0" in card_content
-
-
-def test_create_and_upload_card_with_benchmark(mock_kernel_dir_with_benchmark):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir_with_benchmark),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "## Benchmarks" in card_content
-        assert "Benchmarking script is available for this kernel" in card_content
-        assert "kernels benchmark" in card_content
-
-
-def test_create_and_upload_card_minimal_structure(mock_kernel_dir_minimal):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir_minimal),
-            card_path=str(card_path),
-        )
-
-        create_and_upload_card(args)
-
-        assert card_path.exists()
-
-        card_content = card_path.read_text()
-
-        assert "---" in card_content
-        assert "## How to use" in card_content
-        assert "## Available functions" in card_content
-        assert "## Supported backends" in card_content
-
-
-def test_create_and_upload_card_custom_description(mock_kernel_dir):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        custom_desc = "My custom kernel description with special features."
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-            description=custom_desc,
-        )
-
-        create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert custom_desc in card_content
-
-
-def test_create_and_upload_card_usage_with_repo_id(mock_kernel_dir):
-    """Test that usage code snippet includes the provided repo_id."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        card_path = Path(tmpdir) / "README.md"
-
-        args = CardArgs(
-            kernel_dir=str(mock_kernel_dir),
-            card_path=str(card_path),
-            repo_id="my-org/my-kernel",
-        )
-
-        with patch("huggingface_hub.ModelCard.push_to_hub"):
-            create_and_upload_card(args)
-
-        card_content = card_path.read_text()
-
-        assert "## How to use" in card_content
-        assert 'get_kernel("my-org/my-kernel")' in card_content
+def test_initialize_card_creates_file(mock_kernel_dir):
+    args = CardArgs(kernel_dir=str(mock_kernel_dir))
+    initialize_card(args)
+    card_path = mock_kernel_dir / SYSTEM_CARD_PATH
+    assert card_path.exists()
+
+    content = card_path.read_text()
+    assert "{{ kernel_description }}" in content
+    assert "{{ supported_backends }}" in content
+
+
+def test_fill_kernel_card_backends(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert "- cuda" in content
+    assert "- metal" in content
+
+
+def test_fill_kernel_card_cuda_capabilities(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert "## CUDA Capabilities" in content
+    assert "- 8.0" in content or "- 8.9" in content
+
+
+def test_fill_kernel_card_available_funcs(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert "- `func1`" in content
+    assert "- `func2`" in content
+
+
+def test_fill_kernel_card_usage_repo_id(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert 'get_kernel("my-org/my-kernel")' in content
+
+
+def test_fill_kernel_card_usage_with_custom_repo_id(initialized_kernel_dir):
+    repo_id = "test-org/test-kernel"
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir), repo_id=repo_id)
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert f'get_kernel("{repo_id}")' in content
+
+
+def test_fill_kernel_card_license(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert "license: apache-2.0" in content
+
+
+def test_fill_kernel_card_benchmark(initialized_kernel_dir):
+    benchmarks_dir = initialized_kernel_dir / "benchmarks"
+    benchmarks_dir.mkdir()
+    (benchmarks_dir / "benchmark.py").write_text("def benchmark(): pass\n")
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert "## Benchmarks" in content
+    assert "Benchmarking script is available" in content
+
+
+def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
+    existing_description = "A hand-written description of this kernel."
+    existing_notes = "Custom notes that should not be overwritten."
+    existing_source = "https://github.com/example/kernel-source"
+
+    card_path = mock_kernel_dir / SYSTEM_CARD_PATH
+    card_path.write_text(
+        "---\n"
+        "{{ card_data }}\n"
+        "---\n\n"
+        f"{existing_description}\n\n"
+        "{{ kernel_description }}\n\n"
+        "## How to use\n\n"
+        "{{ usage_example }}\n\n"
+        "## Available functions\n\n"
+        "{{ available_functions }}\n\n"
+        "## Supported backends\n\n"
+        "{{ supported_backends }}\n\n"
+        f"## Source code\n\n{existing_source}\n\n"
+        "{{ source_code }}\n\n"
+        f"## Notes\n\n{existing_notes}\n"
+    )
+
+    repo_id = "test-org/test-kernel"
+    args = CardArgs(kernel_dir=str(mock_kernel_dir), repo_id=repo_id)
+    fill_kernel_card(args)
+
+    content = card_path.read_text()
+
+    # Dynamic content
+    assert "- `func1`" in content
+    assert "- `func2`" in content
+    assert "- cuda" in content
+    assert "- metal" in content
+    assert f'get_kernel("{repo_id}")' in content
+
+    # Static user content
+    assert existing_description in content
+    assert existing_notes in content
+    assert existing_source in content
+
+
+def test_fill_kernel_card_upstream_source(mock_kernel_dir):
+    build_toml = mock_kernel_dir / "build.toml"
+    upstream = "huggingface/upstream-kernel"
+    build_toml.write_text(
+        f'upstream = "{upstream}"\n'
+        "\n"
+        "[general]\n"
+        'name = "test_kernel"\n'
+        'backends = ["cuda", "metal"]\n'
+        'license = "apache-2.0"\n'
+        "version = 1\n"
+        "\n"
+        "[kernel._test]\n"
+        'backend = "cuda"\n'
+        'cuda-capabilities = ["8.0", "8.9"]\n'
+    )
+
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
+
+    args = CardArgs(kernel_dir=str(mock_kernel_dir))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert f"{upstream}" in content
+
+
+def test_fill_kernel_card_preserves_user_notes(initialized_kernel_dir):
+    card_path = initialized_kernel_dir / SYSTEM_CARD_PATH
+    user_text = "Custom kernel notes."
+    existing_content = card_path.read_text()
+    card_path.write_text(existing_content.replace("{{ notes }}", user_text))
+
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
+    fill_kernel_card(args)
+    content = card_path.read_text()
+    assert user_text in content

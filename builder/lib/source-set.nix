@@ -17,8 +17,19 @@ let
     ];
   pyFilter = file: builtins.any (ext: file.hasExt ext) pyExt;
   extSrc = extConfig.src or [ ] ++ [ "build.toml" ];
-  torchPySrcSet = fileset.fileFilter pyFilter (path + "/torch-ext");
-  tvmFfiPySrcSet = fileset.fileFilter pyFilter (path + "/tvm-ffi-ext");
+  torchExtPath = path + "/torch-ext";
+  tvmFfiExtPath = path + "/tvm-ffi-ext";
+  pySrcSet =
+    let
+      path =
+        if builtins.pathExists torchExtPath then
+          torchExtPath
+        else if builtins.pathExists tvmFfiExtPath then
+          tvmFfiExtPath
+        else
+          throw "Kernel should have torch-ext or tvm-ffi-ext directory";
+    in
+    fileset.fileFilter pyFilter (builtins.trace path path);
   kernelsSrc = fileset.unions (
     lib.flatten (lib.mapAttrsToList (name: buildConfig: map (nameToPath path) buildConfig.src) kernels)
   );
@@ -29,7 +40,6 @@ fileset.toSource {
   fileset = fileset.unions [
     kernelsSrc
     srcSet
-    torchPySrcSet
-    tvmFfiPySrcSet
+    pySrcSet
   ];
 }

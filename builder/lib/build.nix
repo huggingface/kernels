@@ -158,8 +158,7 @@ rec {
           ;
         kernelName = buildToml.general.name;
       }
-    else
-      if buildToml ? "tvm-ffi" then
+    else if buildToml ? "tvm-ffi" then
       extension.mkTvmFfiExtension {
         inherit
           buildConfig
@@ -176,7 +175,7 @@ rec {
         kernelName = buildToml.general.name;
         doAbiCheck = true;
       }
-      else
+    else
       extension.mkExtension {
         inherit
           buildConfig

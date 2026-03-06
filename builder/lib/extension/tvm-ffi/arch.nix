@@ -74,7 +74,10 @@ assert (buildConfig ? xpuVersion) -> xpuSupport;
 assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
-  inherit (import ../../deps.nix { inherit lib pkgs torch; }) resolvePythonDeps resolveBackendPythonDeps;
+  inherit (import ../../deps.nix { inherit lib pkgs torch; })
+    resolvePythonDeps
+    resolveBackendPythonDeps
+    ;
 
   dependencies =
     resolvePythonDeps pythonDeps
@@ -165,7 +168,10 @@ stdenv.mkDerivation (prevAttrs: {
     rewrite-nix-paths-macho
   ];
 
-  buildInputs = [ python3.pkgs.tvm-ffi ] ++ lib.optionals cudaSupport (
+  buildInputs = [
+    python3.pkgs.tvm-ffi
+  ]
+  ++ lib.optionals cudaSupport (
     with cudaPackages;
     [
       cuda_cudart
@@ -211,7 +217,14 @@ stdenv.mkDerivation (prevAttrs: {
 
   cmakeFlags = [
     (lib.cmakeBool "BUILD_ALL_SUPPORTED_ARCHS" true)
-    (lib.cmakeFeature "Python_EXECUTABLE" "${python3.withPackages (ps: with ps; [ tvm-ffi typing-extensions ])}/bin/python")
+    (lib.cmakeFeature "Python_EXECUTABLE" "${
+      python3.withPackages (
+        ps: with ps; [
+          tvm-ffi
+          typing-extensions
+        ]
+      )
+    }/bin/python")
     # Fix: file RPATH_CHANGE could not write new RPATH, we are rewriting
     # rpaths anyway.
     (lib.cmakeBool "CMAKE_SKIP_RPATH" true)
@@ -231,22 +244,21 @@ stdenv.mkDerivation (prevAttrs: {
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
   ];
 
-  postInstall =
-    ''
-      rm -rf $out/_${moduleName}_*_${rev}
-    ''
-    + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
-      find $out/ -name '*.so' \
-        -exec patchelf --set-rpath "" {} \;
-    ''
-    + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
-      find $out/ -name '*.so' \
-        -exec rewrite-nix-paths-macho {} \;
+  postInstall = ''
+    rm -rf $out/_${moduleName}_*_${rev}
+  ''
+  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
+    find $out/ -name '*.so' \
+      -exec patchelf --set-rpath "" {} \;
+  ''
+  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
+    find $out/ -name '*.so' \
+      -exec rewrite-nix-paths-macho {} \;
 
-      # Stub some rpath.
-      find $out/ -name '*.so' \
-        -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
-    '';
+    # Stub some rpath.
+    find $out/ -name '*.so' \
+      -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
+  '';
 
   doInstallCheck = true;
 

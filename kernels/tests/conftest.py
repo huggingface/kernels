@@ -3,7 +3,7 @@ import sys
 import pytest
 import torch
 
-from kernels.utils import _get_privateuse_backend_name
+from kernels.backends import _get_torch_privateuse_backend_name
 
 has_cuda = (
     hasattr(torch.version, "cuda")
@@ -20,7 +20,7 @@ has_xpu = (
     and torch.version.xpu is not None
     and torch.xpu.device_count() > 0
 )
-has_npu = _get_privateuse_backend_name() == "npu"
+has_npu = _get_torch_privateuse_backend_name() == "npu"
 
 
 def pytest_addoption(parser):
@@ -37,7 +37,7 @@ def device():
         return "cuda"
     elif hasattr(torch, "xpu") and torch.xpu.is_available():
         return "xpu"
-    elif _get_privateuse_backend_name() == "npu":
+    elif _get_torch_privateuse_backend_name() == "npu":
         return "npu"
 
     return "cpu"

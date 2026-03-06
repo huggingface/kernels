@@ -20,7 +20,7 @@ def validate_dependencies(dependencies: list[str], backend: str):
         backend (`str`): The backend to validate dependencies for.
     """
     general_deps = DEPENDENCY_DATA.get("general", {})
-    backend_deps = DEPENDENCY_DATA.get("backends", {}).get(backend, {})
+    backend_deps = DEPENDENCY_DATA.get("backends", {}).get(backend.name, {})
 
     # Validate each dependency
     for dependency in dependencies:

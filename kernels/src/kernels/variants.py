@@ -57,7 +57,7 @@ def _tvm_ffi_build_variant(backend: str | None) -> list[str]:
     os = platform.system().lower()
 
     return [
-        f"torch{tvm_ffi_version.major}{tvm_ffi_version.minor}-{compute_framework}-{cpu}-{os}"
+        f"tvm-ffi{tvm_ffi_version.major}{tvm_ffi_version.minor}-{compute_framework}-{cpu}-{os}"
     ]
 
 

@@ -267,7 +267,6 @@ stdenv.mkDerivation (prevAttrs: {
 
   passthru = {
     inherit dependencies;
-    # TODO: fix variant
-    inherit (torch) variant;
+    inherit (python3.pkgs.tvm-ffi) variant;
   };
 })

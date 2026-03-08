@@ -241,25 +241,21 @@ stdenv.mkDerivation (prevAttrs: {
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
   ];
 
-  postInstall =
-    let
-      buildVariant = torch.variant;
-    in
-    ''
-      rm -rf $out/_${moduleName}_*_${rev}
-    ''
-    + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
-      find $out/ -name '*.so' \
-        -exec patchelf --set-rpath "" {} \;
-    ''
-    + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
-      find $out/ -name '*.so' \
-        -exec rewrite-nix-paths-macho {} \;
+  postInstall = ''
+    rm -rf $out/_${moduleName}_*_${rev}
+  ''
+  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isLinux)) ''
+    find $out/ -name '*.so' \
+      -exec patchelf --set-rpath "" {} \;
+  ''
+  + (lib.optionalString (stripRPath && stdenv.hostPlatform.isDarwin)) ''
+    find $out/ -name '*.so' \
+      -exec rewrite-nix-paths-macho {} \;
 
-      # Stub some rpath.
-      find $out/ -name '*.so' \
-        -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
-    '';
+    # Stub some rpath.
+    find $out/ -name '*.so' \
+      -exec install_name_tool -add_rpath "@loader_path/lib" {} \;
+  '';
 
   doInstallCheck = true;
 

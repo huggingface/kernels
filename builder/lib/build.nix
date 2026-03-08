@@ -275,7 +275,7 @@ rec {
           extension = mkTorchExtension buildSet { inherit path rev doGetKernelCheck; };
         in
         {
-          name = buildSet.torch.variant;
+          name = extension.variant;
           value = mkShell {
             nativeBuildInputs = with pkgs; pythonNativeCheckInputs python3.pkgs;
 
@@ -297,7 +297,7 @@ rec {
               # environment. We clear the LD_LIBRARY_PATH and PYTHONPATH to
               # make testing as pure as possible.
               unset LD_LIBRARY_PATH
-              export PYTHONPATH=${extension}/${buildSet.torch.variant}
+              export PYTHONPATH=${extension}/${extension.variant}
             '';
           };
         };
@@ -337,7 +337,7 @@ rec {
           );
         in
         {
-          name = buildSet.torch.variant;
+          name = extension.variant;
           value = mkShell rec {
             nativeBuildInputs =
               with pkgs;

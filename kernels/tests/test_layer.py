@@ -102,7 +102,6 @@ class ReLU(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         self.n_calls += 1
-        d = input.shape[-1] // 2
         return F.relu(input)
 
 

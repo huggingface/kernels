@@ -1,10 +1,10 @@
-from packaging.version import parse
 import platform
 import re
 
+from packaging.version import parse
 
-from kernels.compat import has_torch, has_tvm_ffi
 from kernels.backends import _select_backend
+from kernels.compat import has_torch, has_tvm_ffi
 
 BUILD_VARIANT_REGEX = re.compile(
     r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)"

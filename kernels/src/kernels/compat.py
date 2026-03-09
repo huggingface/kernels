@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 
 if sys.version_info >= (3, 11):
@@ -5,19 +6,9 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-try:
-    import torch
 
-    has_torch = True
-except ImportError:
-    has_torch = False
+has_torch = importlib.util.find_spec("torch") is not None
+has_tvm_ffi = importlib.util.find_spec("tvm_ffi") is not None
 
-
-try:
-    import tvm_ffi
-
-    has_tvm_ffi = True
-except ImportError:
-    has_tvm_ffi = False
 
 __all__ = ["has_torch", "has_tvm_ffi", "tomllib"]

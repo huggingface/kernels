@@ -22,8 +22,8 @@ from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
-from kernels.variants import _build_variants
 from kernels.status import resolve_status
+from kernels.variants import _build_variants
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 

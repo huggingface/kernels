@@ -155,6 +155,7 @@
               black
               # For testing CUDA version detection in kernels.
               cudaPackages.cuda_cudart
+              isort
               mypy
               pyright
               ruff

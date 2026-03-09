@@ -22,6 +22,7 @@
           ++ allOutputs build2cmake
           ++ allOutputs kernel-abi-check
           ++ allOutputs python3Packages.kernels
+          ++ allOutputs python3Packages.tvm-ffi
           ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)
         );
       buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.torch.variant (buildSetOutputs buildSet);

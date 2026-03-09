@@ -7,7 +7,7 @@ use std::{
 use eyre::{bail, Result};
 use serde::{Deserialize, Serialize};
 
-use super::{Backend, Dependency};
+use super::{Backend, Dependency, KernelName};
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,7 +23,7 @@ pub struct Build {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
     #[serde(default)]
     pub universal: bool,
 
@@ -132,6 +132,7 @@ impl TryFrom<Build> for super::Build {
                 Backend::Cpu,
                 Backend::Cuda,
                 Backend::Metal,
+                Backend::Neuron,
                 Backend::Rocm,
                 Backend::Xpu,
             ]
@@ -173,6 +174,7 @@ impl General {
             backends,
             cuda,
             hub: general.hub.map(Into::into),
+            neuron: None,
             python_depends: None,
             xpu: None,
         }

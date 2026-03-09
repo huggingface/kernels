@@ -332,6 +332,8 @@ buildPythonPackage {
       xpuPackages
       ;
 
+    inherit (python) pkgs;
+
     cudaCapabilities = if cudaSupport then supportedCudaCapabilities else [ ];
     rocmArchs = if rocmSupport then supportedTorchRocmArchs else [ ];
   }

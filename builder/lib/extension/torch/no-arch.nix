@@ -60,7 +60,14 @@ in
 stdenv.mkDerivation (prevAttrs: {
   name = "${kernelName}-torch-ext";
 
-  inherit moduleName src;
+  inherit moduleName;
+
+  src = pkgs.runCommand "source" { } ''
+    mkdir -p $out
+    cp -r --no-preserve=mode ${src}/* $out/
+    ${pkgs.build2cmake}/bin/build2cmake generate-torch \
+      --ops-id ${rev} $out/build.toml
+  '';
 
   framework = "torch";
 
@@ -79,26 +86,14 @@ stdenv.mkDerivation (prevAttrs: {
     })
   ];
 
-  dontBuild = true;
-
-  # We do not strictly need this, since we don't use the setuptools-based
-  # build. But `build2cmake` does proper validation of the build.toml, so
-  # we run it anyway.
-  postPatch = ''
-    build2cmake generate \
-      --ops-id ${rev} build.toml
+  buildPhase = ''
+    python3 setup.py build_kernel --backend ${buildConfig.backend}
   '';
 
-  installPhase =
-    let
-      noarchVariant = torch.noarchVariant;
-    in
-    ''
-      mkdir -p $out/${noarchVariant}/${moduleName}
-      cp -r torch-ext/${moduleName}/* $out/${noarchVariant}
-      cp compat.py $out/${noarchVariant}/${moduleName}/__init__.py
-      cp metadata-${buildConfig.backend}.json $out/${noarchVariant}
-    '';
+  installPhase = ''
+    mkdir -p $out
+    cp -r build/* $out/
+  '';
 
   doInstallCheck = true;
 

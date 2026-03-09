@@ -9,6 +9,9 @@ pub use deps::Dependency;
 mod compat;
 pub use compat::BuildCompat;
 
+mod name;
+pub use name::KernelName;
+
 mod v1;
 mod v2;
 pub(crate) mod v3;
@@ -51,7 +54,7 @@ impl Build {
 }
 
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
     pub version: Option<usize>,
 
     /// Hugging Face Hub license identifier.
@@ -62,15 +65,11 @@ pub struct General {
     pub python_depends: Option<Vec<String>>,
 
     pub cuda: Option<CudaGeneral>,
+    pub neuron: Option<NeuronGeneral>,
     pub xpu: Option<XpuGeneral>,
 }
 
 impl General {
-    /// Name of the kernel as a Python extension.
-    pub fn python_name(&self) -> String {
-        self.name.replace("-", "_")
-    }
-
     pub fn python_depends(&self) -> Box<dyn Iterator<Item = Result<String>> + '_> {
         let general_python_deps = match self.python_depends.as_ref() {
             Some(deps) => deps,
@@ -126,6 +125,10 @@ pub struct CudaGeneral {
 }
 
 pub struct XpuGeneral {
+    pub python_depends: Option<Vec<String>>,
+}
+
+pub struct NeuronGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -276,16 +279,18 @@ pub enum Backend {
     Cpu,
     Cuda,
     Metal,
+    Neuron,
     Rocm,
     Xpu,
 }
 
 impl Backend {
-    pub const fn all() -> [Backend; 5] {
+    pub const fn all() -> [Backend; 6] {
         [
             Backend::Cpu,
             Backend::Cuda,
             Backend::Metal,
+            Backend::Neuron,
             Backend::Rocm,
             Backend::Xpu,
         ]
@@ -298,6 +303,7 @@ impl Display for Backend {
             Backend::Cpu => write!(f, "cpu"),
             Backend::Cuda => write!(f, "cuda"),
             Backend::Metal => write!(f, "metal"),
+            Backend::Neuron => write!(f, "neuron"),
             Backend::Rocm => write!(f, "rocm"),
             Backend::Xpu => write!(f, "xpu"),
         }
@@ -312,6 +318,7 @@ impl FromStr for Backend {
             "cpu" => Ok(Backend::Cpu),
             "cuda" => Ok(Backend::Cuda),
             "metal" => Ok(Backend::Metal),
+            "neuron" => Ok(Backend::Neuron),
             "rocm" => Ok(Backend::Rocm),
             "xpu" => Ok(Backend::Xpu),
             _ => Err(format!("Unknown backend: {s}")),

@@ -1,55 +1,87 @@
 # Kernels CLI Reference
 
-## Main Functions
+The `kernels` CLI provides commands for managing compute kernels.
 
-### kernels check
+## Commands
 
-You can use `kernels check` to test compliance of a kernel on the Hub.
-This currently checks that the kernel:
+| Command                                                 | Description                                              |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| [init](cli-init.md)                                     | Initialize a new kernel project from template            |
+| [upload](cli-upload.md)                                 | Upload kernels to the Hub                                |
+| [benchmark](cli-benchmark.md)                           | Run benchmark results for a kernel                       |
+| [check](cli-check.md)                                   | Check a kernel for compliance                            |
+| [versions](cli-versions.md)                             | Show kernel versions                                     |
+| [generate-readme](cli-generate-readme.md)               | Generate README snippets for a kernel's public functions |
+| [lock](cli-lock.md)                                     | Lock kernel revisions                                    |
+| [download](cli-download.md)                             | Download locked kernels                                  |
+| [create-and-upload-card](cli-create-and-upload-card.md) | Create and upload a model card for a kernel              |
+| [skills](cli-skills-add.md)                             | Add skills for AI coding assistants                      |
 
-- Supports the currently-required Python ABI version.
-- Works on supported operating system versions.
+## Quick Start
 
-For example:
+### Create a new kernel project
 
 ```bash
-$ kernels check kernels-community/flash-attn3
-Checking variant: torch28-cxx11-cu128-aarch64-linux
-  🐍 Python ABI 3.9 compatible
-  🐧 manylinux_2_28 compatible
-[...]
+kernels init my-username/my-kernel
+cd my-kernel
 ```
 
-### kernels upload
-
-Use `kernels upload <dir_containing_build> --repo_id="hub-username/kernel"` to upload
-your kernel builds to the Hub. To know the supported arguments run: `kernels upload -h`.
-
-**Notes**:
-
-- This will take care of creating a repository on the Hub with the `repo_id` provided.
-- If a repo with the `repo_id` already exists and if it contains a `build` with the build variant
-  being uploaded, it will attempt to delete the files existing under it.
-- Make sure to be authenticated (run `hf auth login` if not) to be able to perform uploads to the Hub.
-
-### kernels skills add
-
-Use `kernels skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode. For now, only the `cuda-kernels` skill is supported. Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/skills).
-
-Skills instruct agents how to deal with hardware-specific optimizations, integrate with libraries like diffusers and transformers, and benchmark kernel performance in consistent ways.
-
-Examples:
+### Build and test locally
 
 ```bash
-# install for Claude in the current project
-kernels skills add --claude
+cachix use huggingface
+nix run -L --max-jobs 1 --cores 8 .#build-and-copy
+uv run example.py
+```
 
-# install globally for Codex
-kernels skills add --codex --global
+### Upload to the Hub
 
-# install for multiple assistants
-kernels skills add --claude --codex --opencode
+```bash
+kernels upload ./build --repo-id my-username/my-kernel
+```
 
-# install to a custom destination and overwrite if already present
-kernels skills add --dest ~/my-skills --force
+### Use kernels in your project
+
+#### Directly from the Hub
+
+```python
+import torch
+
+from kernels import get_kernel
+
+# Download optimized kernels from the Hugging Face hub
+my_kernel = get_kernel("my-username/my-kernel", version=1)
+
+# Random tensor
+x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
+
+# Run the kernel
+y = torch.empty_like(x)
+my_kernel.my_kernel_function(y, x)
+
+print(y)
+```
+
+or
+
+#### Locked and downloaded
+
+Add to `pyproject.toml`:
+
+```toml
+[tool.kernels.dependencies]
+"my-username/my-kernel" = "1"
+```
+
+Then lock and download:
+
+```bash
+kernels lock .
+kernels download .
+```
+
+### See help
+
+```bash
+kernels --help
 ```

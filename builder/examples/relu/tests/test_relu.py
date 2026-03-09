@@ -1,11 +1,13 @@
 import platform
 
+import pytest
 import torch
 import torch.nn.functional as F
 
 import relu
 
 
+@pytest.mark.kernels_ci
 def test_relu():
     if platform.system() == "Darwin":
         device = torch.device("mps")
@@ -19,6 +21,7 @@ def test_relu():
     torch.testing.assert_allclose(F.relu(x), relu.relu(x))
 
 
+@pytest.mark.kernels_ci
 def test_relu_layer():
     if platform.system() == "Darwin":
         device = torch.device("mps")

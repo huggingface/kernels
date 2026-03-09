@@ -1,12 +1,11 @@
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Protocol, Type
 import sys
+from abc import ABC, abstractmethod
 from functools import lru_cache
+from typing import TYPE_CHECKING, Protocol, Type
 
-from .device import Device
-from .mode import Mode
 from ._interval_tree import IntervalTree
-from .device import CUDAProperties, ROCMProperties
+from .device import CUDAProperties, Device, ROCMProperties
+from .mode import Mode
 
 if TYPE_CHECKING:
     from torch import nn
@@ -36,6 +35,8 @@ class DeviceRepos(ABC):
             return _XPURepos()
         elif device.type == "npu":
             return _NPURepos()
+        elif device.type == "neuron":
+            return _NeuronRepos()
         else:
             raise ValueError(f"Unknown device type: {device.type}")
 
@@ -89,6 +90,26 @@ class _XPURepos(DeviceRepos):
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
         if device.type != "xpu":
             raise ValueError(f"Device type must be 'xpu', got {device.type}")
+
+        self._repos = repos
+
+
+class _NeuronRepos(DeviceRepos):
+    _repos: dict[Mode, RepositoryProtocol]
+
+    def __init__(self):
+        super().__init__()
+        self._repos = {}
+
+    @property
+    def repos(
+        self,
+    ) -> dict[Mode, RepositoryProtocol] | None:
+        return self._repos
+
+    def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
+        if device.type != "neuron":
+            raise ValueError(f"Device type must be 'neuron', got {device.type}")
 
         self._repos = repos
 

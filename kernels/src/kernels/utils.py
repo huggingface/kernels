@@ -22,8 +22,9 @@ from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 from kernels.variants import _build_variants
+from kernels.status import resolve_status
 
-KNOWN_BACKENDS = {"cpu", "cuda", "metal", "rocm", "xpu", "npu"}
+KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
 
 def _get_cache_dir() -> str | None:
@@ -120,9 +121,13 @@ def install_kernel(
     Returns:
         `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
+    api = _get_hf_api(user_agent=user_agent)
+
+    if not local_files_only:
+        repo_id, revision = resolve_status(api, repo_id, revision)
+
     package_name = package_name_from_repo_id(repo_id)
     allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
-    api = _get_hf_api(user_agent=user_agent)
     repo_path = Path(
         str(
             api.snapshot_download(
@@ -332,7 +337,6 @@ def has_kernel(
         `bool`: `True` if a kernel is available for the current environment.
     """
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()

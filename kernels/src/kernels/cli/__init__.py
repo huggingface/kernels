@@ -4,18 +4,26 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, get_kernel_locks
+from kernels.cli.doc import generate_readme_for_kernel
+from kernels.cli.init import parse_kernel_name, run_init
+from kernels.cli.skills import add_skill
 from kernels.cli.upload import upload_kernels_dir
+from kernels.cli.versions import print_kernel_versions
+from kernels.compat import tomllib
+from kernels.kernel_card_utils import (
+    _load_or_create_kernel_card,
+    _update_benchmark,
+    _update_kernel_card_available_funcs,
+    _update_kernel_card_backends,
+    _update_kernel_card_license,
+    _update_kernel_card_usage,
+)
+from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import (
+    KNOWN_BACKENDS,
     install_kernel,
     install_kernel_all_variants,
-    KNOWN_BACKENDS,
 )
-from kernels.cli.init import run_init, parse_kernel_name
-from kernels.cli.skills import add_skill
-from kernels.cli.versions import print_kernel_versions
-from kernels.cli.doc import generate_readme_for_kernel
 
 
 def main():
@@ -221,7 +229,7 @@ def main():
     init_parser.add_argument(
         "--template-repo",
         type=str,
-        default="drbh/template",
+        default="kernels-community/template",
         help="HuggingFace repo ID for the template",
     )
     init_parser.add_argument(
@@ -238,6 +246,37 @@ def main():
         help="Overwrite existing directory if it exists",
     )
     init_parser.set_defaults(func=run_init)
+
+    repocard_parser = subparsers.add_parser(
+        "create-and-upload-card",
+        help="Create and optionally upload a kernel card.",
+    )
+    repocard_parser.add_argument(
+        "kernel_dir",
+        type=str,
+        help="Path to the kernels source.",
+    )
+    repocard_parser.add_argument(
+        "--card-path", type=str, required=True, help="Path to save the card to."
+    )
+    repocard_parser.add_argument(
+        "--description",
+        type=str,
+        default=None,
+        help="Description to introduce the kernel.",
+    )
+    repocard_parser.add_argument(
+        "--repo-id",
+        type=str,
+        default=None,
+        help="If specified it will be pushed to a repository on the Hub.",
+    )
+    repocard_parser.add_argument(
+        "--create-pr",
+        action="store_true",
+        help="If specified it will create a PR on the `repo_id`.",
+    )
+    repocard_parser.set_defaults(func=create_and_upload_card)
 
     args = parser.parse_args()
     args.func(args)
@@ -258,12 +297,14 @@ def download_kernels(args):
     for kernel_lock_json in lock_json:
         kernel_lock = KernelLock.from_json(kernel_lock_json)
         print(
-            f"Downloading `{kernel_lock.repo_id}` at with SHA: {kernel_lock.sha}",
+            f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
             file=sys.stderr,
         )
         if args.all_variants:
             install_kernel_all_variants(
-                kernel_lock.repo_id, kernel_lock.sha, variant_locks=kernel_lock.variants
+                kernel_lock.repo_id,
+                kernel_lock.sha,
+                variant_locks=kernel_lock.variants,
             )
         else:
             try:
@@ -305,6 +346,36 @@ def upload_kernels(args):
         branch=args.branch,
         private=args.private,
     )
+
+
+def create_and_upload_card(args):
+    if not args.repo_id and args.create_pr:
+        raise ValueError("`create_pr` cannot be True when `repo_id` is None.")
+
+    kernel_dir = Path(args.kernel_dir).resolve()
+    kernel_card = _load_or_create_kernel_card(
+        kernel_description=args.description, license="apache-2.0"
+    )
+
+    updated_card = _update_kernel_card_usage(
+        kernel_card=kernel_card, local_path=kernel_dir, repo_id=args.repo_id
+    )
+    updated_card = _update_kernel_card_available_funcs(
+        kernel_card=kernel_card, local_path=kernel_dir
+    )
+    updated_card = _update_kernel_card_backends(
+        kernel_card=kernel_card, local_path=kernel_dir
+    )
+    updated_card = _update_benchmark(kernel_card=kernel_card, local_path=kernel_dir)
+    updated_card = _update_kernel_card_license(
+        kernel_card=kernel_card, local_path=kernel_dir
+    )
+
+    card_path = args.card_path
+    updated_card.save(card_path)
+
+    if args.repo_id:
+        updated_card.push_to_hub(repo_id=args.repo_id, create_pr=args.create_pr)
 
 
 class _JSONEncoder(json.JSONEncoder):

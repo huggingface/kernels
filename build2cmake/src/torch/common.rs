@@ -19,6 +19,7 @@ static COMPAT_PY: &str = include_str!("../templates/compat.py");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
 static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
 static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
+static ADD_GPU_ARCH_METADATA_PY: &str = include_str!("../templates/add_gpu_arch_metadata.py");
 static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
 static REGISTRATION_H: &str = include_str!("../templates/registration.h");
@@ -43,7 +44,7 @@ pub fn write_setup_py(
             context! {
                 data_globs => data_globs,
                 revision => revision,
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 version => "0.1.0",
             },
             writer,
@@ -89,7 +90,7 @@ pub fn write_pyproject_toml(
         .wrap_err("Cannot get pyproject.toml template")?
         .render_to_write(
             context! {
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 python_dependencies => python_dependencies,
                 backend_dependencies => backend_dependencies,
             },
@@ -185,6 +186,11 @@ pub fn write_cmake_helpers(file_set: &mut FileSet) {
         "build-variants.cmake",
         BUILD_VARIANTS_UTILS.as_bytes(),
     );
+    write_cmake_file(
+        file_set,
+        "add_gpu_arch_metadata.py",
+        ADD_GPU_ARCH_METADATA_PY.as_bytes(),
+    );
     write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(
         file_set,
@@ -211,7 +217,7 @@ pub fn render_extension(
         .wrap_err("Cannot get Torch extension template")?
         .render_to_write(
             context! {
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 data_extensions => torch.data_extensions(),
             },
             &mut *write,
@@ -237,8 +243,8 @@ pub fn render_preamble(
         .wrap_err("Cannot get CMake prelude template")?
         .render_to_write(
             context! {
-                name => &general.name,
-                python_name => general.python_name(),
+                name => general.name.as_str(),
+                python_name => general.name.python_name(),
                 revision => revision,
                 cuda_minver => cuda_minver.map(|v| v.to_string()),
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
@@ -299,7 +305,7 @@ pub fn write_torch_ext(
         env,
         build,
         torch_ext,
-        &build.general.name,
+        build.general.name.as_str(),
         &revision,
         &mut file_set,
     )?;

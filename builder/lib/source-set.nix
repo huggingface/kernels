@@ -30,6 +30,14 @@ let
           throw "Kernel should have torch-ext or tvm-ffi-ext directory";
     in
     fileset.fileFilter pyFilter path;
+  pyTestsSet =
+    let
+      testsPath = path + "/tests";
+    in
+    if builtins.pathExists testsPath then
+      fileset.fileFilter pyFilter (path + "/tests")
+    else
+      fileset.empty;
   kernelsSrc = fileset.unions (
     lib.flatten (lib.mapAttrsToList (name: buildConfig: map (nameToPath path) buildConfig.src) kernels)
   );
@@ -41,5 +49,6 @@ fileset.toSource {
     kernelsSrc
     srcSet
     pySrcSet
+    pyTestsSet
   ];
 }

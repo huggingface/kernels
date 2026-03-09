@@ -1,7 +1,7 @@
-from huggingface_hub.errors import RepositoryNotFoundError
 import pytest
 import torch
 import torch.nn.functional as F
+from huggingface_hub.errors import RepositoryNotFoundError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
@@ -260,6 +260,13 @@ def test_local_overrides(monkeypatch, local_kernel_path):
         )
         with pytest.raises(ValueError, match=r"Invalid LOCAL_KERNELS entry"):
             get_kernel("kernels-test/activation")
+
+
+@pytest.mark.neuron_only
+def test_neuron():
+    relu = get_kernel("kernels-test/relu-nki", version=1)
+    x = torch.randn((16, 16), dtype=torch.float16).to(device="neuron")
+    torch.testing.assert_close(relu.relu(x), x.relu())
 
 
 def silu_and_mul_torch(x: torch.Tensor):

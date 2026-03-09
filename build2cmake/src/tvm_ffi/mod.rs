@@ -57,7 +57,7 @@ pub fn write_tvm_ffi_ext(
         build,
         &target_dir,
         tvm_ffi_ext,
-        &build.general.name,
+        build.general.name.as_str(),
         &revision,
         &mut file_set,
     )?;
@@ -92,7 +92,7 @@ pub fn write_setup_py(
             context! {
                 data_globs => data_globs,
                 revision => revision,
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
             },
             writer,
         )
@@ -129,7 +129,7 @@ pub fn write_pyproject_toml(
         .wrap_err("Cannot get tvm_ffi pyproject.toml template")?
         .render_to_write(
             context! {
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 python_dependencies => python_dependencies,
                 backend_dependencies => backend_dependencies,
             },
@@ -173,7 +173,7 @@ pub fn render_extension(
         .wrap_err("Cannot get tvm_ffi extension template")?
         .render_to_write(
             context! {
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 data_extensions => tvm_ffi.data_extensions(),
             },
             &mut *write,
@@ -197,7 +197,7 @@ pub fn render_preamble(
         .render_to_write(
             context! {
                 name => &general.name,
-                python_name => general.python_name(),
+                python_name => general.name.python_name(),
                 revision => revision,
             },
             &mut *write,

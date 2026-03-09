@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.12.2.dev0"
+version = "0.13.0.dev0"
 description = "Download compute kernels"
 authors = [
   { name = "Daniel de Kok", email = "daniel@huggingface.co" },
@@ -53,7 +53,7 @@ kernels = "kernels.cli:main"
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
 [tool.setuptools.package-data]
-kernels = ["python_depends.json"]
+kernels = ["python_depends.json", "card_template.md"]
 
 [tool.isort]
 profile = "black"

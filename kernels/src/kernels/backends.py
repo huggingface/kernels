@@ -45,14 +45,22 @@ class CUDA:
 
 @dataclass
 class Metal:
-    pass
-
     @property
     def name(self) -> str:
         return "metal"
 
     def __str__(self) -> str:
         return "metal"
+
+
+@dataclass
+class Neuron:
+    @property
+    def name(self) -> str:
+        return "neuron"
+
+    def __str__(self) -> str:
+        return "neuron"
 
 
 @dataclass
@@ -79,14 +87,18 @@ class XPU:
         return f"xpu{self.version.major}{self.version.minor}"
 
 
-Backend = CANN | CPU | CUDA | Metal | ROCm | XPU
+Backend = CANN | CPU | CUDA | Metal | Neuron | ROCm | XPU
 
 
 def _backend() -> Backend:
     if has_torch:
         import torch
 
-        if torch.version.cuda is not None:
+        if hasattr(torch, "neuron"):
+            # Needs to be sorted before specific Torch builds, since Neuron
+            # extension can be loaded into e.g. CUDA Torch builds.
+            return Neuron()
+        elif torch.version.cuda is not None:
             cuda_version = parse(torch.version.cuda)
             return CUDA(version=cuda_version)
         elif torch.version.hip is not None:
@@ -95,7 +107,7 @@ def _backend() -> Backend:
         elif torch.backends.mps.is_available():
             return Metal()
         elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
-            version = torch.version.xpu[0:6]
+            version = f"{torch.version.xpu[0:4]}.{torch.version.xpu[5:6]}"
             return XPU(version=parse(version))
         elif _get_torch_privateuse_backend_name() == "npu":
             from torch_npu.utils.collect_env import get_cann_version  # type: ignore[import-not-found]

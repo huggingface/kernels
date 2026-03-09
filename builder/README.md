@@ -63,6 +63,9 @@ See [dockerfiles/README.md](./dockerfiles/README.md) for more options, including
 | XPU        | ✓               | ✓                      | ✗                       | 2    |
 | Metal      | ✓               | ✓                      | ✗                       | 2    |
 | Huawei NPU | ✓               | ✗                      | ✗                       | 3    |
+| Neuron     | ✓               | x                      | x                       | 3    |
+
+**Warning:** Neuron support is experimental and currently requires pre-release packages.
 
 # 📚 Documentation
 

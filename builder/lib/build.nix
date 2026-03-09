@@ -63,10 +63,6 @@ rec {
 
   readBuildConfig = path: validateBuildConfig (readToml (path + "/build.toml"));
 
-  srcFilter =
-    src: name: type:
-    type == "directory" || lib.any (suffix: lib.hasSuffix suffix name) src;
-
   # Source set function to create a fileset for a path
   mkSourceSet = import ./source-set.nix { inherit lib; };
 
@@ -303,6 +299,53 @@ rec {
         };
     in
     builtins.listToAttrs (lib.map (shellForBuildSet { inherit path rev; }) buildSets);
+
+  # Kernel CI test runners.
+  mkCiTests =
+    {
+      path,
+      rev,
+      buildSets,
+      doGetKernelCheck,
+      pythonCheckInputs,
+    }:
+    let
+      runnerForBuildSet =
+        { path, rev }:
+        buildSet:
+        let
+          pkgs = buildSet.pkgs;
+          rocmSupport = pkgs.config.rocmSupport or false;
+          mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
+          extension = mkTorchExtension buildSet { inherit path rev doGetKernelCheck; };
+          testPython =
+            with pkgs;
+            python3.withPackages (
+              ps:
+              with ps;
+              extension.dependencies
+              ++ [
+                buildSet.torch
+                pytest
+              ]
+              ++ pythonCheckInputs ps
+            );
+        in
+        {
+          name = buildSet.torch.variant;
+          value =
+            with pkgs;
+            pkgs.writeShellScriptBin "ci-test" ''
+              if [ -d ${extension.src}/tests ]; then
+                unset LD_LIBRARY_PATH
+                export PYTHONPATH=${extension}/${extension.variant}
+                # Accept exit code 5: no tests are selected
+                ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci -p no:cacheprovider || test $? -eq 5
+              fi
+            '';
+        };
+    in
+    builtins.listToAttrs (lib.map (runnerForBuildSet { inherit path rev; }) buildSets);
 
   mkTorchDevShells =
     {

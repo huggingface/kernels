@@ -7,7 +7,7 @@ use std::{
 use eyre::{bail, Result};
 use serde::Deserialize;
 
-use super::{Backend, Dependency};
+use super::{Backend, Dependency, KernelName};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -22,7 +22,7 @@ pub struct Build {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct General {
-    pub name: String,
+    pub name: KernelName,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -86,6 +86,7 @@ impl TryFrom<Build> for super::Build {
                 Backend::Cpu,
                 Backend::Cuda,
                 Backend::Metal,
+                Backend::Neuron,
                 Backend::Rocm,
                 Backend::Xpu,
             ]
@@ -107,6 +108,7 @@ impl TryFrom<Build> for super::Build {
                 license: None,
                 backends,
                 hub: None,
+                neuron: None,
                 python_depends: None,
                 cuda: None,
                 xpu: None,

@@ -4,7 +4,7 @@ import warnings
 from dataclasses import dataclass
 from typing import Optional
 
-from packaging.version import Version, parse
+from packaging.version import Version
 
 from kernels.compat import has_torch
 
@@ -99,16 +99,16 @@ def _backend() -> Backend:
             # extension can be loaded into e.g. CUDA Torch builds.
             return Neuron()
         elif torch.version.cuda is not None:
-            cuda_version = parse(torch.version.cuda)
+            cuda_version = Version(torch.version.cuda)
             return CUDA(version=cuda_version)
         elif torch.version.hip is not None:
-            rocm_version = parse(torch.version.hip.split("-")[0])
+            rocm_version = Version(torch.version.hip.split("-")[0])
             return ROCm(version=rocm_version)
         elif torch.backends.mps.is_available():
             return Metal()
         elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
             version = f"{torch.version.xpu[0:4]}.{torch.version.xpu[5:6]}"
-            return XPU(version=parse(version))
+            return XPU(version=Version(version))
         elif _get_torch_privateuse_backend_name() == "npu":
             from torch_npu.utils.collect_env import get_cann_version  # type: ignore[import-not-found]
 

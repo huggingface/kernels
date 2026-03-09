@@ -13,14 +13,14 @@
 
 buildPythonPackage rec {
   pname = "tvm-ffi";
-  version = "0.1.8-post2";
+  version = "0.1.9";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "apache";
     repo = "tvm-ffi";
     rev = "v${version}";
-    hash = "sha256-IPt1/VokZ4STfnt+JEYaCkslOWFCHZYWqpFCbJtvGQY=";
+    hash = "sha256-XnlM//WW2TbjbmzYBq6itJQ7R3J646UMVQUVhV5Afwc=";
     fetchSubmodules = true;
   };
 

@@ -8,8 +8,10 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from huggingface_hub import CommitOperationAdd, CommitOperationDelete
 
 from kernels.cli import upload_kernels
+from kernels.cli.upload import BUILD_COMMIT_BATCH_SIZE
 from kernels.utils import _get_hf_api
 
 REPO_ID = "valid_org/kernels-upload-test"
@@ -172,25 +174,62 @@ def test_kernel_upload_deletes_as_expected():
     _get_hf_api().delete_repo(repo_id=REPO_ID)
 
 
-def test_large_kernel_upload_uses_kernel_root_path(monkeypatch, tmp_path):
+def test_large_kernel_upload_uses_create_commit_batches(monkeypatch, tmp_path):
     kernel_root = tmp_path / "kernel"
     build_variant = kernel_root / "build" / "torch-cpu"
     build_variant.mkdir(parents=True, exist_ok=True)
     (build_variant / "metadata.json").write_text("{}")
-    for i in range(1001):
+    file_count = BUILD_COMMIT_BATCH_SIZE * 2
+    for i in range(file_count):
         (build_variant / f"file_{i}.py").touch()
 
     api = Mock()
     api.create_repo.return_value = SimpleNamespace(repo_id=REPO_ID)
+    api.list_repo_files.return_value = [
+        "README.md",
+        "build/torch-cpu/file_0.py",
+        "build/torch-cpu/stale.py",
+        "build/torch-cuda/keep.py",
+    ]
     monkeypatch.setattr("kernels.cli.upload._get_hf_api", lambda: api)
 
     upload_kernels(UploadArgs(kernel_root, REPO_ID, False, "main"))
 
-    api.upload_large_folder.assert_called_once()
-    kwargs = api.upload_large_folder.call_args.kwargs
-    assert kwargs["repo_id"] == REPO_ID
-    assert kwargs["folder_path"] == kernel_root.resolve()
-    assert kwargs["revision"] == "main"
-    assert kwargs["repo_type"] == "model"
-    assert kwargs["allow_patterns"] == ["build/torch*"]
+    # 2 full batches of adds, plus metadata and 1 stale-file delete.
+    assert api.create_commit.call_count == 3
+    batch_sizes = [
+        len(call.kwargs["operations"]) for call in api.create_commit.call_args_list
+    ]
+    assert batch_sizes == [
+        BUILD_COMMIT_BATCH_SIZE,
+        BUILD_COMMIT_BATCH_SIZE,
+        2,
+    ]
+    commit_messages = [
+        call.kwargs["commit_message"] for call in api.create_commit.call_args_list
+    ]
+    assert commit_messages == [
+        "Build uploaded using `kernels` (batch 1/3).",
+        "Build uploaded using `kernels` (batch 2/3).",
+        "Build uploaded using `kernels` (batch 3/3).",
+    ]
+
+    # Stale repo files should be deleted.
+    operations = [
+        operation
+        for call in api.create_commit.call_args_list
+        for operation in call.kwargs["operations"]
+    ]
+    delete_paths = {
+        op.path_in_repo for op in operations if isinstance(op, CommitOperationDelete)
+    }
+    assert delete_paths == {"build/torch-cpu/stale.py"}
+
+    add_paths = {
+        op.path_in_repo for op in operations if isinstance(op, CommitOperationAdd)
+    }
+    assert len(add_paths) == file_count + 1
+    assert "build/torch-cpu/metadata.json" in add_paths
+    assert "build/torch-cpu/file_0.py" in add_paths
+    assert "build/torch-cpu/file_399.py" in add_paths
     api.upload_folder.assert_not_called()

@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+from kernels.backends import Backend
+
 try:
     with open(Path(__file__).parent / "python_depends.json", "r") as f:
         DEPENDENCY_DATA: dict = json.load(f)
@@ -11,7 +13,7 @@ except FileNotFoundError:
     )
 
 
-def validate_dependencies(dependencies: list[str], backend: str):
+def validate_dependencies(dependencies: list[str], backend: Backend):
     """
     Validate a list of dependencies to ensure they are installed.
 

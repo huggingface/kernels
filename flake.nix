@@ -163,6 +163,7 @@
               docutils
               huggingface-hub
               kernel-abi-check
+              matplotlib
               mktestdocs
               openssl.dev
               pytest

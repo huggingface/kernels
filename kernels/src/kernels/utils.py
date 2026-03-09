@@ -18,6 +18,7 @@ from huggingface_hub import HfApi, constants
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
 from kernels.backends import _backend
+from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
@@ -539,7 +540,6 @@ def package_name_from_repo_id(repo_id: str) -> str:
 
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
     """Returns an instance of HfApi with proper settings."""
-    import torch
 
     from . import __version__
 
@@ -554,7 +554,16 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
         variants = ":".join(_build_variants(None))
-        user_agent_str += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{variants}; file_type/kernel"
+        user_agent_str += f"; kernels/{__version__}; python/{python}; build_variant/{variants}; file_type/kernel"
+
+        if has_torch:
+            import torch
+
+            user_agent_str += f"; torch/{torch.__version__}"
+        if has_tvm_ffi:
+            import tvm_ffi
+
+            user_agent_str += f"; tvm-ffi/{tvm_ffi.__version__}"
 
         # Add glibc version if available
         glibc = glibc_version()

@@ -1,7 +1,6 @@
 import sys
 
 import pytest
-import torch
 
 from kernels.backends import _get_torch_privateuse_backend_name
 
@@ -12,25 +11,36 @@ try:
 except ImportError:
     has_torch = False
 
+try:
+    import torch
+except ImportError:
+    torch = None
+
 has_cuda = (
-    hasattr(torch.version, "cuda")
+    torch is not None
+    and hasattr(torch.version, "cuda")
     and torch.version.cuda is not None
     and torch.cuda.device_count() > 0
 )
 
-has_neuron = hasattr(torch, "neuron") and torch.neuron.device_count() > 0
+has_neuron = (
+    torch is not None and hasattr(torch, "neuron") and torch.neuron.device_count() > 0
+)
 
 has_rocm = (
-    hasattr(torch.version, "hip")
+    torch is not None
+    and hasattr(torch.version, "hip")
     and torch.version.hip is not None
     and torch.cuda.device_count() > 0
 )
 has_xpu = (
-    hasattr(torch.version, "xpu")
+    torch is not None
+    and hasattr(torch.version, "xpu")
     and torch.version.xpu is not None
     and torch.xpu.device_count() > 0
 )
-has_npu = _get_torch_privateuse_backend_name() == "npu"
+
+has_npu = torch is not None and _get_torch_privateuse_backend_name() == "npu"
 
 
 def pytest_addoption(parser):
@@ -43,11 +53,11 @@ def pytest_addoption(parser):
 
 @pytest.fixture
 def device():
-    if torch.cuda.is_available():
+    if has_cuda:
         return "cuda"
-    elif hasattr(torch, "xpu") and torch.xpu.is_available():
+    elif has_xpu:
         return "xpu"
-    elif _get_torch_privateuse_backend_name() == "npu":
+    elif has_npu:
         return "npu"
 
     return "cpu"

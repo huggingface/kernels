@@ -148,6 +148,7 @@ fn render_kernel_component_metal(
                 cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
                 includes => kernel.include().map(prefix_and_join_includes),
                 kernel_name => kernel_name,
+                metal_std_version => kernel.metal_std_version(),
                 sources => sources,
             },
             &mut *write,

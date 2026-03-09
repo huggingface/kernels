@@ -11,6 +11,7 @@ src = [
 
 [kernel.relu_metal]
 backend = "metal"
+metal-std-version = "metal3.1"
 src = [
   "relu/relu.cpp",
   "relu/metallib_loader.mm",

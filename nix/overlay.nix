@@ -83,6 +83,8 @@ in
 
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
+        kernels-test-utils = callPackage ./pkgs/python-modules/kernels-test-utils { };
+
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };

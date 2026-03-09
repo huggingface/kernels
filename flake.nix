@@ -90,7 +90,7 @@
             # fail in a GPU-less sandbox. Even in that case, it's better to lazily
             # load the part with this functionality.
             doGetKernelCheck ? true,
-            pythonCheckInputs ? pkgs: [ ],
+            pythonCheckInputs ? pkgs: [ pkgs.kernels-test-utils ],
             pythonNativeCheckInputs ? pkgs: [ ],
             torchVersions ? _: torchVersions',
           }:

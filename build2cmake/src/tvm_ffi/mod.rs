@@ -55,7 +55,6 @@ pub fn write_tvm_ffi_ext(
     write_cmake(
         env,
         build,
-        &target_dir,
         tvm_ffi_ext,
         build.general.name.as_str(),
         &revision,
@@ -189,7 +188,6 @@ pub fn render_preamble(
     env: &Environment,
     general: &General,
     revision: &str,
-    target_dir: impl AsRef<Path>,
     write: &mut impl Write,
 ) -> Result<()> {
     env.get_template("tvm_ffi/preamble.cmake")
@@ -212,7 +210,6 @@ pub fn render_preamble(
 pub fn write_cmake(
     env: &Environment,
     build: &Build,
-    target_dir: impl AsRef<Path>,
     tvm_ffi: &TvmFfi,
     name: &str,
     revision: &str,
@@ -222,7 +219,7 @@ pub fn write_cmake(
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    render_preamble(env, &build.general, revision, &target_dir, cmake_writer)?;
+    render_preamble(env, &build.general, revision, cmake_writer)?;
 
     render_binding(env, tvm_ffi, name, cmake_writer)?;
 

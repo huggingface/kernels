@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-import relu
+import relu_tvm_ffi
 
 
 @pytest.mark.kernels_ci
@@ -18,7 +18,7 @@ def test_relu():
     else:
         device = torch.device("cpu")
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
-    torch.testing.assert_allclose(F.relu(x), relu.relu(x))
+    torch.testing.assert_allclose(F.relu(x), relu_tvm_ffi.relu(x))
 
 
 @pytest.mark.kernels_ci
@@ -32,5 +32,5 @@ def test_relu_layer():
     else:
         device = torch.device("cpu")
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
-    layer = relu.layers.ReLU()
+    layer = relu_tvm_ffi.layers.ReLU()
     torch.testing.assert_allclose(F.relu(x), layer(x))

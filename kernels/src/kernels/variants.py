@@ -17,7 +17,7 @@ def _torch_build_variant(backend: str | None) -> list[str]:
 
     selected_backend = _select_backend(backend)
 
-    compute_framework = str(selected_backend)
+    backend_variant = selected_backend.variant
 
     import torch
 
@@ -28,17 +28,17 @@ def _torch_build_variant(backend: str | None) -> list[str]:
     if os == "darwin":
         cpu = "aarch64" if cpu == "arm64" else cpu
         return [
-            f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
+            f"torch{torch_version.major}{torch_version.minor}-{backend_variant}-{cpu}-{os}"
         ]
     elif os == "windows":
         cpu = "x86_64" if cpu == "AMD64" else cpu
         return [
-            f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
+            f"torch{torch_version.major}{torch_version.minor}-{backend_variant}-{cpu}-{os}"
         ]
 
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
     return [
-        f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{compute_framework}-{cpu}-{os}"
+        f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{backend_variant}-{cpu}-{os}"
     ]
 
 
@@ -48,7 +48,7 @@ def _tvm_ffi_build_variant(backend: str | None) -> list[str]:
 
     selected_backend = _select_backend(backend)
 
-    compute_framework = str(selected_backend)
+    backend_variant = selected_backend.variant
 
     import tvm_ffi
 
@@ -57,7 +57,7 @@ def _tvm_ffi_build_variant(backend: str | None) -> list[str]:
     os = platform.system().lower()
 
     return [
-        f"tvm-ffi{tvm_ffi_version.major}{tvm_ffi_version.minor}-{compute_framework}-{cpu}-{os}"
+        f"tvm-ffi{tvm_ffi_version.major}{tvm_ffi_version.minor}-{backend_variant}-{cpu}-{os}"
     ]
 
 

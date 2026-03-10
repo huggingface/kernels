@@ -2,23 +2,41 @@ import ctypes
 import ctypes.util
 import warnings
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol
 
 from packaging.version import Version
 
 from kernels.compat import has_torch
 
 
+class Backend(Protocol):
+    @property
+    def name(self) -> str:
+        """
+        Short name of the backend, e.g. "cuda", "rocm", "cpu", etc.
+        """
+        ...
+
+    @property
+    def variant(self) -> str:
+        """
+        The name of the backend as used in a build variant, e.g. `cu128`
+        for CUDA 12.8.
+        """
+        ...
+
+
 @dataclass
 class CANN:
     version: Version
 
-    def __str__(self) -> str:
-        return f"cann{self.version.major}{self.version.minor}"
-
     @property
     def name(self) -> str:
         return "cann"
+
+    @property
+    def variant(self) -> str:
+        return f"cann{self.version.major}{self.version.minor}"
 
 
 @dataclass
@@ -27,7 +45,8 @@ class CPU:
     def name(self) -> str:
         return "cpu"
 
-    def __str__(self) -> str:
+    @property
+    def variant(self) -> str:
         return "cpu"
 
 
@@ -39,7 +58,8 @@ class CUDA:
     def name(self) -> str:
         return "cuda"
 
-    def __str__(self) -> str:
+    @property
+    def variant(self) -> str:
         return f"cu{self.version.major}{self.version.minor}"
 
 
@@ -49,7 +69,8 @@ class Metal:
     def name(self) -> str:
         return "metal"
 
-    def __str__(self) -> str:
+    @property
+    def variant(self) -> str:
         return "metal"
 
 
@@ -59,7 +80,8 @@ class Neuron:
     def name(self) -> str:
         return "neuron"
 
-    def __str__(self) -> str:
+    @property
+    def variant(self) -> str:
         return "neuron"
 
 
@@ -71,7 +93,8 @@ class ROCm:
     def name(self) -> str:
         return "rocm"
 
-    def __str__(self) -> str:
+    @property
+    def variant(self) -> str:
         return f"rocm{self.version.major}{self.version.minor}"
 
 
@@ -83,11 +106,9 @@ class XPU:
     def name(self) -> str:
         return "xpu"
 
-    def __str__(self) -> str:
+    @property
+    def variant(self) -> str:
         return f"xpu{self.version.major}{self.version.minor}"
-
-
-Backend = CANN | CPU | CUDA | Metal | Neuron | ROCm | XPU
 
 
 def _backend() -> Backend:

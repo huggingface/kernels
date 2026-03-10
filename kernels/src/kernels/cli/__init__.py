@@ -284,12 +284,6 @@ def main():
         default=None,
         help="Description to introduce the kernel.",
     )
-    fill_card_parser.add_argument(
-        "--repo_id",
-        type=str,
-        default=None,
-        help="When specified, the example code will incorporate this `repo_id` to create a custom example snippet.",
-    )
     fill_card_parser.set_defaults(func=fill_kernel_card)
 
     args = parser.parse_args()
@@ -386,7 +380,7 @@ def fill_kernel_card(args):
     card_path = kernel_dir / SYSTEM_CARD_PATH
 
     repo_id_from_build = _parse_repo_id(kernel_dir)
-    repo_id = args.repo_id or repo_id_from_build or "REPO_ID"
+    repo_id = repo_id_from_build or "{repo_id}"
 
     dynamic_vars = _build_kernel_card_vars(kernel_dir, repo_id=repo_id)
     description = (args.description or DESCRIPTION).format(repo_id=repo_id)

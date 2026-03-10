@@ -94,7 +94,7 @@ def _parse_repo_id(local_path: str | Path) -> str | None:
 
 def _build_kernel_card_vars(
     local_path: str | Path,
-    repo_id: str = "REPO_ID",
+    repo_id: str = "{repo_id}",
 ) -> dict:
     local_path = Path(local_path)
     vars: dict[str, Any] = {}
@@ -118,6 +118,8 @@ def _build_kernel_card_vars(
 
         kernel_configs = config.get("kernel", {})
         cuda_capabilities: set[Any] = set()
+
+        # TODO (sayakpaul): implement this to read from `metadata.json` per each build
         for k in kernel_configs:
             caps = kernel_configs[k].get("cuda-capabilities")
             if caps:

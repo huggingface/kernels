@@ -99,12 +99,33 @@ def test_fill_kernel_card_usage_repo_id(initialized_kernel_dir):
     assert 'get_kernel("my-org/my-kernel")' in content
 
 
-def test_fill_kernel_card_usage_with_custom_repo_id(initialized_kernel_dir):
-    repo_id = "test-org/test-kernel"
-    args = CardArgs(kernel_dir=str(initialized_kernel_dir), repo_id=repo_id)
+def test_fill_kernel_card_usage_with_build_toml_repo_id(initialized_kernel_dir):
+    args = CardArgs(kernel_dir=str(initialized_kernel_dir))
     fill_kernel_card(args)
     content = (initialized_kernel_dir / SYSTEM_CARD_PATH).read_text()
-    assert f'get_kernel("{repo_id}")' in content
+    assert 'get_kernel("my-org/my-kernel")' in content
+
+
+def test_fill_kernel_card_placeholder_repo_id(mock_kernel_dir):
+    (mock_kernel_dir / "build.toml").write_text(
+        """[general]
+name = "test_kernel"
+backends = ["cuda"]
+license = "apache-2.0"
+version = 1
+
+[kernel._test]
+backend = "cuda"
+cuda-capabilities = ["8.0"]
+"""
+    )
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
+
+    args = CardArgs(kernel_dir=str(mock_kernel_dir))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir / SYSTEM_CARD_PATH).read_text()
+    assert 'get_kernel("{repo_id}")' in content
+    assert "{repo_id}" in content
 
 
 def test_fill_kernel_card_license(initialized_kernel_dir):
@@ -148,8 +169,7 @@ def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
         f"## Notes\n\n{existing_notes}\n"
     )
 
-    repo_id = "test-org/test-kernel"
-    args = CardArgs(kernel_dir=str(mock_kernel_dir), repo_id=repo_id)
+    args = CardArgs(kernel_dir=str(mock_kernel_dir))
     fill_kernel_card(args)
 
     content = card_path.read_text()
@@ -159,7 +179,7 @@ def test_fill_kernel_card_preserves_existing_content(mock_kernel_dir):
     assert "- `func2`" in content
     assert "- cuda" in content
     assert "- metal" in content
-    assert f'get_kernel("{repo_id}")' in content
+    assert 'get_kernel("my-org/my-kernel")' in content
 
     # Static user content
     assert existing_description in content

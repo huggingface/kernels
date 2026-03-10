@@ -69,7 +69,7 @@ in
     stdenv = effectiveStdenv;
   };
 
-  mkExtension = callPackage ./torch/arch.nix {
+  mkTorchExtension = callPackage ./torch/arch.nix {
     inherit
       clr
       cuda_nvcc
@@ -80,7 +80,7 @@ in
     stdenv = effectiveStdenv;
   };
 
-  mkNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
+  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
 
   stdenv = effectiveStdenv;
 }

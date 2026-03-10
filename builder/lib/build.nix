@@ -98,8 +98,8 @@ rec {
   applicableBuildSets =
     { path, buildSets }: filterApplicableBuildSets (readBuildConfig path) buildSets;
 
-  # Build a single Torch extension.
-  mkTorchExtension =
+  # Build a single extension.
+  mkExtension =
     {
       buildConfig,
       extension,
@@ -143,7 +143,7 @@ rec {
     if !kernelBackends'.${buildConfig.backend} then
       # No compiled kernel files? Treat it as a noarch package.
 
-      extension.mkNoArchExtension {
+      extension.mkTorchNoArchExtension {
         inherit
           buildConfig
           src
@@ -172,7 +172,7 @@ rec {
         doAbiCheck = true;
       }
     else
-      extension.mkExtension {
+      extension.mkTorchExtension {
         inherit
           buildConfig
           doGetKernelCheck
@@ -203,7 +203,7 @@ rec {
         { path, rev }:
         buildSet: rec {
           name = value.variant;
-          value = mkTorchExtension buildSet {
+          value = mkExtension buildSet {
             inherit path rev doGetKernelCheck;
             stripRPath = true;
           };
@@ -213,7 +213,7 @@ rec {
     in
     builtins.listToAttrs (lib.map (extensionForTorch { inherit path rev; }) applicableBuildSets');
 
-  mkTorchExtensionBundle =
+  mkExtensionBundle =
     {
       path,
       rev,
@@ -268,7 +268,7 @@ rec {
           pkgs = buildSet.pkgs;
           rocmSupport = pkgs.config.rocmSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
-          extension = mkTorchExtension buildSet { inherit path rev doGetKernelCheck; };
+          extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
         in
         {
           name = extension.variant;
@@ -317,7 +317,7 @@ rec {
           pkgs = buildSet.pkgs;
           rocmSupport = pkgs.config.rocmSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
-          extension = mkTorchExtension buildSet { inherit path rev doGetKernelCheck; };
+          extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
           testPython =
             with pkgs;
             python3.withPackages (
@@ -347,7 +347,7 @@ rec {
     in
     builtins.listToAttrs (lib.map (runnerForBuildSet { inherit path rev; }) buildSets);
 
-  mkTorchDevShells =
+  mkDevShells =
     {
       path,
       rev,
@@ -364,7 +364,7 @@ rec {
           rocmSupport = pkgs.config.rocmSupport or false;
           xpuSupport = pkgs.config.xpuSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
-          extension = mkTorchExtension buildSet { inherit path rev doGetKernelCheck; };
+          extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
           python = (
             pkgs.python3.withPackages (
               ps:

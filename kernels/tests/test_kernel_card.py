@@ -23,8 +23,7 @@ def mock_kernel_dir():
         kernel_dir = Path(tmpdir)
 
         build_toml = kernel_dir / "build.toml"
-        build_toml.write_text(
-            """[general]
+        build_toml.write_text("""[general]
 name = "test_kernel"
 backends = ["cuda", "metal"]
 license = "apache-2.0"
@@ -36,23 +35,19 @@ repo-id = "test-org/test-kernel"
 [kernel._test]
 backend = "cuda"
 cuda-capabilities = ["8.0", "8.9"]
-"""
-        )
+""")
 
         torch_ext_dir = kernel_dir / "torch-ext" / "test_kernel"
         torch_ext_dir.mkdir(parents=True)
 
         init_file = torch_ext_dir / "__init__.py"
-        init_file.write_text(
-            """from .core import func1, func2
+        init_file.write_text("""from .core import func1, func2
 
 __all__ = ["func1", "func2", "func3"]
-"""
-        )
+""")
 
         core_file = torch_ext_dir / "core.py"
-        core_file.write_text(
-            """def func1():
+        core_file.write_text("""def func1():
     pass
 
 def func2():
@@ -60,8 +55,7 @@ def func2():
 
 def func3():
     pass
-"""
-        )
+""")
 
         yield kernel_dir
 
@@ -72,8 +66,7 @@ def mock_kernel_dir_with_benchmark(mock_kernel_dir):
     benchmarks_dir.mkdir()
 
     benchmark_file = benchmarks_dir / "benchmark.py"
-    benchmark_file.write_text(
-        """import time
+    benchmark_file.write_text("""import time
 
 def benchmark():
     # Simple benchmark
@@ -81,8 +74,7 @@ def benchmark():
     # ... benchmark code ...
     end = time.time()
     return end - start
-"""
-    )
+""")
 
     return mock_kernel_dir
 
@@ -93,12 +85,10 @@ def mock_kernel_dir_minimal():
         kernel_dir = Path(tmpdir)
 
         build_toml = kernel_dir / "build.toml"
-        build_toml.write_text(
-            """[general]
+        build_toml.write_text("""[general]
 name = "minimal_kernel"
 backends = ["cuda"]
-"""
-        )
+""")
 
         yield kernel_dir
 

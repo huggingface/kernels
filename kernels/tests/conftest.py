@@ -6,13 +6,6 @@ from kernels.backends import _get_torch_privateuse_backend_name
 
 try:
     import torch
-
-    has_torch = True
-except ImportError:
-    has_torch = False
-
-try:
-    import torch
 except ImportError:
     torch = None
 
@@ -64,7 +57,7 @@ def device():
 
 
 def pytest_runtest_setup(item):
-    if "torch_only" in item.keywords and not has_torch:
+    if "torch_only" in item.keywords and torch is not None:
         pytest.skip("skipping CUDA Torch-only test on host without Torch")
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")

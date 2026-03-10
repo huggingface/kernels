@@ -51,6 +51,9 @@ if(GPU_LANG STREQUAL "CUDA")
     set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0+PTX")
   endif()
 
+  # We have per-source file archs, so disable global arch setting.
+  set(CMAKE_CUDA_ARCHITECTURES OFF)
+
   # Get the capabilities without +PTX suffixes, so that we can use them as
   # the target archs in the loose intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")

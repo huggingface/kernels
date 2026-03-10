@@ -27,11 +27,8 @@ jobs:
         with:
           python-version: 3.12
 
-      - name: Install black
-        run: uv pip install black
-
       - name: Check formatting
-        run: uv run black --check kernels/src kernels/tests
+        run: uv run --with black black --check kernels/src kernels/tests
 
   isort:
     name: Run isort check
@@ -46,11 +43,8 @@ jobs:
         with:
           python-version: 3.12
 
-      - name: Install isort
-        run: uv pip install isort
-
       - name: Check import sorting
-        run: uv run isort --check-only --diff kernels/src kernels/tests
+        run: uv run --with isort isort --check-only --diff kernels/src kernels/tests
 
   validate-dependencies:
     name: Validate python_depends.json

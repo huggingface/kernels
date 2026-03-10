@@ -5,6 +5,11 @@ from kernels.utils import _get_hf_api
 from kernels.variants import BUILD_VARIANT_REGEX
 
 
+def _branch_exists(api, repo_id, branch):
+    refs = api.list_repo_refs(repo_id=repo_id)
+    return any(ref.name == branch for ref in refs.branches)
+
+
 def upload_kernels_dir(
     kernel_dir: Path,
     *,
@@ -50,7 +55,9 @@ def upload_kernels_dir(
 
     repo_id = api.create_repo(repo_id=repo_id, private=private, exist_ok=True).repo_id
 
+    is_new_branch = False
     if branch is not None:
+        is_new_branch = not _branch_exists(api, repo_id, branch)
         api.create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
 
     delete_patterns: set[str] = set()
@@ -58,14 +65,20 @@ def upload_kernels_dir(
         if build_variant.is_dir():
             delete_patterns.add(f"{build_variant.name}/**")
 
+    # New branches should start with a clean tree to respect
+    # versioning policies.
+    if is_new_branch:
+        delete_patterns.add("**")
+
     # in the case we have variants, upload to the same as the kernel_dir
     if (kernel_dir / "benchmarks").is_dir():
+        benchmark_delete = ["**"] if is_new_branch else ["benchmark*.py"]
         api.upload_folder(
             repo_id=repo_id,
             folder_path=kernel_dir / "benchmarks",
             revision=branch,
             path_in_repo="benchmarks",
-            delete_patterns=["benchmark*.py"],
+            delete_patterns=benchmark_delete,
             commit_message="Benchmarks uploaded using `kernels`.",
             allow_patterns=["benchmark*.py"],
         )

@@ -59,7 +59,7 @@ jobs:
 
       - name: Validate python_depends.json is up-to-date
         run: |
-          python ( cd kernels && update_python_depends.py --validate ) || {
+          (cd kernels && python update_python_depends.py --validate) || {
             echo "Error: python_depends.json is out of date."
             echo "Please run: python update_python_depends.py"
             exit 1

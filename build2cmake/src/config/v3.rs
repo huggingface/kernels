@@ -11,8 +11,12 @@ use crate::version::Version;
 pub struct Build {
     pub general: General,
 
+    // NOTE: In v3, the absense of a framework section means torch-noarch.
+    //       However, this won't work if we have support for other noarch
+    //       frameworks in the future, so in v4, we probably have to make
+    //       a torch-noarch framework variant.
     #[serde(flatten)]
-    pub framework: Framework,
+    pub framework: Option<Framework>,
 
     #[serde(rename = "kernel", default)]
     pub kernels: HashMap<String, Kernel>,
@@ -160,8 +164,9 @@ impl From<Build> for super::Build {
             .collect();
 
         let framework = match build.framework {
-            Framework::Torch(torch) => super::Framework::Torch(torch.into()),
-            Framework::TvmFfi(tvm_ffi) => super::Framework::TvmFfi(tvm_ffi.into()),
+            Some(Framework::Torch(torch)) => super::Framework::Torch(torch.into()),
+            Some(Framework::TvmFfi(tvm_ffi)) => super::Framework::TvmFfi(tvm_ffi.into()),
+            None => super::Framework::TorchNoarch,
         };
 
         Self {
@@ -335,8 +340,9 @@ impl From<Kernel> for super::Kernel {
 impl From<super::Build> for Build {
     fn from(build: super::Build) -> Self {
         let framework = match build.framework {
-            super::Framework::Torch(torch) => Framework::Torch(torch.into()),
-            super::Framework::TvmFfi(tvm_ffi) => Framework::TvmFfi(tvm_ffi.into()),
+            super::Framework::Torch(torch) => Some(Framework::Torch(torch.into())),
+            super::Framework::TorchNoarch => None,
+            super::Framework::TvmFfi(tvm_ffi) => Some(Framework::TvmFfi(tvm_ffi.into())),
         };
 
         Self {

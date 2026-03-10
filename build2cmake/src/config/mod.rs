@@ -28,6 +28,7 @@ pub struct Build {
 
 pub enum Framework {
     Torch(Torch),
+    TorchNoarch,
     TvmFfi(TvmFfi),
 }
 
@@ -35,14 +36,14 @@ impl Framework {
     pub fn torch(&self) -> Option<&Torch> {
         match self {
             Framework::Torch(torch) => Some(torch),
-            Framework::TvmFfi(_) => None,
+            _ => None,
         }
     }
 
     pub fn tvm_ffi(&self) -> Option<&TvmFfi> {
         match self {
-            Framework::Torch(_) => None,
             Framework::TvmFfi(tvm_ffi) => Some(tvm_ffi),
+            _ => None,
         }
     }
 }

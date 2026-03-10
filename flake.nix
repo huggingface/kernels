@@ -153,6 +153,9 @@
             ];
             buildInputs = [
               black
+              # For testing CUDA version detection in kernels.
+              cudaPackages.cuda_cudart
+              isort
               mypy
               pyright
               ruff
@@ -161,6 +164,7 @@
               docutils
               huggingface-hub
               kernel-abi-check
+              matplotlib
               mktestdocs
               openssl.dev
               pytest

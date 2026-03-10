@@ -13,7 +13,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  styling-and-lints:
+    uses: ./.github/workflows/lint.yml
+
   build:
+    needs: [styling-and-lints]
     name: Run kernels tests
     runs-on:
       group: aws-g6-24xlarge

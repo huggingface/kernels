@@ -1,4 +1,4 @@
-.PHONY: style
+.PHONY: style quality
 
 export check_dirs := src tests
 
@@ -11,3 +11,8 @@ style:
 	black ${check_dirs}
 	isort ${check_dirs}
 	ruff check ${check_dirs} --fix
+
+quality:
+	black --check ${check_dirs}
+	isort --check-only --diff ${check_dirs}
+	ruff check ${check_dirs}

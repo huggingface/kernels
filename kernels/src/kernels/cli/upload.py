@@ -6,7 +6,6 @@ from kernels.variants import BUILD_VARIANT_REGEX
 
 
 def _branch_exists(api, repo_id, branch):
-    """Check if a branch exists in the repo."""
     refs = api.list_repo_refs(repo_id=repo_id)
     return any(ref.name == branch for ref in refs.branches)
 
@@ -66,8 +65,8 @@ def upload_kernels_dir(
         if build_variant.is_dir():
             delete_patterns.add(f"{build_variant.name}/**")
 
-    # New branches should start with a clean tree rather than inheriting
-    # files from main (e.g. old build variants from a previous version).
+    # New branches should start with a clean tree to respect
+    # versioning policies.
     if is_new_branch:
         delete_patterns.add("**")
 

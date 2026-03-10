@@ -211,7 +211,7 @@ in
             "general"
             "hub"
             "repo-id"
-          ] "kernels-community/${buildToml.general.name}" buildToml;
+          ] (throw "[general.hub] section in build.toml does not have a `repo-id` field.") buildToml;
           branch = lib.attrByPath [ "general" "hub" "branch" ] null buildToml;
           branchOpt = lib.optionalString (branch != null) "--branch ${branch}";
           # `kernels upload` fails when there are no build variants to upload.

@@ -225,6 +225,7 @@ stdenv.mkDerivation (prevAttrs: {
   cmakeFlags = [
     (lib.cmakeBool "BUILD_ALL_SUPPORTED_ARCHS" true)
     (lib.cmakeFeature "Python_EXECUTABLE" "${python3.withPackages (ps: [ torch ])}/bin/python")
+    (lib.cmakeFeature "Python3_EXECUTABLE" "${python3.withPackages (ps: [ torch ])}/bin/python")
     # Fix: file RPATH_CHANGE could not write new RPATH, we are rewriting
     # rpaths anyway.
     (lib.cmakeBool "CMAKE_SKIP_RPATH" true)

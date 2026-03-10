@@ -357,6 +357,7 @@ function Get-CMakeConfigureArgs {
     $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
     if ($pythonExe) {
         $kwargs += "-DPython3_EXECUTABLE=$pythonExe"
+        $kwargs += "-DPython_EXECUTABLE=$pythonExe"
         Write-Status "Using Python from environment: $pythonExe" -Type Info
 
         # Verify Python and PyTorch version

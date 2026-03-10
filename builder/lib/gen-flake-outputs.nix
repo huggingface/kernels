@@ -112,7 +112,11 @@ let
       throw "No build variant is compatible with this system"
     else
       builtins.head buildSetsSorted;
-  bestVariant = if buildToml ? "tvm-ffi" then bestBuildSet.pkgs.python3.pkgs.tvm-ffi.variant else bestBuildSet.torch.variant;
+  bestVariant =
+    if buildToml ? "tvm-ffi" then
+      bestBuildSet.pkgs.python3.pkgs.tvm-ffi.variant
+    else
+      bestBuildSet.torch.variant;
   # We need a package set for some outputs (e.g. kernels and build-and-upload),
   # even when there is no applicable build set.
   pkgs =

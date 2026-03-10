@@ -109,6 +109,9 @@ in
           torchVersion = "2.9";
           xpuPackages = final.xpuPackages_2025_2;
         };
+
+        tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
+        };
       }
     )
     (import ./pkgs/python-modules/hooks)

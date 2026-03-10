@@ -478,7 +478,7 @@ function Invoke-Backend {
     $backendName = if ($Backend -eq 'universal') { 'Universal' } else { $Backend.ToUpper() }
     Write-Status "Generating $backendName backend..." -Type Info
 
-    $kwargs = @('generate-torch', $BuildToml)
+    $kwargs = @('generate', $BuildToml)
 
     if ($Target) { $kwargs += $Target }
     if ($Options.Force) { $kwargs += '--force' }
@@ -573,7 +573,7 @@ try {
         # Auto-detect backend from build.toml
         Write-Status "Auto-detecting backend from build.toml..." -Type Info
 
-        $kwargs = @('generate-torch', $buildTomlPath)
+        $kwargs = @('generate', $buildTomlPath)
         if ($TargetFolder) { $kwargs += (Resolve-Path $TargetFolder) }
         if ($Force) { $kwargs += '--force' }
         if ($OpsId) { $kwargs += '--ops-id', $OpsId }

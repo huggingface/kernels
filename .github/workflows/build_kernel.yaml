@@ -41,6 +41,11 @@ jobs:
       - name: Copy relu kernel
         run: cp -rL builder/examples/relu/result relu-kernel
 
+      - name: Build relu-tvm-ffi kernel
+        run: ( cd builder/examples/relu-tvm-ffi && nix build .\#redistributable.tvm-ffi01-cu126-${{ matrix.arch }} )
+      - name: Copy relu-tvm-ffi kernel
+        run: cp -rL builder/examples/relu-tvm-ffi/result relu-tvm-ffi-kernel
+
       - name: Build extra-data kernel
         run: ( cd builder/examples/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy extra-data kernel
@@ -85,6 +90,7 @@ jobs:
             cutlass-gemm-kernel
             extra-data
             relu-kernel
+            relu-tvm-ffi-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel
             silu-and-mul-kernel

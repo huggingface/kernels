@@ -1,8 +1,6 @@
 name: Styling and lints
-on:
-  push:
-  pull_request:
-  workflow_call:
+on: [push, pull_request]
+
 jobs:
   lint:
     name: Run lints

@@ -102,6 +102,7 @@ pub enum Kernel {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
+        metal_std_version: Option<String>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -261,11 +262,13 @@ impl From<Kernel> for super::Kernel {
                 cxx_flags,
                 depends,
                 include,
+                metal_std_version,
                 src,
             } => super::Kernel::Metal {
                 cxx_flags,
                 depends,
                 include,
+                metal_std_version,
                 src,
             },
             Kernel::Rocm {
@@ -425,11 +428,13 @@ impl From<super::Kernel> for Kernel {
                 cxx_flags,
                 depends,
                 include,
+                metal_std_version,
                 src,
             } => Kernel::Metal {
                 cxx_flags,
                 depends,
                 include,
+                metal_std_version,
                 src,
             },
             super::Kernel::Rocm {

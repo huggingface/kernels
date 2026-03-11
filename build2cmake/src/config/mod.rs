@@ -165,6 +165,7 @@ pub enum Kernel {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
+        metal_std_version: Option<String>,
         src: Vec<String>,
     },
     Rocm {
@@ -232,6 +233,15 @@ impl Kernel {
             | Kernel::Metal { src, .. }
             | Kernel::Rocm { src, .. }
             | Kernel::Xpu { src, .. } => src,
+        }
+    }
+
+    pub fn metal_std_version(&self) -> Option<&str> {
+        match self {
+            Kernel::Metal {
+                metal_std_version, ..
+            } => metal_std_version.as_deref(),
+            _ => None,
         }
     }
 }

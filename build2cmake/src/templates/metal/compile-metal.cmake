@@ -17,8 +17,14 @@ function(compile_metal_shaders TARGET_NAME METAL_SOURCES EXTRA_INCLUDE_DIRS)
       set(METAL_TOOLCHAIN "${CMAKE_MATCH_1}/Metal.xctoolchain")
     endif()
 
-    # Set Metal compiler flags
-    set(METAL_FLAGS "-std=metal4.0" "-O2")
+    # Set Metal compiler flags.
+    # metal3.1 → air64_v26, macOS 14+
+    # metal3.2 → air64_v27, macOS 15+
+    # metal4.0 → air64_v28, macOS 26+
+    if(NOT DEFINED METAL_STD_VERSION)
+        set(METAL_STD_VERSION "metal4.0")
+    endif()
+    set(METAL_FLAGS "-std=${METAL_STD_VERSION}" "-O2")
 
     # Output directory for compiled metallib
     set(METALLIB_OUTPUT_DIR "${CMAKE_BINARY_DIR}/metallib")

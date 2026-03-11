@@ -1,3 +1,6 @@
+# Claude Code
+.claude/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 text_generation_server/__pycache__/

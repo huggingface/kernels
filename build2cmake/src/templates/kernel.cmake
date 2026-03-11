@@ -231,7 +231,7 @@ endfunction()
 
 function(metal_kernel_component SRC_VAR)
     set(options)
-    set(oneValueArgs)
+    set(oneValueArgs METAL_STD_VERSION)
     set(multiValueArgs SOURCES INCLUDES CXX_FLAGS)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -292,5 +292,10 @@ function(metal_kernel_component SRC_VAR)
         set(_TMP_METAL_INCLUDES ${METAL_INCLUDE_DIRS})
         list(APPEND _TMP_METAL_INCLUDES ${KERNEL_INCLUDES})
         set(METAL_INCLUDE_DIRS ${_TMP_METAL_INCLUDES} PARENT_SCOPE)
+    endif()
+
+    # Propagate Metal std version to parent scope for compile_metal_shaders
+    if(KERNEL_METAL_STD_VERSION)
+        set(METAL_STD_VERSION ${KERNEL_METAL_STD_VERSION} PARENT_SCOPE)
     endif()
 endfunction()

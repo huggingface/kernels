@@ -14,14 +14,16 @@ from pathlib import Path
 from types import ModuleType
 
 from huggingface_hub import HfApi, constants
-from packaging.version import parse
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
+from kernels.backends import _backend
+from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 from kernels.status import resolve_status
+from kernels.variants import _build_variants
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
@@ -62,134 +64,6 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 
 
 CACHE_DIR: str | None = _get_cache_dir()
-
-
-def _get_privateuse_backend_name() -> str | None:
-    import torch
-
-    if hasattr(torch._C, "_get_privateuse1_backend_name"):
-        return torch._C._get_privateuse1_backend_name()
-    return None
-
-
-def _backend() -> str:
-    import torch
-
-    if hasattr(torch, "neuron"):
-        # Needs to be sorted before specific Torch builds, since Neuron
-        # extension can be loaded into e.g. CUDA Torch builds.
-        return "neuron"
-    elif torch.version.cuda is not None:
-        return "cuda"
-    elif torch.version.hip is not None:
-        return "rocm"
-    elif torch.backends.mps.is_available():
-        return "metal"
-    elif hasattr(torch.version, "xpu") and torch.version.xpu is not None:
-        return "xpu"
-    elif _get_privateuse_backend_name() == "npu":
-        return "cann"
-    else:
-        return "cpu"
-
-
-def _build_variant(backend: str | None) -> str | None:
-    """
-    Build variant for arch kernels, returns `None` when the backend
-    does not (yet) support arch kernels.
-    """
-    backend = _select_backend(backend)
-
-    import torch
-
-    if backend == "cuda" and torch.version.cuda is not None:
-        cuda_version = parse(torch.version.cuda)
-        compute_framework = f"cu{cuda_version.major}{cuda_version.minor}"
-    elif backend == "rocm" and torch.version.hip is not None:
-        rocm_version = parse(torch.version.hip.split("-")[0])
-        compute_framework = f"rocm{rocm_version.major}{rocm_version.minor}"
-    elif backend == "metal":
-        compute_framework = "metal"
-    elif backend == "neuron":
-        return None
-    elif backend == "xpu" and torch.version.xpu is not None:
-        version = torch.version.xpu
-        compute_framework = f"xpu{version[0:4]}{version[5:6]}"
-    elif backend == "cann":
-        from torch_npu.utils.collect_env import get_cann_version  # type: ignore[import-not-found]
-
-        cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
-        compute_framework = f"cann{cann_major}{cann_minor}"
-    else:
-        compute_framework = "cpu"
-
-    torch_version = parse(torch.__version__)
-    cpu = platform.machine()
-    os = platform.system().lower()
-
-    if os == "darwin":
-        cpu = "aarch64" if cpu == "arm64" else cpu
-        return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
-    elif os == "windows":
-        cpu = "x86_64" if cpu == "AMD64" else cpu
-        return f"torch{torch_version.major}{torch_version.minor}-{compute_framework}-{cpu}-{os}"
-
-    cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
-    return f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{compute_framework}-{cpu}-{os}"
-
-
-def _supported_backends() -> set[str]:
-    return {"cpu", _backend()}
-
-
-def _select_backend(backend: str | None) -> str:
-    if backend is None:
-        return _backend()
-
-    supported = _supported_backends()
-    if backend in supported:
-        return backend
-
-    raise ValueError(
-        f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported))}"
-    )
-
-
-def _build_variant_noarch(backend: str | None) -> str:
-    backend = _select_backend(backend)
-
-    if backend == "cuda":
-        return "torch-cuda"
-    elif backend == "neuron":
-        return "torch-neuron"
-    elif backend == "rocm":
-        return "torch-rocm"
-    elif backend == "metal":
-        return "torch-metal"
-    elif backend == "xpu":
-        return "torch-xpu"
-    elif backend == "cann":
-        return "torch-npu"
-    else:
-        return "torch-cpu"
-
-
-def _build_variant_universal() -> str:
-    # Once we support other frameworks, detection goes here.
-    return "torch-universal"
-
-
-def _build_variants(backend: str | None) -> list[str]:
-    """Return compatible build variants in preferred order."""
-    arch_variant = _build_variant(backend)
-    variants = [arch_variant] if arch_variant is not None else []
-    variants.extend(
-        [
-            _build_variant_noarch(backend),
-            _build_variant_universal(),
-        ]
-    )
-    return variants
 
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
@@ -666,7 +540,6 @@ def package_name_from_repo_id(repo_id: str) -> str:
 
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
     """Returns an instance of HfApi with proper settings."""
-    import torch
 
     from . import __version__
 
@@ -680,7 +553,17 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
 
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
-        user_agent_str += f"; kernels/{__version__}; python/{python}; torch/{torch.__version__}; build_variant/{_build_variant(None)}; file_type/kernel"
+        variants = ":".join(_build_variants(None))
+        user_agent_str += f"; kernels/{__version__}; python/{python}; build_variant/{variants}; file_type/kernel"
+
+        if has_torch:
+            import torch
+
+            user_agent_str += f"; torch/{torch.__version__}"
+        if has_tvm_ffi:
+            import tvm_ffi
+
+            user_agent_str += f"; tvm-ffi/{tvm_ffi.__version__}"
 
         # Add glibc version if available
         glibc = glibc_version()

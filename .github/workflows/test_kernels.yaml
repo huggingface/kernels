@@ -96,6 +96,11 @@ jobs:
           uv pip uninstall torch
           uv run python -c "import kernels"
 
+      - name: tvm-ffi check without torch
+        working-directory: ./kernels
+        run: |
+          uv run pytest tests/test_tvm_ffi.py
+
       - name: Run command-line tools without Torch
         working-directory: ./kernels
         run: |

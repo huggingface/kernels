@@ -35,7 +35,7 @@ def _upload_build_dir(
         f"build/{variant.relative_to(build_dir).as_posix()}/" for variant in variants
     )
     delete_prefixes = ("build/",) if is_new_branch else variant_prefixes
-    operations = [
+    operations: list[CommitOperationAdd | CommitOperationDelete] = [
         CommitOperationDelete(path_in_repo=repo_file)
         for repo_file in sorted(
             api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="model")

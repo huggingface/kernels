@@ -17,7 +17,7 @@ from huggingface_hub import HfApi, constants
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
-from kernels.backends import _backend
+from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
@@ -173,6 +173,12 @@ def _find_kernel_in_repo_path(
         )
 
     assert variant_path is not None
+
+    exact_backend_variant = _select_backend(backend).variant
+    if exact_backend_variant not in variant:
+        logging.info(
+            f"Exact build variant matching {exact_backend_variant} not found, resolved to {variant}"
+        )
 
     if variant_locks is not None:
         variant_lock = variant_locks.get(variant)

@@ -1,14 +1,78 @@
 from itertools import chain
 from pathlib import Path
 
+from huggingface_hub import CommitOperationAdd, CommitOperationDelete
+from huggingface_hub.utils import chunk_iterable
+
 from kernels.metadata import Metadata
 from kernels.utils import _get_hf_api
 from kernels.variants import BUILD_VARIANT_REGEX
+
+BUILD_COMMIT_BATCH_SIZE = 1_000
 
 
 def _branch_exists(api, repo_id, branch):
     refs = api.list_repo_refs(repo_id=repo_id)
     return any(ref.name == branch for ref in refs.branches)
+
+
+def _upload_build_dir(
+    api,
+    *,
+    repo_id: str,
+    revision: str | None,
+    build_dir: Path,
+    variants: list[Path],
+    is_new_branch: bool,
+):
+    repo_paths = {}
+    for variant in variants:
+        for path in sorted(variant.rglob("*")):
+            if path.is_file():
+                repo_paths[f"build/{path.relative_to(build_dir).as_posix()}"] = path
+
+    variant_prefixes = tuple(
+        f"build/{variant.relative_to(build_dir).as_posix()}/" for variant in variants
+    )
+    delete_prefixes = ("build/",) if is_new_branch else variant_prefixes
+    operations = [
+        CommitOperationDelete(path_in_repo=repo_file)
+        for repo_file in sorted(
+            api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="model")
+        )
+        if repo_file.startswith(delete_prefixes) and repo_file not in repo_paths
+    ]
+    operations.extend(
+        CommitOperationAdd(path_in_repo=repo_path, path_or_fileobj=str(local_path))
+        for repo_path, local_path in sorted(repo_paths.items())
+    )
+
+    if not operations:
+        return
+
+    batch_count = (
+        len(operations) + BUILD_COMMIT_BATCH_SIZE - 1
+    ) // BUILD_COMMIT_BATCH_SIZE
+    if batch_count > 1:
+        print(
+            f"⚠️  Found {len(operations)} build operations, uploading in {batch_count} commits."
+        )
+
+    for batch_index, chunk in enumerate(
+        chunk_iterable(operations, chunk_size=BUILD_COMMIT_BATCH_SIZE), start=1
+    ):
+        commit_message = "Build uploaded using `kernels`."
+        if batch_count > 1:
+            commit_message = (
+                f"Build uploaded using `kernels` (batch {batch_index}/{batch_count})."
+            )
+        api.create_commit(
+            repo_id=repo_id,
+            operations=list(chunk),
+            revision=revision,
+            repo_type="model",
+            commit_message=commit_message,
+        )
 
 
 def upload_kernels_dir(
@@ -63,17 +127,7 @@ def upload_kernels_dir(
         is_new_branch = not _branch_exists(api, repo_id, branch)
         api.create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
 
-    delete_patterns: set[str] = set()
-    for build_variant in build_dir.iterdir():
-        if build_variant.is_dir():
-            delete_patterns.add(f"{build_variant.name}/**")
-
-    # New branches should start with a clean tree to respect
-    # versioning policies.
-    if is_new_branch:
-        delete_patterns.add("**")
-
-    # in the case we have variants, upload to the same as the kernel_dir
+    # In the case we have benchmarks, upload to the same repo as the kernel_dir.
     if (kernel_dir / "benchmarks").is_dir():
         benchmark_delete = ["**"] if is_new_branch else ["benchmark*.py"]
         api.upload_folder(
@@ -86,13 +140,13 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    api.upload_folder(
+    assert variants is not None
+    _upload_build_dir(
+        api,
         repo_id=repo_id,
-        folder_path=build_dir,
         revision=branch,
-        path_in_repo="build",
-        delete_patterns=list(delete_patterns),
-        commit_message="Build uploaded using `kernels`.",
-        allow_patterns=["torch*", "tvm-ffi*"],
+        build_dir=build_dir,
+        variants=variants,
+        is_new_branch=is_new_branch,
     )
     print(f"✅ Kernel upload successful. Find the kernel in: https://hf.co/{repo_id}")

@@ -185,6 +185,9 @@ def test_large_kernel_upload_uses_create_commit_batches(monkeypatch, tmp_path):
 
     api = Mock()
     api.create_repo.return_value = SimpleNamespace(repo_id=REPO_ID)
+    api.list_repo_refs.return_value = SimpleNamespace(
+        branches=[SimpleNamespace(name="main")]
+    )
     api.list_repo_files.return_value = [
         "README.md",
         "build/torch-cpu/file_0.py",
@@ -233,3 +236,44 @@ def test_large_kernel_upload_uses_create_commit_batches(monkeypatch, tmp_path):
     assert "build/torch-cpu/file_0.py" in add_paths
     assert "build/torch-cpu/file_399.py" in add_paths
     api.upload_folder.assert_not_called()
+
+
+def test_new_branch_upload_replaces_inherited_build_tree(monkeypatch, tmp_path):
+    kernel_root = tmp_path / "kernel"
+    build_variant = kernel_root / "build" / "torch-cpu"
+    build_variant.mkdir(parents=True, exist_ok=True)
+    (build_variant / "metadata.json").write_text("{}")
+    (build_variant / "current.py").write_text(PY_CONTENT)
+
+    benchmarks_dir = kernel_root / "benchmarks"
+    benchmarks_dir.mkdir(parents=True, exist_ok=True)
+    (benchmarks_dir / "benchmark_current.py").write_text(PY_CONTENT)
+
+    api = Mock()
+    api.create_repo.return_value = SimpleNamespace(repo_id=REPO_ID)
+    api.list_repo_refs.return_value = SimpleNamespace(branches=[])
+    api.list_repo_files.return_value = [
+        "README.md",
+        "benchmarks/benchmark_old.py",
+        "build/torch-cpu/stale.py",
+        "build/torch-cuda/inherited.py",
+    ]
+    monkeypatch.setattr("kernels.cli.upload._get_hf_api", lambda: api)
+
+    upload_kernels(UploadArgs(kernel_root, REPO_ID, False, "v2"))
+
+    api.upload_folder.assert_called_once()
+    assert api.upload_folder.call_args.kwargs["delete_patterns"] == ["**"]
+
+    operations = [
+        operation
+        for call in api.create_commit.call_args_list
+        for operation in call.kwargs["operations"]
+    ]
+    delete_paths = {
+        op.path_in_repo for op in operations if isinstance(op, CommitOperationDelete)
+    }
+    assert delete_paths == {
+        "build/torch-cpu/stale.py",
+        "build/torch-cuda/inherited.py",
+    }

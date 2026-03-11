@@ -1,7 +1,6 @@
 ## Why kernels?
 
-Why do we want yet-another standard? Our goal with the `kernels`
-package is two-fold:
+Our goal with the `kernels` package is two-fold:
 
 * Establish a much needed standardization in the ecosystem of
 custom kernels. This is enforced in the build structure, support

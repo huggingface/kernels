@@ -11,6 +11,11 @@
   },
   {
     "torchVersion": "2.9.0",
+    "cudaVersion": "12.9",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.9.0",
     "cudaVersion": "13.0",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },

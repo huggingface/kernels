@@ -1,6 +1,10 @@
+import logging
+from unittest.mock import patch
+
 from packaging.version import Version
 
 from kernels.backends import CANN, CPU, CUDA, XPU, Metal, Neuron, ROCm
+from kernels.utils import _find_kernel_in_repo_path
 from kernels.variants import _compatible_backend_variants
 
 
@@ -86,3 +90,42 @@ class TestCompatibleBackendVariants:
     def test_cann_returns_single_variant(self):
         backend = CANN(version=Version("8.0"))
         assert _compatible_backend_variants(backend) == ["cann80"]
+
+
+class TestVariantResolutionLogging:
+    def test_logs_when_resolved_to_lower_minor(self, tmp_path, caplog):
+        exact = "torch28-cxx11-cu129-x86_64-linux"
+        resolved = "torch28-cxx11-cu128-x86_64-linux"
+
+        build_dir = tmp_path / "build" / resolved
+        build_dir.mkdir(parents=True)
+        (build_dir / "__init__.py").touch()
+
+        cuda_129 = CUDA(version=Version("12.9"))
+        with (
+            patch("kernels.utils._build_variants", return_value=[exact, resolved]),
+            patch("kernels.utils._select_backend", return_value=cuda_129),
+            caplog.at_level(logging.INFO),
+        ):
+            _find_kernel_in_repo_path(tmp_path, "test_kernel")
+
+        assert any(
+            "cu129" in r.message and resolved in r.message for r in caplog.records
+        )
+
+    def test_no_log_when_exact_match(self, tmp_path, caplog):
+        exact = "torch28-cxx11-cu129-x86_64-linux"
+
+        build_dir = tmp_path / "build" / exact
+        build_dir.mkdir(parents=True)
+        (build_dir / "__init__.py").touch()
+
+        cuda_129 = CUDA(version=Version("12.9"))
+        with (
+            patch("kernels.utils._build_variants", return_value=[exact]),
+            patch("kernels.utils._select_backend", return_value=cuda_129),
+            caplog.at_level(logging.INFO),
+        ):
+            _find_kernel_in_repo_path(tmp_path, "test_kernel")
+
+        assert not any("resolved to" in r.message for r in caplog.records)

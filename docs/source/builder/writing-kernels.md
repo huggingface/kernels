@@ -338,7 +338,10 @@ information from its `build.toml` and metadata. This system card provides a
 reasonable starting point and is meant to be edited afterward by the kernel
 developer.
 
-To generate the card, first run `kernels init-card`, which will either
-instantiate a fresh kernel card or load an existing one. The card will
-be filled automatically by the builder when using the `build-and-upload`
-or `build-and-copy` command.
+The template card is generated as a part of [`kernels init`](../cli-init.md)
+command and is serialized in the root directory of the kernel.
+
+The card will be filled automatically by the builder when using the
+`build-and-upload` or `build-and-copy` command. It will be serialized
+to the `build` sub-directory inside the main kernel directory. It
+will be uploaded as `README.md` to the Hub.

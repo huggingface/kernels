@@ -62,7 +62,7 @@ project files. For example:
 
 ```bash
 $ nix develop
-$ build2cmake generate-torch build.toml
+$ build2cmake generate build.toml
 $ cmake -B build-ext
 $ cmake --build build-ext
 ```
@@ -74,7 +74,7 @@ Python package in this virtual environment:
 
 ```bash
 $ nix develop
-$ build2cmake generate-torch build.toml
+$ build2cmake generate build.toml
 $ pip install --no-build-isolation -e .
 ```
 

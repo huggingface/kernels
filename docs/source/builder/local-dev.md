@@ -29,7 +29,7 @@ $ cargo install build2cmake
 file. The invocation is as follows:
 
 ```bash
-$ build2cmake generate-torch build.toml -f
+$ build2cmake generate build.toml -f
 ```
 
 The `-f` flag is optional and instructs `build2cmake` to overwrite

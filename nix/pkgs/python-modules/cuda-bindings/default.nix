@@ -17,10 +17,17 @@ let
   versionHashes =
     let
       cuda_12 = {
-        version = "12.9.4";
+        version = "12.9.5";
         hash = {
-          x86_64-linux = "sha256-Mr3Fp2kGvkxh65j1RqZ4bFdzqIHzsWZIZEm10UHko58=";
-          aarch64-linux = "sha256-z4v67cI487EV2VfR/WVit+hDW6V/bQ4vh9DnFJzLLaU=";
+          x86_64-linux = "sha256-2jdFj4xQdNWQQN7dvQBUYMDPcNHvkN19LIFuRoYDjoc=";
+          aarch64-linux = "sha256-4G0nKyUUnhqDtEb/Pb789vgvZoZcSejZ23VoO7z/C18=";
+        };
+      };
+      cuda_13 = {
+        version = "13.2.0";
+        hash = {
+          x86_64-linux = "sha256-fcoNoFPTtMxIae/0nGHAPzxduqC81xIxejWNW48/OF0=";
+          aarch64-linux = "sha256-ZinKLfb3lbeEdSQJvK7b0ip6ZRt0tWoWXrwMncvVBNA=";
         };
       };
     in
@@ -28,13 +35,8 @@ let
       "12.6" = cuda_12;
       "12.8" = cuda_12;
       "12.9" = cuda_12;
-      "13.0" = {
-        version = "13.0.3";
-        hash = {
-          x86_64-linux = "sha256-US0NgDpeR6ikLVo0zgkygCv3L+lS/bEax5hxWjXG5cs=";
-          aarch64-linux = "sha256-+xan92nJxnRprdeh2fbBTdRGN/aSHLa564LLUBWzXD0=";
-        };
-      };
+      "13.0" = cuda_13;
+      "13.1" = cuda_13;
     };
 
   versionHash =

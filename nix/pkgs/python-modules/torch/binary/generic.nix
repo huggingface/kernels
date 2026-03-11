@@ -220,6 +220,7 @@ buildPythonPackage {
   ];
 
   pythonRelaxWheelDeps = [
+    "cuda-bindings"
     "sympy"
     "triton"
   ];

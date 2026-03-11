@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from kernels.cli import fill_kernel_card, initialize_card
+from kernels.cli import fill_kernel_card
 from kernels.cli.kernel_card_utils import KERNEL_CARD_TEMPLATE_PATH
 
 SYSTEM_CARD_PATH = "CARD.md"
@@ -53,17 +53,6 @@ cuda-capabilities = ["8.0", "8.9"]
 def initialized_kernel_dir(mock_kernel_dir):
     shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
     return mock_kernel_dir
-
-
-def test_initialize_card_creates_file(mock_kernel_dir):
-    args = CardArgs(kernel_dir=str(mock_kernel_dir))
-    initialize_card(args)
-    card_path = mock_kernel_dir / SYSTEM_CARD_PATH
-    assert card_path.exists()
-
-    content = card_path.read_text()
-    assert "{{ kernel_description }}" in content
-    assert "{{ supported_backends }}" in content
 
 
 def test_fill_kernel_card_backends(initialized_kernel_dir):

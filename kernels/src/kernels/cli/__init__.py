@@ -1,7 +1,6 @@
 import argparse
 import dataclasses
 import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -11,7 +10,6 @@ from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.init import parse_kernel_name, run_init
 from kernels.cli.kernel_card_utils import (
     DESCRIPTION,
-    KERNEL_CARD_TEMPLATE_PATH,
     LIBRARY_NAME,
     _build_kernel_card_vars,
     _parse_repo_id,
@@ -252,23 +250,6 @@ def main():
     )
     init_parser.set_defaults(func=run_init)
 
-    init_card_parser = subparsers.add_parser(
-        "init-card",
-        help="Initialize a kernel system card template inside the build directory of the kernel.",
-    )
-    init_card_parser.add_argument(
-        "kernel_dir",
-        type=str,
-        help="Path to the kernels source.",
-    )
-    init_card_parser.add_argument(
-        "--repo_id",
-        type=str,
-        default=None,
-        help="When specified, existing card content is reused. Specific parts are updated based on the build information.",
-    )
-    init_card_parser.set_defaults(func=initialize_card)
-
     fill_card_parser = subparsers.add_parser(
         "fill-card",
         help="Fill a system card template based on the `build` information and save it.",
@@ -354,20 +335,6 @@ def upload_kernels(args):
         branch=args.branch,
         private=args.private,
     )
-
-
-def initialize_card(args):
-    kernel_dir = Path(args.kernel_dir).resolve()
-    card_path = kernel_dir / SYSTEM_CARD_PATH
-
-    if args.repo_id:
-        try:
-            ModelCard.load(args.repo_id).save(card_path)
-            return
-        except Exception:
-            pass
-
-    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, card_path)
 
 
 def fill_kernel_card(args):

@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use eyre::Result;
+use eyre::{bail, Result};
 use serde::{Deserialize, Serialize};
 
 use super::{Backend, Dependency, KernelName};
@@ -142,9 +142,14 @@ impl TryFrom<Build> for super::Build {
             backend_set.into_iter().collect()
         };
 
+        let torch = match build.torch {
+            Some(torch) => torch,
+            None => bail!("Torch section is required build.toml v2"),
+        };
+
         Ok(Self {
             general: General::from_v2(build.general, backends),
-            torch: build.torch.map(Into::into),
+            framework: super::Framework::Torch(torch.into()),
             kernels,
         })
     }

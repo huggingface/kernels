@@ -7,13 +7,26 @@ use super::{Dependency, KernelName};
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Build {
     pub general: General,
-    pub torch: Option<Torch>,
+
+    // NOTE: In v3, the absense of a framework section means torch-noarch.
+    //       However, this won't work if we have support for other noarch
+    //       frameworks in the future, so in v4, we probably have to make
+    //       a torch-noarch framework variant.
+    #[serde(flatten)]
+    pub framework: Option<Framework>,
 
     #[serde(rename = "kernel", default)]
     pub kernels: HashMap<String, Kernel>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Framework {
+    Torch(Torch),
+    TvmFfi(TvmFfi),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -74,6 +87,14 @@ pub struct Torch {
     pub pyext: Option<Vec<String>>,
 
     #[serde(default)]
+    pub src: Vec<PathBuf>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TvmFfi {
+    pub include: Option<Vec<String>>,
+    pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
 }
 
@@ -142,9 +163,15 @@ impl From<Build> for super::Build {
             .map(|(k, v)| (k, v.into()))
             .collect();
 
+        let framework = match build.framework {
+            Some(Framework::Torch(torch)) => super::Framework::Torch(torch.into()),
+            Some(Framework::TvmFfi(tvm_ffi)) => super::Framework::TvmFfi(tvm_ffi.into()),
+            None => super::Framework::TorchNoarch,
+        };
+
         Self {
             general: build.general.into(),
-            torch: build.torch.map(Into::into),
+            framework,
             kernels,
         }
     }
@@ -209,6 +236,16 @@ impl From<Torch> for super::Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+        }
+    }
+}
+
+impl From<TvmFfi> for super::TvmFfi {
+    fn from(tvm_ffi: TvmFfi) -> Self {
+        Self {
+            include: tvm_ffi.include,
+            pyext: tvm_ffi.pyext,
+            src: tvm_ffi.src,
         }
     }
 }
@@ -302,9 +339,15 @@ impl From<Kernel> for super::Kernel {
 
 impl From<super::Build> for Build {
     fn from(build: super::Build) -> Self {
+        let framework = match build.framework {
+            super::Framework::Torch(torch) => Some(Framework::Torch(torch.into())),
+            super::Framework::TorchNoarch => None,
+            super::Framework::TvmFfi(tvm_ffi) => Some(Framework::TvmFfi(tvm_ffi.into())),
+        };
+
         Self {
             general: build.general.into(),
-            torch: build.torch.map(Into::into),
+            framework,
             kernels: build
                 .kernels
                 .into_iter()
@@ -373,6 +416,16 @@ impl From<super::Torch> for Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+        }
+    }
+}
+
+impl From<super::TvmFfi> for TvmFfi {
+    fn from(tvm_ffi: super::TvmFfi) -> Self {
+        Self {
+            include: tvm_ffi.include,
+            pyext: tvm_ffi.pyext,
+            src: tvm_ffi.src,
         }
     }
 }

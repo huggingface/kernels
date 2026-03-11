@@ -465,7 +465,7 @@ def run_benchmark_class(
         kernel = get_kernel(repo_id, revision=revision)
 
     kernel_sha = get_kernel_sha_from_build_name(kernel)
-    backend_name = _backend() if TORCH_AVAILABLE else "cpu"
+    backend_name = _backend().name
     # Map backend names to torch device names
     device_map = {
         "rocm": "cuda",

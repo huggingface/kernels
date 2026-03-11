@@ -81,6 +81,7 @@ buildConfig@{
   system,
   bundleBuild ? false,
   sourceBuild ? false,
+  tvmFfi ? false,
 }:
 let
   backendOverlay =
@@ -111,7 +112,7 @@ let
 
   torch = pkgs.python3.pkgs.torch;
 
-  extension = pkgs.callPackage ./torch-extension { inherit torch; };
+  extension = pkgs.callPackage ./extension { inherit torch; };
 in
 {
   inherit

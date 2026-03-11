@@ -38,6 +38,8 @@ let
 
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 
+  buildToml = build.readBuildConfig path;
+
   buildConfigBackend =
     buildConfig:
     if buildConfig.cpu or false then
@@ -110,7 +112,11 @@ let
       throw "No build variant is compatible with this system"
     else
       builtins.head buildSetsSorted;
-  shellTorch = bestBuildSet.torch.variant;
+  bestVariant =
+    if buildToml ? "tvm-ffi" then
+      bestBuildSet.pkgs.python3.pkgs.tvm-ffi.variant
+    else
+      bestBuildSet.torch.variant;
   # We need a package set for some outputs (e.g. kernels and build-and-upload),
   # even when there is no applicable build set.
   pkgs =
@@ -125,9 +131,9 @@ let
 in
 {
   devShells = rec {
-    default = devShells.${shellTorch};
-    test = testShells.${shellTorch};
-    devShells = build.mkTorchDevShells {
+    default = devShells.${bestVariant};
+    test = testShells.${bestVariant};
+    devShells = build.mkDevShells {
       inherit
         path
         doGetKernelCheck
@@ -150,7 +156,7 @@ in
   };
   packages =
     let
-      bundle = build.mkTorchExtensionBundle {
+      bundle = build.mkExtensionBundle {
         inherit path doGetKernelCheck;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
@@ -172,7 +178,7 @@ in
         builtins.listToAttrs (
           builtins.map (backend: {
             name = backend;
-            value = build.mkTorchExtensionBundle {
+            value = build.mkExtensionBundle {
               inherit path doGetKernelCheck;
               buildSets = builtins.filter (
                 set: buildConfigBackend set.buildConfig == backend
@@ -206,7 +212,6 @@ in
 
       build-and-upload =
         let
-          buildToml = build.readBuildConfig path;
           repo_id = lib.attrByPath [
             "general"
             "hub"
@@ -239,13 +244,13 @@ in
             ++ (headOrEmpty (setsWithFramework "rocm"))
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
-        build.mkTorchExtensionBundle {
+        build.mkExtensionBundle {
           inherit path doGetKernelCheck;
           buildSets = onePerFramework;
           rev = revUnderscored;
         };
 
-      ci-test = ciTests.${shellTorch};
+      ci-test = ciTests.${bestVariant};
 
       kernels =
         pkgs.python3.withPackages (

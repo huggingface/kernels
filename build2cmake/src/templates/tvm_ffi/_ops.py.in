@@ -1,0 +1,7 @@
+from pathlib import Path
+
+import tvm_ffi
+
+_SELF_PATH = Path(__file__).parent
+
+ops = tvm_ffi.load_module(_SELF_PATH / "@OPS_NAME@.so")

@@ -3,21 +3,12 @@ import re
 
 from packaging.version import parse
 
-from kernels.backends import CUDA, Backend, _select_backend
+from kernels.backends import _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 
 BUILD_VARIANT_REGEX = re.compile(
     r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)"
 )
-
-
-def _compatible_backend_variants(backend: Backend) -> list[str]:
-    if isinstance(backend, CUDA):
-        return [
-            f"cu{backend.version.major}{minor}"
-            for minor in range(backend.version.minor, -1, -1)
-        ]
-    return [backend.variant]
 
 
 def _torch_build_variant(backend: str | None) -> list[str]:
@@ -26,7 +17,7 @@ def _torch_build_variant(backend: str | None) -> list[str]:
 
     selected_backend = _select_backend(backend)
 
-    backend_variants = _compatible_backend_variants(selected_backend)
+    backend_variant = selected_backend.variant
 
     import torch
 
@@ -37,20 +28,17 @@ def _torch_build_variant(backend: str | None) -> list[str]:
     if os == "darwin":
         cpu = "aarch64" if cpu == "arm64" else cpu
         return [
-            f"torch{torch_version.major}{torch_version.minor}-{v}-{cpu}-{os}"
-            for v in backend_variants
+            f"torch{torch_version.major}{torch_version.minor}-{backend_variant}-{cpu}-{os}"
         ]
     elif os == "windows":
         cpu = "x86_64" if cpu == "AMD64" else cpu
         return [
-            f"torch{torch_version.major}{torch_version.minor}-{v}-{cpu}-{os}"
-            for v in backend_variants
+            f"torch{torch_version.major}{torch_version.minor}-{backend_variant}-{cpu}-{os}"
         ]
 
     cxxabi = "cxx11" if torch.compiled_with_cxx11_abi() else "cxx98"
     return [
-        f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{v}-{cpu}-{os}"
-        for v in backend_variants
+        f"torch{torch_version.major}{torch_version.minor}-{cxxabi}-{backend_variant}-{cpu}-{os}"
     ]
 
 
@@ -60,7 +48,7 @@ def _tvm_ffi_build_variant(backend: str | None) -> list[str]:
 
     selected_backend = _select_backend(backend)
 
-    backend_variants = _compatible_backend_variants(selected_backend)
+    backend_variant = selected_backend.variant
 
     import tvm_ffi
 
@@ -69,8 +57,7 @@ def _tvm_ffi_build_variant(backend: str | None) -> list[str]:
     os = platform.system().lower()
 
     return [
-        f"tvm-ffi{tvm_ffi_version.major}{tvm_ffi_version.minor}-{v}-{cpu}-{os}"
-        for v in backend_variants
+        f"tvm-ffi{tvm_ffi_version.major}{tvm_ffi_version.minor}-{backend_variant}-{cpu}-{os}"
     ]
 
 

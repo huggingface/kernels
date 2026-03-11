@@ -21,9 +21,13 @@
           ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
           ++ allOutputs build2cmake
           ++ allOutputs kernel-abi-check
-          ++ allOutputs python3Packages.kernels
-          ++ allOutputs python3Packages.tvm-ffi
+          ++ allOutputs python3.pkgs.kernels
+          ++ allOutputs python3.pkgs.tvm-ffi
           ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)
+          # Only works on recent CUDAs.
+          ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (
+            allOutputs python3.pkgs.nvidia-cutlass-dsl
+          )
         );
       buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.torch.variant (buildSetOutputs buildSet);
     in

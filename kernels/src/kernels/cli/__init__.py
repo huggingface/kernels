@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from kernels.cli.collate_readme import collate_readme_from_versions
 from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.init import parse_kernel_name, run_init
 from kernels.cli.skills import add_skill
@@ -278,6 +279,22 @@ def main():
     )
     repocard_parser.set_defaults(func=create_and_upload_card)
 
+    collate_readme_parser = subparsers.add_parser(
+        "collate-readme",
+        help="Generate a main-branch README listing available kernel versions.",
+    )
+    collate_readme_parser.add_argument(
+        "repo_id",
+        type=str,
+        help="The kernel repo ID (e.g., kernels-community/activation)",
+    )
+    collate_readme_parser.add_argument(
+        "--push-to-hub",
+        action="store_true",
+        help="Push the generated README to the main branch on the Hub.",
+    )
+    collate_readme_parser.set_defaults(func=run_collate_readme)
+
     args = parser.parse_args()
     args.func(args)
 
@@ -345,6 +362,13 @@ def upload_kernels(args):
         repo_id=args.repo_id,
         branch=args.branch,
         private=args.private,
+    )
+
+
+def run_collate_readme(args):
+    collate_readme_from_versions(
+        repo_id=args.repo_id,
+        push_to_hub=args.push_to_hub,
     )
 
 

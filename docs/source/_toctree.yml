@@ -67,4 +67,6 @@
       title: kernels skills
     - local: cli-create-and-upload-card
       title: kernels create-and-upload-card
+    - local: cli-collate-readme
+      title: kernels collate-readme
   title: CLI Reference

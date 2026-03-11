@@ -9,7 +9,7 @@ let
   buildConfig = readBuildConfig path;
   nameToPath = path: name: path + "/${name}";
   kernels = buildConfig.kernel or { };
-  extConfig = buildConfig.torch or { };
+  extConfig = buildConfig.torch or buildConfig.tvm-ffi or { };
   pyExt =
     extConfig.pyext or [
       "py"
@@ -17,7 +17,19 @@ let
     ];
   pyFilter = file: builtins.any (ext: file.hasExt ext) pyExt;
   extSrc = extConfig.src or [ ] ++ [ "build.toml" ];
-  pySrcSet = fileset.fileFilter pyFilter (path + "/torch-ext");
+  torchExtPath = path + "/torch-ext";
+  tvmFfiExtPath = path + "/tvm-ffi-ext";
+  pySrcSet =
+    let
+      path =
+        if builtins.pathExists torchExtPath then
+          torchExtPath
+        else if builtins.pathExists tvmFfiExtPath then
+          tvmFfiExtPath
+        else
+          throw "Kernel should have torch-ext or tvm-ffi-ext directory";
+    in
+    fileset.fileFilter pyFilter path;
   pyTestsSet =
     let
       testsPath = path + "/tests";

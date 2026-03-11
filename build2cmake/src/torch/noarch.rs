@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eyre::{Context, Result};
 use itertools::Itertools;
@@ -7,10 +7,8 @@ use minijinja::{context, Environment};
 use crate::{
     config::{Backend, Build, General, Torch},
     fileset::FileSet,
-    torch::{
-        common::{write_compat_py, write_metadata},
-        kernel_ops_identifier,
-    },
+    ops_identifier::kernel_ops_identifier,
+    torch::common::{write_compat_py, write_metadata},
 };
 
 static SETUP_PY: &str = include_str!("../templates/noarch/setup.py");
@@ -18,7 +16,7 @@ static SETUP_PY: &str = include_str!("../templates/noarch/setup.py");
 pub fn write_torch_ext_noarch(
     env: &Environment,
     build: &Build,
-    target_dir: PathBuf,
+    target_dir: impl AsRef<Path>,
     ops_id: Option<String>,
 ) -> Result<FileSet> {
     let mut file_set = FileSet::default();
@@ -32,7 +30,7 @@ pub fn write_torch_ext_noarch(
         &ops_name,
         &mut file_set,
     )?;
-    write_pyproject_toml(env, build.torch.as_ref(), &build.general, &mut file_set)?;
+    write_pyproject_toml(env, build.framework.torch(), &build.general, &mut file_set)?;
     write_setup_py(&mut file_set)?;
     write_metadata(&build.general, &mut file_set)?;
 

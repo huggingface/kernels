@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
@@ -7,9 +7,9 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, General, Torch};
 use crate::metadata::Metadata;
+use crate::ops_identifier::{git_identifier, random_identifier};
 use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
-use crate::torch::ops_identifier::{git_identifier, random_identifier};
 use crate::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/build-variants.cmake");
@@ -288,10 +288,10 @@ pub fn write_cmake(
 pub fn write_torch_ext(
     env: &Environment,
     build: &Build,
-    target_dir: PathBuf,
+    target_dir: impl AsRef<Path>,
     ops_id: Option<String>,
 ) -> Result<FileSet> {
-    let torch_ext = match build.torch.as_ref() {
+    let torch_ext = match build.framework.torch() {
         Some(torch_ext) => torch_ext,
         None => bail!("Build configuration does not have `torch` section"),
     };

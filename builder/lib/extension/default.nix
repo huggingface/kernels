@@ -58,7 +58,7 @@ in
     ]
     ++ lib.optionals rocmSupport [ clr ];
 
-  mkExtension = callPackage ./arch.nix {
+  mkTvmFfiExtension = callPackage ./tvm-ffi/arch.nix {
     inherit
       clr
       cuda_nvcc
@@ -69,7 +69,18 @@ in
     stdenv = effectiveStdenv;
   };
 
-  mkNoArchExtension = callPackage ./no-arch.nix { inherit torch; };
+  mkTorchExtension = callPackage ./torch/arch.nix {
+    inherit
+      clr
+      cuda_nvcc
+      oneapi-torch-dev
+      onednn-xpu
+      torch
+      ;
+    stdenv = effectiveStdenv;
+  };
+
+  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
 
   stdenv = effectiveStdenv;
 }

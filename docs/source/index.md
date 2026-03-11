@@ -18,3 +18,6 @@ packages in that they are made to be:
 
 You can [search for kernels](https://huggingface.co/models?other=kernels) on
 the Hub.
+
+If you're looking for a more involved "Why kernels?" answer, refer to
+[this page](./why_kernels.md).

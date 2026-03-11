@@ -1,0 +1,23 @@
+[general]
+name = "relu-tvm-ffi"
+version = 1
+
+backends = [
+    "cpu",
+    "cuda",
+]
+
+[tvm-ffi]
+src = [
+    "tvm-ffi-ext/tvm_ffi_binding.cpp",
+]
+
+[kernel.relu_cpu]
+backend = "cpu"
+src = ["relu_cpu/relu_cpu.cpp", "util.hh"]
+depends = []
+
+[kernel.relu_cuda]
+backend = "cuda"
+src = ["relu_cuda/relu.cu", "util.hh"]
+depends = []

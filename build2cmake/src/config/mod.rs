@@ -23,7 +23,29 @@ use crate::version::Version;
 pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
-    pub torch: Option<Torch>,
+    pub framework: Framework,
+}
+
+pub enum Framework {
+    Torch(Torch),
+    TorchNoarch,
+    TvmFfi(TvmFfi),
+}
+
+impl Framework {
+    pub fn torch(&self) -> Option<&Torch> {
+        match self {
+            Framework::Torch(torch) => Some(torch),
+            _ => None,
+        }
+    }
+
+    pub fn tvm_ffi(&self) -> Option<&TvmFfi> {
+        match self {
+            Framework::TvmFfi(tvm_ffi) => Some(tvm_ffi),
+            _ => None,
+        }
+    }
 }
 
 impl Build {
@@ -124,24 +146,40 @@ pub struct Torch {
     pub src: Vec<PathBuf>,
 }
 
+fn data_extensions(py_ext: Option<&[String]>) -> Option<Vec<String>> {
+    match py_ext {
+        Some(exts) => {
+            let extensions = exts
+                .iter()
+                .filter(|&ext| ext != "py" && ext != "pyi")
+                .cloned()
+                .collect_vec();
+            if extensions.is_empty() {
+                None
+            } else {
+                Some(extensions)
+            }
+        }
+
+        None => None,
+    }
+}
+
 impl Torch {
     pub fn data_extensions(&self) -> Option<Vec<String>> {
-        match self.pyext.as_ref() {
-            Some(exts) => {
-                let extensions = exts
-                    .iter()
-                    .filter(|&ext| ext != "py" && ext != "pyi")
-                    .cloned()
-                    .collect_vec();
-                if extensions.is_empty() {
-                    None
-                } else {
-                    Some(extensions)
-                }
-            }
+        data_extensions(self.pyext.as_deref())
+    }
+}
 
-            None => None,
-        }
+pub struct TvmFfi {
+    pub include: Option<Vec<String>>,
+    pub pyext: Option<Vec<String>>,
+    pub src: Vec<PathBuf>,
+}
+
+impl TvmFfi {
+    pub fn data_extensions(&self) -> Option<Vec<String>> {
+        data_extensions(self.pyext.as_deref())
     }
 }
 

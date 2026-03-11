@@ -339,7 +339,6 @@ reasonable starting point and is meant to be edited afterward by the kernel
 developer.
 
 To generate the card, first run `kernels init-card`, which will either
-instantiate a fresh kernel card or load an existing one. Then run
-`kernels fill-card` to update the card based on the build information.
-The existing user content is preserved. Refer to the [documentation](../cli.md)
-to know more.
+instantiate a fresh kernel card or load an existing one. The card will
+be filled automatically by the builder when using the `build-and-upload`
+or `build-and-copy` command.

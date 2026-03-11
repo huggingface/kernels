@@ -182,7 +182,9 @@ def test_upload_includes_card_as_readme():
             '{"version": 1, "python-depends": []}'
         )
 
-        card_path = kernel_dir / "CARD.md"
+        build_dir = kernel_dir / "build"
+        build_dir.mkdir()
+        card_path = build_dir / "CARD.md"
         card_path.write_text("# Test Kernel\n")
 
         mock_api = MagicMock()

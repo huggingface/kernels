@@ -10,6 +10,7 @@ from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.init import parse_kernel_name, run_init
 from kernels.cli.kernel_card_utils import (
     DESCRIPTION,
+    KERNEL_CARD_TEMPLATE_PATH,
     LIBRARY_NAME,
     _build_kernel_card_vars,
     _parse_repo_id,
@@ -344,7 +345,7 @@ def fill_kernel_card(args):
             f"`build.toml` was not found in {str(kernel_dir)}. Cannot proceed."
         )
 
-    card_path = kernel_dir / SYSTEM_CARD_PATH
+    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
 
     repo_id_from_build = _parse_repo_id(kernel_dir)
     repo_id = repo_id_from_build or "{repo_id}"
@@ -355,11 +356,12 @@ def fill_kernel_card(args):
     card_data = ModelCardData(library_name=LIBRARY_NAME)
     updated_card = ModelCard.from_template(
         card_data=card_data,
-        template_path=str(card_path),
+        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
         kernel_description=description,
         **dynamic_vars,
     )
     _update_kernel_card_license(updated_card, kernel_dir)
+    card_path.parent.mkdir(parents=True, exist_ok=True)
     updated_card.save(card_path)
 
 

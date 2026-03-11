@@ -86,7 +86,7 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    card_path = kernel_dir / "CARD.md"
+    card_path = kernel_dir / "build" / "CARD.md"
     if (card_path).exists():
         api.upload_file(
             repo_id=repo_id,

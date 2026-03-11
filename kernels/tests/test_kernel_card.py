@@ -23,8 +23,7 @@ def mock_kernel_dir():
     with tempfile.TemporaryDirectory() as tmpdir:
         kernel_dir = Path(tmpdir)
 
-        (kernel_dir / "build.toml").write_text(
-            """[general]
+        (kernel_dir / "build.toml").write_text("""[general]
 name = "test_kernel"
 backends = ["cuda", "metal"]
 license = "apache-2.0"
@@ -36,8 +35,7 @@ repo-id = "my-org/my-kernel"
 [kernel._test]
 backend = "cuda"
 cuda-capabilities = ["8.0", "8.9"]
-"""
-        )
+""")
 
         torch_ext_dir = kernel_dir / "torch-ext" / "test_kernel"
         torch_ext_dir.mkdir(parents=True)
@@ -107,8 +105,7 @@ def test_fill_kernel_card_usage_with_build_toml_repo_id(initialized_kernel_dir):
 
 
 def test_fill_kernel_card_placeholder_repo_id(mock_kernel_dir):
-    (mock_kernel_dir / "build.toml").write_text(
-        """[general]
+    (mock_kernel_dir / "build.toml").write_text("""[general]
 name = "test_kernel"
 backends = ["cuda"]
 license = "apache-2.0"
@@ -117,8 +114,7 @@ version = 1
 [kernel._test]
 backend = "cuda"
 cuda-capabilities = ["8.0"]
-"""
-    )
+""")
     shutil.copy(KERNEL_CARD_TEMPLATE_PATH, mock_kernel_dir / SYSTEM_CARD_PATH)
 
     args = CardArgs(kernel_dir=str(mock_kernel_dir))

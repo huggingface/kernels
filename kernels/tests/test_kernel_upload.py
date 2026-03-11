@@ -93,6 +93,54 @@ def test_kernel_upload_works_as_expected(branch):
     api.delete_repo(repo_id=REPO_ID)
 
 
+def get_filenames_from_a_branch(repo_id: str, branch: str) -> list[str]:
+    try:
+        repo_info = _get_hf_api().model_info(
+            repo_id=repo_id, revision=branch, files_metadata=True
+        )
+        repo_siblings = repo_info.siblings
+        if repo_siblings is not None:
+            return [f.rfilename for f in repo_siblings]
+        else:
+            raise ValueError("No repo siblings found.")
+    except Exception as e:
+        logging.error(f"Error connecting to the Hub: {e}.")
+
+
+@pytest.mark.token
+@pytest.mark.is_staging_test
+def test_kernel_upload_new_branch_starts_fresh():
+    api = _get_hf_api()
+
+    # First upload to main to populate it.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = f"{tmpdir}/build/torch-universal/upload_test"
+        build_dir = Path(path)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        (build_dir / "foo.py").write_text(PY_CONTENT)
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False, None))
+
+    main_files = get_filenames_from_a_repo(REPO_ID)
+    assert any("foo.py" in f for f in main_files)
+
+    # Now upload a different variant to a new branch.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = f"{tmpdir}/build/torch-universal/upload_test"
+        build_dir = Path(path)
+        build_dir.mkdir(parents=True, exist_ok=True)
+        (build_dir / "bar.py").write_text(PY_CONTENT)
+        upload_kernels(UploadArgs(tmpdir, REPO_ID, False, "v2"))
+
+    branch_files = get_filenames_from_a_branch(REPO_ID, "v2")
+
+    assert any("bar.py" in f for f in branch_files), f"{branch_files=}"
+    assert not any(
+        "foo.py" in f for f in branch_files
+    ), f"Branch v2 should not inherit foo.py from main: {branch_files=}"
+
+    api.delete_repo(repo_id=REPO_ID)
+
+
 @pytest.mark.token
 @pytest.mark.is_staging_test
 def test_kernel_upload_deletes_as_expected():

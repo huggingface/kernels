@@ -85,7 +85,7 @@ class TestCompatibleBackendVariants:
 
     def test_xpu_returns_single_variant(self):
         backend = XPU(version=Version("2024.2"))
-        assert _compatible_backend_variants(backend) == [backend.variant]
+        assert _compatible_backend_variants(backend) == ["xpu20242"]
 
     def test_cann_returns_single_variant(self):
         backend = CANN(version=Version("8.0"))

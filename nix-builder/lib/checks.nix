@@ -9,7 +9,7 @@
 let
   kernelBuildSets = build.applicableBuildSets {
     inherit buildSets;
-    path = ../examples/relu-torch-bounds;
+    path = ../../examples/kernels/relu-torch-bounds;
   };
 in
 assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.9.0") kernelBuildSets) ''

@@ -29,7 +29,7 @@ one or more of the following variants:\n
 def json_to_markdown():
     project_root = Path(__file__).parent.parent.parent
 
-    with open(project_root / "builder" / "build-variants.json", "r") as f:
+    with open(project_root / "nix-builder" / "build-variants.json", "r") as f:
         data = json.load(f)
 
     with open(

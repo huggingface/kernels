@@ -7,7 +7,8 @@
 }:
 
 let
-  version = (builtins.fromTOML (builtins.readFile ../../../kernel-builder/Cargo.toml)).package.version;
+  version =
+    (builtins.fromTOML (builtins.readFile ../../../kernel-builder/Cargo.toml)).package.version;
 in
 rustPlatform.buildRustPackage {
   inherit version;

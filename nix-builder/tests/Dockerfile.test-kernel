@@ -74,5 +74,5 @@ COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 
 # Run tests
-ADD builder/tests/run-tests.sh ./run-tests.sh
+ADD nix-builder/tests/run-tests.sh ./run-tests.sh
 CMD ["sh", "run-tests.sh"]

@@ -51,8 +51,8 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Build build2cmake
-        run: ( cd build2cmake && cargo build --release )
+      - name: Build kernel-builder
+        run: ( cd kernel-builder && cargo build --release )
 
       # Python environment setup
       - uses: actions/setup-python@v6

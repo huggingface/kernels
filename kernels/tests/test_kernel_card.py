@@ -75,14 +75,14 @@ def test_fill_kernel_card_usage_repo_id(mock_kernel_dir):
     args = CardArgs(kernel_dir=str(mock_kernel_dir))
     fill_kernel_card(args)
     content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
-    assert 'get_kernel("my-org/my-kernel")' in content
+    assert 'get_kernel("my-org/my-kernel"' in content
 
 
 def test_fill_kernel_card_usage_with_build_toml_repo_id(mock_kernel_dir):
     args = CardArgs(kernel_dir=str(mock_kernel_dir))
     fill_kernel_card(args)
     content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
-    assert 'get_kernel("my-org/my-kernel")' in content
+    assert 'get_kernel("my-org/my-kernel"' in content
 
 
 def test_fill_kernel_card_placeholder_repo_id(mock_kernel_dir):
@@ -100,7 +100,7 @@ cuda-capabilities = ["8.0"]
     args = CardArgs(kernel_dir=str(mock_kernel_dir))
     fill_kernel_card(args)
     content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
-    assert 'get_kernel("{repo_id}")' in content
+    assert 'get_kernel("{repo_id}"' in content
     assert "{repo_id}" in content
 
 

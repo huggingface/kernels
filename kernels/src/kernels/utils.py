@@ -23,7 +23,7 @@ from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 from kernels.status import resolve_status
-from kernels.variants import _build_variants
+from kernels.variants import _build_variants, _resolve_variants
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
@@ -91,6 +91,18 @@ def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
     return module
 
 
+def _list_available_variants(api: HfApi, repo_id: str, revision: str) -> set[str]:
+    from huggingface_hub import RepoFolder
+
+    try:
+        tree = api.list_repo_tree(repo_id, path_in_repo="build", revision=revision)
+        return {
+            item.path.split("/")[-1] for item in tree if isinstance(item, RepoFolder)
+        }
+    except Exception:
+        return set()
+
+
 def install_kernel(
     repo_id: str,
     revision: str,
@@ -128,7 +140,15 @@ def install_kernel(
         repo_id, revision = resolve_status(api, repo_id, revision)
 
     package_name = package_name_from_repo_id(repo_id)
-    allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
+
+    if local_files_only:
+        variants = _build_variants(backend)
+    else:
+        available = _list_available_variants(api, repo_id, revision)
+        resolved = _resolve_variants(available, backend)
+        variants = resolved if resolved else _build_variants(backend)
+
+    allow_patterns = [f"build/{variant}/*" for variant in variants]
     repo_path = Path(
         str(
             api.snapshot_download(
@@ -166,6 +186,18 @@ def _find_kernel_in_repo_path(
         if variant_path.exists():
             variant = candidate_variant
             break
+
+    # If no exact match, resolve from what's available on disk.
+    if variant is None:
+        build_dir = repo_path / "build"
+        if build_dir.exists():
+            available = {d.name for d in build_dir.iterdir() if d.is_dir()}
+            resolved = _resolve_variants(available, backend)
+            for candidate_variant in resolved:
+                variant_path = repo_path / "build" / candidate_variant
+                if variant_path.exists():
+                    variant = candidate_variant
+                    break
 
     if variant is None:
         raise FileNotFoundError(
@@ -310,6 +342,15 @@ def get_local_kernel(
             if variant_path.exists():
                 return _import_from_path(package_name, variant_path)
 
+    for base_path in [repo_path, repo_path / "build"]:
+        if base_path.exists():
+            available = {d.name for d in base_path.iterdir() if d.is_dir()}
+            resolved = _resolve_variants(available, backend)
+            for v in resolved:
+                variant_path = base_path / v
+                if variant_path.exists():
+                    return _import_from_path(package_name, variant_path)
+
     # If we didn't find the package in the repo we may have a explicit
     # package path.
     variant_path = repo_path
@@ -347,7 +388,12 @@ def has_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    for variant in _build_variants(backend):
+
+    available = _list_available_variants(api, repo_id, revision)
+    resolved = _resolve_variants(available, backend)
+    variants = resolved if resolved else _build_variants(backend)
+
+    for variant in variants:
         for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
             if api.file_exists(
                 repo_id, revision=revision, filename=f"build/{variant}/{init_file}"

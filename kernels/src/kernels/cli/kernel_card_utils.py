@@ -14,7 +14,7 @@ EXAMPLE_CODE = """```python
 # make sure `kernels` is installed: `pip install -U kernels`
 from kernels import get_kernel
 
-kernel_module = get_kernel("{repo_id}") # <- change the ID if needed
+kernel_module = get_kernel("{repo_id}", version=N)  # N is an integer representing the latest version
 {func_name} = kernel_module.{func_name}
 
 {func_name}(...)

@@ -64,6 +64,8 @@ class TvmFfi:
 
 @dataclass
 class Arch:
+    """Aarch kernel information."""
+
     backend: Backend
     platform: str
     os: str
@@ -96,6 +98,8 @@ class Arch:
 
 @dataclass
 class Noarch:
+    """Noarch kernel information."""
+
     backend_name: str
 
     @property
@@ -109,6 +113,8 @@ class Noarch:
 
 @dataclass
 class Variant:
+    """Kernel build variant."""
+
     framework: Torch | TvmFfi
     arch: Arch | Noarch
 

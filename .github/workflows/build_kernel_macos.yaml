@@ -5,6 +5,9 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
   workflow_dispatch:
 
 jobs:

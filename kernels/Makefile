@@ -4,7 +4,7 @@ export check_dirs := src tests
 
 all: src/kernels/python_depends.json
 
-src/kernels/python_depends.json: ../build2cmake/src/python_dependencies.json
+src/kernels/python_depends.json: ../kernel-builder/src/python_dependencies.json
 	cp $< $@
 
 style:

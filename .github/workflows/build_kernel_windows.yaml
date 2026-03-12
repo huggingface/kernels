@@ -51,8 +51,8 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Build build2cmake
-        run: ( cd build2cmake && cargo build --release )
+      - name: Build kernel-builder
+        run: ( cd kernel-builder && cargo build --release )
 
       # Python environment setup
       - uses: actions/setup-python@v6
@@ -64,13 +64,13 @@ jobs:
         run: pip install torch --index-url https://download.pytorch.org/whl/cu${{ matrix.torch.wheel }}
 
       - name: Build cutlass GEMM kernel
-        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/cutlass-gemm -BuildConfig Release -Backend cuda -Build -Force )
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder examples/kernels/cutlass-gemm -BuildConfig Release -Backend cuda -Build -Force )
 
       - name: Build relu kernel
-        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/relu -BuildConfig Release -Backend cuda -Build -Force )
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder examples/kernels/relu -BuildConfig Release -Backend cuda -Build -Force )
 
       - name: Build relu-backprop-compile kernel
-        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/relu-backprop-compile -BuildConfig Release -Backend cuda -Build -Force  )
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder examples/kernels/relu-backprop-compile -BuildConfig Release -Backend cuda -Build -Force  )
 
       - name: Build silu-and-mul kernel
-        run: ( builder\scripts\windows\builder.ps1 -SourceFolder builder/examples/silu-and-mul -BuildConfig Release -Backend cuda -Build -Force)
+        run: ( builder\scripts\windows\builder.ps1 -SourceFolder examples/kernels/silu-and-mul -BuildConfig Release -Backend cuda -Build -Force)

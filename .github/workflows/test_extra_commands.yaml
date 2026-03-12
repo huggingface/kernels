@@ -28,4 +28,4 @@ jobs:
         env:
           USER: runner
       - name: Test nix run .#kernels
-        run: ( cd builder/examples/relu ; nix run .#kernels -- lock ../../tests/run-kernels )
+        run: ( cd examples/kernels/relu ; nix run .#kernels -- lock ../../../nix-builder/tests/run-kernels )

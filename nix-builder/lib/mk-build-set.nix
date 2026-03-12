@@ -6,7 +6,7 @@
 let
   inherit (nixpkgs) lib;
 
-  overlay = import ../../nix/overlay.nix;
+  overlay = import ../overlay.nix;
 
   flattenVersion = version: lib.replaceStrings [ "." ] [ "_" ] (lib.versions.pad 2 version);
 

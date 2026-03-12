@@ -39,7 +39,7 @@ WORKDIR /app/kernel-test
 
 # Install PyTorch with the appropriate CUDA version
 
-# NOTE: `markupsafe` must be installed first to avoid a conflict with the torch package. 
+# NOTE: `markupsafe` must be installed first to avoid a conflict with the torch package.
 # See: https://github.com/astral-sh/uv/issues/9647
 
 RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
@@ -68,10 +68,10 @@ COPY relu-tvm-ffi-kernel ./relu-tvm-ffi-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
-COPY builder/examples/extra-data/tests ./extra_data_tests
-COPY builder/examples/relu/tests ./relu_tests
-COPY builder/examples/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
-COPY builder/examples/cutlass-gemm/tests ./cutlass_gemm_tests
+COPY examples/kernels/extra-data/tests ./extra_data_tests
+COPY examples/kernels/relu/tests ./relu_tests
+COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
+COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 
 # Run tests
 ADD builder/tests/run-tests.sh ./run-tests.sh

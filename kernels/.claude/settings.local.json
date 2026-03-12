@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -m pytest tests/test_variants.py::TestFindKernelInRepoPath::test_no_log_when_exact_match -v 2>&1)",
-      "Bash(python -m pytest tests/test_variants.py -v 2>&1)"
-    ]
-  }
-}

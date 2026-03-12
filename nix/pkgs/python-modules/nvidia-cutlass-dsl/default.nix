@@ -1,61 +1,49 @@
 {
+  lib,
   stdenv,
   fetchPypi,
   python,
 
   buildPythonPackage,
-  autoPatchelfHook,
-  autoAddDriverRunpath,
   pythonWheelDepsCheckHook,
 
   cudaPackages,
-  cuda-python,
-  numpy,
-  typing-extensions,
+
+  nvidia-cutlass-dsl-libs,
 }:
 
 let
   format = "wheel";
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
-  hashes = {
-    cp313-x86_64-linux = "sha256-Lm7cFGjZjhdg4YXftwjcmaAVThSg9IOejUkc61YzoZk=";
-  };
-  hash =
-    hashes."${pyShortVersion}-${stdenv.system}"
-      or (throw "Unsupported Python version: ${pyShortVersion}-${stdenv.system}");
-
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl";
-  version = "4.3.0";
+  version = "4.4.1";
   inherit format;
 
   src = fetchPypi {
+    inherit format version;
     pname = "nvidia_cutlass_dsl";
-    python = pyShortVersion;
-    abi = pyShortVersion;
-    dist = pyShortVersion;
-    platform = "manylinux_2_28_${stdenv.hostPlatform.uname.processor}";
-    inherit format hash version;
+    dist = "py3";
+    python = "py3";
+    hash = "sha256-e4/6ARe+Ne9smoj0Ri7ip5Tv0PfZ9lCQ4QqVPkNPv84=";
   };
 
   nativeBuildInputs = [
-    autoAddDriverRunpath
-    autoPatchelfHook
     pythonWheelDepsCheckHook
   ];
 
   dependencies = [
-    cuda-python
-    numpy
-    typing-extensions
+    nvidia-cutlass-dsl-libs
   ];
 
-  autoPatchelfIgnoreMissingDeps = [
-    "libcuda.so.1"
+  pythonRemoveDeps = lib.optionals (cudaPackages.cudaAtLeast "13.0") [
+    # nvidia-cutlass-dsl-libs-cu13 has a dependency on the base package,
+    # but it has the same contents + CUDA 13 extensions.
+    "nvidia-cutlass-dsl-libs-base"
   ];
 
   meta = {
-    broken = !(cudaPackages.cudaAtLeast "12.8");
+    broken = nvidia-cutlass-dsl-libs.meta.broken;
   };
 }

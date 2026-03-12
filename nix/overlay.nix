@@ -79,6 +79,8 @@ in
 
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
+        nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };
+
         kernel-abi-check = callPackage ./pkgs/python-modules/kernel-abi-check { };
 
         kernels = callPackage ./pkgs/python-modules/kernels { };

@@ -281,7 +281,7 @@ def main():
 
     collate_readme_parser = subparsers.add_parser(
         "collate-readme",
-        help="Generate a main-branch README listing available kernel versions.",
+        help="Copy the most recent version's README to the main branch.",
     )
     collate_readme_parser.add_argument(
         "repo_id",

@@ -2,7 +2,7 @@ from kernels._versions import _get_available_versions
 from kernels.utils import _get_hf_api
 
 
-def generate_main_readme(repo_id: str) -> str:
+def get_latest_version_readme(repo_id: str) -> str:
     versions = _get_available_versions(repo_id)
 
     if not versions:
@@ -11,50 +11,26 @@ def generate_main_readme(repo_id: str) -> str:
             "Upload at least one versioned kernel before generating a main README."
         )
 
-    kernel_name = repo_id.split("/")[-1]
-    hub_url = f"https://huggingface.co/{repo_id}"
+    latest_version = max(versions.keys())
+    branch = f"v{latest_version}"
 
-    lines = [
-        "---",
-        "tags:",
-        "- kernels",
-        "library_name: kernels",
-        "---",
-        "",
-        f"# {kernel_name}",
-        "",
-        "This kernel is available in the following versions. "
-        "Please refer to the version branches for details.",
-        "",
-        "## Available versions",
-        "",
-        "| Version | Branch |",
-        "| ------- | ------ |",
-    ]
+    api = _get_hf_api()
+    readme_content = api.hf_hub_download(
+        repo_id=repo_id,
+        filename="README.md",
+        revision=branch,
+    )
 
-    for version_num in sorted(versions.keys()):
-        branch_name = f"v{version_num}"
-        branch_url = f"{hub_url}/tree/{branch_name}"
-        lines.append(f"| {version_num} | [{branch_name}]({branch_url}) |")
-
-    lines.append("")
-    lines.append("## Quick start")
-    lines.append("")
-    lines.append("```python")
-    lines.append("from kernels import get_kernel")
-    lines.append("")
-    lines.append(f'kernel = get_kernel("{repo_id}", version=<version>)')
-    lines.append("```")
-    lines.append("")
-
-    return "\n".join(lines)
+    with open(readme_content) as f:
+        return f.read()
 
 
 def collate_readme_from_versions(
     repo_id: str,
     push_to_hub: bool = False,
 ):
-    readme_content = generate_main_readme(repo_id)
+    """Copy the most recent version's README to the main branch."""
+    readme_content = get_latest_version_readme(repo_id)
 
     if push_to_hub:
         api = _get_hf_api()
@@ -63,7 +39,7 @@ def collate_readme_from_versions(
             path_in_repo="README.md",
             repo_id=repo_id,
             revision="main",
-            commit_message="Update main README with available versions.",
+            commit_message="Update main README from latest version.",
         )
         print(f"README pushed to https://huggingface.co/{repo_id}")
     else:

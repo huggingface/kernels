@@ -7,7 +7,7 @@
   pkgs,
   stdenv,
 
-  build2cmake,
+  kernel-builder,
   get-kernel-check,
   kernel-layout-check,
   python3,
@@ -65,7 +65,7 @@ stdenv.mkDerivation (prevAttrs: {
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
-    ${pkgs.build2cmake}/bin/build2cmake generate-torch \
+    ${pkgs.kernel-builder}/bin/kernel-builder generate-torch \
       --ops-id ${rev} $out/build.toml
   '';
 
@@ -76,7 +76,7 @@ stdenv.mkDerivation (prevAttrs: {
   buildInputs = [ torch ];
 
   nativeBuildInputs = [
-    build2cmake
+    kernel-builder
     kernel-layout-check
     remove-bytecode-hook
   ]

@@ -19,7 +19,7 @@
         (
           allOutputs buildSet.torch
           ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
-          ++ allOutputs build2cmake
+          ++ allOutputs kernel-builder
           ++ allOutputs kernel-abi-check
           ++ allOutputs python3.pkgs.kernels
           ++ allOutputs python3.pkgs.tvm-ffi

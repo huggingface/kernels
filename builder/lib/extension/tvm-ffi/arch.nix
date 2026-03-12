@@ -9,7 +9,7 @@
   writeText,
 
   # Native build inputs
-  build2cmake,
+  kernel-builder,
   cmake,
   cmakeNvccThreadsHook,
   cuda_nvcc,
@@ -112,7 +112,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   # Generate build files.
   postPatch = ''
-    build2cmake generate \
+    kernel-builder generate \
       --ops-id ${rev} build.toml
   '';
 
@@ -144,7 +144,7 @@ stdenv.mkDerivation (prevAttrs: {
   nativeBuildInputs = [
     cmake
     ninja
-    build2cmake
+    kernel-builder
     kernel-abi-check
     kernel-layout-check
     remove-bytecode-hook

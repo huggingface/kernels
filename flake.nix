@@ -145,7 +145,7 @@
           in
           mkShell {
             nativeBuildInputs = [
-              build2cmake
+              kernel-builder
               kernel-abi-check
               nodejs # For hf-doc-builder.
               pkg-config
@@ -205,11 +205,11 @@
         formatter = pkgs.nixfmt-tree;
 
         packages = rec {
-          inherit (buildSet.pkgs) build2cmake kernel-abi-check;
+          inherit (buildSet.pkgs) kernel-builder kernel-abi-check;
           inherit (buildSet.pkgs.python3.pkgs) kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
-            ${build2cmake}/bin/build2cmake update-build ''${1:-build.toml}
+            ${kernel-builder}/bin/kernel-builder update-build ''${1:-build.toml}
           '';
 
           forCache = mkForCache pkgs (

@@ -7,11 +7,11 @@
 }:
 
 let
-  version = (builtins.fromTOML (builtins.readFile ../../../build2cmake/Cargo.toml)).package.version;
+  version = (builtins.fromTOML (builtins.readFile ../../../kernel-builder/Cargo.toml)).package.version;
 in
 rustPlatform.buildRustPackage {
   inherit version;
-  pname = "build2cmake";
+  pname = "kernel-builder";
 
   src =
     let
@@ -31,12 +31,12 @@ rustPlatform.buildRustPackage {
         ]);
     in
     lib.fileset.toSource {
-      root = ../../../build2cmake;
-      fileset = lib.fileset.fileFilter sourceFiles ../../../build2cmake;
+      root = ../../../kernel-builder;
+      fileset = lib.fileset.fileFilter sourceFiles ../../../kernel-builder;
     };
 
   cargoLock = {
-    lockFile = ../../../build2cmake/Cargo.lock;
+    lockFile = ../../../kernel-builder/Cargo.lock;
   };
 
   nativeBuildInputs = [ pkg-config ];

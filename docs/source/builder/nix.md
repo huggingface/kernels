@@ -57,12 +57,12 @@ The compiled kernel will then be in the local `build/` directory.
 ## Shell for local development
 
 `kernel-builder` provides shells for developing kernels. In such a shell,
-all required dependencies are available, as well as `build2cmake` for generating
+all required dependencies are available, as well as `kernel-builder` for generating
 project files. For example:
 
 ```bash
 $ nix develop
-$ build2cmake generate build.toml
+$ kernel-builder generate build.toml
 $ cmake -B build-ext
 $ cmake --build build-ext
 ```
@@ -74,7 +74,7 @@ Python package in this virtual environment:
 
 ```bash
 $ nix develop
-$ build2cmake generate build.toml
+$ kernel-builder generate build.toml
 $ pip install --no-build-isolation -e .
 ```
 

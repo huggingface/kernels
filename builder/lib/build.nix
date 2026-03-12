@@ -13,7 +13,7 @@
 
 let
   supportedCudaCapabilities = builtins.fromJSON (
-    builtins.readFile ../../build2cmake/src/cuda_supported_archs.json
+    builtins.readFile ../../kernel-builder/src/cuda_supported_archs.json
   );
 in
 rec {
@@ -28,7 +28,7 @@ rec {
     in
     assert lib.assertMsg hasBackends ''
       build.toml seems to be of an older version, update it with:
-            nix run github:huggingface/kernel-builder#build2cmake update-build build.toml'';
+            nix run github:huggingface/kernel-builder#kernel-builder update-build build.toml'';
     buildToml;
 
   # Backends supported by the kernel.
@@ -385,7 +385,7 @@ rec {
             nativeBuildInputs =
               with pkgs;
               [
-                build2cmake
+                kernel-builder
                 kernel-abi-check
               ]
               ++ (pythonNativeCheckInputs python3.pkgs);

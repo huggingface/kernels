@@ -296,7 +296,7 @@ fn generate_file_set(
 
     if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
         eprintln!(
-            "build.toml is in the deprecated V1 or V2 format, use `build2cmake update-build` to update."
+            "build.toml is in the deprecated V1 or V2 format, use `kernel-builder update-build` to update."
         )
     }
 

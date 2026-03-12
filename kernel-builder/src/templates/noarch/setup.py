@@ -89,7 +89,7 @@ class BuildKernel(build):
         metadata_file: Path = project_root / f"metadata-{backend}.json"
         if not metadata_file.exists():
             raise ValueError(
-                f"Metadata file {metadata_file} does not exist, run build2cmake to create it"
+                f"Metadata file {metadata_file} does not exist, run kernel-builder to create it"
             )
         shutil.copy2(metadata_file, variant_dir / "metadata.json")
 

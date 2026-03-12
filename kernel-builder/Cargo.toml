@@ -1,11 +1,11 @@
 [package]
-name = "build2cmake"
+name = "hf-kernel-builder"
 version = "0.13.0-dev0"
 edition = "2021"
 description = "Generate CMake files for kernel-builder projects"
 homepage = "https://github.com/huggingface/kernel-builder"
 license = "Apache-2.0"
-documentation = "https://docs.rs/build2cmake"
+documentation = "https://docs.rs/hf-kernel-builder"
 repository = "https://github.com/huggingface/kernel-builder"
 
 [dependencies]
@@ -26,3 +26,7 @@ toml = "0.8"
 
 [build-dependencies]
 minijinja-embed = "2.5"
+
+[[bin]]
+name = "kernel-builder"
+path = "src/main.rs"

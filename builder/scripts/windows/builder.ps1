@@ -2,10 +2,10 @@
 
 <#
 .SYNOPSIS
-    Kernel Builder - Modern PowerShell wrapper for build2cmake tool
+    Kernel Builder - Modern PowerShell wrapper for kernel-builder tool
 
 .DESCRIPTION
-    This script provides a modular interface to build2cmake for generating CMake
+    This script provides a modular interface to kernel-builder for generating CMake
     structures from build.toml configuration files. Supports multiple backends
     including CUDA, ROCm, Metal, and XPU.
 
@@ -18,8 +18,8 @@
 .PARAMETER Backend
     Target backend: cuda, rocm, metal, xpu, or universal
 
-.PARAMETER Build2CmakePath
-    Path to build2cmake executable (auto-detected if not specified)
+.PARAMETER KernelBuilderPath
+    Path to kernel-builder executable (auto-detected if not specified)
 
 .PARAMETER Force
     Force overwrite existing files without prompting
@@ -105,7 +105,7 @@ param(
     [string]$Backend,
 
     [Parameter()]
-    [string]$Build2CmakePath,
+    [string]$KernelBuilderPath,
 
     [Parameter(ParameterSetName = 'Generate')]
     [switch]$Force,
@@ -167,26 +167,26 @@ function Write-Status {
     Write-Host "$prefix $Message" -ForegroundColor $colors[$Type]
 }
 
-function Find-Build2Cmake {
+function Find-KernelBuilder {
     <#
     .SYNOPSIS
-        Locates build2cmake executable in common locations
+        Locates kernel-builder executable in common locations
     #>
 
     # Check if provided path is valid
-    if ($Build2CmakePath) {
-        if (Test-Path $Build2CmakePath -PathType Leaf) {
-            return $Build2CmakePath
+    if ($KernelBuilderPath) {
+        if (Test-Path $KernelBuilderPath -PathType Leaf) {
+            return $KernelBuilderPath
         }
-        throw "Specified build2cmake path not found: $Build2CmakePath"
+        throw "Specified kernel-builder path not found: $KernelBuilderPath"
     }
 
     # Search common locations
     $searchPaths = @(
-        (Join-Path $PSScriptRoot '..' '..' '..' 'build2cmake' 'target' 'release' 'build2cmake.exe'),
-        (Join-Path $PSScriptRoot '..' '..' '..' 'build2cmake' 'target' 'debug' 'build2cmake.exe'),
-        'build2cmake.exe',
-        'build2cmake'
+        (Join-Path $PSScriptRoot '..' '..' '..' 'kernel-builder' 'target' 'release' 'kernel-builder.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'kernel-builder' 'target' 'debug' 'kernel-builder.exe'),
+        'kernel-builder.exe',
+        'kernel-builder'
     )
 
     foreach ($path in $searchPaths) {
@@ -197,19 +197,19 @@ function Find-Build2Cmake {
         }
 
         if (Test-Path $resolved -PathType Leaf) {
-            Write-Status "Found build2cmake at: $resolved" -Type Info
+            Write-Status "Found kernel-builder at: $resolved" -Type Info
             return $resolved
         }
     }
 
     # Try system PATH
-    $cmd = Get-Command build2cmake -ErrorAction SilentlyContinue
+    $cmd = Get-Command kernel-builder -ErrorAction SilentlyContinue
     if ($cmd) {
-        Write-Status "Using build2cmake from PATH: $($cmd.Source)" -Type Info
+        Write-Status "Using kernel-builder from PATH: $($cmd.Source)" -Type Info
         return $cmd.Source
     }
 
-    throw "build2cmake executable not found. Please build it or specify -Build2CmakePath"
+    throw "kernel-builder executable not found. Please build it or specify -KernelBuilderPath"
 }
 
 function Get-BuildTomlPath {
@@ -224,18 +224,18 @@ function Get-BuildTomlPath {
     return $buildTomlPath
 }
 
-function Invoke-Build2Cmake {
+function Invoke-KernelBuilder {
     param(
-        [string]$Build2CmakeExe,
+        [string]$KernelBuilderExe,
         [string[]]$Arguments
     )
 
-    Write-Status "Executing: $Build2CmakeExe $($Arguments -join ' ')" -Type Info
+    Write-Status "Executing: $KernelBuilderExe $($Arguments -join ' ')" -Type Info
 
-    & $Build2CmakeExe @Arguments
+    & $KernelBuilderExe @Arguments
 
     if ($LASTEXITCODE -ne 0) {
-        throw "build2cmake failed with exit code $LASTEXITCODE"
+        throw "kernel-builder failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -469,7 +469,7 @@ function Invoke-Backend {
         Generates CMake files for specified backend
     #>
     param(
-        [string]$Build2CmakeExe,
+        [string]$KernelBuilderExe,
         [string]$BuildToml,
         [string]$Target,
         [hashtable]$Options,
@@ -485,7 +485,7 @@ function Invoke-Backend {
     if ($Options.Force) { $kwargs += '--force' }
     if ($Options.OpsId) { $kwargs += '--ops-id', $Options.OpsId }
 
-    Invoke-Build2Cmake -Build2CmakeExe $Build2CmakeExe -Arguments $kwargs
+    Invoke-KernelBuilder -KernelBuilderExe $KernelBuilderExe -Arguments $kwargs
 }
 
 function Set-BackendArchitecture {
@@ -524,12 +524,12 @@ try {
     # Resolve paths
     $SourceFolder = Resolve-Path $SourceFolder -ErrorAction Stop
     $buildTomlPath = Get-BuildTomlPath -Folder $SourceFolder
-    $build2cmakeExe = Find-Build2Cmake
+    $kernelBuilderExe = Find-KernelBuilder
 
     # Validate mode
     if ($Validate) {
         Write-Status "Validating $buildTomlPath..." -Type Info
-        Invoke-Build2Cmake -Build2CmakeExe $build2cmakeExe -Arguments @('validate', $buildTomlPath)
+        Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments @('validate', $buildTomlPath)
         Write-Status "Validation successful!" -Type Success
         exit 0
     }
@@ -544,7 +544,7 @@ try {
         if ($Force) { $kwargs += '--force' }
         if ($OpsId) { $kwargs += '--ops-id', $OpsId }
 
-        Invoke-Build2Cmake -Build2CmakeExe $build2cmakeExe -Arguments $kwargs
+        Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments $kwargs
         Write-Status "Clean completed!" -Type Success
         exit 0
     }
@@ -569,7 +569,7 @@ try {
     if ($Backend) {
         # Explicit backend specified
         $targetPath = if ($TargetFolder) { Resolve-Path $TargetFolder } else { $null }
-        Invoke-Backend -Build2CmakeExe $build2cmakeExe -BuildToml $buildTomlPath -Target $targetPath -Options $options -Backend $Backend.ToLower()
+        Invoke-Backend -KernelBuilderExe $kernelBuilderExe -BuildToml $buildTomlPath -Target $targetPath -Options $options -Backend $Backend.ToLower()
     } else {
         # Auto-detect backend from build.toml
         Write-Status "Auto-detecting backend from build.toml..." -Type Info
@@ -579,7 +579,7 @@ try {
         if ($Force) { $kwargs += '--force' }
         if ($OpsId) { $kwargs += '--ops-id', $OpsId }
 
-        Invoke-Build2Cmake -Build2CmakeExe $build2cmakeExe -Arguments $kwargs
+        Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments $kwargs
     }
 
     Write-Status "Generation completed successfully!" -Type Success

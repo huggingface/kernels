@@ -8,7 +8,7 @@ in
   blas = if useMKL then prev.blas.override { blasProvider = prev.mkl; } else prev.blas;
   lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.blas;
 
-  build2cmake = prev.callPackage ./pkgs/build2cmake { };
+  kernel-builder = prev.callPackage ./pkgs/kernel-builder { };
 
   cmakeNvccThreadsHook = prev.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 

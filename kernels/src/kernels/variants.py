@@ -1,3 +1,4 @@
+import logging
 import platform
 import re
 from dataclasses import dataclass
@@ -152,19 +153,20 @@ class Variant:
 def get_variants(api: HfApi, *, repo_id: str, revision: str) -> list[Variant]:
     """Get all the build variants available from a kernel repository."""
 
-    try:
-        tree = api.list_repo_tree(repo_id, path_in_repo="build", revision=revision)
-        variant_strs = {
-            item.path.split("/")[-1] for item in tree if isinstance(item, RepoFolder)
-        }
-    except Exception:
-        return []
+    tree = api.list_repo_tree(repo_id, path_in_repo="build", revision=revision)
+    variant_strs = {
+        item.path.split("/")[-1] for item in tree if isinstance(item, RepoFolder)
+    }
 
     variants = []
     for variant_str in variant_strs:
         try:
             variants.append(Variant.parse(variant_str))
         except ValueError:
+            logging.warning(
+                f"Repository {repo_id} (revision: {revision}) contains invalid build variant variant: {variant_str!r}"
+            )
+            log
             pass
     return variants
 

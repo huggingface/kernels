@@ -36,8 +36,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Generate CMake files for a kernel extension build.
-    #[command(alias = "generate-torch")]
-    Generate {
+    CreatePyproject {
         #[arg(name = "BUILD_TOML")]
         build_toml: PathBuf,
 
@@ -95,7 +94,7 @@ enum Commands {
 fn main() -> Result<()> {
     let args = Cli::parse();
     match args.command {
-        Commands::Generate {
+        Commands::CreatePyproject {
             build_toml,
             force,
             target_dir,

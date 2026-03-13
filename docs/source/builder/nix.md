@@ -12,7 +12,7 @@ We recommend installing Nix in the following way:
 
 The easiest way get all the Nix functionality is by putting a
 `flake.nix` in your kernel repository. To do so, copy
-[`examples/relu/flake.nix`](https://github.com/huggingface/kernels/blob/main/builder/examples/relu/flake.nix) into the
+[`examples/relu/flake.nix`](https://github.com/huggingface/kernels/blob/main/examples/kernels/relu/flake.nix) into the
 same directory as your `build.toml` file. Then run `nix flake update`.
 This generates a `flake.lock` file that pins the kernel builder
 and _all_ its transitive dependencies. Commit both `flake.nix`
@@ -57,12 +57,12 @@ The compiled kernel will then be in the local `build/` directory.
 ## Shell for local development
 
 `kernel-builder` provides shells for developing kernels. In such a shell,
-all required dependencies are available, as well as `build2cmake` for generating
+all required dependencies are available, as well as `kernel-builder` for generating
 project files. For example:
 
 ```bash
 $ nix develop
-$ build2cmake generate build.toml
+$ kernel-builder generate build.toml
 $ cmake -B build-ext
 $ cmake --build build-ext
 ```
@@ -74,7 +74,7 @@ Python package in this virtual environment:
 
 ```bash
 $ nix develop
-$ build2cmake generate build.toml
+$ kernel-builder generate build.toml
 $ pip install --no-build-isolation -e .
 ```
 

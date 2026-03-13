@@ -5,6 +5,9 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
   workflow_dispatch:
 
 jobs:
@@ -25,4 +28,4 @@ jobs:
         env:
           USER: runner
       - name: Test nix run .#kernels
-        run: ( cd builder/examples/relu ; nix run .#kernels -- lock ../../tests/run-kernels )
+        run: ( cd examples/kernels/relu ; nix run .#kernels -- lock ../../../nix-builder/tests/run-kernels )

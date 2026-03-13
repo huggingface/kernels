@@ -165,4 +165,4 @@ mamba/
 poetry.lock
 
 # Nix
-builder/examples/**/flake.lock
+examples/kernels/**/flake.lock

@@ -5,6 +5,9 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
   workflow_dispatch:
 
 jobs:
@@ -37,44 +40,49 @@ jobs:
         run: nix-shell -p nix-info --run "nix-info -m"
 
       - name: Build relu kernel
-        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
+        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy relu kernel
-        run: cp -rL builder/examples/relu/result relu-kernel
+        run: cp -rL examples/kernels/relu/result relu-kernel
+
+      - name: Build relu-tvm-ffi kernel
+        run: ( cd examples/kernels/relu-tvm-ffi && nix build .\#redistributable.tvm-ffi01-cu126-${{ matrix.arch }} )
+      - name: Copy relu-tvm-ffi kernel
+        run: cp -rL examples/kernels/relu-tvm-ffi/result relu-tvm-ffi-kernel
 
       - name: Build extra-data kernel
-        run: ( cd builder/examples/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
+        run: ( cd examples/kernels/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy extra-data kernel
-        run: cp -rL builder/examples/extra-data/result extra-data
+        run: cp -rL examples/kernels/extra-data/result extra-data
 
       - name: Build relu kernel (CPU)
-        run: ( cd builder/examples/relu && nix build .\#redistributable.torch29-cxx11-cpu-${{ matrix.arch }} )
+        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch29-cxx11-cpu-${{ matrix.arch }} )
       - name: Copy relu kernel (CPU)
-        run: cp -rL builder/examples/relu/result relu-kernel-cpu
+        run: cp -rL examples/kernels/relu/result relu-kernel-cpu
 
       - name: Build cutlass GEMM kernel
-        run: ( cd builder/examples/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
+        run: ( cd examples/kernels/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy cutlass GEMM kernel
-        run: cp -rL builder/examples/cutlass-gemm/result cutlass-gemm-kernel
+        run: cp -rL examples/kernels/cutlass-gemm/result cutlass-gemm-kernel
 
       - name: Build relu-backprop-compile kernel
-        run: ( cd builder/examples/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
+        run: ( cd examples/kernels/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy relu-backprop-compile kernel
-        run: cp -rL builder/examples/relu-backprop-compile/result relu-backprop-compile-kernel
+        run: cp -rL examples/kernels/relu-backprop-compile/result relu-backprop-compile-kernel
 
       # Just test that we build with the extra torchVersions argument.
       - name: Build relu kernel (specific Torch version)
-        run: ( cd builder/examples/relu-specific-torch && nix build . )
+        run: ( cd examples/kernels/relu-specific-torch && nix build . )
 
       - name: Build relu kernel (compiler flags)
-        run: ( cd builder/examples/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
+        run: ( cd examples/kernels/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
 
       - name: Test that we can build a test shell (e.g. that gcc corresponds to CUDA-required)
-        run: ( cd builder/examples/relu && nix build .#devShells.${{ matrix.arch }}.test )
+        run: ( cd examples/kernels/relu && nix build .#devShells.${{ matrix.arch }}.test )
 
       - name: Build silu-and-mul kernel
-        run: ( cd builder/examples/silu-and-mul && nix build .\#redistributable.torch-cuda )
+        run: ( cd examples/kernels/silu-and-mul && nix build .\#redistributable.torch-cuda )
       - name: Copy silu-and-mul kernel
-        run: cp -rL builder/examples/silu-and-mul/result silu-and-mul-kernel
+        run: cp -rL examples/kernels/silu-and-mul/result silu-and-mul-kernel
 
       - name: Upload kernel artifacts
         uses: actions/upload-artifact@v6
@@ -85,6 +93,7 @@ jobs:
             cutlass-gemm-kernel
             extra-data
             relu-kernel
+            relu-tvm-ffi-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel
             silu-and-mul-kernel
@@ -109,7 +118,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: builder/tests/Dockerfile.test-kernel
+          file: nix-builder/tests/Dockerfile.test-kernel
           platforms: linux/amd64
           load: true
           push: false

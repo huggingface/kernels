@@ -17,13 +17,18 @@ from huggingface_hub import HfApi, constants
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
-from kernels.backends import _backend
+from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.metadata import Metadata
 from kernels.status import resolve_status
-from kernels.variants import _build_variants
+from kernels.variants import (
+    Variant,
+    get_variants,
+    get_variants_local,
+    resolve_variant,
+)
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
@@ -128,7 +133,16 @@ def install_kernel(
         repo_id, revision = resolve_status(api, repo_id, revision)
 
     package_name = package_name_from_repo_id(repo_id)
-    allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
+
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    variant = resolve_variant(variants, backend)
+
+    if variant is None:
+        raise FileNotFoundError(
+            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+        )
+
+    allow_patterns = [f"build/{variant.variant_str}/*"]
     repo_path = Path(
         str(
             api.snapshot_download(
@@ -143,7 +157,10 @@ def install_kernel(
 
     try:
         return _find_kernel_in_repo_path(
-            repo_path, package_name, backend=backend, variant_locks=variant_locks
+            repo_path,
+            package_name,
+            variant=variant,
+            variant_locks=variant_locks,
         )
     except FileNotFoundError:
         raise FileNotFoundError(
@@ -155,30 +172,21 @@ def _find_kernel_in_repo_path(
     repo_path: Path,
     package_name: str,
     *,
-    backend: str | None = None,
+    variant: Variant,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> tuple[str, Path]:
-    variants = _build_variants(backend)
-    variant = None
-    variant_path = None
-    for candidate_variant in variants:
-        variant_path = repo_path / "build" / candidate_variant
-        if variant_path.exists():
-            variant = candidate_variant
-            break
-
-    if variant is None:
-        raise FileNotFoundError(
-            f"Kernel at path `{repo_path}` does not have one of build variants: {', '.join(variants)}"
-        )
-
-    assert variant_path is not None
+    variant_str = variant.variant_str
+    variant_path = repo_path / "build" / variant_str
+    if not variant_path.exists():
+        raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
 
     if variant_locks is not None:
-        variant_lock = variant_locks.get(variant)
+        variant_lock = variant_locks.get(variant_str)
         if variant_lock is None:
             raise ValueError(f"No lock found for build variant: {variant}")
-        validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
+        validate_kernel(
+            repo_path=repo_path, variant=variant_str, hash=variant_lock.hash
+        )
 
     module_init_path = variant_path / "__init__.py"
     if not os.path.exists(module_init_path):
@@ -297,12 +305,12 @@ def get_local_kernel(
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    # Presume we were given the top level path of the kernel repository.
     for base_path in [repo_path, repo_path / "build"]:
-        for v in _build_variants(backend):
-            variant_path = base_path / v
-            if variant_path.exists():
-                return _import_from_path(package_name, variant_path)
+        variants = get_variants_local(base_path)
+        variant = resolve_variant(variants, backend)
+
+        if variant is not None:
+            return _import_from_path(package_name, base_path / variant.variant_str)
 
     # If we didn't find the package in the repo we may have a explicit
     # package path.
@@ -341,12 +349,19 @@ def has_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    for variant in _build_variants(backend):
-        for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
-            if api.file_exists(
-                repo_id, revision=revision, filename=f"build/{variant}/{init_file}"
-            ):
-                return True
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    variant = resolve_variant(variants, backend)
+
+    if variant is None:
+        return False
+
+    for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
+        if api.file_exists(
+            repo_id,
+            revision=revision,
+            filename=f"build/{variant.variant_str}/{init_file}",
+        ):
+            return True
 
     return False
 
@@ -388,7 +403,15 @@ def load_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    allow_patterns = [f"build/{variant}/*" for variant in _build_variants(backend)]
+    variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
+    variant = resolve_variant(variants, backend)
+
+    if variant is None:
+        raise FileNotFoundError(
+            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+        )
+
+    allow_patterns = [f"build/{variant.variant_str}/*"]
     repo_path = Path(
         str(
             api.snapshot_download(
@@ -403,7 +426,10 @@ def load_kernel(
 
     try:
         package_name, variant_path = _find_kernel_in_repo_path(
-            repo_path, package_name, backend=backend, variant_locks=None
+            repo_path,
+            package_name,
+            variant=variant,
+            variant_locks=None,
         )
         return _import_from_path(package_name, variant_path)
     except FileNotFoundError:
@@ -538,6 +564,18 @@ def package_name_from_repo_id(repo_id: str) -> str:
     return repo_id.split("/")[-1].replace("-", "_")
 
 
+def _platform() -> str:
+    cpu = platform.machine()
+    os = platform.system().lower()
+
+    if os == "darwin":
+        cpu = "aarch64" if cpu == "arm64" else cpu
+    elif os == "windows":
+        cpu = "x86_64" if cpu == "AMD64" else cpu
+
+    return f"{cpu}-{os}"
+
+
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
     """Returns an instance of HfApi with proper settings."""
 
@@ -553,8 +591,8 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
 
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
-        variants = ":".join(_build_variants(None))
-        user_agent_str += f"; kernels/{__version__}; python/{python}; build_variant/{variants}; file_type/kernel"
+        backend = _select_backend(None).variant_str
+        user_agent_str += f"; kernels/{__version__}; python/{python}; backend/{backend}; flatform/{_platform()}; file_type/kernel"
 
         if has_torch:
             import torch

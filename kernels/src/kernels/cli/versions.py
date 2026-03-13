@@ -18,12 +18,12 @@ def print_kernel_versions(repo_id: str):
         variants = get_variants(api, repo_id=repo_id, revision=ref.ref)
         resolved = resolve_variants(variants, None)
         best = resolved[0] if resolved else None
-        resolved = set(resolved)
+        resolved_set = set(resolved)
         print(f"Version {version}: ", end="")
         variant_strs = [
             (
                 f"✅ {variant.variant_str} ({'compatible, preferred' if variant == best else 'compatible'})"
-                if variant in resolved
+                if variant in resolved_set
                 else f"{variant.variant_str}"
             )
             for variant in variants

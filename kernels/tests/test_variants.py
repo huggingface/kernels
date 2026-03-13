@@ -129,8 +129,8 @@ def test_resolve_cuda_exact():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result != []
+    assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
 
 
 def test_resolve_cuda_best_older_minor():
@@ -144,8 +144,8 @@ def test_resolve_cuda_best_older_minor():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result != []
+    assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
 
 
 def test_resolve_cuda_no_newer_minor():
@@ -159,8 +159,8 @@ def test_resolve_cuda_no_newer_minor():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch-cuda"
+    assert result != []
+    assert result[0].variant_str == "torch-cuda"
 
 
 def test_resolve_cuda_no_different_major():
@@ -174,8 +174,8 @@ def test_resolve_cuda_no_different_major():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch-cuda"
+    assert result != []
+    assert result[0].variant_str == "torch-cuda"
 
 
 def test_resolve_rocm():
@@ -188,8 +188,8 @@ def test_resolve_rocm():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cxx11-rocm70-x86_64-linux"
+    assert result != []
+    assert result[0].variant_str == "torch210-cxx11-rocm70-x86_64-linux"
 
 
 def test_resolve_cpu_linux():
@@ -202,8 +202,8 @@ def test_resolve_cpu_linux():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cxx11-cpu-x86_64-linux"
+    assert result != []
+    assert result[0].variant_str == "torch210-cxx11-cpu-x86_64-linux"
 
 
 def test_resolve_cpu_darwin():
@@ -216,8 +216,8 @@ def test_resolve_cpu_darwin():
         torch_cxx11_abi=None,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cpu-aarch64-darwin"
+    assert result != []
+    assert result[0].variant_str == "torch210-cpu-aarch64-darwin"
 
 
 def test_resolve_metal_darwin():
@@ -230,8 +230,8 @@ def test_resolve_metal_darwin():
         torch_cxx11_abi=None,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cpu-aarch64-darwin"
+    assert result != []
+    assert result[0].variant_str == "torch210-cpu-aarch64-darwin"
 
 
 def test_resolve_noarch_fallback():
@@ -245,8 +245,8 @@ def test_resolve_noarch_fallback():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch-cuda"
+    assert result != []
+    assert result[0].variant_str == "torch-cuda"
 
 
 def test_resolve_no_match():
@@ -259,7 +259,7 @@ def test_resolve_no_match():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is None
+    assert result == []
 
 
 RESOLVE_VARIANTS_UNIVERSAL = [
@@ -282,8 +282,8 @@ def test_resolve_universal_matches_any_backend():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch-universal"
+    assert result != []
+    assert result[0].variant_str == "torch-universal"
 
 
 def test_resolve_universal_is_last_resort():
@@ -297,8 +297,8 @@ def test_resolve_universal_is_last_resort():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result != []
+    assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
 
 
 def test_resolve_specific_noarch_preferred_over_universal():
@@ -313,8 +313,8 @@ def test_resolve_specific_noarch_preferred_over_universal():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is not None
-    assert result.variant_str == "torch-cuda"
+    assert result != []
+    assert result[0].variant_str == "torch-cuda"
 
 
 RESOLVE_VARIANTS_NO_NOARCH = [
@@ -338,7 +338,7 @@ def test_resolve_cuda_no_newer_minor_no_noarch():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is None
+    assert result == []
 
 
 def test_resolve_cuda_no_different_major_no_noarch():
@@ -352,4 +352,4 @@ def test_resolve_cuda_no_different_major_no_noarch():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result is None
+    assert result == []

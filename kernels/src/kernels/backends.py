@@ -3,16 +3,11 @@ import ctypes.util
 import re
 import warnings
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import ClassVar, Optional, Protocol
 
 from packaging.version import Version
 
 from kernels.compat import has_torch
-
-_CUDA_VARIANT_REGEX = re.compile(r"cu(\d+)(\d+)")
-_ROCM_VARIANT_REGEX = re.compile(r"rocm(\d+)(\d+)")
-_XPU_VARIANT_REGEX = re.compile(r"xpu(\d+)(\d+)")
-_CANN_VARIANT_REGEX = re.compile(r"cann(\d+)(\d+)")
 
 
 class Backend(Protocol):
@@ -34,6 +29,8 @@ class Backend(Protocol):
 
 @dataclass(unsafe_hash=True)
 class CANN:
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
+
     version: Version
 
     @property
@@ -46,7 +43,7 @@ class CANN:
 
     @staticmethod
     def parse(s: str) -> "CANN":
-        m = _CANN_VARIANT_REGEX.fullmatch(s)
+        m = CANN._VARIANT_REGEX.fullmatch(s)
         if not m:
             raise ValueError(f"Invalid CANN variant string: {s!r}")
         return CANN(version=Version(f"{m.group(1)}.{m.group(2)}"))
@@ -71,6 +68,8 @@ class CPU:
 
 @dataclass(unsafe_hash=True)
 class CUDA:
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
+
     version: Version
 
     @property
@@ -83,7 +82,7 @@ class CUDA:
 
     @staticmethod
     def parse(s: str) -> "CUDA":
-        m = _CUDA_VARIANT_REGEX.fullmatch(s)
+        m = CUDA._VARIANT_REGEX.fullmatch(s)
         if not m:
             raise ValueError(f"Invalid CUDA variant string: {s!r}")
         return CUDA(version=Version(f"{m.group(1)}.{m.group(2)}"))
@@ -125,6 +124,8 @@ class Neuron:
 
 @dataclass(unsafe_hash=True)
 class ROCm:
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
+
     version: Version
 
     @property
@@ -137,7 +138,7 @@ class ROCm:
 
     @staticmethod
     def parse(s: str) -> "ROCm":
-        m = _ROCM_VARIANT_REGEX.fullmatch(s)
+        m = ROCm._VARIANT_REGEX.fullmatch(s)
         if not m:
             raise ValueError(f"Invalid ROCm variant string: {s!r}")
         return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
@@ -145,6 +146,8 @@ class ROCm:
 
 @dataclass(unsafe_hash=True)
 class XPU:
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")
+
     version: Version
 
     @property
@@ -157,7 +160,7 @@ class XPU:
 
     @staticmethod
     def parse(s: str) -> "XPU":
-        m = _XPU_VARIANT_REGEX.fullmatch(s)
+        m = XPU._VARIANT_REGEX.fullmatch(s)
         if not m:
             raise ValueError(f"Invalid XPU variant string: {s!r}")
         return XPU(version=Version(f"{m.group(1)}.{m.group(2)}"))

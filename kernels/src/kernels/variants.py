@@ -2,6 +2,7 @@ import platform
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from huggingface_hub import HfApi
 from huggingface_hub.hf_api import RepoFolder
@@ -22,12 +23,11 @@ BUILD_VARIANT_REGEX = re.compile(
     r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)"
 )
 
-_TORCH_VARIANT_REGEX = re.compile(r"torch(\d+?)(\d+)")
-_TVM_FFI_VARIANT_REGEX = re.compile(r"tvm-ffi(\d+?)(\d+)")
-
 
 @dataclass(unsafe_hash=True)
 class Torch:
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch(\d+?)(\d+)")
+
     version: Version | None
 
     @property
@@ -40,7 +40,7 @@ class Torch:
     def parse(s: str) -> "Torch":
         if s == "torch":
             return Torch(version=None)
-        m = _TORCH_VARIANT_REGEX.fullmatch(s)
+        m = Torch._VARIANT_REGEX.fullmatch(s)
         if not m:
             raise ValueError(f"Invalid Torch variant string: {s!r}")
         return Torch(version=Version(f"{m.group(1)}.{m.group(2)}"))
@@ -48,6 +48,8 @@ class Torch:
 
 @dataclass(unsafe_hash=True)
 class TvmFfi:
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"tvm-ffi(\d+?)(\d+)")
+
     version: Version
 
     @property
@@ -56,7 +58,7 @@ class TvmFfi:
 
     @staticmethod
     def parse(s: str) -> "TvmFfi":
-        m = _TVM_FFI_VARIANT_REGEX.fullmatch(s)
+        m = TvmFfi._VARIANT_REGEX.fullmatch(s)
         if not m:
             raise ValueError(f"Invalid TvmFfi variant string: {s!r}")
         return TvmFfi(version=Version(f"{m.group(1)}.{m.group(2)}"))

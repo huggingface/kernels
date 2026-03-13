@@ -62,7 +62,7 @@ class TvmFfi:
         return TvmFfi(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Arch:
     """Aarch kernel information."""
 
@@ -98,7 +98,7 @@ class Arch:
         return Arch(backend=backend, platform=platform, os=os, cxx11_abi=cxx11_abi)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Noarch:
     """Noarch kernel information."""
 
@@ -113,7 +113,7 @@ class Noarch:
         return Noarch(backend_name=s)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Variant:
     """Kernel build variant."""
 
@@ -188,6 +188,15 @@ def resolve_variant(
     variants: list[Variant], backend: str | None = None
 ) -> Variant | None:
     """Return the best matching variant for the current system."""
+    resolved = resolve_variants(variants, backend)
+    return resolved[0] if resolved else None
+
+
+def resolve_variants(
+    variants: list[Variant], backend: str | None = None
+) -> list[Variant]:
+    """Return the matching variants for the current system, sorted
+    by decreasing order of preference."""
     selected_backend = _select_backend(backend)
 
     cpu = platform.machine()
@@ -236,7 +245,7 @@ def _resolve_variant_for_system(
     torch_version: Version | None,
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
-) -> Variant | None:
+) -> list[Variant]:
     """Resolve the best matching variant given explicit system parameters."""
     applicable = _filter_variants(
         variants,
@@ -247,8 +256,7 @@ def _resolve_variant_for_system(
         torch_cxx11_abi,
         tvm_ffi_version,
     )
-    sorted_variants = _sort_variants(applicable)
-    return sorted_variants[0] if sorted_variants else None
+    return _sort_variants(applicable)
 
 
 def _filter_variants(

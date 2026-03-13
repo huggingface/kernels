@@ -1,6 +1,7 @@
 # kernels versions
 
-Use `kernels versions` to list all available versions of a kernel on the Hub.
+Use `kernels versions` to list all available versions of a kernel on the Hub
+and marks compatible versions.
 
 ## Usage
 
@@ -19,7 +20,7 @@ kernels versions kernels-community/activation
 ## Example Output
 
 ```text
-Version 1: torch210-cu128-x86_64-windows, torch210-cxx11-cu126-x86_64-linux, torch210-cxx11-cu128-x86_64-linux, torch210-cxx11-cu130-x86_64-linux, torch210-metal-aarch64-darwin ✅, torch27-cxx11-cu118-x86_64-linux, torch27-cxx11-cu126-x86_64-linux, torch27-cxx11-cu128-aarch64-linux, torch27-cxx11-cu128-x86_64-linux, torch28-cxx11-cu126-aarch64-linux, torch28-cxx11-cu126-x86_64-linux, torch28-cxx11-cu128-aarch64-linux, torch28-cxx11-cu128-x86_64-linux, torch28-cxx11-cu129-aarch64-linux, torch28-cxx11-cu129-x86_64-linux, torch29-cxx11-cu126-aarch64-linux, torch29-cxx11-cu126-x86_64-linux, torch29-cxx11-cu128-aarch64-linux, torch29-cxx11-cu128-x86_64-linux, torch29-cxx11-cu130-aarch64-linux, torch29-cxx11-cu130-x86_64-linux, torch29-metal-aarch64-darwin
+Version 1: torch210-metal-aarch64-darwin, torch28-cxx11-cu126-aarch64-linux, torch28-cxx11-cu129-aarch64-linux, torch28-cxx11-cu128-aarch64-linux, torch29-cxx11-cu130-x86_64-linux, torch27-cxx11-cu118-x86_64-linux, torch210-cxx11-cu130-x86_64-linux, torch29-cxx11-cu128-aarch64-linux, torch29-cxx11-cu130-aarch64-linux, torch27-cxx11-cu126-x86_64-linux, ✅ torch29-cxx11-cu126-x86_64-linux (compatible), torch27-cxx11-cu128-x86_64-linux, torch210-cxx11-cu126-x86_64-linux, torch29-metal-aarch64-darwin, torch27-cxx11-cu128-aarch64-linux, torch210-cu128-x86_64-windows, torch28-cxx11-cu128-x86_64-linux, torch28-cxx11-cu126-x86_64-linux, torch210-cxx11-cu128-x86_64-linux, torch29-cxx11-cu126-aarch64-linux, ✅ torch29-cxx11-cu128-x86_64-linux (preferred), torch28-cxx11-cu129-x86_64-linux
 ```
 
 ## Use Cases

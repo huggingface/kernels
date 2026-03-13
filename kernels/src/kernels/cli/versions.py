@@ -1,6 +1,9 @@
 from kernels._versions import _get_available_versions
 from kernels.utils import _get_hf_api
-from kernels.variants import get_variants, resolve_variant
+from kernels.variants import (
+    get_variants,
+    resolve_variants,
+)
 
 
 def print_kernel_versions(repo_id: str):
@@ -13,10 +16,16 @@ def print_kernel_versions(repo_id: str):
 
     for version, ref in sorted(versions, key=lambda x: x[0]):
         variants = get_variants(api, repo_id=repo_id, revision=ref.ref)
-        best = resolve_variant(variants)
+        resolved = resolve_variants(variants, None)
+        best = resolved[0] if resolved else None
+        resolved = set(resolved)
         print(f"Version {version}: ", end="")
         variant_strs = [
-            f"{variant.variant_str} ✅" if variant == best else f"{variant.variant_str}"
+            (
+                f"✅ {variant.variant_str} ({'compatible, preferred' if variant == best else 'compatible'})"
+                if variant in resolved
+                else f"{variant.variant_str}"
+            )
             for variant in variants
         ]
         print(", ".join(variant_strs))

@@ -32,7 +32,7 @@ class Backend(Protocol):
         ...
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class CANN:
     version: Version
 
@@ -52,7 +52,7 @@ class CANN:
         return CANN(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class CPU:
     @property
     def name(self) -> str:
@@ -69,7 +69,7 @@ class CPU:
         return CPU()
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class CUDA:
     version: Version
 
@@ -89,7 +89,7 @@ class CUDA:
         return CUDA(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Metal:
     @property
     def name(self) -> str:
@@ -106,7 +106,7 @@ class Metal:
         return Metal()
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Neuron:
     @property
     def name(self) -> str:
@@ -123,7 +123,7 @@ class Neuron:
         return Neuron()
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class ROCm:
     version: Version
 
@@ -143,7 +143,7 @@ class ROCm:
         return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class XPU:
     version: Version
 

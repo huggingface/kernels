@@ -36,6 +36,12 @@ VARIANT_STRINGS = [
     "torch210-cxx11-xpu20253-x86_64-linux",
     "torch210-metal-aarch64-darwin",
     "torch210-xpu20253-x86_64-windows",
+    "tvm-ffi01-cpu-x86_64-linux",
+    "tvm-ffi01-cu126-x86_64-linux",
+    "tvm-ffi01-cu128-x86_64-linux",
+    "tvm-ffi01-cu130-x86_64-linux",
+    "tvm-ffi01-metal-aarch64-darwin",
+    "tvm-ffi01-xpu20253-x86_64-linux",
 ]
 
 

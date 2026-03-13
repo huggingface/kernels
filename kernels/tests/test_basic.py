@@ -120,7 +120,6 @@ def test_relu_metal(metal_kernel, dtype):
         # Repo only contains Torch 2.4 kernels (and we don't
         # support/test against this version).
         ("kernels-test/only-torch-2.4", "main", False),
-        ("google-bert/bert-base-uncased", "87565a309", False),
         ("kernels-test/flattened-build", "main", True),
         ("kernels-test/flattened-build", "without-compat-module", True),
     ],

@@ -166,8 +166,6 @@ def get_variants(api: HfApi, *, repo_id: str, revision: str) -> list[Variant]:
             logging.warning(
                 f"Repository {repo_id} (revision: {revision}) contains invalid build variant variant: {variant_str!r}"
             )
-            log
-            pass
     return variants
 
 

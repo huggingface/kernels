@@ -6,6 +6,8 @@ from kernels.backends import CPU, CUDA, ROCm
 from kernels.variants import Variant, _resolve_variant_for_system, get_variants
 
 VARIANT_STRINGS = [
+    "torch25-cxx98-cu118-aarch64-linux",
+    "torch25-cxx98-cpu-x86_64-linux",
     "torch29-cpu-aarch64-darwin",
     "torch29-cxx11-cpu-aarch64-linux",
     "torch29-cxx11-cpu-x86_64-linux",
@@ -48,6 +50,37 @@ NOARCH_VARIANT_STRINGS = [
     "torch-universal",
 ]
 
+SUPERSET_VARIANT_STRINGS = [
+    "torch29-cpu-aarch64-darwin",
+    "torch29-cxx11-cpu-aarch64-linux",
+    "torch29-cxx11-cpu-x86_64-linux",
+    "torch29-cxx11-cu126-aarch64-linux",
+    "torch29-cxx11-cu126-x86_64-linux",
+    "torch29-cxx11-cu128-aarch64-linux",
+    "torch29-cxx11-cu128-x86_64-linux",
+    "torch29-cxx11-cu130-aarch64-linux",
+    "torch29-cxx11-cu130-x86_64-linux",
+    "torch29-cxx11-rocm63-x86_64-linux",
+    "torch29-cxx11-rocm64-x86_64-linux",
+    "torch29-cxx11-xpu20252-x86_64-linux",
+    "torch29-metal-aarch64-darwin",
+    "torch210-cpu-aarch64-darwin",
+    "torch210-cu128-x86_64-windows",
+    "torch210-cxx11-cpu-aarch64-linux",
+    "torch210-cxx11-cpu-x86_64-linux",
+    "torch210-cxx11-cu126-aarch64-linux",
+    "torch210-cxx11-cu126-x86_64-linux",
+    "torch210-cxx11-cu128-aarch64-linux",
+    "torch210-cxx11-cu128-x86_64-linux",
+    "torch210-cxx11-cu130-aarch64-linux",
+    "torch210-cxx11-cu130-x86_64-linux",
+    "torch210-cxx11-rocm70-x86_64-linux",
+    "torch210-cxx11-rocm71-x86_64-linux",
+    "torch210-cxx11-xpu20253-x86_64-linux",
+    "torch210-metal-aarch64-darwin",
+    "torch210-xpu20253-x86_64-windows",
+]
+
 
 @pytest.mark.parametrize("variant_str", VARIANT_STRINGS)
 def test_arch_variants(variant_str: str):
@@ -66,7 +99,7 @@ def test_get_variants():
     variants = get_variants(api, repo_id="kernels-community/relu", revision="v1")
     variant_strs = {v.variant_str for v in variants}
     # Superset because new variants may be added in the future.
-    assert variant_strs.issuperset(VARIANT_STRINGS)
+    assert variant_strs.issuperset(SUPERSET_VARIANT_STRINGS)
 
 
 RESOLVE_VARIANTS = [

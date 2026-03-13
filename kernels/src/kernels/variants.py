@@ -82,7 +82,9 @@ class Arch:
     def parse(parts: list[str]) -> "Arch":
         # Handle Linux with cxx11 marker.
         if len(parts) == 4:
-            cxx11_abi = parts[0] == "cxx11"
+            # In the future, we want to remove the marker and use cxx11 as
+            # the default. We check on cxx98 for this reason.
+            cxx11_abi = parts[0] != "cxx98"
             parts = parts[1:]
         elif len(parts) == 3:
             cxx11_abi = None

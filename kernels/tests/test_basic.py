@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -159,6 +161,22 @@ def test_version():
         ValueError, match="Version 0 not found, available versions: 1, 2.*"
     ):
         kernel = get_kernel("kernels-test/versions", version=0)
+
+
+def test_version_outdated_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="kernels._versions"):
+        kernel = get_kernel("kernels-test/versions", version=1)
+    assert kernel.version() == "1"
+    assert (
+        "You are using version 1 of 'kernels-test/versions', but version 2 is available."
+        in caplog.text
+    )
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="kernels._versions"):
+        kernel = get_kernel("kernels-test/versions", version=2)
+    assert kernel.version() == "2"
+    assert "but version" not in caplog.text
 
 
 @pytest.mark.cuda_only

@@ -140,6 +140,16 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
+    card_path = kernel_dir / "build" / "CARD.md"
+    if (card_path).exists():
+        api.upload_file(
+            repo_id=repo_id,
+            path_or_fileobj=card_path,
+            path_in_repo="README.md",
+            revision=branch,
+            commit_message="File uploaded using `kernels`.",
+        )
+
     assert variants is not None
     _upload_build_dir(
         api,

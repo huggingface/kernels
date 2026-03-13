@@ -67,6 +67,4 @@
       title: kernels download
     - local: cli-skills
       title: kernels skills
-    - local: cli-create-and-upload-card
-      title: kernels create-and-upload-card
   title: CLI Reference

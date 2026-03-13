@@ -115,7 +115,7 @@ stdenv.mkDerivation (prevAttrs: {
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
-    ${pkgs.kernel-builder}/bin/kernel-builder generate-torch \
+    ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
       --ops-id ${rev} $out/build.toml
   '';
 

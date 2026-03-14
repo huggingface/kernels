@@ -16,6 +16,8 @@ static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static COMPAT_PY: &str = include_str!("../templates/compat.py");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
+static DETECT_CUDA_CAPABILITY_PY: &str =
+    include_str!("../templates/tvm_ffi/cuda/detect-cuda-capability.py");
 
 fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
@@ -26,6 +28,11 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
         BUILD_VARIANTS_UTILS.as_bytes(),
     );
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
+    write_cmake_file(
+        file_set,
+        "cuda/detect-cuda-capability.py",
+        DETECT_CUDA_CAPABILITY_PY.as_bytes(),
+    );
 }
 
 pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {

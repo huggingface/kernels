@@ -1,0 +1,18 @@
+# Files for rocm-kernels skill
+SKILL.md
+CHANGELOG.md
+references/mi355x-optimization-guide.md
+references/r9700-optimization-guide.md
+references/kernel-templates.md
+references/diffusers-integration.md
+references/transformers-integration.md
+references/huggingface-kernels-integration.md
+references/troubleshooting.md
+references/skill-evaluation-methodology.md
+references/kernelbench-classification.md
+references/kernel-agent-knowledge-base.md
+scripts/benchmark_kernels.py
+scripts/benchmark_e2e.py
+scripts/ltx_kernel_injection_example.py
+scripts/transformers_injection_example.py
+scripts/huggingface_kernels_example.py

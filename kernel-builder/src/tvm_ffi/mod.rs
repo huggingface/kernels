@@ -7,8 +7,8 @@ use minijinja::{context, Environment};
 
 use crate::compat::{prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata};
 use crate::config::{Backend, Build, General, TvmFfi};
+use crate::kernel::render_kernel_components;
 use crate::ops_identifier::{git_identifier, random_identifier};
-use crate::torch::kernel::render_kernel_components;
 use crate::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");

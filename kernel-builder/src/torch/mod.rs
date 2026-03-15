@@ -13,8 +13,7 @@ use crate::FileSet;
 mod deps;
 use deps::render_deps;
 
-pub mod kernel;
-use kernel::render_kernel_components;
+use crate::kernel::render_kernel_components;
 
 mod noarch;
 pub use noarch::write_torch_ext_noarch;

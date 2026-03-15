@@ -10,6 +10,8 @@ use minijinja::Environment;
 
 mod compat;
 
+mod kernel;
+
 mod torch;
 use torch::{write_torch_ext, write_torch_ext_noarch};
 

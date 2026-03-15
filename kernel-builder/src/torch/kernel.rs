@@ -58,7 +58,7 @@ fn render_kernel_component_cpu(
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
-    env.get_template("cpu/kernel.cmake")
+    env.get_template("torch/cpu/kernel.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_to_write(
             context! {
@@ -110,7 +110,7 @@ fn render_kernel_component_cuda(
         _ => unreachable!("Unsupported kernel type for CUDA rendering"),
     };
 
-    env.get_template("cuda/kernel.cmake")
+    env.get_template("torch/cuda/kernel.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_to_write(
             context! {
@@ -141,7 +141,7 @@ fn render_kernel_component_metal(
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
-    env.get_template("metal/kernel.cmake")
+    env.get_template("torch/metal/kernel.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_to_write(
             context! {
@@ -171,7 +171,7 @@ fn render_kernel_component_xpu(
         _ => unreachable!("Unsupported kernel type for XPU rendering"),
     };
 
-    env.get_template("xpu/kernel.cmake")
+    env.get_template("torch/xpu/kernel.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_to_write(
             context! {

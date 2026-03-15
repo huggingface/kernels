@@ -12,18 +12,18 @@ use crate::torch::deps::render_deps;
 use crate::torch::kernel::render_kernel_components;
 use crate::FileSet;
 
-static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/build-variants.cmake");
+static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/torch/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static COMPAT_PY: &str = include_str!("../templates/compat.py");
-static COMPILE_METAL_CMAKE: &str = include_str!("../templates/metal/compile-metal.cmake");
-static GET_GPU_LANG: &str = include_str!("../templates/get_gpu_lang.cmake");
-static GET_GPU_LANG_PY: &str = include_str!("../templates/get_gpu_lang.py");
-static ADD_GPU_ARCH_METADATA_PY: &str = include_str!("../templates/add_gpu_arch_metadata.py");
-static HIPIFY: &str = include_str!("../templates/cuda/hipify.py");
-static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/metal/metallib_to_header.py");
-static REGISTRATION_H: &str = include_str!("../templates/registration.h");
-static OPS_PY_IN: &str = include_str!("../templates/_ops.py.in");
+static COMPILE_METAL_CMAKE: &str = include_str!("../templates/torch/metal/compile-metal.cmake");
+static GET_GPU_LANG: &str = include_str!("../templates/torch/get_gpu_lang.cmake");
+static GET_GPU_LANG_PY: &str = include_str!("../templates/torch/get_gpu_lang.py");
+static ADD_GPU_ARCH_METADATA_PY: &str = include_str!("../templates/torch/add_gpu_arch_metadata.py");
+static HIPIFY: &str = include_str!("../templates/torch/cuda/hipify.py");
+static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/torch/metal/metallib_to_header.py");
+static REGISTRATION_H: &str = include_str!("../templates/torch/registration.h");
+static OPS_PY_IN: &str = include_str!("../templates/torch/_ops.py.in");
 
 pub fn write_setup_py(
     env: &Environment,
@@ -38,7 +38,7 @@ pub fn write_setup_py(
         .data_extensions()
         .map(|exts| exts.iter().map(|ext| format!("\"**/*.{ext}\"")).join(", "));
 
-    env.get_template("setup.py")
+    env.get_template("torch/setup.py")
         .wrap_err("Cannot get setup.py template")?
         .render_to_write(
             context! {
@@ -86,7 +86,7 @@ pub fn write_pyproject_toml(
         }
     }
 
-    env.get_template("pyproject.toml")
+    env.get_template("torch/pyproject.toml")
         .wrap_err("Cannot get pyproject.toml template")?
         .render_to_write(
             context! {
@@ -151,7 +151,7 @@ pub fn render_binding(
     name: &str,
     write: &mut impl Write,
 ) -> Result<()> {
-    env.get_template("torch-binding.cmake")
+    env.get_template("torch/torch-binding.cmake")
         .wrap_err("Cannot get Torch binding template")?
         .render_to_write(
             context! {
@@ -213,7 +213,7 @@ pub fn render_extension(
     torch: &Torch,
     write: &mut impl Write,
 ) -> Result<()> {
-    env.get_template("torch-extension.cmake")
+    env.get_template("torch/torch-extension.cmake")
         .wrap_err("Cannot get Torch extension template")?
         .render_to_write(
             context! {
@@ -239,7 +239,7 @@ pub fn render_preamble(
     let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
     let cuda_maxver = general.cuda.as_ref().and_then(|c| c.maxver.as_ref());
 
-    env.get_template("preamble.cmake")
+    env.get_template("torch/preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
         .render_to_write(
             context! {

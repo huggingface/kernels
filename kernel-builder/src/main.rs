@@ -57,7 +57,7 @@ enum Commands {
     },
 
     /// Clean generated artifacts.
-    Clean {
+    CleanPyproject {
         #[arg(name = "BUILD_TOML")]
         build_toml: PathBuf,
 
@@ -94,13 +94,13 @@ fn main() -> Result<()> {
             parse_and_validate(build_toml)?;
             Ok(())
         }
-        Commands::Clean {
+        Commands::CleanPyproject {
             build_toml,
             target_dir,
             dry_run,
             force,
             ops_id,
-        } => generate_and_clean(build_toml, target_dir, dry_run, force, ops_id),
+        } => clean_pyproject(build_toml, target_dir, dry_run, force, ops_id),
     }
 }
 
@@ -199,7 +199,7 @@ fn parse_and_validate(build_toml: impl AsRef<Path>) -> Result<BuildCompat> {
     Ok(build_compat)
 }
 
-fn generate_and_clean(
+fn clean_pyproject(
     build_toml: PathBuf,
     target_dir: Option<PathBuf>,
     dry_run: bool,

@@ -5,15 +5,17 @@ use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use minijinja::context;
 
-use crate::compat::{prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata};
 use crate::config::{Backend, Build, General, Torch};
-use crate::ops_identifier::{git_identifier, random_identifier};
-use crate::FileSet;
+use crate::pyproject::compat::{
+    prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
+};
+use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
+use crate::pyproject::FileSet;
 
 mod deps;
 use deps::render_deps;
 
-use crate::kernel::render_kernel_components;
+use crate::pyproject::kernel::render_kernel_components;
 
 mod noarch;
 pub use noarch::write_torch_ext_noarch;

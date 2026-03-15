@@ -4,8 +4,8 @@ use eyre::Result;
 use itertools::Itertools;
 
 use crate::config::{Backend, General};
-use crate::metadata::Metadata;
-use crate::FileSet;
+use crate::pyproject::metadata::Metadata;
+use crate::pyproject::FileSet;
 
 static COMPAT_PY: &str = include_str!("templates/compat.py");
 

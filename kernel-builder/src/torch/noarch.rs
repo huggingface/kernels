@@ -5,10 +5,10 @@ use itertools::Itertools;
 use minijinja::{context, Environment};
 
 use crate::{
+    compat::{write_compat_py, write_metadata},
     config::{Backend, Build, General, Torch},
     fileset::FileSet,
     ops_identifier::kernel_ops_identifier,
-    torch::common::{write_compat_py, write_metadata},
 };
 
 static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");

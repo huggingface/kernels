@@ -8,6 +8,8 @@ use clap::{Parser, Subcommand};
 use eyre::{bail, ensure, Context, Result};
 use minijinja::Environment;
 
+mod compat;
+
 mod torch;
 use torch::{write_torch_ext, write_torch_ext_noarch};
 

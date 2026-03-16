@@ -1,20 +1,21 @@
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, General, TvmFfi};
-use crate::ops_identifier::{git_identifier, random_identifier};
-use crate::torch::common::{prefix_and_join_includes, write_cmake_file, write_metadata};
-use crate::torch::kernel::render_kernel_components;
-use crate::FileSet;
+use crate::pyproject::compat::{
+    prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
+};
+use crate::pyproject::kernel::render_kernel_components;
+use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
+use crate::pyproject::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
-static COMPAT_PY: &str = include_str!("../templates/compat.py");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 
 fn write_cmake_helpers(file_set: &mut FileSet) {
@@ -26,14 +27,6 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
         BUILD_VARIANTS_UTILS.as_bytes(),
     );
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
-}
-
-pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("compat.py");
-    file_set.entry(path).extend_from_slice(COMPAT_PY.as_bytes());
-
-    Ok(())
 }
 
 pub fn write_tvm_ffi_ext(

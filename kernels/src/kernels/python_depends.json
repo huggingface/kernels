@@ -3,6 +3,10 @@
     "einops": {
       "nix": ["einops"],
       "python": ["einops"]
+    },
+    "tvm-ffi": {
+      "nix": ["tvm-ffi"],
+      "python": ["apache-tvm-ffi"]
     }
   },
   "backends": {

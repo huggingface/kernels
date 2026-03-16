@@ -6,23 +6,12 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use eyre::{bail, ensure, Context, Result};
-use minijinja::Environment;
 
-mod torch;
-use torch::{write_torch_ext, write_torch_ext_noarch};
-
-mod ops_identifier;
-
-mod tvm_ffi;
-use tvm_ffi::write_tvm_ffi_ext;
+mod pyproject;
+use pyproject::create_pyproject_file_set;
 
 mod config;
 use config::{v3, Build, BuildCompat};
-
-mod fileset;
-use fileset::FileSet;
-
-mod metadata;
 
 mod version;
 
@@ -68,7 +57,7 @@ enum Commands {
     },
 
     /// Clean generated artifacts.
-    Clean {
+    CleanPyproject {
         #[arg(name = "BUILD_TOML")]
         build_toml: PathBuf,
 
@@ -99,30 +88,47 @@ fn main() -> Result<()> {
             force,
             target_dir,
             ops_id,
-        } => generate_and_write(build_toml, target_dir, force, ops_id),
+        } => create_pyproject(build_toml, target_dir, force, ops_id),
         Commands::UpdateBuild { build_toml } => update_build(build_toml),
         Commands::Validate { build_toml } => {
             parse_and_validate(build_toml)?;
             Ok(())
         }
-        Commands::Clean {
+        Commands::CleanPyproject {
             build_toml,
             target_dir,
             dry_run,
             force,
             ops_id,
-        } => generate_and_clean(build_toml, target_dir, dry_run, force, ops_id),
+        } => clean_pyproject(build_toml, target_dir, dry_run, force, ops_id),
     }
 }
 
-fn generate_and_write(
+fn parse_build(build_toml: impl AsRef<Path>) -> Result<Build> {
+    let build_compat = parse_and_validate(build_toml)?;
+
+    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
+        eprintln!(
+            "build.toml is in the deprecated V1 or V2 format, use `kernel-builder update-build` to update."
+        )
+    }
+
+    let build: Build = build_compat
+        .try_into()
+        .context("Cannot update build configuration")?;
+
+    Ok(build)
+}
+
+fn create_pyproject(
     build_toml: PathBuf,
     target_dir: Option<PathBuf>,
     force: bool,
     ops_id: Option<String>,
 ) -> Result<()> {
     let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
-    let file_set = generate_file_set(build_toml, &target_dir, ops_id)?;
+    let build = parse_build(&build_toml)?;
+    let file_set = create_pyproject_file_set(build, &target_dir, ops_id)?;
     file_set.write(&target_dir, force)?;
 
     Ok(())
@@ -193,7 +199,7 @@ fn parse_and_validate(build_toml: impl AsRef<Path>) -> Result<BuildCompat> {
     Ok(build_compat)
 }
 
-fn generate_and_clean(
+fn clean_pyproject(
     build_toml: PathBuf,
     target_dir: Option<PathBuf>,
     dry_run: bool,
@@ -202,7 +208,9 @@ fn generate_and_clean(
 ) -> Result<()> {
     let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
 
-    let generated_files = generate_file_set(build_toml, target_dir.clone(), ops_id)?.into_names();
+    let build = parse_build(&build_toml)?;
+    let generated_files =
+        create_pyproject_file_set(build, target_dir.clone(), ops_id)?.into_names();
 
     if generated_files.is_empty() {
         eprintln!("No generated artifacts found to clean.");
@@ -284,38 +292,6 @@ fn generate_and_clean(
 
     println!("Cleaned {deleted_count} generated artifacts.");
     Ok(())
-}
-
-fn generate_file_set(
-    build_toml: PathBuf,
-    target_dir: impl AsRef<Path>,
-    ops_id: Option<String>,
-) -> Result<FileSet> {
-    let build_compat = parse_and_validate(build_toml)?;
-
-    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
-        eprintln!(
-            "build.toml is in the deprecated V1 or V2 format, use `kernel-builder update-build` to update."
-        )
-    }
-
-    let build: Build = build_compat
-        .try_into()
-        .context("Cannot update build configuration")?;
-
-    let mut env = Environment::new();
-    env.set_trim_blocks(true);
-    minijinja_embed::load_templates!(&mut env);
-
-    let file_set = if matches!(build.framework, crate::config::Framework::TvmFfi(_)) {
-        write_tvm_ffi_ext(&env, &build, target_dir, ops_id)?
-    } else if build.is_noarch() {
-        write_torch_ext_noarch(&env, &build, target_dir, ops_id)?
-    } else {
-        write_torch_ext(&env, &build, target_dir, ops_id)?
-    };
-
-    Ok(file_set)
 }
 
 fn is_empty_dir(dir: &Path) -> Result<bool> {

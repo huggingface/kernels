@@ -2,11 +2,13 @@
   "general": {
     "einops": {
       "nix": ["einops"],
-      "python": ["einops"]
+      "python_pkgs": ["einops"],
+      "python_imports": ["einops"]
     },
     "tvm-ffi": {
       "nix": ["tvm-ffi"],
-      "python": ["apache-tvm-ffi"]
+      "python_pkgs": ["apache-tvm-ffi"],
+      "python_imports": ["tvm_ffi"]
     }
   },
   "backends": {
@@ -14,21 +16,24 @@
     "cuda": {
       "nvidia-cutlass-dsl": {
         "nix": ["nvidia-cutlass-dsl"],
-        "python": ["nvidia-cutlass-dsl"]
+        "python_pkgs": ["nvidia-cutlass-dsl"],
+        "python_imports": ["cutlass"]
       }
     },
     "metal": {},
     "neuron": {
       "nki": {
         "nix": [],
-        "python": ["nki"]
+        "python_pkgs": ["nki"],
+        "python_imports": ["nki"]
       }
     },
     "rocm": {},
     "xpu": {
       "onednn": {
         "nix": [],
-        "python": ["onednn-devel"]
+        "python_pkgs": ["onednn-devel"],
+        "python_imports": []
       }
     }
   }

@@ -75,7 +75,8 @@ impl PythonDependencies {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PythonDependency {
     pub nix: Vec<String>,
-    pub python: Vec<String>,
+    pub python_pkgs: Vec<String>,
+    pub python_imports: Vec<String>,
 }
 
 #[derive(Debug, Error)]

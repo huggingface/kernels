@@ -4,7 +4,7 @@ use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 mod deps;
-pub use deps::Dependency;
+pub use deps::{Dependency, PythonDependency};
 
 mod compat;
 pub use compat::BuildCompat;
@@ -71,7 +71,9 @@ pub struct General {
 }
 
 impl General {
-    pub fn python_depends(&self) -> Box<dyn Iterator<Item = Result<String>> + '_> {
+    pub fn python_depends(
+        &self,
+    ) -> Box<dyn Iterator<Item = Result<(&str, &PythonDependency)>> + '_> {
         let general_python_deps = match self.python_depends.as_ref() {
             Some(deps) => deps,
             None => {
@@ -79,10 +81,10 @@ impl General {
             }
         };
 
-        Box::new(general_python_deps.iter().flat_map(move |dep| {
+        Box::new(general_python_deps.iter().map(move |dep| {
             match deps::PYTHON_DEPENDENCIES.get_dependency(dep) {
-                Ok(deps) => deps.iter().map(|s| Ok(s.clone())).collect::<Vec<_>>(),
-                Err(e) => vec![Err(e.into())],
+                Ok(resolved_deps) => Ok((dep.as_str(), resolved_deps)),
+                Err(e) => Err(e.into()),
             }
         }))
     }
@@ -90,7 +92,7 @@ impl General {
     pub fn backend_python_depends(
         &self,
         backend: Backend,
-    ) -> Box<dyn Iterator<Item = Result<String>> + '_> {
+    ) -> Box<dyn Iterator<Item = Result<(&str, &PythonDependency)>> + '_> {
         let backend_python_deps = match backend {
             Backend::Cuda => self
                 .cuda
@@ -110,10 +112,10 @@ impl General {
             }
         };
 
-        Box::new(backend_python_deps.iter().flat_map(move |dep| {
+        Box::new(backend_python_deps.iter().map(move |dep| {
             match deps::PYTHON_DEPENDENCIES.get_backend_dependency(backend, dep) {
-                Ok(deps) => deps.iter().map(|s| Ok(s.clone())).collect::<Vec<_>>(),
-                Err(e) => vec![Err(e.into())],
+                Ok(resolved_deps) => Ok((dep.as_str(), resolved_deps)),
+                Err(e) => Err(e.into()),
             }
         }))
     }

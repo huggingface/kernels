@@ -23,7 +23,12 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
 
         let python_depends = general
             .python_depends()
-            .chain(general.backend_python_depends(*backend))
+            .map(|deps| Ok(deps?.0.to_owned()))
+            .chain(
+                general
+                    .backend_python_depends(*backend)
+                    .map(|deps| Ok(deps?.0.to_owned())),
+            )
             .collect::<Result<Vec<_>>>()?;
 
         let metadata = Metadata {

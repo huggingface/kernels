@@ -40,12 +40,12 @@ pub struct PythonDependencies {
 }
 
 impl PythonDependencies {
-    pub fn get_dependency(&self, dependency: &str) -> Result<&[String], DependencyError> {
+    pub fn get_dependency(&self, dependency: &str) -> Result<&PythonDependency, DependencyError> {
         match self.general.get(dependency) {
             None => Err(DependencyError::GeneralDependency {
                 dependency: dependency.to_string(),
             }),
-            Some(dep) => Ok(&dep.python),
+            Some(dep) => Ok(dep),
         }
     }
 
@@ -53,7 +53,7 @@ impl PythonDependencies {
         &self,
         backend: Backend,
         dependency: &str,
-    ) -> Result<&[String], DependencyError> {
+    ) -> Result<&PythonDependency, DependencyError> {
         let backend_deps = match self.backends.get(&backend) {
             None => {
                 return Err(DependencyError::Backend {
@@ -67,15 +67,15 @@ impl PythonDependencies {
                 backend: backend.to_string(),
                 dependency: dependency.to_string(),
             }),
-            Some(dep) => Ok(&dep.python),
+            Some(dep) => Ok(dep),
         }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct PythonDependency {
-    nix: Vec<String>,
-    python: Vec<String>,
+pub struct PythonDependency {
+    pub nix: Vec<String>,
+    pub python: Vec<String>,
 }
 
 #[derive(Debug, Error)]

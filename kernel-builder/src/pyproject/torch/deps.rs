@@ -16,7 +16,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
     for dep in deps {
         match dep {
             Dependency::Cutlass2_10 => {
-                env.get_template("cuda/dep-cutlass.cmake")
+                env.get_template("torch/cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_to_write(
                         context! {
@@ -27,7 +27,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::Cutlass3_5 => {
-                env.get_template("cuda/dep-cutlass.cmake")
+                env.get_template("torch/cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_to_write(
                         context! {
@@ -38,7 +38,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::Cutlass3_6 => {
-                env.get_template("cuda/dep-cutlass.cmake")
+                env.get_template("torch/cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_to_write(
                         context! {
@@ -49,7 +49,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::Cutlass3_8 => {
-                env.get_template("cuda/dep-cutlass.cmake")
+                env.get_template("torch/cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_to_write(
                         context! {
@@ -60,7 +60,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::Cutlass3_9 => {
-                env.get_template("cuda/dep-cutlass.cmake")
+                env.get_template("torch/cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_to_write(
                         context! {
@@ -71,7 +71,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::Cutlass4_0 => {
-                env.get_template("cuda/dep-cutlass.cmake")
+                env.get_template("torch/cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_to_write(
                         context! {
@@ -82,7 +82,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::SyclTla => {
-                env.get_template("xpu/dep-sycl-tla.cmake")?
+                env.get_template("torch/xpu/dep-sycl-tla.cmake")?
                     .render_to_write(context! {}, &mut *write)?;
             }
             Dependency::MetalCpp => {

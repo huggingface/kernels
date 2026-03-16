@@ -6,12 +6,14 @@ use minijinja::{context, Environment};
 
 use crate::{
     config::{Backend, Build, General, Torch},
-    fileset::FileSet,
-    ops_identifier::kernel_ops_identifier,
-    torch::common::{write_compat_py, write_metadata},
+    pyproject::{
+        compat::{write_compat_py, write_metadata},
+        fileset::FileSet,
+        ops_identifier::kernel_ops_identifier,
+    },
 };
 
-static SETUP_PY: &str = include_str!("../templates/noarch/setup.py");
+static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");
 
 pub fn write_torch_ext_noarch(
     env: &Environment,
@@ -49,7 +51,7 @@ fn write_ops_py(
     path.push("_ops.py");
     let writer = file_set.entry(path);
 
-    env.get_template("noarch/_ops.py")
+    env.get_template("torch/noarch/_ops.py")
         .wrap_err("Cannot get noarch _ops.py template")?
         .render_to_write(
             context! {
@@ -94,7 +96,7 @@ fn write_pyproject_toml(
         }
     }
 
-    env.get_template("noarch/pyproject.toml")
+    env.get_template("torch/noarch/pyproject.toml")
         .wrap_err("Cannot get noarch pyproject.toml template")?
         .render_to_write(
             context! {

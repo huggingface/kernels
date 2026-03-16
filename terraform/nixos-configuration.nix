@@ -103,7 +103,7 @@
   systemd.tmpfiles.rules = [
     "d /data/nix-store  0755 root root -"
     "d /data/workspace  0755 nixos nixos -"
-    "f /var/lib/systemd/linger/root 0644 root root -" 
+    "f /var/lib/systemd/linger/root 0644 root root -"
   ];
 
   # -------------------------------------------------------------------------

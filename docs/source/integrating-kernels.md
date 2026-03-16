@@ -7,6 +7,11 @@ This page shows how different projects use `kernels`.
 [karpathy/autoresearch](https://github.com/karpathy/autoresearch) [uses](https://github.com/karpathy/autoresearch/blob/c2450add72cc80317be1fe8111974b892da10944/train.py#L23) `kernels` to
 integrate Flash-Attention 3 through the `get_kernes()` method.
 
+## AReaL
+
+[inclusionAI/AReaL](https://github.com/inclusionAI/AReaL) uses `kernels` in an opt-in manner to integrate
+optimized attention mechanisms.
+
 ## transformers
 
 [huggingface/transformers](https://github.com/huggingface/transformers/) primarily

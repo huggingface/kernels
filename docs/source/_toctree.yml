@@ -1,12 +1,14 @@
 - sections:
     - local: index
       title: Introduction
+    - local: why_kernels
+      title: Why kernels?
     - local: installation
       title: Installation
   title: Getting started
 - sections:
     - local: basic-usage
-      title: Basic Usage
+      title: Quickstart
     - local: layers
       title: Using Layers
     - local: locking
@@ -65,6 +67,4 @@
       title: kernels download
     - local: cli-skills
       title: kernels skills
-    - local: cli-create-and-upload-card
-      title: kernels create-and-upload-card
   title: CLI Reference

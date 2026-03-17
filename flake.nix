@@ -28,14 +28,14 @@
     }:
     let
       inherit
-        (import ./builder/lib/build-sets.nix {
+        (import ./nix-builder/lib/build-sets.nix {
           inherit nixpkgs rust-overlay;
         })
         mkBuildSets
         partitionBuildSetsBySystem
         partitionBuildSetsBySystemBackend
         ;
-      inherit (import ./builder/lib/cache.nix) mkForCache;
+      inherit (import ./nix-builder/lib/cache.nix) mkForCache;
 
       systems = with flake-utils.lib.system; [
         aarch64-darwin
@@ -43,7 +43,7 @@
         x86_64-linux
       ];
 
-      torchVersions' = import ./builder/versions.nix;
+      torchVersions' = import ./nix-builder/versions.nix;
 
       defaultBuildSets = mkBuildSets torchVersions' systems;
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
@@ -53,7 +53,7 @@
         builtins.listToAttrs (
           builtins.map (system: {
             name = system;
-            value = nixpkgs.legacyPackages.${system}.callPackage builder/lib/build.nix { };
+            value = nixpkgs.legacyPackages.${system}.callPackage ./nix-builder/lib/build.nix { };
           }) systems
         );
       buildPerSystem = mkBuildPerSystem systems;
@@ -67,7 +67,7 @@
         allBuildVariantsJSON =
           let
             buildVariants =
-              (import ./builder/lib/build-variants.nix {
+              (import ./nix-builder/lib/build-variants.nix {
                 inherit (nixpkgs) lib;
               }).buildVariants
                 torchVersions';
@@ -103,7 +103,7 @@
           in
           flake-utils.lib.eachSystem systems (
             system:
-            nixpkgs.legacyPackages.${system}.callPackage ./builder/lib/gen-flake-outputs.nix {
+            nixpkgs.legacyPackages.${system}.callPackage ./nix-builder/lib/gen-flake-outputs.nix {
               inherit
                 system
                 path
@@ -145,7 +145,7 @@
           in
           mkShell {
             nativeBuildInputs = [
-              build2cmake
+              kernel-builder
               kernel-abi-check
               nodejs # For hf-doc-builder.
               pkg-config
@@ -193,7 +193,7 @@
         ) buildSetsByBackend;
       in
       rec {
-        checks.default = pkgs.callPackage ./builder/lib/checks.nix {
+        checks.default = pkgs.callPackage ./nix-builder/lib/checks.nix {
           inherit buildSets;
           build = buildPerSystem.${system};
         };
@@ -205,11 +205,11 @@
         formatter = pkgs.nixfmt-tree;
 
         packages = rec {
-          inherit (buildSet.pkgs) build2cmake kernel-abi-check;
+          inherit (buildSet.pkgs) kernel-builder kernel-abi-check;
           inherit (buildSet.pkgs.python3.pkgs) kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
-            ${build2cmake}/bin/build2cmake update-build ''${1:-build.toml}
+            ${kernel-builder}/bin/kernel-builder update-build ''${1:-build.toml}
           '';
 
           forCache = mkForCache pkgs (

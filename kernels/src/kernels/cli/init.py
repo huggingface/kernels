@@ -12,7 +12,10 @@ import tomlkit
 from huggingface_hub import snapshot_download
 from huggingface_hub.utils import disable_progress_bars
 
+from kernels.cli.kernel_card_utils import KERNEL_CARD_TEMPLATE_PATH
 from kernels.utils import KNOWN_BACKENDS
+
+SYSTEM_CARD_FILENAME = "CARD.md"
 
 KERNEL_NAME_PATTERN = re.compile(r"^[a-z][-a-z0-9]*[a-z0-9]$")
 
@@ -98,6 +101,9 @@ def run_init(args: Namespace) -> None:
 
         _remove_backend_dirs(target_dir, backends)
 
+    # Generate the card template
+    _initialize_card(target_dir)
+
     # Initialize git repo (required for Nix flakes)
     subprocess.run(["git", "init"], cwd=target_dir, check=True, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=target_dir, check=True, capture_output=True)
@@ -109,6 +115,11 @@ def run_init(args: Namespace) -> None:
     print("cachix use huggingface")
     print("nix run -L --max-jobs 1 --cores 8 .#build-and-copy")
     print("uv run example.py")
+
+
+def _initialize_card(target_dir: Path) -> None:
+    card_path = target_dir / SYSTEM_CARD_FILENAME
+    shutil.copy(KERNEL_CARD_TEMPLATE_PATH, card_path)
 
 
 def _init_from_local_template(

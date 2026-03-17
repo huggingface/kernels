@@ -27,6 +27,7 @@ available. This list will be updated as new PyTorch versions are released.
 - `torch210-cxx11-cu130-aarch64-linux`
 - `torch29-cxx11-cu126-aarch64-linux`
 - `torch29-cxx11-cu128-aarch64-linux`
+- `torch29-cxx11-cu129-aarch64-linux`
 - `torch29-cxx11-cu130-aarch64-linux`
 
 ## CPU x86_64-linux
@@ -41,6 +42,7 @@ available. This list will be updated as new PyTorch versions are released.
 - `torch210-cxx11-cu130-x86_64-linux`
 - `torch29-cxx11-cu126-x86_64-linux`
 - `torch29-cxx11-cu128-x86_64-linux`
+- `torch29-cxx11-cu129-x86_64-linux`
 - `torch29-cxx11-cu130-x86_64-linux`
 
 ## ROCm x86_64-linux

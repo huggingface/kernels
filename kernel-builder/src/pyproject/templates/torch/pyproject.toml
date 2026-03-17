@@ -1,0 +1,28 @@
+[project]
+name = "{{ python_name }}"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[build-system]
+requires = [
+  "cmake>=3.26",
+  "ninja",
+  "packaging",
+  "setuptools>=61",
+  "torch",
+  "wheel",
+  {{python_dependencies}}
+]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+{% for backend_name, deps in backend_dependencies %}
+{{backend_name}} = [
+  {{ deps }}
+]
+{% endfor %}
+
+[tool.pytest.ini_options]
+markers = [
+  "kernels_ci: mark a test as a kernel CI test"
+]

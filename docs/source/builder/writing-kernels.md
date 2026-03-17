@@ -30,9 +30,9 @@ of CMake or setuptools.
 
 This page describes the directory layout of a kernel-builder project, the
 format of the `build.toml` file, and some additional Python glue that
-`kernel-builder` provides. We will use a [simple ReLU kernel](https://github.com/huggingface/kernels/tree/main/builder/examples/relu)
+`kernel-builder` provides. We will use a [simple ReLU kernel](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu)
 as the running example. After reading this page, you may also want to have
-a look at the more realistic [ReLU kernel with backprop and `torch.compile`](https://github.com/huggingface/kernels/tree/main/builder/examples/relu-backprop-compile)
+a look at the more realistic [ReLU kernel with backprop and `torch.compile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-backprop-compile)
 support.
 
 ## Setting up environment
@@ -330,3 +330,18 @@ $ nix run .#ciTests.torch210-cxx11-cpu-x86_64-linux
 
 When running the tests on a non-NixOS systems, make sure that
 [the CUDA driver library can be found](https://danieldk.eu/Software/Nix/Nix-CUDA-on-non-NixOS-systems#solutions).
+
+## Kernel docs
+
+We provide a utility to generate a system card for a given kernel, utilizing
+information from its `build.toml` and metadata. This system card provides a
+reasonable starting point and is meant to be edited afterward by the kernel
+developer.
+
+The template card is generated as a part of [`kernels init`](../cli-init.md)
+command and is serialized in the root directory of the kernel.
+
+The card will be filled automatically by the builder when using the
+`build-and-upload` or `build-and-copy` command. It will be serialized
+to the `build` sub-directory inside the main kernel directory. It
+will be uploaded as `README.md` to the Hub.

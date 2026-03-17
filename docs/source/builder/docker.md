@@ -58,7 +58,7 @@ The kernel builder includes a command-line interface for easier interaction. The
 # Build the example relu kernel from the root of the repository
 docker run --rm \
   -v $(pwd):/kernel-builder \
-  -w /kernel-builder/examples/relu \
+  -w /kernel-builder/examples/kernels/relu \
   ghcr.io/huggingface/kernel-builder:main \
   build
 

@@ -3,7 +3,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from kernels.cli.init import parse_kernel_name, run_init
+from kernels.cli.init import SYSTEM_CARD_FILENAME, parse_kernel_name, run_init
 from kernels.utils import KNOWN_BACKENDS
 
 
@@ -56,6 +56,11 @@ def e2e_init(backends: list[str]) -> None:
                     raise AssertionError(
                         f"Expected backend directory was not created: {expected_backend_dir}"
                     )
+
+            # check that CARD.md was created
+            card_path = target_dir / SYSTEM_CARD_FILENAME
+            if not card_path.exists():
+                raise AssertionError(f"Card template was not created: {card_path}")
 
         finally:
             os.chdir(cwd)

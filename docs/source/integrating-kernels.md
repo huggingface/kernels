@@ -31,3 +31,10 @@ Refer to the following posts to know more:
 
 Similar to `transformers`, [huggingface/diffusers](https://github.com/huggingface/diffusers/) uses
 `kernels` for integrating optimized kernels to [compute attention](https://github.com/huggingface/diffusers/blob/e5aa719241f9b74d6700be3320a777799bfab70a/src/diffusers/models/attention_dispatch.py).
+
+Besides leveraging pre-built compute kernels, different projects
+rely on `kernels` to also package, build, and distribute their
+kernels on the Hugging Face Hub platform. This is made possible by the
+["builder" component of `kernels`](./builder/writing-kernels.md).
+Visit [this page](https://huggingface.co/models?other=kernels) to find out
+different pre-built compute kernels available on the Hub.

@@ -6,7 +6,7 @@ use itertools::Itertools;
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, General, TvmFfi};
-use crate::pyproject::compat::{
+use crate::pyproject::common::{
     prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
 };
 use crate::pyproject::kernel::render_kernel_components;

@@ -6,7 +6,7 @@ use itertools::Itertools;
 use minijinja::context;
 
 use crate::config::{Backend, Build, General, Torch};
-use crate::pyproject::compat::{
+use crate::pyproject::common::{
     prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
 };
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};

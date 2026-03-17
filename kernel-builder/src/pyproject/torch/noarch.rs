@@ -7,7 +7,7 @@ use minijinja::{context, Environment};
 use crate::{
     config::{Backend, Build, General, Torch},
     pyproject::{
-        compat::{write_compat_py, write_metadata},
+        common::{write_compat_py, write_metadata},
         fileset::FileSet,
         ops_identifier::kernel_ops_identifier,
     },

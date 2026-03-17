@@ -11,7 +11,7 @@ def test_python_deps(dependency):
     if must_raise:
         with pytest.raises(
             ImportError,
-            match=r"Kernel requires Python dependency `(einops|nvidia-cutlass-dsl)`",
+            match=r"Kernel module `python_dep` requires Python dependency `(einops|nvidia-cutlass-dsl)`",
         ):
             get_kernel("kernels-test/python-dep")
     else:
@@ -19,5 +19,7 @@ def test_python_deps(dependency):
 
 
 def test_illegal_dep():
-    with pytest.raises(ValueError, match=r"Invalid dependency: kepler-22b"):
+    with pytest.raises(
+        ValueError, match=r"Kernel module `python_invalid_dep` uses.*kepler-22b"
+    ):
         get_kernel("kernels-test/python-invalid-dep")

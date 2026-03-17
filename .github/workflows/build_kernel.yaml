@@ -97,33 +97,3 @@ jobs:
             relu-kernel-cpu
             relu-backprop-compile-kernel
             silu-and-mul-kernel
-
-  test:
-    name: Test kernels
-    needs: build
-    runs-on:
-      group: aws-g6-12xlarge-plus
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Download kernel artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: built-kernels-x86_64-linux
-          path: .
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: nix-builder/tests/Dockerfile.test-kernel
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: kernel-builder:latest
-
-      - name: Run Tests
-        run: |
-          docker run --gpus all kernel-builder:latest

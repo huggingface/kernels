@@ -42,17 +42,6 @@ nix run .#build-and-copy \
 Where `--max-jobs` specifies the number of build variant that should be built concurrently and `--cores` the number of CPU cores that should be used per build variant.
 
 The compiled kernel will then be available in the local `build/` directory.
-We also provide Docker containers for CI builds. For a quick build:
-
-```bash
-# Using the prebuilt container
-cd examples/relu
-docker run --rm \
-  --mount type=bind,source=$(pwd),target=/kernelcode \
-  -w /kernelcode ghcr.io/huggingface/kernel-builder:main build
-```
-
-See [dockerfiles/README.md](./dockerfiles/README.md) for more options, including a user-level container for CI/CD environments.
 
 ## 🎯 Hardware Support
 
@@ -73,7 +62,6 @@ See [dockerfiles/README.md](./dockerfiles/README.md) for more options, including
 - [Building kernels with Nix](../docs/source/builder/nix.md)
 - Framework-specific notes:
   - [Metal](../docs/source/builder/metal.md)
-- [Building kernels with Docker](../docs/source/builder/docker.md) (for systems without Nix)
 - [Local kernel development](../docs/source/builder/local-dev.md) (IDE integration)
 - [Kernel security](../docs/source/builder/security.md)
 - [Why Nix?](../docs/source/builder/why-nix.md)

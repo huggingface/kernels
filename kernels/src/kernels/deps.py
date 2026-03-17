@@ -28,9 +28,9 @@ def validate_dependencies(dependencies: list[str], backend: Backend):
     for dependency in dependencies:
         # Look up dependency in general dependencies first, then backend-specific
         if dependency in general_deps:
-            python_packages = general_deps[dependency].get("python", [])
+            python_packages = general_deps[dependency].get("python_imports", [])
         elif dependency in backend_deps:
-            python_packages = backend_deps[dependency].get("python", [])
+            python_packages = backend_deps[dependency].get("python_imports", [])
         else:
             # Dependency not found in general or backend-specific dependencies
             raise ValueError(f"Invalid dependency: {dependency}")

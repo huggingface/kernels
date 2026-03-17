@@ -41,6 +41,20 @@ option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 if(GPU_LANG STREQUAL "CUDA")
   enable_language(CUDA)
 
+  {% if cuda_minver %}
+  if (CMAKE_CUDA_COMPILER_VERSION VERSION_LESS {{ cuda_minver }})
+    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too old. "
+      "Minimum required version is {{ cuda_minver }}.")
+  endif()
+  {% endif %}
+
+  {% if cuda_maxver %}
+  if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER {{ cuda_maxver }})
+    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too new. "
+      "Maximum version is {{ cuda_maxver }}.")
+  endif()
+  {% endif %}
+
   if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
       CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
     set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0+PTX")
@@ -57,7 +71,7 @@ if(GPU_LANG STREQUAL "CUDA")
   # Get the capabilities without +PTX suffixes, so that we can use them as
   # the target archs in the loose intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
-  message(STATUS "CUDA supported base architectures: ${CUDA_ARCHS}")
+  message(STATUS "CUDA base archs used for intersection with kernel archs: ${CUDA_ARCHS}")
 
   if(BUILD_ALL_SUPPORTED_ARCHS)
       set(CUDA_KERNEL_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
@@ -70,19 +84,12 @@ if(GPU_LANG STREQUAL "CUDA")
       set(CUDA_KERNEL_ARCHS "${DETECTED_CUDA_CAPABILITY}")
   endif()
 
-  {% if cuda_minver %}
-  if (CMAKE_CUDA_COMPILER_VERSION VERSION_LESS {{ cuda_minver }})
-    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too old. "
-      "Minimum required version is {{ cuda_minver }}.")
-  endif()
-  {% endif %}
+  message(STATUS "Default CUDA kernel architectures: ${CUDA_KERNEL_ARCHS}")
 
-  {% if cuda_maxver %}
-  if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER {{ cuda_maxver }})
-    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too new. "
-      "Maximum version is {{ cuda_maxver }}.")
+  if(NVCC_THREADS AND GPU_LANG STREQUAL "CUDA")
+    message(STATUS "Using nvcc with: -threads=${NVCC_THREADS}")
+    list(APPEND GPU_FLAGS "--threads=${NVCC_THREADS}")
   endif()
-  {% endif %}
 
   add_compile_definitions(CUDA_KERNEL)
 elseif(GPU_LANG STREQUAL "CPU")

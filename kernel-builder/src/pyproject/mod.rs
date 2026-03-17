@@ -3,7 +3,7 @@ use std::path::Path;
 use eyre::Result;
 use minijinja::Environment;
 
-mod compat;
+mod common;
 pub mod fileset;
 mod kernel;
 mod metadata;

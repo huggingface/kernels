@@ -112,7 +112,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   # Generate build files.
   postPatch = ''
-    kernel-builder generate \
+    kernel-builder create-pyproject \
       --ops-id ${rev} build.toml
   '';
 

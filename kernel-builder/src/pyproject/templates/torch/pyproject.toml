@@ -9,7 +9,7 @@ requires = [
   "ninja",
   "packaging",
   "setuptools>=61",
-  "tvm-ffi",
+  "torch",
   "wheel",
   {{python_dependencies}}
 ]
@@ -18,8 +18,11 @@ build-backend = "setuptools.build_meta"
 [project.optional-dependencies]
 {% for backend_name, deps in backend_dependencies %}
 {{backend_name}} = [
-  {% for dep in deps %}
-  {{dep}},
-  {% endfor %}
+  {{ deps }}
 ]
 {% endfor %}
+
+[tool.pytest.ini_options]
+markers = [
+  "kernels_ci: mark a test as a kernel CI test"
+]

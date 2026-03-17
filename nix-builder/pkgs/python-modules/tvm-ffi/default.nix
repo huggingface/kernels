@@ -12,7 +12,7 @@
 }:
 
 buildPythonPackage rec {
-  pname = "tvm-ffi";
+  pname = "apache-tvm-ffi";
   version = "0.1.9";
   pyproject = true;
 

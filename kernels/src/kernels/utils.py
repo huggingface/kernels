@@ -73,7 +73,7 @@ CACHE_DIR: str | None = _get_cache_dir()
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
     metadata = Metadata.load_from_variant(variant_path)
-    validate_dependencies(metadata.python_depends, _backend())
+    validate_dependencies(module_name, metadata.python_depends, _backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():

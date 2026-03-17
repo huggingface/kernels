@@ -5,13 +5,13 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from huggingface_hub import CommitOperationAdd, CommitOperationDelete
 
 from kernels.cli import upload_kernels
-from kernels.cli.upload import BUILD_COMMIT_BATCH_SIZE
+from kernels.cli.upload import BUILD_COMMIT_BATCH_SIZE, upload_kernels_dir
 from kernels.utils import _get_hf_api
 
 REPO_ID = "valid_org/kernels-upload-test"
@@ -172,6 +172,36 @@ def test_kernel_upload_deletes_as_expected():
         str(filename_to_change) in k for k in repo_filenames
     ), f"{repo_filenames=}"
     _get_hf_api().delete_repo(repo_id=REPO_ID)
+
+
+def test_upload_includes_card_as_readme():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        kernel_dir = Path(tmpdir).resolve()
+
+        variant_dir = kernel_dir / "torch-cuda"
+        variant_dir.mkdir(parents=True)
+        (variant_dir / "metadata.json").write_text(
+            '{"version": 1, "python-depends": []}'
+        )
+
+        build_dir = kernel_dir / "build"
+        build_dir.mkdir()
+        card_path = build_dir / "CARD.md"
+        card_path.write_text("# Test Kernel\n")
+
+        mock_api = MagicMock()
+        mock_api.create_repo.return_value.repo_id = REPO_ID
+
+        with patch("kernels.cli.upload._get_hf_api", return_value=mock_api):
+            upload_kernels_dir(kernel_dir, repo_id=REPO_ID, branch=None, private=False)
+
+        mock_api.upload_file.assert_called_once_with(
+            repo_id=REPO_ID,
+            path_or_fileobj=card_path,
+            path_in_repo="README.md",
+            revision="v1",
+            commit_message="File uploaded using `kernels`.",
+        )
 
 
 def test_large_kernel_upload_uses_create_commit_batches(monkeypatch, tmp_path):

@@ -29,7 +29,7 @@ $ cargo install hf-kernel-builder
 file. The invocation is as follows:
 
 ```bash
-$ kernel-builder generate build.toml -f
+$ kernel-builder create-pyproject build.toml -f
 ```
 
 The `-f` flag is optional and instructs `kernel-builder` to overwrite

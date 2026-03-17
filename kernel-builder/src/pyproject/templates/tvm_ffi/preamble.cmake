@@ -36,7 +36,7 @@ endif()
 set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
 set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")
 
-option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" on)
+option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 
 if(GPU_LANG STREQUAL "CUDA")
   enable_language(CUDA)
@@ -62,8 +62,12 @@ if(GPU_LANG STREQUAL "CUDA")
   if(BUILD_ALL_SUPPORTED_ARCHS)
       set(CUDA_KERNEL_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
   else()
-      # TODO: detect capability.
-      message(FATAL_ERROR "Capability detection is not implemented for CUDA yet, please set BUILD_ALL_SUPPORTED_ARCHS to ON to build for all supported architectures.")
+      # Detect the compute capability of the first available GPU device.
+      run_python_script(DETECTED_CUDA_CAPABILITY
+          "${CMAKE_CURRENT_LIST_DIR}/cmake/cuda/detect-cuda-capability.py"
+          "Cannot detect CUDA device capability. Set BUILD_ALL_SUPPORTED_ARCHS=ON to disable detection.")
+      message(STATUS "Detected CUDA device capability: ${DETECTED_CUDA_CAPABILITY}")
+      set(CUDA_KERNEL_ARCHS "${DETECTED_CUDA_CAPABILITY}")
   endif()
 
   {% if cuda_minver %}

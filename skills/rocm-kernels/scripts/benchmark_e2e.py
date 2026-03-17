@@ -45,7 +45,7 @@ import triton.language as tl
 def _rmsnorm_kernel(
     x_ptr, weight_ptr, out_ptr,
     stride_x_row, D,
-    eps: tl.constexpr,
+    eps,
     HAS_WEIGHT: tl.constexpr,
     BLOCK_D: tl.constexpr,
 ):
@@ -76,7 +76,7 @@ def triton_rmsnorm(x, weight=None, eps=1e-6):
     BLOCK_D = triton.next_power_of_2(D)
     num_warps = 4 if BLOCK_D <= 1024 else (8 if BLOCK_D <= 4096 else 16)
     _rmsnorm_kernel[(M,)](
-        x_flat, weight, out, x_flat.stride(0), D, eps, has_weight,
+        x_flat, weight, out, x_flat.stride(0), D, float(eps), has_weight,
         BLOCK_D=BLOCK_D, num_warps=num_warps, num_stages=2,
     )
     return out.view_as(x)

@@ -83,10 +83,10 @@ python scripts/benchmark_e2e.py --mode all --output-json results.json
 
 ## Supported Hardware
 
-| GPU | Architecture | Wave Size | LDS/CU | Mem BW | Key Feature |
-|-----|-------------|-----------|--------|--------|-------------|
-| **MI355X** | CDNA3+ (gfx950) | Wave64 | **160 KB** | 8 TB/s | 32 XCDs, XCD Swizzle for GEMM |
-| **R9700** | RDNA4 (gfx1201) | **Wave32** | 64 KB | ~608 GB/s | 256B cacheline, inference-focused |
+| GPU | Architecture | Wave Size | LDS/CU | Mem BW | Key Feature | Verified |
+|-----|-------------|-----------|--------|--------|-------------|:--------:|
+| **MI355X** | CDNA3+ (gfx950) | Wave64 | **160 KB** | 8 TB/s | 32 XCDs, XCD Swizzle for GEMM | Yes |
+| **R9700** | RDNA4 (gfx1201) | **Wave32** | 64 KB | ~608 GB/s | 256B cacheline, inference-focused | Yes |
 
 > See [MI355X guide](references/mi355x-optimization-guide.md) | [R9700 guide](references/r9700-optimization-guide.md)
 
@@ -393,6 +393,38 @@ RMSNorm bandwidth utilization: 3554 GB/s (MI355X theoretical: 8 TB/s, ~44%).
 
 **Key finding**: MI355X Triton E2E speedup (22%) is significantly higher than H100 CUDA reference (6%), because MI355X's default PyTorch RMSNorm path has more room for optimization.
 
+### Micro-benchmark Results (R9700, BF16)
+
+| Kernel | Avg Speedup | Best Config Speedup | Status |
+|--------|:-----------:|:-------------------:|:------:|
+| **RMSNorm** | **2.90x** | 3.97x ([1×8192×2048]) | PASS |
+| **RoPE 3D** | **2.09x** | 2.38x ([1×1024×16×64]) | PASS |
+| **GEGLU** | **1.69x** | 1.93x ([2×1024×8192]) | PASS |
+| **AdaLN** | **3.00x** | 3.67x ([4×4096×3072]) | PASS |
+
+RMSNorm bandwidth utilization: 483 GB/s (R9700 theoretical: ~608 GB/s, **~79%**).
+
+R9700 speedups are higher than MI355X because PyTorch's default RDNA4 backend is less mature, leaving more room for Triton optimization. The bandwidth utilization (79%) is also significantly better than MI355X (44%).
+
+### End-to-End LTX-Video (R9700, 25 frames, 30 steps)
+
+| Mode | Time (s) | Per Step (s) | Peak Mem (GB) | Speedup |
+|------|:--------:|:------------:|:-------------:|:-------:|
+| baseline | 6.89 | 0.230 | 18.58 | 1.00x |
+| **triton** | **6.06** | **0.202** | **18.58** | **1.14x** |
+| torch.compile | 5.07 | 0.169 | 18.58 | 1.36x |
+
+### R9700 Additional Validation
+
+| Test | Result |
+|------|--------|
+| Transformers injection (TinyLlama 1.1B) | PASS — 45 RMSNorm patched, 99.9 tokens/s |
+| HuggingFace Kernels Hub integration | PASS — Hub kernel loads and runs on ROCm |
+| Local Triton vs Hub kernel (small shape) | Local **5.92x** vs Hub 1.27x (lower launch overhead) |
+| Local Triton vs Hub kernel (large shape) | Local 3.59x vs Hub 3.57x (comparable) |
+| num_warps sweep (2/4/8/16/32) | Default heuristic (4/8/16) is near-optimal; nw=32 always worst |
+| rocprof kernel fusion analysis | Triton fuses 4 PyTorch kernels (pow+mean+rsqrt+mul) into 1 |
+
 ### CUDA Reference (H100, for comparison)
 
 | Shape | Custom (ms) | PyTorch (ms) | Speedup |
@@ -404,12 +436,12 @@ H100 E2E: ~6% (RMSNorm is ~5% of total compute).
 
 ### Optimization Targets
 
-| Kernel | Current | Target | Priority |
-|--------|:-------:|:------:|:--------:|
-| RMSNorm | 1.71x | >2x | P0 — increase bandwidth util (44%→60%+) |
-| AdaLN | 2.22x | >2.5x | P1 — already strong |
-| GEGLU | 1.43x | >1.5x | P1 — tanh overhead |
-| RoPE 3D | 1.21x | >1.5x | P2 — small head_dim launch overhead |
+| Kernel | MI355X | R9700 | Target | Priority |
+|--------|:------:|:-----:|:------:|:--------:|
+| RMSNorm | 1.71x | 2.90x | >3x (R9700) | P0 — MI355X bandwidth util (44%→60%+) |
+| AdaLN | 2.22x | 3.00x | >3.5x (R9700) | P1 — already strong on both |
+| GEGLU | 1.43x | 1.69x | >2x | P1 — tanh overhead |
+| RoPE 3D | 1.21x | 2.09x | >2.5x (R9700) | P2 — small head_dim launch overhead |
 
 ## Common Issues on ROCm
 
@@ -440,6 +472,7 @@ rocminfo | grep -E "Name|Compute Unit|Wavefront"
 ### Benchmark & Test Scripts
 - [benchmark_kernels.py](scripts/benchmark_kernels.py) - Micro-benchmark all 4 kernels (correctness + perf + bandwidth)
 - [benchmark_e2e.py](scripts/benchmark_e2e.py) - End-to-end LTX-Video pipeline benchmark (baseline vs Triton vs compile)
+- [sweep_num_warps.py](scripts/sweep_num_warps.py) - num_warps sweep for R9700 Wave32 optimization
 - [ltx_kernel_injection_example.py](scripts/ltx_kernel_injection_example.py) - Minimal diffusers injection example
 - [transformers_injection_example.py](scripts/transformers_injection_example.py) - Minimal transformers injection example
 - [huggingface_kernels_example.py](scripts/huggingface_kernels_example.py) - HuggingFace Kernels Hub integration example

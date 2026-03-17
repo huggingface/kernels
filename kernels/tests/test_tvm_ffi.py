@@ -2,7 +2,7 @@ import pytest
 
 from kernels import get_kernel
 
-relu_supported_devices = ["cpu", "cuda"]
+relu_supported_devices = ["cpu", "cuda", "xpu"]
 
 
 def test_relu_load(device):

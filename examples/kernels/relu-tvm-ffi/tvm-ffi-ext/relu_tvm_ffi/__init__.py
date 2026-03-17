@@ -9,6 +9,8 @@ def relu(x: tvm_ffi.Tensor, out: tvm_ffi.Tensor) -> tvm_ffi.Tensor:
         ops.relu_cpu(out, x)
     elif device.type == "cuda":
         ops.relu_cuda(out, x)
+    elif device.type == "xpu":
+        ops.relu_xpu(out, x)
     else:
         raise NotImplementedError(f"Unsupported device type: {device.type}")
     return out

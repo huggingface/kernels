@@ -72,11 +72,21 @@ impl PythonDependencies {
     }
 }
 
+/// Entry for a builder Python dependency.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PythonDependency {
+    /// Nix dependencies in `python3.pkgs`.
     pub nix: Vec<String>,
-    pub python_pkgs: Vec<String>,
-    pub python_imports: Vec<String>,
+
+    /// Python dependency.
+    pub python: Vec<PythonPkgImport>,
+}
+
+/// Python package and (module to import).
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PythonPkgImport {
+    pub pkg: String,
+    pub import: Option<String>,
 }
 
 #[derive(Debug, Error)]

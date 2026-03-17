@@ -13,7 +13,9 @@ except FileNotFoundError:
     )
 
 
-def validate_dependencies(dependencies: list[str], backend: Backend):
+def validate_dependencies(
+    kernel_module_name: str, dependencies: list[str], backend: Backend
+):
     """
     Validate a list of dependencies to ensure they are installed.
 
@@ -33,7 +35,9 @@ def validate_dependencies(dependencies: list[str], backend: Backend):
             python_packages = backend_deps[dependency].get("python", [])
         else:
             # Dependency not found in general or backend-specific dependencies
-            raise ValueError(f"Unsupported kernel dependency: {dependency}")
+            raise ValueError(
+                f"Kernel module `{kernel_module_name}` uses unsupported kernel dependency: {dependency}"
+            )
 
         # Check if each python package is installed
         for python_package in python_packages:
@@ -46,7 +50,6 @@ def validate_dependencies(dependencies: list[str], backend: Backend):
 
             module_name = python_package.get("import")
             if module_name is None:
-                print("wut?")
                 # These are typically packages that do not provide any Python
                 # code, but get installed to Python's library dirctory. E.g.
                 # OneAPI.
@@ -54,5 +57,5 @@ def validate_dependencies(dependencies: list[str], backend: Backend):
 
             if importlib.util.find_spec(module_name) is None:
                 raise ImportError(
-                    f"Kernel requires Python dependency `{pkg_name}`. Please install with: pip install {pkg_name}"
+                    f"Kernel module `{kernel_module_name}` requires Python dependency `{pkg_name}`. Please install with: pip install {pkg_name}"
                 )

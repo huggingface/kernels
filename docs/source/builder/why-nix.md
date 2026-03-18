@@ -30,6 +30,14 @@ Nix allows you to experiment with different kernel configurations, PyTorch versi
 
 Overall, Nix streamlines the Kernel Builder workflow, allowing us to efficiently and reliably manage complex machine learning kernel builds.
 
+## Commonly Asked Questions
+
+**Q. Why not use Docker or other containerization tools instead of Nix?**
+
+While Docker provides isolation and consistent runtime environments, it doesn't guarantee fully reproducible builds. Factors like base image changes or implicit dependencies can still introduce variability.
+
+Nix focuses on reproducibility through deterministic builds, ensuring the same inputs always produce identical outputs. Its declarative configuration, precise dependency management, and efficient caching also make it well-suited for complex environments and CI/CD workflows.
+
 ---
 
 If you want to learn more about Nix, check out the following resources:

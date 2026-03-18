@@ -69,6 +69,6 @@
       title: kernels download
     - local: cli-skills
       title: kernels skills
-    - local: cli-collate-readme
-      title: kernels collate-readme
+    - local: cli-copy-readme
+      title: kernels copy-readme
   title: CLI Reference

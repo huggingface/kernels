@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from kernels.cli.collate_readme import (
-    collate_readme_from_versions,
+from kernels.cli.copy_readme import (
+    copy_readme_to_main,
     get_latest_version_readme,
 )
 
@@ -18,8 +18,8 @@ def _make_versions(version_nums: list[int]) -> dict:
     return versions
 
 
-PATCH_VERSIONS = "kernels.cli.collate_readme._get_available_versions"
-PATCH_API = "kernels.cli.collate_readme._get_hf_api"
+PATCH_VERSIONS = "kernels.cli.copy_readme._get_available_versions"
+PATCH_API = "kernels.cli.copy_readme._get_hf_api"
 
 SAMPLE_README = """\
 ---
@@ -84,7 +84,7 @@ class TestGetLatestVersionReadme:
             get_latest_version_readme("org/kernel")
 
 
-class TestCollateReadmeCLI:
+class TestCopyReadmeCLI:
     @patch("builtins.open", mock_open(read_data=SAMPLE_README))
     @patch(PATCH_API)
     @patch(PATCH_VERSIONS)
@@ -94,7 +94,7 @@ class TestCollateReadmeCLI:
         api_instance.hf_hub_download.return_value = "/tmp/README.md"
         mock_api.return_value = api_instance
 
-        collate_readme_from_versions(repo_id="org/my-kernel")
+        copy_readme_to_main(repo_id="org/my-kernel")
 
         captured = capsys.readouterr()
         assert "# my-kernel" in captured.out
@@ -108,7 +108,7 @@ class TestCollateReadmeCLI:
         api_instance.hf_hub_download.return_value = "/tmp/README.md"
         mock_api.return_value = api_instance
 
-        collate_readme_from_versions(repo_id="org/kernel", push_to_hub=True)
+        copy_readme_to_main(repo_id="org/kernel", push_to_hub=True)
 
         api_instance.upload_file.assert_called_once()
         call_kwargs = api_instance.upload_file.call_args[1]

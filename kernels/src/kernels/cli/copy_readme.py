@@ -25,7 +25,7 @@ def get_latest_version_readme(repo_id: str) -> str:
         return f.read()
 
 
-def collate_readme_from_versions(
+def copy_readme_to_main(
     repo_id: str,
     push_to_hub: bool = False,
 ):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from huggingface_hub import ModelCard, ModelCardData
 
-from kernels.cli.collate_readme import collate_readme_from_versions
+from kernels.cli.copy_readme import copy_readme_to_main
 from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.init import parse_kernel_name, run_init
 from kernels.cli.kernel_card_utils import (
@@ -269,21 +269,21 @@ def main():
     )
     fill_card_parser.set_defaults(func=fill_kernel_card)
 
-    collate_readme_parser = subparsers.add_parser(
-        "collate-readme",
+    copy_readme_parser = subparsers.add_parser(
+        "copy-readme",
         help="Copy the most recent version's README to the main branch.",
     )
-    collate_readme_parser.add_argument(
+    copy_readme_parser.add_argument(
         "repo_id",
         type=str,
         help="The kernel repo ID (e.g., kernels-community/activation)",
     )
-    collate_readme_parser.add_argument(
+    copy_readme_parser.add_argument(
         "--push-to-hub",
         action="store_true",
         help="Push the generated README to the main branch on the Hub.",
     )
-    collate_readme_parser.set_defaults(func=run_collate_readme)
+    copy_readme_parser.set_defaults(func=run_copy_readme)
 
     args = parser.parse_args()
     args.func(args)
@@ -355,8 +355,8 @@ def upload_kernels(args):
     )
 
 
-def run_collate_readme(args):
-    collate_readme_from_versions(
+def run_copy_readme(args):
+    copy_readme_to_main(
         repo_id=args.repo_id,
         push_to_hub=args.push_to_hub,
     )

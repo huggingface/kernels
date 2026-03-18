@@ -159,6 +159,7 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ lib.optionals rocmSupport [
     clr
+    rocmPackages.hipify-clang
   ]
   ++ lib.optionals xpuSupport ([
     xpuPackages.ocloc

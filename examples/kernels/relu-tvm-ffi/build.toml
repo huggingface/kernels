@@ -5,6 +5,7 @@ version = 1
 backends = [
     "cpu",
     "cuda",
+    "rocm",
     "xpu",
 ]
 
@@ -23,7 +24,23 @@ backend = "cuda"
 src = ["relu_cuda/relu.cu", "util.hh"]
 depends = []
 
+[kernel.relu_rocm]
+backend = "rocm"
+rocm-archs = [
+    "gfx906",
+    "gfx908",
+    "gfx90a",
+    "gfx940",
+    "gfx941",
+    "gfx942",
+    "gfx1030",
+    "gfx1100",
+    "gfx1101",
+]
+src = ["relu_cuda/relu.cu", "util.hh"]
+depends = []
+
 [kernel.relu_xpu]
 backend = "xpu"
-depends = ["torch"]
 src = ["relu_xpu/relu.cpp", "util.hh"]
+depends = []

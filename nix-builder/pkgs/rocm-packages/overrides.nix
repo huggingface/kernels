@@ -37,16 +37,30 @@ applyOverrides {
 
   hipify-clang =
     {
+      lib,
+      makeWrapper,
       ncurses,
+      clang,
+      clr,
+      rocm-llvm,
       zlib,
       zstd,
     }:
     prevAttrs: {
+      nativeBuildInputs = prevAttrs.nativeBuildInputs ++ [ makeWrapper ];
+
       buildInputs = prevAttrs.buildInputs ++ [
         ncurses
         zlib
         zstd
       ];
+
+      postInstall = let
+        clangMajor = lib.versions.major rocm-llvm.version;
+      in ''
+        wrapProgram $out/bin/hipify-clang \
+          --add-flag "--clang-resource-directory=${rocm-llvm}/lib/llvm/lib/clang/${clangMajor}"
+        '';
     };
 
   hiprand =

@@ -1,6 +1,10 @@
 # Avoid 'lib' prefix for the extension.
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
+if (${GPU_LANG} STREQUAL "HIP")
+  hipify_sources_target(SRC ${OPS_NAME} "${SRC}")
+endif()
+
 add_library(${OPS_NAME} SHARED ${SRC})
 target_compile_definitions(${OPS_NAME} PRIVATE
   "-DTVM_FFI_EXTENSION_NAME=${OPS_NAME}")
@@ -8,6 +12,10 @@ tvm_ffi_configure_target(${OPS_NAME})
 
 if(NOT (MSVC OR GPU_LANG STREQUAL "SYCL"))
    target_link_options(${OPS_NAME} PRIVATE -static-libstdc++)
+endif()
+
+if (${GPU_LANG} STREQUAL "HIP")
+  add_dependencies(${OPS_NAME} hipify${OPS_NAME})
 endif()
 
 if(GPU_LANG STREQUAL "SYCL")

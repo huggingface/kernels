@@ -1,5 +1,6 @@
 cuda_kernel_component(SRC
   SOURCES {{ sources }}
+  NAME {{ kernel_name }}
   {% if cuda_minver %}CUDA_MINVER {{ cuda_minver }}{% endif %}
   {% if includes %}INCLUDES "{{ includes }}"{% endif %}
   {% if cuda_capabilities %}CUDA_CAPABILITIES {{ cuda_capabilities|join(" ") }}{% endif %}

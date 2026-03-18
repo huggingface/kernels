@@ -8,11 +8,11 @@ endfunction()
 function(cuda_kernel_component SRC_VAR)
     set(options SUPPORTS_HIPIFY)
     set(oneValueArgs CUDA_MINVER)
-    set(multiValueArgs SOURCES INCLUDES CUDA_CAPABILITIES CUDA_FLAGS CXX_FLAGS HIP_FLAGS ROCM_ARCHS)
+    set(multiValueArgs SOURCES INCLUDES CUDA_CAPABILITIES CUDA_FLAGS CXX_FLAGS HIP_FLAGS ROCM_ARCHS NAME)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT KERNEL_SOURCES)
-        message(FATAL_ERROR "cuda_kernel_component: SOURCES argument is required")
+        message(FATAL_ERROR "CUDA kernel (${KERNEL_NAME}): SOURCES argument is required")
     endif()
 
     # Bail out if this component is not supported by the CUDA version.
@@ -39,7 +39,7 @@ function(cuda_kernel_component SRC_VAR)
         else()
             set(_KERNEL_ARCHS "${CUDA_KERNEL_ARCHS}")
         endif()
-        message(STATUS "CUDA kernel capabilities: ${_KERNEL_ARCHS}")
+        message(STATUS "CUDA kernel (${KERNEL_NAME}) capabilities: ${_KERNEL_ARCHS}")
         set_gencode_flags_for_srcs(SRCS "${_KERNEL_SRC}" CUDA_ARCHS "${_KERNEL_ARCHS}")
 
         accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
@@ -82,7 +82,7 @@ function(cuda_kernel_component SRC_VAR)
 
     elseif(GPU_LANG STREQUAL "HIP")
         if(NOT KERNEL_SUPPORTS_HIPIFY)
-            message(WARNING "Kernel does not support HIP")
+          message(STATUS "Kernel does not support HIP: ${KERNEL_NAME}")
             return()
         endif()
 
@@ -105,7 +105,7 @@ function(cuda_kernel_component SRC_VAR)
         else()
             set(_KERNEL_ARCHS "${ROCM_ARCHS}")
         endif()
-        message(STATUS "HIP kernel archs: ${_KERNEL_ARCHS}")
+        message(STATUS "HIP kernel (${KERNEL_NAME}) archs: ${_KERNEL_ARCHS}")
 
         accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
         set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
@@ -114,10 +114,10 @@ function(cuda_kernel_component SRC_VAR)
             if(_SRC MATCHES ".*\\.(cu|hip)$")
                 foreach(_ARCH ${_KERNEL_ARCHS})
                     set_property(
-            SOURCE ${_SRC}
-            APPEND PROPERTY
-            COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:HIP>:--offload-arch=${_ARCH}>"
-          )
+                      SOURCE ${_SRC}
+                      APPEND PROPERTY
+                      COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:HIP>:--offload-arch=${_ARCH}>"
+                    )
                 endforeach()
             endif()
         endforeach()
@@ -135,7 +135,7 @@ function(xpu_kernel_component SRC_VAR)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT KERNEL_SOURCES)
-        message(FATAL_ERROR "xpu_kernel_component: SOURCES argument is required")
+      message(FATAL_ERROR "XPU kernel (${KERNEL_NAME}): SOURCES argument is required")
     endif()
 
     set(_KERNEL_SRC ${KERNEL_SOURCES})
@@ -198,7 +198,7 @@ function(cpu_kernel_component SRC_VAR)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT KERNEL_SOURCES)
-        message(FATAL_ERROR "cpu_kernel_component: SOURCES argument is required")
+        message(FATAL_ERROR "CPU kernel (${KERNEL_NAME}): SOURCES argument is required")
     endif()
 
     set(_KERNEL_SRC ${KERNEL_SOURCES})
@@ -236,7 +236,7 @@ function(metal_kernel_component SRC_VAR)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT KERNEL_SOURCES)
-        message(FATAL_ERROR "metal_kernel_component: SOURCES argument is required")
+        message(FATAL_ERROR "Metal kernel (${KERNEL_NAME}): SOURCES argument is required")
     endif()
 
     set(_KERNEL_SRC ${KERNEL_SOURCES})

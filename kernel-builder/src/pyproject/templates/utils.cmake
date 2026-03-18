@@ -98,7 +98,12 @@ endmacro()
 # of CUDA source files. The names of the corresponding "hipified" sources are
 # stored in `OUT_SRCS`.
 #
+# Optional boolean argument:
+#   TORCH_HIPIFY - When set, use torch's hipify.py. When not set, use
+#                  hipify-clang.
+#
 function (hipify_sources_target OUT_SRCS NAME ORIG_SRCS)
+  cmake_parse_arguments(PARSE_ARGV 3 HIPIFY "TORCH_HIPIFY" "" "")
   #
   # Split into C++ and non-C++ (i.e. CUDA) sources.
   #
@@ -137,12 +142,29 @@ function (hipify_sources_target OUT_SRCS NAME ORIG_SRCS)
     list(APPEND HIP_SRCS "${CMAKE_CURRENT_BINARY_DIR}/${SRC}")
   endforeach()
 
-  add_custom_target(
-    hipify${NAME}
-    COMMAND "${Python3_EXECUTABLE}" ${CMAKE_SOURCE_DIR}/cmake/hipify.py -p ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${SRCS}
-    DEPENDS ${CMAKE_SOURCE_DIR}/cmake/hipify.py ${SRCS}
-    BYPRODUCTS ${HIP_SRCS}
-    COMMENT "Running hipify on ${NAME} extension source files.")
+  if (HIPIFY_TORCH_HIPIFY)
+    add_custom_target(
+      hipify${NAME}
+      COMMAND "${Python3_EXECUTABLE}" ${CMAKE_SOURCE_DIR}/cmake/hipify.py -p ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${SRCS}
+      DEPENDS ${CMAKE_SOURCE_DIR}/cmake/hipify.py ${SRCS}
+      BYPRODUCTS ${HIP_SRCS}
+      COMMENT "Running hipify (torch) on ${NAME} extension source files.")
+  else()
+    set(_HIPIFY_CLANG_COMMANDS)
+    foreach (_SRC ${SRCS})
+      list(APPEND _HIPIFY_CLANG_COMMANDS
+        COMMAND hipify-clang -o-dir=${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/${_SRC} --
+              -I ${CMAKE_SOURCE_DIR}
+              --cuda-host-only)
+    endforeach()
+
+    add_custom_target(
+      hipify${NAME}
+      ${_HIPIFY_CLANG_COMMANDS}
+      DEPENDS ${SRCS}
+      BYPRODUCTS ${HIP_SRCS}
+      COMMENT "Running hipify-clang on ${NAME} extension source files.")
+  endif()
 
   # Swap out original extension sources with hipified sources.
   list(APPEND HIP_SRCS ${CXX_SRCS})
@@ -561,7 +583,7 @@ function (define_gpu_extension_target GPU_MOD_NAME)
 
   # Add hipify preprocessing step when building with HIP/ROCm.
   if (GPU_LANGUAGE STREQUAL "HIP")
-    hipify_sources_target(GPU_SOURCES ${GPU_MOD_NAME} "${GPU_SOURCES}")
+    hipify_sources_target(GPU_SOURCES ${GPU_MOD_NAME} "${GPU_SOURCES}" TORCH_HIPIFY)
   endif()
 
   if (GPU_WITH_SOABI)

@@ -301,6 +301,17 @@ impl Backend {
             Backend::Xpu,
         ]
     }
+
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Backend::Cpu => "cpu",
+            Backend::Cuda => "cuda",
+            Backend::Metal => "metal",
+            Backend::Neuron => "neuron",
+            Backend::Rocm => "rocm",
+            Backend::Xpu => "xpu",
+        }
+    }
 }
 
 impl Display for Backend {

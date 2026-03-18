@@ -12,6 +12,9 @@ use completions::print_completions;
 mod develop;
 use develop::{devshell, testshell};
 
+mod init;
+use init::{run_init, InitArgs};
+
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
@@ -49,7 +52,11 @@ enum Commands {
     /// Generate shell completions.
     Completions { shell: Shell },
 
-    /// Create pyproject and CMake files for a kernel development.
+    /// Initialize a new kernel project from template.
+    Init(InitArgs),
+
+    #[command(hide = true)]
+    /// Generate CMake files for a kernel extension build.
     CreatePyproject {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
@@ -87,18 +94,21 @@ enum Commands {
         nix_args: NixArgs,
     },
 
+    #[command(hide = true)]
     /// Update a `build.toml` to the current format.
     UpdateBuild {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
     },
 
+    #[command(hide = true)]
     /// Validate the build.toml file.
     Validate {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
     },
 
+    #[command(hide = true)]
     /// Clean generated artifacts.
     CleanPyproject {
         #[arg(name = "KERNEL_DIR")]
@@ -130,6 +140,7 @@ fn main() -> Result<()> {
             print_completions(&mut Cli::command(), shell);
             Ok(())
         }
+        Commands::Init(args) => run_init(args),
         Commands::CreatePyproject {
             kernel_dir,
             force,

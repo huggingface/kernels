@@ -23,6 +23,14 @@ result = __KERNEL_NAME_NORMALIZED__(x)
 
 ## Development
 
+### Getting started
+
+```bash
+cachix use huggingface
+nix run -L .#build-and-copy
+uv run example.py
+```
+
 ### Building
 
 ```bash

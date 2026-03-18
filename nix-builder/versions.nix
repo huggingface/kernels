@@ -4,6 +4,7 @@
     xpuVersion = "2025.2.1";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+    tvmFfi = true;
   }
   {
     torchVersion = "2.9";
@@ -134,5 +135,6 @@
     xpuVersion = "2025.3.1";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+    tvmFfi = true;
   }
 ]

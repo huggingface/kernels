@@ -6,12 +6,14 @@ use minijinja::{context, Environment};
 
 use crate::{
     config::{Backend, Build, General, Torch},
-    fileset::FileSet,
-    ops_identifier::kernel_ops_identifier,
-    torch::common::{write_compat_py, write_metadata},
+    pyproject::{
+        common::{write_compat_py, write_metadata},
+        fileset::FileSet,
+        ops_identifier::kernel_ops_identifier,
+    },
 };
 
-static SETUP_PY: &str = include_str!("../templates/noarch/setup.py");
+static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");
 
 pub fn write_torch_ext_noarch(
     env: &Environment,
@@ -49,7 +51,7 @@ fn write_ops_py(
     path.push("_ops.py");
     let writer = file_set.entry(path);
 
-    env.get_template("noarch/_ops.py")
+    env.get_template("torch/noarch/_ops.py")
         .wrap_err("Cannot get noarch _ops.py template")?
         .render_to_write(
             context! {
@@ -79,14 +81,16 @@ fn write_pyproject_toml(
 
     // Common python dependencies (no backend-specific ones)
     let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
-        iter.map(|d| format!("\"{d}\"")).join(", ")
+        iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
+            .join(", ")
     })?;
 
     // Collect backend-specific dependencies for all backends
     let mut backend_dependencies = Vec::new();
     for backend in &Backend::all() {
         let deps = itertools::process_results(general.backend_python_depends(*backend), |iter| {
-            iter.map(|d| format!("\"{d}\"")).collect::<Vec<_>>()
+            iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
+                .join(", ")
         })?;
 
         if !deps.is_empty() {
@@ -94,7 +98,7 @@ fn write_pyproject_toml(
         }
     }
 
-    env.get_template("noarch/pyproject.toml")
+    env.get_template("torch/noarch/pyproject.toml")
         .wrap_err("Cannot get noarch pyproject.toml template")?
         .render_to_write(
             context! {

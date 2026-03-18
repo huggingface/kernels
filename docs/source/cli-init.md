@@ -15,6 +15,8 @@ This creates a new directory in the current working directory with the (normaliz
 - Downloads a project template and replaces placeholders in file names, paths, and file contents
 - Optionally restricts enabled backends (updates `build.toml` and removes unused backend folders)
 - Initializes a Git repo and stages the files (`git init`, `git add .`)
+- Initializes a templated system card for the kernel which is meant for the
+kernel developer to further modify
 
 ## Examples
 

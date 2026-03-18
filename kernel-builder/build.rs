@@ -1,3 +1,3 @@
 fn main() {
-    minijinja_embed::embed_templates!("src/templates");
+    minijinja_embed::embed_templates!("src/pyproject/templates");
 }

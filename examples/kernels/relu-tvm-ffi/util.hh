@@ -20,6 +20,13 @@
     TVM_FFI_CHECK((a).device().device_id == (b).device().device_id, ValueError)     \
         << #a " and " #b " must be on the same device";                             \
   } while (0)
+#define CHECK_XPU(x) \
+  TVM_FFI_CHECK((x).device().device_type == kDLOneAPI, ValueError) << #x " must be an XPU tensor"
+#define CHECK_INPUT_XPU(x)   \
+  do {                   \
+    CHECK_XPU(x);       \
+    CHECK_CONTIGUOUS(x); \
+  } while (0)
 
 constexpr DLDataType dl_float32 = DLDataType{kDLFloat, 32, 1};
 

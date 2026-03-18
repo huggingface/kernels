@@ -19,6 +19,8 @@
       title: FAQ
     - local: migration
       title: Migrating from older versions
+    - local: integrating-kernels
+      title: Integrating kernels into a project
   title: Using kernels
 - sections:
     - local: builder/writing-kernels
@@ -67,8 +69,6 @@
       title: kernels download
     - local: cli-skills
       title: kernels skills
-    - local: cli-create-and-upload-card
-      title: kernels create-and-upload-card
     - local: cli-collate-readme
       title: kernels collate-readme
   title: CLI Reference

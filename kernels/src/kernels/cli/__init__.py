@@ -4,27 +4,31 @@ import json
 import sys
 from pathlib import Path
 
+from huggingface_hub import ModelCard, ModelCardData
+
 from kernels.cli.collate_readme import collate_readme_from_versions
 from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.init import parse_kernel_name, run_init
+from kernels.cli.kernel_card_utils import (
+    DESCRIPTION,
+    KERNEL_CARD_TEMPLATE_PATH,
+    LIBRARY_NAME,
+    _build_kernel_card_vars,
+    _parse_repo_id,
+    _update_kernel_card_license,
+)
 from kernels.cli.skills import add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
-from kernels.kernel_card_utils import (
-    _load_or_create_kernel_card,
-    _update_benchmark,
-    _update_kernel_card_available_funcs,
-    _update_kernel_card_backends,
-    _update_kernel_card_license,
-    _update_kernel_card_usage,
-)
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import (
     KNOWN_BACKENDS,
     install_kernel,
     install_kernel_all_variants,
 )
+
+SYSTEM_CARD_PATH = "CARD.md"
 
 
 def main():
@@ -248,36 +252,22 @@ def main():
     )
     init_parser.set_defaults(func=run_init)
 
-    repocard_parser = subparsers.add_parser(
-        "create-and-upload-card",
-        help="Create and optionally upload a kernel card.",
+    fill_card_parser = subparsers.add_parser(
+        "fill-card",
+        help="Fill a system card template based on the `build` information and save it.",
     )
-    repocard_parser.add_argument(
+    fill_card_parser.add_argument(
         "kernel_dir",
         type=str,
         help="Path to the kernels source.",
     )
-    repocard_parser.add_argument(
-        "--card-path", type=str, required=True, help="Path to save the card to."
-    )
-    repocard_parser.add_argument(
+    fill_card_parser.add_argument(
         "--description",
         type=str,
         default=None,
         help="Description to introduce the kernel.",
     )
-    repocard_parser.add_argument(
-        "--repo-id",
-        type=str,
-        default=None,
-        help="If specified it will be pushed to a repository on the Hub.",
-    )
-    repocard_parser.add_argument(
-        "--create-pr",
-        action="store_true",
-        help="If specified it will create a PR on the `repo_id`.",
-    )
-    repocard_parser.set_defaults(func=create_and_upload_card)
+    fill_card_parser.set_defaults(func=fill_kernel_card)
 
     collate_readme_parser = subparsers.add_parser(
         "collate-readme",
@@ -372,34 +362,31 @@ def run_collate_readme(args):
     )
 
 
-def create_and_upload_card(args):
-    if not args.repo_id and args.create_pr:
-        raise ValueError("`create_pr` cannot be True when `repo_id` is None.")
-
+def fill_kernel_card(args):
     kernel_dir = Path(args.kernel_dir).resolve()
-    kernel_card = _load_or_create_kernel_card(
-        kernel_description=args.description, license="apache-2.0"
-    )
+    if not (kernel_dir / "build.toml").exists():
+        raise ValueError(
+            f"`build.toml` was not found in {str(kernel_dir)}. Cannot proceed."
+        )
 
-    updated_card = _update_kernel_card_usage(
-        kernel_card=kernel_card, local_path=kernel_dir, repo_id=args.repo_id
-    )
-    updated_card = _update_kernel_card_available_funcs(
-        kernel_card=kernel_card, local_path=kernel_dir
-    )
-    updated_card = _update_kernel_card_backends(
-        kernel_card=kernel_card, local_path=kernel_dir
-    )
-    updated_card = _update_benchmark(kernel_card=kernel_card, local_path=kernel_dir)
-    updated_card = _update_kernel_card_license(
-        kernel_card=kernel_card, local_path=kernel_dir
-    )
+    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
 
-    card_path = args.card_path
+    repo_id_from_build = _parse_repo_id(kernel_dir)
+    repo_id = repo_id_from_build or "{repo_id}"
+
+    dynamic_vars = _build_kernel_card_vars(kernel_dir, repo_id=repo_id)
+    description = (args.description or DESCRIPTION).format(repo_id=repo_id)
+
+    card_data = ModelCardData(library_name=LIBRARY_NAME)
+    updated_card = ModelCard.from_template(
+        card_data=card_data,
+        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
+        kernel_description=description,
+        **dynamic_vars,
+    )
+    _update_kernel_card_license(updated_card, kernel_dir)
+    card_path.parent.mkdir(parents=True, exist_ok=True)
     updated_card.save(card_path)
-
-    if args.repo_id:
-        updated_card.push_to_hub(repo_id=args.repo_id, create_pr=args.create_pr)
 
 
 class _JSONEncoder(json.JSONEncoder):

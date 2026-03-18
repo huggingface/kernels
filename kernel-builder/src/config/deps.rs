@@ -40,12 +40,12 @@ pub struct PythonDependencies {
 }
 
 impl PythonDependencies {
-    pub fn get_dependency(&self, dependency: &str) -> Result<&[String], DependencyError> {
+    pub fn get_dependency(&self, dependency: &str) -> Result<&PythonDependency, DependencyError> {
         match self.general.get(dependency) {
             None => Err(DependencyError::GeneralDependency {
                 dependency: dependency.to_string(),
             }),
-            Some(dep) => Ok(&dep.python),
+            Some(dep) => Ok(dep),
         }
     }
 
@@ -53,7 +53,7 @@ impl PythonDependencies {
         &self,
         backend: Backend,
         dependency: &str,
-    ) -> Result<&[String], DependencyError> {
+    ) -> Result<&PythonDependency, DependencyError> {
         let backend_deps = match self.backends.get(&backend) {
             None => {
                 return Err(DependencyError::Backend {
@@ -67,15 +67,26 @@ impl PythonDependencies {
                 backend: backend.to_string(),
                 dependency: dependency.to_string(),
             }),
-            Some(dep) => Ok(&dep.python),
+            Some(dep) => Ok(dep),
         }
     }
 }
 
+/// Entry for a builder Python dependency.
 #[derive(Debug, Deserialize, Serialize)]
-struct PythonDependency {
-    nix: Vec<String>,
-    python: Vec<String>,
+pub struct PythonDependency {
+    /// Nix dependencies in `python3.pkgs`.
+    pub nix: Vec<String>,
+
+    /// Python dependency.
+    pub python: Vec<PythonPkgImport>,
+}
+
+/// Python package and (module to import).
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PythonPkgImport {
+    pub pkg: String,
+    pub import: Option<String>,
 }
 
 #[derive(Debug, Error)]

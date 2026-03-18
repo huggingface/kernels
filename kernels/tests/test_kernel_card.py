@@ -1,3 +1,4 @@
+import json
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,44 @@ cuda-capabilities = ["8.0", "8.9"]
         (torch_ext_dir / "core.py").write_text(
             "def func1():\n    pass\n\ndef func2():\n    pass\n"
         )
+
+        yield kernel_dir
+
+
+@pytest.fixture
+def mock_kernel_dir_with_metadata():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        kernel_dir = Path(tmpdir)
+
+        (kernel_dir / "build.toml").write_text("""[general]
+name = "test_kernel"
+backends = ["cuda"]
+license = "apache-2.0"
+version = 1
+
+[general.hub]
+repo-id = "my-org/my-kernel"
+""")
+
+        torch_ext_dir = kernel_dir / "torch-ext" / "test_kernel"
+        torch_ext_dir.mkdir(parents=True)
+        (torch_ext_dir / "__init__.py").write_text(
+            'from .core import func1\n\n__all__ = ["func1"]\n'
+        )
+        (torch_ext_dir / "core.py").write_text("def func1():\n    pass\n")
+
+        for variant, archs in [
+            ("torch28-cxx11-cu126-x86_64-linux", ["8.0", "9.0a"]),
+            ("torch28-cxx11-cu128-x86_64-linux", ["8.0", "8.9", "9.0a"]),
+        ]:
+            variant_dir = kernel_dir / "build" / variant
+            variant_dir.mkdir(parents=True)
+            metadata = {
+                "version": 1,
+                "license": "apache-2.0",
+                "backend": {"type": "cuda", "archs": archs},
+            }
+            (variant_dir / "metadata.json").write_text(json.dumps(metadata))
 
         yield kernel_dir
 
@@ -143,3 +182,65 @@ def test_fill_kernel_card_upstream_source(mock_kernel_dir):
     fill_kernel_card(args)
     content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
     assert f"{upstream}" in content
+
+
+def test_fill_kernel_card_cuda_capabilities_from_metadata(
+    mock_kernel_dir_with_metadata,
+):
+    args = CardArgs(kernel_dir=str(mock_kernel_dir_with_metadata))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir_with_metadata / "build" / SYSTEM_CARD_PATH).read_text()
+    assert "## CUDA Capabilities" in content
+    assert "- 8.0" in content
+    assert "- 8.9" in content
+    assert "- 9.0a" in content
+
+
+def test_fill_kernel_card_cuda_capabilities_malformed_metadata(
+    mock_kernel_dir_with_metadata,
+):
+    variant_dir = (
+        mock_kernel_dir_with_metadata / "build" / "torch28-cxx11-cu126-x86_64-linux"
+    )
+    (variant_dir / "metadata.json").write_text("not valid json")
+
+    args = CardArgs(kernel_dir=str(mock_kernel_dir_with_metadata))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir_with_metadata / "build" / SYSTEM_CARD_PATH).read_text()
+    assert "- 8.0" in content
+    assert "- 8.9" in content
+    assert "- 9.0a" in content
+
+
+def test_fill_kernel_card_prefers_metadata_over_build_toml(
+    mock_kernel_dir_with_metadata,
+):
+    """metadata.json capabilities should be used even if build.toml has cuda-capabilities."""
+    (mock_kernel_dir_with_metadata / "build.toml").write_text("""[general]
+name = "test_kernel"
+backends = ["cuda"]
+license = "apache-2.0"
+version = 1
+
+[general.hub]
+repo-id = "my-org/my-kernel"
+
+[kernel._test]
+backend = "cuda"
+cuda-capabilities = ["7.0"]
+""")
+
+    args = CardArgs(kernel_dir=str(mock_kernel_dir_with_metadata))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir_with_metadata / "build" / SYSTEM_CARD_PATH).read_text()
+    assert "- 8.0" in content
+    assert "- 9.0a" in content
+    assert "- 7.0" not in content
+
+
+def test_fill_kernel_card_falls_back_to_build_toml(mock_kernel_dir):
+    args = CardArgs(kernel_dir=str(mock_kernel_dir))
+    fill_kernel_card(args)
+    content = (mock_kernel_dir / "build" / SYSTEM_CARD_PATH).read_text()
+    assert "- 8.0" in content
+    assert "- 8.9" in content

@@ -1,4 +1,5 @@
 import ast
+import json
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,31 @@ def _extract_functions_from_all(init_file_path: Path) -> list[str] | None:
         return None
 
 
+def _read_cuda_capabilities_from_metadata(local_path: Path) -> set[str]:
+    """Read CUDA capabilities from metadata.json files in each build variant."""
+    cuda_capabilities: set[str] = set()
+    build_dir = local_path / "build"
+
+    if not build_dir.is_dir():
+        return cuda_capabilities
+
+    for variant_dir in build_dir.iterdir():
+        if not variant_dir.is_dir():
+            continue
+        metadata_file = variant_dir / "metadata.json"
+        if not metadata_file.exists():
+            continue
+        try:
+            with open(metadata_file) as f:
+                metadata = json.load(f)
+            archs = metadata.get("backend", {}).get("archs", [])
+            cuda_capabilities.update(archs)
+        except Exception:
+            continue
+
+    return cuda_capabilities
+
+
 def _parse_repo_id(local_path: str | Path) -> str | None:
     local_path = Path(local_path)
 
@@ -116,17 +142,18 @@ def _build_kernel_card_vars(
         if backends:
             vars["supported_backends"] = "\n".join(f"- {b}" for b in backends)
 
-        kernel_configs = config.get("kernel", {})
-        cuda_capabilities: set[Any] = set()
-
-        # TODO (sayakpaul): implement this to read from `metadata.json` per each build
-        for k in kernel_configs:
-            caps = kernel_configs[k].get("cuda-capabilities")
-            if caps:
-                cuda_capabilities.update(caps)
+        # Try reading CUDA capabilities from build variant metadata.json files first,
+        # fall back to legacy build.toml parsing.
+        cuda_capabilities = _read_cuda_capabilities_from_metadata(local_path)
+        if not cuda_capabilities:
+            kernel_configs = config.get("kernel", {})
+            for k in kernel_configs:
+                caps = kernel_configs[k].get("cuda-capabilities")
+                if caps:
+                    cuda_capabilities.update(caps)
         if cuda_capabilities:
             vars["cuda_capabilities"] = "\n".join(
-                f"- {cap}" for cap in cuda_capabilities
+                f"- {cap}" for cap in sorted(cuda_capabilities)
             )
 
         upstream_repo = config.get("upstream", None)

@@ -1,0 +1,82 @@
+name: Backfill documentation for a tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build docs for (e.g. v0.12.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      UV_HTTP_TIMEOUT: 900
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'huggingface/doc-builder'
+          path: doc-builder
+
+      - uses: actions/checkout@v4
+        with:
+          repository: 'huggingface/kernels'
+          path: kernels
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache-dependency-path: "kit/package-lock.json"
+
+      - name: Install zip
+        run: sudo apt-get install -y zip
+
+      - name: Install uv
+        run: |
+          pip install -U uv
+          uv venv
+
+      - name: Setup environment
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          uv pip uninstall doc-builder
+          cd doc-builder
+          git pull origin main
+          uv pip install .
+          cd ..
+          cd kernels/kernels/
+          uv pip install .[dev]
+          cd ../..
+
+      - name: Setup git
+        run: |
+          git config --global user.name "Hugging Face Doc Builder"
+          git config --global user.email docs@huggingface.co
+
+      - name: Create build directory
+        run: |
+          mkdir build_dir
+          mkdir build_dir/kernels
+          cd build_dir/kernels
+          wget https://huggingface.co/datasets/hf-doc-build/doc-build/raw/main/kernels/_versions.yml
+
+      - name: Make documentation
+        shell: bash
+        env:
+          NODE_OPTIONS: --max-old-space-size=6656
+        run: |
+          source .venv/bin/activate
+          cd doc-builder
+          doc-builder build kernels ../kernels/docs/source --build_dir ../build_dir --clean --html --repo_owner huggingface --repo_name kernels --version_tag_suffix=src/
+          cd ..
+
+      - name: Push to repositories
+        run: |
+          source .venv/bin/activate
+          cd build_dir
+          doc-builder push kernels --doc_build_repo_id "hf-doc-build/doc-build" --token "${{ secrets.HF_DOC_BUILD_PUSH }}" --commit_msg "Backfill docs for ${{ inputs.tag }}" --n_retries 5 --upload_version_yml
+          cd ..

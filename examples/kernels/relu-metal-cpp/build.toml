@@ -1,6 +1,5 @@
 [general]
 name = "relu"
-upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-metal-cpp"
 backends = ["metal"]
 
 [torch]

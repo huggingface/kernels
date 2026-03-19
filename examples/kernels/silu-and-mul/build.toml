@@ -1,7 +1,6 @@
 [general]
 name = "silu-and-mul"
 license = "apache-2.0"
-upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/silu-and-mul"
 backends = [
     "cpu",
     "cuda",

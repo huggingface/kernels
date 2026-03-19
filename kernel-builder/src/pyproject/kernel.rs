@@ -60,7 +60,7 @@ fn render_kernel_component_cpu(
 ) -> Result<()> {
     env.get_template("kernel-component/cpu.cmake")
         .wrap_err("Cannot get kernel template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
                 includes => kernel.include().map(prefix_and_join_includes),
@@ -112,7 +112,7 @@ fn render_kernel_component_cuda(
 
     env.get_template("kernel-component/cuda.cmake")
         .wrap_err("Cannot get kernel template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 cuda_capabilities => cuda_capabilities,
                 cuda_flags => cuda_flags.map(|flags| flags.join(";")),
@@ -143,7 +143,7 @@ fn render_kernel_component_metal(
 ) -> Result<()> {
     env.get_template("kernel-component/metal.cmake")
         .wrap_err("Cannot get kernel template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
                 includes => kernel.include().map(prefix_and_join_includes),
@@ -173,7 +173,7 @@ fn render_kernel_component_xpu(
 
     env.get_template("kernel-component/xpu.cmake")
         .wrap_err("Cannot get kernel template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
                 sycl_flags => sycl_flags.map(|flags| flags.join(";")),

@@ -235,7 +235,7 @@ fn collect_benchmark_ops(
         if is_new_branch
             || file
                 .split('/')
-                .last()
+                .next_back()
                 .is_some_and(|n| n.starts_with("benchmark"))
         {
             operations.push(CommitOperation::Delete {

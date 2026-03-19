@@ -12,6 +12,7 @@ use eyre::{bail, Context, Result};
 use git2::{IndexAddOption, Repository};
 
 use crate::config::Backend;
+use crate::hf;
 
 const DEFAULT_TEMPLATE_REPO: &str = "kernels-community/template";
 
@@ -118,35 +119,67 @@ impl FromStr for RepoInfo {
 pub fn run_init(args: InitArgs) -> Result<()> {
     let cwd = std::env::current_dir().context("Cannot determine current directory")?;
 
-    // Resolve target directory: use provided path or current directory
-    let target_dir = match &args.path {
-        Some(path) => {
-            if path.is_absolute() {
-                path.clone()
+    // Resolve repo info and target directory together, since they can inform each other.
+    //
+    // Priority:
+    //   1. Explicit --name always wins for repo identity.
+    //   2. Positional arg as "owner/repo" sets both identity and directory.
+    //   3. Positional arg as bare name (e.g. "my-kernel") + whoami → "owner/my-kernel".
+    //   4. No positional arg + --name → derive directory from repo name.
+    //   5. No positional arg, no --name → use cwd, try to infer identity.
+    let (repo_info, target_dir) = match (args.path, args.name) {
+        // --name provided: use it for identity, derive directory if needed.
+        (Some(path), Some(info)) => {
+            let dir = if path.is_absolute() {
+                path
             } else {
                 cwd.join(path)
-            }
+            };
+            (info, dir)
         }
-        None => cwd.clone(),
-    };
+        (None, Some(info)) => {
+            let dir = cwd.join(&info.name);
+            (info, dir)
+        }
 
-    // Resolve repo info: use --name or infer from directory name
-    let repo_info = match args.name {
-        Some(info) => info,
-        None => {
-            let dir_name = target_dir
+        // No --name: infer identity from the positional arg.
+        (Some(path), None) => {
+            let path_str = path.to_string_lossy();
+
+            // Try parsing the positional arg directly as "owner/repo".
+            let info = if let Ok(info) = RepoInfo::from_str(&path_str) {
+                info
+            } else {
+                // Bare name like "my-kernel" — look up the HF user as the owner.
+                let bare_name = path.file_name().and_then(OsStr::to_str).ok_or_else(|| {
+                    eyre::eyre!("Cannot determine directory name from `{path_str}`")
+                })?;
+                let owner = hf::whoami_username()?;
+                RepoInfo::from_str(&format!("{owner}/{bare_name}"))
+                    .map_err(|e| eyre::eyre!("{e}"))?
+            };
+
+            let dir = cwd.join(&info.name);
+            (info, dir)
+        }
+
+        // Nothing provided — use cwd, try to infer identity.
+        (None, None) => {
+            let dir = cwd.clone();
+            let dir_name = dir
                 .file_name()
                 .and_then(OsStr::to_str)
                 .ok_or_else(|| eyre::eyre!("Cannot determine directory name"))?;
 
-            // Try to parse as owner/repo, otherwise require --name
-            match RepoInfo::from_str(dir_name) {
+            let info = match RepoInfo::from_str(dir_name) {
                 Ok(info) => info,
                 Err(_) => bail!(
                     "Cannot infer kernel name from directory `{dir_name}`. \
-                     Use --name <owner/repo> to specify the kernel name."
+                     Pass a name (e.g. `kernel-builder init my-kernel`) or use \
+                     --name <owner/repo>."
                 ),
-            }
+            };
+            (info, dir)
         }
     };
 
@@ -257,8 +290,31 @@ fn resolve_template_source(template: &str) -> Result<TemplateSource> {
     let tmp_dir = TempDir::new("kernel-builder-init-template")?;
     let repo_url = format!("https://huggingface.co/{template}");
 
-    Repository::clone(&repo_url, tmp_dir.path()).wrap_err_with(|| {
-        format!("Cannot clone template repository `{template}` from `{repo_url}`")
+    // Set up fetch options with HF token credentials when available.
+    let mut fetch_opts = git2::FetchOptions::new();
+    let mut callbacks = git2::RemoteCallbacks::new();
+
+    let token = hf::token();
+    callbacks.credentials(move |_url, _username, _allowed| match &token {
+        Some(token) => git2::Cred::userpass_plaintext("hf_user", token),
+        None => Err(git2::Error::from_str(
+            "authentication required but no Hugging Face token found",
+        )),
+    });
+    fetch_opts.remote_callbacks(callbacks);
+
+    let mut builder = git2::build::RepoBuilder::new();
+    builder.fetch_options(fetch_opts);
+
+    builder.clone(&repo_url, tmp_dir.path()).map_err(|e| {
+        if e.code() == git2::ErrorCode::Auth {
+            eyre::eyre!(
+                "Cannot clone template `{template}`: authentication failed.\n\
+                 Run `hf auth login` or set the HF_TOKEN environment variable."
+            )
+        } else {
+            eyre::eyre!("Cannot clone template `{template}` from `{repo_url}`: {e}")
+        }
     })?;
 
     Ok(TemplateSource::Remote(tmp_dir))

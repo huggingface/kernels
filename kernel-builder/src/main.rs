@@ -12,8 +12,13 @@ use completions::print_completions;
 mod develop;
 use develop::{devshell, testshell};
 
+mod hf;
+
 mod init;
 use init::{run_init, InitArgs};
+
+mod upload;
+use upload::{run_upload, UploadArgs};
 
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
@@ -54,6 +59,9 @@ enum Commands {
 
     /// Initialize a new kernel project from template.
     Init(InitArgs),
+
+    /// Upload kernel build artifacts to the Hugging Face Hub.
+    Upload(UploadArgs),
 
     #[command(hide = true)]
     /// Generate CMake files for a kernel extension build.
@@ -141,6 +149,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::Init(args) => run_init(args),
+        Commands::Upload(args) => run_upload(args),
         Commands::CreatePyproject {
             kernel_dir,
             force,

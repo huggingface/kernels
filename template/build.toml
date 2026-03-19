@@ -10,6 +10,9 @@ name = "__KERNEL_NAME__"
 version = 1
 upstream = "__UPSTREAM_URL__"
 
+[general.hub]
+repo-id = "__REPO_ID__"
+
 [torch]
 src = [
   "torch-ext/torch_binding.cpp",

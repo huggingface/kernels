@@ -15,6 +15,8 @@ clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
+huggingface-hub = { git = "https://github.com/huggingface/huggingface_hub_rust.git", package = "huggingface-hub", features = ["xet"] }
+tokio = { version = "1", features = ["rt"] }
 itertools = "0.13"
 minijinja = "2.5"
 minijinja-embed = "2.5"

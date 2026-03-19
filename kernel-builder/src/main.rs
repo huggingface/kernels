@@ -12,6 +12,9 @@ use completions::print_completions;
 mod develop;
 use develop::{devshell, testshell};
 
+mod build;
+use build::{run_build, BuildArgs};
+
 mod hf;
 
 mod init;
@@ -59,6 +62,9 @@ enum Commands {
 
     /// Initialize a new kernel project from template.
     Init(InitArgs),
+
+    /// Build the kernel using Nix.
+    Build(BuildArgs),
 
     /// Upload kernel build artifacts to the Hugging Face Hub.
     Upload(UploadArgs),
@@ -150,6 +156,7 @@ fn main() -> Result<()> {
         }
         Commands::Init(args) => run_init(args),
         Commands::Upload(args) => run_upload(args),
+        Commands::Build(args) => run_build(args),
         Commands::CreatePyproject {
             kernel_dir,
             force,

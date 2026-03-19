@@ -28,7 +28,9 @@ def _get_cache_dir() -> str | None:
     """Returns the kernels cache directory."""
     cache_dir = os.environ.get("HF_KERNELS_CACHE", None)
     if cache_dir is not None:
-        logging.warning("HF_KERNELS_CACHE will be removed in the future, use KERNELS_CACHE instead")
+        logging.warning(
+            "HF_KERNELS_CACHE will be removed in the future, use KERNELS_CACHE instead"
+        )
         return cache_dir
 
     return os.environ.get("KERNELS_CACHE", None)
@@ -136,7 +138,7 @@ def build_variants() -> list[str]:
 
 def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
     metadata = Metadata.load_from_variant(variant_path)
-    validate_dependencies(metadata.python_depends, backend())
+    validate_dependencies(module_name, metadata.python_depends, backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
@@ -203,7 +205,9 @@ def install_kernel(
     try:
         return _find_kernel_in_repo_path(repo_path, package_name, variant_locks)
     except FileNotFoundError:
-        raise FileNotFoundError(f"Cannot install kernel from repo {repo_id} (revision: {revision})")
+        raise FileNotFoundError(
+            f"Cannot install kernel from repo {repo_id} (revision: {revision})"
+        )
 
 
 def _find_kernel_in_repo_path(
@@ -268,7 +272,9 @@ def install_kernel_all_variants(
             if variant_lock is None:
                 raise ValueError(f"No lock found for build variant: {variant}")
 
-            validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
+            validate_kernel(
+                repo_path=repo_path, variant=variant, hash=variant_lock.hash
+            )
 
     return repo_path / "build"
 
@@ -311,7 +317,9 @@ def get_kernel(
         ```
     """
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-    package_name, variant_path = install_kernel(repo_id, revision=revision, user_agent=user_agent)
+    package_name, variant_path = install_kernel(
+        repo_id, revision=revision, user_agent=user_agent
+    )
     return _import_from_path(package_name, variant_path)
 
 
@@ -344,7 +352,9 @@ def get_local_kernel(repo_path: Path, package_name: str) -> ModuleType:
     raise FileNotFoundError(f"Could not find package '{package_name}' in {repo_path}")
 
 
-def has_kernel(repo_id: str, revision: str | None = None, version: int | str | None = None) -> bool:
+def has_kernel(
+    repo_id: str, revision: str | None = None, version: int | str | None = None
+) -> bool:
     """
     Check whether a kernel build exists for the current environment (Torch version and compute framework).
 
@@ -417,7 +427,9 @@ def load_kernel(repo_id: str, *, lockfile: Path | None) -> ModuleType:
     )
 
     try:
-        package_name, variant_path = _find_kernel_in_repo_path(repo_path, package_name, variant_locks=None)
+        package_name, variant_path = _find_kernel_in_repo_path(
+            repo_path, package_name, variant_locks=None
+        )
         return _import_from_path(package_name, variant_path)
     except FileNotFoundError:
         raise FileNotFoundError(
@@ -443,7 +455,9 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
-    package_name, variant_path = install_kernel(repo_id, locked_sha, local_files_only=local_files_only)
+    package_name, variant_path = install_kernel(
+        repo_id, locked_sha, local_files_only=local_files_only
+    )
 
     return _import_from_path(package_name, variant_path)
 

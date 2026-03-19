@@ -11,7 +11,9 @@ except FileNotFoundError:
     )
 
 
-def validate_dependencies(dependencies: list[str], backend: str):
+def validate_dependencies(
+    kernel_module_name: str, dependencies: list[str], backend: str
+):
     """
     Validate a list of dependencies to ensure they are installed.
 
@@ -31,13 +33,27 @@ def validate_dependencies(dependencies: list[str], backend: str):
             python_packages = backend_deps[dependency].get("python", [])
         else:
             # Dependency not found in general or backend-specific dependencies
-            raise ValueError(f"Invalid dependency: {dependency}")
+            raise ValueError(
+                f"Kernel module `{kernel_module_name}` uses unsupported kernel dependency: {dependency}"
+            )
 
         # Check if each python package is installed
         for python_package in python_packages:
             # Convert package name to module name (replace - with _)
-            module_name = python_package.replace("-", "_")
+            pkg_name = python_package.get("pkg")
+            # Assertion because this should not happen and is a bug.
+            assert (
+                pkg_name is not None
+            ), f"Invalid dependency data for `{dependency}`: missing `pkg` field."
+
+            module_name = python_package.get("import")
+            if module_name is None:
+                # These are typically packages that do not provide any Python
+                # code, but get installed to Python's library dirctory. E.g.
+                # OneAPI.
+                continue
+
             if importlib.util.find_spec(module_name) is None:
                 raise ImportError(
-                    f"Kernel requires Python dependency `{python_package}`. Please install with: pip install {python_package}"
+                    f"Kernel module `{kernel_module_name}` requires Python dependency `{pkg_name}`. Please install with: pip install {pkg_name}"
                 )

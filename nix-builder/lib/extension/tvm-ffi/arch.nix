@@ -82,7 +82,10 @@ let
   dependencies =
     resolvePythonDeps pythonDeps
     ++ resolveBackendPythonDeps buildConfig.backend backendPythonDeps
-    ++ [ torch ];
+    ++ [
+      torch
+      python3.pkgs.tvm-ffi
+    ];
 
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
 
@@ -149,10 +152,9 @@ stdenv.mkDerivation (prevAttrs: {
     kernel-layout-check
     remove-bytecode-hook
   ]
-  # TODO: renenable
-  #++ lib.optionals doGetKernelCheck [
-  #  (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
-  #]
+  ++ lib.optionals doGetKernelCheck [
+    (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
+  ]
   ++ lib.optionals cudaSupport [
     cmakeNvccThreadsHook
     cuda_nvcc

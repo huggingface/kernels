@@ -1,5 +1,3 @@
-import platform
-
 import pytest
 import torch
 import torch.nn.functional as F
@@ -8,29 +6,33 @@ import relu_tvm_ffi
 
 
 @pytest.mark.kernels_ci
-def test_relu():
-    if platform.system() == "Darwin":
-        device = torch.device("mps")
-    elif hasattr(torch, "xpu") and torch.xpu.is_available():
-        device = torch.device("xpu")
-    elif torch.version.cuda is not None and torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+def test_relu(device):
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
-    torch.testing.assert_allclose(F.relu(x), relu_tvm_ffi.relu(x))
+    torch.testing.assert_close(F.relu(x), relu_tvm_ffi.relu(x, torch.empty_like(x)))
 
 
 @pytest.mark.kernels_ci
-def test_relu_layer():
-    if platform.system() == "Darwin":
-        device = torch.device("mps")
-    elif hasattr(torch, "xpu") and torch.xpu.is_available():
-        device = torch.device("xpu")
-    elif torch.version.cuda is not None and torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+def test_relu_views(device):
+    x = torch.arange(-20, 20, device=device, dtype=torch.float32)
+
+    # Keep buffers and fill on each iteration. Stable pointers make C++-side
+    # pointer inspection esier.
+    out = torch.empty_like(x)
+    out_check = torch.empty_like(x)
+
+    for i in range(41):
+        # Put a sentineal value in the output.
+        out.fill_(42)
+        out_check.fill_(42)
+
+        relu_tvm_ffi.relu(x[i:], out[i:])
+        out_check[i:] = F.relu(x[i:])
+
+        torch.testing.assert_close(out, out_check)
+
+
+@pytest.mark.kernels_ci
+def test_relu_layer(device):
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
     layer = relu_tvm_ffi.layers.ReLU()
-    torch.testing.assert_allclose(F.relu(x), layer(x))
+    torch.testing.assert_close(F.relu(x), layer(x))

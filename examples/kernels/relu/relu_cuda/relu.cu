@@ -32,6 +32,10 @@ void relu(torch::Tensor &out, torch::Tensor const &input) {
               "Tensors must be on the same device. Got input device: ",
               input.device(), " and output device: ", out.device());
 
+  if (input.numel() == 0) {
+    return;
+  }
+
   int d = input.size(-1);
   int64_t num_tokens = input.numel() / d;
   dim3 grid(num_tokens);

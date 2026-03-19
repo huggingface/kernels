@@ -26,8 +26,7 @@ result = __KERNEL_NAME_NORMALIZED__(x)
 ### Getting started
 
 ```bash
-cachix use huggingface
-nix run -L .#build-and-copy
+kernel-builder build
 uv run example.py
 ```
 

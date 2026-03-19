@@ -21,7 +21,9 @@ impl<'de> Deserialize<'de> for BuildCompat {
         v1::Build::deserialize(value.clone())
             .map(BuildCompat::V1)
             .or_else(|_| v2::Build::deserialize(value.clone()).map(BuildCompat::V2))
-            .or_else(|_| v3::Build::deserialize(value.clone()).map(|b| BuildCompat::V3(Box::new(b))))
+            .or_else(|_| {
+                v3::Build::deserialize(value.clone()).map(|b| BuildCompat::V3(Box::new(b)))
+            })
             .map_err(serde::de::Error::custom)
     }
 }

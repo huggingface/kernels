@@ -1,5 +1,6 @@
 [general]
 name = "relu-compiler-flags"
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-compiler-flags"
 backends = [
     "cuda",
     "rocm",

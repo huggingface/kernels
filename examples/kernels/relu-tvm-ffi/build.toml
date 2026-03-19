@@ -1,6 +1,7 @@
 [general]
 name = "relu-tvm-ffi"
 version = 1
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-tvm-ffi"
 
 backends = [
     "cpu",

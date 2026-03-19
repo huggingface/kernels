@@ -1,6 +1,7 @@
 [general]
 name = "relu-nki"
 version = 1
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-nki"
 backends = [
     "neuron",
 ]

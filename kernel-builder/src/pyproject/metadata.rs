@@ -7,5 +7,7 @@ pub struct Metadata {
     pub version: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upstream: Option<String>,
     pub python_depends: Vec<String>,
 }

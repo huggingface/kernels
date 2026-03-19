@@ -1,5 +1,6 @@
 [general]
 name = "relu"
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/relu"
 backends = [
     "cpu",
     "cuda",

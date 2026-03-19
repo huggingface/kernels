@@ -1,5 +1,6 @@
 [general]
 name = "extra-data"
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/extra-data"
 backends = [
     "cpu",
     "cuda",

@@ -1,5 +1,6 @@
 [general]
 name = "relu-specific-torch"
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-specific-torch"
 backends = [
     "cuda",
     "rocm",

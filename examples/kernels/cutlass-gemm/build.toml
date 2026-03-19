@@ -1,5 +1,6 @@
 [general]
 name = "cutlass-gemm"
+upstream = "https://github.com/huggingface/kernels/tree/main/examples/kernels/cutlass-gemm"
 backends = [
     "cuda",
     "xpu",

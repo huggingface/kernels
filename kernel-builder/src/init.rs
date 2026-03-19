@@ -163,7 +163,7 @@ pub fn run_init(args: InitArgs) -> Result<()> {
             (info, dir)
         }
 
-        // Nothing provided — use cwd, try to infer identity.
+        // Nothing provided — use cwd, infer identity from directory name + whoami.
         (None, None) => {
             let dir = cwd.clone();
             let dir_name = dir
@@ -173,11 +173,11 @@ pub fn run_init(args: InitArgs) -> Result<()> {
 
             let info = match RepoInfo::from_str(dir_name) {
                 Ok(info) => info,
-                Err(_) => bail!(
-                    "Cannot infer kernel name from directory `{dir_name}`. \
-                     Pass a name (e.g. `kernel-builder init my-kernel`) or use \
-                     --name <owner/repo>."
-                ),
+                Err(_) => {
+                    let owner = hf::whoami_username()?;
+                    RepoInfo::from_str(&format!("{owner}/{dir_name}"))
+                        .map_err(|e| eyre::eyre!("{e}"))?
+                }
             };
             (info, dir)
         }

@@ -269,6 +269,7 @@ rec {
           rocmSupport = pkgs.config.rocmSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
           extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
+          buildToml = readBuildConfig path;
         in
         {
           name = extension.variant;
@@ -286,6 +287,9 @@ rec {
                   pytest
                 ]
                 ++ pythonCheckInputs ps
+                ++ lib.optionals (buildToml ? "tvm-ffi") [
+                  tvm-ffi
+                ]
               ))
             ];
             shellHook = ''

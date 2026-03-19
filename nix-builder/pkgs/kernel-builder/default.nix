@@ -44,6 +44,10 @@ rustPlatform.buildRustPackage {
 
   cargoLock = {
     lockFile = ../../../kernel-builder/Cargo.lock;
+    outputHashes = {
+      "huggingface-hub-0.1.0" = "sha256-RtzeDDhgqFhFj4r58GwVuchu8ld7OZXnrVFz4rHlU30=";
+      "hf-xet-1.4.0" = "sha256-dvZiTe7AWE3bu3XKWW70axm4vxXpTuXMcgfdpnlkR8s=";
+    };
   };
 
   nativeBuildInputs = [

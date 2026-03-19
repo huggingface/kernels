@@ -38,7 +38,7 @@ pub struct General {
 
     pub license: Option<String>,
 
-    pub upstream: Option<String>,
+    pub upstream: Option<url::Url>,
 
     pub backends: Vec<Backend>,
 

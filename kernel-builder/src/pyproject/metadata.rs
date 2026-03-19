@@ -8,6 +8,6 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub upstream: Option<String>,
+    pub upstream: Option<url::Url>,
     pub python_depends: Vec<String>,
 }

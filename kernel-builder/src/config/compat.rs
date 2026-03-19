@@ -5,10 +5,11 @@ use serde_value::Value;
 use super::{v1, v2, v3, Build};
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum BuildCompat {
     V1(v1::Build),
     V2(v2::Build),
-    V3(Box<v3::Build>),
+    V3(v3::Build),
 }
 
 impl<'de> Deserialize<'de> for BuildCompat {
@@ -21,9 +22,7 @@ impl<'de> Deserialize<'de> for BuildCompat {
         v1::Build::deserialize(value.clone())
             .map(BuildCompat::V1)
             .or_else(|_| v2::Build::deserialize(value.clone()).map(BuildCompat::V2))
-            .or_else(|_| {
-                v3::Build::deserialize(value.clone()).map(|b| BuildCompat::V3(Box::new(b)))
-            })
+            .or_else(|_| v3::Build::deserialize(value.clone()).map(BuildCompat::V3))
             .map_err(serde::de::Error::custom)
     }
 }
@@ -35,7 +34,7 @@ impl TryFrom<BuildCompat> for Build {
         match compat {
             BuildCompat::V1(v1_build) => v1_build.try_into(),
             BuildCompat::V2(v2_build) => v2_build.try_into(),
-            BuildCompat::V3(v3_build) => Ok((*v3_build).into()),
+            BuildCompat::V3(v3_build) => Ok(v3_build.into()),
         }
     }
 }

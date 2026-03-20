@@ -5,11 +5,12 @@ EXTRA_DATA_PATH=$(echo extra-data/torch*)
 RELU_PATH=$(echo relu-kernel/torch*)
 RELU_TVM_FFI_PATH=$(echo relu-tvm-ffi-kernel/tvm-ffi*)
 CUTLASS_PATH=$(echo cutlass-gemm-kernel/torch*)
+CUTLASS_TVM_FFI_PATH=$(echo cutlass-gemm-tvm-ffi-kernel/tvm-ffi*)
 SILU_MUL_PATH=$(echo silu-and-mul-kernel/torch*)
 RELU_CPU_PATH=$(echo relu-kernel-cpu/torch*)
 
-PYTHONPATH="$EXTRA_DATA_PATH:$RELU_PATH:$RELU_TVM_FFI_PATH:$CUTLASS_PATH:$PYTHONPATH" \
-  .venv/bin/pytest extra_data_tests relu_tests relu_tvm_ffi_tests cutlass_gemm_tests
+PYTHONPATH="$EXTRA_DATA_PATH:$RELU_PATH:$RELU_TVM_FFI_PATH:$CUTLASS_PATH:$CUTLASS_TVM_FFI_PATH:$PYTHONPATH" \
+  .venv/bin/pytest extra_data_tests relu_tests relu_tvm_ffi_tests cutlass_gemm_tests cutlass_gemm_tvm_ffi_tests
 
 # We only care about importing, the kernel is trivial.
 PYTHONPATH="$SILU_MUL_PATH:$PYTHONPATH" \

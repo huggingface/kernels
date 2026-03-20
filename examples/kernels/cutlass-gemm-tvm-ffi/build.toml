@@ -1,0 +1,25 @@
+[general]
+name = "cutlass-gemm-tvm-ffi"
+backends = [
+    "cuda",
+    "xpu",
+]
+
+[tvm-ffi]
+src = [
+    "tvm-ffi-ext/tvm_ffi_binding.cpp",
+]
+
+[kernel.gemm]
+backend = "cuda"
+depends = [
+    "cutlass_3_6",
+]
+src = ["gemm.cu", "util.hh"]
+
+[kernel.gemm_xpu]
+backend = "xpu"
+depends = [
+    "sycl_tla",
+]
+src = ["gemm_sycl.cpp", "util.hh"]

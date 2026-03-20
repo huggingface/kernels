@@ -12,8 +12,7 @@ use crate::pyproject::common::{
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
 use crate::pyproject::FileSet;
 
-mod deps;
-use deps::render_deps;
+use crate::pyproject::deps::render_deps;
 
 use crate::pyproject::kernel::render_kernel_components;
 

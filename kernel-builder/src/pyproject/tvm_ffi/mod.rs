@@ -9,6 +9,7 @@ use crate::config::{Backend, Build, General, TvmFfi};
 use crate::pyproject::common::{
     prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
 };
+use crate::pyproject::deps::render_deps;
 use crate::pyproject::kernel::render_kernel_components;
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
 use crate::pyproject::FileSet;
@@ -227,6 +228,8 @@ pub fn write_cmake(
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
     render_preamble(env, &build.general, revision, cmake_writer)?;
+
+    render_deps(env, build, cmake_writer)?;
 
     render_binding(env, tvm_ffi, name, cmake_writer)?;
 

@@ -64,6 +64,11 @@ jobs:
       - name: Copy cutlass GEMM kernel
         run: cp -rL examples/kernels/cutlass-gemm/result cutlass-gemm-kernel
 
+      - name: Build cutlass-gemm-tvm-ffi kernel
+        run: ( cd examples/kernels/cutlass-gemm-tvm-ffi && nix build .\#redistributable.tvm-ffi01-cu126-${{ matrix.arch }} )
+      - name: Copy cutlass-gemm-tvm-ffi kernel
+        run: cp -rL examples/kernels/cutlass-gemm-tvm-ffi/result cutlass-gemm-tvm-ffi-kernel
+
       - name: Build relu-backprop-compile kernel
         run: ( cd examples/kernels/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
       - name: Copy relu-backprop-compile kernel
@@ -91,6 +96,7 @@ jobs:
           path: |
             activation-kernel
             cutlass-gemm-kernel
+            cutlass-gemm-tvm-ffi-kernel
             extra-data
             relu-kernel
             relu-tvm-ffi-kernel

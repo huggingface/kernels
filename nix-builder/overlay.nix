@@ -77,6 +77,13 @@ in
           else
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
+        fastapi = python-super.fastapi.overrideAttrs (
+          _: prevAttrs: {
+            # Gets stuck sometimes, already tested in nixpkgs.
+            doInstallCheck = false;
+          }
+        );
+
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };

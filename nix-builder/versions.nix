@@ -129,6 +129,7 @@
     metal = true;
     systems = [ "aarch64-darwin" ];
     bundleBuild = true;
+    tvmFfi = true;
   }
   {
     torchVersion = "2.10";

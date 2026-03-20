@@ -1,3 +1,8 @@
+# Include Metal shader compilation utilities if needed
+if(GPU_LANG STREQUAL "METAL")
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/compile-metal.cmake)
+endif()
+
 # Avoid 'lib' prefix for the extension.
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
@@ -7,12 +12,16 @@ target_compile_definitions(${OPS_NAME} PRIVATE
 tvm_ffi_configure_target(${OPS_NAME})
 
 if(NOT (MSVC OR GPU_LANG STREQUAL "SYCL"))
-   target_link_options(${OPS_NAME} PRIVATE -static-libstdc++)
+    target_link_options(${OPS_NAME} PRIVATE -static-libstdc++)
 endif()
 
 if(GPU_LANG STREQUAL "SYCL")
     target_link_options(${OPS_NAME} PRIVATE ${sycl_link_flags})
     target_link_libraries(${OPS_NAME} PRIVATE dnnl)
+endif()
+
+if(GPU_LANG STREQUAL "METAL")
+    target_link_libraries(${OPS_NAME} PRIVATE "-framework Metal" "-framework Foundation")
 endif()
 
 # Compile Metal shaders if any were found

@@ -7,7 +7,8 @@ use minijinja::context;
 
 use crate::config::{Backend, Build, General, Torch};
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
+    prefix_and_join_includes, write_cmake_file, write_compile_metal_cmake, write_compat_py,
+    write_metallib_to_header_py, write_metadata,
 };
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
 use crate::pyproject::FileSet;
@@ -23,12 +24,11 @@ pub use noarch::write_torch_ext_noarch;
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/torch/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
-static COMPILE_METAL_CMAKE: &str = include_str!("../templates/torch/metal/compile-metal.cmake");
+
 static GET_GPU_LANG: &str = include_str!("../templates/torch/get_gpu_lang.cmake");
 static GET_GPU_LANG_PY: &str = include_str!("../templates/torch/get_gpu_lang.py");
 static ADD_GPU_ARCH_METADATA_PY: &str = include_str!("../templates/torch/add_gpu_arch_metadata.py");
 static HIPIFY: &str = include_str!("../templates/torch/cuda/hipify.py");
-static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/torch/metal/metallib_to_header.py");
 static REGISTRATION_H: &str = include_str!("../templates/torch/registration.h");
 static OPS_PY_IN: &str = include_str!("../templates/torch/_ops.py.in");
 
@@ -152,16 +152,8 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
         ADD_GPU_ARCH_METADATA_PY.as_bytes(),
     );
     write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
-    write_cmake_file(
-        file_set,
-        "compile-metal.cmake",
-        COMPILE_METAL_CMAKE.as_bytes(),
-    );
-    write_cmake_file(
-        file_set,
-        "metallib_to_header.py",
-        METALLIB_TO_HEADER_PY.as_bytes(),
-    );
+    write_compile_metal_cmake(file_set);
+    write_metallib_to_header_py(file_set);
     write_cmake_file(file_set, "get_gpu_lang.cmake", GET_GPU_LANG.as_bytes());
     write_cmake_file(file_set, "get_gpu_lang.py", GET_GPU_LANG_PY.as_bytes());
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());

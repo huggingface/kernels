@@ -245,6 +245,7 @@ stdenv.mkDerivation (prevAttrs: {
     # Use host compiler for Metal. Not included in the redistributable SDK.
     # Re-enable when the issue mentioned in preConfigure is solved.
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
+    (lib.cmakeFeature "GPU_LANG" "METAL")
   ]
   ++ lib.optionals xpuSupport [
     (lib.cmakeFeature "GPU_LANG" "SYCL")

@@ -7,7 +7,8 @@ use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, General, TvmFfi};
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
+    prefix_and_join_includes, write_cmake_file, write_compile_metal_cmake, write_compat_py,
+    write_metallib_to_header_py, write_metadata,
 };
 use crate::pyproject::kernel::render_kernel_components;
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
@@ -34,6 +35,8 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
         "cuda/detect-cuda-capability.py",
         DETECT_CUDA_CAPABILITY_PY.as_bytes(),
     );
+    write_compile_metal_cmake(file_set);
+    write_metallib_to_header_py(file_set);
 }
 
 pub fn write_tvm_ffi_ext(

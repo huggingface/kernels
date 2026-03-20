@@ -16,7 +16,7 @@ _getKernelCheckHook() {
   # in a Nix environment, the library dependencies cannot be found
   # anymore. So we have to add the Torch library directory to the
   # dynamic linker path to get it to pick it up.
-  if [ $(uname -s) == "Darwin" ]; then
+  if [ $(uname -s) == "Darwin" -a "${framework}" == "torch" ]; then
     TORCH_DIR=$(python -c "from pathlib import Path; import torch; print(Path(torch.__file__).parent)")
     export DYLD_LIBRARY_PATH="${TORCH_DIR}/lib:${DYLD_LIBRARY_PATH}"
   fi

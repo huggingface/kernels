@@ -10,15 +10,18 @@
 #include <arm_neon.h>
 #endif
 
+// NOTE: This is a minimal example kernel that is not optimized for
+//       performance, so we do not care about unaligned loads/stores.
+
 #ifdef __SSE__
 void relu_forward_sse(float* out, const float* input, size_t size) {
     size_t i = 0;
 
     for (; i + 4 <= size; i += 4) {
-        __m128 vec_input = _mm_load_ps(input + i);
+        __m128 vec_input = _mm_loadu_ps(input + i);
         __m128 vec_zero = _mm_setzero_ps();
         __m128 vec_output = _mm_max_ps(vec_input, vec_zero);
-        _mm_store_ps(out + i, vec_output);
+        _mm_storeu_ps(out + i, vec_output);
     }
 
     for (; i < size; ++i) {

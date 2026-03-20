@@ -16,4 +16,7 @@ def relu(x: tvm_ffi.Tensor, out: tvm_ffi.Tensor) -> tvm_ffi.Tensor:
     return out
 
 
-__all__ = ["relu"]
+from . import layers
+
+
+__all__ = ["layers", "relu"]

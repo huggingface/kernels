@@ -5,6 +5,7 @@ use serde_value::Value;
 use super::{v1, v2, v3, Build};
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum BuildCompat {
     V1(v1::Build),
     V2(v2::Build),

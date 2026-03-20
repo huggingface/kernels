@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.12.2"
+version = "0.12.3"
 description = "Download compute kernels"
 authors = [
   { name = "Daniel de Kok", email = "daniel@huggingface.co" },
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.optional-dependencies]
-abi-check = ["kernel-abi-check>=0.6.2,<0.7.0"]
+abi-check = ["kernel-abi-check>=0.12.0,<0.13.0"]
 benchmark = [
   "numpy>=2.0.2",
   "requests>=2.32.5",

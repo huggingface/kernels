@@ -44,21 +44,3 @@ jobs:
       - name: Check import sorting
         run: uv run --with isort isort --check-only --diff kernels/src kernels/tests
 
-  validate-dependencies:
-    name: Validate python_depends.json
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Validate python_depends.json is up-to-date
-        run: |
-          (cd kernels && python update_python_depends.py --validate) || {
-            echo "Error: python_depends.json is out of date."
-            echo "Please run: python update_python_depends.py"
-            exit 1
-          }

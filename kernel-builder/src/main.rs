@@ -12,7 +12,7 @@ mod config;
 use config::{v3, Build, BuildCompat};
 
 mod util;
-use util::parse_and_validate;
+use util::{check_or_infer_kernel_dir, parse_and_validate};
 
 mod version;
 
@@ -27,8 +27,8 @@ struct Cli {
 enum Commands {
     /// Generate CMake files for a kernel extension build.
     CreatePyproject {
-        #[arg(name = "BUILD_TOML")]
-        build_toml: PathBuf,
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
 
         /// The directory to write the generated files to
         /// (directory of `BUILD_TOML` when absent).
@@ -47,20 +47,20 @@ enum Commands {
 
     /// Update a `build.toml` to the current format.
     UpdateBuild {
-        #[arg(name = "BUILD_TOML")]
-        build_toml: PathBuf,
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
     },
 
     /// Validate the build.toml file.
     Validate {
-        #[arg(name = "BUILD_TOML")]
-        build_toml: PathBuf,
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
     },
 
     /// Clean generated artifacts.
     CleanPyproject {
-        #[arg(name = "BUILD_TOML")]
-        build_toml: PathBuf,
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
 
         /// The directory to clean from (directory of `BUILD_TOML` when absent).
         #[arg(name = "TARGET_DIR")]
@@ -85,28 +85,35 @@ fn main() -> Result<()> {
     let args = Cli::parse();
     match args.command {
         Commands::CreatePyproject {
-            build_toml,
+            kernel_dir,
             force,
             target_dir,
             ops_id,
-        } => create_pyproject(build_toml, target_dir, force, ops_id),
-        Commands::UpdateBuild { build_toml } => update_build(build_toml),
-        Commands::Validate { build_toml } => {
-            parse_and_validate(build_toml)?;
+        } => create_pyproject(kernel_dir, target_dir, force, ops_id),
+        Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
+        Commands::Validate { kernel_dir } => {
+            validate(kernel_dir)?;
             Ok(())
         }
         Commands::CleanPyproject {
-            build_toml,
+            kernel_dir,
             target_dir,
             dry_run,
             force,
             ops_id,
-        } => clean_pyproject(build_toml, target_dir, dry_run, force, ops_id),
+        } => clean_pyproject(kernel_dir, target_dir, dry_run, force, ops_id),
     }
 }
 
-fn update_build(build_toml: PathBuf) -> Result<()> {
-    let build_compat: BuildCompat = parse_and_validate(&build_toml)?;
+fn validate(kernel_dir: Option<PathBuf>) -> Result<()> {
+    let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
+    parse_and_validate(kernel_dir)?;
+    Ok(())
+}
+
+fn update_build(kernel_dir: Option<PathBuf>) -> Result<()> {
+    let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
+    let build_compat: BuildCompat = parse_and_validate(&kernel_dir)?;
 
     if matches!(build_compat, BuildCompat::V3(_)) {
         return Ok(());
@@ -118,6 +125,7 @@ fn update_build(build_toml: PathBuf) -> Result<()> {
     let v3_build: v3::Build = build.into();
     let pretty_toml = toml::to_string_pretty(&v3_build)?;
 
+    let build_toml = kernel_dir.join("build.toml");
     let mut writer =
         BufWriter::new(File::create(&build_toml).wrap_err_with(|| {
             format!("Cannot open {} for writing", build_toml.to_string_lossy())

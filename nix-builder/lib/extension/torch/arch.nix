@@ -116,7 +116,7 @@ stdenv.mkDerivation (prevAttrs: {
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --ops-id ${rev} $out/build.toml
+      --ops-id ${rev} $out
   '';
 
   preConfigure =

@@ -7,8 +7,11 @@ use std::{
 use eyre::{bail, Result};
 use minijinja::Environment;
 
-use crate::config::{Build, Framework};
 use crate::util::{check_or_infer_target_dir, parse_build};
+use crate::{
+    config::{Build, Framework},
+    util::check_or_infer_kernel_dir,
+};
 
 pub(crate) mod common;
 pub mod deps;
@@ -42,13 +45,14 @@ pub fn create_pyproject_file_set(
 }
 
 pub fn create_pyproject(
-    build_toml: PathBuf,
+    kernel_dir: Option<PathBuf>,
     target_dir: Option<PathBuf>,
     force: bool,
     ops_id: Option<String>,
 ) -> Result<()> {
-    let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
-    let build = parse_build(&build_toml)?;
+    let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
+    let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
+    let build = parse_build(&kernel_dir)?;
     let file_set = create_pyproject_file_set(build, &target_dir, ops_id)?;
     file_set.write(&target_dir, force)?;
 
@@ -56,15 +60,16 @@ pub fn create_pyproject(
 }
 
 pub fn clean_pyproject(
-    build_toml: PathBuf,
+    kernel_dir: Option<PathBuf>,
     target_dir: Option<PathBuf>,
     dry_run: bool,
     force: bool,
     ops_id: Option<String>,
 ) -> Result<()> {
-    let target_dir = check_or_infer_target_dir(&build_toml, target_dir)?;
+    let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
+    let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
 
-    let build = parse_build(&build_toml)?;
+    let build = parse_build(&kernel_dir)?;
     let generated_files =
         create_pyproject_file_set(build, target_dir.clone(), ops_id)?.into_names();
 

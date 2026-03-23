@@ -44,3 +44,12 @@ jobs:
       - name: Check import sorting
         run: uv run --with isort isort --check-only --diff kernels/src kernels/tests
 
+  validate-dependencies:
+    name: Validate shared files between Rust crate and Python package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check python_depends.json is in sync
+        run: cmp -s kernel-builder/src/python_dependencies.json kernels/src/kernels/python_depends.json
+

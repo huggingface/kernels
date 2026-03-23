@@ -11,7 +11,7 @@ def test_user_agent_contains_core_fields():
     python_ver = ".".join(platform.python_version_tuple()[:2])
     assert f"python/{python_ver}" in ua
     assert "backend/" in ua
-    assert f"flatform/{_platform()}" in ua
+    assert f"platform/{_platform()}" in ua
     assert "file_type/kernel" in ua
 
 

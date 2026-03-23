@@ -140,16 +140,6 @@ def upload_kernels_dir(
             allow_patterns=["benchmark*.py"],
         )
 
-    card_path = kernel_dir / "build" / "CARD.md"
-    if (card_path).exists():
-        api.upload_file(
-            repo_id=repo_id,
-            path_or_fileobj=card_path,
-            path_in_repo="README.md",
-            revision=branch,
-            commit_message="File uploaded using `kernels`.",
-        )
-
     assert variants is not None
     _upload_build_dir(
         api,
@@ -160,3 +150,14 @@ def upload_kernels_dir(
         is_new_branch=is_new_branch,
     )
     print(f"✅ Kernel upload successful. Find the kernel in: https://hf.co/{repo_id}")
+
+    # We always upload the card to "main" branch.
+    card_path = kernel_dir / "build" / "CARD.md"
+    if (card_path).exists():
+        api.upload_file(
+            repo_id=repo_id,
+            path_or_fileobj=card_path,
+            path_in_repo="README.md",
+            revision="main",
+            commit_message="File uploaded using `kernels`.",
+        )

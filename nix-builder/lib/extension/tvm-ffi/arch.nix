@@ -274,5 +274,6 @@ stdenv.mkDerivation (prevAttrs: {
   passthru = {
     inherit dependencies;
     inherit (python3.pkgs.tvm-ffi) variant;
+    archVariant = python3.pkgs.tvm-ffi.variant;
   };
 })

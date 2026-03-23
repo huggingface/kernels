@@ -100,5 +100,6 @@ stdenv.mkDerivation (prevAttrs: {
   passthru = {
     inherit dependencies;
     variant = torch.noarchVariant;
+    archVariant = torch.variant;
   };
 })

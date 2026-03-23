@@ -3,12 +3,14 @@ use std::path::PathBuf;
 use clap::Args;
 use eyre::{bail, Context, Result};
 
+use crate::util::check_or_infer_kernel_dir;
+
 /// Common arguments shared by all build commands.
 #[derive(Debug, Args)]
 pub struct CommonBuildArgs {
     /// Directory of the kernel project (defaults to current directory).
-    #[arg(value_name = "KERNEL_DIR", default_value = ".")]
-    pub kernel_dir: PathBuf,
+    #[arg(value_name = "KERNEL_DIR")]
+    pub kernel_dir: Option<PathBuf>,
 
     /// Maximum number of Nix build jobs.
     #[arg(long, default_value = "4")]
@@ -20,6 +22,7 @@ pub struct CommonBuildArgs {
 }
 
 pub fn run_build(args: CommonBuildArgs, target: &str) -> Result<()> {
+    let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
     let flake_ref = format!(".#{target}");
 
     let mut cmd = std::process::Command::new("nix");
@@ -32,7 +35,7 @@ pub fn run_build(args: CommonBuildArgs, target: &str) -> Result<()> {
         &args.cores.to_string(),
         &flake_ref,
     ]);
-    cmd.current_dir(&args.kernel_dir);
+    cmd.current_dir(&kernel_dir);
 
     let status = cmd
         .status()

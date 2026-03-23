@@ -13,14 +13,15 @@ use huggingface_hub::{
 use regex::Regex;
 
 use crate::hf;
+use crate::util::check_or_infer_kernel_dir;
 
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
 #[derive(Debug, Args)]
 pub struct UploadArgs {
     /// Directory of the kernel build (defaults to current directory).
-    #[arg(value_name = "KERNEL_DIR", default_value = ".")]
-    pub kernel_dir: PathBuf,
+    #[arg(value_name = "KERNEL_DIR")]
+    pub kernel_dir: Option<PathBuf>,
 
     /// Repository ID on the Hugging Face Hub (e.g. `user/my-kernel`).
     /// Defaults to `general.hub.repo-id` from `build.toml`.
@@ -39,10 +40,11 @@ pub struct UploadArgs {
 pub fn run_upload(args: UploadArgs) -> Result<()> {
     let rt = hf::runtime()?;
     let api = hf::api()?;
-    let kernel_dir = fs::canonicalize(&args.kernel_dir).wrap_err_with(|| {
+    let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
+    let kernel_dir = fs::canonicalize(&kernel_dir).wrap_err_with(|| {
         format!(
             "Cannot resolve kernel directory `{}`",
-            args.kernel_dir.display()
+            kernel_dir.display()
         )
     })?;
 

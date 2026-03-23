@@ -6,9 +6,10 @@ use itertools::Itertools;
 use minijinja::{context, Environment};
 
 use crate::config::{Backend, Build, General, TvmFfi};
-use crate::pyproject::compat::{
+use crate::pyproject::common::{
     prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
 };
+use crate::pyproject::deps::render_deps;
 use crate::pyproject::kernel::render_kernel_components;
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
 use crate::pyproject::FileSet;
@@ -109,7 +110,7 @@ pub fn write_pyproject_toml(
 
     // Common python dependencies (no backend-specific ones)
     let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
-        iter.flat_map(|(_, deps)| deps.python_pkgs.iter().map(|d| format!("\"{d}\"")))
+        iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
             .join(", ")
     })?;
 
@@ -117,7 +118,7 @@ pub fn write_pyproject_toml(
     let mut backend_dependencies = Vec::new();
     for backend in &Backend::all() {
         let deps = itertools::process_results(general.backend_python_depends(*backend), |iter| {
-            iter.flat_map(|(_, deps)| deps.python_pkgs.iter().map(|d| format!("\"{d}\"")))
+            iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
                 .join(", ")
         })?;
 
@@ -227,6 +228,8 @@ pub fn write_cmake(
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
     render_preamble(env, &build.general, revision, cmake_writer)?;
+
+    render_deps(env, build, cmake_writer)?;
 
     render_binding(env, tvm_ffi, name, cmake_writer)?;
 

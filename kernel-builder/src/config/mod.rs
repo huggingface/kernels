@@ -61,6 +61,9 @@ pub struct General {
     /// Hugging Face Hub license identifier.
     pub license: Option<String>,
 
+    /// Source repository or reference for the kernel code.
+    pub upstream: Option<url::Url>,
+
     pub backends: Vec<Backend>,
     pub hub: Option<Hub>,
     pub python_depends: Option<Vec<String>>,

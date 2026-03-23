@@ -105,7 +105,7 @@ if(GPU_LANG STREQUAL "CUDA")
   # Get the capabilities without +PTX suffixes, so that we can use them as
   # the target archs in the loose intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
-  message(STATUS "CUDA supported base architectures: ${CUDA_ARCHS}")
+  message(STATUS "CUDA base archs used for intersection with kernel archs: ${CUDA_ARCHS}")
 
   if(BUILD_ALL_SUPPORTED_ARCHS)
     set(CUDA_KERNEL_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
@@ -117,9 +117,10 @@ if(GPU_LANG STREQUAL "CUDA")
     endif()
   endif()
 
-  message(STATUS "CUDA supported kernel architectures: ${CUDA_KERNEL_ARCHS}")
+  message(STATUS "Default CUDA kernel architectures: ${CUDA_KERNEL_ARCHS}")
 
   if(NVCC_THREADS AND GPU_LANG STREQUAL "CUDA")
+    message(STATUS "Using nvcc with: -threads=${NVCC_THREADS}")
     list(APPEND GPU_FLAGS "--threads=${NVCC_THREADS}")
   endif()
 

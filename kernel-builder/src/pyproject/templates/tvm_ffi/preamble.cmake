@@ -1,5 +1,19 @@
 cmake_minimum_required(VERSION 3.26)
 
+# Set Intel SYCL compiler before project() call
+find_program(ICX_COMPILER icx)
+find_program(ICPX_COMPILER icpx)
+
+if(ICX_COMPILER OR ICPX_COMPILER)
+  set(CMAKE_C_COMPILER ${ICX_COMPILER})
+
+ if(WIN32)
+    set(CMAKE_CXX_COMPILER ${ICX_COMPILER})
+  else()
+    set(CMAKE_CXX_COMPILER ${ICPX_COMPILER})
+  endif()
+endif()
+
 project({{name}} LANGUAGES CXX)
 
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
@@ -11,15 +25,21 @@ message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 
-include(CheckLanguage)
-check_language(CUDA)
-if(CMAKE_CUDA_COMPILER)
-    set(DETECTED_GPU_LANG "CUDA")
-else()
-    set(DETECTED_GPU_LANG "CPU")
-endif()
+if(NOT DEFINED GPU_LANG)
+    if(ICX_COMPILER OR ICPX_COMPILER)
+        set(DETECTED_GPU_LANG "SYCL")
+    else()
+        include(CheckLanguage)
+        check_language(CUDA)
+        if(CMAKE_CUDA_COMPILER)
+            set(DETECTED_GPU_LANG "CUDA")
+        else()
+            set(DETECTED_GPU_LANG "CPU")
+        endif()
+    endif()
 
-set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
+    set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
+endif()
 gpu_lang_to_backend(BACKEND "${GPU_LANG}")
 message(STATUS "Using backend: ${BACKEND}, GPU language: ${GPU_LANG}")
 
@@ -41,6 +61,20 @@ option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 if(GPU_LANG STREQUAL "CUDA")
   enable_language(CUDA)
 
+  {% if cuda_minver %}
+  if (CMAKE_CUDA_COMPILER_VERSION VERSION_LESS {{ cuda_minver }})
+    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too old. "
+      "Minimum required version is {{ cuda_minver }}.")
+  endif()
+  {% endif %}
+
+  {% if cuda_maxver %}
+  if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER {{ cuda_maxver }})
+    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too new. "
+      "Maximum version is {{ cuda_maxver }}.")
+  endif()
+  {% endif %}
+
   if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
       CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
     set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0+PTX")
@@ -57,7 +91,7 @@ if(GPU_LANG STREQUAL "CUDA")
   # Get the capabilities without +PTX suffixes, so that we can use them as
   # the target archs in the loose intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
-  message(STATUS "CUDA supported base architectures: ${CUDA_ARCHS}")
+  message(STATUS "CUDA base archs used for intersection with kernel archs: ${CUDA_ARCHS}")
 
   if(BUILD_ALL_SUPPORTED_ARCHS)
       set(CUDA_KERNEL_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
@@ -70,24 +104,44 @@ if(GPU_LANG STREQUAL "CUDA")
       set(CUDA_KERNEL_ARCHS "${DETECTED_CUDA_CAPABILITY}")
   endif()
 
-  {% if cuda_minver %}
-  if (CMAKE_CUDA_COMPILER_VERSION VERSION_LESS {{ cuda_minver }})
-    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too old. "
-      "Minimum required version is {{ cuda_minver }}.")
-  endif()
-  {% endif %}
+  message(STATUS "Default CUDA kernel architectures: ${CUDA_KERNEL_ARCHS}")
 
-  {% if cuda_maxver %}
-  if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER {{ cuda_maxver }})
-    message(FATAL_ERROR "CUDA version ${CMAKE_CUDA_COMPILER_VERSION} is too new. "
-      "Maximum version is {{ cuda_maxver }}.")
+  if(NVCC_THREADS AND GPU_LANG STREQUAL "CUDA")
+    message(STATUS "Using nvcc with: -threads=${NVCC_THREADS}")
+    list(APPEND GPU_FLAGS "--threads=${NVCC_THREADS}")
   endif()
-  {% endif %}
 
   add_compile_definitions(CUDA_KERNEL)
 elseif(GPU_LANG STREQUAL "CPU")
   add_compile_definitions(CPU_KERNEL)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
+elseif(GPU_LANG STREQUAL "SYCL")
+  if(NOT ICX_COMPILER AND NOT ICPX_COMPILER)
+    message(FATAL_ERROR "Intel SYCL C++ compiler (icpx) and/or C compiler (icx) not found. Please install Intel oneAPI toolkit.")
+  endif()
+
+  execute_process(
+    COMMAND ${ICPX_COMPILER} --version
+    OUTPUT_VARIABLE ICPX_VERSION_OUTPUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "[0-9]+\\.[0-9]+" DPCPP_VERSION "${ICPX_VERSION_OUTPUT}")
+  set(DPCPP_VERSION "${DPCPP_VERSION}" CACHE STRING "DPCPP major.minor version")
+
+  # On Windows, use icx (MSVC-compatible) for C++ to work with Ninja generator
+  # On Linux, use icpx (GNU-compatible) for C++
+  if(WIN32)
+    message(STATUS "Using Intel SYCL C++ compiler: ${ICX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION} (Windows MSVC-compatible mode)")
+  else()
+    message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
+  endif()
+
+  set(sycl_link_flags "-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
+  set(sycl_flags "-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  set(GPU_FLAGS "${sycl_flags}")
+  set(GPU_ARCHES "")
+
+  add_compile_definitions(XPU_KERNEL)
 endif()
 
 # Run `tvm-ffi-config --cmakedir` to set `tvm_ffi_ROOT`

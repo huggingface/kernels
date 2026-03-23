@@ -41,10 +41,7 @@ def main():
         print(f"Error: failed to parse input metadata JSON: {e}", file=sys.stderr)
         sys.exit(1)
 
-    data["backend"] = {
-        "type": args.backend,
-        "archs": archs,
-    }
+    data["backend"]["archs"] = archs
 
     with open(args.destination, "w") as f:
         json.dump(data, f, indent=2)

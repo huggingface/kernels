@@ -5,6 +5,7 @@ version = 1
 backends = [
     "cpu",
     "cuda",
+    "xpu",
 ]
 
 [tvm-ffi]
@@ -21,3 +22,8 @@ depends = []
 backend = "cuda"
 src = ["relu_cuda/relu.cu", "util.hh"]
 depends = []
+
+[kernel.relu_xpu]
+backend = "xpu"
+depends = ["torch"]
+src = ["relu_xpu/relu.cpp", "util.hh"]

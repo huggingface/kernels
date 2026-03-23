@@ -7,7 +7,7 @@ use minijinja::{context, Environment};
 use crate::{
     config::{Backend, Build, General, Torch},
     pyproject::{
-        compat::{write_compat_py, write_metadata},
+        common::{write_compat_py, write_metadata},
         fileset::FileSet,
         ops_identifier::kernel_ops_identifier,
     },
@@ -81,7 +81,7 @@ fn write_pyproject_toml(
 
     // Common python dependencies (no backend-specific ones)
     let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
-        iter.flat_map(|(_, deps)| deps.python_pkgs.iter().map(|d| format!("\"{d}\"")))
+        iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
             .join(", ")
     })?;
 
@@ -89,7 +89,7 @@ fn write_pyproject_toml(
     let mut backend_dependencies = Vec::new();
     for backend in &Backend::all() {
         let deps = itertools::process_results(general.backend_python_depends(*backend), |iter| {
-            iter.flat_map(|(_, deps)| deps.python_pkgs.iter().map(|d| format!("\"{d}\"")))
+            iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
                 .join(", ")
         })?;
 

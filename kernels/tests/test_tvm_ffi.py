@@ -1,8 +1,9 @@
 import pytest
 
-from kernels import get_kernel
+from kernels import get_kernel, install_kernel, get_local_kernel
 
-relu_supported_devices = ["cpu", "cuda"]
+
+relu_supported_devices = ["cpu", "cuda", "xpu"]
 
 
 def test_relu_load(device):
@@ -23,3 +24,11 @@ def test_relu_torch(device):
     out = kernel.relu(x, torch.empty_like(x))
 
     torch.testing.assert_close(out, torch.relu(x))
+
+
+def test_local_load(device):
+    if device not in relu_supported_devices:
+        pytest.skip(f"Device is not one of: {','.join(relu_supported_devices)}")
+
+    package_name, path = install_kernel("kernels-test/relu-tvm-ffi", "v1")
+    get_local_kernel(path.parent.parent, package_name)

@@ -8,6 +8,7 @@ backends = [
 ]
 name = "__KERNEL_NAME__"
 version = 1
+upstream = "__UPSTREAM_URL__"
 
 [torch]
 src = [

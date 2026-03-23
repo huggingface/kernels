@@ -19,14 +19,14 @@
       title: FAQ
     - local: migration
       title: Migrating from older versions
+    - local: integrating-kernels
+      title: Integrating kernels into a project
   title: Using kernels
 - sections:
     - local: builder/writing-kernels
       title: Writing Kernels
     - local: builder/nix
       title: Building with Nix
-    - local: builder/docker
-      title: Building with Docker
     - local: builder/local-dev
       title: Local Development
     - local: kernel-requirements

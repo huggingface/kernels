@@ -245,6 +245,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "toml",
+ "url",
 ]
 
 [[package]]
@@ -810,6 +811,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

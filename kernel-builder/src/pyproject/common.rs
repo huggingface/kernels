@@ -34,6 +34,7 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
         let metadata = Metadata {
             version: general.version,
             license: general.license.clone(),
+            upstream: general.upstream.clone(),
             python_depends,
         };
 

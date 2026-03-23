@@ -37,7 +37,7 @@ support.
 
 ## Setting up environment
 
-In the [`terraform`](../../../terraform/) directory, we provide an
+In the [`terraform`](https://github.com/huggingface/kernels/tree/main/terraform) directory, we provide an
 example of programatically spinning up an EC2 instance that is ready
 with everything needed for you to start developing and building
 kernels.

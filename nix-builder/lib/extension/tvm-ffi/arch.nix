@@ -82,7 +82,10 @@ let
   dependencies =
     resolvePythonDeps pythonDeps
     ++ resolveBackendPythonDeps buildConfig.backend backendPythonDeps
-    ++ [ torch ];
+    ++ [
+      torch
+      python3.pkgs.tvm-ffi
+    ];
 
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
 
@@ -149,10 +152,9 @@ stdenv.mkDerivation (prevAttrs: {
     kernel-layout-check
     remove-bytecode-hook
   ]
-  # TODO: renenable
-  #++ lib.optionals doGetKernelCheck [
-  #  (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
-  #]
+  ++ lib.optionals doGetKernelCheck [
+    (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
+  ]
   ++ lib.optionals cudaSupport [
     cmakeNvccThreadsHook
     cuda_nvcc
@@ -231,6 +233,7 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ lib.optionals cudaSupport [
     (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
+    (lib.cmakeFeature "GPU_LANG" "CUDA")
   ]
   ++ lib.optionals rocmSupport [
     # Ensure sure that we use HIP from our CLR override and not HIP from
@@ -242,6 +245,9 @@ stdenv.mkDerivation (prevAttrs: {
     # Use host compiler for Metal. Not included in the redistributable SDK.
     # Re-enable when the issue mentioned in preConfigure is solved.
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
+  ]
+  ++ lib.optionals xpuSupport [
+    (lib.cmakeFeature "GPU_LANG" "SYCL")
   ];
 
   postInstall = ''

@@ -62,7 +62,7 @@ project files. For example:
 
 ```bash
 $ nix develop
-$ kernel-builder create-pyproject build.toml
+$ kernel-builder create-pyproject
 $ cmake -B build-ext
 $ cmake --build build-ext
 ```
@@ -74,7 +74,7 @@ Python package in this virtual environment:
 
 ```bash
 $ nix develop
-$ kernel-builder create-pyproject build.toml
+$ kernel-builder create-pyproject
 $ pip install --no-build-isolation -e .
 ```
 

@@ -13,7 +13,7 @@ mod develop;
 use develop::{devshell, testshell};
 
 mod build;
-use build::{run_build, BuildArgs};
+use build::{run_build, CommonBuildArgs};
 
 mod hf;
 
@@ -63,8 +63,23 @@ enum Commands {
     /// Initialize a new kernel project from template.
     Init(InitArgs),
 
-    /// Build the kernel using Nix.
-    Build(BuildArgs),
+    /// Build the kernel locally (alias for build-and-copy).
+    Build {
+        #[command(flatten)]
+        args: CommonBuildArgs,
+    },
+
+    /// Build the kernel and copy artifacts locally.
+    BuildAndCopy {
+        #[command(flatten)]
+        args: CommonBuildArgs,
+    },
+
+    /// Build the kernel and upload to Hugging Face Hub.
+    BuildAndUpload {
+        #[command(flatten)]
+        args: CommonBuildArgs,
+    },
 
     /// Upload kernel build artifacts to the Hugging Face Hub.
     Upload(UploadArgs),
@@ -152,7 +167,10 @@ fn main() -> Result<()> {
         }
         Commands::Init(args) => run_init(args),
         Commands::Upload(args) => run_upload(args),
-        Commands::Build(args) => run_build(args),
+        Commands::Build { args } | Commands::BuildAndCopy { args } => {
+            run_build(args, "build-and-copy")
+        }
+        Commands::BuildAndUpload { args } => run_build(args, "build-and-upload"),
         Commands::CreatePyproject {
             kernel_dir,
             force,

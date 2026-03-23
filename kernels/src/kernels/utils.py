@@ -592,7 +592,7 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
         backend = _select_backend(None).variant_str
-        user_agent_str += f"; kernels/{__version__}; python/{python}; backend/{backend}; flatform/{_platform()}; file_type/kernel"
+        user_agent_str += f"; kernels/{__version__}; python/{python}; backend/{backend}; platform/{_platform()}; file_type/kernel"
 
         if has_torch:
             import torch

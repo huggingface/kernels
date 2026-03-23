@@ -272,7 +272,7 @@ rec {
           buildToml = readBuildConfig path;
         in
         {
-          name = extension.variant;
+          name = extension.archVariant;
           value = mkShell {
             nativeBuildInputs = with pkgs; pythonNativeCheckInputs python3.pkgs;
 
@@ -336,7 +336,7 @@ rec {
             );
         in
         {
-          name = buildSet.torch.variant;
+          name = extension.variant;
           value =
             with pkgs;
             pkgs.writeShellScriptBin "ci-test" ''
@@ -384,7 +384,7 @@ rec {
           );
         in
         {
-          name = extension.variant;
+          name = extension.archVariant;
           value = mkShell rec {
             nativeBuildInputs =
               with pkgs;

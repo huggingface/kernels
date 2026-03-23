@@ -1113,6 +1113,7 @@ dependencies = [
  "tokio",
  "toml",
  "url",
+ "walkdir",
 ]
 
 [[package]]

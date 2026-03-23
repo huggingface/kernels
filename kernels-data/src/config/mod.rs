@@ -52,6 +52,10 @@ impl Build {
     pub fn is_noarch(&self) -> bool {
         self.kernels.is_empty()
     }
+
+    pub fn repo_id(&self) -> Option<&str> {
+        self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
+    }
 }
 
 pub struct General {

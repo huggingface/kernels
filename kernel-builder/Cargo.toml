@@ -28,6 +28,7 @@ serde-value = "0.7"
 thiserror = "1"
 toml = "0.8"
 url = { version = "2", features = ["serde"] }
+walkdir = "2"
 
 [build-dependencies]
 minijinja-embed = "2.5"

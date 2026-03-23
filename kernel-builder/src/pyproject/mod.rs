@@ -18,6 +18,7 @@ mod torch;
 mod tvm_ffi;
 
 pub use fileset::FileSet;
+pub use metadata::parse_metadata;
 
 pub fn create_pyproject_file_set(
     build: Build,

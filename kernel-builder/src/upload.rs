@@ -10,11 +10,15 @@ use huggingface_hub::{
     AddSource, CommitOperation, CreateBranchParams, CreateCommitParams, CreateRepoParams,
     ListRepoFilesParams, ListRepoRefsParams, RepoType,
 };
-use regex::Regex;
+use walkdir::WalkDir;
 
-use crate::hf;
-use crate::util::check_or_infer_kernel_dir;
+use crate::{
+    hf,
+    pyproject::parse_metadata,
+    util::{check_or_infer_kernel_dir, parse_build},
+};
 
+const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
 #[derive(Debug, Args)]
@@ -41,20 +45,19 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     let rt = hf::runtime()?;
     let api = hf::api()?;
     let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
-    let kernel_dir = fs::canonicalize(&kernel_dir).wrap_err_with(|| {
-        format!(
-            "Cannot resolve kernel directory `{}`",
-            kernel_dir.display()
-        )
-    })?;
+    let kernel_dir = fs::canonicalize(&kernel_dir)
+        .wrap_err_with(|| format!("Cannot resolve kernel directory `{}`", kernel_dir.display()))?;
 
-    // Resolve repo_id: explicit --repo-id flag, or read from build.toml.
     let arg_repo_id = match args.repo_id {
         Some(id) => id,
-        None => read_repo_id_from_build_toml(&kernel_dir)?,
+        None => parse_build(&kernel_dir)?
+            .repo_id()
+            .ok_or_else(|| {
+                eyre::eyre!("No `general.hub.repo-id` in build.toml. Use --repo-id to specify it.")
+            })?
+            .to_owned(),
     };
 
-    // Discover build variants.
     let (build_dir, variants) = discover_variants(&kernel_dir)?;
     eprintln!(
         "Found {} build variant(s) in {}",
@@ -62,12 +65,10 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         build_dir.display()
     );
 
-    // Determine branch from metadata version if not specified.
-    let branch = args
+    let version_branch = args
         .branch
         .map_or_else(|| detect_branch_from_metadata(&variants), |b| Ok(Some(b)))?;
 
-    // Create repo (or get existing).
     let repo_id = rt.block_on(async {
         let params = CreateRepoParams::builder()
             .repo_id(&arg_repo_id)
@@ -78,7 +79,6 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
             .create_repo(&params)
             .await
             .wrap_err("Cannot create repository")?;
-        // Extract repo_id from the URL (format: https://huggingface.co/{repo_id}).
         let id = repo_url
             .url
             .trim_end_matches('/')
@@ -88,8 +88,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         Ok::<_, eyre::Report>(id)
     })?;
 
-    // Create branch if needed.
-    let is_new_branch = if let Some(ref branch) = branch {
+    let is_new_version_branch = if let Some(ref branch) = version_branch {
         let new = rt.block_on(async {
             let refs_params = ListRepoRefsParams::builder().repo_id(&repo_id).build();
             let refs = api
@@ -115,84 +114,110 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         false
     };
 
-    // List existing repo files so we can compute deletions.
-    let existing_files: Vec<String> = rt.block_on(async {
-        let params = ListRepoFilesParams {
-            repo_id: repo_id.to_owned(),
-            revision: branch.clone(),
-            repo_type: Some(RepoType::Model),
-        };
-        api.list_repo_files(&params)
-            .await
-            .wrap_err("Cannot list repository files")
-    })?;
+    // README goes to main branch, build artifacts go to version branch.
+    let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
 
-    // Collect all operations: benchmarks, README, and build artifacts.
-    let mut operations: Vec<CommitOperation> = Vec::new();
+    collect_readme_commit_ops(
+        &kernel_dir,
+        operations_by_branch
+            .entry(MAIN_BRANCH.to_owned())
+            .or_default(),
+    );
 
-    collect_benchmark_ops(&kernel_dir, &existing_files, is_new_branch, &mut operations)?;
-    collect_readme_ops(&kernel_dir, &mut operations);
-    collect_build_ops(
-        &build_dir,
-        &variants,
-        &existing_files,
-        is_new_branch,
-        &mut operations,
-    )?;
-
-    if operations.is_empty() {
-        eprintln!("No changes to upload.");
-        return Ok(());
-    }
-
-    eprintln!("Uploading {} operations...", operations.len());
-
-    let batch_count = operations.len().div_ceil(BUILD_COMMIT_BATCH_SIZE);
-    if batch_count > 1 {
-        eprintln!(
-            "Uploading in {} commits ({} operations).",
-            batch_count,
-            operations.len()
-        );
-    }
-
-    for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
-        let commit_message = if batch_count > 1 {
-            format!(
-                "Uploaded using `kernel-builder` (batch {}/{batch_count}).",
-                batch_index + 1
-            )
-        } else {
-            "Uploaded using `kernel-builder`.".to_owned()
-        };
-
-        rt.block_on(async {
-            let params = CreateCommitParams {
+    if let Some(ref branch) = version_branch {
+        let version_existing_files: Vec<String> = rt.block_on(async {
+            let params = ListRepoFilesParams {
                 repo_id: repo_id.to_owned(),
-                operations: chunk.to_vec(),
-                commit_message,
-                commit_description: None,
+                revision: Some(branch.clone()),
                 repo_type: Some(RepoType::Model),
-                revision: branch.clone(),
-                create_pr: None,
-                parent_commit: None,
             };
-            api.create_commit(&params)
-                .await
-                .wrap_err("Cannot create commit")
-        })?;
+            api.list_repo_files(&params).await.unwrap_or_default() // OK if branch is new
+        });
 
+        let version_ops = operations_by_branch.entry(branch.clone()).or_default();
+
+        collect_benchmark_commit_ops(
+            &kernel_dir,
+            &version_existing_files,
+            is_new_version_branch,
+            version_ops,
+        )?;
+        collect_build_commit_ops(
+            &build_dir,
+            &variants,
+            &version_existing_files,
+            is_new_version_branch,
+            version_ops,
+        )?;
+    }
+
+    for (branch, operations) in &operations_by_branch {
+        if operations.is_empty() {
+            continue;
+        }
+
+        eprintln!(
+            "Uploading {} operations to branch `{}`...",
+            operations.len(),
+            branch
+        );
+
+        let batch_count = operations.len().div_ceil(BUILD_COMMIT_BATCH_SIZE);
         if batch_count > 1 {
-            eprintln!("  Uploaded batch {}/{batch_count}.", batch_index + 1);
+            eprintln!(
+                "Uploading in {} commits ({} operations).",
+                batch_count,
+                operations.len()
+            );
+        }
+
+        for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
+            let commit_message = if batch_count > 1 {
+                format!(
+                    "Uploaded using `kernel-builder` (batch {}/{batch_count}).",
+                    batch_index + 1
+                )
+            } else {
+                "Uploaded using `kernel-builder`.".to_owned()
+            };
+
+            rt.block_on(async {
+                let params = CreateCommitParams {
+                    repo_id: repo_id.to_owned(),
+                    operations: chunk.to_vec(),
+                    commit_message,
+                    commit_description: None,
+                    repo_type: Some(RepoType::Model),
+                    revision: Some(branch.clone()),
+                    create_pr: None,
+                    parent_commit: None,
+                };
+                api.create_commit(&params)
+                    .await
+                    .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))
+            })?;
+
+            if batch_count > 1 {
+                eprintln!("  Uploaded batch {}/{batch_count}.", batch_index + 1);
+            }
         }
     }
 
-    println!("Kernel upload successful. Find the kernel at: https://hf.co/{repo_id}");
+    let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();
+    if total_ops == 0 {
+        eprintln!("No changes to upload.");
+    } else {
+        let tree_path = version_branch
+            .as_ref()
+            .map_or(String::new(), |b| format!("/tree/{b}"));
+        println!("Kernel uploaded: https://hf.co/{repo_id}{tree_path}");
+    }
+
     Ok(())
 }
 
-// Collect benchmark file operations: add matching files, delete stale ones.
-fn collect_benchmark_ops(
+/// Collect benchmark file commit operations: add matching files, delete stale ones.
+fn collect_benchmark_commit_ops(
     kernel_dir: &Path,
     existing_files: &[String],
     is_new_branch: bool,
@@ -203,7 +228,6 @@ fn collect_benchmark_ops(
         return Ok(());
     }
 
-    // Add local benchmark files.
     let mut added: HashSet<String> = HashSet::new();
     for entry in fs::read_dir(&benchmarks_dir)
         .wrap_err_with(|| format!("Cannot read `{}`", benchmarks_dir.display()))?
@@ -227,13 +251,11 @@ fn collect_benchmark_ops(
         });
     }
 
-    // Delete stale benchmark files from the repo.
     for file in existing_files {
         if !file.starts_with("benchmarks/") || added.contains(file) {
             continue;
         }
-        // On new branches, delete everything under benchmarks/.
-        // On existing branches, only delete benchmark*.py files.
+        // On new branches delete everything; on existing branches only delete benchmark*.py.
         if is_new_branch
             || file
                 .split('/')
@@ -249,8 +271,8 @@ fn collect_benchmark_ops(
     Ok(())
 }
 
-// Collect README operation: upload build/CARD.md as README.md.
-fn collect_readme_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
+/// Collect README commit operation: upload build/CARD.md as README.md.
+fn collect_readme_commit_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
     let card_path = kernel_dir.join("build").join("CARD.md");
     if card_path.exists() {
         operations.push(CommitOperation::Add {
@@ -260,29 +282,25 @@ fn collect_readme_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) 
     }
 }
 
-// Collect build artifact operations: add variant files, delete stale ones.
-fn collect_build_ops(
+/// Collect build artifact commit operations: add variant files, delete stale ones.
+fn collect_build_commit_ops(
     build_dir: &Path,
     variants: &[PathBuf],
     existing_files: &[String],
     is_new_branch: bool,
     operations: &mut Vec<CommitOperation>,
 ) -> Result<()> {
-    // Collect local files to repo paths.
     let mut repo_paths: BTreeMap<String, PathBuf> = BTreeMap::new();
     for variant in variants {
-        for entry in walkdir(variant)? {
-            if entry.is_file() {
-                let relative = entry
-                    .strip_prefix(build_dir)
-                    .wrap_err("Cannot compute relative path")?;
-                let repo_path = format!("build/{}", relative.to_string_lossy().replace('\\', "/"));
-                repo_paths.insert(repo_path, entry);
-            }
+        for path in walk_files(variant) {
+            let relative = path
+                .strip_prefix(build_dir)
+                .wrap_err("Cannot compute relative path")?;
+            let repo_path = format!("build/{}", relative.to_string_lossy().replace('\\', "/"));
+            repo_paths.insert(repo_path, path);
         }
     }
 
-    // Determine which prefixes to delete.
     let variant_prefixes: Vec<String> = variants
         .iter()
         .map(|v| {
@@ -297,7 +315,6 @@ fn collect_build_ops(
         variant_prefixes.iter().map(|s| s.as_str()).collect()
     };
 
-    // Delete stale files under the relevant prefixes.
     for file in existing_files {
         let should_delete = delete_prefixes
             .iter()
@@ -309,7 +326,6 @@ fn collect_build_ops(
         }
     }
 
-    // Add build files.
     for (repo_path, local_path) in repo_paths {
         operations.push(CommitOperation::Add {
             path_in_repo: repo_path,
@@ -320,56 +336,20 @@ fn collect_build_ops(
     Ok(())
 }
 
-// Read `general.hub.repo-id` from `build.toml` in the kernel directory.
-fn read_repo_id_from_build_toml(kernel_dir: &Path) -> Result<String> {
-    let build_toml_path = kernel_dir.join("build.toml");
-    let content = fs::read_to_string(&build_toml_path)
-        .wrap_err_with(|| format!("Cannot read `{}`", build_toml_path.display()))?;
-    let parsed: toml::Value = toml::from_str(&content)
-        .wrap_err_with(|| format!("Cannot parse `{}`", build_toml_path.display()))?;
-
-    parsed
-        .get("general")
-        .and_then(|g| g.get("hub"))
-        .and_then(|h| h.get("repo-id"))
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_owned())
-        .ok_or_else(|| {
-            eyre::eyre!(
-                "No `general.hub.repo-id` in `{}`. Use --repo-id to specify it.",
-                build_toml_path.display()
-            )
-        })
-}
-
-// Discover build variant directories. Checks `kernel_dir/build/` first, then `kernel_dir/`.
+/// Discover build variant directories (contain `metadata.json`).
 fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
-    let variant_re =
-        Regex::new(r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)")
-            .expect("valid regex");
-
     for candidate in [kernel_dir.join("build"), kernel_dir.to_path_buf()] {
         if !candidate.is_dir() {
             continue;
         }
-        let mut variants: Vec<PathBuf> = Vec::new();
-        for entry in fs::read_dir(&candidate)
+
+        let mut variants: Vec<PathBuf> = fs::read_dir(&candidate)
             .wrap_err_with(|| format!("Cannot read `{}`", candidate.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-            let name = entry.file_name();
-            let Some(name_str) = name.to_str() else {
-                continue;
-            };
-            if variant_re.is_match(name_str) && path.join("metadata.json").is_file() {
-                variants.push(path);
-            }
-        }
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.join("metadata.json").is_file())
+            .collect();
+
         if !variants.is_empty() {
             variants.sort();
             return Ok((candidate, variants));
@@ -383,59 +363,38 @@ fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
     );
 }
 
-// Read metadata.json from each variant to determine the branch name (`v{version}`).
+/// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
-    let mut versions: HashSet<Option<u64>> = HashSet::new();
+    let mut versions: HashSet<Option<usize>> = HashSet::new();
 
     for variant in variants {
-        let metadata_path = variant.join("metadata.json");
-        let data = fs::read_to_string(&metadata_path)
-            .wrap_err_with(|| format!("Cannot read `{}`", metadata_path.display()))?;
-        let parsed: serde_json::Value = serde_json::from_str(&data)
-            .wrap_err_with(|| format!("Cannot parse `{}`", metadata_path.display()))?;
-        let version = parsed.get("version").and_then(|v| v.as_u64());
-        versions.insert(version);
+        let metadata = parse_metadata(variant.join("metadata.json"))?;
+        versions.insert(metadata.version);
     }
 
     if versions.len() > 1 {
-        let version_strs: Vec<String> = versions
+        let strs: Vec<_> = versions
             .iter()
-            .map(|v| match v {
-                Some(n) => n.to_string(),
-                None => "none".to_owned(),
-            })
+            .map(|v| v.map_or("none".into(), |n| n.to_string()))
             .collect();
         bail!(
             "Found multiple versions in build variants: {}",
-            version_strs.join(", ")
+            strs.join(", ")
         );
     }
 
-    match versions.into_iter().next() {
-        Some(Some(version)) => Ok(Some(format!("v{version}"))),
-        _ => Ok(None),
-    }
+    Ok(versions
+        .into_iter()
+        .next()
+        .flatten()
+        .map(|v| format!("v{v}")))
 }
 
-// Recursively walk a directory and return all file paths.
-fn walkdir(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    walk_recursive(dir, &mut files)?;
-    files.sort();
-    Ok(files)
-}
-
-fn walk_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in
-        fs::read_dir(dir).wrap_err_with(|| format!("Cannot read directory `{}`", dir.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            walk_recursive(&path, files)?;
-        } else {
-            files.push(path);
-        }
-    }
-    Ok(())
+/// Recursively walk a directory and return all file paths.
+fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
+    WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .map(|e| e.into_path())
 }

@@ -11,6 +11,7 @@ repository = "https://github.com/huggingface/kernel-builder"
 [dependencies]
 base32 = "0.5"
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
 itertools = "0.13"

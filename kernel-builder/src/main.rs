@@ -2,8 +2,12 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use eyre::{Context, Result};
+
+mod completions;
+pub use completions::print_completions;
 
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
@@ -25,7 +29,10 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Generate CMake files for a kernel extension build.
+    /// Generate shell completions.
+    Completions { shell: Shell },
+
+    /// Create pyproject and CMake files for a kernel development.
     CreatePyproject {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
@@ -84,6 +91,10 @@ enum Commands {
 fn main() -> Result<()> {
     let args = Cli::parse();
     match args.command {
+        Commands::Completions { shell } => {
+            print_completions(&mut Cli::command(), shell);
+            Ok(())
+        }
         Commands::CreatePyproject {
             kernel_dir,
             force,

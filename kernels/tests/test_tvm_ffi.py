@@ -1,7 +1,6 @@
 import pytest
 
-from kernels import get_kernel, install_kernel, get_local_kernel
-
+from kernels import get_kernel, get_local_kernel, install_kernel
 
 relu_supported_devices = ["cpu", "cuda", "xpu"]
 

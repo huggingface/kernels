@@ -1,18 +1,18 @@
 use std::{
     ffi::OsStr,
     fmt::{Display, Formatter},
-    fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
 };
 
 use clap::Args;
-use eyre::{bail, Context, Result};
+use eyre::{Context, Result};
 use git2::{IndexAddOption, Repository};
 use minijinja::{context, Environment};
 
 use crate::config::Backend;
 use crate::hf;
+use crate::pyproject::FileSet;
 
 fn to_camel_case(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
@@ -44,7 +44,7 @@ pub struct InitArgs {
     #[arg(long, num_args = 1.., default_values_t = default_init_backends())]
     pub backends: Vec<BackendSelection>,
 
-    /// Overwrite the target directory if it already exists.
+    /// Overwrite existing scaffold files (preserves other files).
     #[arg(long)]
     pub overwrite: bool,
 }
@@ -163,31 +163,19 @@ pub fn run_init(args: InitArgs) -> Result<()> {
         }
     };
 
-    if args.overwrite && target_dir.exists() {
-        fs::remove_dir_all(&target_dir).wrap_err_with(|| {
-            format!(
-                "Cannot remove existing directory `{}`",
-                target_dir.to_string_lossy()
-            )
-        })?;
-    }
-
-    if target_dir.exists() && !is_dir_empty(&target_dir)? {
-        bail!(
-            "Directory already exists and is not empty: {}",
-            target_dir.to_string_lossy()
-        );
-    }
-
     let enabled_backends = resolve_backends(&args.backends);
 
-    // Set up minijinja environment and render templates
+    // Set up minijinja environment
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     env.set_lstrip_blocks(true);
     load_init_templates(&mut env);
 
-    render_templates(&env, &target_dir, &repo_info, &enabled_backends)?;
+    // Build FileSet in memory (atomic preparation)
+    let file_set = build_init_fileset(&env, &repo_info, &enabled_backends)?;
+
+    // Atomic write - validates first, then writes all files
+    file_set.write(&target_dir, args.overwrite)?;
 
     initialize_git_repo(&target_dir)?;
 
@@ -227,15 +215,6 @@ fn resolve_backends(backends: &[BackendSelection]) -> Vec<Backend> {
     }
 
     unique
-}
-
-fn is_dir_empty(path: &Path) -> Result<bool> {
-    if !path.is_dir() {
-        return Ok(false);
-    }
-
-    let mut entries = fs::read_dir(path)?;
-    Ok(entries.next().is_none())
 }
 
 /// Load all init templates into the environment
@@ -332,13 +311,12 @@ fn load_init_templates(env: &mut Environment) {
     .unwrap();
 }
 
-/// Render all templates to the target directory
-fn render_templates(
+/// Build a FileSet with all init templates rendered in memory
+fn build_init_fileset(
     env: &Environment,
-    target_dir: &Path,
     repo_info: &RepoInfo,
     enabled_backends: &[Backend],
-) -> Result<()> {
+) -> Result<FileSet> {
     let has_cpu = enabled_backends.contains(&Backend::Cpu);
     let has_cuda = enabled_backends.contains(&Backend::Cuda);
     let has_rocm = enabled_backends.contains(&Backend::Rocm);
@@ -363,68 +341,75 @@ fn render_templates(
         has_xpu => has_xpu,
     };
 
-    // Create target directory
-    fs::create_dir_all(target_dir)
-        .wrap_err_with(|| format!("Cannot create target directory `{}`", target_dir.display()))?;
+    let mut file_set = FileSet::new();
 
-    // Render static files (copy as-is)
-    render_static_file(env, target_dir, "static/.gitignore", ".gitignore")?;
-    render_static_file(env, target_dir, "static/.gitattributes", ".gitattributes")?;
-    render_static_file(env, target_dir, "static/flake.nix", "flake.nix")?;
-    render_static_file(
-        env,
-        target_dir,
-        "static/tests/__init__.py",
-        "tests/__init__.py",
-    )?;
-    render_static_file(env, target_dir, "static/CARD.md", "CARD.md")?;
-
-    // Render templated files
-    render_template(env, target_dir, "build.toml", "build.toml", &ctx)?;
-    render_template(env, target_dir, "example.py", "example.py", &ctx)?;
+    // Static files (no templating)
+    render_template(env, &mut file_set, "static/.gitignore", ".gitignore", ())?;
     render_template(
         env,
-        target_dir,
+        &mut file_set,
+        "static/.gitattributes",
+        ".gitattributes",
+        (),
+    )?;
+    render_template(env, &mut file_set, "static/flake.nix", "flake.nix", ())?;
+    render_template(
+        env,
+        &mut file_set,
+        "static/tests/__init__.py",
+        "tests/__init__.py",
+        (),
+    )?;
+    render_template(env, &mut file_set, "static/CARD.md", "CARD.md", ())?;
+
+    // Templated files
+    render_template(env, &mut file_set, "build.toml", "build.toml", &ctx)?;
+    render_template(env, &mut file_set, "example.py", "example.py", &ctx)?;
+    render_template(
+        env,
+        &mut file_set,
         "benchmarks/benchmark.py",
         "benchmarks/benchmark.py",
         &ctx,
     )?;
 
-    // Render torch-ext files with dynamic directory name
+    // torch-ext files
     let torch_ext_dir = format!("torch-ext/{}", repo_info.normalized_name);
     render_template(
         env,
-        target_dir,
+        &mut file_set,
         "torch-ext/__init__.py",
         &format!("{torch_ext_dir}/__init__.py"),
         &ctx,
     )?;
     render_template(
         env,
-        target_dir,
+        &mut file_set,
         "torch-ext/torch_binding.cpp",
         "torch-ext/torch_binding.cpp",
         &ctx,
     )?;
     render_template(
         env,
-        target_dir,
+        &mut file_set,
         "torch-ext/torch_binding.h",
         "torch-ext/torch_binding.h",
         &ctx,
     )?;
 
-    // Render test file with dynamic name
+    // Test file
     let test_file = format!("tests/test_{}.py", repo_info.normalized_name);
-    render_template(env, target_dir, "tests/test_kernel.py", &test_file, &ctx)?;
+    render_template(env, &mut file_set, "tests/test_kernel.py", &test_file, &ctx)?;
 
-    // Render backend-specific kernel sources (only for enabled backends)
+    // Backend-specific kernel sources
     if has_cpu {
-        let cpu_dir = format!("{}_cpu", repo_info.normalized_name);
-        let cpu_file = format!("{cpu_dir}/{}_cpu.cpp", repo_info.normalized_name);
+        let cpu_file = format!(
+            "{}_cpu/{}_cpu.cpp",
+            repo_info.normalized_name, repo_info.normalized_name
+        );
         render_template(
             env,
-            target_dir,
+            &mut file_set,
             "kernel_cpu/kernel_cpu.cpp",
             &cpu_file,
             &ctx,
@@ -432,90 +417,68 @@ fn render_templates(
     }
 
     if has_cuda || has_rocm {
-        let cuda_dir = format!("{}_cuda", repo_info.normalized_name);
-        let cuda_file = format!("{cuda_dir}/{}.cu", repo_info.normalized_name);
-        render_template(env, target_dir, "kernel_cuda/kernel.cu", &cuda_file, &ctx)?;
+        let cuda_file = format!(
+            "{}_cuda/{}.cu",
+            repo_info.normalized_name, repo_info.normalized_name
+        );
+        render_template(
+            env,
+            &mut file_set,
+            "kernel_cuda/kernel.cu",
+            &cuda_file,
+            &ctx,
+        )?;
     }
 
     if has_metal {
         let metal_dir = format!("{}_metal", repo_info.normalized_name);
-        let metal_file = format!("{metal_dir}/{}.metal", repo_info.normalized_name);
-        let mm_file = format!("{metal_dir}/{}.mm", repo_info.normalized_name);
         render_template(
             env,
-            target_dir,
+            &mut file_set,
             "kernel_metal/kernel.metal",
-            &metal_file,
+            &format!("{metal_dir}/{}.metal", repo_info.normalized_name),
             &ctx,
         )?;
-        render_template(env, target_dir, "kernel_metal/kernel.mm", &mm_file, &ctx)?;
+        render_template(
+            env,
+            &mut file_set,
+            "kernel_metal/kernel.mm",
+            &format!("{metal_dir}/{}.mm", repo_info.normalized_name),
+            &ctx,
+        )?;
     }
 
     if has_xpu {
-        let xpu_dir = format!("{}_xpu", repo_info.normalized_name);
-        let xpu_file = format!("{xpu_dir}/{}.cpp", repo_info.normalized_name);
-        render_template(env, target_dir, "kernel_xpu/kernel.cpp", &xpu_file, &ctx)?;
+        let xpu_file = format!(
+            "{}_xpu/{}.cpp",
+            repo_info.normalized_name, repo_info.normalized_name
+        );
+        render_template(env, &mut file_set, "kernel_xpu/kernel.cpp", &xpu_file, &ctx)?;
     }
 
-    Ok(())
+    Ok(file_set)
 }
 
-/// Render a static file (no template variables)
-fn render_static_file(
-    env: &Environment,
-    target_dir: &Path,
-    template_name: &str,
-    output_path: &str,
-) -> Result<()> {
-    let template = env
-        .get_template(template_name)
-        .wrap_err_with(|| format!("Cannot get template `{template_name}`"))?;
-
-    let content = template
-        .render(context! {})
-        .wrap_err_with(|| format!("Cannot render template `{template_name}`"))?;
-
-    let output_file = target_dir.join(output_path);
-    if let Some(parent) = output_file.parent() {
-        fs::create_dir_all(parent)
-            .wrap_err_with(|| format!("Cannot create directory `{}`", parent.display()))?;
-    }
-
-    fs::write(&output_file, content)
-        .wrap_err_with(|| format!("Cannot write file `{}`", output_file.display()))?;
-
-    Ok(())
-}
-
-/// Render a template with the given context
+/// Render a template into the FileSet
 fn render_template(
     env: &Environment,
-    target_dir: &Path,
+    file_set: &mut FileSet,
     template_name: &str,
     output_path: &str,
-    ctx: &minijinja::Value,
+    ctx: impl serde::Serialize,
 ) -> Result<()> {
     let template = env
         .get_template(template_name)
         .wrap_err_with(|| format!("Cannot get template `{template_name}`"))?;
 
-    let content = template
-        .render(ctx)
+    template
+        .render_captured_to(ctx, file_set.entry(output_path))
         .wrap_err_with(|| format!("Cannot render template `{template_name}`"))?;
-
-    let output_file = target_dir.join(output_path);
-    if let Some(parent) = output_file.parent() {
-        fs::create_dir_all(parent)
-            .wrap_err_with(|| format!("Cannot create directory `{}`", parent.display()))?;
-    }
-
-    fs::write(&output_file, content)
-        .wrap_err_with(|| format!("Cannot write file `{}`", output_file.display()))?;
 
     Ok(())
 }
 
-fn initialize_git_repo(target_dir: &Path) -> Result<()> {
+fn initialize_git_repo(target_dir: &std::path::Path) -> Result<()> {
     let repo = Repository::init(target_dir).wrap_err_with(|| {
         format!(
             "Cannot initialize git repository in `{}`",

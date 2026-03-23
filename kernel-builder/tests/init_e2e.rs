@@ -50,10 +50,12 @@ fn test_init_templates_rendered() {
 }
 
 #[test]
-fn test_init_fails_on_nonempty_dir() {
+fn test_init_fails_on_existing_scaffold_file() {
     let temp = tempfile::tempdir().unwrap();
-    fs::create_dir_all(temp.path().join("exists")).unwrap();
-    fs::write(temp.path().join("exists/file.txt"), "x").unwrap();
+    let dir = temp.path().join("exists");
+    fs::create_dir_all(&dir).unwrap();
+    // Pre-create a scaffold file - should cause init to fail
+    fs::write(dir.join("build.toml"), "existing content").unwrap();
 
     let bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug/kernel-builder");
 
@@ -64,6 +66,11 @@ fn test_init_fails_on_nonempty_dir() {
         .unwrap();
 
     assert!(!out.status.success());
+    // Original file should be preserved (atomic - no partial writes)
+    assert_eq!(
+        fs::read_to_string(dir.join("build.toml")).unwrap(),
+        "existing content"
+    );
 }
 
 #[test]
@@ -71,7 +78,9 @@ fn test_init_overwrite() {
     let temp = tempfile::tempdir().unwrap();
     let dir = temp.path().join("k");
     fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join("old.txt"), "x").unwrap();
+    // Pre-create a scaffold file and a user file
+    fs::write(dir.join("build.toml"), "old scaffold").unwrap();
+    fs::write(dir.join("custom.txt"), "user content").unwrap();
 
     let bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug/kernel-builder");
 
@@ -93,6 +102,19 @@ fn test_init_overwrite() {
         "overwrite failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(!dir.join("old.txt").exists());
-    assert!(dir.join("build.toml").exists());
+    // Scaffold file should be overwritten with new content
+    let build_toml = fs::read_to_string(dir.join("build.toml")).unwrap();
+    assert!(
+        build_toml.contains("[general]"),
+        "build.toml not overwritten"
+    );
+    // User's custom file should be preserved
+    assert!(
+        dir.join("custom.txt").exists(),
+        "user file should be preserved"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("custom.txt")).unwrap(),
+        "user content"
+    );
 }

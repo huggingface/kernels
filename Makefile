@@ -1,10 +1,10 @@
 .PHONY: style quality
 
-export check_dirs := src tests
+export check_dirs := kernels/src kernels/tests
 
 all: src/kernels/python_depends.json
 
-src/kernels/python_depends.json: ../kernel-builder/src/python_dependencies.json
+kernels/src/kernels/python_depends.json: kernel-builder/src/python_dependencies.json
 	cp $< $@
 
 style:

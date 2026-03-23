@@ -1,5 +1,6 @@
 {
   lib,
+  installShellFiles,
   rustPlatform,
   pkg-config,
   libgit2,
@@ -40,12 +41,22 @@ rustPlatform.buildRustPackage {
     lockFile = ../../../kernel-builder/Cargo.lock;
   };
 
-  nativeBuildInputs = [ pkg-config ];
+  nativeBuildInputs = [
+    installShellFiles
+    pkg-config
+  ];
 
   buildInputs = [
     libgit2
     openssl.dev
   ];
+
+  postInstall = ''
+    for shell in bash fish zsh; do
+      $out/bin/kernel-builder completions $shell > kernel-builder.$shell
+    done
+    installShellCompletion kernel-builder.{bash,fish,zsh}
+  '';
 
   meta = {
     description = "Create cmake build infrastructure from build.toml files";

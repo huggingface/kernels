@@ -11,6 +11,7 @@ repository = "https://github.com/huggingface/kernel-builder"
 [dependencies]
 base32 = "0.5"
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
 itertools = "0.13"
@@ -23,6 +24,7 @@ serde_json = "1"
 serde-value = "0.7"
 thiserror = "1"
 toml = "0.8"
+url = { version = "2", features = ["serde"] }
 
 [build-dependencies]
 minijinja-embed = "2.5"

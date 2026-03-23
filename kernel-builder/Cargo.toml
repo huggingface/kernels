@@ -32,6 +32,9 @@ url = { version = "2", features = ["serde"] }
 [build-dependencies]
 minijinja-embed = "2.5"
 
+[dev-dependencies]
+tempfile = "3"
+
 [[bin]]
 name = "kernel-builder"
 path = "src/main.rs"

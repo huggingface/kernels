@@ -69,7 +69,6 @@ enum Commands {
     /// Upload kernel build artifacts to the Hugging Face Hub.
     Upload(UploadArgs),
 
-    #[command(hide = true)]
     /// Generate CMake files for a kernel extension build.
     CreatePyproject {
         #[arg(name = "KERNEL_DIR")]
@@ -108,21 +107,18 @@ enum Commands {
         nix_args: NixArgs,
     },
 
-    #[command(hide = true)]
     /// Update a `build.toml` to the current format.
     UpdateBuild {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
     },
 
-    #[command(hide = true)]
     /// Validate the build.toml file.
     Validate {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
     },
 
-    #[command(hide = true)]
     /// Clean generated artifacts.
     CleanPyproject {
         #[arg(name = "KERNEL_DIR")]

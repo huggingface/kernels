@@ -1,4 +1,4 @@
----
+{% raw %}---
 {{ card_data }}
 ---
 
@@ -36,3 +36,4 @@ should probably proofread and complete it, then remove this comment. -->
 ## Notes
 
 {{ notes }}
+{% endraw %}

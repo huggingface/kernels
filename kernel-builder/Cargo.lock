@@ -122,9 +122,9 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.16.1"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94bffc006df10ac2a68c83692d734a465f8ee6c5b384d8545a636f81d858f4bf"
+checksum = "a054912289d18629dc78375ba2c3726a3afe3ff71b4edba9dedfca0e3446d1fc"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -132,9 +132,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.38.0"
+version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4321e568ed89bb5a7d291a7f37997c2c0df89809d7b6d12062c81ddb54aa782e"
+checksum = "1fa7e52a4c5c547c741610a2c6f123f3881e409b714cd27e6798ef020c514f0a"
 dependencies = [
  "cc",
  "cmake",
@@ -411,7 +411,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -623,7 +623,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -715,7 +715,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1100,6 +1100,7 @@ dependencies = [
  "git2",
  "huggingface-hub",
  "itertools 0.13.0",
+ "kernels-data",
  "minijinja",
  "minijinja-embed",
  "rand 0.8.5",
@@ -1107,6 +1108,7 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml",
@@ -1116,10 +1118,12 @@ dependencies = [
 [[package]]
 name = "hf-xet"
 version = "1.4.0"
-source = "git+https://github.com/huggingface/xet-core.git?rev=6232b42#6232b42591e8db8320f45d68bb8db94b2793ab46"
+source = "git+https://github.com/huggingface/xet-core.git?rev=749c28b#749c28b086d78ac64338819d13f420714ba13ce8"
 dependencies = [
+ "anyhow",
  "async-trait",
  "http",
+ "more-asserts",
  "serde",
  "thiserror 2.0.18",
  "tokio",
@@ -1179,7 +1183,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "huggingface-hub"
 version = "0.1.0"
-source = "git+https://github.com/huggingface/huggingface_hub_rust.git#60e1ac0b544754c2c21d901c5f35d51c8489a752"
+source = "git+https://github.com/huggingface/huggingface_hub_rust.git#6324b5b97bdf46e786ff962b450309e298ffaf20"
 dependencies = [
  "async-trait",
  "base64",
@@ -1464,9 +1468,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
+checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jni"
@@ -1508,6 +1512,20 @@ checksum = "b49715b7073f385ba4bc528e5747d02e66cb39c6146efb66b781f131f0fb399c"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kernels-data"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "itertools 0.13.0",
+ "regex",
+ "serde",
+ "serde-value",
+ "serde_json",
+ "thiserror 1.0.69",
+ "url",
 ]
 
 [[package]]
@@ -1646,9 +1664,9 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "lz4_flex"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98c23545df7ecf1b16c303910a69b079e8e251d60f7dd2cc9b4177f2afaf1746"
+checksum = "db9a0d582c2874f68138a16ce1867e0ffde6c0bb0a0df85e1f36d04146db488a"
 dependencies = [
  "twox-hash",
 ]
@@ -1797,7 +1815,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2509,7 +2527,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2997,10 +3015,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4228,7 +4246,7 @@ checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
 [[package]]
 name = "xet-client"
 version = "1.4.0"
-source = "git+https://github.com/huggingface/xet-core.git?rev=6232b42#6232b42591e8db8320f45d68bb8db94b2793ab46"
+source = "git+https://github.com/huggingface/xet-core.git?rev=749c28b#749c28b086d78ac64338819d13f420714ba13ce8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4275,9 +4293,8 @@ dependencies = [
 [[package]]
 name = "xet-core-structures"
 version = "1.4.0"
-source = "git+https://github.com/huggingface/xet-core.git?rev=6232b42#6232b42591e8db8320f45d68bb8db94b2793ab46"
+source = "git+https://github.com/huggingface/xet-core.git?rev=749c28b#749c28b086d78ac64338819d13f420714ba13ce8"
 dependencies = [
- "anyhow",
  "async-trait",
  "base64",
  "bincode",
@@ -4315,7 +4332,7 @@ dependencies = [
 [[package]]
 name = "xet-data"
 version = "1.4.0"
-source = "git+https://github.com/huggingface/xet-core.git?rev=6232b42#6232b42591e8db8320f45d68bb8db94b2793ab46"
+source = "git+https://github.com/huggingface/xet-core.git?rev=749c28b#749c28b086d78ac64338819d13f420714ba13ce8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4349,8 +4366,9 @@ dependencies = [
 [[package]]
 name = "xet-runtime"
 version = "1.4.0"
-source = "git+https://github.com/huggingface/xet-core.git?rev=6232b42#6232b42591e8db8320f45d68bb8db94b2793ab46"
+source = "git+https://github.com/huggingface/xet-core.git?rev=749c28b#749c28b086d78ac64338819d13f420714ba13ce8"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bytes",
  "chrono",
@@ -4409,18 +4427,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.42"
+version = "0.8.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2578b716f8a7a858b7f02d5bd870c14bf4ddbbcf3a4c05414ba6503640505e3"
+checksum = "efbb2a062be311f2ba113ce66f697a4dc589f85e78a4aea276200804cea0ed87"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.42"
+version = "0.8.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e6cc098ea4d3bd6246687de65af3f920c430e236bee1e3bf2e441463f08a02f"
+checksum = "0e8bc7269b54418e7aeeef514aa68f8690b8c0489a06b0136e5f57c4c5ccab89"
 dependencies = [
  "proc-macro2",
  "quote",

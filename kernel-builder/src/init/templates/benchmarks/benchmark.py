@@ -3,14 +3,14 @@ import torch
 from kernels.benchmark import Benchmark
 
 
-class __KERNEL_NAME_CLASS__Benchmark(Benchmark):
+class {{ kernel_name_class }}Benchmark(Benchmark):
     def setup(self):
         self.size = 1024
         self.input = torch.randn(self.size, self.size, device=self.device)
         self.out = torch.empty_like(self.input)
 
     def benchmark_base(self):
-        self.kernel.__KERNEL_NAME_NORMALIZED__(self.out, self.input)
+        self.kernel.{{ kernel_name_normalized }}(self.out, self.input)
 
     def verify_base(self) -> torch.Tensor:
         # Reference implementation

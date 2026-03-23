@@ -24,12 +24,21 @@ rustPlatform.buildRustPackage {
         || file.name == "pyproject.toml"
         || file.name == "pyproject_universal.toml"
         || file.name == "python_dependencies.json"
+        || file.name == ".gitattributes"
+        || file.name == ".gitignore"
         || (builtins.any file.hasExt [
           "cmake"
+          "cpp"
+          "cu"
           "h"
           "in"
+          "md"
+          "metal"
+          "mm"
+          "nix"
           "py"
           "rs"
+          "toml"
         ]);
     in
     lib.fileset.toSource {
@@ -49,6 +58,9 @@ rustPlatform.buildRustPackage {
       "hf-xet-1.4.0" = "sha256-/vvU8qy9U+suiH9MCcxrV3Ayw84yRV6EmW0yzB7Uvng=";
     };
   };
+
+  # e2e tests look for binary at target/debug/ which doesn't exist in nix
+  doCheck = false;
 
   nativeBuildInputs = [
     installShellFiles

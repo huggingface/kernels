@@ -6,6 +6,9 @@ on:
       - main
       - doc-builder*
       - v*-release
+    tags:
+      - v*
+  workflow_dispatch:
 
 jobs:
   build:

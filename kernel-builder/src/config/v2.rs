@@ -171,6 +171,7 @@ impl General {
             name: general.name,
             version: None,
             license: None,
+            upstream: None,
             backends,
             cuda,
             hub: general.hub.map(Into::into),

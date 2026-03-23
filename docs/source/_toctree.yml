@@ -27,8 +27,6 @@
       title: Writing Kernels
     - local: builder/nix
       title: Building with Nix
-    - local: builder/docker
-      title: Building with Docker
     - local: builder/local-dev
       title: Local Development
     - local: kernel-requirements

@@ -24,6 +24,10 @@ void relu_cuda(ffi::TensorView out, ffi::TensorView const input) {
   TVM_FFI_CHECK(input.dtype() == out.dtype(), ValueError) << "input/output dtype mismatch";
   TVM_FFI_CHECK(input.numel() == out.numel(), ValueError) << "input/output size mismatch";
 
+  if (input.numel() == 0) {
+    return;
+  }
+
   ffi::CUDADeviceGuard guard(input.device().device_id);
   cudaStream_t stream = static_cast<cudaStream_t>(
       TVMFFIEnvGetStream(input.device().device_type, input.device().device_id));

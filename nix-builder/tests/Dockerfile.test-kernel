@@ -67,11 +67,13 @@ COPY relu-kernel ./relu-kernel
 COPY relu-tvm-ffi-kernel ./relu-tvm-ffi-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
+COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
 COPY examples/kernels/extra-data/tests ./extra_data_tests
 COPY examples/kernels/relu/tests ./relu_tests
 COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
+COPY examples/kernels/cutlass-gemm-tvm-ffi/tests ./cutlass_gemm_tvm_ffi_tests
 
 # Run tests
 ADD nix-builder/tests/run-tests.sh ./run-tests.sh

@@ -106,6 +106,7 @@ impl TryFrom<Build> for super::Build {
                 name: build.general.name,
                 version: None,
                 license: None,
+                upstream: None,
                 backends,
                 hub: None,
                 neuron: None,

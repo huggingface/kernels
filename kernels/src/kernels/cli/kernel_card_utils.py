@@ -1,7 +1,7 @@
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from huggingface_hub import ModelCard
 from huggingface_hub.dataclasses import strict
@@ -38,10 +38,10 @@ class HubConfig:
 @dataclass
 class GeneralConfig:
     name: str = ""
-    version: Optional[int] = None
-    license: Optional[str] = None
-    backends: Optional[List[str]] = None
-    hub: Optional[HubConfig] = None
+    version: int | None = None
+    license: str | None = None
+    backends: list[str] | None = None
+    hub: HubConfig | None = None
 
     @staticmethod
     def from_dict(data: dict) -> "GeneralConfig":
@@ -58,7 +58,7 @@ class GeneralConfig:
 @strict
 @dataclass
 class KernelConfig:
-    cuda_capabilities: Optional[List[str]] = None
+    cuda_capabilities: list[str] | None = None
 
     @staticmethod
     def from_dict(data: dict) -> "KernelConfig":
@@ -69,8 +69,8 @@ class KernelConfig:
 @dataclass
 class BuildConfig:
     general: GeneralConfig = field(default_factory=GeneralConfig)
-    kernel: Optional[Dict[str, KernelConfig]] = None
-    upstream: Optional[str] = None
+    kernel: dict[str, KernelConfig] | None = None
+    upstream: str | None = None
 
     @staticmethod
     def from_dict(data: dict) -> "BuildConfig":
@@ -90,7 +90,7 @@ class BuildConfig:
         )
 
     @staticmethod
-    def load(build_toml_path: Path) -> Optional["BuildConfig"]:
+    def load(build_toml_path: Path) -> "BuildConfig | None":
         if not build_toml_path.exists():
             return None
         try:

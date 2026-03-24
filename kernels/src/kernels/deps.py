@@ -2,7 +2,6 @@ import importlib.util
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from huggingface_hub.dataclasses import strict
 
@@ -13,7 +12,7 @@ from kernels.backends import Backend
 @dataclass
 class PythonPackage:
     pkg: str
-    import_name: Optional[str] = None
+    import_name: str | None = None
 
     @staticmethod
     def from_dict(data: dict) -> "PythonPackage":

@@ -12,7 +12,7 @@ from kernels.backends import Backend
 @dataclass
 class PythonPackage:
     pkg: str
-    import_name: str | None = None
+    import_name: str | None
 
     @staticmethod
     def from_dict(data: dict) -> "PythonPackage":
@@ -25,8 +25,8 @@ class PythonPackage:
 @strict
 @dataclass
 class DependencyInfo:
-    nix: list
-    python: list
+    nix: list[str]
+    python: list[str]
 
     @staticmethod
     def from_dict(data: dict) -> "DependencyInfo":

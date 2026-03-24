@@ -27,27 +27,27 @@ LIBRARY_NAME = "kernels"
 @strict
 @dataclass
 class HubConfig:
-    repo_id: str = ""
+    repo_id: str | None
 
     @staticmethod
     def from_dict(data: dict) -> "HubConfig":
-        return HubConfig(repo_id=data.get("repo-id", ""))
+        return HubConfig(repo_id=data.get("repo-id"))
 
 
 @strict
 @dataclass
 class GeneralConfig:
     name: str = ""
-    version: int | None = None
-    license: str | None = None
-    backends: list[str] | None = None
-    hub: HubConfig | None = None
+    version: int | None
+    license: str | None
+    backends: list[str] | None
+    hub: HubConfig | None
 
     @staticmethod
     def from_dict(data: dict) -> "GeneralConfig":
         hub_data = data.get("hub")
         return GeneralConfig(
-            name=data.get("name", ""),
+            name=data.get("name"),
             version=data.get("version"),
             license=data.get("license"),
             backends=data.get("backends"),
@@ -58,7 +58,7 @@ class GeneralConfig:
 @strict
 @dataclass
 class KernelConfig:
-    cuda_capabilities: list[str] | None = None
+    cuda_capabilities: list[str] | None
 
     @staticmethod
     def from_dict(data: dict) -> "KernelConfig":
@@ -69,8 +69,8 @@ class KernelConfig:
 @dataclass
 class BuildConfig:
     general: GeneralConfig = field(default_factory=GeneralConfig)
-    kernel: dict[str, KernelConfig] | None = None
-    upstream: str | None = None
+    kernel: dict[str, KernelConfig] | None
+    upstream: str | None
 
     @staticmethod
     def from_dict(data: dict) -> "BuildConfig":
@@ -159,8 +159,7 @@ def _parse_repo_id(local_path: str | Path) -> str | None:
 
     if config.general.hub is None:
         return None
-    repo_id = config.general.hub.repo_id
-    return repo_id if repo_id else None
+    return config.general.hub.repo_id
 
 
 def _build_kernel_card_vars(

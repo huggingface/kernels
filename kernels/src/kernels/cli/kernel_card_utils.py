@@ -45,6 +45,8 @@ class GeneralConfig:
 
     @staticmethod
     def from_dict(data: dict) -> "GeneralConfig":
+        # TODO: revisit `from_dict` as per
+        # https://github.com/huggingface/kernels/pull/393/changes#r2981209411
         hub_data = data.get("hub")
         return GeneralConfig(
             name=data.get("name"),

@@ -217,10 +217,8 @@ def _build_kernel_card_vars(
     return vars
 
 
-def _update_kernel_card_license(
-    kernel_card: ModelCard, local_path: str | Path
-) -> ModelCard:
-    config = _parse_build_toml(Path(local_path))
+def _update_kernel_card_license(kernel_card: ModelCard, local_path: Path) -> ModelCard:
+    config = _parse_build_toml(local_path)
     if not config:
         return kernel_card
 

@@ -1,8 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
-use eyre::{ensure, Context};
+use eyre::{Context, ensure};
 use itertools::Itertools;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Version(Vec<usize>);

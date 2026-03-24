@@ -7,17 +7,13 @@ use std::{
 use eyre::{bail, Result};
 use minijinja::Environment;
 
-use crate::util::{check_or_infer_target_dir, parse_build};
-use crate::{
-    config::{Build, Framework},
-    util::check_or_infer_kernel_dir,
-};
+use crate::util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build};
+use kernels_data::config::{Build, Framework};
 
 pub(crate) mod common;
 pub mod deps;
 pub mod fileset;
 mod kernel;
-mod metadata;
 mod ops_identifier;
 mod torch;
 mod tvm_ffi;

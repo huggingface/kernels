@@ -4,14 +4,12 @@ use eyre::{Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::{
-    config::{Backend, Build, General, Torch},
-    pyproject::{
-        common::{write_compat_py, write_metadata},
-        fileset::FileSet,
-        ops_identifier::kernel_ops_identifier,
-    },
+use crate::pyproject::{
+    common::{write_compat_py, write_metadata},
+    fileset::FileSet,
+    ops_identifier::kernel_ops_identifier,
 };
+use kernels_data::config::{Backend, Build, General, Torch};
 
 static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");
 

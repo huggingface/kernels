@@ -7,7 +7,7 @@ use std::{
 
 use eyre::{ensure, Context, Result};
 
-use crate::config::{Build, BuildCompat};
+use kernels_data::config::{Build, BuildCompat};
 
 pub(crate) fn parse_build(kernel_dir: impl AsRef<Path>) -> Result<Build> {
     let build_compat = parse_and_validate(kernel_dir)?;

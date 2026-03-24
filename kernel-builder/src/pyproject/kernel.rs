@@ -4,8 +4,8 @@ use eyre::{Context, Result};
 use itertools::Itertools;
 use minijinja::{context, Environment};
 
-use crate::config::{Build, Kernel};
 use crate::pyproject::common::prefix_and_join_includes;
+use kernels_data::config::{Build, Kernel};
 
 pub fn render_kernel_components(
     env: &Environment,

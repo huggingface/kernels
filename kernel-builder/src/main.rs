@@ -15,15 +15,12 @@ use develop::{devshell, testshell};
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
-mod config;
-use config::{v3, Build, BuildCompat};
+use kernels_data::config::{v3, Build, BuildCompat};
 
 mod nix;
 
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
-
-mod version;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

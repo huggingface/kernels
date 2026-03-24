@@ -2,14 +2,15 @@
 name = "hf-kernel-builder"
 version = "0.13.0-dev0"
 edition = "2021"
-description = "Generate CMake files for kernel-builder projects"
-homepage = "https://github.com/huggingface/kernel-builder"
+description = "Build Hugging Face Hub kernels"
+homepage = "https://github.com/huggingface/kernels"
 license = "Apache-2.0"
 documentation = "https://docs.rs/hf-kernel-builder"
-repository = "https://github.com/huggingface/kernel-builder"
+repository = "https://github.com/huggingface/kernels"
 
 [dependencies]
 base32 = "0.5"
+kernels-data = { path = "../kernels-data" }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 eyre = "0.6.12"

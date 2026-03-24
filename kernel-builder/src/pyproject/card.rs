@@ -4,7 +4,7 @@ use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 use regex::Regex;
 
-use crate::config::Build;
+use kernels_data::config::Build;
 
 fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let init_path = kernel_dir

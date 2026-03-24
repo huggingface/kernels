@@ -15,14 +15,13 @@ pub(crate) mod common;
 pub mod deps;
 pub mod fileset;
 mod kernel;
-mod metadata;
 mod ops_identifier;
 mod torch;
 mod tvm_ffi;
 
 pub use card::write_card;
 pub use fileset::FileSet;
-pub use metadata::parse_metadata;
+pub use kernels_data::metadata::parse_metadata;
 
 pub fn create_pyproject_file_set(
     build: Build,

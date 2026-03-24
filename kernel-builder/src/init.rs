@@ -10,7 +10,7 @@ use eyre::{Context, Result};
 use git2::{IndexAddOption, Repository};
 use minijinja::{context, Environment};
 
-use crate::config::Backend;
+use kernels_data::config::Backend;
 use crate::hf;
 use crate::pyproject::FileSet;
 

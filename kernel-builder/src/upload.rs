@@ -42,7 +42,6 @@ pub struct UploadArgs {
 }
 
 pub fn run_upload(args: UploadArgs) -> Result<()> {
-    let rt = hf::runtime()?;
     let api = hf::api()?;
     let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
     let kernel_dir = fs::canonicalize(&kernel_dir)
@@ -70,47 +69,41 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         .branch
         .map_or_else(|| detect_branch_from_metadata(&variants), |b| Ok(Some(b)))?;
 
-    let repo_id = rt.block_on(async {
-        let params = CreateRepoParams::builder()
-            .repo_id(&arg_repo_id)
-            .private(args.private)
-            .exist_ok(true)
-            .build();
-        let repo_url = api
-            .create_repo(&params)
-            .await
-            .wrap_err("Cannot create repository")?;
-        let id = repo_url
-            .url
-            .trim_end_matches('/')
-            .strip_prefix("https://huggingface.co/")
-            .unwrap_or(&arg_repo_id)
-            .to_owned();
-        Ok::<_, eyre::Report>(id)
-    })?;
+    let params = CreateRepoParams::builder()
+        .repo_id(&arg_repo_id)
+        .private(args.private)
+        .exist_ok(true)
+        .build();
+    let repo_url = api
+        .create_repo(&params)
+        .wrap_err("Cannot create repository")?;
+    let repo_id = repo_url
+        .url
+        .trim_end_matches('/')
+        .strip_prefix("https://huggingface.co/")
+        .unwrap_or(&arg_repo_id)
+        .to_owned();
 
     let is_new_version_branch = if let Some(ref branch) = version_branch {
-        let new = rt.block_on(async {
-            let refs_params = ListRepoRefsParams::builder().repo_id(&repo_id).build();
-            let refs = api
-                .list_repo_refs(&refs_params)
-                .await
-                .wrap_err("Cannot list repository refs")?;
-            let exists = refs.branches.iter().any(|r| r.name == *branch);
+        let refs_params = ListRepoRefsParams::builder().repo_id(&repo_id).build();
+        let refs = api
+            .list_repo_refs(&refs_params)
+            .wrap_err("Cannot list repository refs")?;
+        let exists = refs.branches.iter().any(|r| r.name == *branch);
 
-            if !exists {
-                let params = CreateBranchParams::builder()
-                    .repo_id(&repo_id)
-                    .branch(branch)
-                    .build();
-                api.create_branch(&params)
-                    .await
-                    .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
-            }
-            Ok::<_, eyre::Report>(!exists)
-        })?;
-        eprintln!("Using branch `{branch}`{}", if new { " (new)" } else { "" });
-        new
+        if !exists {
+            let params = CreateBranchParams::builder()
+                .repo_id(&repo_id)
+                .branch(branch)
+                .build();
+            api.create_branch(&params)
+                .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
+        }
+        eprintln!(
+            "Using branch `{branch}`{}",
+            if !exists { " (new)" } else { "" }
+        );
+        !exists
     } else {
         false
     };
@@ -126,14 +119,12 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     );
 
     if let Some(ref branch) = version_branch {
-        let version_existing_files: Vec<String> = rt.block_on(async {
-            let params = ListRepoFilesParams {
-                repo_id: repo_id.to_owned(),
-                revision: Some(branch.clone()),
-                repo_type: Some(RepoType::Model),
-            };
-            api.list_repo_files(&params).await.unwrap_or_default() // OK if branch is new
-        });
+        let params = ListRepoFilesParams {
+            repo_id: repo_id.to_owned(),
+            revision: Some(branch.clone()),
+            repo_type: Some(RepoType::Model),
+        };
+        let version_existing_files: Vec<String> = api.list_repo_files(&params).unwrap_or_default();
 
         let version_ops = operations_by_branch.entry(branch.clone()).or_default();
 
@@ -182,21 +173,18 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 "Uploaded using `kernel-builder`.".to_owned()
             };
 
-            rt.block_on(async {
-                let params = CreateCommitParams {
-                    repo_id: repo_id.to_owned(),
-                    operations: chunk.to_vec(),
-                    commit_message,
-                    commit_description: None,
-                    repo_type: Some(RepoType::Model),
-                    revision: Some(branch.clone()),
-                    create_pr: None,
-                    parent_commit: None,
-                };
-                api.create_commit(&params)
-                    .await
-                    .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))
-            })?;
+            let params = CreateCommitParams {
+                repo_id: repo_id.to_owned(),
+                operations: chunk.to_vec(),
+                commit_message,
+                commit_description: None,
+                repo_type: Some(RepoType::Model),
+                revision: Some(branch.clone()),
+                create_pr: None,
+                parent_commit: None,
+            };
+            api.create_commit(&params)
+                .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
 
             if batch_count > 1 {
                 eprintln!("  Uploaded batch {}/{batch_count}.", batch_index + 1);

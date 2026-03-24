@@ -5,11 +5,10 @@ use std::{
 };
 
 use eyre::{bail, Result};
+use kernels_data::config::{Build, Framework};
 use minijinja::Environment;
 
 use crate::util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build};
-use kernels_data::config::{Build, Framework};
-
 pub(crate) mod common;
 pub mod deps;
 pub mod fileset;

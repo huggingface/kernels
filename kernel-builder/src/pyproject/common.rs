@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use eyre::Result;
 use itertools::Itertools;
 
-use crate::pyproject::FileSet;
 use kernels_data::config::{Backend, General};
-use kernels_data::Metadata;
+use kernels_data::metadata::{BackendInfo, Metadata};
+
+use crate::pyproject::FileSet;
 
 static COMPAT_PY: &str = include_str!("templates/compat.py");
 
@@ -36,6 +37,9 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
             license: general.license.clone(),
             upstream: general.upstream.clone(),
             python_depends,
+            backend: BackendInfo {
+                backend_type: *backend,
+            },
         };
 
         serde_json::to_writer_pretty(writer, &metadata)?;

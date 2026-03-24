@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
+use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::context;
 
 use crate::pyproject::common::{
@@ -10,7 +11,6 @@ use crate::pyproject::common::{
 };
 use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
 use crate::pyproject::FileSet;
-use kernels_data::config::{Backend, Build, General, Torch};
 
 use crate::pyproject::deps::render_deps;
 

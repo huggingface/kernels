@@ -2,10 +2,10 @@ use std::io::Write;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
+use kernels_data::config::{Build, Kernel};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;
-use kernels_data::config::{Build, Kernel};
 
 pub fn render_kernel_components(
     env: &Environment,

@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use eyre::{Context, Result};
 use itertools::Itertools;
+use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::{context, Environment};
 
 use crate::pyproject::{
@@ -9,7 +10,6 @@ use crate::pyproject::{
     fileset::FileSet,
     ops_identifier::kernel_ops_identifier,
 };
-use kernels_data::config::{Backend, Build, General, Torch};
 
 static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");
 

@@ -26,7 +26,6 @@ BUILD_VARIANT_REGEX = re.compile(
 )
 
 
-@strict
 @dataclass(unsafe_hash=True)
 class Torch:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch(\d+?)(\d+)")
@@ -49,7 +48,6 @@ class Torch:
         return Torch(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
-@strict
 @dataclass(unsafe_hash=True)
 class TvmFfi:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"tvm-ffi(\d+?)(\d+)")

@@ -29,7 +29,6 @@ class Backend(Protocol):
         ...
 
 
-@strict
 @dataclass(unsafe_hash=True)
 class CANN:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
@@ -70,7 +69,6 @@ class CPU:
         return CPU()
 
 
-@strict
 @dataclass(unsafe_hash=True)
 class CUDA:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
@@ -129,7 +127,6 @@ class Neuron:
         return Neuron()
 
 
-@strict
 @dataclass(unsafe_hash=True)
 class ROCm:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
@@ -152,7 +149,6 @@ class ROCm:
         return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
-@strict
 @dataclass(unsafe_hash=True)
 class XPU:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")

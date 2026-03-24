@@ -84,6 +84,11 @@ in
             inherit version;
             hash = "sha256-KJ4qNYb98B41iClE6qBvvVdDbeJLbmU9H6skhYSs1ms=";
           };
+          dependencies = (old.dependencies or [ ]) ++ [
+            python-self.httpx
+            python-self.shellingham
+            python-self.typer-slim
+          ];
           # Skip tests since they require network access.
           doCheck = false;
         });

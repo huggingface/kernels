@@ -12,6 +12,7 @@ fn run_develop(
     kernel_dir: Option<PathBuf>,
     max_jobs: Option<u32>,
     cores: Option<u32>,
+    print_build_logs: bool,
     attribute: Option<String>,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
@@ -27,6 +28,8 @@ fn run_develop(
         nix = nix.cores(cores);
     }
 
+    nix = nix.print_build_logs(print_build_logs);
+
     nix.run(NixSubcommand::Develop { flake, attribute })
 }
 
@@ -35,8 +38,9 @@ pub fn devshell(
     kernel_dir: Option<PathBuf>,
     max_jobs: Option<u32>,
     cores: Option<u32>,
+    print_build_logs: bool,
 ) -> Result<()> {
-    run_develop(kernel_dir, max_jobs, cores, None)
+    run_develop(kernel_dir, max_jobs, cores, print_build_logs, None)
 }
 
 /// Run a kernel test shell.
@@ -44,6 +48,13 @@ pub fn testshell(
     kernel_dir: Option<PathBuf>,
     max_jobs: Option<u32>,
     cores: Option<u32>,
+    print_build_logs: bool,
 ) -> Result<()> {
-    run_develop(kernel_dir, max_jobs, cores, Some("test".to_string()))
+    run_develop(
+        kernel_dir,
+        max_jobs,
+        cores,
+        print_build_logs,
+        Some("test".to_string()),
+    )
 }

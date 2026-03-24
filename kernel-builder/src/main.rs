@@ -31,6 +31,10 @@ struct NixArgs {
     /// Number of CPU cores to use for each build job.
     #[arg(long)]
     cores: Option<u32>,
+
+    /// Print full build logs on standard error.
+    #[arg(short = 'L', long)]
+    print_build_logs: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -135,11 +139,21 @@ fn main() -> Result<()> {
         Commands::Devshell {
             kernel_dir,
             nix_args,
-        } => devshell(kernel_dir, nix_args.max_jobs, nix_args.cores),
+        } => devshell(
+            kernel_dir,
+            nix_args.max_jobs,
+            nix_args.cores,
+            nix_args.print_build_logs,
+        ),
         Commands::Testshell {
             kernel_dir,
             nix_args,
-        } => testshell(kernel_dir, nix_args.max_jobs, nix_args.cores),
+        } => testshell(
+            kernel_dir,
+            nix_args.max_jobs,
+            nix_args.cores,
+            nix_args.print_build_logs,
+        ),
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
         Commands::Validate { kernel_dir } => {
             validate(kernel_dir)?;

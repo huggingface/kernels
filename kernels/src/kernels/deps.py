@@ -26,7 +26,7 @@ class PythonPackage:
 @dataclass
 class DependencyInfo:
     nix: list[str]
-    python: list[str]
+    python: list[PythonPackage]
 
     @staticmethod
     def from_dict(data: dict) -> "DependencyInfo":

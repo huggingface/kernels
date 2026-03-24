@@ -2,17 +2,21 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from huggingface_hub.dataclasses import strict
+
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
 from kernels.status import resolve_status
 
 
+@strict
 @dataclass
 class VariantLock:
     hash: str
     hash_type: str = "git_lfs_concat"
 
 
+@strict
 @dataclass
 class KernelLock:
     repo_id: str

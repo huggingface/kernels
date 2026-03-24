@@ -3,13 +3,15 @@ import ctypes.util
 import re
 import warnings
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Protocol
+from typing import ClassVar, Optional, Protocol, runtime_checkable
 
+from huggingface_hub.dataclasses import strict
 from packaging.version import Version
 
 from kernels.compat import has_torch
 
 
+@runtime_checkable
 class Backend(Protocol):
     @property
     def name(self) -> str:
@@ -27,6 +29,7 @@ class Backend(Protocol):
         ...
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class CANN:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cann(\d+)(\d+)")
@@ -49,6 +52,7 @@ class CANN:
         return CANN(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class CPU:
     @property
@@ -66,6 +70,7 @@ class CPU:
         return CPU()
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class CUDA:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"cu(\d+)(\d+)")
@@ -88,6 +93,7 @@ class CUDA:
         return CUDA(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class Metal:
     @property
@@ -105,6 +111,7 @@ class Metal:
         return Metal()
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class Neuron:
     @property
@@ -122,6 +129,7 @@ class Neuron:
         return Neuron()
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class ROCm:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
@@ -144,6 +152,7 @@ class ROCm:
         return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class XPU:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")

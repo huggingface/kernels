@@ -1,12 +1,66 @@
 import importlib.util
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
+
+from huggingface_hub.dataclasses import strict
 
 from kernels.backends import Backend
 
+
+@strict
+@dataclass
+class PythonPackage:
+    pkg: str
+    import_name: Optional[str] = None
+
+    @staticmethod
+    def from_dict(data: dict) -> "PythonPackage":
+        return PythonPackage(
+            pkg=data["pkg"],
+            import_name=data.get("import"),
+        )
+
+
+@strict
+@dataclass
+class DependencyInfo:
+    nix: list
+    python: list
+
+    @staticmethod
+    def from_dict(data: dict) -> "DependencyInfo":
+        return DependencyInfo(
+            nix=data.get("nix", []),
+            python=[PythonPackage.from_dict(p) for p in data.get("python", [])],
+        )
+
+
+@strict
+@dataclass
+class DependencyData:
+    general: dict = field(default_factory=dict)
+    backends: dict = field(default_factory=dict)
+
+    @staticmethod
+    def from_dict(data: dict) -> "DependencyData":
+        general = {
+            name: DependencyInfo.from_dict(info)
+            for name, info in data.get("general", {}).items()
+        }
+        backends = {
+            backend_name: {
+                name: DependencyInfo.from_dict(info) for name, info in deps.items()
+            }
+            for backend_name, deps in data.get("backends", {}).items()
+        }
+        return DependencyData(general=general, backends=backends)
+
+
 try:
     with open(Path(__file__).parent / "python_depends.json", "r") as f:
-        DEPENDENCY_DATA: dict = json.load(f)
+        _DEPENDENCY_DATA = DependencyData.from_dict(json.load(f))
 except FileNotFoundError:
     raise FileNotFoundError(
         "Cannot load dependency data, is `kernels` correctly installed?"
@@ -23,16 +77,16 @@ def validate_dependencies(
         dependencies (`list[str]`): A list of dependency strings to validate.
         backend (`str`): The backend to validate dependencies for.
     """
-    general_deps = DEPENDENCY_DATA.get("general", {})
-    backend_deps = DEPENDENCY_DATA.get("backends", {}).get(backend.name, {})
+    general_deps = _DEPENDENCY_DATA.general
+    backend_deps = _DEPENDENCY_DATA.backends.get(backend.name, {})
 
     # Validate each dependency
     for dependency in dependencies:
         # Look up dependency in general dependencies first, then backend-specific
         if dependency in general_deps:
-            python_packages = general_deps[dependency].get("python", [])
+            dep_info = general_deps[dependency]
         elif dependency in backend_deps:
-            python_packages = backend_deps[dependency].get("python", [])
+            dep_info = backend_deps[dependency]
         else:
             # Dependency not found in general or backend-specific dependencies
             raise ValueError(
@@ -40,15 +94,14 @@ def validate_dependencies(
             )
 
         # Check if each python package is installed
-        for python_package in python_packages:
-            # Convert package name to module name (replace - with _)
-            pkg_name = python_package.get("pkg")
+        for python_package in dep_info.python:
+            pkg_name = python_package.pkg
             # Assertion because this should not happen and is a bug.
             assert (
                 pkg_name is not None
             ), f"Invalid dependency data for `{dependency}`: missing `pkg` field."
 
-            module_name = python_package.get("import")
+            module_name = python_package.import_name
             if module_name is None:
                 # These are typically packages that do not provide any Python
                 # code, but get installed to Python's library dirctory. E.g.

@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
+from huggingface_hub.dataclasses import strict
 
+
+@strict
 @dataclass(frozen=True)
 class CUDAProperties:
     """
@@ -34,6 +37,12 @@ class CUDAProperties:
     min_capability: int
     max_capability: int
 
+    def validate_capability_range(self):
+        if self.min_capability > self.max_capability:
+            raise ValueError(
+                f"min_capability ({self.min_capability}) must be <= max_capability ({self.max_capability})"
+            )
+
     def __eq__(self, other):
         if not isinstance(other, CUDAProperties):
             return NotImplemented
@@ -46,6 +55,7 @@ class CUDAProperties:
         return hash((self.min_capability, self.max_capability))
 
 
+@strict
 @dataclass(frozen=True)
 class ROCMProperties:
     """
@@ -79,6 +89,12 @@ class ROCMProperties:
     min_capability: int
     max_capability: int
 
+    def validate_capability_range(self):
+        if self.min_capability > self.max_capability:
+            raise ValueError(
+                f"min_capability ({self.min_capability}) must be <= max_capability ({self.max_capability})"
+            )
+
     def __eq__(self, other):
         if not isinstance(other, ROCMProperties):
             return NotImplemented
@@ -91,6 +107,7 @@ class ROCMProperties:
         return hash((self.min_capability, self.max_capability))
 
 
+@strict
 @dataclass(frozen=True)
 class Device:
     """

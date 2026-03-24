@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
 
@@ -21,6 +21,17 @@ mod nix;
 
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
+
+#[derive(Args, Debug)]
+struct NixArgs {
+    /// Maximum number of parallel Nix build jobs.
+    #[arg(long)]
+    max_jobs: Option<u32>,
+
+    /// Number of CPU cores to use for each build job.
+    #[arg(long)]
+    cores: Option<u32>,
+}
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -59,13 +70,8 @@ enum Commands {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
 
-        /// Maximum number of parallel Nix build jobs.
-        #[arg(long)]
-        max_jobs: Option<u32>,
-
-        /// Number of CPU cores to use for each build job.
-        #[arg(long)]
-        cores: Option<u32>,
+        #[command(flatten)]
+        nix_args: NixArgs,
     },
 
     /// Spawn a kernel test shell.
@@ -73,13 +79,8 @@ enum Commands {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
 
-        /// Maximum number of parallel Nix build jobs.
-        #[arg(long)]
-        max_jobs: Option<u32>,
-
-        /// Number of CPU cores to use for each build job.
-        #[arg(long)]
-        cores: Option<u32>,
+        #[command(flatten)]
+        nix_args: NixArgs,
     },
 
     /// Update a `build.toml` to the current format.
@@ -133,14 +134,12 @@ fn main() -> Result<()> {
         } => create_pyproject(kernel_dir, target_dir, force, ops_id),
         Commands::Devshell {
             kernel_dir,
-            max_jobs,
-            cores,
-        } => devshell(kernel_dir, max_jobs, cores),
+            nix_args,
+        } => devshell(kernel_dir, nix_args.max_jobs, nix_args.cores),
         Commands::Testshell {
             kernel_dir,
-            max_jobs,
-            cores,
-        } => testshell(kernel_dir, max_jobs, cores),
+            nix_args,
+        } => testshell(kernel_dir, nix_args.max_jobs, nix_args.cores),
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
         Commands::Validate { kernel_dir } => {
             validate(kernel_dir)?;

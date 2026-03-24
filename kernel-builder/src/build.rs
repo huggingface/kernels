@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use clap::Args;
 use eyre::{bail, Context, Result};
 
-use crate::util::check_or_infer_kernel_dir;
+use crate::pyproject::write_card;
+use crate::util::{check_or_infer_kernel_dir, parse_build};
 
 /// Common arguments shared by all build commands.
 #[derive(Debug, Args)]
@@ -23,6 +24,13 @@ pub struct CommonBuildArgs {
 
 pub fn run_build(args: CommonBuildArgs, target: &str) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
+
+    if let Ok(build) = parse_build(&kernel_dir) {
+        if let Err(e) = write_card(&build, &kernel_dir) {
+            eprintln!("Warning: cannot generate CARD.md: {e}");
+        }
+    }
+
     let flake_ref = format!(".#{target}");
 
     let mut cmd = std::process::Command::new("nix");

@@ -1,39 +1,49 @@
 {% raw %}---
-{{ card_data }}
----
+library_name: kernels
+{% if license %}license: {{ license }}
+{% endif %}---
 
-<!-- This model card has automatically been generated. You
-should probably proofread and complete it, then remove this comment. -->
-
-{{ kernel_description }}
+This is the repository card of {{ repo_id }} that has been pushed on the Hub. It was built to be used with the [`kernels` library](https://github.com/huggingface/kernels). This card was automatically generated.
 
 ## How to use
+{% if functions %}
 
-{{ usage_example }}
+```python
+# make sure `kernels` is installed: `pip install -U kernels`
+from kernels import get_kernel
+
+kernel_module = get_kernel("{{ repo_id }}")
+{{ functions[0] }} = kernel_module.{{ functions[0] }}
+
+{{ functions[0] }}(...)
+```
+{% else %}
+
+Usage example not available.
+{% endif %}
 
 ## Available functions
+{% if functions %}
+{% for func in functions %}
+- `{{ func }}`
+{% endfor %}
+{% else %}
 
-{{ available_functions }}
-
-## Supported backends
-
-{{ supported_backends }}
-{% if cuda_capabilities %}
-
-## CUDA Capabilities
-
-{{ cuda_capabilities }}
+Function list not available.
 {% endif %}
 
 ## Benchmarks
+{% if has_benchmark %}
 
-{{ benchmark_content }}
+Benchmarking script is available for this kernel. Run `kernels benchmark {{ repo_id }}`.
+{% else %}
+
+No benchmark available yet.
+{% endif %}
+{% if upstream %}
 
 ## Source code
 
-{{ source_code }}
-
-## Notes
-
-{{ notes }}
+Source code of this kernel originally comes from {{ upstream }} and it was repurposed for compatibility with `kernels`.
+{% endif %}
 {% endraw %}

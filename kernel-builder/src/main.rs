@@ -78,7 +78,19 @@ enum Commands {
     /// Build the kernel and upload to Hugging Face Hub.
     BuildAndUpload {
         #[command(flatten)]
-        args: CommonBuildArgs,
+        build_args: CommonBuildArgs,
+
+        /// Repository ID on the Hugging Face Hub (e.g. `user/my-kernel`).
+        #[arg(long)]
+        repo_id: Option<String>,
+
+        /// Upload to a specific branch (defaults to `v{version}` from metadata).
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Create the repository as private.
+        #[arg(long)]
+        private: bool,
     },
 
     /// Upload kernel build artifacts to the Hugging Face Hub.
@@ -170,7 +182,21 @@ fn main() -> Result<()> {
         Commands::Build { args } | Commands::BuildAndCopy { args } => {
             run_build(args, "build-and-copy")
         }
-        Commands::BuildAndUpload { args } => run_build(args, "build-and-upload"),
+        Commands::BuildAndUpload {
+            build_args,
+            repo_id,
+            branch,
+            private,
+        } => {
+            let kernel_dir = build_args.kernel_dir.clone();
+            run_build(build_args, "build-and-copy")?;
+            run_upload(UploadArgs {
+                kernel_dir,
+                repo_id,
+                branch,
+                private,
+            })
+        }
         Commands::CreatePyproject {
             kernel_dir,
             force,

@@ -10,9 +10,9 @@ use eyre::{Context, Result};
 use git2::{IndexAddOption, Repository};
 use minijinja::{context, Environment};
 
-use kernels_data::config::Backend;
 use crate::hf;
 use crate::pyproject::FileSet;
+use kernels_data::config::Backend;
 
 fn to_camel_case(s: &str) -> String {
     let mut result = String::with_capacity(s.len());

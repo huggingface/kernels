@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use clap::Args;
-use eyre::{bail, Context, Result};
+use eyre::Result;
 
+use crate::nix::{Flake, Nix, NixSubcommand};
 use crate::pyproject::write_card;
 use crate::util::{check_or_infer_kernel_dir, parse_build};
 
@@ -31,26 +32,13 @@ pub fn run_build(args: CommonBuildArgs, target: &str) -> Result<()> {
         }
     }
 
-    let flake_ref = format!(".#{target}");
+    let flake = Flake::from_path(kernel_dir)?;
 
-    let mut cmd = std::process::Command::new("nix");
-    cmd.args([
-        "run",
-        "-L",
-        "--max-jobs",
-        &args.max_jobs.to_string(),
-        "--cores",
-        &args.cores.to_string(),
-        &flake_ref,
-    ]);
-    cmd.current_dir(&kernel_dir);
-
-    let status = cmd
-        .status()
-        .wrap_err("Cannot run `nix`. Is Nix installed?")?;
-
-    if !status.success() {
-        bail!("Build failed with exit code {}", status.code().unwrap_or(1));
-    }
-    Ok(())
+    Nix::new()
+        .max_jobs(args.max_jobs)
+        .cores(args.cores)
+        .run(NixSubcommand::Run {
+            flake,
+            attribute: Some(target.to_owned()),
+        })
 }

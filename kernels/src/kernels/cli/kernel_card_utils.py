@@ -1,5 +1,5 @@
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ class HubConfig:
 @strict
 @dataclass
 class GeneralConfig:
-    name: str = ""
+    name: str | None
     version: int | None
     license: str | None
     backends: list[str] | None
@@ -70,7 +70,7 @@ class KernelConfig:
 @strict
 @dataclass
 class BuildConfig:
-    general: GeneralConfig = field(default_factory=GeneralConfig)
+    general: GeneralConfig
     kernel: dict[str, KernelConfig] | None
     upstream: str | None
 

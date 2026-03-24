@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use eyre::{bail, Result};
+use eyre::{Result, bail};
 use serde::{Deserialize, Serialize};
 
 use super::{Backend, Dependency, KernelName};

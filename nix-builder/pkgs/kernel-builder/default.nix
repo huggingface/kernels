@@ -33,9 +33,14 @@ rustPlatform.buildRustPackage {
         ]);
     in
     lib.fileset.toSource {
-      root = ../../../kernel-builder;
-      fileset = lib.fileset.fileFilter sourceFiles ../../../kernel-builder;
+      root = ../../..;
+      fileset = lib.fileset.unions [
+        (lib.fileset.fileFilter sourceFiles ../../../kernel-builder)
+        (lib.fileset.fileFilter sourceFiles ../../../kernels-data)
+      ];
     };
+
+  sourceRoot = "source/kernel-builder";
 
   cargoLock = {
     lockFile = ../../../kernel-builder/Cargo.lock;

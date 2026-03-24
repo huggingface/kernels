@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use eyre::Result;
 use itertools::Itertools;
 
-use crate::config::{Backend, General};
-use crate::pyproject::metadata::{BackendInfo, Metadata};
+use kernels_data::config::{Backend, General};
+use kernels_data::metadata::{BackendInfo, Metadata};
+
 use crate::pyproject::FileSet;
 
 static COMPAT_PY: &str = include_str!("templates/compat.py");

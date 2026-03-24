@@ -21,6 +21,22 @@ use crate::{
 const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum RepoTypeArg {
+    #[default]
+    Model,
+    Kernel,
+}
+
+impl From<RepoTypeArg> for RepoType {
+    fn from(arg: RepoTypeArg) -> Self {
+        match arg {
+            RepoTypeArg::Model => RepoType::Model,
+            RepoTypeArg::Kernel => RepoType::Kernel,
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 pub struct UploadArgs {
     /// Directory of the kernel build (defaults to current directory).
@@ -39,10 +55,16 @@ pub struct UploadArgs {
     /// Create the repository as private.
     #[arg(long)]
     pub private: bool,
+
+    /// TODO: remove when we fully move over to kernel repos
+    /// Repository type on Hugging Face Hub (`model` or `kernel`).
+    #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+    pub repo_type: RepoTypeArg,
 }
 
 pub fn run_upload(args: UploadArgs) -> Result<()> {
     let api = hf::api()?;
+    let repo_type: RepoType = args.repo_type.into();
     let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
     let kernel_dir = fs::canonicalize(&kernel_dir)
         .wrap_err_with(|| format!("Cannot resolve kernel directory `{}`", kernel_dir.display()))?;
@@ -71,21 +93,27 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
 
     let params = CreateRepoParams::builder()
         .repo_id(&arg_repo_id)
+        .repo_type(repo_type)
         .private(args.private)
         .exist_ok(true)
         .build();
     let repo_url = api
         .create_repo(&params)
         .wrap_err("Cannot create repository")?;
+    // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
     let repo_id = repo_url
         .url
         .trim_end_matches('/')
         .strip_prefix("https://huggingface.co/")
+        .map(|s| s.strip_prefix("kernels/").unwrap_or(s))
         .unwrap_or(&arg_repo_id)
         .to_owned();
 
     let is_new_version_branch = if let Some(ref branch) = version_branch {
-        let refs_params = ListRepoRefsParams::builder().repo_id(&repo_id).build();
+        let refs_params = ListRepoRefsParams::builder()
+            .repo_id(&repo_id)
+            .repo_type(repo_type)
+            .build();
         let refs = api
             .list_repo_refs(&refs_params)
             .wrap_err("Cannot list repository refs")?;
@@ -95,6 +123,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
             let params = CreateBranchParams::builder()
                 .repo_id(&repo_id)
                 .branch(branch)
+                .repo_type(repo_type)
                 .build();
             api.create_branch(&params)
                 .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
@@ -122,7 +151,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         let params = ListRepoFilesParams {
             repo_id: repo_id.to_owned(),
             revision: Some(branch.clone()),
-            repo_type: Some(RepoType::Model),
+            repo_type: Some(repo_type),
         };
         let version_existing_files: Vec<String> = api.list_repo_files(&params).unwrap_or_default();
 
@@ -178,7 +207,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 operations: chunk.to_vec(),
                 commit_message,
                 commit_description: None,
-                repo_type: Some(RepoType::Model),
+                repo_type: Some(repo_type),
                 revision: Some(branch.clone()),
                 create_pr: None,
                 parent_commit: None,
@@ -196,10 +225,14 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     if total_ops == 0 {
         eprintln!("No changes to upload.");
     } else {
+        let type_prefix = match repo_type {
+            RepoType::Kernel => "kernels/",
+            _ => "",
+        };
         let tree_path = version_branch
             .as_ref()
             .map_or(String::new(), |b| format!("/tree/{b}"));
-        println!("Kernel uploaded: https://hf.co/{repo_id}{tree_path}");
+        println!("Kernel uploaded: https://hf.co/{type_prefix}{repo_id}{tree_path}");
     }
 
     Ok(())

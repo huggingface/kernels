@@ -21,7 +21,7 @@ mod init;
 use init::{run_init, InitArgs};
 
 mod upload;
-use upload::{run_upload, UploadArgs};
+use upload::{run_upload, RepoTypeArg, UploadArgs};
 
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
@@ -91,6 +91,10 @@ enum Commands {
         /// Create the repository as private.
         #[arg(long)]
         private: bool,
+
+        /// Repository type on Hugging Face Hub (`model` or `kernel`).
+        #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+        repo_type: RepoTypeArg,
     },
 
     /// Upload kernel build artifacts to the Hugging Face Hub.
@@ -187,6 +191,7 @@ fn main() -> Result<()> {
             repo_id,
             branch,
             private,
+            repo_type,
         } => {
             let kernel_dir = build_args.kernel_dir.clone();
             run_build(build_args, "build-and-copy")?;
@@ -195,6 +200,7 @@ fn main() -> Result<()> {
                 repo_id,
                 branch,
                 private,
+                repo_type,
             })
         }
         Commands::CreatePyproject {

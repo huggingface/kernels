@@ -29,17 +29,20 @@
         {
           name = "relu-kernel";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
-          drv = sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "extra-data";
           path = ./extra-data;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-kernel-cpu";
@@ -49,17 +52,20 @@
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-tvm-ffi-kernel";
           path = ./cutlass-gemm-tvm-ffi;
-          drv = sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "silu-and-mul-kernel";
@@ -86,7 +92,8 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           # Check that we can build a test shell (e.g. gcc is compatible with

@@ -117,6 +117,7 @@ impl NixConfig {
 pub struct Nix {
     max_jobs: Option<u32>,
     cores: Option<u32>,
+    print_build_logs: bool,
 }
 
 impl Nix {
@@ -125,6 +126,7 @@ impl Nix {
         Self {
             max_jobs: None,
             cores: None,
+            print_build_logs: false,
         }
     }
 
@@ -137,6 +139,12 @@ impl Nix {
     /// Set the number of cores to use for parallel jobs.
     pub fn cores(mut self, cores: u32) -> Self {
         self.cores = Some(cores);
+        self
+    }
+
+    /// Print full build logs on standard error.
+    pub fn print_build_logs(mut self, print_build_logs: bool) -> Self {
+        self.print_build_logs = print_build_logs;
         self
     }
 
@@ -213,6 +221,10 @@ impl Nix {
 
         if let Some(cores) = self.cores {
             cmd.arg("--cores").arg(cores.to_string());
+        }
+
+        if self.print_build_logs {
+            cmd.arg("-L");
         }
 
         let status = cmd.status()?;

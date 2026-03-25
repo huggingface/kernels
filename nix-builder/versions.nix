@@ -27,7 +27,7 @@
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
-  
+
   {
     torchVersion = "2.10";
     cudaVersion = "12.6";

@@ -7,18 +7,20 @@ use clap_complete::Shell;
 use eyre::{Context, Result};
 
 mod completions;
-pub use completions::print_completions;
+use completions::print_completions;
+
+mod develop;
+use develop::{devshell, testshell};
 
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
-mod config;
-use config::{v3, Build, BuildCompat};
+use kernels_data::config::{v3, Build, BuildCompat};
+
+mod nix;
 
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
-
-mod version;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -50,6 +52,34 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         ops_id: Option<String>,
+    },
+
+    /// Spawn a kernel development shell.
+    Devshell {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// Maximum number of parallel Nix build jobs.
+        #[arg(long)]
+        max_jobs: Option<u32>,
+
+        /// Number of CPU cores to use for each build job.
+        #[arg(long)]
+        cores: Option<u32>,
+    },
+
+    /// Spawn a kernel test shell.
+    Testshell {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// Maximum number of parallel Nix build jobs.
+        #[arg(long)]
+        max_jobs: Option<u32>,
+
+        /// Number of CPU cores to use for each build job.
+        #[arg(long)]
+        cores: Option<u32>,
     },
 
     /// Update a `build.toml` to the current format.
@@ -101,6 +131,16 @@ fn main() -> Result<()> {
             target_dir,
             ops_id,
         } => create_pyproject(kernel_dir, target_dir, force, ops_id),
+        Commands::Devshell {
+            kernel_dir,
+            max_jobs,
+            cores,
+        } => devshell(kernel_dir, max_jobs, cores),
+        Commands::Testshell {
+            kernel_dir,
+            max_jobs,
+            cores,
+        } => testshell(kernel_dir, max_jobs, cores),
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
         Commands::Validate { kernel_dir } => {
             validate(kernel_dir)?;

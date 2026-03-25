@@ -58,7 +58,7 @@ impl PythonDependencies {
             None => {
                 return Err(DependencyError::Backend {
                     backend: backend.to_string(),
-                })
+                });
             }
             Some(backend_deps) => backend_deps,
         };

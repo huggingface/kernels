@@ -1,7 +1,7 @@
 use std::fmt;
 
 use regex::Regex;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 /// A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`.
 #[derive(Debug, Clone, PartialEq, Eq)]

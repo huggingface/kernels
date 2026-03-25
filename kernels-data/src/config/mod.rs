@@ -12,9 +12,9 @@ pub use compat::BuildCompat;
 mod name;
 pub use name::KernelName;
 
-mod v1;
-mod v2;
-pub(crate) mod v3;
+pub mod v1;
+pub mod v2;
+pub mod v3;
 
 use itertools::Itertools;
 

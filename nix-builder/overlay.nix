@@ -114,6 +114,11 @@ in
           xpuPackages = final.xpuPackages_2025_3;
         };
 
+        torch-bin_2_11 = mkTorch {
+          version = "2.11";
+          xpuPackages = final.xpuPackages_2025_3;
+        };
+
         triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {
           torchVersion = "2.9";
           xpuPackages = final.xpuPackages_2025_2;

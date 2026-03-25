@@ -27,7 +27,7 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
         with:
           extra-conf: |
-            max-jobs = 4
+            max-jobs = 8
             cores = 12
             sandbox-fallback = false
       - uses: cachix/cachix-action@v16

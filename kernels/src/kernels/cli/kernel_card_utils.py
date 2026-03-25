@@ -1,8 +1,10 @@
 import ast
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from huggingface_hub import ModelCard
+from huggingface_hub.dataclasses import strict
 
 from ..compat import tomllib
 
@@ -22,18 +24,87 @@ kernel_module = get_kernel("{repo_id}", version=N)  # N is an integer representi
 LIBRARY_NAME = "kernels"
 
 
-def _parse_build_toml(local_path: str | Path) -> dict | None:
-    local_path = Path(local_path)
-    build_toml_path = local_path / "build.toml"
+@strict
+@dataclass
+class HubConfig:
+    repo_id: str | None
 
-    if not build_toml_path.exists():
-        return None
+    @staticmethod
+    def from_dict(data: dict) -> "HubConfig":
+        return HubConfig(repo_id=data.get("repo-id"))
 
-    try:
-        with open(build_toml_path, "rb") as f:
-            return tomllib.load(f)
-    except Exception:
-        return None
+
+@strict
+@dataclass
+class GeneralConfig:
+    name: str | None
+    version: int | None
+    license: str | None
+    backends: list[str] | None
+    hub: HubConfig | None
+
+    @staticmethod
+    def from_dict(data: dict) -> "GeneralConfig":
+        # TODO: revisit `from_dict` as per
+        # https://github.com/huggingface/kernels/pull/393/changes#r2981209411
+        hub_data = data.get("hub")
+        return GeneralConfig(
+            name=data.get("name"),
+            version=data.get("version"),
+            license=data.get("license"),
+            backends=data.get("backends"),
+            hub=HubConfig.from_dict(hub_data) if hub_data else None,
+        )
+
+
+@strict
+@dataclass
+class KernelConfig:
+    cuda_capabilities: list[str] | None
+
+    @staticmethod
+    def from_dict(data: dict) -> "KernelConfig":
+        return KernelConfig(cuda_capabilities=data.get("cuda-capabilities"))
+
+
+@strict
+@dataclass
+class BuildConfig:
+    general: GeneralConfig
+    kernel: dict[str, KernelConfig] | None
+    upstream: str | None
+
+    @staticmethod
+    def from_dict(data: dict) -> "BuildConfig":
+        general_data = data.get("general", {})
+        kernel_data = data.get("kernel")
+        return BuildConfig(
+            general=GeneralConfig.from_dict(general_data),
+            kernel=(
+                {
+                    name: KernelConfig.from_dict(info)
+                    for name, info in kernel_data.items()
+                }
+                if kernel_data
+                else None
+            ),
+            upstream=data.get("upstream"),
+        )
+
+    @staticmethod
+    def load(build_toml_path: Path) -> "BuildConfig | None":
+        if not build_toml_path.exists():
+            return None
+        try:
+            with open(build_toml_path, "rb") as f:
+                data = tomllib.load(f)
+        except Exception:
+            return None
+        return BuildConfig.from_dict(data)
+
+
+def _parse_build_toml(local_path: Path) -> BuildConfig | None:
+    return BuildConfig.load(local_path / "build.toml")
 
 
 def _find_torch_ext_init(local_path: str | Path) -> Path | None:
@@ -44,7 +115,7 @@ def _find_torch_ext_init(local_path: str | Path) -> Path | None:
         return None
 
     try:
-        kernel_name = config.get("general", {}).get("name")
+        kernel_name = config.general.name
         if not kernel_name:
             return None
 
@@ -88,8 +159,9 @@ def _parse_repo_id(local_path: str | Path) -> str | None:
     if not config:
         return None
 
-    repo_id = config.get("general", {}).get("hub", {}).get("repo-id", None)
-    return repo_id
+    if config.general.hub is None:
+        return None
+    return config.general.hub.repo_id
 
 
 def _build_kernel_card_vars(
@@ -111,28 +183,25 @@ def _build_kernel_card_vars(
     # --- backends, CUDA capabilities, upstream ---
     config = _parse_build_toml(local_path)
     if config:
-        general_config = config.get("general", {})
-        backends = general_config.get("backends")
+        backends = config.general.backends
         if backends:
             vars["supported_backends"] = "\n".join(f"- {b}" for b in backends)
 
-        kernel_configs = config.get("kernel", {})
         cuda_capabilities: set[Any] = set()
 
         # TODO (sayakpaul): implement this to read from `metadata.json` per each build
-        for k in kernel_configs:
-            caps = kernel_configs[k].get("cuda-capabilities")
-            if caps:
-                cuda_capabilities.update(caps)
+        if config.kernel:
+            for kernel_cfg in config.kernel.values():
+                if kernel_cfg.cuda_capabilities:
+                    cuda_capabilities.update(kernel_cfg.cuda_capabilities)
         if cuda_capabilities:
             vars["cuda_capabilities"] = "\n".join(
                 f"- {cap}" for cap in cuda_capabilities
             )
 
-        upstream_repo = config.get("upstream", None)
-        if upstream_repo:
+        if config.upstream:
             vars["source_code"] = (
-                f"Source code of this kernel originally comes from {upstream_repo}"
+                f"Source code of this kernel originally comes from {config.upstream}"
                 " and it was repurposed for compatibility with `kernels`."
             )
 
@@ -148,15 +217,13 @@ def _build_kernel_card_vars(
     return vars
 
 
-def _update_kernel_card_license(
-    kernel_card: ModelCard, local_path: str | Path
-) -> ModelCard:
+def _update_kernel_card_license(kernel_card: ModelCard, local_path: Path) -> ModelCard:
     config = _parse_build_toml(local_path)
     if not config:
         return kernel_card
 
     existing_license = kernel_card.data.get("license", None)
-    license_from_config = config.get("general", {}).get("license", None)
+    license_from_config = config.general.license
     final_license = license_from_config or existing_license
     kernel_card.data["license"] = final_license
     return kernel_card

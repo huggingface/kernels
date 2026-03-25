@@ -6,8 +6,8 @@ backends = [
 ]
 
 [torch]
-minver = "2.9"
-maxver = "2.9"
+minver = "2.10"
+maxver = "2.10"
 src = [
     "torch-ext/torch_binding.cpp",
     "torch-ext/torch_binding.h",

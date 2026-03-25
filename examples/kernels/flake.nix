@@ -15,7 +15,7 @@
       inherit (kernel-builder.inputs.nixpkgs) lib;
 
       cudaVersion = "cu126";
-      torchVersion = "29";
+      torchVersion = "210";
       tvmFfiVersion = "01";
 
       # All example kernels to build in CI.
@@ -79,7 +79,7 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.9";
+              torchVersion = "2.10";
               cudaVersion = "12.8";
               systems = [
                 "x86_64-linux"

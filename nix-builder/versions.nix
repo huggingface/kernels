@@ -27,13 +27,7 @@
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
-  {
-    torchVersion = "2.9";
-    metal = true;
-    systems = [ "aarch64-darwin" ];
-    bundleBuild = true;
-  }
-
+  
   {
     torchVersion = "2.10";
     cudaVersion = "12.6";
@@ -137,5 +131,11 @@
     ];
     bundleBuild = true;
     tvmFfi = true;
+  }
+  {
+    torchVersion = "2.11";
+    metal = true;
+    systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
   }
 ]

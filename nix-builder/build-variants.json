@@ -6,7 +6,7 @@
     ],
     "metal": [
       "torch210-metal-aarch64-darwin",
-      "torch29-metal-aarch64-darwin"
+      "torch211-metal-aarch64-darwin"
     ]
   },
   "aarch64-linux": {

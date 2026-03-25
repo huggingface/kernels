@@ -13,7 +13,7 @@ available. This list will be updated as new PyTorch versions are released.
 ## Metal aarch64-darwin
 
 - `torch210-metal-aarch64-darwin`
-- `torch29-metal-aarch64-darwin`
+- `torch211-metal-aarch64-darwin`
 
 ## CPU aarch64-linux
 

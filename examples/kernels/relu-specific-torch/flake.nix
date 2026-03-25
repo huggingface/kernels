@@ -15,7 +15,7 @@
       path = ./.;
       torchVersions = defaultVersions: [
         {
-          torchVersion = "2.9";
+          torchVersion = "2.10";
           cudaVersion = "12.8";
           systems = [
             "x86_64-linux"

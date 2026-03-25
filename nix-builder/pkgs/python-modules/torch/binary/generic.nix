@@ -230,6 +230,7 @@ buildPythonPackage {
   # the Nix store paths of the framework into the Torch libraries..
   pythonRemoveWheelDeps =
     lib.optionals cudaSupport [
+      "cuda-toolkit"
       "nvidia-cuda-runtime"
       "nvidia-cuda-nvrtc"
       "nvidia-cuda-cupti"

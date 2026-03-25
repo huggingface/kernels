@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
-use regex::Regex;
+use rustpython_parser::{ast, Parse};
 
 use kernels_data::config::Build;
 
@@ -13,21 +13,40 @@ fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>
         .join("__init__.py");
 
     let content = fs::read_to_string(&init_path).ok()?;
+    let stmts = ast::Suite::parse(&content, "<module>").ok()?;
 
-    let re = Regex::new(r#"__all__\s*=\s*\[\s*([^\]]*)\s*\]"#).ok()?;
-    let list_content = re.captures(&content)?.get(1)?.as_str();
+    for stmt in stmts {
+        if let ast::Stmt::Assign(assign) = stmt {
+            // Check if this is an assignment to __all__
+            let is_all = assign.targets.iter().any(
+                |target| matches!(target, ast::Expr::Name(name) if name.id.as_str() == "__all__"),
+            );
 
-    let string_re = Regex::new(r#"["']([^"']+)["']"#).ok()?;
-    let functions: Vec<String> = string_re
-        .captures_iter(list_content)
-        .filter_map(|c| c.get(1).map(|m| m.as_str().to_owned()))
-        .collect();
+            if is_all {
+                // Extract the list elements
+                if let ast::Expr::List(list) = assign.value.as_ref() {
+                    let functions: Vec<String> = list
+                        .elts
+                        .iter()
+                        .filter_map(|elt| {
+                            if let ast::Expr::Constant(constant) = elt {
+                                if let ast::Constant::Str(s) = &constant.value {
+                                    return Some(s.to_string());
+                                }
+                            }
+                            None
+                        })
+                        .collect();
 
-    if functions.is_empty() {
-        None
-    } else {
-        Some(functions)
+                    if !functions.is_empty() {
+                        return Some(functions);
+                    }
+                }
+            }
+        }
     }
+
+    None
 }
 
 pub fn write_card(build: &Build, kernel_dir: &Path) -> Result<()> {
@@ -96,6 +115,33 @@ mod tests {
         assert_eq!(
             extract_functions(kernel_dir, "test_module"),
             Some(vec!["func_a".to_owned(), "func_b".to_owned()])
+        );
+    }
+
+    #[test]
+    fn test_extract_functions_multiline() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(
+            module_dir.join("__init__.py"),
+            r#"__all__ = [
+    "func_a",
+    "func_b",
+    "func_c",
+]"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_functions(kernel_dir, "test_module"),
+            Some(vec![
+                "func_a".to_owned(),
+                "func_b".to_owned(),
+                "func_c".to_owned()
+            ])
         );
     }
 

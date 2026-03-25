@@ -359,13 +359,20 @@ fn collect_build_commit_ops(
 }
 
 /// Discover build variant directories (contain `metadata.json`).
+/// Checks `result` symlink (Nix store output) first, then falls back to `build/`.
 fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
-    for candidate in [kernel_dir.join("build"), kernel_dir.to_path_buf()] {
+    let candidates = [
+        kernel_dir.join("result"),
+        kernel_dir.join("build"),
+        kernel_dir.to_path_buf(),
+    ];
+
+    for candidate in &candidates {
         if !candidate.is_dir() {
             continue;
         }
 
-        let mut variants: Vec<PathBuf> = fs::read_dir(&candidate)
+        let mut variants: Vec<PathBuf> = fs::read_dir(candidate)
             .wrap_err_with(|| format!("Cannot read `{}`", candidate.display()))?
             .filter_map(|e| e.ok())
             .map(|e| e.path())
@@ -374,14 +381,15 @@ fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
 
         if !variants.is_empty() {
             variants.sort();
-            return Ok((candidate, variants));
+            return Ok((candidate.clone(), variants));
         }
     }
 
     bail!(
-        "No build variants found in `{}` or `{}`",
-        kernel_dir.join("build").display(),
-        kernel_dir.display()
+        "No build variants found in `{}`, `{}`, or `{}`",
+        candidates[0].display(),
+        candidates[1].display(),
+        candidates[2].display(),
     );
 }
 
@@ -419,4 +427,278 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .map(|e| e.into_path())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_discover_variants() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let build_dir = kernel_dir.join("build");
+        fs::create_dir_all(build_dir.join("variant-a")).unwrap();
+        fs::create_dir_all(build_dir.join("variant-b")).unwrap();
+
+        fs::write(
+            build_dir.join("variant-a/metadata.json"),
+            r#"{"version": 1}"#,
+        )
+        .unwrap();
+        fs::write(
+            build_dir.join("variant-b/metadata.json"),
+            r#"{"version": 1}"#,
+        )
+        .unwrap();
+
+        let (found_build_dir, variants) = discover_variants(kernel_dir).unwrap();
+        assert_eq!(found_build_dir, build_dir);
+        assert_eq!(variants.len(), 2);
+    }
+
+    #[test]
+    fn test_discover_variants_no_variants() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let result = discover_variants(temp_dir.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_discover_variants_from_result_symlink() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        // Create a "nix store" directory with variants
+        let store_dir = kernel_dir.join("nix-store-output");
+        fs::create_dir_all(store_dir.join("variant-a")).unwrap();
+        fs::write(
+            store_dir.join("variant-a/metadata.json"),
+            r#"{"version": 1}"#,
+        )
+        .unwrap();
+
+        // Create result symlink pointing to store output
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
+
+        #[cfg(unix)]
+        {
+            let (found_dir, variants) = discover_variants(kernel_dir).unwrap();
+            assert_eq!(found_dir, kernel_dir.join("result"));
+            assert_eq!(variants.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        fs::create_dir_all(kernel_dir.join("build")).unwrap();
+        fs::write(kernel_dir.join("build/CARD.md"), "# Readme").unwrap();
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(kernel_dir, &mut operations);
+
+        assert_eq!(operations.len(), 1);
+        match &operations[0] {
+            CommitOperation::Add { path_in_repo, .. } => {
+                assert_eq!(path_in_repo, "README.md");
+            }
+            _ => panic!("Expected Add operation"),
+        }
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops_no_card() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut operations = vec![];
+        collect_readme_commit_ops(temp_dir.path(), &mut operations);
+        assert!(operations.is_empty());
+    }
+
+    #[test]
+    fn test_collect_benchmark_commit_ops() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let benchmarks_dir = kernel_dir.join("benchmarks");
+        fs::create_dir_all(&benchmarks_dir).unwrap();
+        fs::write(benchmarks_dir.join("benchmark.py"), "# benchmark").unwrap();
+        fs::write(benchmarks_dir.join("benchmark_v2.py"), "# v2").unwrap();
+        fs::write(benchmarks_dir.join("other.py"), "# not a benchmark").unwrap();
+
+        let mut operations = vec![];
+        collect_benchmark_commit_ops(kernel_dir, &[], false, &mut operations).unwrap();
+
+        // Should only include benchmark*.py files
+        assert_eq!(operations.len(), 2);
+    }
+
+    #[test]
+    fn test_collect_benchmark_commit_ops_delete_stale() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let benchmarks_dir = kernel_dir.join("benchmarks");
+        fs::create_dir_all(&benchmarks_dir).unwrap();
+        fs::write(benchmarks_dir.join("benchmark.py"), "# benchmark").unwrap();
+
+        let existing = vec!["benchmarks/benchmark_old.py".to_owned()];
+        let mut operations = vec![];
+        collect_benchmark_commit_ops(kernel_dir, &existing, false, &mut operations).unwrap();
+
+        // Should add new benchmark and delete stale one
+        let add_count = operations
+            .iter()
+            .filter(|op| matches!(op, CommitOperation::Add { .. }))
+            .count();
+        let delete_count = operations
+            .iter()
+            .filter(|op| matches!(op, CommitOperation::Delete { .. }))
+            .count();
+
+        assert_eq!(add_count, 1);
+        assert_eq!(delete_count, 1);
+    }
+
+    #[test]
+    fn test_collect_build_commit_ops() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let build_dir = temp_dir.path();
+
+        let variant = build_dir.join("torch-cpu");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), "{}").unwrap();
+        fs::write(variant.join("kernel.so"), "binary").unwrap();
+
+        let variants = vec![variant];
+        let mut operations = vec![];
+        collect_build_commit_ops(build_dir, &variants, &[], false, &mut operations).unwrap();
+
+        assert_eq!(operations.len(), 2); // metadata.json + kernel.so
+        let paths: Vec<_> = operations
+            .iter()
+            .filter_map(|op| match op {
+                CommitOperation::Add { path_in_repo, .. } => Some(path_in_repo.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(paths.iter().any(|p| p.ends_with("metadata.json")));
+        assert!(paths.iter().any(|p| p.ends_with("kernel.so")));
+    }
+
+    #[test]
+    fn test_collect_build_commit_ops_deletes_stale() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let build_dir = temp_dir.path();
+
+        let variant = build_dir.join("torch-cpu");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), "{}").unwrap();
+
+        let existing = vec![
+            "build/torch-cpu/stale.py".to_owned(),
+            "build/torch-cuda/keep.py".to_owned(), // Different variant, should not delete
+        ];
+        let variants = vec![variant];
+        let mut operations = vec![];
+        collect_build_commit_ops(build_dir, &variants, &existing, false, &mut operations).unwrap();
+
+        let delete_paths: Vec<_> = operations
+            .iter()
+            .filter_map(|op| match op {
+                CommitOperation::Delete { path_in_repo } => Some(path_in_repo.clone()),
+                _ => None,
+            })
+            .collect();
+
+        // Only deletes stale files within the same variant
+        assert_eq!(delete_paths, vec!["build/torch-cpu/stale.py"]);
+    }
+
+    #[test]
+    fn test_collect_build_commit_ops_new_branch_deletes_all() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let build_dir = temp_dir.path();
+
+        let variant = build_dir.join("torch-cpu");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), "{}").unwrap();
+
+        let existing = vec![
+            "build/torch-cpu/stale.py".to_owned(),
+            "build/torch-cuda/inherited.py".to_owned(),
+        ];
+        let variants = vec![variant];
+        let mut operations = vec![];
+        // is_new_branch = true
+        collect_build_commit_ops(build_dir, &variants, &existing, true, &mut operations).unwrap();
+
+        let delete_paths: HashSet<_> = operations
+            .iter()
+            .filter_map(|op| match op {
+                CommitOperation::Delete { path_in_repo } => Some(path_in_repo.clone()),
+                _ => None,
+            })
+            .collect();
+
+        // New branch deletes ALL build/* files not in current upload
+        assert!(delete_paths.contains("build/torch-cpu/stale.py"));
+        assert!(delete_paths.contains("build/torch-cuda/inherited.py"));
+    }
+
+    const METADATA_V3: &str =
+        r#"{"version": 3, "python-depends": [], "backend": {"type": "cuda"}}"#;
+    const METADATA_NO_VERSION: &str =
+        r#"{"python-depends": [], "backend": {"type": "cuda"}}"#;
+
+    #[test]
+    fn test_detect_branch_from_metadata() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let variant = temp_dir.path().join("variant");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), METADATA_V3).unwrap();
+
+        let variants = vec![variant];
+        let branch = detect_branch_from_metadata(&variants).unwrap();
+        assert_eq!(branch, Some("v3".to_owned()));
+    }
+
+    #[test]
+    fn test_detect_branch_from_metadata_no_version() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let variant = temp_dir.path().join("variant");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), METADATA_NO_VERSION).unwrap();
+
+        let variants = vec![variant];
+        let branch = detect_branch_from_metadata(&variants).unwrap();
+        assert_eq!(branch, None);
+    }
+
+    #[test]
+    fn test_detect_branch_from_metadata_mismatched_versions() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let v1 = temp_dir.path().join("v1");
+        let v2 = temp_dir.path().join("v2");
+        fs::create_dir_all(&v1).unwrap();
+        fs::create_dir_all(&v2).unwrap();
+        fs::write(
+            v1.join("metadata.json"),
+            r#"{"version": 1, "python-depends": [], "backend": {"type": "cuda"}}"#,
+        )
+        .unwrap();
+        fs::write(
+            v2.join("metadata.json"),
+            r#"{"version": 2, "python-depends": [], "backend": {"type": "cuda"}}"#,
+        )
+        .unwrap();
+
+        let variants = vec![v1, v2];
+        let result = detect_branch_from_metadata(&variants);
+        assert!(result.is_err());
+    }
 }

@@ -118,17 +118,11 @@ jobs:
           name: built-kernels-x86_64-linux
           path: .
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: nix-builder/tests/Dockerfile.test-kernel
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: kernel-builder:latest
+        run: |
+          docker build \
+            -t kernel-builder:latest \
+            -f nix-builder/tests/Dockerfile.test-kernel .
 
       - name: Run Tests
         run: |

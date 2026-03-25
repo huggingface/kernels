@@ -212,17 +212,7 @@ function Find-KernelBuilder {
     throw "kernel-builder executable not found. Please build it or specify -KernelBuilderPath"
 }
 
-function Get-BuildTomlPath {
-    param([string]$Folder)
 
-    $buildTomlPath = Join-Path $Folder 'build.toml'
-
-    if (!(Test-Path $buildTomlPath -PathType Leaf)) {
-        throw "build.toml not found in folder: $Folder"
-    }
-
-    return $buildTomlPath
-}
 
 function Invoke-KernelBuilder {
     param(
@@ -326,12 +316,12 @@ function Get-CMakeConfigureArgs {
     # For XPU backend, use Ninja generator with Intel compilers
     if ($Backend -and $Backend.ToLower() -eq 'xpu') {
         Write-Status "Using Ninja generator for XPU backend with Intel SYCL compilers" -Type Info
-        
+
         $kwargs = @("..", "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release")
-        
+
         # Verify Intel compilers are available (CMakeLists.txt will set them correctly)
         $icx = Get-Command icx -ErrorAction SilentlyContinue
-        
+
         if ($icx) {
             Write-Status "Found Intel compiler: $($icx.Source)" -Type Info
             Write-Status "CMakeLists.txt will configure icx for Windows (MSVC-compatible mode)" -Type Info
@@ -470,7 +460,7 @@ function Invoke-Backend {
     #>
     param(
         [string]$KernelBuilderExe,
-        [string]$BuildToml,
+        [string]$KernelDir,
         [string]$Target,
         [hashtable]$Options,
         [string]$Backend
@@ -479,7 +469,7 @@ function Invoke-Backend {
     $backendName = if ($Backend -eq 'universal') { 'Universal' } else { $Backend.ToUpper() }
     Write-Status "Generating $backendName backend..." -Type Info
 
-    $kwargs = @('create-pyproject', $BuildToml)
+    $kwargs = @('create-pyproject', $KernelDir)
 
     if ($Target) { $kwargs += $Target }
     if ($Options.Force) { $kwargs += '--force' }
@@ -523,13 +513,12 @@ function Set-BackendArchitecture {
 try {
     # Resolve paths
     $SourceFolder = Resolve-Path $SourceFolder -ErrorAction Stop
-    $buildTomlPath = Get-BuildTomlPath -Folder $SourceFolder
     $kernelBuilderExe = Find-KernelBuilder
 
     # Validate mode
     if ($Validate) {
-        Write-Status "Validating $buildTomlPath..." -Type Info
-        Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments @('validate', $buildTomlPath)
+        Write-Status "Validating $SourceFolder..." -Type Info
+        Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments @('validate', $SourceFolder)
         Write-Status "Validation successful!" -Type Success
         exit 0
     }
@@ -538,7 +527,7 @@ try {
     if ($Clean) {
         Write-Status "Cleaning generated artifacts..." -Type Warning
 
-        $kwargs = @('clean', $buildTomlPath)
+        $kwargs = @('clean', $SourceFolder)
         if ($TargetFolder) { $kwargs += $TargetFolder }
         if ($DryRun) { $kwargs += '--dry-run' }
         if ($Force) { $kwargs += '--force' }
@@ -569,12 +558,12 @@ try {
     if ($Backend) {
         # Explicit backend specified
         $targetPath = if ($TargetFolder) { Resolve-Path $TargetFolder } else { $null }
-        Invoke-Backend -KernelBuilderExe $kernelBuilderExe -BuildToml $buildTomlPath -Target $targetPath -Options $options -Backend $Backend.ToLower()
+        Invoke-Backend -KernelBuilderExe $kernelBuilderExe -KernelDir $SourceFolder -Target $targetPath -Options $options -Backend $Backend.ToLower()
     } else {
         # Auto-detect backend from build.toml
         Write-Status "Auto-detecting backend from build.toml..." -Type Info
 
-        $kwargs = @('create-pyproject', $buildTomlPath)
+        $kwargs = @('create-pyproject', $SourceFolder)
         if ($TargetFolder) { $kwargs += (Resolve-Path $TargetFolder) }
         if ($Force) { $kwargs += '--force' }
         if ($OpsId) { $kwargs += '--ops-id', $OpsId }

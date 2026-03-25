@@ -25,11 +25,12 @@ $ cargo install hf-kernel-builder
 
 ## Generating a Python project with `kernel-builder`
 
-`kernel-builder` generates a CMake/Python project from a [`build.toml`](./writing-kernels.md)
-file. The invocation is as follows:
+`kernel-builder` can create CMake/Python project files for a kernel with
+a [`build.toml`](./writing-kernels.md) file. The `create-pyproject`
+command will create the files for the kernel in the current directory:
 
 ```bash
-$ kernel-builder create-pyproject build.toml -f
+$ kernel-builder create-pyproject -f
 ```
 
 The `-f` flag is optional and instructs `kernel-builder` to overwrite
@@ -41,6 +42,12 @@ your Python virtual environment for development:
 ```bash
 $ pip install wheel # Needed once to enable bdist_wheel.
 $ pip install --no-build-isolation -e .
+```
+
+You can also create a Python project for a kernel in another directory:
+
+```bash
+$ kernel-builder create-pyproject -f path/to/kernel
 ```
 
 **Warnings:**

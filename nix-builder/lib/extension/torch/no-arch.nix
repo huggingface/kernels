@@ -66,7 +66,7 @@ stdenv.mkDerivation (prevAttrs: {
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --ops-id ${rev} $out/build.toml
+      --ops-id ${rev} $out
   '';
 
   framework = "torch";
@@ -100,5 +100,6 @@ stdenv.mkDerivation (prevAttrs: {
   passthru = {
     inherit dependencies;
     variant = torch.noarchVariant;
+    archVariant = torch.variant;
   };
 })

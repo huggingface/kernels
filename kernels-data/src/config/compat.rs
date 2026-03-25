@@ -2,7 +2,7 @@ use eyre::Result;
 use serde::Deserialize;
 use serde_value::Value;
 
-use super::{v1, v2, v3, Build};
+use super::{Build, v1, v2, v3};
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]

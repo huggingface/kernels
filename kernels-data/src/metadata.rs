@@ -1,5 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+use crate::config::Backend;
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct BackendInfo {
+    #[serde(rename = "type")]
+    pub backend_type: Backend,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Metadata {
@@ -10,4 +19,5 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream: Option<url::Url>,
     pub python_depends: Vec<String>,
+    pub backend: BackendInfo,
 }

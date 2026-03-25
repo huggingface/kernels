@@ -116,7 +116,7 @@ stdenv.mkDerivation (prevAttrs: {
   # Generate build files.
   postPatch = ''
     kernel-builder create-pyproject \
-      --ops-id ${rev} build.toml
+      --ops-id ${rev} .
   '';
 
   preConfigure =
@@ -274,5 +274,6 @@ stdenv.mkDerivation (prevAttrs: {
   passthru = {
     inherit dependencies;
     inherit (python3.pkgs.tvm-ffi) variant;
+    archVariant = python3.pkgs.tvm-ffi.variant;
   };
 })

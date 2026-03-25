@@ -1,9 +1,9 @@
 import ctypes
+import importlib.util
 import sys
-
-import importlib
 from pathlib import Path
 from types import ModuleType
+
 
 def _import_from_path(file_path: Path) -> ModuleType:
     # We cannot use the module name as-is, after adding it to `sys.modules`,

@@ -246,6 +246,7 @@ dependencies = [
  "eyre",
  "git2",
  "itertools",
+ "kernels-data",
  "minijinja",
  "minijinja-embed",
  "rand",
@@ -409,6 +410,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48d1dbcbbeb6a7fec7e059840aa538bd62aaccf972c7346c4d9d2059312853d0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "kernels-data"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "itertools",
+ "regex",
+ "serde",
+ "serde-value",
+ "serde_json",
+ "thiserror",
+ "url",
 ]
 
 [[package]]

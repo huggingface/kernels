@@ -3,9 +3,9 @@ use std::path::Path;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
+use kernels_data::config::{Backend, Build, General, TvmFfi};
 use minijinja::{context, Environment};
 
-use crate::config::{Backend, Build, General, TvmFfi};
 use crate::pyproject::common::{
     prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
 };

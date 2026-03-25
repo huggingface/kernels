@@ -4,7 +4,7 @@ use std::io::Write;
 use eyre::{Context, Result};
 use minijinja::{context, Environment};
 
-use crate::config::{Build, Dependency};
+use kernels_data::config::{Build, Dependency};
 
 pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> Result<()> {
     // Collect all dependencies.
@@ -89,6 +89,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                 // TODO: add CMake dependency.
             }
             Dependency::Torch => (),
+            _ => (),
         }
         write.write_all(b"\n")?;
     }

@@ -10,13 +10,13 @@ CUTLASS_TVM_FFI_PATH=$(echo cutlass-gemm-tvm-ffi-kernel/tvm-ffi*)
 SILU_MUL_PATH=$(echo silu-and-mul-kernel/torch*)
 RELU_CPU_PATH=$(echo relu-kernel-cpu/torch*)
 
-PYTHONPATH="$EXTRA_DATA_PATH:$RELU_PATH:$RELU_TVM_FFI_PATH:$CUTLASS_PATH:$CUTLASS_TVM_FFI_PATH:$PYTHONPATH" \
+PYTHONPATH="$EXTRA_DATA_PATH:$RELU_PATH:$RELU_TVM_FFI_PATH:$CUTLASS_PATH:$CUTLASS_TVM_FFI_PATH" \
   .venv/bin/pytest extra_data_tests relu_tests relu_tvm_ffi_tests cutlass_gemm_tests cutlass_gemm_tvm_ffi_tests
 
 # We only care about importing, the kernel is trivial.
-PYTHONPATH="$SILU_MUL_PATH:$PYTHONPATH" \
+PYTHONPATH="$SILU_MUL_PATH" \
   .venv/bin/python -c "import silu_and_mul"
 
-PYTHONPATH="$RELU_CPU_PATH:$PYTHONPATH" \
+PYTHONPATH="$RELU_CPU_PATH" \
    CUDA_VISIBLE_DEVICES="" \
   .venv/bin/pytest relu_tests

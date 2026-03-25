@@ -14,12 +14,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# Install system dependencies
-RUN dnf install -y \
-    curl
-
-# Install uv package manager
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install uv.
+RUN dnf install -y curl && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    dnf clean all
 
 # Set working directory
 WORKDIR /app

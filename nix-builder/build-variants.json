@@ -2,7 +2,7 @@
   "aarch64-darwin": {
     "cpu": [
       "torch210-cpu-aarch64-darwin",
-      "torch29-cpu-aarch64-darwin"
+      "torch211-cpu-aarch64-darwin"
     ],
     "metal": [
       "torch210-metal-aarch64-darwin",
@@ -12,31 +12,31 @@
   "aarch64-linux": {
     "cpu": [
       "torch210-cxx11-cpu-aarch64-linux",
-      "torch29-cxx11-cpu-aarch64-linux"
+      "torch211-cxx11-cpu-aarch64-linux"
     ],
     "cuda": [
       "torch210-cxx11-cu126-aarch64-linux",
       "torch210-cxx11-cu128-aarch64-linux",
       "torch210-cxx11-cu130-aarch64-linux",
-      "torch29-cxx11-cu126-aarch64-linux",
-      "torch29-cxx11-cu128-aarch64-linux",
-      "torch29-cxx11-cu129-aarch64-linux",
-      "torch29-cxx11-cu130-aarch64-linux"
+      "torch211-cxx11-cu126-aarch64-linux",
+      "torch211-cxx11-cu128-aarch64-linux",
+      "torch211-cxx11-cu130-aarch64-linux",
+      "torch29-cxx11-cu129-aarch64-linux"
     ]
   },
   "x86_64-linux": {
     "cpu": [
       "torch210-cxx11-cpu-x86_64-linux",
-      "torch29-cxx11-cpu-x86_64-linux"
+      "torch211-cxx11-cpu-x86_64-linux"
     ],
     "cuda": [
       "torch210-cxx11-cu126-x86_64-linux",
       "torch210-cxx11-cu128-x86_64-linux",
       "torch210-cxx11-cu130-x86_64-linux",
-      "torch29-cxx11-cu126-x86_64-linux",
-      "torch29-cxx11-cu128-x86_64-linux",
-      "torch29-cxx11-cu129-x86_64-linux",
-      "torch29-cxx11-cu130-x86_64-linux"
+      "torch211-cxx11-cu126-x86_64-linux",
+      "torch211-cxx11-cu128-x86_64-linux",
+      "torch211-cxx11-cu130-x86_64-linux",
+      "torch29-cxx11-cu129-x86_64-linux"
     ],
     "rocm": [
       "torch210-cxx11-rocm70-x86_64-linux",

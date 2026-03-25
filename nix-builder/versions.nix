@@ -8,34 +8,7 @@
   }
   {
     torchVersion = "2.9";
-    cudaVersion = "12.6";
-    systems = [
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
-    bundleBuild = true;
-  }
-  {
-    torchVersion = "2.9";
-    cudaVersion = "12.8";
-    systems = [
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
-    bundleBuild = true;
-  }
-  {
-    torchVersion = "2.9";
     cudaVersion = "12.9";
-    systems = [
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
-    bundleBuild = true;
-  }
-  {
-    torchVersion = "2.9";
-    cudaVersion = "13.0";
     systems = [
       "x86_64-linux"
       "aarch64-linux"
@@ -60,16 +33,6 @@
     systems = [ "aarch64-darwin" ];
     bundleBuild = true;
   }
-  {
-    torchVersion = "2.9";
-    cpu = true;
-    systems = [
-      "aarch64-darwin"
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
-    bundleBuild = true;
-  }
 
   {
     torchVersion = "2.10";
@@ -79,7 +42,6 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
   }
   {
     torchVersion = "2.10";
@@ -89,7 +51,6 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
   }
   {
     torchVersion = "2.10";
@@ -99,7 +60,6 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
   }
   {
     torchVersion = "2.10";
@@ -122,7 +82,6 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
   }
   {
     torchVersion = "2.10";
@@ -134,6 +93,48 @@
     torchVersion = "2.10";
     xpuVersion = "2025.3.1";
     systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+    tvmFfi = true;
+  }
+
+  {
+    torchVersion = "2.11";
+    cpu = true;
+    systems = [
+      "aarch64-darwin"
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+    tvmFfi = true;
+  }
+  {
+    torchVersion = "2.11";
+    cudaVersion = "12.6";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+    tvmFfi = true;
+  }
+  {
+    torchVersion = "2.11";
+    cudaVersion = "12.8";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+    tvmFfi = true;
+  }
+  {
+    torchVersion = "2.11";
+    cudaVersion = "13.0";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
     bundleBuild = true;
     tvmFfi = true;
   }

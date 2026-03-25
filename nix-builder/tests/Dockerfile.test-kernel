@@ -57,8 +57,8 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
     uv add "torch==${TORCH_VERSION}"; \
     fi
 
-# add pytest for runtime tests
-RUN uv add numpy pytest
+# Add additional dependencies.
+RUN uv add "apache-tvm-ffi~=0.1.9" numpy pytest
 
 # Copy kernels and tests
 COPY relu-kernel ./relu-kernel
@@ -67,6 +67,7 @@ COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
+COPY extra-data ./extra-data
 COPY examples/kernels/extra-data/tests ./extra_data_tests
 COPY examples/kernels/relu/tests ./relu_tests
 COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests

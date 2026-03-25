@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Expand to build variant directories.
 EXTRA_DATA_PATH=$(echo extra-data/torch*)

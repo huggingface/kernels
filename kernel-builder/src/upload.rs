@@ -652,8 +652,7 @@ mod tests {
 
     const METADATA_V3: &str =
         r#"{"version": 3, "python-depends": [], "backend": {"type": "cuda"}}"#;
-    const METADATA_NO_VERSION: &str =
-        r#"{"python-depends": [], "backend": {"type": "cuda"}}"#;
+    const METADATA_NO_VERSION: &str = r#"{"python-depends": [], "backend": {"type": "cuda"}}"#;
 
     #[test]
     fn test_detect_branch_from_metadata() {

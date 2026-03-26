@@ -72,7 +72,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     let arg_repo_id = match args.repo_id {
         Some(id) => id,
         None =>
-        // WARN: parsing must not be moved out op this branch, we want users
+        // WARN: parsing must not be moved out of this branch, we want users
         //       to be able to upload without `build.toml` as long as they
         //       provide a repo id.
         {

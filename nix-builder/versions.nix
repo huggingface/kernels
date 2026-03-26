@@ -15,18 +15,6 @@
     ];
     bundleBuild = true;
   }
-  {
-    torchVersion = "2.9";
-    rocmVersion = "6.3.4";
-    systems = [ "x86_64-linux" ];
-    bundleBuild = true;
-  }
-  {
-    torchVersion = "2.9";
-    rocmVersion = "6.4.2";
-    systems = [ "x86_64-linux" ];
-    bundleBuild = true;
-  }
 
   {
     torchVersion = "2.10";
@@ -136,6 +124,18 @@
     torchVersion = "2.11";
     metal = true;
     systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
+    rocmVersion = "7.1";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
+    rocmVersion = "7.2";
+    systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
 ]

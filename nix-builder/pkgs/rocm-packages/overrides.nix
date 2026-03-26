@@ -24,9 +24,7 @@ applyOverrides {
       hipblas-common-devel ? null,
     }:
     prevAttrs: {
-      # Only available starting ROCm 6.3.
-      propagatedBuildInputs =
-        prevAttrs.buildInputs ++ lib.optionals (hipblas-common-devel != null) [ hipblas-common-devel ];
+      propagatedBuildInputs = prevAttrs.buildInputs ++ [ hipblas-common-devel ];
     };
 
   hipblaslt =

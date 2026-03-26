@@ -69,8 +69,6 @@ let
   inherit (archs) supportedTorchRocmArchs;
 
   aotritonVersions = with rocmPackages; {
-    "2.8" = aotriton_0_10;
-    "2.9" = aotriton_0_11;
     "2.10" = aotriton_0_11_1;
     "2.11" = aotriton_0_11_2;
   };

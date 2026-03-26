@@ -24,8 +24,6 @@ let
     # Add aotriton
     (final: prev: {
       inherit (prev.callPackage ../aotriton { })
-        aotriton_0_10
-        aotriton_0_11
         aotriton_0_11_1
         aotriton_0_11_2
         ;

@@ -191,8 +191,6 @@ in
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     versions = [
-      "6.3.4"
-      "6.4.2"
       "7.0.2"
       "7.1.1"
       "7.2.1"

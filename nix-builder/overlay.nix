@@ -102,6 +102,27 @@ in
           }
         );
 
+        hf-xet = python-super.hf-xet.overridePythonAttrs (prevAttrs: rec {
+          version = "1.4.2";
+          src = final.fetchFromGitHub {
+            owner = "huggingface";
+            repo = "xet-core";
+            tag = "v${version}";
+            hash = "sha256-UdHEpJztlVI8LPs8Ne9sKe1Nv3kVVk4YLxQ3W8sUPbQ=";
+          };
+          cargoDeps = final.rustPlatform.fetchCargoVendor {
+            inherit (prevAttrs)
+              pname
+              sourceRoot
+              ;
+            inherit
+              version
+              src
+              ;
+            hash = "sha256-GV+XY5uV57yQWVGdRLpGU3eD8Gz2gy6p7OHlF+mlJI4=";
+          };
+        });
+
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };

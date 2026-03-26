@@ -78,18 +78,18 @@ in
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.3.0";
+          version = "1.8.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
-            hash = "sha256-KJ4qNYb98B41iClE6qBvvVdDbeJLbmU9H6skhYSs1ms=";
+            hash = "sha256-xWJ7L9Uh4Ayvjv9KyWW6mI6nUWf61+5y4X+bcYPsY/M=";
           };
           dependencies =
             (prevAttrs.dependencies or [ ])
             ++ (with python-self; [
               httpx
               shellingham
-              typer-slim
+              typer
             ]);
           # Skip tests since they require network access.
           doCheck = false;

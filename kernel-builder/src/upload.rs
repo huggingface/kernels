@@ -69,15 +69,23 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     let kernel_dir = fs::canonicalize(&kernel_dir)
         .wrap_err_with(|| format!("Cannot resolve kernel directory `{}`", kernel_dir.display()))?;
 
-    let build = parse_build(&kernel_dir)?;
     let arg_repo_id = match args.repo_id {
         Some(id) => id,
-        None => build
-            .repo_id()
-            .ok_or_else(|| {
-                eyre::eyre!("No `general.hub.repo-id` in build.toml. Use --repo-id to specify it.")
-            })?
-            .to_owned(),
+        None =>
+        // WARN: parsing must not be moved out of this branch, we want users
+        //       to be able to upload without `build.toml` as long as they
+        //       provide a repo id.
+        {
+            parse_build(&kernel_dir)
+                .context("--repo-id is not provided and cannot parse build.toml.")?
+                .repo_id()
+                .ok_or_else(|| {
+                    eyre::eyre!(
+                        "No `general.hub.repo-id` in build.toml. Use --repo-id to specify it."
+                    )
+                })?
+                .to_owned()
+        }
     };
 
     let (build_dir, variants) = discover_variants(&kernel_dir)?;

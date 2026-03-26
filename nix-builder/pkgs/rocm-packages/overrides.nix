@@ -94,6 +94,15 @@ applyOverrides {
       ];
     };
 
+  hipsparselt =
+    { hip-runtime-amd, roctracer }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        hip-runtime-amd
+        roctracer
+      ];
+    };
+
   hsa-rocr =
     {
       elfutils,

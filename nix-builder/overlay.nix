@@ -77,18 +77,20 @@ in
           else
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
-        huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (old: rec {
+        huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
           version = "1.3.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
             hash = "sha256-KJ4qNYb98B41iClE6qBvvVdDbeJLbmU9H6skhYSs1ms=";
           };
-          dependencies = (old.dependencies or [ ]) ++ [
-            python-self.httpx
-            python-self.shellingham
-            python-self.typer-slim
-          ];
+          dependencies =
+            (prevAttrs.dependencies or [ ])
+            ++ (with python-self; [
+              httpx
+              shellingham
+              typer-slim
+            ]);
           # Skip tests since they require network access.
           doCheck = false;
         });
@@ -134,6 +136,19 @@ in
           version = "2.11";
           xpuPackages = final.xpuPackages_2025_3;
         };
+
+        transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
+          version = "5.3.0";
+          src = python-super.fetchPypi {
+            pname = "transformers";
+            inherit version;
+            hash = "sha256-AJVVs2QCnanilG1B8cXenxXmsd9GsYm3KT8zoWG5xVc=";
+          };
+
+          dependencies = (prevAttrs.dependencies or [ ]) ++ [
+            python-self.typer
+          ];
+        });
 
         triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {
           torchVersion = "2.9";

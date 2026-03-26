@@ -13,11 +13,11 @@ static inline id<MTLBuffer> getMTLBufferStorage(const torch::Tensor &tensor) {
   return __builtin_bit_cast(id<MTLBuffer>, tensor.storage().data());
 }
 
-void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) {
+void {{ kernel_name_normalized }}(torch::Tensor &out, torch::Tensor const &input) {
   TORCH_CHECK(input.device().is_mps(), "input must be a MPS tensor");
   TORCH_CHECK(input.is_contiguous(), "input must be contiguous");
   TORCH_CHECK(input.scalar_type() == at::ScalarType::Float,
-              "__KERNEL_NAME_NORMALIZED__ only supports float32");
+              "{{ kernel_name_normalized }} only supports float32");
   TORCH_CHECK(input.sizes() == out.sizes(), "Tensors must have same shape");
   TORCH_CHECK(input.scalar_type() == out.scalar_type(),
               "Tensors must have same dtype");
@@ -35,7 +35,7 @@ void __KERNEL_NAME_NORMALIZED__(torch::Tensor &out, torch::Tensor const &input) 
                 error.localizedDescription.UTF8String);
 
     id<MTLFunction> func =
-        [library newFunctionWithName:@"__KERNEL_NAME_NORMALIZED___kernel"];
+        [library newFunctionWithName:@"{{ kernel_name_normalized }}_kernel"];
     TORCH_CHECK(func, "Failed to create function");
 
     id<MTLComputePipelineState> pso =

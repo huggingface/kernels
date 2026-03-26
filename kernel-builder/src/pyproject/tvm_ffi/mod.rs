@@ -88,7 +88,7 @@ pub fn write_setup_py(
 
     env.get_template("tvm_ffi/setup.py")
         .wrap_err("Cannot get tvm_ffi setup.py template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 data_globs => data_globs,
                 revision => revision,
@@ -129,7 +129,7 @@ pub fn write_pyproject_toml(
 
     env.get_template("tvm_ffi/pyproject.toml")
         .wrap_err("Cannot get tvm_ffi pyproject.toml template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 python_name => general.name.python_name(),
                 python_dependencies => python_dependencies,
@@ -150,7 +150,7 @@ pub fn render_binding(
 ) -> Result<()> {
     env.get_template("tvm_ffi/binding.cmake")
         .wrap_err("Cannot get tvm_ffi binding template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 includes => tvm_ffi.include.as_ref().map(prefix_and_join_includes),
                 name => name,
@@ -173,7 +173,7 @@ pub fn render_extension(
 ) -> Result<()> {
     env.get_template("tvm_ffi/tvm-ffi-extension.cmake")
         .wrap_err("Cannot get tvm_ffi extension template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 python_name => general.name.python_name(),
                 data_extensions => tvm_ffi.data_extensions(),
@@ -198,7 +198,7 @@ pub fn render_preamble(
 
     env.get_template("tvm_ffi/preamble.cmake")
         .wrap_err("Cannot get tvm_ffi preamble template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 name => &general.name,
                 python_name => general.name.python_name(),

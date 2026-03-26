@@ -1,3 +1,6 @@
+use std::{fs, path::Path};
+
+use eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Backend;
@@ -20,4 +23,11 @@ pub struct Metadata {
     pub upstream: Option<url::Url>,
     pub python_depends: Vec<String>,
     pub backend: BackendInfo,
+}
+
+pub fn parse_metadata(path: impl AsRef<Path>) -> Result<Metadata> {
+    let path = path.as_ref();
+    let data =
+        fs::read_to_string(path).wrap_err_with(|| format!("Cannot read `{}`", path.display()))?;
+    serde_json::from_str(&data).wrap_err_with(|| format!("Cannot parse `{}`", path.display()))
 }

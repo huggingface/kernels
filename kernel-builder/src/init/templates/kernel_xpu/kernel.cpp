@@ -1,7 +1,7 @@
 #include <sycl/sycl.hpp>
 #include <torch/torch.h>
 
-void __KERNEL_NAME_NORMALIZED__(torch::Tensor& out, const torch::Tensor& input) {
+void {{ kernel_name_normalized }}(torch::Tensor& out, const torch::Tensor& input) {
     TORCH_CHECK(input.device().is_xpu(), "input must be a XPU tensor");
     TORCH_CHECK(input.is_contiguous(), "input must be contiguous");
     TORCH_CHECK(input.scalar_type() == torch::kFloat, "only float32 supported");

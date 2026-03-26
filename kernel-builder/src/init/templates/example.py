@@ -14,7 +14,7 @@ import kernels
 import torch
 
 # Load the locally built kernel
-kernel = kernels.get_local_kernel(Path("build"), "__KERNEL_NAME_NORMALIZED__")
+kernel = kernels.get_local_kernel(Path("build"), "{{ kernel_name_normalized }}")
 
 # Select device
 if platform.system() == "Darwin":
@@ -33,7 +33,7 @@ x = torch.tensor([1.0, 2.0, 3.0], device=device)
 print(f"Input:  {x}")
 
 # Run kernel (adds 1 to each element)
-result = kernel.__KERNEL_NAME_NORMALIZED__(x)
+result = kernel.{{ kernel_name_normalized }}(x)
 print(f"Output: {result}")
 
 # Verify result

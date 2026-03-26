@@ -12,6 +12,17 @@ use completions::print_completions;
 mod develop;
 use develop::{devshell, testshell};
 
+mod build;
+use build::run_build;
+
+mod hf;
+
+mod init;
+use init::{run_init, InitArgs};
+
+mod upload;
+use upload::{run_upload, RepoTypeArg, UploadArgs};
+
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
@@ -26,15 +37,15 @@ use util::{check_or_infer_kernel_dir, parse_and_validate};
 struct NixArgs {
     /// Maximum number of parallel Nix build jobs.
     #[arg(long)]
-    max_jobs: Option<u32>,
+    pub max_jobs: Option<u32>,
 
     /// Number of CPU cores to use for each build job.
     #[arg(long)]
-    cores: Option<u32>,
+    pub cores: Option<u32>,
 
     /// Print full build logs on standard error.
     #[arg(short = 'L', long)]
-    print_build_logs: bool,
+    pub print_build_logs: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -49,7 +60,59 @@ enum Commands {
     /// Generate shell completions.
     Completions { shell: Shell },
 
-    /// Create pyproject and CMake files for a kernel development.
+    /// Initialize a new kernel project from template.
+    Init(InitArgs),
+
+    /// Build the kernel locally (alias for build-and-copy).
+    Build {
+        /// Directory of the kernel project (defaults to current directory).
+        #[arg(value_name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        #[command(flatten)]
+        nix_args: NixArgs,
+    },
+
+    /// Build the kernel and copy artifacts locally.
+    BuildAndCopy {
+        /// Directory of the kernel project (defaults to current directory).
+        #[arg(value_name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        #[command(flatten)]
+        nix_args: NixArgs,
+    },
+
+    /// Build the kernel and upload to Hugging Face Hub.
+    BuildAndUpload {
+        /// Directory of the kernel project (defaults to current directory).
+        #[arg(value_name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        #[command(flatten)]
+        nix_args: NixArgs,
+
+        /// Repository ID on the Hugging Face Hub (e.g. `user/my-kernel`).
+        #[arg(long)]
+        repo_id: Option<String>,
+
+        /// Upload to a specific branch (defaults to `v{version}` from metadata).
+        #[arg(long)]
+        branch: Option<String>,
+
+        /// Create the repository as private.
+        #[arg(long)]
+        private: bool,
+
+        /// Repository type on Hugging Face Hub (`model` or `kernel`).
+        #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+        repo_type: RepoTypeArg,
+    },
+
+    /// Upload kernel build artifacts to the Hugging Face Hub.
+    Upload(UploadArgs),
+
+    /// Generate CMake files for a kernel extension build.
     CreatePyproject {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
@@ -129,6 +192,51 @@ fn main() -> Result<()> {
         Commands::Completions { shell } => {
             print_completions(&mut Cli::command(), shell);
             Ok(())
+        }
+        Commands::Init(args) => run_init(args),
+        Commands::Upload(args) => run_upload(args),
+        Commands::Build {
+            kernel_dir,
+            nix_args,
+        } => run_build(
+            kernel_dir,
+            nix_args.max_jobs,
+            nix_args.cores,
+            nix_args.print_build_logs,
+            "build",
+        ),
+        Commands::BuildAndCopy {
+            kernel_dir,
+            nix_args,
+        } => run_build(
+            kernel_dir,
+            nix_args.max_jobs,
+            nix_args.cores,
+            nix_args.print_build_logs,
+            "build-and-copy",
+        ),
+        Commands::BuildAndUpload {
+            kernel_dir,
+            nix_args,
+            repo_id,
+            branch,
+            private,
+            repo_type,
+        } => {
+            run_build(
+                kernel_dir.clone(),
+                nix_args.max_jobs,
+                nix_args.cores,
+                nix_args.print_build_logs,
+                "build",
+            )?;
+            run_upload(UploadArgs {
+                kernel_dir,
+                repo_id,
+                branch,
+                private,
+                repo_type,
+            })
         }
         Commands::CreatePyproject {
             kernel_dir,

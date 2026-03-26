@@ -30,7 +30,6 @@ impl Flake {
 /// Nix subcommands.
 pub enum NixSubcommand {
     /// Run the program associated with an attribute in a flake.
-    #[allow(dead_code)]
     Run {
         flake: Flake,
         attribute: Option<String>,

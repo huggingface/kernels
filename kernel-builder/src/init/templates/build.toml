@@ -1,0 +1,66 @@
+[general]
+backends = [
+{% for backend in backends %}
+  "{{ backend }}",
+{% endfor %}
+]
+name = "{{ kernel_name }}"
+version = 1
+
+[general.hub]
+repo-id = "{{ repo_id }}"
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h",
+]
+{% if has_cuda %}
+
+[kernel.{{ kernel_name_normalized }}]
+backend = "cuda"
+depends = ["torch"]
+src = ["{{ kernel_name_normalized }}_cuda/{{ kernel_name_normalized }}.cu"]
+{% endif %}
+{% if has_metal %}
+
+[kernel.{{ kernel_name_normalized }}_metal]
+backend = "metal"
+depends = ["torch"]
+src = [
+  "{{ kernel_name_normalized }}_metal/{{ kernel_name_normalized }}.mm",
+  "{{ kernel_name_normalized }}_metal/{{ kernel_name_normalized }}.metal",
+]
+{% endif %}
+{% if has_rocm %}
+
+[kernel.{{ kernel_name_normalized }}_rocm]
+backend = "rocm"
+depends = ["torch"]
+rocm-archs = [
+  "gfx906",
+  "gfx908",
+  "gfx90a",
+  "gfx940",
+  "gfx941",
+  "gfx942",
+  "gfx1030",
+  "gfx1100",
+  "gfx1101",
+]
+src = ["{{ kernel_name_normalized }}_cuda/{{ kernel_name_normalized }}.cu"]
+{% endif %}
+{% if has_xpu %}
+
+[kernel.{{ kernel_name_normalized }}_xpu]
+backend = "xpu"
+depends = ["torch"]
+src = ["{{ kernel_name_normalized }}_xpu/{{ kernel_name_normalized }}.cpp"]
+{% endif %}
+{% if has_cpu %}
+
+[kernel.{{ kernel_name_normalized }}_cpu]
+backend = "cpu"
+depends = ["torch"]
+src = ["{{ kernel_name_normalized }}_cpu/{{ kernel_name_normalized }}_cpu.cpp"]
+{% endif %}

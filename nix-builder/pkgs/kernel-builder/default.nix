@@ -24,12 +24,21 @@ rustPlatform.buildRustPackage {
         || file.name == "pyproject.toml"
         || file.name == "pyproject_universal.toml"
         || file.name == "python_dependencies.json"
+        || file.name == ".gitattributes"
+        || file.name == ".gitignore"
         || (builtins.any file.hasExt [
           "cmake"
+          "cpp"
+          "cu"
           "h"
           "in"
+          "md"
+          "metal"
+          "mm"
+          "nix"
           "py"
           "rs"
+          "toml"
         ]);
     in
     lib.fileset.toSource {
@@ -44,7 +53,14 @@ rustPlatform.buildRustPackage {
 
   cargoLock = {
     lockFile = ../../../kernel-builder/Cargo.lock;
+    outputHashes = {
+      "huggingface-hub-0.1.0" = "sha256-XgVrtujU7gPQ3XnUxeEVF9Kaf4+/EwLudKkwDPj44II=";
+      "hf-xet-1.4.0" = "sha256-/vvU8qy9U+suiH9MCcxrV3Ayw84yRV6EmW0yzB7Uvng=";
+    };
   };
+
+  # e2e tests look for binary at target/debug/ which doesn't exist in nix
+  doCheck = false;
 
   nativeBuildInputs = [
     installShellFiles

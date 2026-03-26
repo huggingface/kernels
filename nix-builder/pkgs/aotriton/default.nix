@@ -187,4 +187,58 @@ in
     extraPythonDepends = ps: [ ps.pandas ];
   };
 
+  aotriton_0_11_2 = generic rec {
+    version = "0.11.2b";
+
+    src = fetchFromGitHub {
+      owner = "ROCm";
+      repo = "aotriton";
+      rev = version;
+      hash = "sha256-VIwwQR1fl40NLNOwO8KhQK/xOK6wb2l8qBugJ1cRjm4=";
+      leaveDotGit = true;
+      inherit postFetch;
+    };
+
+    patches = [
+      # Fails with: ld.lld: error: unable to insert .comment after .comment
+      ./v0.11.1b-no-ld-script.diff
+    ];
+
+    gpuTargets = [
+      # aotriton GPU support list:
+      # https://github.com/ROCm/aotriton/blob/main/v2python/gpu_targets.py
+      "gfx90a"
+      "gfx942"
+      "gfx950"
+      "gfx1100"
+      "gfx1151"
+      "gfx1201"
+    ];
+
+    images = mkImages version [
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.11.2b/aotriton-0.11.2b-images-amd-gfx90a.tar.gz";
+        hash = "sha256-/p8Etmv1KsJ80CXh2Jz9BJdN0/s64HYZL3g2QaTYD98=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.11.2b/aotriton-0.11.2b-images-amd-gfx942.tar.gz";
+        hash = "sha256-CnvO4Z07ttVIcyJIwyNPe5JzbCq3p6rmUpS4en/WTAY=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.11.2b/aotriton-0.11.2b-images-amd-gfx950.tar.gz";
+        hash = "sha256-wbo7/oQhf9Z9890fi2fICn97M9CtTXS0HWVnA24DKs4=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.11.2b/aotriton-0.11.2b-images-amd-gfx11xx.tar.gz";
+        hash = "sha256-g5KZY3/MsT++Pngj1X0bLc0OC+14q7y3AF6l9P2CuSg=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.11.2b/aotriton-0.11.2b-images-amd-gfx120x.tar.gz";
+        hash = "sha256-Ck/zJL/9rAwv3oeop/cFY9PISoCtTo8xNF8rQKE4TpU=";
+      })
+    ];
+
+    extraPythonDepends = ps: [ ps.pandas ];
+  };
+
 }

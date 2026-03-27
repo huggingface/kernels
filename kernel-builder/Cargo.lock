@@ -1255,7 +1255,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "huggingface-hub"
 version = "0.1.0"
-source = "git+https://github.com/huggingface/huggingface_hub_rust.git?rev=8cbc662035e04d4be8e829316272893e980f5926#8cbc662035e04d4be8e829316272893e980f5926"
+source = "git+https://github.com/huggingface/huggingface_hub_rust.git?branch=support-commit-operation-callback#b73ef621e847fff79b4ac73d88d07530192e3679"
 dependencies = [
  "async-trait",
  "base64",

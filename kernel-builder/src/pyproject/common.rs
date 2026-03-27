@@ -20,7 +20,7 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
 
 pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
     for backend in &Backend::all() {
-        let writer = file_set.entry(format!("metadata-{}.json", backend));
+        let writer = file_set.entry(format!("metadata-{backend}.json"));
 
         let python_depends = general
             .python_depends()

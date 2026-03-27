@@ -10,8 +10,7 @@ license = { text = "Apache-2.0" }
 readme = "README.md"
 requires-python = ">= 3.9"
 dependencies = [
-  "huggingface_hub>=0.26.0,<2.0",
-  "Jinja2>=3.1.5",
+  "huggingface_hub>=1.3.0,<2.0",
   "packaging>=20.0",
   "pyyaml>=6",
   "tomli>=2.0; python_version<'3.11'",
@@ -55,7 +54,7 @@ kernels = "kernels.cli:main"
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
 [tool.setuptools.package-data]
-kernels = ["python_depends.json", "card_template.md"]
+kernels = ["python_depends.json"]
 
 [tool.isort]
 profile = "black"

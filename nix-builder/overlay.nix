@@ -77,12 +77,51 @@ in
           else
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
+        huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
+          version = "1.8.0";
+          src = python-super.fetchPypi {
+            pname = "huggingface_hub";
+            inherit version;
+            hash = "sha256-xWJ7L9Uh4Ayvjv9KyWW6mI6nUWf61+5y4X+bcYPsY/M=";
+          };
+          dependencies =
+            (prevAttrs.dependencies or [ ])
+            ++ (with python-self; [
+              httpx
+              shellingham
+              typer
+            ]);
+          # Skip tests since they require network access.
+          doCheck = false;
+        });
+
         fastapi = python-super.fastapi.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.
             doInstallCheck = false;
           }
         );
+
+        hf-xet = python-super.hf-xet.overridePythonAttrs (prevAttrs: rec {
+          version = "1.4.2";
+          src = final.fetchFromGitHub {
+            owner = "huggingface";
+            repo = "xet-core";
+            tag = "v${version}";
+            hash = "sha256-UdHEpJztlVI8LPs8Ne9sKe1Nv3kVVk4YLxQ3W8sUPbQ=";
+          };
+          cargoDeps = final.rustPlatform.fetchCargoVendor {
+            inherit (prevAttrs)
+              pname
+              sourceRoot
+              ;
+            inherit
+              version
+              src
+              ;
+            hash = "sha256-GV+XY5uV57yQWVGdRLpGU3eD8Gz2gy6p7OHlF+mlJI4=";
+          };
+        });
 
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
@@ -114,6 +153,24 @@ in
           xpuPackages = final.xpuPackages_2025_3;
         };
 
+        torch-bin_2_11 = mkTorch {
+          version = "2.11";
+          xpuPackages = final.xpuPackages_2025_3;
+        };
+
+        transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
+          version = "5.3.0";
+          src = python-super.fetchPypi {
+            pname = "transformers";
+            inherit version;
+            hash = "sha256-AJVVs2QCnanilG1B8cXenxXmsd9GsYm3KT8zoWG5xVc=";
+          };
+
+          dependencies = (prevAttrs.dependencies or [ ]) ++ [
+            python-self.typer
+          ];
+        });
+
         triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {
           torchVersion = "2.9";
           xpuPackages = final.xpuPackages_2025_2;
@@ -134,10 +191,9 @@ in
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     versions = [
-      "6.3.4"
-      "6.4.2"
       "7.0.2"
       "7.1.1"
+      "7.2.1"
     ];
     newRocmPackages = final.callPackage ./pkgs/rocm-packages { };
   in

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from huggingface_hub.dataclasses import strict
 from huggingface_hub.utils import (
     build_hf_headers,
     disable_progress_bars,
@@ -69,6 +70,7 @@ def _calculate_iqr_and_outliers(
     return q1, q3, iqr, outliers
 
 
+@strict
 @dataclass
 class TimingResults:
     mean_ms: float
@@ -83,7 +85,18 @@ class TimingResults:
     verified: bool | None = None  # None = no verify fn, True = passed, False = failed
     ref_mean_ms: float | None = None  # Reference implementation mean time
 
+    def validate_iterations(self):
+        if self.iterations <= 0:
+            raise ValueError(f"iterations must be > 0, got {self.iterations}")
 
+    def validate_timing_range(self):
+        if self.min_ms > self.max_ms:
+            raise ValueError(
+                f"min_ms ({self.min_ms}) must be <= max_ms ({self.max_ms})"
+            )
+
+
+@strict
 @dataclass
 class MachineInfo:
     gpu: str
@@ -94,6 +107,7 @@ class MachineInfo:
     gpu_cores: int | None = None
 
 
+@strict
 @dataclass
 class BenchmarkResult:
     timing_results: dict[str, TimingResults]  # workload name -> timing

@@ -2,9 +2,12 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from huggingface_hub.dataclasses import strict
+
 from kernels.compat import tomllib
 
 
+@strict
 @dataclass
 class Metadata:
     python_depends: list[str]

@@ -223,7 +223,7 @@ in
           # However, we do not want this command to error out in that case, so
           # only insert the upload command when there is something to upload.
           uploadStr = lib.optionalString (applicableBuildSets != [ ]) ''
-            ${pkgs.python3.pkgs.kernels}/bin/kernels upload --repo-id ${repo_id} ${branchOpt} ${bundle}
+            ${pkgs.kernel-builder}/bin/kernel-builder upload --repo-id ${repo_id} ${branchOpt} ${bundle}
           '';
         in
         writeScriptBin "build-and-upload" ''

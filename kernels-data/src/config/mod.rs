@@ -52,6 +52,10 @@ impl Build {
     pub fn is_noarch(&self) -> bool {
         self.kernels.is_empty()
     }
+
+    pub fn repo_id(&self) -> Option<&str> {
+        self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
+    }
 }
 
 pub struct General {
@@ -300,6 +304,17 @@ impl Backend {
             Backend::Rocm,
             Backend::Xpu,
         ]
+    }
+
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Backend::Cpu => "cpu",
+            Backend::Cuda => "cuda",
+            Backend::Metal => "metal",
+            Backend::Neuron => "neuron",
+            Backend::Rocm => "rocm",
+            Backend::Xpu => "xpu",
+        }
     }
 }
 

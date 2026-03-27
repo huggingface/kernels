@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from huggingface_hub import HfApi
+from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import RepoFolder
 from packaging.version import Version, parse
 
@@ -65,6 +66,7 @@ class TvmFfi:
         return TvmFfi(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class Arch:
     """Aarch kernel information."""
@@ -101,6 +103,7 @@ class Arch:
         return Arch(backend=backend, platform=platform, os=os, cxx11_abi=cxx11_abi)
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class Noarch:
     """Noarch kernel information."""
@@ -116,6 +119,7 @@ class Noarch:
         return Noarch(backend_name=s)
 
 
+@strict
 @dataclass(unsafe_hash=True)
 class Variant:
     """Kernel build variant."""

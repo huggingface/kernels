@@ -176,4 +176,46 @@
     ];
   };
 
+  "2.11" = {
+    # https://github.com/pytorch/pytorch/blob/release/2.11/.ci/manywheel/build_cuda.sh
+    capsPerCudaVersion = {
+      "13.0" = [
+        "7.5"
+        "8.0"
+        "8.6"
+        "9.0"
+        "10.0"
+        "11.0"
+        "12.0"
+      ];
+      # NOTE: 12.9 does not seem to be in RC builds, check if needed for final release.
+      #       https://download.pytorch.org/whl/test/torch/
+      "12.9" = [
+        "7.0"
+        "7.5"
+        "8.0"
+        "9.0"
+        "10.0"
+        "12.0"
+      ];
+      "12.8" = [
+        "7.0"
+        "7.5"
+        "8.0"
+        "8.6"
+        "9.0"
+        "10.0"
+        "12.0"
+      ];
+      "12.6" = [
+        "5.0"
+        "6.0"
+        "7.0"
+        "7.5"
+        "8.0"
+        "8.6"
+        "9.0"
+      ];
+    };
+  };
 }

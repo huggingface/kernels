@@ -53,7 +53,7 @@ def generate_pytorch_url(
     if "darwin" in system:
         framework_dir = "cpu"
         version_part = torch_version
-        abi_tag = "none" if "darwin" in system else python_version
+        abi_tag = "none" if "2.10" in version_part else python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     elif framework_type == "cpu":
         framework_dir = "cpu"

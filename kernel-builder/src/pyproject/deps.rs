@@ -18,7 +18,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             Dependency::Cutlass2_10 => {
                 env.get_template("cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
-                    .render_to_write(
+                    .render_captured_to(
                         context! {
                             version => "2.10.0",
                         },
@@ -29,7 +29,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             Dependency::Cutlass3_5 => {
                 env.get_template("cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
-                    .render_to_write(
+                    .render_captured_to(
                         context! {
                             version => "3.5.1",
                         },
@@ -40,7 +40,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             Dependency::Cutlass3_6 => {
                 env.get_template("cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
-                    .render_to_write(
+                    .render_captured_to(
                         context! {
                             version => "3.6.0",
                         },
@@ -51,7 +51,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             Dependency::Cutlass3_8 => {
                 env.get_template("cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
-                    .render_to_write(
+                    .render_captured_to(
                         context! {
                             version => "3.8.0",
                         },
@@ -62,7 +62,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             Dependency::Cutlass3_9 => {
                 env.get_template("cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
-                    .render_to_write(
+                    .render_captured_to(
                         context! {
                             version => "3.9.2",
                         },
@@ -73,7 +73,7 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
             Dependency::Cutlass4_0 => {
                 env.get_template("cuda/dep-cutlass.cmake")
                     .wrap_err("Cannot get CUTLASS dependency template")?
-                    .render_to_write(
+                    .render_captured_to(
                         context! {
                             version => "4.0.0",
                         },
@@ -82,8 +82,10 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::SyclTla => {
-                env.get_template("xpu/dep-sycl-tla.cmake")?
-                    .render_to_write(context! {}, &mut *write)?;
+                env.get_template("xpu/dep-sycl-tla.cmake")
+                    .wrap_err("Cannot get SYCL TLA dependency template")?
+                    .render_captured_to(context! {}, &mut *write)
+                    .wrap_err("Cannot render SYCL TLA dependency template")?;
             }
             Dependency::MetalCpp => {
                 // TODO: add CMake dependency.

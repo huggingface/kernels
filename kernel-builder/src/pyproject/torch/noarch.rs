@@ -51,7 +51,7 @@ fn write_ops_py(
 
     env.get_template("torch/noarch/_ops.py")
         .wrap_err("Cannot get noarch _ops.py template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 ops_name => ops_name,
             },
@@ -98,7 +98,7 @@ fn write_pyproject_toml(
 
     env.get_template("torch/noarch/pyproject.toml")
         .wrap_err("Cannot get noarch pyproject.toml template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 data_globs => data_globs,
                 python_dependencies => python_dependencies,

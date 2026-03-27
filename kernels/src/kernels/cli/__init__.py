@@ -4,30 +4,16 @@ import json
 import sys
 from pathlib import Path
 
-from huggingface_hub import ModelCard, ModelCardData
-
 from kernels.cli.doc import generate_readme_for_kernel
-from kernels.cli.init import parse_kernel_name, run_init
-from kernels.cli.kernel_card_utils import (
-    DESCRIPTION,
-    KERNEL_CARD_TEMPLATE_PATH,
-    LIBRARY_NAME,
-    _build_kernel_card_vars,
-    _parse_repo_id,
-    _update_kernel_card_license,
-)
 from kernels.cli.skills import add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import (
-    KNOWN_BACKENDS,
     install_kernel,
     install_kernel_all_variants,
 )
-
-SYSTEM_CARD_PATH = "CARD.md"
 
 
 def main():
@@ -78,7 +64,9 @@ def main():
     versions_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
     versions_parser.set_defaults(func=kernel_versions)
 
-    upload_parser = subparsers.add_parser("upload", help="Upload kernels to the Hub")
+    upload_parser = subparsers.add_parser(
+        "upload", help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead."
+    )
     upload_parser.add_argument(
         "kernel_dir",
         type=Path,
@@ -223,50 +211,14 @@ def main():
 
     init_parser = subparsers.add_parser(
         "init",
-        help="Initialize a new kernel project from template",
+        help="(Removed) Use `kernel-builder init` instead",
     )
     init_parser.add_argument(
         "kernel_name",
-        type=parse_kernel_name,
+        nargs="?",
         help="Name of the kernel repo (e.g., drbh/my-kernel)",
     )
-    init_parser.add_argument(
-        "--template-repo",
-        type=str,
-        default="kernels-community/template",
-        help="HuggingFace repo ID for the template",
-    )
-    init_parser.add_argument(
-        "--backends",
-        nargs="+",
-        choices={"all"} | KNOWN_BACKENDS,
-        default=["metal"] if sys.platform == "darwin" else ["cuda"],
-        metavar="BACKEND",
-        help=f"Backends to enable (all, {', '.join(KNOWN_BACKENDS)}). Defaults: cuda on Linux/Windows, metal on macOS.",
-    )
-    init_parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Overwrite existing directory if it exists",
-    )
-    init_parser.set_defaults(func=run_init)
-
-    fill_card_parser = subparsers.add_parser(
-        "fill-card",
-        help="Fill a system card template based on the `build` information and save it.",
-    )
-    fill_card_parser.add_argument(
-        "kernel_dir",
-        type=str,
-        help="Path to the kernels source.",
-    )
-    fill_card_parser.add_argument(
-        "--description",
-        type=str,
-        default=None,
-        help="Description to introduce the kernel.",
-    )
-    fill_card_parser.set_defaults(func=fill_kernel_card)
+    init_parser.set_defaults(func=_init_removed)
 
     args = parser.parse_args()
     args.func(args)
@@ -330,6 +282,20 @@ def lock_kernels(args):
 
 
 def upload_kernels(args):
+    import warnings
+
+    warnings.warn(
+        "`kernels upload` is deprecated and will be removed in version 0.14. "
+        "Please use `kernel-builder upload` instead.",
+        DeprecationWarning,
+        stacklevel=1,
+    )
+    # Also print to stderr for visibility in CLI usage
+    print(
+        "Warning: `kernels upload` is deprecated and will be removed in version 0.14.\n"
+        "Please use `kernel-builder upload` instead.\n",
+        file=sys.stderr,
+    )
     upload_kernels_dir(
         Path(args.kernel_dir).resolve(),
         repo_id=args.repo_id,
@@ -338,38 +304,22 @@ def upload_kernels(args):
     )
 
 
-def fill_kernel_card(args):
-    kernel_dir = Path(args.kernel_dir).resolve()
-    if not (kernel_dir / "build.toml").exists():
-        raise ValueError(
-            f"`build.toml` was not found in {str(kernel_dir)}. Cannot proceed."
-        )
-
-    card_path = kernel_dir / "build" / SYSTEM_CARD_PATH
-
-    repo_id_from_build = _parse_repo_id(kernel_dir)
-    repo_id = repo_id_from_build or "{repo_id}"
-
-    dynamic_vars = _build_kernel_card_vars(kernel_dir, repo_id=repo_id)
-    description = (args.description or DESCRIPTION).format(repo_id=repo_id)
-
-    card_data = ModelCardData(library_name=LIBRARY_NAME)
-    updated_card = ModelCard.from_template(
-        card_data=card_data,
-        template_path=str(KERNEL_CARD_TEMPLATE_PATH),
-        kernel_description=description,
-        **dynamic_vars,
-    )
-    _update_kernel_card_license(updated_card, kernel_dir)
-    card_path.parent.mkdir(parents=True, exist_ok=True)
-    updated_card.save(card_path)
-
-
 class _JSONEncoder(json.JSONEncoder):
     def default(self, o):
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)
+
+
+def _init_removed(args):
+    print(
+        "Error: `kernels init` has been removed.\n\n"
+        "Please use `kernel-builder init` instead:\n\n"
+        "    kernel-builder init <kernel_name>\n\n"
+        "For more information, see: https://github.com/huggingface/kernels",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def check_kernel(

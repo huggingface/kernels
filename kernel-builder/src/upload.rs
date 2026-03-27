@@ -2,14 +2,16 @@ use std::{
     collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use clap::Args;
 use eyre::{bail, Context, Result};
 use huggingface_hub::{
-    AddSource, CommitOperation, CreateBranchParams, CreateCommitParams, CreateRepoParams,
-    ListRepoFilesParams, ListRepoRefsParams, RepoType,
+    AddSource, CommitOperation, CommitProgressCallback, CreateBranchParams, CreateCommitParams,
+    CreateRepoParams, ListRepoFilesParams, ListRepoRefsParams, RepoType,
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use walkdir::WalkDir;
 
 use crate::{
@@ -60,6 +62,10 @@ pub struct UploadArgs {
     /// Repository type on Hugging Face Hub (`model` or `kernel`).
     #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
     pub repo_type: RepoTypeArg,
+
+    /// Suppress progress output.
+    #[arg(long, short)]
+    pub quiet: bool,
 }
 
 pub fn run_upload(args: UploadArgs) -> Result<()> {
@@ -185,20 +191,30 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
             continue;
         }
 
-        eprintln!(
-            "Uploading {} operations to branch `{}`...",
-            operations.len(),
-            branch
-        );
-
         let batch_count = operations.len().div_ceil(BUILD_COMMIT_BATCH_SIZE);
-        if batch_count > 1 {
-            eprintln!(
-                "Uploading in {} commits ({} operations).",
-                batch_count,
-                operations.len()
+        let progress = if args.quiet {
+            ProgressBar::hidden()
+        } else {
+            let pb = ProgressBar::new(operations.len() as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "Uploading to `{msg}` [{bar:40.cyan/blue}] {pos}/{len} files",
+                )
+                .unwrap()
+                .progress_chars("=> "),
             );
-        }
+            pb.set_message(branch.clone());
+            pb
+        };
+
+        let progress_callback: Option<CommitProgressCallback> = if args.quiet {
+            None
+        } else {
+            let pb = progress.clone();
+            Some(Arc::new(move |_path: &str| {
+                pb.inc(1);
+            }))
+        };
 
         for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
             let commit_message = if batch_count > 1 {
@@ -219,14 +235,13 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 revision: Some(branch.clone()),
                 create_pr: None,
                 parent_commit: None,
+                progress_callback: progress_callback.clone(),
             };
             api.create_commit(&params)
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
-
-            if batch_count > 1 {
-                eprintln!("  Uploaded batch {}/{batch_count}.", batch_index + 1);
-            }
         }
+
+        progress.finish_with_message(format!("Uploaded to `{branch}`"));
     }
 
     let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();

@@ -34,7 +34,7 @@ let
   };
 
   overlayForXpuVersion = xpuVersion: self: super: {
-    xpuPackages = super."xpuPackages_${flattenVersion xpuVersion}";
+    xpuPackages = super."xpuPackages_${lib.replaceStrings [ "." ] [ "_" ] xpuVersion}";
   };
 
   backendConfig = {

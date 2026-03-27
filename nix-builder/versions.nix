@@ -1,13 +1,6 @@
 [
   {
     torchVersion = "2.9";
-    xpuVersion = "2025.2.1";
-    systems = [ "x86_64-linux" ];
-    bundleBuild = true;
-    tvmFfi = true;
-  }
-  {
-    torchVersion = "2.9";
     cudaVersion = "12.9";
     systems = [
       "x86_64-linux"
@@ -76,7 +69,6 @@
     xpuVersion = "2025.3.1";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
-    tvmFfi = true;
   }
 
   {
@@ -137,5 +129,12 @@
     rocmVersion = "7.2";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
+    xpuVersion = "2025.3.2";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+    tvmFfi = true;
   }
 ]

@@ -50,8 +50,12 @@ _pythonRelaxWheelDeps() {
     else
         # shellcheck disable=SC2048
         for dep in ${pythonRelaxWheelDeps[*]}; do
+            # NOTE: we match anything but valid PEP 508 characters characters
+            #       as the first character of the version specifier to avoid
+            #       that e.g. `-xpu` gets consumed in `triton-xpu` when dep is
+            #       `triton`.
             sed -i "$metadata_file" -r \
-                -e "s/(Requires-Dist: $dep\s*(\[[^]]+\])?)[^;]*(;.*)?/\1\3/i"
+                -e "s/(Requires-Dist: $dep)(\s*(\[[^]]+\])?)([^a-zA-Z0-9._-][^;]*)?(;.*)?$/\1\2\5/i"
         done
     fi
 }
@@ -67,8 +71,8 @@ _pythonRemoveWheelDeps() {
     else
         # shellcheck disable=SC2048
         for dep in ${pythonRemoveWheelDeps[*]-}; do
-            sed -i "$metadata_file" \
-                -e "/Requires-Dist: $dep/d"
+            sed -i "$metadata_file" -r \
+                -e "/Requires-Dist: $dep([^a-zA-Z0-9._-]|$)/d"
         done
     fi
 

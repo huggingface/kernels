@@ -5,11 +5,6 @@
         "url": "https://download.pytorch.org/whl/cu129/torch-2.9.0%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-a6V77xFJM5fBUddVM0CSKQQSkE5GyF7YYnegO7JP0To=",
         "version": "2.9.0"
-      },
-      "xpu": {
-        "url": "https://download.pytorch.org/whl/xpu/torch-2.9.0%2Bxpu-cp313-cp313-linux_x86_64.whl",
-        "hash": "sha256-mNagbdf7GFh0NnsYvWCfBfFv3OQUKlmAypRGGUmWXNI=",
-        "version": "2.9.0"
       }
     },
     "aarch64-linux": {
@@ -118,6 +113,11 @@
       "rocm72": {
         "url": "https://download.pytorch.org/whl/rocm7.2/torch-2.11.0%2Brocm7.2-cp313-cp313-manylinux_2_28_x86_64.whl",
         "hash": "sha256-CupGzRf2SN6z/1kOFipiQ6SCV2W9AHJ0OWDvqdSlvB0=",
+        "version": "2.11.0"
+      },
+      "xpu": {
+        "url": "https://download.pytorch.org/whl/xpu/torch-2.11.0%2Bxpu-cp313-cp313-linux_x86_64.whl",
+        "hash": "sha256-x8KZcJJCc3w3ZGctcQTWwmq36Qbvbr1NhAvUVjl5EvQ=",
         "version": "2.11.0"
       }
     },

@@ -34,13 +34,13 @@ jobs:
       # For now we only test that there are no regressions in building XPU
       # kernels. Also run tests once we have a XPU runner.
       - name: Build relu kernel
-        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux -L )
+        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch210-cxx11-xpu20253-x86_64-linux -L )
 
       - name: Build relu tvm-ffi kernel
-        run: ( cd examples/kernels/relu-tvm-ffi && nix build .\#redistributable.tvm-ffi01-xpu20252-x86_64-linux -L )
+        run: ( cd examples/kernels/relu-tvm-ffi && nix build .\#redistributable.tvm-ffi01-xpu20253-x86_64-linux -L )
 
       - name: Build relu kernel (compiler flags)
-        run: ( cd examples/kernels/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux )
+        run: ( cd examples/kernels/relu-compiler-flags && nix build .\#redistributable.torch210-cxx11-xpu20253-x86_64-linux )
 
       - name: Build cutlass-gemm kernel
-        run: ( cd examples/kernels/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-xpu20252-x86_64-linux -L )
+        run: ( cd examples/kernels/cutlass-gemm && nix build .\#redistributable.torch210-cxx11-xpu20253-x86_64-linux -L )

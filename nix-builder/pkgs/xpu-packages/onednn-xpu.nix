@@ -12,14 +12,6 @@
 let
   dpcppVersion = oneapi-torch-dev.version;
   oneDnnVersions = {
-    "2025.1" = {
-      version = "3.8.1";
-      hash = "sha256-x4leRd0xPFUygjAv/D125CIXn7lYSyzUKsd9IDh/vCc=";
-    };
-    "2025.2" = {
-      version = "3.9.1";
-      hash = "sha256-DbLW22LgG8wrBNMsxoUGlacHLcfIBwqyiv+HOmFDtxc=";
-    };
     "2025.3" = {
       version = "3.10.2";
       hash = "sha256-/e57voLBNun/2koTF3sEb0Z/nDjCwq9NJVk7TaTSvMY=";

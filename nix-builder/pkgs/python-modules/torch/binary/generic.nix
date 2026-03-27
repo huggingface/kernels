@@ -39,6 +39,7 @@
   sympy,
   triton,
   triton-cuda,
+  triton-xpu,
   typing-extensions,
 
   url,
@@ -52,7 +53,7 @@ let
     if cudaSupport then
       triton-cuda
     else if xpuSupport then
-      python.pkgs.triton-xpu_2_9
+      triton-xpu
     else
       triton;
 

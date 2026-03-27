@@ -148,10 +148,12 @@ in
           }
         );
 
+        # Remove once sglang moves to a newer Torch version.
         torch-bin_2_9 = mkTorch {
           version = "2.9";
           triton-xpu = null;
-          xpuPackages = final.xpuPackages_2025_2_1;
+          # Not supported anymore.
+          xpuPackages = null;
         };
 
         torch-bin_2_10 = mkTorch {
@@ -190,7 +192,7 @@ in
     (import ./pkgs/python-modules/hooks)
   ];
 
-  xpuPackages = final.xpuPackages_2025_2_1;
+  xpuPackages = final.xpuPackages_2025_3_1;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
 // (
@@ -218,8 +220,6 @@ in
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     xpuVersions = [
-      "2025.1.3"
-      "2025.2.1"
       "2025.3.1"
       "2025.3.2"
     ];

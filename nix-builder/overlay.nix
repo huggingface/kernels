@@ -145,17 +145,17 @@ in
 
         torch-bin_2_9 = mkTorch {
           version = "2.9";
-          xpuPackages = final.xpuPackages_2025_2;
+          xpuPackages = final.xpuPackages_2025_2_1;
         };
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
-          xpuPackages = final.xpuPackages_2025_3;
+          xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         torch-bin_2_11 = mkTorch {
           version = "2.11";
-          xpuPackages = final.xpuPackages_2025_3;
+          xpuPackages = final.xpuPackages_2025_3_2;
         };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
@@ -173,7 +173,7 @@ in
 
         triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {
           torchVersion = "2.9";
-          xpuPackages = final.xpuPackages_2025_2;
+          xpuPackages = final.xpuPackages_2025_2_1;
         };
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
@@ -183,7 +183,7 @@ in
     (import ./pkgs/python-modules/hooks)
   ];
 
-  xpuPackages = final.xpuPackages_2025_1;
+  xpuPackages = final.xpuPackages_2025_2_1;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
 // (
@@ -214,12 +214,13 @@ in
       "2025.1.3"
       "2025.2.1"
       "2025.3.1"
+      "2025.3.2"
     ];
     newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
   in
   builtins.listToAttrs (
     map (version: {
-      name = "xpuPackages_${flattenVersion (prev.lib.versions.majorMinor version)}";
+      name = "xpuPackages_${flattenVersion version}";
       value = newXpuPackages {
         packageMetadata = readPackageMetadata ./pkgs/xpu-packages/intel-deep-learning-${version}.json;
       };

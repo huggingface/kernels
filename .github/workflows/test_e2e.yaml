@@ -101,12 +101,6 @@ jobs:
           name: e2e-built-kernel
           path: /tmp/e2e-test-kernel/
 
-      - name: Upload kernel-builder binary
-        uses: actions/upload-artifact@v6
-        with:
-          name: kernel-builder-bin
-          path: ${{ github.workspace }}/result/bin/kernel-builder
-
   upload:
     name: Upload kernel to Hub
     needs: init-and-build
@@ -115,25 +109,27 @@ jobs:
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
+      - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/cachix-action@v16
+        with:
+          name: huggingface
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+        env:
+          USER: runner
+
+      - name: Build kernel-builder CLI
+        run: nix build .#kernel-builder -L
+
       - name: Download built kernel
         uses: actions/download-artifact@v7
         with:
           name: e2e-built-kernel
           path: /tmp/e2e-test-kernel
 
-      - name: Download kernel-builder binary
-        uses: actions/download-artifact@v7
-        with:
-          name: kernel-builder-bin
-          path: /tmp/bin
-
-      - name: Make binary executable
-        run: chmod +x /tmp/bin/kernel-builder
-
       - name: Upload kernel to Hub
         run: |
-          /tmp/bin/kernel-builder upload /tmp/e2e-test-kernel \
+          ./result/bin/kernel-builder upload /tmp/e2e-test-kernel \
             --repo-id kernels-test/kernels-upload-test
 
   download-and-test:

@@ -111,10 +111,11 @@ jobs:
     name: Upload kernel to Hub
     needs: init-and-build
     runs-on:
-      group: aws-g6-12xlarge-plus
+      group: aws-highmemory-32-plus-nix
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
+      - uses: DeterminateSystems/nix-installer-action@main
       - name: Download built kernel
         uses: actions/download-artifact@v7
         with:

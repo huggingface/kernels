@@ -20,6 +20,8 @@ concurrency:
 jobs:
   init-and-build:
     name: Init and build kernel
+    outputs:
+      torch_version: ${{ steps.detect-variant.outputs.torch_version }}
     runs-on:
       group: aws-highmemory-32-plus-nix
     steps:
@@ -74,7 +76,8 @@ jobs:
           mkdir -p build
           cp -rL result/* build/
 
-      - name: Verify build artifacts
+      - name: Verify build artifacts and detect Torch version
+        id: detect-variant
         run: |
           cd /tmp/e2e-test-kernel
           VARIANT_DIR=$(ls -d build/torch* | head -1)
@@ -82,6 +85,15 @@ jobs:
           test -f "$VARIANT_DIR/__init__.py"
           test -f "$VARIANT_DIR/metadata.json"
           ls "$VARIANT_DIR"/*.so
+
+          # Extract Torch version from variant dir name (e.g. torch210 -> 2.10.0)
+          VARIANT_NAME=$(basename "$VARIANT_DIR")
+          TORCH_DIGITS=$(echo "$VARIANT_NAME" | grep -oP '(?<=torch)\d+')
+          TORCH_MAJOR=${TORCH_DIGITS:0:1}
+          TORCH_MINOR=${TORCH_DIGITS:1}
+          TORCH_VERSION="${TORCH_MAJOR}.${TORCH_MINOR}.0"
+          echo "Detected Torch version: $TORCH_VERSION"
+          echo "torch_version=$TORCH_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Upload built kernel
         uses: actions/upload-artifact@v6
@@ -125,7 +137,7 @@ jobs:
 
   download-and-test:
     name: Download and test kernel via get_kernel
-    needs: upload
+    needs: [upload, init-and-build]
     runs-on:
       group: aws-g6-12xlarge-plus
     env:
@@ -143,7 +155,7 @@ jobs:
         working-directory: ./kernels
         run: |
           uv sync --all-extras --dev
-          uv pip install torch==2.10.0
+          uv pip install "torch==${{ needs.init-and-build.outputs.torch_version }}"
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels

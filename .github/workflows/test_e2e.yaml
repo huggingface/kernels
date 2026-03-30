@@ -40,12 +40,12 @@ jobs:
           USER: runner
 
       - name: Build kernel-builder CLI
-        run: cargo build --release --manifest-path kernel-builder/Cargo.toml
+        run: nix build .#kernel-builder -L
 
       - name: Init kernel project
         run: |
           cd /tmp
-          $GITHUB_WORKSPACE/target/release/kernel-builder init \
+          $GITHUB_WORKSPACE/result/bin/kernel-builder init \
             --name kernels-test/e2e-test-kernel \
             --backends cuda
 
@@ -105,7 +105,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: kernel-builder-bin
-          path: ${{ github.workspace }}/target/release/kernel-builder
+          path: ${{ github.workspace }}/result/bin/kernel-builder
 
   upload:
     name: Upload kernel to Hub

@@ -336,7 +336,7 @@ rec {
             );
         in
         {
-          name = extension.variant;
+          name = extension.archVariant;
           value =
             with pkgs;
             pkgs.writeShellScriptBin "ci-test" ''

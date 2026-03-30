@@ -1,0 +1,176 @@
+name: "E2E: kernel-builder init + build + upload + download"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "kernel-builder/**"
+      - "kernels/src/**"
+      - "nix-builder/**"
+      - "kernels-data/**"
+      - ".github/workflows/test_e2e.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  init-and-build:
+    name: Init and build kernel
+    runs-on:
+      group: aws-highmemory-32-plus-nix
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            max-jobs = 8
+            cores = 12
+            sandbox-fallback = false
+      - uses: cachix/cachix-action@v16
+        with:
+          name: huggingface
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+        env:
+          USER: runner
+
+      - name: Build kernel-builder CLI
+        run: cargo build --release --manifest-path kernel-builder/Cargo.toml
+
+      - name: Init kernel project
+        run: |
+          cd /tmp
+          $GITHUB_WORKSPACE/target/release/kernel-builder init \
+            --name kernels-test/e2e-test-kernel \
+            --backends cuda
+
+      - name: Validate scaffold
+        run: |
+          cd /tmp/e2e-test-kernel
+          test -f build.toml
+          test -f flake.nix
+          test -f torch-ext/e2e_test_kernel/__init__.py
+          test -f torch-ext/torch_binding.cpp
+          test -f torch-ext/torch_binding.h
+          test -f e2e_test_kernel_cuda/e2e_test_kernel.cu
+          test -f tests/test_e2e_test_kernel.py
+          test -f example.py
+          grep -q 'name = "e2e-test-kernel"' build.toml
+          grep -q 'repo-id = "kernels-test/e2e-test-kernel"' build.toml
+          grep -q 'backend = "cuda"' build.toml
+
+      - name: Patch flake.nix to use local nix-builder
+        run: |
+          cd /tmp/e2e-test-kernel
+          sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
+
+      - name: Build one CUDA variant
+        run: |
+          cd /tmp/e2e-test-kernel
+          nix build .#ci -L
+          mkdir -p build
+          cp -rL result/* build/
+
+      - name: Verify build artifacts
+        run: |
+          cd /tmp/e2e-test-kernel
+          VARIANT_DIR=$(ls -d build/torch* | head -1)
+          echo "Built variant: $VARIANT_DIR"
+          test -f "$VARIANT_DIR/__init__.py"
+          test -f "$VARIANT_DIR/metadata.json"
+          ls "$VARIANT_DIR"/*.so
+
+      - name: Upload built kernel
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-built-kernel
+          path: /tmp/e2e-test-kernel/
+
+      - name: Upload kernel-builder binary
+        uses: actions/upload-artifact@v6
+        with:
+          name: kernel-builder-bin
+          path: ${{ github.workspace }}/target/release/kernel-builder
+
+  upload:
+    name: Upload kernel to Hub
+    needs: init-and-build
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - name: Download built kernel
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-built-kernel
+          path: /tmp/e2e-test-kernel
+
+      - name: Download kernel-builder binary
+        uses: actions/download-artifact@v7
+        with:
+          name: kernel-builder-bin
+          path: /tmp/bin
+
+      - name: Make binary executable
+        run: chmod +x /tmp/bin/kernel-builder
+
+      - name: Upload kernel to Hub
+        run: |
+          /tmp/bin/kernel-builder upload /tmp/e2e-test-kernel \
+            --repo-id kernels-test/kernels-upload-test
+
+  download-and-test:
+    name: Download and test kernel via get_kernel
+    needs: upload
+    runs-on:
+      group: aws-g6-12xlarge-plus
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      UV_PYTHON_PREFERENCE: only-managed
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv and set Python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        working-directory: ./kernels
+        run: |
+          uv sync --all-extras --dev
+          uv pip install torch==2.10.0
+
+      - name: Test get_kernel download and usage
+        working-directory: ./kernels
+        run: |
+          uv run python -c "
+          import torch
+          from kernels import get_kernel
+
+          kernel = get_kernel('kernels-test/kernels-upload-test', version=1)
+
+          x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
+          result = kernel.e2e_test_kernel(x)
+          expected = x + 1.0
+          torch.testing.assert_close(result, expected)
+          print('E2E test passed: get_kernel + correctness check')
+          "
+
+      - name: Cleanup Hub repo
+        if: always()
+        working-directory: ./kernels
+        run: |
+          uv run python -c "
+          from huggingface_hub import HfApi
+          api = HfApi()
+          try:
+              api.delete_repo('kernels-test/kernels-upload-test')
+              print('Cleaned up repo')
+          except Exception as e:
+              print(f'Cleanup warning: {e}')
+          "

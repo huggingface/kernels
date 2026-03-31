@@ -120,16 +120,16 @@ HF_SUBSTITUTER="https://huggingface.cachix.org"
 HF_PUBLIC_KEY="huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o="
 
 configure_cache() {
-  local substituters
-  substituters="$(nix show-config 2>/dev/null | grep "^substituters" || true)"
-
-  if echo "$substituters" | grep -q "huggingface.cachix.org"; then
+  if grep -q "huggingface.cachix.org" /etc/nix/nix.conf 2>/dev/null; then
     info "Hugging Face binary cache is already configured"
     return 0
   fi
 
   info "Configuring Hugging Face binary cache..."
-  echo "extra-substituters = $HF_SUBSTITUTER" | sudo tee -a /etc/nix/nix.conf >/dev/null
+  # Use 'trusted-substituters' and 'trusted-public-keys' — these are daemon-level
+  # settings (written to nix.conf as root) so they don't require the user to be
+  # in 'trusted-users'.
+  echo "extra-trusted-substituters = $HF_SUBSTITUTER" | sudo tee -a /etc/nix/nix.conf >/dev/null
   echo "extra-trusted-public-keys = $HF_PUBLIC_KEY" | sudo tee -a /etc/nix/nix.conf >/dev/null
   sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
   sleep 2

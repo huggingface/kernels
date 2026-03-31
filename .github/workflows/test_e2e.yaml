@@ -86,9 +86,7 @@ jobs:
 
       - name: Upload kernel to Hub
         run: |
-          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test \
-            --repo-id ${{ env.E2E_REPO_ID }} \
-            --branch ${{ env.E2E_BRANCH }}
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }}
 
   download-and-test:
     name: Download and test kernel via get_kernel

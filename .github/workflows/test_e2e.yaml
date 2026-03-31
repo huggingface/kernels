@@ -103,21 +103,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Detect CUDA version
-        id: cuda
-        run: |
-          nvidia-smi
-          CUDA_RT=$(nvidia-smi | grep -oP 'CUDA Version: \K[\d.]+')
-          CUDA_TAG="cu$(echo $CUDA_RT | tr -d '.')"
-          echo "Detected CUDA: $CUDA_RT -> $CUDA_TAG"
-          echo "cuda_tag=$CUDA_TAG" >> "$GITHUB_OUTPUT"
-
       - name: Install Python deps
         working-directory: ./kernels
         run: |
           uv sync --all-extras --dev
-          uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/${{ steps.cuda.outputs.cuda_tag }}
-          uv pip show torch
+          uv pip install --upgrade torch
+          uv run python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels

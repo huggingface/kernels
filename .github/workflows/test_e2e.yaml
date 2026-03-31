@@ -47,7 +47,7 @@ jobs:
         run: |
           cd /tmp
           nix run $GITHUB_WORKSPACE#kernel-builder -- init \
-            --name kernels-test/e2e-test-kernel \
+            --name ${{ env.E2E_REPO_ID }} \
             --backends cuda
 
       - name: Validate scaffold

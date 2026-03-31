@@ -13,7 +13,7 @@ mod develop;
 use develop::{devshell, testshell};
 
 mod build;
-use build::run_build;
+use build::{run_build, run_build_and_copy};
 
 mod hf;
 
@@ -85,10 +85,6 @@ enum Commands {
         /// Directory of the kernel project (defaults to current directory).
         #[arg(value_name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
-
-        /// Build a specific variant.
-        #[arg(long)]
-        variant: Option<String>,
 
         #[command(flatten)]
         nix_args: NixArgs,
@@ -238,19 +234,16 @@ fn main() -> Result<()> {
             nix_args.cores,
             nix_args.print_build_logs,
             variant,
-            "build",
         ),
         Commands::BuildAndCopy {
             kernel_dir,
-            variant,
             nix_args,
-        } => run_build(
+            ..
+        } => run_build_and_copy(
             kernel_dir,
             nix_args.max_jobs,
             nix_args.cores,
             nix_args.print_build_logs,
-            variant,
-            "build-and-copy",
         ),
         Commands::BuildAndUpload {
             kernel_dir,
@@ -267,7 +260,6 @@ fn main() -> Result<()> {
                 nix_args.cores,
                 nix_args.print_build_logs,
                 variant,
-                "build",
             )?;
             run_upload(UploadArgs {
                 kernel_dir,

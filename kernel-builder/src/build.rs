@@ -7,14 +7,13 @@ use crate::nix::{Flake, Nix, NixSubcommand};
 use crate::pyproject::write_card;
 use crate::util::{check_or_infer_kernel_dir, parse_build};
 
-pub fn run_build(
+fn prepare_build(
     kernel_dir: Option<PathBuf>,
     max_jobs: Option<u32>,
     cores: Option<u32>,
     print_build_logs: bool,
     variant: Option<String>,
-    target: &str,
-) -> Result<()> {
+) -> Result<(Flake, Option<String>, Nix)> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
 
     if let Ok(build) = parse_build(&kernel_dir) {
@@ -35,11 +34,6 @@ pub fn run_build(
         }
     }
 
-    let attribute = match variant {
-        Some(ref v) => Some(format!("redistributable.{v}")),
-        None => Some(target.to_owned()),
-    };
-
     let mut nix = Nix::new();
     if let Some(jobs) = max_jobs {
         nix = nix.max_jobs(jobs);
@@ -49,8 +43,35 @@ pub fn run_build(
     }
     nix = nix.print_build_logs(print_build_logs);
 
+    Ok((flake, variant, nix))
+}
+
+pub fn run_build(
+    kernel_dir: Option<PathBuf>,
+    max_jobs: Option<u32>,
+    cores: Option<u32>,
+    print_build_logs: bool,
+    variant: Option<String>,
+) -> Result<()> {
+    let (flake, variant, nix) =
+        prepare_build(kernel_dir, max_jobs, cores, print_build_logs, variant)?;
+
+    nix.run(NixSubcommand::Build {
+        flake: &flake,
+        attribute: variant.map(|v| format!("redistributable.{v}")),
+    })
+}
+
+pub fn run_build_and_copy(
+    kernel_dir: Option<PathBuf>,
+    max_jobs: Option<u32>,
+    cores: Option<u32>,
+    print_build_logs: bool,
+) -> Result<()> {
+    let (flake, _, nix) = prepare_build(kernel_dir, max_jobs, cores, print_build_logs, None)?;
+
     nix.run(NixSubcommand::Run {
         flake: &flake,
-        attribute,
+        attribute: Some("build-and-copy".to_owned()),
     })
 }

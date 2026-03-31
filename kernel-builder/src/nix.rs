@@ -29,6 +29,12 @@ impl Flake {
 
 /// Nix subcommands.
 pub enum NixSubcommand<'a> {
+    /// Build a flake output.
+    Build {
+        flake: &'a Flake,
+        attribute: Option<String>,
+    },
+
     /// Run the program associated with an attribute in a flake.
     Run {
         flake: &'a Flake,
@@ -193,6 +199,13 @@ impl Nix {
         let mut cmd = Command::new("nix");
 
         match subcommand {
+            NixSubcommand::Build { flake, attribute } => {
+                cmd.arg("build");
+                match attribute {
+                    Some(attr) => cmd.arg(format!("{}#{}", flake.path.display(), attr)),
+                    None => cmd.arg(flake.path.as_os_str()),
+                };
+            }
             NixSubcommand::Run { flake, attribute } => {
                 cmd.arg("run");
                 match attribute {

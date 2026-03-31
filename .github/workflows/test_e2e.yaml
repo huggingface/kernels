@@ -15,6 +15,7 @@ on:
 
 env:
   E2E_REPO_ID: kernels-test/kernels-upload-test
+  E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -86,7 +87,8 @@ jobs:
       - name: Upload kernel to Hub
         run: |
           nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/e2e-test-kernel \
-            --repo-id ${{ env.E2E_REPO_ID }}
+            --repo-id ${{ env.E2E_REPO_ID }} \
+            --branch ${{ env.E2E_BRANCH }}
 
   download-and-test:
     name: Download and test kernel via get_kernel
@@ -117,7 +119,7 @@ jobs:
           import torch
           from kernels import get_kernel
 
-          kernel = get_kernel('${{ env.E2E_REPO_ID }}', version=1)
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}')
 
           x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
           result = kernel.e2e_test_kernel(x)
@@ -125,8 +127,3 @@ jobs:
           torch.testing.assert_close(result, expected)
           print('E2E test passed: get_kernel + correctness check')
           "
-
-      - name: Cleanup Hub repo
-        if: always()
-        working-directory: ./kernels
-        run: uv run huggingface-cli delete-repo ${{ env.E2E_REPO_ID }} --yes || true

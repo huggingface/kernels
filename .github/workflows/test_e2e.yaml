@@ -107,7 +107,7 @@ jobs:
         working-directory: ./kernels
         run: |
           uv sync --all-extras --dev
-          uv pip install torch
+          uv pip install --upgrade torch
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels

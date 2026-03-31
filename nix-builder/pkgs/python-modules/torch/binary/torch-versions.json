@@ -4,11 +4,6 @@
     "cudaVersion": "12.9",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
-  {
-    "torchVersion": "2.9.0",
-    "xpuVersion": "2025.2.1",
-    "systems": ["x86_64-linux"]
-  },
 
   {
     "torchVersion": "2.10.0",
@@ -84,6 +79,11 @@
   {
     "torchVersion": "2.11.0",
     "rocmVersion": "7.2",
+    "systems": ["x86_64-linux"]
+  },
+  {
+    "torchVersion": "2.11.0",
+    "xpuVersion": "2025.3.2",
     "systems": ["x86_64-linux"]
   }
 ]

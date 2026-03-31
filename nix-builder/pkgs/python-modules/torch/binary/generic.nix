@@ -39,6 +39,7 @@
   sympy,
   triton,
   triton-cuda,
+  triton-xpu,
   typing-extensions,
 
   url,
@@ -52,7 +53,7 @@ let
     if cudaSupport then
       triton-cuda
     else if xpuSupport then
-      python.pkgs.triton-xpu_2_9
+      triton-xpu
     else
       triton;
 
@@ -228,26 +229,46 @@ buildPythonPackage {
   # dependencies, but we don't need them or provide them because we burn
   # the Nix store paths of the framework into the Torch libraries..
   pythonRemoveWheelDeps =
-    lib.optionals cudaSupport [
-      "cuda-toolkit"
-      "nvidia-cuda-runtime"
-      "nvidia-cuda-nvrtc"
-      "nvidia-cuda-cupti"
-      "nvidia-cudnn"
-      "nvidia-cublas"
-      "nvidia-cufft"
-      "nvidia-curand"
-      "nvidia-cusolver"
-      "nvidia-cusparse"
-      "nvidia-cusparselt"
-      "nvidia-nccl"
-      "nvidia-nvshmem"
-      "nvidia-nvtx"
-      "nvidia-nvjitlink"
-      "nvidia-cufile"
-    ]
+    # Some CUDA dependencies have a version suffix and some don't. Let's
+    # be greedy, autoPatchelfHook will catch missing library dependencies
+    # for us.
+    lib.optionals cudaSupport (
+      builtins.map ({ pkg, suffix }: "${pkg}${suffix}") (
+        lib.cartesianProduct {
+          pkg = [
+            "cuda-toolkit"
+            "nvidia-cuda-runtime"
+            "nvidia-cuda-nvrtc"
+            "nvidia-cuda-cupti"
+            "nvidia-cudnn"
+            "nvidia-cudnn"
+            "nvidia-cublas"
+            "nvidia-cufft"
+            "nvidia-curand"
+            "nvidia-cusolver"
+            "nvidia-cusparse"
+            "nvidia-cusparselt"
+            "nvidia-cusparselt"
+            "nvidia-nccl"
+            "nvidia-nccl"
+            "nvidia-nvshmem"
+            "nvidia-nvshmem"
+            "nvidia-nvtx"
+            "nvidia-nvjitlink"
+            "nvidia-cufile"
+          ];
+          suffix = [
+            ""
+            "-cu12"
+            "-cu13"
+          ];
+        }
+      )
+    )
     ++ lib.optionals rocmSupport [
-      "pytorch-triton-rocm"
+      # Ours is called 'triton'. Remove this once we build ROCm Triton from
+      # a binary wheel.
+      "triton-rocm"
     ]
     ++ lib.optionals xpuSupport [
       "intel-cmplr-lib-rt"
@@ -271,7 +292,6 @@ buildPythonPackage {
       "tcmlib"
       "umf"
       "intel-pti"
-      "pytorch-triton-xpu"
     ];
 
   propagatedCxxBuildInputs = lib.optionals rocmSupport [ rocmtoolkit_joined ];

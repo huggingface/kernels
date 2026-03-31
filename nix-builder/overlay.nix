@@ -63,7 +63,12 @@ in
   # Python packages
   pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
     (
-      python-self: python-super: with python-self; {
+      python-self: python-super:
+      with python-self;
+      let
+        triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
+      in
+      {
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };
@@ -143,19 +148,24 @@ in
           }
         );
 
+        # Remove once sglang moves to a newer Torch version.
         torch-bin_2_9 = mkTorch {
           version = "2.9";
-          xpuPackages = final.xpuPackages_2025_2;
+          triton-xpu = null;
+          # Not supported anymore.
+          xpuPackages = null;
         };
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
-          xpuPackages = final.xpuPackages_2025_3;
+          triton-xpu = triton-xpu_3_6_0;
+          xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         torch-bin_2_11 = mkTorch {
           version = "2.11";
-          xpuPackages = final.xpuPackages_2025_3;
+          triton-xpu = triton-xpu_3_7_0;
+          xpuPackages = final.xpuPackages_2025_3_2;
         };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
@@ -171,10 +181,9 @@ in
           ];
         });
 
-        triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {
-          torchVersion = "2.9";
-          xpuPackages = final.xpuPackages_2025_2;
-        };
+        triton-xpu_3_6_0 = triton-xpu.triton-xpu_3_6_0;
+
+        triton-xpu_3_7_0 = triton-xpu.triton-xpu_3_7_0;
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };
@@ -183,7 +192,7 @@ in
     (import ./pkgs/python-modules/hooks)
   ];
 
-  xpuPackages = final.xpuPackages_2025_1;
+  xpuPackages = final.xpuPackages_2025_3_1;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
 // (
@@ -211,15 +220,14 @@ in
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     xpuVersions = [
-      "2025.1.3"
-      "2025.2.1"
       "2025.3.1"
+      "2025.3.2"
     ];
     newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
   in
   builtins.listToAttrs (
     map (version: {
-      name = "xpuPackages_${flattenVersion (prev.lib.versions.majorMinor version)}";
+      name = "xpuPackages_${flattenVersion version}";
       value = newXpuPackages {
         packageMetadata = readPackageMetadata ./pkgs/xpu-packages/intel-deep-learning-${version}.json;
       };

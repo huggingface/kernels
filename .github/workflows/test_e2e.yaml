@@ -92,7 +92,7 @@ jobs:
     name: Download and test kernel via get_kernel
     needs: init-build-upload
     runs-on:
-      group: aws-g6-12xlarge-plus
+      group: aws-g6-24xlarge
     env:
       UV_PYTHON_PREFERENCE: only-managed
     steps:

@@ -116,6 +116,23 @@ install_nix() {
 
 # --- Binary cache ---
 
+ensure_trusted_user() {
+  local user
+  user="$(whoami)"
+  local trusted
+  trusted="$(nix show-config 2>/dev/null | grep "^trusted-users" || true)"
+
+  if echo "$trusted" | grep -qE "(^| )(root|\*|${user})( |$)"; then
+    return 0
+  fi
+
+  info "Adding $user as a trusted Nix user (requires sudo)..."
+  echo "trusted-users = root $user" | sudo tee -a /etc/nix/nix.conf >/dev/null
+  sudo pkill nix-daemon || true
+  # Give the daemon a moment to restart.
+  sleep 1
+}
+
 configure_cache() {
   local substituters
   substituters="$(nix show-config 2>/dev/null | grep "^substituters" || true)"
@@ -124,6 +141,8 @@ configure_cache() {
     info "Hugging Face binary cache is already configured"
     return 0
   fi
+
+  ensure_trusted_user
 
   info "Configuring Hugging Face binary cache..."
   nix run nixpkgs#cachix -- use huggingface

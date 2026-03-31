@@ -116,21 +116,8 @@ install_nix() {
 
 # --- Binary cache ---
 
-ensure_trusted_user() {
-  local user
-  user="$(whoami)"
-
-  # nix show-config outputs: "trusted-users = root"
-  # Check if the current user (or wildcard *) is already trusted.
-  if nix show-config 2>/dev/null | grep "^trusted-users" | grep -qwE "(\*|${user})"; then
-    return 0
-  fi
-
-  info "Adding $user as a trusted Nix user (requires sudo)..."
-  echo "trusted-users = root $user" | sudo tee -a /etc/nix/nix.conf >/dev/null
-  sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
-  sleep 2
-}
+HF_SUBSTITUTER="https://huggingface.cachix.org"
+HF_PUBLIC_KEY="huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o="
 
 configure_cache() {
   local substituters
@@ -141,10 +128,11 @@ configure_cache() {
     return 0
   fi
 
-  ensure_trusted_user
-
   info "Configuring Hugging Face binary cache..."
-  nix run nixpkgs#cachix -- use huggingface
+  echo "extra-substituters = $HF_SUBSTITUTER" | sudo tee -a /etc/nix/nix.conf >/dev/null
+  echo "extra-trusted-public-keys = $HF_PUBLIC_KEY" | sudo tee -a /etc/nix/nix.conf >/dev/null
+  sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
+  sleep 2
   info "Binary cache configured"
 }
 

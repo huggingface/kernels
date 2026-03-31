@@ -50,7 +50,7 @@ jobs:
       - name: Init kernel project
         run: |
           cd /tmp
-          $GITHUB_WORKSPACE/result/bin/kernel-builder init \
+          nix run $GITHUB_WORKSPACE#kernel-builder -- init \
             --name kernels-test/e2e-test-kernel \
             --backends cuda
 

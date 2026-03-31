@@ -140,7 +140,7 @@ configure_cache() {
 
 install_kernel_builder() {
   info "Installing kernel-builder..."
-  nix profile install "${FLAKE_REF}#kernel-builder"
+  nix profile add --accept-flake-config "${FLAKE_REF}#kernel-builder"
 
   if ! command -v kernel-builder &>/dev/null; then
     error "kernel-builder was installed but is not in PATH."

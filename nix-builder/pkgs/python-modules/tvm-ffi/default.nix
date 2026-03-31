@@ -37,8 +37,4 @@ buildPythonPackage rec {
   postInstall = ''
     ln -s $out/${python.sitePackages}/tvm_ffi/share $out/share
   '';
-
-  passthru = callPackage ./variant.nix {
-    tvmFfiVersion = version;
-  };
 }

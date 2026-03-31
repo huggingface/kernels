@@ -80,7 +80,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.11";
@@ -90,7 +90,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.11";
@@ -100,7 +100,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.11";
@@ -110,7 +110,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
-    tvmFfi = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.11";
@@ -135,6 +135,6 @@
     xpuVersion = "2025.3.2";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
-    tvmFfi = true;
+    tvmFfiVersion = "0.1";
   }
 ]

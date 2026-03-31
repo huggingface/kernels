@@ -26,8 +26,6 @@ jobs:
     name: Init, build, and upload kernel
     runs-on:
       group: aws-highmemory-32-plus-nix
-    env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
@@ -85,6 +83,8 @@ jobs:
           ls "$VARIANT_DIR"/*.so
 
       - name: Upload kernel to Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }}
 
@@ -94,7 +94,6 @@ jobs:
     runs-on:
       group: aws-g6-12xlarge-plus
     env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@v6
@@ -112,6 +111,8 @@ jobs:
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           uv run python -c "
           import torch

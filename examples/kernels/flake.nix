@@ -96,10 +96,28 @@
             sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
-          # Check that we can build a test shell (e.g. gcc is compatible with
-          # CUDA requirements).
+          # Check that we can build an arch dev shell.
+          name = "relu-dev-shell";
+          path = ./relu;
+          drv = sys: out: out.devShells.${sys}.default;
+        }
+        {
+          # Check that we can build an arch test shell (e.g. gcc is
+          # compatible with CUDA requirements).
           name = "relu-test-shell";
           path = ./relu;
+          drv = sys: out: out.devShells.${sys}.test;
+        }
+        {
+          # Check that we can build a noarch dev shell.
+          name = "silu-and-mul-dev-shell";
+          path = ./silu-and-mul;
+          drv = sys: out: out.devShells.${sys}.default;
+        }
+        {
+          # Check that we can build an noarch test shell.
+          name = "silu-and-mul-test-shell";
+          path = ./silu-and-mul;
           drv = sys: out: out.devShells.${sys}.test;
         }
       ];

@@ -268,7 +268,5 @@ stdenv.mkDerivation (prevAttrs: {
 
   passthru = {
     inherit dependencies torch;
-    inherit (torch) variant;
-    archVariant = torch.variant;
   };
 })

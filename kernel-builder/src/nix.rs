@@ -194,8 +194,8 @@ impl Nix {
         }
     }
 
-    /// Build the Nix command for the given subcommand.
-    fn build_command(&self, subcommand: &NixSubcommand<'_>) -> Command {
+    /// Convert the Nix options and subcommand into a [`Command`].
+    fn to_command(&self, subcommand: &NixSubcommand<'_>) -> Command {
         let mut cmd = Command::new("nix");
 
         match subcommand {
@@ -269,7 +269,7 @@ impl Nix {
         Self::check_installed()?;
         Self::check_sandbox()?;
 
-        let mut cmd = self.build_command(&subcommand);
+        let mut cmd = self.to_command(&subcommand);
         let status = cmd.status()?;
 
         if !status.success() {
@@ -280,11 +280,11 @@ impl Nix {
     }
 
     /// Run Nix with the given subcommand and capture stdout.
-    pub fn output(self, subcommand: NixSubcommand<'_>) -> Result<Vec<u8>> {
+    pub fn run_capture_stdout(self, subcommand: NixSubcommand<'_>) -> Result<Vec<u8>> {
         Self::check_installed()?;
         Self::check_sandbox()?;
 
-        let mut cmd = self.build_command(&subcommand);
+        let mut cmd = self.to_command(&subcommand);
         let output = cmd.output()?;
 
         if !output.status.success() {

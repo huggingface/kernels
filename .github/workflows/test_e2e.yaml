@@ -13,6 +13,9 @@ on:
       - ".github/workflows/test_e2e.yaml"
   workflow_dispatch:
 
+env:
+  E2E_REPO_ID: kernels-test/kernels-upload-test
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -100,7 +103,7 @@ jobs:
       - name: Upload kernel to Hub
         run: |
           $GITHUB_WORKSPACE/result/bin/kernel-builder upload /tmp/e2e-test-kernel \
-            --repo-id kernels-test/kernels-upload-test
+            --repo-id ${{ env.E2E_REPO_ID }}
 
   download-and-test:
     name: Download and test kernel via get_kernel
@@ -131,7 +134,7 @@ jobs:
           import torch
           from kernels import get_kernel
 
-          kernel = get_kernel('kernels-test/kernels-upload-test', version=1)
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', version=1)
 
           x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
           result = kernel.e2e_test_kernel(x)
@@ -143,13 +146,4 @@ jobs:
       - name: Cleanup Hub repo
         if: always()
         working-directory: ./kernels
-        run: |
-          uv run python -c "
-          from huggingface_hub import HfApi
-          api = HfApi()
-          try:
-              api.delete_repo('kernels-test/kernels-upload-test')
-              print('Cleaned up repo')
-          except Exception as e:
-              print(f'Cleanup warning: {e}')
-          "
+        run: uv run huggingface-cli delete-repo ${{ env.E2E_REPO_ID }} --yes || true

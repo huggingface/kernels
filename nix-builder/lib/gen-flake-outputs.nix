@@ -38,7 +38,7 @@ let
 
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 
-  buildToml = build.readBuildConfig path;
+  kernelConfig = (import ./kernel-config.nix { inherit lib; }) path;
 
   buildConfigBackend =
     buildConfig:
@@ -112,11 +112,7 @@ let
       throw "No build variant is compatible with this system"
     else
       builtins.head buildSetsSorted;
-  bestVariant =
-    if buildToml ? "tvm-ffi" then
-      bestBuildSet.pkgs.python3.pkgs.tvm-ffi.variant
-    else
-      bestBuildSet.torch.variant;
+  bestVariant = bestBuildSet.variants.kernelArchVariant kernelConfig;
   # We need a package set for some outputs (e.g. kernels and build-and-upload),
   # even when there is no applicable build set.
   pkgs =
@@ -216,8 +212,8 @@ in
             "general"
             "hub"
             "repo-id"
-          ] (throw "[general.hub] section in build.toml does not have a `repo-id` field.") buildToml;
-          branch = lib.attrByPath [ "general" "hub" "branch" ] null buildToml;
+          ] (throw "[general.hub] section in build.toml does not have a `repo-id` field.") kernelConfig.toml;
+          branch = lib.attrByPath [ "general" "hub" "branch" ] null kernelConfig.toml;
           branchOpt = lib.optionalString (branch != null) "--branch ${branch}";
           # `kernels upload` fails when there are no build variants to upload.
           # However, we do not want this command to error out in that case, so
@@ -269,5 +265,16 @@ in
         rev = revUnderscored;
         buildSets = applicableBuildSets;
       };
+
+      # We do not really have a great place to put these. We need them to be
+      # keyed by system, so we cannot put thin in the `lib` output.
+
+      variants = lib.unique (
+        map (buildSet: buildSet.variants.kernelVariant kernelConfig) applicableBuildSets
+      );
+
+      archVariants = lib.unique (
+        map (buildSet: buildSet.variants.kernelArchVariant kernelConfig) applicableBuildSets
+      );
     };
 }

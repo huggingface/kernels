@@ -357,10 +357,7 @@ buildPythonPackage {
 
     cudaCapabilities = if cudaSupport then supportedCudaCapabilities else [ ];
     rocmArchs = if rocmSupport then supportedTorchRocmArchs else [ ];
-  }
-  // (callPackage ../variant.nix {
-    torchVersion = version;
-  });
+  };
 
   meta = with lib; {
     description = "PyTorch: Tensors and Dynamic neural networks in Python with strong GPU acceleration";

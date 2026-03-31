@@ -119,18 +119,17 @@ install_nix() {
 ensure_trusted_user() {
   local user
   user="$(whoami)"
-  local trusted
-  trusted="$(nix show-config 2>/dev/null | grep "^trusted-users" || true)"
 
-  if echo "$trusted" | grep -qE "(^| )(root|\*|${user})( |$)"; then
+  # nix show-config outputs: "trusted-users = root"
+  # Check if the current user (or wildcard *) is already trusted.
+  if nix show-config 2>/dev/null | grep "^trusted-users" | grep -qwE "(\*|${user})"; then
     return 0
   fi
 
   info "Adding $user as a trusted Nix user (requires sudo)..."
   echo "trusted-users = root $user" | sudo tee -a /etc/nix/nix.conf >/dev/null
-  sudo pkill nix-daemon || true
-  # Give the daemon a moment to restart.
-  sleep 1
+  sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
+  sleep 2
 }
 
 configure_cache() {

@@ -20,6 +20,9 @@ mod hf;
 mod init;
 use init::{run_init, InitArgs};
 
+mod list_variants;
+use list_variants::list_variants;
+
 mod upload;
 use upload::{run_upload, RepoTypeArg, UploadArgs};
 
@@ -69,6 +72,10 @@ enum Commands {
         #[arg(value_name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
 
+        /// Build a specific variant.
+        #[arg(long)]
+        variant: Option<String>,
+
         #[command(flatten)]
         nix_args: NixArgs,
     },
@@ -79,6 +86,10 @@ enum Commands {
         #[arg(value_name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
 
+        /// Build a specific variant.
+        #[arg(long)]
+        variant: Option<String>,
+
         #[command(flatten)]
         nix_args: NixArgs,
     },
@@ -88,6 +99,10 @@ enum Commands {
         /// Directory of the kernel project (defaults to current directory).
         #[arg(value_name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
+
+        /// Build a specific variant.
+        #[arg(long)]
+        variant: Option<String>,
 
         #[command(flatten)]
         nix_args: NixArgs,
@@ -137,14 +152,32 @@ enum Commands {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
 
+        /// Use a specific variant.
+        #[arg(long)]
+        variant: Option<String>,
+
         #[command(flatten)]
         nix_args: NixArgs,
+    },
+
+    /// List build variants.
+    ListVariants {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// Only list variants for the current architecture.
+        #[arg(long)]
+        arch: bool,
     },
 
     /// Spawn a kernel test shell.
     Testshell {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
+
+        /// Use a specific variant.
+        #[arg(long)]
+        variant: Option<String>,
 
         #[command(flatten)]
         nix_args: NixArgs,
@@ -197,26 +230,31 @@ fn main() -> Result<()> {
         Commands::Upload(args) => run_upload(args),
         Commands::Build {
             kernel_dir,
+            variant,
             nix_args,
         } => run_build(
             kernel_dir,
             nix_args.max_jobs,
             nix_args.cores,
             nix_args.print_build_logs,
+            variant,
             "build",
         ),
         Commands::BuildAndCopy {
             kernel_dir,
+            variant,
             nix_args,
         } => run_build(
             kernel_dir,
             nix_args.max_jobs,
             nix_args.cores,
             nix_args.print_build_logs,
+            variant,
             "build-and-copy",
         ),
         Commands::BuildAndUpload {
             kernel_dir,
+            variant,
             nix_args,
             repo_id,
             branch,
@@ -228,6 +266,7 @@ fn main() -> Result<()> {
                 nix_args.max_jobs,
                 nix_args.cores,
                 nix_args.print_build_logs,
+                variant,
                 "build",
             )?;
             run_upload(UploadArgs {
@@ -246,21 +285,26 @@ fn main() -> Result<()> {
         } => create_pyproject(kernel_dir, target_dir, force, ops_id),
         Commands::Devshell {
             kernel_dir,
+            variant,
             nix_args,
         } => devshell(
             kernel_dir,
             nix_args.max_jobs,
             nix_args.cores,
             nix_args.print_build_logs,
+            variant,
         ),
+        Commands::ListVariants { kernel_dir, arch } => list_variants(kernel_dir, arch),
         Commands::Testshell {
             kernel_dir,
+            variant,
             nix_args,
         } => testshell(
             kernel_dir,
             nix_args.max_jobs,
             nix_args.cores,
             nix_args.print_build_logs,
+            variant,
         ),
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
         Commands::Validate { kernel_dir } => {

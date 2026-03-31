@@ -23,8 +23,6 @@ concurrency:
 jobs:
   init-build-upload:
     name: Init, build, and upload kernel
-    outputs:
-      torch_version: ${{ steps.detect-variant.outputs.torch_version }}
     runs-on:
       group: aws-highmemory-32-plus-nix
     env:
@@ -43,9 +41,6 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
         env:
           USER: runner
-
-      - name: Build kernel-builder CLI
-        run: nix build .#kernel-builder -L
 
       - name: Init kernel project
         run: |
@@ -74,15 +69,12 @@ jobs:
           cd /tmp/e2e-test-kernel
           sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
 
-      - name: Build one CUDA variant
+      - name: Build kernel
         run: |
           cd /tmp/e2e-test-kernel
-          nix build .#ci -L
-          mkdir -p build
-          cp -rL result/* build/
+          nix run $GITHUB_WORKSPACE#kernel-builder -- build . -L
 
-      - name: Verify build artifacts and detect Torch version
-        id: detect-variant
+      - name: Verify build artifacts
         run: |
           cd /tmp/e2e-test-kernel
           VARIANT_DIR=$(ls -d build/torch* | head -1)
@@ -91,18 +83,9 @@ jobs:
           test -f "$VARIANT_DIR/metadata.json"
           ls "$VARIANT_DIR"/*.so
 
-          # Extract Torch version from variant dir name (e.g. torch210 -> 2.10.0)
-          VARIANT_NAME=$(basename "$VARIANT_DIR")
-          TORCH_DIGITS=$(echo "$VARIANT_NAME" | grep -oP '(?<=torch)\d+')
-          TORCH_MAJOR=${TORCH_DIGITS:0:1}
-          TORCH_MINOR=${TORCH_DIGITS:1}
-          TORCH_VERSION="${TORCH_MAJOR}.${TORCH_MINOR}.0"
-          echo "Detected Torch version: $TORCH_VERSION"
-          echo "torch_version=$TORCH_VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Upload kernel to Hub
         run: |
-          $GITHUB_WORKSPACE/result/bin/kernel-builder upload /tmp/e2e-test-kernel \
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/e2e-test-kernel \
             --repo-id ${{ env.E2E_REPO_ID }}
 
   download-and-test:
@@ -125,7 +108,7 @@ jobs:
         working-directory: ./kernels
         run: |
           uv sync --all-extras --dev
-          uv pip install "torch==${{ needs.init-build-upload.outputs.torch_version }}"
+          uv pip install torch
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels

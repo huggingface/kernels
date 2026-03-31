@@ -73,7 +73,7 @@ jobs:
       - name: Build kernel
         run: |
           cd /tmp/kernels-upload-test
-          nix run $GITHUB_WORKSPACE#kernel-builder -- build . -L
+          nix run $GITHUB_WORKSPACE#kernel-builder -- build-and-copy . -L
 
       - name: Verify build artifacts
         run: |

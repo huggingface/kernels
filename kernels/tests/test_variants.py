@@ -26,55 +26,6 @@ VARIANT_STRINGS = [
     "torch29-cxx11-rocm63-x86_64-linux",
     "torch29-cxx11-rocm64-x86_64-linux",
     "torch29-cxx11-xpu20252-x86_64-linux",
-    "torch29-metal-aarch64-darwin",
-    "torch210-cpu-aarch64-darwin",
-    "torch210-cu128-x86_64-windows",
-    "torch210-cxx11-cpu-aarch64-linux",
-    "torch210-cxx11-cpu-x86_64-linux",
-    "torch210-cxx11-cu126-aarch64-linux",
-    "torch210-cxx11-cu126-x86_64-linux",
-    "torch210-cxx11-cu128-aarch64-linux",
-    "torch210-cxx11-cu128-x86_64-linux",
-    "torch210-cxx11-cu130-aarch64-linux",
-    "torch210-cxx11-cu130-x86_64-linux",
-    "torch210-cxx11-rocm70-x86_64-linux",
-    "torch210-cxx11-rocm71-x86_64-linux",
-    "torch210-cxx11-xpu20253-x86_64-linux",
-    "torch210-metal-aarch64-darwin",
-    "torch210-xpu20253-x86_64-windows",
-    "tvm-ffi01-cpu-x86_64-linux",
-    "tvm-ffi01-cu126-x86_64-linux",
-    "tvm-ffi01-cu128-x86_64-linux",
-    "tvm-ffi01-cu130-x86_64-linux",
-    "tvm-ffi01-metal-aarch64-darwin",
-    "tvm-ffi01-xpu20253-x86_64-linux",
-]
-
-
-NOARCH_VARIANT_STRINGS = [
-    "torch-cpu",
-    "torch-cuda",
-    "torch-metal",
-    "torch-neuron",
-    "torch-rocm",
-    "torch-xpu",
-    "torch-npu",
-    "torch-universal",
-]
-
-SUPERSET_VARIANT_STRINGS = [
-    "torch29-cpu-aarch64-darwin",
-    "torch29-cxx11-cpu-aarch64-linux",
-    "torch29-cxx11-cpu-x86_64-linux",
-    "torch29-cxx11-cu126-aarch64-linux",
-    "torch29-cxx11-cu126-x86_64-linux",
-    "torch29-cxx11-cu128-aarch64-linux",
-    "torch29-cxx11-cu128-x86_64-linux",
-    "torch29-cxx11-cu130-aarch64-linux",
-    "torch29-cxx11-cu130-x86_64-linux",
-    "torch29-cxx11-rocm63-x86_64-linux",
-    "torch29-cxx11-rocm64-x86_64-linux",
-    "torch29-cxx11-xpu20252-x86_64-linux",
     "torch29-cpu-aarch64-linux",
     "torch29-cpu-x86_64-linux",
     "torch29-cu126-aarch64-linux",
@@ -111,6 +62,55 @@ SUPERSET_VARIANT_STRINGS = [
     "torch210-rocm70-x86_64-linux",
     "torch210-rocm71-x86_64-linux",
     "torch210-xpu20253-x86_64-linux",
+    "torch210-metal-aarch64-darwin",
+    "torch210-xpu20253-x86_64-windows",
+    "tvm-ffi01-cpu-x86_64-linux",
+    "tvm-ffi01-cu126-x86_64-linux",
+    "tvm-ffi01-cu128-x86_64-linux",
+    "tvm-ffi01-cu130-x86_64-linux",
+    "tvm-ffi01-metal-aarch64-darwin",
+    "tvm-ffi01-xpu20253-x86_64-linux",
+]
+
+
+NOARCH_VARIANT_STRINGS = [
+    "torch-cpu",
+    "torch-cuda",
+    "torch-metal",
+    "torch-neuron",
+    "torch-rocm",
+    "torch-xpu",
+    "torch-npu",
+    "torch-universal",
+]
+
+SUPERSET_VARIANT_STRINGS = [
+    "torch29-cpu-aarch64-darwin",
+    "torch29-cxx11-cpu-aarch64-linux",
+    "torch29-cxx11-cpu-x86_64-linux",
+    "torch29-cxx11-cu126-aarch64-linux",
+    "torch29-cxx11-cu126-x86_64-linux",
+    "torch29-cxx11-cu128-aarch64-linux",
+    "torch29-cxx11-cu128-x86_64-linux",
+    "torch29-cxx11-cu130-aarch64-linux",
+    "torch29-cxx11-cu130-x86_64-linux",
+    "torch29-cxx11-rocm63-x86_64-linux",
+    "torch29-cxx11-rocm64-x86_64-linux",
+    "torch29-cxx11-xpu20252-x86_64-linux",
+    "torch29-metal-aarch64-darwin",
+    "torch210-cpu-aarch64-darwin",
+    "torch210-cu128-x86_64-windows",
+    "torch210-cxx11-cpu-aarch64-linux",
+    "torch210-cxx11-cpu-x86_64-linux",
+    "torch210-cxx11-cu126-aarch64-linux",
+    "torch210-cxx11-cu126-x86_64-linux",
+    "torch210-cxx11-cu128-aarch64-linux",
+    "torch210-cxx11-cu128-x86_64-linux",
+    "torch210-cxx11-cu130-aarch64-linux",
+    "torch210-cxx11-cu130-x86_64-linux",
+    "torch210-cxx11-rocm70-x86_64-linux",
+    "torch210-cxx11-rocm71-x86_64-linux",
+    "torch210-cxx11-xpu20253-x86_64-linux",
     "torch210-metal-aarch64-darwin",
     "torch210-xpu20253-x86_64-windows",
 ]
@@ -389,21 +389,19 @@ def test_resolve_cuda_no_different_major_no_noarch():
     assert result == []
 
 
-def test_possible_variants_roundtrip():
-    """Every variant produced by possible_variants() should round-trip through parse."""
+def test_system_variants_roundtrip():
     variants = system_variants()
     for v in variants:
         assert parse_variant(v.variant_str).variant_str == v.variant_str
 
 
-def test_possible_variants_no_duplicates():
+def test_system_variants_no_duplicates():
     variants = system_variants()
     variant_strs = [v.variant_str for v in variants]
     assert len(variant_strs) == len(set(variant_strs))
 
 
-def test_possible_variants_all_resolve():
-    """All generated variants should be accepted by resolve_variants."""
+def test_system_variants_all_resolve():
     variants = system_variants()
     resolved = resolve_variants(variants)
     assert set(v.variant_str for v in resolved) == set(v.variant_str for v in variants)

@@ -29,6 +29,8 @@ in
     }
   );
 
+  libffi_3_3 = prev.libffi_3_3.override { doCheck = false; };
+
   nvtx = final.callPackage ./pkgs/nvtx { };
 
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };

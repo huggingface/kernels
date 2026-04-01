@@ -125,12 +125,10 @@ let
   };
 
 in
-buildPythonPackage {
+buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pname = "torch";
   inherit version;
   format = "wheel";
-
-  stdenv = effectiveStdenv;
 
   outputs = [
     "out" # output standard python package

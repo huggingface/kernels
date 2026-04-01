@@ -89,6 +89,7 @@ configure_cache() {
   info "Configuring Hugging Face binary cache..."
 
   sudo tee -a /etc/nix/nix.custom.conf >/dev/null <<EOF
+trusted-users = root $USER
 extra-trusted-substituters = $HF_SUBSTITUTER
 extra-trusted-public-keys = $HF_PUBLIC_KEY
 EOF

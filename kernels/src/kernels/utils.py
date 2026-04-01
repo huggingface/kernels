@@ -25,6 +25,7 @@ from kernels.metadata import Metadata
 from kernels.status import resolve_status
 from kernels.variants import (
     Variant,
+    describe_system_variant,
     get_variants,
     get_variants_local,
     resolve_variant,
@@ -138,8 +139,9 @@ def install_kernel(
     variant = resolve_variant(variants, backend)
 
     if variant is None:
+        requested = describe_system_variant(backend)
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}). Requested variant: {requested}. Available variants: {', '.join([variant.variant_str for variant in variants])}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
@@ -407,8 +409,9 @@ def load_kernel(
     variant = resolve_variant(variants, backend)
 
     if variant is None:
+        requested = describe_system_variant(backend)
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}). Requested variant: {requested}. Available variants: {', '.join([variant.variant_str for variant in variants])}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]

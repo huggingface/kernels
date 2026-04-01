@@ -141,6 +141,9 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     inherit url hash;
   };
 
+  # We use our own pythonWheelDepsHook.
+  dontCheckRuntimeDeps = true;
+
   nativeBuildInputs = [
     pythonRelaxWheelDepsHook
     pythonWheelDepsCheckHook

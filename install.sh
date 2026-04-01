@@ -27,45 +27,6 @@ info()  { echo -e "${BOLD}${GREEN}==>${RESET} ${BOLD}$1${RESET}"; }
 warn()  { echo -e "${BOLD}${YELLOW}warning:${RESET} $1"; }
 error() { echo -e "${BOLD}${RED}error:${RESET} $1" >&2; }
 
-# --- Platform detection ---
-
-detect_platform() {
-  local os arch
-  os="$(uname -s)"
-  arch="$(uname -m)"
-
-  case "$os" in
-    Linux)  os="linux" ;;
-    Darwin) os="darwin" ;;
-    *)
-      error "Unsupported operating system: $os"
-      exit 1
-      ;;
-  esac
-
-  case "$arch" in
-    x86_64)  arch="x86_64" ;;
-    aarch64|arm64) arch="aarch64" ;;
-    *)
-      error "Unsupported architecture: $arch"
-      exit 1
-      ;;
-  esac
-
-  PLATFORM="${arch}-${os}"
-
-  case "$PLATFORM" in
-    x86_64-linux|aarch64-linux|aarch64-darwin) ;;
-    *)
-      error "Unsupported platform: $PLATFORM"
-      echo "  Supported platforms: x86_64-linux, aarch64-linux, aarch64-darwin"
-      exit 1
-      ;;
-  esac
-
-  info "Detected platform: $PLATFORM"
-}
-
 # --- macOS: Xcode check ---
 
 check_xcode() {
@@ -167,7 +128,6 @@ main() {
   echo -e "${BOLD}kernel-builder installer${RESET}"
   echo ""
 
-  detect_platform
   check_xcode
   install_nix
   configure_cache

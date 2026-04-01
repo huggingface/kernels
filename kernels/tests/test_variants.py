@@ -3,7 +3,13 @@ from huggingface_hub import HfApi
 from packaging.version import Version
 
 from kernels.backends import CPU, CUDA, ROCm
-from kernels.variants import Variant, _resolve_variant_for_system, get_variants
+from kernels.variants import (
+    _resolve_variant_for_system,
+    get_variants,
+    parse_variant,
+    resolve_variants,
+    system_variants,
+)
 
 VARIANT_STRINGS = [
     "torch25-cxx98-cu118-aarch64-linux",
@@ -69,6 +75,17 @@ SUPERSET_VARIANT_STRINGS = [
     "torch29-cxx11-rocm63-x86_64-linux",
     "torch29-cxx11-rocm64-x86_64-linux",
     "torch29-cxx11-xpu20252-x86_64-linux",
+    "torch29-cpu-aarch64-linux",
+    "torch29-cpu-x86_64-linux",
+    "torch29-cu126-aarch64-linux",
+    "torch29-cu126-x86_64-linux",
+    "torch29-cu128-aarch64-linux",
+    "torch29-cu128-x86_64-linux",
+    "torch29-cu130-aarch64-linux",
+    "torch29-cu130-x86_64-linux",
+    "torch29-rocm63-x86_64-linux",
+    "torch29-rocm64-x86_64-linux",
+    "torch29-xpu20252-x86_64-linux",
     "torch29-metal-aarch64-darwin",
     "torch210-cpu-aarch64-darwin",
     "torch210-cu128-x86_64-windows",
@@ -83,6 +100,17 @@ SUPERSET_VARIANT_STRINGS = [
     "torch210-cxx11-rocm70-x86_64-linux",
     "torch210-cxx11-rocm71-x86_64-linux",
     "torch210-cxx11-xpu20253-x86_64-linux",
+    "torch210-cpu-aarch64-linux",
+    "torch210-cpu-x86_64-linux",
+    "torch210-cu126-aarch64-linux",
+    "torch210-cu126-x86_64-linux",
+    "torch210-cu128-aarch64-linux",
+    "torch210-cu128-x86_64-linux",
+    "torch210-cu130-aarch64-linux",
+    "torch210-cu130-x86_64-linux",
+    "torch210-rocm70-x86_64-linux",
+    "torch210-rocm71-x86_64-linux",
+    "torch210-xpu20253-x86_64-linux",
     "torch210-metal-aarch64-darwin",
     "torch210-xpu20253-x86_64-windows",
 ]
@@ -91,13 +119,13 @@ SUPERSET_VARIANT_STRINGS = [
 @pytest.mark.parametrize("variant_str", VARIANT_STRINGS)
 def test_arch_variants(variant_str: str):
     # Roundtrip parse and generate variant string.
-    assert Variant.parse(variant_str).variant_str == variant_str
+    assert parse_variant(variant_str).variant_str == variant_str
 
 
 @pytest.mark.parametrize("variant_str", NOARCH_VARIANT_STRINGS)
 def test_noarch_variants(variant_str: str):
     # Roundtrip parse and generate variant string.
-    assert Variant.parse(variant_str).variant_str == variant_str
+    assert parse_variant(variant_str).variant_str == variant_str
 
 
 def test_get_variants():
@@ -109,7 +137,7 @@ def test_get_variants():
 
 
 RESOLVE_VARIANTS = [
-    Variant.parse(s)
+    parse_variant(s)
     for s in [
         "torch210-cxx11-cu128-x86_64-linux",
         "torch210-cxx11-cu126-x86_64-linux",
@@ -269,7 +297,7 @@ def test_resolve_no_match():
 
 
 RESOLVE_VARIANTS_UNIVERSAL = [
-    Variant.parse(s)
+    parse_variant(s)
     for s in [
         "torch210-cxx11-cu128-x86_64-linux",
         "torch-universal",
@@ -309,7 +337,7 @@ def test_resolve_universal_is_last_resort():
 
 def test_resolve_specific_noarch_preferred_over_universal():
     # Backend-specific noarch is preferred over universal.
-    variants = [Variant.parse(s) for s in ["torch-universal", "torch-cuda"]]
+    variants = [parse_variant(s) for s in ["torch-universal", "torch-cuda"]]
     result = _resolve_variant_for_system(
         variants=variants,
         selected_backend=CUDA(Version("12.8")),
@@ -324,7 +352,7 @@ def test_resolve_specific_noarch_preferred_over_universal():
 
 
 RESOLVE_VARIANTS_NO_NOARCH = [
-    Variant.parse(s)
+    parse_variant(s)
     for s in [
         "torch210-cxx11-cu126-x86_64-linux",
         "torch210-cxx11-cu128-x86_64-linux",
@@ -359,3 +387,23 @@ def test_resolve_cuda_no_different_major_no_noarch():
         tvm_ffi_version=None,
     )
     assert result == []
+
+
+def test_possible_variants_roundtrip():
+    """Every variant produced by possible_variants() should round-trip through parse."""
+    variants = system_variants()
+    for v in variants:
+        assert parse_variant(v.variant_str).variant_str == v.variant_str
+
+
+def test_possible_variants_no_duplicates():
+    variants = system_variants()
+    variant_strs = [v.variant_str for v in variants]
+    assert len(variant_strs) == len(set(variant_strs))
+
+
+def test_possible_variants_all_resolve():
+    """All generated variants should be accepted by resolve_variants."""
+    variants = system_variants()
+    resolved = resolve_variants(variants)
+    assert set(v.variant_str for v in resolved) == set(v.variant_str for v in variants)

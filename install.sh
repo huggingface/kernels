@@ -81,23 +81,18 @@ HF_SUBSTITUTER="https://huggingface.cachix.org"
 HF_PUBLIC_KEY="huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o="
 
 configure_cache() {
-  if nix show-config 2>/dev/null | grep -q "huggingface.cachix.org"; then
+  if sudo nix config show 2>/dev/null | grep -q "huggingface.cachix.org"; then
     info "Hugging Face binary cache is already configured"
     return 0
   fi
 
   info "Configuring Hugging Face binary cache..."
-  local user
-  user="$(whoami)"
 
-  # 'extra-trusted-users' appends to the existing trusted-users list.
-  # Using 'trusted-users' would override the default (root), which could
-  # break the Nix installation.
-  sudo tee -a /etc/nix/nix.conf >/dev/null <<EOF
-extra-trusted-users = $user
-extra-substituters = $HF_SUBSTITUTER
+  sudo tee -a /etc/nix/nix.custom.conf >/dev/null <<EOF
+extra-trusted-substituters = $HF_SUBSTITUTER
 extra-trusted-public-keys = $HF_PUBLIC_KEY
 EOF
+
   sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
   sleep 3
   info "Binary cache configured"
@@ -116,6 +111,9 @@ install_kernel_builder() {
   fi
 
   nix profile add "${nix_args[@]}" "${FLAKE_REF}#kernel-builder"
+
+  # Symlink the kernel-builder binary to /usr/local/bin for easy access
+  sudo ln -sf "$HOME/.nix-profile/bin/kernel-builder" /usr/local/bin/kernel-builder
 
   info "kernel-builder installed: $(kernel-builder --version)"
 }

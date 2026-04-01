@@ -87,9 +87,12 @@ configure_cache() {
   fi
 
   info "Configuring Hugging Face binary cache..."
-  # Use 'trusted-substituters' and 'trusted-public-keys' — these are daemon-level
-  # settings (written to nix.conf as root) so they don't require the user to be
-  # in 'trusted-users'.
+  local user
+  user="$(whoami)"
+  # Add the user as a trusted Nix user and configure the binary cache.
+  # Trusted users can accept flake nixConfig settings (extra-substituters,
+  # extra-trusted-public-keys) without the daemon ignoring them.
+  echo "trusted-users = root $user" | sudo tee -a /etc/nix/nix.conf >/dev/null
   echo "extra-trusted-substituters = $HF_SUBSTITUTER" | sudo tee -a /etc/nix/nix.conf >/dev/null
   echo "extra-trusted-public-keys = $HF_PUBLIC_KEY" | sudo tee -a /etc/nix/nix.conf >/dev/null
   sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true

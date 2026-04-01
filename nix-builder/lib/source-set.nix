@@ -4,12 +4,10 @@ path:
 
 let
   inherit (lib) fileset;
-  readToml = path: builtins.fromTOML (builtins.readFile path);
-  readBuildConfig = path: readToml (path + "/build.toml");
-  buildConfig = readBuildConfig path;
+  kernelConfig = (import ./kernel-config.nix { inherit lib; }) path;
   nameToPath = path: name: path + "/${name}";
-  kernels = buildConfig.kernel or { };
-  extConfig = buildConfig.torch or buildConfig.tvm-ffi or { };
+  kernels = kernelConfig.toml.kernel or { };
+  extConfig = kernelConfig.toml.torch or kernelConfig.toml.tvm-ffi or { };
   pyExt =
     extConfig.pyext or [
       "py"

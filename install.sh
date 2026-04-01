@@ -79,9 +79,11 @@ install_nix() {
 
 HF_SUBSTITUTER="https://huggingface.cachix.org"
 HF_PUBLIC_KEY="huggingface.cachix.org-1:ynTPbLS0W8ofXd9fDjk1KvoFky9K2jhxe6r4nXAkc/o="
+NIX_CONF_DIR="/etc/nix/nix.conf.d"
+HF_CONF="$NIX_CONF_DIR/huggingface.conf"
 
 configure_cache() {
-  if grep -q "huggingface.cachix.org" /etc/nix/nix.conf 2>/dev/null; then
+  if [ -f "$HF_CONF" ]; then
     info "Hugging Face binary cache is already configured"
     return 0
   fi
@@ -89,12 +91,18 @@ configure_cache() {
   info "Configuring Hugging Face binary cache..."
   local user
   user="$(whoami)"
-  # Add the user as a trusted Nix user and configure the binary cache.
-  # Trusted users can accept flake nixConfig settings (extra-substituters,
-  # extra-trusted-public-keys) without the daemon ignoring them.
-  echo "trusted-users = root $user" | sudo tee -a /etc/nix/nix.conf >/dev/null
-  echo "extra-trusted-substituters = $HF_SUBSTITUTER" | sudo tee -a /etc/nix/nix.conf >/dev/null
-  echo "extra-trusted-public-keys = $HF_PUBLIC_KEY" | sudo tee -a /etc/nix/nix.conf >/dev/null
+
+  # Write a drop-in config file rather than appending to nix.conf.
+  # This is idempotent and doesn't risk corrupting the main config.
+  # - trusted-users: allows the user to accept flake nixConfig settings
+  # - extra-substituters: adds the HF cache
+  # - extra-trusted-public-keys: trusts the HF cache signing key
+  sudo mkdir -p "$NIX_CONF_DIR"
+  sudo tee "$HF_CONF" >/dev/null <<EOF
+trusted-users = root $user
+extra-substituters = $HF_SUBSTITUTER
+extra-trusted-public-keys = $HF_PUBLIC_KEY
+EOF
   sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
   info "Binary cache configured"
 }

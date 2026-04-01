@@ -117,13 +117,6 @@ install_kernel_builder() {
 
   nix profile add "${nix_args[@]}" "${FLAKE_REF}#kernel-builder"
 
-  if ! command -v kernel-builder &>/dev/null; then
-    error "kernel-builder was installed but is not in PATH."
-    echo "  Try restarting your shell or running:"
-    echo "    . $NIX_PROFILE_SCRIPT"
-    exit 1
-  fi
-
   info "kernel-builder installed: $(kernel-builder --version)"
 }
 

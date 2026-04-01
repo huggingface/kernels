@@ -130,6 +130,13 @@ in
           };
         });
 
+        jupyter-server = python-super.jupyter-server.overrideAttrs (
+          _: prevAttrs: {
+            # Gets stuck sometimes, already tested in nixpkgs.
+            dontUsePytestCheck = true;
+          }
+        );
+
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };

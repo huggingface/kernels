@@ -99,6 +99,7 @@ extra-substituters = $HF_SUBSTITUTER
 extra-trusted-public-keys = $HF_PUBLIC_KEY
 EOF
   sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
+  sleep 3
   info "Binary cache configured"
 }
 

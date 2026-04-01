@@ -140,7 +140,15 @@ configure_cache() {
 
 install_kernel_builder() {
   info "Installing kernel-builder..."
-  nix profile add --accept-flake-config "${FLAKE_REF}#kernel-builder"
+
+  local nix_args=(--accept-flake-config)
+
+  # macOS requires relaxed sandboxing to access the Metal compiler.
+  if [ "$(uname -s)" = "Darwin" ]; then
+    nix_args+=(--extra-conf "sandbox = relaxed")
+  fi
+
+  nix profile add "${nix_args[@]}" "${FLAKE_REF}#kernel-builder"
 
   if ! command -v kernel-builder &>/dev/null; then
     error "kernel-builder was installed but is not in PATH."

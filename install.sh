@@ -93,7 +93,6 @@ configure_cache() {
   echo "extra-trusted-substituters = $HF_SUBSTITUTER" | sudo tee -a /etc/nix/nix.conf >/dev/null
   echo "extra-trusted-public-keys = $HF_PUBLIC_KEY" | sudo tee -a /etc/nix/nix.conf >/dev/null
   sudo systemctl restart nix-daemon 2>/dev/null || sudo pkill -HUP nix-daemon || true
-  sleep 2
   info "Binary cache configured"
 }
 

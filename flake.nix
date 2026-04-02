@@ -163,6 +163,8 @@
             ++ (with python3.pkgs; [
               docutils
               huggingface-hub
+              jax
+              jax-tvm-ffi
               kernel-abi-check
               matplotlib
               mktestdocs

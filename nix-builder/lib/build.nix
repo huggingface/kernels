@@ -2,13 +2,13 @@
   lib,
   pkgs,
 
-# Every `buildSets` argument is a list of build sets. Each build set is
-# a attrset of the form
-#
-#     { pkgs = <nixpkgs>, torch = <torch drv> }
-#
-# The Torch derivation is built as-is. So e.g. the ABI version should
-# already be set.
+  # Every `buildSets` argument is a list of build sets. Each build set is
+  # a attrset of the form
+  #
+  #     { pkgs = <nixpkgs>, torch = <torch drv> }
+  #
+  # The Torch derivation is built as-is. So e.g. the ABI version should
+  # already be set.
 }:
 
 let

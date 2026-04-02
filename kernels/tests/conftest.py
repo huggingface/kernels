@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 
 import pytest
@@ -35,6 +36,8 @@ has_xpu = (
 
 has_npu = torch is not None and _get_torch_privateuse_backend_name() == "npu"
 
+has_jax = importlib.util.find_spec("jax") is not None
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -61,6 +64,8 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping CUDA Torch-only test on host without Torch")
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")
+    if "jax_only" in item.keywords and not has_jax:
+        pytest.skip("skipping JAX-only test on host without JAX")
     if "neuron_only" in item.keywords and not has_neuron:
         pytest.skip("skipping Neuron-only test on host without Neuron")
     if "rocm_only" in item.keywords and not has_rocm:

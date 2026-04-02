@@ -117,6 +117,8 @@ in
           };
         });
 
+        jax-tvm-ffi = python-self.callPackage ./pkgs/python-modules/jax-tvm-ffi { };
+
         jupyter-server = python-super.jupyter-server.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.

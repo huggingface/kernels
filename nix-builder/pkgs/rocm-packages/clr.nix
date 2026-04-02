@@ -11,7 +11,6 @@
   hip-runtime-amd,
   hsa-rocr,
   perl,
-  rocm,
   rocm-core,
   rocm-device-libs,
   rocm-opencl,
@@ -34,7 +33,7 @@ let
 in
 stdenv.mkDerivation {
   pname = "rocm-clr";
-  version = rocm.version;
+  version = rocm-core.version;
 
   nativeBuildInputs = [
     markForRocmRootHook

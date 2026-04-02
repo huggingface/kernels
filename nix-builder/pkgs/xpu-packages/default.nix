@@ -2,6 +2,7 @@
   lib,
   callPackage,
   newScope,
+  pkgs,
 }:
 
 {
@@ -9,7 +10,11 @@
 }:
 
 let
-  fixedPoint = final: { inherit callPackage lib packageMetadata; };
+  inherit (lib.fixedPoints) extends composeManyExtensions;
+
+  fixedPoint = final: {
+    inherit lib packageMetadata;
+  };
   composed = lib.composeManyExtensions [
     # Hooks
     (import ./hooks.nix)

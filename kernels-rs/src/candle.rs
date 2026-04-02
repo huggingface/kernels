@@ -56,10 +56,116 @@ impl TryFrom<&Device> for BackendKind {
 }
 
 struct PreparedArg {
-    data: *mut c_void,
-    shape: Vec<i64>,
-    strides: Vec<i64>,
-    dtype: DLDataType,
+    tensor: DLTensor,
+    _shape: Vec<i64>,
+    _strides: Vec<i64>,
+}
+
+enum PreparedCallArg {
+    Tensor(PreparedArg),
+    Scalar(TVMFFIAny),
+}
+
+impl PreparedCallArg {
+    fn as_tvm_arg(&mut self) -> TVMFFIAny {
+        match self {
+            Self::Tensor(arg) => TVMFFIAny::from_dltensor(&mut arg.tensor as *mut DLTensor),
+            Self::Scalar(arg) => *arg,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum KernelArg<'a> {
+    Tensor(&'a Tensor),
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+}
+
+impl<'a> From<&'a Tensor> for KernelArg<'a> {
+    fn from(value: &'a Tensor) -> Self {
+        Self::Tensor(value)
+    }
+}
+
+impl From<bool> for KernelArg<'_> {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<i32> for KernelArg<'_> {
+    fn from(value: i32) -> Self {
+        Self::Int(value.into())
+    }
+}
+
+impl From<i64> for KernelArg<'_> {
+    fn from(value: i64) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl From<u32> for KernelArg<'_> {
+    fn from(value: u32) -> Self {
+        Self::Int(value.into())
+    }
+}
+
+impl From<f32> for KernelArg<'_> {
+    fn from(value: f32) -> Self {
+        Self::Float(value.into())
+    }
+}
+
+impl From<f64> for KernelArg<'_> {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+// Helper to convert a variable number of heterogeneous arguments
+// into a slice of `KernelArg`.
+//
+// Example:
+//
+// without:
+// call("my_kernel", [
+//     KernelArg::Tensor(&my_tensor),
+//     KernelArg::Int(42),
+//     KernelArg::Float(3.14),
+// ])
+//
+// with:
+// call("my_kernel", kargs![&my_tensor, 42, 3.14])
+//
+#[macro_export]
+macro_rules! kargs {
+    ($($arg:expr),* $(,)?) => {
+        [$($crate::candle::KernelArg::from($arg)),*]
+    };
+}
+
+fn call_backend_kind(args: &[KernelArg<'_>], fallback: BackendKind) -> Result<BackendKind> {
+    let mut kind = None;
+
+    for arg in args {
+        let KernelArg::Tensor(tensor) = arg else {
+            continue;
+        };
+
+        let arg_kind = BackendKind::try_from(tensor.device())?;
+        match kind {
+            Some(prev) if prev != arg_kind => {
+                return Err(err("all tensor arguments must use the same backend"));
+            }
+            Some(_) => {}
+            None => kind = Some(arg_kind),
+        }
+    }
+
+    Ok(kind.unwrap_or(fallback))
 }
 
 impl TryFrom<DType> for DLDataType {
@@ -166,61 +272,67 @@ impl KernelModule {
     pub fn device(&self) -> Result<Device> {
         Device::try_from(self.backend().kind())
     }
-}
 
-// Tensors are passed to the kernel as DLPack pointers directly into
-// candle's storage - no copies for contiguous tensors.
-pub trait CallKernel {
-    fn call(&self, func_name: &str, args: &[&Tensor]) -> Result<()>;
-}
-
-impl CallKernel for KernelModule {
-    fn call(&self, func_name: &str, args: &[&Tensor]) -> Result<()> {
-        let kind = args
-            .first()
-            .map(|t| BackendKind::try_from(t.device()))
-            .transpose()?
-            .unwrap_or(self.backend().kind());
+    // Tensor arguments are passed as DLTensor views directly into candle
+    // storage. Scalar arguments are marshalled as TVM FFI Any POD values.
+    pub fn call<'a, A>(&self, func_name: &str, args: A) -> Result<()>
+    where
+        A: AsRef<[KernelArg<'a>]>,
+    {
+        let args = args.as_ref();
+        let kind = call_backend_kind(args, self.backend().kind())?;
 
         let symbol = format!("__tvm_ffi_{}_{}", func_name, kind.as_str());
         let func = unsafe { self.get_func(symbol.as_bytes()) }?;
 
         let contiguous: Vec<Tensor> = args
             .iter()
-            .map(|t| t.contiguous().map_err(Into::into))
+            .filter_map(|arg| match arg {
+                KernelArg::Tensor(tensor) => Some(tensor.contiguous().map_err(Into::into)),
+                KernelArg::Bool(_) | KernelArg::Int(_) | KernelArg::Float(_) => None,
+            })
             .collect::<Result<_>>()?;
 
         let guards: Vec<_> = contiguous.iter().map(|t| t.storage_and_layout()).collect();
 
-        let mut prepared: Vec<PreparedArg> = guards
+        let mut tensor_index = 0;
+        let mut prepared: Vec<PreparedCallArg> = args
             .iter()
-            .enumerate()
-            .map(|(i, (storage, layout))| {
-                Ok(PreparedArg {
-                    data: storage_data_ptr(storage, layout.start_offset())?,
-                    shape: layout.dims().iter().map(|&d| d as i64).collect(),
-                    strides: layout.stride().iter().map(|&s| s as i64).collect(),
-                    dtype: contiguous[i].dtype().try_into()?,
-                })
+            .map(|arg| match arg {
+                KernelArg::Tensor(_) => {
+                    let (storage, layout) = &guards[tensor_index];
+                    let tensor = &contiguous[tensor_index];
+                    tensor_index += 1;
+
+                    let mut shape: Vec<_> = layout.dims().iter().map(|&d| d as i64).collect();
+                    let mut strides: Vec<_> = layout.stride().iter().map(|&s| s as i64).collect();
+                    let tensor = DLTensor {
+                        data: storage_data_ptr(storage, layout.start_offset())?,
+                        device: kind.into(),
+                        ndim: shape.len() as i32,
+                        dtype: tensor.dtype().try_into()?,
+                        shape: shape.as_mut_ptr(),
+                        strides: strides.as_mut_ptr(),
+                        byte_offset: 0,
+                    };
+
+                    Ok(PreparedCallArg::Tensor(PreparedArg {
+                        tensor,
+                        _shape: shape,
+                        _strides: strides,
+                    }))
+                }
+                KernelArg::Bool(value) => Ok(PreparedCallArg::Scalar(TVMFFIAny::from_bool(*value))),
+                KernelArg::Int(value) => Ok(PreparedCallArg::Scalar(TVMFFIAny::from_int(*value))),
+                KernelArg::Float(value) => {
+                    Ok(PreparedCallArg::Scalar(TVMFFIAny::from_float(*value)))
+                }
             })
             .collect::<Result<_>>()?;
 
-        let mut dl_tensors: Vec<DLTensor> = prepared
+        let tvm_args: Vec<TVMFFIAny> = prepared
             .iter_mut()
-            .map(|p| DLTensor {
-                data: p.data,
-                device: kind.into(),
-                ndim: p.shape.len() as i32,
-                dtype: p.dtype,
-                shape: p.shape.as_mut_ptr(),
-                strides: p.strides.as_mut_ptr(),
-                byte_offset: 0,
-            })
-            .collect();
-
-        let tvm_args: Vec<TVMFFIAny> = dl_tensors
-            .iter_mut()
-            .map(|dl| TVMFFIAny::from_dltensor(dl as *mut DLTensor))
+            .map(PreparedCallArg::as_tvm_arg)
             .collect();
         let mut result = TVMFFIAny::none();
 

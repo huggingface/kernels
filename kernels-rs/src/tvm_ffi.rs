@@ -52,12 +52,27 @@ pub struct DLTensor {
 }
 
 const TVMFFI_DLTENSOR_PTR: i32 = 7;
+const TVMFFI_NONE: i32 = 0;
+const TVMFFI_INT: i32 = 1;
+const TVMFFI_BOOL: i32 = 2;
+const TVMFFI_FLOAT: i32 = 3;
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub union TVMFFIValue {
+    pub v_ptr: *mut c_void,
+    pub v_int64: i64,
+    pub v_float64: f64,
+    pub v_uint64: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct TVMFFIAny {
     pub type_index: i32,
     pub zero_padding: u32,
-    pub v_ptr: *mut c_void,
+    // Tagged payload for a DLTensor pointer or scalar argument.
+    pub value: TVMFFIValue,
 }
 
 impl TVMFFIAny {
@@ -65,15 +80,45 @@ impl TVMFFIAny {
         Self {
             type_index: TVMFFI_DLTENSOR_PTR,
             zero_padding: 0,
-            v_ptr: tensor as *mut c_void,
+            value: TVMFFIValue {
+                v_ptr: tensor.cast(),
+            },
+        }
+    }
+
+    pub fn from_int(value: i64) -> Self {
+        Self {
+            type_index: TVMFFI_INT,
+            zero_padding: 0,
+            value: TVMFFIValue { v_int64: value },
+        }
+    }
+
+    pub fn from_bool(value: bool) -> Self {
+        Self {
+            type_index: TVMFFI_BOOL,
+            zero_padding: 0,
+            value: TVMFFIValue {
+                v_int64: i64::from(value),
+            },
+        }
+    }
+
+    pub fn from_float(value: f64) -> Self {
+        Self {
+            type_index: TVMFFI_FLOAT,
+            zero_padding: 0,
+            value: TVMFFIValue { v_float64: value },
         }
     }
 
     pub fn none() -> Self {
         Self {
-            type_index: 0,
+            type_index: TVMFFI_NONE,
             zero_padding: 0,
-            v_ptr: std::ptr::null_mut(),
+            value: TVMFFIValue {
+                v_ptr: std::ptr::null_mut(),
+            },
         }
     }
 }

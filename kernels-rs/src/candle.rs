@@ -11,15 +11,14 @@ fn err(msg: impl Into<String>) -> Error {
     Error::Kernel(msg.into())
 }
 
-impl BackendKind {
-    pub fn to_candle_supported(self) -> Self {
-        match self {
-            #[cfg(feature = "candle-cuda")]
-            BackendKind::Cuda => BackendKind::Cuda,
-            #[cfg(not(feature = "candle-cuda"))]
-            BackendKind::Cuda => BackendKind::Cpu,
-            other => other,
-        }
+fn fallback_backend_to_cpu(kind: BackendKind) -> BackendKind {
+    match kind {
+        BackendKind::Cpu => BackendKind::Cpu,
+        #[cfg(feature = "candle-cuda")]
+        BackendKind::Cuda => BackendKind::Cuda,
+        #[cfg(not(feature = "candle-cuda"))]
+        BackendKind::Cuda => BackendKind::Cpu,
+        BackendKind::Xpu => BackendKind::Cpu,
     }
 }
 
@@ -32,8 +31,10 @@ impl TryFrom<BackendKind> for Device {
             #[cfg(feature = "candle-cuda")]
             BackendKind::Cuda => Device::new_cuda(0).map_err(Into::into),
             #[cfg(not(feature = "candle-cuda"))]
-            BackendKind::Cuda => Ok(Device::Cpu),
-            BackendKind::Xpu => Ok(Device::Cpu),
+            BackendKind::Cuda => Err(err(
+                "CUDA backend is not supported without the `candle-cuda` feature",
+            )),
+            BackendKind::Xpu => Err(err("XPU backend is not supported by Candle")),
         }
     }
 }
@@ -259,12 +260,12 @@ fn storage_data_ptr(storage: &Storage, offset: usize) -> Result<*mut c_void> {
 }
 
 pub fn get_kernel(repo_id: &str, version: u32) -> Result<KernelModule> {
-    let kind = crate::backend::detect().to_candle_supported();
+    let kind = fallback_backend_to_cpu(crate::backend::detect());
     crate::get_kernel_for_backend(repo_id, version, kind)
 }
 
 pub fn get_local_kernel(repo_path: &std::path::Path) -> Result<KernelModule> {
-    let kind = crate::backend::detect().to_candle_supported();
+    let kind = fallback_backend_to_cpu(crate::backend::detect());
     crate::get_local_kernel_for_backend(repo_path, kind)
 }
 

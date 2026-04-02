@@ -1,5 +1,7 @@
 use std::ffi::c_void;
 
+use crate::backend::BackendKind;
+
 pub const DL_CPU: i32 = 1;
 pub const DL_CUDA: i32 = 2;
 pub const DL_ONEAPI: i32 = 14;
@@ -13,6 +15,21 @@ pub const DL_BFLOAT: u8 = 4;
 pub struct DLDevice {
     pub device_type: i32,
     pub device_id: i32,
+}
+
+impl From<BackendKind> for DLDevice {
+    fn from(kind: BackendKind) -> Self {
+        let device_type = match kind {
+            BackendKind::Cpu => DL_CPU,
+            BackendKind::Cuda => DL_CUDA,
+            BackendKind::Xpu => DL_ONEAPI,
+        };
+
+        Self {
+            device_type,
+            device_id: 0,
+        }
+    }
 }
 
 #[repr(C)]

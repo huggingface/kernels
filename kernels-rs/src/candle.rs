@@ -5,25 +5,14 @@ use candle_core::{CpuStorage, DType, Device, Storage, Tensor};
 use crate::KernelModule;
 use crate::backend::BackendKind;
 use crate::error::{Error, Result};
-use crate::tvm_ffi::{self, DLDataType, DLDevice, DLTensor, TVMFFIAny};
+use crate::tvm_ffi::{self, DLDataType, DLTensor, TVMFFIAny};
 
 fn err(msg: impl Into<String>) -> Error {
     Error::Kernel(msg.into())
 }
 
 impl BackendKind {
-    pub fn candle_device(self) -> Result<Device> {
-        match self {
-            BackendKind::Cpu => Ok(Device::Cpu),
-            #[cfg(feature = "candle-cuda")]
-            BackendKind::Cuda => Device::new_cuda(0).map_err(Into::into),
-            #[cfg(not(feature = "candle-cuda"))]
-            BackendKind::Cuda => Ok(Device::Cpu),
-            BackendKind::Xpu => Ok(Device::Cpu),
-        }
-    }
-
-    pub fn candle_supported(self) -> Self {
+    pub fn to_candle_supported(self) -> Self {
         match self {
             #[cfg(feature = "candle-cuda")]
             BackendKind::Cuda => BackendKind::Cuda,
@@ -34,14 +23,34 @@ impl BackendKind {
     }
 }
 
-impl From<&Device> for BackendKind {
-    fn from(device: &Device) -> Self {
-        match device {
-            Device::Cpu => BackendKind::Cpu,
+impl TryFrom<BackendKind> for Device {
+    type Error = Error;
+
+    fn try_from(kind: BackendKind) -> Result<Self> {
+        match kind {
+            BackendKind::Cpu => Ok(Device::Cpu),
             #[cfg(feature = "candle-cuda")]
-            Device::Cuda(_) => BackendKind::Cuda,
-            #[allow(unreachable_patterns)]
-            _ => BackendKind::Cpu,
+            BackendKind::Cuda => Device::new_cuda(0).map_err(Into::into),
+            #[cfg(not(feature = "candle-cuda"))]
+            BackendKind::Cuda => Ok(Device::Cpu),
+            BackendKind::Xpu => Ok(Device::Cpu),
+        }
+    }
+}
+
+impl TryFrom<&Device> for BackendKind {
+    type Error = Error;
+
+    fn try_from(device: &Device) -> Result<Self> {
+        match device {
+            Device::Cpu => Ok(BackendKind::Cpu),
+            #[cfg(feature = "candle-cuda")]
+            Device::Cuda(_) => Ok(BackendKind::Cuda),
+            #[cfg(not(feature = "candle-cuda"))]
+            Device::Cuda(_) => Err(err(
+                "CUDA candle device is not supported without the `candle-cuda` feature",
+            )),
+            Device::Metal(_) => Err(err("Metal candle devices are not supported")),
         }
     }
 }
@@ -53,94 +62,109 @@ struct PreparedArg {
     dtype: DLDataType,
 }
 
-fn dtype_to_dl(dtype: DType) -> Result<DLDataType> {
-    let (code, bits) = match dtype {
-        DType::U8 => (tvm_ffi::DL_UINT, 8),
-        DType::U32 => (tvm_ffi::DL_UINT, 32),
-        DType::I64 => (tvm_ffi::DL_INT, 64),
-        DType::BF16 => (tvm_ffi::DL_BFLOAT, 16),
-        DType::F16 => (tvm_ffi::DL_FLOAT, 16),
-        DType::F32 => (tvm_ffi::DL_FLOAT, 32),
-        DType::F64 => (tvm_ffi::DL_FLOAT, 64),
-        other => return Err(err(format!("unsupported dtype: {other:?}"))),
-    };
-    Ok(DLDataType {
-        code,
-        bits,
-        lanes: 1,
-    })
+impl TryFrom<DType> for DLDataType {
+    type Error = Error;
+
+    fn try_from(dtype: DType) -> Result<Self> {
+        let (code, bits) = match dtype {
+            DType::U8 => (tvm_ffi::DL_UINT, 8),
+            DType::U32 => (tvm_ffi::DL_UINT, 32),
+            DType::I64 => (tvm_ffi::DL_INT, 64),
+            DType::BF16 => (tvm_ffi::DL_BFLOAT, 16),
+            DType::F16 => (tvm_ffi::DL_FLOAT, 16),
+            DType::F32 => (tvm_ffi::DL_FLOAT, 32),
+            DType::F64 => (tvm_ffi::DL_FLOAT, 64),
+            other => return Err(err(format!("unsupported dtype: {other:?}"))),
+        };
+        Ok(Self {
+            code,
+            bits,
+            lanes: 1,
+        })
+    }
+}
+
+fn cpu_slice_data_ptr<T>(slice: &[T], offset: usize) -> Result<*mut c_void> {
+    let slice = slice
+        .get(offset..)
+        .ok_or_else(|| err("CPU storage offset out of bounds"))?;
+    Ok(slice.as_ptr() as *mut c_void)
 }
 
 fn cpu_storage_data_ptr(cpu: &CpuStorage, offset: usize) -> Result<*mut c_void> {
-    macro_rules! ptr {
-        ($v:expr) => {
-            Ok(unsafe { $v.as_ptr().add(offset) as *mut c_void })
-        };
-    }
     match cpu {
-        CpuStorage::U8(v) => ptr!(v),
-        CpuStorage::U32(v) => ptr!(v),
-        CpuStorage::I64(v) => ptr!(v),
-        CpuStorage::BF16(v) => ptr!(v),
-        CpuStorage::F16(v) => ptr!(v),
-        CpuStorage::F32(v) => ptr!(v),
-        CpuStorage::F64(v) => ptr!(v),
+        CpuStorage::U8(v) => cpu_slice_data_ptr(v, offset),
+        CpuStorage::U32(v) => cpu_slice_data_ptr(v, offset),
+        CpuStorage::I64(v) => cpu_slice_data_ptr(v, offset),
+        CpuStorage::BF16(v) => cpu_slice_data_ptr(v, offset),
+        CpuStorage::F16(v) => cpu_slice_data_ptr(v, offset),
+        CpuStorage::F32(v) => cpu_slice_data_ptr(v, offset),
+        CpuStorage::F64(v) => cpu_slice_data_ptr(v, offset),
         _ => Err(err("unsupported CpuStorage variant")),
     }
 }
 
 #[cfg(feature = "candle-cuda")]
-fn cuda_storage_data_ptr(cuda: &candle_core::CudaStorage, offset: usize) -> Result<*mut c_void> {
-    use candle_core::cuda_backend::CudaStorageSlice as S;
+fn cuda_slice_data_ptr<T>(
+    slice: &cudarc::driver::CudaSlice<T>,
+    stream: &cudarc::driver::CudaStream,
+    offset: usize,
+) -> Result<*mut c_void> {
     use cudarc::driver::DevicePtr;
-
-    let stream = cuda.device.cuda_stream();
 
     // SyncOnDrop records a stream event; the pointer stays valid as long
     // as the caller holds the storage read-guard.
-    macro_rules! ptr {
-        ($slice:expr) => {{
-            let view = $slice.slice(offset..);
-            let (device_ptr, _sync) = view.device_ptr(&stream);
-            Ok(device_ptr as *mut c_void)
-        }};
-    }
+    let view = slice
+        .try_slice(offset..)
+        .ok_or_else(|| err("CUDA storage offset out of bounds"))?;
+    let (device_ptr, _sync) = view.device_ptr(stream);
+    Ok(device_ptr as *mut c_void)
+}
+
+#[cfg(feature = "candle-cuda")]
+fn cuda_storage_data_ptr(cuda: &candle_core::CudaStorage, offset: usize) -> Result<*mut c_void> {
+    use candle_core::cuda_backend::CudaStorageSlice as S;
+
+    let stream = cuda.device.cuda_stream();
 
     match &cuda.slice {
-        S::U8(s) => ptr!(s),
-        S::U32(s) => ptr!(s),
-        S::I64(s) => ptr!(s),
-        S::BF16(s) => ptr!(s),
-        S::F16(s) => ptr!(s),
-        S::F32(s) => ptr!(s),
-        S::F64(s) => ptr!(s),
+        S::U8(s) => cuda_slice_data_ptr(s, &stream, offset),
+        S::U32(s) => cuda_slice_data_ptr(s, &stream, offset),
+        S::I64(s) => cuda_slice_data_ptr(s, &stream, offset),
+        S::BF16(s) => cuda_slice_data_ptr(s, &stream, offset),
+        S::F16(s) => cuda_slice_data_ptr(s, &stream, offset),
+        S::F32(s) => cuda_slice_data_ptr(s, &stream, offset),
+        S::F64(s) => cuda_slice_data_ptr(s, &stream, offset),
         _ => Err(err("unsupported CudaStorage variant")),
     }
 }
 
-fn extract_data_ptr(storage: &Storage, offset: usize) -> Result<*mut c_void> {
+fn storage_data_ptr(storage: &Storage, offset: usize) -> Result<*mut c_void> {
     match storage {
         Storage::Cpu(cpu) => cpu_storage_data_ptr(cpu, offset),
         #[cfg(feature = "candle-cuda")]
         Storage::Cuda(cuda) => cuda_storage_data_ptr(cuda, offset),
-        #[allow(unreachable_patterns)]
-        _ => Err(err("unsupported storage backend")),
+        #[cfg(not(feature = "candle-cuda"))]
+        Storage::Cuda(_) => Err(err(
+            "CUDA storage is not supported without the `candle-cuda` feature",
+        )),
+        Storage::Metal(_) => Err(err("Metal storage is not supported")),
     }
 }
 
 pub fn get_kernel(repo_id: &str, version: u32) -> Result<KernelModule> {
-    let kind = crate::backend::detect().candle_supported();
+    let kind = crate::backend::detect().to_candle_supported();
     crate::get_kernel_for_backend(repo_id, version, kind)
 }
 
 pub fn get_local_kernel(repo_path: &std::path::Path) -> Result<KernelModule> {
-    let kind = crate::backend::detect().candle_supported();
+    let kind = crate::backend::detect().to_candle_supported();
     crate::get_local_kernel_for_backend(repo_path, kind)
 }
 
 impl KernelModule {
     pub fn device(&self) -> Result<Device> {
-        self.backend().kind().candle_device()
+        Device::try_from(self.backend().kind())
     }
 }
 
@@ -154,7 +178,8 @@ impl CallKernel for KernelModule {
     fn call(&self, func_name: &str, args: &[&Tensor]) -> Result<()> {
         let kind = args
             .first()
-            .map(|t| BackendKind::from(t.device()))
+            .map(|t| BackendKind::try_from(t.device()))
+            .transpose()?
             .unwrap_or(self.backend().kind());
 
         let symbol = format!("__tvm_ffi_{}_{}", func_name, kind.as_str());
@@ -172,28 +197,19 @@ impl CallKernel for KernelModule {
             .enumerate()
             .map(|(i, (storage, layout))| {
                 Ok(PreparedArg {
-                    data: extract_data_ptr(&storage, layout.start_offset())?,
+                    data: storage_data_ptr(storage, layout.start_offset())?,
                     shape: layout.dims().iter().map(|&d| d as i64).collect(),
                     strides: layout.stride().iter().map(|&s| s as i64).collect(),
-                    dtype: dtype_to_dl(contiguous[i].dtype())?,
+                    dtype: contiguous[i].dtype().try_into()?,
                 })
             })
             .collect::<Result<_>>()?;
-
-        let device_type = match kind {
-            BackendKind::Cpu => tvm_ffi::DL_CPU,
-            BackendKind::Cuda => tvm_ffi::DL_CUDA,
-            BackendKind::Xpu => tvm_ffi::DL_ONEAPI,
-        };
 
         let mut dl_tensors: Vec<DLTensor> = prepared
             .iter_mut()
             .map(|p| DLTensor {
                 data: p.data,
-                device: DLDevice {
-                    device_type,
-                    device_id: 0,
-                },
+                device: kind.into(),
                 ndim: p.shape.len() as i32,
                 dtype: p.dtype,
                 shape: p.shape.as_mut_ptr(),

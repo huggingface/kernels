@@ -18,19 +18,6 @@ in
 
   kernel-layout-check = prev.callPackage ./pkgs/kernel-layout-check { };
 
-  # Used by ROCm.
-  libffi_3_2 = final.libffi_3_3.overrideAttrs (
-    finalAttrs: _: {
-      version = "3.2.1";
-      src = final.fetchurl {
-        url = with finalAttrs; "https://gcc.gnu.org/pub/${pname}/${pname}-${version}.tar.gz";
-        hash = "sha256-0G67jh2aItGeONY/24OVQlPzm+3F1GIyoFZFaFciyjc=";
-      };
-    }
-  );
-
-  libffi_3_3 = prev.libffi_3_3.override { doCheck = false; };
-
   nvtx = final.callPackage ./pkgs/nvtx { };
 
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };

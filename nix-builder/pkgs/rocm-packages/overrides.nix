@@ -66,10 +66,9 @@ applyOverrides {
     };
 
   openmp-extras-runtime =
-    { rocm-llvm, libffi_3_2 }:
+    { rocm-llvm }:
     prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [
-        libffi_3_2
         rocm-llvm
       ];
       # Can we change rocm-llvm to pick these up?

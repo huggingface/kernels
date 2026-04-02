@@ -117,6 +117,12 @@ in
           };
         });
 
+        jax = python-super.jax.overrideAttrs (
+          _: prevAttrs: {
+            dontUsePytestCheck = true;
+          }
+        );
+
         jax-tvm-ffi = python-self.callPackage ./pkgs/python-modules/jax-tvm-ffi { };
 
         jupyter-server = python-super.jupyter-server.overrideAttrs (

@@ -1,6 +1,7 @@
 use std::fmt;
-use std::process::Command;
 use std::str::FromStr;
+
+use libloading::Library;
 
 use crate::error::Error;
 
@@ -72,24 +73,28 @@ impl FromStr for BackendKind {
 }
 
 pub fn detect_cuda_version() -> Option<String> {
-    cuda_version_from_smi().or_else(cuda_version_from_nvcc)
-}
+    type CudaRuntimeGetVersion = unsafe extern "C" fn(*mut i32) -> i32;
 
-fn cuda_version_from_smi() -> Option<String> {
-    let output = Command::new("nvidia-smi").output().ok()?;
-    if !output.status.success() {
+    let library = unsafe { Library::new(libloading::library_filename("cudart")) }.ok()?;
+    let cuda_runtime_get_version: libloading::Symbol<CudaRuntimeGetVersion> =
+        unsafe { library.get(b"cudaRuntimeGetVersion\0").ok()? };
+
+    let mut runtime_version = 0;
+    if unsafe { cuda_runtime_get_version(&mut runtime_version) } != 0 {
         return None;
     }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let rest = stdout.split("CUDA Version:").nth(1)?;
-    Some(rest.split_whitespace().next()?.to_string())
+
+    format_cuda_runtime_version(runtime_version)
 }
 
-fn cuda_version_from_nvcc() -> Option<String> {
-    let output = Command::new("nvcc").arg("--version").output().ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let after = stdout.split("release ").nth(1)?;
-    Some(after.split(',').next()?.trim().to_string())
+fn format_cuda_runtime_version(runtime_version: i32) -> Option<String> {
+    if runtime_version <= 0 {
+        return None;
+    }
+
+    let major = runtime_version / 1000;
+    let minor = (runtime_version % 1000) / 10;
+    Some(format!("{major}.{minor}"))
 }
 
 pub fn detect() -> BackendKind {
@@ -97,5 +102,17 @@ pub fn detect() -> BackendKind {
         BackendKind::Cuda
     } else {
         BackendKind::Cpu
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_cuda_runtime_version;
+
+    #[test]
+    fn formats_cuda_runtime_versions() {
+        assert_eq!(format_cuda_runtime_version(12080).as_deref(), Some("12.8"));
+        assert_eq!(format_cuda_runtime_version(11020).as_deref(), Some("11.2"));
+        assert_eq!(format_cuda_runtime_version(0), None);
     }
 }

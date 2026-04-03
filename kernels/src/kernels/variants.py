@@ -32,8 +32,16 @@ BUILD_VARIANT_REGEX = re.compile(
 class Torch:
     """Versioned Torch framework (arch variants)."""
 
+    # Match the following Torch version encoding:
+    #
+    # The first part is `torchxy` where x is the major version and y the minor
+    # version. x can only consist of one digit, y of one or more digits.
+    #
+    # The optional second part is the ABI tag, which is `-cxx11` or `-cxx98`.
+    # The ABI tag is used for historical reasons for Linux build variants. It
+    # will be removed from builds in the future.
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(
-        r"torch(\d+?)(\d+)(?:-(cxx11|cxx98))?"
+        r"torch(\d)(\d+)(?:-(cxx11|cxx98))?"
     )
 
     version: Version
@@ -52,6 +60,8 @@ class Torch:
                 cxx11_abi = torch.compiled_with_cxx11_abi()
                 return [
                     Torch(version=torch_version, cxx11_abi=cxx11_abi),
+                    # We already accept build variants without an ABI tag, so
+                    # that we can remove the tag from builds in the future.
                     Torch(version=torch_version, cxx11_abi=None),
                 ]
             else:

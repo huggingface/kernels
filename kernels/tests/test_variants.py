@@ -3,7 +3,12 @@ from huggingface_hub import HfApi
 from packaging.version import Version
 
 from kernels.backends import CPU, CUDA, ROCm
-from kernels.variants import Variant, _resolve_variant_for_system, get_variants
+from kernels.variants import (
+    Variant,
+    _describe_system_variant,
+    _resolve_variant_for_system,
+    get_variants,
+)
 
 VARIANT_STRINGS = [
     "torch25-cxx98-cu118-aarch64-linux",
@@ -359,3 +364,37 @@ def test_resolve_cuda_no_different_major_no_noarch():
         tvm_ffi_version=None,
     )
     assert result == []
+
+
+def test_error_message_includes_requested_variant():
+    # Simulate a no-match scenario: ROCm 7.0 system with torch 2.9, but only
+    # CUDA variants available.
+    variants = RESOLVE_VARIANTS_NO_NOARCH
+    selected_backend = ROCm(Version("7.0"))
+    result = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=selected_backend,
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.9"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result == []
+
+    # Build the error message the same way utils.py does.
+    requested = _describe_system_variant(
+        selected_backend=selected_backend,
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.9"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    error_msg = (
+        f"Cannot find a build variant for this system in test/repo (revision: abc123). "
+        f"Requested variant: {requested}. "
+        f"Available variants: {', '.join([v.variant_str for v in variants])}"
+    )
+    assert "Requested variant: torch29-cxx11-rocm70-x86_64-linux" in error_msg
+    assert "Available variants:" in error_msg

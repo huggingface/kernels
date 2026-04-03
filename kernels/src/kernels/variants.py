@@ -198,11 +198,8 @@ def resolve_variant(
     return resolved[0] if resolved else None
 
 
-def resolve_variants(
-    variants: list[Variant], backend: str | None = None
-) -> list[Variant]:
-    """Return the matching variants for the current system, sorted
-    by decreasing order of preference."""
+def _get_system_info(backend: str | None = None):
+    """Gather system information used for variant resolution."""
     selected_backend = _select_backend(backend)
 
     cpu = platform.machine()
@@ -231,6 +228,59 @@ def resolve_variants(
         # Parse Torch version and strip patch/tags.
         tvm_ffi_version = parse(tvm_ffi.__version__)
         tvm_ffi_version = Version(f"{tvm_ffi_version.major}.{tvm_ffi_version.minor}")
+
+    return selected_backend, cpu, os, torch_version, torch_cxx11_abi, tvm_ffi_version
+
+
+def describe_system_variant(backend: str | None = None) -> str:
+    """Return a human-readable description of the variant the current system requires."""
+    selected_backend, cpu, os, torch_version, torch_cxx11_abi, tvm_ffi_version = (
+        _get_system_info(backend)
+    )
+    return _describe_system_variant(
+        selected_backend=selected_backend,
+        cpu=cpu,
+        os=os,
+        torch_version=torch_version,
+        torch_cxx11_abi=torch_cxx11_abi,
+        tvm_ffi_version=tvm_ffi_version,
+    )
+
+
+def _describe_system_variant(
+    selected_backend: Backend,
+    cpu: str,
+    os: str,
+    torch_version: Version | None,
+    torch_cxx11_abi: bool | None,
+    tvm_ffi_version: Version | None,
+) -> str:
+    """Return a human-readable description of the requested variant given explicit system parameters."""
+    parts = []
+
+    if torch_version is not None:
+        parts.append(f"torch{torch_version.major}{torch_version.minor}")
+
+    if tvm_ffi_version is not None:
+        parts.append(f"tvm-ffi{tvm_ffi_version.major}{tvm_ffi_version.minor}")
+
+    if torch_cxx11_abi is not None:
+        parts.append("cxx11" if torch_cxx11_abi else "cxx98")
+
+    parts.append(selected_backend.variant_str)
+    parts.append(f"{cpu}-{os}")
+
+    return "-".join(parts)
+
+
+def resolve_variants(
+    variants: list[Variant], backend: str | None = None
+) -> list[Variant]:
+    """Return the matching variants for the current system, sorted
+    by decreasing order of preference."""
+    selected_backend, cpu, os, torch_version, torch_cxx11_abi, tvm_ffi_version = (
+        _get_system_info(backend)
+    )
 
     return _resolve_variant_for_system(
         variants=variants,

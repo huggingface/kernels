@@ -9,8 +9,12 @@
 }:
 
 let
-  fixedPoint = final: { inherit callPackage lib packageMetadata; };
-  composed = lib.composeManyExtensions [
+  inherit (lib.fixedPoints) extends composeManyExtensions;
+
+  fixedPoint = final: {
+    inherit lib packageMetadata;
+  };
+  composed = composeManyExtensions [
     # Hooks
     (import ./hooks.nix)
     # Base package set.
@@ -23,11 +27,11 @@ let
     (callPackage ./joins.nix { })
     # Add aotriton
     (final: prev: {
-      inherit (prev.callPackage ../aotriton { })
+      inherit (final.callPackage ../aotriton { })
         aotriton_0_11_1
         aotriton_0_11_2
         ;
     })
   ];
 in
-lib.makeScope newScope (lib.extends composed fixedPoint)
+lib.makeScope newScope (extends composed fixedPoint)

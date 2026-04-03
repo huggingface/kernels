@@ -1,5 +1,10 @@
 # Using the kernel builder with Nix
 
+> [!NOTE] 
+> The [install script](writing-kernels.md#quick-install) automates
+> the Nix and kernel-builder setup described below. Use these manual
+> instructions if you prefer step-by-step control.
+
 The kernel builder uses Nix for building kernels. You can build or
 run the kernels directly if you have Nix installed on your system.
 We recommend installing Nix in the following way:

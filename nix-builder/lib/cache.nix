@@ -30,11 +30,11 @@
             allOutputs python3.pkgs.nvidia-cutlass-dsl
           )
         );
-      buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.torch.variant (buildSetOutputs buildSet);
+      buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.variants.torch.arch (buildSetOutputs buildSet);
     in
     pkgs.linkFarm "packages-for-cache" (
       map (buildSet: {
-        name = buildSet.torch.variant;
+        name = buildSet.variants.torch.arch;
         path = buildSetLinkFarm buildSet;
       }) buildSets
     );

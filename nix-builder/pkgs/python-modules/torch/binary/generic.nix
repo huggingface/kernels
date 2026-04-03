@@ -125,12 +125,10 @@ let
   };
 
 in
-buildPythonPackage {
+buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pname = "torch";
   inherit version;
   format = "wheel";
-
-  stdenv = effectiveStdenv;
 
   outputs = [
     "out" # output standard python package
@@ -142,6 +140,9 @@ buildPythonPackage {
   src = fetchurl {
     inherit url hash;
   };
+
+  # We use our own pythonWheelDepsHook.
+  dontCheckRuntimeDeps = true;
 
   nativeBuildInputs = [
     pythonRelaxWheelDepsHook

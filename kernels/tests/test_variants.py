@@ -11,67 +11,43 @@ from kernels.variants import (
     system_variants,
 )
 
-VARIANT_STRINGS = [
-    "torch25-cxx98-cu118-aarch64-linux",
-    "torch25-cxx98-cpu-x86_64-linux",
-    "torch29-cpu-aarch64-darwin",
-    "torch29-cxx11-cpu-aarch64-linux",
-    "torch29-cxx11-cpu-x86_64-linux",
-    "torch29-cxx11-cu126-aarch64-linux",
-    "torch29-cxx11-cu126-x86_64-linux",
-    "torch29-cxx11-cu128-aarch64-linux",
-    "torch29-cxx11-cu128-x86_64-linux",
-    "torch29-cxx11-cu130-aarch64-linux",
-    "torch29-cxx11-cu130-x86_64-linux",
-    "torch29-cxx11-rocm63-x86_64-linux",
-    "torch29-cxx11-rocm64-x86_64-linux",
-    "torch29-cxx11-xpu20252-x86_64-linux",
-    "torch29-cpu-aarch64-linux",
-    "torch29-cpu-x86_64-linux",
-    "torch29-cu126-aarch64-linux",
-    "torch29-cu126-x86_64-linux",
-    "torch29-cu128-aarch64-linux",
-    "torch29-cu128-x86_64-linux",
-    "torch29-cu130-aarch64-linux",
-    "torch29-cu130-x86_64-linux",
-    "torch29-rocm63-x86_64-linux",
-    "torch29-rocm64-x86_64-linux",
-    "torch29-xpu20252-x86_64-linux",
-    "torch29-metal-aarch64-darwin",
-    "torch210-cpu-aarch64-darwin",
-    "torch210-cu128-x86_64-windows",
-    "torch210-cxx11-cpu-aarch64-linux",
-    "torch210-cxx11-cpu-x86_64-linux",
-    "torch210-cxx11-cu126-aarch64-linux",
-    "torch210-cxx11-cu126-x86_64-linux",
-    "torch210-cxx11-cu128-aarch64-linux",
-    "torch210-cxx11-cu128-x86_64-linux",
-    "torch210-cxx11-cu130-aarch64-linux",
-    "torch210-cxx11-cu130-x86_64-linux",
-    "torch210-cxx11-rocm70-x86_64-linux",
-    "torch210-cxx11-rocm71-x86_64-linux",
-    "torch210-cxx11-xpu20253-x86_64-linux",
-    "torch210-cpu-aarch64-linux",
-    "torch210-cpu-x86_64-linux",
-    "torch210-cu126-aarch64-linux",
-    "torch210-cu126-x86_64-linux",
-    "torch210-cu128-aarch64-linux",
-    "torch210-cu128-x86_64-linux",
-    "torch210-cu130-aarch64-linux",
-    "torch210-cu130-x86_64-linux",
-    "torch210-rocm70-x86_64-linux",
-    "torch210-rocm71-x86_64-linux",
-    "torch210-xpu20253-x86_64-linux",
-    "torch210-metal-aarch64-darwin",
-    "torch210-xpu20253-x86_64-windows",
-    "tvm-ffi01-cpu-x86_64-linux",
-    "tvm-ffi01-cu126-x86_64-linux",
-    "tvm-ffi01-cu128-x86_64-linux",
-    "tvm-ffi01-cu130-x86_64-linux",
-    "tvm-ffi01-metal-aarch64-darwin",
-    "tvm-ffi01-xpu20253-x86_64-linux",
-]
-
+VARIANT_STRINGS = (
+    [
+        f"{torch}{abi}-{backend}-{system}"
+        for torch in ["torch25", "torch29", "torch210"]
+        for abi in ["", "-cxx98", "-cxx11"]
+        for backend in [
+            "cpu",
+            "cu126",
+            "cu128",
+            "cu130",
+            "rocm63",
+            "rocm64",
+            "xpu20252",
+        ]
+        for system in ["aarch64-linux", "x86_64-linux"]
+    ]
+    + [
+        f"{framework}-{backend}-{system}"
+        for framework in ["torch25", "torch29", "torch210", "tvm-ffi01"]
+        for backend in ["cpu", "metal"]
+        for system in ["aarch64-darwin"]
+    ]
+    + [
+        f"{tvmFfi}-{backend}-{system}"
+        for tvmFfi in ["tvm-ffi01"]
+        for backend in [
+            "cpu",
+            "cu126",
+            "cu128",
+            "cu130",
+            "rocm63",
+            "rocm64",
+            "xpu20252",
+        ]
+        for system in ["aarch64-linux", "x86_64-linux"]
+    ]
+)
 
 NOARCH_VARIANT_STRINGS = [
     "torch-cpu",

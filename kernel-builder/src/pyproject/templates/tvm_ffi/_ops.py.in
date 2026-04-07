@@ -1,3 +1,4 @@
+from importlib.util import find_spec
 from pathlib import Path
 import platform
 
@@ -5,9 +6,40 @@ import tvm_ffi
 
 _SELF_PATH = Path(__file__).parent
 
+has_jax = find_spec("jax") and find_spec("jax_tvm_ffi")
+
+has_torch = find_spec("torch")
+
 if platform.system() == "Darwin":
     ops = tvm_ffi.load_module(_SELF_PATH / "@OPS_NAME@.dylib")
 elif platform.system() == "Windows":
     ops = tvm_ffi.load_module(_SELF_PATH / "@OPS_NAME@.dll")
 else:
     ops = tvm_ffi.load_module(_SELF_PATH / "@OPS_NAME@.so")
+
+
+def jax_add_ffi_target_name_prefix(name: str):
+    """
+    Prefix JAX FFI target name by namespace.
+    """
+    return f"@OPS_NAME@.{name}"
+
+def torch_add_op_namespace_prefix(op_name: str):
+    """
+    Prefix Torch op by namespace.
+    """
+    return f"@OPS_NAME@::{op_name}"
+
+def jax_register_ffi_target(name: str, *args, **kwargs):
+    if has_jax:
+        from jax_tvm_ffi import register_ffi_target
+
+        return register_ffi_target(f"@OPS_NAME@.{name}", *args, **kwargs)
+
+def jax_ffi_call(name: str, *args, **kwargs):
+    if has_jax:
+        from jax.ffi import ffi_call
+
+        return ffi_call(f"@OPS_NAME@.{name}", *args, **kwargs)
+
+    raise RuntimeError("jax is not available, cannot call jax_ffi_call")

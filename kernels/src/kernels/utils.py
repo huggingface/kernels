@@ -53,8 +53,7 @@ _loaded_kernels: dict[str, LoadedKernel] = {}
 
 
 def get_loaded_kernels() -> dict[str, LoadedKernel]:
-    """Returns the `op_namespace -> LoadedKernel` mapping
-    """
+    """Returns a copy of the loaded kernels registry (`op_namespace -> LoadedKernel` mapping)."""
     return _loaded_kernels.copy()
 
 

@@ -71,7 +71,7 @@ def _get_cache_dir() -> str | None:
 
 
 def _get_local_kernel_overrides() -> dict[str, Path]:
-    """Returns list local overrides for kernels."""
+    """Returns a copy of the loaded kernels registry (`op_namespace -> LoadedKernel` mapping)."""
     local_kerels = os.environ.get("LOCAL_KERNELS", None)
     if local_kerels is None:
         return dict()

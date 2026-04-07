@@ -36,3 +36,17 @@ def test_relu_layer(device):
     x = torch.randn(1024, 1024, dtype=torch.float32, device=device)
     layer = relu_tvm_ffi.layers.ReLU()
     torch.testing.assert_close(F.relu(x), layer(x))
+
+
+@pytest.mark.jax_only
+def test_relu_jax():
+    import jax
+    import jax.numpy as jnp
+    from numpy.testing import assert_allclose
+
+    x = jnp.arange(-20, 20, dtype=jnp.float32)
+
+    for i in range(41):
+        out = relu_tvm_ffi.relu_jax(x[i:])
+        expected = jax.nn.relu(x[i:])
+        assert_allclose(out, expected)

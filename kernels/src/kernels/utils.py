@@ -95,7 +95,9 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 CACHE_DIR: str | None = _get_cache_dir()
 
 
-def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None) -> ModuleType:
+def _import_from_path(
+    module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None
+) -> ModuleType:
     metadata = Metadata.load_from_variant(variant_path)
     validate_dependencies(module_name, metadata.python_depends, _backend())
 

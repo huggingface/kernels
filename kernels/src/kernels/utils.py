@@ -119,14 +119,16 @@ def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInf
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore
-    op_namespace = sys.modules[f"{module_name}._ops"].ops.name
-    _loaded_kernels[op_namespace] = LoadedKernel(
-        op_namespace=op_namespace,
-        variant_path=variant_path,
-        package_name=package_name,
-        module_name=module_name,
-        repo_infos=_repo_infos,
-    )
+    # Only track kernels that register custom torch ops
+    if (ops := sys.modules.get(f"{module_name}._ops")) is not None:
+        op_namespace = ops.ops.name
+        _loaded_kernels[op_namespace] = LoadedKernel(
+            op_namespace=op_namespace,
+            variant_path=variant_path,
+            package_name=package_name,
+            module_name=module_name,
+            repo_infos=_repo_infos,
+        )
     return module
 
 

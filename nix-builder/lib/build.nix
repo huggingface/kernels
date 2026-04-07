@@ -358,6 +358,8 @@ rec {
               ++ pythonCheckInputs ps
               ++ [
                 buildSet.torch
+                jax
+                jax-tvm-ffi
                 pip
                 pytest
               ]

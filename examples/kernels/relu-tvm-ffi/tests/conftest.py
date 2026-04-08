@@ -18,6 +18,7 @@ def device() -> torch.device:
     else:
         return torch.device("cpu")
 
+
 def pytest_runtest_setup(item):
     if "jax_only" in item.keywords and not has_jax:
         pytest.skip("skipping JAX-only test on host without JAX")

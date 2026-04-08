@@ -26,7 +26,6 @@ if has_jax:
         or getattr(ops, "relu_xpu", None)
         or getattr(ops, "relu_cpu", None)
     )
-
     if ops_func is not None:
         from jax_tvm_ffi import register_ffi_target
 

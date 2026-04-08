@@ -42,10 +42,10 @@ class RepoInfos(NamedTuple):
 
 
 class LoadedKernel(NamedTuple):
-    op_namespace: str
     variant_path: Path
     package_name: str
     module_name: str
+    torch_namespace: str | None
     repo_infos: RepoInfos | None
 
 
@@ -53,7 +53,7 @@ _loaded_kernels: dict[str, LoadedKernel] = {}
 
 
 def get_loaded_kernels() -> dict[str, LoadedKernel]:
-    """Returns a copy of the loaded kernels registry (`op_namespace -> LoadedKernel` mapping)."""
+    """Returns a copy of the loaded kernels registry (`module_name -> LoadedKernel` mapping)."""
     return _loaded_kernels.copy()
 
 
@@ -120,16 +120,16 @@ def _import_from_path(
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore
-    # Only track kernels that register custom torch ops
+    torch_namespace: str | None = None
     if (ops := sys.modules.get(f"{module_name}._ops")) is not None:
-        op_namespace = ops.ops.name
-        _loaded_kernels[op_namespace] = LoadedKernel(
-            op_namespace=op_namespace,
-            variant_path=variant_path,
-            package_name=package_name,
-            module_name=module_name,
-            repo_infos=_repo_infos,
-        )
+        torch_namespace = getattr(ops.ops, "name", None)
+    _loaded_kernels[module_name] = LoadedKernel(
+        torch_namespace=torch_namespace,
+        variant_path=variant_path,
+        package_name=package_name,
+        module_name=module_name,
+        repo_infos=_repo_infos,
+    )
     return module
 
 

@@ -74,4 +74,11 @@ buildPythonPackage {
   dependencies = [ cuda-pathfinder ];
 
   pythonImportsCheck = [ "cuda.bindings" ];
+
+  meta = {
+    description = "Python bindings for CUDA";
+    homepage = "https://github.com/NVIDIA/cuda-python";
+    license = lib.licenses.unfreeRedistributable;
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+  };
 }

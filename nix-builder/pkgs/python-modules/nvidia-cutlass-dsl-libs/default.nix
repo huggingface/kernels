@@ -71,6 +71,10 @@ buildPythonPackage rec {
   ];
 
   meta = {
+    description = "NVIDIA CUTLASS Python DSL native libraries";
+    homepage = "https://github.com/NVIDIA/cutlass";
+    license = lib.licenses.unfree;
     broken = !(cudaPackages.cudaAtLeast "12.8");
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
   };
 }

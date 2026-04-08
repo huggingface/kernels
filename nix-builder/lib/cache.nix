@@ -22,6 +22,8 @@
           ++ allOutputs kernel-builder
           ++ allOutputs kernel-abi-check
           ++ allOutputs python3.pkgs.einops
+          ++ allOutputs python3.pkgs.jax
+          ++ allOutputs python3.pkgs.jax-tvm-ffi
           ++ allOutputs python3.pkgs.kernels
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)

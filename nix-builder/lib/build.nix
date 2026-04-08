@@ -255,6 +255,7 @@ rec {
                 ++ lib.optionals kernelConfig.isTvmFfi [
                   jax
                   jax-tvm-ffi
+                  numpy
                   tvm-ffi
                 ]
               ))
@@ -366,6 +367,7 @@ rec {
               ++ lib.optionals kernelConfig.isTvmFfi [
                 jax
                 jax-tvm-ffi
+                numpy
                 tvm-ffi
               ]
             )

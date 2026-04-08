@@ -17,7 +17,7 @@ buildPythonPackage rec {
   src = fetchFromGitHub {
     owner = "NVIDIA";
     repo = "cuda-python";
-    rev = "v${version}";
+    tag = "v${version}";
     hash = "sha256-AvIw2G4EGWsX7PxFGxzECXhwkbwYslHzRdUArTNf7jE=";
   };
 

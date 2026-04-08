@@ -38,7 +38,7 @@ in
     src = fetchFromGitHub {
       owner = "ROCm";
       repo = "aotriton";
-      rev = version;
+      tag = version;
       hash = "sha256-F7JjyS+6gMdCpOFLldTsNJdVzzVwd6lwW7+V8ZOZfig=";
       leaveDotGit = true;
       inherit postFetch;
@@ -92,7 +92,7 @@ in
     src = fetchFromGitHub {
       owner = "ROCm";
       repo = "aotriton";
-      rev = version;
+      tag = version;
       hash = "sha256-VIwwQR1fl40NLNOwO8KhQK/xOK6wb2l8qBugJ1cRjm4=";
       leaveDotGit = true;
       inherit postFetch;

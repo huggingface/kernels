@@ -225,7 +225,7 @@
           # This package set is exposed so that we can prebuild the Torch versions.
           torch = builtins.listToAttrs (
             map (buildSet: {
-              name = buildSet.variants.torch.archVariant;
+              name = buildSet.variants.torch.arch;
               value = buildSet.torch;
             }) buildSets
           );

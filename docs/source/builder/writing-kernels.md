@@ -37,6 +37,34 @@ support.
 
 ## Setting up environment
 
+### Quick install
+
+The fastest way to get started is to run the install script. This
+installs [Determinate Nix](https://docs.determinate.systems/determinate-nix/)
+and `kernel-builder` in a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/huggingface/kernels/main/install.sh | bash
+```
+
+This will:
+
+1. Install Determinate Nix (if not already installed).
+2. Configure the Hugging Face binary cache (to avoid building dependencies from
+   source).
+3. Install `kernel-builder` via `nix profile install`.
+
+To update `kernel-builder` later:
+
+```bash
+nix profile upgrade --all
+```
+
+For a step-by-step breakdown of what the script does, see
+[Using the kernel builder with Nix](nix.md).
+
+### Cloud environment
+
 In the [`terraform`](https://github.com/huggingface/kernels/tree/main/terraform) directory, we provide an
 example of programatically spinning up an EC2 instance that is ready
 with everything needed for you to start developing and building

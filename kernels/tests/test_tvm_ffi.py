@@ -35,18 +35,13 @@ def test_local_load(device):
 
 @pytest.mark.cuda_only
 @pytest.mark.jax_only
-def test_jax(device):
+def test_jax():
     import jax
-    import jax_tvm_ffi
     import numpy as np
 
     kernel = get_kernel("kernels-test/relu-tvm-ffi", version=1)
 
     x = jax.numpy.arange(-10, 10, dtype=jax.numpy.float32)
-    jax_tvm_ffi.register_ffi_target("relu.relu", kernel.relu, platform="gpu")
-    out = jax.ffi.ffi_call(
-        "relu.relu", jax.ShapeDtypeStruct(x.shape, x.dtype), vmap_method="broadcast_all"
-    )(x)
-
+    out = kernel.relu_jax(x)
     expected = jax.nn.relu(x)
     np.testing.assert_array_equal(out, expected)

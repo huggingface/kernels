@@ -36,7 +36,10 @@ has_xpu = (
 
 has_npu = torch is not None and _get_torch_privateuse_backend_name() == "npu"
 
-has_jax = importlib.util.find_spec("jax") is not None and importlib.util.find_spec("jax_tvm_ffi") is not None
+has_jax = (
+    importlib.util.find_spec("jax") is not None
+    and importlib.util.find_spec("jax_tvm_ffi") is not None
+)
 
 
 def pytest_addoption(parser):
@@ -60,7 +63,7 @@ def device():
 
 
 def pytest_runtest_setup(item):
-    if "torch_only" in item.keywords and torch is not None:
+    if "torch_only" in item.keywords and torch is None:
         pytest.skip("skipping CUDA Torch-only test on host without Torch")
     if "cuda_only" in item.keywords and not has_cuda:
         pytest.skip("skipping CUDA-only test on host without CUDA")

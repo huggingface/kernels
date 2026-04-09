@@ -57,27 +57,22 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
         repo_id=repo_id,
         repo_type=repo_type,
         revision=revision,
-        files_metadata=True,
     )
     if r.sha is None:
         raise ValueError(
             f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
         )
 
-    # Kernel-type repos don't expose siblings in repo_info, fall back
-    # to list_repo_tree (mirroring huggingface_hub's snapshot_download).
-    siblings = getattr(r, "siblings", None)
-    if siblings is None or len(siblings) == 0:
-        siblings = [
-            f
-            for f in api.list_repo_tree(
-                repo_id=repo_id,
-                repo_type=repo_type,
-                revision=revision,
-                recursive=True,
-            )
-            if isinstance(f, RepoFile)
-        ]
+    siblings = [
+        f
+        for f in api.list_repo_tree(
+            repo_id=repo_id,
+            repo_type=repo_type,
+            revision=revision,
+            recursive=True,
+        )
+        if isinstance(f, RepoFile)
+    ]
 
     variant_files: dict[str, list[tuple[bytes, str]]] = {}
     for sibling in siblings:

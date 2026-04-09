@@ -624,17 +624,14 @@ def _resolve_repo_type(repo_id: str, revision: str | None = None) -> str:
     except (RepositoryNotFoundError, HfHubHTTPError):
         pass
 
-    try:
-        api.repo_info(repo_id=repo_id, repo_type="model", revision=revision)
-        warnings.warn(
-            f"Repository '{repo_id}' uses deprecated repo type 'model'; "
-            "use 'kernel' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return "model"
-    except RepositoryNotFoundError:
-        raise
+    api.repo_info(repo_id=repo_id, repo_type="model", revision=revision)
+    warnings.warn(
+        f"Repository '{repo_id}' uses deprecated repo type 'model'; "
+        "use 'kernel' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return "model"
 
 
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:

@@ -65,7 +65,8 @@ def main():
     versions_parser.set_defaults(func=kernel_versions)
 
     upload_parser = subparsers.add_parser(
-        "upload", help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead."
+        "upload",
+        help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead.",
     )
     upload_parser.add_argument(
         "kernel_dir",
@@ -121,8 +122,7 @@ def main():
         dest="global_",
         action="store_true",
         help=(
-            "Install globally (user-level) instead of in the current project "
-            "directory."
+            "Install globally (user-level) instead of in the current project directory."
         ),
     )
     skills_add_parser.add_argument(
@@ -208,17 +208,6 @@ def main():
         help="Output PNG and GIF formats instead of SVG",
     )
     benchmark_parser.set_defaults(func=run_benchmark)
-
-    init_parser = subparsers.add_parser(
-        "init",
-        help="(Removed) Use `kernel-builder init` instead",
-    )
-    init_parser.add_argument(
-        "kernel_name",
-        nargs="?",
-        help="Name of the kernel repo (e.g., drbh/my-kernel)",
-    )
-    init_parser.set_defaults(func=_init_removed)
 
     args = parser.parse_args()
     args.func(args)
@@ -309,17 +298,6 @@ class _JSONEncoder(json.JSONEncoder):
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)
-
-
-def _init_removed(args):
-    print(
-        "Error: `kernels init` has been removed.\n\n"
-        "Please use `kernel-builder init` instead:\n\n"
-        "    kernel-builder init <kernel_name>\n\n"
-        "For more information, see: https://github.com/huggingface/kernels",
-        file=sys.stderr,
-    )
-    sys.exit(1)
 
 
 def check_kernel(

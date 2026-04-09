@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.skills import add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
@@ -145,28 +144,6 @@ def main():
         help="The project directory",
     )
     lock_parser.set_defaults(func=lock_kernels)
-
-    # Add generate-readme subcommand parser
-    generate_readme_parser = subparsers.add_parser(
-        "generate-readme",
-        help="Generate README snippets for a kernel's public functions",
-    )
-    generate_readme_parser.add_argument(
-        "repo_id",
-        type=str,
-        help="The kernel repo ID (e.g., kernels-community/activation)",
-    )
-    generate_readme_parser.add_argument(
-        "--revision",
-        type=str,
-        default="main",
-        help="The kernel revision (branch, tag, or commit SHA, defaults to 'main')",
-    )
-    generate_readme_parser.set_defaults(
-        func=lambda args: generate_readme_for_kernel(
-            repo_id=args.repo_id, revision=args.revision
-        )
-    )
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",

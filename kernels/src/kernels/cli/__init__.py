@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.cli.doc import generate_readme_for_kernel
 from kernels.cli.skills import add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
@@ -65,7 +64,8 @@ def main():
     versions_parser.set_defaults(func=kernel_versions)
 
     upload_parser = subparsers.add_parser(
-        "upload", help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead."
+        "upload",
+        help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead.",
     )
     upload_parser.add_argument(
         "kernel_dir",
@@ -121,8 +121,7 @@ def main():
         dest="global_",
         action="store_true",
         help=(
-            "Install globally (user-level) instead of in the current project "
-            "directory."
+            "Install globally (user-level) instead of in the current project directory."
         ),
     )
     skills_add_parser.add_argument(
@@ -145,28 +144,6 @@ def main():
         help="The project directory",
     )
     lock_parser.set_defaults(func=lock_kernels)
-
-    # Add generate-readme subcommand parser
-    generate_readme_parser = subparsers.add_parser(
-        "generate-readme",
-        help="Generate README snippets for a kernel's public functions",
-    )
-    generate_readme_parser.add_argument(
-        "repo_id",
-        type=str,
-        help="The kernel repo ID (e.g., kernels-community/activation)",
-    )
-    generate_readme_parser.add_argument(
-        "--revision",
-        type=str,
-        default="main",
-        help="The kernel revision (branch, tag, or commit SHA, defaults to 'main')",
-    )
-    generate_readme_parser.set_defaults(
-        func=lambda args: generate_readme_for_kernel(
-            repo_id=args.repo_id, revision=args.revision
-        )
-    )
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -208,17 +185,6 @@ def main():
         help="Output PNG and GIF formats instead of SVG",
     )
     benchmark_parser.set_defaults(func=run_benchmark)
-
-    init_parser = subparsers.add_parser(
-        "init",
-        help="(Removed) Use `kernel-builder init` instead",
-    )
-    init_parser.add_argument(
-        "kernel_name",
-        nargs="?",
-        help="Name of the kernel repo (e.g., drbh/my-kernel)",
-    )
-    init_parser.set_defaults(func=_init_removed)
 
     args = parser.parse_args()
     args.func(args)
@@ -309,17 +275,6 @@ class _JSONEncoder(json.JSONEncoder):
         if dataclasses.is_dataclass(o):
             return dataclasses.asdict(o)
         return super().default(o)
-
-
-def _init_removed(args):
-    print(
-        "Error: `kernels init` has been removed.\n\n"
-        "Please use `kernel-builder init` instead:\n\n"
-        "    kernel-builder init <kernel_name>\n\n"
-        "For more information, see: https://github.com/huggingface/kernels",
-        file=sys.stderr,
-    )
-    sys.exit(1)
 
 
 def check_kernel(

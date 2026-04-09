@@ -29,5 +29,5 @@ def test_local_load(device):
     if device not in relu_supported_devices:
         pytest.skip(f"Device is not one of: {','.join(relu_supported_devices)}")
 
-    package_name, path = install_kernel("kernels-test/relu-tvm-ffi", "v1", repo_type="kernel")
+    package_name, path = install_kernel("kernels-test/relu-tvm-ffi", "v1", repo_type="model")
     get_local_kernel(path.parent.parent, package_name)

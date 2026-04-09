@@ -1,4 +1,5 @@
 {
+  lib,
   buildPythonPackage,
   fetchFromGitHub,
   fetchpatch,
@@ -49,4 +50,11 @@ buildPythonPackage rec {
   ];
 
   pythonRelaxDeps = [ "apache-tvm-ffi" ];
+
+  meta = with lib; {
+    description = "JAX support for tvm-ffi ABI";
+    homepage = "https://github.com/NVIDIA/jax-tvm-ffi";
+    license = licenses.asl20;
+    sourceProvenance = with sourceTypes; [ fromSource ];
+  };
 }

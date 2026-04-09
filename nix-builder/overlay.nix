@@ -73,7 +73,7 @@ in
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
           version = "1.10.0.dev0";
-          src = python-super.fetchFromGitHub {
+          src = final.fetchFromGitHub {
             owner = "huggingface";
             repo = "huggingface_hub";
             rev = "c414cc55dd5ac379d1f213222fc82769b8bd553c";

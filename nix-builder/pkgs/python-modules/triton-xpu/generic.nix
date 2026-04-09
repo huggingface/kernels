@@ -45,5 +45,6 @@ buildPythonPackage {
     description = "Triton XPU backend for PyTorch";
     homepage = "https://github.com/intel/intel-xpu-backend-for-triton";
     license = lib.licenses.mit;
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
   };
 }

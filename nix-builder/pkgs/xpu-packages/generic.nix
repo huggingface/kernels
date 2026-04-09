@@ -84,5 +84,6 @@ stdenv.mkDerivation rec {
     homepage = "https://software.intel.com/oneapi";
     platforms = platforms.linux;
     license = licenses.unfree;
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
   };
 }

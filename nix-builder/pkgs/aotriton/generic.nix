@@ -129,5 +129,9 @@ stdenv.mkDerivation (finalAttrs: {
     homepage = "https://github.com/ROCm/aotriton";
     license = with licenses; [ mit ];
     platforms = platforms.linux;
+    sourceProvenance = with sourceTypes; [
+      fromSource
+      binaryNativeCode # aotriton.images
+    ];
   };
 })

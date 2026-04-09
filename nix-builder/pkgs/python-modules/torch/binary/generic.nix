@@ -364,5 +364,6 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     description = "PyTorch: Tensors and Dynamic neural networks in Python with strong GPU acceleration";
     homepage = "https://pytorch.org/";
     license = lib.licenses.bsd3;
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
   };
 }

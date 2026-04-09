@@ -171,7 +171,9 @@ def install_kernel(
 
     package_name = package_name_from_repo_id(repo_id)
 
-    variants = get_variants(api, repo_id=repo_id, revision=revision, repo_type=repo_type)
+    variants = get_variants(
+        api, repo_id=repo_id, revision=revision, repo_type=repo_type
+    )
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -401,7 +403,9 @@ def has_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    variants = get_variants(api, repo_id=repo_id, revision=revision, repo_type=repo_type)
+    variants = get_variants(
+        api, repo_id=repo_id, revision=revision, repo_type=repo_type
+    )
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -457,7 +461,9 @@ def load_kernel(
 
     api = _get_hf_api()
     repo_type = _resolve_repo_type(repo_id)
-    variants = get_variants(api, repo_id=repo_id, revision=locked_sha, repo_type=repo_type)
+    variants = get_variants(
+        api, repo_id=repo_id, revision=locked_sha, repo_type=repo_type
+    )
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -655,7 +661,7 @@ def _resolve_repo_type(repo_id: str) -> str:
             return "model"
         except RepositoryNotFoundError:
             # If the repository doesn't exist as either "kernel" or "model", we raise an error.
-            raise RepositoryNotFoundError(
+            raise ValueError(
                 f"Repository '{repo_id}' not found as either 'kernel' or 'model' type."
             )
 

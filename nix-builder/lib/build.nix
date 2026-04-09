@@ -253,6 +253,9 @@ rec {
                 ]
                 ++ pythonCheckInputs ps
                 ++ lib.optionals kernelConfig.isTvmFfi [
+                  jax
+                  jax-tvm-ffi
+                  numpy
                   tvm-ffi
                 ]
               ))
@@ -360,6 +363,12 @@ rec {
                 buildSet.torch
                 pip
                 pytest
+              ]
+              ++ lib.optionals kernelConfig.isTvmFfi [
+                jax
+                jax-tvm-ffi
+                numpy
+                tvm-ffi
               ]
             )
           );

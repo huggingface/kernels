@@ -4,6 +4,9 @@ import pytest
 import torch
 
 
+from relu_tvm_ffi._ops import has_jax
+
+
 @pytest.fixture(scope="session")
 def device() -> torch.device:
     if platform.system() == "Darwin":
@@ -14,3 +17,8 @@ def device() -> torch.device:
         return torch.device("cuda")
     else:
         return torch.device("cpu")
+
+
+def pytest_runtest_setup(item):
+    if "jax_only" in item.keywords and not has_jax:
+        pytest.skip("skipping JAX-only test on host without JAX")

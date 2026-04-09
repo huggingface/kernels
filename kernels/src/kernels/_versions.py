@@ -107,15 +107,13 @@ def select_revision_or_version(
     *,
     revision: str | None,
     version: int | str | None,
-) -> tuple[str, str]:
+) -> tuple[str, str | None]:
     """Select a revision, returning (revision, repo_type)."""
     if revision is not None and version is not None:
         raise ValueError("Only one of `revision` or `version` must be specified.")
 
-    from kernels.utils import _resolve_repo_type
-
     if revision is not None:
-        return revision, _resolve_repo_type(repo_id)
+        return revision, None
     elif version is not None:
         ref, repo_type = resolve_version_spec_as_ref(repo_id, version)
         return ref.target_commit, repo_type
@@ -127,4 +125,4 @@ def select_revision_or_version(
         stacklevel=2,
     )
 
-    return "main", _resolve_repo_type(repo_id)
+    return "main", None

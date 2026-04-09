@@ -101,7 +101,7 @@ def test_local_kernel_func(device):
     x = torch.arange(-10, 10).float()
     assert model(x) is x
 
-    package_name, path = install_kernel("kernels-test/flattened-build", "main", repo_type="kernel")
+    package_name, path = install_kernel("kernels-test/flattened-build", "main", repo_type="model")
 
     with use_kernel_mapping(
         {

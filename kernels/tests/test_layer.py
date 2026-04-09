@@ -418,7 +418,7 @@ def test_layer_fallback_works():
 
 def test_local_layer_repo(device):
     # Fetch a kernel to the local cache.
-    package_name, path = install_kernel("kernels-test/backward-marker-test", "main", repo_type="kernel")
+    package_name, path = install_kernel("kernels-test/backward-marker-test", "main", repo_type="model")
 
     linear = TorchLinearWithCounter(32, 32).to(device)
 

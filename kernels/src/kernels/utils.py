@@ -328,6 +328,8 @@ def get_kernel(
         revision=revision,
         backend=backend,
     )
+    if repo_type is None:
+        repo_type = _resolve_repo_type(repo_id)
     package_name, variant_path = install_kernel(
         repo_id,
         revision,
@@ -400,6 +402,8 @@ def has_kernel(
     revision, repo_type = select_revision_or_version(
         repo_id, revision=revision, version=version
     )
+    if repo_type is None:
+        repo_type = _resolve_repo_type(repo_id)
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()

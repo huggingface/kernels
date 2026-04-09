@@ -4,6 +4,7 @@ from typing import Union
 
 from huggingface_hub import HfApi
 from huggingface_hub.dataclasses import strict
+from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import EntryNotFoundError
 
 from kernels.compat import tomllib
@@ -61,7 +62,7 @@ class KernelStatus:
             )
             with open(path, "r") as f:
                 return KernelStatus.from_toml(f.read())
-        except EntryNotFoundError:
+        except (EntryNotFoundError, RepositoryNotFoundError):
             return None
 
 

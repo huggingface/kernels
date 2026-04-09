@@ -65,7 +65,7 @@ class TestResolveStatus:
             'kind = "redirect"\ndestination = "kernels-community/new-kernel"'
         )
 
-        def mock_download(repo_id, filename, revision):
+        def mock_download(repo_id, filename, revision, repo_type):
             if repo_id == "kernels-test/old-kernel":
                 return str(status_file)
             raise EntryNotFoundError("Not found")
@@ -85,7 +85,7 @@ class TestResolveStatus:
             'kind = "redirect"\ndestination = "kernels-community/new-kernel"\nrevision = "v2"'
         )
 
-        def mock_download(repo_id, filename, revision):
+        def mock_download(repo_id, filename, revision, repo_type):
             if repo_id == "kernels-test/old-kernel":
                 return str(status_file)
             raise EntryNotFoundError("Not found")

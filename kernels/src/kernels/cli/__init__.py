@@ -210,24 +210,39 @@ def download_kernels(args):
             file=sys.stderr,
         )
         repo_type = _resolve_repo_type(kernel_lock.repo_id)
+        # Lockfiles don't record repo_type. If the resolved type fails
+        # (e.g. SHA only exists in the model namespace), retry with "model".
+        repo_types = [repo_type] if repo_type == "model" else [repo_type, "model"]
         if args.all_variants:
-            install_kernel_all_variants(
-                kernel_lock.repo_id,
-                kernel_lock.sha,
-                variant_locks=kernel_lock.variants,
-                repo_type=repo_type,
-            )
+            for rt in repo_types:
+                try:
+                    install_kernel_all_variants(
+                        kernel_lock.repo_id,
+                        kernel_lock.sha,
+                        variant_locks=kernel_lock.variants,
+                        repo_type=rt,
+                    )
+                    break
+                except Exception:
+                    if rt == repo_types[-1]:
+                        raise
         else:
-            try:
-                install_kernel(
-                    kernel_lock.repo_id,
-                    kernel_lock.sha,
-                    variant_locks=kernel_lock.variants,
-                    repo_type=repo_type,
-                )
-            except FileNotFoundError as e:
-                print(e, file=sys.stderr)
-                all_successful = False
+            for rt in repo_types:
+                try:
+                    install_kernel(
+                        kernel_lock.repo_id,
+                        kernel_lock.sha,
+                        variant_locks=kernel_lock.variants,
+                        repo_type=rt,
+                    )
+                    break
+                except FileNotFoundError as e:
+                    if rt == repo_types[-1]:
+                        print(e, file=sys.stderr)
+                        all_successful = False
+                except Exception:
+                    if rt == repo_types[-1]:
+                        raise
 
     if not all_successful:
         sys.exit(1)

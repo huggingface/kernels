@@ -106,7 +106,7 @@ def test_noarch_variants(variant_str: str):
 
 def test_get_variants():
     api = HfApi()
-    variants = get_variants(api, repo_id="kernels-community/relu", revision="v1")
+    variants = get_variants(api, repo_id="kernels-community/relu", revision="v1", repo_type="kernel")
     variant_strs = {v.variant_str for v in variants}
     # Superset because new variants may be added in the future.
     assert variant_strs.issuperset(SUPERSET_VARIANT_STRINGS)

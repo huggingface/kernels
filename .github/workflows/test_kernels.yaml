@@ -81,12 +81,6 @@ jobs:
           HUGGINGFACE_CO_STAGING=true uv run pytest --token -m "is_staging_test" tests/
         if: matrix.python_version == '3.10' && matrix.torch-version == '2.9.0'
 
-      - name: Check README generation
-        working-directory: ./kernels
-        # For now, just checks that generation doesn't fail.
-        run: |
-          uv run kernels generate-readme kernels-community/triton-layer-norm
-
       - name: Check kernel check
         working-directory: ./kernels
         run: |

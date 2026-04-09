@@ -132,6 +132,8 @@ def _import_from_path(
 def install_kernel(
     repo_id: str,
     revision: str,
+    *,
+    repo_type: str,
     local_files_only: bool = False,
     backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
@@ -156,6 +158,8 @@ def install_kernel(
             Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        repo_type (`str`):
+            The repository type (``"kernel"`` or ``"model"``).
 
     Returns:
         `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
@@ -163,11 +167,11 @@ def install_kernel(
     api = _get_hf_api(user_agent=user_agent)
 
     if not local_files_only:
-        repo_id, revision = resolve_status(api, repo_id, revision)
+        repo_id, revision = resolve_status(api, repo_id, revision, repo_type)
 
     package_name = package_name_from_repo_id(repo_id)
 
-    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    variants = get_variants(api, repo_id=repo_id, revision=revision, repo_type=repo_type)
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -176,10 +180,12 @@ def install_kernel(
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
+
     repo_path = Path(
         str(
             api.snapshot_download(
                 repo_id,
+                repo_type=repo_type,
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
@@ -235,6 +241,8 @@ def _find_kernel_in_repo_path(
 def install_kernel_all_variants(
     repo_id: str,
     revision: str,
+    *,
+    repo_type: str,
     local_files_only: bool = False,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
@@ -243,6 +251,7 @@ def install_kernel_all_variants(
         str(
             api.snapshot_download(
                 repo_id,
+                repo_type=repo_type,
                 allow_patterns="build/*",
                 cache_dir=CACHE_DIR,
                 revision=revision,
@@ -318,7 +327,10 @@ def get_kernel(
         backend=backend,
     )
     package_name, variant_path = install_kernel(
-        repo_id, revision=revision, backend=backend, user_agent=user_agent
+        repo_id,
+        revision,
+        backend=backend,
+        user_agent=user_agent,
     )
     return _import_from_path(package_name, variant_path, _repo_infos=repo_infos)
 
@@ -383,11 +395,13 @@ def has_kernel(
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
     """
-    revision = select_revision_or_version(repo_id, revision=revision, version=version)
+    revision, repo_type = select_revision_or_version(
+        repo_id, revision=revision, version=version
+    )
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    variants = get_variants(api, repo_id=repo_id, revision=revision, repo_type=repo_type)
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -396,6 +410,7 @@ def has_kernel(
     for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
         if api.file_exists(
             repo_id,
+            repo_type=repo_type,
             revision=revision,
             filename=f"build/{variant.variant_str}/{init_file}",
         ):
@@ -441,7 +456,8 @@ def load_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
+    repo_type = _resolve_repo_type(repo_id)
+    variants = get_variants(api, repo_id=repo_id, revision=locked_sha, repo_type=repo_type)
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -454,6 +470,7 @@ def load_kernel(
         str(
             api.snapshot_download(
                 repo_id,
+                repo_type=repo_type,
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=locked_sha,
@@ -494,8 +511,9 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
+    repo_type = _resolve_repo_type(repo_id)
     package_name, variant_path = install_kernel(
-        repo_id, locked_sha, local_files_only=local_files_only
+        repo_id, locked_sha, local_files_only=local_files_only, repo_type=repo_type
     )
 
     return _import_from_path(package_name, variant_path)
@@ -612,6 +630,34 @@ def _platform() -> str:
         cpu = "x86_64" if cpu == "AMD64" else cpu
 
     return f"{cpu}-{os}"
+
+
+def _resolve_repo_type(repo_id: str) -> str:
+    """Determine the repo type for *repo_id*.
+
+    Tries ``"kernel"`` first, falls back to ``"model"``."""
+    from huggingface_hub.errors import RepositoryNotFoundError
+
+    api = _get_hf_api()
+    try:
+        api.repo_info(repo_id=repo_id, repo_type="kernel")
+        return "kernel"
+    except RepositoryNotFoundError:
+        try:
+            api.repo_info(repo_id=repo_id, repo_type="model")
+            import warnings
+
+            warnings.warn(
+                "Repository type 'model' is deprecated for kernels, please change it to 'kernel' in the future.",
+                DeprecationWarning,
+                stacklevel=1,
+            )
+            return "model"
+        except RepositoryNotFoundError:
+            # If the repository doesn't exist as either "kernel" or "model", we raise an error.
+            raise RepositoryNotFoundError(
+                f"Repository '{repo_id}' not found as either 'kernel' or 'model' type."
+            )
 
 
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:

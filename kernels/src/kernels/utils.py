@@ -662,10 +662,8 @@ def _resolve_repo_type(repo_id: str) -> str:
             )
             repo_type = "model"
 
-        except RepositoryNotFoundError as exc:
-            raise ValueError(
-                f"Repository '{repo_id}' is neither a 'kernel' nor a 'model' repo."
-            ) from exc
+        except RepositoryNotFoundError:
+            raise
 
     return repo_type
 

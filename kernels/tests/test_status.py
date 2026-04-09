@@ -53,7 +53,7 @@ class TestResolveStatus:
         mock_api = MagicMock()
         mock_api.hf_hub_download.side_effect = EntryNotFoundError("Not found")
 
-        repo_id, revision = resolve_status(mock_api, "kernels-test/kernel", "main")
+        repo_id, revision = resolve_status(mock_api, "kernels-test/kernel", "main", "kernel")
         assert repo_id == "kernels-test/kernel"
         assert revision == "main"
 
@@ -73,7 +73,7 @@ class TestResolveStatus:
         mock_api = MagicMock()
         mock_api.hf_hub_download.side_effect = mock_download
 
-        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main")
+        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main", "kernel")
         assert repo_id == "kernels-community/new-kernel"
         assert revision == "main"
 
@@ -93,6 +93,6 @@ class TestResolveStatus:
         mock_api = MagicMock()
         mock_api.hf_hub_download.side_effect = mock_download
 
-        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main")
+        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main", "kernel")
         assert repo_id == "kernels-community/new-kernel"
         assert revision == "v2"

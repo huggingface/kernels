@@ -522,8 +522,8 @@ wheels = [
 
 [[package]]
 name = "huggingface-hub"
-version = "1.10.0.dev0"
-source = { git = "https://github.com/huggingface/huggingface_hub.git?rev=c414cc5#c414cc55dd5ac379d1f213222fc82769b8bd553c" }
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
     { name = "fsspec" },
@@ -534,6 +534,10 @@ dependencies = [
     { name = "tqdm" },
     { name = "typer" },
     { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/14/6a5fb1eafd6a2a44a821681b3781f349d249db09b615cf2d23cc3d580e4a/huggingface_hub-1.10.0.tar.gz", hash = "sha256:f803c3aae2dc98515a4341a0ce310b4e6b96ac557bb4b5fb4a77bcf525026d5b", size = 757492, upload-time = "2026-04-09T13:00:55.788Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/f5/7b6362580f2bac447a816352b2c53a2f4461683ffea2862a5f14b44b3b14/huggingface_hub-1.10.0-py3-none-any.whl", hash = "sha256:012a6a9177e861147b63d11da1aed58131fb7cbf7e3cd64ad6f154cb400f00c9", size = 641856, upload-time = "2026-04-09T13:00:54.243Z" },
 ]
 
 [[package]]
@@ -687,7 +691,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "hf-doc-builder", marker = "extra == 'docs'" },
-    { name = "huggingface-hub", git = "https://github.com/huggingface/huggingface_hub.git?rev=c414cc5" },
+    { name = "huggingface-hub", specifier = ">=1.10.0" },
     { name = "kernel-abi-check", marker = "extra == 'abi-check'", specifier = ">=0.6.2,<0.7.0" },
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.7.0" },
     { name = "numpy", marker = "extra == 'benchmark'", specifier = ">=2.0.2" },

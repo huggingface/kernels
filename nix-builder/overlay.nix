@@ -6,7 +6,7 @@ in
 {
   # Use MKL for BLAS/LAPACK on x86_64.
   blas = if useMKL then prev.blas.override { blasProvider = prev.mkl; } else prev.blas;
-  lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.blas;
+  lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.lapack;
 
   kernel-builder = prev.callPackage ./pkgs/kernel-builder { };
 

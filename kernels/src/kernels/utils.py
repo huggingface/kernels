@@ -608,17 +608,17 @@ def _resolve_repo_type(repo_id: str) -> str:
 
     Tries ``"kernel"`` first, falls back to ``"model"``."""
     import warnings
-    from huggingface_hub.errors import RepositoryNotFoundError
+    from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
 
     api = _get_hf_api()
 
     try:
-        api.list_repo_refs(repo_id=repo_id, repo_type="kernel")
+        api.repo_info(repo_id=repo_id, repo_type="kernel")
         repo_type = "kernel"
 
-    except RepositoryNotFoundError:
+    except (RepositoryNotFoundError, HfHubHTTPError):
         try:
-            api.list_repo_refs(repo_id=repo_id, repo_type="model")
+            api.repo_info(repo_id=repo_id, repo_type="model")
             warnings.warn(
                 f"Repository '{repo_id}' uses deprecated repo type 'model'; "
                 "use 'kernel' instead.",

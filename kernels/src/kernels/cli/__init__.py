@@ -209,40 +209,25 @@ def download_kernels(args):
             f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
             file=sys.stderr,
         )
-        repo_type = _resolve_repo_type(kernel_lock.repo_id)
-        # Lockfiles don't record repo_type. If the resolved type fails
-        # (e.g. SHA only exists in the model namespace), retry with "model".
-        repo_types = [repo_type] if repo_type == "model" else [repo_type, "model"]
+        repo_type = _resolve_repo_type(kernel_lock.repo_id, revision=kernel_lock.sha)
         if args.all_variants:
-            for rt in repo_types:
-                try:
-                    install_kernel_all_variants(
-                        kernel_lock.repo_id,
-                        kernel_lock.sha,
-                        variant_locks=kernel_lock.variants,
-                        repo_type=rt,
-                    )
-                    break
-                except Exception:
-                    if rt == repo_types[-1]:
-                        raise
+            install_kernel_all_variants(
+                kernel_lock.repo_id,
+                kernel_lock.sha,
+                variant_locks=kernel_lock.variants,
+                repo_type=repo_type,
+            )
         else:
-            for rt in repo_types:
-                try:
-                    install_kernel(
-                        kernel_lock.repo_id,
-                        kernel_lock.sha,
-                        variant_locks=kernel_lock.variants,
-                        repo_type=rt,
-                    )
-                    break
-                except FileNotFoundError as e:
-                    if rt == repo_types[-1]:
-                        print(e, file=sys.stderr)
-                        all_successful = False
-                except Exception:
-                    if rt == repo_types[-1]:
-                        raise
+            try:
+                install_kernel(
+                    kernel_lock.repo_id,
+                    kernel_lock.sha,
+                    variant_locks=kernel_lock.variants,
+                    repo_type=repo_type,
+                )
+            except FileNotFoundError as e:
+                print(e, file=sys.stderr)
+                all_successful = False
 
     if not all_successful:
         sys.exit(1)

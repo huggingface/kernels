@@ -464,7 +464,7 @@ def load_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    repo_type = _resolve_repo_type(repo_id)
+    repo_type = _resolve_repo_type(repo_id, revision=locked_sha)
     variants = get_variants(
         api, repo_id=repo_id, revision=locked_sha, repo_type=repo_type
     )
@@ -521,7 +521,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
-    repo_type = _resolve_repo_type(repo_id)
+    repo_type = _resolve_repo_type(repo_id, revision=locked_sha)
     package_name, variant_path = install_kernel(
         repo_id, locked_sha, local_files_only=local_files_only, repo_type=repo_type
     )
@@ -642,34 +642,34 @@ def _platform() -> str:
     return f"{cpu}-{os}"
 
 
-def _resolve_repo_type(repo_id: str) -> str:
+def _resolve_repo_type(repo_id: str, revision: str | None = None) -> str:
     """Determine the repo type for *repo_id*.
 
-    Tries ``"kernel"`` first, falls back to ``"model"``."""
+    Tries ``"kernel"`` first, falls back to ``"model"``.
+    When *revision* is given, also verifies the revision exists in
+    that namespace — a repo may exist as both types with different commits."""
     import warnings
     from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
 
     api = _get_hf_api()
 
     try:
-        api.repo_info(repo_id=repo_id, repo_type="kernel")
-        repo_type = "kernel"
-
+        api.repo_info(repo_id=repo_id, repo_type="kernel", revision=revision)
+        return "kernel"
     except (RepositoryNotFoundError, HfHubHTTPError):
-        try:
-            api.repo_info(repo_id=repo_id, repo_type="model")
-            warnings.warn(
-                f"Repository '{repo_id}' uses deprecated repo type 'model'; "
-                "use 'kernel' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            repo_type = "model"
+        pass
 
-        except RepositoryNotFoundError:
-            raise
-
-    return repo_type
+    try:
+        api.repo_info(repo_id=repo_id, repo_type="model", revision=revision)
+        warnings.warn(
+            f"Repository '{repo_id}' uses deprecated repo type 'model'; "
+            "use 'kernel' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return "model"
+    except RepositoryNotFoundError:
+        raise
 
 
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:

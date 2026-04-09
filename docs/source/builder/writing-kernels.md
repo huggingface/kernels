@@ -73,63 +73,104 @@ kernels.
 If you use a different provider, the Terraform bridges should be
 similar and straightforward to modify.
 
+## Starting a new kernel
+
+The easiest way to start a new kernel is by using the `init` subcommand
+of `kernel-builder`. This creates a minimal, compilable kernel:
+
+```bash
+$ kernel-builder init --name myorg/mykernel
+Initialized `myorg/mykernel` at /home/daniel/git/kernels/examples/kernels/mykernel
+```
+
+This creates a kernel named `mykernel` in the directory `mykernel`. The
+kernel is configured to upload to the `myorg/mykernel` Hub
+repository when an upload command is used.
+
+By default, the `init` subcommand creates a CUDA kernel. You can specify
+different or additional backends with the `--backends` option:
+
+```bash
+$ kernel-builder init --name myorg/mykernel --backends cuda xpu
+Initialized `myorg/mykernel` at /home/daniel/git/kernels/examples/kernels/mykernel
+```
+
+If you want to create a kernel for all supported backends, you can
+use `--backends all`.
+
 ## Kernel project layout
 
 Kernel projects follow this general directory layout:
 
 ```text
-relu
+mykernel
+├── benchmarks
+│   └── benchmark.py
 ├── build.toml
-├── relu_kernel
-│   └── relu.cu
+├── CARD.md
+├── example.py
+├── flake.nix
+├── mykernel_cuda
+│   └── mykernel.cu
+├── tests
+│   ├── __init__.py
+│   └── test_mykernel.py
 └── torch-ext
-    └── torch_binding.cpp
-    └── torch_binding.h
-    └── relu
-        └── __init__.py
-└── tests
-    └── __init__.py
-    └── test_relu.py
+├── mykernel
+│   └── __init__.py
+├── torch_binding.cpp
+└── torch_binding.h
 ```
 
 In this example we can find:
 
 - The build configuration in `build.toml`.
-- One or more top-level directories containing kernels (`relu_kernel`).
+- One or more top-level directories containing kernels (`mykernel_cuda`).
 - The `torch-ext` directory, which contains:
   - `torch_binding.h`: contains declarations for kernel entry points
     (from `kernel_a` and `kernel_b`).
   - `torch_binding.cpp`: registers the entry points as Torch ops.
-  - `torch_ext/relu`: contains any Python wrapping the kernel needs. At the
+  - `torch_ext/mykernel`: contains any Python wrapping the kernel needs. At the
     bare minimum, it should contain an `__init__.py` file.
 - Kernel tests in the directory `tests`.
+- Benchmarks in the directory `benchmarks`.
+- A kernel card template in `CARD.md`.
+- The Nix flake configuration in `flake.nix`.
+- An example script that uses the kernel in `example.py`.
 
 ## `build.toml`
 
 `build.toml` tells `kernel-builder` what to build and how. It looks as
-follows for the `relu` kernel:
+follows for the `mykernel` kernel:
 
 ```toml
 [general]
-name = "relu"
+backends = [
+  "cuda",
+]
+name = "mykernel"
+version = 1
+
+[general.hub]
+repo-id = "myorg/mykernel"
 
 [torch]
 src = [
   "torch-ext/torch_binding.cpp",
-  "torch-ext/torch_binding.h"
+  "torch-ext/torch_binding.h",
 ]
 
-[kernel.relu]
+[kernel.mykernel]
 backend = "cuda"
-src = [
-  "relu_kernel/relu.cu",
-]
-depends = [ "torch" ]
+depends = ["torch"]
+src = ["mykernel_cuda/mykernel.cu"]
 # If the kernel is only supported on specific capabilities, set the
 # cuda-capabilities option:
 #
 # cuda-capabilities = [ "9.0", "10.0", "12.0" ]
 ```
+
+The following sections enumerate all supported options for `build.toml`.
 
 ### `general`
 
@@ -144,6 +185,11 @@ depends = [ "torch" ]
 - `python-depends` (**experimental**): a list of additional Python dependencies
   that the kernel requires. The only supported dependencies are `einops`
   and `nvidia-cutlass-dsl`.
+
+### `general.hub`
+
+- `repo-id`: the Hub repository to upload the kernel to when the `upload` or
+  `build-and-upload` subcommands of `kernel-builder` are used.
 
 ### `general.cuda`
 
@@ -227,52 +273,15 @@ Torch bindings are defined in C++, kernels commonly use two files:
 - `torch_binding.h` containing function declarations.
 - `torch_binding.cpp` registering the functions as Torch ops.
 
-For instance, the `relu` kernel has the following declaration in
-`torch_binding.h`:
+For instance, the `mykernel` kernel discussed above has the following
+declaration in `torch_binding.h`:
 
 ```cpp
 #pragma once
 
 #include <torch/torch.h>
 
-void relu(torch::Tensor &out, torch::Tensor const &input);
-```
-
-This is a declaration for the actual kernel, which is in `relu_kernel/relu.cu`:
-
-```cpp
-#include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
-#include <torch/all.h>
-
-#include <cmath>
-
-__global__ void relu_kernel(float *__restrict__ out,
-                            float const *__restrict__ input,
-                            const int d) {
-  const int64_t token_idx = blockIdx.x;
-  for (int64_t idx = threadIdx.x; idx < d; idx += blockDim.x) {
-    auto x = input[token_idx * d + idx];
-    out[token_idx * d + idx] = x > 0.0f ? x : 0.0f;
-  }
-}
-
-void relu(torch::Tensor &out,
-          torch::Tensor const &input)
-{
-  TORCH_CHECK(input.scalar_type() == at::ScalarType::Float &&
-                  input.scalar_type() == at::ScalarType::Float,
-              "relu_kernel only supports float32");
-
-  int d = input.size(-1);
-  int64_t num_tokens = input.numel() / d;
-  dim3 grid(num_tokens);
-  dim3 block(std::min(d, 1024));
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(input));
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  relu_kernel<<<grid, block, 0, stream>>>(out.data_ptr<float>(),
-                                          input.data_ptr<float>(), d);
-}
+void mykernel(torch::Tensor &out, torch::Tensor const &input);
 ```
 
 This function is then registered as a Torch op in `torch_binding.cpp`:
@@ -284,8 +293,10 @@ This function is then registered as a Torch op in `torch_binding.cpp`:
 #include "torch_binding.h"
 
 TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
-  ops.def("relu(Tensor! out, Tensor input) -> ()");
-  ops.impl("relu", torch::kCUDA, &relu);
+  ops.def("mykernel(Tensor! out, Tensor input) -> ()");
+#if defined(CUDA_KERNEL) || defined(ROCM_KERNEL)
+  ops.impl("mykernel", torch::kCUDA, &mykernel);
+#endif
 }
 
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME)
@@ -313,13 +324,16 @@ refer to the correct `torch.ops` module. For example:
 
 ```python
 from typing import Optional
+
 import torch
+
 from ._ops import ops
 
-def relu(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor:
+
+def mykernel(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor:
     if out is None:
         out = torch.empty_like(x)
-    ops.relu(out, x)
+    ops.mykernel(out, x)
     return out
 ```
 
@@ -334,7 +348,7 @@ PyTest marker that can be used as follows:
 import pytest
 
 @pytest.mark.kernels_ci
-def test_relu():
+def test_mykernel():
   ...
 ```
 
@@ -366,7 +380,7 @@ information from its `build.toml` and metadata. This system card provides a
 reasonable starting point and is meant to be edited afterward by the kernel
 developer.
 
-The template card is generated as a part of [`kernels init`](../cli-init.md)
+The template card is generated as a part of `kernel-builder init`
 command and is serialized in the root directory of the kernel.
 
 The card will be filled automatically by the builder when using the

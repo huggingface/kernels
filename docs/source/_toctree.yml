@@ -25,8 +25,8 @@
 - sections:
     - local: builder/writing-kernels
       title: Writing Kernels
-    - local: builder/nix
-      title: Building with Nix
+    - local: builder/build
+      title: Building kernels
     - local: builder/local-dev
       title: Local Development
     - local: kernel-requirements

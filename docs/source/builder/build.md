@@ -1,9 +1,13 @@
 # Using the kernel builder with Nix
 
-> [!NOTE] 
+## Installation
+
+> [!NOTE]
 > The [install script](writing-kernels.md#quick-install) automates
 > the Nix and kernel-builder setup described below. Use these manual
 > instructions if you prefer step-by-step control.
+
+### Installing Nix
 
 The kernel builder uses Nix for building kernels. You can build or
 run the kernels directly if you have Nix installed on your system.
@@ -13,16 +17,7 @@ We recommend installing Nix in the following way:
 - macOS: use the [Determinate Nix installer](https://docs.determinate.systems/determinate-nix/).
   In addition, Xcode 16.x is currently required to build kernels.
 
-## Getting started
-
-The easiest way get all the Nix functionality is by putting a
-`flake.nix` in your kernel repository. To do so, copy
-[`examples/relu/flake.nix`](https://github.com/huggingface/kernels/blob/main/examples/kernels/relu/flake.nix) into the
-same directory as your `build.toml` file. Then run `nix flake update`.
-This generates a `flake.lock` file that pins the kernel builder
-and _all_ its transitive dependencies. Commit both `flake.nix`
-and `flake.lock` to your repository, this will ensure that kernel
-builds are reproducible.
+### Using the Hugging Face binary cache
 
 Since the kernel builder depends on many packages (e.g. every supported
 PyTorch version), it is recommended to enable the huggingface cache
@@ -42,22 +37,37 @@ Or run it once without installing cachix permanently:
 nix run nixpkgs#cachix -- use huggingface
 ```
 
+### GPU library configuration
+
 The kernel builder also provides Nix development shells with all Torch
 and CUDA/ROCm dependencies needed to develop kernels (see below). If
 you want to test your kernels inside a Nix development shell and you
 are not using NixOS, [make sure that the CUDA driver is visible](https://danieldk.eu/Nix-CUDA-on-non-NixOS-systems#make-runopengl-driverlib-and-symlink-the-driver-library) to Torch.
 
-## Building kernels with Nix
+## Getting started
 
-A kernel that has a `flake.nix` file can be built with the `build-and-copy`
-command. For example:
+The easiest way to get all the Nix functionality is by putting a
+`flake.nix` in your kernel repository. To do so, copy
+[`examples/relu/flake.nix`](https://github.com/huggingface/kernels/blob/main/examples/kernels/relu/flake.nix) into the
+same directory as your `build.toml` file. Then run `nix flake update`.
+This generates a `flake.lock` file that pins the kernel builder
+and _all_ its transitive dependencies. Commit both `flake.nix`
+and `flake.lock` to your repository, this will ensure that kernel
+builds are reproducible.
+
+## Building a kernel
+
+A kernel can be built with the `kernel-builder build-and-copy` command.
+For example:
 
 ```bash
 cd examples/relu
-nix run .#build-and-copy -L
+kernel-builder build-and-copy -L
 ```
 
-The compiled kernel will then be in the local `build/` directory.
+The `-L` option prints out build logs in the terminal, which can be handy
+for monitoring the build. The compiled kernel will then be in the local
+`build/` directory.
 
 ## Shell for local development
 
@@ -66,43 +76,69 @@ all required dependencies are available, as well as `kernel-builder` for generat
 project files. For example:
 
 ```bash
-$ nix develop
+$ kernel-builder devshell
+# A devshell is opened in which you can run the following commands:
 $ kernel-builder create-pyproject
 $ cmake -B build-ext
 $ cmake --build build-ext
 ```
 
 If you want to test the kernel as a Python package, you can do so.
-`nix develop` will automatically create a virtual environment in the
-`.venv` and activate it. You can install the kernel as a regular
+`kernel-builder devshell` will automatically create a virtual environment in
+the `.venv` and activate it. You can install the kernel as a regular
 Python package in this virtual environment:
 
 ```bash
-$ nix develop
+$ kernel-builder devshell
 $ kernel-builder create-pyproject
 $ pip install --no-build-isolation -e .
 ```
 
 Development shells are available for every build configuration. For
-instance, you can get a Torch 2.7 development shell for ROCm extensions
+instance, you can get a Torch 2.11 development shell for ROCm kernels
 using:
 
 ```bash
 $ rm -rf .venv  # Remove existing venv if any.
-$ nix develop .#devShells.torch29-cxx11-rocm64-x86_64-linux
+$ kernel-builder devshell --variant torch211-cxx11-rocm71-x86_64-linux
+```
+
+You can list the variants that the kernel supports with the `list-variants`
+subcommand:
+
+```bash
+$ kernel-builder list-variants
+torch29-cxx11-cu129-x86_64-linux
+torch210-cxx11-cu126-x86_64-linux
+torch210-cxx11-cu128-x86_64-linux
+torch210-cxx11-cu130-x86_64-linux
+torch210-cxx11-rocm70-x86_64-linux
+torch210-cxx11-rocm71-x86_64-linux
+torch210-cxx11-cpu-x86_64-linux
+torch210-cxx11-xpu20253-x86_64-linux
+torch211-cxx11-cpu-x86_64-linux
+torch211-cxx11-cu126-x86_64-linux
+torch211-cxx11-cu128-x86_64-linux
+torch211-cxx11-cu130-x86_64-linux
+torch211-cxx11-rocm71-x86_64-linux
+torch211-cxx11-rocm72-x86_64-linux
+torch211-cxx11-xpu20253-x86_64-linux
 ```
 
 ## Shell for testing a kernel
 
-You can also start a development shell. This will give you a Python interpreter
+You can also start a test shell. This will give you a Python interpreter
 with the kernel in Python's search path. This makes it more convenient to run
 tests:
 
 ```bash
 cd examples/relu
-nix develop -L .#test
+kernel-builder testshell
 python -m pytest tests
 ```
+
+`testshell` also supports the `--variant` option, so you can test a particular
+kernel variant.
 
 ## Adding test dependencies to development shells
 
@@ -127,7 +163,7 @@ the kernel's `flake.nix` to use the `pythonCheckInputs` option:
       path = ./.;
 
       # The einops and numpy test dependencies are added here:
-      pythonCheckInputs = pkgs: with pkgs; [ einops numpy ];
+      pythonCheckInputs = pkgs: with pkgs; [ numpy ];
     };
 }
 ```
@@ -136,6 +172,33 @@ The available packages can be found on [search.nixos.org](https://search.nixos.o
 
 Keep in mind that these additional dependencies will only be available to
 the Nix shells, not the final kernel uploaded to the Hub.
+
+## Uploading your kernel to the Hub
+
+Finally, when you are ready to make a kernel release, you can build and
+upload a kernel to the Hub:
+
+```bash
+$ cd mykernel
+$ kernel-builder build-and-upload
+```
+
+The repository to upload to is determined by the `repo-id` and `version`
+fields in `build.toml`. For example, with the following `build.toml`, the
+kernel will be uploaded to the repository `kernels-community/flash-attn4`
+in the `v1` version branch:
+
+```toml
+[general]
+# ...
+version = 1
+
+[general.hub]
+repo-id = "kernels-community/flash-attn4"
+```
+
+See [Writing Kernels](writing-kernels.md) for more details on the `build.toml`
+format.
 
 ## Skipping the `get_kernel` check
 

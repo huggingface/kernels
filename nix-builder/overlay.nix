@@ -72,16 +72,16 @@ in
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.10.0.dev0";
-          src = final.fetchFromGitHub {
-            owner = "huggingface";
-            repo = "huggingface_hub";
-            rev = "c414cc55dd5ac379d1f213222fc82769b8bd553c";
-            hash = "sha256-+JBtUUeh2j1aLbNa1nQ4JQRZfpiiXYsPzmpsB6OS6O4=";
+          version = "1.10.0";
+          src = python-super.fetchPypi {
+            pname = "huggingface_hub";
+            inherit version;
+            hash = "sha256-+APDquLcmFFaQ0GgzjELTmuWrFV7tLX7Sne89SUCbVs=";
           };
           dependencies =
             (prevAttrs.dependencies or [ ])
             ++ (with python-self; [
+              hf-xet
               httpx
               shellingham
               typer

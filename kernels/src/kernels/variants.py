@@ -339,9 +339,7 @@ def resolve_variant(
     """Return the best matching variant for the current system."""
     resolved = resolve_variants(variants, backend)
 
-    # TODO: avoid hardcoded for debugging
-    # return resolved[0] if resolved else None
-    return variants[0] if variants else None
+    return resolved[0] if resolved else None
 
 
 def resolve_variants(

@@ -66,7 +66,8 @@ def main():
     versions_parser.set_defaults(func=kernel_versions)
 
     upload_parser = subparsers.add_parser(
-        "upload", help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead."
+        "upload",
+        help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead.",
     )
     upload_parser.add_argument(
         "kernel_dir",

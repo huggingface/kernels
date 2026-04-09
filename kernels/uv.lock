@@ -523,7 +523,7 @@ wheels = [
 [[package]]
 name = "huggingface-hub"
 version = "1.10.0.dev0"
-source = { git = "https://github.com/huggingface/huggingface_hub.git#fa1718dab3897902ae35a37f65c2c5005d7cdaea" }
+source = { git = "https://github.com/huggingface/huggingface_hub.git?rev=c414cc5#c414cc55dd5ac379d1f213222fc82769b8bd553c" }
 dependencies = [
     { name = "filelock" },
     { name = "fsspec" },
@@ -687,7 +687,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "hf-doc-builder", marker = "extra == 'docs'" },
-    { name = "huggingface-hub", git = "https://github.com/huggingface/huggingface_hub.git" },
+    { name = "huggingface-hub", git = "https://github.com/huggingface/huggingface_hub.git?rev=c414cc5" },
     { name = "kernel-abi-check", marker = "extra == 'abi-check'", specifier = ">=0.6.2,<0.7.0" },
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.7.0" },
     { name = "numpy", marker = "extra == 'benchmark'", specifier = ">=2.0.2" },

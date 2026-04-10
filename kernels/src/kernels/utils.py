@@ -296,6 +296,9 @@ def get_kernel(
             The backend will be detected automatically if not provided.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        reload (`bool`, *optional*, defaults to `False`):
+            Whether to force reloading the kernel in case it is already loaded,
+            given: `repo_id`, (possibly inferred) `revision` and `backend`
 
     Returns:
         `ModuleType`: The imported kernel module.

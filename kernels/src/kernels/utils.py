@@ -37,7 +37,6 @@ KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 class RepoInfos(NamedTuple):
     repo_id: str
     revision: str | None
-    version: int | str | None
     backend: str | None
 
 
@@ -52,9 +51,9 @@ class LoadedKernel(NamedTuple):
 _loaded_kernels: dict[str, LoadedKernel] = {}
 
 
-def get_loaded_kernels() -> dict[str, LoadedKernel]:
-    """Returns a copy of the loaded kernels registry (`module_name -> LoadedKernel` mapping)."""
-    return _loaded_kernels.copy()
+def get_loaded_kernels() -> list[LoadedKernel]:
+    """Returns a copy of the loaded kernels registry (see `kernels.utils.LoadedKernel` NamedTuple)."""
+    return list(_loaded_kernels.values())
 
 
 def _get_cache_dir() -> str | None:
@@ -276,6 +275,7 @@ def get_kernel(
     version: int | str | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
+    reload: bool = False,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -316,14 +316,18 @@ def get_kernel(
         return get_local_kernel(override, package_name_from_repo_id(repo_id))
 
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-    package_name, variant_path = install_kernel(
-        repo_id, revision=revision, backend=backend, user_agent=user_agent
-    )
     repo_infos = RepoInfos(
         repo_id=repo_id,
         revision=revision,
-        version=version,
         backend=backend,
+    )
+    if not reload:
+        for loaded_kernel in get_loaded_kernels():
+            if loaded_kernel.repo_infos == repo_infos:
+                if (module := sys.modules.get(loaded_kernel.module_name)) is not None:
+                    return module
+    package_name, variant_path = install_kernel(
+        repo_id, revision=revision, backend=backend, user_agent=user_agent
     )
     return _import_from_path(package_name, variant_path, _repo_infos=repo_infos)
 

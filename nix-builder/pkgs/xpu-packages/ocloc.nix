@@ -79,4 +79,12 @@ stdenv.mkDerivation (finalAttrs: {
   preInstallCheck = ''
     patchelf --add-rpath ${placeholder "out"}/lib $out/lib/*.so*
   '';
+
+  meta = with lib; {
+    description = "Intel OpenCL Offline Compiler";
+    homepage = "https://github.com/intel/compute-runtime";
+    platforms = platforms.linux;
+    license = licenses.mit;
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+  };
 })

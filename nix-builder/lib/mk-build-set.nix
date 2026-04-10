@@ -34,7 +34,7 @@ let
   };
 
   overlayForXpuVersion = xpuVersion: self: super: {
-    xpuPackages = super."xpuPackages_${flattenVersion xpuVersion}";
+    xpuPackages = super."xpuPackages_${lib.replaceStrings [ "." ] [ "_" ] xpuVersion}";
   };
 
   backendConfig = {
@@ -81,7 +81,7 @@ buildConfig@{
   system,
   bundleBuild ? false,
   sourceBuild ? false,
-  tvmFfi ? false,
+  tvmFfiVersion ? null,
 }:
 let
   backendOverlay =
@@ -113,6 +113,10 @@ let
   torch = pkgs.python3.pkgs.torch;
 
   extension = pkgs.callPackage ./extension { inherit torch; };
+
+  variants = import ./variants {
+    inherit lib buildConfig;
+  };
 in
 {
   inherit
@@ -121,5 +125,6 @@ in
     pkgs
     torch
     bundleBuild
+    variants
     ;
 }

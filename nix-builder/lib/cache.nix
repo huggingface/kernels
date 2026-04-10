@@ -22,6 +22,8 @@
           ++ allOutputs kernel-builder
           ++ allOutputs kernel-abi-check
           ++ allOutputs python3.pkgs.einops
+          ++ allOutputs python3.pkgs.jax
+          ++ allOutputs python3.pkgs.jax-tvm-ffi
           ++ allOutputs python3.pkgs.kernels
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)
@@ -30,11 +32,11 @@
             allOutputs python3.pkgs.nvidia-cutlass-dsl
           )
         );
-      buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.torch.variant (buildSetOutputs buildSet);
+      buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.variants.torch.arch (buildSetOutputs buildSet);
     in
     pkgs.linkFarm "packages-for-cache" (
       map (buildSet: {
-        name = buildSet.torch.variant;
+        name = buildSet.variants.torch.arch;
         path = buildSetLinkFarm buildSet;
       }) buildSets
     );

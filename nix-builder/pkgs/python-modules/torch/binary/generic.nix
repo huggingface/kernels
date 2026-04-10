@@ -39,6 +39,7 @@
   sympy,
   triton,
   triton-cuda,
+  triton-xpu,
   typing-extensions,
 
   url,
@@ -52,7 +53,7 @@ let
     if cudaSupport then
       triton-cuda
     else if xpuSupport then
-      python.pkgs.triton-xpu_2_9
+      triton-xpu
     else
       triton;
 
@@ -69,9 +70,8 @@ let
   inherit (archs) supportedTorchRocmArchs;
 
   aotritonVersions = with rocmPackages; {
-    "2.8" = aotriton_0_10;
-    "2.9" = aotriton_0_11;
     "2.10" = aotriton_0_11_1;
+    "2.11" = aotriton_0_11_2;
   };
 
   aotriton =
@@ -125,12 +125,10 @@ let
   };
 
 in
-buildPythonPackage {
+buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pname = "torch";
   inherit version;
   format = "wheel";
-
-  stdenv = effectiveStdenv;
 
   outputs = [
     "out" # output standard python package
@@ -142,6 +140,9 @@ buildPythonPackage {
   src = fetchurl {
     inherit url hash;
   };
+
+  # We use our own pythonWheelDepsHook.
+  dontCheckRuntimeDeps = true;
 
   nativeBuildInputs = [
     pythonRelaxWheelDepsHook
@@ -229,25 +230,46 @@ buildPythonPackage {
   # dependencies, but we don't need them or provide them because we burn
   # the Nix store paths of the framework into the Torch libraries..
   pythonRemoveWheelDeps =
-    lib.optionals cudaSupport [
-      "nvidia-cuda-runtime"
-      "nvidia-cuda-nvrtc"
-      "nvidia-cuda-cupti"
-      "nvidia-cudnn"
-      "nvidia-cublas"
-      "nvidia-cufft"
-      "nvidia-curand"
-      "nvidia-cusolver"
-      "nvidia-cusparse"
-      "nvidia-cusparselt"
-      "nvidia-nccl"
-      "nvidia-nvshmem"
-      "nvidia-nvtx"
-      "nvidia-nvjitlink"
-      "nvidia-cufile"
-    ]
+    # Some CUDA dependencies have a version suffix and some don't. Let's
+    # be greedy, autoPatchelfHook will catch missing library dependencies
+    # for us.
+    lib.optionals cudaSupport (
+      builtins.map ({ pkg, suffix }: "${pkg}${suffix}") (
+        lib.cartesianProduct {
+          pkg = [
+            "cuda-toolkit"
+            "nvidia-cuda-runtime"
+            "nvidia-cuda-nvrtc"
+            "nvidia-cuda-cupti"
+            "nvidia-cudnn"
+            "nvidia-cudnn"
+            "nvidia-cublas"
+            "nvidia-cufft"
+            "nvidia-curand"
+            "nvidia-cusolver"
+            "nvidia-cusparse"
+            "nvidia-cusparselt"
+            "nvidia-cusparselt"
+            "nvidia-nccl"
+            "nvidia-nccl"
+            "nvidia-nvshmem"
+            "nvidia-nvshmem"
+            "nvidia-nvtx"
+            "nvidia-nvjitlink"
+            "nvidia-cufile"
+          ];
+          suffix = [
+            ""
+            "-cu12"
+            "-cu13"
+          ];
+        }
+      )
+    )
     ++ lib.optionals rocmSupport [
-      "pytorch-triton-rocm"
+      # Ours is called 'triton'. Remove this once we build ROCm Triton from
+      # a binary wheel.
+      "triton-rocm"
     ]
     ++ lib.optionals xpuSupport [
       "intel-cmplr-lib-rt"
@@ -271,7 +293,6 @@ buildPythonPackage {
       "tcmlib"
       "umf"
       "intel-pti"
-      "pytorch-triton-xpu"
     ];
 
   propagatedCxxBuildInputs = lib.optionals rocmSupport [ rocmtoolkit_joined ];
@@ -337,14 +358,12 @@ buildPythonPackage {
 
     cudaCapabilities = if cudaSupport then supportedCudaCapabilities else [ ];
     rocmArchs = if rocmSupport then supportedTorchRocmArchs else [ ];
-  }
-  // (callPackage ../variant.nix {
-    torchVersion = version;
-  });
+  };
 
   meta = with lib; {
     description = "PyTorch: Tensors and Dynamic neural networks in Python with strong GPU acceleration";
     homepage = "https://pytorch.org/";
     license = lib.licenses.bsd3;
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
   };
 }

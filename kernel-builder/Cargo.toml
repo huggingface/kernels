@@ -15,20 +15,26 @@ clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
+huggingface-hub = { git = "https://github.com/huggingface/huggingface_hub_rust.git", rev = "8cbc662035e04d4be8e829316272893e980f5926", package = "huggingface-hub", features = ["blocking", "xet"] }
 itertools = "0.13"
 minijinja = "2.5"
 minijinja-embed = "2.5"
 rand = "0.8"
 regex = "1"
+rustpython-parser = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-value = "0.7"
 thiserror = "1"
 toml = "0.8"
 url = { version = "2", features = ["serde"] }
+walkdir = "2"
 
 [build-dependencies]
 minijinja-embed = "2.5"
+
+[dev-dependencies]
+tempfile = "3"
 
 [[bin]]
 name = "kernel-builder"

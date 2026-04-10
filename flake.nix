@@ -163,6 +163,8 @@
             ++ (with python3.pkgs; [
               docutils
               huggingface-hub
+              jax
+              jax-tvm-ffi
               kernel-abi-check
               matplotlib
               mktestdocs
@@ -223,7 +225,7 @@
           # This package set is exposed so that we can prebuild the Torch versions.
           torch = builtins.listToAttrs (
             map (buildSet: {
-              name = buildSet.torch.variant;
+              name = buildSet.variants.torch.arch;
               value = buildSet.torch;
             }) buildSets
           );

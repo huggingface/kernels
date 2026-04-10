@@ -23,11 +23,11 @@ jobs:
     runs-on:
       group: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: DeterminateSystems/nix-installer-action@main
         with:
           extra-conf: |
-            max-jobs = 4
+            max-jobs = 8
             cores = 12
             sandbox-fallback = false
       - uses: cachix/cachix-action@v16
@@ -39,58 +39,13 @@ jobs:
       - name: Nix info
         run: nix-shell -p nix-info --run "nix-info -m"
 
-      - name: Build relu kernel
-        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
-      - name: Copy relu kernel
-        run: cp -rL examples/kernels/relu/result relu-kernel
-
-      - name: Build relu-tvm-ffi kernel
-        run: ( cd examples/kernels/relu-tvm-ffi && nix build .\#redistributable.tvm-ffi01-cu126-${{ matrix.arch }} )
-      - name: Copy relu-tvm-ffi kernel
-        run: cp -rL examples/kernels/relu-tvm-ffi/result relu-tvm-ffi-kernel
-
-      - name: Build extra-data kernel
-        run: ( cd examples/kernels/extra-data && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
-      - name: Copy extra-data kernel
-        run: cp -rL examples/kernels/extra-data/result extra-data
-
-      - name: Build relu kernel (CPU)
-        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch29-cxx11-cpu-${{ matrix.arch }} )
-      - name: Copy relu kernel (CPU)
-        run: cp -rL examples/kernels/relu/result relu-kernel-cpu
-
-      - name: Build cutlass GEMM kernel
-        run: ( cd examples/kernels/cutlass-gemm && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
-      - name: Copy cutlass GEMM kernel
-        run: cp -rL examples/kernels/cutlass-gemm/result cutlass-gemm-kernel
-
-      - name: Build cutlass-gemm-tvm-ffi kernel
-        run: ( cd examples/kernels/cutlass-gemm-tvm-ffi && nix build .\#redistributable.tvm-ffi01-cu126-${{ matrix.arch }} )
-      - name: Copy cutlass-gemm-tvm-ffi kernel
-        run: cp -rL examples/kernels/cutlass-gemm-tvm-ffi/result cutlass-gemm-tvm-ffi-kernel
-
-      - name: Build relu-backprop-compile kernel
-        run: ( cd examples/kernels/relu-backprop-compile && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
-      - name: Copy relu-backprop-compile kernel
-        run: cp -rL examples/kernels/relu-backprop-compile/result relu-backprop-compile-kernel
-
-      # Just test that we build with the extra torchVersions argument.
-      - name: Build relu kernel (specific Torch version)
-        run: ( cd examples/kernels/relu-specific-torch && nix build . )
-
-      - name: Build relu kernel (compiler flags)
-        run: ( cd examples/kernels/relu-compiler-flags && nix build .\#redistributable.torch29-cxx11-cu126-${{ matrix.arch }} )
-
-      - name: Test that we can build a test shell (e.g. that gcc corresponds to CUDA-required)
-        run: ( cd examples/kernels/relu && nix build .#devShells.${{ matrix.arch }}.test )
-
-      - name: Build silu-and-mul kernel
-        run: ( cd examples/kernels/silu-and-mul && nix build .\#redistributable.torch-cuda )
-      - name: Copy silu-and-mul kernel
-        run: cp -rL examples/kernels/silu-and-mul/result silu-and-mul-kernel
+      - name: Build all example kernels
+        run: nix build -L ./examples/kernels#ci-build
+      - name: Copy kernel artifacts
+        run: cp -rL result/* .
 
       - name: Upload kernel artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
         with:
           name: built-kernels-${{ matrix.arch }}
           path: |
@@ -110,25 +65,19 @@ jobs:
     runs-on:
       group: aws-g6-12xlarge-plus
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Download kernel artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
         with:
           name: built-kernels-x86_64-linux
           path: .
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: nix-builder/tests/Dockerfile.test-kernel
-          platforms: linux/amd64
-          load: true
-          push: false
-          tags: kernel-builder:latest
+        run: |
+          docker build \
+            -t kernel-builder:latest \
+            -f nix-builder/tests/Dockerfile.test-kernel .
 
       - name: Run Tests
         run: |

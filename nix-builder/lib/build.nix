@@ -2,101 +2,52 @@
   lib,
   pkgs,
 
-# Every `buildSets` argument is a list of build sets. Each build set is
-# a attrset of the form
-#
-#     { pkgs = <nixpkgs>, torch = <torch drv> }
-#
-# The Torch derivation is built as-is. So e.g. the ABI version should
-# already be set.
+  # Every `buildSets` argument is a list of build sets. Each build set is
+  # a attrset of the form
+  #
+  #     { pkgs = <nixpkgs>, torch = <torch drv> }
+  #
+  # The Torch derivation is built as-is. So e.g. the ABI version should
+  # already be set.
 }:
 
 let
+  readKernelConfig = import ./kernel-config.nix { inherit lib; };
   supportedCudaCapabilities = builtins.fromJSON (
     builtins.readFile ../../kernel-builder/src/cuda_supported_archs.json
   );
 in
 rec {
-  readToml = path: builtins.fromTOML (builtins.readFile path);
-
-  validateBuildConfig =
-    buildToml:
-    let
-      hasBackends = buildToml.general ? backends;
-      kernels = lib.attrValues (buildToml.kernel or { });
-
-    in
-    assert lib.assertMsg hasBackends ''
-      build.toml seems to be of an older version, update it with:
-            nix run github:huggingface/kernel-builder#kernel-builder update-build build.toml'';
-    buildToml;
-
-  # Backends supported by the kernel.
-  backends =
-    buildToml:
-    let
-      init = {
-        cpu = false;
-        cuda = false;
-        metal = false;
-        rocm = false;
-        xpu = false;
-      };
-    in
-    lib.foldl (backends: backend: backends // { ${backend} = true; }) init (buildToml.general.backends);
-
-  # Backends for which there is a native (compiled kernel).
-  kernelBackends =
-    buildToml:
-    let
-      kernels = lib.attrValues (buildToml.kernel or { });
-      kernelBackend = kernel: kernel.backend;
-      init = {
-        cpu = false;
-        cuda = false;
-        metal = false;
-        rocm = false;
-        xpu = false;
-      };
-    in
-    lib.foldl (backends: kernel: backends // { ${kernelBackend kernel} = true; }) init kernels;
-
-  readBuildConfig = path: validateBuildConfig (readToml (path + "/build.toml"));
-
   # Source set function to create a fileset for a path
   mkSourceSet = import ./source-set.nix { inherit lib; };
 
   # Filter buildsets that are applicable to a given kernel build config.
   filterApplicableBuildSets =
-    buildToml: buildSets:
+    kernelConfig: buildSets:
     let
-      backends' = backends buildToml;
-      minCuda = buildToml.general.cuda.minver or "11.8";
-      maxCuda = buildToml.general.cuda.maxver or "99.9";
-      minTorch = buildToml.torch.minver or "2.0";
-      maxTorch = buildToml.torch.maxver or "99.9";
-      tvmFfi = buildToml ? tvm-ffi;
+      minCuda = kernelConfig.toml.general.cuda.minver or "11.8";
+      maxCuda = kernelConfig.toml.general.cuda.maxver or "99.9";
+      minTorch = kernelConfig.toml.torch.minver or "2.0";
+      maxTorch = kernelConfig.toml.torch.maxver or "99.9";
       versionBetween =
         minver: maxver: ver:
         builtins.compareVersions ver minver >= 0 && builtins.compareVersions ver maxver <= 0;
       supportedBuildSet =
         buildSet:
         let
-          backendSupported = backends'.${buildSet.buildConfig.backend};
-          frameworkSupported = !tvmFfi || (buildSet.buildConfig.tvmFfi or false);
+          backendSupported = kernelConfig.backends.${buildSet.buildConfig.backend};
+          frameworkSupported = !kernelConfig.isTvmFfi || (buildSet.buildConfig ? tvmFfiVersion);
           cudaVersionSupported =
             buildSet.buildConfig.backend != "cuda"
-            || versionBetween minCuda maxCuda buildSet.pkgs.cudaPackages.cudaMajorMinorVersion;
-          torchVersionParts = lib.splitString "." buildSet.torch.version;
-          torchMajorMinor = lib.concatStringsSep "." (lib.take 2 torchVersionParts);
-          torchVersionSupported = versionBetween minTorch maxTorch torchMajorMinor;
+            || versionBetween minCuda maxCuda buildSet.buildConfig.cudaVersion;
+          torchVersionSupported = versionBetween minTorch maxTorch buildSet.buildConfig.torchVersion;
         in
         backendSupported && cudaVersionSupported && frameworkSupported && torchVersionSupported;
     in
     builtins.filter supportedBuildSet buildSets;
 
   applicableBuildSets =
-    { path, buildSets }: filterApplicableBuildSets (readBuildConfig path) buildSets;
+    { path, buildSets }: filterApplicableBuildSets (readKernelConfig path) buildSets;
 
   # Build a single extension.
   mkExtension =
@@ -106,8 +57,10 @@ rec {
       pkgs,
       torch,
       bundleBuild,
+      variants,
     }:
     {
+      kernelConfig,
       path,
       rev,
       doGetKernelCheck,
@@ -115,10 +68,8 @@ rec {
     }:
     let
       inherit (lib) fileset;
-      buildToml = readBuildConfig path;
-      kernelBackends' = kernelBackends buildToml;
       kernels = lib.filterAttrs (_: kernel: buildConfig.backend == kernel.backend) (
-        buildToml.kernel or { }
+        kernelConfig.toml.kernel or { }
       );
       extraDeps =
         let
@@ -135,12 +86,14 @@ rec {
       nvccThreads = listMax (
         lib.mapAttrsToList (
           _: kernel: builtins.length (kernel.cuda-capabilities or supportedCudaCapabilities)
-        ) buildToml.kernel
+        ) kernelConfig.toml.kernel
       );
-      pythonDeps = (buildToml.general.python-depends or [ ]);
-      backendPythonDeps = lib.attrByPath [ buildConfig.backend "python-depends" ] [ ] buildToml.general;
+      pythonDeps = (kernelConfig.toml.general.python-depends or [ ]);
+      backendPythonDeps =
+        lib.attrByPath [ buildConfig.backend "python-depends" ] [ ]
+          kernelConfig.toml.general;
     in
-    if !kernelBackends'.${buildConfig.backend} then
+    if !kernelConfig.kernelBackends.${buildConfig.backend} then
       # No compiled kernel files? Treat it as a noarch package.
 
       extension.mkTorchNoArchExtension {
@@ -152,9 +105,9 @@ rec {
           pythonDeps
           backendPythonDeps
           ;
-        kernelName = buildToml.general.name;
+        kernelName = kernelConfig.name;
       }
-    else if buildToml ? "tvm-ffi" then
+    else if kernelConfig.isTvmFfi then
       extension.mkTvmFfiExtension {
         inherit
           buildConfig
@@ -168,7 +121,7 @@ rec {
           backendPythonDeps
           ;
 
-        kernelName = buildToml.general.name;
+        kernelName = kernelConfig.name;
         doAbiCheck = true;
       }
     else
@@ -185,7 +138,7 @@ rec {
           backendPythonDeps
           ;
 
-        kernelName = buildToml.general.name;
+        kernelName = kernelConfig.name;
         doAbiCheck = true;
       };
 
@@ -199,12 +152,18 @@ rec {
       buildSets,
     }:
     let
+      kernelConfig = readKernelConfig path;
       extensionForTorch =
         { path, rev }:
         buildSet: rec {
-          name = value.variant;
+          name = buildSet.variants.kernelVariant kernelConfig;
           value = mkExtension buildSet {
-            inherit path rev doGetKernelCheck;
+            inherit
+              path
+              kernelConfig
+              rev
+              doGetKernelCheck
+              ;
             stripRPath = true;
           };
         };
@@ -231,7 +190,6 @@ rec {
           ;
         bundleOnly = true;
       };
-      buildToml = readBuildConfig path;
       benchmarksPath = path + "/benchmarks";
       hasBenchmarks = builtins.pathExists benchmarksPath;
       benchmarks =
@@ -261,6 +219,7 @@ rec {
       pythonNativeCheckInputs,
     }:
     let
+      kernelConfig = readKernelConfig path;
       shellForBuildSet =
         { path, rev }:
         buildSet:
@@ -268,11 +227,17 @@ rec {
           pkgs = buildSet.pkgs;
           rocmSupport = pkgs.config.rocmSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
-          extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
-          buildToml = readBuildConfig path;
+          extension = mkExtension buildSet {
+            inherit
+              path
+              kernelConfig
+              rev
+              doGetKernelCheck
+              ;
+          };
         in
         {
-          name = extension.archVariant;
+          name = buildSet.variants.kernelArchVariant kernelConfig;
           value = mkShell {
             nativeBuildInputs = with pkgs; pythonNativeCheckInputs python3.pkgs;
 
@@ -287,7 +252,10 @@ rec {
                   pytest
                 ]
                 ++ pythonCheckInputs ps
-                ++ lib.optionals (buildToml ? "tvm-ffi") [
+                ++ lib.optionals kernelConfig.isTvmFfi [
+                  jax
+                  jax-tvm-ffi
+                  numpy
                   tvm-ffi
                 ]
               ))
@@ -297,7 +265,7 @@ rec {
               # environment. We clear the LD_LIBRARY_PATH and PYTHONPATH to
               # make testing as pure as possible.
               unset LD_LIBRARY_PATH
-              export PYTHONPATH=${extension}/${extension.variant}
+              export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
             '';
           };
         };
@@ -314,6 +282,7 @@ rec {
       pythonCheckInputs,
     }:
     let
+      kernelConfig = readKernelConfig path;
       runnerForBuildSet =
         { path, rev }:
         buildSet:
@@ -321,7 +290,14 @@ rec {
           pkgs = buildSet.pkgs;
           rocmSupport = pkgs.config.rocmSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
-          extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
+          extension = mkExtension buildSet {
+            inherit
+              path
+              kernelConfig
+              rev
+              doGetKernelCheck
+              ;
+          };
           testPython =
             with pkgs;
             python3.withPackages (
@@ -336,13 +312,13 @@ rec {
             );
         in
         {
-          name = extension.variant;
+          name = buildSet.variants.kernelArchVariant kernelConfig;
           value =
             with pkgs;
             pkgs.writeShellScriptBin "ci-test" ''
               if [ -d ${extension.src}/tests ]; then
                 unset LD_LIBRARY_PATH
-                export PYTHONPATH=${extension}/${extension.variant}
+                export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
                 # Accept exit code 5: no tests are selected
                 ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci -p no:cacheprovider || test $? -eq 5
               fi
@@ -361,6 +337,7 @@ rec {
       pythonNativeCheckInputs,
     }:
     let
+      kernelConfig = readKernelConfig path;
       shellForBuildSet =
         buildSet:
         let
@@ -368,7 +345,14 @@ rec {
           rocmSupport = pkgs.config.rocmSupport or false;
           xpuSupport = pkgs.config.xpuSupport or false;
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
-          extension = mkExtension buildSet { inherit path rev doGetKernelCheck; };
+          extension = mkExtension buildSet {
+            inherit
+              path
+              kernelConfig
+              rev
+              doGetKernelCheck
+              ;
+          };
           python = (
             pkgs.python3.withPackages (
               ps:
@@ -380,11 +364,17 @@ rec {
                 pip
                 pytest
               ]
+              ++ lib.optionals kernelConfig.isTvmFfi [
+                jax
+                jax-tvm-ffi
+                numpy
+                tvm-ffi
+              ]
             )
           );
         in
         {
-          name = extension.archVariant;
+          name = buildSet.variants.kernelArchVariant kernelConfig;
           value = mkShell rec {
             nativeBuildInputs =
               with pkgs;

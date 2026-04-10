@@ -6,7 +6,7 @@ in
 {
   # Use MKL for BLAS/LAPACK on x86_64.
   blas = if useMKL then prev.blas.override { blasProvider = prev.mkl; } else prev.blas;
-  lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.blas;
+  lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.lapack;
 
   kernel-builder = prev.callPackage ./pkgs/kernel-builder { };
 
@@ -17,17 +17,6 @@ in
   kernel-abi-check = prev.callPackage ./pkgs/kernel-abi-check { };
 
   kernel-layout-check = prev.callPackage ./pkgs/kernel-layout-check { };
-
-  # Used by ROCm.
-  libffi_3_2 = final.libffi_3_3.overrideAttrs (
-    finalAttrs: _: {
-      version = "3.2.1";
-      src = final.fetchurl {
-        url = with finalAttrs; "https://gcc.gnu.org/pub/${pname}/${pname}-${version}.tar.gz";
-        hash = "sha256-0G67jh2aItGeONY/24OVQlPzm+3F1GIyoFZFaFciyjc=";
-      };
-    }
-  );
 
   nvtx = final.callPackage ./pkgs/nvtx { };
 
@@ -63,7 +52,12 @@ in
   # Python packages
   pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
     (
-      python-self: python-super: with python-self; {
+      python-self: python-super:
+      with python-self;
+      let
+        triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
+      in
+      {
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };
@@ -77,10 +71,64 @@ in
           else
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
+        huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
+          version = "1.8.0";
+          src = python-super.fetchPypi {
+            pname = "huggingface_hub";
+            inherit version;
+            hash = "sha256-xWJ7L9Uh4Ayvjv9KyWW6mI6nUWf61+5y4X+bcYPsY/M=";
+          };
+          dependencies =
+            (prevAttrs.dependencies or [ ])
+            ++ (with python-self; [
+              httpx
+              shellingham
+              typer
+            ]);
+          # Skip tests since they require network access.
+          doCheck = false;
+        });
+
         fastapi = python-super.fastapi.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.
             doInstallCheck = false;
+          }
+        );
+
+        hf-xet = python-super.hf-xet.overridePythonAttrs (prevAttrs: rec {
+          version = "1.4.2";
+          src = final.fetchFromGitHub {
+            owner = "huggingface";
+            repo = "xet-core";
+            tag = "v${version}";
+            hash = "sha256-UdHEpJztlVI8LPs8Ne9sKe1Nv3kVVk4YLxQ3W8sUPbQ=";
+          };
+          cargoDeps = final.rustPlatform.fetchCargoVendor {
+            inherit (prevAttrs)
+              pname
+              sourceRoot
+              ;
+            inherit
+              version
+              src
+              ;
+            hash = "sha256-GV+XY5uV57yQWVGdRLpGU3eD8Gz2gy6p7OHlF+mlJI4=";
+          };
+        });
+
+        jax = python-super.jax.overrideAttrs (
+          _: prevAttrs: {
+            dontUsePytestCheck = true;
+          }
+        );
+
+        jax-tvm-ffi = python-self.callPackage ./pkgs/python-modules/jax-tvm-ffi { };
+
+        jupyter-server = python-super.jupyter-server.overrideAttrs (
+          _: prevAttrs: {
+            # Gets stuck sometimes, already tested in nixpkgs.
+            dontUsePytestCheck = true;
           }
         );
 
@@ -104,20 +152,42 @@ in
           }
         );
 
+        # Remove once sglang moves to a newer Torch version.
         torch-bin_2_9 = mkTorch {
           version = "2.9";
-          xpuPackages = final.xpuPackages_2025_2;
+          triton-xpu = null;
+          # Not supported anymore.
+          xpuPackages = null;
         };
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
-          xpuPackages = final.xpuPackages_2025_3;
+          triton-xpu = triton-xpu_3_6_0;
+          xpuPackages = final.xpuPackages_2025_3_1;
         };
 
-        triton-xpu_2_9 = callPackage ./pkgs/python-modules/triton-xpu {
-          torchVersion = "2.9";
-          xpuPackages = final.xpuPackages_2025_2;
+        torch-bin_2_11 = mkTorch {
+          version = "2.11";
+          triton-xpu = triton-xpu_3_7_0;
+          xpuPackages = final.xpuPackages_2025_3_2;
         };
+
+        transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
+          version = "5.3.0";
+          src = python-super.fetchPypi {
+            pname = "transformers";
+            inherit version;
+            hash = "sha256-AJVVs2QCnanilG1B8cXenxXmsd9GsYm3KT8zoWG5xVc=";
+          };
+
+          dependencies = (prevAttrs.dependencies or [ ]) ++ [
+            python-self.typer
+          ];
+        });
+
+        triton-xpu_3_6_0 = triton-xpu.triton-xpu_3_6_0;
+
+        triton-xpu_3_7_0 = triton-xpu.triton-xpu_3_7_0;
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };
@@ -126,7 +196,7 @@ in
     (import ./pkgs/python-modules/hooks)
   ];
 
-  xpuPackages = final.xpuPackages_2025_1;
+  xpuPackages = final.xpuPackages_2025_3_1;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
 // (
@@ -134,10 +204,9 @@ in
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     versions = [
-      "6.3.4"
-      "6.4.2"
       "7.0.2"
       "7.1.1"
+      "7.2.1"
     ];
     newRocmPackages = final.callPackage ./pkgs/rocm-packages { };
   in
@@ -155,15 +224,14 @@ in
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     xpuVersions = [
-      "2025.1.3"
-      "2025.2.1"
       "2025.3.1"
+      "2025.3.2"
     ];
     newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
   in
   builtins.listToAttrs (
     map (version: {
-      name = "xpuPackages_${flattenVersion (prev.lib.versions.majorMinor version)}";
+      name = "xpuPackages_${flattenVersion version}";
       value = newXpuPackages {
         packageMetadata = readPackageMetadata ./pkgs/xpu-packages/intel-deep-learning-${version}.json;
       };

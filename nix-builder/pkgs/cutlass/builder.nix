@@ -18,7 +18,7 @@ cudaPackages.backendStdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "NVIDIA";
     repo = pname;
-    rev = "v${version}";
+    tag = "v${version}";
     inherit hash;
   };
 

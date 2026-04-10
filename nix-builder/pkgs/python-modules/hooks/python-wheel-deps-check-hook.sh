@@ -15,7 +15,7 @@ pythonWheelDepsCheckHook() {
     echo "Finished executing pythonWheelDepsCheck"
 }
 
-if [ -z "${dontCheckRuntimeDeps-}" ]; then
+if [ -z "${dontCheckWheelDeps-}" ]; then
     echo "Using pythonWheelDepsCheckHook"
     # Ideally, this would be post-install, but we have to guarantee
     # that the relax hook runs before this, so we move it a phase

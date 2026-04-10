@@ -1,0 +1,129 @@
+name: "E2E: kernel-builder init + build + upload + download"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "kernel-builder/**"
+      - "kernels/src/**"
+      - "nix-builder/**"
+      - "kernels-data/**"
+      - ".github/workflows/test_e2e.yaml"
+  workflow_dispatch:
+
+env:
+  E2E_REPO_ID: kernels-test/kernels-upload-test
+  E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  init-build-upload:
+    name: Init, build, and upload kernel
+    runs-on:
+      group: aws-highmemory-32-plus-nix
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            max-jobs = 8
+            cores = 12
+            sandbox-fallback = false
+      - uses: cachix/cachix-action@v16
+        with:
+          name: huggingface
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+        env:
+          USER: runner
+
+      - name: Init kernel project
+        run: |
+          cd /tmp
+          nix run $GITHUB_WORKSPACE#kernel-builder -- init \
+            --name ${{ env.E2E_REPO_ID }} \
+            --backends cuda
+
+      - name: Validate scaffold
+        run: |
+          cd /tmp/kernels-upload-test
+          test -f build.toml
+          test -f flake.nix
+          test -f torch-ext/kernels_upload_test/__init__.py
+          test -f torch-ext/torch_binding.cpp
+          test -f torch-ext/torch_binding.h
+          test -f kernels_upload_test_cuda/kernels_upload_test.cu
+          test -f tests/test_kernels_upload_test.py
+          test -f example.py
+          grep -q 'name = "kernels-upload-test"' build.toml
+          grep -q 'repo-id = "kernels-test/kernels-upload-test"' build.toml
+          grep -q 'backend = "cuda"' build.toml
+
+      - name: Patch flake.nix to use local nix-builder
+        run: |
+          cd /tmp/kernels-upload-test
+          sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
+
+      - name: Build kernel
+        run: |
+          cd /tmp/kernels-upload-test
+          nix run $GITHUB_WORKSPACE#kernel-builder -- build-and-copy . -L
+
+      - name: Verify build artifacts
+        run: |
+          cd /tmp/kernels-upload-test
+          VARIANT_DIR=$(ls -d build/torch* | head -1)
+          echo "Built variant: $VARIANT_DIR"
+          test -f "$VARIANT_DIR/__init__.py"
+          test -f "$VARIANT_DIR/metadata.json"
+          ls "$VARIANT_DIR"/*.so
+
+      - name: Upload kernel to Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }}
+
+  download-and-test:
+    name: Download and test kernel via get_kernel
+    needs: init-build-upload
+    runs-on:
+      group: aws-g6-24xlarge
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv and set Python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        working-directory: ./kernels
+        run: |
+          uv sync --all-extras --dev
+          uv pip install --upgrade torch
+          uv run --no-sync python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
+
+      - name: Test get_kernel download and usage
+        working-directory: ./kernels
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          uv run --no-sync python -c "
+          import torch
+          from kernels import get_kernel
+
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}')
+
+          x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
+          result = kernel.kernels_upload_test(x)
+          expected = x + 1.0
+          torch.testing.assert_close(result, expected)
+          print('E2E test passed: get_kernel + correctness check')
+          "

@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from typing import Union
 
 from huggingface_hub import HfApi
+from huggingface_hub.dataclasses import strict
 from huggingface_hub.utils import EntryNotFoundError
 
 from kernels.compat import tomllib
 
 
+@strict
 @dataclass
 class Redirect:
     kind: str  # must be "redirect"

@@ -46,7 +46,7 @@ fn write_setup_py(
 
     env.get_template("torch/setup.py")
         .wrap_err("Cannot get setup.py template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 data_globs => data_globs,
                 revision => revision,
@@ -88,7 +88,7 @@ fn write_pyproject_toml(
 
     env.get_template("torch/pyproject.toml")
         .wrap_err("Cannot get pyproject.toml template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 python_name => general.name.python_name(),
                 python_dependencies => python_dependencies,
@@ -120,7 +120,7 @@ fn render_binding(
 ) -> Result<()> {
     env.get_template("torch/torch-binding.cmake")
         .wrap_err("Cannot get Torch binding template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 includes => torch.include.as_ref().map(prefix_and_join_includes),
                 name => name,
@@ -174,7 +174,7 @@ fn render_extension(
 ) -> Result<()> {
     env.get_template("torch/torch-extension.cmake")
         .wrap_err("Cannot get Torch extension template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 python_name => general.name.python_name(),
                 data_extensions => torch.data_extensions(),
@@ -200,7 +200,7 @@ fn render_preamble(
 
     env.get_template("torch/preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
-        .render_to_write(
+        .render_captured_to(
             context! {
                 name => general.name.as_str(),
                 python_name => general.name.python_name(),

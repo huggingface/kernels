@@ -12,7 +12,7 @@ buildPythonPackage rec {
   src = fetchFromGitHub {
     owner = "NVIDIA";
     repo = "cuda-python";
-    rev = "${pname}-v${version}";
+    tag = "${pname}-v${version}";
     hash = "sha256-aF06WwThJmGEqUcVP4dooym1uqYjUM45arqZaxjlTuA=";
   };
 

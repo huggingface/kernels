@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
-import sys
 import gzip
+import json
 import re
+import sys
 import xml.etree.ElementTree as ET
-from typing import Set, Dict
+from typing import Dict, Set
 from urllib.parse import urljoin
 from urllib.request import urlopen
+
+from packaging.version import Version
 
 BASEURL = "https://yum.repos.intel.com/oneapi/"
 
@@ -24,6 +26,8 @@ VERSION_SUFFIX_RE = re.compile(r"-(\d+\.\d+(\.\d+)?)$")
 
 parser = argparse.ArgumentParser(description="Parse intel oneapi repository")
 parser.add_argument("version", help="oneAPI version")
+
+TARGET_PACKAGE_NAME = "intel-deep-learning-essentials"
 
 
 class Package:
@@ -138,7 +142,7 @@ def fetch_and_parse_repodata(repo_url: str):
         sys.exit(1)
 
 
-def get_all_packages() -> Dict[str, Package]:
+def get_all_packages(version: Version) -> Dict[str, Package]:
     """Get all packages from the repository"""
     repo_url = BASEURL
     metadata = fetch_and_parse_repodata(repo_url)
@@ -147,26 +151,55 @@ def get_all_packages() -> Dict[str, Package]:
     for package_elem in metadata.findall(
         './/common:package[@type="rpm"]', RPM_NAMESPACES
     ):
-        pkg = Package(package_elem, repo_url)
-        all_packages[pkg.name] = pkg
+        package = Package(package_elem, repo_url)
 
-    return all_packages
+        # The repo metadata contains multiple versions of the same package.
+        # As a user, you typically want the latest version, however for
+        # builds we don't, because newer versions could introduce new APIs
+        # that are incompatible with the exact version that we want to compile
+        # for.
+        #
+        # So we first get all versions and then we find the closest match.
+
+        all_packages.setdefault(package.name, []).append(
+            (Version(package.version), package)
+        )
+
+    packages = {}
+    for name, versions in all_packages.items():
+        versions.sort(key=lambda x: x[0])  # Sort by version
+        for package_version, package in versions:
+            if package_version >= version:
+                packages[name] = package
+                break
+
+        if name not in packages:
+            packages[name] = versions[-1][1]
+
+    return packages
 
 
 def find_target_package(all_packages: Dict[str, Package], version: str) -> Package:
     """Find intel-deep-learning-essentials package with the specified version"""
-    target_name = "intel-deep-learning-essentials"
-
     version_suffix = ".".join(version.split(".")[:2])  # 2025.2.0 -> 2025.2
 
     # Fallback: Look for version-specific package names
     for name, pkg in all_packages.items():
-        if name.startswith(target_name) and name.endswith(f"-{version_suffix}") and (version in pkg.version):
-            print(f"Found version match: {name} with version {pkg.version}", file=sys.stderr)
+        if (
+            name.startswith(TARGET_PACKAGE_NAME)
+            and name.endswith(f"-{version_suffix}")
+            and (version in pkg.version)
+        ):
+            print(
+                f"Found version match: {name} with version {pkg.version}",
+                file=sys.stderr,
+            )
             return pkg
 
     # If not found, raise an exception
-    raise Exception(f"Could not find {target_name} package with version suffix -{version_suffix}")
+    raise Exception(
+        f"Could not find {TARGET_PACKAGE_NAME} package with version suffix -{version_suffix}"
+    )
 
 
 def resolve_dependencies_recursively(
@@ -201,7 +234,9 @@ def resolve_dependencies_recursively(
             )
 
             # Recursively resolve this dependency
-            resolve_dependencies_recursively(dep_package, all_packages, resolved_packages)
+            resolve_dependencies_recursively(
+                dep_package, all_packages, resolved_packages
+            )
         else:
             print(
                 f"Warning: Dependency {dep_name} not found in repository",
@@ -210,13 +245,14 @@ def resolve_dependencies_recursively(
 
     return resolved_packages
 
+
 def main():
     args = parser.parse_args()
 
-    print(f"Fetching all packages from oneAPI repository...", file=sys.stderr)
+    print("Fetching all packages from oneAPI repository...", file=sys.stderr)
 
     # Step 1: Get all packages from repository
-    all_packages = get_all_packages()
+    all_packages = get_all_packages(Version(args.version))
     print(f"Found {len(all_packages)} total packages in repository", file=sys.stderr)
 
     # Step 2: Find intel-deep-learning-essentials package with specified version
@@ -231,7 +267,7 @@ def main():
         sys.exit(1)
 
     # Step 3: Recursively resolve all dependencies
-    print(f"Resolving dependencies recursively...", file=sys.stderr)
+    print("Resolving dependencies recursively...", file=sys.stderr)
     required_packages = resolve_dependencies_recursively(target_package, all_packages)
 
     print(f"Total required packages: {len(required_packages)}", file=sys.stderr)
@@ -274,9 +310,7 @@ def main():
     # sorted will put -devel after non-devel packages.
     for name in sorted(packages.keys()):
         info = packages[name]
-        deps = {
-            dev_to_merge.get(dep, dep) for dep in info.depends() if dep in packages
-        }
+        deps = {dev_to_merge.get(dep, dep) for dep in info.depends() if dep in packages}
 
         pkg_metadata = {
             "name": name,
@@ -308,11 +342,8 @@ def main():
         deps -= {name, f"{name}-devel"}
         pkg_metadata["deps"] = list(sorted(deps))
 
-
     # Step 7: Filter out unwanted packages by prefix
-    unwanted_prefixes = (
-        "intel-oneapi-dpcpp-debugger",
-    )
+    unwanted_prefixes = ("intel-oneapi-dpcpp-debugger",)
 
     filtered_metadata = {
         name: pkg
@@ -321,7 +352,9 @@ def main():
     }
 
     # Step 8: remove version suffixes from package names.
-    filtered_metadata = {VERSION_SUFFIX_RE.sub("", name): pkg for name, pkg in filtered_metadata.items()}
+    filtered_metadata = {
+        VERSION_SUFFIX_RE.sub("", name): pkg for name, pkg in filtered_metadata.items()
+    }
     for pkg in filtered_metadata.values():
         pkg["deps"] = [VERSION_SUFFIX_RE.sub("", dep) for dep in pkg["deps"]]
 

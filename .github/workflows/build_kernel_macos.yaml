@@ -28,7 +28,7 @@ jobs:
       # For now we only test that there are no regressions in building macOS
       # kernels. Also run tests once we have a macOS runner.
       - name: Build relu kernel
-        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch29-metal-aarch64-darwin -L )
+        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch210-metal-aarch64-darwin -L )
 
       - name: Build relu metal cpp kernel
-        run: ( cd examples/kernels/relu-metal-cpp && nix build .\#redistributable.torch29-metal-aarch64-darwin -L )
+        run: ( cd examples/kernels/relu-metal-cpp && nix build .\#redistributable.torch210-metal-aarch64-darwin -L )

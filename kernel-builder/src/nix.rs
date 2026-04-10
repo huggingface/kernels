@@ -28,19 +28,27 @@ impl Flake {
 }
 
 /// Nix subcommands.
-pub enum NixSubcommand {
+pub enum NixSubcommand<'a> {
+    /// Build a flake output.
+    Build {
+        flake: &'a Flake,
+        attribute: Option<String>,
+    },
+
     /// Run the program associated with an attribute in a flake.
-    #[allow(dead_code)]
     Run {
-        flake: Flake,
+        flake: &'a Flake,
         attribute: Option<String>,
     },
 
     /// Spawn a development shell with the given attribute for a flake.
     Develop {
-        flake: Flake,
+        flake: &'a Flake,
         attribute: Option<String>,
     },
+
+    /// Evaluate an output.
+    Eval { flake: &'a Flake, attribute: String },
 }
 
 /// Nix sandboxing mode.
@@ -117,6 +125,8 @@ impl NixConfig {
 pub struct Nix {
     max_jobs: Option<u32>,
     cores: Option<u32>,
+    print_build_logs: bool,
+    json: bool,
 }
 
 impl Nix {
@@ -125,6 +135,8 @@ impl Nix {
         Self {
             max_jobs: None,
             cores: None,
+            print_build_logs: false,
+            json: false,
         }
     }
 
@@ -137,6 +149,18 @@ impl Nix {
     /// Set the number of cores to use for parallel jobs.
     pub fn cores(mut self, cores: u32) -> Self {
         self.cores = Some(cores);
+        self
+    }
+
+    /// Print full build logs on standard error.
+    pub fn print_build_logs(mut self, print_build_logs: bool) -> Self {
+        self.print_build_logs = print_build_logs;
+        self
+    }
+
+    /// Enable JSON output (`--json` flag).
+    pub fn json(mut self, json: bool) -> Self {
+        self.json = json;
         self
     }
 
@@ -170,27 +194,18 @@ impl Nix {
         }
     }
 
-    /// Run Nix with the given subcommand.
-    pub fn run(self, subcommand: NixSubcommand) -> Result<()> {
-        Self::check_installed()?;
-
-        let sandbox = Self::config()?.sandbox_mode();
-        if cfg!(target_os = "linux") && sandbox != SandboxMode::Enabled {
-            eyre::bail!(
-                "Nix sandboxing must be enabled on Linux.\n\
-                 Set `sandbox = true` in /etc/nix/nix.conf and restart the Nix daemon."
-            );
-        }
-        if cfg!(target_os = "macos") && sandbox == SandboxMode::Disabled {
-            eyre::bail!(
-                "Nix sandboxing must be enabled on macOS.\n\
-                 Set `sandbox = relaxed` or `sandbox = true` in /etc/nix/nix.conf and restart the Nix daemon."
-            );
-        }
-
+    /// Convert the Nix options and subcommand into a [`Command`].
+    fn to_command(&self, subcommand: &NixSubcommand<'_>) -> Command {
         let mut cmd = Command::new("nix");
 
-        match &subcommand {
+        match subcommand {
+            NixSubcommand::Build { flake, attribute } => {
+                cmd.arg("build");
+                match attribute {
+                    Some(attr) => cmd.arg(format!("{}#{}", flake.path.display(), attr)),
+                    None => cmd.arg(flake.path.as_os_str()),
+                };
+            }
             NixSubcommand::Run { flake, attribute } => {
                 cmd.arg("run");
                 match attribute {
@@ -205,6 +220,11 @@ impl Nix {
                     None => cmd.arg(flake.path.as_os_str()),
                 };
             }
+
+            NixSubcommand::Eval { flake, attribute } => {
+                cmd.arg("eval")
+                    .arg(format!("{}#{}", flake.path.display(), attribute));
+            }
         }
 
         if let Some(max_jobs) = self.max_jobs {
@@ -215,6 +235,41 @@ impl Nix {
             cmd.arg("--cores").arg(cores.to_string());
         }
 
+        if self.print_build_logs {
+            cmd.arg("-L");
+        }
+
+        if self.json {
+            cmd.arg("--json");
+        }
+
+        cmd
+    }
+
+    /// Check sandbox configuration.
+    fn check_sandbox() -> Result<()> {
+        let sandbox = Self::config()?.sandbox_mode();
+        if cfg!(target_os = "linux") && sandbox != SandboxMode::Enabled {
+            eyre::bail!(
+                "Nix sandboxing must be enabled on Linux.\n\
+                 Set `sandbox = true` in /etc/nix/nix.conf and restart the Nix daemon."
+            );
+        }
+        if cfg!(target_os = "macos") && sandbox == SandboxMode::Disabled {
+            eyre::bail!(
+                "Nix sandboxing must be enabled on macOS.\n\
+                 Set `sandbox = relaxed` or `sandbox = true` in /etc/nix/nix.conf and restart the Nix daemon."
+            );
+        }
+        Ok(())
+    }
+
+    /// Run Nix with the given subcommand.
+    pub fn run(self, subcommand: NixSubcommand<'_>) -> Result<()> {
+        Self::check_installed()?;
+        Self::check_sandbox()?;
+
+        let mut cmd = self.to_command(&subcommand);
         let status = cmd.status()?;
 
         if !status.success() {
@@ -222,5 +277,20 @@ impl Nix {
         }
 
         Ok(())
+    }
+
+    /// Run Nix with the given subcommand and capture stdout.
+    pub fn run_capture_stdout(self, subcommand: NixSubcommand<'_>) -> Result<Vec<u8>> {
+        Self::check_installed()?;
+        Self::check_sandbox()?;
+
+        let mut cmd = self.to_command(&subcommand);
+        let output = cmd.output()?;
+
+        if !output.status.success() {
+            eyre::bail!("nix exited with status {}", output.status);
+        }
+
+        Ok(output.stdout)
     }
 }

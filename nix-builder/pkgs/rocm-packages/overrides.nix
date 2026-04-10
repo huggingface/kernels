@@ -24,9 +24,7 @@ applyOverrides {
       hipblas-common-devel ? null,
     }:
     prevAttrs: {
-      # Only available starting ROCm 6.3.
-      propagatedBuildInputs =
-        prevAttrs.buildInputs ++ lib.optionals (hipblas-common-devel != null) [ hipblas-common-devel ];
+      propagatedBuildInputs = prevAttrs.buildInputs ++ [ hipblas-common-devel ];
     };
 
   hipblaslt =
@@ -68,10 +66,9 @@ applyOverrides {
     };
 
   openmp-extras-runtime =
-    { rocm-llvm, libffi_3_2 }:
+    { rocm-llvm }:
     prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [
-        libffi_3_2
         rocm-llvm
       ];
       # Can we change rocm-llvm to pick these up?
@@ -91,6 +88,15 @@ applyOverrides {
     prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [
         suitesparse
+      ];
+    };
+
+  hipsparselt =
+    { hip-runtime-amd, roctracer }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        hip-runtime-amd
+        roctracer
       ];
     };
 

@@ -19,7 +19,7 @@ buildPythonPackage rec {
   src = fetchFromGitHub {
     owner = "apache";
     repo = "tvm-ffi";
-    rev = "v${version}";
+    tag = "v${version}";
     hash = "sha256-XnlM//WW2TbjbmzYBq6itJQ7R3J646UMVQUVhV5Afwc=";
     fetchSubmodules = true;
   };
@@ -37,8 +37,4 @@ buildPythonPackage rec {
   postInstall = ''
     ln -s $out/${python.sitePackages}/tvm_ffi/share $out/share
   '';
-
-  passthru = callPackage ./variant.nix {
-    tvmFfiVersion = version;
-  };
 }

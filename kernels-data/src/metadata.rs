@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
+use base64::prelude::{BASE64_STANDARD, Engine as _};
 use digest::{Digest, DynDigest};
 use eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,7 @@ pub struct Metadata {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SourceDigest {
     algorithm: DigestAlgorithm,
-    files: BTreeMap<String, Vec<u8>>,
+    files: BTreeMap<String, String>,
 }
 
 impl SourceDigest {
@@ -67,7 +68,9 @@ impl SourceDigest {
             // Normalize Windows directory separators.
             let relative_path_str = relative_path.to_string_lossy().replace('\\', "/");
 
-            files.insert(relative_path_str, hasher.finalize_reset().to_vec());
+            let hash_base64 = BASE64_STANDARD.encode(hasher.finalize_reset());
+
+            files.insert(relative_path_str, hash_base64);
         }
 
         Ok(SourceDigest {
@@ -86,9 +89,9 @@ pub enum DigestAlgorithm {
     SHA512,
 }
 
-impl Into<Box<dyn DynDigest>> for DigestAlgorithm {
-    fn into(self) -> Box<dyn DynDigest> {
-        match self {
+impl From<DigestAlgorithm> for Box<dyn DynDigest> {
+    fn from(digest_algorithm: DigestAlgorithm) -> Box<dyn DynDigest> {
+        match digest_algorithm {
             DigestAlgorithm::SHA256 => Box::new(Sha256::new()),
             DigestAlgorithm::SHA512 => Box::new(Sha512::new()),
         }

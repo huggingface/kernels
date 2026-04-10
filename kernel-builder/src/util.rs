@@ -1,11 +1,12 @@
 use std::{
     env::current_dir,
+    fs,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
 };
 
-use eyre::{ensure, Context, Result};
+use eyre::{bail, ensure, Context, Result};
 
 use kernels_data::config::{Build, BuildCompat};
 
@@ -57,6 +58,41 @@ pub(crate) fn check_or_infer_target_dir(
     }
 }
 
+/// Discover build variant directories (contain `metadata.json`).
+/// Checks `result` symlink (Nix store output) first, then falls back to `build/`.
+pub(crate) fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
+    let candidates = [
+        kernel_dir.join("result"),
+        kernel_dir.join("build"),
+        kernel_dir.to_path_buf(),
+    ];
+
+    for candidate in &candidates {
+        if !candidate.is_dir() {
+            continue;
+        }
+
+        let mut variants: Vec<PathBuf> = fs::read_dir(candidate)
+            .wrap_err_with(|| format!("Cannot read `{}`", candidate.display()))?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.join("metadata.json").is_file())
+            .collect();
+
+        if !variants.is_empty() {
+            variants.sort();
+            return Ok((candidate.clone(), variants));
+        }
+    }
+
+    bail!(
+        "No build variants found in `{}`, `{}`, or `{}`",
+        candidates[0].display(),
+        candidates[1].display(),
+        candidates[2].display(),
+    );
+}
+
 pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {
     let build_toml = kernel_dir.as_ref().join("build.toml");
     let mut toml_data = String::new();
@@ -69,4 +105,67 @@ pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<BuildCo
         .wrap_err_with(|| format!("Cannot parse TOML in {}", build_toml.to_string_lossy()))?;
 
     Ok(build_compat)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_discover_variants() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let build_dir = kernel_dir.join("build");
+        fs::create_dir_all(build_dir.join("variant-a")).unwrap();
+        fs::create_dir_all(build_dir.join("variant-b")).unwrap();
+
+        fs::write(
+            build_dir.join("variant-a/metadata.json"),
+            r#"{"version": 1}"#,
+        )
+        .unwrap();
+        fs::write(
+            build_dir.join("variant-b/metadata.json"),
+            r#"{"version": 1}"#,
+        )
+        .unwrap();
+
+        let (found_build_dir, variants) = discover_variants(kernel_dir).unwrap();
+        assert_eq!(found_build_dir, build_dir);
+        assert_eq!(variants.len(), 2);
+    }
+
+    #[test]
+    fn test_discover_variants_no_variants() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let result = discover_variants(temp_dir.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_discover_variants_from_result_symlink() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        // Create a "nix store" directory with variants
+        let store_dir = kernel_dir.join("nix-store-output");
+        fs::create_dir_all(store_dir.join("variant-a")).unwrap();
+        fs::write(
+            store_dir.join("variant-a/metadata.json"),
+            r#"{"version": 1}"#,
+        )
+        .unwrap();
+
+        // Create result symlink pointing to store output
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
+
+        #[cfg(unix)]
+        {
+            let (found_dir, variants) = discover_variants(kernel_dir).unwrap();
+            assert_eq!(found_dir, kernel_dir.join("result"));
+            assert_eq!(variants.len(), 1);
+        }
+    }
 }

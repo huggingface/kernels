@@ -40,6 +40,7 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
             backend: BackendInfo {
                 backend_type: *backend,
             },
+            source_digest: None,
         };
 
         serde_json::to_writer_pretty(writer, &metadata)?;

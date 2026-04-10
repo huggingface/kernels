@@ -30,7 +30,7 @@ from kernels.utils import (
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", "main")
+    package_name, path = install_kernel("kernels-community/activation", "main", repo_type="kernel")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
     return package_name, path
@@ -418,7 +418,7 @@ def test_layer_fallback_works():
 
 def test_local_layer_repo(device):
     # Fetch a kernel to the local cache.
-    package_name, path = install_kernel("kernels-test/backward-marker-test", "main")
+    package_name, path = install_kernel("kernels-test/backward-marker-test", "main", repo_type="model")
 
     linear = TorchLinearWithCounter(32, 32).to(device)
 

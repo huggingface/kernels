@@ -8,12 +8,23 @@ from packaging.version import InvalidVersion, Version
 logger = logging.getLogger(__name__)
 
 
-def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
-    """Get kernel versions that are available in the repository."""
-    from kernels.utils import _get_hf_api
+def _get_available_versions(
+    repo_id: str,
+) -> tuple[dict[int, GitRefInfo], str]:
+    """Get kernel versions that are available in the repository.
+
+    Tries ``"kernel"`` repo type first. If the repository is not found,
+    falls back to ``"model"``.
+
+    Returns a tuple of (versions, repo_type)."""
+    from kernels.utils import _get_hf_api, _resolve_repo_type
+
+    repo_type = _resolve_repo_type(repo_id)
+
+    refs = _get_hf_api().list_repo_refs(repo_id=repo_id, repo_type=repo_type)
 
     versions = {}
-    for branch in _get_hf_api().list_repo_refs(repo_id).branches:
+    for branch in refs.branches:
         if not branch.name.startswith("v"):
             continue
         try:
@@ -21,7 +32,7 @@ def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
         except ValueError:
             continue
 
-    return versions
+    return versions, repo_type
 
 
 def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
@@ -30,10 +41,11 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
 
     This is for the old tag-based versioning scheme.
     """
-    from kernels.utils import _get_hf_api
+    from kernels.utils import _get_hf_api, _resolve_repo_type
 
+    repo_type = _resolve_repo_type(repo_id)
     versions = {}
-    for tag in _get_hf_api().list_repo_refs(repo_id).tags:
+    for tag in _get_hf_api().list_repo_refs(repo_id, repo_type=repo_type).tags:
         if not tag.name.startswith("v"):
             continue
         try:
@@ -44,15 +56,19 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
     return versions
 
 
-def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRefInfo:
+def resolve_version_spec_as_ref(
+    repo_id: str, version_spec: int | str
+) -> tuple[GitRefInfo, str]:
     """
-    Get the locks for a kernel with the given version spec.
-
+    Get the ref for a kernel with the given version spec.
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
+
+    Returns a tuple of (ref, repo_type).
     """
     if isinstance(version_spec, int):
-        versions = _get_available_versions(repo_id)
+        versions, repo_type = _get_available_versions(repo_id)
+
         ref = versions.get(version_spec, None)
         if ref is None:
             raise ValueError(
@@ -68,7 +84,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRef
                 latest_version,
             )
 
-        return ref
+        return ref, repo_type
     else:
         warnings.warn(
             """Version specifiers are deprecated, support will be removed in a future `kernels` version.
@@ -83,7 +99,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRef
                 f"No version of `{repo_id}` satisfies requirement: {version_spec}"
             )
 
-        return versions_old[accepted_versions[-1]]
+        return versions_old[accepted_versions[-1]], "model"
 
 
 def select_revision_or_version(
@@ -91,14 +107,16 @@ def select_revision_or_version(
     *,
     revision: str | None,
     version: int | str | None,
-) -> str:
+) -> tuple[str, str | None]:
+    """Select a revision, returning (revision, repo_type)."""
     if revision is not None and version is not None:
         raise ValueError("Only one of `revision` or `version` must be specified.")
 
     if revision is not None:
-        return revision
+        return revision, None
     elif version is not None:
-        return resolve_version_spec_as_ref(repo_id, version).target_commit
+        ref, repo_type = resolve_version_spec_as_ref(repo_id, version)
+        return ref.target_commit, repo_type
 
     # Re-enable once we have proper UX on the hub for showing the
     # kernel versions.
@@ -108,4 +126,4 @@ def select_revision_or_version(
     #    "See: https://huggingface.co/docs/kernels/migration"
     # )
 
-    return "main"
+    return "main", None

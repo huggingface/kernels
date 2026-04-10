@@ -53,7 +53,7 @@ class TestResolveStatus:
         mock_api = MagicMock()
         mock_api.hf_hub_download.side_effect = EntryNotFoundError("Not found")
 
-        repo_id, revision = resolve_status(mock_api, "kernels-test/kernel", "main")
+        repo_id, revision = resolve_status(mock_api, "kernels-test/kernel", "main", "kernel")
         assert repo_id == "kernels-test/kernel"
         assert revision == "main"
 
@@ -65,7 +65,7 @@ class TestResolveStatus:
             'kind = "redirect"\ndestination = "kernels-community/new-kernel"'
         )
 
-        def mock_download(repo_id, filename, revision):
+        def mock_download(repo_id, filename, revision, repo_type):
             if repo_id == "kernels-test/old-kernel":
                 return str(status_file)
             raise EntryNotFoundError("Not found")
@@ -73,7 +73,7 @@ class TestResolveStatus:
         mock_api = MagicMock()
         mock_api.hf_hub_download.side_effect = mock_download
 
-        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main")
+        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main", "kernel")
         assert repo_id == "kernels-community/new-kernel"
         assert revision == "main"
 
@@ -85,7 +85,7 @@ class TestResolveStatus:
             'kind = "redirect"\ndestination = "kernels-community/new-kernel"\nrevision = "v2"'
         )
 
-        def mock_download(repo_id, filename, revision):
+        def mock_download(repo_id, filename, revision, repo_type):
             if repo_id == "kernels-test/old-kernel":
                 return str(status_file)
             raise EntryNotFoundError("Not found")
@@ -93,6 +93,6 @@ class TestResolveStatus:
         mock_api = MagicMock()
         mock_api.hf_hub_download.side_effect = mock_download
 
-        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main")
+        repo_id, revision = resolve_status(mock_api, "kernels-test/old-kernel", "main", "kernel")
         assert repo_id == "kernels-community/new-kernel"
         assert revision == "v2"

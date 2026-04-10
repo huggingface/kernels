@@ -10,6 +10,7 @@ from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
 from kernels.utils import (
+    _resolve_repo_type,
     install_kernel,
     install_kernel_all_variants,
 )
@@ -208,11 +209,13 @@ def download_kernels(args):
             f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
             file=sys.stderr,
         )
+        repo_type = _resolve_repo_type(kernel_lock.repo_id, revision=kernel_lock.sha)
         if args.all_variants:
             install_kernel_all_variants(
                 kernel_lock.repo_id,
                 kernel_lock.sha,
                 variant_locks=kernel_lock.variants,
+                repo_type=repo_type,
             )
         else:
             try:
@@ -220,6 +223,7 @@ def download_kernels(args):
                     kernel_lock.repo_id,
                     kernel_lock.sha,
                     variant_locks=kernel_lock.variants,
+                    repo_type=repo_type,
                 )
             except FileNotFoundError as e:
                 print(e, file=sys.stderr)
@@ -289,12 +293,14 @@ def check_kernel(
         )
         sys.exit(1)
 
+    repo_type = _resolve_repo_type(repo_id)
     check.check_kernel(
         macos=macos,
         manylinux=manylinux,
         python_abi=python_abi,
         repo_id=repo_id,
         revision=revision,
+        repo_type=repo_type,
     )
 
 

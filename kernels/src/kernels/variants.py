@@ -292,10 +292,15 @@ def parse_variant(variant_str: str) -> Variant:
         raise ValueError(f"Unknown framework in variant string: {variant_str!r}")
 
 
-def get_variants(api: HfApi, *, repo_id: str, revision: str) -> list[Variant]:
+def get_variants(
+    api: HfApi, *, repo_id: str, revision: str, repo_type: str
+) -> list[Variant]:
     """Get all the build variants available from a kernel repository."""
 
-    tree = api.list_repo_tree(repo_id, path_in_repo="build", revision=revision)
+    tree = api.list_repo_tree(
+        repo_id, path_in_repo="build", repo_type=repo_type, revision=revision
+    )
+
     variant_strs = {
         item.path.split("/")[-1] for item in tree if isinstance(item, RepoFolder)
     }
@@ -333,6 +338,7 @@ def resolve_variant(
 ) -> Variant | None:
     """Return the best matching variant for the current system."""
     resolved = resolve_variants(variants, backend)
+
     return resolved[0] if resolved else None
 
 

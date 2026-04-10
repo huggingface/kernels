@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.cli.skills import add_skill
+from kernels.cli.skills import DEFAULT_SKILL_ID, SUPPORTED_SKILL_IDS, add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
@@ -98,7 +98,17 @@ def main():
     skills_subparsers = skills_parser.add_subparsers(required=True)
     skills_add_parser = skills_subparsers.add_parser(
         "add",
-        help="Install the cuda-kernels skill for an AI assistant",
+        help="Install a kernels skill for an AI assistant",
+    )
+    skills_add_parser.add_argument(
+        "--skill",
+        type=str,
+        choices=SUPPORTED_SKILL_IDS,
+        default=DEFAULT_SKILL_ID,
+        help=(
+            f"Skill ID to install. Defaults to `{DEFAULT_SKILL_ID}`. "
+            "Use `rocm-kernels` for ROCm-focused kernels."
+        ),
     )
     skills_add_parser.add_argument(
         "--claude",

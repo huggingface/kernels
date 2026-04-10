@@ -1,0 +1,10 @@
+torch
+triton
+diffusers
+transformers
+accelerate
+safetensors
+huggingface-hub
+imageio
+imageio-ffmpeg
+kernels

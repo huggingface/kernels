@@ -2,6 +2,68 @@
 
 Integrating custom Triton kernels into HuggingFace diffusers pipelines on AMD GPUs.
 
+## Dependencies
+
+Use the existing dependency file:
+
+```bash
+python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
+```
+
+### Required (for this guide)
+
+- `torch`
+- `triton`
+- `diffusers`
+- `transformers`
+- `accelerate`
+
+### Optional
+
+- Video export: `imageio-ffmpeg` (pip) or system `ffmpeg`
+- Profiling/trace: `rocprof`, `rocprofv3`
+
+## Tested Environment
+
+| Component | Version |
+|-----------|---------|
+| GPU | AMD Radeon Graphics (gfx1201) |
+| ROCm | 7.1.52802-26aae437f6 |
+| PyTorch | 2.8.0+rocm7.1.1 |
+| Triton | 3.4.0+rocm7.1.1 |
+| diffusers | 0.37.0 |
+| transformers | 4.57.3 |
+| accelerate | 1.12.0 |
+
+## Clean Install + Smoke Test
+
+```bash
+python -m venv .venv-rocm-kernels
+source .venv-rocm-kernels/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
+```
+
+```bash
+python - <<'PY'
+import torch
+from diffusers import LTXPipeline
+
+assert torch.cuda.is_available(), "ROCm device is not available"
+pipe = LTXPipeline.from_pretrained("Lightricks/LTX-Video", torch_dtype=torch.bfloat16)
+pipe.to("cuda")
+_ = pipe(
+    prompt="A quick smoke test on ROCm",
+    num_frames=9,
+    height=480,
+    width=704,
+    num_inference_steps=1,
+    guidance_scale=7.5,
+)
+print("Smoke test passed.")
+PY
+```
+
 ## Overview
 
 This guide covers injecting optimized Triton kernels (RMSNorm, RoPE 3D, GEGLU, AdaLN) into diffusers pipelines running on ROCm. The patterns are analogous to the CUDA kernel integration but use Triton instead of CUDA C.
@@ -240,6 +302,26 @@ torch.testing.assert_close(
     rtol=1e-2, atol=1e-3
 )
 ```
+
+### Benchmark Evidence (R9700)
+
+For reviewer-facing benchmark materials, see `examples/ltx-video-benchmark/`.
+
+| Mode | gen_time_s | time_per_step_s | peak_memory_gb | speedup |
+|------|-----------:|----------------:|---------------:|--------:|
+| baseline (mean of 3) | 6.91 | 0.231 | 18.58 | 1.00x |
+| triton (mean of 3) | 6.10 | 0.203 | 18.58 | 1.13x |
+| compile (single run) | 5.05 | 0.168 | 18.58 | 1.37x |
+
+Videos are generated under `examples/ltx-video-benchmark/`:
+
+- `benchmark_results.json`
+- `ltx_video_baseline.mp4`
+- `ltx_video_triton.mp4`
+- `ltx_video_compile.mp4`
+- `trace/codex_trace.json`
+- `trace/opencode_trace.jsonl`
+- `trace/opencode_trace_result.json`
 
 ## Troubleshooting
 

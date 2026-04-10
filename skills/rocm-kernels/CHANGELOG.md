@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.3 (2026-04-10)
+
+### Added
+- **Consolidated benchmark package**: `examples/ltx-video-benchmark/benchmark_results.json` now provides a single JSON artifact with formal R9700 benchmark runs and summary statistics.
+- **Live harness benchmark traces**:
+  - `examples/ltx-video-benchmark/trace/codex_live/codex_trace.json`
+  - `examples/ltx-video-benchmark/trace/opencode_live/opencode_trace_result.json`
+  - Per-run outputs in `trace/*_live/results.json`
+- **Unified examples documentation**: `examples/ltx-video-benchmark/README.md` is now the single reviewer-facing README for the examples package.
+- **Dependency lock-in entrypoint**: `scripts/requirements.txt` is used as the canonical install file for benchmark/integration examples.
+
+### Changed
+- **E2E benchmark CLI/output semantics** (`scripts/benchmark_e2e.py`):
+  - Standardized output flag to `--output-dir`
+  - Updated docs and usage examples to match current examples layout
+  - Structured outputs under `examples/ltx-video-benchmark/` and `trace/*_live/`
+- **Examples content structure**:
+  - Merged previous top-level examples README content into `examples/ltx-video-benchmark/README.md`
+  - Updated trace/result paths in docs to current live locations
+- **Script requirement notes**:
+  - Updated benchmark/example script docstrings to install dependencies from `scripts/requirements.txt`
+
+### Fixed
+- Removed ambiguity between "harness replay" and "live benchmark execution" by recording explicit `live_benchmark: true` trace outputs with executed command/config.
+- Aligned reviewer-facing materials to use one benchmark documentation entrypoint and one consolidated formal benchmark JSON.
+
+### Removed
+- Legacy split/duplicate examples documentation and outdated trace path references in the examples package.
+
 ## v0.2 (2026-03-12)
 
 ### Added

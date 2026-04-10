@@ -14,6 +14,9 @@ Usage:
     python benchmark_kernels.py --kernel geglu
     python benchmark_kernels.py --kernel adaln
     python benchmark_kernels.py --dtype float16
+
+Requirements:
+    python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
 """
 import os
 os.environ['TRITON_HIP_USE_BLOCK_PINGPONG'] = '1'

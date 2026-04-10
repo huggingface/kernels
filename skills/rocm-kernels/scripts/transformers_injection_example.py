@@ -14,6 +14,9 @@ Key lessons:
 
 Usage:
     python scripts/transformers_injection_example.py
+
+Requirements:
+    python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
 """
 
 import os

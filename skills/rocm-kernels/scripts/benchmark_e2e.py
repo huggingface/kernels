@@ -5,7 +5,7 @@ End-to-end benchmark: LTX-Video pipeline with/without custom Triton kernels on R
 Measures total generation time, per-step latency, and peak memory.
 
 Requirements:
-    pip install diffusers transformers accelerate torch triton
+    python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
 
 Usage:
     # Baseline (no custom kernels)
@@ -22,6 +22,11 @@ Usage:
 
     # Quick test (fewer frames/steps)
     python benchmark_e2e.py --mode triton --num-frames 9 --steps 5
+
+    # Save videos and JSON to a structured directory
+    python benchmark_e2e.py --mode all \
+        --output-dir examples/ltx-video-benchmark \
+        --output-json examples/ltx-video-benchmark/results.json
 """
 import os
 os.environ['TRITON_HIP_USE_BLOCK_PINGPONG'] = '1'
@@ -168,7 +173,7 @@ def inject_triton_kernels(pipe):
 # ============================================================================
 
 def run_benchmark(mode, prompt, num_frames, height, width, steps,
-                  guidance_scale, seed, warmup_iters):
+                  guidance_scale, seed, warmup_iters, output_dir):
     from diffusers import LTXPipeline
     from diffusers.utils import export_to_video
 
@@ -230,8 +235,8 @@ def run_benchmark(mode, prompt, num_frames, height, width, steps,
     print(f"    Per step:   {result['time_per_step_s']:.3f} s")
     print(f"    Peak mem:   {result['peak_memory_gb']:.2f} GB")
 
-    # Save video
-    out_path = f"ltx_video_{mode}.mp4"
+    os.makedirs(output_dir, exist_ok=True)
+    out_path = os.path.join(output_dir, f"ltx_video_{mode}.mp4")
     export_to_video(output.frames[0], out_path, fps=24)
     print(f"    Saved to:   {out_path}")
 
@@ -253,6 +258,8 @@ def main():
     parser.add_argument("--guidance-scale", type=float, default=7.5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--warmup", type=int, default=1)
+    parser.add_argument("--output-dir", type=str, default=".",
+                        help="Directory for generated output files")
     parser.add_argument("--output-json", type=str, default=None,
                         help="Save results to JSON for comparison")
     args = parser.parse_args()
@@ -270,7 +277,7 @@ def main():
     for mode in modes:
         r = run_benchmark(mode, args.prompt, args.num_frames, args.height,
                           args.width, args.steps, args.guidance_scale,
-                          args.seed, args.warmup)
+                          args.seed, args.warmup, args.output_dir)
         all_results.append(r)
 
     # Comparison table
@@ -287,6 +294,9 @@ def main():
             print(f"{r['mode']:<12} {r['gen_time_s']:<12.2f} {r['time_per_step_s']:<15.3f} {r['peak_memory_gb']:<15.2f}{suffix}")
 
     if args.output_json:
+        output_dir = os.path.dirname(args.output_json)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         with open(args.output_json, 'w') as f:
             json.dump(all_results, f, indent=2)
         print(f"\nResults saved to {args.output_json}")

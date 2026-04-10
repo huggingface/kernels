@@ -8,11 +8,13 @@ references/diffusers-integration.md
 references/transformers-integration.md
 references/huggingface-kernels-integration.md
 references/troubleshooting.md
-references/skill-evaluation-methodology.md
 references/kernelbench-classification.md
-references/kernel-agent-knowledge-base.md
 scripts/benchmark_kernels.py
 scripts/benchmark_e2e.py
-scripts/ltx_kernel_injection_example.py
 scripts/transformers_injection_example.py
 scripts/huggingface_kernels_example.py
+scripts/requirements.txt
+examples/ltx-video-benchmark/README.md
+examples/ltx-video-benchmark/benchmark_results.json
+examples/ltx-video-benchmark/trace/codex_trace.json
+examples/ltx-video-benchmark/trace/opencode_trace_result.json

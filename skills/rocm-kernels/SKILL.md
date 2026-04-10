@@ -410,9 +410,18 @@ R9700 speedups are higher than MI355X because PyTorch's default RDNA4 backend is
 
 | Mode | Time (s) | Per Step (s) | Peak Mem (GB) | Speedup |
 |------|:--------:|:------------:|:-------------:|:-------:|
-| baseline | 6.89 | 0.230 | 18.58 | 1.00x |
-| **triton** | **6.06** | **0.202** | **18.58** | **1.14x** |
-| torch.compile | 5.07 | 0.169 | 18.58 | 1.36x |
+| baseline (mean of 3) | 6.91 | 0.231 | 18.58 | 1.00x |
+| **triton (mean of 3)** | **6.10** | **0.203** | **18.58** | **1.13x** |
+| torch.compile (single run) | 5.05 | 0.168 | 18.58 | 1.37x |
+
+Reviewer-facing benchmark files for this comparison live in `examples/ltx-video-benchmark/`, including:
+
+- Summary table with `gen_time_s`, `time_per_step_s`, `peak_memory_gb`, and `speedup`
+- Consolidated JSON results in `examples/ltx-video-benchmark/benchmark_results.json`
+- Coding harness trace in `examples/ltx-video-benchmark/trace/codex_trace.json`
+- OpenCode native trace in `examples/ltx-video-benchmark/trace/opencode_trace.jsonl`
+- OpenCode parsed result in `examples/ltx-video-benchmark/trace/opencode_trace_result.json`
+- Videos: `ltx_video_baseline.mp4`, `ltx_video_triton.mp4`, `ltx_video_compile.mp4`
 
 ### R9700 Additional Validation
 

@@ -1,0 +1,44 @@
+{
+  "harness": "codex",
+  "mode": "live-benchmark-run",
+  "live_benchmark": true,
+  "generated_at_utc": "2026-04-10T04:44:38.986664Z",
+  "benchmark_config": {
+    "num_frames": 25,
+    "height": 480,
+    "width": 704,
+    "steps": 30,
+    "warmup": 1
+  },
+  "command": "python skills/rocm-kernels/scripts/benchmark_e2e.py --mode all --num-frames 25 --steps 30 --warmup 1 --output-dir skills/rocm-kernels/examples/ltx-video-benchmark/trace/codex_live --output-json skills/rocm-kernels/examples/ltx-video-benchmark/trace/codex_live/results.json",
+  "result_json_path": "trace/codex_live/results.json",
+  "summary": {
+    "baseline": {
+      "gen_time_s": 9.39,
+      "time_per_frame_s": 0.376,
+      "time_per_step_s": 0.313,
+      "peak_memory_gb": 18.58,
+      "speedup_vs_baseline": 1.0
+    },
+    "triton": {
+      "gen_time_s": 8.62,
+      "time_per_frame_s": 0.345,
+      "time_per_step_s": 0.287,
+      "peak_memory_gb": 22.43,
+      "speedup_vs_baseline": 1.089
+    },
+    "compile": {
+      "gen_time_s": 7.02,
+      "time_per_frame_s": 0.281,
+      "time_per_step_s": 0.234,
+      "peak_memory_gb": 18.58,
+      "speedup_vs_baseline": 1.338
+    }
+  },
+  "generated_files": [
+    "trace/codex_live/ltx_video_baseline.mp4",
+    "trace/codex_live/ltx_video_triton.mp4",
+    "trace/codex_live/ltx_video_compile.mp4",
+    "trace/codex_live/results.json"
+  ]
+}

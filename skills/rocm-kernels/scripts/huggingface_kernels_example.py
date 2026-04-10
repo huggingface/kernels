@@ -9,7 +9,7 @@ This script demonstrates how to:
 4. Fall back to local Triton kernels when Hub builds are unavailable
 
 Requirements:
-    pip install kernels torch numpy
+    python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
 
 Usage:
     python scripts/huggingface_kernels_example.py

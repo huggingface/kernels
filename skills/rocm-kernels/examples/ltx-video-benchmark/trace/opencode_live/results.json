@@ -1,0 +1,23 @@
+[
+  {
+    "mode": "baseline",
+    "gen_time_s": 9.37,
+    "time_per_frame_s": 0.375,
+    "time_per_step_s": 0.312,
+    "peak_memory_gb": 18.58
+  },
+  {
+    "mode": "triton",
+    "gen_time_s": 8.67,
+    "time_per_frame_s": 0.347,
+    "time_per_step_s": 0.289,
+    "peak_memory_gb": 22.43
+  },
+  {
+    "mode": "compile",
+    "gen_time_s": 7.02,
+    "time_per_frame_s": 0.281,
+    "time_per_step_s": 0.234,
+    "peak_memory_gb": 18.58
+  }
+]

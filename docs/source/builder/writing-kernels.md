@@ -88,15 +88,22 @@ kernel is configured to upload to the `myorg/mykernel` Hub
 repository when an upload command is used.
 
 By default, the `init` subcommand creates a CUDA kernel. You can specify
-different or additional backends with the `--backends` option:
+another backend with the `--backends` option:
+
+```bash
+$ kernel-builder init --name myorg/mykernel --backends xpu
+```
+
+You can also make a multi-backend kernel by adding all the backends
+that you would like to support as arguments to `--backends`:
 
 ```bash
 $ kernel-builder init --name myorg/mykernel --backends cuda xpu
 Initialized `myorg/mykernel` at /home/daniel/git/kernels/examples/kernels/mykernel
 ```
 
-If you want to create a kernel for all supported backends, you can
-use `--backends all`.
+Finally, if you want to create a kernel for all supported backends, you
+can use `--backends all`.
 
 ## Kernel project layout
 
@@ -134,7 +141,8 @@ In this example we can find:
     bare minimum, it should contain an `__init__.py` file.
 - Kernel tests in the directory `tests`.
 - Benchmarks in the directory `benchmarks`.
-- A kernel card template in `CARD.md`.
+- A kernel card template in `CARD.md`. This placeholders in the card are filled
+  during the kernel build.
 - The Nix flake configuration in `flake.nix`.
 - An example script that uses the kernel in `example.py`.
 

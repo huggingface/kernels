@@ -46,14 +46,10 @@ are not using NixOS, [make sure that the CUDA driver is visible](https://danield
 
 ## Getting started
 
-The easiest way to get all the Nix functionality is by putting a
-`flake.nix` in your kernel repository. To do so, copy
-[`examples/relu/flake.nix`](https://github.com/huggingface/kernels/blob/main/examples/kernels/relu/flake.nix) into the
-same directory as your `build.toml` file. Then run `nix flake update`.
-This generates a `flake.lock` file that pins the kernel builder
-and _all_ its transitive dependencies. Commit both `flake.nix`
-and `flake.lock` to your repository, this will ensure that kernel
-builds are reproducible.
+The easiest way to start a new kernel is using the `kernel-builder init`
+subcommand, which is discussed in [Writing Kernels](writing-kernels.md).
+The commands discussed in the following sections will also work on
+existing kernel sources that have `build.toml`/`flake.nix`.
 
 ## Building a kernel
 
@@ -183,6 +179,10 @@ $ cd mykernel
 $ kernel-builder build-and-upload
 ```
 
+Aside from building and uploading the kernel itself, this will also fill
+the card template and upload it as `README.md` to the Hub if the card
+template is provided in the source repository as `CARD.md`.
+
 The repository to upload to is determined by the `repo-id` and `version`
 fields in `build.toml`. For example, with the following `build.toml`, the
 kernel will be uploaded to the repository `kernels-community/flash-attn4`
@@ -199,6 +199,32 @@ repo-id = "kernels-community/flash-attn4"
 
 See [Writing Kernels](writing-kernels.md) for more details on the `build.toml`
 format.
+
+## Updating the kernel build toolchain
+
+The kernel's dependencies are fully pinned down in the `flake.lock` that
+is shipped with the kernel. We periodically release new versions of the
+build toolchain that includes bug fixes and supports newer Torch and compute backend
+versions. To update the kernel build toolchain, run `nix flake update`
+in the kernel directory:
+
+```bash
+❯ nix flake update
+• Added input 'kernel-builder':
+    'github:huggingface/kernels/8ad8a5094f1b3c425f70900699ed690d65d878c3?narHash=sha256-m8tBntCIlH/rY4BcIv5X5%2BdtgSS1yQi883Co%2Bj5cudI%3D' (2026-04-09)
+• Added input 'kernel-builder/flake-compat':
+    'github:edolstra/flake-compat/5edf11c44bc78a0d334f6334cdaf7d60d732daab?narHash=sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns%3D' (2025-12-29)
+• Added input 'kernel-builder/flake-utils':
+    'github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b?narHash=sha256-l0KFg5HjrsfsO/JpG%2Br7fRrqm12kzFHyUHqHCVpMMbI%3D' (2024-11-13)
+• Added input 'kernel-builder/flake-utils/systems':
+    'github:nix-systems/default/da67096a3b9bf56a91d16901293e51ba5b49a27e?narHash=sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768%3D' (2023-04-09)
+• Added input 'kernel-builder/nixpkgs':
+    'github:NixOS/nixpkgs/2f4fd5e1abf9bac8c1d22750c701a7a5e6b524c6?narHash=sha256-Mh6bLcYAcENBAZk3RoMPMFCGGMZmfaGMERE4siZOgP4%3D' (2026-03-31)
+• Added input 'kernel-builder/rust-overlay':
+    'github:oxalica/rust-overlay/962a0934d0e32f42d1b5e49186f9595f9b178d2d?narHash=sha256-JMdDYn0F%2BswYBILlpCeHDbCSyzqkeSGNxZ/Q5J584jM%3D' (2026-03-31)
+• Added input 'kernel-builder/rust-overlay/nixpkgs':
+    follows 'kernel-builder/nixpkgs'
+```
 
 ## Skipping the `get_kernel` check
 

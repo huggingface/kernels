@@ -36,7 +36,7 @@ KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
 class RepoInfos(NamedTuple):
     repo_id: str
-    revision: str | None
+    revision: str
     backend: str | None
 
 

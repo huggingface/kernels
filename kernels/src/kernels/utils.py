@@ -44,7 +44,7 @@ class LoadedKernel(NamedTuple):
     variant_path: Path
     package_name: str
     module_name: str
-    torch_namespace: str | None
+    op_namespace: str | None
     repo_infos: RepoInfos | None
 
 
@@ -119,14 +119,15 @@ def _import_from_path(
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore
-    torch_namespace: str | None = None
-    if (ops := sys.modules.get(f"{module_name}._ops")) is not None:
-        torch_namespace = getattr(ops.ops, "name", None)
+    op_namespace: str | None = None
+    for so_path in file_path.parent.iterdir():
+        if so_path.is_file() and so_path.name.endswith('.so'):
+            op_namespace = so_path.name.split('.')[0]
     _loaded_kernels[module_name] = LoadedKernel(
-        torch_namespace=torch_namespace,
         variant_path=variant_path,
         package_name=package_name,
         module_name=module_name,
+        op_namespace=op_namespace,
         repo_infos=_repo_infos,
     )
     return module

@@ -12,6 +12,7 @@ import sys
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
+from typing import NamedTuple
 
 from huggingface_hub import HfApi, constants
 
@@ -31,6 +32,28 @@ from kernels.variants import (
 )
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
+
+
+class RepoInfos(NamedTuple):
+    repo_id: str
+    revision: str
+    backend: str | None
+
+
+class LoadedKernel(NamedTuple):
+    variant_path: Path
+    package_name: str
+    module_name: str
+    op_namespace: str | None
+    repo_infos: RepoInfos | None
+
+
+_loaded_kernels: dict[str, LoadedKernel] = {}
+
+
+def get_loaded_kernels() -> list[LoadedKernel]:
+    """Returns a copy of the loaded kernels registry (see `kernels.utils.LoadedKernel` NamedTuple)."""
+    return list(_loaded_kernels.values())
 
 
 def _get_cache_dir() -> str | None:
@@ -71,7 +94,9 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 CACHE_DIR: str | None = _get_cache_dir()
 
 
-def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
+def _import_from_path(
+    module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None
+) -> ModuleType:
     metadata = Metadata.load_from_variant(variant_path)
     validate_dependencies(module_name, metadata.python_depends, _backend())
 
@@ -83,6 +108,7 @@ def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
     # it would also be used for other imports. So, we make a module name that
     # depends on the path for it to be unique using the hex-encoded hash of
     # the path.
+    package_name = module_name
     path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
     module_name = f"{module_name}_{path_hash}"
     spec = importlib.util.spec_from_file_location(module_name, file_path)
@@ -93,6 +119,17 @@ def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore
+    op_namespace: str | None = None
+    for so_path in file_path.parent.iterdir():
+        if so_path.is_file() and so_path.name.endswith('.so'):
+            op_namespace = so_path.name.split('.')[0]
+    _loaded_kernels[module_name] = LoadedKernel(
+        variant_path=variant_path,
+        package_name=package_name,
+        module_name=module_name,
+        op_namespace=op_namespace,
+        repo_infos=_repo_infos,
+    )
     return module
 
 
@@ -239,6 +276,7 @@ def get_kernel(
     version: int | str | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
+    reload: bool = False,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -259,6 +297,9 @@ def get_kernel(
             The backend will be detected automatically if not provided.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        reload (`bool`, *optional*, defaults to `False`):
+            Whether to force reloading the kernel in case it is already loaded,
+            given: `repo_id`, (possibly inferred) `revision` and `backend`
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -279,10 +320,20 @@ def get_kernel(
         return get_local_kernel(override, package_name_from_repo_id(repo_id))
 
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
+    repo_infos = RepoInfos(
+        repo_id=repo_id,
+        revision=revision,
+        backend=backend,
+    )
+    if not reload:
+        for loaded_kernel in get_loaded_kernels():
+            if loaded_kernel.repo_infos == repo_infos:
+                if (module := sys.modules.get(loaded_kernel.module_name)) is not None:
+                    return module
     package_name, variant_path = install_kernel(
         repo_id, revision=revision, backend=backend, user_agent=user_agent
     )
-    return _import_from_path(package_name, variant_path)
+    return _import_from_path(package_name, variant_path, _repo_infos=repo_infos)
 
 
 def get_local_kernel(

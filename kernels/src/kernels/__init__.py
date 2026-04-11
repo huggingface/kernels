@@ -23,6 +23,7 @@ from kernels.layer import (
 )
 from kernels.utils import (
     get_kernel,
+    get_loaded_kernels,
     get_local_kernel,
     get_locked_kernel,
     has_kernel,
@@ -45,6 +46,7 @@ __all__ = [
     "LockedLayerRepository",
     "Mode",
     "get_kernel",
+    "get_loaded_kernels",
     "get_local_kernel",
     "get_locked_kernel",
     "has_kernel",

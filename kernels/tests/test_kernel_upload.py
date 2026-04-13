@@ -14,7 +14,7 @@ from kernels.cli import upload_kernels
 from kernels.cli.upload import BUILD_COMMIT_BATCH_SIZE, upload_kernels_dir
 from kernels.utils import _get_hf_api
 
-REPO_ID = "valid_org/kernels-upload-test"
+REPO_ID = "__DUMMY_KERNELS_USER__/kernels-upload-test"
 
 
 PY_CONTENT = """\

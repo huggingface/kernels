@@ -72,14 +72,15 @@ jobs:
           uv pip install einops nvidia-cutlass-dsl
           uv run pytest tests/test_deps.py
 
-      - name: Run staging tests
+      - name: Run hub-ci upload tests
         working-directory: ./kernels
         env:
           HF_HUB_DOWNLOAD_TIMEOUT: 60
-          HF_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
+          HF_ENDPOINT: https://hub-ci.huggingface.co
+          HF_TOKEN: ${{ secrets.HF_HUB_CI_TOKEN }}
         run: |
-          HUGGINGFACE_CO_STAGING=true uv run pytest --token -m "is_staging_test" tests/
-        if: matrix.python_version == '3.10' && matrix.torch-version == '2.9.0'
+          uv run pytest --token -m "is_staging_test" tests/
+        if: matrix.python-version == '3.10' && matrix.torch-version == '2.9.0'
 
       - name: Check kernel check
         working-directory: ./kernels

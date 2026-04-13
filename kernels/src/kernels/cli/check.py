@@ -11,7 +11,7 @@ from kernel_abi_check import (  # type: ignore[import-not-found]
     ObjectFile,
 )
 
-from kernels.utils import CACHE_DIR, _get_hf_api
+from kernels.utils import CACHE_DIR, _get_hf_api, _resolve_repo_type
 
 
 def check_kernel(
@@ -21,8 +21,8 @@ def check_kernel(
     python_abi: str,
     repo_id: str,
     revision: str,
-    repo_type: str,
 ):
+    repo_type = _resolve_repo_type(repo_id, revision=revision)
     variants_path = (
         Path(
             str(

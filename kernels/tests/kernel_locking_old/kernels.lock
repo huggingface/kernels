@@ -1,26 +1,62 @@
 [
   {
     "repo_id": "kernels-community/activation",
-    "sha": "e3dec6a812261059d936a1c232ba265856c6176b",
+    "sha": "383e6c6a8290fe4f753965a99697816c31ac2916",
     "variants": {
       "torch210-cu128-x86_64-windows": {
         "hash": "sha256-cbf085e1d297d990d9cb074fb5079ff48e9682c729f53a0899a36b5164a6fb45",
         "hash_type": "git_lfs_concat"
       },
+      "torch210-cxx11-cu126-aarch64-linux": {
+        "hash": "sha256-452c9c658a5ce21f874b8dd69986b3d66b4d6e48a23634fc2969a7200827d64c",
+        "hash_type": "git_lfs_concat"
+      },
       "torch210-cxx11-cu126-x86_64-linux": {
-        "hash": "sha256-309cf8d7557e9c1484c109539548faeabc9022425280df28bc00eb2dcb3e0fae",
+        "hash": "sha256-71c6a6c46c8a3dfd2bd6e45b87a4db72a73fcff8cd00b8bdb4091ae747c6b6c4",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch210-cxx11-cu128-aarch64-linux": {
+        "hash": "sha256-80d64a08988c699f0ec14030cf8c6b9c17a7901b6b56a6ae436e1f3060ee0021",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu128-x86_64-linux": {
-        "hash": "sha256-7d533499fb1018f96b9118767a7e39292b5b9990710e74f1ee6b266196b8f19b",
+        "hash": "sha256-f8af0e29c2a171cf51b0a7670381ba6a0c43970eebc5c593d07f0ac244b068cb",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch210-cxx11-cu130-aarch64-linux": {
+        "hash": "sha256-6e05acd887fda7ac71a1a05d28c13e81fea53aa1fb530940c8ed545fdc9c19ef",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu130-x86_64-linux": {
-        "hash": "sha256-7490a34e58f8a82d06992ffb7cae27e4dc8db22bc4b53bfd346eec87c30a4b27",
+        "hash": "sha256-73909380d9a75dbf34db82533713f465409f9457db6cb2d04471060e203a6972",
         "hash_type": "git_lfs_concat"
       },
       "torch210-metal-aarch64-darwin": {
         "hash": "sha256-a7d10d6ddbe4bb7b869419f9787afe4a826f65944be8d2df080ae32a217ab5cc",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cxx11-cu126-aarch64-linux": {
+        "hash": "sha256-5762bb7ad9262c69ead5ce98f71fc6cc780c94f061827cdc1a250477796e05fa",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cxx11-cu126-x86_64-linux": {
+        "hash": "sha256-97e4b8bd95661cc260134efbfc25906a07bf861e53e46c2ba62a5773e16806c3",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cxx11-cu128-aarch64-linux": {
+        "hash": "sha256-78797b9cb760c2b15da6df80a146de8d28ab90334e4284efd5e9d86c6a618404",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cxx11-cu128-x86_64-linux": {
+        "hash": "sha256-4edacf6f431b8f0bd88d66a66f8e83d4765b22ed4ce8bb7397f5b529b1897ff8",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cxx11-cu130-aarch64-linux": {
+        "hash": "sha256-49356c8a11eef645f2b43702d183e17b5d992b7beb7f17136f106973a73830f6",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cxx11-cu130-x86_64-linux": {
+        "hash": "sha256-a081ca8cae1620b2f5a77fd55b473e5d904fd1553bfcaed3dbc60381958cf8f4",
         "hash_type": "git_lfs_concat"
       },
       "torch27-cxx11-cu118-x86_64-linux": {
@@ -79,6 +115,14 @@
         "hash": "sha256-64852d1194ba9c2476f3b3046148fbbfeb7adab645ef86b30dd393d4c0ba4ed0",
         "hash_type": "git_lfs_concat"
       },
+      "torch29-cxx11-cu129-aarch64-linux": {
+        "hash": "sha256-bd90203c83387c1c79e465b7ed530f07fa183032a21120d65ac75f53af4b0081",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch29-cxx11-cu129-x86_64-linux": {
+        "hash": "sha256-33a99b0814c7d257f1f520fdc0ce364d33c128630ab189900d2b34274df8300b",
+        "hash_type": "git_lfs_concat"
+      },
       "torch29-cxx11-cu130-aarch64-linux": {
         "hash": "sha256-23741b935462b53bdf868f8d1c9c8cff5f02f71ea3b0550df41dc8b030b0b474",
         "hash_type": "git_lfs_concat"
@@ -95,7 +139,7 @@
   },
   {
     "repo_id": "kernels-community/triton-scaled-mm",
-    "sha": "af10d8c1affe8efce93d228c3e6e64ff673d493f",
+    "sha": "d9d0c93d9a705edd38d446199589c5aca981e215",
     "variants": {
       "torch-universal": {
         "hash": "sha256-b843c5f30b52b6c1c56fca28cb0cf453be71d6ce7d308f383dce71a8050f7b52",

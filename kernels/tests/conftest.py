@@ -37,7 +37,6 @@ has_xpu = (
 )
 
 has_npu = torch is not None and _get_torch_privateuse_backend_name() == "npu"
-SUBPROCESS_TEST_ENV = "PYTEST_SUBPROCESS_TEST_NODEID"
 
 has_jax = (
     importlib.util.find_spec("jax") is not None
@@ -84,29 +83,3 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping NPU-only test on host without NPU")
     if "token" in item.keywords and not item.config.getoption("--token"):
         pytest.skip("need --token option to run this test")
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_pyfunc_call(pyfuncitem):
-    if "subprocess_test" not in pyfuncitem.keywords:
-        return None
-
-    if os.environ.get(SUBPROCESS_TEST_ENV) == pyfuncitem.nodeid:
-        return None
-
-    env = os.environ.copy()
-    env[SUBPROCESS_TEST_ENV] = pyfuncitem.nodeid
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", pyfuncitem.nodeid],
-        cwd=pyfuncitem.config.rootpath,
-        env=env,
-        text=True,
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        pytest.fail(
-            "subprocess test failed\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
-        )
-    return True

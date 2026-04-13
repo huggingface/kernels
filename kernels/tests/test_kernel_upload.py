@@ -36,6 +36,17 @@ class UploadArgs:
     branch: None
 
 
+def create_build_variant(tmpdir: str, filename: str) -> tuple[Path, Path]:
+    build_dir = Path(tmpdir) / "build" / "torch-cpu"
+    build_dir.mkdir(parents=True, exist_ok=True)
+    (build_dir / "metadata.json").write_text(
+        '{"version": null, "python-depends": []}'
+    )
+    script_path = build_dir / filename
+    script_path.write_text(PY_CONTENT)
+    return build_dir, script_path
+
+
 def next_filename(path: Path) -> Path:
     """
     Given a path like foo_2050.py, return foo_2051.py.
@@ -77,11 +88,7 @@ def get_filenames_from_a_repo(repo_id: str) -> list[str]:
 @pytest.mark.parametrize("branch", (None, "foo"))
 def test_kernel_upload_works_as_expected(branch):
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = f"{tmpdir}/build/torch-universal/upload_test"
-        build_dir = Path(path)
-        build_dir.mkdir(parents=True, exist_ok=True)
-        script_path = build_dir / "foo.py"
-        script_path.write_text(PY_CONTENT)
+        _, script_path = create_build_variant(tmpdir, "foo.py")
         upload_kernels(UploadArgs(tmpdir, REPO_ID, False, branch))
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
@@ -116,10 +123,7 @@ def test_kernel_upload_new_branch_starts_fresh():
 
     # First upload to main to populate it.
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = f"{tmpdir}/build/torch-universal/upload_test"
-        build_dir = Path(path)
-        build_dir.mkdir(parents=True, exist_ok=True)
-        (build_dir / "foo.py").write_text(PY_CONTENT)
+        create_build_variant(tmpdir, "foo.py")
         upload_kernels(UploadArgs(tmpdir, REPO_ID, False, None))
 
     main_files = get_filenames_from_a_repo(REPO_ID)
@@ -127,10 +131,7 @@ def test_kernel_upload_new_branch_starts_fresh():
 
     # Now upload a different variant to a new branch.
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = f"{tmpdir}/build/torch-universal/upload_test"
-        build_dir = Path(path)
-        build_dir.mkdir(parents=True, exist_ok=True)
-        (build_dir / "bar.py").write_text(PY_CONTENT)
+        create_build_variant(tmpdir, "bar.py")
         upload_kernels(UploadArgs(tmpdir, REPO_ID, False, "v2"))
 
     branch_files = get_filenames_from_a_branch(REPO_ID, "v2")
@@ -147,23 +148,15 @@ def test_kernel_upload_new_branch_starts_fresh():
 @pytest.mark.is_staging_test
 def test_kernel_upload_deletes_as_expected():
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = f"{tmpdir}/build/torch-universal/upload_test"
-        build_dir = Path(path)
-        build_dir.mkdir(parents=True, exist_ok=True)
-        script_path = build_dir / "foo_2025.py"
-        script_path.write_text(PY_CONTENT)
+        _, script_path = create_build_variant(tmpdir, "foo_2025.py")
         upload_kernels(UploadArgs(tmpdir, REPO_ID, False, None))
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)
     filename_to_change = get_filename_to_change(repo_filenames)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        path = f"{tmpdir}/build/torch-universal/upload_test"
-        build_dir = Path(path)
-        build_dir.mkdir(parents=True, exist_ok=True)
         changed_filename = next_filename(Path(filename_to_change))
-        script_path = build_dir / changed_filename
-        script_path.write_text(PY_CONTENT)
+        create_build_variant(tmpdir, changed_filename)
         upload_kernels(UploadArgs(tmpdir, REPO_ID, False, None))
 
     repo_filenames = get_filenames_from_a_repo(REPO_ID)

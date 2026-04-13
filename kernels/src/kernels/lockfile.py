@@ -63,6 +63,9 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
             f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
         )
 
+    # Note: previouslly we used r.siblings, but this attribute is not supported
+    # on kernel repo types. Instead, we list the repo tree and filter for files which
+    # should be supported across all repo types.
     siblings = [
         f
         for f in api.list_repo_tree(

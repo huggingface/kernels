@@ -15,7 +15,7 @@ def kernel():
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", "main", repo_type="kernel")
+    package_name, path = install_kernel("kernels-community/activation", "main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
     return package_name, path
@@ -86,7 +86,7 @@ def test_local_kernel(local_kernel, device):
 )
 def test_local_kernel_path_types(repo_revision, device):
     repo_id, revision = repo_revision
-    package_name, path = install_kernel(repo_id, revision, repo_type="model")
+    package_name, path = install_kernel(repo_id, revision)
 
     # Top-level repo path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071

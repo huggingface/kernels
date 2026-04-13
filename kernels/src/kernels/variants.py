@@ -293,7 +293,7 @@ def parse_variant(variant_str: str) -> Variant:
 
 
 def get_variants(
-    api: HfApi, *, repo_id: str, revision: str, repo_type: str
+    api: HfApi, *, repo_id: str, revision: str, repo_type: str | None = None
 ) -> list[Variant]:
     """Get all the build variants available from a kernel repository."""
 

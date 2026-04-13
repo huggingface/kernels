@@ -133,7 +133,7 @@ def install_kernel(
     repo_id: str,
     revision: str,
     *,
-    repo_type: str,
+    repo_type: str | None = None,
     local_files_only: bool = False,
     backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
@@ -149,6 +149,8 @@ def install_kernel(
             The Hub repository containing the kernel.
         revision (`str`):
             The specific revision (branch, tag, or commit) to download.
+        repo_type (`str`, *optional*):
+            The repository type (``"kernel"`` or ``"model"``). Detected automatically if not provided.
         local_files_only (`bool`, *optional*, defaults to `False`):
             Whether to only use local files and not download from the Hub.
         backend (`str`, *optional*):
@@ -158,13 +160,14 @@ def install_kernel(
             Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
-        repo_type (`str`):
-            The repository type (``"kernel"`` or ``"model"``).
 
     Returns:
         `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
+
+    if repo_type is None:
+        repo_type = _resolve_repo_type(repo_id, revision=revision)
 
     if not local_files_only:
         repo_id, revision = resolve_status(api, repo_id, revision, repo_type)
@@ -244,11 +247,15 @@ def install_kernel_all_variants(
     repo_id: str,
     revision: str,
     *,
-    repo_type: str,
+    repo_type: str | None = None,
     local_files_only: bool = False,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     api = _get_hf_api()
+
+    if repo_type is None:
+        repo_type = _resolve_repo_type(repo_id, revision=revision)
+
     repo_path = Path(
         str(
             api.snapshot_download(

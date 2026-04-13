@@ -14,15 +14,6 @@ setuptools files for building the kernel as a regular Python package.
 Since CMake and setuptools are widely supported by IDEs, this provides
 a much-improved development experience.
 
-## Installing `kernel-builder`
-
-`kernel-builder` is available as a Rust crate. After [installing Rust](https://rustup.rs),
-it can be built and installed as follows:
-
-```bash
-$ cargo install hf-kernel-builder
-```
-
 ## Generating a Python project with `kernel-builder`
 
 `kernel-builder` can create CMake/Python project files for a kernel with

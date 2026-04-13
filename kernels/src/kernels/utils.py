@@ -41,14 +41,12 @@ class RepoInfos(NamedTuple):
 
 
 class LoadedKernel(NamedTuple):
-    variant_path: Path
+    module: ModuleType
     package_name: str
-    module_name: str
-    op_namespace: str | None
     repo_infos: RepoInfos | None
 
 
-_loaded_kernels: dict[str, LoadedKernel] = {}
+_loaded_kernels: dict[Path, LoadedKernel] = {}
 
 
 def get_loaded_kernels() -> list[LoadedKernel]:
@@ -97,6 +95,9 @@ CACHE_DIR: str | None = _get_cache_dir()
 def _import_from_path(
     module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None
 ) -> ModuleType:
+    if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
+        return loaded_kernel.module
+
     metadata = Metadata.load_from_variant(variant_path)
     validate_dependencies(module_name, metadata.python_depends, _backend())
 
@@ -119,15 +120,10 @@ def _import_from_path(
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore
-    op_namespace: str | None = None
-    for so_path in file_path.parent.iterdir():
-        if so_path.is_file() and so_path.name.endswith('.so'):
-            op_namespace = so_path.name.split('.')[0]
-    _loaded_kernels[module_name] = LoadedKernel(
-        variant_path=variant_path,
+
+    _loaded_kernels[variant_path] = LoadedKernel(
+        module=module,
         package_name=package_name,
-        module_name=module_name,
-        op_namespace=op_namespace,
         repo_infos=_repo_infos,
     )
     return module
@@ -276,7 +272,6 @@ def get_kernel(
     version: int | str | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
-    reload: bool = False,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -297,9 +292,6 @@ def get_kernel(
             The backend will be detected automatically if not provided.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
-        reload (`bool`, *optional*, defaults to `False`):
-            Whether to force reloading the kernel in case it is already loaded,
-            given: `repo_id`, (possibly inferred) `revision` and `backend`
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -325,11 +317,6 @@ def get_kernel(
         revision=revision,
         backend=backend,
     )
-    if not reload:
-        for loaded_kernel in get_loaded_kernels():
-            if loaded_kernel.repo_infos == repo_infos:
-                if (module := sys.modules.get(loaded_kernel.module_name)) is not None:
-                    return module
     package_name, variant_path = install_kernel(
         repo_id, revision=revision, backend=backend, user_agent=user_agent
     )

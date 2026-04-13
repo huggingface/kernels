@@ -10,6 +10,10 @@
 let
   version =
     (builtins.fromTOML (builtins.readFile ../../../kernel-builder/Cargo.toml)).package.version;
+  cargoFlags = [
+    "-p"
+    "hf-kernel-builder"
+  ];
 in
 rustPlatform.buildRustPackage {
   inherit version;
@@ -43,21 +47,18 @@ rustPlatform.buildRustPackage {
     in
     lib.fileset.toSource {
       root = ../../..;
-      fileset = lib.fileset.unions [
-        (lib.fileset.fileFilter sourceFiles ../../../kernel-builder)
-        (lib.fileset.fileFilter sourceFiles ../../../kernels-data)
-      ];
+      fileset = lib.fileset.fileFilter sourceFiles ../../..;
     };
-
-  sourceRoot = "source/kernel-builder";
 
   cargoLock = {
-    lockFile = ../../../kernel-builder/Cargo.lock;
+    lockFile = ../../../Cargo.lock;
     outputHashes = {
-      "huggingface-hub-0.1.0" = "sha256-XgVrtujU7gPQ3XnUxeEVF9Kaf4+/EwLudKkwDPj44II=";
-      "hf-xet-1.4.0" = "sha256-/vvU8qy9U+suiH9MCcxrV3Ayw84yRV6EmW0yzB7Uvng=";
+      "huggingface-hub-0.0.1" = "sha256-By8b1NUPWu+XF3Om1NcEO+o2qdZUco+FxvrJGNRqxWs=";
     };
   };
+
+  cargoBuildFlags = cargoFlags;
+  cargoTestFlags = cargoFlags;
 
   # e2e tests look for binary at target/debug/ which doesn't exist in nix
   doCheck = false;

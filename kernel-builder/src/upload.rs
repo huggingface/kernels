@@ -7,13 +7,13 @@ use std::{
 use clap::Args;
 use eyre::{bail, Context, Result};
 use huggingface_hub::{
-    AddSource, CommitOperation, CreateBranchParams, CreateCommitParams, CreateRepoParams,
-    ListRepoFilesParams, ListRepoRefsParams, RepoType,
+    AddSource, CommitOperation, CreateRepoParams, RepoCreateBranchParams, RepoCreateCommitParams,
+    RepoListFilesParams, RepoListRefsParams, RepoType,
 };
 use walkdir::WalkDir;
 
 use crate::{
-    hf,
+    hf::{self, repo_handle},
     pyproject::parse_metadata,
     util::{check_or_infer_kernel_dir, parse_build},
 };
@@ -117,23 +117,18 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         .unwrap_or(&arg_repo_id)
         .to_owned();
 
+    let repo = repo_handle(&api, repo_type, &repo_id);
+
     let is_new_version_branch = if let Some(ref branch) = version_branch {
-        let refs_params = ListRepoRefsParams::builder()
-            .repo_id(&repo_id)
-            .repo_type(repo_type)
-            .build();
-        let refs = api
-            .list_repo_refs(&refs_params)
+        let refs_params = RepoListRefsParams::builder().build();
+        let refs = repo
+            .list_refs(&refs_params)
             .wrap_err("Cannot list repository refs")?;
         let exists = refs.branches.iter().any(|r| r.name == *branch);
 
         if !exists {
-            let params = CreateBranchParams::builder()
-                .repo_id(&repo_id)
-                .branch(branch)
-                .repo_type(repo_type)
-                .build();
-            api.create_branch(&params)
+            let params = RepoCreateBranchParams::builder().branch(branch).build();
+            repo.create_branch(&params)
                 .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
         }
         eprintln!(
@@ -156,12 +151,10 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     );
 
     if let Some(ref branch) = version_branch {
-        let params = ListRepoFilesParams {
-            repo_id: repo_id.to_owned(),
+        let params = RepoListFilesParams {
             revision: Some(branch.clone()),
-            repo_type: Some(repo_type),
         };
-        let version_existing_files: Vec<String> = api.list_repo_files(&params).unwrap_or_default();
+        let version_existing_files: Vec<String> = repo.list_files(&params).unwrap_or_default();
 
         let version_ops = operations_by_branch.entry(branch.clone()).or_default();
 
@@ -210,17 +203,15 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 "Uploaded using `kernel-builder`.".to_owned()
             };
 
-            let params = CreateCommitParams {
-                repo_id: repo_id.to_owned(),
+            let params = RepoCreateCommitParams {
                 operations: chunk.to_vec(),
                 commit_message,
                 commit_description: None,
-                repo_type: Some(repo_type),
                 revision: Some(branch.clone()),
                 create_pr: None,
                 parent_commit: None,
             };
-            api.create_commit(&params)
+            repo.create_commit(&params)
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
 
             if batch_count > 1 {

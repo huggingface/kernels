@@ -183,8 +183,8 @@ function Find-KernelBuilder {
 
     # Search common locations
     $searchPaths = @(
-        (Join-Path $PSScriptRoot '..' '..' '..' 'kernel-builder' 'target' 'release' 'kernel-builder.exe'),
-        (Join-Path $PSScriptRoot '..' '..' '..' 'kernel-builder' 'target' 'debug' 'kernel-builder.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'target' 'release' 'kernel-builder.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'target' 'debug' 'kernel-builder.exe'),
         'kernel-builder.exe',
         'kernel-builder'
     )

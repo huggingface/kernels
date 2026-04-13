@@ -43,6 +43,7 @@ def test_load_locked():
 
 
 @pytest.mark.cuda_only
+@pytest.mark.subprocess_test
 def test_load_locked_old():
     project_dir = Path(__file__).parent / "kernel_locking_old"
     # Also validates that hashing works correctly.

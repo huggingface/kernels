@@ -648,7 +648,7 @@ def _resolve_repo_type(repo_id: str, revision: str | None = None) -> str:
     Tries ``"kernel"`` first, falls back to ``"model"``.
     When *revision* is given, also verifies the revision exists in
     that namespace — a repo may exist as both types with different commits."""
-    import warnings
+    # import warnings
     from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
 
     api = _get_hf_api()
@@ -660,12 +660,14 @@ def _resolve_repo_type(repo_id: str, revision: str | None = None) -> str:
         pass
 
     api.repo_info(repo_id=repo_id, repo_type="model", revision=revision)
-    warnings.warn(
-        f"Repository '{repo_id}' uses deprecated repo type 'model'; "
-        "use 'kernel' instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
+    # TODO: add back the deprecation warning when we remove support for the "model" repo type.
+    # we should also add a removal date in the warning message for a final migration date.
+    # warnings.warn(
+    #     f"Repository '{repo_id}' uses deprecated repo type 'model'; "
+    #     "use 'kernel' instead.",
+    #     DeprecationWarning,
+    #     stacklevel=2,
+    # )
     return "model"
 
 

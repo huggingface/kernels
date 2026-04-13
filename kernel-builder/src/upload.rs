@@ -23,8 +23,8 @@ const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum RepoTypeArg {
-    #[default]
     Model,
+    #[default]
     Kernel,
 }
 
@@ -56,9 +56,8 @@ pub struct UploadArgs {
     #[arg(long)]
     pub private: bool,
 
-    /// TODO: remove when we fully move over to kernel repos
-    /// Repository type on Hugging Face Hub (`model` or `kernel`).
-    #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+    /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
+    #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
     pub repo_type: RepoTypeArg,
 }
 

@@ -115,8 +115,8 @@ enum Commands {
         #[arg(long)]
         private: bool,
 
-        /// Repository type on Hugging Face Hub (`model` or `kernel`).
-        #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+        /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
+        #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
         repo_type: RepoTypeArg,
     },
 

@@ -14,7 +14,9 @@ on:
   workflow_dispatch:
 
 env:
-  E2E_REPO_ID: kernels-test/kernels-upload-test
+  HF_ENDPOINT: https://hub-ci.huggingface.co
+  HF_TOKEN: ${{ secrets.HF_HUB_CI_TOKEN }}
+  E2E_REPO_ID: __DUMMY_KERNELS_USER__/kernels-upload-test
   E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
 
 concurrency:
@@ -60,7 +62,7 @@ jobs:
           test -f tests/test_kernels_upload_test.py
           test -f example.py
           grep -q 'name = "kernels-upload-test"' build.toml
-          grep -q 'repo-id = "kernels-test/kernels-upload-test"' build.toml
+          grep -q 'repo-id = "__DUMMY_KERNELS_USER__/kernels-upload-test"' build.toml
           grep -q 'backend = "cuda"' build.toml
 
       - name: Patch flake.nix to use local nix-builder
@@ -83,10 +85,9 @@ jobs:
           ls "$VARIANT_DIR"/*.so
 
       - name: Upload kernel to Hub
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }}
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }} --repo-type model
 
   download-and-test:
     name: Download and test kernel via get_kernel
@@ -112,8 +113,6 @@ jobs:
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           uv run --no-sync python -c "
           import torch

@@ -1,10 +1,10 @@
 [
   {
     "repo_id": "kernels-test/versions",
-    "sha": "dc142fd6c9920c993d32be6358b78957c58681c3",
+    "sha": "d3821a34bf6736bb7312025138becd4b8b2eb704",
     "variants": {
       "torch-universal": {
-        "hash": "sha256-35ce0ccfe68e392cbc06feef72268f4c41a74b9920496a2c6ee8978db7f7c17c",
+        "hash": "sha256-57de77a9bde54f52d0a67eb9e5d259d223cae66963f644ed2b7386f59f7e2d23",
         "hash_type": "git_lfs_concat"
       }
     }

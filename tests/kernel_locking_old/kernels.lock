@@ -1,62 +1,70 @@
 [
   {
     "repo_id": "kernels-community/activation",
-    "sha": "383e6c6a8290fe4f753965a99697816c31ac2916",
+    "sha": "b3cb933fdc2354b80db222dadff831503b9c1632",
     "variants": {
       "torch210-cu128-x86_64-windows": {
         "hash": "sha256-cbf085e1d297d990d9cb074fb5079ff48e9682c729f53a0899a36b5164a6fb45",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu126-aarch64-linux": {
-        "hash": "sha256-452c9c658a5ce21f874b8dd69986b3d66b4d6e48a23634fc2969a7200827d64c",
+        "hash": "sha256-85184e408af4b22586d1da98632b7d1ab3d9d87b8becbc5b5c785025a55fbe88",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu126-x86_64-linux": {
-        "hash": "sha256-71c6a6c46c8a3dfd2bd6e45b87a4db72a73fcff8cd00b8bdb4091ae747c6b6c4",
+        "hash": "sha256-924c5f36805c1f12649cfabc28d1234ffce7cc6fa7e12c9e0841b3760290a57a",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu128-aarch64-linux": {
-        "hash": "sha256-80d64a08988c699f0ec14030cf8c6b9c17a7901b6b56a6ae436e1f3060ee0021",
+        "hash": "sha256-45ba6c5202137081323abc42c92b5a2fb9c46b1d89f9f2d8ecd7e4192cf66e2e",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu128-x86_64-linux": {
-        "hash": "sha256-f8af0e29c2a171cf51b0a7670381ba6a0c43970eebc5c593d07f0ac244b068cb",
+        "hash": "sha256-0c5ff1cdf5d020edc4b79b7bad40f671c8692c33fa2492334c0171a328c546e5",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu130-aarch64-linux": {
-        "hash": "sha256-6e05acd887fda7ac71a1a05d28c13e81fea53aa1fb530940c8ed545fdc9c19ef",
+        "hash": "sha256-e3c8da0b23e9c4fa7b749e5b917f029951135a4c0d5fc4e76d6bc84d6201f116",
         "hash_type": "git_lfs_concat"
       },
       "torch210-cxx11-cu130-x86_64-linux": {
-        "hash": "sha256-73909380d9a75dbf34db82533713f465409f9457db6cb2d04471060e203a6972",
+        "hash": "sha256-d090008245aec4d8dd7a92226c15e6cc3b9465afebe9a7a2357dad78c3c3be2c",
         "hash_type": "git_lfs_concat"
       },
       "torch210-metal-aarch64-darwin": {
-        "hash": "sha256-a7d10d6ddbe4bb7b869419f9787afe4a826f65944be8d2df080ae32a217ab5cc",
+        "hash": "sha256-369e4f2ca723aa2776cab8330eae464b99ee7531072d1f90075afeadc4c5c5d1",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-cu128-x86_64-windows": {
+        "hash": "sha256-b4ff2e690c8eac3e93643c442f8cf8acc8f6514d9054fa425186800d2a5a6e2f",
         "hash_type": "git_lfs_concat"
       },
       "torch211-cxx11-cu126-aarch64-linux": {
-        "hash": "sha256-5762bb7ad9262c69ead5ce98f71fc6cc780c94f061827cdc1a250477796e05fa",
+        "hash": "sha256-abff92d40279ee8324039b0ddfa7e4791d6d0a52ea552328903ec48d9cb7f9f4",
         "hash_type": "git_lfs_concat"
       },
       "torch211-cxx11-cu126-x86_64-linux": {
-        "hash": "sha256-97e4b8bd95661cc260134efbfc25906a07bf861e53e46c2ba62a5773e16806c3",
+        "hash": "sha256-deb8ab3998f075b44462cce4bf36d449c8934012c928073c36f1deabd10d9445",
         "hash_type": "git_lfs_concat"
       },
       "torch211-cxx11-cu128-aarch64-linux": {
-        "hash": "sha256-78797b9cb760c2b15da6df80a146de8d28ab90334e4284efd5e9d86c6a618404",
+        "hash": "sha256-ff7945f50f5b27d43d31cbe1ba3b515fcb8bdc691538b6632efafbb61b7cce4d",
         "hash_type": "git_lfs_concat"
       },
       "torch211-cxx11-cu128-x86_64-linux": {
-        "hash": "sha256-4edacf6f431b8f0bd88d66a66f8e83d4765b22ed4ce8bb7397f5b529b1897ff8",
+        "hash": "sha256-3ec6937795f4d0178ce36dbc23e53e0cb59bb583f4158b6cde254a37e1202881",
         "hash_type": "git_lfs_concat"
       },
       "torch211-cxx11-cu130-aarch64-linux": {
-        "hash": "sha256-49356c8a11eef645f2b43702d183e17b5d992b7beb7f17136f106973a73830f6",
+        "hash": "sha256-b574e8b6f35077b78af583c735e952acfcc81a61400e53821053fa9537a72030",
         "hash_type": "git_lfs_concat"
       },
       "torch211-cxx11-cu130-x86_64-linux": {
-        "hash": "sha256-a081ca8cae1620b2f5a77fd55b473e5d904fd1553bfcaed3dbc60381958cf8f4",
+        "hash": "sha256-2fd9f14f77b717b7a1ef0010a57a4a6e45b322ea76ed866035103576116d32cf",
+        "hash_type": "git_lfs_concat"
+      },
+      "torch211-metal-aarch64-darwin": {
+        "hash": "sha256-9430c5a298420b9457fe96aa1e8011e62aeaaa60a918ae35c563da1d62262a7a",
         "hash_type": "git_lfs_concat"
       },
       "torch27-cxx11-cu118-x86_64-linux": {
@@ -116,11 +124,11 @@
         "hash_type": "git_lfs_concat"
       },
       "torch29-cxx11-cu129-aarch64-linux": {
-        "hash": "sha256-bd90203c83387c1c79e465b7ed530f07fa183032a21120d65ac75f53af4b0081",
+        "hash": "sha256-c7444128e54787e1597e1d84ef221d4cf0e2cdefd11f772d8eb5ab904d8c8df0",
         "hash_type": "git_lfs_concat"
       },
       "torch29-cxx11-cu129-x86_64-linux": {
-        "hash": "sha256-33a99b0814c7d257f1f520fdc0ce364d33c128630ab189900d2b34274df8300b",
+        "hash": "sha256-6868015dc4cdc088b669f474a944a206d78f9cf427c0a35086091309cff8a3ed",
         "hash_type": "git_lfs_concat"
       },
       "torch29-cxx11-cu130-aarch64-linux": {

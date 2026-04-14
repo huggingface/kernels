@@ -101,7 +101,7 @@ def select_revision_or_version(
         return resolve_version_spec_as_ref(repo_id, version).target_commit
 
     warnings.warn(
-        "Future versions of `kernels` (>=0.14) will require specifying a kernel version or revision. "
+        "Future versions of `kernels` (>=0.15) will require specifying a kernel version or revision. "
         "See: https://huggingface.co/docs/kernels/migration",
         FutureWarning,
         stacklevel=2,

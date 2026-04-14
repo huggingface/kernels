@@ -184,7 +184,7 @@ def test_no_version_or_revision_warning():
 
     from kernels import __version__
 
-    assert Version(__version__) < Version("0.14"), (
+    assert Version(__version__) < Version("0.15"), (
         "The deprecation cycle for requiring `version` or `revision` is complete. "
         "Remove the fallback to 'main' in `select_revision_or_version` and make "
         "`version` or `revision` a required argument."

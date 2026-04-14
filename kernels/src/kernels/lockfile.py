@@ -39,23 +39,22 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
     """
-    from kernels.utils import _get_hf_api, _resolve_repo_type
+    from kernels.utils import _get_hf_api
 
     api = _get_hf_api()
-    repo_type = _resolve_repo_type(repo_id)
 
     # NOTE: the destination of a redirect is respected but we still use
     # resolve_version_spec_as_ref to resolve the version specifier of the
     # final destination repo.
-    repo_id, _ = resolve_status(api, repo_id, "main", repo_type)
+    repo_id, _ = resolve_status(api, repo_id, "main")
 
-    tag_for_newest, repo_type = resolve_version_spec_as_ref(repo_id, version_spec)
+    tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 
     revision = tag_for_newest.target_commit
 
     r = api.repo_info(
         repo_id=repo_id,
-        repo_type=repo_type,
+        repo_type="kernel",
         revision=revision,
     )
     if r.sha is None:
@@ -63,14 +62,11 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
             f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
         )
 
-    # Note: previouslly we used r.siblings, but this attribute is not supported
-    # on kernel repo types. Instead, we list the repo tree and filter for files which
-    # should be supported across all repo types.
     siblings = [
         f
         for f in api.list_repo_tree(
             repo_id=repo_id,
-            repo_type=repo_type,
+            repo_type="kernel",
             revision=revision,
             recursive=True,
         )

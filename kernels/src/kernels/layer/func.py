@@ -81,12 +81,11 @@ class FuncRepository:
 
     @functools.lru_cache()
     def _resolve_revision(self) -> str:
-        revision, _ = select_revision_or_version(
+        return select_revision_or_version(
             repo_id=self._repo_id,
             revision=self._revision,
             version=self._version,
         )
-        return revision
 
     def load(self) -> Type["nn.Module"]:
         kernel = get_kernel(self._repo_id, revision=self._resolve_revision())

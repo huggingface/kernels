@@ -162,16 +162,13 @@ def install_kernel(
         `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
-    repo_type = _resolve_repo_type(repo_id, revision=revision)
 
     if not local_files_only:
-        repo_id, revision = resolve_status(api, repo_id, revision, repo_type)
+        repo_id, revision = resolve_status(api, repo_id, revision)
 
     package_name = package_name_from_repo_id(repo_id)
 
-    variants = get_variants(
-        api, repo_id=repo_id, revision=revision, repo_type=repo_type
-    )
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -185,7 +182,7 @@ def install_kernel(
         str(
             api.snapshot_download(
                 repo_id,
-                repo_type=repo_type,
+                repo_type="kernel",
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
@@ -246,13 +243,12 @@ def install_kernel_all_variants(
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     api = _get_hf_api()
-    repo_type = _resolve_repo_type(repo_id, revision=revision)
 
     repo_path = Path(
         str(
             api.snapshot_download(
                 repo_id,
-                repo_type=repo_type,
+                repo_type="kernel",
                 allow_patterns="build/*",
                 cache_dir=CACHE_DIR,
                 revision=revision,
@@ -396,16 +392,11 @@ def has_kernel(
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
     """
-    revision, _ = select_revision_or_version(
-        repo_id, revision=revision, version=version
-    )
-    repo_type = _resolve_repo_type(repo_id)
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    variants = get_variants(
-        api, repo_id=repo_id, revision=revision, repo_type=repo_type
-    )
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -414,7 +405,7 @@ def has_kernel(
     for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
         if api.file_exists(
             repo_id,
-            repo_type=repo_type,
+            repo_type="kernel",
             revision=revision,
             filename=f"build/{variant.variant_str}/{init_file}",
         ):
@@ -460,10 +451,7 @@ def load_kernel(
     package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
-    repo_type = _resolve_repo_type(repo_id, revision=locked_sha)
-    variants = get_variants(
-        api, repo_id=repo_id, revision=locked_sha, repo_type=repo_type
-    )
+    variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
     variant = resolve_variant(variants, backend)
 
     if variant is None:
@@ -476,7 +464,7 @@ def load_kernel(
         str(
             api.snapshot_download(
                 repo_id,
-                repo_type=repo_type,
+                repo_type="kernel",
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=locked_sha,
@@ -635,35 +623,6 @@ def _platform() -> str:
         cpu = "x86_64" if cpu == "AMD64" else cpu
 
     return f"{cpu}-{os}"
-
-
-def _resolve_repo_type(repo_id: str, revision: str | None = None) -> str:
-    """Determine the repo type for *repo_id*.
-
-    Tries ``"kernel"`` first, falls back to ``"model"``.
-    When *revision* is given, also verifies the revision exists in
-    that namespace — a repo may exist as both types with different commits."""
-    # import warnings
-    from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
-
-    api = _get_hf_api()
-
-    try:
-        api.repo_info(repo_id=repo_id, repo_type="kernel", revision=revision)
-        return "kernel"
-    except (RepositoryNotFoundError, HfHubHTTPError):
-        pass
-
-    api.repo_info(repo_id=repo_id, repo_type="model", revision=revision)
-    # TODO: add back the deprecation warning when we remove support for the "model" repo type.
-    # we should also add a removal date in the warning message for a final migration date.
-    # warnings.warn(
-    #     f"Repository '{repo_id}' uses deprecated repo type 'model'; "
-    #     "use 'kernel' instead.",
-    #     DeprecationWarning,
-    #     stacklevel=2,
-    # )
-    return "model"
 
 
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:

@@ -11,8 +11,8 @@ from kernels.variants import BUILD_VARIANT_REGEX
 BUILD_COMMIT_BATCH_SIZE = 1_000
 
 
-def _branch_exists(api, repo_id, branch, repo_type):
-    refs = api.list_repo_refs(repo_id=repo_id, repo_type=repo_type)
+def _branch_exists(api, repo_id, branch):
+    refs = api.list_repo_refs(repo_id=repo_id, repo_type="kernel")
     return any(ref.name == branch for ref in refs.branches)
 
 
@@ -38,7 +38,7 @@ def _upload_build_dir(
     operations: list[CommitOperationAdd | CommitOperationDelete] = [
         CommitOperationDelete(path_in_repo=repo_file)
         for repo_file in sorted(
-            api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="model")
+            api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="kernel")
         )
         if repo_file.startswith(delete_prefixes) and repo_file not in repo_paths
     ]
@@ -70,7 +70,7 @@ def _upload_build_dir(
             repo_id=repo_id,
             operations=list(chunk),
             revision=revision,
-            repo_type="model",
+            repo_type="kernel",
             commit_message=commit_message,
         )
 
@@ -124,7 +124,7 @@ def upload_kernels_dir(
 
     is_new_branch = False
     if branch is not None:
-        is_new_branch = not _branch_exists(api, repo_id, branch, repo_type="model")
+        is_new_branch = not _branch_exists(api, repo_id, branch)
         api.create_branch(repo_id=repo_id, branch=branch, exist_ok=True)
 
     # In the case we have benchmarks, upload to the same repo as the kernel_dir.

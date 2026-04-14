@@ -8,20 +8,11 @@ from packaging.version import InvalidVersion, Version
 logger = logging.getLogger(__name__)
 
 
-def _get_available_versions(
-    repo_id: str,
-) -> tuple[dict[int, GitRefInfo], str]:
-    """Get kernel versions that are available in the repository.
+def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
+    """Get kernel versions that are available in the repository."""
+    from kernels.utils import _get_hf_api
 
-    Tries ``"kernel"`` repo type first. If the repository is not found,
-    falls back to ``"model"``.
-
-    Returns a tuple of (versions, repo_type)."""
-    from kernels.utils import _get_hf_api, _resolve_repo_type
-
-    repo_type = _resolve_repo_type(repo_id)
-
-    refs = _get_hf_api().list_repo_refs(repo_id=repo_id, repo_type=repo_type)
+    refs = _get_hf_api().list_repo_refs(repo_id=repo_id, repo_type="kernel")
 
     versions = {}
     for branch in refs.branches:
@@ -32,7 +23,7 @@ def _get_available_versions(
         except ValueError:
             continue
 
-    return versions, repo_type
+    return versions
 
 
 def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
@@ -41,11 +32,10 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
 
     This is for the old tag-based versioning scheme.
     """
-    from kernels.utils import _get_hf_api, _resolve_repo_type
+    from kernels.utils import _get_hf_api
 
-    repo_type = _resolve_repo_type(repo_id)
     versions = {}
-    for tag in _get_hf_api().list_repo_refs(repo_id, repo_type=repo_type).tags:
+    for tag in _get_hf_api().list_repo_refs(repo_id, repo_type="kernel").tags:
         if not tag.name.startswith("v"):
             continue
         try:
@@ -56,18 +46,15 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
     return versions
 
 
-def resolve_version_spec_as_ref(
-    repo_id: str, version_spec: int | str
-) -> tuple[GitRefInfo, str]:
+def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRefInfo:
     """
     Get the ref for a kernel with the given version spec.
+
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
-
-    Returns a tuple of (ref, repo_type).
     """
     if isinstance(version_spec, int):
-        versions, repo_type = _get_available_versions(repo_id)
+        versions = _get_available_versions(repo_id)
 
         ref = versions.get(version_spec, None)
         if ref is None:
@@ -84,7 +71,7 @@ def resolve_version_spec_as_ref(
                 latest_version,
             )
 
-        return ref, repo_type
+        return ref
     else:
         warnings.warn(
             """Version specifiers are deprecated, support will be removed in a future `kernels` version.
@@ -99,7 +86,7 @@ def resolve_version_spec_as_ref(
                 f"No version of `{repo_id}` satisfies requirement: {version_spec}"
             )
 
-        return versions_old[accepted_versions[-1]], "model"
+        return versions_old[accepted_versions[-1]]
 
 
 def select_revision_or_version(
@@ -107,16 +94,14 @@ def select_revision_or_version(
     *,
     revision: str | None,
     version: int | str | None,
-) -> tuple[str, str | None]:
-    """Select a revision, returning (revision, repo_type)."""
+) -> str:
     if revision is not None and version is not None:
         raise ValueError("Only one of `revision` or `version` must be specified.")
 
     if revision is not None:
-        return revision, None
+        return revision
     elif version is not None:
-        ref, repo_type = resolve_version_spec_as_ref(repo_id, version)
-        return ref.target_commit, repo_type
+        return resolve_version_spec_as_ref(repo_id, version).target_commit
 
     warnings.warn(
         "Future versions of `kernels` (>=0.15) will require specifying a kernel version or revision. "
@@ -125,4 +110,4 @@ def select_revision_or_version(
         stacklevel=2,
     )
 
-    return "main", None
+    return "main"

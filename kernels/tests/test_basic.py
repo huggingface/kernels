@@ -190,7 +190,9 @@ def test_no_version_or_revision_warning():
         "Remove the fallback to 'main' in `select_revision_or_version` and make "
         "`version` or `revision` a required argument."
     )
-    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
+    with pytest.warns(
+        FutureWarning, match="will require specifying a kernel version or revision"
+    ):
         get_kernel("kernels-test/versions")
 
 

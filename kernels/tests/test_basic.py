@@ -179,6 +179,20 @@ def test_version_outdated_warning(caplog):
     assert "but version" not in caplog.text
 
 
+def test_no_version_or_revision_warning():
+    from packaging.version import Version
+
+    from kernels import __version__
+
+    assert Version(__version__) < Version("0.14"), (
+        "The deprecation cycle for requiring `version` or `revision` is complete. "
+        "Remove the fallback to 'main' in `select_revision_or_version` and make "
+        "`version` or `revision` a required argument."
+    )
+    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
+        get_kernel("kernels-test/versions")
+
+
 @pytest.mark.cuda_only
 def test_universal_kernel(universal_kernel):
     torch.manual_seed(0)

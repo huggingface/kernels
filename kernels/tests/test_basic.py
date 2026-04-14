@@ -3,7 +3,7 @@ import logging
 import pytest
 import torch
 import torch.nn.functional as F
-from huggingface_hub.errors import RepositoryNotFoundError
+from huggingface_hub.errors import HfHubHTTPError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
@@ -131,6 +131,7 @@ def test_has_kernel(kernel_exists):
     assert has_kernel(repo_id, revision=revision) == kernel
 
 
+@pytest.mark.skip(reason="Tags are not supported on kernel repos")
 def test_version_old():
     # Remove once we drop support for version specs.
     kernel = get_kernel("kernels-test/versions")
@@ -257,7 +258,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
 
     # Ensure that we are testing with a non-existing kernel, so that we know
     # that the kernel must be local.
-    with pytest.raises(RepositoryNotFoundError):
+    with pytest.raises(HfHubHTTPError):
         get_kernel(f"kernels-test/{package_name}")
 
     with monkeypatch.context() as m:

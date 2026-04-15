@@ -1,13 +1,34 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use clap::ValueEnum;
 use eyre::{Context, Result};
 
-pub const DEFAULT_SKILL_ID: &str = "cuda-kernels";
-pub const SUPPORTED_SKILL_IDS: &[&str] = &["cuda-kernels", "rocm-kernels"];
+use crate::pyproject::FileSet;
 
 const GITHUB_RAW_BASE_TEMPLATE: &str =
     "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills";
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum SkillId {
+    CudaKernels,
+    RocmKernels,
+}
+
+impl SkillId {
+    fn as_str(&self) -> &'static str {
+        match self {
+            SkillId::CudaKernels => "cuda-kernels",
+            SkillId::RocmKernels => "rocm-kernels",
+        }
+    }
+}
+
+impl Default for SkillId {
+    fn default() -> Self {
+        SkillId::CudaKernels
+    }
+}
 
 struct Targets {
     codex: PathBuf,
@@ -17,10 +38,12 @@ struct Targets {
 
 fn global_targets() -> Result<Targets> {
     let home = dirs::home_dir().ok_or_else(|| eyre::eyre!("Cannot determine home directory"))?;
+    let config_dir =
+        dirs::config_dir().ok_or_else(|| eyre::eyre!("Cannot determine config directory"))?;
     Ok(Targets {
         codex: home.join(".codex/skills"),
         claude: home.join(".claude/skills"),
-        opencode: home.join(".config/opencode/skills"),
+        opencode: config_dir.join("opencode/skills"),
     })
 }
 
@@ -32,21 +55,21 @@ fn local_targets() -> Targets {
     }
 }
 
-fn github_raw_base(skill_id: &str) -> String {
-    format!("{GITHUB_RAW_BASE_TEMPLATE}/{skill_id}")
+fn github_raw_base(skill_id: &SkillId) -> String {
+    format!("{GITHUB_RAW_BASE_TEMPLATE}/{}", skill_id.as_str())
 }
 
 fn download(url: &str) -> Result<String> {
-    let body = ureq::get(url)
-        .call()
+    let body = reqwest::blocking::get(url)
         .wrap_err_with(|| format!("Failed to fetch {url}"))?
-        .into_body()
-        .read_to_string()
+        .error_for_status()
+        .wrap_err_with(|| format!("HTTP error for {url}"))?
+        .text()
         .wrap_err("Failed to read response body")?;
     Ok(body)
 }
 
-fn download_manifest(skill_id: &str) -> Result<Vec<String>> {
+fn download_manifest(skill_id: &SkillId) -> Result<Vec<String>> {
     let url = format!("{}/manifest.txt", github_raw_base(skill_id));
     let raw = download(&url)?;
     let entries: Vec<String> = raw
@@ -58,12 +81,13 @@ fn download_manifest(skill_id: &str) -> Result<Vec<String>> {
     Ok(entries)
 }
 
-fn download_file(skill_id: &str, rel_path: &str) -> Result<String> {
+fn download_file(skill_id: &SkillId, rel_path: &str) -> Result<String> {
     let url = format!("{}/{rel_path}", github_raw_base(skill_id));
     download(&url)
 }
 
-fn remove_existing(path: &PathBuf) -> Result<()> {
+fn remove_existing(path: impl AsRef<Path>) -> Result<()> {
+    let path = path.as_ref();
     if path.is_symlink() || path.is_file() {
         fs::remove_file(path).wrap_err_with(|| format!("Cannot remove {}", path.display()))?;
     } else if path.is_dir() {
@@ -73,13 +97,16 @@ fn remove_existing(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn install_to(target: &PathBuf, force: bool, skill_id: &str) -> Result<PathBuf> {
-    let target = fs::canonicalize(target).unwrap_or_else(|_| target.clone());
+fn install_to(target: impl AsRef<Path>, force: bool, skill_id: &SkillId) -> Result<PathBuf> {
+    let target = target.as_ref();
 
-    fs::create_dir_all(&target)
+    fs::create_dir_all(target)
         .wrap_err_with(|| format!("Cannot create directory {}", target.display()))?;
 
-    let dest = target.join(skill_id);
+    let target = fs::canonicalize(target)
+        .wrap_err_with(|| format!("Cannot canonicalize {}", target.display()))?;
+
+    let dest = target.join(skill_id.as_str());
 
     if dest.exists() {
         if !force {
@@ -92,22 +119,20 @@ fn install_to(target: &PathBuf, force: bool, skill_id: &str) -> Result<PathBuf> 
     }
 
     let manifest = download_manifest(skill_id)?;
+    let mut fileset = FileSet::new();
     for rel_path in &manifest {
         let content = download_file(skill_id, rel_path)?;
-        let output_file = dest.join(rel_path);
-        if let Some(parent) = output_file.parent() {
-            fs::create_dir_all(parent)
-                .wrap_err_with(|| format!("Cannot create directory {}", parent.display()))?;
-        }
-        fs::write(&output_file, &content)
-            .wrap_err_with(|| format!("Cannot write {}", output_file.display()))?;
+        fileset
+            .entry(rel_path)
+            .extend_from_slice(content.as_bytes());
     }
+    fileset.write(&dest, force)?;
 
     Ok(dest)
 }
 
 pub fn add_skill(
-    skill_id: &str,
+    skill_id: SkillId,
     claude: bool,
     codex: bool,
     opencode: bool,
@@ -115,11 +140,6 @@ pub fn add_skill(
     dest: Option<PathBuf>,
     force: bool,
 ) -> Result<()> {
-    if !SUPPORTED_SKILL_IDS.contains(&skill_id) {
-        let supported = SUPPORTED_SKILL_IDS.join(", ");
-        eyre::bail!("Unsupported skill '{skill_id}'. Supported skills: {supported}");
-    }
-
     if !claude && !codex && !opencode && dest.is_none() {
         eyre::bail!("Pick a destination via --claude, --codex, --opencode, or --dest.");
     }
@@ -155,8 +175,12 @@ pub fn add_skill(
     }
 
     for target in &install_targets {
-        let installed_path = install_to(target, force, skill_id)?;
-        println!("Installed '{}' to {}", skill_id, installed_path.display());
+        let installed_path = install_to(target, force, &skill_id)?;
+        println!(
+            "Installed '{}' to {}",
+            skill_id.as_str(),
+            installed_path.display()
+        );
     }
 
     Ok(())

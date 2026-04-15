@@ -225,8 +225,12 @@ enum Commands {
 
 #[derive(Debug, Subcommand)]
 enum SkillsCommands {
-    /// Install the cuda-kernels skill for an AI assistant.
+    /// Install a kernels skill for an AI assistant.
     Add {
+        /// Skill ID to install (default: cuda-kernels). Use `rocm-kernels` for ROCm-focused kernels.
+        #[arg(long, default_value = skills::DEFAULT_SKILL_ID)]
+        skill: String,
+
         /// Install for Claude.
         #[arg(long)]
         claude: bool,
@@ -343,13 +347,14 @@ fn main() -> Result<()> {
         }
         Commands::Skills { command } => match command {
             SkillsCommands::Add {
+                skill,
                 claude,
                 codex,
                 opencode,
                 global,
                 dest,
                 force,
-            } => skills::add_skill(claude, codex, opencode, global, dest, force),
+            } => skills::add_skill(&skill, claude, codex, opencode, global, dest, force),
         },
         Commands::CleanPyproject {
             kernel_dir,

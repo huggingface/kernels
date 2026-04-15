@@ -3,13 +3,11 @@ use std::path::PathBuf;
 
 use eyre::{Context, Result};
 
-const DEFAULT_SKILL_ID: &str = "cuda-kernels";
-const GITHUB_RAW_BASE: &str =
-    "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills/cuda-kernels";
-const MANIFEST_URL: &str = concat!(
-    "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills/cuda-kernels",
-    "/manifest.txt"
-);
+pub const DEFAULT_SKILL_ID: &str = "cuda-kernels";
+pub const SUPPORTED_SKILL_IDS: &[&str] = &["cuda-kernels", "rocm-kernels"];
+
+const GITHUB_RAW_BASE_TEMPLATE: &str =
+    "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills";
 
 struct Targets {
     codex: PathBuf,
@@ -34,6 +32,10 @@ fn local_targets() -> Targets {
     }
 }
 
+fn github_raw_base(skill_id: &str) -> String {
+    format!("{GITHUB_RAW_BASE_TEMPLATE}/{skill_id}")
+}
+
 fn download(url: &str) -> Result<String> {
     let body = ureq::get(url)
         .call()
@@ -44,8 +46,9 @@ fn download(url: &str) -> Result<String> {
     Ok(body)
 }
 
-fn download_manifest() -> Result<Vec<String>> {
-    let raw = download(MANIFEST_URL)?;
+fn download_manifest(skill_id: &str) -> Result<Vec<String>> {
+    let url = format!("{}/manifest.txt", github_raw_base(skill_id));
+    let raw = download(&url)?;
     let entries: Vec<String> = raw
         .lines()
         .map(|l| l.trim())
@@ -55,8 +58,8 @@ fn download_manifest() -> Result<Vec<String>> {
     Ok(entries)
 }
 
-fn download_file(rel_path: &str) -> Result<String> {
-    let url = format!("{GITHUB_RAW_BASE}/{rel_path}");
+fn download_file(skill_id: &str, rel_path: &str) -> Result<String> {
+    let url = format!("{}/{rel_path}", github_raw_base(skill_id));
     download(&url)
 }
 
@@ -71,13 +74,13 @@ fn remove_existing(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn install_to(target: &PathBuf, force: bool) -> Result<PathBuf> {
+fn install_to(target: &PathBuf, force: bool, skill_id: &str) -> Result<PathBuf> {
     let target = fs::canonicalize(target).unwrap_or_else(|_| target.clone());
 
     fs::create_dir_all(&target)
         .wrap_err_with(|| format!("Cannot create directory {}", target.display()))?;
 
-    let dest = target.join(DEFAULT_SKILL_ID);
+    let dest = target.join(skill_id);
 
     if dest.exists() {
         if !force {
@@ -89,9 +92,9 @@ fn install_to(target: &PathBuf, force: bool) -> Result<PathBuf> {
         remove_existing(&dest)?;
     }
 
-    let manifest = download_manifest()?;
+    let manifest = download_manifest(skill_id)?;
     for rel_path in &manifest {
-        let content = download_file(rel_path)?;
+        let content = download_file(skill_id, rel_path)?;
         let output_file = dest.join(rel_path);
         if let Some(parent) = output_file.parent() {
             fs::create_dir_all(parent)
@@ -105,6 +108,7 @@ fn install_to(target: &PathBuf, force: bool) -> Result<PathBuf> {
 }
 
 pub fn add_skill(
+    skill_id: &str,
     claude: bool,
     codex: bool,
     opencode: bool,
@@ -112,6 +116,11 @@ pub fn add_skill(
     dest: Option<PathBuf>,
     force: bool,
 ) -> Result<()> {
+    if !SUPPORTED_SKILL_IDS.contains(&skill_id) {
+        let supported = SUPPORTED_SKILL_IDS.join(", ");
+        eyre::bail!("Unsupported skill '{skill_id}'. Supported skills: {supported}");
+    }
+
     if !claude && !codex && !opencode && dest.is_none() {
         eyre::bail!("Pick a destination via --claude, --codex, --opencode, or --dest.");
     }
@@ -147,10 +156,10 @@ pub fn add_skill(
     }
 
     for target in &install_targets {
-        let installed_path = install_to(target, force)?;
+        let installed_path = install_to(target, force, skill_id)?;
         println!(
             "Installed '{}' to {}",
-            DEFAULT_SKILL_ID,
+            skill_id,
             installed_path.display()
         );
     }

@@ -1,0 +1,41 @@
+{
+  "harness": "opencode",
+  "mode": "live-benchmark-run",
+  "live_benchmark": true,
+  "generated_at_utc": "2026-04-10T04:46:53.218608Z",
+  "benchmark_config": {
+    "num_frames": 25,
+    "height": 480,
+    "width": 704,
+    "steps": 30,
+    "warmup": 1
+  },
+  "command": "python skills/rocm-kernels/scripts/benchmark_e2e.py --mode all --num-frames 25 --steps 30 --warmup 1 --output-dir skills/rocm-kernels/examples/ltx-video-benchmark/trace/opencode_live --output-json skills/rocm-kernels/examples/ltx-video-benchmark/trace/opencode_live/results.json",
+  "result_json_path": "trace/opencode_live/results.json",
+  "summary": {
+    "baseline": {
+      "gen_time_s": 9.37,
+      "time_per_frame_s": 0.375,
+      "time_per_step_s": 0.312,
+      "peak_memory_gb": 18.58,
+      "speedup_vs_baseline": 1.0
+    },
+    "triton": {
+      "gen_time_s": 8.67,
+      "time_per_frame_s": 0.347,
+      "time_per_step_s": 0.289,
+      "peak_memory_gb": 22.43,
+      "speedup_vs_baseline": 1.081
+    },
+    "compile": {
+      "gen_time_s": 7.02,
+      "time_per_frame_s": 0.281,
+      "time_per_step_s": 0.234,
+      "peak_memory_gb": 18.58,
+      "speedup_vs_baseline": 1.335
+    }
+  },
+  "generated_files": [
+    "trace/opencode_live/results.json"
+  ]
+}

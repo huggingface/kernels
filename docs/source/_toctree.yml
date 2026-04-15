@@ -66,5 +66,5 @@
     - local: cli-download
       title: kernels download
     - local: cli-skills
-      title: kernels skills
+      title: install_skills.py
   title: CLI Reference

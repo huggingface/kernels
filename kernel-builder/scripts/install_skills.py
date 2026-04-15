@@ -1,16 +1,20 @@
+#!/usr/bin/env python3
+"""Install kernels skills for AI coding assistants (Claude, Codex, OpenCode)."""
+
+import argparse
 import shutil
 import sys
-from argparse import Namespace
 from pathlib import Path
 
 from huggingface_hub.utils import get_session
 
 DEFAULT_SKILL_ID = "cuda-kernels"
 _GITHUB_RAW_BASE = (
-    "https://raw.githubusercontent.com/huggingface/kernels/main/" "skills/cuda-kernels"
+    "https://raw.githubusercontent.com/huggingface/kernels/main/"
+    "kernel-builder/skills/cuda-kernels"
 )
 _MANIFEST_URL = f"{_GITHUB_RAW_BASE}/manifest.txt"
-_LOCAL_SKILLS_ROOT = Path(__file__).resolve().parents[4] / "skills" / "cuda-kernels"
+_LOCAL_SKILLS_ROOT = Path(__file__).resolve().parent.parent / "skills" / "cuda-kernels"
 
 GLOBAL_TARGETS = {
     "codex": Path("~/.codex/skills"),
@@ -75,7 +79,8 @@ def _install_to(target: Path, force: bool) -> Path:
     if dest.exists():
         if not force:
             raise SystemExit(
-                f"Skill already exists at {dest}.\n" "Re-run with --force to overwrite."
+                f"Skill already exists at {dest}.\n"
+                "Re-run with --force to overwrite."
             )
         _remove_existing(dest)
 
@@ -88,7 +93,7 @@ def _install_to(target: Path, force: bool) -> Path:
     return dest
 
 
-def add_skill(args: Namespace) -> None:
+def add_skill(args: argparse.Namespace) -> None:
     if not (args.claude or args.codex or args.opencode or args.dest):
         print(
             "Pick a destination via --claude, --codex, --opencode, or --dest.",
@@ -111,3 +116,48 @@ def add_skill(args: Namespace) -> None:
     for target in targets:
         installed_path = _install_to(target, force=args.force)
         print(f"Installed '{DEFAULT_SKILL_ID}' to {installed_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Install kernels skills for AI coding assistants",
+    )
+    parser.add_argument(
+        "--claude",
+        action="store_true",
+        help="Install for Claude.",
+    )
+    parser.add_argument(
+        "--codex",
+        action="store_true",
+        help="Install for Codex.",
+    )
+    parser.add_argument(
+        "--opencode",
+        action="store_true",
+        help="Install for OpenCode.",
+    )
+    parser.add_argument(
+        "--global",
+        "-g",
+        dest="global_",
+        action="store_true",
+        help="Install globally (user-level) instead of in the current project directory.",
+    )
+    parser.add_argument(
+        "--dest",
+        type=Path,
+        default=None,
+        help="Install into a custom destination (path to skills directory).",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing skills in the destination.",
+    )
+    args = parser.parse_args()
+    add_skill(args)
+
+
+if __name__ == "__main__":
+    main()

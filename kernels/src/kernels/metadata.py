@@ -12,6 +12,7 @@ from kernels.compat import tomllib
 class Metadata:
     python_depends: list[str]
     version: int | None
+    op_namespace: str | None = None
 
     @staticmethod
     def load_from_build_toml(build_toml_path: Path) -> "Metadata":
@@ -35,6 +36,7 @@ class Metadata:
                 return Metadata(
                     python_depends=metadata_dict.get("python-depends", []),
                     version=metadata_dict.get("version", None),
+                    op_namespace=metadata_dict.get("op-namespace", None),
                 )
 
         return Metadata(version=None, python_depends=[])

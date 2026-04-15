@@ -32,7 +32,7 @@ pub fn write_torch_ext_noarch(
     )?;
     write_pyproject_toml(env, build.framework.torch(), &build.general, &mut file_set)?;
     write_setup_py(&mut file_set)?;
-    write_metadata(&build.general, &mut file_set)?;
+    write_metadata(&build.general, |_backend| ops_name.clone(), &mut file_set)?;
 
     Ok(file_set)
 }

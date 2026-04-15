@@ -23,6 +23,11 @@ pub struct Metadata {
     pub upstream: Option<url::Url>,
     pub python_depends: Vec<String>,
     pub backend: BackendInfo,
+    /// The operator namespace under which the kernel is registered
+    /// (e.g. `_relu_cuda_abc1234` exposed as `torch.ops._relu_cuda_abc1234`).
+    /// `None` for older kernels that did not write this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub op_namespace: Option<String>,
 }
 
 pub fn parse_metadata(path: impl AsRef<Path>) -> Result<Metadata> {

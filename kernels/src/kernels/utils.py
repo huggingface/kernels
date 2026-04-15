@@ -44,6 +44,7 @@ class LoadedKernel(NamedTuple):
     module: ModuleType
     package_name: str
     repo_infos: RepoInfos | None
+    op_namespace: str | None
 
 
 _loaded_kernels: dict[Path, LoadedKernel] = {}
@@ -125,6 +126,7 @@ def _import_from_path(
         module=module,
         package_name=package_name,
         repo_infos=_repo_infos,
+        op_namespace=metadata.op_namespace,
     )
     return module
 

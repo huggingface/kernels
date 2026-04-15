@@ -68,7 +68,12 @@ pub fn write_tvm_ffi_ext(
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 
-    write_metadata(&build.general, &mut file_set)?;
+    let python_name = build.general.name.python_name();
+    write_metadata(
+        &build.general,
+        |backend| format!("_{python_name}_{backend}_{revision}"),
+        &mut file_set,
+    )?;
 
     Ok(file_set)
 }

@@ -18,7 +18,11 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
     Ok(())
 }
 
-pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
+pub fn write_metadata(
+    general: &General,
+    op_namespace_for: impl Fn(Backend) -> String,
+    file_set: &mut FileSet,
+) -> Result<()> {
     for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
@@ -40,6 +44,7 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
             backend: BackendInfo {
                 backend_type: *backend,
             },
+            op_namespace: Some(op_namespace_for(*backend)),
         };
 
         serde_json::to_writer_pretty(writer, &metadata)?;

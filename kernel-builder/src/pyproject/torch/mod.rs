@@ -277,7 +277,12 @@ pub fn write_torch_ext(
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(&build.general, &mut file_set)?;
+    let python_name = build.general.name.python_name();
+    write_metadata(
+        &build.general,
+        |backend| format!("_{python_name}_{backend}_{revision}"),
+        &mut file_set,
+    )?;
 
     Ok(file_set)
 }

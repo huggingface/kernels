@@ -65,8 +65,7 @@ fn download_file(skill_id: &str, rel_path: &str) -> Result<String> {
 
 fn remove_existing(path: &PathBuf) -> Result<()> {
     if path.is_symlink() || path.is_file() {
-        fs::remove_file(path)
-            .wrap_err_with(|| format!("Cannot remove {}", path.display()))?;
+        fs::remove_file(path).wrap_err_with(|| format!("Cannot remove {}", path.display()))?;
     } else if path.is_dir() {
         fs::remove_dir_all(path)
             .wrap_err_with(|| format!("Cannot remove directory {}", path.display()))?;
@@ -157,11 +156,7 @@ pub fn add_skill(
 
     for target in &install_targets {
         let installed_path = install_to(target, force, skill_id)?;
-        println!(
-            "Installed '{}' to {}",
-            skill_id,
-            installed_path.display()
-        );
+        println!("Installed '{}' to {}", skill_id, installed_path.display());
     }
 
     Ok(())

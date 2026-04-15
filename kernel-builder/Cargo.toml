@@ -28,6 +28,8 @@ serde-value = "0.7"
 thiserror = "1"
 toml = "0.8"
 url = { version = "2", features = ["serde"] }
+ureq = "3"
+dirs = "6"
 walkdir = "2"
 
 [build-dependencies]

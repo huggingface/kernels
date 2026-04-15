@@ -37,7 +37,9 @@ def _upload_build_dir(
     delete_prefixes = ("build/",) if is_new_branch else variant_prefixes
     operations: list[CommitOperationAdd | CommitOperationDelete] = [
         CommitOperationDelete(path_in_repo=repo_file)
-        for repo_file in sorted(api.list_repo_files(repo_id=repo_id, revision=revision))
+        for repo_file in sorted(
+            api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="model")
+        )
         if repo_file.startswith(delete_prefixes) and repo_file not in repo_paths
     ]
     operations.extend(

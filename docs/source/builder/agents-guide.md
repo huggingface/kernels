@@ -25,11 +25,11 @@ kernels skills add
 ```
 
 > [!NOTE]
-> If you want to check out the generated kernel, got to [this example](https://github.com/burtenshaw/kernel-skill/tree/main/examples/ltx_video)
+> Check [this example](https://github.com/burtenshaw/kernel-skill/tree/main/examples/ltx_video) to see what generated kernels look like.
 
 ## 1. Give the agent a precise task prompt
 
-Writing kernels is a hard problem so be specific to agents. A robust will declare all core attributes. For example;
+Writing kernels is a hard problem, so be specific to agents. A robust prompt will declare all core attributes, including:
 
 - the library, for example `transformers` or `diffusers`  
 - the model id, for example `Qwen3-8B` or `LTX-Video`  
@@ -179,7 +179,7 @@ The agent will generate both benchmarks based on the agent skills examples. Typi
 
 Interpret the results carefully. A kernel can show a large isolated speedup but only a modest end-to-end gain if that operation is a small fraction of total runtime. In the LTX-Video example from [the blog we wrote](https://huggingface.co/blog/custom-cuda-kernels-agent-skills), the generated RMSNorm kernel improved the isolated benchmark by about **1.88x** on average, but end-to-end video generation improved by about **6%**, which matched the fact that RMSNorm accounted for only a small share of total compute.
 
-## 7. Publish to the Hub if you want reuse
+## 7. Publish to the Hub
 
 Once the project is correct and benchmarked, you can build Hub-compatible artifacts and upload them. For this, you should first push to the Hub using the `hf` CLI tool:
 

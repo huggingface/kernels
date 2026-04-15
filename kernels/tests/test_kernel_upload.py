@@ -131,9 +131,9 @@ def test_kernel_upload_new_branch_starts_fresh():
     branch_files = get_filenames_from_a_branch(REPO_ID, "v2")
 
     assert any("bar.py" in f for f in branch_files), f"{branch_files=}"
-    assert not any(
-        "foo.py" in f for f in branch_files
-    ), f"Branch v2 should not inherit foo.py from main: {branch_files=}"
+    assert not any("foo.py" in f for f in branch_files), (
+        f"Branch v2 should not inherit foo.py from main: {branch_files=}"
+    )
 
     api.delete_repo(repo_id=REPO_ID)
 

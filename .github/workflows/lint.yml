@@ -10,10 +10,12 @@ jobs:
         uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6  # v3
         with:
           src: kernels
+          version: "0.15.10"
       - name: Run ruff format check
         uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6  # v3
         with:
           src: kernels
+          version: "0.15.10"
           args: format --check
 
   griffe:

@@ -709,7 +709,7 @@ def run_benchmark(
     if is_local:
         if repo_id.count("/") == 1 and not repo_id.startswith(("./", "../")):
             warnings.warn(
-                f"'{repo_id}' exists locally but looks like a repo_id. " f"Use './{repo_id}' to be explicit.",
+                f"'{repo_id}' exists locally but looks like a repo_id. Use './{repo_id}' to be explicit.",
                 stacklevel=2,
             )
         branch = "local"

@@ -57,6 +57,7 @@ kernels = "kernels.cli:main"
 kernels = ["python_depends.json"]
 
 [tool.ruff]
+required-version = "==0.15.10"
 exclude = [
   ".eggs",
   ".git",

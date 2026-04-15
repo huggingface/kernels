@@ -65,7 +65,7 @@ def _embed_logo_in_svg(svg_path: str, logo_size: int = 24) -> None:
 
     logo_x = 10
     logo_y = height - logo_size - 5
-    logo_element = f'<g transform="translate({logo_x},{logo_y}) scale({logo_size/256})">{logo_inner}</g>'
+    logo_element = f'<g transform="translate({logo_x},{logo_y}) scale({logo_size / 256})">{logo_inner}</g>'
     new_content = content.replace("</svg>", f"{logo_element}</svg>")
 
     with open(svg_path, "w") as f:
@@ -250,7 +250,7 @@ def save_speedup_image(
             color=text,
         )
 
-        speedup_text = f"  {speedup:.2f}x faster" if speedup >= 1.0 else f"  {1/speedup:.2f}x slower"
+        speedup_text = f"  {speedup:.2f}x faster" if speedup >= 1.0 else f"  {1 / speedup:.2f}x slower"
         speedup_color = _HF_ORANGE if speedup >= 1.0 else _HF_GRAY
         ax.text(
             max(t.mean_ms, ref_mean) + max_time * 0.15,
@@ -376,7 +376,7 @@ def _save_ops_per_sec_image(
             color=text,
         )
 
-        speedup_text = f"  {speedup:.2f}x faster" if speedup >= 1.0 else f"  {1/speedup:.2f}x slower"
+        speedup_text = f"  {speedup:.2f}x faster" if speedup >= 1.0 else f"  {1 / speedup:.2f}x slower"
         speedup_color = _HF_ORANGE if speedup >= 1.0 else _HF_GRAY
         ax.text(
             max(kernel_ops, ref_ops) + max_ops * 0.15,
@@ -701,7 +701,7 @@ def _save_speedup_svg(
     ]
     if subtitle:
         svg_parts.append(
-            f'<text x="{width-10}" y="25" font-size="10" fill="{_HF_GRAY}" text-anchor="end">{subtitle}</text>'
+            f'<text x="{width - 10}" y="25" font-size="10" fill="{_HF_GRAY}" text-anchor="end">{subtitle}</text>'
         )
 
     for i, (name, speedup) in enumerate(workloads):
@@ -710,13 +710,13 @@ def _save_speedup_svg(
 
         svg_parts.extend(
             [
-                f'<rect x="{track_x}" y="{y-15}" width="{track_w}" height="30" rx="4" fill="{track_bg}" stroke="{track_border}"/>',
-                f'<text x="{track_x-10}" y="{y+4}" font-size="10" fill="{text}" text-anchor="end">{name}</text>',
-                f'<text x="{track_x+track_w+10}" y="{y+4}" font-size="10" font-weight="bold" fill="{text}">{speedup:.2f}x</text>',
-                f'<circle cx="{x_min}" cy="{y-6}" r="{ball_r}" fill="{_HF_ORANGE}" stroke="white" stroke-width="1.5">',
+                f'<rect x="{track_x}" y="{y - 15}" width="{track_w}" height="30" rx="4" fill="{track_bg}" stroke="{track_border}"/>',
+                f'<text x="{track_x - 10}" y="{y + 4}" font-size="10" fill="{text}" text-anchor="end">{name}</text>',
+                f'<text x="{track_x + track_w + 10}" y="{y + 4}" font-size="10" font-weight="bold" fill="{text}">{speedup:.2f}x</text>',
+                f'<circle cx="{x_min}" cy="{y - 6}" r="{ball_r}" fill="{_HF_ORANGE}" stroke="white" stroke-width="1.5">',
                 f'  <animate attributeName="cx" values="{x_min};{x_max};{x_min}" dur="{kernel_dur}s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1"/>',
                 "</circle>",
-                f'<circle cx="{x_min}" cy="{y+6}" r="{ball_r}" fill="{_HF_GRAY}" stroke="white" stroke-width="1.5">',
+                f'<circle cx="{x_min}" cy="{y + 6}" r="{ball_r}" fill="{_HF_GRAY}" stroke="white" stroke-width="1.5">',
                 f'  <animate attributeName="cx" values="{x_min};{x_max};{x_min}" dur="{ref_dur}s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1"/>',
                 "</circle>",
             ]
@@ -725,10 +725,10 @@ def _save_speedup_svg(
     legend_y = height - 20
     svg_parts.extend(
         [
-            f'<circle cx="{width-150}" cy="{legend_y}" r="6" fill="{_HF_ORANGE}" stroke="white"/>',
-            f'<text x="{width-138}" y="{legend_y+4}" font-size="9" fill="{text}">Kernel</text>',
-            f'<circle cx="{width-70}" cy="{legend_y}" r="6" fill="{_HF_GRAY}" stroke="white"/>',
-            f'<text x="{width-58}" y="{legend_y+4}" font-size="9" fill="{text}">Torch (ref)</text>',
+            f'<circle cx="{width - 150}" cy="{legend_y}" r="6" fill="{_HF_ORANGE}" stroke="white"/>',
+            f'<text x="{width - 138}" y="{legend_y + 4}" font-size="9" fill="{text}">Kernel</text>',
+            f'<circle cx="{width - 70}" cy="{legend_y}" r="6" fill="{_HF_GRAY}" stroke="white"/>',
+            f'<text x="{width - 58}" y="{legend_y + 4}" font-size="9" fill="{text}">Torch (ref)</text>',
             "</svg>",
         ]
     )

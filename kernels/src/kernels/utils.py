@@ -131,8 +131,8 @@ def _import_from_path(
 
 def install_kernel(
     repo_id: str,
-    revision: str,
     *,
+    revision: str,
     local_files_only: bool = False,
     backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
@@ -237,8 +237,8 @@ def _find_kernel_in_repo_path(
 
 def install_kernel_all_variants(
     repo_id: str,
-    revision: str,
     *,
+    revision: str,
     local_files_only: bool = False,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:

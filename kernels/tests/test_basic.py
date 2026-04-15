@@ -15,7 +15,7 @@ def kernel():
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", "main")
+    package_name, path = install_kernel("kernels-community/activation", revision="main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
     return package_name, path

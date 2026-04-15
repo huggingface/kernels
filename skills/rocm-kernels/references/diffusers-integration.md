@@ -313,15 +313,11 @@ For reviewer-facing benchmark materials, see `examples/ltx-video-benchmark/`.
 | triton (mean of 3) | 6.10 | 0.203 | 18.58 | 1.13x |
 | compile (single run) | 5.05 | 0.168 | 18.58 | 1.37x |
 
-Videos are generated under `examples/ltx-video-benchmark/`:
+Reviewer-facing artifacts are organized under `examples/ltx-video-benchmark/`:
 
 - `benchmark_results.json`
-- `ltx_video_baseline.mp4`
-- `ltx_video_triton.mp4`
-- `ltx_video_compile.mp4`
-- `trace/codex_trace.json`
-- `trace/opencode_trace.jsonl`
-- `trace/opencode_trace_result.json`
+- `trace/opencode_live/results.json`
+- `trace/opencode_live/opencode_trace_result.json`
 
 ## Troubleshooting
 

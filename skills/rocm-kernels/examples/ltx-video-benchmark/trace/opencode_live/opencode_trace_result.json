@@ -36,10 +36,6 @@
     }
   },
   "generated_files": [
-    "trace/opencode_live/ltx_video_baseline.mp4",
-    "trace/opencode_live/ltx_video_triton.mp4",
-    "trace/opencode_live/ltx_video_compile.mp4",
     "trace/opencode_live/results.json"
-  ],
-  "native_trace_file": "trace/opencode_trace.jsonl"
+  ]
 }

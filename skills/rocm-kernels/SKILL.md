@@ -418,10 +418,8 @@ Reviewer-facing benchmark files for this comparison live in `examples/ltx-video-
 
 - Summary table with `gen_time_s`, `time_per_step_s`, `peak_memory_gb`, and `speedup`
 - Consolidated JSON results in `examples/ltx-video-benchmark/benchmark_results.json`
-- Coding harness trace in `examples/ltx-video-benchmark/trace/codex_trace.json`
-- OpenCode native trace in `examples/ltx-video-benchmark/trace/opencode_trace.jsonl`
-- OpenCode parsed result in `examples/ltx-video-benchmark/trace/opencode_trace_result.json`
-- Videos: `ltx_video_baseline.mp4`, `ltx_video_triton.mp4`, `ltx_video_compile.mp4`
+- OpenCode run outputs in `examples/ltx-video-benchmark/trace/opencode_live/results.json`
+- OpenCode parsed trace in `examples/ltx-video-benchmark/trace/opencode_live/opencode_trace_result.json`
 
 ### R9700 Additional Validation
 

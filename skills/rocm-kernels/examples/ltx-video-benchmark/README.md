@@ -4,7 +4,7 @@ This is the consolidated reviewer-facing README for ROCm kernels benchmark examp
 
 It answers:
 
-> Could we also see some numbers with and without these kernels, and preferably some videos?
+> Could we also see some numbers with and without these kernels?
 
 ## Dependencies
 
@@ -15,10 +15,9 @@ python -m pip install -r skills/rocm-kernels/scripts/requirements.txt
 ## What is included
 
 - A formal benchmark table comparing `baseline` and `triton`
-- A supplemental `compile` run for video generation
+- A supplemental `compile` run for reference
 - A single consolidated JSON file: `benchmark_results.json`
-- Generated MP4 videos
-- Live harness traces from Codex and OpenCode
+- A single live harness trace from OpenCode
 
 ## Benchmark configuration
 
@@ -49,27 +48,22 @@ python scripts/benchmark_e2e.py --mode all --num-frames 25 --steps 30 --warmup 1
 Notes:
 
 - `speedup` is computed against baseline mean.
-- `compile` is generated as a supplemental artifact for reviewers who want the third comparison video, but it is not used as the main claim for the custom-kernel comparison.
+- `compile` is included as a supplemental reference and is not used as the main claim for the custom-kernel comparison.
 
 ## Output files
 
 - `benchmark_results.json`
-- `trace/codex_live/results.json`
 - `trace/opencode_live/results.json`
-- `trace/codex_live/codex_trace.json`
 - `trace/opencode_live/opencode_trace_result.json`
-- `trace/opencode_trace.jsonl`
 
 ## Coding Harness Trace
 
-This package includes coding-harness trace files at current locations:
+This package includes a single coding-harness trace file:
 
-- `trace/codex_live/codex_trace.json`
 - `trace/opencode_live/opencode_trace_result.json`
-- `trace/opencode_trace.jsonl`
 
 OpenCode trace was generated with model `opencode/minimax-m2.5-free`.
 
 ## PR-ready response
 
-We added baseline vs Triton numbers for LTX-Video on ROCm and attached generated outputs. Using the same prompt, seed, resolution, frame count, and inference steps, Triton improves end-to-end latency from `6.91s` to `6.10s` on average (`1.13x` speedup) in the formal benchmark package.
+We added baseline vs Triton numbers for LTX-Video on ROCm with consolidated benchmark output and a single live harness trace. Using the same prompt, seed, resolution, frame count, and inference steps, Triton improves end-to-end latency from `6.91s` to `6.10s` on average (`1.13x` speedup) in the formal benchmark package.

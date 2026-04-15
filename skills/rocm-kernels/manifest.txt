@@ -16,5 +16,5 @@ scripts/huggingface_kernels_example.py
 scripts/requirements.txt
 examples/ltx-video-benchmark/README.md
 examples/ltx-video-benchmark/benchmark_results.json
-examples/ltx-video-benchmark/trace/codex_trace.json
-examples/ltx-video-benchmark/trace/opencode_trace_result.json
+examples/ltx-video-benchmark/trace/opencode_live/results.json
+examples/ltx-video-benchmark/trace/opencode_live/opencode_trace_result.json

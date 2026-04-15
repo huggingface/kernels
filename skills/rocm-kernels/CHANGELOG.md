@@ -4,10 +4,9 @@
 
 ### Added
 - **Consolidated benchmark package**: `examples/ltx-video-benchmark/benchmark_results.json` now provides a single JSON artifact with formal R9700 benchmark runs and summary statistics.
-- **Live harness benchmark traces**:
-  - `examples/ltx-video-benchmark/trace/codex_live/codex_trace.json`
+- **Live harness benchmark trace**:
   - `examples/ltx-video-benchmark/trace/opencode_live/opencode_trace_result.json`
-  - Per-run outputs in `trace/*_live/results.json`
+  - Supporting run output in `examples/ltx-video-benchmark/trace/opencode_live/results.json`
 - **Unified examples documentation**: `examples/ltx-video-benchmark/README.md` is now the single reviewer-facing README for the examples package.
 - **Dependency lock-in entrypoint**: `scripts/requirements.txt` is used as the canonical install file for benchmark/integration examples.
 
@@ -28,6 +27,7 @@
 
 ### Removed
 - Legacy split/duplicate examples documentation and outdated trace path references in the examples package.
+- Codex-specific benchmark trace artifacts and non-essential video artifacts from the reviewer package.
 
 ## v0.2 (2026-03-12)
 

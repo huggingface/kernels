@@ -9,8 +9,9 @@ use crate::pyproject::FileSet;
 const GITHUB_RAW_BASE_TEMPLATE: &str =
     "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills";
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, Default, ValueEnum)]
 pub enum SkillId {
+    #[default]
     CudaKernels,
     RocmKernels,
 }
@@ -21,12 +22,6 @@ impl SkillId {
             SkillId::CudaKernels => "cuda-kernels",
             SkillId::RocmKernels => "rocm-kernels",
         }
-    }
-}
-
-impl Default for SkillId {
-    fn default() -> Self {
-        SkillId::CudaKernels
     }
 }
 

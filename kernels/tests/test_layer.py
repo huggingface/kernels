@@ -4,7 +4,7 @@ from contextlib import nullcontext
 import pytest
 import torch
 import torch.nn as nn
-from huggingface_hub.errors import RepositoryNotFoundError
+from huggingface_hub.errors import HfHubHTTPError
 from torch.nn import functional as F
 
 from kernels import (
@@ -1227,7 +1227,7 @@ def test_local_overrides_layer(monkeypatch, local_kernel_path):
     model = SiluAndMulWithKernel()
 
     with use_kernel_mapping(mapping, inherit_mapping=False):
-        with pytest.raises(RepositoryNotFoundError):
+        with pytest.raises(HfHubHTTPError):
             kernelize(model, device="cuda", mode=Mode.INFERENCE)
 
     with monkeypatch.context() as m:

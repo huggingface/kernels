@@ -1,6 +1,6 @@
 # Writing custom kernels with code agents
 
-Code agents are a good fit for custom kernels because the hard part is not just writing in Domain Specific Language (DSLs) like CUDA. You also need the right project layout, PyTorch bindings, architecture-specific choices, model-specific integration, and trustworthy benchmarks. 
+Code agents are a good fit to build custom kernels because the hard part is not just writing in Domain Specific Language (DSLs) like CUDA. You also need the right project layout, PyTorch bindings, architecture-specific choices, model-specific integration, and trustworthy benchmarks. 
 
 Kernels on Hugging Face are compatible with agents via skills and the `hf` cli. The `cuda-kernels` and `rocm-kernels` skills contain knowledge so an agent can generate and publish a complete kernel project, instead of isolated snippets.
 

@@ -8,6 +8,5 @@ kernels/src/kernels/python_depends.json: kernel-builder/src/python_dependencies.
 	cp $< $@
 
 style:
-	black ${check_dirs}
-	isort ${check_dirs}
+	ruff format ${check_dirs}
 	ruff check ${check_dirs} --fix

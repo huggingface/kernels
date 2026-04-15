@@ -56,10 +56,6 @@ kernels = "kernels.cli:main"
 [tool.setuptools.package-data]
 kernels = ["python_depends.json"]
 
-[tool.isort]
-profile = "black"
-line_length = 119
-
 [tool.ruff]
 exclude = [
   ".eggs",
@@ -85,4 +81,6 @@ line-length = 119
 # Ignored rules:
 # "E501" -> line length violation
 lint.ignore = ["E501"]
-lint.select = ["E", "F", "W"]
+lint.select = ["E", "F", "I", "W"]
+
+[tool.ruff.format]

@@ -75,6 +75,7 @@ def test_layer_locked(device):
         assert version() == "1"
 
 
+@pytest.mark.skip(reason="Tags are not supported on kernel repos")
 def test_layer_locked_old(device):
     project_dir = Path(__file__).parent / "layer_locking_old"
 
@@ -154,6 +155,7 @@ def test_func_locked(device):
     assert version() == "0.0.0"
 
 
+@pytest.mark.skip(reason="Tags are not supported on kernel repos")
 def test_func_locked_old(device):
     project_dir = Path(__file__).parent / "layer_locking_old"
 

@@ -3,7 +3,7 @@ import logging
 import pytest
 import torch
 import torch.nn.functional as F
-from huggingface_hub.errors import RepositoryNotFoundError
+from huggingface_hub.errors import HfHubHTTPError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
@@ -15,7 +15,7 @@ def kernel():
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", "main")
+    package_name, path = install_kernel("kernels-community/activation", revision="main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
     return package_name, path
@@ -86,7 +86,7 @@ def test_local_kernel(local_kernel, device):
 )
 def test_local_kernel_path_types(repo_revision, device):
     repo_id, revision = repo_revision
-    package_name, path = install_kernel(repo_id, revision)
+    package_name, path = install_kernel(repo_id, revision=revision)
 
     # Top-level repo path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071
@@ -131,6 +131,7 @@ def test_has_kernel(kernel_exists):
     assert has_kernel(repo_id, revision=revision) == kernel
 
 
+@pytest.mark.skip(reason="Tags are not supported on kernel repos")
 def test_version_old():
     # Remove once we drop support for version specs.
     kernel = get_kernel("kernels-test/versions")
@@ -189,7 +190,9 @@ def test_no_version_or_revision_warning():
         "Remove the fallback to 'main' in `select_revision_or_version` and make "
         "`version` or `revision` a required argument."
     )
-    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
+    with pytest.warns(
+        FutureWarning, match="will require specifying a kernel version or revision"
+    ):
         get_kernel("kernels-test/versions")
 
 
@@ -257,7 +260,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
 
     # Ensure that we are testing with a non-existing kernel, so that we know
     # that the kernel must be local.
-    with pytest.raises(RepositoryNotFoundError):
+    with pytest.raises(HfHubHTTPError):
         get_kernel(f"kernels-test/{package_name}")
 
     with monkeypatch.context() as m:

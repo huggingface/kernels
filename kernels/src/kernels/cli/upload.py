@@ -70,7 +70,6 @@ def _upload_build_dir(
             repo_id=repo_id,
             operations=list(chunk),
             revision=revision,
-            repo_type="model",
             commit_message=commit_message,
         )
 

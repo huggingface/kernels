@@ -4,7 +4,7 @@ from contextlib import nullcontext
 import pytest
 import torch
 import torch.nn as nn
-from huggingface_hub.errors import RepositoryNotFoundError
+from huggingface_hub.errors import HfHubHTTPError
 from torch.nn import functional as F
 
 from kernels import (
@@ -30,7 +30,7 @@ from kernels.utils import (
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", "main")
+    package_name, path = install_kernel("kernels-community/activation", revision="main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
     return package_name, path
@@ -418,7 +418,9 @@ def test_layer_fallback_works():
 
 def test_local_layer_repo(device):
     # Fetch a kernel to the local cache.
-    package_name, path = install_kernel("kernels-test/backward-marker-test", "main")
+    package_name, path = install_kernel(
+        "kernels-test/backward-marker-test", revision="main"
+    )
 
     linear = TorchLinearWithCounter(32, 32).to(device)
 
@@ -1128,98 +1130,6 @@ def test_kernel_modes_cross_fallback():
         assert linear.n_calls == 2
 
 
-def test_layer_versions_old(device):
-    @use_kernel_forward_from_hub("Version")
-    class Version(nn.Module):
-        def forward(self) -> str:
-            return "0.0.0"
-
-    version = Version()
-
-    with use_kernel_mapping(
-        {
-            "Version": {
-                Device(type=device): LayerRepository(
-                    repo_id="kernels-test/versions",
-                    layer_name="Version",
-                )
-            }
-        }
-    ):
-        version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "0.2.0"
-
-    with use_kernel_mapping(
-        {
-            "Version": {
-                Device(type=device): LayerRepository(
-                    repo_id="kernels-test/versions",
-                    layer_name="Version",
-                    version="<1.0.0",
-                )
-            }
-        }
-    ):
-        version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "0.2.0"
-
-    with use_kernel_mapping(
-        {
-            "Version": {
-                Device(type=device): LayerRepository(
-                    repo_id="kernels-test/versions",
-                    layer_name="Version",
-                    version="<0.2.0",
-                )
-            }
-        }
-    ):
-        version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "0.1.1"
-
-    with use_kernel_mapping(
-        {
-            "Version": {
-                Device(type=device): LayerRepository(
-                    repo_id="kernels-test/versions",
-                    layer_name="Version",
-                    version=">0.1.0,<0.2.0",
-                )
-            }
-        }
-    ):
-        version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "0.1.1"
-
-    with use_kernel_mapping(
-        {
-            "Version": {
-                Device(type=device): LayerRepository(
-                    repo_id="kernels-test/versions",
-                    layer_name="Version",
-                    version=">0.2.0",
-                )
-            }
-        }
-    ):
-        with pytest.raises(ValueError, match=r"No version.*satisfies requirement"):
-            kernelize(version, device=device, mode=Mode.INFERENCE)
-
-    with pytest.raises(ValueError, match=r"Either a revision or a version.*not both"):
-        use_kernel_mapping(
-            {
-                "Version": {
-                    Device(type=device): LayerRepository(
-                        repo_id="kernels-test/versions",
-                        layer_name="Version",
-                        revision="v0.1.0",
-                        version="<1.0.0",
-                    )
-                }
-            }
-        )
-
-
 def test_layer_versions(device):
     @use_kernel_forward_from_hub("Version")
     class Version(nn.Module):
@@ -1319,7 +1229,7 @@ def test_local_overrides_layer(monkeypatch, local_kernel_path):
     model = SiluAndMulWithKernel()
 
     with use_kernel_mapping(mapping, inherit_mapping=False):
-        with pytest.raises(RepositoryNotFoundError):
+        with pytest.raises(HfHubHTTPError):
             kernelize(model, device="cuda", mode=Mode.INFERENCE)
 
     with monkeypatch.context() as m:

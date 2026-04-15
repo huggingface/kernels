@@ -121,9 +121,7 @@ def _style_axes(
     ax.spines["bottom"].set_linewidth(0.5)
 
 
-def _add_header(
-    fig, title: str, backend: str, pytorch_version: str, dark: bool = False
-):
+def _add_header(fig, title: str, backend: str, pytorch_version: str, dark: bool = False):
     _, text, _, _ = _get_colors(dark)
     fig.text(
         0.02,
@@ -252,11 +250,7 @@ def save_speedup_image(
             color=text,
         )
 
-        speedup_text = (
-            f"  {speedup:.2f}x faster"
-            if speedup >= 1.0
-            else f"  {1/speedup:.2f}x slower"
-        )
+        speedup_text = f"  {speedup:.2f}x faster" if speedup >= 1.0 else f"  {1/speedup:.2f}x slower"
         speedup_color = _HF_ORANGE if speedup >= 1.0 else _HF_GRAY
         ax.text(
             max(t.mean_ms, ref_mean) + max_time * 0.15,
@@ -382,11 +376,7 @@ def _save_ops_per_sec_image(
             color=text,
         )
 
-        speedup_text = (
-            f"  {speedup:.2f}x faster"
-            if speedup >= 1.0
-            else f"  {1/speedup:.2f}x slower"
-        )
+        speedup_text = f"  {speedup:.2f}x faster" if speedup >= 1.0 else f"  {1/speedup:.2f}x slower"
         speedup_color = _HF_ORANGE if speedup >= 1.0 else _HF_GRAY
         ax.text(
             max(kernel_ops, ref_ops) + max_ops * 0.15,
@@ -409,11 +399,7 @@ def _save_ops_per_sec_image(
     )
     _add_header(
         fig,
-        (
-            f"{repo_id} vs Torch - Throughput"
-            if repo_id
-            else "Kernel vs Torch - Throughput"
-        ),
+        (f"{repo_id} vs Torch - Throughput" if repo_id else "Kernel vs Torch - Throughput"),
         backend,
         pytorch_version,
         dark,
@@ -509,14 +495,8 @@ def _save_speedup_gif(
     track_end = (track_x + track_w) / svg_width
     ball_r = 8 / svg_width
 
-    title = (
-        f"{repo_id} vs Torch - Relative Speed"
-        if repo_id
-        else "Kernel vs Torch - Relative Speed"
-    )
-    subtitle = " · ".join(
-        filter(None, [f"PyTorch {pytorch_version}" if pytorch_version else "", backend])
-    )
+    title = f"{repo_id} vs Torch - Relative Speed" if repo_id else "Kernel vs Torch - Relative Speed"
+    subtitle = " · ".join(filter(None, [f"PyTorch {pytorch_version}" if pytorch_version else "", backend]))
 
     ref_dur = 4.0
     fps = 30
@@ -602,18 +582,10 @@ def _save_speedup_gif(
             kernel_period = 1.0 / speedup
             kernel_t = (t % kernel_period) / kernel_period
             kernel_phase = math.sin(kernel_t * math.pi)
-            kernel_x = (
-                track_start
-                + ball_r
-                + kernel_phase * (track_end - track_start - 2 * ball_r)
-            )
+            kernel_x = track_start + ball_r + kernel_phase * (track_end - track_start - 2 * ball_r)
 
             ref_phase = math.sin(t * math.pi)
-            ref_x = (
-                track_start
-                + ball_r
-                + ref_phase * (track_end - track_start - 2 * ball_r)
-            )
+            ref_x = track_start + ball_r + ref_phase * (track_end - track_start - 2 * ball_r)
 
             ball_offset = 6 / svg_height
             kernel_ball = Ellipse(
@@ -699,9 +671,7 @@ def _save_speedup_gif(
         frames.append(frame_img.convert("RGB"))
         plt.close(fig)
 
-    frames[0].save(
-        path, save_all=True, append_images=frames[1:], duration=1000 // fps, loop=0
-    )
+    frames[0].save(path, save_all=True, append_images=frames[1:], duration=1000 // fps, loop=0)
     print(f"Animated GIF saved to: {path}", file=sys.stderr)
 
 
@@ -720,14 +690,8 @@ def _save_speedup_svg(
     track_x, track_w, ball_r = 180, 470, 8
     x_min, x_max = track_x + ball_r, track_x + track_w - ball_r
 
-    title = (
-        f"{repo_id} vs Torch - Relative Speed"
-        if repo_id
-        else "Kernel vs Torch - Relative Speed"
-    )
-    subtitle = " · ".join(
-        filter(None, [f"PyTorch {pytorch_version}" if pytorch_version else "", backend])
-    )
+    title = f"{repo_id} vs Torch - Relative Speed" if repo_id else "Kernel vs Torch - Relative Speed"
+    subtitle = " · ".join(filter(None, [f"PyTorch {pytorch_version}" if pytorch_version else "", backend]))
 
     ref_dur = 4.0
 

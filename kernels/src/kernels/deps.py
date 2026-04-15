@@ -44,14 +44,9 @@ class DependencyData:
 
     @staticmethod
     def from_dict(data: dict) -> "DependencyData":
-        general = {
-            name: DependencyInfo.from_dict(info)
-            for name, info in data.get("general", {}).items()
-        }
+        general = {name: DependencyInfo.from_dict(info) for name, info in data.get("general", {}).items()}
         backends = {
-            backend_name: {
-                name: DependencyInfo.from_dict(info) for name, info in deps.items()
-            }
+            backend_name: {name: DependencyInfo.from_dict(info) for name, info in deps.items()}
             for backend_name, deps in data.get("backends", {}).items()
         }
         return DependencyData(general=general, backends=backends)
@@ -61,14 +56,10 @@ try:
     with open(Path(__file__).parent / "python_depends.json", "r") as f:
         _DEPENDENCY_DATA = DependencyData.from_dict(json.load(f))
 except FileNotFoundError:
-    raise FileNotFoundError(
-        "Cannot load dependency data, is `kernels` correctly installed?"
-    )
+    raise FileNotFoundError("Cannot load dependency data, is `kernels` correctly installed?")
 
 
-def validate_dependencies(
-    kernel_module_name: str, dependencies: list[str], backend: Backend
-):
+def validate_dependencies(kernel_module_name: str, dependencies: list[str], backend: Backend):
     """
     Validate a list of dependencies to ensure they are installed.
 
@@ -88,17 +79,13 @@ def validate_dependencies(
             dep_info = backend_deps[dependency]
         else:
             # Dependency not found in general or backend-specific dependencies
-            raise ValueError(
-                f"Kernel module `{kernel_module_name}` uses unsupported kernel dependency: {dependency}"
-            )
+            raise ValueError(f"Kernel module `{kernel_module_name}` uses unsupported kernel dependency: {dependency}")
 
         # Check if each python package is installed
         for python_package in dep_info.python:
             pkg_name = python_package.pkg
             # Assertion because this should not happen and is a bug.
-            assert (
-                pkg_name is not None
-            ), f"Invalid dependency data for `{dependency}`: missing `pkg` field."
+            assert pkg_name is not None, f"Invalid dependency data for `{dependency}`: missing `pkg` field."
 
             module_name = python_package.import_name
             if module_name is None:

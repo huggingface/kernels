@@ -161,18 +161,14 @@ def register_kernel_mapping(
     for new_kernel, new_device_repos in mapping.items():
         device_repo = _KERNEL_MAPPING.get().setdefault(new_kernel, {})
         for new_device, new_repo in new_device_repos.items():
-            device = (
-                Device(type=new_device) if isinstance(new_device, str) else new_device
-            )
+            device = Device(type=new_device) if isinstance(new_device, str) else new_device
 
             if isinstance(new_repo, dict):
                 kernel_options = new_repo
             else:
                 kernel_options = {Mode.FALLBACK: new_repo}
 
-            feature_repos = device_repo.setdefault(
-                device.type, DeviceRepos.create_repo(device)
-            )
+            feature_repos = device_repo.setdefault(device.type, DeviceRepos.create_repo(device))
             feature_repos.insert(device, kernel_options)
 
 
@@ -264,9 +260,7 @@ def kernelize(
         if not hasattr(module_class, "kernel_layer_name"):
             continue
 
-        kernelize_layer(
-            module, mode=mode, device_type=device_type, use_fallback=use_fallback
-        )
+        kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
 
     return model
 
@@ -284,9 +278,7 @@ def _find_device(model: "nn.Module") -> Device:
     try:
         param = next(model.parameters())
     except StopIteration:
-        raise ValueError(
-            "Cannot determine model device, provide as `device` argument to `kernelize`."
-        )
+        raise ValueError("Cannot determine model device, provide as `device` argument to `kernelize`.")
 
     dev_type = param.device.type
     if dev_type == "cuda":

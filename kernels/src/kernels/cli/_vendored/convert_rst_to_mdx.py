@@ -121,10 +121,7 @@ def convert_rst_links(text, page_info):
     # Other links
     text = _re_links.sub(r"[\1](\2)", text)
     # Relative links or Transformers links need to remove the .html
-    if (
-        "(https://https://huggingface.co/" in text
-        or re.search(r"\(\.+/", text) is not None
-    ):
+    if "(https://https://huggingface.co/" in text or re.search(r"\(\.+/", text) is not None:
         text = text.replace(".html", "")
     return text
 
@@ -160,9 +157,7 @@ def convert_special_chars(text):
     """
     text = text.replace("{", "&amp;lcub;")
     # We don't want to replace those by the HTML code, so we temporarily set them at LTHTML
-    text = re.sub(
-        r"<(img|br|hr|Youtube)", r"LTHTML\1", text
-    )  # html void elements with no closing counterpart
+    text = re.sub(r"<(img|br|hr|Youtube)", r"LTHTML\1", text)  # html void elements with no closing counterpart
     _re_lt_html = re.compile(r"<(\S+)([^>]*>)(((?!</\1>).)*)<(/\1>)", re.DOTALL)
     while _re_lt_html.search(text):
         text = _re_lt_html.sub(r"LTHTML\1\2\3LTHTML\5", text)
@@ -208,9 +203,7 @@ def apply_min_indent(text, min_indent):
             continue
         indent = find_indent(lines[idx])
         if indent < min_indent:
-            while idx < len(lines) and (
-                find_indent(lines[idx]) >= indent or is_empty_line(lines[idx])
-            ):
+            while idx < len(lines) and (find_indent(lines[idx]) >= indent or is_empty_line(lines[idx])):
                 if not is_empty_line(lines[idx]):
                     lines[idx] = " " * (min_indent - indent) + lines[idx]
                 idx += 1
@@ -257,18 +250,13 @@ def convert_rst_blocks(text, page_info):
             while idx < len(lines) and is_empty_line(lines[idx]):
                 idx += 1
             # Grab the indent of the return line, this block will stop when we unindent under it (or has already)
-            example_indent = (
-                find_indent(lines[idx]) if idx < len(lines) else block_indent
-            )
+            example_indent = find_indent(lines[idx]) if idx < len(lines) else block_indent
 
             if example_indent == block_indent:
                 block_content = ""
             else:
                 block_lines = []
-                while idx < len(lines) and (
-                    is_empty_line(lines[idx])
-                    or find_indent(lines[idx]) >= example_indent
-                ):
+                while idx < len(lines) and (is_empty_line(lines[idx]) or find_indent(lines[idx]) >= example_indent):
                     block_lines.append(lines[idx][example_indent:])
                     idx += 1
                 block_content = "\n".join(block_lines)
@@ -280,16 +268,11 @@ def convert_rst_blocks(text, page_info):
                 prefix = f"<example>```{block_info}"
                 new_lines.append(f"{prefix}\n{block_content.strip()}\n```\n</example>")
             elif block_type == "note":
-                new_lines.append(
-                    apply_min_indent(
-                        f"<Tip>\n\n{block_content.strip()}\n\n</Tip>\n", block_indent
-                    )
-                )
+                new_lines.append(apply_min_indent(f"<Tip>\n\n{block_content.strip()}\n\n</Tip>\n", block_indent))
             elif block_type == "warning":
                 new_lines.append(
                     apply_min_indent(
-                        "<Tip warning={true}>\n\n"
-                        + f"{block_content.strip()}\n\n</Tip>\n",
+                        "<Tip warning={true}>\n\n" + f"{block_content.strip()}\n\n</Tip>\n",
                         block_indent,
                     )
                 )
@@ -328,18 +311,12 @@ def convert_rst_blocks(text, page_info):
                         raise ValueError("Image source not defined.")
                     options["src"] = target
                 # Adapt path
-                options["src"] = options["src"].replace(
-                    "/imgs/", f"/docs/{package_name}/{version}/{language}/imgs/"
-                )
-                html_code = " ".join(
-                    [f'{key}="{value}"' for key, value in options.items()]
-                )
+                options["src"] = options["src"].replace("/imgs/", f"/docs/{package_name}/{version}/{language}/imgs/")
+                html_code = " ".join([f'{key}="{value}"' for key, value in options.items()])
                 new_lines.append(f"<img {html_code}/>\n")
 
             else:
-                new_lines.append(
-                    f"{block_type},{block_info}\n{block_content.rstrip()}\n"
-                )
+                new_lines.append(f"{block_type},{block_info}\n{block_content.rstrip()}\n")
 
         else:
             new_lines.append(lines[idx])
@@ -397,9 +374,7 @@ class InvalidRstDocstringError(ValueError):
     pass
 
 
-_re_parameters = re.compile(
-    r"<parameters>(((?!<parameters>).)*)</parameters>", re.DOTALL
-)
+_re_parameters = re.compile(r"<parameters>(((?!<parameters>).)*)</parameters>", re.DOTALL)
 _re_md_link = re.compile(r"\[(.+)\]\(.+\)", re.DOTALL)
 
 
@@ -422,22 +397,16 @@ def parse_rst_docstring(docstring):
             # Returns or Raises block.
             param_indent = find_indent(lines[idx])
             while (
-                idx < len(lines)
-                and find_indent(lines[idx]) == param_indent
-                and _re_returns.search(lines[idx]) is None
+                idx < len(lines) and find_indent(lines[idx]) == param_indent and _re_returns.search(lines[idx]) is None
             ):
                 intro, doc = split_arg_line(lines[idx])
                 # Line starting with a > after indent indicate a "section title" in the parameters.
                 if intro.lstrip().startswith(">"):
                     lines[idx] = intro.lstrip()
                 else:
-                    lines[idx] = (
-                        re.sub(r"^\s*(\S+)(\s)?", r"- **\1**\2", intro) + " --" + doc
-                    )
+                    lines[idx] = re.sub(r"^\s*(\S+)(\s)?", r"- **\1**\2", intro) + " --" + doc
                 idx += 1
-                while idx < len(lines) and (
-                    is_empty_line(lines[idx]) or find_indent(lines[idx]) > param_indent
-                ):
+                while idx < len(lines) and (is_empty_line(lines[idx]) or find_indent(lines[idx]) > param_indent):
                     idx += 1
             lines.insert(idx, "</parameters>\n")
             idx += 1
@@ -461,10 +430,7 @@ def parse_rst_docstring(docstring):
                 return_type, return_description = split_return_line(lines[idx])
                 lines[idx] = return_description
                 idx += 1
-                while idx < len(lines) and (
-                    is_empty_line(lines[idx])
-                    or find_indent(lines[idx]) >= return_indent
-                ):
+                while idx < len(lines) and (is_empty_line(lines[idx]) or find_indent(lines[idx]) >= return_indent):
                     idx += 1
             else:
                 while idx < len(lines) and find_indent(lines[idx]) == return_indent:
@@ -474,16 +440,11 @@ def parse_rst_docstring(docstring):
                     md_link = _re_md_link.match(raised_error)
                     if md_link:
                         raised_error = md_link[1]
-                        raised_error = re.sub(
-                            r"^\s*`?([\w\.]*)`?$", r"``\1``", raised_error
-                        )
+                        raised_error = re.sub(r"^\s*`?([\w\.]*)`?$", r"``\1``", raised_error)
                     if raised_error not in raised_errors:
                         raised_errors.append(raised_error)
                     idx += 1
-                    while idx < len(lines) and (
-                        is_empty_line(lines[idx])
-                        or find_indent(lines[idx]) > return_indent
-                    ):
+                    while idx < len(lines) and (is_empty_line(lines[idx]) or find_indent(lines[idx]) > return_indent):
                         idx += 1
 
             lines.insert(idx, f"</{tag}s>\n")
@@ -494,9 +455,7 @@ def parse_rst_docstring(docstring):
                 lines[idx - 1] += f"\n<{tag}type>{return_type}</{tag}type>\n"
             elif len(raised_errors) > 0:
                 # raised errors
-                lines[
-                    idx - 1
-                ] += f"\n<raisederrors>{' or '.join(raised_errors)}</raisederrors>\n"
+                lines[idx - 1] += f"\n<raisederrors>{' or '.join(raised_errors)}</raisederrors>\n"
 
         else:
             idx += 1
@@ -685,9 +644,7 @@ def split_pt_tf_code_blocks(text):
                 block_lines = ["<frameworkcontent>", "<pt>"]
                 block_lines.extend(code_lines["common"].copy() + code_lines["pytorch"])
                 block_lines.extend(["```", "</pt>", "<tf>"])
-                block_lines.extend(
-                    code_lines["common"].copy() + code_lines["tensorflow"]
-                )
+                block_lines.extend(code_lines["common"].copy() + code_lines["tensorflow"])
                 block_lines.extend(["```", "</tf>", "</frameworkcontent>"])
                 new_lines.extend(block_lines)
             else:

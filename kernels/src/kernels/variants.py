@@ -23,9 +23,7 @@ from kernels.backends import (
 )
 from kernels.compat import has_torch, has_tvm_ffi
 
-BUILD_VARIANT_REGEX = re.compile(
-    r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)"
-)
+BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)")
 
 
 @dataclass(unsafe_hash=True)
@@ -40,9 +38,7 @@ class Torch:
     # The optional second part is the ABI tag, which is `-cxx11` or `-cxx98`.
     # The ABI tag is used for historical reasons for Linux build variants. It
     # will be removed from builds in the future.
-    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(
-        r"torch(\d)(\d+)(?:-(cxx11|cxx98))?"
-    )
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch(\d)(\d+)(?:-(cxx11|cxx98))?")
 
     version: Version
     cxx11_abi: bool | None
@@ -104,9 +100,7 @@ class TvmFfi:
             import tvm_ffi
 
             tvm_ffi_version = parse(tvm_ffi.__version__)
-            tvm_ffi_version = Version(
-                f"{tvm_ffi_version.major}.{tvm_ffi_version.minor}"
-            )
+            tvm_ffi_version = Version(f"{tvm_ffi_version.major}.{tvm_ffi_version.minor}")
             return [TvmFfi(version=tvm_ffi_version)]
         else:
             return []
@@ -212,14 +206,9 @@ class ArchVariant:
 
     @staticmethod
     def possible_variants() -> list["ArchVariant"]:
-        frameworks: list[Torch | TvmFfi] = (
-            Torch.possible_variants() + TvmFfi.possible_variants()
-        )
+        frameworks: list[Torch | TvmFfi] = Torch.possible_variants() + TvmFfi.possible_variants()
         archs = Arch.possible_variants()
-        return [
-            ArchVariant(framework=fw, arch=arch)
-            for fw, arch in itertools.product(frameworks, archs)
-        ]
+        return [ArchVariant(framework=fw, arch=arch) for fw, arch in itertools.product(frameworks, archs)]
 
     @property
     def variant_str(self) -> str:
@@ -238,10 +227,7 @@ class NoarchVariant:
     def possible_variants() -> list["NoarchVariant"]:
         frameworks = TorchNoarch.possible_variants()
         archs = Noarch.possible_variants()
-        return [
-            NoarchVariant(framework=fw, arch=arch)
-            for fw, arch in itertools.product(frameworks, archs)
-        ]
+        return [NoarchVariant(framework=fw, arch=arch) for fw, arch in itertools.product(frameworks, archs)]
 
     @property
     def variant_str(self) -> str:
@@ -259,9 +245,7 @@ def system_variants() -> list[Variant]:
              feedback. When loading kernels, etc. rely what is on disk and
              use `parse_variant` + `resolve_variant`, since this uses our
              priority order, etc."""
-    result: list[Variant] = (
-        ArchVariant.possible_variants() + NoarchVariant.possible_variants()
-    )
+    result: list[Variant] = ArchVariant.possible_variants() + NoarchVariant.possible_variants()
     return _sort_variants(result)
 
 
@@ -271,9 +255,7 @@ def parse_variant(variant_str: str) -> Variant:
 
     if parts[0] == "torch":
         # noarch: e.g. "torch-cpu"
-        return NoarchVariant(
-            framework=TorchNoarch(), arch=Noarch.parse("-".join(parts[1:]))
-        )
+        return NoarchVariant(framework=TorchNoarch(), arch=Noarch.parse("-".join(parts[1:])))
     elif parts[0].startswith("torch"):
         if len(parts) >= 2 and parts[1] in ("cxx11", "cxx98"):
             framework_str = f"{parts[0]}-{parts[1]}"
@@ -281,13 +263,9 @@ def parse_variant(variant_str: str) -> Variant:
         else:
             framework_str = parts[0]
             arch_parts = parts[1:]
-        return ArchVariant(
-            framework=Torch.parse(framework_str), arch=Arch.parse(arch_parts)
-        )
+        return ArchVariant(framework=Torch.parse(framework_str), arch=Arch.parse(arch_parts))
     elif parts[0] == "tvm" and len(parts) >= 2 and parts[1].startswith("ffi"):
-        return ArchVariant(
-            framework=TvmFfi.parse(f"tvm-{parts[1]}"), arch=Arch.parse(parts[2:])
-        )
+        return ArchVariant(framework=TvmFfi.parse(f"tvm-{parts[1]}"), arch=Arch.parse(parts[2:]))
     else:
         raise ValueError(f"Unknown framework in variant string: {variant_str!r}")
 
@@ -295,13 +273,9 @@ def parse_variant(variant_str: str) -> Variant:
 def get_variants(api: HfApi, *, repo_id: str, revision: str) -> list[Variant]:
     """Get all the build variants available from a kernel repository."""
 
-    tree = api.list_repo_tree(
-        repo_id, path_in_repo="build", repo_type="kernel", revision=revision
-    )
+    tree = api.list_repo_tree(repo_id, path_in_repo="build", repo_type="kernel", revision=revision)
 
-    variant_strs = {
-        item.path.split("/")[-1] for item in tree if isinstance(item, RepoFolder)
-    }
+    variant_strs = {item.path.split("/")[-1] for item in tree if isinstance(item, RepoFolder)}
 
     variants: list[Variant] = []
     for variant_str in variant_strs:
@@ -331,18 +305,14 @@ def get_variants_local(repo_path: Path) -> list[Variant]:
     return variants
 
 
-def resolve_variant(
-    variants: list[Variant], backend: str | None = None
-) -> Variant | None:
+def resolve_variant(variants: list[Variant], backend: str | None = None) -> Variant | None:
     """Return the best matching variant for the current system."""
     resolved = resolve_variants(variants, backend)
 
     return resolved[0] if resolved else None
 
 
-def resolve_variants(
-    variants: list[Variant], backend: str | None = None
-) -> list[Variant]:
+def resolve_variants(variants: list[Variant], backend: str | None = None) -> list[Variant]:
     """Return the matching variants for the current system, sorted
     by decreasing order of preference."""
     selected_backend = _select_backend(backend)
@@ -428,10 +398,7 @@ def _filter_variants(
             if isinstance(v.framework, Torch):
                 if v.framework.version != torch_version:
                     continue
-                if (
-                    v.framework.cxx11_abi is not None
-                    and v.framework.cxx11_abi != torch_cxx11_abi
-                ):
+                if v.framework.cxx11_abi is not None and v.framework.cxx11_abi != torch_cxx11_abi:
                     continue
             elif isinstance(v.framework, TvmFfi):
                 if v.framework.version != tvm_ffi_version:
@@ -450,13 +417,8 @@ def _filter_variants(
         elif isinstance(v, NoarchVariant):
             # Only noarch variants with a matching backend or "universal"
             # are applicable.
-            noarch_backend_name = (
-                "npu" if selected_backend.name == "cann" else selected_backend.name
-            )
-            if (
-                v.arch.backend_name != noarch_backend_name
-                and v.arch.backend_name != "universal"
-            ):
+            noarch_backend_name = "npu" if selected_backend.name == "cann" else selected_backend.name
+            if v.arch.backend_name != noarch_backend_name and v.arch.backend_name != "universal":
                 continue
         result.append(v)
     return result

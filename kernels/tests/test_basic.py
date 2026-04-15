@@ -147,9 +147,7 @@ def test_version_old():
         get_kernel("kernels-test/versions", version=">0.2.0")
 
     with pytest.raises(ValueError, match=r"Only one of"):
-        kernel = get_kernel(
-            "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
-        )
+        kernel = get_kernel("kernels-test/versions", revision="v0.1.0", version="<1.0.0")
 
 
 def test_version():
@@ -158,9 +156,7 @@ def test_version():
     kernel = get_kernel("kernels-test/versions", version=2)
     assert kernel.version() == "2"
 
-    with pytest.raises(
-        ValueError, match="Version 0 not found, available versions: 1, 2.*"
-    ):
+    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
         kernel = get_kernel("kernels-test/versions", version=0)
 
 
@@ -168,10 +164,7 @@ def test_version_outdated_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=1)
     assert kernel.version() == "1"
-    assert (
-        "You are using version 1 of 'kernels-test/versions', but version 2 is available."
-        in caplog.text
-    )
+    assert "You are using version 1 of 'kernels-test/versions', but version 2 is available." in caplog.text
 
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
@@ -190,9 +183,7 @@ def test_no_version_or_revision_warning():
         "Remove the fallback to 'main' in `select_revision_or_version` and make "
         "`version` or `revision` a required argument."
     )
-    with pytest.warns(
-        FutureWarning, match="will require specifying a kernel version or revision"
-    ):
+    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
         get_kernel("kernels-test/versions")
 
 

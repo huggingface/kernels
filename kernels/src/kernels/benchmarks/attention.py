@@ -14,9 +14,7 @@ def _reference_attention(query, key, value, causal=False):
     """Reference implementation using PyTorch SDPA."""
     query, key, value = (x.transpose(1, 2).contiguous() for x in (query, key, value))
     with torch.nn.attention.sdpa_kernel(torch.nn.attention.SDPBackend.MATH):
-        out = torch.nn.functional.scaled_dot_product_attention(
-            query, key, value, is_causal=causal
-        )
+        out = torch.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=causal)
     return out.transpose(1, 2).contiguous()
 
 
@@ -24,9 +22,7 @@ def _varlen_reference_attention(q, k, v, cu_seqlens_q, cu_seqlens_k, causal=Fals
     """Reference implementation for variable length attention."""
     batch_size = cu_seqlens_q.shape[0] - 1
     total_tokens_q = q.shape[0]
-    out = torch.zeros(
-        (total_tokens_q, q.shape[1], q.shape[2]), device=q.device, dtype=q.dtype
-    )
+    out = torch.zeros((total_tokens_q, q.shape[1], q.shape[2]), device=q.device, dtype=q.dtype)
 
     for b in range(batch_size):
         start_q, end_q = cu_seqlens_q[b], cu_seqlens_q[b + 1]
@@ -54,9 +50,7 @@ class FlashAttentionBenchmark(Benchmark):
         self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
 
     def benchmark_small(self):
-        self.out = _extract_output(
-            self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False)
-        )
+        self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
 
     def verify_small(self) -> torch.Tensor:
         return _reference_attention(self.q, self.k, self.v, causal=False)
@@ -70,9 +64,7 @@ class FlashAttentionBenchmark(Benchmark):
         self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
 
     def benchmark_medium(self):
-        self.out = _extract_output(
-            self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False)
-        )
+        self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
 
     def verify_medium(self) -> torch.Tensor:
         return _reference_attention(self.q, self.k, self.v, causal=False)
@@ -86,9 +78,7 @@ class FlashAttentionBenchmark(Benchmark):
         self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
 
     def benchmark_large(self):
-        self.out = _extract_output(
-            self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False)
-        )
+        self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=False))
 
     def verify_large(self) -> torch.Tensor:
         return _reference_attention(self.q, self.k, self.v, causal=False)
@@ -106,9 +96,7 @@ class FlashAttentionCausalBenchmark(Benchmark):
         self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
 
     def benchmark_small(self):
-        self.out = _extract_output(
-            self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True)
-        )
+        self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
 
     def verify_small(self) -> torch.Tensor:
         return _reference_attention(self.q, self.k, self.v, causal=True)
@@ -122,9 +110,7 @@ class FlashAttentionCausalBenchmark(Benchmark):
         self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
 
     def benchmark_medium(self):
-        self.out = _extract_output(
-            self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True)
-        )
+        self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
 
     def verify_medium(self) -> torch.Tensor:
         return _reference_attention(self.q, self.k, self.v, causal=True)
@@ -138,9 +124,7 @@ class FlashAttentionCausalBenchmark(Benchmark):
         self.out = torch.empty(B, S, H, D, device="cuda", dtype=torch.float16)
 
     def benchmark_large(self):
-        self.out = _extract_output(
-            self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True)
-        )
+        self.out = _extract_output(self.kernel.flash_attn_func(self.q, self.k, self.v, causal=True))
 
     def verify_large(self) -> torch.Tensor:
         return _reference_attention(self.q, self.k, self.v, causal=True)
@@ -180,9 +164,7 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         )
 
     def verify_small(self) -> torch.Tensor:
-        return _varlen_reference_attention(
-            self.q, self.k, self.v, self.cu_seqlens, self.cu_seqlens, causal=False
-        )
+        return _varlen_reference_attention(self.q, self.k, self.v, self.cu_seqlens, self.cu_seqlens, causal=False)
 
     # Workload: medium (5 sequences, max_seqlen=256)
     def setup_medium(self):
@@ -214,9 +196,7 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         )
 
     def verify_medium(self) -> torch.Tensor:
-        return _varlen_reference_attention(
-            self.q, self.k, self.v, self.cu_seqlens, self.cu_seqlens, causal=False
-        )
+        return _varlen_reference_attention(self.q, self.k, self.v, self.cu_seqlens, self.cu_seqlens, causal=False)
 
     # Workload: large (8 sequences, max_seqlen=512)
     def setup_large(self):
@@ -248,6 +228,4 @@ class FlashAttentionVarlenBenchmark(Benchmark):
         )
 
     def verify_large(self) -> torch.Tensor:
-        return _varlen_reference_attention(
-            self.q, self.k, self.v, self.cu_seqlens, self.cu_seqlens, causal=False
-        )
+        return _varlen_reference_attention(self.q, self.k, self.v, self.cu_seqlens, self.cu_seqlens, causal=False)

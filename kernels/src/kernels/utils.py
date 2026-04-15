@@ -325,7 +325,7 @@ def get_kernel(
     )
     package_name, variant_path = install_kernel(
         repo_id,
-        revision,
+        revision=revision,
         backend=backend,
         user_agent=user_agent,
     )
@@ -506,7 +506,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
     package_name, variant_path = install_kernel(
-        repo_id, locked_sha, local_files_only=local_files_only
+        repo_id, revision=locked_sha, local_files_only=local_files_only
     )
 
     return _import_from_path(package_name, variant_path)

@@ -31,10 +31,8 @@ jobs:
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
         with:
           python-version: "3.12"
-      - name: Install griffe
-        run: uv pip install --system griffe
       - name: Check for breaking changes
-        run: griffe check kernels --search kernels/src -a main
+        run: uvx griffe check kernels --search kernels/src -a main
 
   validate-dependencies:
     name: Validate python_depends.json

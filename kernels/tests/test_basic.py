@@ -3,7 +3,7 @@ import logging
 import pytest
 import torch
 import torch.nn.functional as F
-from huggingface_hub.errors import HfHubHTTPError
+from huggingface_hub.errors import RepositoryNotFoundError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
@@ -260,7 +260,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
 
     # Ensure that we are testing with a non-existing kernel, so that we know
     # that the kernel must be local.
-    with pytest.raises(HfHubHTTPError):
+    with pytest.raises(RepositoryNotFoundError):
         get_kernel(f"kernels-test/{package_name}")
 
     with monkeypatch.context() as m:

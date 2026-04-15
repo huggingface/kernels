@@ -72,15 +72,16 @@ in
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.8.0";
+          version = "1.10.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
-            hash = "sha256-xWJ7L9Uh4Ayvjv9KyWW6mI6nUWf61+5y4X+bcYPsY/M=";
+            hash = "sha256-+APDquLcmFFaQ0GgzjELTmuWrFV7tLX7Sne89SUCbVs=";
           };
           dependencies =
             (prevAttrs.dependencies or [ ])
             ++ (with python-self; [
+              hf-xet
               httpx
               shellingham
               typer
@@ -97,12 +98,12 @@ in
         );
 
         hf-xet = python-super.hf-xet.overridePythonAttrs (prevAttrs: rec {
-          version = "1.4.2";
+          version = "1.4.3";
           src = final.fetchFromGitHub {
             owner = "huggingface";
             repo = "xet-core";
             tag = "v${version}";
-            hash = "sha256-UdHEpJztlVI8LPs8Ne9sKe1Nv3kVVk4YLxQ3W8sUPbQ=";
+            hash = "sha256-zAliMR2d2j6ynHQmAljQ8XgDyjuPxNawI1bZks5aRgs=";
           };
           cargoDeps = final.rustPlatform.fetchCargoVendor {
             inherit (prevAttrs)
@@ -113,7 +114,7 @@ in
               version
               src
               ;
-            hash = "sha256-GV+XY5uV57yQWVGdRLpGU3eD8Gz2gy6p7OHlF+mlJI4=";
+            hash = "sha256-TOgBT0l7TvJamVdIAdAUFRWs8AMRRY+Ydoh6e+3dEp0=";
           };
         });
 

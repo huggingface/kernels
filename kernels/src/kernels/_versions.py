@@ -12,8 +12,10 @@ def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
     """Get kernel versions that are available in the repository."""
     from kernels.utils import _get_hf_api
 
+    refs = _get_hf_api().list_repo_refs(repo_id=repo_id, repo_type="kernel")
+
     versions = {}
-    for branch in _get_hf_api().list_repo_refs(repo_id).branches:
+    for branch in refs.branches:
         if not branch.name.startswith("v"):
             continue
         try:
@@ -33,7 +35,7 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
     from kernels.utils import _get_hf_api
 
     versions = {}
-    for tag in _get_hf_api().list_repo_refs(repo_id).tags:
+    for tag in _get_hf_api().list_repo_refs(repo_id, repo_type="kernel").tags:
         if not tag.name.startswith("v"):
             continue
         try:
@@ -46,13 +48,14 @@ def _get_available_versions_old(repo_id: str) -> dict[Version, GitRefInfo]:
 
 def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRefInfo:
     """
-    Get the locks for a kernel with the given version spec.
+    Get the ref for a kernel with the given version spec.
 
     The version specifier can be any valid Python version specifier:
     https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
     """
     if isinstance(version_spec, int):
         versions = _get_available_versions(repo_id)
+
         ref = versions.get(version_spec, None)
         if ref is None:
             raise ValueError(

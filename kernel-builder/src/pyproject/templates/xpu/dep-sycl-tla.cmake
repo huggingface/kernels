@@ -3,7 +3,7 @@ if(GPU_LANG STREQUAL "SYCL")
 find_package(SyclTla)
 
 if(DPCPP_VERSION STREQUAL "2025.3")
-  set(SYCL_TLA_REVISION "14055e78510b8776ba739755eb57e592fdceefdb" CACHE STRING "CUTLASS revision to use")
+  set(SYCL_TLA_REVISION "v0.8" CACHE STRING "CUTLASS revision to use")
 else()
   message(FATAL_ERROR "Unknown DPCPP_VERSION: ${DPCPP_VERSION}")
 endif()

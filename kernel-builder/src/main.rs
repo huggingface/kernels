@@ -33,6 +33,8 @@ use kernels_data::config::{v3, Build, BuildCompat};
 
 mod nix;
 
+mod skills;
+
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
 
@@ -191,6 +193,12 @@ enum Commands {
         kernel_dir: Option<PathBuf>,
     },
 
+    /// Install skills for AI coding assistants (Claude, Codex, OpenCode).
+    Skills {
+        #[command(subcommand)]
+        command: SkillsCommands,
+    },
+
     /// Clean generated artifacts.
     CleanPyproject {
         #[arg(name = "KERNEL_DIR")]
@@ -212,6 +220,40 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         ops_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SkillsCommands {
+    /// Install a kernels skill for an AI assistant.
+    Add {
+        /// Skill to install.
+        #[arg(long, value_enum, default_value_t = skills::SkillId::CudaKernels)]
+        skill: skills::SkillId,
+
+        /// Install for Claude.
+        #[arg(long)]
+        claude: bool,
+
+        /// Install for Codex.
+        #[arg(long)]
+        codex: bool,
+
+        /// Install for OpenCode.
+        #[arg(long)]
+        opencode: bool,
+
+        /// Install globally (user-level) instead of in the current project directory.
+        #[arg(short, long)]
+        global: bool,
+
+        /// Install into a custom destination (path to skills directory).
+        #[arg(long)]
+        dest: Option<PathBuf>,
+
+        /// Overwrite existing skills in the destination.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -303,6 +345,17 @@ fn main() -> Result<()> {
             validate(kernel_dir)?;
             Ok(())
         }
+        Commands::Skills { command } => match command {
+            SkillsCommands::Add {
+                skill,
+                claude,
+                codex,
+                opencode,
+                global,
+                dest,
+                force,
+            } => skills::add_skill(skill, claude, codex, opencode, global, dest, force),
+        },
         Commands::CleanPyproject {
             kernel_dir,
             target_dir,

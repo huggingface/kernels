@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.cli.skills import DEFAULT_SKILL_ID, SUPPORTED_SKILL_IDS, add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
@@ -91,62 +90,6 @@ def main():
     )
     upload_parser.set_defaults(func=upload_kernels)
 
-    skills_parser = subparsers.add_parser(
-        "skills",
-        help="Install kernels specific skills for agents like Claude, Codex, and OpenCode",
-    )
-    skills_subparsers = skills_parser.add_subparsers(required=True)
-    skills_add_parser = skills_subparsers.add_parser(
-        "add",
-        help="Install a kernels skill for an AI assistant",
-    )
-    skills_add_parser.add_argument(
-        "--skill",
-        type=str,
-        choices=SUPPORTED_SKILL_IDS,
-        default=DEFAULT_SKILL_ID,
-        help=(
-            f"Skill ID to install. Defaults to `{DEFAULT_SKILL_ID}`. "
-            "Use `rocm-kernels` for ROCm-focused kernels."
-        ),
-    )
-    skills_add_parser.add_argument(
-        "--claude",
-        action="store_true",
-        help="Install for Claude.",
-    )
-    skills_add_parser.add_argument(
-        "--codex",
-        action="store_true",
-        help="Install for Codex.",
-    )
-    skills_add_parser.add_argument(
-        "--opencode",
-        action="store_true",
-        help="Install for OpenCode.",
-    )
-    skills_add_parser.add_argument(
-        "--global",
-        "-g",
-        dest="global_",
-        action="store_true",
-        help=(
-            "Install globally (user-level) instead of in the current project directory."
-        ),
-    )
-    skills_add_parser.add_argument(
-        "--dest",
-        type=Path,
-        default=None,
-        help="Install into a custom destination (path to skills directory).",
-    )
-    skills_add_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing skills in the destination.",
-    )
-    skills_add_parser.set_defaults(func=add_skill)
-
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
     lock_parser.add_argument(
         "project_dir",
@@ -221,14 +164,14 @@ def download_kernels(args):
         if args.all_variants:
             install_kernel_all_variants(
                 kernel_lock.repo_id,
-                kernel_lock.sha,
+                revision=kernel_lock.sha,
                 variant_locks=kernel_lock.variants,
             )
         else:
             try:
                 install_kernel(
                     kernel_lock.repo_id,
-                    kernel_lock.sha,
+                    revision=kernel_lock.sha,
                     variant_locks=kernel_lock.variants,
                 )
             except FileNotFoundError as e:

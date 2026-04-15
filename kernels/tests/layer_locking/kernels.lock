@@ -1,7 +1,7 @@
 [
   {
     "repo_id": "kernels-test/versions",
-    "sha": "7dc0217a6c2e9eb7d7470aa32554dadbbf619b02",
+    "sha": "56d69c4e6d313a4616421077eee6447fffbe3e70",
     "variants": {
       "torch-cpu": {
         "hash": "sha256-e1e60c9e2c69f1b60614f5867e22e9147a2419984b4ef77041ae920c7abc4a73",

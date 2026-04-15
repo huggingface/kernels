@@ -211,14 +211,14 @@ def download_kernels(args):
         if args.all_variants:
             install_kernel_all_variants(
                 kernel_lock.repo_id,
-                kernel_lock.sha,
+                revision=kernel_lock.sha,
                 variant_locks=kernel_lock.variants,
             )
         else:
             try:
                 install_kernel(
                     kernel_lock.repo_id,
-                    kernel_lock.sha,
+                    revision=kernel_lock.sha,
                     variant_locks=kernel_lock.variants,
                 )
             except FileNotFoundError as e:

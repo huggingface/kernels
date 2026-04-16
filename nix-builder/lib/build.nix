@@ -206,7 +206,9 @@ rec {
       name = "torch-ext-bundle";
       # Fill card iff we build any variants.
       postInstall = lib.optionalString (buildSets != [ ]) ''
-        ${(builtins.head buildSets).pkgs.kernel-builder}/bin/kernel-builder fill-card ${path} $out/CARD.md
+        if [ -f "${path}/CARD.md" ]; then
+          ${(builtins.head buildSets).pkgs.kernel-builder}/bin/kernel-builder fill-card ${path} $out/CARD.md
+        fi
       '';
     };
 

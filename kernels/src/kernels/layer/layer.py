@@ -40,9 +40,8 @@ class LayerRepository:
             The name of the layer within the kernel repository.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`int|str`, *optional*):
-            The kernel version to download as an integer. The `str` variant is deprecated and will be
-            removed in a future release. Cannot be used together with `revision`.
+        version (`int`, *optional*):
+            The kernel version to download. Cannot be used together with `revision`.
 
     Example:
         ```python
@@ -63,7 +62,7 @@ class LayerRepository:
         *,
         layer_name: str,
         revision: str | None = None,
-        version: int | str | None = None,
+        version: int | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")

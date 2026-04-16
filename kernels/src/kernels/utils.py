@@ -5,7 +5,6 @@ import importlib
 import importlib.metadata
 import inspect
 import json
-import logging
 import os
 import platform
 import sys
@@ -56,11 +55,6 @@ def get_loaded_kernels() -> list[LoadedKernel]:
 
 def _get_cache_dir() -> str | None:
     """Returns the kernels cache directory."""
-    cache_dir = os.environ.get("HF_KERNELS_CACHE", None)
-    if cache_dir is not None:
-        logging.warning("HF_KERNELS_CACHE will be removed in the future, use KERNELS_CACHE instead")
-        return cache_dir
-
     return os.environ.get("KERNELS_CACHE", None)
 
 
@@ -265,7 +259,7 @@ def install_kernel_all_variants(
 def get_kernel(
     repo_id: str,
     revision: str | None = None,
-    version: int | str | None = None,
+    version: int | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
 ) -> ModuleType:
@@ -280,9 +274,8 @@ def get_kernel(
             The Hub repository containing the kernel.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`int|str`, *optional*):
-            The kernel version to download as an integer. The `str` variant is deprecated and will be
-            removed in a future release. Cannot be used together with `revision`.
+        version (`int`, *optional*):
+            The kernel version to download. Cannot be used together with `revision`.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -361,7 +354,7 @@ def get_local_kernel(
 def has_kernel(
     repo_id: str,
     revision: str | None = None,
-    version: int | str | None = None,
+    version: int | None = None,
     backend: str | None = None,
 ) -> bool:
     """
@@ -372,9 +365,8 @@ def has_kernel(
             The Hub repository containing the kernel.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`int|str`, *optional*):
-            The kernel version to download as an integer. The `str` variant is deprecated and will be
-            removed in a future release. Cannot be used together with `revision`.
+        version (`int`, *optional*):
+            The kernel version to download. Cannot be used together with `revision`.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.

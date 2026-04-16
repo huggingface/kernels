@@ -17,5 +17,6 @@ jobs:
     with:
       commit_sha: ${{ github.event.pull_request.head.sha }}
       pr_number: ${{ github.event.number }}
-      package_path: kernels/
+      package_path: kernels/kernels/
       package: kernels
+      version_tag_suffix: "kernels/src/"

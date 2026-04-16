@@ -1,4 +1,4 @@
-.PHONY: style
+.PHONY: style quality
 
 export check_dirs := kernels/src kernels/tests
 
@@ -10,3 +10,7 @@ kernels/src/kernels/python_depends.json: kernels-data/src/python_dependencies.js
 style:
 	ruff format ${check_dirs}
 	ruff check ${check_dirs} --fix
+
+quality:
+	ruff format --check ${check_dirs}
+	ruff check ${check_dirs}

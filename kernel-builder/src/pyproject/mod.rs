@@ -10,7 +10,6 @@ use minijinja::Environment;
 
 use crate::util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build};
 
-mod card;
 pub(crate) mod common;
 pub mod deps;
 pub mod fileset;
@@ -19,7 +18,6 @@ mod ops_identifier;
 mod torch;
 mod tvm_ffi;
 
-pub use card::write_card;
 pub use fileset::FileSet;
 pub use kernels_data::metadata::parse_metadata;
 

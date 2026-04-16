@@ -1,10 +1,16 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
 use eyre::{bail, Context, Result};
 use minijinja::{context, Environment};
 use rustpython_parser::{ast, Parse};
 
 use kernels_data::config::Build;
+
+use crate::util::{check_or_infer_kernel_dir, parse_build};
 
 fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let init_path = kernel_dir
@@ -49,7 +55,7 @@ fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>
     None
 }
 
-pub fn write_card(build: &Build, kernel_dir: &Path) -> Result<()> {
+fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
     let card_template_path = kernel_dir.join("CARD.md");
     if !card_template_path.exists() {
         bail!(
@@ -66,13 +72,14 @@ pub fn write_card(build: &Build, kernel_dir: &Path) -> Result<()> {
     env.add_template_owned("card", template_content)
         .wrap_err("Cannot load card template")?;
 
-    let repo_id = build.repo_id().unwrap_or("{repo_id}");
+    let repo_id = build.repo_id().ok_or(eyre::eyre!(
+        "Cannot fill card template because `repo-id` is not specified in `[general.hub]`"
+    ))?;
     let module_name = build.general.name.python_name();
     let functions = extract_functions(kernel_dir, &module_name);
     let has_benchmark = kernel_dir.join("benchmarks").join("benchmark.py").exists();
 
-    let content = env
-        .get_template("card")
+    env.get_template("card")
         .wrap_err("Cannot get card template")?
         .render(context! {
             repo_id => repo_id,
@@ -81,17 +88,27 @@ pub fn write_card(build: &Build, kernel_dir: &Path) -> Result<()> {
             upstream => build.general.upstream.as_ref().map(|u| u.to_string()),
             license => build.general.license.clone(),
         })
-        .wrap_err("Cannot render card template")?;
+        .wrap_err("Cannot render card template")
+}
 
-    let build_dir = kernel_dir.join("build");
-    fs::create_dir_all(&build_dir)
-        .wrap_err_with(|| format!("Cannot create directory `{}`", build_dir.display()))?;
+pub fn fill_card(kernel_dir: Option<PathBuf>, output: Option<PathBuf>) -> Result<()> {
+    let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
+    let build = parse_build(&kernel_dir)?;
+    let content = render_card(&build, &kernel_dir)?;
 
-    let card_path = build_dir.join("CARD.md");
-    fs::write(&card_path, content)
-        .wrap_err_with(|| format!("Cannot write `{}`", card_path.display()))?;
+    match output {
+        Some(path) => {
+            fs::write(&path, &content)
+                .wrap_err_with(|| format!("Cannot write `{}`", path.display()))?;
+            eprintln!("Generated {}", path.display());
+        }
+        None => {
+            io::stdout()
+                .write_all(content.as_bytes())
+                .wrap_err("Cannot write to stdout")?;
+        }
+    }
 
-    eprintln!("Generated {}", card_path.display());
     Ok(())
 }
 

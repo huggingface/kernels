@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
+mod card;
+
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
@@ -156,6 +158,18 @@ enum Commands {
 
         #[command(flatten)]
         nix_args: NixArgs,
+    },
+
+    /// Render the CARD.md template for a kernel.
+    #[command(hide = true)]
+    FillCard {
+        /// Kernel source directory (current directory when not specified).
+        #[arg(value_name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// File to write the rendered card to (defaults to stdout).
+        #[arg(value_name = "OUTPUT")]
+        output: Option<PathBuf>,
     },
 
     /// List build variants.
@@ -365,6 +379,7 @@ fn main() -> Result<()> {
                 force,
             } => skills::add_skill(skill, claude, codex, opencode, global, dest, force),
         },
+        Commands::FillCard { kernel_dir, output } => card::fill_card(kernel_dir, output),
         Commands::CleanPyproject {
             kernel_dir,
             target_dir,

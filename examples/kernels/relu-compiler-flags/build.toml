@@ -6,6 +6,9 @@ backends = [
     "xpu",
 ]
 
+[general.hub]
+repo-id = "kernels-test/relu-compiler-flags"
+
 [torch]
 src = ["torch-ext/torch_binding.cpp", "torch-ext/torch_binding.h"]
 

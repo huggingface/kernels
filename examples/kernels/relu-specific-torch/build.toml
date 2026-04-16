@@ -5,6 +5,9 @@ backends = [
     "rocm",
 ]
 
+[general.hub]
+repo-id = "kernels-test/relu-specific-torch"
+
 [torch]
 src = [
     "torch-ext/torch_binding.cpp",

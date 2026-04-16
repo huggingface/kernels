@@ -5,5 +5,8 @@ backends = [
     "neuron",
 ]
 
+[general.hub]
+repo-id = "kernels-test/relu-nki"
+
 [general.neuron]
 python-depends = ["nki"]

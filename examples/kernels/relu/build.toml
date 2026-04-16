@@ -8,6 +8,9 @@ backends = [
     "xpu",
 ]
 
+[general.hub]
+repo-id = "kernels-test/relu"
+
 [torch]
 src = [
     "torch-ext/torch_binding.cpp",

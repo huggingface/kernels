@@ -5,6 +5,9 @@ backends = [
     "xpu",
 ]
 
+[general.hub]
+repo-id = "kernels-test/cutlass-gemm-tvm-ffi"
+
 [tvm-ffi]
 src = [
     "tvm-ffi-ext/tvm_ffi_binding.cpp",

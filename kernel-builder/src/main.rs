@@ -199,6 +199,10 @@ enum Commands {
         command: SkillsCommands,
     },
 
+    /// Generate Markdown documentation for the CLI.
+    #[command(hide = true)]
+    GenerateDocs,
+
     /// Clean generated artifacts.
     CleanPyproject {
         #[arg(name = "KERNEL_DIR")]
@@ -343,6 +347,11 @@ fn main() -> Result<()> {
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
         Commands::Validate { kernel_dir } => {
             validate(kernel_dir)?;
+            Ok(())
+        }
+        Commands::GenerateDocs => {
+            let markdown = clap_markdown::help_markdown::<Cli>();
+            print!("{}", markdown);
             Ok(())
         }
         Commands::Skills { command } => match command {

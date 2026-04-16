@@ -28,6 +28,8 @@ jobs:
     name: Init, build, and upload kernel
     runs-on:
       group: aws-highmemory-32-plus-nix
+    outputs:
+      variant: ${{ steps.variant.outputs.name }}
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@main
@@ -70,15 +72,23 @@ jobs:
           cd /tmp/kernels-upload-test
           sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
 
+      - name: Determine latest variant
+        id: variant
+        run: |
+          cd /tmp/kernels-upload-test
+          VARIANT=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants . | tail -1)
+          echo "name=$VARIANT" >> $GITHUB_OUTPUT
+          echo "Building variant: $VARIANT"
+
       - name: Build kernel
         run: |
           cd /tmp/kernels-upload-test
-          nix run $GITHUB_WORKSPACE#kernel-builder -- build-and-copy . -L
+          nix run $GITHUB_WORKSPACE#kernel-builder -- build --variant ${{ steps.variant.outputs.name }} . -L
 
       - name: Verify build artifacts
         run: |
           cd /tmp/kernels-upload-test
-          VARIANT_DIR=$(ls -d build/torch* | head -1)
+          VARIANT_DIR=$(ls -d result/torch* | head -1)
           echo "Built variant: $VARIANT_DIR"
           test -f "$VARIANT_DIR/__init__.py"
           test -f "$VARIANT_DIR/metadata.json"
@@ -107,8 +117,11 @@ jobs:
       - name: Install Python deps
         working-directory: ./kernels
         run: |
+          VARIANT="${{ needs.init-build-upload.outputs.variant }}"
+          CUDA_TAG=$(echo "$VARIANT" | grep -oP 'cu\d+')
+          echo "Installing torch matching variant $VARIANT (CUDA tag: $CUDA_TAG)"
           uv sync --all-extras --dev
-          uv pip install --upgrade torch
+          uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/$CUDA_TAG
           uv run --no-sync python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
 
       - name: Test get_kernel download and usage

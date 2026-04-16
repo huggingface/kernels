@@ -1,18 +1,15 @@
-name: "Test kernel flake commands"
+name: "Nix checks"
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build kernel
+    name: Nix checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -27,5 +24,14 @@ jobs:
           name: huggingface
         env:
           USER: runner
-      - name: Test nix run .#kernels
-        run: ( cd examples/kernels/relu ; nix run .#kernels -- lock ../../../nix-builder/tests/run-kernels )
+      - name: Check formatting
+        run: nix fmt -- --ci
+      - name: Nix checks
+        run: nix build .\#checks.x86_64-linux.default
+      - name: Test kernel card generation
+        run: |
+          (
+            cd examples/kernels/silu-and-mul
+            nix build -L .
+            test -e result/CARD.md
+          )

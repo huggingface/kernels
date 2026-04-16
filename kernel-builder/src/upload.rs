@@ -764,7 +764,7 @@ mod tests {
     }
 
     #[test]
-    fn test_discover_build_file_in_kernel_dir() {
+    fn test_discover_build_file_in_fully_specified_build_dir() {
         let temp_dir = tempfile::tempdir().unwrap();
         let kernel_dir = temp_dir.path();
 

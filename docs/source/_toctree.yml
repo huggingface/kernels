@@ -67,4 +67,6 @@
       title: kernels download
     - local: cli-skills
       title: kernel-builder skills
+    - local: builder-cli
+      title: Builder CLI Reference
   title: CLI Reference

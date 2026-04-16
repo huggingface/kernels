@@ -6,6 +6,7 @@ on:
       - "kernel-builder/src/**"
       - "kernel-builder/Cargo.toml"
       - "docs/source/builder-cli.md"
+      - "Makefile"
       - ".github/workflows/kernel-builder-cli-docs.yaml"
   push:
     branches:
@@ -32,12 +33,12 @@ jobs:
             ${{ runner.os }}-cargo-cli-docs-
 
       - name: Generate CLI docs
-        run: kernel-builder/scripts/generate_cli_docs.sh
+        run: make kernel-builder-cli-docs
 
       - name: Check docs are up to date
         run: |
           if ! git diff --quiet docs/source/builder-cli.md; then
-            echo "::error::builder-cli.md is out of date. Run 'kernel-builder/scripts/generate_cli_docs.sh' to regenerate."
+            echo "::error::builder-cli.md is out of date. Run 'make kernel-builder-cli-docs' to regenerate."
             git diff docs/source/builder-cli.md
             exit 1
           fi

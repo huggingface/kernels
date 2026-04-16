@@ -60,5 +60,5 @@
     - local: cli-download
       title: kernels download
     - local: cli-skills
-      title: kernels skills
+      title: kernel-builder skills
   title: CLI Reference

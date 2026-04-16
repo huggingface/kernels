@@ -15,13 +15,19 @@ from kernels.utils import CACHE_DIR, _get_hf_api
 
 
 def check_kernel(
-    *, macos: str, manylinux: str, python_abi: str, repo_id: str, revision: str
+    *,
+    macos: str,
+    manylinux: str,
+    python_abi: str,
+    repo_id: str,
+    revision: str,
 ):
     variants_path = (
         Path(
             str(
                 _get_hf_api().snapshot_download(
                     repo_id,
+                    repo_type="kernel",
                     allow_patterns=["build/*"],
                     cache_dir=CACHE_DIR,
                     revision=revision,

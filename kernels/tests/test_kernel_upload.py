@@ -39,9 +39,7 @@ class UploadArgs:
 def create_build_variant(tmpdir: str, filename: str) -> tuple[Path, Path]:
     build_dir = Path(tmpdir) / "build" / "torch-cpu"
     build_dir.mkdir(parents=True, exist_ok=True)
-    (build_dir / "metadata.json").write_text(
-        '{"version": null, "python-depends": []}'
-    )
+    (build_dir / "metadata.json").write_text('{"version": null, "python-depends": []}')
     script_path = build_dir / filename
     script_path.write_text(PY_CONTENT)
     return build_dir, script_path

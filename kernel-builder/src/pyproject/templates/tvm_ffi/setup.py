@@ -19,7 +19,7 @@ def get_backend() -> str:
 
 
 backend = get_backend()
-ops_name = f"_{{ python_name }}_{backend}_{{ revision }}"
+ops_name = f"_{{ kernel_name }}_{backend}_{{ kernel_unique_id }}"
 
 
 def is_sccache_available() -> bool:

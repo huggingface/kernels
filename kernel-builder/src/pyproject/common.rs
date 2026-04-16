@@ -6,9 +6,11 @@ use itertools::Itertools;
 use kernels_data::config::{Backend, General};
 use kernels_data::metadata::{BackendInfo, Metadata};
 
+use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
 
 static COMPAT_PY: &str = include_str!("templates/compat.py");
+static ADD_BUILD_METADATA_PY: &str = include_str!("templates/torch/add_build_metadata.py");
 
 pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
     let mut path = PathBuf::new();
@@ -18,7 +20,11 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
     Ok(())
 }
 
-pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
+pub fn write_metadata(
+    general: &General,
+    kernel_id: &KernelIdentifier,
+    file_set: &mut FileSet,
+) -> Result<()> {
     for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
@@ -33,6 +39,7 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
             .collect::<Result<Vec<_>>>()?;
 
         let metadata = Metadata {
+            id: kernel_id.to_string_for_backend(*backend),
             version: general.version,
             license: general.license.clone(),
             upstream: general.upstream.clone(),
@@ -58,6 +65,14 @@ where
         .map(|include| format!("${{CMAKE_SOURCE_DIR}}/{}", include.as_ref()))
         .collect_vec()
         .join(";")
+}
+
+pub fn write_add_build_metadata_py(file_set: &mut FileSet) {
+    write_cmake_file(
+        file_set,
+        "add_build_metadata.py",
+        ADD_BUILD_METADATA_PY.as_bytes(),
+    );
 }
 
 /// Helper function to write a file to the cmake subdirectory

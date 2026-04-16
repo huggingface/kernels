@@ -1,5 +1,4 @@
 use std::io::Write;
-use std::path::Path;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
@@ -7,11 +6,12 @@ use kernels_data::config::{Backend, Build, General, TvmFfi};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
+    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
+    write_metadata,
 };
 use crate::pyproject::deps::render_deps;
 use crate::pyproject::kernel::render_kernel_components;
-use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
+use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
@@ -30,6 +30,7 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
         BUILD_VARIANTS_UTILS.as_bytes(),
     );
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
+    write_add_build_metadata_py(file_set);
     write_cmake_file(
         file_set,
         "cuda/detect-cuda-capability.py",
@@ -40,8 +41,7 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
 pub fn write_tvm_ffi_ext(
     env: &Environment,
     build: &Build,
-    target_dir: impl AsRef<Path>,
-    ops_id: Option<String>,
+    kernel_id: &KernelIdentifier,
 ) -> Result<FileSet> {
     let tvm_ffi_ext = match build.framework.tvm_ffi() {
         Some(torch_ext) => torch_ext,
@@ -50,25 +50,22 @@ pub fn write_tvm_ffi_ext(
 
     let mut file_set = FileSet::default();
 
-    let revision = ops_id
-        .unwrap_or_else(|| git_identifier(&target_dir).unwrap_or_else(|_| random_identifier()));
-
     write_cmake(
         env,
         build,
         tvm_ffi_ext,
         build.general.name.as_str(),
-        &revision,
+        kernel_id,
         &mut file_set,
     )?;
 
-    write_setup_py(env, &build.general, tvm_ffi_ext, &revision, &mut file_set)?;
+    write_setup_py(env, &build.general, tvm_ffi_ext, &kernel_id, &mut file_set)?;
 
     write_compat_py(&mut file_set)?;
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 
-    write_metadata(&build.general, &mut file_set)?;
+    write_metadata(&build.general, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }
@@ -77,7 +74,7 @@ pub fn write_setup_py(
     env: &Environment,
     general: &General,
     tvm_ffi: &TvmFfi,
-    revision: &str,
+    kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let writer = file_set.entry("setup.py");
@@ -91,7 +88,8 @@ pub fn write_setup_py(
         .render_captured_to(
             context! {
                 data_globs => data_globs,
-                revision => revision,
+                kernel_name => kernel_id.name(),
+                kernel_unique_id => kernel_id.unique_id(),
                 python_name => general.name.python_name(),
             },
             writer,
@@ -190,7 +188,7 @@ pub fn render_extension(
 pub fn render_preamble(
     env: &Environment,
     general: &General,
-    revision: &str,
+    kernel_id: &KernelIdentifier,
     write: &mut impl Write,
 ) -> Result<()> {
     let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
@@ -200,9 +198,10 @@ pub fn render_preamble(
         .wrap_err("Cannot get tvm_ffi preamble template")?
         .render_captured_to(
             context! {
+                kernel_name => kernel_id.name(),
+                kernel_unique_id => kernel_id.unique_id(),
                 name => &general.name,
                 python_name => general.name.python_name(),
-                revision => revision,
                 cuda_minver => cuda_minver.map(|v| v.to_string()),
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
             },
@@ -220,14 +219,14 @@ pub fn write_cmake(
     build: &Build,
     tvm_ffi: &TvmFfi,
     name: &str,
-    revision: &str,
+    kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
     write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    render_preamble(env, &build.general, revision, cmake_writer)?;
+    render_preamble(env, &build.general, kernel_id, cmake_writer)?;
 
     render_deps(env, build, cmake_writer)?;
 

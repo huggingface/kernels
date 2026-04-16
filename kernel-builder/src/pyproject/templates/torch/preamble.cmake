@@ -43,8 +43,7 @@ set(GPU_LANG "${DETECTED_GPU_LANG}" CACHE STRING "GPU language")
 gpu_lang_to_backend(BACKEND "${GPU_LANG}")
 message(STATUS "Using backend: ${BACKEND}, GPU language: ${GPU_LANG}")
 
-set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
-set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")
+set(OPS_NAME "_{{kernel_name}}_${BACKEND}_{{ kernel_unique_id }}")
 
 append_cmake_prefix_path("torch" "torch.utils.cmake_prefix_path")
 

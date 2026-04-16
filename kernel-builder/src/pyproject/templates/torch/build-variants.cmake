@@ -168,10 +168,9 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             file(MAKE_DIRECTORY \"${KERNEL_INSTALL_DIR}\")
             execute_process(
                 COMMAND \"${Python3_EXECUTABLE}\"
-                    \"${CMAKE_CURRENT_LIST_DIR}/cmake/add_gpu_arch_metadata.py\"
+                    \"${CMAKE_CURRENT_LIST_DIR}/cmake/add_build_metadata.py\"
                     \"${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json\"
                     \"${KERNEL_INSTALL_DIR}/metadata.json\"
-                    --backend \"${_BACKEND}\"
                     --archs \"${_GPU_ARCHS_STR}\"
                 RESULT_VARIABLE _METADATA_RESULT
                 ERROR_VARIABLE _METADATA_ERROR
@@ -181,10 +180,20 @@ function(add_kernels_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
             endif()
         " COMPONENT ${TARGET_NAME})
     else()
-        install(FILES ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
-            DESTINATION "${KERNEL_INSTALL_DIR}"
-            RENAME "metadata.json"
-            COMPONENT ${TARGET_NAME})
+        install(CODE "
+            file(MAKE_DIRECTORY \"${KERNEL_INSTALL_DIR}\")
+            execute_process(
+                COMMAND \"${Python3_EXECUTABLE}\"
+                    \"${CMAKE_CURRENT_LIST_DIR}/cmake/add_build_metadata.py\"
+                    \"${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json\"
+                    \"${KERNEL_INSTALL_DIR}/metadata.json\"
+                RESULT_VARIABLE _METADATA_RESULT
+                ERROR_VARIABLE _METADATA_ERROR
+            )
+            if(NOT _METADATA_RESULT EQUAL 0)
+                message(WARNING \"Failed to write metadata: \${_METADATA_ERROR}\")
+            endif()
+        " COMPONENT ${TARGET_NAME})
     endif()
 
     # Compatibility with older kernels and direct Python imports.
@@ -259,20 +268,20 @@ function(add_local_install_target TARGET_NAME PACKAGE_NAME BUILD_VARIANT_NAME)
         add_custom_command(TARGET local_install POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory ${VARIANT_DIR}
             COMMAND ${Python3_EXECUTABLE}
-                ${CMAKE_CURRENT_LIST_DIR}/cmake/add_gpu_arch_metadata.py
+                ${CMAKE_CURRENT_LIST_DIR}/cmake/add_build_metadata.py
                 ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
                 ${VARIANT_DIR}/metadata.json
-                --backend ${_BACKEND}
                 --archs "${_GPU_ARCHS_STR}"
             COMMENT "Writing metadata.json with GPU arch info to ${VARIANT_DIR}"
         )
     else()
         add_custom_command(TARGET local_install POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory ${VARIANT_DIR}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_LIST_DIR}/cmake/add_build_metadata.py
                 ${CMAKE_SOURCE_DIR}/metadata-${_BACKEND}.json
                 ${VARIANT_DIR}/metadata.json
-            COMMENT "Copying metadata.json to ${VARIANT_DIR}"
+            COMMENT "Writing metadata.json to ${VARIANT_DIR}"
         )
     endif()
 

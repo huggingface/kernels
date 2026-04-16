@@ -293,13 +293,13 @@ fn collect_benchmark_commit_ops(
 
 /// Collect README commit operation: upload build/CARD.md as README.md.
 fn collect_readme_commit_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
-    let card_path = kernel_dir.join("build").join("CARD.md");
-    if card_path.exists() {
-        operations.push(CommitOperation::Add {
-            path_in_repo: "README.md".to_owned(),
-            source: AddSource::File(card_path),
-        });
-    }
+    let Ok(card_path) = discover_build_file(kernel_dir, "CARD.md") else {
+        return;
+    };
+    operations.push(CommitOperation::Add {
+        path_in_repo: "README.md".to_owned(),
+        source: AddSource::File(card_path),
+    });
 }
 
 /// Collect build artifact commit operations: add variant files, delete stale ones.
@@ -354,6 +354,35 @@ fn collect_build_commit_ops(
     }
 
     Ok(())
+}
+
+fn discover_build_file(
+    kernel_dir: impl AsRef<Path>,
+    filename: impl AsRef<Path>,
+) -> Result<PathBuf> {
+    let kernel_dir = kernel_dir.as_ref();
+    let filename = filename.as_ref();
+
+    let candidates = [
+        kernel_dir.join("result").join(filename),
+        kernel_dir.join("build").join(filename),
+        kernel_dir.join(filename),
+    ];
+
+    for candidate in &candidates {
+        if candidate.is_file() {
+            return Ok(candidate.clone());
+        }
+    }
+
+    bail!(
+        "No build directory found: {}",
+        candidates
+            .iter()
+            .map(|p| p.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }
 
 /// Discover build variant directories (contain `metadata.json`).
@@ -468,7 +497,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let kernel_dir = temp_dir.path();
 
-        // Create a "nix store" directory with variants
+        // Mock a Nix store directory with variants
         let store_dir = kernel_dir.join("nix-store-output");
         fs::create_dir_all(store_dir.join("variant-a")).unwrap();
         fs::write(
@@ -696,6 +725,60 @@ mod tests {
 
         let variants = vec![v1, v2];
         let result = detect_branch_from_metadata(&variants);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_discover_build_file_in_result_symlink() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        // Mock a Nix store directory with the file inside
+        let store_dir = kernel_dir.join("nix-store-output");
+        let target = store_dir.join("CARD.md");
+        fs::create_dir_all(&store_dir).unwrap();
+        fs::write(&target, "# Test card").unwrap();
+
+        // Create result symlink pointing to store output
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
+
+        #[cfg(unix)]
+        {
+            let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
+            assert_eq!(found, kernel_dir.join("result").join("CARD.md"));
+        }
+    }
+
+    #[test]
+    fn test_discover_build_file_in_build() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let target = kernel_dir.join("build").join("CARD.md");
+        fs::create_dir_all(kernel_dir.join("build")).unwrap();
+        fs::write(&target, "# Test card").unwrap();
+
+        let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn test_discover_build_file_in_fully_specified_build_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let target = kernel_dir.join("CARD.md");
+        fs::write(&target, "# Test card").unwrap();
+
+        let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn test_discover_build_file_not_found() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let result = discover_build_file(temp_dir.path(), "CARD.md");
         assert!(result.is_err());
     }
 }

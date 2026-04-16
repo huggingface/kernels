@@ -76,7 +76,6 @@ Initialize a new kernel project from template
 * `--name <OWNER/REPO>` — Name of the kernel repo (e.g. `drbh/my-kernel`)
 * `--backends <BACKENDS>` — Backends to enable (`all`, `cpu`, `cuda`, `metal`, `neuron`, `rocm`, `xpu`)
 
-  Default value: `metal`
 * `--overwrite` — Overwrite existing scaffold files (preserves other files)
 
 

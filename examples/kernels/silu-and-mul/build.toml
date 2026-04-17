@@ -8,3 +8,6 @@ backends = [
     "rocm",
     "xpu",
 ]
+
+[general.hub]
+repo-id = "kernels-tests/silu-and-mul"

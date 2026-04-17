@@ -4,8 +4,7 @@ use eyre::Result;
 
 use crate::list_variants::variants;
 use crate::nix::{Flake, Nix, NixSubcommand};
-use crate::pyproject::write_card;
-use crate::util::{check_or_infer_kernel_dir, parse_build};
+use crate::util::check_or_infer_kernel_dir;
 
 fn prepare_build(
     kernel_dir: Option<PathBuf>,
@@ -15,12 +14,6 @@ fn prepare_build(
     variant: Option<String>,
 ) -> Result<(Flake, Option<String>, Nix)> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-
-    if let Ok(build) = parse_build(&kernel_dir) {
-        if let Err(e) = write_card(&build, &kernel_dir) {
-            eprintln!("Warning: cannot generate CARD.md: {e}");
-        }
-    }
 
     let flake = Flake::from_path(kernel_dir)?;
 

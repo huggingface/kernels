@@ -1,7 +1,7 @@
 .PHONY: style kernel-builder-cli-docs quality
 
 
-export check_dirs := kernels/src kernels/tests
+export check_dirs := kernels/src kernels/tests kernels-data/bindings/python
 
 all: src/kernels/python_depends.json
 

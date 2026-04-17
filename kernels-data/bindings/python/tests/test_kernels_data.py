@@ -5,9 +5,8 @@ import pytest
 from kernels_data import Backend, KernelName, Metadata, Version, parse_metadata
 
 
-def _write_metadata(variant_dir, **fields):
-    variant_dir.mkdir(parents=True, exist_ok=True)
-    path = variant_dir / "metadata.json"
+def _write_metadata(path, **fields):
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(fields))
     return path
 
@@ -150,19 +149,18 @@ def test_metadata_parse_malformed(tmp_path):
         parse_metadata(path)
 
 
-def test_metadata_load_from_variant(tmp_path):
-    _write_metadata(
-        tmp_path / "variant",
+def test_metadata_load(tmp_path):
+    path = _write_metadata(
+        tmp_path / "variant" / "metadata.json",
         **{"python-depends": ["torch"], "backend": {"type": "cuda"}},
     )
-    m = Metadata.load_from_variant(tmp_path / "variant")
-    assert m is not None
+    m = Metadata.load(path)
     assert m.backend == Backend.CUDA
 
 
-def test_metadata_load_from_variant_missing(tmp_path):
-    (tmp_path / "empty-variant").mkdir()
-    assert Metadata.load_from_variant(tmp_path / "empty-variant") is None
+def test_metadata_load_missing_file(tmp_path):
+    with pytest.raises(ValueError):
+        Metadata.load(tmp_path / "does-not-exist.json")
 
 
 def test_metadata_parse_missing_file(tmp_path):

@@ -82,13 +82,11 @@ class Metadata:
     """Parsed ``metadata.json`` for a kernel build variant."""
 
     @staticmethod
-    def load_from_variant(variant_path: os.PathLike[str] | str) -> Optional["Metadata"]:
-        """Load ``metadata.json`` from a build variant directory.
-
-        Returns ``None`` if the file does not exist in ``variant_path``.
+    def load(metadata_path: os.PathLike[str] | str) -> "Metadata":
+        """Parse ``metadata.json`` at the given path.
 
         Raises:
-            ValueError: If the file exists but cannot be parsed.
+            ValueError: On any I/O or parse error.
         """
         ...
 

@@ -171,18 +171,13 @@ impl From<Metadata> for PyMetadata {
 
 #[pymethods]
 impl PyMetadata {
-    /// Load `metadata.json` from a build variant directory.
+    /// Parse `metadata.json` at the given path.
     ///
-    /// Returns `None` if the file does not exist in the given directory.
-    /// Raises `ValueError` if the file exists but cannot be parsed.
+    /// Raises `ValueError` on any I/O or parse error.
     #[staticmethod]
-    fn load_from_variant(variant_path: PathBuf) -> PyResult<Option<Self>> {
-        let metadata_path = variant_path.join("metadata.json");
-        if !metadata_path.exists() {
-            return Ok(None);
-        }
+    fn load(metadata_path: PathBuf) -> PyResult<Self> {
         parse_metadata(&metadata_path)
-            .map(|m| Some(m.into()))
+            .map(Into::into)
             .map_err(|err| PyValueError::new_err(format!("{err:#}")))
     }
 

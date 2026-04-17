@@ -187,13 +187,13 @@ impl PyMetadata {
     }
 
     #[getter]
-    fn license(&self) -> Option<&str> {
-        self.license.as_deref()
+    fn license(&self) -> Option<&String> {
+        self.license.as_ref()
     }
 
     #[getter]
-    fn upstream(&self) -> Option<&str> {
-        self.upstream.as_deref()
+    fn upstream(&self) -> Option<&String> {
+        self.upstream.as_ref()
     }
 
     #[getter]

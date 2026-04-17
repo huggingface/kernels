@@ -124,7 +124,7 @@ def test_metadata_load_cann(tmp_path):
     assert Metadata.load(path).backend.backend_type == Backend.CANN
 
 
-def test_metadata_load_unknown_field_rejected(tmp_path):
+def test_metadata_load_unknown_field_accepted(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
         json.dumps(
@@ -135,8 +135,7 @@ def test_metadata_load_unknown_field_rejected(tmp_path):
             }
         )
     )
-    with pytest.raises(ValueError):
-        Metadata.load(path)
+    Metadata.load(path)
 
 
 def test_metadata_load_malformed(tmp_path):

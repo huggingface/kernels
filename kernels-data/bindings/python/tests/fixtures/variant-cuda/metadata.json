@@ -1,7 +1,0 @@
-{
-  "version": 1,
-  "license": "Apache-2.0",
-  "upstream": "https://github.com/example/kernel",
-  "python-depends": ["torch"],
-  "backend": {"type": "cuda"}
-}

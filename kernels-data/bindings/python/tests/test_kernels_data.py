@@ -1,13 +1,15 @@
-from pathlib import Path
+import json
 
 import pytest
 
 from kernels_data import Backend, KernelName, Metadata, Version, parse_metadata
 
 
-@pytest.fixture
-def fixtures_dir():
-    return Path(__file__).parent / "fixtures"
+def _write_metadata(variant_dir, **fields):
+    variant_dir.mkdir(parents=True, exist_ok=True)
+    path = variant_dir / "metadata.json"
+    path.write_text(json.dumps(fields))
+    return path
 
 
 def test_version_parse_and_normalize():
@@ -70,8 +72,20 @@ def test_backend_unknown():
         Backend.from_str("tpu")
 
 
-def test_metadata_parse_full(fixtures_dir):
-    m = parse_metadata(fixtures_dir / "variant-cuda" / "metadata.json")
+def test_metadata_parse_full(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "license": "Apache-2.0",
+                "upstream": "https://github.com/example/kernel",
+                "python-depends": ["torch"],
+                "backend": {"type": "cuda"},
+            }
+        )
+    )
+    m = parse_metadata(path)
     assert m.version == 1
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"
@@ -79,8 +93,12 @@ def test_metadata_parse_full(fixtures_dir):
     assert m.backend == Backend.CUDA
 
 
-def test_metadata_parse_minimal(fixtures_dir):
-    m = parse_metadata(fixtures_dir / "variant-minimal" / "metadata.json")
+def test_metadata_parse_minimal(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text(
+        json.dumps({"python-depends": [], "backend": {"type": "cpu"}})
+    )
+    m = parse_metadata(path)
     assert m.version is None
     assert m.license is None
     assert m.upstream is None
@@ -88,16 +106,43 @@ def test_metadata_parse_minimal(fixtures_dir):
     assert m.backend == Backend.CPU
 
 
-def test_metadata_load_from_variant(fixtures_dir):
-    m = Metadata.load_from_variant(fixtures_dir / "variant-cuda")
+def test_metadata_parse_unknown_field_rejected(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text(
+        json.dumps(
+            {
+                "python-depends": [],
+                "backend": {"type": "cpu"},
+                "surprise": "not allowed",
+            }
+        )
+    )
+    with pytest.raises(ValueError):
+        parse_metadata(path)
+
+
+def test_metadata_parse_malformed(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text("{not json")
+    with pytest.raises(ValueError):
+        parse_metadata(path)
+
+
+def test_metadata_load_from_variant(tmp_path):
+    _write_metadata(
+        tmp_path / "variant",
+        **{"python-depends": ["torch"], "backend": {"type": "cuda"}},
+    )
+    m = Metadata.load_from_variant(tmp_path / "variant")
     assert m is not None
     assert m.backend == Backend.CUDA
 
 
-def test_metadata_load_from_variant_missing(fixtures_dir):
-    assert Metadata.load_from_variant(fixtures_dir / "variant-empty") is None
+def test_metadata_load_from_variant_missing(tmp_path):
+    (tmp_path / "empty-variant").mkdir()
+    assert Metadata.load_from_variant(tmp_path / "empty-variant") is None
 
 
-def test_metadata_parse_missing_file(fixtures_dir):
+def test_metadata_parse_missing_file(tmp_path):
     with pytest.raises(ValueError):
-        parse_metadata(fixtures_dir / "does-not-exist.json")
+        parse_metadata(tmp_path / "does-not-exist.json")

@@ -6,15 +6,14 @@
 
 let
   version =
-    (builtins.fromTOML (builtins.readFile ../../../../kernel-abi-check/kernel-abi-check/Cargo.toml))
-    .package.version;
+    (builtins.fromTOML (builtins.readFile ../../../../kernels-data/Cargo.toml)).package.version;
   cargoFlags = [
     "-m"
-    "kernel-abi-check/bindings/python/Cargo.toml"
+    "kernels-data/bindings/python/Cargo.toml"
   ];
 in
 buildPythonPackage {
-  pname = "kernel-abi-check";
+  pname = "kernels-data";
   inherit version;
   format = "pyproject";
 
@@ -24,11 +23,10 @@ buildPythonPackage {
         file:
         file.name == "Cargo.toml"
         || file.name == "Cargo.lock"
-        || file.name == "manylinux-policy.json"
         || file.hasExt "pyi"
         || file.name == "pyproject.toml"
-        || file.hasExt "rs"
-        || file.name == "stable_abi.toml";
+        || file.name == "python_dependencies.json"
+        || file.hasExt "rs";
     in
     import ../../crate-dirs.nix {
       inherit lib sourceFiles;
@@ -43,14 +41,12 @@ buildPythonPackage {
 
   maturinBuildFlags = cargoFlags;
 
-  #sourceRoot = "source/bindings/python";
-
   build-system = [
     rustPlatform.cargoSetupHook
     rustPlatform.maturinBuildHook
   ];
 
   meta = with lib; {
-    description = "Check ABI compliance of Hugging Face Hub kernels";
+    description = "Kernels data structures";
   };
 }

@@ -26,9 +26,8 @@ rustPlatform.buildRustPackage {
         || file.hasExt "rs"
         || file.name == "stable_abi.toml";
     in
-    lib.fileset.toSource {
-      root = ../../..;
-      fileset = lib.fileset.fileFilter sourceFiles ../../..;
+    import ../crate-dirs.nix {
+      inherit lib sourceFiles;
     };
 
   cargoLock = {

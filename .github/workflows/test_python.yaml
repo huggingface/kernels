@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Run tests
+  kernel-abi-check:
+    name: kernel-abi-check bindings
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -40,3 +40,31 @@ jobs:
 
       - name: Run tests
         run: ( cd kernel-abi-check/bindings/python && uv run pytest tests )
+
+  kernels-data:
+    name: kernels-data bindings
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the project
+        run: ( cd kernels-data/bindings/python && uv sync --all-extras --dev)
+
+      - name: Run tests
+        run: ( cd kernels-data/bindings/python && uv run pytest tests )
+
+      - name: Check type stubs match runtime
+        run: ( cd kernels-data/bindings/python && uv run python -m mypy.stubtest kernels_data --allowlist stubtest-allowlist.txt )

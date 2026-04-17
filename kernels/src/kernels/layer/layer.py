@@ -66,9 +66,7 @@ class LayerRepository:
         version: int | str | None = None,
     ):
         if revision is not None and version is not None:
-            raise ValueError(
-                "Either a revision or a version must be specified, not both."
-            )
+            raise ValueError("Either a revision or a version must be specified, not both.")
 
         self._repo_id = repo_id
         self.layer_name = layer_name
@@ -217,9 +215,7 @@ class LockedLayerRepository:
         return hash((self.layer_name, self._repo_id, self._revision))
 
     def __str__(self) -> str:
-        return (
-            f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
-        )
+        return f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
 
 
 _CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}
@@ -294,9 +290,7 @@ def use_kernel_forward_from_hub(layer_name: str):
     return decorator
 
 
-def kernelize_layer(
-    module: "nn.Module", *, mode: Mode, device_type: Device, use_fallback
-):
+def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use_fallback):
     module_class = type(module)
     layer_name = module_class.kernel_layer_name  # type: ignore[attr-defined]
 
@@ -323,9 +317,7 @@ def kernelize_layer(
 
     if property_repos is None:
         if not use_fallback:
-            raise ValueError(
-                f"No layer mapping for `{layer_name}` with device type `{device_type}`"
-            )
+            raise ValueError(f"No layer mapping for `{layer_name}` with device type `{device_type}`")
         _replace_forward(module, module_class)
         return
 
@@ -333,9 +325,7 @@ def kernelize_layer(
 
     if repos is None:
         if not use_fallback:
-            raise ValueError(
-                f"No layer mapping for `{layer_name}` device `{device_type}` with the right properties"
-            )
+            raise ValueError(f"No layer mapping for `{layer_name}` device `{device_type}` with the right properties")
         _replace_forward(module, module_class)
         return
 
@@ -346,9 +336,7 @@ def kernelize_layer(
 
     if repo_with_mode is None:
         if not use_fallback:
-            raise ValueError(
-                f"No repository for `{layer_name}` for configuration mode={mode}"
-            )
+            raise ValueError(f"No repository for `{layer_name}` for configuration mode={mode}")
         _replace_forward(module, module_class)
         return
 
@@ -363,9 +351,7 @@ def kernelize_layer(
     # e.g. if a repo class is registered for TRAINING | TORCH_COMPILE,
     # the actual layer is compatible with that. Unfortunately, this would
     # mean that we have to pre-download everything.
-    _validate_layer_has_mode(
-        layer_name=layer_name, module=layer, repo=repo, repo_mode=repo_mode
-    )
+    _validate_layer_has_mode(layer_name=layer_name, module=layer, repo=repo, repo_mode=repo_mode)
 
     _conditionally_replace_forward(
         module=module,
@@ -375,9 +361,7 @@ def kernelize_layer(
     )
 
 
-def _get_kernel_layer(
-    repo: LayerRepositoryProtocol, kernel: ModuleType
-) -> Type["nn.Module"]:
+def _get_kernel_layer(repo: LayerRepositoryProtocol, kernel: ModuleType) -> Type["nn.Module"]:
     """Get a layer from a kernel."""
 
     if getattr(kernel, "layers", None) is None:
@@ -411,9 +395,7 @@ def _validate_layer(*, check_cls, cls, repo: RepositoryProtocol):
     difference = cls_members - torch_module_members
     # verify if : difference ⊄ {"can_torch_compile", "has_backward"}
     if not difference <= {"can_torch_compile", "has_backward"}:
-        raise TypeError(
-            f"{repo} must not contain additional members compared to `{check_cls.__name__}`."
-        )
+        raise TypeError(f"{repo} must not contain additional members compared to `{check_cls.__name__}`.")
 
     # Check whether the forward signatures are similar.
     params = inspect.signature(cls.forward).parameters
@@ -445,12 +427,8 @@ def _conditionally_replace_forward(
     # layers registered with the FALLBACK mode never get rejected by
     # _validate_layer_has_mode. For such layers, we want to fall back in
     # case the layer does not support the given mode.
-    needs_fallback_for_compile = Mode.TORCH_COMPILE in mode and not getattr(
-        layer, "can_torch_compile", False
-    )
-    needs_fallback_for_backward = Mode.TRAINING in mode and not getattr(
-        layer, "has_backward", True
-    )
+    needs_fallback_for_compile = Mode.TORCH_COMPILE in mode and not getattr(layer, "can_torch_compile", False)
+    needs_fallback_for_backward = Mode.TRAINING in mode and not getattr(layer, "has_backward", True)
 
     if needs_fallback_for_compile or needs_fallback_for_backward:
         if use_fallback:
@@ -486,9 +464,7 @@ def _validate_layer_has_mode(
             f"Was registered for `{layer_name}` with mode `{repo_mode}`"
         )
 
-    if Mode.TORCH_COMPILE in repo_mode and not getattr(
-        module, "can_torch_compile", False
-    ):
+    if Mode.TORCH_COMPILE in repo_mode and not getattr(module, "can_torch_compile", False):
         raise ValueError(
             f"Function/layer from repo {repo} does not support torch.compile.\n"
             f"Was registered for `{layer_name}` with mode `{repo_mode}`"
@@ -497,9 +473,7 @@ def _validate_layer_has_mode(
     return True
 
 
-def _get_layer_memoize(
-    repo: RepositoryProtocol, module_class: Type["nn.Module"]
-) -> Type["nn.Module"]:
+def _get_layer_memoize(repo: RepositoryProtocol, module_class: Type["nn.Module"]) -> Type["nn.Module"]:
     layer = _CACHED_LAYER.get(repo, None)
     if layer is not None:
         return layer

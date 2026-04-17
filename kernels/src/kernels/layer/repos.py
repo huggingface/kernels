@@ -169,18 +169,10 @@ class _CUDARepos(DeviceRepos):
         return self.repos_by_capability.find_smallest_interval(capability)
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
-        assert device.properties is None or isinstance(
-            device.properties, CUDAProperties
-        )
+        assert device.properties is None or isinstance(device.properties, CUDAProperties)
 
-        min_capability = (
-            0 if device.properties is None else device.properties.min_capability
-        )
-        max_capability = (
-            sys.maxsize
-            if device.properties is None
-            else device.properties.max_capability
-        )
+        min_capability = 0 if device.properties is None else device.properties.min_capability
+        max_capability = sys.maxsize if device.properties is None else device.properties.max_capability
 
         self.repos_by_capability.insert(min_capability, max_capability, repos)
 
@@ -200,18 +192,10 @@ class _ROCMRepos(DeviceRepos):
         return self.repos_by_capability.find_smallest_interval(capability)
 
     def insert(self, device: Device, repos: dict[Mode, RepositoryProtocol]):
-        assert device.properties is None or isinstance(
-            device.properties, ROCMProperties
-        )
+        assert device.properties is None or isinstance(device.properties, ROCMProperties)
 
-        min_capability = (
-            0 if device.properties is None else device.properties.min_capability
-        )
-        max_capability = (
-            sys.maxsize
-            if device.properties is None
-            else device.properties.max_capability
-        )
+        min_capability = 0 if device.properties is None else device.properties.min_capability
+        max_capability = sys.maxsize if device.properties is None else device.properties.max_capability
 
         self.repos_by_capability.insert(min_capability, max_capability, repos)
 
@@ -229,14 +213,12 @@ _MODE_FALLBACK_PRIORITY = {
         Mode.TRAINING | Mode.TORCH_COMPILE,
         Mode.FALLBACK,
     ],
-    Mode.INFERENCE
-    | Mode.TORCH_COMPILE: [
+    Mode.INFERENCE | Mode.TORCH_COMPILE: [
         Mode.INFERENCE | Mode.TORCH_COMPILE,
         Mode.TRAINING | Mode.TORCH_COMPILE,
         Mode.FALLBACK,
     ],
-    Mode.TRAINING
-    | Mode.TORCH_COMPILE: [
+    Mode.TRAINING | Mode.TORCH_COMPILE: [
         Mode.TRAINING | Mode.TORCH_COMPILE,
         Mode.FALLBACK,
     ],

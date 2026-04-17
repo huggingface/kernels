@@ -129,9 +129,7 @@ class LayerNormBenchmark(Benchmark):
         )[0].view(self.B, self.S, self.D)
 
     def verify_small(self) -> torch.Tensor:
-        return torch.nn.functional.layer_norm(
-            self.x, [self.D], self.weight, eps=self.eps
-        )
+        return torch.nn.functional.layer_norm(self.x, [self.D], self.weight, eps=self.eps)
 
     # Workload: medium (B=4, S=512, D=2048)
     def setup_medium(self):
@@ -160,9 +158,7 @@ class LayerNormBenchmark(Benchmark):
         )[0].view(self.B, self.S, self.D)
 
     def verify_medium(self) -> torch.Tensor:
-        return torch.nn.functional.layer_norm(
-            self.x, [self.D], self.weight, eps=self.eps
-        )
+        return torch.nn.functional.layer_norm(self.x, [self.D], self.weight, eps=self.eps)
 
     # Workload: large (B=8, S=1024, D=4096)
     def setup_large(self):
@@ -191,6 +187,4 @@ class LayerNormBenchmark(Benchmark):
         )[0].view(self.B, self.S, self.D)
 
     def verify_large(self) -> torch.Tensor:
-        return torch.nn.functional.layer_norm(
-            self.x, [self.D], self.weight, eps=self.eps
-        )
+        return torch.nn.functional.layer_norm(self.x, [self.D], self.weight, eps=self.eps)

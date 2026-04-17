@@ -50,9 +50,7 @@ class KernelStatus:
 
     # Fetch the kernel status from the repository, if it exists
     @staticmethod
-    def check_status(
-        api: HfApi, repo_id: str, revision: str
-    ) -> KernelStatusKind | None:
+    def check_status(api: HfApi, repo_id: str, revision: str) -> KernelStatusKind | None:
         try:
             path = api.hf_hub_download(
                 repo_id=repo_id,

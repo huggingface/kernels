@@ -26,6 +26,23 @@ in
 
   remove-bytecode-hook = prev.callPackage ./pkgs/remove-bytecode-hook { };
 
+  ruff = prev.ruff.overrideAttrs (
+    finalAttrs: prevAttrs: {
+      version = "0.15.10";
+      src = prev.fetchFromGitHub {
+        inherit (prevAttrs.src) owner repo;
+        tag = finalAttrs.version;
+        hash = "sha256-x+zqgIJATDWimxbh/VGt94HFiUSD4H9QD/49hnHgfuQ=";
+      };
+
+      # overrideAttrs works on the mkDerivation, so we cannot override cargoHash.
+      cargoDeps = final.rustPlatform.fetchCargoVendor {
+        inherit (finalAttrs) src;
+        hash = "sha256-EQERi5NSMUK7qfFYWilzhacYlK4ShQl9Koz8t/8I6+U=";
+      };
+    }
+  );
+
   stdenvGlibc_2_27 = import ./pkgs/stdenv-glibc-2_27 {
     # Do not use callPackage, because we want overrides to apply to
     # the stdenv itself and not this file.

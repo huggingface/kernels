@@ -38,6 +38,7 @@ pub fn write_metadata(general: &General, file_set: &mut FileSet) -> Result<()> {
             upstream: general.upstream.clone(),
             python_depends,
             backend: BackendInfo {
+                archs: None,
                 backend_type: *backend,
             },
         };

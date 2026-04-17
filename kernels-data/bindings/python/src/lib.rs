@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
-use kernels_data::metadata::{Metadata, parse_metadata};
+use kernels_data::metadata::{BackendInfo, Metadata, parse_metadata};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::PyValueError;
@@ -146,6 +146,44 @@ impl PyBackend {
     }
 }
 
+/// Backend information
+#[pyclass(name = "BackendInfo", frozen)]
+#[derive(Clone, Debug)]
+struct PyBackendInfo {
+    backend_type: PyBackend,
+    archs: Option<Vec<String>>,
+}
+
+impl From<BackendInfo> for PyBackendInfo {
+    fn from(backend_info: BackendInfo) -> Self {
+        Self {
+            backend_type: backend_info.backend_type.into(),
+            archs: backend_info.archs,
+        }
+    }
+}
+
+#[pymethods]
+impl PyBackendInfo {
+    fn __repr__(&self) -> String {
+        format!(
+            "BackendInfo(backend_type={}, archs={:?})",
+            self.backend_type.__repr__(),
+            self.archs
+        )
+    }
+
+    #[getter]
+    fn backend_type(&self) -> PyBackend {
+        self.backend_type
+    }
+
+    #[getter]
+    fn archs(&self) -> Option<&[String]> {
+        self.archs.as_deref()
+    }
+}
+
 /// Parsed `metadata.json` for a kernel build variant.
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
@@ -154,7 +192,7 @@ struct PyMetadata {
     license: Option<String>,
     upstream: Option<String>,
     python_depends: Vec<String>,
-    backend: PyBackend,
+    backend: PyBackendInfo,
 }
 
 impl From<Metadata> for PyMetadata {
@@ -164,7 +202,7 @@ impl From<Metadata> for PyMetadata {
             license: m.license,
             upstream: m.upstream.map(|u| u.to_string()),
             python_depends: m.python_depends,
-            backend: m.backend.backend_type.into(),
+            backend: m.backend.into(),
         }
     }
 }
@@ -202,8 +240,8 @@ impl PyMetadata {
     }
 
     #[getter]
-    fn backend(&self) -> PyBackend {
-        self.backend
+    fn backend(&self) -> PyBackendInfo {
+        self.backend.clone()
     }
 
     fn __repr__(&self) -> String {
@@ -221,6 +259,7 @@ impl PyMetadata {
 #[pyo3::pymodule(name = "kernels_data")]
 fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
+    m.add_class::<PyBackendInfo>()?;
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;

@@ -1,10 +1,10 @@
 """Type stubs for kernels_data module."""
 
+import os
 from enum import Enum
 from typing import Optional, final
-import os
 
-__all__ = ["Backend", "KernelName", "Metadata", "Version", "__version__"]
+__all__ = ["Backend", "BackendInfo", "KernelName", "Metadata", "Version", "__version__"]
 
 __version__: str
 
@@ -34,6 +34,21 @@ class Backend(Enum):
         ...
 
     def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
+
+@final
+class BackendInfo:
+    """Backend information."""
+
+    def backend_type(self) -> Backend:
+        """Return the backend type."""
+        ...
+
+    @property
+    def archs(self) -> Optional[list[str]]:
+        """Optional list of target architectures."""
+        ...
+
     def __repr__(self) -> str: ...
 
 @final
@@ -105,5 +120,5 @@ class Metadata:
     @property
     def python_depends(self) -> list[str]: ...
     @property
-    def backend(self) -> Backend: ...
+    def backend(self) -> BackendInfo: ...
     def __repr__(self) -> str: ...

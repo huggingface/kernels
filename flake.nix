@@ -166,6 +166,7 @@
               jax
               jax-tvm-ffi
               kernel-abi-check
+              kernels-data
               matplotlib
               mktestdocs
               openssl.dev

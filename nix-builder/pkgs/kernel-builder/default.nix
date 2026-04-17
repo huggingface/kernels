@@ -45,17 +45,8 @@ rustPlatform.buildRustPackage {
           "toml"
         ]);
     in
-    with lib.fileset;
-    toSource {
-      root = ../../..;
-      fileset = unions [
-        ../../../Cargo.lock
-        ../../../Cargo.toml
-        (fileFilter sourceFiles ../../../kernel-builder)
-        # Cargo wants access to the whole workspace.
-        (fileFilter sourceFiles ../../../kernel-abi-check)
-        (fileFilter sourceFiles ../../../kernels-data)
-      ];
+    import ../crate-dirs.nix {
+      inherit lib sourceFiles;
     };
 
   cargoLock = {

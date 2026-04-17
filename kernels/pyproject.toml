@@ -57,6 +57,8 @@ kernels = "kernels.cli:main"
 kernels = ["python_depends.json"]
 
 [tool.ruff]
+# If the version is changed, apply the change in the Nix overlay
+# as well.
 required-version = "==0.15.10"
 exclude = [
   ".eggs",

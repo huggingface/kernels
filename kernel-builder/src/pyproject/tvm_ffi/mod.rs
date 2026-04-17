@@ -59,7 +59,7 @@ pub fn write_tvm_ffi_ext(
         &mut file_set,
     )?;
 
-    write_setup_py(env, &build.general, tvm_ffi_ext, &kernel_id, &mut file_set)?;
+    write_setup_py(env, &build.general, tvm_ffi_ext, kernel_id, &mut file_set)?;
 
     write_compat_py(&mut file_set)?;
 

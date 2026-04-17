@@ -40,6 +40,7 @@ class Backend(Enum):
 class BackendInfo:
     """Backend information."""
 
+    @property
     def backend_type(self) -> Backend:
         """Return the backend type."""
         ...

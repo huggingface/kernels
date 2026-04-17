@@ -149,6 +149,7 @@ pub enum Kernel {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Backend {
+    Cann,
     Cpu,
     Cuda,
     Metal,
@@ -256,6 +257,7 @@ impl From<TvmFfi> for super::TvmFfi {
 impl From<Backend> for super::Backend {
     fn from(backend: Backend) -> Self {
         match backend {
+            Backend::Cann => super::Backend::Cann,
             Backend::Cpu => super::Backend::Cpu,
             Backend::Cuda => super::Backend::Cuda,
             Backend::Metal => super::Backend::Metal,
@@ -437,6 +439,7 @@ impl From<super::TvmFfi> for TvmFfi {
 impl From<super::Backend> for Backend {
     fn from(backend: super::Backend) -> Self {
         match backend {
+            super::Backend::Cann => Backend::Cann,
             super::Backend::Cpu => Backend::Cpu,
             super::Backend::Cuda => Backend::Cuda,
             super::Backend::Metal => Backend::Metal,

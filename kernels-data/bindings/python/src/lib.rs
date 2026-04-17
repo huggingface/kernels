@@ -72,15 +72,17 @@ impl PyKernelName {
 #[pyclass(name = "Backend", eq, frozen, hash)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum PyBackend {
+    #[pyo3(name = "CANN")]
+    Cann,
     #[pyo3(name = "CPU")]
     Cpu,
     #[pyo3(name = "CUDA")]
     Cuda,
-    #[pyo3(name = "METAL")]
+    #[pyo3(name = "Metal")]
     Metal,
-    #[pyo3(name = "NEURON")]
+    #[pyo3(name = "Neuron")]
     Neuron,
-    #[pyo3(name = "ROCM")]
+    #[pyo3(name = "ROCm")]
     Rocm,
     #[pyo3(name = "XPU")]
     Xpu,
@@ -89,6 +91,7 @@ enum PyBackend {
 impl From<Backend> for PyBackend {
     fn from(b: Backend) -> Self {
         match b {
+            Backend::Cann => PyBackend::Cann,
             Backend::Cpu => PyBackend::Cpu,
             Backend::Cuda => PyBackend::Cuda,
             Backend::Metal => PyBackend::Metal,
@@ -102,6 +105,7 @@ impl From<Backend> for PyBackend {
 impl From<PyBackend> for Backend {
     fn from(b: PyBackend) -> Self {
         match b {
+            PyBackend::Cann => Backend::Cann,
             PyBackend::Cpu => Backend::Cpu,
             PyBackend::Cuda => Backend::Cuda,
             PyBackend::Metal => Backend::Metal,
@@ -114,8 +118,8 @@ impl From<PyBackend> for Backend {
 
 #[pymethods]
 impl PyBackend {
-    /// Parse a backend name (`"cpu"`, `"cuda"`, `"metal"`, `"neuron"`,
-    /// `"rocm"`, `"xpu"`).
+    /// Parse a backend name (`"cann"`, `"cpu"`, `"cuda"`, `"metal"`,
+    /// `"neuron"`, `"rocm"`, `"xpu"`).
     #[staticmethod]
     #[pyo3(name = "from_str")]
     fn py_from_str(s: &str) -> PyResult<Self> {
@@ -130,11 +134,12 @@ impl PyBackend {
 
     fn __repr__(&self) -> String {
         let variant = match self {
+            PyBackend::Cann => "CANN",
             PyBackend::Cpu => "CPU",
             PyBackend::Cuda => "CUDA",
-            PyBackend::Metal => "METAL",
-            PyBackend::Neuron => "NEURON",
-            PyBackend::Rocm => "ROCM",
+            PyBackend::Metal => "Metal",
+            PyBackend::Neuron => "Neuron",
+            PyBackend::Rocm => "ROCm",
             PyBackend::Xpu => "XPU",
         };
         format!("Backend.{variant}")

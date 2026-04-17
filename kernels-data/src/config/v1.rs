@@ -83,6 +83,7 @@ impl TryFrom<Build> for super::Build {
 
         let backends = if universal {
             vec![
+                Backend::Cann,
                 Backend::Cpu,
                 Backend::Cuda,
                 Backend::Metal,

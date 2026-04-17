@@ -72,6 +72,20 @@ def test_backend_unknown():
         Backend.from_str("tpu")
 
 
+def test_backend_all_variants_and_casing():
+    assert str(Backend.Metal) == "metal"
+    assert repr(Backend.Metal) == "Backend.Metal"
+    assert str(Backend.Neuron) == "neuron"
+    assert repr(Backend.Neuron) == "Backend.Neuron"
+    assert str(Backend.ROCm) == "rocm"
+    assert repr(Backend.ROCm) == "Backend.ROCm"
+    assert repr(Backend.XPU) == "Backend.XPU"
+    assert repr(Backend.CANN) == "Backend.CANN"
+    assert Backend.from_str("cann") == Backend.CANN
+    assert Backend.from_str("ROCM") == Backend.ROCm
+    assert Backend.from_str("metal") == Backend.Metal
+
+
 def test_metadata_parse_full(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
@@ -104,6 +118,14 @@ def test_metadata_parse_minimal(tmp_path):
     assert m.upstream is None
     assert m.python_depends == []
     assert m.backend == Backend.CPU
+
+
+def test_metadata_parse_cann(tmp_path):
+    path = tmp_path / "metadata.json"
+    path.write_text(
+        json.dumps({"python-depends": [], "backend": {"type": "cann"}})
+    )
+    assert parse_metadata(path).backend == Backend.CANN
 
 
 def test_metadata_parse_unknown_field_rejected(tmp_path):

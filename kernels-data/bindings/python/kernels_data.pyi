@@ -9,11 +9,12 @@ __version__: str
 class Backend(Enum):
     """Kernel backend (hardware target)."""
 
+    CANN = "CANN"
     CPU = "CPU"
     CUDA = "CUDA"
-    METAL = "METAL"
-    NEURON = "NEURON"
-    ROCM = "ROCM"
+    Metal = "Metal"
+    Neuron = "Neuron"
+    ROCm = "ROCm"
     XPU = "XPU"
 
     @staticmethod
@@ -21,8 +22,8 @@ class Backend(Enum):
         """Parse a backend name.
 
         Args:
-            s: One of ``"cpu"``, ``"cuda"``, ``"metal"``, ``"neuron"``,
-               ``"rocm"``, ``"xpu"``.
+            s: One of ``"cann"``, ``"cpu"``, ``"cuda"``, ``"metal"``,
+               ``"neuron"``, ``"rocm"``, ``"xpu"``.
 
         Raises:
             ValueError: If the backend name is unknown.

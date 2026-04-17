@@ -16,7 +16,7 @@ pub struct BackendInfo {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Metadata {
-    pub id: String,
+    pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]

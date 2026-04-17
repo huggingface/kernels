@@ -241,9 +241,7 @@ def _select_backend(backend: str | None) -> Backend:
     if backend in supported:
         return supported[backend]
 
-    raise ValueError(
-        f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported.keys()))}"
-    )
+    raise ValueError(f"Invalid backend '{backend}', system supported backends: {', '.join(sorted(supported.keys()))}")
 
 
 def _supported_backends() -> dict[str, Backend]:
@@ -267,9 +265,7 @@ def _get_cuda() -> Optional[CUDA]:
     runtime_version = ctypes.c_int(0)
     result = libcudart.cudaRuntimeGetVersion(ctypes.byref(runtime_version))
     if result != 0:
-        warnings.warn(
-            "System has CUDA runtime library, but cannot get runtime version."
-        )
+        warnings.warn("System has CUDA runtime library, but cannot get runtime version.")
         return None
 
     # cudaRuntimeGetVersion encodes the version as (major * 1000 + minor * 10).

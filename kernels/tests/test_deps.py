@@ -19,7 +19,5 @@ def test_python_deps(dependency):
 
 
 def test_illegal_dep():
-    with pytest.raises(
-        ValueError, match=r"Kernel module `python_invalid_dep` uses.*kepler-22b"
-    ):
+    with pytest.raises(ValueError, match=r"Kernel module `python_invalid_dep` uses.*kepler-22b"):
         get_kernel("kernels-test/python-invalid-dep")

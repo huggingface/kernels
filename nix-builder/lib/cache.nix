@@ -26,6 +26,7 @@
           ++ allOutputs python3.pkgs.jax-tvm-ffi
           ++ allOutputs python3.pkgs.kernels
           ++ allOutputs python3.pkgs.tvm-ffi
+          ++ allOutputs ruff
           ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)
           # Only works on recent CUDAs.
           ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (

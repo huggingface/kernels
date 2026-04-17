@@ -82,9 +82,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int | str) -> GitRef
         accepted_versions = sorted(requirement.filter(versions_old.keys()))
 
         if len(accepted_versions) == 0:
-            raise ValueError(
-                f"No version of `{repo_id}` satisfies requirement: {version_spec}"
-            )
+            raise ValueError(f"No version of `{repo_id}` satisfies requirement: {version_spec}")
 
         return versions_old[accepted_versions[-1]]
 

@@ -26,9 +26,7 @@ class KernelLock:
 
     @classmethod
     def from_json(cls, o: dict):
-        variants = {
-            variant: VariantLock(**lock) for variant, lock in o["variants"].items()
-        }
+        variants = {variant: VariantLock(**lock) for variant, lock in o["variants"].items()}
         return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
@@ -58,9 +56,7 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
         revision=revision,
     )
     if r.sha is None:
-        raise ValueError(
-            f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
-        )
+        raise ValueError(f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}")
 
     siblings = [
         f

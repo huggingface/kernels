@@ -1563,6 +1563,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernels-data-python"
+version = "0.13.0-dev0"
+dependencies = [
+ "kernels-data",
+ "pyo3",
+]
+
+[[package]]
 name = "konst"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

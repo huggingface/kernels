@@ -1,0 +1,18 @@
+[package]
+name = "kernels-data-python"
+version = "0.13.0-dev0"
+edition = "2024"
+description = "Kernels data structures (Python bindings)"
+homepage = "https://github.com/huggingface/kernels"
+license = "Apache-2.0"
+repository = "https://github.com/huggingface/kernels"
+
+[lib]
+name = "kernels_data"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.26", features = ["abi3", "abi3-py38"] }
+
+[dependencies.kernels-data]
+path = "../.."

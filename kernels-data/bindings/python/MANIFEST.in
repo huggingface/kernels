@@ -1,0 +1,4 @@
+include Cargo.toml
+include pyproject.toml
+include ../../../LICENSE
+recursive-include src *

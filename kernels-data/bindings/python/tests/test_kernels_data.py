@@ -1,0 +1,103 @@
+from pathlib import Path
+
+import pytest
+
+from kernels_data import Backend, KernelName, Metadata, Version, parse_metadata
+
+
+@pytest.fixture
+def fixtures_dir():
+    return Path(__file__).parent / "fixtures"
+
+
+def test_version_parse_and_normalize():
+    assert str(Version.from_str("12.8.0")) == "12.8"
+    assert str(Version.from_str("1")) == "1"
+    assert str(Version.from_str("1.2.3")) == "1.2.3"
+
+
+def test_version_ordering_and_hash():
+    v1 = Version.from_str("1.2")
+    v2 = Version.from_str("1.2.0")
+    v3 = Version.from_str("1.3")
+    assert v1 == v2
+    assert v1 < v3
+    assert hash(v1) == hash(v2)
+    assert {v1, v2, v3} == {v1, v3}
+
+
+def test_version_invalid():
+    with pytest.raises(ValueError):
+        Version.from_str("abc")
+    with pytest.raises(ValueError):
+        Version.from_str("")
+
+
+def test_kernel_name_valid():
+    n = KernelName("my-kernel")
+    assert str(n) == "my-kernel"
+    assert n.python_name == "my_kernel"
+
+
+def test_kernel_name_hash_and_eq():
+    assert KernelName("flash-attention") == KernelName("flash-attention")
+    assert {KernelName("a1"), KernelName("a1")} == {KernelName("a1")}
+
+
+def test_kernel_name_invalid():
+    with pytest.raises(ValueError):
+        KernelName("My-Kernel")
+    with pytest.raises(ValueError):
+        KernelName("1kernel")
+    with pytest.raises(ValueError):
+        KernelName("-kernel")
+
+
+def test_backend_from_str_and_repr():
+    assert Backend.from_str("cuda") == Backend.CUDA
+    assert Backend.from_str("CUDA") == Backend.CUDA
+    assert str(Backend.CUDA) == "cuda"
+    assert repr(Backend.CUDA) == "Backend.CUDA"
+
+
+def test_backend_hash():
+    d = {Backend.CUDA: 1, Backend.CPU: 2}
+    assert d[Backend.CUDA] == 1
+
+
+def test_backend_unknown():
+    with pytest.raises(ValueError):
+        Backend.from_str("tpu")
+
+
+def test_metadata_parse_full(fixtures_dir):
+    m = parse_metadata(fixtures_dir / "variant-cuda" / "metadata.json")
+    assert m.version == 1
+    assert m.license == "Apache-2.0"
+    assert m.upstream == "https://github.com/example/kernel"
+    assert m.python_depends == ["torch"]
+    assert m.backend == Backend.CUDA
+
+
+def test_metadata_parse_minimal(fixtures_dir):
+    m = parse_metadata(fixtures_dir / "variant-minimal" / "metadata.json")
+    assert m.version is None
+    assert m.license is None
+    assert m.upstream is None
+    assert m.python_depends == []
+    assert m.backend == Backend.CPU
+
+
+def test_metadata_load_from_variant(fixtures_dir):
+    m = Metadata.load_from_variant(fixtures_dir / "variant-cuda")
+    assert m is not None
+    assert m.backend == Backend.CUDA
+
+
+def test_metadata_load_from_variant_missing(fixtures_dir):
+    assert Metadata.load_from_variant(fixtures_dir / "variant-empty") is None
+
+
+def test_metadata_parse_missing_file(fixtures_dir):
+    with pytest.raises(ValueError):
+        parse_metadata(fixtures_dir / "does-not-exist.json")

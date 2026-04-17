@@ -26,9 +26,17 @@ rustPlatform.buildRustPackage {
         || file.hasExt "rs"
         || file.name == "stable_abi.toml";
     in
-    lib.fileset.toSource {
+    with lib.fileset;
+    toSource {
       root = ../../..;
-      fileset = lib.fileset.fileFilter sourceFiles ../../..;
+      fileset = unions [
+        ../../../Cargo.lock
+        ../../../Cargo.toml
+        (fileFilter sourceFiles ../../../kernel-abi-check)
+        # Cargo wants access to the whole workspace.
+        (fileFilter sourceFiles ../../../kernel-builder)
+        (fileFilter sourceFiles ../../../kernels-data)
+      ];
     };
 
   cargoLock = {

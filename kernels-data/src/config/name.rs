@@ -4,7 +4,7 @@ use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 /// A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct KernelName(String);
 
 impl KernelName {

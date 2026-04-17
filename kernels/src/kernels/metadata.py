@@ -21,7 +21,9 @@ class Metadata:
                 metadata_dict = json.load(f)
                 if (kernel_id := metadata_dict.get("id", None)) is None:
                     warnings.warn(
-                        f"Metadata for kernel loaded from `{variant_path}` does have an identifier, identifiers will become required in kernels >= 0.15",
+                        f"Metadata for kernel loaded from `{variant_path}` does have an identifier,"
+                        " identifiers will become required in kernels >= 0.15\n"
+                        "Run `nix flake update in your kernel directory and rebuild to generate metadata.",
                         UserWarning,
                         stacklevel=2,
                     )
@@ -32,7 +34,9 @@ class Metadata:
                 )
 
         warnings.warn(
-            f"Kernel loaded from `{variant_path}` does not have metadata, metadata will be required in kernels >= 0.15",
+            f"Kernel loaded from `{variant_path}` does not have metadata,"
+            " metadata will be required in kernels >= 0.15\n"
+            "Run `nix flake update in your kernel directory and rebuild to generate metadata.",
             UserWarning,
             stacklevel=2,
         )

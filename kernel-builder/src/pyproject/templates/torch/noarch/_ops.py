@@ -4,7 +4,11 @@ def get_backend() -> str:
     """Detect the backend by inspecting torch."""
     import torch
 
-    if torch.version.cuda is not None:
+    if hasattr(torch, "neuron"):
+        # Needs to be sorted before specific Torch builds, since Neuron
+        # extension can be loaded into e.g. CUDA Torch builds.
+        return "neuron"
+    elif torch.version.cuda is not None:
         return "cuda"
     elif torch.version.hip is not None:
         return "rocm"

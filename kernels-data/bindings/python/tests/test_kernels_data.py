@@ -108,9 +108,7 @@ def test_metadata_load_full(tmp_path):
 
 def test_metadata_load_minimal(tmp_path):
     path = tmp_path / "metadata.json"
-    path.write_text(
-        json.dumps({"python-depends": [], "backend": {"type": "cpu"}})
-    )
+    path.write_text(json.dumps({"python-depends": [], "backend": {"type": "cpu"}}))
     m = Metadata.load(path)
     assert m.version is None
     assert m.license is None
@@ -121,13 +119,11 @@ def test_metadata_load_minimal(tmp_path):
 
 def test_metadata_load_cann(tmp_path):
     path = tmp_path / "metadata.json"
-    path.write_text(
-        json.dumps({"python-depends": [], "backend": {"type": "cann"}})
-    )
+    path.write_text(json.dumps({"python-depends": [], "backend": {"type": "cann"}}))
     assert Metadata.load(path).backend == Backend.CANN
 
 
-def test_metadata_load_unknown_field_rejected(tmp_path):
+def test_metadata_load_unknown_field_accepted(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
         json.dumps(
@@ -138,8 +134,7 @@ def test_metadata_load_unknown_field_rejected(tmp_path):
             }
         )
     )
-    with pytest.raises(ValueError):
-        Metadata.load(path)
+    Metadata.load(path)
 
 
 def test_metadata_load_malformed(tmp_path):

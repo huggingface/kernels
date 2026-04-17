@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
@@ -55,34 +54,6 @@ def main():
     versions_parser = subparsers.add_parser("versions", help="Show kernel versions")
     versions_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
     versions_parser.set_defaults(func=kernel_versions)
-
-    upload_parser = subparsers.add_parser(
-        "upload",
-        help="(Deprecated) Upload kernels to the Hub. Use `kernel-builder upload` instead.",
-    )
-    upload_parser.add_argument(
-        "kernel_dir",
-        type=Path,
-        help="Directory of the kernel build",
-    )
-    upload_parser.add_argument(
-        "--repo-id",
-        type=str,
-        required=True,
-        help="Repository ID to use to upload to the Hugging Face Hub",
-    )
-    upload_parser.add_argument(
-        "--branch",
-        type=str,
-        default=None,
-        help="If set, the upload will be made to a particular branch of the provided `repo-id`.",
-    )
-    upload_parser.add_argument(
-        "--private",
-        action="store_true",
-        help="If the repository should be private.",
-    )
-    upload_parser.set_defaults(func=upload_kernels)
 
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
     lock_parser.add_argument(
@@ -188,29 +159,6 @@ def lock_kernels(args):
 
     with open(args.project_dir / "kernels.lock", "w") as f:
         json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
-
-
-def upload_kernels(args):
-    import warnings
-
-    warnings.warn(
-        "`kernels upload` is deprecated and will be removed in version 0.14. "
-        "Please use `kernel-builder upload` instead.",
-        DeprecationWarning,
-        stacklevel=1,
-    )
-    # Also print to stderr for visibility in CLI usage
-    print(
-        "Warning: `kernels upload` is deprecated and will be removed in version 0.14.\n"
-        "Please use `kernel-builder upload` instead.\n",
-        file=sys.stderr,
-    )
-    upload_kernels_dir(
-        Path(args.kernel_dir).resolve(),
-        repo_id=args.repo_id,
-        branch=args.branch,
-        private=args.private,
-    )
 
 
 class _JSONEncoder(json.JSONEncoder):

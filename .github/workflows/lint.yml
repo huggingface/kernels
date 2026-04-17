@@ -1,5 +1,10 @@
 name: Lints
 on: [push, pull_request]
+
+env:
+  RUFF_VERSION: "0.15.10"
+  GRIFFE_VERSION: "1.15.0"
+
 jobs:
   lint:
     name: Run lints
@@ -10,12 +15,12 @@ jobs:
         uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6  # v3
         with:
           src: kernels
-          version: "0.15.10"
+          version: ${{ env.RUFF_VERSION }}
       - name: Run ruff format check
         uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6  # v3
         with:
           src: kernels
-          version: "0.15.10"
+          version: ${{ env.RUFF_VERSION }}
           args: format --check
 
   griffe:
@@ -32,7 +37,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check for breaking changes
-        run: uvx griffe check kernels --search kernels/src -a main
+        run: uvx griffe==${{ env.GRIFFE_VERSION }} check kernels --search kernels/src -a main
 
   validate-dependencies:
     name: Validate python_depends.json

@@ -30,12 +30,9 @@ class KernelLock:
         return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
-def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
+def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
     """
-    Get the locks for a kernel with the given version spec.
-
-    The version specifier can be any valid Python version specifier:
-    https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
+    Get the locks for a kernel with the given version.
     """
     from kernels.utils import _get_hf_api
 

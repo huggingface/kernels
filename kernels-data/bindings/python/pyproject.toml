@@ -18,6 +18,7 @@ build-backend = "maturin"
 [dependency-groups]
 dev = [
   "pytest>=8",
+  "mypy>=1.11",
 ]
 
 [tool.maturin]

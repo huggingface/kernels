@@ -65,3 +65,6 @@ jobs:
 
       - name: Run tests
         run: ( cd kernels-data/bindings/python && uv run pytest tests )
+
+      - name: Check type stubs match runtime
+        run: ( cd kernels-data/bindings/python && uv run python -m mypy.stubtest kernels_data --allowlist stubtest-allowlist.txt )

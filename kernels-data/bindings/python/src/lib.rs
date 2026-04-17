@@ -218,23 +218,12 @@ impl PyMetadata {
     }
 }
 
-/// Parse a kernel `metadata.json` file.
-///
-/// Raises `ValueError` on any I/O or parse error.
-#[pyfunction(name = "parse_metadata")]
-fn py_parse_metadata(path: PathBuf) -> PyResult<PyMetadata> {
-    parse_metadata(&path)
-        .map(Into::into)
-        .map_err(|err| PyValueError::new_err(format!("{err:#}")))
-}
-
 #[pyo3::pymodule(name = "kernels_data")]
 fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
-    m.add_function(wrap_pyfunction!(py_parse_metadata, m)?)?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

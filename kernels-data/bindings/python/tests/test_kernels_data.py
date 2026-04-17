@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from kernels_data import Backend, KernelName, Metadata, Version, parse_metadata
+from kernels_data import Backend, KernelName, Metadata, Version
 
 
 def _write_metadata(path, **fields):
@@ -85,7 +85,7 @@ def test_backend_all_variants_and_casing():
     assert Backend.from_str("metal") == Backend.Metal
 
 
-def test_metadata_parse_full(tmp_path):
+def test_metadata_load_full(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
         json.dumps(
@@ -98,7 +98,7 @@ def test_metadata_parse_full(tmp_path):
             }
         )
     )
-    m = parse_metadata(path)
+    m = Metadata.load(path)
     assert m.version == 1
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"
@@ -106,12 +106,12 @@ def test_metadata_parse_full(tmp_path):
     assert m.backend == Backend.CUDA
 
 
-def test_metadata_parse_minimal(tmp_path):
+def test_metadata_load_minimal(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
         json.dumps({"python-depends": [], "backend": {"type": "cpu"}})
     )
-    m = parse_metadata(path)
+    m = Metadata.load(path)
     assert m.version is None
     assert m.license is None
     assert m.upstream is None
@@ -119,15 +119,15 @@ def test_metadata_parse_minimal(tmp_path):
     assert m.backend == Backend.CPU
 
 
-def test_metadata_parse_cann(tmp_path):
+def test_metadata_load_cann(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
         json.dumps({"python-depends": [], "backend": {"type": "cann"}})
     )
-    assert parse_metadata(path).backend == Backend.CANN
+    assert Metadata.load(path).backend == Backend.CANN
 
 
-def test_metadata_parse_unknown_field_rejected(tmp_path):
+def test_metadata_load_unknown_field_rejected(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(
         json.dumps(
@@ -139,14 +139,14 @@ def test_metadata_parse_unknown_field_rejected(tmp_path):
         )
     )
     with pytest.raises(ValueError):
-        parse_metadata(path)
+        Metadata.load(path)
 
 
-def test_metadata_parse_malformed(tmp_path):
+def test_metadata_load_malformed(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text("{not json")
     with pytest.raises(ValueError):
-        parse_metadata(path)
+        Metadata.load(path)
 
 
 def test_metadata_load(tmp_path):
@@ -161,8 +161,3 @@ def test_metadata_load(tmp_path):
 def test_metadata_load_missing_file(tmp_path):
     with pytest.raises(ValueError):
         Metadata.load(tmp_path / "does-not-exist.json")
-
-
-def test_metadata_parse_missing_file(tmp_path):
-    with pytest.raises(ValueError):
-        parse_metadata(tmp_path / "does-not-exist.json")

@@ -25,6 +25,7 @@ rustPlatform.buildRustPackage {
         file:
         file.name == "Cargo.toml"
         || file.name == "Cargo.lock"
+        || file.name == "flake.nix"
         || file.name == "pyproject.toml"
         || file.name == "pyproject_universal.toml"
         || file.name == "python_dependencies.json"
@@ -39,15 +40,22 @@ rustPlatform.buildRustPackage {
           "md"
           "metal"
           "mm"
-          "nix"
           "py"
           "rs"
           "toml"
         ]);
     in
-    lib.fileset.toSource {
+    with lib.fileset;
+    toSource {
       root = ../../..;
-      fileset = lib.fileset.fileFilter sourceFiles ../../..;
+      fileset = unions [
+        ../../../Cargo.lock
+        ../../../Cargo.toml
+        (fileFilter sourceFiles ../../../kernel-builder)
+        # Cargo wants access to the whole workspace.
+        (fileFilter sourceFiles ../../../kernel-abi-check)
+        (fileFilter sourceFiles ../../../kernels-data)
+      ];
     };
 
   cargoLock = {

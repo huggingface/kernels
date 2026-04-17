@@ -10,6 +10,7 @@ use crate::config::Backend;
 pub struct BackendInfo {
     #[serde(rename = "type")]
     pub backend_type: Backend,
+    pub archs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

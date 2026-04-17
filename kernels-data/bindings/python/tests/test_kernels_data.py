@@ -94,7 +94,7 @@ def test_metadata_load_full(tmp_path):
                 "license": "Apache-2.0",
                 "upstream": "https://github.com/example/kernel",
                 "python-depends": ["torch"],
-                "backend": {"type": "cuda"},
+                "backend": {"type": "cuda", "archs": ["9.0", "10.0"]},
             }
         )
     )
@@ -103,7 +103,8 @@ def test_metadata_load_full(tmp_path):
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"
     assert m.python_depends == ["torch"]
-    assert m.backend == Backend.CUDA
+    assert m.backend.backend_type == Backend.CUDA
+    assert m.backend.archs == ["9.0", "10.0"]
 
 
 def test_metadata_load_minimal(tmp_path):
@@ -114,13 +115,13 @@ def test_metadata_load_minimal(tmp_path):
     assert m.license is None
     assert m.upstream is None
     assert m.python_depends == []
-    assert m.backend == Backend.CPU
+    assert m.backend.backend_type == Backend.CPU
 
 
 def test_metadata_load_cann(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text(json.dumps({"python-depends": [], "backend": {"type": "cann"}}))
-    assert Metadata.load(path).backend == Backend.CANN
+    assert Metadata.load(path).backend.backend_type == Backend.CANN
 
 
 def test_metadata_load_unknown_field_accepted(tmp_path):
@@ -150,7 +151,7 @@ def test_metadata_load(tmp_path):
         **{"python-depends": ["torch"], "backend": {"type": "cuda"}},
     )
     m = Metadata.load(path)
-    assert m.backend == Backend.CUDA
+    assert m.backend.backend_type == Backend.CUDA
 
 
 def test_metadata_load_missing_file(tmp_path):

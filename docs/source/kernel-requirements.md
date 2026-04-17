@@ -52,16 +52,17 @@ Example `metadata.json`:
 
 ```json
 {
+  "id": "_mykernel_cuda_be238e4",
   "python-depends": ["einops"],
-  "version": 1
+  "version": 1,
+  "backend": {
+    "type": "cuda",
+    "archs": ["7.0", "7.2", "7.5", "8.0", "8.6", "8.7", "8.9", "9.0+PTX"]
+  }
 }
 ```
 
-The `metadata.json` file is generated automatically by `kernel-builder`,
-so creating this file is only required for kernels that are built with
-a different tool. For such kernels, we strongly recommend generating
-`metadata.json` using the [`kernels-data`](https://github.com/huggingface/kernels/tree/main/kernels-data)
-Rust crate to ensure compatibility.
+The `metadata.json` file is generated automatically by `kernel-builder`.
 
 ## Backend
 
@@ -77,8 +78,8 @@ The `backend` specifies a dictionary of the following form:
 }
 ```
 
-The backend `type` must be one of `cpu`, `cuda`, `metal`, `neuron`, `rocm`,
-or `xpu`. For CUDA and ROCm, the supported architectures must
+The backend `type` must be one of `cann`, `cpu`, `cuda`, `metal`, `neuron`,
+`rocm`, or `xpu`. For CUDA and ROCm, the supported architectures must
 be specified in the `archs` field.
 
 ### Python dependencies

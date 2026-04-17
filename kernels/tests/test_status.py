@@ -61,11 +61,9 @@ class TestResolveStatus:
         from huggingface_hub.utils import EntryNotFoundError
 
         status_file = tmp_path / "kernel-status.toml"
-        status_file.write_text(
-            'kind = "redirect"\ndestination = "kernels-community/new-kernel"'
-        )
+        status_file.write_text('kind = "redirect"\ndestination = "kernels-community/new-kernel"')
 
-        def mock_download(repo_id, filename, revision):
+        def mock_download(repo_id, filename, revision, repo_type):
             if repo_id == "kernels-test/old-kernel":
                 return str(status_file)
             raise EntryNotFoundError("Not found")
@@ -81,11 +79,9 @@ class TestResolveStatus:
         from huggingface_hub.utils import EntryNotFoundError
 
         status_file = tmp_path / "kernel-status.toml"
-        status_file.write_text(
-            'kind = "redirect"\ndestination = "kernels-community/new-kernel"\nrevision = "v2"'
-        )
+        status_file.write_text('kind = "redirect"\ndestination = "kernels-community/new-kernel"\nrevision = "v2"')
 
-        def mock_download(repo_id, filename, revision):
+        def mock_download(repo_id, filename, revision, repo_type):
             if repo_id == "kernels-test/old-kernel":
                 return str(status_file)
             raise EntryNotFoundError("Not found")

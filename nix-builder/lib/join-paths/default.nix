@@ -8,6 +8,8 @@ args@{
 
   preferLocalBuild ? true,
   allowSubstitutes ? false,
+
+  postInstall ? "",
 }:
 let
   inherit (pkgs) lib;
@@ -23,4 +25,6 @@ let
     mkdir -p ${placeholder "out"}
   '';
 in
-pkgs.runCommand name args_ (prelude + lib.concatStringsSep "\n" (builtins.map copyPkg contents))
+pkgs.runCommand name args_ (
+  prelude + lib.concatStringsSep "\n" (builtins.map copyPkg contents) + postInstall
+)

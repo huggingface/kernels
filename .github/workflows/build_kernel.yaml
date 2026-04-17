@@ -23,14 +23,14 @@ jobs:
     runs-on:
       group: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
         with:
           extra-conf: |
             max-jobs = 8
             cores = 12
             sandbox-fallback = false
-      - uses: cachix/cachix-action@v16
+      - uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
         with:
           name: huggingface
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
@@ -45,7 +45,7 @@ jobs:
         run: cp -rL result/* .
 
       - name: Upload kernel artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: built-kernels-${{ matrix.arch }}
           path: |
@@ -65,10 +65,10 @@ jobs:
     runs-on:
       group: aws-g6-12xlarge-plus
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Download kernel artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: built-kernels-x86_64-linux
           path: .

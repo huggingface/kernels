@@ -67,9 +67,7 @@ class FuncRepository:
         version: int | str | None = None,
     ):
         if revision is not None and version is not None:
-            raise ValueError(
-                "Either a revision or a version must be specified, not both."
-            )
+            raise ValueError("Either a revision or a version must be specified, not both.")
 
         self._repo_id = repo_id
         self.func_name = func_name
@@ -279,9 +277,7 @@ class LockedFuncRepository:
         return f"`{self._repo_id}` (revision: {self._revision}), function `{self.func_name}`"
 
 
-def _get_kernel_func(
-    repo: FuncRepositoryProtocol, kernel: ModuleType
-) -> Type["nn.Module"]:
+def _get_kernel_func(repo: FuncRepositoryProtocol, kernel: ModuleType) -> Type["nn.Module"]:
     func = getattr(kernel, repo.func_name, None)
     if func is None:
         raise ValueError(f"Function `{repo.func_name}` not found in `{repo}`")

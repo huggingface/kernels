@@ -1,7 +1,7 @@
 import json
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
-import warnings
 
 from huggingface_hub.dataclasses import strict
 

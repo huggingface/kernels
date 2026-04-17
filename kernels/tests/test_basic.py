@@ -3,7 +3,7 @@ import logging
 import pytest
 import torch
 import torch.nn.functional as F
-from huggingface_hub.errors import RepositoryNotFoundError
+from huggingface_hub.errors import HfHubHTTPError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
@@ -15,7 +15,7 @@ def kernel():
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", "main")
+    package_name, path = install_kernel("kernels-community/activation", revision="main")
     # Path is the build variant path (build/torch-<...>), so the grandparent
     # is the kernel repository path.
     return package_name, path
@@ -86,7 +86,7 @@ def test_local_kernel(local_kernel, device):
 )
 def test_local_kernel_path_types(repo_revision, device):
     repo_id, revision = repo_revision
-    package_name, path = install_kernel(repo_id, revision)
+    package_name, path = install_kernel(repo_id, revision=revision)
 
     # Top-level repo path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071
@@ -131,6 +131,7 @@ def test_has_kernel(kernel_exists):
     assert has_kernel(repo_id, revision=revision) == kernel
 
 
+@pytest.mark.skip(reason="Tags are not supported on kernel repos")
 def test_version_old():
     # Remove once we drop support for version specs.
     kernel = get_kernel("kernels-test/versions")
@@ -146,9 +147,7 @@ def test_version_old():
         get_kernel("kernels-test/versions", version=">0.2.0")
 
     with pytest.raises(ValueError, match=r"Only one of"):
-        kernel = get_kernel(
-            "kernels-test/versions", revision="v0.1.0", version="<1.0.0"
-        )
+        kernel = get_kernel("kernels-test/versions", revision="v0.1.0", version="<1.0.0")
 
 
 def test_version():
@@ -157,9 +156,7 @@ def test_version():
     kernel = get_kernel("kernels-test/versions", version=2)
     assert kernel.version() == "2"
 
-    with pytest.raises(
-        ValueError, match="Version 0 not found, available versions: 1, 2.*"
-    ):
+    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
         kernel = get_kernel("kernels-test/versions", version=0)
 
 
@@ -167,16 +164,27 @@ def test_version_outdated_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=1)
     assert kernel.version() == "1"
-    assert (
-        "You are using version 1 of 'kernels-test/versions', but version 2 is available."
-        in caplog.text
-    )
+    assert "You are using version 1 of 'kernels-test/versions', but version 2 is available." in caplog.text
 
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=2)
     assert kernel.version() == "2"
     assert "but version" not in caplog.text
+
+
+def test_no_version_or_revision_warning():
+    from packaging.version import Version
+
+    from kernels import __version__
+
+    assert Version(__version__) < Version("0.15"), (
+        "The deprecation cycle for requiring `version` or `revision` is complete. "
+        "Remove the fallback to 'main' in `select_revision_or_version` and make "
+        "`version` or `revision` a required argument."
+    )
+    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
+        get_kernel("kernels-test/versions")
 
 
 @pytest.mark.cuda_only
@@ -243,7 +251,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
 
     # Ensure that we are testing with a non-existing kernel, so that we know
     # that the kernel must be local.
-    with pytest.raises(RepositoryNotFoundError):
+    with pytest.raises(HfHubHTTPError):
         get_kernel(f"kernels-test/{package_name}")
 
     with monkeypatch.context() as m:

@@ -4,6 +4,7 @@ from typing import Union
 
 from huggingface_hub import HfApi
 from huggingface_hub.dataclasses import strict
+from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import EntryNotFoundError
 
 from kernels.compat import tomllib
@@ -49,16 +50,17 @@ class KernelStatus:
 
     # Fetch the kernel status from the repository, if it exists
     @staticmethod
-    def check_status(
-        api: HfApi, repo_id: str, revision: str
-    ) -> KernelStatusKind | None:
+    def check_status(api: HfApi, repo_id: str, revision: str) -> KernelStatusKind | None:
         try:
             path = api.hf_hub_download(
-                repo_id=repo_id, filename="kernel-status.toml", revision=revision
+                repo_id=repo_id,
+                repo_type="kernel",
+                filename="kernel-status.toml",
+                revision=revision,
             )
             with open(path, "r") as f:
                 return KernelStatus.from_toml(f.read())
-        except EntryNotFoundError:
+        except (EntryNotFoundError, RepositoryNotFoundError):
             return None
 
 

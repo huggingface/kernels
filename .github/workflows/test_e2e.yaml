@@ -14,7 +14,9 @@ on:
   workflow_dispatch:
 
 env:
-  E2E_REPO_ID: kernels-test/kernels-upload-test
+  HF_ENDPOINT: https://hub-ci.huggingface.co
+  HF_TOKEN: ${{ secrets.HF_HUB_CI_TOKEN }}
+  E2E_REPO_ID: __DUMMY_KERNELS_USER__/kernels-upload-test
   E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
 
 concurrency:
@@ -26,9 +28,11 @@ jobs:
     name: Init, build, and upload kernel
     runs-on:
       group: aws-highmemory-32-plus-nix
+    outputs:
+      variant: ${{ steps.variant.outputs.name }}
     steps:
       - uses: actions/checkout@v6
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
         with:
           extra-conf: |
             max-jobs = 8
@@ -60,7 +64,7 @@ jobs:
           test -f tests/test_kernels_upload_test.py
           test -f example.py
           grep -q 'name = "kernels-upload-test"' build.toml
-          grep -q 'repo-id = "kernels-test/kernels-upload-test"' build.toml
+          grep -q 'repo-id = "__DUMMY_KERNELS_USER__/kernels-upload-test"' build.toml
           grep -q 'backend = "cuda"' build.toml
 
       - name: Patch flake.nix to use local nix-builder
@@ -68,25 +72,32 @@ jobs:
           cd /tmp/kernels-upload-test
           sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
 
+      - name: Determine latest variant
+        id: variant
+        run: |
+          cd /tmp/kernels-upload-test
+          VARIANT=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants . | tail -1)
+          echo "name=$VARIANT" >> $GITHUB_OUTPUT
+          echo "Building variant: $VARIANT"
+
       - name: Build kernel
         run: |
           cd /tmp/kernels-upload-test
-          nix run $GITHUB_WORKSPACE#kernel-builder -- build-and-copy . -L
+          nix run $GITHUB_WORKSPACE#kernel-builder -- build --variant ${{ steps.variant.outputs.name }} . -L
 
       - name: Verify build artifacts
         run: |
           cd /tmp/kernels-upload-test
-          VARIANT_DIR=$(ls -d build/torch* | head -1)
+          VARIANT_DIR=$(ls -d result/torch* | head -1)
           echo "Built variant: $VARIANT_DIR"
           test -f "$VARIANT_DIR/__init__.py"
           test -f "$VARIANT_DIR/metadata.json"
           ls "$VARIANT_DIR"/*.so
 
       - name: Upload kernel to Hub
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }}
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }} --repo-type model
 
   download-and-test:
     name: Download and test kernel via get_kernel
@@ -106,14 +117,15 @@ jobs:
       - name: Install Python deps
         working-directory: ./kernels
         run: |
+          VARIANT="${{ needs.init-build-upload.outputs.variant }}"
+          CUDA_TAG=$(echo "$VARIANT" | grep -oP 'cu\d+')
+          echo "Installing torch matching variant $VARIANT (CUDA tag: $CUDA_TAG)"
           uv sync --all-extras --dev
-          uv pip install --upgrade torch
+          uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/$CUDA_TAG
           uv run --no-sync python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           uv run --no-sync python -c "
           import torch

@@ -31,15 +31,11 @@ def _upload_build_dir(
             if path.is_file():
                 repo_paths[f"build/{path.relative_to(build_dir).as_posix()}"] = path
 
-    variant_prefixes = tuple(
-        f"build/{variant.relative_to(build_dir).as_posix()}/" for variant in variants
-    )
+    variant_prefixes = tuple(f"build/{variant.relative_to(build_dir).as_posix()}/" for variant in variants)
     delete_prefixes = ("build/",) if is_new_branch else variant_prefixes
     operations: list[CommitOperationAdd | CommitOperationDelete] = [
         CommitOperationDelete(path_in_repo=repo_file)
-        for repo_file in sorted(
-            api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="model")
-        )
+        for repo_file in sorted(api.list_repo_files(repo_id=repo_id, revision=revision, repo_type="model"))
         if repo_file.startswith(delete_prefixes) and repo_file not in repo_paths
     ]
     operations.extend(
@@ -50,27 +46,18 @@ def _upload_build_dir(
     if not operations:
         return
 
-    batch_count = (
-        len(operations) + BUILD_COMMIT_BATCH_SIZE - 1
-    ) // BUILD_COMMIT_BATCH_SIZE
+    batch_count = (len(operations) + BUILD_COMMIT_BATCH_SIZE - 1) // BUILD_COMMIT_BATCH_SIZE
     if batch_count > 1:
-        print(
-            f"⚠️  Found {len(operations)} build operations, uploading in {batch_count} commits."
-        )
+        print(f"⚠️  Found {len(operations)} build operations, uploading in {batch_count} commits.")
 
-    for batch_index, chunk in enumerate(
-        chunk_iterable(operations, chunk_size=BUILD_COMMIT_BATCH_SIZE), start=1
-    ):
+    for batch_index, chunk in enumerate(chunk_iterable(operations, chunk_size=BUILD_COMMIT_BATCH_SIZE), start=1):
         commit_message = "Build uploaded using `kernels`."
         if batch_count > 1:
-            commit_message = (
-                f"Build uploaded using `kernels` (batch {batch_index}/{batch_count})."
-            )
+            commit_message = f"Build uploaded using `kernels` (batch {batch_index}/{batch_count})."
         api.create_commit(
             repo_id=repo_id,
             operations=list(chunk),
             revision=revision,
-            repo_type="model",
             commit_message=commit_message,
         )
 
@@ -90,11 +77,8 @@ def upload_kernels_dir(
     for candidate in [kernel_dir / "build", kernel_dir]:
         variants = [
             variant_path
-            for variant_path in chain(
-                candidate.glob("torch*"), candidate.glob("tvm-ffi*")
-            )
-            if BUILD_VARIANT_REGEX.match(variant_path.name) is not None
-            and (variant_path / "metadata.json").is_file()
+            for variant_path in chain(candidate.glob("torch*"), candidate.glob("tvm-ffi*"))
+            if BUILD_VARIANT_REGEX.match(variant_path.name) is not None and (variant_path / "metadata.json").is_file()
         ]
         if variants:
             build_dir = candidate

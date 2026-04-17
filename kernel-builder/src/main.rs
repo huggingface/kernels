@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
+mod card;
+
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
@@ -32,6 +34,8 @@ use pyproject::{clean_pyproject, create_pyproject};
 use kernels_data::config::{v3, Build, BuildCompat};
 
 mod nix;
+
+mod skills;
 
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
@@ -118,8 +122,8 @@ enum Commands {
         #[arg(long)]
         private: bool,
 
-        /// Repository type on Hugging Face Hub (`model` or `kernel`).
-        #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+        /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
+        #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
         repo_type: RepoTypeArg,
     },
 
@@ -171,6 +175,18 @@ enum Commands {
         nix_args: NixArgs,
     },
 
+    /// Render the CARD.md template for a kernel.
+    #[command(hide = true)]
+    FillCard {
+        /// Kernel source directory (current directory when not specified).
+        #[arg(value_name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// File to write the rendered card to (defaults to stdout).
+        #[arg(value_name = "OUTPUT")]
+        output: Option<PathBuf>,
+    },
+
     /// List build variants.
     ListVariants {
         #[arg(name = "KERNEL_DIR")]
@@ -200,6 +216,16 @@ enum Commands {
         kernel_dir: Option<PathBuf>,
     },
 
+    /// Install skills for AI coding assistants (Claude, Codex, OpenCode).
+    Skills {
+        #[command(subcommand)]
+        command: SkillsCommands,
+    },
+
+    /// Generate Markdown documentation for the CLI.
+    #[command(hide = true)]
+    GenerateDocs,
+
     /// Clean generated artifacts.
     CleanPyproject {
         #[arg(name = "KERNEL_DIR")]
@@ -221,6 +247,40 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         ops_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SkillsCommands {
+    /// Install a kernels skill for an AI assistant.
+    Add {
+        /// Skill to install.
+        #[arg(long, value_enum, default_value_t = skills::SkillId::CudaKernels)]
+        skill: skills::SkillId,
+
+        /// Install for Claude.
+        #[arg(long)]
+        claude: bool,
+
+        /// Install for Codex.
+        #[arg(long)]
+        codex: bool,
+
+        /// Install for OpenCode.
+        #[arg(long)]
+        opencode: bool,
+
+        /// Install globally (user-level) instead of in the current project directory.
+        #[arg(short, long)]
+        global: bool,
+
+        /// Install into a custom destination (path to skills directory).
+        #[arg(long)]
+        dest: Option<PathBuf>,
+
+        /// Overwrite existing skills in the destination.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -316,6 +376,23 @@ fn main() -> Result<()> {
             check_builds(kernel_dir)?;
             Ok(())
         }
+        Commands::GenerateDocs => {
+            let markdown = clap_markdown::help_markdown::<Cli>();
+            print!("{}", markdown);
+            Ok(())
+        }
+        Commands::Skills { command } => match command {
+            SkillsCommands::Add {
+                skill,
+                claude,
+                codex,
+                opencode,
+                global,
+                dest,
+                force,
+            } => skills::add_skill(skill, claude, codex, opencode, global, dest, force),
+        },
+        Commands::FillCard { kernel_dir, output } => card::fill_card(kernel_dir, output),
         Commands::CleanPyproject {
             kernel_dir,
             target_dir,

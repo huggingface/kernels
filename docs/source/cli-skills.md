@@ -1,6 +1,11 @@
-### kernels skills add
+### kernel-builder skills add
 
-Use `kernels skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode. For now, only the `cuda-kernels` skill is supported. Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/skills).
+Use `kernel-builder skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode.
+Supported skills include:
+- `cuda-kernels` (default)
+- `rocm-kernels`
+
+Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/kernel-builder/skills).
 
 Skills instruct agents how to deal with hardware-specific optimizations, integrate with libraries like diffusers and transformers, and benchmark kernel performance in consistent ways.
 
@@ -8,16 +13,17 @@ Examples:
 
 ```bash
 # install for Claude in the current project
-kernels skills add --claude
+kernel-builder skills add --claude
+
+# install ROCm kernels skill for Codex
+kernel-builder skills add --skill rocm-kernels --codex
 
 # install globally for Codex
-kernels skills add --codex --global
+kernel-builder skills add --codex --global
 
 # install for multiple assistants
-kernels skills add --claude --codex --opencode
+kernel-builder skills add --claude --codex --opencode
 
 # install to a custom destination and overwrite if already present
-kernels skills add --dest ~/my-skills --force
-### Create a new kernel project
-kernels init my-username/my-kernel --skills ~/my-skills
+kernel-builder skills add --dest ~/my-skills --force
 ```

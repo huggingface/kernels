@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-from kernels.cli.skills import add_skill
 from kernels.cli.upload import upload_kernels_dir
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
@@ -16,9 +15,7 @@ from kernels.utils import (
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        prog="kernel", description="Manage compute kernels"
-    )
+    parser = argparse.ArgumentParser(prog="kernel", description="Manage compute kernels")
     subparsers = parser.add_subparsers(required=True)
 
     check_parser = subparsers.add_parser("check", help="Check a kernel for compliance")
@@ -30,12 +27,8 @@ def main():
         help="The kernel revision (branch, tag, or commit SHA, defaults to 'main')",
     )
     check_parser.add_argument("--macos", type=str, help="macOS version", default="15.0")
-    check_parser.add_argument(
-        "--manylinux", type=str, help="Manylinux version", default="manylinux_2_28"
-    )
-    check_parser.add_argument(
-        "--python-abi", type=str, help="Python ABI version", default="3.9"
-    )
+    check_parser.add_argument("--manylinux", type=str, help="Manylinux version", default="manylinux_2_28")
+    check_parser.add_argument("--python-abi", type=str, help="Python ABI version", default="3.9")
     check_parser.set_defaults(
         func=lambda args: check_kernel(
             macos=args.macos,
@@ -91,52 +84,6 @@ def main():
     )
     upload_parser.set_defaults(func=upload_kernels)
 
-    skills_parser = subparsers.add_parser(
-        "skills",
-        help="Install kernels specific skills for agents like Claude, Codex, and OpenCode",
-    )
-    skills_subparsers = skills_parser.add_subparsers(required=True)
-    skills_add_parser = skills_subparsers.add_parser(
-        "add",
-        help="Install the cuda-kernels skill for an AI assistant",
-    )
-    skills_add_parser.add_argument(
-        "--claude",
-        action="store_true",
-        help="Install for Claude.",
-    )
-    skills_add_parser.add_argument(
-        "--codex",
-        action="store_true",
-        help="Install for Codex.",
-    )
-    skills_add_parser.add_argument(
-        "--opencode",
-        action="store_true",
-        help="Install for OpenCode.",
-    )
-    skills_add_parser.add_argument(
-        "--global",
-        "-g",
-        dest="global_",
-        action="store_true",
-        help=(
-            "Install globally (user-level) instead of in the current project directory."
-        ),
-    )
-    skills_add_parser.add_argument(
-        "--dest",
-        type=Path,
-        default=None,
-        help="Install into a custom destination (path to skills directory).",
-    )
-    skills_add_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing skills in the destination.",
-    )
-    skills_add_parser.set_defaults(func=add_skill)
-
     lock_parser = subparsers.add_parser("lock", help="Lock kernel revisions")
     lock_parser.add_argument(
         "project_dir",
@@ -154,12 +101,8 @@ def main():
         type=str,
         help="Kernel repo ID (e.g., kernels-community/activation)",
     )
-    benchmark_parser.add_argument(
-        "--branch", type=str, help="Kernel branch to benchmark"
-    )
-    benchmark_parser.add_argument(
-        "--version", type=int, help="Kernel version to benchmark"
-    )
+    benchmark_parser.add_argument("--branch", type=str, help="Kernel branch to benchmark")
+    benchmark_parser.add_argument("--version", type=int, help="Kernel version to benchmark")
     benchmark_parser.add_argument(
         "--output",
         type=str,
@@ -211,14 +154,14 @@ def download_kernels(args):
         if args.all_variants:
             install_kernel_all_variants(
                 kernel_lock.repo_id,
-                kernel_lock.sha,
+                revision=kernel_lock.sha,
                 variant_locks=kernel_lock.variants,
             )
         else:
             try:
                 install_kernel(
                     kernel_lock.repo_id,
-                    kernel_lock.sha,
+                    revision=kernel_lock.sha,
                     variant_locks=kernel_lock.variants,
                 )
             except FileNotFoundError as e:
@@ -277,9 +220,7 @@ class _JSONEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-def check_kernel(
-    *, macos: str, manylinux: str, python_abi: str, repo_id: str, revision: str
-):
+def check_kernel(*, macos: str, manylinux: str, python_abi: str, repo_id: str, revision: str):
     try:
         from kernels.cli import check
     except ImportError:

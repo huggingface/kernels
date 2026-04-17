@@ -1564,7 +1564,7 @@ dependencies = [
 
 [[package]]
 name = "kernels-data-python"
-version = "0.13.0-dev0"
+version = "0.0.1"
 dependencies = [
  "kernels-data",
  "pyo3",

@@ -197,8 +197,8 @@ impl PyMetadata {
     }
 
     #[getter]
-    fn python_depends(&self) -> Vec<String> {
-        self.python_depends.clone()
+    fn python_depends(&self) -> &[String] {
+        &self.python_depends
     }
 
     #[getter]

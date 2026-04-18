@@ -53,6 +53,10 @@ impl Build {
         self.kernels.is_empty()
     }
 
+    pub fn branch(&self) -> Option<&str> {
+        self.general.hub.as_ref().and_then(|h| h.branch.as_deref())
+    }
+
     pub fn repo_id(&self) -> Option<&str> {
         self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
     }

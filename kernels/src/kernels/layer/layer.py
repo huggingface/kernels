@@ -16,7 +16,7 @@ from ..utils import (
     get_local_kernel,
 )
 from .device import Device
-from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
+from .globals import _CACHED_LAYER, _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
 from .repos import RepositoryProtocol, _select_repository
 
@@ -215,9 +215,6 @@ class LockedLayerRepository:
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
-
-
-_CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}
 
 
 def replace_kernel_forward_from_hub(
@@ -473,12 +470,13 @@ def _validate_layer_has_mode(
 
 
 def _get_layer_memoize(repo: RepositoryProtocol, module_class: Type["nn.Module"]) -> Type["nn.Module"]:
-    layer = _CACHED_LAYER.get(repo, None)
+    cache = _CACHED_LAYER.get()
+    layer = cache.get(repo, None)
     if layer is not None:
         return layer
 
     layer = repo.load()
     _validate_layer(check_cls=module_class, cls=layer, repo=repo)
-    _CACHED_LAYER[repo] = layer
+    cache[repo] = layer
 
     return layer

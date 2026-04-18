@@ -141,12 +141,15 @@ class Device:
     """
 
     type: str
-    properties: CUDAProperties | None = None
+    properties: CUDAProperties | ROCMProperties | None = None
 
     def __post_init__(self):
         if self.properties is not None and isinstance(self.properties, CUDAProperties):
             if self.type != "cuda":
                 raise ValueError("CUDAProperties is only supported for 'cuda' devices.")
+        if self.properties is not None and isinstance(self.properties, ROCMProperties):
+            if self.type != "rocm":
+                raise ValueError("ROCMProperties is only supported for 'rocm' devices.")
 
     def __eq__(self, other):
         if not isinstance(other, Device):

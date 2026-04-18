@@ -10,7 +10,8 @@ on:
 jobs:
   build:
     name: Nix checks
-    runs-on: aws-highmemory-32-plus-nix
+    runs-on:
+      group: aws-highmemory-32-plus-nix
     steps:
       - uses: actions/checkout@v6
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25

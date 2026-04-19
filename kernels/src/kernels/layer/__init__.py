@@ -1,4 +1,4 @@
-from .device import CUDAProperties, Device
+from .device import CUDAProperties, Device, ROCMProperties
 from .func import (
     FuncRepository,
     LocalFuncRepository,
@@ -29,6 +29,7 @@ __all__ = [
     "LockedFuncRepository",
     "LockedLayerRepository",
     "Mode",
+    "ROCMProperties",
     "kernelize",
     "register_kernel_mapping",
     "replace_kernel_forward_from_hub",

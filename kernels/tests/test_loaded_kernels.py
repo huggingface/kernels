@@ -4,7 +4,7 @@ from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_ke
 from kernels.utils import LoadedKernel, RepoInfos, _loaded_kernels
 
 _REPO_ID = "kernels-community/relu"
-_PACKAGE_NAME = "versions"
+_PACKAGE_NAME = "relu"
 _VERSION = 1
 
 

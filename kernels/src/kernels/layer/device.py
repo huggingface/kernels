@@ -108,17 +108,17 @@ class Device:
     Represents a compute device with optional properties.
 
     This class encapsulates device information including device type and optional device-specific properties
-    like CUDA capabilities.
+    like CUDA or ROCM capabilities.
 
     Args:
         type (`str`):
             The device type (e.g., "cuda", "mps", "npu", "rocm", "xpu").
-        properties ([`CUDAProperties`], *optional*):
-            Device-specific properties. Currently only [`CUDAProperties`] is supported for CUDA devices.
+        properties ([`CUDAProperties`] or [`ROCMProperties`], *optional*):
+            Device-specific properties. Use [`CUDAProperties`] for CUDA devices and [`ROCMProperties`] for ROCM devices.
 
     Example:
-        ```python
-        from kernels import Device, CUDAProperties
+```python
+        from kernels import Device, CUDAProperties, ROCMProperties
 
         # Basic CUDA device
         cuda_device = Device(type="cuda")
@@ -129,6 +129,12 @@ class Device:
             properties=CUDAProperties(min_capability=75, max_capability=90)
         )
 
+        # ROCM device with specific capability requirements (e.g., MI300X)
+        rocm_device_with_props = Device(
+            type="rocm",
+            properties=ROCMProperties(min_capability=94, max_capability=94)
+        )
+
         # MPS device for Apple Silicon
         mps_device = Device(type="mps")
 
@@ -137,16 +143,19 @@ class Device:
 
         # NPU device (Huawei Ascend)
         npu_device = Device(type="npu")
-        ```
+```
     """
 
     type: str
-    properties: CUDAProperties | None = None
+    properties: CUDAProperties | ROCMProperties | None = None
 
     def __post_init__(self):
         if self.properties is not None and isinstance(self.properties, CUDAProperties):
             if self.type != "cuda":
                 raise ValueError("CUDAProperties is only supported for 'cuda' devices.")
+        if self.properties is not None and isinstance(self.properties, ROCMProperties):
+            if self.type != "rocm":
+                raise ValueError("ROCMProperties is only supported for 'rocm' devices.")
 
     def __eq__(self, other):
         if not isinstance(other, Device):

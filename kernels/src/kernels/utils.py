@@ -52,7 +52,37 @@ _loaded_kernels: dict[Path, LoadedKernel] = {}
 
 
 def get_loaded_kernels() -> list[LoadedKernel]:
-    """Returns a copy of the loaded kernels registry (see `kernels.utils.LoadedKernel` NamedTuple)."""
+    """
+    Return a snapshot of every kernel that has been loaded into the current process.
+
+    Each entry is a `kernels.utils.LoadedKernel` namedtuple with fields:
+
+    - `module` (`ModuleType`): the imported kernel module.
+    - `package_name` (`str`): the kernel's package name.
+    - `repo_infos` (`kernels.utils.RepoInfos | None`): populated only for
+      kernels loaded via `get_kernel`. Loaders that work from a local path
+      (`get_local_kernel`) or a lockfile (`get_locked_kernel`, `load_kernel`)
+      leave this as `None`.
+
+    `RepoInfos` has `repo_id`, `revision`, and `backend` fields. `backend`
+    reflects the value passed by the caller — it is `None` when the caller
+    relied on backend auto-detection.
+
+    The returned list is a new list; mutating it does not affect the registry.
+
+    Returns:
+        `list[LoadedKernel]`: one entry per distinct kernel variant path
+        loaded in this process.
+
+    Example:
+        ```python
+        from kernels import get_kernel, get_loaded_kernels
+
+        get_kernel("kernels-community/activation", version=1)
+        for loaded in get_loaded_kernels():
+            print(loaded.package_name, loaded.repo_infos)
+        ```
+    """
     return list(_loaded_kernels.values())
 
 

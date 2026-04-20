@@ -1,6 +1,6 @@
 [package]
 name = "kernels-data-python"
-version = "0.0.1"
+version = "0.14.0-dev0"
 edition = "2024"
 description = "Kernels data structures (Python bindings)"
 homepage = "https://github.com/huggingface/kernels"

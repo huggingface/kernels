@@ -30,7 +30,7 @@ endmacro()
 function (run_python OUT EXPR ERR_MSG)
   execute_process(
     COMMAND
-    "${Python_EXECUTABLE}" "-c" "${EXPR}"
+    "${Python3_EXECUTABLE}" "-c" "${EXPR}"
     OUTPUT_VARIABLE PYTHON_OUT
     RESULT_VARIABLE PYTHON_ERROR_CODE
     ERROR_VARIABLE PYTHON_STDERR
@@ -50,7 +50,7 @@ endfunction()
 function (run_python_script OUT SCRIPT_PATH ERR_MSG)
   execute_process(
     COMMAND
-    "${Python_EXECUTABLE}" "${SCRIPT_PATH}"
+    "${Python3_EXECUTABLE}" "${SCRIPT_PATH}"
     OUTPUT_VARIABLE PYTHON_OUT
     RESULT_VARIABLE PYTHON_ERROR_CODE
     ERROR_VARIABLE PYTHON_STDERR

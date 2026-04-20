@@ -2,9 +2,9 @@
 
 Code agents are a good fit to build custom kernels because the hard part is not just writing in Domain Specific Language (DSLs) like CUDA. You also need the right project layout, PyTorch bindings, architecture-specific choices, model-specific integration, and trustworthy benchmarks. 
 
-Kernels on Hugging Face are compatible with agents via skills and the `hf` cli. The `cuda-kernels` and `rocm-kernels` skills contain knowledge so an agent can generate and publish a complete kernel project, instead of isolated snippets.
+Kernels on Hugging Face are compatible with agents via skills and the `hf` CLI. The `cuda-kernels` and `rocm-kernels` skills contain knowledge so an agent can generate and publish a complete kernel project, instead of isolated snippets.
 
-This guide is for **authoring new kernels**. If you only want to **load an existing precompiled kernel**, use `get_kernel()` from the Hub instead.
+This guide is for **authoring new kernels**. If you only want to **load an existing precompiled kernel**, use `get_kernel()` instead.
 
 ## Before you start
 
@@ -18,10 +18,10 @@ The skill currently focuses on NVIDIA GPUs such as **H100**, **A100**, and **T4*
 Install the skill into your agent. If you need the latest version from `main`, use:
 
 ```shell
-pip install kernels
+cargo install --git https://github.com/huggingface/kernels hf-kernel-builder
 
-# Install your skills
-kernels skills add
+# Install your skills. Use --claude, --codex, or --opencode
+kernel-builder skills add --claude
 ```
 
 > [!NOTE]
@@ -91,6 +91,7 @@ This is the main configuration file for `kernel-builder`. It tells `kernel-build
 [general]
 name = "your_kernels"
 backends = ["cuda"]
+version = 1
 
 [torch]
 src = ["torch-ext/torch_binding.cpp"]
@@ -203,7 +204,8 @@ Or, you can manually create the repository and upload the artifacts:
 hf repo create your-org/your-kernel --type model
 
 # Upload the artifacts
-hf upload your-org/your-kernel ./build
+# Run inside the main kernel directory, where build/ is.
+kernel-builder upload
 ```
 
 After pushing to the Hub, users can load the kernel without compiling:
@@ -211,7 +213,7 @@ After pushing to the Hub, users can load the kernel without compiling:
 ```py
 from kernels import get_kernel
 
-kernel = get_kernel("your-org/your-kernel")
+kernel = get_kernel("your-org/your-kernel", version=1)
 ```
 
 Well done! You have now built a custom kernel and published it to the Hub.

@@ -184,7 +184,7 @@ The following sections enumerate all supported options for `build.toml`.
 
 - `name` (required): the name of the kernel. The Python code for a Torch
   extension must be stored in `torch-ext/<name>`.
-- `version` (int, **experimental**): the major version of the kernel.
+- `version` (int): the major version of the kernel.
   The version is written to the kernel's `metadata.json` and is used
   by the `kernels upload` command to upload the kernel to a version
   branch named `v<version>`.

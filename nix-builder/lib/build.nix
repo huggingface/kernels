@@ -180,7 +180,6 @@ rec {
       buildSets,
     }:
     let
-      # We just need to get any nixpkgs for use by the path join.
       extensions = mkDistTorchExtensions {
         inherit
           buildSets
@@ -205,6 +204,12 @@ rec {
     import ./join-paths {
       inherit pkgs contents;
       name = "torch-ext-bundle";
+      # Fill card iff we build any variants.
+      postInstall = lib.optionalString (buildSets != [ ]) ''
+        if [ -f "${path}/CARD.md" ]; then
+          ${(builtins.head buildSets).pkgs.kernel-builder}/bin/kernel-builder fill-card ${path} $out/CARD.md
+        fi
+      '';
     };
 
   # Get a development shell with the extension in PYTHONPATH. Handy

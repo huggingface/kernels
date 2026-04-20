@@ -5,6 +5,9 @@ backends = [
     "rocm",
 ]
 
+[general.hub]
+repo-id = "kernels-test/relu-torch-bounds"
+
 [torch]
 minver = "2.10"
 maxver = "2.10"

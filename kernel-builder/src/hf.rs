@@ -1,8 +1,19 @@
 use eyre::{Context, Result};
+use huggingface_hub::{HFClientSync, HFRepositorySync, RepoType};
 
 /// Build a sync HF API client.
-pub fn api() -> Result<huggingface_hub::HfApiSync> {
-    huggingface_hub::HfApiSync::new().context("Cannot create Hugging Face API client")
+pub fn api() -> Result<huggingface_hub::HFClientSync> {
+    huggingface_hub::HFClientSync::new().context("Cannot create Hugging Face API client")
+}
+
+/// Get a repo handle.
+pub fn repo_handle(api: &HFClientSync, repo_type: RepoType, repo_id: &str) -> HFRepositorySync {
+    let parts: Vec<&str> = repo_id.splitn(2, '/').collect();
+    if parts.len() == 2 {
+        api.repo(repo_type, parts[0], parts[1])
+    } else {
+        api.repo(repo_type, "", repo_id)
+    }
 }
 
 /// Resolve the HF username of the currently logged-in user via `whoami`.

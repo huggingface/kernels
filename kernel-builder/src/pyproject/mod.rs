@@ -8,9 +8,11 @@ use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
 use minijinja::Environment;
 
-use crate::util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build};
+use crate::{
+    pyproject::ops_identifier::KernelIdentifier,
+    util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build},
+};
 
-mod card;
 pub(crate) mod common;
 pub mod deps;
 pub mod fileset;
@@ -19,25 +21,20 @@ mod ops_identifier;
 mod torch;
 mod tvm_ffi;
 
-pub use card::write_card;
 pub use fileset::FileSet;
 pub use kernels_data::metadata::parse_metadata;
 
-pub fn create_pyproject_file_set(
-    build: Build,
-    target_dir: impl AsRef<Path>,
-    ops_id: Option<String>,
-) -> Result<FileSet> {
+pub fn create_pyproject_file_set(build: Build, kernel_id: &KernelIdentifier) -> Result<FileSet> {
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
     let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
-        tvm_ffi::write_tvm_ffi_ext(&env, &build, target_dir, ops_id)?
+        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id)?
     } else if build.is_noarch() {
-        torch::write_torch_ext_noarch(&env, &build, target_dir, ops_id)?
+        torch::write_torch_ext_noarch(&env, &build, kernel_id)?
     } else {
-        torch::write_torch_ext(&env, &build, target_dir, ops_id)?
+        torch::write_torch_ext(&env, &build, kernel_id)?
     };
 
     Ok(file_set)
@@ -47,12 +44,13 @@ pub fn create_pyproject(
     kernel_dir: Option<PathBuf>,
     target_dir: Option<PathBuf>,
     force: bool,
-    ops_id: Option<String>,
+    unique_id: Option<String>,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = parse_build(&kernel_dir)?;
-    let file_set = create_pyproject_file_set(build, &target_dir, ops_id)?;
+    let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
+    let file_set = create_pyproject_file_set(build, &kernel_id)?;
     file_set.write(&target_dir, force)?;
 
     Ok(())
@@ -63,14 +61,14 @@ pub fn clean_pyproject(
     target_dir: Option<PathBuf>,
     dry_run: bool,
     force: bool,
-    ops_id: Option<String>,
+    unique_id: Option<String>,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-
     let build = parse_build(&kernel_dir)?;
-    let generated_files =
-        create_pyproject_file_set(build, target_dir.clone(), ops_id)?.into_names();
+    let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
+
+    let generated_files = create_pyproject_file_set(build, &kernel_id)?.into_names();
 
     if generated_files.is_empty() {
         eprintln!("No generated artifacts found to clean.");

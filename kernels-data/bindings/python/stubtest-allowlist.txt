@@ -1,0 +1,3 @@
+# The `.so` submodule `kernels_data.kernels_data` is a pyo3/maturin
+# implementation detail; end users import from the `kernels_data` package.
+kernels_data\.kernels_data

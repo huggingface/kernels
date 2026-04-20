@@ -6,39 +6,18 @@ The `kernels` CLI provides commands for managing compute kernels.
 
 | Command                                                 | Description                                              |
 | ------------------------------------------------------- | -------------------------------------------------------- |
-| [init](cli-init.md)                                     | Initialize a new kernel project from template            |
 | [upload](cli-upload.md)                                 | Upload kernels to the Hub                                |
 | [benchmark](cli-benchmark.md)                           | Run benchmark results for a kernel                       |
 | [check](cli-check.md)                                   | Check a kernel for compliance                            |
 | [versions](cli-versions.md)                             | Show kernel versions                                     |
-| [generate-readme](cli-generate-readme.md)               | Generate README snippets for a kernel's public functions |
 | [lock](cli-lock.md)                                     | Lock kernel revisions                                    |
 | [download](cli-download.md)                             | Download locked kernels                                  |
-| [create-and-upload-card](cli-create-and-upload-card.md) | Create and upload a model card for a kernel              |
 | [skills](cli-skills-add.md)                             | Add skills for AI coding assistants                      |
 
 ## Quick Start
 
-### Create a new kernel project
-
-```bash
-kernels init my-username/my-kernel
-cd my-kernel
-```
-
-### Build and test locally
-
-```bash
-cachix use huggingface
-nix run -L --max-jobs 1 --cores 8 .#build-and-copy
-uv run example.py
-```
-
-### Upload to the Hub
-
-```bash
-kernels upload ./build --repo-id my-username/my-kernel
-```
+For building and writing kernels, please refer [building kernels](./builder/build.md) and 
+[writing kernels](./builder/writing-kernels.md).
 
 ### Use kernels in your project
 

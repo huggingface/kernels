@@ -6,6 +6,7 @@ on:
       - main
       - doc-builder*
       - v*-release
+      - release-*
     tags:
       - v*
   workflow_dispatch:
@@ -17,5 +18,6 @@ jobs:
       commit_sha: ${{ github.sha }}
       package_path: kernels/kernels/
       package: kernels
+      version_tag_suffix: "kernels/src/"
     secrets:
       hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}

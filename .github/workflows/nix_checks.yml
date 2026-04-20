@@ -1,0 +1,38 @@
+name: "Nix checks"
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened] # trigger on PRs
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Nix checks
+    runs-on:
+      group: aws-highmemory-32-plus-nix
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
+        with:
+          extra-conf: |
+            max-jobs = 4
+            cores = 12
+            sandbox-fallback = false
+      - uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
+        with:
+          name: huggingface
+        env:
+          USER: runner
+      - name: Check formatting
+        run: nix fmt -- --ci
+      - name: Nix checks
+        run: nix build .\#checks.x86_64-linux.default
+      - name: Test kernel card generation
+        run: |
+          (
+            cd examples/kernels/silu-and-mul
+            nix build -L .
+            test -e result/CARD.md
+          )

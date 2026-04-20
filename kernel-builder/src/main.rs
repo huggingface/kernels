@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
+mod card;
+
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
@@ -33,8 +35,13 @@ use kernels_data::config::{v3, Build, BuildCompat};
 
 mod nix;
 
+mod skills;
+
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
+
+mod validate_builds;
+use validate_builds::check_builds;
 
 #[derive(Args, Debug)]
 struct NixArgs {
@@ -115,13 +122,25 @@ enum Commands {
         #[arg(long)]
         private: bool,
 
-        /// Repository type on Hugging Face Hub (`model` or `kernel`).
-        #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+        /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
+        #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
         repo_type: RepoTypeArg,
     },
 
     /// Upload kernel build artifacts to the Hugging Face Hub.
     Upload(UploadArgs),
+
+    /// Validate the build.toml file.
+    CheckConfig {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+    },
+
+    /// Validate kernel builds.
+    CheckBuilds {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+    },
 
     /// Generate CMake files for a kernel extension build.
     CreatePyproject {
@@ -140,7 +159,7 @@ enum Commands {
         /// This is an optional unique identifier that is suffixed to the
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
-        ops_id: Option<String>,
+        unique_id: Option<String>,
     },
 
     /// Spawn a kernel development shell.
@@ -154,6 +173,18 @@ enum Commands {
 
         #[command(flatten)]
         nix_args: NixArgs,
+    },
+
+    /// Render the CARD.md template for a kernel.
+    #[command(hide = true)]
+    FillCard {
+        /// Kernel source directory (current directory when not specified).
+        #[arg(value_name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+
+        /// File to write the rendered card to (defaults to stdout).
+        #[arg(value_name = "OUTPUT")]
+        output: Option<PathBuf>,
     },
 
     /// List build variants.
@@ -185,11 +216,15 @@ enum Commands {
         kernel_dir: Option<PathBuf>,
     },
 
-    /// Validate the build.toml file.
-    Validate {
-        #[arg(name = "KERNEL_DIR")]
-        kernel_dir: Option<PathBuf>,
+    /// Install skills for AI coding assistants (Claude, Codex, OpenCode).
+    Skills {
+        #[command(subcommand)]
+        command: SkillsCommands,
     },
+
+    /// Generate Markdown documentation for the CLI.
+    #[command(hide = true)]
+    GenerateDocs,
 
     /// Clean generated artifacts.
     CleanPyproject {
@@ -212,6 +247,40 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         ops_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SkillsCommands {
+    /// Install a kernels skill for an AI assistant.
+    Add {
+        /// Skill to install.
+        #[arg(long, value_enum, default_value_t = skills::SkillId::CudaKernels)]
+        skill: skills::SkillId,
+
+        /// Install for Claude.
+        #[arg(long)]
+        claude: bool,
+
+        /// Install for Codex.
+        #[arg(long)]
+        codex: bool,
+
+        /// Install for OpenCode.
+        #[arg(long)]
+        opencode: bool,
+
+        /// Install globally (user-level) instead of in the current project directory.
+        #[arg(short, long)]
+        global: bool,
+
+        /// Install into a custom destination (path to skills directory).
+        #[arg(long)]
+        dest: Option<PathBuf>,
+
+        /// Overwrite existing skills in the destination.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -273,8 +342,8 @@ fn main() -> Result<()> {
             kernel_dir,
             force,
             target_dir,
-            ops_id,
-        } => create_pyproject(kernel_dir, target_dir, force, ops_id),
+            unique_id,
+        } => create_pyproject(kernel_dir, target_dir, force, unique_id),
         Commands::Devshell {
             kernel_dir,
             variant,
@@ -299,10 +368,31 @@ fn main() -> Result<()> {
             variant,
         ),
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
-        Commands::Validate { kernel_dir } => {
-            validate(kernel_dir)?;
+        Commands::CheckConfig { kernel_dir } => {
+            check_config(kernel_dir)?;
             Ok(())
         }
+        Commands::CheckBuilds { kernel_dir } => {
+            check_builds(kernel_dir)?;
+            Ok(())
+        }
+        Commands::GenerateDocs => {
+            let markdown = clap_markdown::help_markdown::<Cli>();
+            print!("{}", markdown);
+            Ok(())
+        }
+        Commands::Skills { command } => match command {
+            SkillsCommands::Add {
+                skill,
+                claude,
+                codex,
+                opencode,
+                global,
+                dest,
+                force,
+            } => skills::add_skill(skill, claude, codex, opencode, global, dest, force),
+        },
+        Commands::FillCard { kernel_dir, output } => card::fill_card(kernel_dir, output),
         Commands::CleanPyproject {
             kernel_dir,
             target_dir,
@@ -313,7 +403,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn validate(kernel_dir: Option<PathBuf>) -> Result<()> {
+fn check_config(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     parse_and_validate(kernel_dir)?;
     Ok(())

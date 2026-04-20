@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from huggingface_hub.dataclasses import strict
+from huggingface_hub.hf_api import RepoFile
 
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
@@ -25,18 +26,13 @@ class KernelLock:
 
     @classmethod
     def from_json(cls, o: dict):
-        variants = {
-            variant: VariantLock(**lock) for variant, lock in o["variants"].items()
-        }
+        variants = {variant: VariantLock(**lock) for variant, lock in o["variants"].items()}
         return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
 
 
-def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
+def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
     """
-    Get the locks for a kernel with the given version spec.
-
-    The version specifier can be any valid Python version specifier:
-    https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
+    Get the locks for a kernel with the given version.
     """
     from kernels.utils import _get_hf_api
 
@@ -49,21 +45,29 @@ def get_kernel_locks(repo_id: str, version_spec: int | str) -> KernelLock:
 
     tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
 
+    revision = tag_for_newest.target_commit
+
     r = api.repo_info(
-        repo_id=repo_id, revision=tag_for_newest.target_commit, files_metadata=True
+        repo_id=repo_id,
+        repo_type="kernel",
+        revision=revision,
     )
     if r.sha is None:
-        raise ValueError(
-            f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}"
-        )
+        raise ValueError(f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}")
 
-    if r.siblings is None:
-        raise ValueError(
-            f"Cannot get sibling information for {repo_id} for tag {tag_for_newest.name}"
+    siblings = [
+        f
+        for f in api.list_repo_tree(
+            repo_id=repo_id,
+            repo_type="kernel",
+            revision=revision,
+            recursive=True,
         )
+        if isinstance(f, RepoFile)
+    ]
 
     variant_files: dict[str, list[tuple[bytes, str]]] = {}
-    for sibling in r.siblings:
+    for sibling in siblings:
         if sibling.rfilename.startswith("build/torch"):
             if sibling.blob_id is None:
                 raise ValueError(f"Cannot get blob ID for {sibling.rfilename}")

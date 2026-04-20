@@ -56,7 +56,18 @@ in
       oneapi-torch-dev
       onednn-xpu
     ]
-    ++ lib.optionals rocmSupport [ clr ];
+    ++ lib.optionals rocmSupport (
+      [
+        clr
+      ]
+      ++ (with rocmPackages; [
+        hipcub-devel
+        hipsparselt
+        rocprim-devel
+        rocthrust-devel
+        rocwmma-devel
+      ])
+    );
 
   mkTvmFfiExtension = callPackage ./tvm-ffi/arch.nix {
     inherit

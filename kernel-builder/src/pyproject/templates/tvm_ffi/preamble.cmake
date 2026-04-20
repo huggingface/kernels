@@ -53,8 +53,7 @@ else()
   find_package(Python REQUIRED COMPONENTS Development Development.SABIModule Interpreter)
 endif()
 
-set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
-set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")
+set(OPS_NAME "_{{kernel_name}}_${BACKEND}_{{ kernel_unique_id }}")
 
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 
@@ -136,8 +135,8 @@ elseif(GPU_LANG STREQUAL "SYCL")
     message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
   endif()
 
-  set(sycl_link_flags "-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
-  set(sycl_flags "-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
+  set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
   set(GPU_FLAGS "${sycl_flags}")
   set(GPU_ARCHES "")
 

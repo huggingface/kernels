@@ -8,6 +8,10 @@ let
   version =
     (builtins.fromTOML (builtins.readFile ../../../../kernel-abi-check/kernel-abi-check/Cargo.toml))
     .package.version;
+  cargoFlags = [
+    "-m"
+    "kernel-abi-check/bindings/python/Cargo.toml"
+  ];
 in
 buildPythonPackage {
   pname = "kernel-abi-check";
@@ -26,16 +30,20 @@ buildPythonPackage {
         || file.hasExt "rs"
         || file.name == "stable_abi.toml";
     in
-    lib.fileset.toSource {
-      root = ../../../../kernel-abi-check;
-      fileset = lib.fileset.fileFilter sourceFiles ../../../../kernel-abi-check;
+    import ../../crate-dirs.nix {
+      inherit lib sourceFiles;
     };
 
   cargoDeps = rustPlatform.importCargoLock {
-    lockFile = ../../../../kernel-abi-check/bindings/python/Cargo.lock;
+    lockFile = ../../../../Cargo.lock;
+    outputHashes = {
+      "huggingface-hub-0.0.1" = "sha256-By8b1NUPWu+XF3Om1NcEO+o2qdZUco+FxvrJGNRqxWs=";
+    };
   };
 
-  sourceRoot = "source/bindings/python";
+  maturinBuildFlags = cargoFlags;
+
+  #sourceRoot = "source/bindings/python";
 
   build-system = [
     rustPlatform.cargoSetupHook

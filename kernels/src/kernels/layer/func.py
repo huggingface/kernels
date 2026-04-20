@@ -35,9 +35,8 @@ class FuncRepository:
             The name of the function within the kernel repository.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`int|str`, *optional*):
-            The kernel version to download as an integer. The `str` variant is deprecated and will be
-            removed in a future release. Cannot be used together with `revision`.
+        version (`int`, *optional*):
+            The kernel version to download. Cannot be used together with `revision`.
 
     Example:
         ```python
@@ -64,12 +63,10 @@ class FuncRepository:
         *,
         func_name: str,
         revision: str | None = None,
-        version: int | str | None = None,
+        version: int | None = None,
     ):
         if revision is not None and version is not None:
-            raise ValueError(
-                "Either a revision or a version must be specified, not both."
-            )
+            raise ValueError("Either a revision or a version must be specified, not both.")
 
         self._repo_id = repo_id
         self.func_name = func_name
@@ -279,9 +276,7 @@ class LockedFuncRepository:
         return f"`{self._repo_id}` (revision: {self._revision}), function `{self.func_name}`"
 
 
-def _get_kernel_func(
-    repo: FuncRepositoryProtocol, kernel: ModuleType
-) -> Type["nn.Module"]:
+def _get_kernel_func(repo: FuncRepositoryProtocol, kernel: ModuleType) -> Type["nn.Module"]:
     func = getattr(kernel, repo.func_name, None)
     if func is None:
         raise ValueError(f"Function `{repo.func_name}` not found in `{repo}`")

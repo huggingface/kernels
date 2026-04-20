@@ -10,11 +10,14 @@ use crate::config::Backend;
 pub struct BackendInfo {
     #[serde(rename = "type")]
     pub backend_type: Backend,
+    pub archs: Option<Vec<String>>,
 }
 
+/// Kernel metadata.
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub struct Metadata {
+    pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]

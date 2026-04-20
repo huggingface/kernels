@@ -5,6 +5,9 @@ backends = [
     "xpu",
 ]
 
+[general.hub]
+repo-id = "kernels-test/cutlass-gemm"
+
 [torch]
 src = [
     "torch-ext/torch_binding.cpp",
@@ -26,4 +29,3 @@ depends = [
     "sycl_tla",
 ]
 src = ["gemm_sycl.cpp"]
-

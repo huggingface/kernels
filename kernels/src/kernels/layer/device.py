@@ -46,10 +46,7 @@ class CUDAProperties:
     def __eq__(self, other):
         if not isinstance(other, CUDAProperties):
             return NotImplemented
-        return (
-            self.min_capability == other.min_capability
-            and self.max_capability == other.max_capability
-        )
+        return self.min_capability == other.min_capability and self.max_capability == other.max_capability
 
     def __hash__(self):
         return hash((self.min_capability, self.max_capability))
@@ -98,10 +95,7 @@ class ROCMProperties:
     def __eq__(self, other):
         if not isinstance(other, ROCMProperties):
             return NotImplemented
-        return (
-            self.min_capability == other.min_capability
-            and self.max_capability == other.max_capability
-        )
+        return self.min_capability == other.min_capability and self.max_capability == other.max_capability
 
     def __hash__(self):
         return hash((self.min_capability, self.max_capability))

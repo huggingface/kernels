@@ -5,10 +5,10 @@ import importlib
 import importlib.metadata
 import inspect
 import json
-import logging
 import os
 import platform
 import sys
+from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
@@ -33,15 +33,31 @@ from kernels.variants import (
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
 
+@dataclass(frozen=True)
+class RepoInfos:
+    repo_id: str
+    revision: str
+    backend: str | None
+
+
+@dataclass(frozen=True)
+class LoadedKernel:
+    kernel_id: str
+    module: ModuleType
+    module_name: str
+    repo_infos: RepoInfos | None
+
+
+_loaded_kernels: dict[Path, LoadedKernel] = {}
+
+
+def get_loaded_kernels() -> list[LoadedKernel]:
+    """Returns a copy of the loaded kernels registry (see `kernels.utils.LoadedKernel` NamedTuple)."""
+    return list(_loaded_kernels.values())
+
+
 def _get_cache_dir() -> str | None:
     """Returns the kernels cache directory."""
-    cache_dir = os.environ.get("HF_KERNELS_CACHE", None)
-    if cache_dir is not None:
-        logging.warning(
-            "HF_KERNELS_CACHE will be removed in the future, use KERNELS_CACHE instead"
-        )
-        return cache_dir
-
     return os.environ.get("KERNELS_CACHE", None)
 
 
@@ -71,7 +87,10 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 CACHE_DIR: str | None = _get_cache_dir()
 
 
-def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
+def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None) -> ModuleType:
+    if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
+        return loaded_kernel.module
+
     metadata = Metadata.load_from_variant(variant_path)
     validate_dependencies(module_name, metadata.python_depends, _backend())
 
@@ -83,21 +102,33 @@ def _import_from_path(module_name: str, variant_path: Path) -> ModuleType:
     # it would also be used for other imports. So, we make a module name that
     # depends on the path for it to be unique using the hex-encoded hash of
     # the path.
-    path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
-    module_name = f"{module_name}_{path_hash}"
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if metadata.id is None:
+        path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
+        kernel_id = f"{module_name}_{path_hash}"
+    else:
+        kernel_id = metadata.id
+
+    spec = importlib.util.spec_from_file_location(kernel_id, file_path)
     if spec is None:
         raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
-    sys.modules[module_name] = module
+    sys.modules[kernel_id] = module
     spec.loader.exec_module(module)  # type: ignore
+
+    _loaded_kernels[variant_path] = LoadedKernel(
+        kernel_id=kernel_id,
+        module=module,
+        module_name=module_name,
+        repo_infos=_repo_infos,
+    )
     return module
 
 
 def install_kernel(
     repo_id: str,
+    *,
     revision: str,
     local_files_only: bool = False,
     backend: str | None = None,
@@ -143,10 +174,12 @@ def install_kernel(
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
+
     repo_path = Path(
         str(
             api.snapshot_download(
                 repo_id,
+                repo_type="kernel",
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
@@ -163,9 +196,7 @@ def install_kernel(
             variant_locks=variant_locks,
         )
     except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Cannot install kernel from repo {repo_id} (revision: {revision})"
-        )
+        raise FileNotFoundError(f"Cannot install kernel from repo {repo_id} (revision: {revision})")
 
 
 def _find_kernel_in_repo_path(
@@ -184,9 +215,7 @@ def _find_kernel_in_repo_path(
         variant_lock = variant_locks.get(variant_str)
         if variant_lock is None:
             raise ValueError(f"No lock found for build variant: {variant}")
-        validate_kernel(
-            repo_path=repo_path, variant=variant_str, hash=variant_lock.hash
-        )
+        validate_kernel(repo_path=repo_path, variant=variant_str, hash=variant_lock.hash)
 
     module_init_path = variant_path / "__init__.py"
     if not os.path.exists(module_init_path):
@@ -201,15 +230,18 @@ def _find_kernel_in_repo_path(
 
 def install_kernel_all_variants(
     repo_id: str,
+    *,
     revision: str,
     local_files_only: bool = False,
     variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     api = _get_hf_api()
+
     repo_path = Path(
         str(
             api.snapshot_download(
                 repo_id,
+                repo_type="kernel",
                 allow_patterns="build/*",
                 cache_dir=CACHE_DIR,
                 revision=revision,
@@ -226,9 +258,7 @@ def install_kernel_all_variants(
             if variant_lock is None:
                 raise ValueError(f"No lock found for build variant: {variant}")
 
-            validate_kernel(
-                repo_path=repo_path, variant=variant, hash=variant_lock.hash
-            )
+            validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
 
     return repo_path / "build"
 
@@ -236,7 +266,7 @@ def install_kernel_all_variants(
 def get_kernel(
     repo_id: str,
     revision: str | None = None,
-    version: int | str | None = None,
+    version: int | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
 ) -> ModuleType:
@@ -251,9 +281,8 @@ def get_kernel(
             The Hub repository containing the kernel.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`int|str`, *optional*):
-            The kernel version to download as an integer. The `str` variant is deprecated and will be
-            removed in a future release. Cannot be used together with `revision`.
+        version (`int`, *optional*):
+            The kernel version to download. Cannot be used together with `revision`.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -279,10 +308,18 @@ def get_kernel(
         return get_local_kernel(override, package_name_from_repo_id(repo_id))
 
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-    package_name, variant_path = install_kernel(
-        repo_id, revision=revision, backend=backend, user_agent=user_agent
+    repo_infos = RepoInfos(
+        repo_id=repo_id,
+        revision=revision,
+        backend=backend,
     )
-    return _import_from_path(package_name, variant_path)
+    package_name, variant_path = install_kernel(
+        repo_id,
+        revision=revision,
+        backend=backend,
+        user_agent=user_agent,
+    )
+    return _import_from_path(package_name, variant_path, _repo_infos=repo_infos)
 
 
 def get_local_kernel(
@@ -324,7 +361,7 @@ def get_local_kernel(
 def has_kernel(
     repo_id: str,
     revision: str | None = None,
-    version: int | str | None = None,
+    version: int | None = None,
     backend: str | None = None,
 ) -> bool:
     """
@@ -335,9 +372,8 @@ def has_kernel(
             The Hub repository containing the kernel.
         revision (`str`, *optional*, defaults to `"main"`):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
-        version (`int|str`, *optional*):
-            The kernel version to download as an integer. The `str` variant is deprecated and will be
-            removed in a future release. Cannot be used together with `revision`.
+        version (`int`, *optional*):
+            The kernel version to download. Cannot be used together with `revision`.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -358,6 +394,7 @@ def has_kernel(
     for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
         if api.file_exists(
             repo_id,
+            repo_type="kernel",
             revision=revision,
             filename=f"build/{variant.variant_str}/{init_file}",
         ):
@@ -416,6 +453,7 @@ def load_kernel(
         str(
             api.snapshot_download(
                 repo_id,
+                repo_type="kernel",
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=locked_sha,
@@ -456,9 +494,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
-    package_name, variant_path = install_kernel(
-        repo_id, locked_sha, local_files_only=local_files_only
-    )
+    package_name, variant_path = install_kernel(repo_id, revision=locked_sha, local_files_only=local_files_only)
 
     return _import_from_path(package_name, variant_path)
 
@@ -592,7 +628,9 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
         backend = _select_backend(None).variant_str
-        user_agent_str += f"; kernels/{__version__}; python/{python}; backend/{backend}; platform/{_platform()}; file_type/kernel"
+        user_agent_str += (
+            f"; kernels/{__version__}; python/{python}; backend/{backend}; platform/{_platform()}; file_type/kernel"
+        )
 
         if has_torch:
             import torch
@@ -608,6 +646,4 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
         if glibc is not None:
             user_agent_str += f"; glibc/{glibc}"
 
-    return HfApi(
-        library_name="kernels", library_version=__version__, user_agent=user_agent_str
-    )
+    return HfApi(library_name="kernels", library_version=__version__, user_agent=user_agent_str)

@@ -2,6 +2,9 @@
 name = "relu"
 backends = ["metal"]
 
+[general.hub]
+repo-id = "kernels-test/relu-metal-cpp"
+
 [torch]
 src = [
     "torch-ext/torch_binding.cpp",

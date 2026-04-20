@@ -17,9 +17,7 @@ has_cuda = (
     and torch.cuda.device_count() > 0
 )
 
-has_neuron = (
-    torch is not None and hasattr(torch, "neuron") and torch.neuron.device_count() > 0
-)
+has_neuron = torch is not None and hasattr(torch, "neuron") and torch.neuron.device_count() > 0
 
 has_rocm = (
     torch is not None
@@ -36,10 +34,7 @@ has_xpu = (
 
 has_npu = torch is not None and _get_torch_privateuse_backend_name() == "npu"
 
-has_jax = (
-    importlib.util.find_spec("jax") is not None
-    and importlib.util.find_spec("jax_tvm_ffi") is not None
-)
+has_jax = importlib.util.find_spec("jax") is not None and importlib.util.find_spec("jax_tvm_ffi") is not None
 
 
 def pytest_addoption(parser):

@@ -12,33 +12,32 @@
 
 let
   dpcppVersion = oneapi-torch-dev.version;
-  cutlassVersions = {
+  syclTlaVersions = {
     "2025.3" = {
-      version = "0.6-dev";
-      rev = "14055e78510b8776ba739755eb57e592fdceefdb";
-      hash = "sha256-5KVvFdEYFQhvIjeauoEUSyhBdbSh6UYEwgsd+X7jcHA=";
+      version = "0.8";
+      hash = "sha256-xXAxIDBesjDDOIa6/YsGznyW+5+NpaO1L96lBuqRzrk=";
     };
   };
-  cutlassVersion =
-    cutlassVersions.${lib.versions.majorMinor dpcppVersion}
+  syclTlaVersion =
+    syclTlaVersions.${lib.versions.majorMinor dpcppVersion}
     or (throw "Unsupported DPC++ version: ${dpcppVersion}");
 in
 
 stdenv.mkDerivation rec {
   pname = "sycl-tla";
-  inherit (cutlassVersion) version;
+  inherit (syclTlaVersion) version;
 
   src = fetchFromGitHub (
     {
       owner = "intel";
       repo = "sycl-tla";
-      inherit (cutlassVersion) hash;
+      inherit (syclTlaVersion) hash;
     }
     // (
-      if cutlassVersion ? rev then
-        { inherit (cutlassVersion) rev; }
+      if syclTlaVersion ? rev then
+        { inherit (syclTlaVersion) rev; }
       else
-        { tag = "v${cutlassVersion.version}"; }
+        { tag = "v${syclTlaVersion.version}"; }
     )
   );
 

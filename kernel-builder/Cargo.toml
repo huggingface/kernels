@@ -12,10 +12,11 @@ repository = "https://github.com/huggingface/kernels"
 base32 = "0.5"
 kernels-data = { path = "../kernels-data" }
 clap = { version = "4", features = ["derive"] }
+clap-markdown = "0.1.5"
 clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
-huggingface-hub = { git = "https://github.com/huggingface/huggingface_hub_rust.git", rev = "8cbc662035e04d4be8e829316272893e980f5926", package = "huggingface-hub", features = ["blocking", "xet"] }
+huggingface-hub = { git = "https://github.com/huggingface/huggingface_hub_rust.git", rev = "6084c0f911026b4fec2961742c611520d7eb3d27", package = "huggingface-hub", features = ["blocking", "xet"] }
 itertools = "0.13"
 minijinja = "2.5"
 minijinja-embed = "2.5"
@@ -28,6 +29,8 @@ serde-value = "0.7"
 thiserror = "1"
 toml = "0.8"
 url = { version = "2", features = ["serde"] }
+dirs = "6"
+reqwest = { version = "0.13", features = ["blocking"] }
 walkdir = "2"
 
 [build-dependencies]

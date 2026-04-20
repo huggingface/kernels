@@ -8,13 +8,12 @@ from kernels.variants import (
 
 def print_kernel_versions(repo_id: str):
     api = _get_hf_api()
-
-    versions = _get_available_versions(repo_id).items()
+    versions = _get_available_versions(repo_id)
     if not versions:
         print(f"Repository does not support kernel versions: {repo_id}")
         return
 
-    for version, ref in sorted(versions, key=lambda x: x[0]):
+    for version, ref in sorted(versions.items(), key=lambda x: x[0]):
         variants = get_variants(api, repo_id=repo_id, revision=ref.ref)
         resolved = resolve_variants(variants, None)
         best = resolved[0] if resolved else None

@@ -53,6 +53,10 @@ impl Build {
         self.kernels.is_empty()
     }
 
+    pub fn branch(&self) -> Option<&str> {
+        self.general.hub.as_ref().and_then(|h| h.branch.as_deref())
+    }
+
     pub fn repo_id(&self) -> Option<&str> {
         self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
     }
@@ -286,6 +290,7 @@ impl Kernel {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Backend {
+    Cann,
     Cpu,
     Cuda,
     Metal,
@@ -295,8 +300,9 @@ pub enum Backend {
 }
 
 impl Backend {
-    pub const fn all() -> [Backend; 6] {
+    pub const fn all() -> [Backend; 7] {
         [
+            Backend::Cann,
             Backend::Cpu,
             Backend::Cuda,
             Backend::Metal,
@@ -308,6 +314,7 @@ impl Backend {
 
     pub const fn as_str(&self) -> &'static str {
         match self {
+            Backend::Cann => "cann",
             Backend::Cpu => "cpu",
             Backend::Cuda => "cuda",
             Backend::Metal => "metal",
@@ -321,6 +328,7 @@ impl Backend {
 impl Display for Backend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Backend::Cann => write!(f, "cann"),
             Backend::Cpu => write!(f, "cpu"),
             Backend::Cuda => write!(f, "cuda"),
             Backend::Metal => write!(f, "metal"),
@@ -336,6 +344,7 @@ impl FromStr for Backend {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "cann" => Ok(Backend::Cann),
             "cpu" => Ok(Backend::Cpu),
             "cuda" => Ok(Backend::Cuda),
             "metal" => Ok(Backend::Metal),

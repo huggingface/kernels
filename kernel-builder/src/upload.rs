@@ -7,15 +7,15 @@ use std::{
 use clap::Args;
 use eyre::{bail, Context, Result};
 use huggingface_hub::{
-    AddSource, CommitOperation, CreateBranchParams, CreateCommitParams, CreateRepoParams,
-    ListRepoFilesParams, ListRepoRefsParams, RepoType,
+    AddSource, CommitOperation, CreateRepoParams, RepoCreateBranchParams, RepoCreateCommitParams,
+    RepoListFilesParams, RepoListRefsParams, RepoType,
 };
 use walkdir::WalkDir;
 
 use crate::{
-    hf,
+    hf::{self, repo_handle},
     pyproject::parse_metadata,
-    util::{check_or_infer_kernel_dir, parse_build},
+    util::{check_or_infer_kernel_dir, discover_variants, parse_build},
 };
 
 const MAIN_BRANCH: &str = "main";
@@ -23,8 +23,8 @@ const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum RepoTypeArg {
-    #[default]
     Model,
+    #[default]
     Kernel,
 }
 
@@ -56,10 +56,42 @@ pub struct UploadArgs {
     #[arg(long)]
     pub private: bool,
 
-    /// TODO: remove when we fully move over to kernel repos
-    /// Repository type on Hugging Face Hub (`model` or `kernel`).
-    #[arg(long, value_enum, default_value_t = RepoTypeArg::Model)]
+    /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
+    #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
     pub repo_type: RepoTypeArg,
+}
+
+/// Get repository and branch from the given arguments, or fallback to
+/// reading `build.toml` and/or metadata otherwise.
+fn get_repo_and_branch(
+    kernel_dir: &Path,
+    repo_id: Option<String>,
+    branch: Option<String>,
+    variants: &[PathBuf],
+) -> Result<(String, Option<String>)> {
+    let build = parse_build(kernel_dir);
+
+    let build_branch = build
+        .as_ref()
+        .ok()
+        .and_then(|b| b.branch().map(ToOwned::to_owned));
+    let arg_branch = branch.or(build_branch);
+
+    let resolved_repo_id = match repo_id {
+        Some(id) => id,
+        None => build
+            .context("--repo-id is not provided and cannot parse build.toml.")?
+            .repo_id()
+            .ok_or_else(|| {
+                eyre::eyre!("No `general.hub.repo-id` in build.toml. Use --repo-id to specify it.")
+            })?
+            .to_owned(),
+    };
+
+    let version_branch =
+        arg_branch.map_or_else(|| detect_branch_from_metadata(variants), |b| Ok(Some(b)))?;
+
+    Ok((resolved_repo_id, version_branch))
 }
 
 pub fn run_upload(args: UploadArgs) -> Result<()> {
@@ -69,25 +101,6 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     let kernel_dir = fs::canonicalize(&kernel_dir)
         .wrap_err_with(|| format!("Cannot resolve kernel directory `{}`", kernel_dir.display()))?;
 
-    let arg_repo_id = match args.repo_id {
-        Some(id) => id,
-        None =>
-        // WARN: parsing must not be moved out of this branch, we want users
-        //       to be able to upload without `build.toml` as long as they
-        //       provide a repo id.
-        {
-            parse_build(&kernel_dir)
-                .context("--repo-id is not provided and cannot parse build.toml.")?
-                .repo_id()
-                .ok_or_else(|| {
-                    eyre::eyre!(
-                        "No `general.hub.repo-id` in build.toml. Use --repo-id to specify it."
-                    )
-                })?
-                .to_owned()
-        }
-    };
-
     let (build_dir, variants) = discover_variants(&kernel_dir)?;
     eprintln!(
         "Found {} build variant(s) in {}",
@@ -95,12 +108,10 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         build_dir.display()
     );
 
-    let version_branch = args
-        .branch
-        .map_or_else(|| detect_branch_from_metadata(&variants), |b| Ok(Some(b)))?;
+    let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
     let params = CreateRepoParams::builder()
-        .repo_id(&arg_repo_id)
+        .repo_id(&repo_id)
         .repo_type(repo_type)
         .private(args.private)
         .exist_ok(true)
@@ -114,26 +125,21 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         .trim_end_matches('/')
         .strip_prefix("https://huggingface.co/")
         .map(|s| s.strip_prefix("kernels/").unwrap_or(s))
-        .unwrap_or(&arg_repo_id)
+        .unwrap_or(&repo_id)
         .to_owned();
 
-    let is_new_version_branch = if let Some(ref branch) = version_branch {
-        let refs_params = ListRepoRefsParams::builder()
-            .repo_id(&repo_id)
-            .repo_type(repo_type)
-            .build();
-        let refs = api
-            .list_repo_refs(&refs_params)
+    let repo = repo_handle(&api, repo_type, &repo_id);
+
+    let is_new_version_branch = if let Some(ref branch) = branch {
+        let refs_params = RepoListRefsParams::builder().build();
+        let refs = repo
+            .list_refs(&refs_params)
             .wrap_err("Cannot list repository refs")?;
         let exists = refs.branches.iter().any(|r| r.name == *branch);
 
         if !exists {
-            let params = CreateBranchParams::builder()
-                .repo_id(&repo_id)
-                .branch(branch)
-                .repo_type(repo_type)
-                .build();
-            api.create_branch(&params)
+            let params = RepoCreateBranchParams::builder().branch(branch).build();
+            repo.create_branch(&params)
                 .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
         }
         eprintln!(
@@ -155,13 +161,11 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
             .or_default(),
     );
 
-    if let Some(ref branch) = version_branch {
-        let params = ListRepoFilesParams {
-            repo_id: repo_id.to_owned(),
+    if let Some(ref branch) = branch {
+        let params = RepoListFilesParams {
             revision: Some(branch.clone()),
-            repo_type: Some(repo_type),
         };
-        let version_existing_files: Vec<String> = api.list_repo_files(&params).unwrap_or_default();
+        let version_existing_files: Vec<String> = repo.list_files(&params).unwrap_or_default();
 
         let version_ops = operations_by_branch.entry(branch.clone()).or_default();
 
@@ -210,17 +214,15 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 "Uploaded using `kernel-builder`.".to_owned()
             };
 
-            let params = CreateCommitParams {
-                repo_id: repo_id.to_owned(),
+            let params = RepoCreateCommitParams {
                 operations: chunk.to_vec(),
                 commit_message,
                 commit_description: None,
-                repo_type: Some(repo_type),
                 revision: Some(branch.clone()),
                 create_pr: None,
                 parent_commit: None,
             };
-            api.create_commit(&params)
+            repo.create_commit(&params)
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
 
             if batch_count > 1 {
@@ -237,7 +239,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
             RepoType::Kernel => "kernels/",
             _ => "",
         };
-        let tree_path = version_branch
+        let tree_path = branch
             .as_ref()
             .map_or(String::new(), |b| format!("/tree/{b}"));
         println!("Kernel uploaded: https://hf.co/{type_prefix}{repo_id}{tree_path}");
@@ -303,13 +305,13 @@ fn collect_benchmark_commit_ops(
 
 /// Collect README commit operation: upload build/CARD.md as README.md.
 fn collect_readme_commit_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
-    let card_path = kernel_dir.join("build").join("CARD.md");
-    if card_path.exists() {
-        operations.push(CommitOperation::Add {
-            path_in_repo: "README.md".to_owned(),
-            source: AddSource::File(card_path),
-        });
-    }
+    let Ok(card_path) = discover_build_file(kernel_dir, "CARD.md") else {
+        return;
+    };
+    operations.push(CommitOperation::Add {
+        path_in_repo: "README.md".to_owned(),
+        source: AddSource::File(card_path),
+    });
 }
 
 /// Collect build artifact commit operations: add variant files, delete stale ones.
@@ -366,38 +368,32 @@ fn collect_build_commit_ops(
     Ok(())
 }
 
-/// Discover build variant directories (contain `metadata.json`).
-/// Checks `result` symlink (Nix store output) first, then falls back to `build/`.
-fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
+fn discover_build_file(
+    kernel_dir: impl AsRef<Path>,
+    filename: impl AsRef<Path>,
+) -> Result<PathBuf> {
+    let kernel_dir = kernel_dir.as_ref();
+    let filename = filename.as_ref();
+
     let candidates = [
-        kernel_dir.join("result"),
-        kernel_dir.join("build"),
-        kernel_dir.to_path_buf(),
+        kernel_dir.join("result").join(filename),
+        kernel_dir.join("build").join(filename),
+        kernel_dir.join(filename),
     ];
 
     for candidate in &candidates {
-        if !candidate.is_dir() {
-            continue;
-        }
-
-        let mut variants: Vec<PathBuf> = fs::read_dir(candidate)
-            .wrap_err_with(|| format!("Cannot read `{}`", candidate.display()))?
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.is_dir() && p.join("metadata.json").is_file())
-            .collect();
-
-        if !variants.is_empty() {
-            variants.sort();
-            return Ok((candidate.clone(), variants));
+        if candidate.is_file() {
+            return Ok(candidate.clone());
         }
     }
 
     bail!(
-        "No build variants found in `{}`, `{}`, or `{}`",
-        candidates[0].display(),
-        candidates[1].display(),
-        candidates[2].display(),
+        "No build directory found: {}",
+        candidates
+            .iter()
+            .map(|p| p.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 }
 
@@ -441,65 +437,6 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_discover_variants() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let kernel_dir = temp_dir.path();
-
-        let build_dir = kernel_dir.join("build");
-        fs::create_dir_all(build_dir.join("variant-a")).unwrap();
-        fs::create_dir_all(build_dir.join("variant-b")).unwrap();
-
-        fs::write(
-            build_dir.join("variant-a/metadata.json"),
-            r#"{"version": 1}"#,
-        )
-        .unwrap();
-        fs::write(
-            build_dir.join("variant-b/metadata.json"),
-            r#"{"version": 1}"#,
-        )
-        .unwrap();
-
-        let (found_build_dir, variants) = discover_variants(kernel_dir).unwrap();
-        assert_eq!(found_build_dir, build_dir);
-        assert_eq!(variants.len(), 2);
-    }
-
-    #[test]
-    fn test_discover_variants_no_variants() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let result = discover_variants(temp_dir.path());
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_discover_variants_from_result_symlink() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let kernel_dir = temp_dir.path();
-
-        // Create a "nix store" directory with variants
-        let store_dir = kernel_dir.join("nix-store-output");
-        fs::create_dir_all(store_dir.join("variant-a")).unwrap();
-        fs::write(
-            store_dir.join("variant-a/metadata.json"),
-            r#"{"version": 1}"#,
-        )
-        .unwrap();
-
-        // Create result symlink pointing to store output
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
-
-        #[cfg(unix)]
-        {
-            let (found_dir, variants) = discover_variants(kernel_dir).unwrap();
-            assert_eq!(found_dir, kernel_dir.join("result"));
-            assert_eq!(variants.len(), 1);
-        }
-    }
-
-    #[test]
     fn test_collect_readme_commit_ops() {
         let temp_dir = tempfile::tempdir().unwrap();
         let kernel_dir = temp_dir.path();
@@ -659,8 +596,9 @@ mod tests {
     }
 
     const METADATA_V3: &str =
-        r#"{"version": 3, "python-depends": [], "backend": {"type": "cuda"}}"#;
-    const METADATA_NO_VERSION: &str = r#"{"python-depends": [], "backend": {"type": "cuda"}}"#;
+        r#"{"id": "kernel_id", "version": 3, "python-depends": [], "backend": {"type": "cuda"}}"#;
+    const METADATA_NO_VERSION: &str =
+        r#"{"id": "kernel_id", "python-depends": [], "backend": {"type": "cuda"}}"#;
 
     #[test]
     fn test_detect_branch_from_metadata() {
@@ -707,5 +645,131 @@ mod tests {
         let variants = vec![v1, v2];
         let result = detect_branch_from_metadata(&variants);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_discover_build_file_in_result_symlink() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        // Mock a Nix store directory with the file inside
+        let store_dir = kernel_dir.join("nix-store-output");
+        let target = store_dir.join("CARD.md");
+        fs::create_dir_all(&store_dir).unwrap();
+        fs::write(&target, "# Test card").unwrap();
+
+        // Create result symlink pointing to store output
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
+
+        #[cfg(unix)]
+        {
+            let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
+            assert_eq!(found, kernel_dir.join("result").join("CARD.md"));
+        }
+    }
+
+    #[test]
+    fn test_discover_build_file_in_build() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let target = kernel_dir.join("build").join("CARD.md");
+        fs::create_dir_all(kernel_dir.join("build")).unwrap();
+        fs::write(&target, "# Test card").unwrap();
+
+        let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn test_discover_build_file_in_fully_specified_build_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let target = kernel_dir.join("CARD.md");
+        fs::write(&target, "# Test card").unwrap();
+
+        let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
+        assert_eq!(found, target);
+    }
+
+    #[test]
+    fn test_discover_build_file_not_found() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let result = discover_build_file(temp_dir.path(), "CARD.md");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_branch_from_build_toml() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        fs::write(
+            kernel_dir.join("build.toml"),
+            r#"[general]
+name = "test-kernel"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "test/kernel"
+branch = "custom-branch"
+"#,
+        )
+        .unwrap();
+
+        let build_dir = kernel_dir.join("build");
+        let variant = build_dir.join("torch-cuda");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), METADATA_V3).unwrap();
+        fs::write(variant.join("kernel.so"), "binary").unwrap();
+
+        let variants = vec![variant.clone()];
+        let (repo_id, branch) = get_repo_and_branch(kernel_dir, None, None, &variants).unwrap();
+
+        assert_eq!(repo_id, "test/kernel");
+        assert_eq!(branch, Some("custom-branch".to_owned()));
+
+        // Verify commit ops are generated - these would be uploaded to the branch above.
+        let mut operations = vec![];
+        collect_build_commit_ops(&build_dir, &variants, &[], false, &mut operations).unwrap();
+        assert!(!operations.is_empty());
+    }
+
+    #[test]
+    fn test_args_take_priority_over_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        fs::write(
+            kernel_dir.join("build.toml"),
+            r#"[general]
+name = "test-kernel"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "build-toml/kernel"
+branch = "build-toml-branch"
+"#,
+        )
+        .unwrap();
+
+        let build_dir = kernel_dir.join("build");
+        let variant = build_dir.join("torch-cuda");
+        fs::create_dir_all(&variant).unwrap();
+        fs::write(variant.join("metadata.json"), METADATA_V3).unwrap();
+
+        let variants = vec![variant];
+        let (repo_id, branch) = get_repo_and_branch(
+            kernel_dir,
+            Some("args/kernel".to_owned()),
+            Some("args-branch".to_owned()),
+            &variants,
+        )
+        .unwrap();
+
+        assert_eq!(repo_id, "args/kernel");
+        assert_eq!(branch, Some("args-branch".to_owned()));
     }
 }

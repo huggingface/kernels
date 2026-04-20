@@ -183,8 +183,8 @@ function Find-KernelBuilder {
 
     # Search common locations
     $searchPaths = @(
-        (Join-Path $PSScriptRoot '..' '..' '..' 'kernel-builder' 'target' 'release' 'kernel-builder.exe'),
-        (Join-Path $PSScriptRoot '..' '..' '..' 'kernel-builder' 'target' 'debug' 'kernel-builder.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'target' 'release' 'kernel-builder.exe'),
+        (Join-Path $PSScriptRoot '..' '..' '..' 'target' 'debug' 'kernel-builder.exe'),
         'kernel-builder.exe',
         'kernel-builder'
     )
@@ -473,7 +473,7 @@ function Invoke-Backend {
 
     if ($Target) { $kwargs += $Target }
     if ($Options.Force) { $kwargs += '--force' }
-    if ($Options.OpsId) { $kwargs += '--ops-id', $Options.OpsId }
+    if ($Options.OpsId) { $kwargs += '--unique-id', $Options.OpsId }
 
     Invoke-KernelBuilder -KernelBuilderExe $KernelBuilderExe -Arguments $kwargs
 }
@@ -531,7 +531,7 @@ try {
         if ($TargetFolder) { $kwargs += $TargetFolder }
         if ($DryRun) { $kwargs += '--dry-run' }
         if ($Force) { $kwargs += '--force' }
-        if ($OpsId) { $kwargs += '--ops-id', $OpsId }
+        if ($OpsId) { $kwargs += '--unique-id', $OpsId }
 
         Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments $kwargs
         Write-Status "Clean completed!" -Type Success
@@ -566,7 +566,7 @@ try {
         $kwargs = @('create-pyproject', $SourceFolder)
         if ($TargetFolder) { $kwargs += (Resolve-Path $TargetFolder) }
         if ($Force) { $kwargs += '--force' }
-        if ($OpsId) { $kwargs += '--ops-id', $OpsId }
+        if ($OpsId) { $kwargs += '--unique-id', $OpsId }
 
         Invoke-KernelBuilder -KernelBuilderExe $kernelBuilderExe -Arguments $kwargs
     }

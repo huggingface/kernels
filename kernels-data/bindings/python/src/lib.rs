@@ -1,11 +1,13 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
-use kernels_data::metadata::{BackendInfo, Metadata, parse_metadata};
+use kernels_data::metadata::{BackendInfo, Metadata};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyOSError, PyValueError};
 use pyo3::prelude::*;
 
 /// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
@@ -188,6 +190,7 @@ impl PyBackendInfo {
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
 struct PyMetadata {
+    id: Option<String>,
     version: Option<usize>,
     license: Option<String>,
     upstream: Option<String>,
@@ -198,6 +201,7 @@ struct PyMetadata {
 impl From<Metadata> for PyMetadata {
     fn from(m: Metadata) -> Self {
         Self {
+            id: m.id,
             version: m.version,
             license: m.license,
             upstream: m.upstream.map(|u| u.to_string()),
@@ -213,10 +217,22 @@ impl PyMetadata {
     ///
     /// Raises `ValueError` on any I/O or parse error.
     #[staticmethod]
-    fn load(metadata_path: PathBuf) -> PyResult<Self> {
-        parse_metadata(&metadata_path)
+    fn read_from_file(metadata_path: PathBuf) -> PyResult<Self> {
+        let f = File::open(&metadata_path).map_err(|err| {
+            PyOSError::new_err(format!("Failed to open `{metadata_path:?}`: {err:#}"))
+        })?;
+        Metadata::from_reader(BufReader::new(f))
             .map(Into::into)
-            .map_err(|err| PyValueError::new_err(format!("{err:#}")))
+            .map_err(|err| {
+                PyValueError::new_err(format!(
+                    "Cannot parse metadata from `{metadata_path:?}`: {err:#}"
+                ))
+            })
+    }
+
+    #[getter]
+    fn id(&self) -> Option<&str> {
+        self.id.as_deref()
     }
 
     #[getter]
@@ -225,13 +241,13 @@ impl PyMetadata {
     }
 
     #[getter]
-    fn license(&self) -> Option<&String> {
-        self.license.as_ref()
+    fn license(&self) -> Option<&str> {
+        self.license.as_deref()
     }
 
     #[getter]
-    fn upstream(&self) -> Option<&String> {
-        self.upstream.as_ref()
+    fn upstream(&self) -> Option<&str> {
+        self.upstream.as_deref()
     }
 
     #[getter]

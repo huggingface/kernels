@@ -1092,8 +1092,8 @@ def test_kernel_modes_cross_fallback():
 def test_layer_versions(device):
     @use_kernel_forward_from_hub("Version")
     class Version(nn.Module):
-        def forward(self) -> str:
-            return "0.0.0"
+        def forward(self) -> int:
+            return 0
 
     version = Version()
 
@@ -1122,7 +1122,7 @@ def test_layer_versions(device):
         }
     ):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "1"
+        assert version() == 1
 
     with use_kernel_mapping(
         {
@@ -1136,7 +1136,7 @@ def test_layer_versions(device):
         }
     ):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "2"
+        assert version() == 2
 
     with use_kernel_mapping(
         {

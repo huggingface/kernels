@@ -5,6 +5,7 @@
 
   huggingface-hub,
   kernel-abi-check,
+  kernels-data,
   pyyaml,
   tomlkit,
   torch,
@@ -34,6 +35,7 @@ buildPythonPackage {
   dependencies = [
     huggingface-hub
     kernel-abi-check
+    kernels-data
     pyyaml
     tomlkit
     torch

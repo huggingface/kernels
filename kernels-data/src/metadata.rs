@@ -1,6 +1,6 @@
-use std::{fs, path::Path};
+use std::str::FromStr;
 
-use eyre::{Context, Result};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Backend;
@@ -29,9 +29,16 @@ pub struct Metadata {
     pub backend: BackendInfo,
 }
 
-pub fn parse_metadata(path: impl AsRef<Path>) -> Result<Metadata> {
-    let path = path.as_ref();
-    let data =
-        fs::read_to_string(path).wrap_err_with(|| format!("Cannot read `{}`", path.display()))?;
-    serde_json::from_str(&data).wrap_err_with(|| format!("Cannot parse `{}`", path.display()))
+impl Metadata {
+    pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self> {
+        Ok(serde_json::from_reader(reader)?)
+    }
+}
+
+impl FromStr for Metadata {
+    type Err = eyre::Report;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(serde_json::from_str(s)?)
+    }
 }

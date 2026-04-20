@@ -8,12 +8,14 @@ import json
 import os
 import platform
 import sys
+import warnings
 from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
 from huggingface_hub import HfApi, constants
+from kernels_data import Metadata
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
@@ -21,7 +23,6 @@ from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
-from kernels.metadata import Metadata
 from kernels.status import resolve_status
 from kernels.variants import (
     Variant,
@@ -91,8 +92,19 @@ def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInf
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
-    metadata = Metadata.load_from_variant(variant_path)
-    validate_dependencies(module_name, metadata.python_depends, _backend())
+    try:
+        metadata = Metadata.read_from_file(variant_path / "metadata.json")
+        validate_dependencies(module_name, metadata.python_depends, _backend())
+    except OSError:
+        warnings.warn(
+            f"Kernel loaded from `{variant_path}` does not have metadata,"
+            " metadata will be required in kernels >= 0.15\n"
+            "Run `nix flake update in your kernel directory and rebuild to generate metadata.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+        metadata = None
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
@@ -102,7 +114,14 @@ def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInf
     # it would also be used for other imports. So, we make a module name that
     # depends on the path for it to be unique using the hex-encoded hash of
     # the path.
-    if metadata.id is None:
+    if metadata is None or metadata.id is None:
+        warnings.warn(
+            f"Metadata for kernel loaded from `{variant_path}` does have an identifier,"
+            " identifiers will become required in kernels >= 0.15\n"
+            "Run `nix flake update in your kernel directory and rebuild to generate metadata.",
+            UserWarning,
+            stacklevel=2,
+        )
         path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
         kernel_id = f"{module_name}_{path_hash}"
     else:

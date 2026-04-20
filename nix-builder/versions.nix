@@ -1,15 +1,5 @@
 [
   {
-    torchVersion = "2.9";
-    cudaVersion = "12.9";
-    systems = [
-      "x86_64-linux"
-      "aarch64-linux"
-    ];
-    bundleBuild = true;
-  }
-
-  {
     torchVersion = "2.10";
     cudaVersion = "12.6";
     systems = [

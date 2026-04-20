@@ -152,9 +152,9 @@ def test_version_old():
 
 def test_version():
     kernel = get_kernel("kernels-test/versions", version=1)
-    assert kernel.version() == "1"
+    assert kernel.version() == 1
     kernel = get_kernel("kernels-test/versions", version=2)
-    assert kernel.version() == "2"
+    assert kernel.version() == 2
 
     with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
         kernel = get_kernel("kernels-test/versions", version=0)
@@ -163,13 +163,13 @@ def test_version():
 def test_version_outdated_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=1)
-    assert kernel.version() == "1"
+    assert kernel.version() == 1
     assert "You are using version 1 of 'kernels-test/versions', but version 2 is available." in caplog.text
 
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=2)
-    assert kernel.version() == "2"
+    assert kernel.version() == 2
     assert "but version" not in caplog.text
 
 
@@ -206,7 +206,7 @@ def test_noarch_kernel(device):
     supported_devices = ["cpu", "cuda", "xpu"]
     if device not in supported_devices:
         pytest.skip(f"Device is not one of: {','.join(supported_devices)}")
-    get_kernel("kernels-test/silu-and-mul-noarch")
+    get_kernel("kernels-test/silu-and-mul", version=1)
 
 
 def test_get_kernel_with_backend(device):

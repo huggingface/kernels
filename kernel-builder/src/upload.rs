@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    fs,
+    fs::{self, File},
+    io::BufReader,
     path::{Path, PathBuf},
 };
 
@@ -10,11 +11,11 @@ use huggingface_hub::{
     AddSource, CommitOperation, CreateRepoParams, RepoCreateBranchParams, RepoCreateCommitParams,
     RepoListFilesParams, RepoListRefsParams, RepoType,
 };
+use kernels_data::metadata::Metadata;
 use walkdir::WalkDir;
 
 use crate::{
     hf::{self, repo_handle},
-    pyproject::parse_metadata,
     util::{check_or_infer_kernel_dir, discover_variants, parse_build},
 };
 
@@ -402,7 +403,13 @@ fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
     let mut versions: HashSet<Option<usize>> = HashSet::new();
 
     for variant in variants {
-        let metadata = parse_metadata(variant.join("metadata.json"))?;
+        let metadata_path = variant.join("metadata.json");
+        let metadata = Metadata::from_reader(BufReader::new(File::open(&metadata_path).context(
+            format!(
+                "Cannot read metadata from: {}",
+                metadata_path.to_string_lossy()
+            ),
+        )?))?;
         versions.insert(metadata.version);
     }
 
@@ -437,6 +444,7 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
 mod tests {
     use super::*;
 
+    #[test]
     fn test_collect_readme_commit_ops() {
         let temp_dir = tempfile::tempdir().unwrap();
         let kernel_dir = temp_dir.path();

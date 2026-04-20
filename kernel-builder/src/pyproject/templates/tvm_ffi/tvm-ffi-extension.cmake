@@ -25,8 +25,10 @@ endif()
 install(TARGETS ${OPS_NAME} LIBRARY DESTINATION ${OPS_NAME} COMPONENT ${OPS_NAME})
 # Add kernels_install target for huggingface/kernels library layout
 add_kernels_install_target(${OPS_NAME} "{{ python_name }}" "${BUILD_VARIANT_NAME}"
-    DATA_EXTENSIONS "{{ data_extensions | join(';') }}")
+    DATA_EXTENSIONS "{{ data_extensions | join(';') }}"
+    GPU_ARCHS "${ALL_GPU_ARCHS}")
 
 # Add local_install target for local development with get_local_kernel()
 add_local_install_target(${OPS_NAME} "{{ python_name }}" "${BUILD_VARIANT_NAME}"
-    DATA_EXTENSIONS "{{ data_extensions | join(';') }}")
+    DATA_EXTENSIONS "{{ data_extensions | join(';') }}"
+    GPU_ARCHS "${ALL_GPU_ARCHS}")

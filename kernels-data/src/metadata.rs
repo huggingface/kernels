@@ -13,9 +13,11 @@ pub struct BackendInfo {
     pub archs: Option<Vec<String>>,
 }
 
+/// Kernel metadata.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Metadata {
+    pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]

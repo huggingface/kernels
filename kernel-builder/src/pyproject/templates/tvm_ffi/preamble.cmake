@@ -53,8 +53,7 @@ else()
   find_package(Python REQUIRED COMPONENTS Development Development.SABIModule Interpreter)
 endif()
 
-set(KERNEL_REVISION "{{ revision }}" CACHE STRING "Kernel revision, must be unique")
-set(OPS_NAME "_{{python_name}}_${BACKEND}_{{ revision }}")
+set(OPS_NAME "_{{kernel_name}}_${BACKEND}_{{ kernel_unique_id }}")
 
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 

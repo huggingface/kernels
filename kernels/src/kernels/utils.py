@@ -43,7 +43,9 @@ class RepoInfos:
 
 @dataclass(frozen=True)
 class LoadedKernel:
-    kernel_id: str
+    # NOTE:`metadata` will become mandatory in 0.15 and then this field
+    #      will become non-optional.
+    metadata: Metadata | None
     module: ModuleType
     module_name: str
     repo_infos: RepoInfos | None
@@ -88,7 +90,9 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 CACHE_DIR: str | None = _get_cache_dir()
 
 
-def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None) -> ModuleType:
+def _import_from_path(
+    module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None
+) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
@@ -137,7 +141,7 @@ def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInf
     spec.loader.exec_module(module)  # type: ignore
 
     _loaded_kernels[variant_path] = LoadedKernel(
-        kernel_id=kernel_id,
+        metadata=metadata,
         module=module,
         module_name=module_name,
         repo_infos=_repo_infos,
@@ -215,7 +219,9 @@ def install_kernel(
             variant_locks=variant_locks,
         )
     except FileNotFoundError:
-        raise FileNotFoundError(f"Cannot install kernel from repo {repo_id} (revision: {revision})")
+        raise FileNotFoundError(
+            f"Cannot install kernel from repo {repo_id} (revision: {revision})"
+        )
 
 
 def _find_kernel_in_repo_path(
@@ -234,7 +240,9 @@ def _find_kernel_in_repo_path(
         variant_lock = variant_locks.get(variant_str)
         if variant_lock is None:
             raise ValueError(f"No lock found for build variant: {variant}")
-        validate_kernel(repo_path=repo_path, variant=variant_str, hash=variant_lock.hash)
+        validate_kernel(
+            repo_path=repo_path, variant=variant_str, hash=variant_lock.hash
+        )
 
     module_init_path = variant_path / "__init__.py"
     if not os.path.exists(module_init_path):
@@ -277,7 +285,9 @@ def install_kernel_all_variants(
             if variant_lock is None:
                 raise ValueError(f"No lock found for build variant: {variant}")
 
-            validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
+            validate_kernel(
+                repo_path=repo_path, variant=variant, hash=variant_lock.hash
+            )
 
     return repo_path / "build"
 
@@ -513,7 +523,9 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
-    package_name, variant_path = install_kernel(repo_id, revision=locked_sha, local_files_only=local_files_only)
+    package_name, variant_path = install_kernel(
+        repo_id, revision=locked_sha, local_files_only=local_files_only
+    )
 
     return _import_from_path(package_name, variant_path)
 
@@ -647,9 +659,7 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
         backend = _select_backend(None).variant_str
-        user_agent_str += (
-            f"; kernels/{__version__}; python/{python}; backend/{backend}; platform/{_platform()}; file_type/kernel"
-        )
+        user_agent_str += f"; kernels/{__version__}; python/{python}; backend/{backend}; platform/{_platform()}; file_type/kernel"
 
         if has_torch:
             import torch
@@ -665,4 +675,6 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
         if glibc is not None:
             user_agent_str += f"; glibc/{glibc}"
 
-    return HfApi(library_name="kernels", library_version=__version__, user_agent=user_agent_str)
+    return HfApi(
+        library_name="kernels", library_version=__version__, user_agent=user_agent_str
+    )

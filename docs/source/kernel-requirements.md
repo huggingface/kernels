@@ -36,15 +36,51 @@ must be available for that combination.
 
 ## Kernel metadata
 
-The build variant directory can optionally contain a `metadata.json` file.
-Currently the metadata specifies the kernel's version and Python dependencies,
-for example:
+The build variant directory must contain a `metadata.json` file with kernel
+metadata. Currently the following top-level keys are supported:
+
+- `id` (`str`, required): a unique identifier for the kernel. This
+  identifier must also be a valid Python module name. If the kernel
+  registers Torch ops, they must be registered as `torch.ops.<id>`
+- `version` (`int`, required): the kernel version number.
+- `backend` (`dict`, required): information about the compute backend that
+  this build variant supports.
+- `python-depends` (`list[str]`, optional): list of Python dependencies
+  from a curated set of Python dependencies.
+
+Example `metadata.json`:
 
 ```json
 {
+  "id": "_mykernel_cuda_be238e4",
   "python-depends": ["einops"],
-  "version": 1
+  "version": 1,
+  "backend": {
+    "type": "cuda",
+    "archs": ["7.0", "7.2", "7.5", "8.0", "8.6", "8.7", "8.9", "9.0+PTX"]
+  }
+}
 ```
+
+The `metadata.json` file is generated automatically by `kernel-builder`.
+
+## Backend
+
+The `backend` specifies a dictionary of the following form:
+
+```json
+{
+  # ...
+  "backend": {
+    "type": "cuda",
+    "archs": ["7.0", "7.2", "7.5", "8.0", "8.6", "8.7", "8.9", "9.0+PTX"]
+  }
+}
+```
+
+The backend `type` must be one of `cann`, `cpu`, `cuda`, `metal`, `neuron`,
+`rocm`, or `xpu`. For CUDA and ROCm, the supported architectures must
+be specified in the `archs` field.
 
 ### Python dependencies
 

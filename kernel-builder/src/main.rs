@@ -40,6 +40,9 @@ mod skills;
 mod util;
 use util::{check_or_infer_kernel_dir, parse_and_validate};
 
+mod validate_builds;
+use validate_builds::check_builds;
+
 #[derive(Args, Debug)]
 struct NixArgs {
     /// Maximum number of parallel Nix build jobs.
@@ -127,6 +130,18 @@ enum Commands {
     /// Upload kernel build artifacts to the Hugging Face Hub.
     Upload(UploadArgs),
 
+    /// Validate the build.toml file.
+    CheckConfig {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+    },
+
+    /// Validate kernel builds.
+    CheckBuilds {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+    },
+
     /// Generate CMake files for a kernel extension build.
     CreatePyproject {
         #[arg(name = "KERNEL_DIR")]
@@ -144,7 +159,7 @@ enum Commands {
         /// This is an optional unique identifier that is suffixed to the
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
-        ops_id: Option<String>,
+        unique_id: Option<String>,
     },
 
     /// Spawn a kernel development shell.
@@ -197,12 +212,6 @@ enum Commands {
 
     /// Update a `build.toml` to the current format.
     UpdateBuild {
-        #[arg(name = "KERNEL_DIR")]
-        kernel_dir: Option<PathBuf>,
-    },
-
-    /// Validate the build.toml file.
-    Validate {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
     },
@@ -333,8 +342,8 @@ fn main() -> Result<()> {
             kernel_dir,
             force,
             target_dir,
-            ops_id,
-        } => create_pyproject(kernel_dir, target_dir, force, ops_id),
+            unique_id,
+        } => create_pyproject(kernel_dir, target_dir, force, unique_id),
         Commands::Devshell {
             kernel_dir,
             variant,
@@ -359,8 +368,12 @@ fn main() -> Result<()> {
             variant,
         ),
         Commands::UpdateBuild { kernel_dir } => update_build(kernel_dir),
-        Commands::Validate { kernel_dir } => {
-            validate(kernel_dir)?;
+        Commands::CheckConfig { kernel_dir } => {
+            check_config(kernel_dir)?;
+            Ok(())
+        }
+        Commands::CheckBuilds { kernel_dir } => {
+            check_builds(kernel_dir)?;
             Ok(())
         }
         Commands::GenerateDocs => {
@@ -390,7 +403,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn validate(kernel_dir: Option<PathBuf>) -> Result<()> {
+fn check_config(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     parse_and_validate(kernel_dir)?;
     Ok(())

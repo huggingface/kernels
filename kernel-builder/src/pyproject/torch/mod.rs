@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
@@ -7,9 +7,10 @@ use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::context;
 
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_cmake_file, write_compat_py, write_metadata,
+    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
+    write_metadata,
 };
-use crate::pyproject::ops_identifier::{git_identifier, random_identifier};
+use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
 
 use crate::pyproject::deps::render_deps;
@@ -25,7 +26,6 @@ static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static COMPILE_METAL_CMAKE: &str = include_str!("../templates/torch/metal/compile-metal.cmake");
 static GET_GPU_LANG: &str = include_str!("../templates/torch/get_gpu_lang.cmake");
 static GET_GPU_LANG_PY: &str = include_str!("../templates/torch/get_gpu_lang.py");
-static ADD_GPU_ARCH_METADATA_PY: &str = include_str!("../templates/torch/add_gpu_arch_metadata.py");
 static HIPIFY: &str = include_str!("../templates/torch/cuda/hipify.py");
 static METALLIB_TO_HEADER_PY: &str = include_str!("../templates/torch/metal/metallib_to_header.py");
 static REGISTRATION_H: &str = include_str!("../templates/torch/registration.h");
@@ -35,7 +35,7 @@ fn write_setup_py(
     env: &minijinja::Environment,
     general: &General,
     torch: &Torch,
-    revision: &str,
+    kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let writer = file_set.entry("setup.py");
@@ -49,7 +49,8 @@ fn write_setup_py(
         .render_captured_to(
             context! {
                 data_globs => data_globs,
-                revision => revision,
+                kernel_name => kernel_id.name(),
+                kernel_unique_id => kernel_id.unique_id(),
                 python_name => general.name.python_name(),
                 version => "0.1.0",
             },
@@ -145,11 +146,7 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
         "build-variants.cmake",
         BUILD_VARIANTS_UTILS.as_bytes(),
     );
-    write_cmake_file(
-        file_set,
-        "add_gpu_arch_metadata.py",
-        ADD_GPU_ARCH_METADATA_PY.as_bytes(),
-    );
+    write_add_build_metadata_py(file_set);
     write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(
         file_set,
@@ -192,7 +189,7 @@ fn render_preamble(
     env: &minijinja::Environment,
     general: &General,
     torch: &Torch,
-    revision: &str,
+    kernel_id: &KernelIdentifier,
     write: &mut impl Write,
 ) -> Result<()> {
     let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
@@ -202,9 +199,9 @@ fn render_preamble(
         .wrap_err("Cannot get CMake prelude template")?
         .render_captured_to(
             context! {
-                name => general.name.as_str(),
+                kernel_name => kernel_id.name(),
+                kernel_unique_id => kernel_id.unique_id(),
                 python_name => general.name.python_name(),
-                revision => revision,
                 cuda_minver => cuda_minver.map(|v| v.to_string()),
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
                 torch_minver => torch.minver.as_ref().map(|v| v.to_string()),
@@ -224,14 +221,14 @@ fn write_cmake(
     build: &Build,
     torch: &Torch,
     name: &str,
-    revision: &str,
+    kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
     write_cmake_helpers(file_set);
 
     let cmake_writer = file_set.entry("CMakeLists.txt");
 
-    render_preamble(env, &build.general, torch, revision, cmake_writer)?;
+    render_preamble(env, &build.general, torch, kernel_id, cmake_writer)?;
 
     render_deps(env, build, cmake_writer)?;
 
@@ -247,8 +244,7 @@ fn write_cmake(
 pub fn write_torch_ext(
     env: &minijinja::Environment,
     build: &Build,
-    target_dir: impl AsRef<Path>,
-    ops_id: Option<String>,
+    kernel_id: &KernelIdentifier,
 ) -> Result<FileSet> {
     let torch_ext = match build.framework.torch() {
         Some(torch_ext) => torch_ext,
@@ -257,19 +253,16 @@ pub fn write_torch_ext(
 
     let mut file_set = FileSet::default();
 
-    let revision = ops_id
-        .unwrap_or_else(|| git_identifier(&target_dir).unwrap_or_else(|_| random_identifier()));
-
     write_cmake(
         env,
         build,
         torch_ext,
         build.general.name.as_str(),
-        &revision,
+        kernel_id,
         &mut file_set,
     )?;
 
-    write_setup_py(env, &build.general, torch_ext, &revision, &mut file_set)?;
+    write_setup_py(env, &build.general, torch_ext, kernel_id, &mut file_set)?;
 
     write_compat_py(&mut file_set)?;
 
@@ -277,7 +270,7 @@ pub fn write_torch_ext(
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(&build.general, &mut file_set)?;
+    write_metadata(&build.general, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }

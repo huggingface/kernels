@@ -79,6 +79,8 @@ rustPlatform.buildRustPackage {
     installShellCompletion kernel-builder.{bash,fish,zsh}
   '';
 
+  setupHook = ./check-kernel-build-hook.sh;
+
   meta = {
     description = "Create cmake build infrastructure from build.toml files";
   };

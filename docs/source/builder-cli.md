@@ -11,12 +11,13 @@ This document contains the help content for the `kernel-builder` command-line pr
 * [`kernel-builder build-and-copy`↴](#kernel-builder-build-and-copy)
 * [`kernel-builder build-and-upload`↴](#kernel-builder-build-and-upload)
 * [`kernel-builder upload`↴](#kernel-builder-upload)
+* [`kernel-builder check-config`↴](#kernel-builder-check-config)
+* [`kernel-builder check-builds`↴](#kernel-builder-check-builds)
 * [`kernel-builder create-pyproject`↴](#kernel-builder-create-pyproject)
 * [`kernel-builder devshell`↴](#kernel-builder-devshell)
 * [`kernel-builder list-variants`↴](#kernel-builder-list-variants)
 * [`kernel-builder testshell`↴](#kernel-builder-testshell)
 * [`kernel-builder update-build`↴](#kernel-builder-update-build)
-* [`kernel-builder validate`↴](#kernel-builder-validate)
 * [`kernel-builder skills`↴](#kernel-builder-skills)
 * [`kernel-builder skills add`↴](#kernel-builder-skills-add)
 * [`kernel-builder clean-pyproject`↴](#kernel-builder-clean-pyproject)
@@ -35,12 +36,13 @@ Build Hugging Face Hub kernels
 * `build-and-copy` — Build the kernel and copy artifacts locally
 * `build-and-upload` — Build the kernel and upload to Hugging Face Hub
 * `upload` — Upload kernel build artifacts to the Hugging Face Hub
+* `check-config` — Validate the build.toml file
+* `check-builds` — Validate kernel builds
 * `create-pyproject` — Generate CMake files for a kernel extension build
 * `devshell` — Spawn a kernel development shell
 * `list-variants` — List build variants
 * `testshell` — Spawn a kernel test shell
 * `update-build` — Update a `build.toml` to the current format
-* `validate` — Validate the build.toml file
 * `skills` — Install skills for AI coding assistants (Claude, Codex, OpenCode)
 * `clean-pyproject` — Clean generated artifacts
 
@@ -169,6 +171,30 @@ Upload kernel build artifacts to the Hugging Face Hub
 
 
 
+## `kernel-builder check-config`
+
+Validate the build.toml file
+
+**Usage:** `kernel-builder check-config [KERNEL_DIR]`
+
+###### **Arguments:**
+
+* `<KERNEL_DIR>`
+
+
+
+## `kernel-builder check-builds`
+
+Validate kernel builds
+
+**Usage:** `kernel-builder check-builds [KERNEL_DIR]`
+
+###### **Arguments:**
+
+* `<KERNEL_DIR>`
+
+
+
 ## `kernel-builder create-pyproject`
 
 Generate CMake files for a kernel extension build
@@ -183,7 +209,7 @@ Generate CMake files for a kernel extension build
 ###### **Options:**
 
 * `-f`, `--force` — Force-overwrite existing files
-* `--ops-id <OPS_ID>` — This is an optional unique identifier that is suffixed to the kernel name to avoid name collisions. (e.g. Git SHA)
+* `--unique-id <UNIQUE_ID>` — This is an optional unique identifier that is suffixed to the kernel name to avoid name collisions. (e.g. Git SHA)
 
 
 
@@ -246,18 +272,6 @@ Spawn a kernel test shell
 Update a `build.toml` to the current format
 
 **Usage:** `kernel-builder update-build [KERNEL_DIR]`
-
-###### **Arguments:**
-
-* `<KERNEL_DIR>`
-
-
-
-## `kernel-builder validate`
-
-Validate the build.toml file
-
-**Usage:** `kernel-builder validate [KERNEL_DIR]`
 
 ###### **Arguments:**
 

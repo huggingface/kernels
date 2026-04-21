@@ -28,9 +28,16 @@ endmacro()
 # python, a fatal message `ERR_MSG` is issued.
 #
 function (run_python OUT EXPR ERR_MSG)
+  if(Python3_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+  elseif(Python_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python_EXECUTABLE}")
+  else()
+    message(FATAL_ERROR "No Python executable found. Set Python3_EXECUTABLE or Python_EXECUTABLE.")
+  endif()
   execute_process(
     COMMAND
-    "${Python_EXECUTABLE}" "-c" "${EXPR}"
+    "${_PYTHON_EXECUTABLE}" "-c" "${EXPR}"
     OUTPUT_VARIABLE PYTHON_OUT
     RESULT_VARIABLE PYTHON_ERROR_CODE
     ERROR_VARIABLE PYTHON_STDERR
@@ -48,9 +55,16 @@ endfunction()
 # non-zero code, a fatal message `ERR_MSG` is issued.
 #
 function (run_python_script OUT SCRIPT_PATH ERR_MSG)
+  if(Python3_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+  elseif(Python_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python_EXECUTABLE}")
+  else()
+    message(FATAL_ERROR "No Python executable found. Set Python3_EXECUTABLE or Python_EXECUTABLE.")
+  endif()
   execute_process(
     COMMAND
-    "${Python_EXECUTABLE}" "${SCRIPT_PATH}"
+    "${_PYTHON_EXECUTABLE}" "${SCRIPT_PATH}"
     OUTPUT_VARIABLE PYTHON_OUT
     RESULT_VARIABLE PYTHON_ERROR_CODE
     ERROR_VARIABLE PYTHON_STDERR
@@ -68,9 +82,16 @@ endfunction()
 # python, `SUCCESS` is set to FALSE. If successful, `SUCCESS` is set to TRUE.
 #
 function (try_run_python OUT SUCCESS EXPR)
+  if(Python3_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+  elseif(Python_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python_EXECUTABLE}")
+  else()
+    message(FATAL_ERROR "No Python executable found. Set Python3_EXECUTABLE or Python_EXECUTABLE.")
+  endif()
   execute_process(
     COMMAND
-    "${Python3_EXECUTABLE}" "-c" "${EXPR}"
+    "${_PYTHON_EXECUTABLE}" "-c" "${EXPR}"
     OUTPUT_VARIABLE PYTHON_OUT
     RESULT_VARIABLE PYTHON_ERROR_CODE
     ERROR_QUIET

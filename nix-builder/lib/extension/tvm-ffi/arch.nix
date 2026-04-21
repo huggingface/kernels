@@ -44,6 +44,9 @@
   # Whether to run get-kernel-check.
   doGetKernelCheck ? true,
 
+  # Whether to check the kernel after build.
+  doKernelBuildCheck ? true,
+
   kernelName,
 
   # Extra dependencies (such as CUTLASS).
@@ -106,6 +109,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   inherit
     doAbiCheck
+    doKernelBuildCheck
     moduleName
     nvccThreads
     src
@@ -116,7 +120,7 @@ stdenv.mkDerivation (prevAttrs: {
   # Generate build files.
   postPatch = ''
     kernel-builder create-pyproject \
-      --ops-id ${rev} .
+      --unique-id ${rev} .
   '';
 
   preConfigure =

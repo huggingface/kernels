@@ -1,38 +1,34 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
 use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::{context, Environment};
 
-use crate::pyproject::{
-    common::{write_compat_py, write_metadata},
-    fileset::FileSet,
-    ops_identifier::kernel_ops_identifier,
-};
+use crate::pyproject::common::write_compat_py;
+use crate::pyproject::common::write_metadata;
+use crate::pyproject::fileset::FileSet;
+use crate::pyproject::ops_identifier::KernelIdentifier;
 
 static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");
 
 pub fn write_torch_ext_noarch(
     env: &Environment,
     build: &Build,
-    target_dir: impl AsRef<Path>,
-    ops_id: Option<String>,
+    kernel_id: &KernelIdentifier,
 ) -> Result<FileSet> {
     let mut file_set = FileSet::default();
-
-    let ops_name = kernel_ops_identifier(&target_dir, &build.general.name.python_name(), ops_id);
 
     write_compat_py(&mut file_set)?;
     write_ops_py(
         env,
         &build.general.name.python_name(),
-        &ops_name,
+        kernel_id,
         &mut file_set,
     )?;
     write_pyproject_toml(env, build.framework.torch(), &build.general, &mut file_set)?;
     write_setup_py(&mut file_set)?;
-    write_metadata(&build.general, &mut file_set)?;
+    write_metadata(&build.general, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }
@@ -40,7 +36,7 @@ pub fn write_torch_ext_noarch(
 fn write_ops_py(
     env: &Environment,
     name: &str,
-    ops_name: &str,
+    kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let mut path = PathBuf::new();
@@ -53,7 +49,8 @@ fn write_ops_py(
         .wrap_err("Cannot get noarch _ops.py template")?
         .render_captured_to(
             context! {
-                ops_name => ops_name,
+                kernel_name => kernel_id.name(),
+                kernel_unique_id => kernel_id.unique_id(),
             },
             writer,
         )

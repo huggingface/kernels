@@ -23,6 +23,9 @@
   # Whether to run get-kernel-check.
   doGetKernelCheck ? true,
 
+  # Whether to check the kernel after build.
+  doKernelBuildCheck ? true,
+
   kernelName,
 
   # Revision to bake into the ops name.
@@ -60,13 +63,13 @@ in
 stdenv.mkDerivation (prevAttrs: {
   name = "${kernelName}-torch-ext";
 
-  inherit moduleName;
+  inherit doKernelBuildCheck moduleName;
 
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --ops-id ${rev} $out
+      --unique-id ${rev} $out
   '';
 
   framework = "torch";

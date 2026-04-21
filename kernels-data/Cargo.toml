@@ -1,6 +1,6 @@
 [package]
 name = "kernels-data"
-version = "0.1.0"
+version = "0.14.0-dev0"
 edition = "2024"
 description = "Kernels data structures"
 homepage = "https://github.com/huggingface/kernels"

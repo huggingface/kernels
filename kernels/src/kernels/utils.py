@@ -8,10 +8,10 @@ import json
 import os
 import platform
 import sys
+from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
-from typing import NamedTuple
 
 from huggingface_hub import HfApi, constants
 
@@ -33,15 +33,18 @@ from kernels.variants import (
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
 
-class RepoInfos(NamedTuple):
+@dataclass(frozen=True)
+class RepoInfos:
     repo_id: str
     revision: str
     backend: str | None
 
 
-class LoadedKernel(NamedTuple):
+@dataclass(frozen=True)
+class LoadedKernel:
+    kernel_id: str
     module: ModuleType
-    package_name: str
+    module_name: str
     repo_infos: RepoInfos | None
 
 
@@ -129,21 +132,25 @@ def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInf
     # it would also be used for other imports. So, we make a module name that
     # depends on the path for it to be unique using the hex-encoded hash of
     # the path.
-    package_name = module_name
-    path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
-    module_name = f"{module_name}_{path_hash}"
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if metadata.id is None:
+        path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
+        kernel_id = f"{module_name}_{path_hash}"
+    else:
+        kernel_id = metadata.id
+
+    spec = importlib.util.spec_from_file_location(kernel_id, file_path)
     if spec is None:
         raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
-    sys.modules[module_name] = module
+    sys.modules[kernel_id] = module
     spec.loader.exec_module(module)  # type: ignore
 
     _loaded_kernels[variant_path] = LoadedKernel(
+        kernel_id=kernel_id,
         module=module,
-        package_name=package_name,
+        module_name=module_name,
         repo_infos=_repo_infos,
     )
     return module

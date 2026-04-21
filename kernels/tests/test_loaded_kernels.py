@@ -3,9 +3,9 @@ import pytest
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
 from kernels.utils import LoadedKernel, RepoInfos, _loaded_kernels
 
-_REPO_ID = "kernels-community/relu"
-_PACKAGE_NAME = "relu"
-_VERSION = 1
+_REPO_ID = "kernels-test/versions"
+_PACKAGE_NAME = "versions"
+_VERSION = 2
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def test_namedtuple_shape():
 
 
 def test_get_loaded_kernels_returns_copy(fresh_registry):
-    kernel = get_kernel(_REPO_ID, version=_VERSION)
+    kernel = get_kernel(_REPO_ID, version=_VERSION, backend="cpu")
 
     snapshot = get_loaded_kernels()
     assert len(snapshot) == 1
@@ -38,7 +38,7 @@ def test_get_loaded_kernels_returns_copy(fresh_registry):
 
 
 def test_get_kernel_registers_loaded_kernel(fresh_registry):
-    kernel = get_kernel(_REPO_ID, version=_VERSION)
+    kernel = get_kernel(_REPO_ID, version=_VERSION, backend="cpu")
 
     loaded = get_loaded_kernels()
     assert len(loaded) == 1
@@ -53,22 +53,22 @@ def test_get_kernel_registers_loaded_kernel(fresh_registry):
 
 
 def test_repeated_get_kernel_is_cached(fresh_registry):
-    first = get_kernel(_REPO_ID, version=_VERSION)
-    second = get_kernel(_REPO_ID, version=_VERSION)
+    first = get_kernel(_REPO_ID, version=_VERSION, backend="cpu")
+    second = get_kernel(_REPO_ID, version=_VERSION, backend="cpu")
 
     assert first is second
     assert len(get_loaded_kernels()) == 1
 
 
 def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
-    # Populate the HF cache via get_kernel, grab the variant path,
+    # Populate the HF cache via get_kernel, grab the variant path it registered,
     # then clear the registry and exercise get_local_kernel against that path.
-    get_kernel(_REPO_ID, version=_VERSION)
+    get_kernel(_REPO_ID, version=_VERSION, backend="cpu")
     (variant_path,) = list(_loaded_kernels.keys())
 
     _loaded_kernels.clear()
 
-    kernel = get_local_kernel(variant_path, _PACKAGE_NAME)
+    kernel = get_local_kernel(variant_path, _PACKAGE_NAME, backend="cpu")
 
     loaded = get_loaded_kernels()
     assert len(loaded) == 1
@@ -82,10 +82,10 @@ def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
 def test_install_kernel_plus_import_does_not_set_repo_infos(fresh_registry):
     # install_kernel alone does not import; it returns a path. Any loader
     # that does not go through get_kernel must leave repo_infos as None.
-    package_name, variant_path = install_kernel(_REPO_ID, revision="main")
+    package_name, variant_path = install_kernel(_REPO_ID, revision="main", backend="cpu")
     assert package_name == _PACKAGE_NAME
     assert get_loaded_kernels() == []
 
-    get_local_kernel(variant_path, package_name)
+    get_local_kernel(variant_path, package_name, backend="cpu")
     (entry,) = get_loaded_kernels()
     assert entry.repo_infos is None

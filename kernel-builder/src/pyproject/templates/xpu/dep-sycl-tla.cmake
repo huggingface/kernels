@@ -3,15 +3,15 @@ if(GPU_LANG STREQUAL "SYCL")
 find_package(SyclTla)
 
 if(DPCPP_VERSION STREQUAL "2025.3")
-  set(SYCL_TLA_REVISION "v0.8" CACHE STRING "CUTLASS revision to use")
+  set(SYCL_TLA_REVISION "v0.8" CACHE STRING "sycl-tla revision to use")
 else()
   message(FATAL_ERROR "Unknown DPCPP_VERSION: ${DPCPP_VERSION}")
 endif()
 
 if (NOT SyclTla_FOUND)
   set(CUTLASS_ENABLE_HEADERS_ONLY ON CACHE BOOL "Enable only the header library")
-  set(CUTLASS_ENABLE_BENCHMARKS OFF CACHE BOOL "Disable CUTLASS Benchmarks")
-# Use the specified CUTLASS source directory for compilation if SYCL_TLA_SRC_DIR is provided
+  set(CUTLASS_ENABLE_BENCHMARKS OFF CACHE BOOL "Disable sycl-tla Benchmarks")
+# Use the specified sycl-tla source directory for compilation if SYCL_TLA_SRC_DIR is provided
   if (DEFINED ENV{SYCL_TLA_SRC_DIR})
     set(SYCL_TLA_SRC_DIR $ENV{SYCL_TLA_SRC_DIR})
   endif()
@@ -23,26 +23,26 @@ if (NOT SyclTla_FOUND)
     message(STATUS "The SYCL_TLA_SRC_DIR is set, using ${SYCL_TLA_SRC_DIR} for compilation")
     FetchContent_Declare(cutlass SOURCE_DIR ${SYCL_TLA_SRC_DIR})
   else()
-    # Speed up CUTLASS download by retrieving only the specified GIT_TAG instead of the history.
+    # Speed up sycl-tla download by retrieving only the specified GIT_TAG instead of the history.
     # Important: If GIT_SHALLOW is enabled then GIT_TAG works only with branch names and tags.
     # So if the GIT_TAG above is updated to a commit hash, GIT_SHALLOW must be set to FALSE
     if(SYCL_TLA_REVISION MATCHES "^v")
-      set(CUTLASS_GIT_SHALLOW TRUE)
+      set(SYCL_TLA_GIT_SHALLOW TRUE)
     else()
-      set(CUTLASS_GIT_SHALLOW FALSE)
+      set(SYCL_TLA_GIT_SHALLOW FALSE)
     endif()
     FetchContent_Declare(
         cutlass
         GIT_REPOSITORY https://github.com/intel/sycl-tla.git
         GIT_TAG ${SYCL_TLA_REVISION}
         GIT_PROGRESS TRUE
-        GIT_SHALLOW ${CUTLASS_GIT_SHALLOW}
+        GIT_SHALLOW ${SYCL_TLA_GIT_SHALLOW}
     )
   endif()
 
   # Set Intel backend env
   message(STATUS "Setting Intel GPU optimization env vars for sycl-tla")
-  set(CUTLASS_ENABLE_SYCL ON CACHE BOOL "Enable SYCL for CUTLASS")
+  set(CUTLASS_ENABLE_SYCL ON CACHE BOOL "Enable SYCL for sycl-tla")
   add_compile_definitions(CUTLASS_ENABLE_SYCL=1)
   set(DPCPP_SYCL_TARGET "intel_gpu_bmg_g21,intel_gpu_pvc" CACHE STRING "SYCL target for Intel GPU")
   add_compile_definitions(DPCPP_SYCL_TARGET=intel_gpu_bmg_g21,intel_gpu_pvc)

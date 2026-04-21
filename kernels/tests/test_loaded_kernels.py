@@ -5,9 +5,9 @@ import pytest
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
 from kernels.utils import LoadedKernel, RepoInfos, _loaded_kernels
 
-_REPO_ID = "kernels-test/versions"
-_PACKAGE_NAME = "versions"
-_VERSION = 2
+_REPO_ID = "kernels-community/relu"
+_PACKAGE_NAME = "relu"
+_VERSION = 1
 
 
 @pytest.fixture

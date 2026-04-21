@@ -148,6 +148,7 @@
               kernel-builder
               kernel-abi-check
               nodejs # For hf-doc-builder.
+              pinact
               pkg-config
               rust
             ];

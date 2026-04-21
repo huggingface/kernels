@@ -1,4 +1,4 @@
-.PHONY: style kernel-builder-cli-docs quality
+.PHONY: style kernel-builder-cli-docs quality pin-actions
 
 
 export check_dirs := kernels/src kernels/tests kernels-data/bindings/python
@@ -20,6 +20,9 @@ kernel-builder-cli-docs:
 	  | sed '/`--backends/,/^\*/{/^  Default value:/d;}' \
 	  > docs/source/builder-cli.md
 	@echo "Generated docs/source/builder-cli.md"
+
+pin-actions:
+	pinact run
 
 quality:
 	ruff format --check ${check_dirs}

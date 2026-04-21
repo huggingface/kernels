@@ -72,6 +72,9 @@ def get_loaded_kernels() -> list[LoadedKernel]:
 
     The returned list is a new list; mutating it does not affect the registry.
 
+    > [!NOTE]
+    > These arguments might be renamed / changed a bit.
+
     Returns:
         `list[LoadedKernel]`: one entry per distinct kernel variant path
         loaded in this process.

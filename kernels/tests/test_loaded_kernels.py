@@ -1,3 +1,5 @@
+from dataclasses import fields
+
 import pytest
 
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
@@ -18,9 +20,14 @@ def fresh_registry():
     _loaded_kernels.update(saved)
 
 
-def test_namedtuple_shape():
-    assert LoadedKernel._fields == ("module", "package_name", "repo_infos")
-    assert RepoInfos._fields == ("repo_id", "revision", "backend")
+def test_dataclass_shape():
+    assert tuple(f.name for f in fields(LoadedKernel)) == (
+        "kernel_id",
+        "module",
+        "module_name",
+        "repo_infos",
+    )
+    assert tuple(f.name for f in fields(RepoInfos)) == ("repo_id", "revision", "backend")
 
 
 def test_get_loaded_kernels_returns_copy(fresh_registry):
@@ -45,7 +52,7 @@ def test_get_kernel_registers_loaded_kernel(fresh_registry):
 
     entry = loaded[0]
     assert entry.module is kernel
-    assert entry.package_name == _PACKAGE_NAME
+    assert entry.module_name == _PACKAGE_NAME
     assert entry.repo_infos is not None
     assert entry.repo_infos.repo_id == _REPO_ID
     assert isinstance(entry.repo_infos.revision, str) and entry.repo_infos.revision
@@ -75,7 +82,7 @@ def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
 
     entry = loaded[0]
     assert entry.module is kernel
-    assert entry.package_name == _PACKAGE_NAME
+    assert entry.module_name == _PACKAGE_NAME
     assert entry.repo_infos is None
 
 

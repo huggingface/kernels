@@ -12,7 +12,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.9"
       - name: Install pypa/build
@@ -24,7 +24,7 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: ( cd kernels && python3 -m build )
       - name: Store the distribution packages
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
         with:
           name: python-package-distributions
           path: kernels/dist/
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Download all the dists
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
           name: python-package-distributions
           path: dist/
@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Download all the dists
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
           name: python-package-distributions
           path: dist/
@@ -109,7 +109,7 @@ jobs:
 
     steps:
       - name: Download all the dists
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
         with:
           name: python-package-distributions
           path: dist/

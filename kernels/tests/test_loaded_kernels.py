@@ -93,9 +93,7 @@ def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
 def test_install_kernel_plus_import_does_not_set_repo_infos(fresh_registry):
     # install_kernel alone does not import; it returns a path. Any loader
     # that does not go through get_kernel must leave repo_infos as None.
-    package_name, variant_path = install_kernel(
-        _REPO_ID, revision="main", backend="cpu"
-    )
+    package_name, variant_path = install_kernel(_REPO_ID, revision="main", backend="cpu")
     assert package_name == _PACKAGE_NAME
     assert get_loaded_kernels() == []
 

@@ -5,9 +5,9 @@ import pytest
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
 from kernels.utils import LoadedKernel, RepoInfos, _loaded_kernels
 
-_REPO_ID = "kernels-test/versions"
-_PACKAGE_NAME = "versions"
-_VERSION = 2
+_REPO_ID = "kernels-community/relu"
+_PACKAGE_NAME = "relu"
+_VERSION = 1
 
 
 @pytest.fixture
@@ -27,7 +27,11 @@ def test_dataclass_shape():
         "module_name",
         "repo_infos",
     )
-    assert tuple(f.name for f in fields(RepoInfos)) == ("repo_id", "revision", "backend")
+    assert tuple(f.name for f in fields(RepoInfos)) == (
+        "repo_id",
+        "revision",
+        "backend",
+    )
 
 
 def test_get_loaded_kernels_returns_copy(fresh_registry):
@@ -89,7 +93,9 @@ def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
 def test_install_kernel_plus_import_does_not_set_repo_infos(fresh_registry):
     # install_kernel alone does not import; it returns a path. Any loader
     # that does not go through get_kernel must leave repo_infos as None.
-    package_name, variant_path = install_kernel(_REPO_ID, revision="main", backend="cpu")
+    package_name, variant_path = install_kernel(
+        _REPO_ID, revision="main", backend="cpu"
+    )
     assert package_name == _PACKAGE_NAME
     assert get_loaded_kernels() == []
 

@@ -43,23 +43,3 @@ from kernels import has_kernel
 is_available = has_kernel("kernels-community/activation", version=1)
 print(f"Kernel available: {is_available}")
 ```
-
-## Inspecting Loaded Kernels
-
-`get_loaded_kernels()` returns a snapshot of every kernel that has been loaded
-into the current process. Each entry is a `LoadedKernel` namedtuple with the
-imported `module`, the `package_name`, and `repo_infos` (repo id, resolved
-revision, and the backend argument that was passed).
-
-```python
-from kernels import get_kernel, get_loaded_kernels
-
-get_kernel("kernels-community/activation", version=1)
-
-for loaded in get_loaded_kernels():
-    print(loaded.package_name, loaded.repo_infos)
-```
-
-`repo_infos` is populated only for kernels loaded with `get_kernel`. Kernels
-loaded from a local path (`get_local_kernel`) or via a lockfile
-(`get_locked_kernel`, `load_kernel`) have `repo_infos=None`.

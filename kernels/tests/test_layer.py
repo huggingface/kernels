@@ -1108,7 +1108,7 @@ def test_layer_versions(device):
         }
     ):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "0.2.0"
+        assert version() == 2
 
     with use_kernel_mapping(
         {

@@ -27,7 +27,11 @@ def test_dataclass_shape():
         "module_name",
         "repo_infos",
     )
-    assert tuple(f.name for f in fields(RepoInfos)) == ("repo_id", "revision", "backend")
+    assert tuple(f.name for f in fields(RepoInfos)) == (
+        "repo_id",
+        "revision",
+        "backend",
+    )
 
 
 def test_get_loaded_kernels_returns_copy(fresh_registry):

@@ -55,10 +55,12 @@ def get_loaded_kernels() -> list[LoadedKernel]:
     """
     Return a snapshot of every kernel that has been loaded into the current process.
 
-    Each entry is a `kernels.utils.LoadedKernel` namedtuple with fields:
+    Each entry is a `kernels.utils.LoadedKernel` dataclass with fields:
 
+    - `kernel_id` (`str`): unique identifier used as the `sys.modules` key
+      for this variant (either `metadata.id` or a hash-suffixed module name).
     - `module` (`ModuleType`): the imported kernel module.
-    - `package_name` (`str`): the kernel's package name.
+    - `module_name` (`str`): the kernel's module name.
     - `repo_infos` (`kernels.utils.RepoInfos | None`): populated only for
       kernels loaded via `get_kernel`. Loaders that work from a local path
       (`get_local_kernel`) or a lockfile (`get_locked_kernel`, `load_kernel`)
@@ -80,7 +82,7 @@ def get_loaded_kernels() -> list[LoadedKernel]:
 
         get_kernel("kernels-community/activation", version=1)
         for loaded in get_loaded_kernels():
-            print(loaded.package_name, loaded.repo_infos)
+            print(loaded.module_name, loaded.repo_infos)
         ```
     """
     return list(_loaded_kernels.values())

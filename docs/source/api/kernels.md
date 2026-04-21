@@ -14,6 +14,10 @@
 
 [[autodoc]] kernels.has_kernel
 
+### get_loaded_kernels
+
+[[autodoc]] kernels.get_loaded_kernels
+
 ## Loading locked kernels
 
 ### load_kernel

@@ -13,7 +13,7 @@ def _write_metadata(path, **fields):
 
 def test_version_parse_and_normalize():
     assert str(Version.from_str("12.8.0")) == "12.8"
-    assert str(Version.from_str("1")) == 1
+    assert str(Version.from_str("1")) == "1"
     assert str(Version.from_str("1.2.3")) == "1.2.3"
 
 

@@ -1122,7 +1122,7 @@ def test_layer_versions(device):
         }
     ):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "1"
+        assert version() == 1
 
     with use_kernel_mapping(
         {
@@ -1136,7 +1136,7 @@ def test_layer_versions(device):
         }
     ):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "2"
+        assert version() == 2
 
     with use_kernel_mapping(
         {

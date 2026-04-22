@@ -31,6 +31,13 @@ Usage example not available.
 
 Function list not available.
 {% endif %}
+{% if layers %}
+
+## Available layers
+{% for layer in layers %}
+- `{{ layer }}`
+{% endfor %}
+{% endif %}
 
 ## Benchmarks
 {% if has_benchmark %}
@@ -46,3 +53,4 @@ No benchmark available yet.
 
 Source code of this kernel originally comes from {{ upstream }} and it was repurposed for compatibility with `kernels`.
 {% endif %}
+

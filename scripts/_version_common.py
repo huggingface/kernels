@@ -19,9 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PRIMARY_PYPROJECT = REPO_ROOT / "kernels" / "pyproject.toml"
 
-PYPROJECT_FILES = [
-    PRIMARY_PYPROJECT
-]
+PYPROJECT_FILES = [PRIMARY_PYPROJECT]
 
 CARGO_FILES = [
     REPO_ROOT / "kernels-data" / "Cargo.toml",
@@ -66,9 +64,10 @@ def replace_top_level_version(path: Path, new_version: str, *, dry_run: bool) ->
     if old_version == new_version:
         return None
 
-    # Writing TOML without pulling in tomlkit: re-emit the exact `version = "<old>"`
-    # line we just parsed. Anchoring to ``^`` plus the escaped old value makes this
-    # a single, unambiguous match — inline dep entries can't collide.
+    # tomllib/tomli are parse-only and we don't want a write-capable TOML dep, so
+    # we rewrite the version line ourselves. Anchoring to ``^`` plus the escaped
+    # old value (just parsed) makes this an unambiguous single match — inline dep
+    # entries like `clap = { version = "4", ... }` can't collide.
     original = path.read_text()
     pattern = re.compile(
         r'^(version\s*=\s*)"' + re.escape(old_version) + r'"',

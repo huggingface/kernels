@@ -148,6 +148,7 @@
               kernel-builder
               kernel-abi-check
               nodejs # For hf-doc-builder.
+              pinact
               pkg-config
               rust
               uv # For `make bump-dev` / `make pre-release` to refresh kernels/uv.lock.

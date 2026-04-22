@@ -10,6 +10,8 @@ import re
 import sys
 from pathlib import Path
 
+from packaging.version import Version
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -55,8 +57,8 @@ def _parsed_version(path: Path) -> str:
     )
 
 
-def get_codebase_version() -> str:
-    return _parsed_version(PRIMARY_PYPROJECT)
+def get_codebase_version() -> Version:
+    return Version(_parsed_version(PRIMARY_PYPROJECT))
 
 
 def replace_top_level_version(path: Path, new_version: str, *, dry_run: bool) -> str | None:

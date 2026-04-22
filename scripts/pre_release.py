@@ -12,8 +12,9 @@ Example: codebase at ``0.14.0.dev0`` -> all sites become ``0.14.0``.
 from __future__ import annotations
 
 import argparse
-import re
 from pathlib import Path
+
+from packaging.version import Version
 
 from _version_common import (
     CARGO_FILES,
@@ -25,23 +26,24 @@ from _version_common import (
     replace_top_level_version,
 )
 
-# Accept PEP 440 dev versions like `0.14.0.dev0` (the form kernels/pyproject.toml
-# uses). Cargo.toml files use `0.14.0-dev0`, but we never read from them — we
-# only write to them, using the release string we derive from pyproject.
-DEV_VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?\.dev\d+$")
 
-
-def next_release_version(current: str) -> str:
-    match = DEV_VERSION_RE.match(current.strip())
-    if match is None:
+def next_release_version(current: Version) -> str:
+    if (
+        not current.is_devrelease
+        or current.pre is not None
+        or current.post is not None
+        or current.local is not None
+    ):
         raise SystemExit(
             f"Codebase version `{current}` is not a development version "
             "(e.g. 0.14.0.dev0). This tool strips the dev suffix ahead of a "
             f"release. Set {display_path(PRIMARY_PYPROJECT)} to a dev version first."
         )
 
-    major, minor = int(match.group(1)), int(match.group(2))
-    patch = int(match.group(3)) if match.group(3) is not None else 0
+    release = current.release
+    major = release[0] if len(release) > 0 else 0
+    minor = release[1] if len(release) > 1 else 0
+    patch = release[2] if len(release) > 2 else 0
     return f"{major}.{minor}.{patch}"
 
 

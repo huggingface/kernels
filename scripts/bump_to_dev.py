@@ -11,8 +11,9 @@ and Cargo sites get ``0.14.0-dev0``.
 from __future__ import annotations
 
 import argparse
-import re
 from pathlib import Path
+
+from packaging.version import Version
 
 from _version_common import (
     CARGO_FILES,
@@ -24,23 +25,23 @@ from _version_common import (
     replace_top_level_version,
 )
 
-# Accept plain release versions only (e.g. 0.13.0, 1.2, 1.2.3). Anything with
-# a pre-, post-, or dev-release suffix is rejected: this tool is run *after*
-# a release to kick off the next dev cycle, so the starting point must be a
-# clean release version.
-RELEASE_VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.\d+)?$")
 
-
-def next_dev_versions(current: str) -> tuple[str, str]:
-    match = RELEASE_VERSION_RE.match(current.strip())
-    if match is None:
+def next_dev_versions(current: Version) -> tuple[str, str]:
+    if current.is_prerelease or current.is_postrelease or current.local is not None:
         raise SystemExit(
             f"Codebase version `{current}` is not a plain release (e.g. 0.13.0). "
             "This tool bumps from a release to the next dev cycle. Set "
             f"{display_path(PRIMARY_PYPROJECT)} to a release version first."
         )
 
-    major, minor = int(match.group(1)), int(match.group(2))
+    release = current.release
+    if len(release) < 2:
+        raise SystemExit(
+            f"Codebase version `{current}` is missing a minor component; "
+            "expected at least MAJOR.MINOR (e.g. 0.13.0)."
+        )
+
+    major, minor = release[0], release[1]
     next_minor = f"{major}.{minor + 1}.0"
     return f"{next_minor}.dev0", f"{next_minor}-dev0"
 

@@ -12,7 +12,7 @@ use kernels_data::config::Build;
 
 use crate::util::{check_or_infer_kernel_dir, parse_build};
 
-fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
+fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let init_path = kernel_dir
         .join("torch-ext")
         .join(module_name)
@@ -31,7 +31,7 @@ fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>
             if is_all {
                 // Extract the list elements
                 if let ast::Expr::List(list) = assign.value.as_ref() {
-                    let functions: Vec<String> = list
+                    let names: Vec<String> = list
                         .elts
                         .iter()
                         .filter_map(|elt| {
@@ -44,8 +44,8 @@ fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>
                         })
                         .collect();
 
-                    if !functions.is_empty() {
-                        return Some(functions);
+                    if !names.is_empty() {
+                        return Some(names);
                     }
                 }
             }
@@ -53,6 +53,48 @@ fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>
     }
 
     None
+}
+
+fn extract_functions(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
+    let names = extract_all(kernel_dir, module_name)?;
+    let functions: Vec<String> = names.into_iter().filter(|n| n != "layers").collect();
+
+    if functions.is_empty() {
+        None
+    } else {
+        Some(functions)
+    }
+}
+
+fn extract_layers(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
+    // Only surface layers when the module re-exports the `layers` submodule.
+    let names = extract_all(kernel_dir, module_name)?;
+    if !names.iter().any(|n| n == "layers") {
+        return None;
+    }
+
+    let layers_init = kernel_dir
+        .join("torch-ext")
+        .join(module_name)
+        .join("layers")
+        .join("__init__.py");
+
+    let content = fs::read_to_string(&layers_init).ok()?;
+    let stmts = ast::Suite::parse(&content, "<module>").ok()?;
+
+    let classes: Vec<String> = stmts
+        .into_iter()
+        .filter_map(|stmt| match stmt {
+            ast::Stmt::ClassDef(class_def) => Some(class_def.name.to_string()),
+            _ => None,
+        })
+        .collect();
+
+    if classes.is_empty() {
+        None
+    } else {
+        Some(classes)
+    }
 }
 
 fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
@@ -77,6 +119,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
     ))?;
     let module_name = build.general.name.python_name();
     let functions = extract_functions(kernel_dir, &module_name);
+    let layers = extract_layers(kernel_dir, &module_name);
     let has_benchmark = kernel_dir.join("benchmarks").join("benchmark.py").exists();
 
     env.get_template("card")
@@ -84,6 +127,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
         .render(context! {
             repo_id => repo_id,
             functions => functions,
+            layers => layers,
             has_benchmark => has_benchmark,
             upstream => build.general.upstream.as_ref().map(|u| u.to_string()),
             license => build.general.license.as_ref().map(|l| l.to_lowercase()),
@@ -166,5 +210,109 @@ mod tests {
     fn test_extract_functions_missing() {
         let temp_dir = tempfile::tempdir().unwrap();
         assert_eq!(extract_functions(temp_dir.path(), "missing"), None);
+    }
+
+    #[test]
+    fn test_extract_functions_excludes_layers() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(
+            module_dir.join("__init__.py"),
+            r#"__all__ = ["layers", "func_a"]"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_functions(kernel_dir, "test_module"),
+            Some(vec!["func_a".to_owned()])
+        );
+    }
+
+    #[test]
+    fn test_extract_functions_only_layers() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(module_dir.join("__init__.py"), r#"__all__ = ["layers"]"#).unwrap();
+
+        assert_eq!(extract_functions(kernel_dir, "test_module"), None);
+    }
+
+    #[test]
+    fn test_extract_layers() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(
+            module_dir.join("__init__.py"),
+            r#"__all__ = ["layers", "func_a"]"#,
+        )
+        .unwrap();
+
+        let layers_dir = module_dir.join("layers");
+        fs::create_dir_all(&layers_dir).unwrap();
+        fs::write(
+            layers_dir.join("__init__.py"),
+            r#"
+import torch.nn as nn
+
+
+class ReLU(nn.Module):
+    pass
+
+
+class Softmax(nn.Module):
+    pass
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_layers(kernel_dir, "test_module"),
+            Some(vec!["ReLU".to_owned(), "Softmax".to_owned()])
+        );
+    }
+
+    #[test]
+    fn test_extract_layers_not_in_all() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(module_dir.join("__init__.py"), r#"__all__ = ["func_a"]"#).unwrap();
+
+        let layers_dir = module_dir.join("layers");
+        fs::create_dir_all(&layers_dir).unwrap();
+        fs::write(
+            layers_dir.join("__init__.py"),
+            r#"class ReLU: pass"#,
+        )
+        .unwrap();
+
+        assert_eq!(extract_layers(kernel_dir, "test_module"), None);
+    }
+
+    #[test]
+    fn test_extract_layers_missing_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(
+            module_dir.join("__init__.py"),
+            r#"__all__ = ["layers", "func_a"]"#,
+        )
+        .unwrap();
+
+        assert_eq!(extract_layers(kernel_dir, "test_module"), None);
     }
 }

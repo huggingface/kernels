@@ -31,6 +31,13 @@ Usage example not available.
 
 Function list not available.
 {% endif %}
+{% if layers %}
+
+## Available layers
+{% for layer in layers %}
+- `{{ layer }}`
+{% endfor %}
+{% endif %}
 
 ## Benchmarks
 {% if has_benchmark %}

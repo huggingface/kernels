@@ -150,6 +150,7 @@
               nodejs # For hf-doc-builder.
               pkg-config
               rust
+              uv # For `make bump-dev` / `make pre-release` to refresh kernels/uv.lock.
             ];
             buildInputs = [
               black

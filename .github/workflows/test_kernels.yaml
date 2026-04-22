@@ -45,13 +45,13 @@ jobs:
         working-directory: ./kernels
         run: uv add ../kernels-data/bindings/python --no-sync
 
+      - name: Override the Torch version
+        working-directory: ./kernels
+        run: uv add "torch==${{ matrix.torch-version }}" --no-sync
+
       - name: Install the project
         working-directory: ./kernels
         run: uv sync --all-extras --dev
-
-      - name: Install Torch version
-        working-directory: ./kernels
-        run: uv pip install "torch==${{ matrix.torch-version }}"
 
       - name: Install setuptools for Triton-based test
         working-directory: ./kernels

@@ -1,5 +1,7 @@
 [general]
 name = "relu-backprop-compile"
+version = 1
+license = "Apache-2.0"
 backends = [
     "cuda",
     "rocm",
@@ -21,6 +23,7 @@ src = ["relu_cuda/relu.cu"]
 
 [kernel.relu_rocm]
 backend = "rocm"
+depends = ["torch"]
 rocm-archs = [
     "gfx906",
     "gfx908",
@@ -32,5 +35,4 @@ rocm-archs = [
     "gfx1100",
     "gfx1101",
 ]
-depends = ["torch"]
 src = ["relu_cuda/relu.cu"]

@@ -1,5 +1,7 @@
 [general]
 name = "relu-compiler-flags"
+version = 1
+license = "Apache-2.0"
 backends = [
     "cuda",
     "rocm",
@@ -10,16 +12,26 @@ backends = [
 repo-id = "kernels-test/relu-compiler-flags"
 
 [torch]
-src = ["torch-ext/torch_binding.cpp", "torch-ext/torch_binding.h"]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.activation_xpu]
+backend = "xpu"
+depends = ["torch"]
+sycl-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
+src = ["relu_xpu/relu.cpp"]
 
 [kernel.activation]
 backend = "cuda"
+cuda-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 depends = ["torch"]
 src = ["relu_cuda/relu.cu"]
-cuda-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 
 [kernel.activation_rocm]
 backend = "rocm"
+depends = ["torch"]
 rocm-archs = [
     "gfx906",
     "gfx908",
@@ -31,12 +43,5 @@ rocm-archs = [
     "gfx1100",
     "gfx1101",
 ]
-depends = ["torch"]
-src = ["relu_cuda/relu.cu"]
 hip-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
-
-[kernel.activation_xpu]
-backend = "xpu"
-depends = ["torch"]
-src = ["relu_xpu/relu.cpp"]
-sycl-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
+src = ["relu_cuda/relu.cu"]

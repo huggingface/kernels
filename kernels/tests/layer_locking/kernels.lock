@@ -1,26 +1,22 @@
 [
   {
     "repo_id": "kernels-test/versions",
-    "sha": "31a8142c476b8933320aae9a198945dcebe20f45",
+    "sha": "f609e51b856b3d874b0ae8445913e200f02c1735",
     "variants": {
       "torch-cpu": {
-        "hash": "sha256-d70e804797597372e50001a1e631e96bb38ccec669f5f0a47d7e9863af293447",
+        "hash": "sha256-d9fced49c3beeb47ce5b996c28f760bec579cf444f9fe1040725686b13b1336e",
         "hash_type": "git_lfs_concat"
       },
       "torch-cuda": {
-        "hash": "sha256-d70e804797597372e50001a1e631e96bb38ccec669f5f0a47d7e9863af293447",
+        "hash": "sha256-b6b786e496802bc3d1ae59cb48acb419d99ca1ffbeee0fecbf16238e36c00842",
         "hash_type": "git_lfs_concat"
       },
       "torch-rocm": {
-        "hash": "sha256-d70e804797597372e50001a1e631e96bb38ccec669f5f0a47d7e9863af293447",
-        "hash_type": "git_lfs_concat"
-      },
-      "torch-universal": {
-        "hash": "sha256-cf447f2d128fc60937aee4e2cfe2a915df0829b170a86e5760783726de86a731",
+        "hash": "sha256-0ca53208b80507e0b592cbfb7c0c9b5f22a4def6413b809c551dabbea1e2ac86",
         "hash_type": "git_lfs_concat"
       },
       "torch-xpu": {
-        "hash": "sha256-d70e804797597372e50001a1e631e96bb38ccec669f5f0a47d7e9863af293447",
+        "hash": "sha256-09b9d84cb273d71a081daef373c42bec0691620591822e44a6811833f896b810",
         "hash_type": "git_lfs_concat"
       }
     }

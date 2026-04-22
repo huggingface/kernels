@@ -90,6 +90,7 @@ def test_metadata_load_full(tmp_path):
     path.write_text(
         json.dumps(
             {
+                "id": "_my_kernel_8a3be8f",
                 "version": 1,
                 "license": "Apache-2.0",
                 "upstream": "https://github.com/example/kernel",
@@ -99,6 +100,7 @@ def test_metadata_load_full(tmp_path):
         )
     )
     m = Metadata.load(path)
+    assert m.id == "_my_kernel_8a3be8f"
     assert m.version == 1
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"

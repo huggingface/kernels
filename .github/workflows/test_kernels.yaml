@@ -41,6 +41,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Override kernels-data source to local bindings
+        working-directory: ./kernels
+        run: uv add ../kernels-data/bindings/python --no-sync
+
       - name: Install the project
         working-directory: ./kernels
         run: uv sync --all-extras --dev
@@ -52,10 +56,6 @@ jobs:
       - name: Install setuptools for Triton-based test
         working-directory: ./kernels
         run: uv pip install setuptools
-
-      - name: Install kernels-data from local bindings
-        working-directory: ./kernels
-        run: uv pip install ../kernels-data/bindings/python
 
       - name: Check typing
         working-directory: ./kernels

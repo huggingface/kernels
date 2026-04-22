@@ -291,11 +291,7 @@ class Softmax(nn.Module):
 
         let layers_dir = module_dir.join("layers");
         fs::create_dir_all(&layers_dir).unwrap();
-        fs::write(
-            layers_dir.join("__init__.py"),
-            r#"class ReLU: pass"#,
-        )
-        .unwrap();
+        fs::write(layers_dir.join("__init__.py"), r#"class ReLU: pass"#).unwrap();
 
         assert_eq!(extract_layers(kernel_dir, "test_module"), None);
     }

@@ -53,6 +53,10 @@ jobs:
         working-directory: ./kernels
         run: uv pip install setuptools
 
+      - name: Install kernels-data from local bindings
+        working-directory: ./kernels
+        run: uv pip install ../kernels-data/bindings/python
+
       - name: Check typing
         working-directory: ./kernels
         run: uv run mypy src/kernels

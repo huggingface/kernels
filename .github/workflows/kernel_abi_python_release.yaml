@@ -155,10 +155,12 @@ jobs:
           args: --release --out dist --manifest-path kernel-abi-check/bindings/python/Cargo.toml -i python3.13t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: matrix.platform.target != 'aarch64'
         with:
           python-version: 3.14t
           architecture: ${{ matrix.platform.python_arch }}
       - name: Build free-threaded wheels (3.14t)
+        if: matrix.platform.target != 'aarch64'
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.platform.target }}

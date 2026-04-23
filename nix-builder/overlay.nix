@@ -89,11 +89,11 @@ in
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.10.0";
+          version = "1.11.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
-            hash = "sha256-+APDquLcmFFaQ0GgzjELTmuWrFV7tLX7Sne89SUCbVs=";
+            hash = "sha256-Ffs3E8f5zf97gIqU/ZFmT2YasUJ5a7SMnNlJPo0WYng=";
           };
           dependencies =
             (prevAttrs.dependencies or [ ])

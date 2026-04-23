@@ -150,6 +150,9 @@ class Device:
         if self.properties is not None and isinstance(self.properties, ROCMProperties):
             if self.type != "rocm":
                 raise ValueError("ROCMProperties is only supported for 'rocm' devices.")
+        if self.properties is not None and isinstance(self.properties, ROCMProperties):
+            if self.type != "rocm":
+                raise ValueError("ROCMProperties is only supported for 'rocm' devices.")
 
     def __eq__(self, other):
         if not isinstance(other, Device):

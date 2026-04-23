@@ -77,6 +77,7 @@ in
       in
       {
         inherit (triton) triton_3_6_0 triton_3_7_0;
+        inherit (triton-xpu) triton-xpu_3_6_0 triton-xpu_3_7_0 triton-xpu_3_7_1;
 
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
@@ -207,10 +208,6 @@ in
             python-self.typer
           ];
         });
-
-        triton-xpu_3_6_0 = triton-xpu.triton-xpu_3_6_0;
-
-        triton-xpu_3_7_0 = triton-xpu.triton-xpu_3_7_0;
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };

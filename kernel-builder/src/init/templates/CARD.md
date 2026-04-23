@@ -1,6 +1,6 @@
 {% raw %}---
 library_name: kernels
-license: {{ license }}
+{% if license %}license: {{ license }}
 {% endif %}---
 
 This is the repository card of {{ repo_id }} that has been pushed on the Hub. It was built to be used with the [`kernels` library](https://github.com/huggingface/kernels). This card was automatically generated.

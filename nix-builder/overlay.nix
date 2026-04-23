@@ -72,9 +72,12 @@ in
       python-self: python-super:
       with python-self;
       let
+        triton = callPackage ./pkgs/python-modules/triton { };
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
       in
       {
+        inherit (triton) triton_3_6_0 triton_3_7_0;
+
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };

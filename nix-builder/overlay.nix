@@ -179,6 +179,7 @@ in
         # Remove once sglang moves to a newer Torch version.
         torch-bin_2_9 = mkTorch {
           version = "2.9";
+          triton = python-self.triton-cuda;
           triton-xpu = null;
           # Not supported anymore.
           xpuPackages = null;
@@ -186,12 +187,14 @@ in
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
+          triton-cuda = triton_3_6_0;
           triton-xpu = triton-xpu_3_6_0;
           xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         torch-bin_2_11 = mkTorch {
           version = "2.11";
+          triton-cuda = triton_3_6_0;
           triton-xpu = triton-xpu_3_7_0;
           xpuPackages = final.xpuPackages_2025_3_2;
         };

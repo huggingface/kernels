@@ -223,7 +223,6 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pythonRelaxWheelDeps = [
     "cuda-bindings"
     "sympy"
-    "triton"
   ];
 
   # These are framework dependencies that are normally installed as Python

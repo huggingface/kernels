@@ -6,16 +6,10 @@ step differs. Constants, I/O helpers, and the interactive prompt live here.
 
 from __future__ import annotations
 
-import re
-import sys
 from pathlib import Path
 
+import tomlkit
 from packaging.version import Version
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -39,51 +33,36 @@ def display_path(path: Path) -> Path:
         return path
 
 
-def _parsed_version(path: Path) -> str:
-    """Return the top-level version from a pyproject.toml or Cargo.toml.
+def _version_table(doc, path: Path):
+    """Return the [project] or [package] table holding the top-level ``version``.
 
     pyproject.toml stores it under ``[project]``; Cargo.toml under ``[package]``.
     """
-    with path.open("rb") as f:
-        data = tomllib.load(f)
-
-    for table in ("project", "package"):
-        section = data.get(table)
-        if isinstance(section, dict) and "version" in section:
-            return section["version"]
-
+    for name in ("project", "package"):
+        table = doc.get(name)
+        if table is not None and "version" in table:
+            return table
     raise SystemExit(
         f"Could not find a top-level `version` under [project] or [package] in {display_path(path)}."
     )
 
 
 def get_codebase_version() -> Version:
-    return Version(_parsed_version(PRIMARY_PYPROJECT))
+    doc = tomlkit.parse(PRIMARY_PYPROJECT.read_text())
+    return Version(str(_version_table(doc, PRIMARY_PYPROJECT)["version"]))
 
 
 def replace_top_level_version(path: Path, new_version: str, *, dry_run: bool) -> str | None:
-    old_version = _parsed_version(path)
+    doc = tomlkit.parse(path.read_text())
+    table = _version_table(doc, path)
+
+    old_version = str(table["version"])
     if old_version == new_version:
         return None
 
-    # tomllib/tomli are parse-only and we don't want a write-capable TOML dep, so
-    # we rewrite the version line ourselves. Anchoring to ``^`` plus the escaped
-    # old value (just parsed) makes this an unambiguous single match — inline dep
-    # entries like `clap = { version = "4", ... }` can't collide.
-    original = path.read_text()
-    pattern = re.compile(
-        r'^(version\s*=\s*)"' + re.escape(old_version) + r'"',
-        re.MULTILINE,
-    )
-    updated, count = pattern.subn(rf'\1"{new_version}"', original, count=1)
-    if count != 1:
-        raise SystemExit(
-            f"Parsed version `{old_version}` from {display_path(path)} but could not locate "
-            "the matching top-level `version = \"...\"` line to rewrite."
-        )
-
+    table["version"] = new_version
     if not dry_run:
-        path.write_text(updated)
+        path.write_text(tomlkit.dumps(doc))
     return old_version
 
 

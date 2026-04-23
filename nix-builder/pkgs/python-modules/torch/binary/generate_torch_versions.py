@@ -16,13 +16,13 @@ import sys
 import urllib.parse
 from typing import Dict
 
+from packaging.version import Version
 from torch_versions import (
     PYTHON_VERSION,
     cuda_version_to_framework,
     generate_pytorch_rc_hf_url,
     generate_pytorch_url,
     rocm_version_to_framework,
-    version_to_major_minor,
 )
 
 OUTPUT_FILE = "torch-versions-hash.json"
@@ -151,7 +151,8 @@ def main():
             print(f"Skipping entry without torchVersion: {entry}", file=sys.stderr)
             continue
 
-        version_key = version_to_major_minor(torch_version)
+        v = Version(torch_version)
+        version_key = f"{v.major}.{v.minor}"
 
         if cuda_version is not None:
             framework_type = "cuda"

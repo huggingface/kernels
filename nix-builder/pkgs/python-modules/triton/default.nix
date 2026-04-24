@@ -6,6 +6,12 @@ let
   generic = callPackage ./generic.nix { };
 in
 {
+  triton_3_5_0 = generic {
+    version = "3.5.0";
+    url = "https://download.pytorch.org/whl/triton-3.5.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+    hash = "sha256-tvbbiVAabcSkkv8oFGDBsVVjQgvJCTR3CqanuA/VHJU=";
+  };
+
   triton_3_6_0 = generic {
     version = "3.6.0";
     url = "https://download.pytorch.org/whl/triton-3.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";

@@ -76,7 +76,7 @@ in
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
       in
       {
-        inherit (triton) triton_3_6_0 triton_3_7_0;
+        inherit (triton) triton_3_5_0 triton_3_6_0 triton_3_7_0;
         inherit (triton-xpu) triton-xpu_3_6_0 triton-xpu_3_7_0 triton-xpu_3_7_1;
 
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
@@ -179,7 +179,7 @@ in
         # Remove once sglang moves to a newer Torch version.
         torch-bin_2_9 = mkTorch {
           version = "2.9";
-          triton-cuda = python-self.triton-cuda;
+          triton-cuda = triton_3_5_0;
           triton-xpu = null;
           # Not supported anymore.
           xpuPackages = null;

@@ -344,7 +344,7 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> lis
         tvm_ffi_version = parse(tvm_ffi.__version__)
         tvm_ffi_version = Version(f"{tvm_ffi_version.major}.{tvm_ffi_version.minor}")
 
-    return _resolve_variant_for_system(
+    variants = _resolve_variant_for_system(
         variants=variants,
         selected_backend=selected_backend,
         cpu=cpu,
@@ -353,6 +353,13 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> lis
         torch_cxx11_abi=torch_cxx11_abi,
         tvm_ffi_version=tvm_ffi_version,
     )
+    if not variants:
+        missing_variant = FileNotFoundError(
+            "Variant not found."
+        )
+        missing_variant.filename = f"{torch_version}{torch_cxx11_abi}-{selected_backend}-{cpu}-{os}"
+        raise missing_variant
+
 
 
 def _resolve_variant_for_system(

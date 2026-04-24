@@ -72,9 +72,13 @@ in
       python-self: python-super:
       with python-self;
       let
+        triton = callPackage ./pkgs/python-modules/triton { };
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
       in
       {
+        inherit (triton) triton_3_5_0 triton_3_6_0 triton_3_7_0;
+        inherit (triton-xpu) triton-xpu_3_6_0 triton-xpu_3_7_0 triton-xpu_3_7_1;
+
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };
@@ -89,11 +93,11 @@ in
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.10.0";
+          version = "1.11.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
-            hash = "sha256-+APDquLcmFFaQ0GgzjELTmuWrFV7tLX7Sne89SUCbVs=";
+            hash = "sha256-Ffs3E8f5zf97gIqU/ZFmT2YasUJ5a7SMnNlJPo0WYng=";
           };
           dependencies =
             (prevAttrs.dependencies or [ ])
@@ -175,6 +179,7 @@ in
         # Remove once sglang moves to a newer Torch version.
         torch-bin_2_9 = mkTorch {
           version = "2.9";
+          triton-cuda = triton_3_5_0;
           triton-xpu = null;
           # Not supported anymore.
           xpuPackages = null;
@@ -182,13 +187,22 @@ in
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
+          triton-cuda = triton_3_6_0;
           triton-xpu = triton-xpu_3_6_0;
           xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         torch-bin_2_11 = mkTorch {
           version = "2.11";
+          triton-cuda = triton_3_6_0;
           triton-xpu = triton-xpu_3_7_0;
+          xpuPackages = final.xpuPackages_2025_3_2;
+        };
+
+        torch-bin_2_12 = mkTorch {
+          version = "2.12";
+          triton-cuda = triton_3_7_0;
+          triton-xpu = triton-xpu_3_7_1;
           xpuPackages = final.xpuPackages_2025_3_2;
         };
 
@@ -204,10 +218,6 @@ in
             python-self.typer
           ];
         });
-
-        triton-xpu_3_6_0 = triton-xpu.triton-xpu_3_6_0;
-
-        triton-xpu_3_7_0 = triton-xpu.triton-xpu_3_7_0;
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };

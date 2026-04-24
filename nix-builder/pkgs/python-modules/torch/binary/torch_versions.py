@@ -2,6 +2,8 @@
 Shared utilities for working with PyTorch versions and wheel URLs.
 """
 
+from packaging.version import Version
+
 PYTHON_VERSION = "cp313"
 
 
@@ -15,15 +17,7 @@ def rocm_version_to_framework(rocm_version: str) -> str:
     return f"rocm{rocm_version}"
 
 
-def version_to_major_minor(version: str) -> str:
-    """Convert version like '2.8.0' to '2.8'"""
-    parts = version.split(".")
-    if len(parts) >= 2:
-        return f"{parts[0]}.{parts[1]}"
-    return version
-
-
-def system_to_platform(system: str, framework_type: str = None) -> str:
+def system_to_platform(system: str, framework_type: str, torch_version: str) -> str:
     """Convert system identifier to platform string for wheel naming"""
     if framework_type == "xpu":
         xpu_platform_map = {
@@ -31,10 +25,16 @@ def system_to_platform(system: str, framework_type: str = None) -> str:
         }
         return xpu_platform_map.get(system, system)
 
+    if system == "aarch64-darwin":
+        return (
+            "macosx_14_0_arm64"
+            if Version(torch_version) >= Version("2.12")
+            else "macosx_11_0_arm64"
+        )
+
     platform_map = {
         "x86_64-linux": "manylinux_2_28_x86_64",
         "aarch64-linux": "manylinux_2_28_aarch64",
-        "aarch64-darwin": "macosx_11_0_arm64",
     }
     return platform_map.get(system, system)
 
@@ -48,7 +48,7 @@ def generate_pytorch_url(
     testing: bool = False,
 ) -> str:
     """Generate PyTorch wheel download URL."""
-    platform = system_to_platform(system, framework_type)
+    platform = system_to_platform(system, framework_type, torch_version)
 
     if "darwin" in system:
         framework_dir = "cpu"
@@ -92,11 +92,11 @@ def generate_pytorch_rc_hf_url(
     testing_release: str,
 ) -> str:
     """Generate PyTorch wheel download URL from HuggingFace for testing releases."""
-    platform = system_to_platform(system, framework_type)
+    platform = system_to_platform(system, framework_type, torch_version)
 
     if "darwin" in system:
         version_part = torch_version
-        abi_tag = "none" if "darwin" in system else python_version
+        abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     elif framework_type == "cpu":
         version_part = f"{torch_version}%2Bcpu"
@@ -119,4 +119,4 @@ def generate_pytorch_rc_hf_url(
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
 
-    return f"https://huggingface.co/danieldk/pytorch-rc/resolve/main/{testing_release}/{wheel_name}"
+    return f"https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/{testing_release}/{wheel_name}"

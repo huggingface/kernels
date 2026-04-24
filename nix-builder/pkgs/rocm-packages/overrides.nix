@@ -156,6 +156,42 @@ applyOverrides {
       buildInputs = prevAttrs.buildInputs ++ [ python3 ];
     };
 
+  rocprofiler-sdk =
+    {
+      comgr,
+      elfutils,
+      hsa-amd-aqlprofile,
+      libdrm,
+      sqlite,
+    }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        comgr
+        elfutils
+        hsa-amd-aqlprofile
+        libdrm
+        sqlite
+      ];
+    };
+
+  rocprofiler-sdk-rocpd =
+    {
+      comgr,
+      elfutils,
+      hsa-amd-aqlprofile,
+      libdrm,
+      sqlite,
+    }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        comgr
+        elfutils
+        hsa-amd-aqlprofile
+        libdrm
+        sqlite
+      ];
+    };
+
   rocrand =
     { hip-runtime-amd }:
     prevAttrs: {

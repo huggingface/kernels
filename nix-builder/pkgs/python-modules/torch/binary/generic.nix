@@ -5,6 +5,7 @@
   stdenv,
   symlinkJoin,
   buildPythonPackage,
+  fetchFromGitHub,
   fetchurl,
 
   cudaSupport ? config.cudaSupport,
@@ -72,6 +73,7 @@ let
   aotritonVersions = with rocmPackages; {
     "2.10" = aotriton_0_11_1;
     "2.11" = aotriton_0_11_2;
+    "2.12" = aotriton_0_11_2;
   };
 
   aotriton =
@@ -84,33 +86,38 @@ let
   rocmtoolkit_joined = symlinkJoin {
     name = "rocm-merged";
 
-    paths = with rocmPackages; [
-      aotriton
-      clr
-      comgr
-      hipblas
-      hipblas-common-devel
-      hipblaslt
-      hipfft
-      hipify-clang
-      hiprand
-      hipsolver
-      hipsparse
-      hipsparselt
-      hsa-rocr
-      miopen-hip
-      rccl
-      rocblas
-      rocm-core
-      rocm-device-libs
-      rocm-hip-runtime
-      rocm-smi-lib
-      rocminfo
-      rocrand
-      rocsolver
-      rocsparse
-      roctracer
-    ];
+    paths =
+      with rocmPackages;
+      [
+        aotriton
+        clr
+        comgr
+        hipblas
+        hipblas-common-devel
+        hipblaslt
+        hipfft
+        hipify-clang
+        hiprand
+        hipsolver
+        hipsparse
+        hipsparselt
+        hsa-rocr
+        miopen-hip
+        rccl
+        rocblas
+        rocm-core
+        rocm-device-libs
+        rocm-hip-runtime
+        rocm-smi-lib
+        rocminfo
+        rocrand
+        rocsolver
+        rocsparse
+        roctracer
+      ]
+      ++ lib.optionals (lib.versions.majorMinor version == "2.12") [
+        rocprofiler-sdk
+      ];
 
     postBuild = ''
       # Fix `setuptools` not being found
@@ -175,7 +182,21 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         libcusolver
         libcusparse
         libcusparse_lt
-        nccl
+        # NCCL in nixpkgs is too old.
+        (nccl.overrideAttrs (
+          finalAttrs: prevAttrs: {
+            version = "2.30.4-1";
+            src = fetchFromGitHub {
+              owner = "NVIDIA";
+              repo = "nccl";
+              tag = "v${finalAttrs.version}";
+              hash = "sha256-rgOZTJ8iSYHXzk9lyUElvbw8IysauPJJZyQxhhRZNz4=";
+            };
+            postPatch = prevAttrs.postPatch + ''
+              patchShebangs ./src/misc/generate_git_version.py
+            '';
+          }
+        ))
       ]
     )
     ++ lib.optionals (cudaSupport && lib.versionAtLeast version "2.9") [

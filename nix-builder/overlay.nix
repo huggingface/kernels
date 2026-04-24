@@ -199,6 +199,13 @@ in
           xpuPackages = final.xpuPackages_2025_3_2;
         };
 
+        torch-bin_2_12 = mkTorch {
+          version = "2.12";
+          triton-cuda = triton_3_7_0;
+          triton-xpu = triton-xpu_3_7_1;
+          xpuPackages = final.xpuPackages_2025_3_2;
+        };
+
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
           version = "5.3.0";
           src = python-super.fetchPypi {

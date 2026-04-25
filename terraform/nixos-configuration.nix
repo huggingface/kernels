@@ -103,6 +103,7 @@
   systemd.tmpfiles.rules = [
     "d /data/nix-store  0755 root root -"
     "d /data/workspace  0755 nixos nixos -"
+    "f /var/lib/systemd/linger/root 0644 root root -"
   ];
 
   # -------------------------------------------------------------------------
@@ -158,7 +159,6 @@
     ws = "cd /data/workspace";
     dinit = "echo 'use nix' > .envrc && direnv allow"; # init direnv for a flake dir
   };
-
   # -------------------------------------------------------------------------
   # SSH
   # -------------------------------------------------------------------------

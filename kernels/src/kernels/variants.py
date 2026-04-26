@@ -23,7 +23,12 @@ from kernels.backends import (
 )
 from kernels.compat import has_torch, has_tvm_ffi
 
-BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)")
+BUILD_VARIANT_REGEX = re.compile(
+    r"^(torch\d+\d+"
+    r"|torch-(cpu|cuda|metal|neuron|rocm|xpu|metal)"
+    r"|tvm-ffi\d+\d+"
+    r"|tvm-ffi-(cpu|cuda|metal|neuron|rocm|xpu))"
+)
 
 
 @dataclass(unsafe_hash=True)
@@ -136,6 +141,23 @@ class TorchNoarch:
 
 @strict
 @dataclass(unsafe_hash=True)
+class TvmFfiNoarch:
+    """Versionless tvm-ffi framework (noarch variants)."""
+
+    @staticmethod
+    def possible_variants() -> list["TvmFfiNoarch"]:
+        if has_tvm_ffi:
+            return [TvmFfiNoarch()]
+        else:
+            return []
+
+    @property
+    def variant_str(self) -> str:
+        return "tvm-ffi"
+
+
+@strict
+@dataclass(unsafe_hash=True)
 class Arch:
     """Arch kernel information."""
 
@@ -220,12 +242,14 @@ class ArchVariant:
 class NoarchVariant:
     """Noarch kernel build variant."""
 
-    framework: TorchNoarch
+    framework: TorchNoarch | TvmFfiNoarch
     arch: Noarch
 
     @staticmethod
     def possible_variants() -> list["NoarchVariant"]:
-        frameworks = TorchNoarch.possible_variants()
+        frameworks: list[TorchNoarch | TvmFfiNoarch] = (
+            TorchNoarch.possible_variants() + TvmFfiNoarch.possible_variants()
+        )
         archs = Noarch.possible_variants()
         return [NoarchVariant(framework=fw, arch=arch) for fw, arch in itertools.product(frameworks, archs)]
 
@@ -264,6 +288,9 @@ def parse_variant(variant_str: str) -> Variant:
             framework_str = parts[0]
             arch_parts = parts[1:]
         return ArchVariant(framework=Torch.parse(framework_str), arch=Arch.parse(arch_parts))
+    elif parts[0] == "tvm" and len(parts) >= 2 and parts[1] == "ffi":
+        # noarch: e.g. "tvm-ffi-metal"
+        return NoarchVariant(framework=TvmFfiNoarch(), arch=Noarch.parse("-".join(parts[2:])))
     elif parts[0] == "tvm" and len(parts) >= 2 and parts[1].startswith("ffi"):
         return ArchVariant(framework=TvmFfi.parse(f"tvm-{parts[1]}"), arch=Arch.parse(parts[2:]))
     else:
@@ -432,7 +459,8 @@ def _sort_variants(
     1. Torch arch kernels with with the highest compatible CUDA version.
     2. tvm-ffi arch kernels with with the highest compatible CUDA version.
     3. Torch noarch kernels.
-    4. Old Torch universal kernels.
+    4. tvm-ffi noarch kernels.
+    5. Old universal kernels.
     """
 
     def sort_key(v: Variant) -> tuple:
@@ -447,6 +475,7 @@ def _sort_variants(
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.arch.backend_name == "universal" else 0
-            return (2, universal_order)
+            framework_order = 0 if isinstance(v.framework, TorchNoarch) else 1
+            return (2, universal_order, framework_order)
 
     return sorted(variants, key=sort_key)

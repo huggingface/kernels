@@ -272,6 +272,12 @@ are available:
 - `sycl_flags`: a list of additional flags to be passed to the SYCL
   compiler.
 
+### cpu
+
+- `cxx-flags`: a list of additional flags to be passed to the C++
+  compiler.
+
+
 ## Torch bindings
 
 ### Defining bindings

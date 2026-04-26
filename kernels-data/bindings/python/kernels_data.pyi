@@ -104,7 +104,7 @@ class Metadata:
     """Parsed ``metadata.json`` for a kernel build variant."""
 
     @staticmethod
-    def load(metadata_path: os.PathLike[str] | str) -> "Metadata":
+    def read_from_file(metadata_path: os.PathLike[str] | str) -> "Metadata":
         """Parse ``metadata.json`` at the given path.
 
         Raises:
@@ -112,6 +112,10 @@ class Metadata:
         """
         ...
 
+    @property
+    def id(self) -> str: ...
+    @property
+    def name(self) -> KernelName: ...
     @property
     def version(self) -> Optional[int]: ...
     @property

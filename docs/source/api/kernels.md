@@ -27,3 +27,13 @@
 ### get_locked_kernel
 
 [[autodoc]] kernels.get_locked_kernel
+
+## Classes
+
+### LoadedKernel
+
+[[autodoc]] kernels.LoadedKernel
+
+### RepoInfo
+
+[[autodoc]] kernels.RepoInfo

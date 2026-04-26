@@ -90,7 +90,9 @@ def test_metadata_load_full(tmp_path):
     path.write_text(
         json.dumps(
             {
+                "id": "_my_kernel_8a3be8f",
                 "version": 1,
+                "name": "my-kernel",
                 "license": "Apache-2.0",
                 "upstream": "https://github.com/example/kernel",
                 "python-depends": ["torch"],
@@ -98,7 +100,9 @@ def test_metadata_load_full(tmp_path):
             }
         )
     )
-    m = Metadata.load(path)
+    m = Metadata.read_from_file(path)
+    assert m.id == "_my_kernel_8a3be8f"
+    assert m.name == KernelName("my-kernel")
     assert m.version == 1
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"
@@ -109,10 +113,21 @@ def test_metadata_load_full(tmp_path):
 
 def test_metadata_load_minimal(tmp_path):
     path = tmp_path / "metadata.json"
-    path.write_text(json.dumps({"python-depends": [], "backend": {"type": "cpu"}}))
-    m = Metadata.load(path)
-    assert m.version is None
-    assert m.license is None
+    path.write_text(
+        json.dumps(
+            {
+                "id": "_my_kernel_8a3be8f",
+                "version": 1,
+                "name": "my-kernel",
+                "license": "Apache-2.0",
+                "python-depends": [],
+                "backend": {"type": "cpu"},
+            }
+        )
+    )
+    m = Metadata.read_from_file(path)
+    assert m.version == 1
+    assert m.license == "Apache-2.0"
     assert m.upstream is None
     assert m.python_depends == []
     assert m.backend.backend_type == Backend.CPU
@@ -120,8 +135,19 @@ def test_metadata_load_minimal(tmp_path):
 
 def test_metadata_load_cann(tmp_path):
     path = tmp_path / "metadata.json"
-    path.write_text(json.dumps({"python-depends": [], "backend": {"type": "cann"}}))
-    assert Metadata.load(path).backend.backend_type == Backend.CANN
+    path.write_text(
+        json.dumps(
+            {
+                "id": "_my_kernel_8a3be8f",
+                "version": 1,
+                "name": "my-kernel",
+                "license": "Apache-2.0",
+                "python-depends": [],
+                "backend": {"type": "cann"},
+            }
+        )
+    )
+    assert Metadata.read_from_file(path).backend.backend_type == Backend.CANN
 
 
 def test_metadata_load_unknown_field_accepted(tmp_path):
@@ -129,31 +155,42 @@ def test_metadata_load_unknown_field_accepted(tmp_path):
     path.write_text(
         json.dumps(
             {
+                "id": "_my_kernel_8a3be8f",
+                "version": 1,
+                "name": "my-kernel",
+                "license": "Apache-2.0",
                 "python-depends": [],
                 "backend": {"type": "cpu"},
                 "surprise": "not allowed",
             }
         )
     )
-    Metadata.load(path)
+    Metadata.read_from_file(path)
 
 
 def test_metadata_load_malformed(tmp_path):
     path = tmp_path / "metadata.json"
     path.write_text("{not json")
     with pytest.raises(ValueError):
-        Metadata.load(path)
+        Metadata.read_from_file(path)
 
 
 def test_metadata_load(tmp_path):
     path = _write_metadata(
         tmp_path / "variant" / "metadata.json",
-        **{"python-depends": ["torch"], "backend": {"type": "cuda"}},
+        **{
+            "id": "_my_kernel_8a3be8f",
+            "version": 1,
+            "name": "my-kernel",
+            "license": "Apache-2.0",
+            "python-depends": ["torch"],
+            "backend": {"type": "cuda"},
+        },
     )
-    m = Metadata.load(path)
+    m = Metadata.read_from_file(path)
     assert m.backend.backend_type == Backend.CUDA
 
 
 def test_metadata_load_missing_file(tmp_path):
-    with pytest.raises(ValueError):
-        Metadata.load(tmp_path / "does-not-exist.json")
+    with pytest.raises(OSError):
+        Metadata.read_from_file(tmp_path / "does-not-exist.json")

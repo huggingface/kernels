@@ -1,5 +1,6 @@
 [general]
 name = "silu-and-mul"
+version = 1
 license = "apache-2.0"
 backends = [
     "cpu",
@@ -10,4 +11,8 @@ backends = [
 ]
 
 [general.hub]
-repo-id = "kernels-tests/silu-and-mul"
+repo-id = "kernels-test/silu-and-mul"
+
+[torch-noarch]
+
+[kernel]

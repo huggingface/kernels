@@ -1,12 +1,15 @@
 [general]
 name = "relu-nki"
 version = 1
-backends = [
-    "neuron",
-]
+license = "Apache-2.0"
+backends = ["neuron"]
 
 [general.hub]
 repo-id = "kernels-test/relu-nki"
 
 [general.neuron]
 python-depends = ["nki"]
+
+[torch-noarch]
+
+[kernel]

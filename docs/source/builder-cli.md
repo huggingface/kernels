@@ -75,6 +75,9 @@ Initialize a new kernel project from template
 
 ###### **Options:**
 
+* `--license <LICENSE>` — The kernel's license
+
+  Default value: `Apache-2.0`
 * `--name <OWNER/REPO>` — Name of the kernel repo (e.g. `drbh/my-kernel`)
 * `--backends <BACKENDS>` — Backends to enable (`all`, `cpu`, `cuda`, `metal`, `neuron`, `rocm`, `xpu`)
 

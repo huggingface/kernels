@@ -110,8 +110,6 @@ class LocalLayerRepository:
     Args:
         repo_path (`Path`):
             The local repository containing the layer.
-        package_name (`str`):
-            Package name of the kernel.
         layer_name (`str`):
             The name of the layer within the kernel repository.
 
@@ -124,7 +122,6 @@ class LocalLayerRepository:
         # Reference a specific layer by revision
         layer_repo = LocalLayerRepository(
             repo_path=Path("/home/daniel/kernels/activation"),
-            package_name="activation",
             layer_name="SiluAndMul",
         )
         ```
@@ -134,15 +131,13 @@ class LocalLayerRepository:
         self,
         repo_path: Path,
         *,
-        package_name: str,
         layer_name: str,
     ):
         self._repo_path = repo_path
-        self._package_name = package_name
         self.layer_name = layer_name
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_local_kernel(self._repo_path, self._package_name)
+        kernel = get_local_kernel(self._repo_path)
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
@@ -150,14 +145,13 @@ class LocalLayerRepository:
             isinstance(other, LocalLayerRepository)
             and self.layer_name == other.layer_name
             and self._repo_path == other._repo_path
-            and self._package_name == other._package_name
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_path, self._package_name))
+        return hash((self.layer_name, self._repo_path))
 
     def __str__(self) -> str:
-        return f"`{self._repo_path}` (package: {self._package_name}), layer `{self.layer_name}`"
+        return f"`{self._repo_path}` (layer `{self.layer_name}`"
 
 
 class LockedLayerRepository:

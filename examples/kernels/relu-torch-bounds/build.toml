@@ -1,5 +1,7 @@
 [general]
 name = "relu"
+version = 1
+license = "Apache-2.0"
 backends = [
     "cuda",
     "rocm",

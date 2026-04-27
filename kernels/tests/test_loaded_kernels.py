@@ -3,7 +3,7 @@ from dataclasses import fields
 import pytest
 
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
-from kernels.utils import LoadedKernel, RepoInfos, _loaded_kernels
+from kernels.utils import LoadedKernel, RepoInfo, _loaded_kernels
 
 _REPO_ID = "kernels-community/relu"
 _PACKAGE_NAME = "relu"
@@ -22,15 +22,13 @@ def fresh_registry():
 
 def test_dataclass_shape():
     assert tuple(f.name for f in fields(LoadedKernel)) == (
-        "kernel_id",
+        "metadata",
         "module",
-        "module_name",
-        "repo_infos",
+        "repo_info",
     )
-    assert tuple(f.name for f in fields(RepoInfos)) == (
+    assert tuple(f.name for f in fields(RepoInfo)) == (
         "repo_id",
         "revision",
-        "backend",
     )
 
 
@@ -56,11 +54,10 @@ def test_get_kernel_registers_loaded_kernel(fresh_registry):
 
     entry = loaded[0]
     assert entry.module is kernel
-    assert entry.module_name == _PACKAGE_NAME
-    assert entry.repo_infos is not None
-    assert entry.repo_infos.repo_id == _REPO_ID
-    assert isinstance(entry.repo_infos.revision, str) and entry.repo_infos.revision
-    assert entry.repo_infos.backend == "cpu"
+    assert entry.metadata.name.python_name == _PACKAGE_NAME
+    assert entry.repo_info is not None
+    assert entry.repo_info.repo_id == _REPO_ID
+    assert isinstance(entry.repo_info.revision, str) and entry.repo_info.revision
 
 
 def test_repeated_get_kernel_is_cached(fresh_registry):
@@ -71,7 +68,7 @@ def test_repeated_get_kernel_is_cached(fresh_registry):
     assert len(get_loaded_kernels()) == 1
 
 
-def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
+def test_get_local_kernel_registers_with_null_repo_info(fresh_registry):
     # Populate the HF cache via get_kernel, grab the variant path it registered,
     # then clear the registry and exercise get_local_kernel against that path.
     get_kernel(_REPO_ID, version=_VERSION, backend="cpu")
@@ -79,24 +76,23 @@ def test_get_local_kernel_registers_with_null_repo_infos(fresh_registry):
 
     _loaded_kernels.clear()
 
-    kernel = get_local_kernel(variant_path, _PACKAGE_NAME, backend="cpu")
+    kernel = get_local_kernel(variant_path, backend="cpu")
 
     loaded = get_loaded_kernels()
     assert len(loaded) == 1
 
     entry = loaded[0]
     assert entry.module is kernel
-    assert entry.module_name == _PACKAGE_NAME
-    assert entry.repo_infos is None
+    assert entry.metadata.name.python_name == _PACKAGE_NAME
+    assert entry.repo_info is None
 
 
-def test_install_kernel_plus_import_does_not_set_repo_infos(fresh_registry):
+def test_install_kernel_plus_import_does_not_set_repo_info(fresh_registry):
     # install_kernel alone does not import; it returns a path. Any loader
-    # that does not go through get_kernel must leave repo_infos as None.
-    package_name, variant_path = install_kernel(_REPO_ID, revision="main", backend="cpu")
-    assert package_name == _PACKAGE_NAME
+    # that does not go through get_kernel must leave repo_info as None.
+    variant_path = install_kernel(_REPO_ID, revision="main", backend="cpu")
     assert get_loaded_kernels() == []
 
-    get_local_kernel(variant_path, package_name, backend="cpu")
+    get_local_kernel(variant_path, backend="cpu")
     (entry,) = get_loaded_kernels()
-    assert entry.repo_infos is None
+    assert entry.repo_info is None

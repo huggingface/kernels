@@ -1,9 +1,9 @@
-use std::{fs, path::Path};
+use std::str::FromStr;
 
-use eyre::{Context, Result};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Backend;
+use crate::config::{Backend, KernelName};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -18,20 +18,26 @@ pub struct BackendInfo {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Metadata {
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub license: Option<String>,
+    pub name: KernelName,
+    pub id: String,
+    pub version: usize,
+    pub license: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream: Option<url::Url>,
     pub python_depends: Vec<String>,
     pub backend: BackendInfo,
 }
 
-pub fn parse_metadata(path: impl AsRef<Path>) -> Result<Metadata> {
-    let path = path.as_ref();
-    let data =
-        fs::read_to_string(path).wrap_err_with(|| format!("Cannot read `{}`", path.display()))?;
-    serde_json::from_str(&data).wrap_err_with(|| format!("Cannot parse `{}`", path.display()))
+impl Metadata {
+    pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self> {
+        Ok(serde_json::from_reader(reader)?)
+    }
+}
+
+impl FromStr for Metadata {
+    type Err = eyre::Report;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(serde_json::from_str(s)?)
+    }
 }

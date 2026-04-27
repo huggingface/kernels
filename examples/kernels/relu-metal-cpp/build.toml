@@ -1,5 +1,7 @@
 [general]
 name = "relu"
+version = 1
+license = "Apache-2.0"
 backends = ["metal"]
 
 [general.hub]
@@ -11,13 +13,15 @@ src = [
     "torch-ext/torch_binding.h",
 ]
 
-
 [kernel.relu_metal]
 backend = "metal"
-src = [
-  "relu/relu.cpp",
-  "relu/metallib_loader.mm",
-  "relu/relu_cpp.metal",
-  "relu/common.h",
+depends = [
+    "torch",
+    "metal-cpp",
 ]
-depends = [ "torch", "metal-cpp" ]
+src = [
+    "relu/relu.cpp",
+    "relu/metallib_loader.mm",
+    "relu/relu_cpp.metal",
+    "relu/common.h",
+]

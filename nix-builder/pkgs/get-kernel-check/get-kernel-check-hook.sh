@@ -26,7 +26,7 @@ _getKernelCheckHook() {
   trap "rm -rf '$HOME'" EXIT
 
   PYTHONPATH="@kernels@" \
-    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'), '${moduleName}')"
+    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'))"
 }
 
 postInstallCheckHooks+=(_getKernelCheckHook)

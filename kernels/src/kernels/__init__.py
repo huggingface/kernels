@@ -2,6 +2,8 @@ import importlib.metadata
 
 __version__ = importlib.metadata.version("kernels")
 
+from kernels_data import Metadata
+
 from kernels._windows import _add_additional_dll_paths
 from kernels.benchmark import Benchmark
 from kernels.layer import (
@@ -22,6 +24,8 @@ from kernels.layer import (
     use_kernel_mapping,
 )
 from kernels.utils import (
+    LoadedKernel,
+    RepoInfo,
     get_kernel,
     get_loaded_kernels,
     get_local_kernel,
@@ -40,11 +44,14 @@ __all__ = [
     "Device",
     "FuncRepository",
     "LayerRepository",
+    "LoadedKernel",
     "LocalFuncRepository",
     "LocalLayerRepository",
     "LockedFuncRepository",
     "LockedLayerRepository",
+    "Metadata",
     "Mode",
+    "RepoInfo",
     "get_kernel",
     "get_loaded_kernels",
     "get_local_kernel",

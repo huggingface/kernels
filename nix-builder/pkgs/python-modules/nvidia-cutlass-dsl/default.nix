@@ -13,7 +13,6 @@
 
 let
   format = "wheel";
-  pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl";

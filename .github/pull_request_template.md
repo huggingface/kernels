@@ -2,8 +2,7 @@
 
 > **New contributors:** Please open or comment on an issue **before** submitting a
 > PR to discuss the change you'd like to make. This helps us align on approach and
-> avoids wasted effort. PRs from contributors who have not been vouched for will be
-> automatically closed - open an issue first so we can get to know your contribution.
+> avoids wasted effort on changes we may not be able to merge.
 
 ## Related issue
 

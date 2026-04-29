@@ -7,9 +7,9 @@ use std::{
 
 use clap::Args;
 use eyre::{bail, Context, Result};
-use huggingface_hub::{
-    AddSource, CommitOperation, CreateRepoParams, RepoCreateBranchParams, RepoCreateCommitParams,
-    RepoListFilesParams, RepoListRefsParams, RepoType,
+use hf_hub::{
+    repository::{AddSource, CommitOperation},
+    RepoType,
 };
 use kernels_data::metadata::Metadata;
 use walkdir::WalkDir;
@@ -111,14 +111,13 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
 
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
-    let params = CreateRepoParams::builder()
+    let repo_url = api
+        .create_repo()
         .repo_id(&repo_id)
         .repo_type(repo_type)
         .private(args.private)
         .exist_ok(true)
-        .build();
-    let repo_url = api
-        .create_repo(&params)
+        .send()
         .wrap_err("Cannot create repository")?;
     // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
     let repo_id = repo_url
@@ -132,15 +131,16 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     let repo = repo_handle(&api, repo_type, &repo_id);
 
     let is_new_version_branch = if let Some(ref branch) = branch {
-        let refs_params = RepoListRefsParams::builder().build();
         let refs = repo
-            .list_refs(&refs_params)
+            .list_refs()
+            .send()
             .wrap_err("Cannot list repository refs")?;
         let exists = refs.branches.iter().any(|r| r.name == *branch);
 
         if !exists {
-            let params = RepoCreateBranchParams::builder().branch(branch).build();
-            repo.create_branch(&params)
+            repo.create_branch()
+                .branch(branch)
+                .send()
                 .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
         }
         eprintln!(
@@ -163,10 +163,18 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     );
 
     if let Some(ref branch) = branch {
-        let params = RepoListFilesParams {
-            revision: Some(branch.clone()),
-        };
-        let version_existing_files: Vec<String> = repo.list_files(&params).unwrap_or_default();
+        let version_existing_files: Vec<String> = repo
+            .list_tree()
+            .revision(branch.clone())
+            .recursive(true)
+            .send()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|entry| match entry {
+                hf_hub::repository::RepoTreeEntry::File { path, .. } => path,
+                hf_hub::repository::RepoTreeEntry::Directory { path, .. } => path,
+            })
+            .collect();
 
         let version_ops = operations_by_branch.entry(branch.clone()).or_default();
 
@@ -215,15 +223,11 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 "Uploaded using `kernel-builder`.".to_owned()
             };
 
-            let params = RepoCreateCommitParams {
-                operations: chunk.to_vec(),
-                commit_message,
-                commit_description: None,
-                revision: Some(branch.clone()),
-                create_pr: None,
-                parent_commit: None,
-            };
-            repo.create_commit(&params)
+            repo.create_commit()
+                .operations(chunk.to_vec())
+                .commit_message(&commit_message)
+                .revision(branch.clone())
+                .send()
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
 
             if batch_count > 1 {

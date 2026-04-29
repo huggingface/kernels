@@ -1,9 +1,9 @@
 use eyre::{Context, Result};
-use huggingface_hub::{HFClientSync, HFRepositorySync, RepoType};
+use hf_hub::{HFClientSync, HFRepositorySync, RepoType};
 
 /// Build a sync HF API client.
-pub fn api() -> Result<huggingface_hub::HFClientSync> {
-    huggingface_hub::HFClientSync::new().context("Cannot create Hugging Face API client")
+pub fn api() -> Result<hf_hub::HFClientSync> {
+    hf_hub::HFClientSync::new().context("Cannot create Hugging Face API client")
 }
 
 /// Get a repo handle.
@@ -19,10 +19,14 @@ pub fn repo_handle(api: &HFClientSync, repo_type: RepoType, repo_id: &str) -> HF
 /// Resolve the HF username of the currently logged-in user via `whoami`.
 /// Requires a valid HF token to be configured.
 pub fn whoami_username() -> Result<String> {
-    api()?.whoami().map(|user| user.username).map_err(|_| {
-        eyre::eyre!(
-            "Not logged in to Hugging Face. Run `hf auth login` first, \
-                 or use --name <owner/repo> to skip auto-detection."
-        )
-    })
+    api()?
+        .whoami()
+        .send()
+        .map(|user| user.username)
+        .map_err(|_| {
+            eyre::eyre!(
+                "Not logged in to Hugging Face. Run `hf auth login` first, \
+                     or use --name <owner/repo> to skip auto-detection."
+            )
+        })
 }

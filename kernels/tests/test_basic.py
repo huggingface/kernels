@@ -233,6 +233,44 @@ def test_neuron():
     torch.testing.assert_close(relu.relu(x), x.relu())
 
 
+def test_trust_remote_code_blocks_untrusted_org():
+    """Kernels from untrusted orgs should be rejected by default."""
+    with pytest.raises(ValueError, match=r"not from a trusted organisation"):
+        get_kernel("some-random-org/some-kernel", version=1)
+
+
+def test_trust_remote_code_allows_trusted_org():
+    """Kernels from trusted orgs should not raise a trust error.
+
+    This only checks that the trust check passes — it may still fail
+    for other reasons (e.g. network, missing variant).
+    """
+    # kernels-community is in TRUSTED_KERNEL_ORGS, so trust check passes.
+    # The call may fail later (no CUDA, etc.), but not with a trust error.
+    try:
+        get_kernel("kernels-community/relu", version=1)
+    except ValueError as e:
+        assert "not from a trusted organisation" not in str(e)
+
+
+def test_trust_remote_code_flag_allows_untrusted():
+    """trust_remote_code=True should bypass the org check."""
+    # This will likely fail for network/variant reasons, but NOT with trust error.
+    try:
+        get_kernel("some-random-org/some-kernel", version=1, trust_remote_code=True)
+    except ValueError as e:
+        assert "not from a trusted organisation" not in str(e)
+    except Exception:
+        pass  # Any other error is fine — we only care about trust check
+
+
+def test_trust_remote_code_list_warns_and_falls_back():
+    """trust_remote_code as a list should warn and fall back to the default check."""
+    with pytest.warns(match=r"Signing identity verification is not yet implemented"):
+        with pytest.raises(ValueError, match=r"not from a trusted organisation"):
+            get_kernel("some-random-org/some-kernel", version=1, trust_remote_code=["identity-1"])
+
+
 def silu_and_mul_torch(x: torch.Tensor):
     d = x.shape[-1] // 2
     return F.silu(x[..., :d]) * x[..., d:]

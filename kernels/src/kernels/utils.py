@@ -31,6 +31,45 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
+TRUSTED_KERNEL_ORGS = {"kernels-community", "kernels-test", "sglang"}
+
+
+def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
+    """Check whether a kernel repository is trusted.
+
+    When ``trust_remote_code`` is ``False`` (the default), only repositories
+    belonging to a known trusted organisation are allowed.  Repositories from
+    any other organisation will raise a ``ValueError``.
+
+    When ``trust_remote_code`` is ``True``, all repositories are allowed.
+
+    When ``trust_remote_code`` is a list of strings, it is treated as a list
+    of signing identities to verify against.  Signing verification is not yet
+    implemented, so passing a list currently emits a warning and falls back
+    to the default trust check (i.e. only trusted organisations are allowed).
+    """
+    if trust_remote_code is True:
+        return
+
+    if isinstance(trust_remote_code, list):
+        import warnings
+
+        warnings.warn(
+            "Signing identity verification is not yet implemented. "
+            "The provided signing identities will be ignored and the "
+            "kernel will be treated as untrusted. Use trust_remote_code=True "
+            "to bypass trust checks.",
+            stacklevel=3,
+        )
+
+    org = repo_id.split("/", 1)[0]
+    if org not in TRUSTED_KERNEL_ORGS:
+        raise ValueError(
+            f"Kernel repository '{repo_id}' is not from a trusted organisation. "
+            f"Trusted organisations: {', '.join(sorted(TRUSTED_KERNEL_ORGS))}. "
+            f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        )
+
 
 @dataclass(frozen=True)
 class RepoInfo:
@@ -293,6 +332,7 @@ def get_kernel(
     version: int | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
+    trust_remote_code: bool | list[str] = False,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -312,6 +352,12 @@ def get_kernel(
             The backend will be detected automatically if not provided.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
+            Whether to allow loading kernels from untrusted organisations. When ``False``,
+            only kernels from trusted organisations are allowed. When ``True``, all
+            repositories are allowed. A list of strings will be used to verify signing
+            identities in a future release; for now it emits a warning and falls
+            back to the default trust check.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -330,6 +376,8 @@ def get_kernel(
     override = _get_local_kernel_overrides().get(repo_id, None)
     if override is not None:
         return get_local_kernel(override)
+
+    _check_trust_remote_code(repo_id, trust_remote_code)
 
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
     repo_info = RepoInfo(

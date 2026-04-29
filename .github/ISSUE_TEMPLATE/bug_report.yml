@@ -44,6 +44,7 @@ body:
         - CUDA version:
         - GPU model:
         - OS:
+        - If using the Nix builder, output of `nix-shell -p nix-info --run "nix-info -m"`:
     validations:
       required: true
   - type: textarea

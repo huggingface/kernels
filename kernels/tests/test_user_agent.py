@@ -69,3 +69,16 @@ def test_platform_format():
     parts = plat.split("-")
     assert len(parts) == 2
     assert parts[1] in ("linux", "darwin", "windows")
+
+
+def test_user_agent_no_leading_or_empty_segment():
+    # Regression: when no caller-supplied user_agent is passed, the resulting
+    # string must not start with a separator and must not contain empty
+    # segments. Empty segments downstream produce malformed User-Agent headers
+    # (e.g. trailing "; ") which strict HTTP clients reject.
+    for ua_input in (None, "", {}):
+        api = _get_hf_api(user_agent=ua_input)
+        ua = api.user_agent
+        assert not ua.startswith(";"), f"user_agent must not start with ';': {ua!r}"
+        for segment in ua.split(";"):
+            assert segment.strip() != "", f"empty segment found in user_agent: {ua!r}"

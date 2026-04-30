@@ -9,7 +9,7 @@ use clap::Args;
 use eyre::{bail, Context, Result};
 use hf_hub::{
     repository::{AddSource, CommitOperation},
-    RepoType,
+    RepoType, RepoTypeKernel, RepoTypeModel,
 };
 use kernels_data::metadata::Metadata;
 use walkdir::WalkDir;
@@ -27,15 +27,6 @@ pub enum RepoTypeArg {
     Model,
     #[default]
     Kernel,
-}
-
-impl From<RepoTypeArg> for RepoType {
-    fn from(arg: RepoTypeArg) -> Self {
-        match arg {
-            RepoTypeArg::Model => RepoType::Model,
-            RepoTypeArg::Kernel => RepoType::Kernel,
-        }
-    }
 }
 
 #[derive(Debug, Args)]
@@ -96,8 +87,14 @@ fn get_repo_and_branch(
 }
 
 pub fn run_upload(args: UploadArgs) -> Result<()> {
+    match args.repo_type {
+        RepoTypeArg::Model => run_upload_typed::<RepoTypeModel>(args),
+        RepoTypeArg::Kernel => run_upload_typed::<RepoTypeKernel>(args),
+    }
+}
+
+fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     let api = hf::api()?;
-    let repo_type: RepoType = args.repo_type.into();
     let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
     let kernel_dir = fs::canonicalize(&kernel_dir)
         .wrap_err_with(|| format!("Cannot resolve kernel directory `{}`", kernel_dir.display()))?;
@@ -112,9 +109,9 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
     let repo_url = api
-        .create_repo()
+        .create_repository()
         .repo_id(&repo_id)
-        .repo_type(repo_type)
+        .repo_type(T::default())
         .private(args.private)
         .exist_ok(true)
         .send()
@@ -128,7 +125,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         .unwrap_or(&repo_id)
         .to_owned();
 
-    let repo = repo_handle(&api, repo_type, &repo_id);
+    let repo = repo_handle::<T>(&api, &repo_id);
 
     let is_new_version_branch = if let Some(ref branch) = branch {
         let refs = repo
@@ -240,10 +237,7 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     if total_ops == 0 {
         eprintln!("No changes to upload.");
     } else {
-        let type_prefix = match repo_type {
-            RepoType::Kernel => "kernels/",
-            _ => "",
-        };
+        let type_prefix = T::default().url_prefix();
         let tree_path = branch
             .as_ref()
             .map_or(String::new(), |b| format!("/tree/{b}"));

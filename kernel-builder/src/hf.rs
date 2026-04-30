@@ -7,12 +7,12 @@ pub fn api() -> Result<hf_hub::HFClientSync> {
 }
 
 /// Get a repo handle.
-pub fn repo_handle(api: &HFClientSync, repo_type: RepoType, repo_id: &str) -> HFRepositorySync {
+pub fn repo_handle<T: RepoType>(api: &HFClientSync, repo_id: &str) -> HFRepositorySync<T> {
     let parts: Vec<&str> = repo_id.splitn(2, '/').collect();
     if parts.len() == 2 {
-        api.repo(repo_type, parts[0], parts[1])
+        api.repository::<T>(parts[0], parts[1])
     } else {
-        api.repo(repo_type, "", repo_id)
+        api.repository::<T>("", repo_id)
     }
 }
 

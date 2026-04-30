@@ -37,7 +37,7 @@ buildPythonPackage {
   cargoDeps = rustPlatform.importCargoLock {
     lockFile = ../../../../Cargo.lock;
     outputHashes = {
-      "huggingface-hub-0.0.1" = "sha256-By8b1NUPWu+XF3Om1NcEO+o2qdZUco+FxvrJGNRqxWs=";
+      "hf-hub-1.0.0" = "sha256-XJVbG/dfxeSaTvyZMqB/6oF0I5cqKXIXzG5Zq00xmnk=";
     };
   };
 

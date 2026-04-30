@@ -627,33 +627,41 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
 
     user_agent_str = ""
     if not constants.HF_HUB_DISABLE_TELEMETRY:
+        parts: list[str] = []
+
         # User-defined info
         if isinstance(user_agent, dict):
-            user_agent_str = "; ".join(f"{k}/{v}" for k, v in user_agent.items())
-        if isinstance(user_agent, str):
-            user_agent_str = user_agent
+            parts.extend(f"{k}/{v}" for k, v in user_agent.items())
+        elif isinstance(user_agent, str) and user_agent:
+            parts.append(user_agent)
 
         # System info
         python = ".".join(platform.python_version_tuple()[:2])
         backend = _select_backend(None).variant_str
-        sys_info = (
-            f"kernels/{__version__}; python/{python}; backend/{backend}; platform/{_platform()}; file_type/kernel"
+        parts.extend(
+            [
+                f"kernels/{__version__}",
+                f"python/{python}",
+                f"backend/{backend}",
+                f"platform/{_platform()}",
+                "file_type/kernel",
+            ]
         )
 
         if has_torch:
             import torch
 
-            sys_info += f"; torch/{torch.__version__}"
+            parts.append(f"torch/{torch.__version__}")
         if has_tvm_ffi:
             import tvm_ffi
 
-            sys_info += f"; tvm-ffi/{tvm_ffi.__version__}"
+            parts.append(f"tvm-ffi/{tvm_ffi.__version__}")
 
         # Add glibc version if available
         glibc = glibc_version()
         if glibc is not None:
-            sys_info += f"; glibc/{glibc}"
+            parts.append(f"glibc/{glibc}")
 
-        user_agent_str = f"{user_agent_str}; {sys_info}" if user_agent_str else sys_info
+        user_agent_str = "; ".join(parts)
 
     return HfApi(library_name="kernels", library_version=__version__, user_agent=user_agent_str)

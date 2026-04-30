@@ -1131,8 +1131,9 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hf-hub"
-version = "1.0.0"
-source = "git+https://github.com/huggingface/hf-hub.git?rev=18dfe58f2d1ed3779428b670ab8e407bc336c168#18dfe58f2d1ed3779428b670ab8e407bc336c168"
+version = "1.0.0-rc.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e92c57832843dcd7a502be7150a8df2b132e5fb3e8c30127b5b75fc5a92d554d"
 dependencies = [
  "base64",
  "bon",

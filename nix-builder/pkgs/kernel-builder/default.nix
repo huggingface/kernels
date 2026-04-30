@@ -51,9 +51,6 @@ rustPlatform.buildRustPackage {
 
   cargoLock = {
     lockFile = ../../../Cargo.lock;
-    outputHashes = {
-      "huggingface-hub-0.0.1" = "sha256-By8b1NUPWu+XF3Om1NcEO+o2qdZUco+FxvrJGNRqxWs=";
-    };
   };
 
   cargoBuildFlags = cargoFlags;

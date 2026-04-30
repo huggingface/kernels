@@ -31,6 +31,7 @@ from kernels.variants import (
 )
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
+TRUSTED_PUBLISHERS = {"kernels-community", "kernels-test", "kernels-staging", "sgl-project"}
 
 
 @dataclass(frozen=True)
@@ -304,6 +305,7 @@ def get_kernel(
     version: int | None = None,
     backend: str | None = None,
     user_agent: str | dict | None = None,
+    trust_remote_code: bool = False,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -323,6 +325,8 @@ def get_kernel(
             The backend will be detected automatically if not provided.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        trust_remote_code (`bool`): Boolean flag indicating if the kernel should be trusted. If the kernel is
+            from a trusted publisher then this flag is ignored.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -338,6 +342,9 @@ def get_kernel(
         result = activation.relu(out, x)
         ```
     """
+    if repo_id.split("/")[0] not in TRUSTED_PUBLISHERS and not trust_remote_code:
+        raise ValueError("You must set `trust_remote_code=True` to use this kernel. Make sure you trust its binary!")
+
     override = _get_local_kernel_overrides().get(repo_id, None)
     if override is not None:
         return get_local_kernel(override, package_name_from_repo_id(repo_id))

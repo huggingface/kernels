@@ -287,6 +287,19 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             get_kernel("kernels-test/activation")
 
 
+def test_trust_remote_code(monkeypatch):
+    repo_id = "kernels-test/versions"
+
+    with monkeypatch.context() as m:
+        m.setattr("kernels.utils.TRUSTED_PUBLISHERS", set())
+        with pytest.raises(ValueError, match="trust_remote_code=True"):
+            get_kernel(repo_id, version=1)
+
+        get_kernel(repo_id, version=1, trust_remote_code=True)
+
+    get_kernel(repo_id, version=1)
+
+
 @pytest.mark.neuron_only
 def test_neuron():
     relu = get_kernel("kernels-test/relu-nki", version=1)

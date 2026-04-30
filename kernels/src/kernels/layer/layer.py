@@ -90,7 +90,9 @@ class LayerRepository:
         )
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code)
+        kernel = get_kernel(
+            self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code
+        )
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):

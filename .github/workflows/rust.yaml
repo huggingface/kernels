@@ -49,3 +49,25 @@ jobs:
           ( cd kernels-data/bindings/python && cargo clippy -- -D warnings )
       - name: Clippy (kernel-builder)
         run: ( cd kernel-builder && cargo clippy -- -D warnings )
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+      - name: Test (kernel-abi-check)
+        run: cargo test -p kernel-abi-check
+      - name: Test (kernels-data)
+        run: cargo test -p kernels-data
+      - name: Test (kernel-builder)
+        run: cargo test -p hf-kernel-builder

@@ -597,9 +597,9 @@ mod tests {
     }
 
     const METADATA_V3: &str =
-        r#"{"id": "kernel_id", "version": 3, "python-depends": [], "backend": {"type": "cuda"}}"#;
-    const METADATA_NO_VERSION: &str =
-        r#"{"id": "kernel_id", "python-depends": [], "backend": {"type": "cuda"}}"#;
+        r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
+    const METADATA_V0: &str =
+        r#"{"name": "test-kernel", "id": "kernel_id", "version": 0, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
 
     #[test]
     fn test_detect_branch_from_metadata() {
@@ -614,15 +614,15 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_branch_from_metadata_no_version() {
+    fn test_detect_branch_from_metadata_v0() {
         let temp_dir = tempfile::tempdir().unwrap();
         let variant = temp_dir.path().join("variant");
         fs::create_dir_all(&variant).unwrap();
-        fs::write(variant.join("metadata.json"), METADATA_NO_VERSION).unwrap();
+        fs::write(variant.join("metadata.json"), METADATA_V0).unwrap();
 
         let variants = vec![variant];
         let branch = detect_branch_from_metadata(&variants).unwrap();
-        assert_eq!(branch, None);
+        assert_eq!(branch, Some("v0".to_owned()));
     }
 
     #[test]
@@ -634,12 +634,12 @@ mod tests {
         fs::create_dir_all(&v2).unwrap();
         fs::write(
             v1.join("metadata.json"),
-            r#"{"version": 1, "python-depends": [], "backend": {"type": "cuda"}}"#,
+            r#"{"name": "test-kernel", "version": 1, "id": "k1", "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#,
         )
         .unwrap();
         fs::write(
             v2.join("metadata.json"),
-            r#"{"version": 2, "python-depends": [], "backend": {"type": "cuda"}}"#,
+            r#"{"name": "test-kernel", "version": 2, "id": "k2", "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#,
         )
         .unwrap();
 
@@ -711,6 +711,7 @@ mod tests {
             kernel_dir.join("build.toml"),
             r#"[general]
 name = "test-kernel"
+license = "Apache-2.0"
 backends = ["cuda"]
 
 [general.hub]
@@ -747,6 +748,7 @@ branch = "custom-branch"
             kernel_dir.join("build.toml"),
             r#"[general]
 name = "test-kernel"
+license = "Apache-2.0"
 backends = ["cuda"]
 
 [general.hub]

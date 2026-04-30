@@ -5,7 +5,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-
 use clap::Args;
 use eyre::{bail, Context, Result};
 use hf_hub::{

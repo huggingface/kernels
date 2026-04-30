@@ -36,6 +36,10 @@ pub struct InitArgs {
     #[arg(value_name = "PATH")]
     pub path: Option<PathBuf>,
 
+    /// The kernel's license.
+    #[arg(long, value_name = "LICENSE", default_value = "Apache-2.0")]
+    pub license: String,
+
     /// Name of the kernel repo (e.g. `drbh/my-kernel`).
     #[arg(long, value_name = "OWNER/REPO")]
     pub name: Option<RepoInfo>,
@@ -172,7 +176,7 @@ pub fn run_init(args: InitArgs) -> Result<()> {
     load_init_templates(&mut env);
 
     // Build FileSet in memory (atomic preparation)
-    let file_set = build_init_fileset(&env, &repo_info, &enabled_backends)?;
+    let file_set = build_init_fileset(&env, &repo_info, &args.license, &enabled_backends)?;
 
     // Atomic write - validates first, then writes all files
     file_set.write(&target_dir, args.overwrite)?;
@@ -315,6 +319,7 @@ fn load_init_templates(env: &mut Environment) {
 fn build_init_fileset(
     env: &Environment,
     repo_info: &RepoInfo,
+    license: &str,
     enabled_backends: &[Backend],
 ) -> Result<FileSet> {
     let has_cpu = enabled_backends.contains(&Backend::Cpu);
@@ -332,6 +337,7 @@ fn build_init_fileset(
         kernel_name => &repo_info.name,
         kernel_name_normalized => &repo_info.normalized_name,
         kernel_name_class => &repo_info.class_name,
+        license => license,
         repo_id => &repo_info.repo_id,
         backends => &backend_strings,
         has_cpu => has_cpu,

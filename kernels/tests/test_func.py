@@ -78,8 +78,9 @@ def test_kernel_func_with_layer():
         {
             "surprise_me": {
                 "cuda": LayerRepository(
-                    "kernels-community/activation",
+                    "kernels-test/silu-and-mul",
                     layer_name="SiluAndMul",
+                    version=1,
                 )
             }
         }
@@ -101,14 +102,13 @@ def test_local_kernel_func(device):
     x = torch.arange(-10, 10).float()
     assert model(x) is x
 
-    package_name, path = install_kernel("kernels-test/flattened-build", revision="main")
+    path = install_kernel("kernels-test/flattened-build", revision="main")
 
     with use_kernel_mapping(
         {
             "surprise_me": {
                 device: LocalFuncRepository(
                     repo_path=path.parent.parent,
-                    package_name=package_name,
                     func_name="silu_and_mul",
                 )
             }

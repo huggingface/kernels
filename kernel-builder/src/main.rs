@@ -31,7 +31,7 @@ use upload::{run_upload, RepoTypeArg, UploadArgs};
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
-use kernels_data::config::{v3, Build, BuildCompat};
+use kernels_data::config::{v4, Build, BuildCompat};
 
 mod nix;
 
@@ -413,15 +413,15 @@ fn update_build(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let build_compat: BuildCompat = parse_and_validate(&kernel_dir)?;
 
-    if matches!(build_compat, BuildCompat::V3(_)) {
+    if matches!(build_compat, BuildCompat::V4(_)) {
         return Ok(());
     }
 
     let build: Build = build_compat
         .try_into()
         .context("Cannot update build configuration")?;
-    let v3_build: v3::Build = build.into();
-    let pretty_toml = toml::to_string_pretty(&v3_build)?;
+    let v4_build: v4::Build = build.into();
+    let pretty_toml = toml::to_string_pretty(&v4_build)?;
 
     let build_toml = kernel_dir.join("build.toml");
     let mut writer =

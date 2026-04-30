@@ -42,7 +42,11 @@ metadata. Currently the following top-level keys are supported:
 - `id` (`str`, required): a unique identifier for the kernel. This
   identifier must also be a valid Python module name. If the kernel
   registers Torch ops, they must be registered as `torch.ops.<id>`
+- `name` (`str`, required): then name of the kernel. Replacing dashes
+  by underscores should result in the module name of the kernel.
 - `version` (`int`, required): the kernel version number.
+- `license` (`str`, required): the kernel license in. Refer to the
+  list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
 - `backend` (`dict`, required): information about the compute backend that
   this build variant supports.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
@@ -52,9 +56,11 @@ Example `metadata.json`:
 
 ```json
 {
-  "id": "_mykernel_cuda_be238e4",
-  "python-depends": ["einops"],
+  "name": "mykernel",
+  "id": "_mykernel_cuda_7a4e5a7",
   "version": 1,
+  "license": "Apache-2.0",
+  "python-depends": ["einops"],
   "backend": {
     "type": "cuda",
     "archs": ["7.0", "7.2", "7.5", "8.0", "8.6", "8.7", "8.9", "9.0+PTX"]

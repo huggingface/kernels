@@ -39,7 +39,8 @@ pub fn write_metadata(
             .collect::<Result<Vec<_>>>()?;
 
         let metadata = Metadata {
-            id: Some(kernel_id.to_string_for_backend(*backend)),
+            id: kernel_id.to_string_for_backend(*backend),
+            name: general.name.clone(),
             version: general.version,
             license: general.license.clone(),
             upstream: general.upstream.clone(),

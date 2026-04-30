@@ -59,7 +59,7 @@ def test_layer_locked(device):
         }
     ):
         version = kernelize(version, device=device, mode=Mode.INFERENCE)
-        assert version() == "2"
+        assert version() == 2
 
 
 def test_func_locked(device):
@@ -67,7 +67,7 @@ def test_func_locked(device):
 
     @use_kernel_func_from_hub("version")
     def version():
-        return "0.0.0"
+        return 0
 
     class Version(nn.Module):
         def __init__(self):
@@ -92,9 +92,9 @@ def test_func_locked(device):
     ):
         model = kernelize(model, device=device, mode=Mode.INFERENCE)
 
-    assert version() == "2"
+    assert version() == 2
 
     with use_kernel_mapping({"version": {}}):
         model = kernelize(model, mode=Mode.INFERENCE, device=device)
 
-    assert version() == "0.0.0"
+    assert version() == 0

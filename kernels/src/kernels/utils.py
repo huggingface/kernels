@@ -1,4 +1,3 @@
-import ctypes
 import functools
 import hashlib
 import importlib
@@ -14,6 +13,7 @@ from pathlib import Path
 from types import ModuleType
 
 from huggingface_hub import HfApi, constants
+from kernels_data import Metadata
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
@@ -21,7 +21,6 @@ from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
-from kernels.metadata import Metadata
 from kernels.status import resolve_status
 from kernels.variants import (
     Variant,
@@ -35,18 +34,46 @@ TRUSTED_PUBLISHERS = {"kernels-community", "kernels-test", "kernels-staging", "s
 
 
 @dataclass(frozen=True)
-class RepoInfos:
+class RepoInfo:
+    """
+    This dataclass stores the origin of the kernel.
+
+    The following fields are available:
+
+    - `repo_id` (`str`): the Hub repository containing the kernel.
+    - `revision` (`str`): the specific revision of the kernel.
+    """
+
     repo_id: str
     revision: str
-    backend: str | None
 
 
 @dataclass(frozen=True)
 class LoadedKernel:
-    kernel_id: str
+    """
+    This dataclass provides information about a loaded kernel:
+
+    - `metadata` (`Metadata`): kernel metadata.
+    - `module` (`ModuleType`): the imported kernel module.
+    - `repo_info` (`kernels.utils.RepoInfo | None`): populated only for
+      kernels loaded via `get_kernel`. Loaders that work from a local path
+      (`get_local_kernel`) or a lockfile (`get_locked_kernel`, `load_kernel`)
+      leave this as `None`.
+
+    The metadata includes the following properties that describe a kernel:
+
+    - `id` (`str`): kernel identifier that is unique to the kernel version + backend.
+    - `name` (`str`): the name of the kernel.
+    - `version` (`int`): the version of the kernel.
+    - `license` (`str`): the license of the kernel.
+    - `upstream` (`str | None`): the upstream repository of the kernel.
+    - `python_depends` (`list[str]`): required Python dependencies.
+    - `backend`: information about the kernel's backend.
+    """
+
+    metadata: Metadata
     module: ModuleType
-    module_name: str
-    repo_infos: RepoInfos | None
+    repo_info: RepoInfo | None
 
 
 _loaded_kernels: dict[Path, LoadedKernel] = {}
@@ -56,28 +83,10 @@ def get_loaded_kernels() -> list[LoadedKernel]:
     """
     Return a snapshot of every kernel that has been loaded into the current process.
 
-    Each entry is a `kernels.utils.LoadedKernel` dataclass with fields:
-
-    - `kernel_id` (`str`): unique identifier used as the `sys.modules` key
-      for this variant (either `metadata.id` or a hash-suffixed module name).
-    - `module` (`ModuleType`): the imported kernel module.
-    - `module_name` (`str`): the kernel's module name.
-    - `repo_infos` (`kernels.utils.RepoInfos | None`): populated only for
-      kernels loaded via `get_kernel`. Loaders that work from a local path
-      (`get_local_kernel`) or a lockfile (`get_locked_kernel`, `load_kernel`)
-      leave this as `None`.
-
-    `RepoInfos` has `repo_id`, `revision`, and `backend` fields. `backend`
-    reflects the value passed by the caller — it is `None` when the caller
-    relied on backend auto-detection.
-
     The returned list is a new list; mutating it does not affect the registry.
 
-    > [!NOTE]
-    > These arguments might be renamed / changed a bit.
-
     Returns:
-        `list[LoadedKernel]`: one entry per distinct kernel variant path
+        `list[LoadedKernel]`: One [`LoadedKernel`] per distinct kernel variant path
         loaded in this process.
 
     Example:
@@ -86,7 +95,7 @@ def get_loaded_kernels() -> list[LoadedKernel]:
 
         get_kernel("kernels-community/activation", version=1)
         for loaded in get_loaded_kernels():
-            print(loaded.module_name, loaded.repo_infos)
+            print(loaded.metadata.name, loaded.repo_info)
         ```
     """
     return list(_loaded_kernels.values())
@@ -123,41 +132,33 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 CACHE_DIR: str | None = _get_cache_dir()
 
 
-def _import_from_path(module_name: str, variant_path: Path, _repo_infos: RepoInfos | None = None) -> ModuleType:
+def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
-    metadata = Metadata.load_from_variant(variant_path)
+    metadata = Metadata.read_from_file(variant_path / "metadata.json")
+    module_name = metadata.name.python_name
     validate_dependencies(module_name, metadata.python_depends, _backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
         file_path = variant_path / module_name / "__init__.py"
+    if not file_path.exists():
+        raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
 
-    # We cannot use the module name as-is, after adding it to `sys.modules`,
-    # it would also be used for other imports. So, we make a module name that
-    # depends on the path for it to be unique using the hex-encoded hash of
-    # the path.
-    if metadata.id is None:
-        path_hash = "{:x}".format(ctypes.c_size_t(hash(file_path)).value)
-        kernel_id = f"{module_name}_{path_hash}"
-    else:
-        kernel_id = metadata.id
-
-    spec = importlib.util.spec_from_file_location(kernel_id, file_path)
+    spec = importlib.util.spec_from_file_location(metadata.id, file_path)
     if spec is None:
         raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
-    sys.modules[kernel_id] = module
+    sys.modules[metadata.id] = module
     spec.loader.exec_module(module)  # type: ignore
 
     _loaded_kernels[variant_path] = LoadedKernel(
-        kernel_id=kernel_id,
+        metadata=metadata,
         module=module,
-        module_name=module_name,
-        repo_infos=_repo_infos,
+        repo_info=repo_info,
     )
     return module
 
@@ -170,7 +171,7 @@ def install_kernel(
     backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
     user_agent: str | dict | None = None,
-) -> tuple[str, Path]:
+) -> Path:
     """
     Download a kernel for the current environment to the cache.
 
@@ -192,14 +193,12 @@ def install_kernel(
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
     Returns:
-        `tuple[str, Path]`: A tuple containing the package name and the path to the variant directory.
+        `Path`: The path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
 
     if not local_files_only:
         repo_id, revision = resolve_status(api, repo_id, revision)
-
-    package_name = package_name_from_repo_id(repo_id)
 
     variants = get_variants(api, repo_id=repo_id, revision=revision)
     variant = resolve_variant(variants, backend)
@@ -227,7 +226,6 @@ def install_kernel(
     try:
         return _find_kernel_in_repo_path(
             repo_path,
-            package_name,
             variant=variant,
             variant_locks=variant_locks,
         )
@@ -237,11 +235,10 @@ def install_kernel(
 
 def _find_kernel_in_repo_path(
     repo_path: Path,
-    package_name: str,
     *,
     variant: Variant,
     variant_locks: dict[str, VariantLock] | None = None,
-) -> tuple[str, Path]:
+) -> Path:
     variant_str = variant.variant_str
     variant_path = repo_path / "build" / variant_str
     if not variant_path.exists():
@@ -253,15 +250,7 @@ def _find_kernel_in_repo_path(
             raise ValueError(f"No lock found for build variant: {variant}")
         validate_kernel(repo_path=repo_path, variant=variant_str, hash=variant_lock.hash)
 
-    module_init_path = variant_path / "__init__.py"
-    if not os.path.exists(module_init_path):
-        # Compatibility with older kernels.
-        module_init_path = variant_path / package_name / "__init__.py"
-
-    if not os.path.exists(module_init_path):
-        raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
-
-    return package_name, variant_path
+    return variant_path
 
 
 def install_kernel_all_variants(
@@ -347,26 +336,24 @@ def get_kernel(
 
     override = _get_local_kernel_overrides().get(repo_id, None)
     if override is not None:
-        return get_local_kernel(override, package_name_from_repo_id(repo_id))
+        return get_local_kernel(override)
 
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-    repo_infos = RepoInfos(
+    repo_info = RepoInfo(
         repo_id=repo_id,
         revision=revision,
-        backend=backend,
     )
-    package_name, variant_path = install_kernel(
+    variant_path = install_kernel(
         repo_id,
-        revision=revision,
         backend=backend,
+        revision=revision,
         user_agent=user_agent,
     )
-    return _import_from_path(package_name, variant_path, _repo_infos=repo_infos)
+    return _import_from_path(variant_path, repo_info=repo_info)
 
 
 def get_local_kernel(
     repo_path: Path,
-    package_name: str,
     backend: str | None = None,
 ) -> ModuleType:
     """
@@ -375,8 +362,6 @@ def get_local_kernel(
     Args:
         repo_path (`Path`):
             The local path to the kernel repository.
-        package_name (`str`):
-            The name of the package to import from the repository.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -389,15 +374,15 @@ def get_local_kernel(
         variant = resolve_variant(variants, backend)
 
         if variant is not None:
-            return _import_from_path(package_name, base_path / variant.variant_str)
+            return _import_from_path(base_path / variant.variant_str)
 
     # If we didn't find the package in the repo we may have a explicit
     # package path.
     variant_path = repo_path
     if variant_path.exists():
-        return _import_from_path(package_name, variant_path)
+        return _import_from_path(variant_path)
 
-    raise FileNotFoundError(f"Could not find package '{package_name}' in {repo_path}")
+    raise FileNotFoundError(f"Could not find kernel in {repo_path}")
 
 
 def has_kernel(
@@ -424,7 +409,6 @@ def has_kernel(
         `bool`: `True` if a kernel is available for the current environment.
     """
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
-    package_name = package_name_from_repo_id(repo_id)
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)
@@ -433,16 +417,12 @@ def has_kernel(
     if variant is None:
         return False
 
-    for init_file in ["__init__.py", f"{package_name}/__init__.py"]:
-        if api.file_exists(
-            repo_id,
-            repo_type="kernel",
-            revision=revision,
-            filename=f"build/{variant.variant_str}/{init_file}",
-        ):
-            return True
-
-    return False
+    return api.file_exists(
+        repo_id,
+        repo_type="kernel",
+        revision=revision,
+        filename=f"build/{variant.variant_str}/metadata.json",
+    )
 
 
 def load_kernel(
@@ -479,8 +459,6 @@ def load_kernel(
             f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
         )
 
-    package_name = package_name_from_repo_id(repo_id)
-
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
     variant = resolve_variant(variants, backend)
@@ -505,13 +483,12 @@ def load_kernel(
     )
 
     try:
-        package_name, variant_path = _find_kernel_in_repo_path(
+        variant_path = _find_kernel_in_repo_path(
             repo_path,
-            package_name,
             variant=variant,
             variant_locks=None,
         )
-        return _import_from_path(package_name, variant_path)
+        return _import_from_path(variant_path)
     except FileNotFoundError:
         raise FileNotFoundError(
             f"Locked kernel `{repo_id}` does not have applicable variant or was not downloaded with `kernels download <project>`"
@@ -536,9 +513,9 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
-    package_name, variant_path = install_kernel(repo_id, revision=locked_sha, local_files_only=local_files_only)
+    variant_path = install_kernel(repo_id, revision=locked_sha, local_files_only=local_files_only)
 
-    return _import_from_path(package_name, variant_path)
+    return _import_from_path(variant_path)
 
 
 def _get_caller_locked_kernel(repo_id: str) -> str | None:
@@ -636,10 +613,6 @@ def git_hash_object(data: bytes, object_type: str = "blob"):
     m.update(header)
     m.update(data)
     return m.digest()
-
-
-def package_name_from_repo_id(repo_id: str) -> str:
-    return repo_id.split("/")[-1].replace("-", "_")
 
 
 def _platform() -> str:

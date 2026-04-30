@@ -1,10 +1,11 @@
 [general]
+name = "{{ kernel_name }}"
+license = "{{ license }}"
 backends = [
 {% for backend in backends %}
   "{{ backend }}",
 {% endfor %}
 ]
-name = "{{ kernel_name }}"
 version = 1
 
 [general.hub]

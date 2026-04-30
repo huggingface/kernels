@@ -1,5 +1,7 @@
 [general]
 name = "cutlass-gemm"
+version = 1
+license = "Apache-2.0"
 backends = [
     "cuda",
     "xpu",
@@ -14,14 +16,6 @@ src = [
     "torch-ext/torch_binding.h",
 ]
 
-[kernel.gemm]
-backend = "cuda"
-depends = [
-    "torch",
-    "cutlass_3_6",
-]
-src = ["gemm.cu"]
-
 [kernel.gemm_xpu]
 backend = "xpu"
 depends = [
@@ -29,3 +23,11 @@ depends = [
     "sycl_tla",
 ]
 src = ["gemm_sycl.cpp"]
+
+[kernel.gemm]
+backend = "cuda"
+depends = [
+    "torch",
+    "cutlass_3_6",
+]
+src = ["gemm.cu"]

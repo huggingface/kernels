@@ -111,8 +111,6 @@ class LocalFuncRepository:
     Args:
         repo_path (`Path`):
             The local repository containing the layer.
-        package_name (`str`):
-            Package name of the kernel.
         func_name (`str`):
             The name of the function within the kernel repository.
 
@@ -125,7 +123,6 @@ class LocalFuncRepository:
         # Reference a specific layer by revision
         layer_repo = LocalFuncRepository(
             repo_path=Path("/home/daniel/kernels/activation"),
-            package_name="activation",
             func_name="silu_and_mul",
         )
         ```
@@ -135,15 +132,13 @@ class LocalFuncRepository:
         self,
         repo_path: Path,
         *,
-        package_name: str,
         func_name: str,
     ):
         self._repo_path = repo_path
-        self._package_name = package_name
         self.func_name = func_name
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_local_kernel(self._repo_path, self._package_name)
+        kernel = get_local_kernel(self._repo_path)
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):
@@ -151,14 +146,13 @@ class LocalFuncRepository:
             isinstance(other, LocalFuncRepository)
             and self.func_name == other.func_name
             and self._repo_path == other._repo_path
-            and self._package_name == other._package_name
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_path, self._package_name))
+        return hash((self.func_name, self._repo_path))
 
     def __str__(self) -> str:
-        return f"`{self._repo_path}` (package: {self._package_name}), layer `{self.func_name}`"
+        return f"`{self._repo_path}` (layer `{self.func_name}`"
 
 
 def use_kernel_func_from_hub(func_name: str):

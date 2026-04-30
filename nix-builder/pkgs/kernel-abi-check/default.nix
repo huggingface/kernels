@@ -33,7 +33,7 @@ rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ../../../Cargo.lock;
     outputHashes = {
-      "hf-hub-1.0.0" = "sha256-XJVbG/dfxeSaTvyZMqB/6oF0I5cqKXIXzG5Zq00xmnk=";
+      "hf-hub-1.0.0" = "sha256-oCMBxgqSpSwnaP1fJKyleHA+4o9D19Nx1tz0mjZdgHk=";
     };
   };
 

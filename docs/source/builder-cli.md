@@ -147,6 +147,7 @@ Build the kernel and upload to Hugging Face Hub
 
   Possible values: `model`, `kernel`
 
+* `-q`, `--quiet` — Suppress progress output
 
 
 
@@ -171,6 +172,7 @@ Upload kernel build artifacts to the Hugging Face Hub
 
   Possible values: `model`, `kernel`
 
+* `-q`, `--quiet` — Suppress progress output
 
 
 

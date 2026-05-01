@@ -247,10 +247,7 @@ def test_trust_remote_code_allows_trusted_org():
     """
     # kernels-community is in TRUSTED_KERNEL_ORGS, so trust check passes.
     # The call may fail later (no CUDA, etc.), but not with a trust error.
-    try:
-        get_kernel("kernels-community/relu", version=1)
-    except ValueError as e:
-        assert "not from a trusted organisation" not in str(e)
+    get_kernel("kernels-community/relu", version=1)
 
 
 def test_trust_remote_code_flag_allows_untrusted():

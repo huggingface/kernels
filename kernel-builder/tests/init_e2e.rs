@@ -3,7 +3,7 @@ use std::process::Command;
 
 fn run_init(args: &[&str]) -> (bool, String, tempfile::TempDir) {
     let temp = tempfile::tempdir().unwrap();
-    let bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug/kernel-builder");
+    let bin = std::path::PathBuf::from(env!("CARGO_BIN_EXE_kernel-builder"));
 
     let output = Command::new(&bin)
         .args(["init"])
@@ -57,7 +57,7 @@ fn test_init_fails_on_existing_scaffold_file() {
     // Pre-create a scaffold file - should cause init to fail
     fs::write(dir.join("build.toml"), "existing content").unwrap();
 
-    let bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug/kernel-builder");
+    let bin = std::path::PathBuf::from(env!("CARGO_BIN_EXE_kernel-builder"));
 
     let out = Command::new(&bin)
         .args(["init", "--name", "user/exists", "--backends", "cpu"])
@@ -82,7 +82,7 @@ fn test_init_overwrite() {
     fs::write(dir.join("build.toml"), "old scaffold").unwrap();
     fs::write(dir.join("custom.txt"), "user content").unwrap();
 
-    let bin = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/debug/kernel-builder");
+    let bin = std::path::PathBuf::from(env!("CARGO_BIN_EXE_kernel-builder"));
 
     let out = Command::new(&bin)
         .args([

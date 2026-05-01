@@ -235,8 +235,8 @@ def test_neuron():
 
 def test_trust_remote_code_blocks_untrusted_org():
     """Kernels from untrusted orgs should be rejected by default."""
-    with pytest.raises(ValueError, match=r"not from a trusted organisation"):
-        get_kernel("some-random-org/some-kernel", version=1)
+    with pytest.raises(ValueError, match=r"not from a trusted org"):
+        get_kernel("drbh/not-a-trused-org-kernel", version=1)
 
 
 def test_trust_remote_code_allows_trusted_org():
@@ -253,12 +253,7 @@ def test_trust_remote_code_allows_trusted_org():
 def test_trust_remote_code_flag_allows_untrusted():
     """trust_remote_code=True should bypass the org check."""
     # This will likely fail for network/variant reasons, but NOT with trust error.
-    try:
-        get_kernel("some-random-org/some-kernel", version=1, trust_remote_code=True)
-    except ValueError as e:
-        assert "not from a trusted organisation" not in str(e)
-    except Exception:
-        pass  # Any other error is fine — we only care about trust check
+    get_kernel("drbh/ci-test-kernel", version=1, trust_remote_code=True)
 
 
 def test_trust_remote_code_list_warns_and_falls_back():

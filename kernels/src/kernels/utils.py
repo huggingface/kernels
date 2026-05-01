@@ -31,7 +31,7 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
-TRUSTED_KERNEL_ORGS = {"kernels-community", "kernels-test", "sglang"}
+TRUSTED_KERNEL_ORGS = {"kernels-community", "kernels-staging", "kernels-test", "sglang"}
 
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:

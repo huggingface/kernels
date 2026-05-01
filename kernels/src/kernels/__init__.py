@@ -24,7 +24,6 @@ from kernels.layer import (
     use_kernel_mapping,
 )
 from kernels.utils import (
-    TRUSTED_KERNEL_ORGS,
     LoadedKernel,
     RepoInfo,
     get_kernel,
@@ -53,7 +52,6 @@ __all__ = [
     "Metadata",
     "Mode",
     "RepoInfo",
-    "TRUSTED_KERNEL_ORGS",
     "get_kernel",
     "get_loaded_kernels",
     "get_local_kernel",

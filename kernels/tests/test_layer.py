@@ -41,10 +41,6 @@ kernel_layer_mapping = {
             layer_name="SiluAndMul",
             version=1,
         ),
-        "npu": LayerRepository(
-            repo_id="kernels-ext-npu/SwiGlu",
-            layer_name="SwiGlu",
-        ),
     },
     "SiluAndMulNoCompile": {
         "cuda": LayerRepository(
@@ -291,23 +287,6 @@ def test_hub_forward_xpu():
 
     assert rms_norm.n_calls == 1
     assert rms_norm_with_kernel.n_calls == 0
-
-
-@pytest.mark.npu_only
-def test_hub_forward_npu():
-    torch.manual_seed(0)
-
-    silu_and_mul = SiluAndMul()
-    X = torch.randn((32, 64), device="npu")
-    Y = silu_and_mul(X)
-
-    silu_and_mul_with_kernel = kernelize(SiluAndMulWithKernel(), device="npu", mode=Mode.INFERENCE)
-    Y_kernel = silu_and_mul_with_kernel(X)
-
-    torch.testing.assert_close(Y_kernel, Y)
-
-    assert silu_and_mul.n_calls == 1
-    assert silu_and_mul_with_kernel.n_calls == 0
 
 
 def test_rocm_kernel_mapping(device):

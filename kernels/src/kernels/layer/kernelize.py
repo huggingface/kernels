@@ -139,12 +139,12 @@ def register_kernel_mapping(
             "MultiHeadAttention": {
                 "cuda": {
                     Mode.TRAINING: LayerRepository(
-                        repo_id="username/training-kernels",
+                        repo_id="kernels-community/training-kernels",
                         layer_name="TrainingAttention",
                         version=1,
                     ),
                     Mode.INFERENCE: LayerRepository(
-                        repo_id="username/inference-kernels",
+                        repo_id="kernels-community/inference-kernels",
                         layer_name="FastAttention",
                         version=1,
                     ),

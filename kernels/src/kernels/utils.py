@@ -31,22 +31,20 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
-TRUSTED_KERNEL_ORGS = {"kernels-community", "kernels-staging", "kernels-test", "sglang"}
-
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
 
     When ``trust_remote_code`` is ``False`` (the default), only repositories
-    belonging to a known trusted organisation are allowed.  Repositories from
-    any other organisation will raise a ``ValueError``.
+    whose publisher is marked as trusted on the Hub are allowed.  Repositories
+    from untrusted publishers will raise a ``ValueError``.
 
     When ``trust_remote_code`` is ``True``, all repositories are allowed.
 
     When ``trust_remote_code`` is a list of strings, it is treated as a list
     of signing identities to verify against.  Signing verification is not yet
     implemented, so passing a list currently emits a warning and falls back
-    to the default trust check (i.e. only trusted organisations are allowed).
+    to the default trust check (i.e. only trusted publishers are allowed).
     """
     if trust_remote_code is True:
         return
@@ -62,11 +60,19 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             stacklevel=3,
         )
 
-    org = repo_id.split("/", 1)[0]
-    if org not in TRUSTED_KERNEL_ORGS:
+    api = HfApi()
+    try:
+        info = api.repo_info(repo_id, repo_type="kernel")
+    except Exception:
         raise ValueError(
-            f"Kernel repository '{repo_id}' is not from a trusted organisation. "
-            f"Trusted organisations: {', '.join(sorted(TRUSTED_KERNEL_ORGS))}. "
+            f"Kernel repository '{repo_id}' is not from a trusted publisher. "
+            f"Could not verify publisher trust status. "
+            f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        )
+
+    if not getattr(info, "trustedPublisher", False):
+        raise ValueError(
+            f"Kernel repository '{repo_id}' is not from a trusted publisher. "
             f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
         )
 

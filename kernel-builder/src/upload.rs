@@ -8,9 +8,11 @@ use std::{
 use clap::Args;
 use eyre::{bail, Context, Result};
 use hf_hub::{
+    progress::{Progress, ProgressEvent, ProgressHandler, UploadEvent},
     repository::{AddSource, CommitOperation},
     RepoType, RepoTypeKernel, RepoTypeModel,
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use kernels_data::metadata::Metadata;
 use walkdir::WalkDir;
 
@@ -18,6 +20,21 @@ use crate::{
     hf::{self, repo_handle},
     util::{check_or_infer_kernel_dir, discover_variants, parse_build},
 };
+
+/// Bridges `ProgressHandler` events to an `indicatif::ProgressBar`.
+struct IndicatifProgress(ProgressBar);
+
+impl ProgressHandler for IndicatifProgress {
+    fn on_progress(&self, event: &ProgressEvent) {
+        if let ProgressEvent::Upload(UploadEvent::Progress { files, .. }) = event {
+            let completed = files
+                .iter()
+                .filter(|f| f.status == hf_hub::progress::FileStatus::Complete)
+                .count();
+            self.0.set_position(completed as u64);
+        }
+    }
+}
 
 const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
@@ -51,6 +68,10 @@ pub struct UploadArgs {
     /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
     #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
     pub repo_type: RepoTypeArg,
+
+    /// Suppress progress output.
+    #[arg(long, short)]
+    pub quiet: bool,
 }
 
 /// Get repository and branch from the given arguments, or fallback to
@@ -195,20 +216,28 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             continue;
         }
 
-        eprintln!(
-            "Uploading {} operations to branch `{}`...",
-            operations.len(),
-            branch
-        );
-
         let batch_count = operations.len().div_ceil(BUILD_COMMIT_BATCH_SIZE);
-        if batch_count > 1 {
-            eprintln!(
-                "Uploading in {} commits ({} operations).",
-                batch_count,
-                operations.len()
+        let progress = if args.quiet {
+            ProgressBar::hidden()
+        } else {
+            let pb = ProgressBar::new(operations.len() as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "Uploading to `{msg}` [{bar:40.cyan/blue}] {pos}/{len} files",
+                )
+                .unwrap()
+                .progress_chars("=> "),
             );
-        }
+            pb.set_message(branch.clone());
+            pb
+        };
+
+        let progress_handler: Option<Progress> = if args.quiet {
+            None
+        } else {
+            let pb = progress.clone();
+            Some(Progress::new(IndicatifProgress(pb)))
+        };
 
         for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
             let commit_message = if batch_count > 1 {
@@ -224,13 +253,12 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
                 .operations(chunk.to_vec())
                 .commit_message(&commit_message)
                 .revision(branch.clone())
+                .maybe_progress(progress_handler.clone())
                 .send()
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
-
-            if batch_count > 1 {
-                eprintln!("  Uploaded batch {}/{batch_count}.", batch_index + 1);
-            }
         }
+
+        progress.finish_with_message(format!("Uploaded to `{branch}`"));
     }
 
     let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();

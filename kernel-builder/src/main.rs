@@ -125,6 +125,10 @@ enum Commands {
         /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
         #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
         repo_type: RepoTypeArg,
+
+        /// Suppress progress output.
+        #[arg(long, short)]
+        quiet: bool,
     },
 
     /// Upload kernel build artifacts to the Hugging Face Hub.
@@ -322,6 +326,7 @@ fn main() -> Result<()> {
             branch,
             private,
             repo_type,
+            quiet,
         } => {
             run_build(
                 kernel_dir.clone(),
@@ -336,6 +341,7 @@ fn main() -> Result<()> {
                 branch,
                 private,
                 repo_type,
+                quiet,
             })
         }
         Commands::CreatePyproject {

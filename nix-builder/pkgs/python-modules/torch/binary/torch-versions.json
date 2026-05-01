@@ -89,49 +89,49 @@
 
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "cudaVersion": "12.6",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "cudaVersion": "13.0",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "cudaVersion": "13.2",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "cpu": true,
     "systems": ["aarch64-linux", "x86_64-linux"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "metal": true,
     "systems": ["aarch64-darwin"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "rocmVersion": "7.1",
     "systems": ["x86_64-linux"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "rocmVersion": "7.2",
     "systems": ["x86_64-linux"]
   },
   {
     "torchVersion": "2.12.0",
-    "torchTesting": "rc3",
+    "torchTesting": "rc7",
     "xpuVersion": "2025.3.2",
     "systems": ["x86_64-linux"]
   }

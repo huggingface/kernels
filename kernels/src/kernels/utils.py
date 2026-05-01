@@ -60,7 +60,7 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             stacklevel=3,
         )
 
-    api = HfApi()
+    api = _get_hf_api()
     try:
         info = api.repo_info(repo_id, repo_type="kernel")
     except Exception:

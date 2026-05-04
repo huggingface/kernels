@@ -18,7 +18,7 @@
 <hr/>
 
 The Kernel Hub allows Python libraries and applications to load compute
-kernels directly from the [Hub](https://hf.co/). To support this kind
+kernels directly from the [Hub](https://huggingface.co/). To support this kind
 of dynamic loading, Hub kernels differ from traditional Python kernel
 packages in that they are made to be:
 
@@ -63,8 +63,7 @@ activation.gelu_fast(y, x)
 print(y)
 ```
 
-You can [search for kernels](https://huggingface.co/models?other=kernels) on
-the Hub.
+Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kernels).
 
 ## 📚 Documentation
 

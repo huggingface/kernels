@@ -66,20 +66,28 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
     if org in _ALWAYS_TRUSTED_ORGS:
         return
 
-    api = _get_hf_api()
-    try:
-        info = api.repo_info(repo_id, repo_type="kernel")
-    except Exception as e:
-        raise ValueError(
-            f"Could not verify publisher trust status for kernel repository '{repo_id}'. "
-            "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-        ) from e
+    raise ValueError(
+        f"Kernel repository '{repo_id}' is not from a trusted publisher. "
+        f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
+    )
 
-    if not getattr(info, "trustedPublisher", False):
-        raise ValueError(
-            f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-            f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
-        )
+    # TODO: revisit and update logic when we can check trusted publishers at the
+    # user/organization level
+    #
+    # api = _get_hf_api()
+    # try:
+    #     info = api.repo_info(repo_id, repo_type="kernel")
+    # except Exception as e:
+    #     raise ValueError(
+    #         f"Could not verify publisher trust status for kernel repository '{repo_id}'. "
+    #         "Set trust_remote_code=True to allow loading kernels from untrusted sources."
+    #     ) from e
+
+    # if not getattr(info, "trustedPublisher", False):
+    #     raise ValueError(
+    #         f"Kernel repository '{repo_id}' is not from a trusted publisher. "
+    #         f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
+    #     )
 
 
 @dataclass(frozen=True)

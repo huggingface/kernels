@@ -188,9 +188,9 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             .send()
             .unwrap_or_default()
             .into_iter()
-            .map(|entry| match entry {
-                hf_hub::repository::RepoTreeEntry::File { path, .. } => path,
-                hf_hub::repository::RepoTreeEntry::Directory { path, .. } => path,
+            .filter_map(|entry| match entry {
+                hf_hub::repository::RepoTreeEntry::File { path, .. } => Some(path),
+                hf_hub::repository::RepoTreeEntry::Directory { .. } => None,
             })
             .collect();
 

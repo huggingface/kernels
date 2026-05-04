@@ -45,6 +45,20 @@ jobs:
         env:
           USER: runner
 
+      # Remove the existing test repo if it exists so we test repo creation in the upload step
+      - name: Delete existing test repo
+        run: |
+          curl -sf -X DELETE \
+            "${{ env.HF_ENDPOINT }}/api/repos/delete" \
+            -H "Authorization: Bearer ${{ secrets.HF_STAGING_TOKEN }}" \
+            -d '{"type":"kernel","organization":"__DUMMY_KERNELS_USER__","name":"kernels-upload-test"}' \
+          || true
+          curl -sf -X DELETE \
+            "${{ env.HF_ENDPOINT }}/api/repos/delete" \
+            -H "Authorization: Bearer ${{ secrets.HF_STAGING_TOKEN }}" \
+            -d '{"type":"model","organization":"__DUMMY_KERNELS_USER__","name":"kernels-upload-test"}' \
+          || true
+
       - name: Init kernel project
         run: |
           cd /tmp

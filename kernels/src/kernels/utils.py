@@ -31,6 +31,8 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
+_ALWAYS_TRUSTED_ORGS = {"kernels-community", "kernels-staging", "kernels-test", "sglang"}
+
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
@@ -59,6 +61,10 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             "to bypass trust checks.",
             stacklevel=3,
         )
+
+    org = repo_id.split("/", 1)[0]
+    if org in _ALWAYS_TRUSTED_ORGS:
+        return
 
     api = _get_hf_api()
     try:

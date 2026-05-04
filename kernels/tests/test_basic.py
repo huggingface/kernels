@@ -233,6 +233,22 @@ def test_neuron():
     torch.testing.assert_close(relu.relu(x), x.relu())
 
 
+def test_trust_remote_code_blocks_untrusted_org():
+    """Kernels from untrusted orgs should be rejected by default."""
+    with pytest.raises(ValueError, match=r"not from a trusted publisher"):
+        get_kernel("kernels-test-untrusted/not-a-trused-org-kernel", version=1)
+
+
+def test_trust_remote_code_allows_trusted_org():
+    """Kernels from trusted orgs should not raise a trust error."""
+    get_kernel("kernels-community/relu", version=1)
+
+
+def test_trust_remote_code_flag_allows_untrusted():
+    """trust_remote_code=True should bypass the org check."""
+    get_kernel("kernels-test-untrusted/ci-test-kernel", version=1, trust_remote_code=True)
+
+
 def silu_and_mul_torch(x: torch.Tensor):
     d = x.shape[-1] // 2
     return F.silu(x[..., :d]) * x[..., d:]

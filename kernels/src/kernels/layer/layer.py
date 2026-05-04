@@ -42,6 +42,10 @@ class LayerRepository:
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
+        trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
+            Whether to allow loading kernels from untrusted organisations. A list
+            of signing identities can be provided for future verification support;
+            until then it warns and falls back to the default trust check.
 
     Example:
         ```python
@@ -63,12 +67,14 @@ class LayerRepository:
         layer_name: str,
         revision: str | None = None,
         version: int | None = None,
+        trust_remote_code: bool | list[str] = False,
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
 
         self._repo_id = repo_id
         self.layer_name = layer_name
+        self._trust_remote_code = trust_remote_code
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered LayerRepository.
@@ -84,7 +90,9 @@ class LayerRepository:
         )
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(self._repo_id, revision=self._resolve_revision())
+        kernel = get_kernel(
+            self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code
+        )
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
@@ -94,10 +102,11 @@ class LayerRepository:
             and self._repo_id == other._repo_id
             and self._revision == other._revision
             and self._version == other._version
+            and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id, self._revision, self._version))
+        return hash((self.layer_name, self._repo_id, self._revision, self._version, self._trust_remote_code))
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._resolve_revision()}), layer `{self.layer_name}`"
@@ -168,6 +177,7 @@ class LockedLayerRepository:
         *,
         lockfile: Path | None = None,
         layer_name: str,
+        trust_remote_code: bool | list[str] = False,
     ):
         """
         Construct a layer repository.
@@ -178,6 +188,7 @@ class LockedLayerRepository:
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.layer_name = layer_name
+        self._trust_remote_code = trust_remote_code
         self._revision = self._resolve_revision()
 
     def _resolve_revision(self) -> str:
@@ -193,7 +204,7 @@ class LockedLayerRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision)
+        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision, trust_remote_code=self._trust_remote_code)
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):
@@ -202,10 +213,11 @@ class LockedLayerRepository:
             and self.layer_name == other.layer_name
             and self._repo_id == other._repo_id
             and self._revision == other._revision
+            and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id, self._revision))
+        return hash((self.layer_name, self._repo_id, self._revision, self._trust_remote_code))
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"

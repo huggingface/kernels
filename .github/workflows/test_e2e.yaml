@@ -51,11 +51,13 @@ jobs:
           curl -sf -X DELETE \
             "${{ env.HF_ENDPOINT }}/api/repos/delete" \
             -H "Authorization: Bearer ${{ secrets.HF_STAGING_TOKEN }}" \
+            -H "Content-Type: application/json" \
             -d '{"type":"kernel","organization":"__DUMMY_KERNELS_USER__","name":"kernels-upload-test"}' \
           || true
           curl -sf -X DELETE \
             "${{ env.HF_ENDPOINT }}/api/repos/delete" \
             -H "Authorization: Bearer ${{ secrets.HF_STAGING_TOKEN }}" \
+            -H "Content-Type: application/json" \
             -d '{"type":"model","organization":"__DUMMY_KERNELS_USER__","name":"kernels-upload-test"}' \
           || true
 

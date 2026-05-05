@@ -14,7 +14,9 @@ import os
 import subprocess
 import sys
 import urllib.parse
-from typing import Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
 
 from packaging.version import Version
 from torch_versions import (
@@ -26,6 +28,15 @@ from torch_versions import (
 )
 
 OUTPUT_FILE = "torch-versions-hash.json"
+
+
+@dataclass
+class PendingHash:
+    url: str
+    version_key: str
+    system: str
+    framework_key: str
+    torch_version: str
 
 
 def load_existing_hashes() -> Dict[str, str]:
@@ -56,10 +67,10 @@ def load_existing_hashes() -> Dict[str, str]:
     return {}
 
 
-def compute_nix_hash(url: str) -> str:
+def compute_nix_hash(url: str) -> Tuple[str, List[str]]:
+    """Returns (sri_hash, log_lines). Raises RuntimeError on failure."""
+    logs = [f"Fetching hash for: {url}"]
     try:
-        print(f"Fetching hash for: {url}")
-
         # Some URL encodings are not valid in store paths, so unquote.
         filename = url.split("/")[-1]
         clean_filename = urllib.parse.unquote(filename)
@@ -88,23 +99,18 @@ def compute_nix_hash(url: str) -> str:
             capture_output=True,
             text=True,
         )
-        return convert_result.stdout.strip()
+        return convert_result.stdout.strip(), logs
     except subprocess.CalledProcessError as e:
-        print(f"Error computing hash for {url}: {e.stderr}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Error computing hash for {url}: {e.stderr}") from e
     except FileNotFoundError as e:
         if "nix-prefetch-url" in str(e):
-            print(
-                "Error: nix-prefetch-url not found. Please ensure Nix is installed.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            raise RuntimeError(
+                "nix-prefetch-url not found. Please ensure Nix is installed."
+            ) from e
         else:
-            print(
-                "Error: nix command not found. Please ensure Nix is installed.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            raise RuntimeError(
+                "nix command not found. Please ensure Nix is installed."
+            ) from e
 
 
 def main():
@@ -115,12 +121,16 @@ def main():
         "torch_versions_file",
         help="Path to torch-versions.json file",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=8,
+        help="Number of parallel hash-fetch workers (default: 8)",
+    )
 
     args = parser.parse_args()
 
     existing_hashes = load_existing_hashes()
-    cache_hits = 0
-    cache_misses = 0
 
     try:
         with open(args.torch_versions_file, "r") as f:
@@ -137,6 +147,9 @@ def main():
     print(f"Processing {len(torch_versions)} entries from {args.torch_versions_file}")
     print(f"Found {len(existing_hashes)} existing hashes")
 
+    pending: List[PendingHash] = []
+
+    # Collect URLs, resolve cache hits immediately.
     for entry in torch_versions:
         torch_version = entry.get("torchVersion")
         torch_testing = entry.get("torchTesting")
@@ -230,24 +243,52 @@ def main():
                 )
             print(f"    URL: {url}")
 
-            was_cached = url in existing_hashes
-            if was_cached:
+            framework_key = framework.replace(".", "")
+
+            if url in existing_hashes:
                 hash_value = existing_hashes[url]
+                urls_hashes[version_key][system][framework_key] = {
+                    "url": url,
+                    "hash": hash_value,
+                    "version": torch_version,
+                }
+                print(f"    Hash (cached): {hash_value}")
             else:
-                hash_value = compute_nix_hash(url)
+                pending.append(
+                    PendingHash(
+                        url=url,
+                        version_key=version_key,
+                        system=system,
+                        framework_key=framework_key,
+                        torch_version=torch_version,
+                    )
+                )
 
-            if was_cached:
-                cache_hits += 1
-            else:
-                cache_misses += 1
-
-            urls_hashes[version_key][system][framework.replace(".", "")] = {
-                "url": url,
-                "hash": hash_value,
-                "version": torch_version,
+    # Fetch missing hashes in parallel.
+    if pending:
+        print(
+            f"\nFetching {len(pending)} missing hashes with {args.jobs} parallel worker(s)..."
+        )
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = {
+                executor.submit(compute_nix_hash, item.url): item for item in pending
             }
+            for future in as_completed(futures):
+                item = futures[future]
+                try:
+                    hash_value, logs = future.result()
+                except RuntimeError as e:
+                    print(f"Error: {e}", file=sys.stderr)
+                    sys.exit(1)
 
-            print(f"    Hash: {hash_value}")
+                for line in logs:
+                    print(line)
+                print(f"    Hash: {hash_value}")
+                urls_hashes[item.version_key][item.system][item.framework_key] = {
+                    "url": item.url,
+                    "hash": hash_value,
+                    "version": item.torch_version,
+                }
 
     try:
         with open(OUTPUT_FILE, "w") as f:
@@ -257,8 +298,13 @@ def main():
         print(f"Error writing {OUTPUT_FILE}: {e}", file=sys.stderr)
         sys.exit(1)
 
-    total_urls = cache_hits + cache_misses
+    total_urls = sum(
+        len(framework_data)
+        for version_data in urls_hashes.values()
+        for framework_data in version_data.values()
+    )
     if total_urls > 0:
+        cache_hits = total_urls - len(pending)
         print(
             f"Cache statistics: {cache_hits}/{total_urls} hits ({cache_hits / total_urls * 100:.1f}% hit rate)"
         )

@@ -170,12 +170,18 @@ applyOverrides {
         ncurses
         xz
       ];
+    };
 
-      installPhase = (prevAttrs.installPhase or "") + ''
-        #rm -f $out/bin/rocgdb-py_3.8
-        #rm -f $out/bin/rocgdb-py_3.9
-        #rm -f $out/bin/rocgdb-py_3.10
+  rocm-smi-lib =
+    { libdrm, valgrind }:
+    prevAttrs: {
+      postInstall = (prevAttrs.postInstall or "") + ''
+        substituteInPlace \
+          $out/lib/cmake/rocm_smi/rocm_smiTargets.cmake \
+          --replace-fail "/usr/include/libdrm" "${libdrm.dev}/include/libdrm" \
+          --replace-fail "/usr/include/valgrind" "${valgrind.dev}/include/valgrind"
       '';
+
     };
 
   rocminfo =

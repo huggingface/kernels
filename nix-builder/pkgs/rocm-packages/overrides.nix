@@ -150,10 +150,47 @@ applyOverrides {
       '';
     };
 
+  rocm-gdb =
+    {
+      expat,
+      libxcrypt-legacy,
+      ncurses,
+      python311,
+      python312,
+      python313,
+      xz,
+    }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        expat
+        libxcrypt-legacy
+        python311
+        python312
+        python313
+        ncurses
+        xz
+      ];
+
+      installPhase = (prevAttrs.installPhase or "") + ''
+        #rm -f $out/bin/rocgdb-py_3.8
+        #rm -f $out/bin/rocgdb-py_3.9
+        #rm -f $out/bin/rocgdb-py_3.10
+      '';
+    };
+
   rocminfo =
     { python3 }:
     prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [ python3 ];
+    };
+
+  rocprofiler =
+    { comgr, hsa-amd-aqlprofile }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        comgr
+        hsa-amd-aqlprofile
+      ];
     };
 
   rocprofiler-sdk =

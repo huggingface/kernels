@@ -198,6 +198,7 @@ stdenv.mkDerivation (prevAttrs: {
       hipsparselt
       rocprim-devel
       rocthrust-devel
+      rocshmem-devel
       rocwmma-devel
     ]
   )

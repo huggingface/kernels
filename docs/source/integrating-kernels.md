@@ -36,5 +36,5 @@ Besides leveraging pre-built compute kernels, different projects
 rely on `kernels` to also package, build, and distribute their
 kernels on the Hugging Face Hub platform. This is made possible by the
 ["builder" component of `kernels`](./builder/writing-kernels.md).
-Visit [this page](https://huggingface.co/models?other=kernels) to find out
-different pre-built compute kernels available on the Hub.
+Visit [huggingface.co/kernels](https://huggingface.co/kernels) to browse
+the pre-built compute kernels available on the Hub.

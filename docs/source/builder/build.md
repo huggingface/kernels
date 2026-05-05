@@ -179,6 +179,13 @@ $ cd mykernel
 $ kernel-builder build-and-upload
 ```
 
+> [!NOTE]
+> Uploads go to a `kernel`-type Hub repository (the first-class kernel
+> repository type). The owning user or org must have kernel-creation
+> access. Request it from
+> [huggingface.co/settings/account](https://huggingface.co/settings/account)
+> ("Request Kernels Creation").
+
 Aside from building and uploading the kernel itself, this will also fill
 the card template and upload it as `README.md` to the Hub if the card
 template is provided in the source repository as `CARD.md`.

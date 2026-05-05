@@ -7,6 +7,30 @@ systems and Torch builds.
 [Join us on Discord](https://discord.gg/H6Tkmd88N3) for questions and discussions
 about building kernels!
 
+## Repository type
+
+Compliant kernels are published as `kernel`-type repositories on the Hub
+(the first-class kernel repository type). New uploads via `kernel-builder`
+default to this type; see the [migration guide](migration.md) if you
+maintain an older `model`-type kernel repository.
+
+## Trusted publishers
+
+`kernels` only loads kernels from a curated set of trusted publishers by
+default. Loading from any other publisher raises an error unless the caller
+opts in with `trust_remote_code=True`:
+
+```python
+# Trusted publisher: works without opt-in.
+get_kernel("kernels-community/activation", version=1)
+
+# Untrusted publisher: must opt in explicitly.
+get_kernel("some-other-org/my-kernel", version=1, trust_remote_code=True)
+```
+
+The Hub also exposes a `trustedKernelPublisher` flag on the kernel API and
+displays a corresponding badge in the UI.
+
 ## Directory layout
 
 A kernel repository on the Hub must contain a `build` directory. This

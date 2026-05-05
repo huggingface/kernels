@@ -150,10 +150,89 @@ applyOverrides {
       '';
     };
 
+  rocm-gdb =
+    {
+      expat,
+      libxcrypt-legacy,
+      ncurses,
+      python311,
+      python312,
+      python313,
+      xz,
+    }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        expat
+        libxcrypt-legacy
+        python311
+        python312
+        python313
+        ncurses
+        xz
+      ];
+    };
+
+  rocm-smi-lib =
+    { libdrm, valgrind }:
+    prevAttrs: {
+      postInstall = (prevAttrs.postInstall or "") + ''
+        substituteInPlace \
+          $out/lib/cmake/rocm_smi/rocm_smiTargets.cmake \
+          --replace-fail "/usr/include/libdrm" "${libdrm.dev}/include/libdrm" \
+          --replace-fail "/usr/include/valgrind" "${valgrind.dev}/include/valgrind"
+      '';
+
+    };
+
   rocminfo =
     { python3 }:
     prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [ python3 ];
+    };
+
+  rocprofiler =
+    { comgr, hsa-amd-aqlprofile }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        comgr
+        hsa-amd-aqlprofile
+      ];
+    };
+
+  rocprofiler-sdk =
+    {
+      comgr,
+      elfutils,
+      hsa-amd-aqlprofile,
+      libdrm,
+      sqlite,
+    }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        comgr
+        elfutils
+        hsa-amd-aqlprofile
+        libdrm
+        sqlite
+      ];
+    };
+
+  rocprofiler-sdk-rocpd =
+    {
+      comgr,
+      elfutils,
+      hsa-amd-aqlprofile,
+      libdrm,
+      sqlite,
+    }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        comgr
+        elfutils
+        hsa-amd-aqlprofile
+        libdrm
+        sqlite
+      ];
     };
 
   rocrand =

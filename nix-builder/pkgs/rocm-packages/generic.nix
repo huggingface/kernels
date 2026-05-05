@@ -80,5 +80,9 @@ stdenv.mkDerivation rec {
 
     # Python versions not in nixpkgs anymore.
     "libpython3.6m.so.1.0"
+    "libpython3.7m.so.1.0"
+    "libpython3.8.so.1.0"
+    "libpython3.9.so.1.0"
+    "libpython3.10.so.1.0"
   ];
 }

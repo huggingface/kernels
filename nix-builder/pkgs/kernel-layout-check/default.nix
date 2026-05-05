@@ -1,4 +1,4 @@
-{ makeSetupHook, python3 }:
+{ makeSetupHook }:
 
 makeSetupHook {
   name = "kernel-layout-check-hook";

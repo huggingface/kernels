@@ -81,11 +81,6 @@ function(cuda_kernel_component SRC_VAR)
         set(${SRC_VAR} ${_TMP_SRC} PARENT_SCOPE)
 
     elseif(GPU_LANG STREQUAL "HIP")
-        if(NOT KERNEL_SUPPORTS_HIPIFY)
-            message(WARNING "Kernel does not support HIP")
-            return()
-        endif()
-
         # Apply HIP-specific compile flags
         if(KERNEL_HIP_FLAGS)
             foreach(_SRC ${_KERNEL_SRC})

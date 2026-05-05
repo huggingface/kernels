@@ -8,23 +8,23 @@ in
   blas = if useMKL then prev.blas.override { blasProvider = prev.mkl; } else prev.blas;
   lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.lapack;
 
-  kernel-builder = prev.callPackage ./pkgs/kernel-builder { };
+  kernel-builder = final.callPackage ./pkgs/kernel-builder { };
 
-  cmakeNvccThreadsHook = prev.callPackage ./pkgs/cmake-nvcc-threads-hook { };
+  cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
-  get-kernel-check = prev.callPackage ./pkgs/get-kernel-check { };
+  get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
-  kernel-abi-check = prev.callPackage ./pkgs/kernel-abi-check { };
+  kernel-abi-check = final.callPackage ./pkgs/kernel-abi-check { };
 
-  kernel-layout-check = prev.callPackage ./pkgs/kernel-layout-check { };
+  kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
   nvtx = final.callPackage ./pkgs/nvtx { };
 
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };
 
-  rewrite-nix-paths-macho = prev.callPackage ./pkgs/rewrite-nix-paths-macho { };
+  rewrite-nix-paths-macho = final.callPackage ./pkgs/rewrite-nix-paths-macho { };
 
-  remove-bytecode-hook = prev.callPackage ./pkgs/remove-bytecode-hook { };
+  remove-bytecode-hook = final.callPackage ./pkgs/remove-bytecode-hook { };
 
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {

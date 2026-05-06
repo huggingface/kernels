@@ -10,7 +10,7 @@ repository = "https://github.com/huggingface/kernels"
 
 [dependencies]
 base32 = "0.5"
-kernels-data = { path = "../kernels-data" }
+kernels-data = { path = "../kernels-data", version = "0.14.0" }
 clap = { version = "4", features = ["derive"] }
 clap-markdown = "0.1.5"
 clap_complete = "4"

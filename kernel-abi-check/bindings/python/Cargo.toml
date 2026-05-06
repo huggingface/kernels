@@ -1,6 +1,6 @@
 [package]
 name = "kernel-abi-check-python"
-version = "0.14.0"
+version = "0.15.0-dev0"
 edition = "2024"
 description = "Check the ABI of Hub Kernels"
 homepage = "https://github.com/huggingface/kernel-builder"
@@ -17,4 +17,4 @@ pyo3 = { version = "0.26", features = ["abi3", "abi3-py38"] }
 
 [dependencies.kernel-abi-check]
 path = "../../kernel-abi-check"
-version = "0.14.0"
+version = "0.15.0-dev0"

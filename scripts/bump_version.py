@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Bump all version strings in the repo to the next development version.
+"""Bump all version strings in the repo.
 
-Reads the current ``kernels`` version from ``kernels/pyproject.toml`` (the
-source-of-truth in the codebase — no install required).
+Without ``--dev``: strip the development suffix ahead of a release.
+  Example: codebase at ``0.14.0.dev0`` -> all sites become ``0.14.0``.
 
-Example: codebase at ``0.13.0`` -> Python sites get ``0.14.0.dev0`` (PEP 440)
-and Cargo sites get ``0.14.0-dev0``.
+With ``--dev``: advance to the next development cycle.
+  Example: codebase at ``0.13.0`` -> Python sites get ``0.14.0.dev0`` (PEP 440),
+  Cargo sites get ``0.14.0-dev0``.
 """
 
 from __future__ import annotations
@@ -46,8 +47,34 @@ def next_dev_versions(current: Version) -> tuple[str, str]:
     return f"{next_minor}.dev0", f"{next_minor}-dev0"
 
 
+def next_release_version(current: Version) -> tuple[str, str]:
+    if (
+        not current.is_devrelease
+        or current.pre is not None
+        or current.post is not None
+        or current.local is not None
+    ):
+        raise SystemExit(
+            f"Codebase version `{current}` is not a development version "
+            "(e.g. 0.14.0.dev0). This tool strips the dev suffix ahead of a "
+            f"release. Set {display_path(PRIMARY_PYPROJECT)} to a dev version first."
+        )
+
+    release = current.release
+    major = release[0] if len(release) > 0 else 0
+    minor = release[1] if len(release) > 1 else 0
+    patch = release[2] if len(release) > 2 else 0
+    ver = f"{major}.{minor}.{patch}"
+    return ver, ver
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Bump to the next dev cycle.",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -62,31 +89,40 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     current = get_codebase_version()
-    python_dev, cargo_dev = next_dev_versions(current)
 
-    print(f"Codebase kernels version : {current}")
-    print(f"Next Python dev version  : {python_dev}")
-    print(f"Next Cargo  dev version  : {cargo_dev}")
+    if args.dev:
+        python_ver, cargo_ver = next_dev_versions(current)
+        print(f"Codebase kernels version : {current}")
+        print(f"Next Python dev version  : {python_ver}")
+        print(f"Next Cargo  dev version  : {cargo_ver}")
+        confirm_prompt = f"Bump all version sites to {python_ver} / {cargo_ver}?"
+        makefile_target = "bump-dev"
+    else:
+        python_ver, cargo_ver = next_release_version(current)
+        print(f"Codebase kernels version : {current}")
+        print(f"Next release version     : {ver}")
+        confirm_prompt = f"Strip dev suffix from all version sites -> {ver}?"
+        makefile_target = "bump-release"
     print()
 
     if not args.dry_run and not args.yes:
-        if not confirm(f"Bump all version sites to {python_dev} / {cargo_dev}?"):
+        if not confirm(confirm_prompt):
             print("Aborted; no files changed.")
             return 1
         print()
 
     changed: list[tuple[Path, str, str]] = []
     for path in PYPROJECT_FILES:
-        old = replace_pyproject_version(path, python_dev, dry_run=args.dry_run)
+        old = replace_pyproject_version(path, python_ver, dry_run=args.dry_run)
         if old is not None:
-            changed.append((path, old, python_dev))
+            changed.append((path, old, python_ver))
     for path in CARGO_FILES:
-        old_pkg, old_deps = replace_cargo_version(path, cargo_dev, dry_run=args.dry_run)
+        old_pkg, old_deps = replace_cargo_version(path, cargo_ver, dry_run=args.dry_run)
         if old_pkg is not None:
-            changed.append((path, old_pkg, cargo_dev))
+            changed.append((path, old_pkg, cargo_ver))
         for dep_name, old_dep in old_deps:
             changed.append(
-                (path, f"Path dependency `{dep_name}`: {old_dep}", cargo_dev)
+                (path, f"Path dependency `{dep_name}`: {old_dep}", cargo_ver)
             )
 
     verb = "Would update" if args.dry_run else "Updated"
@@ -100,7 +136,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.dry_run:
         print()
-        print("Note: Cargo.lock and kernels/uv.lock are refreshed by the `bump-dev`")
+        print(
+            f"Note: Cargo.lock and kernels/uv.lock are refreshed by the `{makefile_target}`"
+        )
         print("Makefile target; if you ran this script directly, regenerate them with")
         print("`cargo check --workspace` and `(cd kernels && uv lock)`.")
 

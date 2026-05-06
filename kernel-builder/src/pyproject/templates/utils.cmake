@@ -612,7 +612,7 @@ function (define_gpu_extension_target GPU_MOD_NAME)
     endif()
   endif()
 
-  set_property(TARGET ${GPU_MOD_NAME} PROPERTY CXX_STANDARD 17)
+  set_property(TARGET ${GPU_MOD_NAME} PROPERTY CXX_STANDARD 20)
 
   target_compile_options(${GPU_MOD_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:${GPU_LANGUAGE}>:${GPU_COMPILE_FLAGS}>)

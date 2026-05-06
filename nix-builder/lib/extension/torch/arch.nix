@@ -12,6 +12,7 @@
   kernel-builder,
   cmake,
   cmakeNvccThreadsHook,
+  cmakeXpuParallelHook,
   cuda_nvcc,
   get-kernel-check,
   kernel-abi-check,
@@ -53,6 +54,9 @@
   extraDeps ? [ ],
 
   nvccThreads,
+
+  # TODO: Maximum parallel XPU compilation jobs. (for FA2)
+  xpuParallelJobs ? 12,
 
   # A stringly-typed list of Python dependencies. Ideally we'd take a
   # list of derivations, but we also need to write the dependencies to
@@ -109,6 +113,7 @@ stdenv.mkDerivation (prevAttrs: {
     doKernelBuildCheck
     moduleName
     nvccThreads
+    xpuParallelJobs
     ;
 
   framework = "torch";
@@ -167,6 +172,7 @@ stdenv.mkDerivation (prevAttrs: {
     clr
   ]
   ++ lib.optionals xpuSupport ([
+    cmakeXpuParallelHook
     xpuPackages.ocloc
     oneapi-torch-dev
   ])

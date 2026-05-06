@@ -12,6 +12,8 @@ in
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
+  cmakeXpuParallelHook = final.callPackage ./pkgs/cmake-xpu-parallel-hook { };
+
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
   kernel-abi-check = final.callPackage ./pkgs/kernel-abi-check { };

@@ -13,8 +13,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from packaging.version import Version
-
 from _version_common import (
     CARGO_FILES,
     PRIMARY_PYPROJECT,
@@ -22,8 +20,10 @@ from _version_common import (
     confirm,
     display_path,
     get_codebase_version,
-    replace_top_level_version,
+    replace_cargo_version,
+    replace_pyproject_version,
 )
+from packaging.version import Version
 
 
 def next_dev_versions(current: Version) -> tuple[str, str]:
@@ -77,13 +77,17 @@ def main(argv: list[str] | None = None) -> int:
 
     changed: list[tuple[Path, str, str]] = []
     for path in PYPROJECT_FILES:
-        old = replace_top_level_version(path, python_dev, dry_run=args.dry_run)
+        old = replace_pyproject_version(path, python_dev, dry_run=args.dry_run)
         if old is not None:
             changed.append((path, old, python_dev))
     for path in CARGO_FILES:
-        old = replace_top_level_version(path, cargo_dev, dry_run=args.dry_run)
-        if old is not None:
-            changed.append((path, old, cargo_dev))
+        old_pkg, old_deps = replace_cargo_version(path, cargo_dev, dry_run=args.dry_run)
+        if old_pkg is not None:
+            changed.append((path, old_pkg, cargo_dev))
+        for dep_name, old_dep in old_deps:
+            changed.append(
+                (path, f"Path dependency `{dep_name}`: {old_dep}", cargo_dev)
+            )
 
     verb = "Would update" if args.dry_run else "Updated"
     if not changed:

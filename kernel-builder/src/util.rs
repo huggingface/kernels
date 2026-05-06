@@ -49,6 +49,41 @@ pub(crate) fn check_or_infer_target_dir(
     }
 }
 
+/// Discover build variant directories (contain `metadata.json`).
+/// Checks `result` symlink (Nix store output) first, then falls back to `build/`.
+pub(crate) fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathBuf>)> {
+    let candidates = [
+        kernel_dir.join("result"),
+        kernel_dir.join("build"),
+        kernel_dir.to_path_buf(),
+    ];
+
+    for candidate in &candidates {
+        if !candidate.is_dir() {
+            continue;
+        }
+
+        let mut variants: Vec<PathBuf> = fs::read_dir(candidate)
+            .wrap_err_with(|| format!("Cannot read `{}`", candidate.display()))?
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir() && p.join("metadata.json").is_file())
+            .collect();
+
+        if !variants.is_empty() {
+            variants.sort();
+            return Ok((candidate.clone(), variants));
+        }
+    }
+
+    bail!(
+        "No build variants found in `{}`, `{}`, or `{}`",
+        candidates[0].display(),
+        candidates[1].display(),
+        candidates[2].display(),
+    );
+}
+
 pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {
     let build_toml = kernel_dir.as_ref().join("build.toml");
     let mut toml_data = String::new();

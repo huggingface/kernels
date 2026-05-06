@@ -1681,14 +1681,18 @@ dependencies = [
 name = "kernels-data"
 version = "0.14.0-dev1"
 dependencies = [
+ "base64",
+ "digest 0.11.2",
  "eyre",
  "itertools 0.13.0",
  "regex",
  "serde",
  "serde-value",
  "serde_json",
+ "sha2 0.11.0",
  "thiserror 1.0.69",
  "url",
+ "walkdir",
 ]
 
 [[package]]

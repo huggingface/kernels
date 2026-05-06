@@ -49,6 +49,7 @@ pub fn write_metadata(
                 archs: None,
                 backend_type: *backend,
             },
+            source_digest: None,
         };
 
         serde_json::to_writer_pretty(writer, &metadata)?;

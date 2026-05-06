@@ -25,6 +25,9 @@ use init::{run_init, InitArgs};
 mod list_variants;
 use list_variants::list_variants;
 
+mod sign;
+use sign::sign;
+
 mod upload;
 use upload::{run_upload, RepoTypeArg, UploadArgs};
 
@@ -201,6 +204,12 @@ enum Commands {
         arch: bool,
     },
 
+    /// Sign the builds of a kernel.
+    Sign {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+    },
+
     /// Spawn a kernel test shell.
     Testshell {
         #[arg(name = "KERNEL_DIR")]
@@ -362,6 +371,7 @@ fn main() -> Result<()> {
             variant,
         ),
         Commands::ListVariants { kernel_dir, arch } => list_variants(kernel_dir, arch),
+        Commands::Sign { kernel_dir } => sign(kernel_dir),
         Commands::Testshell {
             kernel_dir,
             variant,

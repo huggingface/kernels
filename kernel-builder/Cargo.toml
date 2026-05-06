@@ -1,6 +1,6 @@
 [package]
 name = "hf-kernel-builder"
-version = "0.14.0-dev1"
+version = "0.14.0"
 edition = "2021"
 description = "Build Hugging Face Hub kernels"
 homepage = "https://github.com/huggingface/kernels"

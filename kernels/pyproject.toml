@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.14.0.dev1"
+version = "0.14.0"
 description = "Download compute kernels"
 authors = [
   { name = "Daniel de Kok", email = "daniel@huggingface.co" },
@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
   "huggingface-hub>=1.10.0",
-  "kernels-data>=0.14.0.dev0",
+  "kernels-data>=0.14.0.dev1",
   "packaging>=20.0",
   "pyyaml>=6",
   "tomli>=2.0; python_version<'3.11'",

@@ -100,8 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         python_ver, cargo_ver = next_release_version(current)
         print(f"Codebase kernels version : {current}")
-        print(f"Next release version     : {ver}")
-        confirm_prompt = f"Strip dev suffix from all version sites -> {ver}?"
+        print(f"Next release version     : {python_ver}")
+        confirm_prompt = f"Strip dev suffix from all version sites -> {python_ver}?"
         makefile_target = "bump-release"
     print()
 

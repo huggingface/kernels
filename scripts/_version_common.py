@@ -52,18 +52,75 @@ def get_codebase_version() -> Version:
     return Version(str(_version_table(doc, PRIMARY_PYPROJECT)["version"]))
 
 
-def replace_top_level_version(path: Path, new_version: str, *, dry_run: bool) -> str | None:
-    doc = tomlkit.parse(path.read_text())
-    table = _version_table(doc, path)
+def _set_top_level_version(doc, path: Path, new_version: str) -> str | None:
+    """Update the top-level version in an already-parsed tomlkit doc.
 
+    Returns the old version string, or *None* if it was already up-to-date.
+    """
+    table = _version_table(doc, path)
     old_version = str(table["version"])
     if old_version == new_version:
         return None
-
     table["version"] = new_version
-    if not dry_run:
+    return old_version
+
+
+def _set_path_dep_versions(doc, new_version: str) -> list[tuple[str, str]]:
+    """Update the ``version`` field of every dependency that also has a ``path`` key.
+
+    Path dependencies are local dependencies, but they need to have the correct version,
+    otherwise `cargo publish` will croak.
+
+    Returns a list of ``(dep_name, old_version)`` for each dependency that was
+    changed.  Dependencies that only have a ``version`` (external crates.io deps)
+    are left untouched.
+    """
+    changed: list[tuple[str, str]] = []
+    for dep_name, dep_value in doc.get("dependencies", {}).items():
+        if not isinstance(dep_value, dict):
+            continue
+        if "path" not in dep_value or "version" not in dep_value:
+            continue
+        old = str(dep_value["version"])
+        if old == new_version:
+            continue
+        dep_value["version"] = new_version
+        changed.append((dep_name, old))
+    return changed
+
+
+def replace_pyproject_version(
+    path: Path, new_version: str, *, dry_run: bool
+) -> str | None:
+    """Rewrite the top-level version in a pyproject.toml file.
+
+    Returns the old version string, or *None* if the file was already
+    up-to-date (in which case the file is not written).
+    """
+    doc = tomlkit.parse(path.read_text())
+    old_version = _set_top_level_version(doc, path, new_version)
+    if old_version is not None and not dry_run:
         path.write_text(tomlkit.dumps(doc))
     return old_version
+
+
+def replace_cargo_version(
+    path: Path, new_version: str, *, dry_run: bool
+) -> tuple[str | None, list[tuple[str, str]]]:
+    """Rewrite the package version and all versioned path-dependency versions
+    in a Cargo.toml file in a single parse/write pass.
+
+    Returns ``(old_package_version | None, [(dep_name, old_dep_version), ...])``,
+    where the first element is *None* when the package version was already
+    up-to-date.  The file is written at most once, and only when something
+    actually changed.
+    """
+    doc = tomlkit.parse(path.read_text())
+    old_package = _set_top_level_version(doc, path, new_version)
+    changed_deps = _set_path_dep_versions(doc, new_version)
+    if (old_package is not None or changed_deps) and not dry_run:
+        path.write_text(tomlkit.dumps(doc))
+    return old_package, changed_deps
 
 
 def confirm(prompt: str) -> bool:

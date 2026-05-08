@@ -1,0 +1,154 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Generate diff
+        run: git diff ${{ github.event.before }}...${{ github.sha }} > /tmp/changes.diff
+
+      - name: Run security audit
+        id: audit
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          {
+            cat <<'PROMPT'
+          You are a senior security engineer performing a penetration-test-style review of a
+          change that just landed on the main branch of the kernels project — a mixed Nix/Python/
+          Rust project for building, fetching and loading compute kernels. The kernels library
+          downloads, loads, and runs code an user's computers, so treat the attack surface
+          accordingly.
+
+          A brief overiew of the most important project directories:
+
+          * `kernel-abi-check`: the ABI check parses kernel binaries and checks that they are ABI3
+            and manylinux-compliant.
+          * `kernel-builder`: this is the main user interface for building and uploading kernels,
+            though it also generates CMake/pyproject files which are used by the NIx builder.
+          * `kernels`: Python package that can download and load kernels from Hugging Face Hub.
+          * `kernels-data`: data structures shared by `kernel-builder` and `kernels`.
+          * `nix-builder`: Nix code that drives kernel building, also contains Nix derivations for
+             some dependencies.
+
+          The diff of the change follows below. You also have access to the full repository —
+          explore it when the diff alone is not sufficient to assess impact (e.g. to check whether
+          a removed guard is relied upon elsewhere, or to understand the data flow around a
+          changed function).
+
+          Think like an attacker. Consider how the `kernels` package could be abused to load
+          malicious code on a user's computer or how tests could fetch untrusted code that could
+          compromise CI. Evaluate how an attacker could slip backdoors into the builder that would
+          add malicious code to kernels that are built. Of course, also evaluate for other possible
+          vulnerabilities.
+
+
+          Focus on:
+          - **Remote code execution and trust model:** The system's core purpose is to fetch and
+              execute native code from the Hub. Review changes to trust gates (`trust_remote_code`,
+              the trusted-org allowlist, signing identity verification stubs), redirect resolution
+              in `kernel-status.toml`, and any path that allows bypassing the trust check — especially
+              environment variable overrides that substitute a local path without re-checking trust.
+          - **Build artifact integrity:** Review the full chain from build → lockfile → runtime hash
+              verification. Look for gaps where downloaded content is executed without being validated
+              against a lock (e.g. when `variant_locks` is not threaded through), weakening of the hash
+              algorithm or comparison, and whether symlink-only hashing creates blind spots for injected
+              files.
+          - **Path traversal and injection via metadata:** Kernel metadata fields (names, IDs, variant
+            strings) flow from Hub-served JSON into filesystem path construction. Check for unsanitized
+            use of these values to traverse outside expected directories, and for module name fields
+            that could shadow Python standard library or third-party modules via `sys.modules`.
+          - **Binary parsing safety in kernel-abi-check:** The checker parses untrusted ELF and Mach-O
+            binaries with the `object` crate. Review for memory safety issues, panics on malformed inputs,
+            integer overflows in offset/size calculations, and whether a crafted binary could produce a
+            false-clean result and slip through the ABI gate.
+          - **ABI and symbol allowlist bypass:** The manylinux and Python ABI checks define what symbols a
+            kernel is allowed to export or import. Look for logic errors that could allow a malicious or
+            malformed kernel to pass the check despite using forbidden symbols, and for coverage gaps in
+            the allowlist itself (new symbol versions, new platforms, tvm-ffi vs. Torch paths).
+          - **Nix build sandbox integrity:** Kernel builds are isolated via Nix sandboxing. Review changes
+            that weaken sandbox settings (`sandbox = relaxed`, `sandbox = false`), that add network access
+            or impure inputs to build derivations, or that allow build-time code to write output outside
+            the declared store path.
+          - **Supply chain: pinned dependencies and lockfiles:** Review changes to `flake.lock`,
+            `Cargo.lock`, `uv.lock`, `python_depends.json`, and pinned GitHub Actions SHAs. Unpinned or
+            updated dependencies — especially C/C++ CUDA toolchain packages, PyTorch, or Hub client
+            libraries — are high-impact supply chain risk.
+          - **CI/CD security:** Workflow permission scopes (`contents: write`, `id-token: write`), secret
+            exposure in run steps, script injection via PR-controlled strings interpolated into `run:`
+            blocks, and whether untrusted PR code can reach jobs that hold publishing or signing credentials.
+          - **Credential and token handling:** The Rust builder and Python loader both interact with the
+            Hugging Face API using user tokens. Review for token leakage into logs, user-agent strings,
+            error messages, or artifact metadata, and for changes that widen the set of operations performed
+            with elevated credentials.
+          - **Denial of service:** Algorithmic complexity in variant resolution and ABI symbol scanning,
+            unbounded downloads or memory allocation when processing Hub responses or binary files, and
+            zip/archive expansion if any archive formats are introduced.
+          - **Information disclosure:** System details (glibc version, CUDA version, platform, Python
+            version) emitted in telemetry or user-agent strings; kernel metadata or error messages that
+            leak internal paths, cache layout, or token scopes.
+
+          For each finding, assess exploitability — not just theoretical presence.
+
+          If you find security issues, output your report formatted for Slack using mrkdwn syntax.
+          Use this structure:
+
+          *[SEVERITY]* `file:lines` — Title
+          Description of the vulnerability and how it could be exploited.
+          _Suggestion:_ How to fix.
+
+          Separate multiple findings with blank lines. Be concise but specific.
+
+          If no security issues are found, output exactly: NO_FINDINGS
+
+          === DIFF ===
+          PROMPT
+            cat /tmp/changes.diff
+          } | claude -p --model claude-opus-4-6 > /tmp/audit_result.txt
+
+          if grep -q "NO_FINDINGS" /tmp/audit_result.txt; then
+            echo "has_findings=false" >> "$GITHUB_OUTPUT"
+            echo "Security audit complete — no findings."
+          else
+            echo "has_findings=true" >> "$GITHUB_OUTPUT"
+            echo "Security audit complete — findings detected, notifying Slack."
+          fi
+
+      - name: Notify Slack
+        if: steps.audit.outputs.has_findings == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_SECURITY }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_AUTHOR: ${{ github.event.head_commit.author.username || github.event.head_commit.author.name }}
+        run: |
+          FINDINGS=$(cat /tmp/audit_result.txt)
+          COMMIT_TITLE=$(printf '%s\n' "$COMMIT_MESSAGE" | head -n1)
+
+          printf -v HEADER '*Security Audit Finding*\n*Commit:* <%s|%s>\n*Author:* %s\n\n---\n\n' \
+            "$COMMIT_URL" "$COMMIT_TITLE" "$COMMIT_AUTHOR"
+
+          jq -n \
+            --arg text "${HEADER}${FINDINGS}" \
+            '{"text": $text}' > /tmp/slack_payload.json
+
+          curl -sf -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d @/tmp/slack_payload.json

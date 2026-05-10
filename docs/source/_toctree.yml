@@ -5,6 +5,8 @@
       title: Why kernels?
     - local: installation
       title: Installation
+    - local: security
+      title: Security model
   title: Getting started
 - sections:
     - local: basic-usage

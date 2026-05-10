@@ -16,20 +16,25 @@ maintain an older `model`-type kernel repository.
 
 ## Trusted publishers
 
-`kernels` only loads kernels from a curated set of trusted publishers by
-default. Loading from any other publisher raises an error unless the caller
-opts in with `trust_remote_code=True`:
+With the default settings, [`get_kernel`](basic-usage.md) only permits Hub
+repositories owned by a **fixed client-side allowlist** of organizations.
+Loading any other repository raises unless you pass `trust_remote_code=True`:
 
 ```python
-# Trusted publisher: works without opt-in.
+# Allowlisted organization: works without opt-in.
 get_kernel("kernels-community/activation", version=1)
 
-# Untrusted publisher: must opt in explicitly.
+# Other organization or personal namespace: explicit opt-in required.
 get_kernel("some-other-org/my-kernel", version=1, trust_remote_code=True)
 ```
 
-The Hub also exposes a `trustedKernelPublisher` flag on the kernel API and
-displays a corresponding badge in the UI.
+For the exact allowlist, semantics of `trust_remote_code`, signing support
+(which is not implemented yet), and APIs that **do not** repeat this check (for
+example lockfiles and local imports), see [Security model](security.md).
+
+The Hugging Face Hub may surface publisher-trust indicators in metadata or the
+UI; **`kernels` does not currently replace the client allowlist with Hub-side
+signals** when enforcing the default gate on `get_kernel`.
 
 ## Directory layout
 

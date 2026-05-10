@@ -31,6 +31,8 @@ for older PyTorch versions. This ensures that your code will continue to work.
 Some kernels have not yet been updated to use versioning yet. In these cases,
 you can use `get_kernel` without the `version` argument.
 
+For trust boundaries, execution risks, and which APIs enforce publisher checks, see [Security model](security.md).
+
 ## Checking Kernel Availability
 
 You can check if a particular version of a kernel supports the environment

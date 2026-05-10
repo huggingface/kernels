@@ -22,5 +22,7 @@ traditional Python kernel packages in that they are made to be:
 
 Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kernels).
 
+Before loading kernels from the Hub in production code, read [Security model](./security.md).
+
 If you're looking for a more involved "Why kernels?" answer, refer to
 [this page](./why_kernels.md).

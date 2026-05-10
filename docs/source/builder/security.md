@@ -2,6 +2,9 @@
 
 ## Introduction
 
+If you integrate kernels into an application (loading builds from the Hub),
+start with the end-user oriented guide [Security model](../security.md) before the publisher-focused sections below.
+
 As a kernel builder, you provide code that might be run on thousands or
 even millions of machines. This comes with the responsibility of ensuring
 no malicious code is distributed.

@@ -17,3 +17,5 @@ or if you want the latest version from the `main` branch:
 ```bash
 pip install "kernels[benchmark] @ git+https://github.com/huggingface/kernels#subdirectory=kernels"
 ```
+
+Before loading kernels from the Hugging Face Hub in production, read [Security model](security.md): it explains execution risks, publisher checks, and which APIs enforce them.

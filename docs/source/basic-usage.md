@@ -63,3 +63,7 @@ for loaded in get_loaded_kernels():
 `repo_infos` is populated only for kernels loaded with `get_kernel`. Kernels
 loaded from a local path (`get_local_kernel`) or via a lockfile
 (`get_locked_kernel`, `load_kernel`) have `repo_infos=None`.
+
+Browse through different kernels compatible with `kernels` from [here](https://huggingface.co/kernels).
+
+A kernel can provide layers in addition to kernel functions. Refer to [Layers](../source/layers.md) to know more.

@@ -41,6 +41,29 @@ jobs:
 
       - name: Build all example kernels
         run: nix build -L ./examples/kernels#ci-build
+
+      - name: Build invalid-cpp-manylinux-symbols kernel (expected to fail)
+        id: build_invalid_kernel
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          nix build -L \
+            './examples/kernels/invalid-cpp-manylinux-symbols#packages.${{ matrix.arch }}.redistributable.torch211-cxx11-cpu-${{ matrix.arch }}' \
+            2>&1 | tee /tmp/invalid_kernel_build.txt
+
+      - name: Validate invalid-cpp-manylinux-symbols build failure
+        run: |
+          if [ '${{ steps.build_invalid_kernel.outcome }}' != 'failure' ]; then
+            echo "❌ Expected build to fail but it succeeded"
+            exit 1
+          fi
+          if ! grep -qF '⛔ Symbols incompatible with `manylinux_2_28` found:' /tmp/invalid_kernel_build.txt; then
+            echo "❌ Expected ABI error message not found in build output:"
+            cat /tmp/invalid_kernel_build.txt
+            exit 1
+          fi
+          echo "✅ Build correctly failed with expected manylinux_2_28 ABI error"
+
       - name: Copy kernel artifacts
         run: cp -rL result/* .
 

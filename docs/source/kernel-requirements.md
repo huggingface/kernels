@@ -16,25 +16,29 @@ maintain an older `model`-type kernel repository.
 
 ## Trusted publishers
 
-With the default settings, [`get_kernel`](basic-usage.md) only permits Hub
-repositories owned by a **fixed client-side allowlist** of organizations.
-Loading any other repository raises unless you pass `trust_remote_code=True`:
+Whether [`get_kernel`](basic-usage.md) loads a kernel without explicit opt-in
+depends on **publisher trust as signaled on the Hugging Face Hub** for that
+kernel repository (trusted publisher metadata on the Hub API and corresponding
+badges in the UI)—not on a separate, permanent **client-side organization
+allowlist** curated inside `kernels`.
+
+If the Hub does **not** mark the publisher as trusted, you must opt in
+explicitly:
 
 ```python
-# Allowlisted organization: works without opt-in.
+# Trusted publisher on the Hub: loads without opt-in (default trust_remote_code=False).
 get_kernel("kernels-community/activation", version=1)
 
-# Other organization or personal namespace: explicit opt-in required.
+# Publisher not trusted on the Hub: opt-in required — treat like arbitrary remote code.
 get_kernel("some-other-org/my-kernel", version=1, trust_remote_code=True)
 ```
 
-For the exact allowlist, semantics of `trust_remote_code`, signing support
-(which is not implemented yet), and APIs that **do not** repeat this check (for
-example lockfiles and local imports), see [Security model](security.md).
+Hub APIs around publisher trust are still evolving; the loader consumes Hub
+signals as they stabilize across Hub and `kernels` releases.
 
-The Hugging Face Hub may surface publisher-trust indicators in metadata or the
-UI; **`kernels` does not currently replace the client allowlist with Hub-side
-signals** when enforcing the default gate on `get_kernel`.
+For execution risks, the semantics of `trust_remote_code`, signing support (not
+implemented yet), and APIs that **do not** repeat the publisher gate (for example
+some lockfile helpers), see [Security model](security.md).
 
 ## Directory layout
 

@@ -8,7 +8,7 @@ If you **publish** kernels, see also [Security for kernel builders](builder/secu
 
 Loading a kernel executes **native machine code** (shared libraries) and **Python code** from the kernel package with the same privileges as your application process.
 
-By default, [`get_kernel`](basic-usage.md) only allows Hub repositories whose owning **organization** is on a fixed client-side allowlist. Other repositories raise unless you explicitly opt in with `trust_remote_code=True`, which is equivalent to agreeing to run **unreviewed code** from that repository.
+By default, [`get_kernel`](basic-usage.md) only loads kernels whose **publisher is trusted as signaled on the Hugging Face Hub** for that kernel repository. Other repositories raise unless you explicitly opt in with `trust_remote_code=True`, which is equivalent to agreeing to run **unreviewed code** from that repository. Publisher trust is **defined by Hub metadata**, not by a permanent client-maintained organization allowlist inside `kernels`.
 
 Some other APIs query or install kernels **without** repeating that publisher gate; they are still safe only when **you** already restricted which repositories and revisions are used (see [Which APIs enforce publisher checks](#which-apis-enforce-publisher-checks)).
 
@@ -38,26 +38,22 @@ The `kernels` package does **not** cryptographically attest builds by default, d
 
 ## Publisher checks in [`get_kernel`](basic-usage.md)
 
-[`get_kernel`](basic-usage.md) performs a **client-side** check before downloading or importing from the Hub:
+[`get_kernel`](basic-usage.md) enforces publisher trust **using Hub-signaled trusted publishers** on kernel repositories (Hub metadata / trusted publisher badges), before downloading or importing from the Hub. That gate exists so accidental loads do not execute arbitrary compiled kernels from unreviewed publishers.
 
-- With the default `trust_remote_code=False`, loading succeeds only if the repository ID’s owning organization (the segment before the first `/`) is one of the following: **`kernels-community`**, **`kernels-staging`**, **`kernels-test`**, **`sglang`**.
+- With the default `trust_remote_code=False`, loading succeeds when the Hub marks the repository’s publisher as trusted for kernels.
 - With `trust_remote_code=True`, that gate is **skipped** for any `kernel`-type repository you request.
 
-Repositories under personal namespaces (`username/repo`) are **not** on the default allowlist unless your username exactly matches one of the names above (which is unlikely). Such kernels require an explicit opt-in.
+If Hub metadata cannot classify publisher trust for a repository yet (for example missing signals during Hub rollout), conservative loader behavior may still require explicit opt-in—publisher trust remains **authored on the Hub**, not as an unrelated permanent client-side allowlist.
 
 ### Signing identities (`trust_remote_code=[...]`)
 
-The API accepts `trust_remote_code` as a list of strings for future **signing identity** verification. **This is not implemented yet.** Passing a list currently emits a warning and **does not** replace the default publisher check; behavior falls through to the same organization allowlist as `False`.
+The API accepts `trust_remote_code` as a list of strings for future **signing identity** verification. **This is not implemented yet.** Passing a list currently emits a warning and **does not** replace the default publisher-trust check based on Hub signals.
 
-Until signing is implemented, treat a list value like `False`: only allowlisted organizations load without error, unless you pass `trust_remote_code=True`.
-
-### Hub metadata and badges
-
-The Hugging Face Hub may expose publisher-trust signals (for example metadata or UI badges). Those signals inform discovery and policy on the Hub side. **`kernels` does not yet substitute Hub-side trust metadata for the client allowlist described above** when enforcing `get_kernel` defaults.
+Until signing is implemented, treat a list value like `False`: you still need a Hub-trusted publisher unless you pass `trust_remote_code=True`.
 
 ## Which APIs enforce publisher checks
 
-| API | Publisher allowlist on Hub loads |
+| API | Publisher trust gate |
 | --- | --- |
 | [`get_kernel`](basic-usage.md) | **Yes** (unless `trust_remote_code=True`) |
 | [`LayerRepository`](layers.md) / [`FuncRepository`](layers.md), Hub-backed `load()` | **Yes** — delegates to [`get_kernel`](basic-usage.md) with that repository’s `trust_remote_code` setting |
@@ -72,7 +68,7 @@ Because of this split, **lockfiles and local overrides must only pin repositorie
 
 Note the distinction between **`kernels.utils` helpers** and **locked Hub repositories in the mapping API**: [`get_locked_kernel`](locking.md) and [`load_kernel`](locking.md) download via internal install paths that **skip** the publisher check, whereas [`LockedLayerRepository`](layers.md) / [`LockedFuncRepository`](layers.md) ultimately call [`get_kernel`](basic-usage.md) and **apply** the same gate as a direct Hub load.
 
-[`LocalLayerRepository`](layers.md) and other **local** mapping helpers call [`get_local_kernel`](basic-usage.md); they never apply the Hub publisher allowlist, since they execute whatever tree you provide.
+[`LocalLayerRepository`](layers.md) and other **local** mapping helpers call [`get_local_kernel`](basic-usage.md); they never apply the Hub publisher gate, since they execute whatever tree you provide.
 
 Mitigations:
 

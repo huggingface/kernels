@@ -16,11 +16,17 @@ traditional Python kernel packages in that they are made to be:
 - **Portable**: a kernel can be loaded from paths outside `PYTHONPATH`.
 - **Unique**: multiple versions of the same kernel can be loaded in the
   same Python process.
-- **Compatible**: kernels must support all recent versions of Python and
+- **Compatible**: `kernels` must support all recent versions of Python and
   the different PyTorch build configurations (various CUDA versions
   and C++ ABIs). Furthermore, older C library versions must be supported.
 
 Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kernels).
+
+The Kernels project is divided into two parts:
+
+* Builder: [`kernel-builder`](../source/builder-cli.md) provides utilities to build, package, and distribute compute kernels in a way that is compatible with the Hugging Face Hub and `kernels`.
+* `kernels`: The [`kernels`](../source/basic-usage.md) is a Python package that lets
+users load compatible compute kernels from the Hub. Refer to the [quickstart](../source/basic-usage.md) to know more.
 
 If you're looking for a more involved "Why kernels?" answer, refer to
 [this page](./why_kernels.md).

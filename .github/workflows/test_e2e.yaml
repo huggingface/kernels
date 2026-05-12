@@ -53,8 +53,7 @@ jobs:
           import os
 
           api = HfApi(
-              endpoint=os.environ["HF_ENDPOINT"],
-              token=os.environ["HF_STAGING_TOKEN"],
+              endpoint=os.environ["HF_ENDPOINT"]
           )
           repo_id = os.environ["E2E_REPO_ID"]
           for repo_type in ["kernel", "model"]:
@@ -62,8 +61,6 @@ jobs:
               print(f"Deleted {repo_type} repo (or it did not exist)")
           PYEOF
           nix-shell -p python3Packages.huggingface-hub --run "python /tmp/delete_repos.py"
-        env:
-          HF_STAGING_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
 
       - name: Init kernel project
         run: |

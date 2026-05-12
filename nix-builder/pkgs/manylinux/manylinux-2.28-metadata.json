@@ -12,7 +12,10 @@
     "version": "8.10"
   },
   "audit-libs": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libcap-ng"
+    ],
     "components": [
       {
         "name": "audit-libs",
@@ -40,7 +43,9 @@
   },
   "bash": {
     "deps": [
-      "filesystem"
+      "filesystem",
+      "glibc",
+      "ncurses-libs"
     ],
     "components": [
       {
@@ -53,7 +58,12 @@
     "version": "4.4.20"
   },
   "boost-regex": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libgcc",
+      "libicu",
+      "libstdcxx"
+    ],
     "components": [
       {
         "name": "boost-regex",
@@ -65,7 +75,9 @@
     "version": "1.66.0"
   },
   "bzip2-libs": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "bzip2-libs",
@@ -96,7 +108,12 @@
     "version": "2025.2.80_v9.0.304"
   },
   "chkconfig": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libselinux",
+      "libsepol",
+      "popt"
+    ],
     "components": [
       {
         "name": "chkconfig",
@@ -110,7 +127,14 @@
   "coreutils": {
     "deps": [
       "coreutils-common",
-      "ncurses"
+      "glibc",
+      "gmp",
+      "libacl",
+      "libattr",
+      "libcap",
+      "libselinux",
+      "ncurses",
+      "openssl-libs"
     ],
     "components": [
       {
@@ -147,7 +171,9 @@
     "version": "20230731"
   },
   "ctags": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "ctags",
@@ -159,7 +185,12 @@
     "version": "5.8"
   },
   "curl": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libcurl-minimal",
+      "openssl-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "curl",
@@ -171,7 +202,12 @@
     "version": "7.61.1"
   },
   "elfutils-debuginfod-client": {
-    "deps": [],
+    "deps": [
+      "elfutils-libelf",
+      "elfutils-libs",
+      "glibc",
+      "libcurl-minimal"
+    ],
     "components": [
       {
         "name": "elfutils-debuginfod-client",
@@ -195,7 +231,13 @@
     "version": "0.190"
   },
   "elfutils-libelf": {
-    "deps": [],
+    "deps": [
+      "bzip2-libs",
+      "glibc",
+      "libzstd",
+      "xz-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "elfutils-libelf",
@@ -207,7 +249,15 @@
     "version": "0.190"
   },
   "elfutils-libs": {
-    "deps": [],
+    "deps": [
+      "bzip2-libs",
+      "elfutils-default-yama-scope",
+      "elfutils-libelf",
+      "glibc",
+      "libzstd",
+      "xz-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "elfutils-libs",
@@ -219,7 +269,9 @@
     "version": "0.190"
   },
   "expat": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "expat",
@@ -246,7 +298,12 @@
   },
   "gawk": {
     "deps": [
-      "filesystem"
+      "filesystem",
+      "glibc",
+      "gmp",
+      "libsigsegv",
+      "mpfr",
+      "readline"
     ],
     "components": [
       {
@@ -259,7 +316,12 @@
     "version": "4.2.1"
   },
   "gc": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libatomic_ops",
+      "libgcc",
+      "libstdcxx"
+    ],
     "components": [
       {
         "name": "gc",
@@ -276,7 +338,7 @@
       "gcc-toolset-14-binutils",
       "gcc-toolset-14-dwz",
       "gcc-toolset-14-gcc",
-      "gcc-toolset-14-gcc-c++",
+      "gcc-toolset-14-gcc-cxx",
       "gcc-toolset-14-gcc-gfortran",
       "gcc-toolset-14-gdb",
       "gcc-toolset-14-runtime"
@@ -309,7 +371,10 @@
     "deps": [
       "gcc-toolset-14-annobin-docs",
       "gcc-toolset-14-gcc",
-      "gcc-toolset-14-runtime"
+      "gcc-toolset-14-runtime",
+      "glibc",
+      "libgcc",
+      "libstdcxx"
     ],
     "components": [
       {
@@ -324,7 +389,13 @@
   "gcc-toolset-14-binutils": {
     "deps": [
       "coreutils",
-      "gcc-toolset-14-runtime"
+      "elfutils-debuginfod-client",
+      "gcc-toolset-14-runtime",
+      "glibc",
+      "jansson",
+      "libgcc",
+      "libstdcxx",
+      "zlib"
     ],
     "components": [
       {
@@ -338,7 +409,9 @@
   },
   "gcc-toolset-14-dwz": {
     "deps": [
-      "gcc-toolset-14-runtime"
+      "elfutils-libelf",
+      "gcc-toolset-14-runtime",
+      "glibc"
     ],
     "components": [
       {
@@ -355,9 +428,14 @@
       "gcc-toolset-14-binutils",
       "gcc-toolset-14-runtime",
       "glibc",
+      "gmp",
       "libgcc",
       "libgomp",
-      "make"
+      "libmpc",
+      "libzstd",
+      "make",
+      "mpfr",
+      "zlib"
     ],
     "components": [
       {
@@ -369,16 +447,22 @@
     ],
     "version": "14.2.1"
   },
-  "gcc-toolset-14-gcc-c++": {
+  "gcc-toolset-14-gcc-cxx": {
     "deps": [
       "gcc-toolset-14-gcc",
-      "gcc-toolset-14-libstdc++-devel",
+      "gcc-toolset-14-libstdcxx-devel",
       "gcc-toolset-14-runtime",
-      "libstdc++"
+      "glibc",
+      "gmp",
+      "libmpc",
+      "libstdcxx",
+      "libzstd",
+      "mpfr",
+      "zlib"
     ],
     "components": [
       {
-        "name": "gcc-toolset-14-gcc-c++",
+        "name": "gcc-toolset-14-gcc-cxx",
         "sha256": "b611732d623d43ab780e6f70ee5300b94f68dbcd490f687b6b407cfaf2ffe8bf",
         "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-gcc-c++-14.2.1-11.el8_10.x86_64.rpm",
         "version": "14.2.1"
@@ -391,7 +475,13 @@
       "gcc-toolset-14-gcc",
       "gcc-toolset-14-libquadmath-devel",
       "gcc-toolset-14-runtime",
-      "libgfortran"
+      "glibc",
+      "gmp",
+      "libgfortran",
+      "libmpc",
+      "libzstd",
+      "mpfr",
+      "zlib"
     ],
     "components": [
       {
@@ -405,7 +495,25 @@
   },
   "gcc-toolset-14-gdb": {
     "deps": [
-      "gcc-toolset-14-runtime"
+      "boost-regex",
+      "elfutils-debuginfod-client",
+      "expat",
+      "gcc-toolset-14-runtime",
+      "glibc",
+      "gmp",
+      "guile",
+      "libbabeltrace",
+      "libgcc",
+      "libipt",
+      "libstdcxx",
+      "libzstd",
+      "mpfr",
+      "ncurses-libs",
+      "python3-libs",
+      "readline",
+      "source-highlight",
+      "xz-libs",
+      "zlib"
     ],
     "components": [
       {
@@ -420,7 +528,8 @@
   "gcc-toolset-14-libquadmath-devel": {
     "deps": [
       "gcc-toolset-14-gcc",
-      "gcc-toolset-14-runtime"
+      "gcc-toolset-14-runtime",
+      "libquadmath"
     ],
     "components": [
       {
@@ -432,13 +541,14 @@
     ],
     "version": "14.2.1"
   },
-  "gcc-toolset-14-libstdc++-devel": {
+  "gcc-toolset-14-libstdcxx-devel": {
     "deps": [
-      "gcc-toolset-14-runtime"
+      "gcc-toolset-14-runtime",
+      "libstdcxx"
     ],
     "components": [
       {
-        "name": "gcc-toolset-14-libstdc++-devel",
+        "name": "gcc-toolset-14-libstdcxx-devel",
         "sha256": "a5306cbaa5f3223de9320374aeac00dbddee817e11bab3c8217e33a131eca0a1",
         "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-libstdc++-devel-14.2.1-11.el8_10.x86_64.rpm",
         "version": "14.2.1"
@@ -461,7 +571,12 @@
     "version": "14.0"
   },
   "gdbm": {
-    "deps": [],
+    "deps": [
+      "gdbm-libs",
+      "glibc",
+      "ncurses-libs",
+      "readline"
+    ],
     "components": [
       {
         "name": "gdbm",
@@ -473,7 +588,9 @@
     "version": "1.18"
   },
   "gdbm-libs": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "gdbm-libs",
@@ -485,7 +602,16 @@
     "version": "1.18"
   },
   "glib2": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "gnutls",
+      "libffi",
+      "libgcc",
+      "libmount",
+      "libselinux",
+      "pcre",
+      "zlib"
+    ],
     "components": [
       {
         "name": "glib2",
@@ -500,7 +626,10 @@
     "deps": [
       "basesystem",
       "glibc-common",
-      "glibc-headers"
+      "glibc-headers",
+      "glibc-minimal-langpack",
+      "libgcc",
+      "libxcrypt"
     ],
     "components": [
       {
@@ -521,6 +650,7 @@
   "glibc-common": {
     "deps": [
       "glibc",
+      "libselinux",
       "tzdata"
     ],
     "components": [
@@ -564,7 +694,9 @@
     "version": "2.28"
   },
   "gmp": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "gmp",
@@ -578,8 +710,13 @@
   "gnutls": {
     "deps": [
       "crypto-policies",
+      "glibc",
+      "gmp",
+      "libidn2",
       "libtasn1",
+      "libunistring",
       "nettle",
+      "p11-kit",
       "p11-kit-trust"
     ],
     "components": [
@@ -593,7 +730,10 @@
     "version": "3.6.16"
   },
   "grep": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "pcre"
+    ],
     "components": [
       {
         "name": "grep",
@@ -606,7 +746,16 @@
   },
   "guile": {
     "deps": [
-      "coreutils"
+      "coreutils",
+      "gc",
+      "glibc",
+      "gmp",
+      "libffi",
+      "libtool-ltdl",
+      "libunistring",
+      "libxcrypt",
+      "ncurses-libs",
+      "readline"
     ],
     "components": [
       {
@@ -619,7 +768,11 @@
     "version": "2.0.14"
   },
   "info": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "ncurses-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "info",
@@ -631,7 +784,9 @@
     "version": "6.5"
   },
   "jansson": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "jansson",
@@ -655,7 +810,9 @@
     "version": "4.18.0"
   },
   "keyutils-libs": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "keyutils-libs",
@@ -670,8 +827,12 @@
     "deps": [
       "coreutils",
       "gawk",
+      "glibc",
       "grep",
       "keyutils-libs",
+      "libcom_err",
+      "libselinux",
+      "libverto",
       "openssl-libs",
       "sed"
     ],
@@ -686,7 +847,10 @@
     "version": "1.18.2"
   },
   "libacl": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libattr"
+    ],
     "components": [
       {
         "name": "libacl",
@@ -698,7 +862,17 @@
     "version": "2.2.53"
   },
   "libarchive": {
-    "deps": [],
+    "deps": [
+      "bzip2-libs",
+      "glibc",
+      "libacl",
+      "libxml2",
+      "libzstd",
+      "lz4-libs",
+      "openssl-libs",
+      "xz-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "libarchive",
@@ -710,7 +884,9 @@
     "version": "3.3.3"
   },
   "libatomic_ops": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libatomic_ops",
@@ -722,7 +898,9 @@
     "version": "7.6.2"
   },
   "libattr": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libattr",
@@ -734,7 +912,14 @@
     "version": "2.4.48"
   },
   "libbabeltrace": {
-    "deps": [],
+    "deps": [
+      "elfutils-libelf",
+      "elfutils-libs",
+      "glib2",
+      "glibc",
+      "libuuid",
+      "popt"
+    ],
     "components": [
       {
         "name": "libbabeltrace",
@@ -748,6 +933,7 @@
   "libblkid": {
     "deps": [
       "coreutils",
+      "glibc",
       "libuuid"
     ],
     "components": [
@@ -761,7 +947,10 @@
     "version": "2.32.1"
   },
   "libcap": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libgcc"
+    ],
     "components": [
       {
         "name": "libcap",
@@ -773,7 +962,9 @@
     "version": "2.48"
   },
   "libcap-ng": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libcap-ng",
@@ -785,7 +976,9 @@
     "version": "0.7.11"
   },
   "libcom_err": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libcom_err",
@@ -797,7 +990,14 @@
     "version": "1.45.6"
   },
   "libcurl-minimal": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "krb5-libs",
+      "libcom_err",
+      "libnghttp2",
+      "openssl-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "libcurl-minimal",
@@ -809,7 +1009,10 @@
     "version": "7.61.1"
   },
   "libdb": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "openssl-libs"
+    ],
     "components": [
       {
         "name": "libdb",
@@ -821,7 +1024,9 @@
     "version": "5.3.28"
   },
   "libffi": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libffi",
@@ -846,7 +1051,10 @@
   },
   "libgfortran": {
     "deps": [
-      "libquadmath"
+      "glibc",
+      "libgcc",
+      "libquadmath",
+      "zlib"
     ],
     "components": [
       {
@@ -859,7 +1067,9 @@
     "version": "8.5.0"
   },
   "libgomp": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libgomp",
@@ -871,7 +1081,11 @@
     "version": "8.5.0"
   },
   "libicu": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libgcc",
+      "libstdcxx"
+    ],
     "components": [
       {
         "name": "libicu",
@@ -883,7 +1097,10 @@
     "version": "60.3"
   },
   "libidn2": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libunistring"
+    ],
     "components": [
       {
         "name": "libidn2",
@@ -895,7 +1112,9 @@
     "version": "2.2.0"
   },
   "libipt": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libipt",
@@ -908,7 +1127,9 @@
   },
   "libmount": {
     "deps": [
+      "glibc",
       "libblkid",
+      "libselinux",
       "libuuid"
     ],
     "components": [
@@ -922,7 +1143,11 @@
     "version": "2.32.1"
   },
   "libmpc": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "gmp",
+      "mpfr"
+    ],
     "components": [
       {
         "name": "libmpc",
@@ -934,7 +1159,9 @@
     "version": "1.1.0"
   },
   "libnghttp2": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libnghttp2",
@@ -946,7 +1173,10 @@
     "version": "1.33.0"
   },
   "libnsl2": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libtirpc"
+    ],
     "components": [
       {
         "name": "libnsl2",
@@ -958,7 +1188,9 @@
     "version": "1.2.0"
   },
   "libquadmath": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libquadmath",
@@ -971,6 +1203,8 @@
   },
   "libselinux": {
     "deps": [
+      "glibc",
+      "libsepol",
       "pcre2"
     ],
     "components": [
@@ -984,7 +1218,9 @@
     "version": "2.9"
   },
   "libsepol": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libsepol",
@@ -996,7 +1232,9 @@
     "version": "2.9"
   },
   "libsigsegv": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libsigsegv",
@@ -1007,13 +1245,14 @@
     ],
     "version": "2.11"
   },
-  "libstdc++": {
+  "libstdcxx": {
     "deps": [
-      "glibc"
+      "glibc",
+      "libgcc"
     ],
     "components": [
       {
-        "name": "libstdc++",
+        "name": "libstdcxx",
         "sha256": "0302b9006d719a31dd51aeaf31fec03d70aad5c318674537bd80c49f9174b066",
         "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libstdc++-8.5.0-28.el8_10.alma.1.x86_64.rpm",
         "version": "8.5.0"
@@ -1022,7 +1261,9 @@
     "version": "8.5.0"
   },
   "libtasn1": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libtasn1",
@@ -1034,7 +1275,11 @@
     "version": "4.13"
   },
   "libtirpc": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "krb5-libs",
+      "libcom_err"
+    ],
     "components": [
       {
         "name": "libtirpc",
@@ -1046,7 +1291,9 @@
     "version": "1.1.4"
   },
   "libtool-ltdl": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libtool-ltdl",
@@ -1059,6 +1306,7 @@
   },
   "libunistring": {
     "deps": [
+      "glibc",
       "info"
     ],
     "components": [
@@ -1072,7 +1320,9 @@
     "version": "0.9.9"
   },
   "libuuid": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libuuid",
@@ -1084,7 +1334,9 @@
     "version": "2.32.1"
   },
   "libverto": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libverto",
@@ -1096,7 +1348,10 @@
     "version": "0.3.2"
   },
   "libxcrypt": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "glibc-headers"
+    ],
     "components": [
       {
         "name": "libxcrypt",
@@ -1114,7 +1369,11 @@
     "version": "4.1.1"
   },
   "libxml2": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "xz-libs",
+      "zlib"
+    ],
     "components": [
       {
         "name": "libxml2",
@@ -1126,7 +1385,9 @@
     "version": "2.9.7"
   },
   "libzstd": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "libzstd",
@@ -1138,7 +1399,9 @@
     "version": "1.4.4"
   },
   "lua-libs": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "lua-libs",
@@ -1150,7 +1413,9 @@
     "version": "5.3.4"
   },
   "lz4-libs": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "lz4-libs",
@@ -1162,7 +1427,9 @@
     "version": "1.8.3"
   },
   "make": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "make",
@@ -1175,6 +1442,7 @@
   },
   "mpfr": {
     "deps": [
+      "glibc",
       "gmp"
     ],
     "components": [
@@ -1188,7 +1456,10 @@
     "version": "3.1.6"
   },
   "ncurses": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "ncurses-libs"
+    ],
     "components": [
       {
         "name": "ncurses",
@@ -1213,6 +1484,7 @@
   },
   "ncurses-libs": {
     "deps": [
+      "glibc",
       "ncurses-base"
     ],
     "components": [
@@ -1227,6 +1499,8 @@
   },
   "nettle": {
     "deps": [
+      "glibc",
+      "gmp",
       "info"
     ],
     "components": [
@@ -1242,7 +1516,9 @@
   "openssl-libs": {
     "deps": [
       "ca-certificates",
-      "crypto-policies"
+      "crypto-policies",
+      "glibc",
+      "zlib"
     ],
     "components": [
       {
@@ -1255,7 +1531,10 @@
     "version": "1.1.1k"
   },
   "p11-kit": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libffi"
+    ],
     "components": [
       {
         "name": "p11-kit",
@@ -1267,7 +1546,11 @@
     "version": "0.23.22"
   },
   "p11-kit-trust": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libtasn1",
+      "p11-kit"
+    ],
     "components": [
       {
         "name": "p11-kit-trust",
@@ -1279,7 +1562,9 @@
     "version": "0.23.22"
   },
   "pcre": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "pcre",
@@ -1291,7 +1576,9 @@
     "version": "8.42"
   },
   "pcre2": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "pcre2",
@@ -1304,7 +1591,11 @@
   },
   "platform-python": {
     "deps": [
+      "chkconfig",
+      "glibc",
+      "openssl-libs",
       "platform-python-setuptools",
+      "python3-libs",
       "python3-pip-wheel",
       "python3-setuptools-wheel"
     ],
@@ -1319,7 +1610,9 @@
     "version": "3.6.8"
   },
   "platform-python-setuptools": {
-    "deps": [],
+    "deps": [
+      "platform-python"
+    ],
     "components": [
       {
         "name": "platform-python-setuptools",
@@ -1331,7 +1624,9 @@
     "version": "39.2.0"
   },
   "popt": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "popt",
@@ -1344,9 +1639,25 @@
   },
   "python3-libs": {
     "deps": [
+      "bzip2-libs",
       "chkconfig",
+      "expat",
+      "gdbm",
+      "gdbm-libs",
+      "glibc",
+      "libffi",
+      "libnsl2",
+      "libtirpc",
+      "libxcrypt",
+      "ncurses-libs",
+      "openssl-libs",
+      "platform-python",
       "python3-pip-wheel",
-      "python3-setuptools-wheel"
+      "python3-setuptools-wheel",
+      "readline",
+      "sqlite-libs",
+      "xz-libs",
+      "zlib"
     ],
     "components": [
       {
@@ -1384,7 +1695,9 @@
   },
   "readline": {
     "deps": [
-      "info"
+      "glibc",
+      "info",
+      "ncurses-libs"
     ],
     "components": [
       {
@@ -1398,8 +1711,24 @@
   },
   "rpm": {
     "deps": [
+      "audit-libs",
+      "bzip2-libs",
       "coreutils",
-      "curl"
+      "curl",
+      "elfutils-libelf",
+      "glibc",
+      "libacl",
+      "libarchive",
+      "libcap",
+      "libdb",
+      "libzstd",
+      "lua-libs",
+      "openssl-libs",
+      "popt",
+      "rpm-libs",
+      "sqlite-libs",
+      "xz-libs",
+      "zlib"
     ],
     "components": [
       {
@@ -1413,7 +1742,21 @@
   },
   "rpm-libs": {
     "deps": [
-      "rpm"
+      "audit-libs",
+      "bzip2-libs",
+      "elfutils-libelf",
+      "glibc",
+      "libacl",
+      "libcap",
+      "libdb",
+      "libzstd",
+      "lua-libs",
+      "openssl-libs",
+      "popt",
+      "rpm",
+      "sqlite-libs",
+      "xz-libs",
+      "zlib"
     ],
     "components": [
       {
@@ -1426,7 +1769,10 @@
     "version": "4.14.3"
   },
   "scl-utils": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "rpm-libs"
+    ],
     "components": [
       {
         "name": "scl-utils",
@@ -1438,7 +1784,11 @@
     "version": "2.0.2"
   },
   "sed": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "libacl",
+      "libselinux"
+    ],
     "components": [
       {
         "name": "sed",
@@ -1450,7 +1800,9 @@
     "version": "4.5"
   },
   "setup": {
-    "deps": [],
+    "deps": [
+      "almalinux-release"
+    ],
     "components": [
       {
         "name": "setup",
@@ -1463,8 +1815,12 @@
   },
   "source-highlight": {
     "deps": [
+      "boost-regex",
       "ctags",
-      "info"
+      "glibc",
+      "info",
+      "libgcc",
+      "libstdcxx"
     ],
     "components": [
       {
@@ -1477,7 +1833,10 @@
     "version": "3.1.8"
   },
   "sqlite-libs": {
-    "deps": [],
+    "deps": [
+      "glibc",
+      "zlib"
+    ],
     "components": [
       {
         "name": "sqlite-libs",
@@ -1501,7 +1860,9 @@
     "version": "2026a"
   },
   "xz-libs": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "xz-libs",
@@ -1513,7 +1874,9 @@
     "version": "5.2.4"
   },
   "zlib": {
-    "deps": [],
+    "deps": [
+      "glibc"
+    ],
     "components": [
       {
         "name": "zlib",

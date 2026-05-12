@@ -21,14 +21,26 @@
 # TODO: make generic (multiple almalinux versions), add aarch64
 
 let
-  filteredDeps = lib.filter (
-    dep:
-    !builtins.elem dep [
-      # Break glibc -> glibc-common -> glibc cycle.
-      "filesystem"
+  filters = {
+    glibc = [
       "glibc-common"
+      "libxcrypt"
+    ];
+    glibc-common = [
       "glibc"
-    ]
+      "libselinux"
+    ];
+    glibc-headers = [ "glibc" ];
+    glibc-minimal-langpack = [
+      "glibc"
+      "glibc-common"
+    ];
+    platform-python-setuptools = [ "platform-python" ];
+    python3-libs = [ "platform-python" ];
+    rpm-libs = [ "rpm" ];
+  };
+  filteredDeps = lib.filter (
+    dep: dep != "filesystem" && !builtins.elem dep (filters.${pname} or [ ])
   ) deps;
   srcs = map (component: fetchurl { inherit (component) url sha256; }) components;
 in
@@ -53,35 +65,24 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
-    find
-
-    echo "creating..."
-
     mkdir -p $out
-    for d in bin lib sbin usr/bin usr/lib usr/sbin; do
-      echo $d
-      if [ -d "$d" ]; then
-        cp -r $d $out/
-      fi
-    done
 
-    for d in lib64 usr/lib64; do
-      echo $d
-      if [ -d "$d" ]; then
-        cp -r $d $out/
+    if [ -d opt/rh/gcc-toolset-14/root ]; then
+      root=opt/rh/gcc-toolset-14/root
+    else
+      root=.
+    fi
+
+    for d in bin lib lib64 libexec sbin usr/bin usr/lib usr/lib64 usr/libexec usr/sbin; do
+      if [ -d "$root/$d" -a ! -L "$root/$d" ]; then
+        cp -r $root/$d $out/
       fi
     done
 
     rm -rf $out/lib/.build-id
-
-    find $out
-
-
 
     runHook postInstall
   '';
 
   dontStrip = true;
 })
-
-

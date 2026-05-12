@@ -359,7 +359,15 @@ def main():
     # sorted will put -devel after non-devel packages.
     for name in sorted(packages.keys()):
         info = packages[name]
-        deps = {dev_to_merge.get(dep, dep) for dep in info.depends() if dep in packages}
+        deps = set()
+        for dep in info.depends():
+            if dep in packages:
+                deps.add(dev_to_merge.get(dep, dep))
+            elif dep in provides_map:
+                # dep is a capability (e.g. 'libmpc.so.3()(64bit)'); use the
+                # name of the package that provides it instead.
+                resolved = provides_map[dep].name
+                deps.add(dev_to_merge.get(resolved, resolved))
 
         pkg_metadata = {
             "name": name,
@@ -406,6 +414,21 @@ def main():
     }
     for pkg in filtered_metadata.values():
         pkg["deps"] = [VERSION_SUFFIX_RE.sub("", dep) for dep in pkg["deps"]]
+
+    # Step 9: Rename any occurrence of 'c++' -> 'cxx' in package names so they
+    # are valid Nix attribute names (++ is an operator in the Nix expression
+    # language). This covers e.g. libstdc++ -> libstdcxx, gcc-c++ -> gcc-cxx.
+    def _cxx(s: str) -> str:
+        return s.replace("c++", "cxx")
+
+    filtered_metadata = {
+        _cxx(name): {
+            **pkg,
+            "deps": [_cxx(d) for d in pkg["deps"]],
+            "components": [{**c, "name": _cxx(c["name"])} for c in pkg["components"]],
+        }
+        for name, pkg in filtered_metadata.items()
+    }
 
     print(f"Generated metadata for {len(filtered_metadata)} packages", file=sys.stderr)
     print(json.dumps(filtered_metadata, indent=2))

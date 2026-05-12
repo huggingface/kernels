@@ -366,6 +366,7 @@ rec {
               ++ pythonCheckInputs ps
               ++ [
                 buildSet.torch
+                kernels
                 pip
                 pytest
               ]

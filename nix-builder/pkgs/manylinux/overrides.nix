@@ -72,18 +72,23 @@ applyOverrides {
     };
 
   glibc =
-    { }:
+    { lib, stdenv }:
     prevAttrs: {
-      postInstall = ''
-        # Update linker script with Nix paths.
-        substituteInPlace $out/lib64/libc.so \
-          --replace-fail "/lib64/libc.so.6" "$out/lib/libc.so.6" \
-          --replace-fail "/usr/lib64/libc_nonshared.a" "$out/lib/libc_nonshared.a"
-        substituteInPlace $out/lib64/libm.so \
-          --replace-fail "/lib64/libm.so.6" "$out/lib/libm.so.6" \
-          --replace-fail "/lib64/libmvec.so.1" "$out/lib/libmvec.so.1" \
-          --replace-fail "/usr/lib64/libmvec_nonshared.a" "$out/lib/libmvec_nonshared.a"
-      '';
+      postInstall =
+        let
+          ldArch = builtins.replaceStrings [ "_" ] [ "-" ] stdenv.hostPlatform.linuxArch;
+        in
+        ''
+          # Update linker script with Nix paths.
+          substituteInPlace $out/lib64/libc.so \
+            --replace-fail "/lib64/libc.so.6" "$out/lib/libc.so.6" \
+            --replace-fail "/usr/lib64/libc_nonshared.a" "$out/lib/libc_nonshared.a" \
+            --replace-fail "/lib64/ld-linux-${ldArch}.so.2" "$out/lib/ld-linux-${ldArch}.so.2"
+          substituteInPlace $out/lib64/libm.so \
+            --replace-fail "/lib64/libm.so.6" "$out/lib/libm.so.6" \
+            --replace-fail "/lib64/libmvec.so.1" "$out/lib/libmvec.so.1" \
+            --replace-fail "/usr/lib64/libmvec_nonshared.a" "$out/lib/libmvec_nonshared.a"
+        '';
     };
 
   python3-libs =

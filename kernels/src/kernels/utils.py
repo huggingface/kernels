@@ -31,15 +31,14 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
-_ALWAYS_TRUSTED_ORGS = {"kernels-community", "kernels-staging", "kernels-test", "sgl-project"}
-
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
 
     When ``trust_remote_code`` is ``False`` (the default), only repositories
-    whose publisher is marked as trusted on the Hub are allowed.  Repositories
-    from untrusted publishers will raise a ``ValueError``.
+    whose publisher organization has ``trustedKernelPublisher`` enabled on the
+    Hub are allowed. Repositories from untrusted publishers will raise a
+    ``ValueError``.
 
     When ``trust_remote_code`` is ``True``, all repositories are allowed.
 
@@ -62,32 +61,24 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             stacklevel=3,
         )
 
-    org = repo_id.split("/", 1)[0]
-    if org in _ALWAYS_TRUSTED_ORGS:
-        return
+    publisher = repo_id.split("/", 1)[0]
+
+    try:
+        info = _get_hf_api().get_organization_overview(publisher)
+    except Exception:
+        failure_reason = "could not verify publisher trust status"
+    else:
+        if getattr(info, "trustedKernelPublisher", False) is True:
+            # If the response indicates that the publisher is trusted we allow the
+            # kernel to be loaded.
+            return
+        # otherwise we fail with a message stating that the publisher is not trusted.
+        failure_reason = "is not from a trusted publisher"
 
     raise ValueError(
-        f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-        f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        f"Kernel repository '{repo_id}' {failure_reason}. "
+        "Set trust_remote_code=True to allow loading kernels from untrusted sources."
     )
-
-    # TODO: revisit and update logic when we can check trusted publishers at the
-    # user/organization level
-    #
-    # api = _get_hf_api()
-    # try:
-    #     info = api.repo_info(repo_id, repo_type="kernel")
-    # except Exception as e:
-    #     raise ValueError(
-    #         f"Could not verify publisher trust status for kernel repository '{repo_id}'. "
-    #         "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-    #     ) from e
-
-    # if not getattr(info, "trustedPublisher", False):
-    #     raise ValueError(
-    #         f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-    #         f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
-    #     )
 
 
 @dataclass(frozen=True)

@@ -66,17 +66,16 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
     try:
         info = _get_hf_api().get_organization_overview(publisher)
     except Exception:
-        failure_reason = "could not verify publisher trust status"
-    else:
-        if getattr(info, "trustedKernelPublisher", False) is True:
-            # If the response indicates that the publisher is trusted we allow the
-            # kernel to be loaded.
-            return
-        # otherwise we fail with a message stating that the publisher is not trusted.
-        failure_reason = "is not from a trusted publisher"
+        raise ValueError(
+            f"Kernel repository '{repo_id}' could not verify publisher trust status. "
+            "Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        )
+
+    if getattr(info, "trustedKernelPublisher", False):
+        return
 
     raise ValueError(
-        f"Kernel repository '{repo_id}' {failure_reason}. "
+        f"Kernel repository '{repo_id}' is not from a trusted publisher. "
         "Set trust_remote_code=True to allow loading kernels from untrusted sources."
     )
 

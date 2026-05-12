@@ -34,7 +34,7 @@ let
           runHook preInstall
 
           mkdir $out
-          for path in ${gcc-toolset-14-binutils} ${gcc-toolset-14-gcc} ${gcc-toolset-14-gcc-cxx} ${gcc-toolset-14-libstdcxx-devel} ${glibc-headers} ${kernel-headers}; do
+          for path in ${gcc-toolset-14-gcc} ${gcc-toolset-14-gcc-cxx} ${gcc-toolset-14-libstdcxx-devel} ${glibc-headers} ${kernel-headers}; do
             rsync --exclude=nix-support -a $path/ $out/
           done
 
@@ -44,7 +44,7 @@ let
       };
 
       binutils = pkgs.wrapBintoolsWith {
-        bintools = final.gcc-unwrapped;
+        bintools = final.gcc-toolset-14-binutils;
         libc = final.glibc;
       };
 

@@ -48,14 +48,22 @@ jobs:
       # Remove the existing test repo if it exists so we test repo creation in the upload step
       - name: Delete existing test repo
         run: |
-          pip install huggingface_hub
-          python -c "
+          cat > /tmp/delete_repos.py << 'PYEOF'
           from huggingface_hub import HfApi
-          api = HfApi(endpoint='${{ env.HF_ENDPOINT }}', token='${{ secrets.HF_STAGING_TOKEN }}')
-          for repo_type in ['kernel', 'model']:
-              api.delete_repo('${{ env.E2E_REPO_ID }}', repo_type=repo_type, missing_ok=True)
-              print(f'Deleted {repo_type} repo (or it did not exist)')
-          "
+          import os
+
+          api = HfApi(
+              endpoint=os.environ["HF_ENDPOINT"],
+              token=os.environ["HF_STAGING_TOKEN"],
+          )
+          repo_id = os.environ["E2E_REPO_ID"]
+          for repo_type in ["kernel", "model"]:
+              api.delete_repo(repo_id, repo_type=repo_type, missing_ok=True)
+              print(f"Deleted {repo_type} repo (or it did not exist)")
+          PYEOF
+          nix-shell -p python3Packages.huggingface-hub --run "python /tmp/delete_repos.py"
+        env:
+          HF_STAGING_TOKEN: ${{ secrets.HF_STAGING_TOKEN }}
 
       - name: Init kernel project
         run: |

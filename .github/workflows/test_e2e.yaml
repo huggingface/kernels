@@ -148,7 +148,7 @@ jobs:
           import torch
           from kernels import get_kernel
 
-          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}')
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}', trust_remote_code=True)
 
           x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
           result = kernel.kernels_upload_test(x)

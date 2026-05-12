@@ -47,7 +47,7 @@ let
           cc = final.toolchain;
           libc = final.glibc;
           bintools = pkgs.wrapBintoolsWith {
-            bintools = final.gcc-toolset-14-binutils;
+            bintools = final.toolchain;
             libc = final.glibc;
           };
         }

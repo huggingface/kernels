@@ -138,6 +138,8 @@ jobs:
           CUDA_TAG=$(echo "$VARIANT" | grep -oP 'cu\d+')
           echo "Installing torch matching variant $VARIANT (CUDA tag: $CUDA_TAG)"
           uv sync --all-extras --dev
+          # E2E validates this checkout, so use the local kernels-data binding instead of the released wheel from uv.lock.
+          uv pip install --reinstall ../kernels-data/bindings/python
           uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/$CUDA_TAG
           uv run --no-sync python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
 

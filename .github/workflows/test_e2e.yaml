@@ -48,18 +48,14 @@ jobs:
       # Remove the existing test repo if it exists so we test repo creation in the upload step
       - name: Delete existing test repo
         run: |
-          curl -sf -X DELETE \
-            "${{ env.HF_ENDPOINT }}/api/repos/delete" \
-            -H "Authorization: Bearer ${{ secrets.HF_STAGING_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"type":"kernel","organization":"__DUMMY_KERNELS_USER__","name":"kernels-upload-test"}' \
-          || true
-          curl -sf -X DELETE \
-            "${{ env.HF_ENDPOINT }}/api/repos/delete" \
-            -H "Authorization: Bearer ${{ secrets.HF_STAGING_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"type":"model","organization":"__DUMMY_KERNELS_USER__","name":"kernels-upload-test"}' \
-          || true
+          pip install huggingface_hub
+          python -c "
+          from huggingface_hub import HfApi
+          api = HfApi(endpoint='${{ env.HF_ENDPOINT }}', token='${{ secrets.HF_STAGING_TOKEN }}')
+          for repo_type in ['kernel', 'model']:
+              api.delete_repo('${{ env.E2E_REPO_ID }}', repo_type=repo_type, missing_ok=True)
+              print(f'Deleted {repo_type} repo (or it did not exist)')
+          "
 
       - name: Init kernel project
         run: |

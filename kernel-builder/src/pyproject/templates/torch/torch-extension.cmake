@@ -15,9 +15,9 @@ define_gpu_extension_target(
   USE_SABI 3
   WITH_SOABI)
 
-if(NOT (MSVC OR GPU_LANG STREQUAL "SYCL"))
-    target_link_options(${OPS_NAME} PRIVATE -static-libstdc++)
-endif()
+#if(NOT (MSVC OR GPU_LANG STREQUAL "SYCL"))
+#    target_link_options(${OPS_NAME} PRIVATE -static-libstdc++)
+#endif()
 
 if(GPU_LANG STREQUAL "SYCL")
     target_link_options(${OPS_NAME} PRIVATE ${sycl_link_flags})

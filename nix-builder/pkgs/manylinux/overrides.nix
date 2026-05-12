@@ -21,7 +21,11 @@ applyOverrides {
     };
 
   gcc-toolset-14-gcc =
-    { gcc-toolset-14-binutils }:
+    {
+      gcc-toolset-14-binutils,
+      libgcc,
+      stdenv,
+    }:
     prevAttrs: {
       postInstall = ''
         # We don't care about compiling for 32-bit, so yank files to avoid
@@ -37,16 +41,23 @@ applyOverrides {
 
         # Not sure yet if we need this.
         find $out -name 'ld.gold' -type l -delete
+
+        substituteInPlace $out/lib/gcc/${stdenv.hostPlatform.linuxArch}-redhat-linux/14/libgcc_s.so \
+          --replace-fail "/lib64/libgcc_s.so.1" "${libgcc}/lib/libgcc_s.so.1"
       '';
     };
 
   gcc-toolset-14-gcc-cxx =
-    { }:
+    { libstdcxx, stdenv }:
     prevAttrs: {
       postInstall = ''
         # We don't care about compiling for 32-bit, so yank files to avoid
         # dealing with broken symlinks.
         rm -rf $out/lib/gcc/x86_64-redhat-linux/14/32
+
+        # Update linker script with Nix paths.
+        substituteInPlace $out/lib/gcc/${stdenv.hostPlatform.linuxArch}-redhat-linux/14/libstdc++.so \
+          --replace-fail "/usr/lib64/libstdc++.so.6" "${libstdcxx}/lib/libstdc++.so.6"
       '';
     };
 
@@ -57,6 +68,21 @@ applyOverrides {
         # We don't care about compiling for 32-bit, so yank files to avoid
         # dealing with broken symlinks.
         rm -rf $out/lib/gcc/x86_64-redhat-linux/14/32
+      '';
+    };
+
+  glibc =
+    { }:
+    prevAttrs: {
+      postInstall = ''
+        # Update linker script with Nix paths.
+        substituteInPlace $out/lib64/libc.so \
+          --replace-fail "/lib64/libc.so.6" "$out/lib/libc.so.6" \
+          --replace-fail "/usr/lib64/libc_nonshared.a" "$out/lib/libc_nonshared.a"
+        substituteInPlace $out/lib64/libm.so \
+          --replace-fail "/lib64/libm.so.6" "$out/lib/libm.so.6" \
+          --replace-fail "/lib64/libmvec.so.1" "$out/lib/libmvec.so.1" \
+          --replace-fail "/usr/lib64/libmvec_nonshared.a" "$out/lib/libmvec_nonshared.a"
       '';
     };
 

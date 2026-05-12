@@ -73,7 +73,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       root=.
     fi
 
-    for d in bin lib lib64 libexec sbin usr/bin usr/lib usr/lib64 usr/libexec usr/sbin; do
+    for d in bin include lib lib64 libexec sbin usr/bin usr/include usr/lib usr/lib64 usr/libexec usr/sbin; do
       if [ -d "$root/$d" -a ! -L "$root/$d" ]; then
         cp -r $root/$d $out/
       fi

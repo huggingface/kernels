@@ -20,7 +20,7 @@ env:
   E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:

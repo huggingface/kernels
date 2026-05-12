@@ -1,10 +1,10 @@
 {
   autoPatchelfHook,
+  clr,
   fetchurl,
   lib,
   python3,
   rocm-core,
-  rocm-hip-runtime,
   stdenv,
   xz,
 }:
@@ -34,7 +34,7 @@ stdenv.mkDerivation {
   nativeInstallCheckInputs = [ python3 ];
 
   buildInputs = [
-    rocm-hip-runtime
+    clr
     stdenv.cc.cc.lib
     xz
   ];

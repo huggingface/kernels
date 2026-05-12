@@ -257,7 +257,7 @@ are available:
   capabilities are the intersection of this list and the capabilities
   supported by the CUDA compiler. It is recommended to leave this option
   unspecified **unless** a kernel requires specific capabilities.
-- `cuda_flags` (optional): additional flags to be passed to `nvcc`.
+- `cuda-flags` (optional): additional flags to be passed to `nvcc`.
   **Warning**: this option should only be used in exceptional circumstances.
   Custom compile flags can interfere with the build process or break
   compatibility requirements.
@@ -269,7 +269,7 @@ are available:
 
 #### xpu
 
-- `sycl_flags`: a list of additional flags to be passed to the SYCL
+- `sycl-flags`: a list of additional flags to be passed to the SYCL
   compiler.
 
 ### cpu

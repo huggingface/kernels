@@ -66,3 +66,28 @@ kernel_layer_mapping = {
     }
 }
 ```
+
+## 0.14
+
+### `kernel` repo type on the Hub
+
+Kernels are now a first-class repository type on the Hugging Face Hub, and
+`kernels` 0.14 loads kernels exclusively from `kernel`-type repositories.
+`model`-type kernel repositories are no longer supported by the loader.
+
+New uploads via `kernel-builder build-and-upload` default to
+`--repo-type kernel`. To publish, the owning user or org must have
+kernel-creation access. Request it from
+[huggingface.co/settings/account](https://huggingface.co/settings/account)
+("Request Kernels Creation").
+
+To migrate an existing `model`-type kernel repository:
+
+1. Make sure the publishing org has been granted kernel-creation access
+   (see above).
+2. Re-upload with `kernel-builder build-and-upload` to a `kernel`-type
+   repository. Either keep the same `repo-id` in `build.toml` if the
+   repository has been migrated to the new type, or point it at a newly
+   created `kernel`-type repository.
+3. Update consumers' `get_kernel(...)` and `LayerRepository(...)` calls
+   to reference the new repository if the `repo-id` changed.

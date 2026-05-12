@@ -1,22 +1,40 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    fs,
+    fs::{self, File},
+    io::BufReader,
     path::{Path, PathBuf},
 };
 
 use clap::Args;
 use eyre::{bail, Context, Result};
-use huggingface_hub::{
-    AddSource, CommitOperation, CreateRepoParams, RepoCreateBranchParams, RepoCreateCommitParams,
-    RepoListFilesParams, RepoListRefsParams, RepoType,
+use hf_hub::{
+    progress::{Progress, ProgressEvent, ProgressHandler, UploadEvent},
+    repository::{AddSource, CommitOperation},
+    RepoType, RepoTypeKernel, RepoTypeModel,
 };
+use indicatif::{ProgressBar, ProgressStyle};
+use kernels_data::metadata::Metadata;
 use walkdir::WalkDir;
 
 use crate::{
     hf::{self, repo_handle},
-    pyproject::parse_metadata,
     util::{check_or_infer_kernel_dir, discover_variants, parse_build},
 };
+
+/// Bridges `ProgressHandler` events to an `indicatif::ProgressBar`.
+struct IndicatifProgress(ProgressBar);
+
+impl ProgressHandler for IndicatifProgress {
+    fn on_progress(&self, event: &ProgressEvent) {
+        if let ProgressEvent::Upload(UploadEvent::Progress { files, .. }) = event {
+            let completed = files
+                .iter()
+                .filter(|f| f.status == hf_hub::progress::FileStatus::Complete)
+                .count();
+            self.0.set_position(completed as u64);
+        }
+    }
+}
 
 const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
@@ -26,15 +44,6 @@ pub enum RepoTypeArg {
     Model,
     #[default]
     Kernel,
-}
-
-impl From<RepoTypeArg> for RepoType {
-    fn from(arg: RepoTypeArg) -> Self {
-        match arg {
-            RepoTypeArg::Model => RepoType::Model,
-            RepoTypeArg::Kernel => RepoType::Kernel,
-        }
-    }
 }
 
 #[derive(Debug, Args)]
@@ -59,6 +68,10 @@ pub struct UploadArgs {
     /// Repository type on Hugging Face Hub (`kernel` by default, or `model` for legacy repos).
     #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
     pub repo_type: RepoTypeArg,
+
+    /// Suppress progress output.
+    #[arg(long, short)]
+    pub quiet: bool,
 }
 
 /// Get repository and branch from the given arguments, or fallback to
@@ -95,8 +108,14 @@ fn get_repo_and_branch(
 }
 
 pub fn run_upload(args: UploadArgs) -> Result<()> {
+    match args.repo_type {
+        RepoTypeArg::Model => run_upload_typed::<RepoTypeModel>(args),
+        RepoTypeArg::Kernel => run_upload_typed::<RepoTypeKernel>(args),
+    }
+}
+
+fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     let api = hf::api()?;
-    let repo_type: RepoType = args.repo_type.into();
     let kernel_dir = check_or_infer_kernel_dir(args.kernel_dir)?;
     let kernel_dir = fs::canonicalize(&kernel_dir)
         .wrap_err_with(|| format!("Cannot resolve kernel directory `{}`", kernel_dir.display()))?;
@@ -110,14 +129,13 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
 
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
-    let params = CreateRepoParams::builder()
+    let repo_url = api
+        .create_repository()
         .repo_id(&repo_id)
-        .repo_type(repo_type)
+        .repo_type(T::default())
         .private(args.private)
         .exist_ok(true)
-        .build();
-    let repo_url = api
-        .create_repo(&params)
+        .send()
         .wrap_err("Cannot create repository")?;
     // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
     let repo_id = repo_url
@@ -128,18 +146,19 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
         .unwrap_or(&repo_id)
         .to_owned();
 
-    let repo = repo_handle(&api, repo_type, &repo_id);
+    let repo = repo_handle::<T>(&api, &repo_id);
 
     let is_new_version_branch = if let Some(ref branch) = branch {
-        let refs_params = RepoListRefsParams::builder().build();
         let refs = repo
-            .list_refs(&refs_params)
+            .list_refs()
+            .send()
             .wrap_err("Cannot list repository refs")?;
         let exists = refs.branches.iter().any(|r| r.name == *branch);
 
         if !exists {
-            let params = RepoCreateBranchParams::builder().branch(branch).build();
-            repo.create_branch(&params)
+            repo.create_branch()
+                .branch(branch)
+                .send()
                 .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
         }
         eprintln!(
@@ -162,10 +181,18 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
     );
 
     if let Some(ref branch) = branch {
-        let params = RepoListFilesParams {
-            revision: Some(branch.clone()),
-        };
-        let version_existing_files: Vec<String> = repo.list_files(&params).unwrap_or_default();
+        let version_existing_files: Vec<String> = repo
+            .list_tree()
+            .revision(branch.clone())
+            .recursive(true)
+            .send()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|entry| match entry {
+                hf_hub::repository::RepoTreeEntry::File { path, .. } => Some(path),
+                hf_hub::repository::RepoTreeEntry::Directory { .. } => None,
+            })
+            .collect();
 
         let version_ops = operations_by_branch.entry(branch.clone()).or_default();
 
@@ -189,20 +216,28 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
             continue;
         }
 
-        eprintln!(
-            "Uploading {} operations to branch `{}`...",
-            operations.len(),
-            branch
-        );
-
         let batch_count = operations.len().div_ceil(BUILD_COMMIT_BATCH_SIZE);
-        if batch_count > 1 {
-            eprintln!(
-                "Uploading in {} commits ({} operations).",
-                batch_count,
-                operations.len()
+        let progress = if args.quiet {
+            ProgressBar::hidden()
+        } else {
+            let pb = ProgressBar::new(operations.len() as u64);
+            pb.set_style(
+                ProgressStyle::with_template(
+                    "Uploading to `{msg}` [{bar:40.cyan/blue}] {pos}/{len} files",
+                )
+                .unwrap()
+                .progress_chars("=> "),
             );
-        }
+            pb.set_message(branch.clone());
+            pb
+        };
+
+        let progress_handler: Option<Progress> = if args.quiet {
+            None
+        } else {
+            let pb = progress.clone();
+            Some(Progress::new(IndicatifProgress(pb)))
+        };
 
         for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
             let commit_message = if batch_count > 1 {
@@ -214,31 +249,23 @@ pub fn run_upload(args: UploadArgs) -> Result<()> {
                 "Uploaded using `kernel-builder`.".to_owned()
             };
 
-            let params = RepoCreateCommitParams {
-                operations: chunk.to_vec(),
-                commit_message,
-                commit_description: None,
-                revision: Some(branch.clone()),
-                create_pr: None,
-                parent_commit: None,
-            };
-            repo.create_commit(&params)
+            repo.create_commit()
+                .operations(chunk.to_vec())
+                .commit_message(&commit_message)
+                .revision(branch.clone())
+                .maybe_progress(progress_handler.clone())
+                .send()
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
-
-            if batch_count > 1 {
-                eprintln!("  Uploaded batch {}/{batch_count}.", batch_index + 1);
-            }
         }
+
+        progress.finish_with_message(format!("Uploaded to `{branch}`"));
     }
 
     let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();
     if total_ops == 0 {
         eprintln!("No changes to upload.");
     } else {
-        let type_prefix = match repo_type {
-            RepoType::Kernel => "kernels/",
-            _ => "",
-        };
+        let type_prefix = T::default().url_prefix();
         let tree_path = branch
             .as_ref()
             .map_or(String::new(), |b| format!("/tree/{b}"));
@@ -399,29 +426,28 @@ fn discover_build_file(
 
 /// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
-    let mut versions: HashSet<Option<usize>> = HashSet::new();
+    let mut versions: HashSet<usize> = HashSet::new();
 
     for variant in variants {
-        let metadata = parse_metadata(variant.join("metadata.json"))?;
+        let metadata_path = variant.join("metadata.json");
+        let metadata = Metadata::from_reader(BufReader::new(File::open(&metadata_path).context(
+            format!(
+                "Cannot read metadata from: {}",
+                metadata_path.to_string_lossy()
+            ),
+        )?))?;
         versions.insert(metadata.version);
     }
 
     if versions.len() > 1 {
-        let strs: Vec<_> = versions
-            .iter()
-            .map(|v| v.map_or("none".into(), |n| n.to_string()))
-            .collect();
+        let strs: Vec<_> = versions.iter().map(ToString::to_string).collect();
         bail!(
             "Found multiple versions in build variants: {}",
             strs.join(", ")
         );
     }
 
-    Ok(versions
-        .into_iter()
-        .next()
-        .flatten()
-        .map(|v| format!("v{v}")))
+    Ok(versions.into_iter().next().map(|v| format!("v{v}")))
 }
 
 /// Recursively walk a directory and return all file paths.
@@ -437,6 +463,7 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
 mod tests {
     use super::*;
 
+    #[test]
     fn test_collect_readme_commit_ops() {
         let temp_dir = tempfile::tempdir().unwrap();
         let kernel_dir = temp_dir.path();
@@ -595,10 +622,8 @@ mod tests {
         assert!(delete_paths.contains("build/torch-cuda/inherited.py"));
     }
 
-    const METADATA_V3: &str =
-        r#"{"id": "kernel_id", "version": 3, "python-depends": [], "backend": {"type": "cuda"}}"#;
-    const METADATA_NO_VERSION: &str =
-        r#"{"id": "kernel_id", "python-depends": [], "backend": {"type": "cuda"}}"#;
+    const METADATA_V3: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
+    const METADATA_V0: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 0, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
 
     #[test]
     fn test_detect_branch_from_metadata() {
@@ -613,15 +638,15 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_branch_from_metadata_no_version() {
+    fn test_detect_branch_from_metadata_v0() {
         let temp_dir = tempfile::tempdir().unwrap();
         let variant = temp_dir.path().join("variant");
         fs::create_dir_all(&variant).unwrap();
-        fs::write(variant.join("metadata.json"), METADATA_NO_VERSION).unwrap();
+        fs::write(variant.join("metadata.json"), METADATA_V0).unwrap();
 
         let variants = vec![variant];
         let branch = detect_branch_from_metadata(&variants).unwrap();
-        assert_eq!(branch, None);
+        assert_eq!(branch, Some("v0".to_owned()));
     }
 
     #[test]
@@ -633,12 +658,12 @@ mod tests {
         fs::create_dir_all(&v2).unwrap();
         fs::write(
             v1.join("metadata.json"),
-            r#"{"version": 1, "python-depends": [], "backend": {"type": "cuda"}}"#,
+            r#"{"name": "test-kernel", "version": 1, "id": "k1", "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#,
         )
         .unwrap();
         fs::write(
             v2.join("metadata.json"),
-            r#"{"version": 2, "python-depends": [], "backend": {"type": "cuda"}}"#,
+            r#"{"name": "test-kernel", "version": 2, "id": "k2", "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#,
         )
         .unwrap();
 
@@ -710,6 +735,7 @@ mod tests {
             kernel_dir.join("build.toml"),
             r#"[general]
 name = "test-kernel"
+license = "Apache-2.0"
 backends = ["cuda"]
 
 [general.hub]
@@ -746,6 +772,7 @@ branch = "custom-branch"
             kernel_dir.join("build.toml"),
             r#"[general]
 name = "test-kernel"
+license = "Apache-2.0"
 backends = ["cuda"]
 
 [general.hub]

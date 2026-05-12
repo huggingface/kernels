@@ -1,4 +1,4 @@
-.PHONY: style kernel-builder-cli-docs quality
+.PHONY: style kernel-builder-cli-docs quality bump-dev bump-dev-dry-run bump-release bump-release-dry-run pin-actions
 
 
 export check_dirs := kernels/src kernels/tests kernels-data/bindings/python
@@ -21,6 +21,31 @@ kernel-builder-cli-docs:
 	  > docs/source/builder-cli.md
 	@echo "Generated docs/source/builder-cli.md"
 
+pin-actions:
+	pinact run
+
 quality:
 	ruff format --check ${check_dirs}
 	ruff check ${check_dirs}
+
+# Bump every version site to the next dev release based on the currently
+# installed `kernels` package version (e.g. installed 0.13.0 -> 0.14.0.dev0).
+# Refreshes Cargo.lock and kernels/uv.lock so all sites stay consistent.
+bump-dev:
+	python scripts/bump_version.py --dev
+	cargo check --workspace
+	cd kernels && uv lock
+
+bump-dev-dry-run:
+	python scripts/bump_version.py --dev --dry-run
+
+# Strip the `.dev0` / `-dev0` suffix from every version site in prep for a
+# release (e.g. codebase 0.14.0.dev0 -> 0.14.0). Refreshes Cargo.lock and
+# kernels/uv.lock so all sites stay consistent.
+bump-release:
+	python scripts/bump_version.py
+	cargo check --workspace
+	cd kernels && uv lock
+
+bump-release-dry-run:
+	python scripts/bump_version.py --dry-run

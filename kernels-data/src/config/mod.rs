@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Display, path::PathBuf, str::FromStr};
 
 use eyre::Result;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 mod deps;
 pub use deps::{Dependency, PythonDependency};
@@ -12,9 +13,8 @@ pub use compat::BuildCompat;
 mod name;
 pub use name::KernelName;
 
-pub mod v1;
-pub mod v2;
 pub mod v3;
+pub mod v4;
 
 use itertools::Itertools;
 
@@ -28,7 +28,7 @@ pub struct Build {
 
 pub enum Framework {
     Torch(Torch),
-    TorchNoarch,
+    TorchNoarch(TorchNoarch),
     TvmFfi(TvmFfi),
 }
 
@@ -64,10 +64,12 @@ impl Build {
 
 pub struct General {
     pub name: KernelName,
-    pub version: Option<usize>,
+
+    /// Kernel API/ABI version.
+    pub version: usize,
 
     /// Hugging Face Hub license identifier.
-    pub license: Option<String>,
+    pub license: String,
 
     /// Source repository or reference for the kernel code.
     pub upstream: Option<url::Url>,
@@ -183,6 +185,7 @@ impl Torch {
         data_extensions(self.pyext.as_deref())
     }
 }
+pub struct TorchNoarch {}
 
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
@@ -354,4 +357,10 @@ impl FromStr for Backend {
             _ => Err(format!("Unknown backend: {s}")),
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("Cannot migrate configuration: {reason:?}")]
+    Migration { reason: String },
 }

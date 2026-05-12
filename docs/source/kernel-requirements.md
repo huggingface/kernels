@@ -7,6 +7,30 @@ systems and Torch builds.
 [Join us on Discord](https://discord.gg/H6Tkmd88N3) for questions and discussions
 about building kernels!
 
+## Repository type
+
+Compliant kernels are published as `kernel`-type repositories on the Hub
+(the first-class kernel repository type). New uploads via `kernel-builder`
+default to this type; see the [migration guide](migration.md) if you
+maintain an older `model`-type kernel repository.
+
+## Trusted publishers
+
+`kernels` only loads kernels from a curated set of trusted publishers by
+default. Loading from any other publisher raises an error unless the caller
+opts in with `trust_remote_code=True`:
+
+```python
+# Trusted publisher: works without opt-in.
+get_kernel("kernels-community/activation", version=1)
+
+# Untrusted publisher: must opt in explicitly.
+get_kernel("some-other-org/my-kernel", version=1, trust_remote_code=True)
+```
+
+The Hub also exposes a `trustedKernelPublisher` flag on the kernel API and
+displays a corresponding badge in the UI.
+
 ## Directory layout
 
 A kernel repository on the Hub must contain a `build` directory. This
@@ -42,7 +66,11 @@ metadata. Currently the following top-level keys are supported:
 - `id` (`str`, required): a unique identifier for the kernel. This
   identifier must also be a valid Python module name. If the kernel
   registers Torch ops, they must be registered as `torch.ops.<id>`
+- `name` (`str`, required): then name of the kernel. Replacing dashes
+  by underscores should result in the module name of the kernel.
 - `version` (`int`, required): the kernel version number.
+- `license` (`str`, required): the kernel license in. Refer to the
+  list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
 - `backend` (`dict`, required): information about the compute backend that
   this build variant supports.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
@@ -52,9 +80,11 @@ Example `metadata.json`:
 
 ```json
 {
-  "id": "_mykernel_cuda_be238e4",
-  "python-depends": ["einops"],
+  "name": "mykernel",
+  "id": "_mykernel_cuda_7a4e5a7",
   "version": 1,
+  "license": "Apache-2.0",
+  "python-depends": ["einops"],
   "backend": {
     "type": "cuda",
     "archs": ["7.0", "7.2", "7.5", "8.0", "8.6", "8.7", "8.9", "9.0+PTX"]

@@ -14,6 +14,10 @@
 
 [[autodoc]] kernels.has_kernel
 
+### get_loaded_kernels
+
+[[autodoc]] kernels.get_loaded_kernels
+
 ## Loading locked kernels
 
 ### load_kernel
@@ -22,4 +26,18 @@
 
 ### get_locked_kernel
 
+<<<<<<< kernels-use-kernels-data
 [[autodoc]] kernels.get_locked_kernel
+
+## Classes
+
+### LoadedKernel
+
+[[autodoc]] kernels.LoadedKernel
+
+### RepoInfo
+
+[[autodoc]] kernels.RepoInfo
+=======
+[[autodoc]] kernels.get_locked_kernel
+>>>>>>> main

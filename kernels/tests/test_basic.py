@@ -10,31 +10,24 @@ from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
 
 @pytest.fixture
 def kernel():
-    return get_kernel("kernels-community/activation")
+    return get_kernel("kernels-community/relu", version=1)
 
 
 @pytest.fixture
 def local_kernel_path():
-    package_name, path = install_kernel("kernels-community/activation", revision="main")
-    # Path is the build variant path (build/torch-<...>), so the grandparent
-    # is the kernel repository path.
-    return package_name, path
+    # install_kernel works with resolved revisions, so explicitly use v1 here.
+    return install_kernel("kernels-community/relu", revision="v1")
 
 
 @pytest.fixture
 def local_kernel(local_kernel_path):
-    package_name, path = local_kernel_path
-    return get_local_kernel(path.parent.parent, package_name)
+    path = local_kernel_path
+    return get_local_kernel(path.parent.parent)
 
 
 @pytest.fixture
 def metal_kernel():
     return get_kernel("kernels-test/relu-metal")
-
-
-@pytest.fixture
-def universal_kernel():
-    return get_kernel("kernels-community/triton-scaled-mm")
 
 
 @pytest.fixture
@@ -45,35 +38,17 @@ def device():
 
 
 @pytest.mark.cuda_only
-def test_gelu_fast(kernel, device):
-    x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
-    y = torch.empty_like(x)
-
-    kernel.gelu_fast(y, x)
-
-    expected = torch.tensor(
-        [[0.8408, 1.9551, 2.9961], [4.0000, 5.0000, 6.0000], [7.0000, 8.0000, 9.0000]],
-        device=device,
-        dtype=torch.float16,
-    )
-
-    assert torch.allclose(y, expected)
+def test_relu(kernel, device):
+    x = torch.arange(-4, 5, dtype=torch.float32, device=device).view(3, 3)
+    y = kernel.relu(x)
+    torch.testing.assert_close(y, F.relu(x))
 
 
 @pytest.mark.cuda_only
 def test_local_kernel(local_kernel, device):
-    x = torch.arange(1, 10, dtype=torch.float16, device=device).view(3, 3)
-    y = torch.empty_like(x)
-
-    local_kernel.gelu_fast(y, x)
-
-    expected = torch.tensor(
-        [[0.8408, 1.9551, 2.9961], [4.0000, 5.0000, 6.0000], [7.0000, 8.0000, 9.0000]],
-        device=device,
-        dtype=torch.float16,
-    )
-
-    assert torch.allclose(y, expected)
+    x = torch.arange(-4, 5, dtype=torch.float32, device=device).view(3, 3)
+    y = local_kernel.relu(x)
+    torch.testing.assert_close(y, F.relu(x))
 
 
 @pytest.mark.parametrize(
@@ -86,22 +61,22 @@ def test_local_kernel(local_kernel, device):
 )
 def test_local_kernel_path_types(repo_revision, device):
     repo_id, revision = repo_revision
-    package_name, path = install_kernel(repo_id, revision=revision)
+    path = install_kernel(repo_id, revision=revision)
 
     # Top-level repo path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071
-    kernel = get_local_kernel(path.parent.parent, package_name)
+    kernel = get_local_kernel(path.parent.parent)
     x = torch.arange(0, 32, dtype=torch.float16, device=device).view(2, 16)
     torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
 
     # Build directory path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build
-    kernel = get_local_kernel(path.parent.parent / "build", package_name)
+    kernel = get_local_kernel(path.parent.parent / "build")
     torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
 
     # Explicit package path
     # ie: /home/ubuntu/.cache/huggingface/hub/models--kernels-community--activation/snapshots/2fafa6a3a38ccb57a1a98419047cf7816ecbc071/build/torch28-cxx11-cu128-x86_64-linux
-    kernel = get_local_kernel(path, package_name)
+    kernel = get_local_kernel(path)
     torch.testing.assert_close(kernel.silu_and_mul(x), silu_and_mul_torch(x))
 
 
@@ -117,8 +92,8 @@ def test_relu_metal(metal_kernel, dtype):
 @pytest.mark.parametrize(
     "kernel_exists",
     [
-        ("kernels-community/activation", "main", True),
-        ("kernels-community/triton-layer-norm", "main", True),
+        ("kernels-community/relu", "main", True),
+        ("kernels-test/silu-and-mul", "v1", True),
         # Repo only contains Torch 2.4 kernels (and we don't
         # support/test against this version).
         ("kernels-test/only-torch-2.4", "main", False),
@@ -129,25 +104,6 @@ def test_relu_metal(metal_kernel, dtype):
 def test_has_kernel(kernel_exists):
     repo_id, revision, kernel = kernel_exists
     assert has_kernel(repo_id, revision=revision) == kernel
-
-
-@pytest.mark.skip(reason="Tags are not supported on kernel repos")
-def test_version_old():
-    # Remove once we drop support for version specs.
-    kernel = get_kernel("kernels-test/versions")
-    assert kernel.version() == "0.2.0"
-    kernel = get_kernel("kernels-test/versions", version="<1.0.0")
-    assert kernel.version() == "0.2.0"
-    kernel = get_kernel("kernels-test/versions", version="<0.2.0")
-    assert kernel.version() == "0.1.1"
-    kernel = get_kernel("kernels-test/versions", version=">0.1.0,<0.2.0")
-    assert kernel.version() == "0.1.1"
-
-    with pytest.raises(ValueError, match=r"No version.*satisfies requirement"):
-        get_kernel("kernels-test/versions", version=">0.2.0")
-
-    with pytest.raises(ValueError, match=r"Only one of"):
-        kernel = get_kernel("kernels-test/versions", revision="v0.1.0", version="<1.0.0")
 
 
 def test_version():
@@ -187,26 +143,11 @@ def test_no_version_or_revision_warning():
         get_kernel("kernels-test/versions")
 
 
-@pytest.mark.cuda_only
-def test_universal_kernel(universal_kernel):
-    torch.manual_seed(0)
-    A = torch.randint(-10, 10, (64, 128), dtype=torch.int8, device="cuda")
-    B = torch.randint(-10, 10, (128, 96), dtype=torch.int8, device="cuda")
-    scale_a = torch.tensor(0.4, dtype=torch.float16, device="cuda")
-    scale_b = torch.tensor(0.6, dtype=torch.float16, device="cuda")
-
-    out = universal_kernel.triton_scaled_mm(A, B, scale_a, scale_b, torch.float16)
-    out_check = (A * scale_a) @ (B * scale_b)
-    out_check = out_check.to(torch.float16)
-
-    torch.testing.assert_close(out, out_check, rtol=1e-1, atol=1e-1)
-
-
 def test_noarch_kernel(device):
     supported_devices = ["cpu", "cuda", "xpu"]
     if device not in supported_devices:
         pytest.skip(f"Device is not one of: {','.join(supported_devices)}")
-    get_kernel("kernels-test/silu-and-mul-noarch")
+    get_kernel("kernels-test/silu-and-mul", version=1)
 
 
 def test_get_kernel_with_backend(device):
@@ -221,8 +162,6 @@ def test_get_kernel_with_backend(device):
 
     with pytest.raises(ValueError, match="Invalid backend 'xpu'"):
         get_kernel("kernels-community/relu", version=1, backend="xpu")
-    with pytest.raises(ValueError, match="Invalid backend 'xpu'"):
-        has_kernel("kernels-community/relu", version=1, backend="xpu")
 
     assert has_kernel("kernels-community/relu", version=1, backend="cpu")
     relu = get_kernel("kernels-community/relu", version=1, backend="cpu")
@@ -247,24 +186,24 @@ def test_flattened_build(repo_revision, device):
 
 
 def test_local_overrides(monkeypatch, local_kernel_path):
-    package_name, kernel_path = local_kernel_path
+    kernel_path = local_kernel_path
 
     # Ensure that we are testing with a non-existing kernel, so that we know
     # that the kernel must be local.
     with pytest.raises(HfHubHTTPError):
-        get_kernel(f"kernels-test/{package_name}")
+        get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         m.setenv(
             "LOCAL_KERNELS",
-            f"kernels-test/{package_name}={str(kernel_path)}:kernels-test/non-existing2=/non/existing",
+            f"kernels-test/activation={str(kernel_path)}:kernels-test/non-existing2=/non/existing",
         )
         get_kernel("kernels-test/activation")
 
     with monkeypatch.context() as m:
         m.setenv(
             "LOCAL_KERNELS",
-            f"kernels-test/non-existing2=/non/existing:kernels-test/{package_name}={str(kernel_path)}",
+            f"kernels-test/non-existing2=/non/existing:kernels-test/activation={str(kernel_path)}",
         )
         get_kernel("kernels-test/activation")
 
@@ -272,16 +211,16 @@ def test_local_overrides(monkeypatch, local_kernel_path):
         # Using a non-existing path should error.
         m.setenv(
             "LOCAL_KERNELS",
-            f"kernels-test/non-existing2=/non/existing:kernels-test/{package_name}=/non/existing",
+            "kernels-test/non-existing2=/non/existing:kernels-test/activation=/non/existing",
         )
-        with pytest.raises(FileNotFoundError, match=r"Could not find.*activation"):
+        with pytest.raises(FileNotFoundError, match=r"Could not find kernel in /non/existing"):
             get_kernel("kernels-test/activation")
 
     with monkeypatch.context() as m:
         # Malformed entries must be rejected.
         m.setenv(
             "LOCAL_KERNELS",
-            f"kernels-test/non-existing2=/non/existing:kernels-test/{package_name}",
+            "kernels-test/non-existing2=/non/existing:kernels-test/activation",
         )
         with pytest.raises(ValueError, match=r"Invalid LOCAL_KERNELS entry"):
             get_kernel("kernels-test/activation")
@@ -292,6 +231,22 @@ def test_neuron():
     relu = get_kernel("kernels-test/relu-nki", version=1)
     x = torch.randn((16, 16), dtype=torch.float16).to(device="neuron")
     torch.testing.assert_close(relu.relu(x), x.relu())
+
+
+def test_trust_remote_code_blocks_untrusted_org():
+    """Kernels from untrusted orgs should be rejected by default."""
+    with pytest.raises(ValueError, match=r"not from a trusted publisher"):
+        get_kernel("kernels-test-untrusted/not-a-trused-org-kernel", version=1)
+
+
+def test_trust_remote_code_allows_trusted_org():
+    """Kernels from trusted orgs should not raise a trust error."""
+    get_kernel("kernels-community/relu", version=1)
+
+
+def test_trust_remote_code_flag_allows_untrusted():
+    """trust_remote_code=True should bypass the org check."""
+    get_kernel("kernels-test-untrusted/ci-test-kernel", version=1, trust_remote_code=True)
 
 
 def silu_and_mul_torch(x: torch.Tensor):

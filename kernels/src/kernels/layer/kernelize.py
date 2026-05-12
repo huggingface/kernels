@@ -139,12 +139,12 @@ def register_kernel_mapping(
             "MultiHeadAttention": {
                 "cuda": {
                     Mode.TRAINING: LayerRepository(
-                        repo_id="username/training-kernels",
+                        repo_id="kernels-community/training-kernels",
                         layer_name="TrainingAttention",
                         version=1,
                     ),
                     Mode.INFERENCE: LayerRepository(
-                        repo_id="username/inference-kernels",
+                        repo_id="kernels-community/inference-kernels",
                         layer_name="FastAttention",
                         version=1,
                     ),
@@ -206,7 +206,7 @@ def kernelize(
         import torch
         import torch.nn as nn
 
-        from kernels import kernelize, Mode, register_kernel_mapping, LayerRepository
+        from kernels import kernelize, Mode, use_kernel_mapping, LayerRepository
         from kernels import use_kernel_forward_from_hub
 
         @use_kernel_forward_from_hub("SiluAndMul")
@@ -220,10 +220,10 @@ def kernelize(
                 "cuda": LayerRepository(
                     repo_id="kernels-community/activation",
                     layer_name="SiluAndMul",
+                    version=1,
                 )
             }
         }
-        register_kernel_mapping(mapping)
 
         # Create and kernelize a model
         model = nn.Sequential(
@@ -232,7 +232,8 @@ def kernelize(
         )
 
         # Kernelize for inference
-        kernelized_model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
+        with use_kernel_mapping(mapping):
+            kernelized_model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE)
         ```
     """
 

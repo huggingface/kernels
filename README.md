@@ -1,7 +1,13 @@
 # kernels
 
 <div align="center">
-<img src="https://github.com/user-attachments/assets/4b5175f3-1d60-455b-8664-43b2495ee1c3" width="450" height="450" alt="kernel-builder logo">
+<a href="https://huggingface.co/kernels">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/kernels/kernels-thumbnail-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/kernels/kernels-thumbnail-light.png">
+  <img alt="Kernels" src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/kernels/kernels-thumbnail-light.png" style="max-width: 100%;">
+</picture>
+</a>
 <p align="center">
     <a href="https://pypi.org/project/kernels"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/kernels"></a>
     <a href="https://github.com/huggingface/kernels/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/huggingface/kernels"></a>
@@ -12,7 +18,7 @@
 <hr/>
 
 The Kernel Hub allows Python libraries and applications to load compute
-kernels directly from the [Hub](https://hf.co/). To support this kind
+kernels directly from the [Hub](https://huggingface.co/). To support this kind
 of dynamic loading, Hub kernels differ from traditional Python kernel
 packages in that they are made to be:
 
@@ -57,8 +63,7 @@ activation.gelu_fast(y, x)
 print(y)
 ```
 
-You can [search for kernels](https://huggingface.co/models?other=kernels) on
-the Hub.
+Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kernels).
 
 ## 📚 Documentation
 

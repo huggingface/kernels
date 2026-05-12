@@ -1,7 +1,7 @@
 [general]
 name = "relu-tvm-ffi"
 version = 1
-
+license = "Apache-2.0"
 backends = [
     "cpu",
     "cuda",
@@ -12,21 +12,28 @@ backends = [
 repo-id = "kernels-test/relu-tvm-ffi"
 
 [tvm-ffi]
+src = ["tvm-ffi-ext/tvm_ffi_binding.cpp"]
+
+[kernel.relu_cuda]
+backend = "cuda"
+depends = []
 src = [
-    "tvm-ffi-ext/tvm_ffi_binding.cpp",
+    "relu_cuda/relu.cu",
+    "util.hh",
 ]
 
 [kernel.relu_cpu]
 backend = "cpu"
-src = ["relu_cpu/relu_cpu.cpp", "util.hh"]
 depends = []
-
-[kernel.relu_cuda]
-backend = "cuda"
-src = ["relu_cuda/relu.cu", "util.hh"]
-depends = []
+src = [
+    "relu_cpu/relu_cpu.cpp",
+    "util.hh",
+]
 
 [kernel.relu_xpu]
 backend = "xpu"
 depends = ["torch"]
-src = ["relu_xpu/relu.cpp", "util.hh"]
+src = [
+    "relu_xpu/relu.cpp",
+    "util.hh",
+]

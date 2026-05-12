@@ -75,6 +75,9 @@ Initialize a new kernel project from template
 
 ###### **Options:**
 
+* `--license <LICENSE>` — The kernel's license
+
+  Default value: `Apache-2.0`
 * `--name <OWNER/REPO>` — Name of the kernel repo (e.g. `drbh/my-kernel`)
 * `--backends <BACKENDS>` — Backends to enable (`all`, `cpu`, `cuda`, `metal`, `neuron`, `rocm`, `xpu`)
 
@@ -144,6 +147,7 @@ Build the kernel and upload to Hugging Face Hub
 
   Possible values: `model`, `kernel`
 
+* `-q`, `--quiet` — Suppress progress output
 
 
 
@@ -168,6 +172,7 @@ Upload kernel build artifacts to the Hugging Face Hub
 
   Possible values: `model`, `kernel`
 
+* `-q`, `--quiet` — Suppress progress output
 
 
 

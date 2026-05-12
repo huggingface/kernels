@@ -2,14 +2,15 @@ use eyre::Result;
 use serde::Deserialize;
 use serde_value::Value;
 
-use super::{Build, v1, v2, v3};
+use crate::config::ConfigError;
+
+use super::{Build, v3, v4};
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum BuildCompat {
-    V1(v1::Build),
-    V2(v2::Build),
     V3(v3::Build),
+    V4(v4::Build),
 }
 
 impl<'de> Deserialize<'de> for BuildCompat {
@@ -19,22 +20,20 @@ impl<'de> Deserialize<'de> for BuildCompat {
     {
         let value = Value::deserialize(deserializer)?;
 
-        v1::Build::deserialize(value.clone())
-            .map(BuildCompat::V1)
-            .or_else(|_| v2::Build::deserialize(value.clone()).map(BuildCompat::V2))
-            .or_else(|_| v3::Build::deserialize(value.clone()).map(BuildCompat::V3))
+        v3::Build::deserialize(value.clone())
+            .map(BuildCompat::V3)
+            .or_else(|_| v4::Build::deserialize(value.clone()).map(BuildCompat::V4))
             .map_err(serde::de::Error::custom)
     }
 }
 
 impl TryFrom<BuildCompat> for Build {
-    type Error = eyre::Error;
+    type Error = ConfigError;
 
-    fn try_from(compat: BuildCompat) -> Result<Self> {
+    fn try_from(compat: BuildCompat) -> Result<Self, Self::Error> {
         match compat {
-            BuildCompat::V1(v1_build) => v1_build.try_into(),
-            BuildCompat::V2(v2_build) => v2_build.try_into(),
-            BuildCompat::V3(v3_build) => Ok(v3_build.into()),
+            BuildCompat::V3(v3_build) => v3_build.try_into(),
+            BuildCompat::V4(v4_build) => Ok(v4_build.into()),
         }
     }
 }

@@ -64,12 +64,14 @@ class FuncRepository:
         func_name: str,
         revision: str | None = None,
         version: int | None = None,
+        trust_remote_code: bool | list[str] = False,
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
 
         self._repo_id = repo_id
         self.func_name = func_name
+        self._trust_remote_code = trust_remote_code
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered FuncRepository.
@@ -85,7 +87,9 @@ class FuncRepository:
         )
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(self._repo_id, revision=self._resolve_revision())
+        kernel = get_kernel(
+            self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code
+        )
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):
@@ -95,10 +99,11 @@ class FuncRepository:
             and self._repo_id == other._repo_id
             and self._revision == other._revision
             and self._version == other._version
+            and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_id, self._revision, self._version))
+        return hash((self.func_name, self._repo_id, self._revision, self._version, self._trust_remote_code))
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._resolve_revision()}), function `{self.func_name}`"
@@ -111,8 +116,6 @@ class LocalFuncRepository:
     Args:
         repo_path (`Path`):
             The local repository containing the layer.
-        package_name (`str`):
-            Package name of the kernel.
         func_name (`str`):
             The name of the function within the kernel repository.
 
@@ -125,7 +128,6 @@ class LocalFuncRepository:
         # Reference a specific layer by revision
         layer_repo = LocalFuncRepository(
             repo_path=Path("/home/daniel/kernels/activation"),
-            package_name="activation",
             func_name="silu_and_mul",
         )
         ```
@@ -135,15 +137,13 @@ class LocalFuncRepository:
         self,
         repo_path: Path,
         *,
-        package_name: str,
         func_name: str,
     ):
         self._repo_path = repo_path
-        self._package_name = package_name
         self.func_name = func_name
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_local_kernel(self._repo_path, self._package_name)
+        kernel = get_local_kernel(self._repo_path)
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):
@@ -151,14 +151,13 @@ class LocalFuncRepository:
             isinstance(other, LocalFuncRepository)
             and self.func_name == other.func_name
             and self._repo_path == other._repo_path
-            and self._package_name == other._package_name
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_path, self._package_name))
+        return hash((self.func_name, self._repo_path))
 
     def __str__(self) -> str:
-        return f"`{self._repo_path}` (package: {self._package_name}), layer `{self.func_name}`"
+        return f"`{self._repo_path}` (layer `{self.func_name}`"
 
 
 def use_kernel_func_from_hub(func_name: str):
@@ -230,6 +229,7 @@ class LockedFuncRepository:
         *,
         lockfile: Path | None = None,
         func_name: str,
+        trust_remote_code: bool | list[str] = False,
     ):
         """
         Construct a function repository.
@@ -239,10 +239,13 @@ class LockedFuncRepository:
             lockfile (`Path`, *optional*): Path to the lockfile. If not provided,
                 the lockfile will be inferred from the caller's context.
             func_name (`str`): The name of the function within the kernel repository.
+            trust_remote_code (`bool`, *optional*, defaults to `False`):
+                Whether to allow loading kernels from untrusted organisations.
         """
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.func_name = func_name
+        self._trust_remote_code = trust_remote_code
         self._revision = self._resolve_revision()
 
     def _resolve_revision(self) -> str:
@@ -258,7 +261,7 @@ class LockedFuncRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision)
+        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision, trust_remote_code=self._trust_remote_code)
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):
@@ -267,10 +270,11 @@ class LockedFuncRepository:
             and self.func_name == other.func_name
             and self._repo_id == other._repo_id
             and self._revision == other._revision
+            and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_id, self._revision))
+        return hash((self.func_name, self._repo_id, self._revision, self._trust_remote_code))
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._revision}), function `{self.func_name}`"

@@ -10,12 +10,6 @@ use kernels_data::config::{Build, BuildCompat};
 pub(crate) fn parse_build(kernel_dir: impl AsRef<Path>) -> Result<Build> {
     let build_compat = parse_and_validate(kernel_dir)?;
 
-    if matches!(build_compat, BuildCompat::V1(_) | BuildCompat::V2(_)) {
-        eprintln!(
-            "build.toml is in the deprecated V1 or V2 format, use `kernel-builder update-build` to update."
-        )
-    }
-
     let build: Build = build_compat
         .try_into()
         .context("Cannot update build configuration")?;

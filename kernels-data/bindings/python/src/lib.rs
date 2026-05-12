@@ -1,11 +1,13 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
-use kernels_data::metadata::{BackendInfo, Metadata, parse_metadata};
+use kernels_data::metadata::{BackendInfo, Metadata};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyOSError, PyValueError};
 use pyo3::prelude::*;
 
 /// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
@@ -188,8 +190,10 @@ impl PyBackendInfo {
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
 struct PyMetadata {
-    version: Option<usize>,
-    license: Option<String>,
+    id: String,
+    name: PyKernelName,
+    version: usize,
+    license: String,
     upstream: Option<String>,
     python_depends: Vec<String>,
     backend: PyBackendInfo,
@@ -198,6 +202,8 @@ struct PyMetadata {
 impl From<Metadata> for PyMetadata {
     fn from(m: Metadata) -> Self {
         Self {
+            id: m.id,
+            name: PyKernelName { inner: m.name },
             version: m.version,
             license: m.license,
             upstream: m.upstream.map(|u| u.to_string()),
@@ -213,25 +219,42 @@ impl PyMetadata {
     ///
     /// Raises `ValueError` on any I/O or parse error.
     #[staticmethod]
-    fn load(metadata_path: PathBuf) -> PyResult<Self> {
-        parse_metadata(&metadata_path)
+    fn read_from_file(metadata_path: PathBuf) -> PyResult<Self> {
+        let f = File::open(&metadata_path).map_err(|err| {
+            PyOSError::new_err(format!("Failed to open `{metadata_path:?}`: {err:#}"))
+        })?;
+        Metadata::from_reader(BufReader::new(f))
             .map(Into::into)
-            .map_err(|err| PyValueError::new_err(format!("{err:#}")))
+            .map_err(|err| {
+                PyValueError::new_err(format!(
+                    "Cannot parse metadata from `{metadata_path:?}`: {err:#}"
+                ))
+            })
     }
 
     #[getter]
-    fn version(&self) -> Option<usize> {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    #[getter]
+    fn name(&self) -> PyKernelName {
+        self.name.clone()
+    }
+
+    #[getter]
+    fn version(&self) -> usize {
         self.version
     }
 
     #[getter]
-    fn license(&self) -> Option<&String> {
-        self.license.as_ref()
+    fn license(&self) -> &str {
+        &self.license
     }
 
     #[getter]
-    fn upstream(&self) -> Option<&String> {
-        self.upstream.as_ref()
+    fn upstream(&self) -> Option<&str> {
+        self.upstream.as_deref()
     }
 
     #[getter]
@@ -246,7 +269,9 @@ impl PyMetadata {
 
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(version={:?}, license={:?}, upstream={:?}, python_depends={:?}, backend={})",
+            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, python_depends={:?}, backend={})",
+            self.id,
+            self.name,
             self.version,
             self.license,
             self.upstream,

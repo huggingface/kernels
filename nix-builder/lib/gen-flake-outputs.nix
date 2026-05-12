@@ -246,6 +246,24 @@ in
           rev = revUnderscored;
         };
 
+      backendCi =
+        let
+          backends = lib.unique (map (set: set.buildConfig.framework) buildSetsSorted);
+        in
+        builtins.listToAttrs (
+          builtins.map (backend: {
+            name = backend;
+            value = build.mkExtensionBundle {
+              inherit path doGetKernelCheck;
+              # It is too costly to build all variants in CI, so we just build one per framework.
+              buildSets = headOrEmpty (
+                builtins.filter (set: set.buildConfig.framework == backend) buildSetsSorted
+              );
+              rev = revUnderscored;
+            };
+          }) backends
+        );
+
       ci-test = ciTests.${bestVariant};
 
       kernels =

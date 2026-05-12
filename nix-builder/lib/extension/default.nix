@@ -5,6 +5,7 @@
   pkgs,
   lib,
   callPackage,
+  manylinux_2_28,
   stdenv,
   stdenvGlibc_2_27,
   cudaPackages,
@@ -16,7 +17,7 @@
 }:
 
 let
-  effectiveStdenv = if stdenv.hostPlatform.isLinux then stdenvGlibc_2_27 else stdenv;
+  effectiveStdenv = if stdenv.hostPlatform.isLinux then manylinux_2_28.stdenv else stdenv;
 
   # CLR that uses the provided stdenv, which can be different from the default
   # to support old glibc/libstdc++ versions.

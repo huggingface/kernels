@@ -1,0 +1,1527 @@
+{
+  "almalinux-release": {
+    "deps": [],
+    "components": [
+      {
+        "name": "almalinux-release",
+        "sha256": "9ce3ce272a37dfabfa37d8aa4da897bd6dc01f76ef34760963d44dd3847afa2c",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/almalinux-release-8.10-1.el8.x86_64.rpm",
+        "version": "8.10"
+      }
+    ],
+    "version": "8.10"
+  },
+  "audit-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "audit-libs",
+        "sha256": "9b4c830690bed3bc9f27439617a9b806e55617f2a3e2ab7cf6f28118adeffd41",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/audit-libs-3.1.2-1.el8_10.1.x86_64.rpm",
+        "version": "3.1.2"
+      }
+    ],
+    "version": "3.1.2"
+  },
+  "basesystem": {
+    "deps": [
+      "filesystem",
+      "setup"
+    ],
+    "components": [
+      {
+        "name": "basesystem",
+        "sha256": "768adcb1b03491f8c8e1c283577130b51f5a3d6215eb6667605d8996219b85a0",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/basesystem-11-5.el8.noarch.rpm",
+        "version": "11"
+      }
+    ],
+    "version": "11"
+  },
+  "bash": {
+    "deps": [
+      "filesystem"
+    ],
+    "components": [
+      {
+        "name": "bash",
+        "sha256": "609b514fd9cb1321505861dd34e70e1967b8539244fee1130e0a85a2fe9f5768",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/bash-4.4.20-6.el8_10.x86_64.rpm",
+        "version": "4.4.20"
+      }
+    ],
+    "version": "4.4.20"
+  },
+  "boost-regex": {
+    "deps": [],
+    "components": [
+      {
+        "name": "boost-regex",
+        "sha256": "8c42c506b94c74fa722cf92203637c0830952f0e839981bd5ede936cbb1a33fd",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/boost-regex-1.66.0-13.el8.x86_64.rpm",
+        "version": "1.66.0"
+      }
+    ],
+    "version": "1.66.0"
+  },
+  "bzip2-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "bzip2-libs",
+        "sha256": "e59bd9d2773dcd2410166e3bcdb7376f0b2eff58e75109a73120e725ae0b5c75",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/bzip2-libs-1.0.6-28.el8_10.x86_64.rpm",
+        "version": "1.0.6"
+      }
+    ],
+    "version": "1.0.6"
+  },
+  "ca-certificates": {
+    "deps": [
+      "bash",
+      "coreutils",
+      "grep",
+      "p11-kit",
+      "p11-kit-trust",
+      "sed"
+    ],
+    "components": [
+      {
+        "name": "ca-certificates",
+        "sha256": "517e00ad205d42f2c1f2aa8e9ab54024805e1cf3482c6a8821c8b92fa5198cc9",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/ca-certificates-2025.2.80_v9.0.304-80.2.el8_10.noarch.rpm",
+        "version": "2025.2.80_v9.0.304"
+      }
+    ],
+    "version": "2025.2.80_v9.0.304"
+  },
+  "chkconfig": {
+    "deps": [],
+    "components": [
+      {
+        "name": "chkconfig",
+        "sha256": "c43235896f9a3685362d8cbaf6dd3237bdbf7dcc104d1127a8f83c5436bb4e1e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/chkconfig-1.19.2-1.el8.x86_64.rpm",
+        "version": "1.19.2"
+      }
+    ],
+    "version": "1.19.2"
+  },
+  "coreutils": {
+    "deps": [
+      "coreutils-common",
+      "ncurses"
+    ],
+    "components": [
+      {
+        "name": "coreutils",
+        "sha256": "be3875b4493e06b66466c5daf7e3c48e46337304f40f8293682fdcb48b94537e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/coreutils-8.30-17.el8_10.x86_64.rpm",
+        "version": "8.30"
+      }
+    ],
+    "version": "8.30"
+  },
+  "coreutils-common": {
+    "deps": [],
+    "components": [
+      {
+        "name": "coreutils-common",
+        "sha256": "17e5813bbf4df9852d07b673de945b5d002e7e4c05b00bbdb6d970bd94118f29",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/coreutils-common-8.30-17.el8_10.x86_64.rpm",
+        "version": "8.30"
+      }
+    ],
+    "version": "8.30"
+  },
+  "crypto-policies": {
+    "deps": [],
+    "components": [
+      {
+        "name": "crypto-policies",
+        "sha256": "92478e2a26b2318fd39880bfd95aedb6c7d63330b65bddd2571c59ed716d5ed4",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/crypto-policies-20230731-1.git3177e06.el8.noarch.rpm",
+        "version": "20230731"
+      }
+    ],
+    "version": "20230731"
+  },
+  "ctags": {
+    "deps": [],
+    "components": [
+      {
+        "name": "ctags",
+        "sha256": "4867499ecc7cdf0656dd6b2abaf8e615a0bd233b419311a86a4fe1781b2e738a",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/ctags-5.8-23.el8.x86_64.rpm",
+        "version": "5.8"
+      }
+    ],
+    "version": "5.8"
+  },
+  "curl": {
+    "deps": [],
+    "components": [
+      {
+        "name": "curl",
+        "sha256": "466915c5434852f7027c2a61ad90f08a3118f5f0ce14d121edd577c45b9a4572",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/curl-7.61.1-34.el8_10.11.x86_64.rpm",
+        "version": "7.61.1"
+      }
+    ],
+    "version": "7.61.1"
+  },
+  "elfutils-debuginfod-client": {
+    "deps": [],
+    "components": [
+      {
+        "name": "elfutils-debuginfod-client",
+        "sha256": "5ce6e3b29c9f072ee7a7e94d5804883e699e2e6629adf4bcf11342e68777c527",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/elfutils-debuginfod-client-0.190-2.el8.alma.1.x86_64.rpm",
+        "version": "0.190"
+      }
+    ],
+    "version": "0.190"
+  },
+  "elfutils-default-yama-scope": {
+    "deps": [],
+    "components": [
+      {
+        "name": "elfutils-default-yama-scope",
+        "sha256": "f9e0bbe4614241fdbce4f2b9145cb7ec144b728859048dc611fd612d63f58058",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/elfutils-default-yama-scope-0.190-2.el8.alma.1.noarch.rpm",
+        "version": "0.190"
+      }
+    ],
+    "version": "0.190"
+  },
+  "elfutils-libelf": {
+    "deps": [],
+    "components": [
+      {
+        "name": "elfutils-libelf",
+        "sha256": "7b1d2ed47b2cc304eb086e1da22361558d08ab3d11d95905ca3a03ed403afd9a",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/elfutils-libelf-0.190-2.el8.alma.1.x86_64.rpm",
+        "version": "0.190"
+      }
+    ],
+    "version": "0.190"
+  },
+  "elfutils-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "elfutils-libs",
+        "sha256": "3ced452c3209ed34c850ece3045777f725c92341343d3b4d4919c77a826bf229",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/elfutils-libs-0.190-2.el8.alma.1.x86_64.rpm",
+        "version": "0.190"
+      }
+    ],
+    "version": "0.190"
+  },
+  "expat": {
+    "deps": [],
+    "components": [
+      {
+        "name": "expat",
+        "sha256": "597882911bee2e95b11f72157088f376890f8894386992d558f7c2d0f0f30ece",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/expat-2.5.0-1.el8_10.x86_64.rpm",
+        "version": "2.5.0"
+      }
+    ],
+    "version": "2.5.0"
+  },
+  "filesystem": {
+    "deps": [
+      "setup"
+    ],
+    "components": [
+      {
+        "name": "filesystem",
+        "sha256": "33ec199b7ef8565770427e4ead345e75b5d8e96ffbe33f0235ae088ee4726361",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/filesystem-3.8-6.el8.x86_64.rpm",
+        "version": "3.8"
+      }
+    ],
+    "version": "3.8"
+  },
+  "gawk": {
+    "deps": [
+      "filesystem"
+    ],
+    "components": [
+      {
+        "name": "gawk",
+        "sha256": "144535cb8d02b969d694d6a01754d98656f841aec5f2342037a0e35723784776",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/gawk-4.2.1-4.el8.x86_64.rpm",
+        "version": "4.2.1"
+      }
+    ],
+    "version": "4.2.1"
+  },
+  "gc": {
+    "deps": [],
+    "components": [
+      {
+        "name": "gc",
+        "sha256": "d92d65317d42de76860dc55f9f33d66eb3f82aee5a5b7e43d4a832169bcf2768",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gc-7.6.4-3.el8.x86_64.rpm",
+        "version": "7.6.4"
+      }
+    ],
+    "version": "7.6.4"
+  },
+  "gcc-toolset-14": {
+    "deps": [
+      "gcc-toolset-14-annobin-plugin-gcc",
+      "gcc-toolset-14-binutils",
+      "gcc-toolset-14-dwz",
+      "gcc-toolset-14-gcc",
+      "gcc-toolset-14-gcc-c++",
+      "gcc-toolset-14-gcc-gfortran",
+      "gcc-toolset-14-gdb",
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14",
+        "sha256": "6cde8ed8504b36b0d7ce223d1b94bf497a55c77f20776a9252b1725adfe9f66d",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-14.0-1.el8_10.x86_64.rpm",
+        "version": "14.0"
+      }
+    ],
+    "version": "14.0"
+  },
+  "gcc-toolset-14-annobin-docs": {
+    "deps": [
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-annobin-docs",
+        "sha256": "24a3dab3dedb1cabbfaa077ff869d8388da737368c25a8b60e0fc25d3298033d",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-annobin-docs-12.88-1.el8_10.noarch.rpm",
+        "version": "12.88"
+      }
+    ],
+    "version": "12.88"
+  },
+  "gcc-toolset-14-annobin-plugin-gcc": {
+    "deps": [
+      "gcc-toolset-14-annobin-docs",
+      "gcc-toolset-14-gcc",
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-annobin-plugin-gcc",
+        "sha256": "1c8b6c5d7b0333f5a0782c1cadaee676149484b0d169eb45cae3e9e2e175dbe3",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-annobin-plugin-gcc-12.88-1.el8_10.x86_64.rpm",
+        "version": "12.88"
+      }
+    ],
+    "version": "12.88"
+  },
+  "gcc-toolset-14-binutils": {
+    "deps": [
+      "coreutils",
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-binutils",
+        "sha256": "d9db391079c211af684948eead9b2d8232a5fc7f9e7432af89b81e6e8884e2de",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-binutils-2.41-4.el8_10.1.x86_64.rpm",
+        "version": "2.41"
+      }
+    ],
+    "version": "2.41"
+  },
+  "gcc-toolset-14-dwz": {
+    "deps": [
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-dwz",
+        "sha256": "6cc7b25f235476769f8d1f9a3f601eee34e6092e39a4038f9bba98b985e188e4",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-dwz-0.14-0.el8_10.x86_64.rpm",
+        "version": "0.14"
+      }
+    ],
+    "version": "0.14"
+  },
+  "gcc-toolset-14-gcc": {
+    "deps": [
+      "gcc-toolset-14-binutils",
+      "gcc-toolset-14-runtime",
+      "glibc",
+      "libgcc",
+      "libgomp",
+      "make"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-gcc",
+        "sha256": "336def96706bc74cfacb9866a9f7d8dbafc479983ff261cba745800ad4216a58",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-gcc-14.2.1-11.el8_10.x86_64.rpm",
+        "version": "14.2.1"
+      }
+    ],
+    "version": "14.2.1"
+  },
+  "gcc-toolset-14-gcc-c++": {
+    "deps": [
+      "gcc-toolset-14-gcc",
+      "gcc-toolset-14-libstdc++-devel",
+      "gcc-toolset-14-runtime",
+      "libstdc++"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-gcc-c++",
+        "sha256": "b611732d623d43ab780e6f70ee5300b94f68dbcd490f687b6b407cfaf2ffe8bf",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-gcc-c++-14.2.1-11.el8_10.x86_64.rpm",
+        "version": "14.2.1"
+      }
+    ],
+    "version": "14.2.1"
+  },
+  "gcc-toolset-14-gcc-gfortran": {
+    "deps": [
+      "gcc-toolset-14-gcc",
+      "gcc-toolset-14-libquadmath-devel",
+      "gcc-toolset-14-runtime",
+      "libgfortran"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-gcc-gfortran",
+        "sha256": "72309da01a3f22e82b2158ff2b61018f2708018ca3d5ffbfa2d6da6754b9f863",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-gcc-gfortran-14.2.1-11.el8_10.x86_64.rpm",
+        "version": "14.2.1"
+      }
+    ],
+    "version": "14.2.1"
+  },
+  "gcc-toolset-14-gdb": {
+    "deps": [
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-gdb",
+        "sha256": "a70969abc20474c4920264e2da93a1dd1cccd18f097daea8b12ce426635c4c28",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-gdb-14.2-3.el8_10.x86_64.rpm",
+        "version": "14.2"
+      }
+    ],
+    "version": "14.2"
+  },
+  "gcc-toolset-14-libquadmath-devel": {
+    "deps": [
+      "gcc-toolset-14-gcc",
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-libquadmath-devel",
+        "sha256": "75214ae7d32e5dc0606eca94135bbd86d0e3cd16d7b6d8b3b7b617ded31eb1ea",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-libquadmath-devel-14.2.1-11.el8_10.x86_64.rpm",
+        "version": "14.2.1"
+      }
+    ],
+    "version": "14.2.1"
+  },
+  "gcc-toolset-14-libstdc++-devel": {
+    "deps": [
+      "gcc-toolset-14-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-libstdc++-devel",
+        "sha256": "a5306cbaa5f3223de9320374aeac00dbddee817e11bab3c8217e33a131eca0a1",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-libstdc++-devel-14.2.1-11.el8_10.x86_64.rpm",
+        "version": "14.2.1"
+      }
+    ],
+    "version": "14.2.1"
+  },
+  "gcc-toolset-14-runtime": {
+    "deps": [
+      "scl-utils"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-14-runtime",
+        "sha256": "e66f892c1b74ac3848ce8b2b8b70f3d3b69fad90e67025c2399aba37e5bc2afa",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-14-runtime-14.0-1.el8_10.x86_64.rpm",
+        "version": "14.0"
+      }
+    ],
+    "version": "14.0"
+  },
+  "gdbm": {
+    "deps": [],
+    "components": [
+      {
+        "name": "gdbm",
+        "sha256": "affe0fe625de1fd2b206dac25d55e791b357968f05b3d413a090ea58c07d64f4",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/gdbm-1.18-2.el8.x86_64.rpm",
+        "version": "1.18"
+      }
+    ],
+    "version": "1.18"
+  },
+  "gdbm-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "gdbm-libs",
+        "sha256": "eb4f65b534d3fc117c6a77ec5079deee12061e1721b13dbc748a1d8785436b4b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/gdbm-libs-1.18-2.el8.x86_64.rpm",
+        "version": "1.18"
+      }
+    ],
+    "version": "1.18"
+  },
+  "glib2": {
+    "deps": [],
+    "components": [
+      {
+        "name": "glib2",
+        "sha256": "2316d3b9b9de67471cd86eba4797ce6d5d25f92b3cdab74abf9ec2c7e057a6c5",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/glib2-2.56.4-169.el8_10.x86_64.rpm",
+        "version": "2.56.4"
+      }
+    ],
+    "version": "2.56.4"
+  },
+  "glibc": {
+    "deps": [
+      "basesystem",
+      "glibc-common",
+      "glibc-headers"
+    ],
+    "components": [
+      {
+        "name": "glibc",
+        "sha256": "216787755575c64bab0c777b99941853e95d22f62d3da94ea686de16067a2d8b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/glibc-2.28-251.el8_10.34.x86_64.rpm",
+        "version": "2.28"
+      },
+      {
+        "name": "glibc-devel",
+        "sha256": "afa940d003f3817abdbae6a5df49aa197233719f32b4811e3021b5717daf3819",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/glibc-devel-2.28-251.el8_10.34.x86_64.rpm",
+        "version": "2.28"
+      }
+    ],
+    "version": "2.28"
+  },
+  "glibc-common": {
+    "deps": [
+      "glibc",
+      "tzdata"
+    ],
+    "components": [
+      {
+        "name": "glibc-common",
+        "sha256": "c36be8adcc6221d6f29cc660218e9c7eb984d54c097aa22ed1594d7eb4fb0120",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/glibc-common-2.28-251.el8_10.34.x86_64.rpm",
+        "version": "2.28"
+      }
+    ],
+    "version": "2.28"
+  },
+  "glibc-headers": {
+    "deps": [
+      "glibc",
+      "kernel-headers"
+    ],
+    "components": [
+      {
+        "name": "glibc-headers",
+        "sha256": "965efca837a45b5496cdc3d3aadc5750e2694cdafe2e652d5e8131ff9f1ef182",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/glibc-headers-2.28-251.el8_10.34.x86_64.rpm",
+        "version": "2.28"
+      }
+    ],
+    "version": "2.28"
+  },
+  "glibc-minimal-langpack": {
+    "deps": [
+      "glibc",
+      "glibc-common"
+    ],
+    "components": [
+      {
+        "name": "glibc-minimal-langpack",
+        "sha256": "dfe4f2321bd83de4f7f702e71df4457bdef324c6666a01c8ea53526564faa6f8",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/glibc-minimal-langpack-2.28-251.el8_10.34.x86_64.rpm",
+        "version": "2.28"
+      }
+    ],
+    "version": "2.28"
+  },
+  "gmp": {
+    "deps": [],
+    "components": [
+      {
+        "name": "gmp",
+        "sha256": "472a114e6d62e63c5c0dc82773d38b37e532602662d809560d46baf55816e56c",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/gmp-6.1.2-11.el8.x86_64.rpm",
+        "version": "6.1.2"
+      }
+    ],
+    "version": "6.1.2"
+  },
+  "gnutls": {
+    "deps": [
+      "crypto-policies",
+      "libtasn1",
+      "nettle",
+      "p11-kit-trust"
+    ],
+    "components": [
+      {
+        "name": "gnutls",
+        "sha256": "8d645481b1de4eaaea8289996b5d9331a3560a127f53d3ca646cc03677ab9bc3",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/gnutls-3.6.16-8.el8_10.5.x86_64.rpm",
+        "version": "3.6.16"
+      }
+    ],
+    "version": "3.6.16"
+  },
+  "grep": {
+    "deps": [],
+    "components": [
+      {
+        "name": "grep",
+        "sha256": "8b6a87ddd82473d4549bfed0e4070e898a3cf1d842e55af19edf86f79013d98b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/grep-3.1-6.el8.x86_64.rpm",
+        "version": "3.1"
+      }
+    ],
+    "version": "3.1"
+  },
+  "guile": {
+    "deps": [
+      "coreutils"
+    ],
+    "components": [
+      {
+        "name": "guile",
+        "sha256": "8edc3f76bbb51388e523595e77daf80c129e6b5b5a81ddf626e885bdc5836371",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/guile-2.0.14-7.el8.x86_64.rpm",
+        "version": "2.0.14"
+      }
+    ],
+    "version": "2.0.14"
+  },
+  "info": {
+    "deps": [],
+    "components": [
+      {
+        "name": "info",
+        "sha256": "6a8d057a8ad1e42b2c0dd17c9ea882a9d9946540fd479e32086551dfdf4b3bc4",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/info-6.5-7.el8.x86_64.rpm",
+        "version": "6.5"
+      }
+    ],
+    "version": "6.5"
+  },
+  "jansson": {
+    "deps": [],
+    "components": [
+      {
+        "name": "jansson",
+        "sha256": "43473522bff88d30d1adc8776cb26b9bd1b3bf4ecd1a00ae9f659c7c0e68f81d",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/jansson-2.14-1.el8.x86_64.rpm",
+        "version": "2.14"
+      }
+    ],
+    "version": "2.14"
+  },
+  "kernel-headers": {
+    "deps": [],
+    "components": [
+      {
+        "name": "kernel-headers",
+        "sha256": "3d3bd2db39d447edc70f6b64a61830024a4ebb7e2d851fb827ea7ddbac2550e6",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/kernel-headers-4.18.0-553.el8_10.x86_64.rpm",
+        "version": "4.18.0"
+      }
+    ],
+    "version": "4.18.0"
+  },
+  "keyutils-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "keyutils-libs",
+        "sha256": "a4ea8367bcedc758a3d0978f4ec53315847ac0397fe578efdd0e52ab4ad985f5",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/keyutils-libs-1.5.10-9.el8.x86_64.rpm",
+        "version": "1.5.10"
+      }
+    ],
+    "version": "1.5.10"
+  },
+  "krb5-libs": {
+    "deps": [
+      "coreutils",
+      "gawk",
+      "grep",
+      "keyutils-libs",
+      "openssl-libs",
+      "sed"
+    ],
+    "components": [
+      {
+        "name": "krb5-libs",
+        "sha256": "7f823e630b26af62660d6208179019174fae47e5332bf825e4af975f2ac68464",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/krb5-libs-1.18.2-33.el8_10.x86_64.rpm",
+        "version": "1.18.2"
+      }
+    ],
+    "version": "1.18.2"
+  },
+  "libacl": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libacl",
+        "sha256": "627d74ecef2469fbad239c5d8c3efa61c641e1a5f036dac59d59ef39bc90da96",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libacl-2.2.53-3.el8.x86_64.rpm",
+        "version": "2.2.53"
+      }
+    ],
+    "version": "2.2.53"
+  },
+  "libarchive": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libarchive",
+        "sha256": "031ea6c9f9af8a18bc79d48dacdfdb38103bd942ef2996837f57326791b1bbcf",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libarchive-3.3.3-7.el8_10.x86_64.rpm",
+        "version": "3.3.3"
+      }
+    ],
+    "version": "3.3.3"
+  },
+  "libatomic_ops": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libatomic_ops",
+        "sha256": "bf4d8314f13614eb18bfe82eb580d1b7c1b308c7b0b2f591246b1c99ba40d473",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/libatomic_ops-7.6.2-3.el8.x86_64.rpm",
+        "version": "7.6.2"
+      }
+    ],
+    "version": "7.6.2"
+  },
+  "libattr": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libattr",
+        "sha256": "c42cd6fc0ab1b6807487f76e7af37994a43b93e51a32bd85a8d75f898dea6a27",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libattr-2.4.48-3.el8.x86_64.rpm",
+        "version": "2.4.48"
+      }
+    ],
+    "version": "2.4.48"
+  },
+  "libbabeltrace": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libbabeltrace",
+        "sha256": "4be1dea481b13debfb97bd3f146e1778fd448315b400b9583b1ee7f40b9eb48d",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libbabeltrace-1.5.4-4.el8.x86_64.rpm",
+        "version": "1.5.4"
+      }
+    ],
+    "version": "1.5.4"
+  },
+  "libblkid": {
+    "deps": [
+      "coreutils",
+      "libuuid"
+    ],
+    "components": [
+      {
+        "name": "libblkid",
+        "sha256": "23ff222f6433aa621f762faf867e24e274aa66ef9c9d650dfe4655ced68a7c69",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libblkid-2.32.1-48.el8_10.x86_64.rpm",
+        "version": "2.32.1"
+      }
+    ],
+    "version": "2.32.1"
+  },
+  "libcap": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libcap",
+        "sha256": "4f50fe58deae1286da3f4d86192257149cd4502afcb7f485bf2918c44e6c2afd",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libcap-2.48-6.el8_10.1.x86_64.rpm",
+        "version": "2.48"
+      }
+    ],
+    "version": "2.48"
+  },
+  "libcap-ng": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libcap-ng",
+        "sha256": "b2043b033c16f932960e778b871c5899f4a99eb9194ac0588696fc0f64e3ba35",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libcap-ng-0.7.11-1.el8.x86_64.rpm",
+        "version": "0.7.11"
+      }
+    ],
+    "version": "0.7.11"
+  },
+  "libcom_err": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libcom_err",
+        "sha256": "07d47ada3925fbbe765d1f1190464e4d04acd89541f92f54ab03a14d4e23d904",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libcom_err-1.45.6-7.el8_10.x86_64.rpm",
+        "version": "1.45.6"
+      }
+    ],
+    "version": "1.45.6"
+  },
+  "libcurl-minimal": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libcurl-minimal",
+        "sha256": "0181af36efa88e30b4f076a2068dbc088deece6e39f41923a21eafe2ed605234",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libcurl-minimal-7.61.1-34.el8_10.11.x86_64.rpm",
+        "version": "7.61.1"
+      }
+    ],
+    "version": "7.61.1"
+  },
+  "libdb": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libdb",
+        "sha256": "da390da03d4d2038e845b603f107699e6616c38462c80df8f012cd5d3eb78186",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libdb-5.3.28-42.el8_4.x86_64.rpm",
+        "version": "5.3.28"
+      }
+    ],
+    "version": "5.3.28"
+  },
+  "libffi": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libffi",
+        "sha256": "baa22d471c0ab0d17ab1ba372a262df3c50d6430af4259a4065dfccf0529324a",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libffi-3.1-24.el8.x86_64.rpm",
+        "version": "3.1"
+      }
+    ],
+    "version": "3.1"
+  },
+  "libgcc": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libgcc",
+        "sha256": "629a08266f7c1397c00d7c32c0ac6d110fe56e993dcf94024559aa28a570f18d",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libgcc-8.5.0-28.el8_10.alma.1.x86_64.rpm",
+        "version": "8.5.0"
+      }
+    ],
+    "version": "8.5.0"
+  },
+  "libgfortran": {
+    "deps": [
+      "libquadmath"
+    ],
+    "components": [
+      {
+        "name": "libgfortran",
+        "sha256": "9a32e0f526dff21a2cc891d0bbc174ce6f1c70d6e232f806e962907ae575aba5",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libgfortran-8.5.0-28.el8_10.alma.1.x86_64.rpm",
+        "version": "8.5.0"
+      }
+    ],
+    "version": "8.5.0"
+  },
+  "libgomp": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libgomp",
+        "sha256": "fba0574d69f6a946696c031e834312f428fe585a4a7842906fc4353ca317b6f0",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libgomp-8.5.0-28.el8_10.alma.1.x86_64.rpm",
+        "version": "8.5.0"
+      }
+    ],
+    "version": "8.5.0"
+  },
+  "libicu": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libicu",
+        "sha256": "9eabd1f776e3128b674e34055505bc37dc1b8d10acecdfc22d4b991bda385095",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libicu-60.3-2.el8_1.x86_64.rpm",
+        "version": "60.3"
+      }
+    ],
+    "version": "60.3"
+  },
+  "libidn2": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libidn2",
+        "sha256": "d4f112cb5782ecbc4873cdc4256badcbcdeef94928b3c7930c9e4b10134bd4a6",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libidn2-2.2.0-1.el8.x86_64.rpm",
+        "version": "2.2.0"
+      }
+    ],
+    "version": "2.2.0"
+  },
+  "libipt": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libipt",
+        "sha256": "e34665518d8db7b4e2bc0fd25e36f3f619e8091d689cc1dd22aff10fcdc2b1c5",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/libipt-1.6.1-8.el8.x86_64.rpm",
+        "version": "1.6.1"
+      }
+    ],
+    "version": "1.6.1"
+  },
+  "libmount": {
+    "deps": [
+      "libblkid",
+      "libuuid"
+    ],
+    "components": [
+      {
+        "name": "libmount",
+        "sha256": "cc1de94d10800a6220090e22c72245833b51e46ee77644598a1aeebfb1d3bdb2",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libmount-2.32.1-48.el8_10.x86_64.rpm",
+        "version": "2.32.1"
+      }
+    ],
+    "version": "2.32.1"
+  },
+  "libmpc": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libmpc",
+        "sha256": "792b9e61af52cbbf5018114edb2a131590b5909e916920afb7a07374dbee95f7",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/libmpc-1.1.0-9.1.el8.x86_64.rpm",
+        "version": "1.1.0"
+      }
+    ],
+    "version": "1.1.0"
+  },
+  "libnghttp2": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libnghttp2",
+        "sha256": "3ec51c266f7a2c989b8b00c02fa57c19c82a0187584b8a60b628f50dca142c31",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libnghttp2-1.33.0-6.el8_10.2.x86_64.rpm",
+        "version": "1.33.0"
+      }
+    ],
+    "version": "1.33.0"
+  },
+  "libnsl2": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libnsl2",
+        "sha256": "6052742d3fe86bd60782214dc6ae9900460160c4c8748c5608e4f59a7eefd1ec",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libnsl2-1.2.0-2.20180605git4a062cf.el8.x86_64.rpm",
+        "version": "1.2.0"
+      }
+    ],
+    "version": "1.2.0"
+  },
+  "libquadmath": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libquadmath",
+        "sha256": "e50ce3215fc8c5fcabb60664fe4933dc84db9f7b27d304e3168fafacb6016a9e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libquadmath-8.5.0-28.el8_10.alma.1.x86_64.rpm",
+        "version": "8.5.0"
+      }
+    ],
+    "version": "8.5.0"
+  },
+  "libselinux": {
+    "deps": [
+      "pcre2"
+    ],
+    "components": [
+      {
+        "name": "libselinux",
+        "sha256": "7ccf8f7e950ee28d9843370d3e23790cbcd6ca86780a39f33bfbfd9d12fac4ba",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libselinux-2.9-11.el8_10.x86_64.rpm",
+        "version": "2.9"
+      }
+    ],
+    "version": "2.9"
+  },
+  "libsepol": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libsepol",
+        "sha256": "55bfbf557e668657b3d8e9b7389c9ec89944c9c21957eecb5e311a9d50a7708d",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libsepol-2.9-3.el8.x86_64.rpm",
+        "version": "2.9"
+      }
+    ],
+    "version": "2.9"
+  },
+  "libsigsegv": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libsigsegv",
+        "sha256": "c3c04d5086931a6af519bcbce8a27498edb99f48faa400d4c9a8fefe89d52f68",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libsigsegv-2.11-5.el8.x86_64.rpm",
+        "version": "2.11"
+      }
+    ],
+    "version": "2.11"
+  },
+  "libstdc++": {
+    "deps": [
+      "glibc"
+    ],
+    "components": [
+      {
+        "name": "libstdc++",
+        "sha256": "0302b9006d719a31dd51aeaf31fec03d70aad5c318674537bd80c49f9174b066",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libstdc++-8.5.0-28.el8_10.alma.1.x86_64.rpm",
+        "version": "8.5.0"
+      }
+    ],
+    "version": "8.5.0"
+  },
+  "libtasn1": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libtasn1",
+        "sha256": "c330f169a59688231b214571bb52d7db5a266c9b5fb256da126b142f995a198f",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libtasn1-4.13-5.el8_10.x86_64.rpm",
+        "version": "4.13"
+      }
+    ],
+    "version": "4.13"
+  },
+  "libtirpc": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libtirpc",
+        "sha256": "e768d79833e604ec5d8dae3173a2a91872a18128050f5b7c0ba29b5f45dccc1f",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libtirpc-1.1.4-12.el8_10.x86_64.rpm",
+        "version": "1.1.4"
+      }
+    ],
+    "version": "1.1.4"
+  },
+  "libtool-ltdl": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libtool-ltdl",
+        "sha256": "d010f5c40d6f3ea51f2f36fa8c8c85406e98536e4c3bb7d06a2cf3f4ed81cac3",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libtool-ltdl-2.4.6-25.el8.x86_64.rpm",
+        "version": "2.4.6"
+      }
+    ],
+    "version": "2.4.6"
+  },
+  "libunistring": {
+    "deps": [
+      "info"
+    ],
+    "components": [
+      {
+        "name": "libunistring",
+        "sha256": "0d1d497fe2b0eb54c88093c2aca92292fb4e94e6e1437af3bdefbb0f5adeb06b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libunistring-0.9.9-3.el8.x86_64.rpm",
+        "version": "0.9.9"
+      }
+    ],
+    "version": "0.9.9"
+  },
+  "libuuid": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libuuid",
+        "sha256": "a7d0fdf6467654dc4c512635d1309238d582e9ea6420df73692b2cee64c8f415",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libuuid-2.32.1-48.el8_10.x86_64.rpm",
+        "version": "2.32.1"
+      }
+    ],
+    "version": "2.32.1"
+  },
+  "libverto": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libverto",
+        "sha256": "cca258084dfb37287271ca92cb796dde3c507203b4e5f1ffafcf8449eed7eee3",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libverto-0.3.2-2.el8.x86_64.rpm",
+        "version": "0.3.2"
+      }
+    ],
+    "version": "0.3.2"
+  },
+  "libxcrypt": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libxcrypt",
+        "sha256": "d47f375a7902f3059a8690edc5949bbfd4708d53762c53414ff8747b7b409809",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libxcrypt-4.1.1-6.el8.x86_64.rpm",
+        "version": "4.1.1"
+      },
+      {
+        "name": "libxcrypt-devel",
+        "sha256": "c370e6338926c45830f0451be2666da2a2aafca18468d2a30304fc8f20736798",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libxcrypt-devel-4.1.1-6.el8.x86_64.rpm",
+        "version": "4.1.1"
+      }
+    ],
+    "version": "4.1.1"
+  },
+  "libxml2": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libxml2",
+        "sha256": "052372fa8cdb81769fec505dfcf36ce9ea7f290016a4b351bb793fc8cccd9073",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libxml2-2.9.7-21.el8_10.4.x86_64.rpm",
+        "version": "2.9.7"
+      }
+    ],
+    "version": "2.9.7"
+  },
+  "libzstd": {
+    "deps": [],
+    "components": [
+      {
+        "name": "libzstd",
+        "sha256": "d18b0c7ee8d94ab7d800bf21485073fc474ed61753e3cd96c981e1e89dc235de",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libzstd-1.4.4-1.el8.x86_64.rpm",
+        "version": "1.4.4"
+      }
+    ],
+    "version": "1.4.4"
+  },
+  "lua-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "lua-libs",
+        "sha256": "7088352944a1ce3fcc943a7f3deac47715aef01f2888423780905343118b29ed",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/lua-libs-5.3.4-12.el8.x86_64.rpm",
+        "version": "5.3.4"
+      }
+    ],
+    "version": "5.3.4"
+  },
+  "lz4-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "lz4-libs",
+        "sha256": "8a32e133982ffaf85b727a1f9a1e88c3a28b70d02345c03a412d2124cb9f99ca",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/lz4-libs-1.8.3-5.el8_10.x86_64.rpm",
+        "version": "1.8.3"
+      }
+    ],
+    "version": "1.8.3"
+  },
+  "make": {
+    "deps": [],
+    "components": [
+      {
+        "name": "make",
+        "sha256": "d6105876c33a4e02637ccaa95c10cc5bac769833ef00e6ddbb2ea942a87491ab",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/make-4.2.1-11.el8.x86_64.rpm",
+        "version": "4.2.1"
+      }
+    ],
+    "version": "4.2.1"
+  },
+  "mpfr": {
+    "deps": [
+      "gmp"
+    ],
+    "components": [
+      {
+        "name": "mpfr",
+        "sha256": "d1eff9daef4ccbd399303ec893ebe4575900661b45d7c1a9113a18836f6472f4",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/mpfr-3.1.6-1.el8.x86_64.rpm",
+        "version": "3.1.6"
+      }
+    ],
+    "version": "3.1.6"
+  },
+  "ncurses": {
+    "deps": [],
+    "components": [
+      {
+        "name": "ncurses",
+        "sha256": "7f590108b77d33a67f79d88201edbba049e67876f8d31171d61db6bf3fc6caf2",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/ncurses-6.1-10.20180224.el8.x86_64.rpm",
+        "version": "6.1"
+      }
+    ],
+    "version": "6.1"
+  },
+  "ncurses-base": {
+    "deps": [],
+    "components": [
+      {
+        "name": "ncurses-base",
+        "sha256": "56b30fb972189c8b0a0522616242d41ae872414c07d33401510340a5ef826114",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/ncurses-base-6.1-10.20180224.el8.noarch.rpm",
+        "version": "6.1"
+      }
+    ],
+    "version": "6.1"
+  },
+  "ncurses-libs": {
+    "deps": [
+      "ncurses-base"
+    ],
+    "components": [
+      {
+        "name": "ncurses-libs",
+        "sha256": "0928372c4b0327c454ce4df970a5eae1a5db667ed360902513b2e9366a442292",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/ncurses-libs-6.1-10.20180224.el8.x86_64.rpm",
+        "version": "6.1"
+      }
+    ],
+    "version": "6.1"
+  },
+  "nettle": {
+    "deps": [
+      "info"
+    ],
+    "components": [
+      {
+        "name": "nettle",
+        "sha256": "fb4aaa22b2e2f2fc0c451b87ac464e8746d240397d64e79f6bfd38f4e9128a5a",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/nettle-3.4.1-7.el8.x86_64.rpm",
+        "version": "3.4.1"
+      }
+    ],
+    "version": "3.4.1"
+  },
+  "openssl-libs": {
+    "deps": [
+      "ca-certificates",
+      "crypto-policies"
+    ],
+    "components": [
+      {
+        "name": "openssl-libs",
+        "sha256": "7ea2e7670924e6977da90eae922171c16b717f86aa4ca0926f3f3a59d03a3da4",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/openssl-libs-1.1.1k-15.el8_6.x86_64.rpm",
+        "version": "1.1.1k"
+      }
+    ],
+    "version": "1.1.1k"
+  },
+  "p11-kit": {
+    "deps": [],
+    "components": [
+      {
+        "name": "p11-kit",
+        "sha256": "954dd788311886cc0d6e961ea1a23d01a5df067b211b0515f9a8dc67a80d81c7",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/p11-kit-0.23.22-2.el8.x86_64.rpm",
+        "version": "0.23.22"
+      }
+    ],
+    "version": "0.23.22"
+  },
+  "p11-kit-trust": {
+    "deps": [],
+    "components": [
+      {
+        "name": "p11-kit-trust",
+        "sha256": "be692240b4f7b8447d3102fa3d7213c760f19d89c325337863e1bef3dfbc0e35",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/p11-kit-trust-0.23.22-2.el8.x86_64.rpm",
+        "version": "0.23.22"
+      }
+    ],
+    "version": "0.23.22"
+  },
+  "pcre": {
+    "deps": [],
+    "components": [
+      {
+        "name": "pcre",
+        "sha256": "4be4dd7c2b6080dece762109d55a05d1683701e5d4d09fe2f54a4a303e5933f6",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/pcre-8.42-6.el8.x86_64.rpm",
+        "version": "8.42"
+      }
+    ],
+    "version": "8.42"
+  },
+  "pcre2": {
+    "deps": [],
+    "components": [
+      {
+        "name": "pcre2",
+        "sha256": "434eed2458f5a004ef6db886afe79cd5241c12cc4de402ded4dd51a3c98ed262",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/pcre2-10.32-3.el8_6.x86_64.rpm",
+        "version": "10.32"
+      }
+    ],
+    "version": "10.32"
+  },
+  "platform-python": {
+    "deps": [
+      "platform-python-setuptools",
+      "python3-pip-wheel",
+      "python3-setuptools-wheel"
+    ],
+    "components": [
+      {
+        "name": "platform-python",
+        "sha256": "47668c160620cbe1ad874d750ae1e93bebcd065ad8d066b24cfae789fab75906",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/platform-python-3.6.8-76.el8_10.alma.1.x86_64.rpm",
+        "version": "3.6.8"
+      }
+    ],
+    "version": "3.6.8"
+  },
+  "platform-python-setuptools": {
+    "deps": [],
+    "components": [
+      {
+        "name": "platform-python-setuptools",
+        "sha256": "0ff89dd1d2d8c3f0fabda65ea9030bf773b3b785b1a39becaf15fe88c902cb9b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/platform-python-setuptools-39.2.0-9.el8_10.noarch.rpm",
+        "version": "39.2.0"
+      }
+    ],
+    "version": "39.2.0"
+  },
+  "popt": {
+    "deps": [],
+    "components": [
+      {
+        "name": "popt",
+        "sha256": "c57eae4eea62c47ff97fa51621e52ecf6cc2421eea648a7275d65bd571233dac",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/popt-1.18-1.el8.x86_64.rpm",
+        "version": "1.18"
+      }
+    ],
+    "version": "1.18"
+  },
+  "python3-libs": {
+    "deps": [
+      "chkconfig",
+      "python3-pip-wheel",
+      "python3-setuptools-wheel"
+    ],
+    "components": [
+      {
+        "name": "python3-libs",
+        "sha256": "c9de4424c21397995542f80ce1cc28e72b7115c692ee52420af7a8d74d9c16bf",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/python3-libs-3.6.8-76.el8_10.alma.1.x86_64.rpm",
+        "version": "3.6.8"
+      }
+    ],
+    "version": "3.6.8"
+  },
+  "python3-pip-wheel": {
+    "deps": [],
+    "components": [
+      {
+        "name": "python3-pip-wheel",
+        "sha256": "443f856c45bb2d2d617ebf0ec7f6310a248f3193ba9317accdeafa4d8c73597b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/python3-pip-wheel-9.0.3-24.el8.noarch.rpm",
+        "version": "9.0.3"
+      }
+    ],
+    "version": "9.0.3"
+  },
+  "python3-setuptools-wheel": {
+    "deps": [],
+    "components": [
+      {
+        "name": "python3-setuptools-wheel",
+        "sha256": "45ca7d7f9bcbdf2f214c188e223e149aadd91a5340a342842ddf8f038b680456",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/python3-setuptools-wheel-39.2.0-9.el8_10.noarch.rpm",
+        "version": "39.2.0"
+      }
+    ],
+    "version": "39.2.0"
+  },
+  "readline": {
+    "deps": [
+      "info"
+    ],
+    "components": [
+      {
+        "name": "readline",
+        "sha256": "0ff2ab7993712caf241360d9e595b3ec539a8dedbf930050e93c21984528b159",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/readline-7.0-10.el8.x86_64.rpm",
+        "version": "7.0"
+      }
+    ],
+    "version": "7.0"
+  },
+  "rpm": {
+    "deps": [
+      "coreutils",
+      "curl"
+    ],
+    "components": [
+      {
+        "name": "rpm",
+        "sha256": "c0f5322dab5fca6c1a7fe65e8513b8a8a7fd11f5a3ce68cc14b0540e5a07b5a2",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/rpm-4.14.3-32.el8_10.x86_64.rpm",
+        "version": "4.14.3"
+      }
+    ],
+    "version": "4.14.3"
+  },
+  "rpm-libs": {
+    "deps": [
+      "rpm"
+    ],
+    "components": [
+      {
+        "name": "rpm-libs",
+        "sha256": "dcb352b0c120f76a44ef6e2e5d29966c100f64bad09dc4b4616d8c269a530d72",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/rpm-libs-4.14.3-32.el8_10.x86_64.rpm",
+        "version": "4.14.3"
+      }
+    ],
+    "version": "4.14.3"
+  },
+  "scl-utils": {
+    "deps": [],
+    "components": [
+      {
+        "name": "scl-utils",
+        "sha256": "daff50f588f5dfe5150f7f4f91d8aa8732aff3f808f306a312cdb8e4ba5c5c98",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/scl-utils-2.0.2-16.el8.x86_64.rpm",
+        "version": "2.0.2"
+      }
+    ],
+    "version": "2.0.2"
+  },
+  "sed": {
+    "deps": [],
+    "components": [
+      {
+        "name": "sed",
+        "sha256": "f1ae0b323ac5a580378867336cff3e88c07e18b9eb6626616cc66c008433870f",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/sed-4.5-5.el8_10.x86_64.rpm",
+        "version": "4.5"
+      }
+    ],
+    "version": "4.5"
+  },
+  "setup": {
+    "deps": [],
+    "components": [
+      {
+        "name": "setup",
+        "sha256": "6cd3f1697e9fdc4e148b54a3b53803ce42e66687d3e0bea66fd7bdef4065c1c6",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/setup-2.12.2-9.el8.noarch.rpm",
+        "version": "2.12.2"
+      }
+    ],
+    "version": "2.12.2"
+  },
+  "source-highlight": {
+    "deps": [
+      "ctags",
+      "info"
+    ],
+    "components": [
+      {
+        "name": "source-highlight",
+        "sha256": "b15f0c3110d9c4754ef3c16e52f9356b4671643565b9ddf31006c945fe487370",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/source-highlight-3.1.8-18.el8_10.x86_64.rpm",
+        "version": "3.1.8"
+      }
+    ],
+    "version": "3.1.8"
+  },
+  "sqlite-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "sqlite-libs",
+        "sha256": "8508587c38ca6354ae236f66c40aa0ba5316d7406c6022cac47208769faee8f4",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/sqlite-libs-3.26.0-20.el8_10.x86_64.rpm",
+        "version": "3.26.0"
+      }
+    ],
+    "version": "3.26.0"
+  },
+  "tzdata": {
+    "deps": [],
+    "components": [
+      {
+        "name": "tzdata",
+        "sha256": "c2e125c696d08c2cba6fc8c5a13fbc5b9813dee001d78f94c4e421ebaa6e3d28",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/tzdata-2026a-1.el8.noarch.rpm",
+        "version": "2026a"
+      }
+    ],
+    "version": "2026a"
+  },
+  "xz-libs": {
+    "deps": [],
+    "components": [
+      {
+        "name": "xz-libs",
+        "sha256": "eab633cd7e81de007792509bfbea6cbd48dec90e4c0f18a4c1c337cb9c06ee51",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/xz-libs-5.2.4-4.el8_6.x86_64.rpm",
+        "version": "5.2.4"
+      }
+    ],
+    "version": "5.2.4"
+  },
+  "zlib": {
+    "deps": [],
+    "components": [
+      {
+        "name": "zlib",
+        "sha256": "ab40e85f180a6d38ce0291408b7ef5c422250f53cb26c44399ef1a4e8622778e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/zlib-1.2.11-25.el8.x86_64.rpm",
+        "version": "1.2.11"
+      }
+    ],
+    "version": "1.2.11"
+  }
+}

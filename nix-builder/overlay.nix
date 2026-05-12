@@ -4,6 +4,9 @@ let
   useMKL = final.stdenv.isx86_64 && !(final.config.xpuSupport or false);
 in
 {
+  almalinux-libstdcxx = final.callPackage ./pkgs/manylinux/libstdcxx { };
+  almalinux-glibc = final.callPackage ./pkgs/manylinux/glibc { };
+
   # Use MKL for BLAS/LAPACK on x86_64.
   blas = if useMKL then prev.blas.override { blasProvider = prev.mkl; } else prev.blas;
   lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.lapack;
@@ -229,6 +232,24 @@ in
   xpuPackages = final.xpuPackages_2025_3_1;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
+// (
+  let
+    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
+    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
+    versions = [
+      "2.28"
+    ];
+    newManyLinuxPackages = final.callPackage ./pkgs/manylinux { };
+  in
+  builtins.listToAttrs (
+    map (version: {
+      name = "manylinux_${flattenVersion (prev.lib.versions.majorMinor version)}";
+      value = newManyLinuxPackages {
+        packageMetadata = readPackageMetadata ./pkgs/manylinux/manylinux-${version}-metadata.json;
+      };
+    }) versions
+  )
+)
 // (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];

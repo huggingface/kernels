@@ -352,10 +352,11 @@ def get_kernel(
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        revision (`str`, *optional*, defaults to `"main"`):
+        revision (`str`, *optional*):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -382,6 +383,13 @@ def get_kernel(
         result = activation.relu(out, x)
         ```
     """
+    if revision is None and version is None:
+        raise ValueError(
+            "A kernel version or revision must be specified. "
+            "Use `version=<major>` for a stable kernel API version or `revision=<branch/tag/commit>` "
+            "for an explicit Hub revision. See: https://huggingface.co/docs/kernels/migration"
+        )
+
     override = _get_local_kernel_overrides().get(repo_id, None)
     if override is not None:
         return get_local_kernel(override)
@@ -447,10 +455,11 @@ def has_kernel(
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        revision (`str`, *optional*, defaults to `"main"`):
+        revision (`str`, *optional*):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.

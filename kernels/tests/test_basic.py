@@ -27,7 +27,7 @@ def local_kernel(local_kernel_path):
 
 @pytest.fixture
 def metal_kernel():
-    return get_kernel("kernels-test/relu-metal")
+    return get_kernel("kernels-test/relu-metal", version=1)
 
 
 @pytest.fixture
@@ -129,18 +129,11 @@ def test_version_outdated_warning(caplog):
     assert "but version" not in caplog.text
 
 
-def test_no_version_or_revision_warning():
-    from packaging.version import Version
-
-    from kernels import __version__
-
-    assert Version(__version__) < Version("0.15"), (
-        "The deprecation cycle for requiring `version` or `revision` is complete. "
-        "Remove the fallback to 'main' in `select_revision_or_version` and make "
-        "`version` or `revision` a required argument."
-    )
-    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
+def test_no_version_or_revision_error():
+    with pytest.raises(ValueError, match="A kernel version or revision must be specified"):
         get_kernel("kernels-test/versions")
+    with pytest.raises(ValueError, match="A kernel version or revision must be specified"):
+        has_kernel("kernels-test/versions")
 
 
 def test_noarch_kernel(device):
@@ -198,14 +191,14 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "LOCAL_KERNELS",
             f"kernels-test/activation={str(kernel_path)}:kernels-test/non-existing2=/non/existing",
         )
-        get_kernel("kernels-test/activation")
+        get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         m.setenv(
             "LOCAL_KERNELS",
             f"kernels-test/non-existing2=/non/existing:kernels-test/activation={str(kernel_path)}",
         )
-        get_kernel("kernels-test/activation")
+        get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         # Using a non-existing path should error.
@@ -214,7 +207,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "kernels-test/non-existing2=/non/existing:kernels-test/activation=/non/existing",
         )
         with pytest.raises(FileNotFoundError, match=r"Could not find kernel in /non/existing"):
-            get_kernel("kernels-test/activation")
+            get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         # Malformed entries must be rejected.
@@ -223,7 +216,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "kernels-test/non-existing2=/non/existing:kernels-test/activation",
         )
         with pytest.raises(ValueError, match=r"Invalid LOCAL_KERNELS entry"):
-            get_kernel("kernels-test/activation")
+            get_kernel("kernels-test/activation", revision="main")
 
 
 @pytest.mark.neuron_only

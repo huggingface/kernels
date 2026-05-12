@@ -126,6 +126,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
         .wrap_err("Cannot get card template")?
         .render(context! {
             repo_id => repo_id,
+            version => build.general.version,
             functions => functions,
             layers => layers,
             has_benchmark => has_benchmark,

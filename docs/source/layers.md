@@ -177,9 +177,8 @@ will get the latest kernel build from the `v1` branch. Kernel layers
 within a version branch must never break the API or remove builds for
 older PyTorch versions. This ensures that your code will continue to
 work.
-
-Some kernels have not yet been updated to use versioning yet. In these cases,
-you can use `LayerRepository` without the `version` argument.
+Hub-backed `LayerRepository` and `FuncRepository` entries must specify
+either a `version` or an explicit `revision`.
 
 You can register a mapping, like the one above, using `register_kernel_mapping`:
 
@@ -210,6 +209,7 @@ kernel_layer_mapping = {
         "cuda": FuncRepository(
             repo_id="kernels-community/activation",
             func_name="silu_and_mul",
+            version=1,
         ),
     }
 }

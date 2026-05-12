@@ -22,8 +22,8 @@ let
     (import ./overrides.nix)
 
     (final: prev: {
-      toolchain = pkgs.stdenvNoCC.mkDerivation {
-        pname = "toolchain";
+      gcc-unwrapped = pkgs.stdenvNoCC.mkDerivation {
+        pname = "gcc";
         version = final.gcc-toolset-14-gcc.version;
 
         nativeBuildInputs = with pkgs; [ rsync ];
@@ -34,24 +34,32 @@ let
           runHook preInstall
 
           mkdir $out
-          for path in ${gcc-toolset-14-binutils} ${gcc-toolset-14-gcc} ${gcc-toolset-14-gcc-cxx} ${gcc-toolset-14-libstdcxx-devel} ${glibc} ${glibc-headers} ${kernel-headers}; do
+          for path in ${gcc-toolset-14-binutils} ${gcc-toolset-14-gcc} ${gcc-toolset-14-gcc-cxx} ${gcc-toolset-14-libstdcxx-devel} ${glibc-headers} ${kernel-headers}; do
             rsync --exclude=nix-support -a $path/ $out/
           done
 
           runHook postInstall
         '';
+
       };
 
-      stdenv = pkgs.overrideCC pkgs.stdenv (
-        pkgs.wrapCCWith {
-          cc = final.toolchain;
-          libc = final.glibc;
-          bintools = pkgs.wrapBintoolsWith {
-            bintools = final.toolchain;
-            libc = final.glibc;
-          };
-        }
-      );
+      binutils = pkgs.wrapBintoolsWith {
+        bintools = final.gcc-unwrapped;
+        libc = final.glibc;
+      };
+
+      gcc = pkgs.wrapCCWith {
+        bintools = final.binutils;
+        coreutils = final.coreutils;
+        cc = final.gcc-unwrapped;
+        gccForLibs = final.gcc-unwrapped;
+        libc = final.glibc;
+        isGNU = true;
+        useCcForLibs = true;
+      };
+
+      #stdenv = pkgs.overrideCC pkgs.stdenv final.gcc-unwrapped;
+      stdenv = pkgs.overrideCC pkgs.stdenv final.gcc;
     })
   ];
 in

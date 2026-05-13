@@ -73,7 +73,7 @@
                 torchVersions';
           in
           builtins.toJSON buildVariants;
-        genFlakeOutputs = builtins.warn ''
+        genFlakeOutputs = builtins.throw ''
           `genFlakeOutputs` was renamed to `genKernelFlakeOutputs` and will be removed
           in kernel-builder 0.14.
         '' genKernelFlakeOutputs;

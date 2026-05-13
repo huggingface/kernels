@@ -20,7 +20,7 @@ env:
   E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
@@ -44,6 +44,23 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
         env:
           USER: runner
+
+      # Remove the existing test repo if it exists so we test repo creation in the upload step
+      - name: Delete existing test repo
+        run: |
+          cat > /tmp/delete_repos.py << 'PYEOF'
+          from huggingface_hub import HfApi
+          import os
+
+          api = HfApi(
+              endpoint=os.environ["HF_ENDPOINT"]
+          )
+          repo_id = os.environ["E2E_REPO_ID"]
+          for repo_type in ["kernel", "model"]:
+              api.delete_repo(repo_id, repo_type=repo_type, missing_ok=True)
+              print(f"Deleted {repo_type} repo (or it did not exist)")
+          PYEOF
+          nix-shell -p python3Packages.huggingface-hub --run "python /tmp/delete_repos.py"
 
       - name: Init kernel project
         run: |
@@ -121,6 +138,8 @@ jobs:
           CUDA_TAG=$(echo "$VARIANT" | grep -oP 'cu\d+')
           echo "Installing torch matching variant $VARIANT (CUDA tag: $CUDA_TAG)"
           uv sync --all-extras --dev
+          # E2E validates this checkout, so use the local kernels-data binding instead of the released wheel from uv.lock.
+          uv pip install --reinstall ../kernels-data/bindings/python
           uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/$CUDA_TAG
           uv run --no-sync python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
 
@@ -131,7 +150,7 @@ jobs:
           import torch
           from kernels import get_kernel
 
-          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}')
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}', trust_remote_code=True)
 
           x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
           result = kernel.kernels_upload_test(x)

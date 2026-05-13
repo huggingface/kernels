@@ -32,10 +32,12 @@ applyOverrides {
         # dealing with broken symlinks.
         rm -rf $out/lib/gcc/x86_64-redhat-linux/14/32
 
-        # Fix binutils symlinks.
+        # Remove binutils symlinks to force gcc to use a wrapped binutils
+        # from the environment. Without using a wrapper, no rpaths will
+        # be set, etc.
         for l in $(find $out/libexec -type l); do
           if [ -f ${gcc-toolset-14-binutils}/bin/$(basename $l) ]; then
-            ln -sf ${gcc-toolset-14-binutils}/bin/$(basename $l) $l
+            rm -f $l
           fi
         done
 

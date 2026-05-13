@@ -1,0 +1,5 @@
+transformers
+safetensors
+huggingface-hub
+kernels
+ai-bench[xpu] @ git+https://github.com/libxsmm/AI-bench.git

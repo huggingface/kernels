@@ -1,0 +1,145 @@
+constraints:
+  - id: outputs_must_match
+    name: "Outputs must match original"
+    severity: info
+    description: |
+      The verification tool will check that outputs match the original.
+      If it fails, try a different optimization approach.
+
+  - id: streamk_output_must_be_prezeroed
+    name: "Pre-zero output buffer when using atomic accumulation (Stream K)"
+    severity: critical
+    description: |
+      When partial tiles use tl.atomic_add to accumulate results, the output
+      tensor MUST be initialized to zero (torch.zeros, NOT torch.empty).
+      Otherwise partial sums will include garbage values.
+
+      WRONG:
+      ```python
+      c = torch.empty((M, N), device=a.device, dtype=torch.float32)
+      first_wave[grid](a, b, c, ...)  # atomic_add onto garbage
+      ```
+
+      CORRECT:
+      ```python
+      c = torch.zeros((M, N), device=a.device, dtype=torch.float32)
+      first_wave[grid](a, b, c, ...)  # atomic_add safely onto zeros
+      ```
+
+  - id: streamk_atomic_add_needs_mask
+    name: "Atomic adds on partial tiles must be masked for boundary safety"
+    severity: critical
+    description: |
+      When falling back to tl.atomic_add for partial tiles, you MUST apply
+      boundary masks (rm < M, rn < N) to avoid writing out-of-bounds.
+
+      ```python
+      rm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+      rn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+      mask = (rm < M)[:, None] & (rn < N)[None, :]
+      tl.atomic_add(c_ptr_, acc, mask=mask, sem='relaxed')
+      ```
+
+  - id: int64_cast_for_large_batch_offsets
+    name: "Cast batch/stride products to int64 to prevent pointer overflow"
+    severity: critical
+    description: |
+      When computing pointer offsets for batched operations, the product of
+      a batch index and a stride can exceed int32 range for large tensors.
+      Triton program_id returns int32 by default. You MUST cast to int64
+      before multiplying by strides.
+
+      WRONG (silent int32 overflow → wrong memory addresses):
+      ```python
+      bid = tl.program_id(axis=1)
+      offset_a = bid * stride_az        # int32 * int32 → overflow for large tensors
+      a_ptrs = a_ptr + offset_a + ...
+      ```
+
+      CORRECT:
+      ```python
+      bid = tl.program_id(axis=1)
+      offset_a = bid.to(tl.int64) * stride_az   # safe for large tensors
+      a_ptrs = a_ptr + offset_a + ...
+      ```
+
+      This applies whenever a program_id or loop index is multiplied by a
+      stride that could produce values > 2^31 (≈2 billion elements). Common
+      in batched GEMM, multi-head attention, and any kernel with a batch
+      dimension over large tensors.
+
+  - id: autotune_no_defaults
+    name: "Do not put default values on @triton.autotune meta-parameters"
+    severity: critical
+    description: |
+      When using @triton.autotune, the meta-parameters (BLOCK_M, BLOCK_N, etc.)
+      must NOT have default values in the kernel signature. Default values cause
+      a "Conflicting meta-parameters" error at runtime.
+
+      WRONG:
+      ```python
+      @triton.autotune(configs=[...], key=['M', 'N', 'K'])
+      @triton.jit
+      def kernel(..., BLOCK_M: tl.constexpr = 128, ...):
+          ...
+      ```
+
+      CORRECT:
+      ```python
+      @triton.autotune(configs=[...], key=['M', 'N', 'K'])
+      @triton.jit
+      def kernel(..., BLOCK_M: tl.constexpr, ...):
+          ...
+      ```
+
+  - id: model_class_pattern
+    name: "Model class must be compatible with ai-bench loading"
+    severity: critical
+    description: |
+      ai-bench creates Model via direct `__init__()` and uses standard
+      `load_state_dict()` for weight synchronization between reference
+      and optimized models.
+
+      The Model class should use standard nn.Module patterns:
+
+      ```python
+      class Model(nn.Module):
+          def __init__(self, input_size, hidden_size, ...):
+              super().__init__()
+              self.gemm = nn.Linear(input_size, hidden_size)
+              self._packed = False
+
+          def _pack_weights(self):
+              device = torch.device("xpu")
+              w = self.gemm.weight.data.detach()
+              b = self.gemm.bias.data.detach()
+              self.weight_t = w.to(device, torch.float16).t().contiguous()
+              self.bias_xpu = b.to(device, torch.float16).contiguous()
+              self._packed = True
+
+          def forward(self, x):
+              if not self._packed:
+                  self._pack_weights()
+              # ... launch triton kernel ...
+      ```
+
+  - id: descriptor_no_boundary_check_arg
+    name: "Tensor descriptor .load() does NOT accept boundary_check"
+    severity: critical
+    description: |
+      Tensor descriptors are the preferred memory access API on XPU.
+      Unlike block pointers which use tl.load(ptr, boundary_check=(0, 1)),
+      tensor descriptors handle boundaries internally. The .load() method
+      takes only a coordinate list.
+
+      WRONG:
+      ```python
+      desc = tl.make_tensor_descriptor(base=ptr, shape=(M, K), ...)
+      data = desc.load([row, col], boundary_check=(0, 1))
+      ```
+
+      CORRECT:
+      ```python
+      desc = tl.make_tensor_descriptor(base=ptr, shape=(M, K), ...)
+      data = desc.load([row, col])
+      ```

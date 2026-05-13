@@ -1,0 +1,452 @@
+# Intel XPU Memory Patterns Optimizations
+# These patterns focus on memory access, layout, and avoiding hidden sync/overhead.
+# They are intended to be used alongside your XPU-specific compute patterns.
+
+constraints:
+  - id: no_device_to_host_scalar_sync
+    name: "Do NOT force device->host scalar sync in hot path"
+    severity: critical
+    description: |
+      Avoid .item(), float(tensor), int(tensor), printing device tensors, or any device->host scalar
+      extraction in forward()/kernel wrapper hot paths. This forces synchronization and kills perf.
+
+      WRONG:
+      ```python
+      c = float(constant_tensor.item())  # syncs XPU -> host
+      ```
+
+      CORRECT:
+      - Keep constants as Python floats / CPU tensors
+      - Pass scalar to kernel as an argument
+
+  - id: prefer_contiguous_inputs
+    name: "Prefer contiguous tensors for Triton kernels"
+    severity: critical
+    description: |
+      Triton kernels generally assume or strongly benefit from contiguous memory.
+      If inputs are strided/non-contiguous, do an explicit .contiguous() in wrapper
+      (outside the timed region if possible).
+
+      WRONG:
+      ```python
+      # Non-contiguous input passed into kernel
+      kernel[grid](x_transposed, ...)
+      ```
+
+      CORRECT:
+      ```python
+      if not x.is_contiguous():
+        x = x.contiguous()
+      kernel[grid](x, ...)
+      ```
+
+  - id: block_ptr_boundary_check_tuple
+    name: "Block pointer boundary_check must be tuple of ints"
+    severity: critical
+    description: |
+      tl.load(block_ptr) uses boundary_check=(dim0, dim1) where values are dimension indices.
+      Use (0,1) not booleans.
+
+      CORRECT:
+      ```python
+      tl.load(ptr, boundary_check=(0, 1))
+      ```
+
+  - id: no_tl_multiple_of_on_python_scalars
+    name: "Do NOT call tl.multiple_of / tl.max_contiguous on Python scalars or constexpr-like values"
+    severity: critical
+    description: |
+      tl.multiple_of / tl.max_contiguous are intended for Triton IR values (tensors/expressions),
+      not Python integers/constexpr-like scalars such as stride arguments.
+
+      WRONG (can error like: 'constexpr' object has no attribute 'shape'):
+      ```python
+      tl.multiple_of(stride_xk, 1)
+      ```
+
+      CORRECT (apply to tensor expressions):
+      ```python
+      offs_n = col_start + tl.arange(0, BLOCK_N)
+      tl.multiple_of(offs_n, 8)  # only if you KNOW it is aligned/multiple
+      ```
+
+patterns:
+  - id: mem_block_pointers
+    name: "Block pointers for structured tiles (fallback — prefer tensor descriptors on XPU)"
+    stage: memory_access
+    description: "Use tl.make_block_ptr + tl.load(boundary_check=...) for tiled loads/stores"
+    rationale: |
+      NOTE: On Intel XPU, tensor descriptors (tl.make_tensor_descriptor) are preferred
+      over block pointers — they produce better address generation codegen. See
+      xpu_optimizations.yaml (xpu_tensor_descriptor_note, xpu_descriptor_gemm_pattern).
+
+      Block pointers improve addressing and bounds handling over manual pointer math.
+      Use them as a fallback when tensor descriptors are not suitable (e.g., legacy code).
+    pattern_before: |
+      offs_m = pid_m * BM + tl.arange(0, BM)
+      offs_k = k0 + tl.arange(0, BK)
+      x_ptrs = x_ptr + offs_m[:, None] * stride_xm + offs_k[None, :] * stride_xk
+      x = tl.load(x_ptrs, mask=(offs_m[:, None] < M) & (offs_k[None, :] < K), other=0.0)
+    pattern_after: |
+      x_bp = tl.make_block_ptr(
+        base=x_ptr,
+        shape=(M, K),
+        strides=(stride_xm, stride_xk),
+        offsets=(pid_m * BM, k0),
+        block_shape=(BM, BK),
+        order=(1, 0),
+      )
+      x = tl.load(x_bp, boundary_check=(0, 1))
+    expected_speedup: "workload-dependent (often positive when indexing is heavy)"
+    applies_to: [gemm, conv, attention, all_memory_bound]
+    examples:
+      - before: |
+          k0 += BK
+        after: |
+          x_bp = tl.advance(x_bp, (0, BK))
+
+  - id: mem_skip_boundary_check_when_divisible
+    name: "Specialize away boundary checks when shapes are divisible"
+    stage: memory_access
+    description: "Avoid boundary_check/masks when M/N/K are known multiples of tile sizes"
+    rationale: |
+      Masks and boundary checks add overhead. If your benchmark/problem guarantees divisibility
+      (or you can specialize per shape), you can remove masks and use unconditional loads/stores.
+    pattern_before: |
+      x = tl.load(x_bp, boundary_check=(0, 1))
+      tl.store(o_bp, acc, boundary_check=(0, 1))
+    pattern_after: |
+      # If M % BM == 0 and K % BK == 0 (specialized case):
+      x = tl.load(x_bp)
+      tl.store(o_bp, acc)
+    expected_speedup: "1.05-1.20x"
+    applies_to: [gemm, large_fixed_shapes]
+    notes: |
+      - Only safe when you can guarantee divisibility or guard with a specialized kernel variant.
+
+  - id: mem_use_static_range_for_k_loop
+    name: "Use tl.static_range for K loops (when K is known / bounded)"
+    stage: memory_access
+    description: "Enable better unrolling/pipelining by using tl.static_range"
+    rationale: |
+      tl.static_range can help Triton generate better scheduled loops and reduce loop overhead.
+      Particularly useful in GEMM-like reductions and fixed-shape workloads.
+    pattern_before: |
+      for k in range(0, K, BK):
+        ...
+    pattern_after: |
+      for k in tl.static_range(0, K, BK):
+        ...
+    expected_speedup: "1.05-1.15x"
+    applies_to: [gemm, attention]
+    notes: |
+      Use only when K is a compile-time constant or you launch specialized kernels by K.
+
+  - id: mem_pointer_arithmetic_coalescing
+    name: "Prefer contiguous (coalesced) access in the innermost dimension"
+    stage: memory_access
+    description: "Make the fastest-changing index map to contiguous memory"
+    rationale: |
+      Coalesced loads/stores are critical. In most layouts, the last dimension is contiguous.
+      Make tl.arange(...) along the contiguous stride dimension when possible.
+    pattern_before: |
+      # Strided / scattered pattern (example)
+      offs = base + tl.arange(0, BN) * stride_n
+      x = tl.load(x_ptr + offs)
+    pattern_after: |
+      # Coalesced: make arange hit contiguous dimension
+      offs_n = col_start + tl.arange(0, BN)
+      x = tl.load(x_ptr + offs_n)
+    expected_speedup: "workload-dependent (can be large if fixing uncoalesced access)"
+    applies_to: [all_memory_bound]
+
+  - id: mem_cache_modifiers_optional
+    name: "Optional cache modifiers (backend-dependent)"
+    stage: memory_access
+    description: "Use cache_modifier/eviction_policy carefully; keep it optional"
+    rationale: |
+      cache modifiers can help (or hurt) depending on backend and access pattern.
+      Treat them as an autotune dimension rather than a hard rule.
+    pattern_before: |
+      x = tl.load(ptr)
+    pattern_after: |
+      # Example: try these as tunables if supported by your Triton backend
+      x = tl.load(ptr, cache_modifier=".ca")
+      # or:
+      x = tl.load(ptr, cache_modifier=".cg")
+    expected_speedup: "workload-dependent"
+    applies_to: [streaming_reads, bandwidth_bound]
+    notes: |
+      - Do not assume Intel XPU backend interprets modifiers the same as CUDA.
+      - Use only if you confirm correctness and performance.
+
+  - id: mem_alignment_hints_on_offsets
+    name: "Alignment hints on OFFSET tensors (not strides)"
+    stage: memory_access
+    description: "Use tl.multiple_of / tl.max_contiguous on tensor offset expressions"
+    rationale: |
+      Alignment hints can improve vectorization/coalescing when you truly have aligned access.
+      Apply hints to offset tensors (e.g., tl.arange expressions) and only when guaranteed.
+    pattern_before: |
+      offs_n = col_start + tl.arange(0, BN)
+      x = tl.load(x_ptr + offs_n)
+    pattern_after: |
+      offs_n = col_start + tl.arange(0, BN)
+      tl.max_contiguous(offs_n, BN)
+      # Only if you KNOW alignment/multiple is valid:
+      # tl.multiple_of(offs_n, 8)
+      x = tl.load(x_ptr + offs_n)
+    expected_speedup: "small but sometimes measurable"
+    applies_to: [gemm, bandwidth_bound]
+    notes: |
+      Do NOT apply tl.multiple_of blindly—incorrect assumptions can lead to wrong-code.
+
+  - id: mem_avoid_redundant_reads
+    name: "Load once, reuse in registers"
+    stage: memory_access
+    description: "Avoid re-loading the same values inside inner loops"
+    rationale: |
+      Redundant tl.load calls inside reduction loops can dominate memory traffic.
+      If values are reused (e.g., bias, scale), load once per tile and broadcast.
+    pattern_before: |
+      for k in ...:
+        b = tl.load(b_ptr + offs_n)  # re-loaded each iteration (waste)
+        acc += ...
+    pattern_after: |
+      b = tl.load(b_ptr + offs_n)    # load once
+      for k in ...:
+        acc += ...
+      acc += b[None, :]
+    expected_speedup: "1.05-1.30x (depends on redundancy)"
+    applies_to: [gemm_epilogues, fused_pointwise]
+
+  - id: mem_wrapper_one_time_device_moves
+    name: "One-time device moves in wrapper (avoid per-forward transfers)"
+    stage: memory_access
+    description: "Move parameters to XPU once, not every forward"
+    rationale: |
+      Per-forward .to('xpu') or .data = .to('xpu') costs time and can interfere with timing.
+      Use a one-time guard in the module.
+    pattern_before: |
+      def forward(self, x):
+        if self.weight.device.type != "xpu":
+          self.weight.data = self.weight.data.to("xpu")
+        ...
+    pattern_after: |
+      def __init__(...):
+        self._moved_to_xpu = False
+
+      def forward(self, x):
+        if not self._moved_to_xpu:
+          self.weight.data = self.weight.data.to("xpu")
+          self._moved_to_xpu = True
+    expected_speedup: "huge for microbenchmarks; correctness/measurement improvement"
+    applies_to: [all]
+    notes: |
+      Ideally move model+inputs to XPU outside the timed region in the harness.
+
+  - id: mem_layout_transform_prepack
+    name: "Pre-pack / pre-transform weights for better access"
+    stage: memory_access
+    description: "Change weight layout to match access pattern (when allowed)"
+    rationale: |
+      If your kernel accesses W as W^T (K,N), storing W in a layout that makes K-contiguous
+      for the inner loop can improve coalescing/cache behavior. This is a higher-level change.
+    pattern_before: |
+      # W stored as [N, K], kernel reads as [K, N] view
+      w_ptr shape=(K, N), strides=(stride_wk, stride_wn)
+    pattern_after: |
+      # Prepack once (outside timed loop), store as [K, N] or blocked layout if acceptable
+      # so inner K loads are contiguous in memory for each program.
+      # (Exact layout depends on your kernel and framework constraints.)
+    expected_speedup: "workload-dependent (can be large for bandwidth-limited kernels)"
+    applies_to: [gemm, attention]
+    notes: |
+      - Only if you control weight storage and can amortize the prepack cost.
+      - Ensure KernelBench correctness expectations still hold.
+
+  - id: reduce_liveness_sink_load_and_prefetch
+    name: "Reduce variable liveness: prefetch early, load late (sink load closer to dot)"
+    stage: memory_access
+    description: "Replace long-lived live-in operand loads with prefetch + per-iteration load near dot/use"
+    rationale: |
+      On Intel XPU, keeping a large operand tile live across a long loop can reserve many registers,
+      increasing GRF pressure and causing spills. A better approach is:
+      1) prefetch the data earlier to pull it into L1, then
+      2) load the operand into registers only right before it is used (inside the loop),
+      reducing liveness and helping the register allocator.
+
+      This is especially relevant when a tensor is loaded outside a loop and used repeatedly
+      inside the loop (classic FlashAttention Q tile scenario).
+    pattern_before: |
+      # Load once, keep live across loop (long liveness)
+      q = tl.load(q_ptrs)  # q stays live for the whole loop
+      for k0 in range(0, K, BLOCK_K):
+          k = tl.load(k_ptrs)
+          acc += tl.dot(q, k)   # q used repeatedly
+          ...
+    pattern_after: |
+      # Prefetch outside loop (warm cache)
+      # (pseudo; actual prefetch API may differ by backend/compiler lowering)
+      tl.prefetch(q_ptrs)  # bring q closer (L1) without allocating regs long-term
+
+      for k0 in range(0, K, BLOCK_K):
+          # Load right before use (short liveness)
+          q = tl.load(q_ptrs)   # q live only for a short window
+          k = tl.load(k_ptrs)
+          acc += tl.dot(q, k)
+          ...
+    expected_speedup: "1.05-1.15x (selective; can regress if cache misses dominate)"
+    applies_to:
+      - attention
+      - flashattention
+      - dot_in_loop
+      - reduction_in_loop
+
+  - id: reduce_liveness_duplicate_load_for_multi_use
+    name: "Reduce liveness when operand has multiple uses (duplicate loads near each use)"
+    stage: memory_access
+    description: "If a large tensor has multiple distant uses, reload near each use to shorten live ranges"
+    rationale: |
+      If a large tensor is used in multiple regions far apart (e.g., two loops or two stages),
+      keeping it live across both regions can reserve registers too long. On XPU, reloading
+      from L1 can be cheaper than spilling registers to memory.
+    pattern_before: |
+      q = tl.load(q_ptrs)        # q stays live a long time
+      for ...:
+          acc += tl.dot(q, k)
+          ...
+      for ...:
+          acc2 += tl.dot(q, k2)  # second use far away keeps q live across both loops
+          ...
+    pattern_after: |
+      tl.prefetch(q_ptrs)
+      for ...:
+          q = tl.load(q_ptrs)    # short liveness
+          acc += tl.dot(q, k)
+          ...
+      for ...:
+          q = tl.load(q_ptrs)    # reload for second stage
+          acc2 += tl.dot(q, k2)
+          ...
+    expected_speedup: "0.95-1.10x (only when it avoids spills; otherwise may regress)"
+    applies_to:
+      - attention
+      - multi_stage_kernels
+      - dot_in_loop
+
+  - id: avoid_long_lived_large_tiles_across_control_flow
+    name: "Avoid long-lived tiles across control-flow splits (two-loop / masked attention patterns)"
+    stage: memory_access
+    description: "Prefer loading tiles inside each loop when control-flow creates long liveness (off-band/on-band)"
+    rationale: |
+      Control-flow splits (e.g., two loops for masked/unmasked regions) often extend the
+      lifetime of large tiles (Q) across both loops. On XPU, that increases GRF pressure.
+      Loading inside each loop reduces the live range and can prevent spills.
+    pattern_before: |
+      q = tl.load(Q_block_ptr)    # q live across both loops
+      for start_n in range(lo, hi, BLOCK_N):
+          ... qk += tl.dot(q, k) ...
+      for start_n in range(lo, hi, BLOCK_N):
+          ... qk += tl.dot(q, k) ...  # second loop extends q lifetime
+    pattern_after: |
+      tl.prefetch(Q_block_ptr)
+      for start_n in range(lo, hi, BLOCK_N):
+          q = tl.load(Q_block_ptr)    # load per-iteration or per-loop (shorter liveness)
+          ... qk += tl.dot(q, k) ...
+      for start_n in range(lo, hi, BLOCK_N):
+          q = tl.load(Q_block_ptr)    # reload for second loop
+          ... qk += tl.dot(q, k) ...
+    expected_speedup: "1.05-1.10x (most likely on masked/causal variants)"
+    applies_to:
+      - attention
+      - flashattention
+      - causal_mask
+
+  - id: trade_bandwidth_for_regs_when_spilling
+    name: "Prefer extra loads over GRF spills (XPU-first rule)"
+    stage: memory_access
+    description: "When register pressure is high, allow re-loads (from cache) to reduce spills"
+    rationale: |
+      When GRF pressure is high, the real cost is often spilling to memory.
+      Reloading a tile (especially if it hits in L1) can be cheaper than spilling
+      and enables other compiler optimizations (unrolling/scheduling).
+    pattern_before: |
+      # Keep many intermediates live to avoid re-loads
+      a = tl.load(...)
+      b = tl.load(...)
+      c = tl.load(...)
+      # long epilogue chain keeps many values live
+      y = f(g(h(a,b,c,...)))
+    pattern_after: |
+      # Shorten live ranges: recompute/reload where cheap
+      tl.prefetch(...)
+      a = tl.load(...)   # load near use
+      y = f(a)
+      # if needed later, reload instead of keeping live
+      a2 = tl.load(...)
+      z = g(a2)
+    expected_speedup: "workload-dependent; key benefit is avoiding catastrophic regressions"
+    applies_to:
+      - flashattention
+      - long_epilogues
+      - register_heavy_kernels
+
+  - id: do_not_apply_if_cache_eviction_likely
+    name: "Do NOT sink loads if cache eviction is likely (small L1 / high conflict risk)"
+    stage: memory_access
+    description: "Guard against turning cheap L1 loads into expensive global loads"
+    rationale: |
+      The sink-load approach assumes the data remains in L1 after prefetch.
+      If cache conflicts/evictions are likely, sinking loads into the loop can increase
+      global memory traffic and regress performance.
+    pattern_before: |
+      # Always sink loads
+      tl.prefetch(ptrs)
+      for ...:
+          x = tl.load(ptrs)   # becomes expensive if evicted
+          ...
+    pattern_after: |
+      # Keep original load placement OR stage to a closer explicitly-managed buffer (if available)
+      x = tl.load(ptrs)       # load once if it avoids repeated global misses
+      for ...:
+          use(x)
+    expected_speedup: "prevents regressions"
+    applies_to:
+      - cache_sensitive
+      - small_cache_targets
+      - very_large_working_sets
+
+  - id: mem_atomic_relaxed_for_accumulation
+    name: "Use sem='relaxed' for commutative atomic accumulation"
+    stage: memory_access
+    description: "Relaxed semantics for atomic_add when ordering doesn't matter"
+    rationale: |
+      When multiple programs accumulate partial sums into the same output
+      (e.g., Stream K partial tiles), the order of additions doesn't matter.
+      Using sem='relaxed' avoids unnecessary memory ordering overhead.
+    pattern_after: |
+      tl.atomic_add(c_ptr_, acc, mask=mask, sem='relaxed')
+    expected_speedup: "avoids synchronization overhead vs stricter semantics"
+    applies_to: [stream_k, split_accumulation, reduction]
+
+  - id: mem_atomic_fallback_from_descriptors
+    name: "Fall back from descriptors/block pointers to manual pointers for atomic stores"
+    stage: memory_access
+    description: "Use manual pointer arithmetic when atomic operations are needed"
+    rationale: |
+      Tensor descriptors (desc.store) and block pointer stores do not support
+      atomic operations. When partial-tile accumulation requires tl.atomic_add,
+      you must compute pointers manually. This is the standard pattern for
+      Stream K partial tiles.
+    pattern_before: |
+      # Cannot do this:
+      c_desc.atomic_add(...)   # NOT SUPPORTED
+    pattern_after: |
+      rm = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+      rn = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+      c_ptr_ = c_ptr + rm[:, None] * stride_cm + rn[None, :] * stride_cn
+      mask = (rm < M)[:, None] & (rn < N)[None, :]
+      tl.atomic_add(c_ptr_, acc, mask=mask, sem='relaxed')
+    expected_speedup: "N/A (required fallback when atomics are needed)"
+    applies_to: [stream_k, partial_tiles, split_accumulation]

@@ -1,0 +1,112 @@
+# Dtype Optimization Patterns for Intel XPU
+
+patterns:
+  - id: dtype_float64_to_float32
+    name: "Float64 to Float32 Accumulator"
+    stage: dtype_fix
+    description: "Replace float64 accumulators with float32"
+    rationale: |
+      float64 throughput is 16-32x slower than float32 on GPUs/XPUs.
+      This is the single biggest performance killer in many kernels.
+      Using float64 alone can cap performance at around 2 TFLOPS on Intel XPU.
+    pattern_before: |
+      acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float64)
+      a = a_fp32.to(tl.float64)
+      b = b_fp32.to(tl.float64)
+    pattern_after: |
+      acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+      # No need to convert inputs - keep as float32
+    expected_speedup: "5-10x"
+    applies_to:
+      - gemm
+      - matmul
+      - reduction
+    examples:
+      - before: |
+          @triton.jit
+          def kernel(a_ptr, b_ptr, c_ptr, ...):
+              acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float64)
+              for k in range(K):
+                  a = tl.load(a_ptr + ...).to(tl.float64)
+                  b = tl.load(b_ptr + ...).to(tl.float64)
+                  acc = tl.dot(a, b, acc)
+        after: |
+          @triton.jit
+          def kernel(a_ptr, b_ptr, c_ptr, ...):
+              acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+              for k in range(K):
+                  a = tl.load(a_ptr + ...)
+                  b = tl.load(b_ptr + ...)
+                  acc = tl.dot(a, b, acc)
+
+  - id: dtype_input_conversion
+    name: "Remove Unnecessary Type Conversions"
+    stage: dtype_fix
+    description: "Avoid converting inputs to higher precision unnecessarily"
+    rationale: |
+      Converting float16 inputs to float64 for computation wastes bandwidth
+      and compute. Use float32 accumulators with float16 inputs for best
+      performance on modern accelerators.
+    pattern_before: |
+      x = tl.load(x_ptr + offsets).to(tl.float64)
+      result = x * x  # float64 computation
+    pattern_after: |
+      x = tl.load(x_ptr + offsets)  # Keep as float16
+      x_fp32 = x.to(tl.float32)  # Upcast to float32 only if needed
+      result = x_fp32 * x_fp32
+    expected_speedup: "2-4x"
+    applies_to:
+      - elementwise
+      - reduction
+
+  - id: dtype_prepack_bf16
+    name: "Pre-pack weights and inputs to bf16 before kernel launch"
+    stage: dtype_fix
+    description: |
+      Convert weights to bf16 at _pack_weights() time and inputs to bf16
+      before kernel launch, instead of loading fp32 and converting in-kernel.
+    rationale: |
+      Loading fp32 data and converting to bf16 inside the kernel wastes
+      memory bandwidth:
+        - fp32 load: 4 bytes per element from global memory
+        - In-kernel .to(tl.bfloat16): discards half the loaded data
+        - Net: 2x wasted bandwidth in the K-loop (the hottest path)
+
+      Pre-packing to bf16 means the kernel loads 2 bytes per element directly.
+      For a GEMM with K-loop iterations, this halves the memory traffic for
+      both A and B tiles — often the difference between 2x and 4x+ speedup.
+    pattern_before: |
+      # In _pack_weights():
+      self.weight_t = w.to(device).t().contiguous()       # stored as fp32
+
+      # In forward():
+      x = x.to(device).contiguous()                       # fp32 input
+
+      # In kernel K-loop:
+      a = tl.load(a_block_ptr, boundary_check=(0, 1))     # loads 4B per element
+      a = a.to(tl.bfloat16)                               # converts to 2B — 2x waste
+      b = tl.load(b_block_ptr, boundary_check=(0, 1))
+      b = b.to(tl.bfloat16)
+      acc += tl.dot(a, b)
+    pattern_after: |
+      # In _pack_weights():
+      self.weight_t = w.to(device).t().contiguous().to(torch.bfloat16)  # bf16
+
+      # In forward():
+      x = x.to(device, torch.bfloat16).contiguous()       # bf16 input
+
+      # In kernel K-loop (no conversion needed):
+      a = tl.load(a_block_ptr, boundary_check=(0, 1))     # loads 2B directly
+      b = tl.load(b_block_ptr, boundary_check=(0, 1))
+      acc = tl.dot(a, b, acc=acc)                          # fused accumulate
+    expected_speedup: "1.5-2x (halves K-loop memory traffic)"
+    applies_to:
+      - gemm
+      - matmul
+      - attention
+      - inference
+    notes: |
+      - Keep bias and epilogue vectors in fp32 (small, precision-sensitive)
+      - Combine with grf_mode='256' and tl.dot(a, b, acc=acc) for best results
+      - Only for inference; training needs fp32 gradients
+      - Works with both block pointers and tensor descriptors

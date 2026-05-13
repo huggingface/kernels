@@ -85,17 +85,17 @@ stdenv.mkDerivation {
 
   installPhase =
     let
+      gccMajor = lib.versions.major stdenv.cc.cc.version;
       wrapperArgs = [
         "--add-flags -B${stdenv.cc.libc}/lib"
         "--add-flags -B${placeholder "out"}/lib/crt"
-        "--add-flags -B${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.uname.processor}-unknown-linux-gnu/${stdenv.cc.cc.version}"
+        "--add-flags -B${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.uname.processor}-redhat-linux/${gccMajor}"
         "--add-flags '-isysroot ${stdenv.cc.libc_dev}'"
         "--add-flags '-isystem ${stdenv.cc.libc_dev}/include'"
-        "--add-flags -I${stdenv.cc.cc}/include/c++/${stdenv.cc.version}"
-        "--add-flags -I${stdenv.cc.cc}/include/c++/${stdenv.cc.version}/x86_64-unknown-linux-gnu"
+        "--add-flags -I${stdenv.cc.cc}/include/c++/${gccMajor}"
+        "--add-flags -I${stdenv.cc.cc}/include/c++/${gccMajor}/x86_64-redhat-linux"
         "--add-flags -L${stdenv.cc.cc}/lib"
-        "--add-flags -L${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.uname.processor}-unknown-linux-gnu/${stdenv.cc.version}"
-        "--add-flags -L${stdenv.cc.cc.libgcc}/lib"
+        "--add-flags -L${stdenv.cc.cc}/lib/gcc/${stdenv.hostPlatform.uname.processor}-redhat-linux/${gccMajor}"
       ];
     in
     ''

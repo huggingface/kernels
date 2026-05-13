@@ -5,6 +5,7 @@
   stdenvNoCC,
 
   autoPatchelfHook,
+  fakeroot,
 
   manylinuxPackages,
 
@@ -22,6 +23,7 @@
 
 let
   filters = {
+    gcc-toolset-13-binutils-gold = [ "gcc-toolset-13-binutils" ];
     glibc = [
       "glibc-common"
       "libxcrypt"
@@ -35,6 +37,8 @@ let
       "glibc"
       "glibc-common"
     ];
+    pam = [ "libpwquality" ];
+    policycoreutils = [ "rpm" ];
     platform-python-setuptools = [ "platform-python" ];
     python3-libs = [ "platform-python" ];
     rpm-libs = [ "rpm" ];
@@ -49,16 +53,17 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     autoPatchelfHook
+    fakeroot
     rpmextract
   ];
 
   buildInputs = map (dep: manylinuxPackages.${dep}) filteredDeps;
 
-  # Extract RPM packages using rpmextract
+  # Extract RPM packages using rpmextract. The package set has some
+  # setuid/setgid binaries. Use fakeroot to avoid extraction errors.
   unpackPhase = ''
-    echo "sources: $srcs"
     for src in $srcs; do
-      rpmextract "$src"
+      fakeroot rpmextract "$src"
     done
   '';
 
@@ -67,7 +72,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     mkdir -p $out
 
-    if [ -d opt/rh/gcc-toolset-14/root ]; then
+    if [ -d opt/rh/gcc-toolset-13/root ]; then
+      root=opt/rh/gcc-toolset-13/root
+    elif [ -d opt/rh/gcc-toolset-14/root ]; then
       root=opt/rh/gcc-toolset-14/root
     else
       root=.

@@ -158,6 +158,36 @@
     ],
     "version": "8.30"
   },
+  "cracklib": {
+    "deps": [
+      "glibc",
+      "gzip",
+      "zlib"
+    ],
+    "components": [
+      {
+        "name": "cracklib",
+        "sha256": "5d0b69be590d57a28c7fa26b05ac801ab4325b94933c9b0c077616bc4dac8df2",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/cracklib-2.9.6-15.el8.x86_64.rpm",
+        "version": "2.9.6"
+      }
+    ],
+    "version": "2.9.6"
+  },
+  "cracklib-dicts": {
+    "deps": [
+      "cracklib"
+    ],
+    "components": [
+      {
+        "name": "cracklib-dicts",
+        "sha256": "3d37b903be1d431e3d5fca1bc476f6122a8dddba5f0882a5a1f1517630333cd2",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/cracklib-dicts-2.9.6-15.el8.x86_64.rpm",
+        "version": "2.9.6"
+      }
+    ],
+    "version": "2.9.6"
+  },
   "crypto-policies": {
     "deps": [],
     "components": [
@@ -200,6 +230,21 @@
       }
     ],
     "version": "7.61.1"
+  },
+  "diffutils": {
+    "deps": [
+      "glibc",
+      "info"
+    ],
+    "components": [
+      {
+        "name": "diffutils",
+        "sha256": "6a4a315f5dbfedfa5d8483552019acfb9dd904b93e8dd0e8a4436905a00a7d3b",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/diffutils-3.6-6.el8.x86_64.rpm",
+        "version": "3.6"
+      }
+    ],
+    "version": "3.6"
   },
   "elfutils-debuginfod-client": {
     "deps": [
@@ -331,6 +376,262 @@
       }
     ],
     "version": "7.6.4"
+  },
+  "gcc-toolset-13": {
+    "deps": [
+      "gcc-toolset-13-annobin-plugin-gcc",
+      "gcc-toolset-13-binutils",
+      "gcc-toolset-13-dwz",
+      "gcc-toolset-13-gcc",
+      "gcc-toolset-13-gcc-cxx",
+      "gcc-toolset-13-gcc-gfortran",
+      "gcc-toolset-13-gdb",
+      "gcc-toolset-13-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13",
+        "sha256": "642034c87aa1c862f2f5c08f98371adf6f66c3b0ad9ff788699af54814bf92bb",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-13.0-2.el8.x86_64.rpm",
+        "version": "13.0"
+      }
+    ],
+    "version": "13.0"
+  },
+  "gcc-toolset-13-annobin-docs": {
+    "deps": [
+      "gcc-toolset-13-runtime"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-annobin-docs",
+        "sha256": "9382788cefa3df15656a744cbfcf48042b8bacaa5da2e694df1d5484f7f0c784",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-annobin-docs-12.92-1.el8_10.noarch.rpm",
+        "version": "12.92"
+      }
+    ],
+    "version": "12.92"
+  },
+  "gcc-toolset-13-annobin-plugin-gcc": {
+    "deps": [
+      "gcc-toolset-13-annobin-docs",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "libgcc",
+      "libstdcxx"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-annobin-plugin-gcc",
+        "sha256": "948a6974078c86f4ba61afa55b309bc1f102afd6b46625479cf1897d0b6defb5",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-annobin-plugin-gcc-12.92-1.el8_10.x86_64.rpm",
+        "version": "12.92"
+      }
+    ],
+    "version": "12.92"
+  },
+  "gcc-toolset-13-binutils": {
+    "deps": [
+      "coreutils",
+      "elfutils-debuginfod-client",
+      "gcc-toolset-13-binutils-gold",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "jansson",
+      "libgcc",
+      "libstdcxx",
+      "policycoreutils"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-binutils",
+        "sha256": "cad37a92c03fb7876fc2c36e34c77c3159447f32c294e6e2a842374e9011c5e7",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-binutils-2.40-21.el8.x86_64.rpm",
+        "version": "2.40"
+      }
+    ],
+    "version": "2.40"
+  },
+  "gcc-toolset-13-binutils-gold": {
+    "deps": [
+      "gcc-toolset-13-binutils",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "jansson",
+      "libgcc",
+      "libstdcxx"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-binutils-gold",
+        "sha256": "34f7fcaeb5490edfc9968c19aa60fb515b8da5b32eb81e2b523604c4c3f81c1a",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-binutils-gold-2.40-21.el8.x86_64.rpm",
+        "version": "2.40"
+      }
+    ],
+    "version": "2.40"
+  },
+  "gcc-toolset-13-dwz": {
+    "deps": [
+      "elfutils-libelf",
+      "gcc-toolset-13-runtime",
+      "glibc"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-dwz",
+        "sha256": "8e19a2c6d5a719cd5332bf2d22e95bdd14d86bf2d7e1e798435bac56e79ad4e2",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-dwz-0.14-0.el8.x86_64.rpm",
+        "version": "0.14"
+      }
+    ],
+    "version": "0.14"
+  },
+  "gcc-toolset-13-gcc": {
+    "deps": [
+      "gcc-toolset-13-binutils",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "gmp",
+      "libgcc",
+      "libgomp",
+      "libmpc",
+      "libzstd",
+      "make",
+      "mpfr",
+      "zlib"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-gcc",
+        "sha256": "b6680896f26484930f5195af66539746196e32fdc3eb1e9c343c82be40fd3b36",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-gcc-13.3.1-2.2.el8_10.x86_64.rpm",
+        "version": "13.3.1"
+      }
+    ],
+    "version": "13.3.1"
+  },
+  "gcc-toolset-13-gcc-cxx": {
+    "deps": [
+      "gcc-toolset-13-gcc",
+      "gcc-toolset-13-libstdcxx-devel",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "gmp",
+      "libmpc",
+      "libstdcxx",
+      "libzstd",
+      "mpfr",
+      "zlib"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-gcc-cxx",
+        "sha256": "cba19230d63e1c6f220ab9b61f941ab20dfd2c9e81aed82545961cbe83ecf523",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-gcc-c++-13.3.1-2.2.el8_10.x86_64.rpm",
+        "version": "13.3.1"
+      }
+    ],
+    "version": "13.3.1"
+  },
+  "gcc-toolset-13-gcc-gfortran": {
+    "deps": [
+      "gcc-toolset-13-gcc",
+      "gcc-toolset-13-libquadmath-devel",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "gmp",
+      "libgfortran",
+      "libmpc",
+      "libzstd",
+      "mpfr",
+      "zlib"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-gcc-gfortran",
+        "sha256": "a7edd6dff8e951ef521f510eb6cb6590dfb38f6bfcce1b043c3ff8cd97dafea3",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-gcc-gfortran-13.3.1-2.2.el8_10.x86_64.rpm",
+        "version": "13.3.1"
+      }
+    ],
+    "version": "13.3.1"
+  },
+  "gcc-toolset-13-gdb": {
+    "deps": [
+      "boost-regex",
+      "elfutils-debuginfod-client",
+      "expat",
+      "gcc-toolset-13-runtime",
+      "glibc",
+      "gmp",
+      "guile",
+      "libbabeltrace",
+      "libgcc",
+      "libipt",
+      "libstdcxx",
+      "mpfr",
+      "ncurses-libs",
+      "python3-libs",
+      "readline",
+      "source-highlight",
+      "xz-libs",
+      "zlib"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-gdb",
+        "sha256": "139e168f7154554af6f1df69139c594fd52f631dc4a4c319b2cc56f72dff519d",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-gdb-12.1-4.el8.x86_64.rpm",
+        "version": "12.1"
+      }
+    ],
+    "version": "12.1"
+  },
+  "gcc-toolset-13-libquadmath-devel": {
+    "deps": [
+      "gcc-toolset-13-gcc",
+      "gcc-toolset-13-runtime",
+      "libquadmath"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-libquadmath-devel",
+        "sha256": "db6941bda4b3944e479d04dee0e5b343437aa8ce40a4ea12f1e6da4740565afa",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-libquadmath-devel-13.3.1-2.2.el8_10.x86_64.rpm",
+        "version": "13.3.1"
+      }
+    ],
+    "version": "13.3.1"
+  },
+  "gcc-toolset-13-libstdcxx-devel": {
+    "deps": [
+      "gcc-toolset-13-runtime",
+      "libstdcxx"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-libstdcxx-devel",
+        "sha256": "5d0a8e7231f2d970943b6faf44c64cb1130af1f041e85966a3d9e383c6c3943f",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-libstdc++-devel-13.3.1-2.2.el8_10.x86_64.rpm",
+        "version": "13.3.1"
+      }
+    ],
+    "version": "13.3.1"
+  },
+  "gcc-toolset-13-runtime": {
+    "deps": [
+      "scl-utils"
+    ],
+    "components": [
+      {
+        "name": "gcc-toolset-13-runtime",
+        "sha256": "763b3a9001290630be2bee2a35d36e87bea6a60d15d817a8ce1338d6402fdbc0",
+        "url": "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/Packages/gcc-toolset-13-runtime-13.0-2.el8.x86_64.rpm",
+        "version": "13.0"
+      }
+    ],
+    "version": "13.0"
   },
   "gcc-toolset-14": {
     "deps": [
@@ -767,6 +1068,21 @@
     ],
     "version": "2.0.14"
   },
+  "gzip": {
+    "deps": [
+      "coreutils",
+      "glibc"
+    ],
+    "components": [
+      {
+        "name": "gzip",
+        "sha256": "e4ece722b559e9e1c70697376006130e5293d1ae10ca9f0b2dbb763ee1b4684e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/gzip-1.9-13.el8_5.x86_64.rpm",
+        "version": "1.9"
+      }
+    ],
+    "version": "1.9"
+  },
   "info": {
     "deps": [
       "glibc",
@@ -839,8 +1155,8 @@
     "components": [
       {
         "name": "krb5-libs",
-        "sha256": "7f823e630b26af62660d6208179019174fae47e5332bf825e4af975f2ac68464",
-        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/krb5-libs-1.18.2-33.el8_10.x86_64.rpm",
+        "sha256": "fccdb0b269912b7a8e43c8eb2a33fa64bc10d2976efeaaa7702aa4462d901c2d",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/krb5-libs-1.18.2-34.el8_10.x86_64.rpm",
         "version": "1.18.2"
       }
     ],
@@ -1023,6 +1339,22 @@
     ],
     "version": "5.3.28"
   },
+  "libfdisk": {
+    "deps": [
+      "glibc",
+      "libblkid",
+      "libuuid"
+    ],
+    "components": [
+      {
+        "name": "libfdisk",
+        "sha256": "06ea29f4748eb1fb49191389d4aa871390b5a30702f7b003fb4405154a3c9192",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libfdisk-2.32.1-48.el8_10.x86_64.rpm",
+        "version": "2.32.1"
+      }
+    ],
+    "version": "2.32.1"
+  },
   "libffi": {
     "deps": [
       "glibc"
@@ -1048,6 +1380,21 @@
       }
     ],
     "version": "8.5.0"
+  },
+  "libgcrypt": {
+    "deps": [
+      "glibc",
+      "libgpg-error"
+    ],
+    "components": [
+      {
+        "name": "libgcrypt",
+        "sha256": "dcfe1f4d19c8ade6902d188949e902971a5b0807643e1c37f0419340ac890a64",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libgcrypt-1.8.5-7.el8_6.x86_64.rpm",
+        "version": "1.8.5"
+      }
+    ],
+    "version": "1.8.5"
   },
   "libgfortran": {
     "deps": [
@@ -1079,6 +1426,20 @@
       }
     ],
     "version": "8.5.0"
+  },
+  "libgpg-error": {
+    "deps": [
+      "glibc"
+    ],
+    "components": [
+      {
+        "name": "libgpg-error",
+        "sha256": "33d01156d568b36a34c79e7723494f6ecc66e3551a09927c9c01018fb92c524f",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libgpg-error-1.31-1.el8.x86_64.rpm",
+        "version": "1.31"
+      }
+    ],
+    "version": "1.31"
   },
   "libicu": {
     "deps": [
@@ -1187,6 +1548,23 @@
     ],
     "version": "1.2.0"
   },
+  "libpwquality": {
+    "deps": [
+      "cracklib",
+      "cracklib-dicts",
+      "glibc",
+      "pam"
+    ],
+    "components": [
+      {
+        "name": "libpwquality",
+        "sha256": "7adadce43bd50d322cce20cd62e4856f147de863fc967d72189d3810b8c2475e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libpwquality-1.4.4-6.el8.x86_64.rpm",
+        "version": "1.4.4"
+      }
+    ],
+    "version": "1.4.4"
+  },
   "libquadmath": {
     "deps": [
       "glibc"
@@ -1212,6 +1590,41 @@
         "name": "libselinux",
         "sha256": "7ccf8f7e950ee28d9843370d3e23790cbcd6ca86780a39f33bfbfd9d12fac4ba",
         "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libselinux-2.9-11.el8_10.x86_64.rpm",
+        "version": "2.9"
+      }
+    ],
+    "version": "2.9"
+  },
+  "libselinux-utils": {
+    "deps": [
+      "glibc",
+      "libselinux",
+      "libsepol",
+      "pcre2"
+    ],
+    "components": [
+      {
+        "name": "libselinux-utils",
+        "sha256": "76028a39b22dd751329ecfd7488746f3237f00c2ca7e99e0dad1b97d2360bc8e",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libselinux-utils-2.9-11.el8_10.x86_64.rpm",
+        "version": "2.9"
+      }
+    ],
+    "version": "2.9"
+  },
+  "libsemanage": {
+    "deps": [
+      "audit-libs",
+      "bzip2-libs",
+      "glibc",
+      "libselinux",
+      "libsepol"
+    ],
+    "components": [
+      {
+        "name": "libsemanage",
+        "sha256": "522c60f6171166989e91a8120a0da1b85fbe100cd4ecdf84a4668309704b8e28",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libsemanage-2.9-12.el8_10.x86_64.rpm",
         "version": "2.9"
       }
     ],
@@ -1244,6 +1657,20 @@
       }
     ],
     "version": "2.11"
+  },
+  "libsmartcols": {
+    "deps": [
+      "glibc"
+    ],
+    "components": [
+      {
+        "name": "libsmartcols",
+        "sha256": "b37070e72bf6c0b67448c2f773ab71292086a26394c58faef5a52586a45a56e3",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libsmartcols-2.32.1-48.el8_10.x86_64.rpm",
+        "version": "2.32.1"
+      }
+    ],
+    "version": "2.32.1"
   },
   "libstdcxx": {
     "deps": [
@@ -1318,6 +1745,21 @@
       }
     ],
     "version": "0.9.9"
+  },
+  "libutempter": {
+    "deps": [
+      "glibc",
+      "shadow-utils"
+    ],
+    "components": [
+      {
+        "name": "libutempter",
+        "sha256": "584243ae908563ba3186cc142a31083ea4a2ecdb740be2dc421f3e89d81b2e16",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/libutempter-1.1.6-14.el8.x86_64.rpm",
+        "version": "1.1.6"
+      }
+    ],
+    "version": "1.1.6"
   },
   "libuuid": {
     "deps": [
@@ -1561,6 +2003,29 @@
     ],
     "version": "0.23.22"
   },
+  "pam": {
+    "deps": [
+      "audit-libs",
+      "coreutils",
+      "cracklib",
+      "glibc",
+      "libdb",
+      "libnsl2",
+      "libpwquality",
+      "libselinux",
+      "libtirpc",
+      "libxcrypt"
+    ],
+    "components": [
+      {
+        "name": "pam",
+        "sha256": "797a514f9cb9ff1b8fb03e09b89db64b752934abcf644835ff479b7ee84a24bf",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/pam-1.3.1-39.el8_10.x86_64.rpm",
+        "version": "1.3.1"
+      }
+    ],
+    "version": "1.3.1"
+  },
   "pcre": {
     "deps": [
       "glibc"
@@ -1622,6 +2087,32 @@
       }
     ],
     "version": "39.2.0"
+  },
+  "policycoreutils": {
+    "deps": [
+      "audit-libs",
+      "coreutils",
+      "diffutils",
+      "gawk",
+      "glibc",
+      "grep",
+      "libselinux",
+      "libselinux-utils",
+      "libsemanage",
+      "libsepol",
+      "rpm",
+      "sed",
+      "util-linux"
+    ],
+    "components": [
+      {
+        "name": "policycoreutils",
+        "sha256": "8589a7577169e8c6644e3eaea8f170f0610471c1248a6e1a5c656a3fc49c59bf",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/policycoreutils-2.9-26.el8_10.x86_64.rpm",
+        "version": "2.9"
+      }
+    ],
+    "version": "2.9"
   },
   "popt": {
     "deps": [
@@ -1813,6 +2304,28 @@
     ],
     "version": "2.12.2"
   },
+  "shadow-utils": {
+    "deps": [
+      "audit-libs",
+      "coreutils",
+      "glibc",
+      "libacl",
+      "libattr",
+      "libselinux",
+      "libsemanage",
+      "libxcrypt",
+      "setup"
+    ],
+    "components": [
+      {
+        "name": "shadow-utils",
+        "sha256": "af9d214739735c6ba91e5dcdccd7545441e38870014853bc1d96c9063815c9e0",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/shadow-utils-4.6-23.el8_10.x86_64.rpm",
+        "version": "4.6"
+      }
+    ],
+    "version": "4.6"
+  },
   "source-highlight": {
     "deps": [
       "boost-regex",
@@ -1847,6 +2360,29 @@
     ],
     "version": "3.26.0"
   },
+  "systemd-libs": {
+    "deps": [
+      "coreutils",
+      "glibc",
+      "grep",
+      "libcap",
+      "libgcc",
+      "libgcrypt",
+      "libmount",
+      "lz4-libs",
+      "sed",
+      "xz-libs"
+    ],
+    "components": [
+      {
+        "name": "systemd-libs",
+        "sha256": "66e15119529799c96d118e684e2db7d64fd69b94988a5aec93482c4b7b716660",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/systemd-libs-239-82.el8_10.16.x86_64.rpm",
+        "version": "239"
+      }
+    ],
+    "version": "239"
+  },
   "tzdata": {
     "deps": [],
     "components": [
@@ -1858,6 +2394,35 @@
       }
     ],
     "version": "2026a"
+  },
+  "util-linux": {
+    "deps": [
+      "audit-libs",
+      "coreutils",
+      "glibc",
+      "libblkid",
+      "libcap-ng",
+      "libfdisk",
+      "libmount",
+      "libselinux",
+      "libsmartcols",
+      "libutempter",
+      "libuuid",
+      "libxcrypt",
+      "ncurses-libs",
+      "pam",
+      "systemd-libs",
+      "zlib"
+    ],
+    "components": [
+      {
+        "name": "util-linux",
+        "sha256": "ce7d92b3f31d653bf0ed3cd67fc5ed8ac9af71e0f581b082a4261020c0cee3c9",
+        "url": "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/Packages/util-linux-2.32.1-48.el8_10.x86_64.rpm",
+        "version": "2.32.1"
+      }
+    ],
+    "version": "2.32.1"
   },
   "xz-libs": {
     "deps": [

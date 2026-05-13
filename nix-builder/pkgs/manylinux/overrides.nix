@@ -20,6 +20,44 @@ applyOverrides {
       '';
     };
 
+  cracklib-dicts =
+    { }:
+    prevAttrs: {
+      postInstall = ''
+        cp -r usr/share $out
+        ln -sf $out/share/cracklib/pw_dict.hwm $out/lib64/cracklib_dict.hwm
+        ln -sf $out/share/cracklib/pw_dict.pwd $out/lib64/cracklib_dict.pwd
+        ln -sf $out/share/cracklib/pw_dict.pwi $out/lib64/cracklib_dict.pwi
+        rm -rf $out/sbin
+      '';
+    };
+
+  gcc-toolset-13-gcc =
+    {
+      gcc-toolset-13-binutils,
+      libgcc,
+      stdenv,
+    }:
+    prevAttrs: {
+      postInstall = ''
+        # We don't care about compiling for 32-bit, so yank files to avoid
+        # dealing with broken symlinks.
+        rm -rf $out/lib/gcc/x86_64-redhat-linux/13/32
+
+        # Remove binutils symlinks to force gcc to use a wrapped binutils
+        # from the environment. Without using a wrapper, no rpaths will
+        # be set, etc.
+        for l in $(find $out/libexec -type l); do
+          if [ -f ${gcc-toolset-13-binutils}/bin/$(basename $l) ]; then
+            rm -f $l
+          fi
+        done
+
+        # Not sure yet if we need this.
+        find $out -name 'ld.gold' -type l -delete
+      '';
+    };
+
   gcc-toolset-14-gcc =
     {
       gcc-toolset-14-binutils,
@@ -43,6 +81,16 @@ applyOverrides {
 
         # Not sure yet if we need this.
         find $out -name 'ld.gold' -type l -delete
+      '';
+    };
+
+  gcc-toolset-13-gcc-cxx =
+    { stdenv }:
+    prevAttrs: {
+      postInstall = ''
+        # We don't care about compiling for 32-bit, so yank files to avoid
+        # dealing with broken symlinks.
+        rm -rf $out/lib/gcc/x86_64-redhat-linux/13/32
       '';
     };
 
@@ -71,7 +119,7 @@ applyOverrides {
     prevAttrs: {
       postInstall =
         let
-          ldArch = builtins.replaceStrings [ "_" ] [ "-" ] stdenv.hostPlatform.linuxArch;
+          ldArch = builtins.replaceStrings [ "_" ] [ "-" ] stdenv.hostPlatform.uname.processor;
         in
         ''
           # Update linker script with Nix paths.
@@ -95,4 +143,13 @@ applyOverrides {
         rm -rf $out/lib64/python*
       '';
     };
+
+  #shadow-utils = { fakeroot, rpmextract }:
+  #prevAttrs: {
+  #  unpackPhase = ''
+  #    for src in $srcs; do
+  #      ${fakeroot}/bin/fakeroot ${rpmextract}/bin/rpmextract "$src"
+  #    done
+  #  '';
+  #};
 }

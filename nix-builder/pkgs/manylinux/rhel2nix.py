@@ -6,7 +6,7 @@ import json
 import re
 import sys
 import xml.etree.ElementTree as ET
-from typing import Dict, Set
+from typing import Dict, List, Set
 from urllib.parse import urljoin
 from urllib.request import urlopen
 
@@ -38,11 +38,14 @@ def _rpm_sort_key(s: str) -> str:
     return re.sub(r"(\d+)", lambda m: m.group(1).zfill(20), s)
 
 
-parser = argparse.ArgumentParser(description="Parse intel oneapi repository")
-parser.add_argument("version", help="oneAPI version")
+parser = argparse.ArgumentParser(description="Parse AlmaLinux repository")
+parser.add_argument("version", help="AlmaLinux version")
 parser.add_argument("arch", help="Target architecture (e.g. x86_64, aarch64)")
 
-TARGET_PACKAGE_NAME = "gcc-toolset-14"
+TARGET_PACKAGE_NAMES = [
+    "gcc-toolset-13",
+    "gcc-toolset-14",
+]
 
 
 class Package:
@@ -221,23 +224,17 @@ def get_all_packages(arch: str) -> Dict[str, Package]:
     return packages, provides_map
 
 
-def find_target_package(all_packages: Dict[str, Package], version: str) -> Package:
-    """Find intel-deep-learning-essentials package with the specified version"""
-    version_suffix = ".".join(version.split(".")[:2])  # 2025.2.0 -> 2025.2
-
-    # Fallback: Look for version-specific package names
-    for name, pkg in all_packages.items():
-        if name.startswith(TARGET_PACKAGE_NAME):
-            print(
-                f"Found version match: {name} with version {pkg.version}",
-                file=sys.stderr,
-            )
-            return pkg
-
-    # If not found, raise an exception
-    raise Exception(
-        f"Could not find {TARGET_PACKAGE_NAME} package with version suffix -{version_suffix}"
-    )
+def find_target_packages(all_packages: Dict[str, Package]) -> List[Package]:
+    """Find all target packages defined in TARGET_PACKAGE_NAMES."""
+    found = []
+    for target in TARGET_PACKAGE_NAMES:
+        pkg = all_packages.get(target)
+        if pkg is not None:
+            print(f"Found target package: {pkg.name} {pkg.version}", file=sys.stderr)
+            found.append(pkg)
+        else:
+            raise Exception(f"Could not find target package '{target}' in repository")
+    return found
 
 
 def resolve_dependencies_recursively(
@@ -296,28 +293,27 @@ def resolve_dependencies_recursively(
 def main():
     args = parser.parse_args()
 
-    print("Fetching all packages from oneAPI repository...", file=sys.stderr)
+    print("Fetching all packages from AlmaLinux repository...", file=sys.stderr)
 
     # Step 1: Get all packages from repository
     all_packages, provides_map = get_all_packages(args.arch)
     print(f"Found {len(all_packages)} total packages in repository", file=sys.stderr)
 
-    # Step 2: Find toolset package with specified version
+    # Step 2: Find all target packages
     try:
-        target_package = find_target_package(all_packages, args.version)
-        print(
-            f"Found target package: {target_package.name} {target_package.version}",
-            file=sys.stderr,
-        )
+        target_packages = find_target_packages(all_packages)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Step 3: Recursively resolve all dependencies
+    # Step 3: Recursively resolve all dependencies, accumulating into one dict
+    # so shared dependencies are only included once.
     print("Resolving dependencies recursively...", file=sys.stderr)
-    required_packages = resolve_dependencies_recursively(
-        target_package, all_packages, provides_map
-    )
+    required_packages: Dict[str, Package] = {}
+    for target_package in target_packages:
+        resolve_dependencies_recursively(
+            target_package, all_packages, provides_map, required_packages
+        )
 
     print(f"Total required packages: {len(required_packages)}", file=sys.stderr)
 

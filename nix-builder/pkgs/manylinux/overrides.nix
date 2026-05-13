@@ -41,23 +41,16 @@ applyOverrides {
 
         # Not sure yet if we need this.
         find $out -name 'ld.gold' -type l -delete
-
-        substituteInPlace $out/lib/gcc/${stdenv.hostPlatform.linuxArch}-redhat-linux/14/libgcc_s.so \
-          --replace-fail "/lib64/libgcc_s.so.1" "${libgcc}/lib/libgcc_s.so.1"
       '';
     };
 
   gcc-toolset-14-gcc-cxx =
-    { libstdcxx, stdenv }:
+    { stdenv }:
     prevAttrs: {
       postInstall = ''
         # We don't care about compiling for 32-bit, so yank files to avoid
         # dealing with broken symlinks.
         rm -rf $out/lib/gcc/x86_64-redhat-linux/14/32
-
-        # Update linker script with Nix paths.
-        substituteInPlace $out/lib/gcc/${stdenv.hostPlatform.linuxArch}-redhat-linux/14/libstdc++.so \
-          --replace-fail "/usr/lib64/libstdc++.so.6" "${libstdcxx}/lib/libstdc++.so.6"
       '';
     };
 

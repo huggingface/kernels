@@ -12,6 +12,16 @@
 let
   inherit (lib.fixedPoints) extends composeManyExtensions;
 
+  nixpkgs_20191230 = import (pkgs.fetchFromGitHub {
+    owner = "NixOS";
+    repo = "nixpkgs";
+    rev = "a9eb3eed170fa916e0a8364e5227ee661af76fde";
+    hash = "sha256-1ycrr9HMrGA3ZDM8qmKcZICBupE5UShnIIhPRWdvAzA=";
+  }) { inherit (pkgs.stdenv.hostPlatform) system; };
+
+    # Fails to build with old gcc, so build with old version.
+    glibc_2_28 = nixpkgs_20191230.callPackage ./glibc_2_28 { };
+
   fixedPoint = final: {
     inherit lib packageMetadata;
   };
@@ -41,7 +51,7 @@ let
           chmod -R u+w $out
 
           # Move around libraries to reflect what Nix expects for gccForLibs.
-          mv $out/lib/gcc/${stdenv.hostPlatform.linuxArch}-redhat-linux/14/{libstdc++*,libgcc_s*,libgomp*} $out/lib
+          mv $out/lib/gcc/${pkgs.stdenv.hostPlatform.linuxArch}-redhat-linux/14/{libstdc++*,libgcc_s*,libgomp*} $out/lib
 
           # Update linker script with Nix paths.
           substituteInPlace $out/lib/libstdc++.so \
@@ -56,7 +66,7 @@ let
 
       binutils = pkgs.wrapBintoolsWith {
         bintools = final.gcc-toolset-14-binutils;
-        libc = final.glibc;
+        libc = glibc_2_28;
       };
 
       gcc = pkgs.wrapCCWith {
@@ -64,7 +74,7 @@ let
         coreutils = final.coreutils;
         cc = final.gcc-unwrapped;
         gccForLibs = final.gcc-unwrapped;
-        libc = final.glibc;
+        libc = glibc_2_28;
         isGNU = true;
         useCcForLibs = true;
       };

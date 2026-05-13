@@ -15,7 +15,12 @@ use crate::util::{check_or_infer_kernel_dir, parse_build};
 fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let init_path = ["torch-ext", "tvm-ffi-ext"]
         .iter()
-        .map(|ext_dir| kernel_dir.join(ext_dir).join(module_name).join("__init__.py"))
+        .map(|ext_dir| {
+            kernel_dir
+                .join(ext_dir)
+                .join(module_name)
+                .join("__init__.py")
+        })
         .find(|path| path.exists())?;
 
     let content = fs::read_to_string(init_path).ok()?;

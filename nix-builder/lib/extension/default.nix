@@ -1,4 +1,5 @@
 {
+  cudaSupport ? torch.cudaSupport,
   rocmSupport ? torch.rocmSupport,
   xpuSupport ? torch.xpuSupport,
 
@@ -17,7 +18,25 @@
 }:
 
 let
-  effectiveStdenv = if stdenv.hostPlatform.isLinux then manylinux_2_28.stdenv else stdenv;
+  cudaBackendStdenv = import ../../pkgs/cuda/backendStdenv {
+    inherit (pkgs)
+      _cuda
+      config
+      lib
+      stdenvAdapters
+      ;
+    inherit (cudaPackages) cudaMajorMinorVersion;
+    # Allow auto-selection to use manylinux gcc versions.
+    pkgs = manylinux_2_28;
+    stdenv = manylinux_2_28.stdenv;
+  };
+  effectiveStdenv =
+    if stdenv.hostPlatform.isLinux && cudaSupport then
+      cudaBackendStdenv
+    else if stdenv.hostPlatform.isLinux then
+      manylinux_2_28.stdenv
+    else
+      stdenv;
 
   # CLR that uses the provided stdenv, which can be different from the default
   # to support old glibc/libstdc++ versions.
@@ -32,17 +51,7 @@ let
   );
 
   cuda_nvcc = cudaPackages.cuda_nvcc.override {
-    backendStdenv = import ../../pkgs/cuda/backendStdenv {
-      inherit (pkgs)
-        _cuda
-        config
-        lib
-        pkgs
-        stdenvAdapters
-        ;
-      inherit (cudaPackages) cudaMajorMinorVersion;
-      stdenv = effectiveStdenv;
-    };
+    backendStdenv = cudaBackendStdenv;
   };
 
   oneapi-torch-dev = xpuPackages.oneapi-torch-dev.override { stdenv = effectiveStdenv; };

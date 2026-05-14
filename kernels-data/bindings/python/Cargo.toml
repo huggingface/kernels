@@ -16,3 +16,4 @@ pyo3 = { version = "0.26", features = ["abi3", "abi3-py38"] }
 
 [dependencies.kernels-data]
 path = "../.."
+version = "0.14.1"

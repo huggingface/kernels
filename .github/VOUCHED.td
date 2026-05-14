@@ -7,6 +7,7 @@ NickCao
 YangKai0616
 burtenshaw
 danieldk
+danielfleischer
 drbh
 kaixuanliu
 mfuntowicz

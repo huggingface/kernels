@@ -143,13 +143,4 @@ applyOverrides {
         rm -rf $out/lib64/python*
       '';
     };
-
-  #shadow-utils = { fakeroot, rpmextract }:
-  #prevAttrs: {
-  #  unpackPhase = ''
-  #    for src in $srcs; do
-  #      ${fakeroot}/bin/fakeroot ${rpmextract}/bin/rpmextract "$src"
-  #    done
-  #  '';
-  #};
 }

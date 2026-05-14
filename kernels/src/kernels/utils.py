@@ -244,8 +244,52 @@ def install_kernel(
     """
     api = _get_hf_api(user_agent=user_agent)
 
-    if not local_files_only:
-        repo_id, revision = resolve_status(api, repo_id, revision)
+    # Honour both the explicit flag and the global HF_HUB_OFFLINE env var.
+    # When offline, list_repo_tree() is unavailable, so we discover build
+    # variants from the local snapshot and skip any network requests.
+    offline = local_files_only or constants.HF_HUB_OFFLINE
+
+    if offline:
+        try:
+            repo_path = Path(
+                str(
+                    api.snapshot_download(
+                        repo_id,
+                        repo_type="kernel",
+                        cache_dir=CACHE_DIR,
+                        revision=revision,
+                        local_files_only=True,
+                    )
+                )
+            )
+        except Exception as exc:
+            raise FileNotFoundError(
+                f"Kernel {repo_id!r} (revision: {revision!r}) is not available in the local "
+                "cache. Run without HF_HUB_OFFLINE to download it first."
+            ) from exc
+
+        variants = get_variants_local(repo_path / "build")
+        variant = resolve_variant(variants, backend)
+
+        if variant is None:
+            raise FileNotFoundError(
+                f"Cannot find a build variant for this system in {repo_id} "
+                f"(revision: {revision}) from local cache. "
+                f"Available variants: {', '.join(v.variant_str for v in variants)}"
+            )
+
+        try:
+            return _find_kernel_in_repo_path(
+                repo_path,
+                variant=variant,
+                variant_locks=variant_locks,
+            )
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Cannot load kernel from local cache for repo {repo_id} (revision: {revision})"
+            )
+
+    repo_id, revision = resolve_status(api, repo_id, revision)
 
     variants = get_variants(api, repo_id=repo_id, revision=revision)
     variant = resolve_variant(variants, backend)
@@ -265,7 +309,7 @@ def install_kernel(
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
-                local_files_only=local_files_only,
+                local_files_only=False,
             )
         )
     )

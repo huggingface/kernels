@@ -1,6 +1,9 @@
 final: prev:
 
 let
+  # Merge the AlmaLinux gcc packages into a single package that resembles
+  # a nixpkgs unwrapped gcc as much as possible. This allows us to use the
+  # standard gcc wrappers from nixpkgs.
   mkGccUnwrapped =
     {
       lib,

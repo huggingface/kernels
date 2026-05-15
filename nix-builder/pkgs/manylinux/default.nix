@@ -18,20 +18,21 @@ let
   composed = lib.composeManyExtensions [
     # Base package set.
     (import ./components.nix)
-    # Overrides (adding dependencies, etc.)
+
+    # Package-specific overrides.
     (import ./overrides.nix)
 
-    # Unwrapped gcc (gcc13-unwrapped, etc.)
+    # Unwrapped gcc (gcc13-unwrapped, gcc14-unwrapped, etc.)
     (import ./gcc-unwrapped.nix)
 
-    # stdenvs (gcc13Stdenv, etc.)
+    # stdenvs (gcc13Stdenv, gcc14Stdeng, etc.)
     (import ./stdenv.nix { inherit pkgs; })
 
     # Use the gcc14 stdenv by default.
     (final: prev: { stdenv = final.gcc14Stdenv; })
 
     # Create a CUDA stdenv that uses a gcc that is compatible with the
-    # default CUDA version of the package set.
+    # CUDA version set as the default in nixpkgs.
     (import ./cuda-backend-stdenv.nix { inherit pkgs; })
 
   ];

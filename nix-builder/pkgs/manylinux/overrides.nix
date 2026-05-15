@@ -32,6 +32,12 @@ applyOverrides {
       '';
     };
 
+  gcc-toolset-13-binutils-gold =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "gcc-toolset-13-binutils" ];
+    };
+
   gcc-toolset-13-gcc =
     {
       gcc-toolset-13-binutils,
@@ -151,6 +157,53 @@ applyOverrides {
             --replace-fail "/lib64/libmvec.so.1" "$out/lib/libmvec.so.1" \
             --replace-fail "/usr/lib64/libmvec_nonshared.a" "$out/lib/libmvec_nonshared.a"
         '';
+
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [
+        "glibc-common"
+        "libxcrypt"
+      ];
+    };
+
+  glibc-common =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [
+        "glibc"
+        "libselinux"
+      ];
+    };
+
+  glibc-headers =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "glibc" ];
+    };
+
+  glibc-minimal-langpack =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [
+        "glibc"
+        "glibc-common"
+      ];
+    };
+
+  pam =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "libpwquality" ];
+    };
+
+  platform-python-setuptools =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "platform-python" ];
+    };
+
+  policycoreutils =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "rpm" ];
     };
 
   python3-libs =
@@ -161,5 +214,13 @@ applyOverrides {
         cp -r $out/lib64/python* $out/lib
         rm -rf $out/lib64/python*
       '';
+
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "platform-python" ];
+    };
+
+  rpm-libs =
+    { }:
+    prevAttrs: {
+      passthru.filterDeps = prevAttrs.passthru.filterDeps ++ [ "rpm" ];
     };
 }

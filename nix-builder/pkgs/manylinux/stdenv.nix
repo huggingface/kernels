@@ -10,7 +10,8 @@ let
     hash = "sha256-1ycrr9HMrGA3ZDM8qmKcZICBupE5UShnIIhPRWdvAzA=";
   }) { inherit (pkgs.stdenv.hostPlatform) system; };
 
-  # Fails to build with old gcc, so build with old version.
+  # Fails to build with current gcc versions, so build with an
+  # old gcc from around the time glibc 2.28 was released.
   glibc_2_28 = nixpkgs_20191230.callPackage ./glibc_2_28 { };
 
   mkBinutilsWrapped =

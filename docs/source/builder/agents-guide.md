@@ -2,7 +2,7 @@
 
 Code agents are a good fit to build custom kernels because the hard part is not just writing in Domain Specific Language (DSLs) like CUDA. You also need the right project layout, PyTorch bindings, architecture-specific choices, model-specific integration, and trustworthy benchmarks. 
 
-Kernels on Hugging Face are compatible with agents via skills and the `hf` CLI. The `cuda-kernels` and `rocm-kernels` skills contain knowledge so an agent can generate and publish a complete kernel project, instead of isolated snippets.
+Kernels on Hugging Face are compatible with agents via skills and the `hf` CLI. The `cuda-kernels`, `rocm-kernels`, and `xpu-kernels` skills contain knowledge so an agent can generate and publish a complete kernel project, instead of isolated snippets.
 
 This guide is for **authoring new kernels**. If you only want to **load an existing precompiled kernel**, use `get_kernel()` instead.
 

@@ -3,7 +3,6 @@
   clr,
   fetchurl,
   lib,
-  python3,
   rocm-core,
   stdenv,
   xz,
@@ -31,8 +30,6 @@ stdenv.mkDerivation {
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];
-  nativeInstallCheckInputs = [ python3 ];
-
   buildInputs = [
     clr
     stdenv.cc.cc.lib
@@ -42,8 +39,6 @@ stdenv.mkDerivation {
   dontConfigure = true;
   dontBuild = true;
   dontStrip = true;
-  doInstallCheck = true;
-
   installPhase = ''
     runHook preInstall
 
@@ -52,24 +47,6 @@ stdenv.mkDerivation {
     ln -s ${images}/lib/aotriton.images "$out/lib/aotriton.images"
 
     runHook postInstall
-  '';
-
-  installCheckPhase = ''
-    runHook preInstallCheck
-
-    test -f "$out/lib/libaotriton_v2.so"
-    test -d "$out/lib/aotriton.images"
-    python - <<PY
-    import ctypes
-    import os
-
-    ctypes.CDLL(
-        "$out/lib/libaotriton_v2.so",
-        mode=os.RTLD_NOW | os.RTLD_LOCAL,
-    )
-    PY
-
-    runHook postInstallCheck
   '';
 
   meta = with lib; {

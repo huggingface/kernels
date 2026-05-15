@@ -8,7 +8,6 @@
   callPackage,
   manylinux_2_28,
   stdenv,
-  stdenvGlibc_2_27,
   cudaPackages,
   rocmPackages,
   writeScriptBin,

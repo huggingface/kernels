@@ -12,7 +12,7 @@ This is the repository card of {{ repo_id }} that has been pushed on the Hub. It
 # make sure `kernels` is installed: `pip install -U kernels`
 from kernels import get_kernel
 
-kernel_module = get_kernel("{{ repo_id }}")
+kernel_module = get_kernel("{{ repo_id }}", version={{ version }})
 {{ functions[0] }} = kernel_module.{{ functions[0] }}
 
 {{ functions[0] }}(...)
@@ -42,7 +42,7 @@ Function list not available.
 ## Benchmarks
 {% if has_benchmark %}
 
-Benchmarking script is available for this kernel. Run `kernels benchmark {{ repo_id }}`.
+Benchmarking script is available for this kernel. Run `kernels benchmark {{ repo_id }} --version {{ version }}`.
 {% else %}
 
 No benchmark available yet.

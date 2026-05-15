@@ -13,12 +13,17 @@ use kernels_data::config::Build;
 use crate::util::{check_or_infer_kernel_dir, parse_build};
 
 fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
-    let init_path = kernel_dir
-        .join("torch-ext")
-        .join(module_name)
-        .join("__init__.py");
+    let init_path = ["torch-ext", "tvm-ffi-ext"]
+        .iter()
+        .map(|ext_dir| {
+            kernel_dir
+                .join(ext_dir)
+                .join(module_name)
+                .join("__init__.py")
+        })
+        .find(|path| path.exists())?;
 
-    let content = fs::read_to_string(&init_path).ok()?;
+    let content = fs::read_to_string(init_path).ok()?;
     let stmts = ast::Suite::parse(&content, "<module>").ok()?;
 
     for stmt in stmts {
@@ -126,6 +131,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
         .wrap_err("Cannot get card template")?
         .render(context! {
             repo_id => repo_id,
+            version => build.general.version,
             functions => functions,
             layers => layers,
             has_benchmark => has_benchmark,

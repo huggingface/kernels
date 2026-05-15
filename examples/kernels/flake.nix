@@ -33,7 +33,7 @@
             sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
-          name = "cpp20-symbols";
+          name = "cpp20-symbols-kernel";
           path = ./cpp20-symbols;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }

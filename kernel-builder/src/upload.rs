@@ -319,7 +319,7 @@ fn collect_benchmark_commit_ops(
             || file
                 .split('/')
                 .next_back()
-                .is_some_and(|n| n.starts_with("benchmark"))
+                .is_some_and(|n| n.starts_with("benchmark") && n.ends_with(".py"))
         {
             operations.push(CommitOperation::Delete {
                 path_in_repo: file.clone(),

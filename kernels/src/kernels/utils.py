@@ -383,13 +383,6 @@ def get_kernel(
         result = activation.relu(out, x)
         ```
     """
-    if revision is None and version is None:
-        raise ValueError(
-            "A kernel version or revision must be specified. "
-            "Use `version=<major>` for a stable kernel API version or `revision=<branch/tag/commit>` "
-            "for an explicit Hub revision. See: https://huggingface.co/docs/kernels/migration"
-        )
-
     override = _get_local_kernel_overrides().get(repo_id, None)
     if override is not None:
         return get_local_kernel(override)

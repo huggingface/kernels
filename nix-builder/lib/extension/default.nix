@@ -18,21 +18,9 @@
 }:
 
 let
-  cudaBackendStdenv = import ../../pkgs/cuda/backendStdenv {
-    inherit (pkgs)
-      _cuda
-      config
-      lib
-      stdenvAdapters
-      ;
-    inherit (cudaPackages) cudaMajorMinorVersion;
-    # Allow auto-selection to use manylinux gcc versions.
-    pkgs = manylinux_2_28;
-    stdenv = manylinux_2_28.stdenv;
-  };
   effectiveStdenv =
     if stdenv.hostPlatform.isLinux && cudaSupport then
-      cudaBackendStdenv
+      manylinux_2_28.cudaBackendStdenv
     else if stdenv.hostPlatform.isLinux then
       manylinux_2_28.stdenv
     else
@@ -51,7 +39,7 @@ let
   );
 
   cuda_nvcc = cudaPackages.cuda_nvcc.override {
-    backendStdenv = cudaBackendStdenv;
+    backendStdenv = manylinux_2_28.cudaBackendStdenv;
   };
 
   oneapi-torch-dev = xpuPackages.oneapi-torch-dev.override { stdenv = effectiveStdenv; };

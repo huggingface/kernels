@@ -27,7 +27,13 @@ let
     # stdenvs (gcc13Stdenv, etc.)
     (import ./stdenv.nix { inherit pkgs; })
 
+    # Use the gcc14 stdenv by default.
     (final: prev: { stdenv = final.gcc14Stdenv; })
+
+    # Create a CUDA stdenv that uses a gcc that is compatible with the
+    # default CUDA version of the package set.
+    (import ./cuda-backend-stdenv.nix { inherit pkgs; })
+
   ];
 in
 lib.makeScope newScope (lib.extends composed fixedPoint)

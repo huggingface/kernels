@@ -61,7 +61,7 @@ def select_revision_or_version(
         return resolve_version_spec_as_ref(repo_id, version).target_commit
     else:
         raise ValueError(
-        "A kernel version or revision must be specified. "
-        "Use `version=<major>` for a stable kernel API version or `revision=<branch/tag/commit>` "
-        "for an explicit Hub revision. See: https://huggingface.co/docs/kernels/migration"
-    )
+            "A kernel version or revision must be specified. "
+            "Use `version=<major>` for a stable kernel API version or `revision=<branch/tag/commit>` "
+            "for an explicit Hub revision. See: https://huggingface.co/docs/kernels/migration"
+        )

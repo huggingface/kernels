@@ -464,7 +464,7 @@ def run_benchmark_class(
     from kernels import get_kernel, get_local_kernel
 
     if is_local:
-        kernel = get_local_kernel(Path(repo_id), "activation")
+        kernel = get_local_kernel(Path(repo_id))
     else:
         kernel = get_kernel(repo_id, revision=revision)
 

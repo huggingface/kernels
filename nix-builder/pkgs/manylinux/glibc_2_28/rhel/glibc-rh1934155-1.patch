@@ -1,0 +1,20 @@
+support: Pass environ to child process
+
+Pass environ to posix_spawn so that the child process can inherit
+environment of the test.
+
+(cherry picked from commit e958490f8c74e660bd93c128b3bea746e268f3f6)
+
+diff --git a/support/support_subprocess.c b/support/support_subprocess.c
+index 12c79ff6b0859877..4573350d775ac4c8 100644
+--- a/support/support_subprocess.c
++++ b/support/support_subprocess.c
+@@ -84,7 +84,7 @@ support_subprogram (const char *file, char *const argv[])
+   xposix_spawn_file_actions_addclose (&fa, result.stdout_pipe[1]);
+   xposix_spawn_file_actions_addclose (&fa, result.stderr_pipe[1]);
+ 
+-  result.pid = xposix_spawn (file, &fa, NULL, argv, NULL);
++  result.pid = xposix_spawn (file, &fa, NULL, argv, environ);
+ 
+   xclose (result.stdout_pipe[1]);
+   xclose (result.stderr_pipe[1]);

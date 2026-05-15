@@ -1,0 +1,72 @@
+commit 5dab5eafb3dc2f72aaab911084d127d1af45a08c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 15 11:37:18 2019 +0200
+
+    malloc: Various cleanups for malloc/tst-mxfast
+    
+    (cherry picked from commit f9769a239784772453d595bc2f4bed8739810e06)
+
+diff --git a/malloc/Makefile b/malloc/Makefile
+index bf9a53cb7c5ebacb..19c2a846ed8ce049 100644
+--- a/malloc/Makefile
++++ b/malloc/Makefile
+@@ -39,7 +39,6 @@ tests := mallocbug tst-malloc tst-valloc tst-calloc tst-obstack \
+ 	 tst-malloc-too-large \
+ 	 tst-malloc-stats-cancellation \
+ 	 tst-tcfree1 tst-tcfree2 tst-tcfree3 \
+-	 tst-mxfast \
+ 
+ tests-static := \
+ 	 tst-interpose-static-nothread \
+@@ -55,7 +54,7 @@ tests-internal += \
+ 	 tst-dynarray-at-fail \
+ 
+ ifneq (no,$(have-tunables))
+-tests += tst-malloc-usable-tunables
++tests += tst-malloc-usable-tunables tst-mxfast
+ tests-static += tst-malloc-usable-static-tunables
+ endif
+ 
+diff --git a/malloc/tst-mxfast.c b/malloc/tst-mxfast.c
+index 7a371d2f9d2f0005..7a7750bc71024bfb 100644
+--- a/malloc/tst-mxfast.c
++++ b/malloc/tst-mxfast.c
+@@ -1,5 +1,5 @@
+ /* Test that glibc.malloc.mxfast tunable works.
+-   Copyright (C) 2018, 2019 Free Software Foundation, Inc.
++   Copyright (C) 2019 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -21,14 +21,14 @@
+    the fast bins.  */
+ 
+ #include <malloc.h>
+-#include <assert.h>
++#include <support/check.h>
+ 
+ int
+-do_test(void)
++do_test (void)
+ {
+   struct mallinfo m;
+-  char * volatile p1;
+-  char * volatile p2;
++  char *volatile p1;
++  char *volatile p2;
+ 
+   /* Arbitrary value; must be in default fastbin range.  */
+   p1 = malloc (3);
+@@ -36,10 +36,10 @@ do_test(void)
+   p2 = malloc (512);
+   free (p1);
+ 
+-  m = mallinfo();
++  m = mallinfo ();
+ 
+   /* This will fail if there are any blocks in the fastbins.  */
+-  assert (m.smblks == 0);
++  TEST_COMPARE (m.smblks, 0);
+ 
+   /* To keep gcc happy.  */
+   free (p2);

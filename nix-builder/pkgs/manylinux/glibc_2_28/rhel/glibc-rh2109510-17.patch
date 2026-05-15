@@ -1,0 +1,78 @@
+commit bd13cb19f5e15e9e9a92a536e755fd93a97a67f6
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Aug 19 11:16:32 2022 +0200
+
+    scripts/glibcelf.py: Add hashing support
+    
+    ELF and GNU hashes can now be computed using the elf_hash and
+    gnu_hash functions.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Tested-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/elf/tst-glibcelf.py b/elf/tst-glibcelf.py
+index bf15a3bad4479e08..e5026e2289df206b 100644
+--- a/elf/tst-glibcelf.py
++++ b/elf/tst-glibcelf.py
+@@ -240,6 +240,24 @@ def check_constant_values(cc):
+             error('{}: glibcelf has {!r}, <elf.h> has {!r}'.format(
+                 name, glibcelf_value, elf_h_value))
+ 
++def check_hashes():
++    for name, expected_elf, expected_gnu in (
++            ('', 0, 0x1505),
++            ('PPPPPPPPPPPP', 0, 0x9f105c45),
++            ('GLIBC_2.0', 0xd696910, 0xf66c3dd5),
++            ('GLIBC_2.34', 0x69691b4, 0xc3f3f90c),
++            ('GLIBC_PRIVATE', 0x963cf85, 0x692a260)):
++        for convert in (lambda x: x, lambda x: x.encode('UTF-8')):
++            name = convert(name)
++            actual_elf = glibcelf.elf_hash(name)
++            if actual_elf != expected_elf:
++                error('elf_hash({!r}): {:x} != 0x{:x}'.format(
++                    name, actual_elf, expected_elf))
++            actual_gnu = glibcelf.gnu_hash(name)
++            if actual_gnu != expected_gnu:
++                error('gnu_hash({!r}): {:x} != 0x{:x}'.format(
++                    name, actual_gnu, expected_gnu))
++
+ def main():
+     """The main entry point."""
+     parser = argparse.ArgumentParser(
+@@ -251,6 +269,7 @@ def main():
+     check_duplicates()
+     check_constant_prefixes()
+     check_constant_values(cc=args.cc)
++    check_hashes()
+ 
+     if errors_encountered > 0:
+         print("note: errors encountered:", errors_encountered)
+diff --git a/scripts/glibcelf.py b/scripts/glibcelf.py
+index de0509130ed9ad47..5c8f46f590722384 100644
+--- a/scripts/glibcelf.py
++++ b/scripts/glibcelf.py
+@@ -1158,5 +1158,24 @@ class Image:
+         self._stringtab[sh_link] = strtab
+         return strtab
+ 
++def elf_hash(s):
++    """Computes the ELF hash of the string."""
++    acc = 0
++    for ch in s:
++        if type(ch) is not int:
++            ch = ord(ch)
++        acc = ((acc << 4) + ch) & 0xffffffff
++        top = acc & 0xf0000000
++        acc = (acc ^ (top >> 24)) & ~top
++    return acc
++
++def gnu_hash(s):
++    """Computes the GNU hash of the string."""
++    h = 5381
++    for ch in s:
++        if type(ch) is not int:
++            ch = ord(ch)
++        h = (h * 33 + ch) & 0xffffffff
++    return h
+ 
+ __all__ = [name for name in dir() if name[0].isupper()]

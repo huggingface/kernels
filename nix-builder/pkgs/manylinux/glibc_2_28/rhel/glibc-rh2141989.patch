@@ -1,0 +1,101 @@
+This change is equivalent to this upstream change:
+
+commit 22a46dee24351fd5f4f188ad80554cad79c82524
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Nov 8 14:15:02 2022 +0100
+
+    Linux: Support __IPC_64 in sysvctl *ctl command arguments (bug 29771)
+
+    Old applications pass __IPC_64 as part of the command argument because
+    old glibc did not check for unknown commands, and passed through the
+    arguments directly to the kernel, without adding __IPC_64.
+    Applications need to continue doing that for old glibc compatibility,
+    so this commit enables this approach in current glibc.
+
+    For msgctl and shmctl, if no translation is required, make
+    direct system calls, as we did before the time64 changes.  If
+    translation is required, mask __IPC_64 from the command argument.
+
+    For semctl, the union-in-vararg argument handling means that
+    translation is needed on all architectures.
+
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+The downstream versions of shmctl and msgctl did not produce
+errors because they lacked a -1 error return path.  There is no
+translation requirement downstream on any architecture, so we
+can remove the switch from shmctl and msgctl.
+
+For semctl, we have to do the varargs translation, so this patch adds
+the same masking as the upstream commit.
+
+diff --git a/sysdeps/unix/sysv/linux/msgctl.c b/sysdeps/unix/sysv/linux/msgctl.c
+index 3362f4562f58f28b..7280cba31a8815a2 100644
+--- a/sysdeps/unix/sysv/linux/msgctl.c
++++ b/sysdeps/unix/sysv/linux/msgctl.c
+@@ -29,20 +29,6 @@
+ int
+ __new_msgctl (int msqid, int cmd, struct msqid_ds *buf)
+ {
+-  switch (cmd)
+-    {
+-    case IPC_RMID:
+-    case IPC_SET:
+-    case IPC_STAT:
+-    case MSG_STAT:
+-    case MSG_STAT_ANY:
+-    case IPC_INFO:
+-    case MSG_INFO:
+-      break;
+-    default:
+-      __set_errno (EINVAL);
+-      return -1;
+-    }
+ #ifdef __ASSUME_DIRECT_SYSVIPC_SYSCALLS
+   return INLINE_SYSCALL_CALL (msgctl, msqid, cmd | __IPC_64, buf);
+ #else
+diff --git a/sysdeps/unix/sysv/linux/semctl.c b/sysdeps/unix/sysv/linux/semctl.c
+index 03c56c69a5412c82..16d3f04fadd039ab 100644
+--- a/sysdeps/unix/sysv/linux/semctl.c
++++ b/sysdeps/unix/sysv/linux/semctl.c
+@@ -42,6 +42,13 @@ __new_semctl (int semid, int semnum, int cmd, ...)
+   union semun arg = { 0 };
+   va_list ap;
+ 
++  /* Some applications pass the __IPC_64 flag in cmd, to invoke
++     previously unsupported commands back when there was no EINVAL
++     error checking in glibc.  Mask the flag for the switch statements
++     below.  msgctl_syscall adds back the __IPC_64 flag for the actual
++     system call.  */
++  cmd &= ~__IPC_64;
++
+   /* Get the argument only if required.  */
+   switch (cmd)
+     {
+diff --git a/sysdeps/unix/sysv/linux/shmctl.c b/sysdeps/unix/sysv/linux/shmctl.c
+index 00768bc47614f9aa..25c5152944a6fcf3 100644
+--- a/sysdeps/unix/sysv/linux/shmctl.c
++++ b/sysdeps/unix/sysv/linux/shmctl.c
+@@ -33,22 +33,6 @@
+ int
+ __new_shmctl (int shmid, int cmd, struct shmid_ds *buf)
+ {
+-  switch (cmd)
+-    {
+-    case IPC_RMID:
+-    case SHM_LOCK:
+-    case SHM_UNLOCK:
+-    case IPC_SET:
+-    case IPC_STAT:
+-    case SHM_STAT:
+-    case SHM_STAT_ANY:
+-    case IPC_INFO:
+-    case SHM_INFO:
+-      break;
+-    default:
+-      __set_errno (EINVAL);
+-      break;
+-    }
+ #ifdef __ASSUME_DIRECT_SYSVIPC_SYSCALLS
+   return INLINE_SYSCALL_CALL (shmctl, shmid, cmd | __IPC_64, buf);
+ #else

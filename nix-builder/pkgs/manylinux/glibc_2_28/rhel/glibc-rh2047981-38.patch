@@ -1,0 +1,44 @@
+commit bc02f1fa2fb302eb8a486794c6b7e4811229b81e
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Mar 25 08:53:42 2022 -0300
+
+    elf: Remove unused functions from tst-audit25(a,b)
+
+diff --git a/elf/tst-audit25a.c b/elf/tst-audit25a.c
+index 49173e862516e876..c2cff8541b3741c3 100644
+--- a/elf/tst-audit25a.c
++++ b/elf/tst-audit25a.c
+@@ -49,14 +49,6 @@ handle_restart (void)
+   return 0;
+ }
+ 
+-static inline bool
+-startswith (const char *str, const char *pre)
+-{
+-  size_t lenpre = strlen (pre);
+-  size_t lenstr = strlen (str);
+-  return lenstr < lenpre ? false : memcmp (pre, str, lenpre) == 0;
+-}
+-
+ static int
+ do_test (int argc, char *argv[])
+ {
+diff --git a/elf/tst-audit25b.c b/elf/tst-audit25b.c
+index a56638d501f9bff5..46391770fdfc1796 100644
+--- a/elf/tst-audit25b.c
++++ b/elf/tst-audit25b.c
+@@ -48,14 +48,6 @@ handle_restart (void)
+   return 0;
+ }
+ 
+-static inline bool
+-startswith (const char *str, const char *pre)
+-{
+-  size_t lenpre = strlen (pre);
+-  size_t lenstr = strlen (str);
+-  return lenstr >= lenpre && memcmp (pre, str, lenpre) == 0;
+-}
+-
+ static int
+ do_test (int argc, char *argv[])
+ {

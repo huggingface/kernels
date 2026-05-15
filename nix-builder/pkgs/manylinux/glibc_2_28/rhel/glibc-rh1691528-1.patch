@@ -1,0 +1,48 @@
+commit ac64195ccd4f320659fd0058bc7524c6fd0b37b4
+Author: DJ Delorie <dj@redhat.com>
+Date:   Wed Mar 20 23:56:59 2019 -0400
+
+    iconv, localedef: avoid floating point rounding differences [BZ #24372]
+    
+    Two cases of "int * 1.4" may result in imprecise results, which
+    in at least one case resulted in i686 and x86-64 producing
+    different locale files.  This replaced that floating point multiply
+    with integer operations.  While the hash table margin is increased
+    from 40% to 50%, testing shows only 2% increase in overall size
+    of the locale archive.
+    
+    https://bugzilla.redhat.com/show_bug.cgi?id=1311954
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/iconv/iconvconfig.c b/iconv/iconvconfig.c
+index d5e8e714233f78d8..696fc8d31231ca2d 100644
+--- a/iconv/iconvconfig.c
++++ b/iconv/iconvconfig.c
+@@ -1079,9 +1079,9 @@ write_output (void)
+ 
+   /* Create the hashing table.  We know how many strings we have.
+      Creating a perfect hash table is not reasonable here.  Therefore
+-     we use open hashing and a table size which is the next prime 40%
++     we use open hashing and a table size which is the next prime 50%
+      larger than the number of strings.  */
+-  hash_size = next_prime (nnames * 1.4);
++  hash_size = next_prime (nnames + nnames >> 1);
+   hash_table = (struct hash_entry *) xcalloc (hash_size,
+ 					      sizeof (struct hash_entry));
+   /* Fill the hash table.  */
+diff --git a/locale/programs/ld-collate.c b/locale/programs/ld-collate.c
+index d2eebcfdbb0677e5..9a1639b999d0e2aa 100644
+--- a/locale/programs/ld-collate.c
++++ b/locale/programs/ld-collate.c
+@@ -2401,8 +2401,8 @@ collate_output (struct localedef_t *locale, const struct charmap_t *charmap,
+ 
+       runp = runp->next;
+     }
+-  /* Add 40% and find the next prime number.  */
+-  elem_size = next_prime (elem_size * 1.4);
++  /* Add 50% and find the next prime number.  */
++  elem_size = next_prime (elem_size + elem_size >> 1);
+ 
+   /* Allocate the table.  Each entry consists of two words: the hash
+      value and an index in a secondary table which provides the index

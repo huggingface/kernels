@@ -1,0 +1,123 @@
+commit 81ecb0ee4970865cbe5d1da733c4879b999c528f
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Sep 19 11:58:46 2019 -0500
+
+    [powerpc] Rename fegetenv_status to fegetenv_control
+    
+    fegetenv_status is used variously to retrieve the FPSCR exception enable
+    bits, rounding mode bits, or both.  These are referred to as the control
+    bits in the POWER ISA.  FPSCR status bits are also returned by the
+    'mffs' and 'mffsl' instructions, but they are uniformly ignored by all
+    uses of fegetenv_status.  Change the name to be reflective of its
+    current and expected use.
+    
+    Reviewed-By: Paul E Murphy <murphyp@linux.ibm.com>
+
+diff --git a/sysdeps/powerpc/fpu/fedisblxcpt.c b/sysdeps/powerpc/fpu/fedisblxcpt.c
+index bdf55ac62f1ffe4f..1273987459655585 100644
+--- a/sysdeps/powerpc/fpu/fedisblxcpt.c
++++ b/sysdeps/powerpc/fpu/fedisblxcpt.c
+@@ -26,7 +26,7 @@ fedisableexcept (int excepts)
+   int result, new;
+ 
+   /* Get current exception mask to return.  */
+-  fe.fenv = curr.fenv = fegetenv_status ();
++  fe.fenv = curr.fenv = fegetenv_control ();
+   result = fenv_reg_to_exceptions (fe.l);
+ 
+   if ((excepts & FE_ALL_INVALID) == FE_ALL_INVALID)
+diff --git a/sysdeps/powerpc/fpu/feenablxcpt.c b/sysdeps/powerpc/fpu/feenablxcpt.c
+index 78ebabed9232c0ad..fa233c305aedd5f6 100644
+--- a/sysdeps/powerpc/fpu/feenablxcpt.c
++++ b/sysdeps/powerpc/fpu/feenablxcpt.c
+@@ -26,7 +26,7 @@ feenableexcept (int excepts)
+   int result, new;
+ 
+   /* Get current exception mask to return.  */
+-  fe.fenv = curr.fenv = fegetenv_status ();
++  fe.fenv = curr.fenv = fegetenv_control ();
+   result = fenv_reg_to_exceptions (fe.l);
+ 
+   if ((excepts & FE_ALL_INVALID) == FE_ALL_INVALID)
+diff --git a/sysdeps/powerpc/fpu/fegetexcept.c b/sysdeps/powerpc/fpu/fegetexcept.c
+index 9d77adea59939ece..6bbf11d9d5df61e5 100644
+--- a/sysdeps/powerpc/fpu/fegetexcept.c
++++ b/sysdeps/powerpc/fpu/fegetexcept.c
+@@ -25,7 +25,7 @@ __fegetexcept (void)
+   fenv_union_t fe;
+   int result = 0;
+ 
+-  fe.fenv = fegetenv_status ();
++  fe.fenv = fegetenv_control ();
+ 
+   if (fe.l & (1 << (31 - FPSCR_XE)))
+       result |= FE_INEXACT;
+diff --git a/sysdeps/powerpc/fpu/fegetmode.c b/sysdeps/powerpc/fpu/fegetmode.c
+index 75493e5f24c8b05b..57d6d5275485ebdc 100644
+--- a/sysdeps/powerpc/fpu/fegetmode.c
++++ b/sysdeps/powerpc/fpu/fegetmode.c
+@@ -21,6 +21,6 @@
+ int
+ fegetmode (femode_t *modep)
+ {
+-  *modep = fegetenv_status ();
++  *modep = fegetenv_control ();
+   return 0;
+ }
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index c3f541c08440b20e..b5c8da1adefe93cb 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -61,7 +61,7 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+    'mffs' on architectures older than "power9" because the additional
+    bits set for 'mffsl' are "don't care" for 'mffs'.  'mffs' is a superset
+    of 'mffsl'.  */
+-#define fegetenv_status()					\
++#define fegetenv_control()					\
+   ({register double __fr;						\
+     __asm__ __volatile__ (						\
+       ".machine push; .machine \"power9\"; mffsl %0; .machine pop"	\
+@@ -85,7 +85,7 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+     __fr.fenv;								\
+   })
+ 
+-/* Like fegetenv_status, but also sets the rounding mode.  */
++/* Like fegetenv_control, but also sets the rounding mode.  */
+ #ifdef _ARCH_PWR9
+ #define fegetenv_and_set_rn(rn) __fe_mffscrn (rn)
+ #else
+@@ -116,7 +116,7 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ 
+ /* Set the last 2 nibbles of the FPSCR, which contain the
+    exception enables and the rounding mode.
+-   'fegetenv_status' retrieves these bits by reading the FPSCR.  */
++   'fegetenv_control' retrieves these bits by reading the FPSCR.  */
+ #define fesetenv_mode(env) __builtin_mtfsf (0b00000011, (env));
+ 
+ /* This very handy macro:
+diff --git a/sysdeps/powerpc/fpu/fesetenv.c b/sysdeps/powerpc/fpu/fesetenv.c
+index 4eab5045c48105e3..252114141cd87f8d 100644
+--- a/sysdeps/powerpc/fpu/fesetenv.c
++++ b/sysdeps/powerpc/fpu/fesetenv.c
+@@ -26,7 +26,7 @@ __fesetenv (const fenv_t *envp)
+ 
+   /* get the currently set exceptions.  */
+   new.fenv = *envp;
+-  old.fenv = fegetenv_status ();
++  old.fenv = fegetenv_control ();
+ 
+   __TEST_AND_EXIT_NON_STOP (old.l, new.l);
+   __TEST_AND_ENTER_NON_STOP (old.l, new.l);
+diff --git a/sysdeps/powerpc/fpu/fesetmode.c b/sysdeps/powerpc/fpu/fesetmode.c
+index 58ba02c0a1e64c27..e5938af04cb71ca1 100644
+--- a/sysdeps/powerpc/fpu/fesetmode.c
++++ b/sysdeps/powerpc/fpu/fesetmode.c
+@@ -27,7 +27,7 @@ fesetmode (const femode_t *modep)
+   /* Logic regarding enabled exceptions as in fesetenv.  */
+ 
+   new.fenv = *modep;
+-  old.fenv = fegetenv_status ();
++  old.fenv = fegetenv_control ();
+   new.l = (new.l & ~FPSCR_STATUS_MASK) | (old.l & FPSCR_STATUS_MASK);
+ 
+   if (old.l == new.l)

@@ -1,0 +1,53 @@
+commit d330f31af68f96dde82840d1e9343b479a8c179e
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Thu Aug 30 11:01:33 2018 -0400
+
+    Fix test failure with -DNDEBUG.
+    
+    The elf/tst-dlopen-aout.c test uses asserts to verify properties of the
+    test execution.  Instead of using assert it should use xpthread_create
+    and xpthread_join to catch errors starting the threads and fail the
+    test.  This shows up in Fedora 28 when building for i686-pc-linux-gnu
+    and using gcc 8.1.1.
+    
+    Tested on i686, and fixes a check failure with -DNDEBUG.
+    
+    Signed-off-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/elf/tst-dlopen-aout.c b/elf/tst-dlopen-aout.c
+index 9038e2096add8798..b0264515cfe62276 100644
+--- a/elf/tst-dlopen-aout.c
++++ b/elf/tst-dlopen-aout.c
+@@ -27,6 +27,7 @@
+ #include <dlfcn.h>
+ #include <stdio.h>
+ #include <pthread.h>
++#include <support/xthread.h>
+ 
+ __thread int x;
+ 
+@@ -45,7 +46,6 @@ do_test (int argc, char *argv[])
+     {
+       pthread_t thr;
+       void *p;
+-      int rc;
+ 
+       p = dlopen (argv[0], RTLD_LAZY);
+       if (p != NULL)
+@@ -53,11 +53,11 @@ do_test (int argc, char *argv[])
+           fprintf (stderr, "dlopen unexpectedly succeeded\n");
+           return 1;
+         }
+-      rc = pthread_create (&thr, NULL, fn, NULL);
+-      assert (rc == 0);
+-
+-      rc = pthread_join (thr, NULL);
+-      assert (rc == 0);
++      /* We create threads to force TLS allocation, which triggers
++	 the original bug i.e. running out of surplus slotinfo entries
++	 for TLS.  */
++      thr = xpthread_create (NULL, fn, NULL);
++      xpthread_join (thr);
+     }
+ 
+   return 0;

@@ -1,0 +1,29 @@
+commit 86140c6223b5d14d773cf3050ffd0d14977c2c2d
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Feb 13 13:34:24 2019 +0000
+
+    Avoid fall-through in test-container if execlp fails.
+    
+    One of the implicit-fallthrough warnings from compiling glibc with
+    -Wextra appears to indicate an actual bug: the test-container code
+    could fall through inappropriately if execlp returns (which only
+    occurs on error).  This patch adds appropriate error handling in this
+    case to avoid that fall-through.
+    
+    Tested for x86_64.
+    
+            * support/test-container.c (recursive_remove): Use FAIL_EXIT1 if
+            execlp returns.
+
+diff --git a/support/test-container.c b/support/test-container.c
+index 1d1aebeaf3412573..f0d9e3060e80bda5 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -361,6 +361,7 @@ recursive_remove (char *path)
+   case 0:
+     /* Child.  */
+     execlp ("rm", "rm", "-rf", path, NULL);
++    FAIL_EXIT1 ("exec rm: %m");
+   default:
+     /* Parent.  */
+     waitpid (child, &status, 0);

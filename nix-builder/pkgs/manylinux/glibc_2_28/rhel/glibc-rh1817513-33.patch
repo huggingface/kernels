@@ -1,0 +1,29 @@
+commit 64fab3633aecc8eadc1338aa8953f8b2f37e3ebf
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Thu Sep 19 12:26:18 2019 +0200
+
+    Fix building support_ptrace.c on i686-gnu.
+    
+    On i686-gnu the build is broken:
+    In file included from support_ptrace.c:22:
+    ../include/sys/prctl.h:2:15: fatal error: sys/prctl.h: No such file or directory
+     #include_next <sys/prctl.h>
+    
+    This patch just removes the unused prctl.h inclusion.
+    
+    ChangeLog:
+    
+            * support/support_ptrace.c: Remove inclusion of sys/prctl.h.
+
+diff --git a/support/support_ptrace.c b/support/support_ptrace.c
+index 616b08cff33022ef..a733adf2c8dfd073 100644
+--- a/support/support_ptrace.c
++++ b/support/support_ptrace.c
+@@ -19,7 +19,6 @@
+ #include <support/check.h>
+ #include <support/xstdio.h>
+ #include <support/xptrace.h>
+-#include <sys/prctl.h>
+ 
+ int
+ support_ptrace_scope (void)

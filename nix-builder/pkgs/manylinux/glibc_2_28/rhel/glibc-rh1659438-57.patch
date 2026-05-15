@@ -1,0 +1,29 @@
+commit 61f5e9470fb397a4c334938ac5a667427d9047df
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Thu Mar 21 09:14:26 2019 +0100
+
+    S390: Mark vx and vxe as important hwcap.
+    
+    This patch adds vx and vxe as important hwcaps
+    which allows one to provide shared libraries
+    tuned for platforms with non-vx/-vxe, vx or vxe.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/dl-procinfo.h (HWCAP_IMPORTANT):
+            Add HWCAP_S390_VX and HWCAP_S390_VXE.
+
+diff --git a/sysdeps/s390/dl-procinfo.h b/sysdeps/s390/dl-procinfo.h
+index b0383bfb4cef7972..f71d64c3ab24e715 100644
+--- a/sysdeps/s390/dl-procinfo.h
++++ b/sysdeps/s390/dl-procinfo.h
+@@ -57,7 +57,8 @@ enum
+ };
+ 
+ #define HWCAP_IMPORTANT (HWCAP_S390_ZARCH | HWCAP_S390_LDISP \
+-			  | HWCAP_S390_EIMM | HWCAP_S390_DFP)
++			 | HWCAP_S390_EIMM | HWCAP_S390_DFP  \
++			 | HWCAP_S390_VX | HWCAP_S390_VXE)
+ 
+ /* We cannot provide a general printing function.  */
+ #define _dl_procinfo(type, word) -1

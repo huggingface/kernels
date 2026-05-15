@@ -1,0 +1,26 @@
+commit b571f3adffdcbed23f35ea39b0ca43809dbb4f5b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Apr 22 19:34:52 2022 +0200
+
+    scripts/glibcelf.py: Mark as UNSUPPORTED on Python 3.5 and earlier
+    
+    enum.IntFlag and enum.EnumMeta._missing_ support are not part of
+    earlier Python versions.
+
+diff --git a/scripts/glibcelf.py b/scripts/glibcelf.py
+index 8f7d0ca184845714..da0d5380f33a195e 100644
+--- a/scripts/glibcelf.py
++++ b/scripts/glibcelf.py
+@@ -28,6 +28,12 @@ import collections
+ import enum
+ import struct
+ 
++if not hasattr(enum, 'IntFlag'):
++    import sys
++    sys.stdout.write(
++        'warning: glibcelf.py needs Python 3.6 for enum support\n')
++    sys.exit(77)
++
+ class _OpenIntEnum(enum.IntEnum):
+     """Integer enumeration that supports arbitrary int values."""
+     @classmethod

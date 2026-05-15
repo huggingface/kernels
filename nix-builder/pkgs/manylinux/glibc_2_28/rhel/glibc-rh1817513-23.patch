@@ -1,0 +1,211 @@
+commit 359653aaacad463d916323f03c0ac3c47405aafa
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jan 16 18:10:56 2019 +0000
+
+    Do not use HP_TIMING_NOW for random bits
+    
+    This patch removes the HP_TIMING_BITS usage for fast random bits and replace
+    with clock_gettime (CLOCK_MONOTONIC).  It has unspecified starting time and
+    nano-second accuracy, so its randomness is significantly better than
+    gettimeofday.
+    
+    Althoug it should incur in more overhead (specially for architecture that
+    support hp-timing), the symbol is also common implemented as a vDSO.
+    
+    Checked on aarch64-linux-gnu, x86_64-linux-gnu, and i686-linux-gnu. I also
+    checked on a i686-gnu build.
+    
+            * include/random-bits.h: New file.
+            * resolv/res_mkquery.c [HP_TIMING_AVAIL] (RANDOM_BITS,
+            (__res_context_mkquery): Remove usage hp-timing usage and replace with
+            random_bits.
+            * resolv/res_send.c [HP_TIMING_AVAIL] (nameserver_offset): Likewise.
+            * sysdeps/posix/tempname.c [HP_TIMING_AVAIL] (__gen_tempname):
+            Likewise.
+
+diff --git a/include/random-bits.h b/include/random-bits.h
+new file mode 100644
+index 0000000000000000..a0651a5a34f80a8d
+--- /dev/null
++++ b/include/random-bits.h
+@@ -0,0 +1,41 @@
++/* Fast pseudo-random bits based on clock_gettime.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifndef _RANDOM_BITS_H
++# define _RANDOM_BITS_H
++
++#include <time.h>
++#include <stdint.h>
++
++/* Provides fast pseudo-random bits through clock_gettime.  It has unspecified
++   starting time, nano-second accuracy, its randomness is significantly better
++   than gettimeofday, and for mostly architectures it is implemented through
++   vDSO instead of a syscall.  Since the source is a system clock, the upper
++   bits will have less entropy. */
++static inline uint32_t
++random_bits (void)
++{
++  struct timespec tv;
++  __clock_gettime (CLOCK_MONOTONIC, &tv);
++  /* Shuffle the lower bits to minimize the clock bias.  */
++  uint32_t ret = tv.tv_nsec ^ tv.tv_sec;
++  ret ^= (ret << 24) | (ret >> 8);
++  return ret;
++}
++
++#endif
+diff --git a/resolv/res_mkquery.c b/resolv/res_mkquery.c
+index 213abeefadf7ece5..4471a8838b1de7ee 100644
+--- a/resolv/res_mkquery.c
++++ b/resolv/res_mkquery.c
+@@ -82,6 +82,7 @@
+  * SOFTWARE.
+  */
+ 
++#include <stdint.h>
+ #include <sys/types.h>
+ #include <sys/param.h>
+ #include <netinet/in.h>
+@@ -92,12 +93,7 @@
+ #include <string.h>
+ #include <sys/time.h>
+ #include <shlib-compat.h>
+-
+-#include <hp-timing.h>
+-#include <stdint.h>
+-#if HP_TIMING_AVAIL
+-# define RANDOM_BITS(Var) { uint64_t v64; HP_TIMING_NOW (v64); Var = v64; }
+-#endif
++#include <random-bits.h>
+ 
+ int
+ __res_context_mkquery (struct resolv_context *ctx, int op, const char *dname,
+@@ -120,16 +116,7 @@ __res_context_mkquery (struct resolv_context *ctx, int op, const char *dname,
+   /* We randomize the IDs every time.  The old code just incremented
+      by one after the initial randomization which still predictable if
+      the application does multiple requests.  */
+-  int randombits;
+-#ifdef RANDOM_BITS
+-  RANDOM_BITS (randombits);
+-#else
+-  struct timeval tv;
+-  __gettimeofday (&tv, NULL);
+-  randombits = (tv.tv_sec << 8) ^ tv.tv_usec;
+-#endif
+-
+-  hp->id = randombits;
++  hp->id = random_bits ();
+   hp->opcode = op;
+   hp->rd = (ctx->resp->options & RES_RECURSE) != 0;
+   hp->rcode = NOERROR;
+diff --git a/resolv/res_send.c b/resolv/res_send.c
+index ac19627634281c2f..55e7fa438e7baac1 100644
+--- a/resolv/res_send.c
++++ b/resolv/res_send.c
+@@ -109,7 +109,7 @@
+ #include <unistd.h>
+ #include <kernel-features.h>
+ #include <libc-diag.h>
+-#include <hp-timing.h>
++#include <random-bits.h>
+ 
+ #if PACKETSZ > 65536
+ #define MAXPACKET       PACKETSZ
+@@ -309,15 +309,7 @@ nameserver_offset (struct __res_state *statp)
+   if ((offset & 1) == 0)
+     {
+       /* Initialization is required.  */
+-#if HP_TIMING_AVAIL
+-      uint64_t ticks;
+-      HP_TIMING_NOW (ticks);
+-      offset = ticks;
+-#else
+-      struct timeval tv;
+-      __gettimeofday (&tv, NULL);
+-      offset = ((tv.tv_sec << 8) ^ tv.tv_usec);
+-#endif
++      offset = random_bits ();
+       /* The lowest bit is the most random.  Preserve it.  */
+       offset <<= 1;
+ 
+diff --git a/sysdeps/posix/tempname.c b/sysdeps/posix/tempname.c
+index 432262a03b6ecc23..3d26f378021680ae 100644
+--- a/sysdeps/posix/tempname.c
++++ b/sysdeps/posix/tempname.c
+@@ -71,22 +71,15 @@
+ #endif
+ 
+ #ifdef _LIBC
+-# include <hp-timing.h>
+-# if HP_TIMING_AVAIL
+-#  define RANDOM_BITS(Var) \
+-  if (__glibc_unlikely (value == UINT64_C (0)))				      \
+-    {									      \
+-      /* If this is the first time this function is used initialize	      \
+-	 the variable we accumulate the value in to some somewhat	      \
+-	 random value.  If we'd not do this programs at startup time	      \
+-	 might have a reduced set of possible names, at least on slow	      \
+-	 machines.  */							      \
+-      struct timeval tv;						      \
+-      __gettimeofday (&tv, NULL);					      \
+-      value = ((uint64_t) tv.tv_usec << 16) ^ tv.tv_sec;		      \
+-    }									      \
+-  HP_TIMING_NOW (Var)
+-# endif
++# include <random-bits.h>
++# define RANDOM_BITS(Var) ((Var) = random_bits ())
++# else
++# define RANDOM_BITS(Var) \
++    {                                                                         \
++      struct timeval tv;                                                      \
++      __gettimeofday (&tv, NULL);                                             \
++      (Var) = ((uint64_t) tv.tv_usec << 16) ^ tv.tv_sec;                      \
++    }
+ #endif
+ 
+ /* Use the widest available unsigned type if uint64_t is not
+@@ -193,8 +186,7 @@ __gen_tempname (char *tmpl, int suffixlen, int flags, int kind)
+ {
+   int len;
+   char *XXXXXX;
+-  static uint64_t value;
+-  uint64_t random_time_bits;
++  uint64_t value;
+   unsigned int count;
+   int fd = -1;
+   int save_errno = errno;
+@@ -227,16 +219,8 @@ __gen_tempname (char *tmpl, int suffixlen, int flags, int kind)
+   XXXXXX = &tmpl[len - 6 - suffixlen];
+ 
+   /* Get some more or less random data.  */
+-#ifdef RANDOM_BITS
+-  RANDOM_BITS (random_time_bits);
+-#else
+-  {
+-    struct timeval tv;
+-    __gettimeofday (&tv, NULL);
+-    random_time_bits = ((uint64_t) tv.tv_usec << 16) ^ tv.tv_sec;
+-  }
+-#endif
+-  value += random_time_bits ^ __getpid ();
++  RANDOM_BITS (value);
++  value ^= (uint64_t)__getpid () << 32;
+ 
+   for (count = 0; count < attempts; value += 7777, ++count)
+     {

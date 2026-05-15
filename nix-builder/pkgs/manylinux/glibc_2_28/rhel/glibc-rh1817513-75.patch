@@ -1,0 +1,115 @@
+commit 9016b6f3893789ddfbd978aa572b46b3d3ce762f
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Jul 11 09:04:34 2020 -0700
+
+    x86: Remove the unused __x86_prefetchw
+    
+    Since
+    
+    commit c867597bff2562180a18da4b8dba89d24e8b65c4
+    Author: H.J. Lu <hjl.tools@gmail.com>
+    Date:   Wed Jun 8 13:57:50 2016 -0700
+    
+        X86-64: Remove previous default/SSE2/AVX2 memcpy/memmove
+    
+    removed the only usage of __x86_prefetchw, we can remove the unused
+    __x86_prefetchw.
+
+Conflicts:
+	sysdeps/x86/cacheinfo.c
+	  (Different backport order downstream, related to cache
+	  comptuation.  Also had to remove the now-unused eax variable.)
+
+diff --git a/sysdeps/i386/Makefile b/sysdeps/i386/Makefile
+index c0a4fe15d47bff1c..41b345c6c6274c01 100644
+--- a/sysdeps/i386/Makefile
++++ b/sysdeps/i386/Makefile
+@@ -13,10 +13,6 @@ ifeq ($(subdir),math)
+ CFLAGS-e_gamma_r.c += -DMATH_SET_BOTH_ROUNDING_MODES
+ endif
+ 
+-ifeq ($(subdir),string)
+-sysdep_routines += cacheinfo
+-endif
+-
+ ifeq ($(subdir),gmon)
+ sysdep_routines += i386-mcount
+ endif
+diff --git a/sysdeps/i386/cacheinfo.c b/sysdeps/i386/cacheinfo.c
+deleted file mode 100644
+index f15fe0779afebb8f..0000000000000000
+--- a/sysdeps/i386/cacheinfo.c
++++ /dev/null
+@@ -1,3 +0,0 @@
+-#define DISABLE_PREFETCHW
+-
+-#include <sysdeps/x86/cacheinfo.c>
+diff --git a/sysdeps/x86/Makefile b/sysdeps/x86/Makefile
+index a936134a577e42a5..962bbcb07eba1259 100644
+--- a/sysdeps/x86/Makefile
++++ b/sysdeps/x86/Makefile
+@@ -14,6 +14,10 @@ gen-as-const-headers += jmp_buf-ssp.sym
+ sysdep_routines += __longjmp_cancel
+ endif
+ 
++ifeq ($(subdir),string)
++sysdep_routines += cacheinfo
++endif
++
+ ifneq ($(enable-cet),no)
+ ifeq ($(subdir),elf)
+ sysdep-dl-routines += dl-cet
+diff --git a/sysdeps/x86/cacheinfo.c b/sysdeps/x86/cacheinfo.c
+index c741a69fb19a1e95..f4edbc0103beb435 100644
+--- a/sysdeps/x86/cacheinfo.c
++++ b/sysdeps/x86/cacheinfo.c
+@@ -536,11 +536,6 @@ long int __x86_rep_movsb_threshold attribute_hidden = 2048;
+ /* Threshold to use Enhanced REP STOSB.  */
+ long int __x86_rep_stosb_threshold attribute_hidden = 2048;
+ 
+-#ifndef DISABLE_PREFETCHW
+-/* PREFETCHW support flag for use in memory and string routines.  */
+-int __x86_prefetchw attribute_hidden;
+-#endif
+-
+ 
+ static void
+ get_common_cache_info (long int *shared_ptr, unsigned int *threads_ptr,
+@@ -765,7 +760,6 @@ __attribute__((constructor))
+ init_cacheinfo (void)
+ {
+   /* Find out what brand of processor.  */
+-  unsigned int eax;
+   unsigned int ebx;
+   unsigned int ecx;
+   unsigned int edx;
+@@ -846,16 +840,6 @@ init_cacheinfo (void)
+ 	      shared += core;
+             }
+ 	}
+-
+-#ifndef DISABLE_PREFETCHW
+-      if (max_cpuid_ex >= 0x80000001)
+-	{
+-	  __cpuid (0x80000001, eax, ebx, ecx, edx);
+-	  /*  PREFETCHW     || 3DNow!  */
+-	  if ((ecx & 0x100) || (edx & 0x80000000))
+-	    __x86_prefetchw = -1;
+-	}
+-#endif
+     }
+ 
+   if (cpu_features->data_cache_size != 0)
+diff --git a/sysdeps/x86_64/Makefile b/sysdeps/x86_64/Makefile
+index d51cf03ac92ebcc2..e3bb45d78811d70f 100644
+--- a/sysdeps/x86_64/Makefile
++++ b/sysdeps/x86_64/Makefile
+@@ -18,7 +18,7 @@ tests += tst-mallocalign1
+ endif
+ 
+ ifeq ($(subdir),string)
+-sysdep_routines += cacheinfo strcasecmp_l-nonascii strncase_l-nonascii
++sysdep_routines += strcasecmp_l-nonascii strncase_l-nonascii
+ gen-as-const-headers += locale-defines.sym
+ endif
+ 

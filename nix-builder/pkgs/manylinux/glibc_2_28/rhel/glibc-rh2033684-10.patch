@@ -1,0 +1,90 @@
+commit 2bbd07c715275eb6c616988925738a0517180d57
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Fri Dec 17 18:35:44 2021 +0530
+
+    fortify: Fix spurious warning with realpath
+    
+    The length and object size arguments were swapped around for realpath.
+    Also add a smoke test so that any changes in this area get caught in
+    future.
+    
+    Signed-off-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+diff --git a/debug/Makefile b/debug/Makefile
+index 81361438fc3d2aa9..b43f42ee3851f360 100644
+--- a/debug/Makefile
++++ b/debug/Makefile
+@@ -108,6 +108,7 @@ CFLAGS-tst-longjmp_chk2.c += -fexceptions -fasynchronous-unwind-tables
+ CPPFLAGS-tst-longjmp_chk2.c += -D_FORTIFY_SOURCE=1
+ CFLAGS-tst-longjmp_chk3.c += -fexceptions -fasynchronous-unwind-tables
+ CPPFLAGS-tst-longjmp_chk3.c += -D_FORTIFY_SOURCE=1
++CPPFLAGS-tst-realpath-chk.c += -D_FORTIFY_SOURCE=2
+ 
+ # We know these tests have problems with format strings, this is what
+ # we are testing.  Disable that warning.  They are also testing
+@@ -155,7 +156,7 @@ tests = backtrace-tst tst-longjmp_chk tst-chk1 tst-chk2 tst-chk3 \
+ 	tst-lfschk1 tst-lfschk2 tst-lfschk3 test-strcpy_chk test-stpcpy_chk \
+ 	tst-chk4 tst-chk5 tst-chk6 tst-chk7 tst-chk8 tst-lfschk4 tst-lfschk5 \
+ 	tst-lfschk6 tst-longjmp_chk2 tst-backtrace2 tst-backtrace3 \
+-	tst-backtrace4 tst-backtrace5 tst-backtrace6
++	tst-backtrace4 tst-backtrace5 tst-backtrace6 tst-realpath-chk
+ 
+ ifeq ($(have-ssp),yes)
+ tests += tst-ssp-1
+diff --git a/debug/tst-realpath-chk.c b/debug/tst-realpath-chk.c
+new file mode 100644
+index 0000000000000000..a8fcb327c43fb34d
+--- /dev/null
++++ b/debug/tst-realpath-chk.c
+@@ -0,0 +1,37 @@
++/* Smoke test to verify that realpath does not cause spurious warnings.
++   Copyright The GNU Toolchain Authors.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <limits.h>
++#include <stdlib.h>
++
++#include <support/check.h>
++#include <support/support.h>
++
++static int
++do_test (void)
++{
++#ifdef PATH_MAX
++  char buf[PATH_MAX + 1];
++  char *res = realpath (".", buf);
++  TEST_VERIFY (res == buf);
++#endif
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/stdlib/bits/stdlib.h b/stdlib/bits/stdlib.h
+index 7ea364a276497720..81ec9bdb32215e3b 100644
+--- a/stdlib/bits/stdlib.h
++++ b/stdlib/bits/stdlib.h
+@@ -42,7 +42,7 @@ __NTH (realpath (const char *__restrict __name, char *__restrict __resolved))
+     return __realpath_alias (__name, __resolved);
+ 
+ #if defined _LIBC_LIMITS_H_ && defined PATH_MAX
+-  if (__glibc_unsafe_len (sz, sizeof (char), PATH_MAX))
++  if (__glibc_unsafe_len (PATH_MAX, sizeof (char), sz))
+     return __realpath_chk_warn (__name, __resolved, sz);
+ #endif
+   return __realpath_chk (__name, __resolved, sz);

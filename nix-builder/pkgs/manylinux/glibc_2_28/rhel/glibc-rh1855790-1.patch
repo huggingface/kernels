@@ -1,0 +1,120 @@
+commit 15eab1e3e89129ab3ed03f5bdc3415b26e9caeb9
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Feb 1 05:44:55 2020 -0800
+
+    i386: Don't unnecessarily save and restore EAX, ECX and EDX [BZ# 25262]
+    
+    On i386, since EAX, ECX and EDX are caller-saved, there are no need
+    to save and restore EAX, ECX and EDX in getcontext, setcontext and
+    swapcontext.  They just need to clear EAX on success.  The extra
+    scratch registers are needed to enable CET.
+    
+    Tested on i386.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+---
+
+diff --git a/sysdeps/unix/sysv/linux/i386/getcontext.S b/sysdeps/unix/sysv/linux/i386/getcontext.S
+index 26ca08a..6637596 100644
+--- a/sysdeps/unix/sysv/linux/i386/getcontext.S
++++ b/sysdeps/unix/sysv/linux/i386/getcontext.S
+@@ -26,13 +26,7 @@ ENTRY(__getcontext)
+ 	/* Load address of the context data structure.  */
+ 	movl	4(%esp), %eax
+ 
+-	/* Return value of getcontext.  EAX is the only register whose
+-	   value is not preserved.  */
+-	movl	$0, oEAX(%eax)
+-
+-	/* Save the 32-bit register values and the return address.  */
+-	movl	%ecx, oECX(%eax)
+-	movl	%edx, oEDX(%eax)
++	/* Save the preserved register values and the return address.  */
+ 	movl	%edi, oEDI(%eax)
+ 	movl	%esi, oESI(%eax)
+ 	movl	%ebp, oEBP(%eax)
+diff --git a/sysdeps/unix/sysv/linux/i386/setcontext.S b/sysdeps/unix/sysv/linux/i386/setcontext.S
+index a604fca..7565d7d 100644
+--- a/sysdeps/unix/sysv/linux/i386/setcontext.S
++++ b/sysdeps/unix/sysv/linux/i386/setcontext.S
+@@ -65,22 +65,19 @@ ENTRY(__setcontext)
+ 	cfi_offset (esi, oESI)
+ 	cfi_offset (ebp, oEBP)
+ 	cfi_offset (ebx, oEBX)
+-	cfi_offset (edx, oEDX)
+-	cfi_offset (ecx, oECX)
+ 	movl	oESP(%eax), %esp
+ 
+ 	/* Push the return address on the new stack so we can return there.  */
+ 	pushl	%ecx
+ 
+-	/* Load the values of all the 32-bit registers (except ESP).
+-	   Since we are loading from EAX, it must be last.  */
++	/* Load the values of all the preserved registers (except ESP).  */
+ 	movl	oEDI(%eax), %edi
+ 	movl	oESI(%eax), %esi
+ 	movl	oEBP(%eax), %ebp
+ 	movl	oEBX(%eax), %ebx
+-	movl	oEDX(%eax), %edx
+-	movl	oECX(%eax), %ecx
+-	movl	oEAX(%eax), %eax
++
++	/* All done, return 0 for success.  */
++	xorl	%eax, %eax
+ 
+ 	/* End FDE here, we fall into another context.  */
+ 	cfi_endproc
+diff --git a/sysdeps/unix/sysv/linux/i386/swapcontext.S b/sysdeps/unix/sysv/linux/i386/swapcontext.S
+index 431f22c..ce27d51 100644
+--- a/sysdeps/unix/sysv/linux/i386/swapcontext.S
++++ b/sysdeps/unix/sysv/linux/i386/swapcontext.S
+@@ -26,13 +26,7 @@ ENTRY(__swapcontext)
+ 	/* Load address of the context data structure we save in.  */
+ 	movl	4(%esp), %eax
+ 
+-	/* Return value of swapcontext.  EAX is the only register whose
+-	   value is not preserved.  */
+-	movl	$0, oEAX(%eax)
+-
+-	/* Save the 32-bit register values and the return address.  */
+-	movl	%ecx, oECX(%eax)
+-	movl	%edx, oEDX(%eax)
++	/* Save the preserved register values and the return address.  */
+ 	movl	%edi, oEDI(%eax)
+ 	movl	%esi, oESI(%eax)
+ 	movl	%ebp, oEBP(%eax)
+@@ -91,15 +85,14 @@ ENTRY(__swapcontext)
+ 	/* Push the return address on the new stack so we can return there.  */
+ 	pushl	%ecx
+ 
+-	/* Load the values of all the 32-bit registers (except ESP).
+-	   Since we are loading from EAX, it must be last.  */
++	/* Load the values of all the preserved registers (except ESP).  */
+ 	movl	oEDI(%eax), %edi
+ 	movl	oESI(%eax), %esi
+ 	movl	oEBP(%eax), %ebp
+ 	movl	oEBX(%eax), %ebx
+-	movl	oEDX(%eax), %edx
+-	movl	oECX(%eax), %ecx
+-	movl	oEAX(%eax), %eax
++
++	/* All done, return 0 for success.  */
++	xorl	%eax, %eax
+ 
+ 	/* The following 'ret' will pop the address of the code and jump
+ 	   to it.  */
+diff --git a/sysdeps/unix/sysv/linux/i386/ucontext_i.sym b/sysdeps/unix/sysv/linux/i386/ucontext_i.sym
+index b11a550..1dfe03d 100644
+--- a/sysdeps/unix/sysv/linux/i386/ucontext_i.sym
++++ b/sysdeps/unix/sysv/linux/i386/ucontext_i.sym
+@@ -21,9 +21,6 @@ oESI		mreg (ESI)
+ oEBP		mreg (EBP)
+ oESP		mreg (ESP)
+ oEBX		mreg (EBX)
+-oEDX		mreg (EDX)
+-oECX		mreg (ECX)
+-oEAX		mreg (EAX)
+ oEIP		mreg (EIP)
+ oFPREGS		mcontext (fpregs)
+ oSIGMASK	ucontext (uc_sigmask)
+

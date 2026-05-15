@@ -1,0 +1,27 @@
+commit ea89d5bbd9e5e514b606045d909e6ab87d851c88
+Author: Arjun Shankar <arjun@redhat.com>
+Date:   Thu Feb 24 21:43:09 2022 +0100
+
+    localedef: Handle symbolic links when generating locale-archive
+    
+    Whenever locale data for any locale included symbolic links, localedef
+    would throw the error "incomplete set of locale files" and exclude it
+    from the generated locale archive.  This commit fixes that.
+    
+    Co-authored-by: Florian Weimer <fweimer@redhat.com>
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/locale/programs/locarchive.c b/locale/programs/locarchive.c
+index dec73264563bc2a0..990f7eb6830d2e57 100644
+--- a/locale/programs/locarchive.c
++++ b/locale/programs/locarchive.c
+@@ -1391,7 +1391,7 @@ add_locales_to_archive (size_t nlist, char *list[], bool replace)
+ 		    {
+ 		      char fullname[fnamelen + 2 * strlen (d->d_name) + 7];
+ 
+-		      if (d_type == DT_UNKNOWN)
++		      if (d_type == DT_UNKNOWN || d_type == DT_LNK)
+ 			{
+ 			  strcpy (stpcpy (stpcpy (fullname, fname), "/"),
+ 				  d->d_name);

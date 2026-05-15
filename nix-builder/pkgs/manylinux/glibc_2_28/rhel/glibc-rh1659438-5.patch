@@ -1,0 +1,306 @@
+commit 07be392807ac78330da90f01408aa7e042a97a88
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:05 2018 +0100
+
+    S390: Implement bzero with memset.
+    
+    This patch removes the bzero s390 implementation with mvcle and
+    adds entry points for bzero in memset ifunc variants.
+    Therefore an ifunc resolver is implemented for bzero, too.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/s390-32/bzero.S: Delete file.
+            * sysdeps/s390/s390-64/bzero.S: Likewise.
+            * sysdeps/s390/Makefile (sysdep_routines): Add bzero.
+            * sysdeps/s390/bzero.c: New file.
+            * sysdeps/s390/memset-z900.S: Add bzero entry points.
+            * sysdeps/s390/ifunc-memset.h: Add bzero function macros.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Add bzero ifunc variants.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 360838e172f4ca37..e40e5bd982e54d89 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -31,5 +31,5 @@ sysdeps-gconv-modules = ../sysdeps/s390/gconv-modules
+ endif
+ 
+ ifeq ($(subdir),string)
+-sysdep_routines += memset memset-z900
++sysdep_routines += bzero memset memset-z900
+ endif
+diff --git a/sysdeps/s390/s390-32/bzero.S b/sysdeps/s390/bzero.c
+similarity index 52%
+rename from sysdeps/s390/s390-32/bzero.S
+rename to sysdeps/s390/bzero.c
+index 897aa2154a861b7f..9f8d95781bf2fb68 100644
+--- a/sysdeps/s390/s390-32/bzero.S
++++ b/sysdeps/s390/bzero.c
+@@ -1,7 +1,6 @@
+-/* bzero -- set a block of memory to zero.  IBM S390 version
++/* Multiple versions of bzero.
++   Copyright (C) 2018 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+-   Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+@@ -17,26 +16,32 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-/*
+- * R2 = address to memory area
+- * R3 = number of bytes to fill
+- */
+-
+-#include "sysdep.h"
+-#include "asm-syntax.h"
+-
+-	.text
+-ENTRY(__bzero)
+-	ltr     %r3,%r3
+-	jz      .L1
+-	sr      %r1,%r1             # set pad byte to zero
+-	sr      %r4,%r4             # no source for MVCLE, only a pad byte
+-	sr      %r5,%r5
+-.L0:    mvcle   %r2,%r4,0(%r1)      # thats it, MVCLE is your friend
+-	jo      .L0
+-.L1:    br      %r14
+-END(__bzero)
+-
+-#ifndef NO_WEAK_ALIAS
++#include <ifunc-memset.h>
++#if HAVE_MEMSET_IFUNC
++# include <string.h>
++# include <ifunc-resolve.h>
++
++# if HAVE_MEMSET_Z900_G5
++extern __typeof (__bzero) BZERO_Z900_G5 attribute_hidden;
++# endif
++
++# if HAVE_MEMSET_Z10
++extern __typeof (__bzero) BZERO_Z10 attribute_hidden;
++# endif
++
++# if HAVE_MEMSET_Z196
++extern __typeof (__bzero) BZERO_Z196 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__bzero, __bzero,
++		      ({
++			s390_libc_ifunc_init ();
++			(HAVE_MEMSET_Z196 && S390_IS_Z196 (stfle_bits))
++			  ? BZERO_Z196
++			  : (HAVE_MEMSET_Z10 && S390_IS_Z10 (stfle_bits))
++			  ? BZERO_Z10
++			  : BZERO_DEFAULT;
++		      })
++		      )
+ weak_alias (__bzero, bzero)
+ #endif
+diff --git a/sysdeps/s390/ifunc-memset.h b/sysdeps/s390/ifunc-memset.h
+index 9a13b1001fed9979..32bc155f7e79fa26 100644
+--- a/sysdeps/s390/ifunc-memset.h
++++ b/sysdeps/s390/ifunc-memset.h
+@@ -25,16 +25,19 @@
+ 
+ #if defined HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
+ # define MEMSET_DEFAULT		MEMSET_Z196
++# define BZERO_DEFAULT		BZERO_Z196
+ # define HAVE_MEMSET_Z900_G5	0
+ # define HAVE_MEMSET_Z10	0
+ # define HAVE_MEMSET_Z196	1
+ #elif defined HAVE_S390_MIN_Z10_ZARCH_ASM_SUPPORT
+ # define MEMSET_DEFAULT		MEMSET_Z10
++# define BZERO_DEFAULT		BZERO_Z10
+ # define HAVE_MEMSET_Z900_G5	0
+ # define HAVE_MEMSET_Z10	1
+ # define HAVE_MEMSET_Z196	HAVE_MEMSET_IFUNC
+ #else
+ # define MEMSET_DEFAULT		MEMSET_Z900_G5
++# define BZERO_DEFAULT		BZERO_Z900_G5
+ # define HAVE_MEMSET_Z900_G5	1
+ # define HAVE_MEMSET_Z10	HAVE_MEMSET_IFUNC
+ # define HAVE_MEMSET_Z196	HAVE_MEMSET_IFUNC
+@@ -48,18 +51,24 @@
+ 
+ #if HAVE_MEMSET_Z900_G5
+ # define MEMSET_Z900_G5		__memset_default
++# define BZERO_Z900_G5		__bzero_default
+ #else
+ # define MEMSET_Z900_G5		NULL
++# define BZERO_Z900_G5		NULL
+ #endif
+ 
+ #if HAVE_MEMSET_Z10
+ # define MEMSET_Z10		__memset_z10
++# define BZERO_Z10		__bzero_z10
+ #else
+ # define MEMSET_Z10		NULL
++# define BZERO_Z10		NULL
+ #endif
+ 
+ #if HAVE_MEMSET_Z196
+ # define MEMSET_Z196		__memset_z196
++# define BZERO_Z196		__bzero_z196
+ #else
+ # define MEMSET_Z196		NULL
++# define BZERO_Z196		NULL
+ #endif
+diff --git a/sysdeps/s390/memset-z900.S b/sysdeps/s390/memset-z900.S
+index eaf13402bd3e251d..bfc659ae0b029eb4 100644
+--- a/sysdeps/s390/memset-z900.S
++++ b/sysdeps/s390/memset-z900.S
+@@ -22,10 +22,14 @@
+ #include "asm-syntax.h"
+ #include <ifunc-memset.h>
+ 
+-/* INPUT PARAMETERS
++/* INPUT PARAMETERS - MEMSET
+      %r2 = address of memory area
+      %r3 = byte to fill memory with
+-     %r4 = number of bytes to fill.  */
++     %r4 = number of bytes to fill.
++
++   INPUT PARAMETERS - BZERO
++     %r2 = address of memory area
++     %r3 = number of bytes to fill.  */
+ 
+        .text
+ 
+@@ -44,7 +48,14 @@
+ #  define BRCTG	brct
+ # endif /* ! defined __s390x__  */
+ 
++ENTRY(BZERO_Z900_G5)
++	LGR	%r4,%r3
++	xr	%r3,%r3
++	j	.L_Z900_G5_start
++END(BZERO_Z900_G5)
++
+ ENTRY(MEMSET_Z900_G5)
++.L_Z900_G5_start:
+ #if defined __s390x__
+ 	.machine "z900"
+ #else
+@@ -90,7 +101,16 @@ END(MEMSET_Z900_G5)
+ #endif /*  HAVE_MEMSET_Z900_G5  */
+ 
+ #if HAVE_MEMSET_Z10
++ENTRY(BZERO_Z10)
++	.machine "z10"
++	.machinemode "zarch_nohighgprs"
++	lgr	%r4,%r3
++	xr	%r3,%r3
++	j	.L_Z10_start
++END(BZERO_Z10)
++
+ ENTRY(MEMSET_Z10)
++.L_Z10_start:
+ 	.machine "z10"
+ 	.machinemode "zarch_nohighgprs"
+ # if !defined __s390x__
+@@ -122,7 +142,16 @@ END(MEMSET_Z10)
+ #endif /* HAVE_MEMSET_Z10  */
+ 
+ #if HAVE_MEMSET_Z196
++ENTRY(BZERO_Z196)
++	.machine "z196"
++	.machinemode "zarch_nohighgprs"
++	lgr	%r4,%r3
++	xr	%r3,%r3
++	j	.L_Z196_start
++END(BZERO_Z196)
++
+ ENTRY(MEMSET_Z196)
++.L_Z196_start:
+ 	.machine "z196"
+ 	.machinemode "zarch_nohighgprs"
+ # if !defined __s390x__
+@@ -177,6 +206,10 @@ END(__memset_mvcle)
+ /* If we don't use ifunc, define an alias for memset here.
+    Otherwise see sysdeps/s390/memset.c.  */
+ strong_alias (MEMSET_DEFAULT, memset)
++/* Same for bzero.  If ifunc is used, see
++   sysdeps/s390/bzero.c.  */
++strong_alias (BZERO_DEFAULT, __bzero)
++weak_alias (__bzero, bzero)
+ #endif
+ 
+ #if defined SHARED && IS_IN (libc)
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 2f671eac1f4f1ffd..253f36045b57cc3c 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -59,6 +59,21 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ # endif
+ # if HAVE_MEMSET_Z900_G5
+ 	      IFUNC_IMPL_ADD (array, i, memset, 1, MEMSET_Z900_G5)
++# endif
++	      )
++
++  /* Note: bzero is implemented in memset.  */
++  IFUNC_IMPL (i, name, bzero,
++# if HAVE_MEMSET_Z196
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      S390_IS_Z196 (stfle_bits), BZERO_Z196)
++# endif
++# if HAVE_MEMSET_Z10
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      S390_IS_Z10 (stfle_bits), BZERO_Z10)
++# endif
++# if HAVE_MEMSET_Z900_G5
++	      IFUNC_IMPL_ADD (array, i, bzero, 1, BZERO_Z900_G5)
+ # endif
+ 	      )
+ #endif /* HAVE_MEMSET_IFUNC */
+diff --git a/sysdeps/s390/s390-64/bzero.S b/sysdeps/s390/s390-64/bzero.S
+deleted file mode 100644
+index b3216652985cc239..0000000000000000
+--- a/sysdeps/s390/s390-64/bzero.S
++++ /dev/null
+@@ -1,41 +0,0 @@
+-/* bzero -- set a block of memory to zero.  64 bit S/390 version.
+-   This file is part of the GNU C Library.
+-   Copyright (C) 2001-2018 Free Software Foundation, Inc.
+-   Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/* INPUT PARAMETERS
+-     %r2 = address of memory area
+-     %r3 = number of bytes to fill.  */
+-
+-#include "sysdep.h"
+-#include "asm-syntax.h"
+-
+-	.text
+-ENTRY(__bzero)
+-	ltgr	%r3,%r3
+-	jz	.L1
+-	sgr	%r1,%r1		    # set pad byte to zero
+-	sgr	%r4,%r4		    # no source for MVCLE, only a pad byte
+-	sgr	%r5,%r5
+-.L0:	mvcle	%r2,%r4,0(%r1)	    # thats it, MVCLE is your friend
+-	jo	.L0
+-.L1:	br	%r14
+-END(__bzero)
+-
+-#ifndef NO_WEAK_ALIAS
+-weak_alias (__bzero, bzero)
+-#endif

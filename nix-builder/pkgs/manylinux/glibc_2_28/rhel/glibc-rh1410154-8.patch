@@ -1,0 +1,619 @@
+commit f63b73814f74032c0e5d0a83300e3d864ef905e5
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Nov 13 15:44:56 2019 +0100
+
+    Remove all loaded objects if dlopen fails, ignoring NODELETE [BZ #20839]
+    
+    This introduces a “pending NODELETE” state in the link map, which is
+    flipped to the persistent NODELETE state late in dlopen, via
+    activate_nodelete.    During initial relocation, symbol binding
+    records pending NODELETE state only.  dlclose ignores pending NODELETE
+    state.  Taken together, this results that a partially completed dlopen
+    is rolled back completely because new NODELETE mappings are unloaded.
+    
+    Tested on x86_64-linux-gnu and i386-linux-gnu.
+    
+    Change-Id: Ib2a3d86af6f92d75baca65431d74783ee0dbc292
+
+Conflicts:
+	elf/Makefile
+	  (Usual conflicts due to test backport differences.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index b752f6366400d221..bf7c41f38be42184 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -191,7 +191,8 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-nodelete2 tst-audit11 tst-audit12 tst-dlsym-error tst-noload \
+ 	 tst-latepthread tst-tls-manydynamic tst-nodelete-dlclose \
+ 	 tst-debug1 tst-main1 tst-absolute-sym tst-absolute-zero tst-big-note \
+-	 tst-sonamemove-link tst-sonamemove-dlopen tst-initfinilazyfail
++	 tst-sonamemove-link tst-sonamemove-dlopen tst-initfinilazyfail \
++	 tst-dlopenfail
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -282,7 +283,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-absolute-zero-lib tst-big-note-lib \
+ 		tst-sonamemove-linkmod1 \
+ 		tst-sonamemove-runmod1 tst-sonamemove-runmod2 \
+-		tst-initlazyfailmod tst-finilazyfailmod
++		tst-initlazyfailmod tst-finilazyfailmod \
++		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2
+ 
+ ifeq (yes,$(have-mtls-dialect-gnu2))
+ tests += tst-gnu2-tls1
+@@ -1537,3 +1539,13 @@ LDFLAGS-tst-initlazyfailmod.so = \
+   -Wl,-z,lazy -Wl,--unresolved-symbols=ignore-all
+ LDFLAGS-tst-finilazyfailmod.so = \
+   -Wl,-z,lazy -Wl,--unresolved-symbols=ignore-all
++
++$(objpfx)tst-dlopenfail: $(libdl)
++$(objpfx)tst-dlopenfail.out: \
++  $(objpfx)tst-dlopenfailmod1.so $(objpfx)tst-dlopenfailmod2.so
++# Order matters here.  tst-dlopenfaillinkmod.so's soname ensures
++# a run-time loader failure.
++$(objpfx)tst-dlopenfailmod1.so: \
++  $(shared-thread-library) $(objpfx)tst-dlopenfaillinkmod.so
++LDFLAGS-tst-dlopenfaillinkmod.so = -Wl,-soname,tst-dlopenfail-missingmod.so
++$(objpfx)tst-dlopenfailmod2.so: $(shared-thread-library)
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 88aeea25839a34e0..243a028c443173c1 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -168,14 +168,6 @@ _dl_close_worker (struct link_map *map, bool force)
+   char done[nloaded];
+   struct link_map *maps[nloaded];
+ 
+-  /* Clear DF_1_NODELETE to force object deletion.  We don't need to touch
+-     l_tls_dtor_count because forced object deletion only happens when an
+-     error occurs during object load.  Destructor registration for TLS
+-     non-POD objects should not have happened till then for this
+-     object.  */
+-  if (force)
+-    map->l_flags_1 &= ~DF_1_NODELETE;
+-
+   /* Run over the list and assign indexes to the link maps and enter
+      them into the MAPS array.  */
+   int idx = 0;
+@@ -205,7 +197,7 @@ _dl_close_worker (struct link_map *map, bool force)
+       /* Check whether this object is still used.  */
+       if (l->l_type == lt_loaded
+ 	  && l->l_direct_opencount == 0
+-	  && (l->l_flags_1 & DF_1_NODELETE) == 0
++	  && l->l_nodelete != link_map_nodelete_active
+ 	  /* See CONCURRENCY NOTES in cxa_thread_atexit_impl.c to know why
+ 	     acquire is sufficient and correct.  */
+ 	  && atomic_load_acquire (&l->l_tls_dtor_count) == 0
+@@ -288,7 +280,7 @@ _dl_close_worker (struct link_map *map, bool force)
+       if (!used[i])
+ 	{
+ 	  assert (imap->l_type == lt_loaded
+-		  && (imap->l_flags_1 & DF_1_NODELETE) == 0);
++		  && imap->l_nodelete != link_map_nodelete_active);
+ 
+ 	  /* Call its termination function.  Do not do it for
+ 	     half-cooked objects.  Temporarily disable exception
+@@ -828,7 +820,7 @@ _dl_close (void *_map)
+      before we took the lock. There is no way to detect this (see below)
+      so we proceed assuming this isn't the case.  First see whether we
+      can remove the object at all.  */
+-  if (__glibc_unlikely (map->l_flags_1 & DF_1_NODELETE))
++  if (__glibc_unlikely (map->l_nodelete == link_map_nodelete_active))
+     {
+       /* Nope.  Do nothing.  */
+       __rtld_lock_unlock_recursive (GL(dl_load_lock));
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index efbdb8deb3c0a9d4..c5e5857fb1fe2808 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -192,9 +192,10 @@ enter_unique_sym (struct unique_sym *table, size_t size,
+    Return the matching symbol in RESULT.  */
+ static void
+ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+-		  const struct link_map *map, struct sym_val *result,
++		  struct link_map *map, struct sym_val *result,
+ 		  int type_class, const ElfW(Sym) *sym, const char *strtab,
+-		  const ElfW(Sym) *ref, const struct link_map *undef_map)
++		  const ElfW(Sym) *ref, const struct link_map *undef_map,
++		  int flags)
+ {
+   /* We have to determine whether we already found a symbol with this
+      name before.  If not then we have to add it to the search table.
+@@ -222,7 +223,7 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+ 		     copy from the copy addressed through the
+ 		     relocation.  */
+ 		  result->s = sym;
+-		  result->m = (struct link_map *) map;
++		  result->m = map;
+ 		}
+ 	      else
+ 		{
+@@ -311,9 +312,19 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+                         new_hash, strtab + sym->st_name, sym, map);
+ 
+       if (map->l_type == lt_loaded)
+-	/* Make sure we don't unload this object by
+-	   setting the appropriate flag.  */
+-	((struct link_map *) map)->l_flags_1 |= DF_1_NODELETE;
++	{
++	  /* Make sure we don't unload this object by
++	     setting the appropriate flag.  */
++	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS)
++	      && map->l_nodelete == link_map_nodelete_inactive)
++	    _dl_debug_printf ("\
++marking %s [%lu] as NODELETE due to unique symbol\n",
++			      map->l_name, map->l_ns);
++	  if (flags & DL_LOOKUP_FOR_RELOCATE)
++	    map->l_nodelete = link_map_nodelete_pending;
++	  else
++	    map->l_nodelete = link_map_nodelete_active;
++	}
+     }
+   ++tab->n_elements;
+ 
+@@ -525,8 +536,9 @@ do_lookup_x (const char *undef_name, uint_fast32_t new_hash,
+ 	      return 1;
+ 
+ 	    case STB_GNU_UNIQUE:;
+-	      do_lookup_unique (undef_name, new_hash, map, result, type_class,
+-				sym, strtab, ref, undef_map);
++	      do_lookup_unique (undef_name, new_hash, (struct link_map *) map,
++				result, type_class, sym, strtab, ref,
++				undef_map, flags);
+ 	      return 1;
+ 
+ 	    default:
+@@ -568,9 +580,13 @@ add_dependency (struct link_map *undef_map, struct link_map *map, int flags)
+   if (undef_map == map)
+     return 0;
+ 
+-  /* Avoid references to objects which cannot be unloaded anyway.  */
++  /* Avoid references to objects which cannot be unloaded anyway.  We
++     do not need to record dependencies if this object goes away
++     during dlopen failure, either.  IFUNC resolvers with relocation
++     dependencies may pick an dependency which can be dlclose'd, but
++     such IFUNC resolvers are undefined anyway.  */
+   assert (map->l_type == lt_loaded);
+-  if ((map->l_flags_1 & DF_1_NODELETE) != 0)
++  if (map->l_nodelete != link_map_nodelete_inactive)
+     return 0;
+ 
+   struct link_map_reldeps *l_reldeps
+@@ -678,16 +694,33 @@ add_dependency (struct link_map *undef_map, struct link_map *map, int flags)
+ 
+       /* Redo the NODELETE check, as when dl_load_lock wasn't held
+ 	 yet this could have changed.  */
+-      if ((map->l_flags_1 & DF_1_NODELETE) != 0)
++      if (map->l_nodelete != link_map_nodelete_inactive)
+ 	goto out;
+ 
+       /* If the object with the undefined reference cannot be removed ever
+ 	 just make sure the same is true for the object which contains the
+ 	 definition.  */
+       if (undef_map->l_type != lt_loaded
+-	  || (undef_map->l_flags_1 & DF_1_NODELETE) != 0)
++	  || (undef_map->l_nodelete != link_map_nodelete_inactive))
+ 	{
+-	  map->l_flags_1 |= DF_1_NODELETE;
++	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS)
++	      && map->l_nodelete == link_map_nodelete_inactive)
++	    {
++	      if (undef_map->l_name[0] == '\0')
++		_dl_debug_printf ("\
++marking %s [%lu] as NODELETE due to reference to main program\n",
++				  map->l_name, map->l_ns);
++	      else
++		_dl_debug_printf ("\
++marking %s [%lu] as NODELETE due to reference to %s [%lu]\n",
++				  map->l_name, map->l_ns,
++				  undef_map->l_name, undef_map->l_ns);
++	    }
++
++	  if (flags & DL_LOOKUP_FOR_RELOCATE)
++	    map->l_nodelete = link_map_nodelete_pending;
++	  else
++	    map->l_nodelete = link_map_nodelete_active;
+ 	  goto out;
+ 	}
+ 
+@@ -712,7 +745,18 @@ add_dependency (struct link_map *undef_map, struct link_map *map, int flags)
+ 		 no fatal problem.  We simply make sure the referenced object
+ 		 cannot be unloaded.  This is semantically the correct
+ 		 behavior.  */
+-	      map->l_flags_1 |= DF_1_NODELETE;
++	      if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS)
++		  && map->l_nodelete == link_map_nodelete_inactive)
++		_dl_debug_printf ("\
++marking %s [%lu] as NODELETE due to memory allocation failure\n",
++				  map->l_name, map->l_ns);
++	      if (flags & DL_LOOKUP_FOR_RELOCATE)
++		/* In case of non-lazy binding, we could actually
++		   report the memory allocation error, but for now, we
++		   use the conservative approximation as well. */
++		map->l_nodelete = link_map_nodelete_pending;
++	      else
++		map->l_nodelete = link_map_nodelete_active;
+ 	      goto out;
+ 	    }
+ 	  else
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index b330cff7d349224a..79c6e4c8ed1c9dfa 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -424,6 +424,40 @@ TLS generation counter wrapped!  Please report this."));
+     }
+ }
+ 
++/* Mark the objects as NODELETE if required.  This is delayed until
++   after dlopen failure is not possible, so that _dl_close can clean
++   up objects if necessary.  */
++static void
++activate_nodelete (struct link_map *new, int mode)
++{
++  if (mode & RTLD_NODELETE || new->l_nodelete == link_map_nodelete_pending)
++    {
++      if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES))
++	_dl_debug_printf ("activating NODELETE for %s [%lu]\n",
++			  new->l_name, new->l_ns);
++      new->l_nodelete = link_map_nodelete_active;
++    }
++
++  for (unsigned int i = 0; i < new->l_searchlist.r_nlist; ++i)
++    {
++      struct link_map *imap = new->l_searchlist.r_list[i];
++      if (imap->l_nodelete == link_map_nodelete_pending)
++	{
++	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES))
++	    _dl_debug_printf ("activating NODELETE for %s [%lu]\n",
++			      imap->l_name, imap->l_ns);
++
++	  /* Only new objects should have set
++	     link_map_nodelete_pending.  Existing objects should not
++	     have gained any new dependencies and therefore cannot
++	     reach NODELETE status.  */
++	  assert (!imap->l_init_called || imap->l_type != lt_loaded);
++
++	  imap->l_nodelete = link_map_nodelete_active;
++	}
++     }
++}
++
+ /* struct dl_init_args and call_dl_init are used to call _dl_init with
+    exception handling disabled.  */
+ struct dl_init_args
+@@ -493,12 +527,6 @@ dl_open_worker (void *a)
+       return;
+     }
+ 
+-  /* Mark the object as not deletable if the RTLD_NODELETE flags was passed.
+-     Do this early so that we don't skip marking the object if it was
+-     already loaded.  */
+-  if (__glibc_unlikely (mode & RTLD_NODELETE))
+-    new->l_flags_1 |= DF_1_NODELETE;
+-
+   if (__glibc_unlikely (mode & __RTLD_SPROF))
+     /* This happens only if we load a DSO for 'sprof'.  */
+     return;
+@@ -514,19 +542,37 @@ dl_open_worker (void *a)
+ 	_dl_debug_printf ("opening file=%s [%lu]; direct_opencount=%u\n\n",
+ 			  new->l_name, new->l_ns, new->l_direct_opencount);
+ 
+-      /* If the user requested the object to be in the global namespace
+-	 but it is not so far, add it now.  */
++      /* If the user requested the object to be in the global
++	 namespace but it is not so far, prepare to add it now.  This
++	 can raise an exception to do a malloc failure.  */
+       if ((mode & RTLD_GLOBAL) && new->l_global == 0)
++	add_to_global_resize (new);
++
++      /* Mark the object as not deletable if the RTLD_NODELETE flags
++	 was passed.  */
++      if (__glibc_unlikely (mode & RTLD_NODELETE))
+ 	{
+-	  add_to_global_resize (new);
+-	  add_to_global_update (new);
++	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES)
++	      && new->l_nodelete == link_map_nodelete_inactive)
++	    _dl_debug_printf ("marking %s [%lu] as NODELETE\n",
++			      new->l_name, new->l_ns);
++	  new->l_nodelete = link_map_nodelete_active;
+ 	}
+ 
++      /* Finalize the addition to the global scope.  */
++      if ((mode & RTLD_GLOBAL) && new->l_global == 0)
++	add_to_global_update (new);
++
+       assert (_dl_debug_initialize (0, args->nsid)->r_state == RT_CONSISTENT);
+ 
+       return;
+     }
+ 
++  /* Schedule NODELETE marking for the directly loaded object if
++     requested.  */
++  if (__glibc_unlikely (mode & RTLD_NODELETE))
++    new->l_nodelete = link_map_nodelete_pending;
++
+   /* Load that object's dependencies.  */
+   _dl_map_object_deps (new, NULL, 0, 0,
+ 		       mode & (__RTLD_DLOPEN | RTLD_DEEPBIND | __RTLD_AUDIT));
+@@ -598,6 +644,14 @@ dl_open_worker (void *a)
+ 
+   int relocation_in_progress = 0;
+ 
++  /* Perform relocation.  This can trigger lazy binding in IFUNC
++     resolvers.  For NODELETE mappings, these dependencies are not
++     recorded because the flag has not been applied to the newly
++     loaded objects.  This means that upon dlopen failure, these
++     NODELETE objects can be unloaded despite existing references to
++     them.  However, such relocation dependencies in IFUNC resolvers
++     are undefined anyway, so this is not a problem.  */
++
+   for (unsigned int i = nmaps; i-- > 0; )
+     {
+       l = maps[i];
+@@ -627,7 +681,7 @@ dl_open_worker (void *a)
+ 	      _dl_start_profile ();
+ 
+ 	      /* Prevent unloading the object.  */
+-	      GL(dl_profile_map)->l_flags_1 |= DF_1_NODELETE;
++	      GL(dl_profile_map)->l_nodelete = link_map_nodelete_active;
+ 	    }
+ 	}
+       else
+@@ -658,6 +712,8 @@ dl_open_worker (void *a)
+      All memory allocations for new objects must have happened
+      before.  */
+ 
++  activate_nodelete (new, mode);
++
+   /* Second stage after resize_scopes: Actually perform the scope
+      update.  After this, dlsym and lazy binding can bind to new
+      objects.  */
+@@ -817,6 +873,10 @@ no more namespaces available for dlmopen()"));
+ 	    GL(dl_tls_dtv_gaps) = true;
+ 
+ 	  _dl_close_worker (args.map, true);
++
++	  /* All link_map_nodelete_pending objects should have been
++	     deleted at this point, which is why it is not necessary
++	     to reset the flag here.  */
+ 	}
+ 
+       assert (_dl_debug_initialize (0, args.nsid)->r_state == RT_CONSISTENT);
+diff --git a/elf/get-dynamic-info.h b/elf/get-dynamic-info.h
+index 4b1ea7c4078ee947..ea286abaea0128d1 100644
+--- a/elf/get-dynamic-info.h
++++ b/elf/get-dynamic-info.h
+@@ -163,6 +163,8 @@ elf_get_dynamic_info (struct link_map *l, ElfW(Dyn) *temp)
+   if (info[VERSYMIDX (DT_FLAGS_1)] != NULL)
+     {
+       l->l_flags_1 = info[VERSYMIDX (DT_FLAGS_1)]->d_un.d_val;
++      if (l->l_flags_1 & DF_1_NODELETE)
++	l->l_nodelete = link_map_nodelete_pending;
+ 
+       /* Only DT_1_SUPPORTED_MASK bits are supported, and we would like
+ 	 to assert this, but we can't. Users have been setting
+diff --git a/elf/tst-dlopenfail.c b/elf/tst-dlopenfail.c
+new file mode 100644
+index 0000000000000000..ce3140c899562ca8
+--- /dev/null
++++ b/elf/tst-dlopenfail.c
+@@ -0,0 +1,79 @@
++/* Test dlopen rollback after failures involving NODELETE objects (bug 20839).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <errno.h>
++#include <gnu/lib-names.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int
++do_test (void)
++{
++  /* This test uses libpthread as the canonical NODELETE module.  If
++     libpthread is no longer NODELETE because it has been merged into
++     libc, the test needs to be updated.  */
++  TEST_VERIFY (dlsym (NULL, "pthread_create") == NULL);
++
++  /* This is expected to fail because of the missing dependency.  */
++  puts ("info: attempting to load tst-dlopenfailmod1.so");
++  TEST_VERIFY (dlopen ("tst-dlopenfailmod1.so", RTLD_LAZY) == NULL);
++  const char *message = dlerror ();
++  TEST_COMPARE_STRING (message,
++                       "tst-dlopenfail-missingmod.so:"
++                       " cannot open shared object file:"
++                       " No such file or directory");
++
++  /* Do not probe for the presence of libpthread at this point because
++     that might trigger relocation if bug 20839 is present, obscuring
++     a subsequent crash.  */
++
++  /* This is expected to succeed.  */
++  puts ("info: loading tst-dlopenfailmod2.so");
++  void *handle = xdlopen ("tst-dlopenfailmod2.so", RTLD_NOW);
++  xdlclose (handle);
++
++  /* libpthread should remain loaded.  */
++  TEST_VERIFY (dlopen (LIBPTHREAD_SO, RTLD_LAZY | RTLD_NOLOAD) != NULL);
++  TEST_VERIFY (dlsym (NULL, "pthread_create") == NULL);
++
++  /* We can make libpthread global, and then the symbol should become
++     available.  */
++  TEST_VERIFY (dlopen (LIBPTHREAD_SO, RTLD_LAZY | RTLD_GLOBAL) != NULL);
++  TEST_VERIFY (dlsym (NULL, "pthread_create") != NULL);
++
++  /* sem_open is sufficiently complex to depend on relocations.  */
++  void *(*sem_open_ptr) (const char *, int flag, ...)
++    = dlsym (NULL, "sem_open");
++  if (sem_open_ptr == NULL)
++    /* Hurd does not implement sem_open.  */
++    puts ("warning: sem_open not found, further testing not possible");
++  else
++    {
++      errno = 0;
++      TEST_VERIFY (sem_open_ptr ("/", 0) == NULL);
++      TEST_COMPARE (errno, EINVAL);
++    }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-dlopenfaillinkmod.c b/elf/tst-dlopenfaillinkmod.c
+new file mode 100644
+index 0000000000000000..3b14b02bc9a12c0b
+--- /dev/null
++++ b/elf/tst-dlopenfaillinkmod.c
+@@ -0,0 +1,17 @@
++/* Empty module with a soname which is not available at run time.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
+diff --git a/elf/tst-dlopenfailmod1.c b/elf/tst-dlopenfailmod1.c
+new file mode 100644
+index 0000000000000000..6ef48829899a5a64
+--- /dev/null
++++ b/elf/tst-dlopenfailmod1.c
+@@ -0,0 +1,36 @@
++/* Module which depends on two modules: one NODELETE, one missing.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* Note: Due to the missing second module, this object cannot be
++   loaded at run time.  */
++
++#include <pthread.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Force linking against libpthread.  */
++void *pthread_create_reference = pthread_create;
++
++/* The constructor will never be executed because the module cannot be
++   loaded.  */
++static void __attribute__ ((constructor))
++init (void)
++{
++  puts ("tst-dlopenfailmod1 constructor executed");
++  _exit (1);
++}
+diff --git a/elf/tst-dlopenfailmod2.c b/elf/tst-dlopenfailmod2.c
+new file mode 100644
+index 0000000000000000..7d600386c13b98bd
+--- /dev/null
++++ b/elf/tst-dlopenfailmod2.c
+@@ -0,0 +1,29 @@
++/* Module which depends on on a NODELETE module, and can be loaded.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <pthread.h>
++#include <stdio.h>
++
++/* Force linking against libpthread.  */
++void *pthread_create_reference = pthread_create;
++
++static void __attribute__ ((constructor))
++init (void)
++{
++  puts ("info: tst-dlopenfailmod2.so constructor invoked");
++}
+diff --git a/include/link.h b/include/link.h
+index 83b1c34b7b4db8f3..a277b77cad6b52b1 100644
+--- a/include/link.h
++++ b/include/link.h
+@@ -79,6 +79,21 @@ struct r_search_path_struct
+     int malloced;
+   };
+ 
++/* Type used by the l_nodelete member.  */
++enum link_map_nodelete
++{
++ /* This link map can be deallocated.  */
++ link_map_nodelete_inactive = 0, /* Zero-initialized in _dl_new_object.  */
++
++ /* This link map cannot be deallocated.  */
++ link_map_nodelete_active,
++
++ /* This link map cannot be deallocated after dlopen has succeded.
++    dlopen turns this into link_map_nodelete_active.  dlclose treats
++    this intermediate state as link_map_nodelete_active.  */
++ link_map_nodelete_pending,
++};
++
+ 
+ /* Structure describing a loaded shared object.  The `l_next' and `l_prev'
+    members form a chain of all the shared objects loaded at startup.
+@@ -203,6 +218,11 @@ struct link_map
+ 				       freed, ie. not allocated with
+ 				       the dummy malloc in ld.so.  */
+ 
++    /* Actually of type enum link_map_nodelete.  Separate byte due to
++       a read in add_dependency in elf/dl-lookup.c outside the loader
++       lock.  Only valid for l_type == lt_loaded.  */
++    unsigned char l_nodelete;
++
+ #include <link_map.h>
+ 
+     /* Collected information about own RPATH directories.  */

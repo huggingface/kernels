@@ -1,0 +1,69 @@
+commit f7e3f92b7c45663be808279a43b5221c16001229
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu May 7 07:29:46 2020 -0700
+
+    strncmp: Add a testcase for page boundary [BZ #25933]
+    
+    Add a strncmp testcase to cover cases where one of strings ends on the
+    page boundary with the maximum string length less than the number bytes
+    of each AVX2 loop iteration and different offsets from page boundary.
+    
+    The updated string/test-strncmp fails on Intel Core i7-8559U without
+    
+    ommit 1c6432316bc434a72108d7b0c7cfbfdde64c3124
+    Author: Sunil K Pandey <skpgkp1@gmail.com>
+    Date:   Fri Jun 12 08:57:16 2020 -0700
+    
+        Fix avx2 strncmp offset compare condition check [BZ #25933]
+
+diff --git a/string/test-strncmp.c b/string/test-strncmp.c
+index d961ac4493..962679b384 100644
+--- a/string/test-strncmp.c
++++ b/string/test-strncmp.c
+@@ -403,6 +403,38 @@ check2 (void)
+   free (s2);
+ }
+ 
++static void
++check3 (void)
++{
++  /* To trigger bug 25933, we need a size that is equal to the vector
++     length times 4. In the case of AVX2 for Intel, we need 32 * 4.  We
++     make this test generic and run it for all architectures as additional
++     boundary testing for such related algorithms.  */
++  size_t size = 32 * 4;
++  CHAR *s1 = (CHAR *) (buf1 + (BUF1PAGES - 1) * page_size);
++  CHAR *s2 = (CHAR *) (buf2 + (BUF1PAGES - 1) * page_size);
++  int exp_result;
++
++  memset (s1, 'a', page_size);
++  memset (s2, 'a', page_size);
++  s1[(page_size / CHARBYTES) - 1] = (CHAR) 0;
++
++  /* Iterate over a size that is just below where we expect the bug to
++     trigger up to the size we expect will trigger the bug e.g. [99-128].
++     Likewise iterate the start of two strings between 30 and 31 bytes
++     away from the boundary to simulate alignment changes.  */
++  for (size_t s = 99; s <= size; s++)
++    for (size_t s1a = 30; s1a < 32; s1a++)
++      for (size_t s2a = 30; s2a < 32; s2a++)
++	{
++	  CHAR *s1p = s1 + (page_size / CHARBYTES - s) - s1a;
++	  CHAR *s2p = s2 + (page_size / CHARBYTES - s) - s2a;
++	  exp_result = SIMPLE_STRNCMP (s1p, s2p, s);
++	  FOR_EACH_IMPL (impl, 0)
++	    check_result (impl, s1p, s2p, s, exp_result);
++	}
++}
++
+ int
+ test_main (void)
+ {
+@@ -412,6 +444,7 @@ test_main (void)
+ 
+   check1 ();
+   check2 ();
++  check3 ();
+ 
+   printf ("%23s", "");
+   FOR_EACH_IMPL (impl, 0)

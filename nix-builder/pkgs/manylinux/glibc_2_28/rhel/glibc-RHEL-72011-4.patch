@@ -1,0 +1,66 @@
+commit e0c0f856f58ceb68800a964c36c15c606e7a8c4c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri May 16 19:53:09 2025 +0200
+
+    Use proper extern declaration for _nl_C_LC_CTYPE_{class,toupper,tolower}
+    
+    The existing initializers already contain explicit casts.  Keep them
+    due to int/uint32_t mismatch.
+    
+    Reviewed-by: Frédéric Bérat <fberat@redhat.com>
+
+diff --git a/ctype/ctype-info.c b/ctype/ctype-info.c
+index 4a8e24c001a89688..18f80ba4f64f72b2 100644
+--- a/ctype/ctype-info.c
++++ b/ctype/ctype-info.c
+@@ -41,10 +41,7 @@ libc_hidden_def (__ctype_init)
+ #if SHLIB_COMPAT (libc, GLIBC_2_0, GLIBC_2_3)
+ 
+ /* Defined in locale/C-ctype.c.  */
+-extern const char _nl_C_LC_CTYPE_class[] attribute_hidden;
+ extern const char _nl_C_LC_CTYPE_class32[] attribute_hidden;
+-extern const char _nl_C_LC_CTYPE_toupper[] attribute_hidden;
+-extern const char _nl_C_LC_CTYPE_tolower[] attribute_hidden;
+ extern const char _nl_C_LC_CTYPE_class_upper[] attribute_hidden;
+ extern const char _nl_C_LC_CTYPE_class_lower[] attribute_hidden;
+ extern const char _nl_C_LC_CTYPE_class_alpha[] attribute_hidden;
+diff --git a/include/ctype.h b/include/ctype.h
+index 0f6e7fc7ea28f821..a15e5b66781535d4 100644
+--- a/include/ctype.h
++++ b/include/ctype.h
+@@ -66,6 +66,11 @@ __ctype_tolower_loc (void)
+ #   define __isdigit_l(c, l) ({ int __c = (c); __c >= '0' && __c <= '9'; })
+ #  endif  /* Not __NO_CTYPE.  */
+ 
++/* For use in initializers.  */
++extern const char _nl_C_LC_CTYPE_class[] attribute_hidden;
++extern const uint32_t _nl_C_LC_CTYPE_toupper[] attribute_hidden;
++extern const uint32_t _nl_C_LC_CTYPE_tolower[] attribute_hidden;
++
+ # endif	/* IS_IN (libc).  */
+ #endif  /* Not _ISOMAC.  */
+ 
+diff --git a/locale/xlocale.c b/locale/xlocale.c
+index 8a52c48e5837e552..5b9199e36aa5b60a 100644
+--- a/locale/xlocale.c
++++ b/locale/xlocale.c
+@@ -19,18 +19,13 @@
+ 
+ #include <locale.h>
+ #include "localeinfo.h"
++#include <ctype.h>
+ 
+ #define DEFINE_CATEGORY(category, category_name, items, a) \
+ extern struct __locale_data _nl_C_##category;
+ #include "categories.def"
+ #undef	DEFINE_CATEGORY
+ 
+-/* Defined in locale/C-ctype.c.  */
+-extern const char _nl_C_LC_CTYPE_class[] attribute_hidden;
+-extern const char _nl_C_LC_CTYPE_toupper[] attribute_hidden;
+-extern const char _nl_C_LC_CTYPE_tolower[] attribute_hidden;
+-
+-
+ const struct __locale_struct _nl_C_locobj attribute_hidden =
+   {
+     .__locales =

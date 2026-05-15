@@ -1,0 +1,290 @@
+commit d2c4c403feddd6f0b9dbf31ca7541b37f90ee30a
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:09 2018 +0100
+
+    S390: Add z13 memmem ifunc variant.
+    
+    The new vector variant of memmem is using the common code
+    implementation, but instead of calling the default
+    mem* functions, the vector variants are called.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/Makefile (sysdep_routines): Add memmem variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Add ifunc variants for memmem.
+            * sysdeps/s390/ifunc-memmem.h: New file.
+            * sysdeps/s390/memmem.c: Likewise.
+            * sysdeps/s390/memmem-c.c: Likewise.
+            * sysdeps/s390/memmem-vx.c: Likewise.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 4441e7a5cf6fa167..47d606d3d5d99274 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -35,5 +35,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   memcmp memcmp-z900 \
+ 		   mempcpy memcpy memcpy-z900 \
+ 		   memmove memmove-c \
+-		   strstr strstr-vx strstr-c
++		   strstr strstr-vx strstr-c \
++		   memmem memmem-vx memmem-c
+ endif
+diff --git a/sysdeps/s390/ifunc-memmem.h b/sysdeps/s390/ifunc-memmem.h
+new file mode 100644
+index 0000000000000000..0f860d8d40080acf
+--- /dev/null
++++ b/sysdeps/s390/ifunc-memmem.h
+@@ -0,0 +1,52 @@
++/* memmem variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_MEMMEM_IFUNC	1
++#else
++# define HAVE_MEMMEM_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_MEMMEM_IFUNC_AND_VX_SUPPORT HAVE_MEMMEM_IFUNC
++#else
++# define HAVE_MEMMEM_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define MEMMEM_DEFAULT		MEMMEM_Z13
++# define HAVE_MEMMEM_C		0
++# define HAVE_MEMMEM_Z13	1
++#else
++# define MEMMEM_DEFAULT		MEMMEM_C
++# define HAVE_MEMMEM_C		1
++# define HAVE_MEMMEM_Z13	HAVE_MEMMEM_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_MEMMEM_C
++# define MEMMEM_C		__memmem_c
++#else
++# define MEMMEM_C		NULL
++#endif
++
++#if HAVE_MEMMEM_Z13
++# define MEMMEM_Z13		__memmem_vx
++#else
++# define MEMMEM_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/memmem-c.c b/sysdeps/s390/memmem-c.c
+new file mode 100644
+index 0000000000000000..1d8ffefcb840b8d2
+--- /dev/null
++++ b/sysdeps/s390/memmem-c.c
+@@ -0,0 +1,47 @@
++/* Default memmem implementation for S/390.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-memmem.h>
++
++#if HAVE_MEMMEM_C
++# if HAVE_MEMMEM_IFUNC
++#  include <string.h>
++
++#  ifndef _LIBC
++#   define memmem MEMMEM_C
++#  else
++#   define __memmem MEMMEM_C
++#  endif
++
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   define libc_hidden_def(name)				\
++  strong_alias (__memmem_c, __memmem_c_1);			\
++  __hidden_ver1 (__memmem_c, __GI___memmem, __memmem_c);
++
++#   undef libc_hidden_weak
++#   define libc_hidden_weak(name)					\
++  __hidden_ver1 (__memmem_c_1, __GI_memmem, __memmem_c_1) __attribute__((weak));
++#  endif
++
++#  undef weak_alias
++#  define weak_alias(a, b)
++# endif
++
++# include <string/memmem.c>
++#endif
+diff --git a/sysdeps/s390/memmem-vx.c b/sysdeps/s390/memmem-vx.c
+new file mode 100644
+index 0000000000000000..af6e200e4e0af1a5
+--- /dev/null
++++ b/sysdeps/s390/memmem-vx.c
+@@ -0,0 +1,61 @@
++/* Default memmem implementation with vector string functions for S/390.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-memmem.h>
++
++#if HAVE_MEMMEM_Z13
++# include <string.h>
++# if HAVE_MEMMEM_IFUNC
++
++#  ifndef _LIBC
++#   define memmem MEMMEM_Z13
++#  else
++#   define __memmem MEMMEM_Z13
++#  endif
++
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   undef libc_hidden_weak
++
++#   if HAVE_MEMMEM_C
++#    define libc_hidden_def(name)
++#    define libc_hidden_weak(name)
++#   else
++#    define libc_hidden_def(name)				\
++  strong_alias (__memmem_vx, __memmem_vx_1);			\
++  __hidden_ver1 (__memmem_vx, __GI___memmem, __memmem_vx);
++
++#    define libc_hidden_weak(name)					\
++  __hidden_ver1 (__memmem_vx_1, __GI_memmem, __memmem_vx_1) __attribute__((weak));
++#   endif
++#  endif
++
++#  undef weak_alias
++#  define weak_alias(a, b)
++# endif
++
++# ifdef USE_MULTIARCH
++extern __typeof (memchr) __memchr_vx attribute_hidden;
++# define memchr __memchr_vx
++
++extern __typeof (memcmp) __memcmp_z196 attribute_hidden;
++# define memcmp __memcmp_z196
++# endif
++
++# include <string/memmem.c>
++#endif
+diff --git a/sysdeps/s390/memmem.c b/sysdeps/s390/memmem.c
+new file mode 100644
+index 0000000000000000..8c50b3f403eb8d1f
+--- /dev/null
++++ b/sysdeps/s390/memmem.c
+@@ -0,0 +1,43 @@
++/* Multiple versions of memmem.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-memmem.h>
++
++#if HAVE_MEMMEM_IFUNC
++# define memmem __redirect_memmem
++# define __memmem __redirect___memmem
++# include <string.h>
++# include <ifunc-resolve.h>
++# undef memmem
++# undef __memmem
++
++# if HAVE_MEMMEM_C
++extern __typeof (__redirect_memmem) MEMMEM_C attribute_hidden;
++# endif
++
++# if HAVE_MEMMEM_Z13
++extern __typeof (__redirect_memmem) MEMMEM_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect_memmem, __memmem,
++		      (HAVE_MEMMEM_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? MEMMEM_Z13
++		      : MEMMEM_DEFAULT
++		      )
++weak_alias (__memmem, memmem)
++#endif
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 14727f8fef5431dd..da8696d917abf51c 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -25,6 +25,7 @@
+ #include <ifunc-memcmp.h>
+ #include <ifunc-memcpy.h>
+ #include <ifunc-strstr.h>
++#include <ifunc-memmem.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -151,6 +152,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRSTR_IFUNC  */
+ 
++#if HAVE_MEMMEM_IFUNC
++    IFUNC_IMPL (i, name, memmem,
++# if HAVE_MEMMEM_Z13
++		IFUNC_IMPL_ADD (array, i, memmem,
++				dl_hwcap & HWCAP_S390_VX, MEMMEM_Z13)
++# endif
++# if HAVE_MEMMEM_C
++		IFUNC_IMPL_ADD (array, i, memmem, 1, MEMMEM_C)
++# endif
++		)
++#endif /* HAVE_MEMMEM_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\

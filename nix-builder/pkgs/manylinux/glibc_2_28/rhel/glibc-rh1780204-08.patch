@@ -1,0 +1,210 @@
+From d37e99de7ab1cd8c3d427f74bf8ceb5774795fe5 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:20 +0100
+Subject: [PATCH 08/28] Use GCC builtins for rint functions if desired.
+
+This patch is using the corresponding GCC builtin for rintf, rint,
+rintl and rintf128 if the USE_FUNCTION_BUILTIN macros are defined to one
+in math-use-builtins.h.
+
+This is the case for s390 if build with at least --march=z196 --mzarch.
+Otherwise the generic implementation is used.  The code of the generic
+implementation is not changed.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit a2a9b004297b777758420c952cb6eea5985d37fe)
+---
+ sysdeps/generic/math-use-builtins.h         |  5 +++++
+ sysdeps/ieee754/dbl-64/s_rint.c             | 17 +++++++++++------
+ sysdeps/ieee754/float128/float128_private.h |  3 +++
+ sysdeps/ieee754/flt-32/s_rintf.c            | 17 +++++++++++------
+ sysdeps/ieee754/ldbl-128/s_rintl.c          | 17 +++++++++++------
+ sysdeps/s390/fpu/math-use-builtins.h        | 11 +++++++++++
+ 6 files changed, 52 insertions(+), 18 deletions(-)
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+index e12490ed41..64b4a4bb5b 100644
+--- a/sysdeps/generic/math-use-builtins.h
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -26,4 +26,9 @@
+ #define USE_NEARBYINTL_BUILTIN 0
+ #define USE_NEARBYINTF128_BUILTIN 0
+ 
++#define USE_RINT_BUILTIN 0
++#define USE_RINTF_BUILTIN 0
++#define USE_RINTL_BUILTIN 0
++#define USE_RINTF128_BUILTIN 0
++
+ #endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_rint.c b/sysdeps/ieee754/dbl-64/s_rint.c
+index 7f3dc87b96..5f4ac7c1e3 100644
+--- a/sysdeps/ieee754/dbl-64/s_rint.c
++++ b/sysdeps/ieee754/dbl-64/s_rint.c
+@@ -22,16 +22,20 @@
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-double.h>
+-
+-static const double
+-TWO52[2] = {
+-	    4.50359962737049600000e+15, /* 0x43300000, 0x00000000 */
+-	    -4.50359962737049600000e+15, /* 0xC3300000, 0x00000000 */
+-};
++#include <math-use-builtins.h>
+ 
+ double
+ __rint (double x)
+ {
++#if USE_RINT_BUILTIN
++  return __builtin_rint (x);
++#else
++  /* Use generic implementation.  */
++  static const double
++    TWO52[2] = {
++		4.50359962737049600000e+15, /* 0x43300000, 0x00000000 */
++		-4.50359962737049600000e+15, /* 0xC3300000, 0x00000000 */
++  };
+   int64_t i0, sx;
+   int32_t j0;
+   EXTRACT_WORDS64 (i0, x);
+@@ -58,6 +62,7 @@ __rint (double x)
+     }
+   double w = TWO52[sx] + x;
+   return w - TWO52[sx];
++#endif /* ! USE_RINT_BUILTIN  */
+ }
+ #ifndef __rint
+ libm_alias_double (__rint, rint)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index 0bf6e8dee2..b872aefbfd 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -141,6 +141,8 @@
+ #include <math-use-builtins.h>
+ #undef USE_NEARBYINTL_BUILTIN
+ #define USE_NEARBYINTL_BUILTIN USE_NEARBYINTF128_BUILTIN
++#undef USE_RINTL_BUILTIN
++#define USE_RINTL_BUILTIN USE_RINTF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -343,6 +345,7 @@
+ #define __builtin_copysignl __builtin_copysignf128
+ #define __builtin_signbitl __builtin_signbit
+ #define __builtin_nearbyintl __builtin_nearbyintf128
++#define __builtin_rintl __builtin_rintf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_rintf.c b/sysdeps/ieee754/flt-32/s_rintf.c
+index db6f260a0b..a266b1999e 100644
+--- a/sysdeps/ieee754/flt-32/s_rintf.c
++++ b/sysdeps/ieee754/flt-32/s_rintf.c
+@@ -16,16 +16,20 @@
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-float.h>
+-
+-static const float
+-TWO23[2]={
+-  8.3886080000e+06, /* 0x4b000000 */
+- -8.3886080000e+06, /* 0xcb000000 */
+-};
++#include <math-use-builtins.h>
+ 
+ float
+ __rintf(float x)
+ {
++#if USE_RINTF_BUILTIN
++  return __builtin_rintf (x);
++#else
++  /* Use generic implementation.  */
++  static const float
++    TWO23[2] = {
++		8.3886080000e+06, /* 0x4b000000 */
++		-8.3886080000e+06, /* 0xcb000000 */
++  };
+ 	int32_t i0,j0,sx;
+ 	float w,t;
+ 	GET_FLOAT_WORD(i0,x);
+@@ -45,6 +49,7 @@ __rintf(float x)
+ 	}
+ 	w = TWO23[sx]+x;
+ 	return w-TWO23[sx];
++#endif /* ! USE_RINTF_BUILTIN  */
+ }
+ #ifndef __rintf
+ libm_alias_float (__rint, rint)
+diff --git a/sysdeps/ieee754/ldbl-128/s_rintl.c b/sysdeps/ieee754/ldbl-128/s_rintl.c
+index 9e6637a225..f060503066 100644
+--- a/sysdeps/ieee754/ldbl-128/s_rintl.c
++++ b/sysdeps/ieee754/ldbl-128/s_rintl.c
+@@ -30,15 +30,19 @@ static char rcsid[] = "$NetBSD: $";
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
+-
+-static const _Float128
+-TWO112[2]={
+-  5.19229685853482762853049632922009600E+33L, /* 0x406F000000000000, 0 */
+- -5.19229685853482762853049632922009600E+33L  /* 0xC06F000000000000, 0 */
+-};
++#include <math-use-builtins.h>
+ 
+ _Float128 __rintl(_Float128 x)
+ {
++#if USE_RINTL_BUILTIN
++  return __builtin_rintl (x);
++#else
++  /* Use generic implementation.  */
++  static const _Float128
++    TWO112[2] = {
++		 5.19229685853482762853049632922009600E+33L, /* 0x406F000000000000, 0 */
++		 -5.19229685853482762853049632922009600E+33L  /* 0xC06F000000000000, 0 */
++  };
+ 	int64_t i0,j0,sx;
+ 	uint64_t i1 __attribute__ ((unused));
+ 	_Float128 w,t;
+@@ -59,5 +63,6 @@ _Float128 __rintl(_Float128 x)
+ 	}
+ 	w = TWO112[sx]+x;
+ 	return w-TWO112[sx];
++#endif /* ! USE_RINTL_BUILTIN  */
+ }
+ libm_alias_ldouble (__rint, rint)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+index 7abbfb3b50..8b702a6a90 100644
+--- a/sysdeps/s390/fpu/math-use-builtins.h
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -30,10 +30,16 @@
+ # define USE_NEARBYINTF_BUILTIN 1
+ # define USE_NEARBYINTL_BUILTIN 1
+ 
++# define USE_RINT_BUILTIN 1
++# define USE_RINTF_BUILTIN 1
++# define USE_RINTL_BUILTIN 1
++
+ # if __GNUC_PREREQ (8, 0)
+ #  define USE_NEARBYINTF128_BUILTIN 1
++#  define USE_RINTF128_BUILTIN 1
+ # else
+ #  define USE_NEARBYINTF128_BUILTIN 0
++#  define USE_RINTF128_BUILTIN 0
+ # endif
+ 
+ #else
+@@ -44,6 +50,11 @@
+ # define USE_NEARBYINTL_BUILTIN 0
+ # define USE_NEARBYINTF128_BUILTIN 0
+ 
++# define USE_RINT_BUILTIN 0
++# define USE_RINTF_BUILTIN 0
++# define USE_RINTL_BUILTIN 0
++# define USE_RINTF128_BUILTIN 0
++
+ #endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
+ 
+ #endif /* math-use-builtins.h */
+-- 
+2.18.2
+

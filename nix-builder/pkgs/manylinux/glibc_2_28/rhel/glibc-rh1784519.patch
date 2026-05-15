@@ -1,0 +1,29 @@
+commit 953ceff17a4a15b10cfdd5edc3c8cae4884c8ec3
+Author: Kamlesh Kumar <kamleshbhalui@gmail.com>
+Date:   Thu Dec 5 16:49:00 2019 +0100
+
+    <string.h>: Define __CORRECT_ISO_CPP_STRING_H_PROTO for Clang [BZ #25232]
+    
+    Without the asm redirects, strchr et al. are not const-correct.
+    
+    libc++ has a wrapper header that works with and without
+    __CORRECT_ISO_CPP_STRING_H_PROTO (using a Clang extension).  But when
+    Clang is used with libstdc++ or just C headers, the overloaded functions
+    with the correct types are not declared.
+    
+    This change does not impact current GCC (with libstdc++ or libc++).
+
+diff --git a/string/string.h b/string/string.h
+index 73c22a535a..faf997b972 100644
+--- a/string/string.h
++++ b/string/string.h
+@@ -33,7 +33,8 @@ __BEGIN_DECLS
+ #include <stddef.h>
+ 
+ /* Tell the caller that we provide correct C++ prototypes.  */
+-#if defined __cplusplus && __GNUC_PREREQ (4, 4)
++#if defined __cplusplus && (__GNUC_PREREQ (4, 4) \
++			    || __glibc_clang_prereq (3, 5))
+ # define __CORRECT_ISO_CPP_STRING_H_PROTO
+ #endif
+ 

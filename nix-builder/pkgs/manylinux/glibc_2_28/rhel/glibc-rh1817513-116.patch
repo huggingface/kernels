@@ -1,0 +1,544 @@
+commit 785969a047ad2f23f758901c6816422573544453
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 4 09:13:43 2020 +0100
+
+    elf: Implement a string table for ldconfig, with tail merging
+    
+    This will be used in ldconfig to reduce the ld.so.cache size slightly.
+    
+    Tail merging is an optimization where a pointer points into another
+    string if the first string is a suffix of the second string.
+    
+    The hash function FNV-1a was chosen because it is simple and achieves
+    good dispersion even for short strings (so that the hash table bucket
+    count can be a power of two).  It is clearly superior to the hsearch
+    hash and the ELF hash in this regard.
+    
+    The hash table uses chaining for collision resolution.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index f795617780b393ec..abb3e9d1179ef5cd 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -163,7 +163,7 @@ tests-container = \
+ 
+ tests := tst-tls9 tst-leaks1 \
+ 	tst-array1 tst-array2 tst-array3 tst-array4 tst-array5 \
+-	tst-auxv
++	tst-auxv tst-stringtable
+ tests-internal := tst-tls1 tst-tls2 $(tests-static-internal)
+ tests-static := $(tests-static-normal) $(tests-static-internal)
+ 
+diff --git a/elf/stringtable.c b/elf/stringtable.c
+new file mode 100644
+index 0000000000000000..099347d73ee70b8f
+--- /dev/null
++++ b/elf/stringtable.c
+@@ -0,0 +1,209 @@
++/* String tables for ld.so.cache construction.  Implementation.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published
++   by the Free Software Foundation; version 2 of the License, or
++   (at your option) any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
++
++#include <assert.h>
++#include <error.h>
++#include <ldconfig.h>
++#include <libintl.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stringtable.h>
++
++static void
++stringtable_init (struct stringtable *table)
++{
++  table->count = 0;
++
++  /* This needs to be a power of two.  128 is sufficient to keep track
++     of 42 DSOs without resizing (assuming two strings per DSOs).
++     glibc itself comes with more than 20 DSOs, so 64 would likely to
++     be too small.  */
++  table->allocated = 128;
++
++  table->entries = xcalloc (table->allocated, sizeof (table->entries[0]));
++}
++
++/* 32-bit FNV-1a hash function.  */
++static uint32_t
++fnv1a (const char *string, size_t length)
++{
++  const unsigned char *p = (const unsigned char *) string;
++  uint32_t hash = 2166136261U;
++  for (size_t i = 0; i < length; ++i)
++    {
++      hash ^= p[i];
++      hash *= 16777619U;
++    }
++  return hash;
++}
++
++/* Double the capacity of the hash table.  */
++static void
++stringtable_rehash (struct stringtable *table)
++{
++  /* This computation cannot overflow because the old total in-memory
++     size of the hash table is larger than the computed value.  */
++  uint32_t new_allocated = table->allocated * 2;
++  struct stringtable_entry **new_entries
++    = xcalloc (new_allocated, sizeof (table->entries[0]));
++
++  uint32_t mask = new_allocated - 1;
++  for (uint32_t i = 0; i < table->allocated; ++i)
++    for (struct stringtable_entry *e = table->entries[i]; e != NULL; )
++      {
++        struct stringtable_entry *next = e->next;
++        uint32_t hash = fnv1a (e->string, e->length);
++        uint32_t new_index = hash & mask;
++        e->next = new_entries[new_index];
++        new_entries[new_index] = e;
++        e = next;
++      }
++
++  free (table->entries);
++  table->entries = new_entries;
++  table->allocated = new_allocated;
++}
++
++struct stringtable_entry *
++stringtable_add (struct stringtable *table, const char *string)
++{
++  /* Check for a zero-initialized table.  */
++  if (table->allocated == 0)
++    stringtable_init (table);
++
++  size_t length = strlen (string);
++  if (length > (1U << 30))
++    error (EXIT_FAILURE, 0, _("String table string is too long"));
++  uint32_t hash = fnv1a (string, length);
++
++  /* Return a previously-existing entry.  */
++  for (struct stringtable_entry *e
++         = table->entries[hash & (table->allocated - 1)];
++       e != NULL; e = e->next)
++    if (e->length == length && memcmp (e->string, string, length) == 0)
++      return e;
++
++  /* Increase the size of the table if necessary.  Keep utilization
++     below two thirds.  */
++  if (table->count >= (1U << 30))
++    error (EXIT_FAILURE, 0, _("String table has too many entries"));
++  if (table->count * 3 > table->allocated * 2)
++    stringtable_rehash (table);
++
++  /* Add the new table entry.  */
++  ++table->count;
++  struct stringtable_entry *e
++    = xmalloc (offsetof (struct stringtable_entry, string) + length + 1);
++  uint32_t index = hash & (table->allocated - 1);
++  e->next = table->entries[index];
++  table->entries[index] = e;
++  e->length = length;
++  e->offset = 0;
++  memcpy (e->string, string, length + 1);
++  return e;
++}
++
++/* Sort reversed strings in reverse lexicographic order.  This is used
++   for tail merging.  */
++static int
++finalize_compare (const void *l, const void *r)
++{
++  struct stringtable_entry *left = *(struct stringtable_entry **) l;
++  struct stringtable_entry *right = *(struct stringtable_entry **) r;
++  size_t to_compare;
++  if (left->length < right->length)
++    to_compare = left->length;
++  else
++    to_compare = right->length;
++  for (size_t i = 1; i <= to_compare; ++i)
++    {
++      unsigned char lch = left->string[left->length - i];
++      unsigned char rch = right->string[right->length - i];
++      if (lch != rch)
++        return rch - lch;
++    }
++  if (left->length == right->length)
++    return 0;
++  else if (left->length < right->length)
++    /* Longer strings should come first.  */
++    return 1;
++  else
++    return -1;
++}
++
++void
++stringtable_finalize (struct stringtable *table,
++                      struct stringtable_finalized *result)
++{
++  if (table->count == 0)
++    {
++      result->strings = xstrdup ("");
++      result->size = 0;
++      return;
++    }
++
++  /* Optimize the order of the strings.  */
++  struct stringtable_entry **array = xcalloc (table->count, sizeof (*array));
++  {
++    size_t j = 0;
++    for (uint32_t i = 0; i < table->allocated; ++i)
++      for (struct stringtable_entry *e = table->entries[i]; e != NULL;
++           e = e->next)
++        {
++          array[j] = e;
++          ++j;
++        }
++    assert (j == table->count);
++  }
++  qsort (array, table->count, sizeof (*array), finalize_compare);
++
++  /* Assign offsets, using tail merging (sharing suffixes) if possible.  */
++  array[0]->offset = 0;
++  for (uint32_t j = 1; j < table->count; ++j)
++    {
++      struct stringtable_entry *previous = array[j - 1];
++      struct stringtable_entry *current = array[j];
++      if (previous->length >= current->length
++          && memcmp (&previous->string[previous->length - current->length],
++                     current->string, current->length) == 0)
++        current->offset = (previous->offset + previous->length
++                           - current->length);
++      else if (__builtin_add_overflow (previous->offset,
++                                       previous->length + 1,
++                                       &current->offset))
++        error (EXIT_FAILURE, 0, _("String table is too large"));
++    }
++
++  /* Allocate the result string.  */
++  {
++    struct stringtable_entry *last = array[table->count - 1];
++    if (__builtin_add_overflow (last->offset, last->length + 1,
++                                &result->size))
++      error (EXIT_FAILURE, 0, _("String table is too large"));
++  }
++  /* The strings are copied from the hash table, so the array is no
++     longer needed.  */
++  free (array);
++  result->strings = xcalloc (result->size, 1);
++
++  /* Copy the strings.  */
++  for (uint32_t i = 0; i < table->allocated; ++i)
++    for (struct stringtable_entry *e = table->entries[i]; e != NULL;
++         e = e->next)
++      if (result->strings[e->offset] == '\0')
++        memcpy (&result->strings[e->offset], e->string, e->length + 1);
++}
+diff --git a/elf/stringtable.h b/elf/stringtable.h
+new file mode 100644
+index 0000000000000000..7d57d1bda9602947
+--- /dev/null
++++ b/elf/stringtable.h
+@@ -0,0 +1,64 @@
++/* String tables for ld.so.cache construction.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published
++   by the Free Software Foundation; version 2 of the License, or
++   (at your option) any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
++
++#ifndef _STRINGTABLE_H
++#define _STRINGTABLE_H
++
++#include <stddef.h>
++#include <stdint.h>
++
++/* An entry in the string table.  Only the length and string fields are
++   expected to be used outside the string table code.  */
++struct stringtable_entry
++{
++  struct stringtable_entry *next; /* For collision resolution.  */
++  uint32_t length;                /* Length of then string.  */
++  uint32_t offset;                /* From start of finalized table.  */
++  char string[];                  /* Null-terminated string.  */
++};
++
++/* A string table.  Zero-initialization produces a valid atable.  */
++struct stringtable
++{
++  struct stringtable_entry **entries;  /* Array of hash table buckets.  */
++  uint32_t count;                 /* Number of elements in the table.  */
++  uint32_t allocated;             /* Length of the entries array.  */
++};
++
++/* Adds STRING to TABLE.  May return the address of an existing entry.  */
++struct stringtable_entry *stringtable_add (struct stringtable *table,
++                                           const char *string);
++
++/* Result of stringtable_finalize.  SIZE bytes at STRINGS should be
++   written to the file.  */
++struct stringtable_finalized
++{
++  char *strings;
++  size_t size;
++};
++
++/* Assigns offsets to string table entries and computes the serialized
++   form of the string table.  */
++void stringtable_finalize (struct stringtable *table,
++                           struct stringtable_finalized *result);
++
++/* Deallocate the string table (but not the TABLE pointer itself).
++   (The table can be re-used for adding more strings without
++   initialization.)  */
++void stringtable_free (struct stringtable *table);
++
++#endif /* _STRINGTABLE_H */
+diff --git a/elf/stringtable_free.c b/elf/stringtable_free.c
+new file mode 100644
+index 0000000000000000..8588a254705d4df8
+--- /dev/null
++++ b/elf/stringtable_free.c
+@@ -0,0 +1,33 @@
++/* String tables for ld.so.cache construction.  Deallocation (for tests only).
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published
++   by the Free Software Foundation; version 2 of the License, or
++   (at your option) any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++#include <stringtable.h>
++
++void
++stringtable_free (struct stringtable *table)
++{
++  for (uint32_t i = 0; i < table->allocated; ++i)
++    for (struct stringtable_entry *e = table->entries[i]; e != NULL; )
++      {
++        struct stringtable_entry *next = e->next;
++        free (e);
++        e = next;
++      }
++  free (table->entries);
++  *table = (struct stringtable) { 0, };
++}
+diff --git a/elf/tst-stringtable.c b/elf/tst-stringtable.c
+new file mode 100644
+index 0000000000000000..3731086037567d57
+--- /dev/null
++++ b/elf/tst-stringtable.c
+@@ -0,0 +1,181 @@
++/* Unit test for ldconfig string tables.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published
++   by the Free Software Foundation; version 2 of the License, or
++   (at your option) any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stringtable.h>
++#include <support/check.h>
++#include <support/support.h>
++
++static int
++do_test (void)
++{
++  /* Empty string table.  */
++  {
++    struct stringtable s = { 0, };
++    struct stringtable_finalized f;
++    stringtable_finalize (&s, &f);
++    TEST_COMPARE_STRING (f.strings, "");
++    TEST_COMPARE (f.size, 0);
++    free (f.strings);
++    stringtable_free (&s);
++  }
++
++  /* String table with one empty string.  */
++  {
++    struct stringtable s = { 0, };
++    struct stringtable_entry *e = stringtable_add (&s, "");
++    TEST_COMPARE_STRING (e->string, "");
++    TEST_COMPARE (e->length, 0);
++    TEST_COMPARE (s.count, 1);
++
++    struct stringtable_finalized f;
++    stringtable_finalize (&s, &f);
++    TEST_COMPARE (e->offset, 0);
++    TEST_COMPARE_STRING (f.strings, "");
++    TEST_COMPARE (f.size, 1);
++    free (f.strings);
++    stringtable_free (&s);
++  }
++
++  /* String table with one non-empty string.  */
++  {
++    struct stringtable s = { 0, };
++    struct stringtable_entry *e = stringtable_add (&s, "name");
++    TEST_COMPARE_STRING (e->string, "name");
++    TEST_COMPARE (e->length, 4);
++    TEST_COMPARE (s.count, 1);
++
++    struct stringtable_finalized f;
++    stringtable_finalize (&s, &f);
++    TEST_COMPARE (e->offset, 0);
++    TEST_COMPARE_STRING (f.strings, "name");
++    TEST_COMPARE (f.size, 5);
++    free (f.strings);
++    stringtable_free (&s);
++  }
++
++  /* Two strings, one is a prefix of the other.  Tail-merging can only
++     happen in one way in this case.  */
++  {
++    struct stringtable s = { 0, };
++    struct stringtable_entry *suffix = stringtable_add (&s, "suffix");
++    TEST_COMPARE_STRING (suffix->string, "suffix");
++    TEST_COMPARE (suffix->length, 6);
++    TEST_COMPARE (s.count, 1);
++
++    struct stringtable_entry *prefix
++      = stringtable_add (&s, "prefix-suffix");
++    TEST_COMPARE_STRING (prefix->string, "prefix-suffix");
++    TEST_COMPARE (prefix->length, strlen ("prefix-suffix"));
++    TEST_COMPARE (s.count, 2);
++
++    struct stringtable_finalized f;
++    stringtable_finalize (&s, &f);
++    TEST_COMPARE (prefix->offset, 0);
++    TEST_COMPARE (suffix->offset, strlen ("prefix-"));
++    TEST_COMPARE_STRING (f.strings, "prefix-suffix");
++    TEST_COMPARE (f.size, sizeof ("prefix-suffix"));
++    free (f.strings);
++    stringtable_free (&s);
++  }
++
++  /* String table with various shared prefixes.  Triggers hash
++     resizing.  */
++  {
++    enum { count = 1500 };
++    char *strings[2 * count];
++    struct stringtable_entry *entries[2 * count];
++    struct stringtable s = { 0, };
++    for (int i = 0; i < count; ++i)
++      {
++        strings[i] = xasprintf ("%d", i);
++        entries[i] = stringtable_add (&s, strings[i]);
++        TEST_COMPARE (entries[i]->length, strlen (strings[i]));
++        TEST_COMPARE_STRING (entries[i]->string, strings[i]);
++        strings[i + count] = xasprintf ("prefix/%d", i);
++        entries[i + count] = stringtable_add (&s, strings[i + count]);
++        TEST_COMPARE (entries[i + count]->length, strlen (strings[i + count]));
++        TEST_COMPARE_STRING (entries[i + count]->string, strings[i + count]);
++      }
++
++    struct stringtable_finalized f;
++    stringtable_finalize (&s, &f);
++
++    for (int i = 0; i < 2 * count; ++i)
++      {
++        TEST_COMPARE (entries[i]->length, strlen (strings[i]));
++        TEST_COMPARE_STRING (entries[i]->string, strings[i]);
++        TEST_COMPARE_STRING (f.strings + entries[i]->offset, strings[i]);
++        free (strings[i]);
++      }
++
++    free (f.strings);
++    stringtable_free (&s);
++  }
++
++  /* Verify that maximum tail merging happens.  */
++  {
++    struct stringtable s = { 0, };
++    const char *strings[] = {
++      "",
++      "a",
++      "b",
++      "aa",
++      "aaa",
++      "aa",
++      "bb",
++      "b",
++      "a",
++      "ba",
++      "baa",
++    };
++    struct stringtable_entry *entries[array_length (strings)];
++    for (int i = 0; i < array_length (strings); ++i)
++      entries[i] = stringtable_add (&s, strings[i]);
++    for (int i = 0; i < array_length (strings); ++i)
++      TEST_COMPARE_STRING (entries[i]->string, strings[i]);
++
++    struct stringtable_finalized f;
++    stringtable_finalize (&s, &f);
++
++    /* There are only four different strings, "aaa", "ba", "baa",
++       "bb".  The rest is shared in an unspecified fashion.  */
++    TEST_COMPARE (f.size, 4 + 3 + 4 + 3);
++
++    for (int i = 0; i < array_length (strings); ++i)
++      {
++        TEST_COMPARE_STRING (entries[i]->string, strings[i]);
++        TEST_COMPARE_STRING (f.strings + entries[i]->offset, strings[i]);
++      }
++
++    free (f.strings);
++    stringtable_free (&s);
++  }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
++
++/* Re-compile the string table implementation here.  It is not
++   possible to link against the actual build because it was built for
++   use in ldconfig.  */
++#define _(arg) arg
++#include "stringtable.c"
++#include "stringtable_free.c"

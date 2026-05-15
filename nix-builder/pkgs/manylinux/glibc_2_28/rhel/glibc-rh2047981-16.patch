@@ -1,0 +1,253 @@
+commit 3dac3959a5cb585b065cef2cb8a8d909c907e202
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Jul 20 11:03:34 2021 -0300
+
+    elf: Add _dl_audit_activity_map and _dl_audit_activity_nsid
+    
+    It consolidates the code required to call la_activity audit
+    callback.
+    
+    Also for a new Lmid_t the namespace link_map list are empty, so it
+    requires to check if before using it.  This can happen for when audit
+    module is used along with dlmopen.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index 4066dfe85146b9d4..74b87f4b39be75e1 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -18,6 +18,32 @@
+ 
+ #include <ldsodefs.h>
+ 
++void
++_dl_audit_activity_map (struct link_map *l, int action)
++{
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      if (afct->activity != NULL)
++	afct->activity (&link_map_audit_state (l, cnt)->cookie, action);
++      afct = afct->next;
++    }
++}
++
++void
++_dl_audit_activity_nsid (Lmid_t nsid, int action)
++{
++  /* If head is NULL, the namespace has become empty, and the audit interface
++     does not give us a way to signal LA_ACT_CONSISTENT for it because the
++     first loaded module is used to identify the namespace.  */
++  struct link_map *head = GL(dl_ns)[nsid]._ns_loaded;
++  if (__glibc_likely (GLRO(dl_naudit) == 0)
++      || head == NULL || head->l_auditing)
++    return;
++
++  _dl_audit_activity_map (head, action);
++}
++
+ void
+ _dl_audit_objopen (struct link_map *l, Lmid_t nsid)
+ {
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 698bda929c0eab6c..1ba594b600c4c87a 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -478,25 +478,7 @@ _dl_close_worker (struct link_map *map, bool force)
+ 
+ #ifdef SHARED
+   /* Auditing checkpoint: we will start deleting objects.  */
+-  if (__glibc_unlikely (do_audit))
+-    {
+-      struct link_map *head = ns->_ns_loaded;
+-      struct audit_ifaces *afct = GLRO(dl_audit);
+-      /* Do not call the functions for any auditing object.  */
+-      if (head->l_auditing == 0)
+-	{
+-	  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	    {
+-	      if (afct->activity != NULL)
+-		{
+-		  struct auditstate *state = link_map_audit_state (head, cnt);
+-		  afct->activity (&state->cookie, LA_ACT_DELETE);
+-		}
+-
+-	      afct = afct->next;
+-	    }
+-	}
+-    }
++  _dl_audit_activity_nsid (nsid, LA_ACT_DELETE);
+ #endif
+ 
+   /* Notify the debugger we are about to remove some loaded objects.  */
+@@ -791,32 +773,9 @@ _dl_close_worker (struct link_map *map, bool force)
+   __rtld_lock_unlock_recursive (GL(dl_load_tls_lock));
+ 
+ #ifdef SHARED
+-  /* Auditing checkpoint: we have deleted all objects.  */
+-  if (__glibc_unlikely (do_audit))
+-    {
+-      struct link_map *head = ns->_ns_loaded;
+-      /* If head is NULL, the namespace has become empty, and the
+-	 audit interface does not give us a way to signal
+-	 LA_ACT_CONSISTENT for it because the first loaded module is
+-	 used to identify the namespace.
+-
+-	 Furthermore, do not notify auditors of the cleanup of a
+-	 failed audit module loading attempt.  */
+-      if (head != NULL && head->l_auditing == 0)
+-	{
+-	  struct audit_ifaces *afct = GLRO(dl_audit);
+-	  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	    {
+-	      if (afct->activity != NULL)
+-		{
+-		  struct auditstate *state = link_map_audit_state (head, cnt);
+-		  afct->activity (&state->cookie, LA_ACT_CONSISTENT);
+-		}
+-
+-	      afct = afct->next;
+-	    }
+-	}
+-    }
++  /* Auditing checkpoint: we have deleted all objects.  Also, do not notify
++     auditors of the cleanup of a failed audit module loading attempt.  */
++  _dl_audit_activity_nsid (nsid, LA_ACT_CONSISTENT);
+ #endif
+ 
+   if (__builtin_expect (ns->_ns_loaded == NULL, 0)
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index c11b1d1781e9b40b..8a18c761bb753e37 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -1403,24 +1403,8 @@ cannot enable executable stack as shared object requires");
+       /* Auditing checkpoint: we are going to add new objects.  Since this
+          is called after _dl_add_to_namespace_list the namespace is guaranteed
+ 	 to not be empty.  */
+-      if ((mode & __RTLD_AUDIT) == 0
+-	  && __glibc_unlikely (GLRO(dl_naudit) > 0))
+-	{
+-	  struct link_map *head = GL(dl_ns)[nsid]._ns_loaded;
+-	  /* Do not call the functions for any auditing object.  */
+-	  if (head->l_auditing == 0)
+-	    {
+-	      struct audit_ifaces *afct = GLRO(dl_audit);
+-	      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-		{
+-		  if (afct->activity != NULL)
+-		    afct->activity (&link_map_audit_state (head, cnt)->cookie,
+-				    LA_ACT_ADD);
+-
+-		  afct = afct->next;
+-		}
+-	    }
+-	}
++      if ((mode & __RTLD_AUDIT) == 0)
++	_dl_audit_activity_nsid (nsid, LA_ACT_ADD);
+ #endif
+ 
+       /* Notify the debugger we have added some objects.  We need to
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index b5a4da04907d8d29..660a56b2fb2639cd 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -598,25 +598,7 @@ dl_open_worker_begin (void *a)
+ 
+ #ifdef SHARED
+   /* Auditing checkpoint: we have added all objects.  */
+-  if (__glibc_unlikely (GLRO(dl_naudit) > 0))
+-    {
+-      struct link_map *head = GL(dl_ns)[new->l_ns]._ns_loaded;
+-      /* Do not call the functions for any auditing object.  */
+-      if (head->l_auditing == 0)
+-	{
+-	  struct audit_ifaces *afct = GLRO(dl_audit);
+-	  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	    {
+-	      if (afct->activity != NULL)
+-		{
+-		  struct auditstate *state = link_map_audit_state (head, cnt);
+-		  afct->activity (&state->cookie, LA_ACT_CONSISTENT);
+-		}
+-
+-	      afct = afct->next;
+-	    }
+-	}
+-    }
++  _dl_audit_activity_nsid (new->l_ns, LA_ACT_CONSISTENT);
+ #endif
+ 
+   /* Notify the debugger all new objects are now ready to go.  */
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 1982e42390760e0a..767acd122262b824 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1799,18 +1799,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+ 
+   /* Auditing checkpoint: we are ready to signal that the initial map
+      is being constructed.  */
+-  if (__glibc_unlikely (GLRO(dl_naudit) > 0))
+-    {
+-      struct audit_ifaces *afct = GLRO(dl_audit);
+-      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	{
+-	  if (afct->activity != NULL)
+-	    afct->activity (&link_map_audit_state (main_map, cnt)->cookie,
+-			    LA_ACT_ADD);
+-
+-	  afct = afct->next;
+-	}
+-    }
++  _dl_audit_activity_map (main_map, LA_ACT_ADD);
+ 
+   /* We have two ways to specify objects to preload: via environment
+      variable and via the file /etc/ld.so.preload.  The latter can also
+@@ -2484,23 +2473,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+ 
+ #ifdef SHARED
+   /* Auditing checkpoint: we have added all objects.  */
+-  if (__glibc_unlikely (GLRO(dl_naudit) > 0))
+-    {
+-      struct link_map *head = GL(dl_ns)[LM_ID_BASE]._ns_loaded;
+-      /* Do not call the functions for any auditing object.  */
+-      if (head->l_auditing == 0)
+-	{
+-	  struct audit_ifaces *afct = GLRO(dl_audit);
+-	  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	    {
+-	      if (afct->activity != NULL)
+-		afct->activity (&link_map_audit_state (head, cnt)->cookie,
+-				LA_ACT_CONSISTENT);
+-
+-	      afct = afct->next;
+-	    }
+-	}
+-    }
++  _dl_audit_activity_nsid (LM_ID_BASE, LA_ACT_CONSISTENT);
+ #endif
+ 
+   /* Notify the debugger all new objects are now ready to go.  We must re-get
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 410f070e28b74bdf..05737342d6287233 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1269,6 +1269,16 @@ link_map_audit_state (struct link_map *l, size_t index)
+   return &l->l_audit[index];
+ }
+ 
++/* Call the la_activity from the audit modules from the link map L and issues
++   the ACTION argument.  */
++void _dl_audit_activity_map (struct link_map *l, int action)
++  attribute_hidden;
++
++/* Call the la_activity from the audit modules from the link map from the
++   namespace NSID and issues the ACTION argument.  */
++void _dl_audit_activity_nsid (Lmid_t nsid, int action)
++  attribute_hidden;
++
+ /* Call the la_objopen from the audit modules for the link_map L on the
+    namespace identification NSID.  */
+ void _dl_audit_objopen (struct link_map *l, Lmid_t nsid)

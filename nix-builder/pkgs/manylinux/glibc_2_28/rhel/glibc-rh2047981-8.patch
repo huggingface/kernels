@@ -1,0 +1,29 @@
+commit 832f50be6c9c010e46180d14126bbb81f35e808c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Jul 6 13:22:01 2021 +0200
+
+    elf: Call free from base namespace on error in dl-libc.c [BZ #27646]
+    
+    In dlerror_run, free corresponds to the local malloc in the
+    namespace, but GLRO (dl_catch_error) uses the malloc from the base
+    namespace.  elf/tst-dlmopen-gethostbyname triggers this mismatch,
+    but it does not crash, presumably because of a fastbin deallocation.
+    
+    Fixes commit c2059edce20c124d1a99f1a94cc52e83b77a917a ("elf: Use
+    _dl_catch_error from base namespace in dl-libc.c [BZ #27646]") and
+    commit b2964eb1d9a6b8ab1250e8a881cf406182da5875 ("dlfcn: Failures
+    after dlmopen should not terminate process [BZ #24772]").
+
+diff --git a/elf/dl-libc.c b/elf/dl-libc.c
+index 3a242d219756dac6..bb6e3378d546b234 100644
+--- a/elf/dl-libc.c
++++ b/elf/dl-libc.c
+@@ -48,7 +48,7 @@ dlerror_run (void (*operate) (void *), void *args)
+ 		?: last_errstring != NULL);
+ 
+   if (result && malloced)
+-    free ((char *) last_errstring);
++    GLRO (dl_error_free) ((char *) last_errstring);
+ 
+   return result;
+ }

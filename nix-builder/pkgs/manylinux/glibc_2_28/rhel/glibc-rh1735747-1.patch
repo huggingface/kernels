@@ -1,0 +1,25 @@
+commit 6d750b18999b52ec74102c046cd27181f943bda8
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 1 14:06:24 2019 +0200
+
+    malloc: Remove unwanted leading whitespace in malloc_info [BZ #24867]
+    
+    It was introduced in commit 6c8dbf00f536d78b1937b5af6f57be47fd376344
+    ("Reformat malloc to gnu style.").
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    (cherry picked from commit b0f6679bcd738ea244a14acd879d974901e56c8e)
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index e6a483d5cf7c4312..4fc7f175fe42d6c6 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -5518,7 +5518,7 @@ __malloc_info (int options, FILE *fp)
+ 
+       for (size_t i = 0; i < nsizes; ++i)
+ 	if (sizes[i].count != 0 && i != NFASTBINS)
+-	  fprintf (fp, "							      \
++	  fprintf (fp, "\
+   <size from=\"%zu\" to=\"%zu\" total=\"%zu\" count=\"%zu\"/>\n",
+ 		   sizes[i].from, sizes[i].to, sizes[i].total, sizes[i].count);
+ 

@@ -1,0 +1,37 @@
+commit 8ef9196b26793830515402ea95aca2629f7721ec
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Mar 23 17:11:56 2022 +0000
+
+    Update syscall lists for Linux 5.17
+    
+    Linux 5.17 has one new syscall, set_mempolicy_home_node.  Update
+    syscall-names.list and regenerate the arch-syscall.h headers with
+    build-many-glibcs.py update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list to Linux 5.17.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 6421806110..b8c0b0c586 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.16.
+-kernel 5.16
++# The list of system calls is current as of Linux 5.17.
++kernel 5.17
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -524,6 +524,7 @@ sendmmsg
+ sendmsg
+ sendto
+ set_mempolicy
++set_mempolicy_home_node
+ set_robust_list
+ set_thread_area
+ set_tid_address

@@ -1,0 +1,27 @@
+commit 5177d85b0c050a2333a0c4165c938dd422013d05
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Jan 16 06:45:36 2020 -0800
+
+    Clear GL(dl_initfirst) when freeing its link_map memory [BZ# 25396]
+    
+    We should clear GL(dl_initfirst) when freeing its link_map memory.
+    
+    Tested on Fedora 31/x86-64 with CET.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index fa7f3e8174576e46..a9ecdff62dba88fb 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -749,6 +749,10 @@ _dl_close_worker (struct link_map *map, bool force)
+ 	  if (imap->l_runpath_dirs.dirs != (void *) -1)
+ 	    free (imap->l_runpath_dirs.dirs);
+ 
++	  /* Clear GL(dl_initfirst) when freeing its link_map memory.  */
++	  if (imap == GL(dl_initfirst))
++	    GL(dl_initfirst) = NULL;
++
+ 	  free (imap);
+ 	}
+     }

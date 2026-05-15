@@ -1,0 +1,35 @@
+From ceeffe968c01b1202e482f4855cb6baf5c6cb713 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 6 Dec 2021 07:14:12 -0800
+Subject: [PATCH] x86: Don't set Prefer_No_AVX512 for processors with AVX512
+ and AVX-VNNI
+Content-type: text/plain; charset=UTF-8
+
+Don't set Prefer_No_AVX512 on processors with AVX512 and AVX-VNNI since
+they won't lower CPU frequency when ZMM load and store instructions are
+used.
+---
+ sysdeps/x86/cpu-features.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 956bfb4f..5ff2baa0 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -525,8 +525,11 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	  |= bit_arch_Prefer_No_VZEROUPPER;
+       else
+ 	{
+-	  cpu_features->preferred[index_arch_Prefer_No_AVX512]
+-	    |= bit_arch_Prefer_No_AVX512;
++	  /* Processors with AVX512 and AVX-VNNI won't lower CPU frequency
++	     when ZMM load and store instructions are used.  */
++	  if (!CPU_FEATURES_CPU_P (cpu_features, AVX_VNNI))
++	    cpu_features->preferred[index_arch_Prefer_No_AVX512]
++	      |= bit_arch_Prefer_No_AVX512;
+ 
+ 	  /* Avoid RTM abort triggered by VZEROUPPER inside a
+ 	     transactionally executing RTM region.  */
+-- 
+GitLab
+

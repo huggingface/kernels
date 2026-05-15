@@ -1,0 +1,37 @@
+commit 4997a533ae4b51ef66a6b68862b7578a7acb82df
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Thu Jan 13 22:18:13 2022 +0000
+
+    Update syscall lists for Linux 5.16
+    
+    Linux 5.16 has one new syscall, futex_waitv.  Update
+    syscall-names.list and regenerate the arch-syscall.h headers with
+    build-many-glibcs.py update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list to Linux 5.16.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index c80a9a59cb..6421806110 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.15.
+-kernel 5.15
++# The list of system calls is current as of Linux 5.16.
++kernel 5.16
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -146,6 +146,7 @@ ftruncate
+ ftruncate64
+ futex
+ futex_time64
++futex_waitv
+ futimesat
+ get_kernel_syms
+ get_mempolicy

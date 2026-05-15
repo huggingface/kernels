@@ -1,0 +1,121 @@
+commit 969e9733c7d17edf1e239a73fa172f357561f440
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Feb 21 09:20:28 2023 +0100
+
+    gshadow: Matching sgetsgent, sgetsgent_r ERANGE handling (bug 30151)
+    
+    Before this change, sgetsgent_r did not set errno to ERANGE, but
+    sgetsgent only check errno, not the return value from sgetsgent_r.
+    Consequently, sgetsgent did not detect any error, and reported
+    success to the caller, without initializing the struct sgrp object
+    whose address was returned.
+    
+    This commit changes sgetsgent_r to set errno as well.  This avoids
+    similar issues in applications which only change errno.
+    
+    Reviewed-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+diff --git a/gshadow/Makefile b/gshadow/Makefile
+index 796fbbf473..a95524593a 100644
+--- a/gshadow/Makefile
++++ b/gshadow/Makefile
+@@ -26,7 +26,7 @@ headers		= gshadow.h
+ routines	= getsgent getsgnam sgetsgent fgetsgent putsgent \
+ 		  getsgent_r getsgnam_r sgetsgent_r fgetsgent_r
+ 
+-tests = tst-gshadow tst-putsgent tst-fgetsgent_r
++tests = tst-gshadow tst-putsgent tst-fgetsgent_r tst-sgetsgent
+ 
+ CFLAGS-getsgent_r.c += -fexceptions
+ CFLAGS-getsgent.c += -fexceptions
+diff --git a/gshadow/sgetsgent_r.c b/gshadow/sgetsgent_r.c
+index ea085e91d7..c75624e1f7 100644
+--- a/gshadow/sgetsgent_r.c
++++ b/gshadow/sgetsgent_r.c
+@@ -61,7 +61,10 @@ __sgetsgent_r (const char *string, struct sgrp *resbuf, char *buffer,
+       buffer[buflen - 1] = '\0';
+       sp = strncpy (buffer, string, buflen);
+       if (buffer[buflen - 1] != '\0')
+-	return ERANGE;
++	{
++	  __set_errno (ERANGE);
++	  return ERANGE;
++	}
+     }
+   else
+     sp = (char *) string;
+diff --git a/gshadow/tst-sgetsgent.c b/gshadow/tst-sgetsgent.c
+new file mode 100644
+index 0000000000..0370c10fd0
+--- /dev/null
++++ b/gshadow/tst-sgetsgent.c
+@@ -0,0 +1,69 @@
++/* Test large input for sgetsgent (bug 30151).
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <gshadow.h>
++#include <stddef.h>
++#include <support/check.h>
++#include <support/support.h>
++#include <support/xmemstream.h>
++#include <stdlib.h>
++
++static int
++do_test (void)
++{
++  /* Create a shadow group with 1000 members.  */
++  struct xmemstream mem;
++  xopen_memstream (&mem);
++  const char *passwd = "k+zD0nucwfxAo3sw1NXUj6K5vt5M16+X0TVGdE1uFvq5R8V7efJ";
++  fprintf (mem.out, "group-name:%s::m0", passwd);
++  for (int i = 1; i < 1000; ++i)
++    fprintf (mem.out, ",m%d", i);
++  xfclose_memstream (&mem);
++
++  /* Call sgetsgent.  */
++  char *input = mem.buffer;
++  struct sgrp *e = sgetsgent (input);
++  TEST_VERIFY_EXIT (e != NULL);
++  TEST_COMPARE_STRING (e->sg_namp, "group-name");
++  TEST_COMPARE_STRING (e->sg_passwd, passwd);
++  /* No administrators.  */
++  TEST_COMPARE_STRING (e->sg_adm[0], NULL);
++  /* Check the members list.  */
++  for (int i = 0; i < 1000; ++i)
++    {
++      char *member = xasprintf ("m%d", i);
++      TEST_COMPARE_STRING (e->sg_mem[i], member);
++      free (member);
++    }
++  TEST_COMPARE_STRING (e->sg_mem[1000], NULL);
++
++  /* Check that putsgent brings back the input string.  */
++  xopen_memstream (&mem);
++  TEST_COMPARE (putsgent (e, mem.out), 0);
++  xfclose_memstream (&mem);
++  /* Compare without the trailing '\n' that putsgent added.  */
++  TEST_COMPARE (mem.buffer[mem.length - 1], '\n');
++  mem.buffer[mem.length - 1] = '\0';
++  TEST_COMPARE_STRING (mem.buffer, input);
++
++  free (mem.buffer);
++  free (input);
++  return 0;
++}
++
++#include <support/test-driver.c>

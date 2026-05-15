@@ -1,0 +1,38 @@
+This patch is a downstream-only variant of this upstream commit:
+
+commit 45b1e17e9150dbd9ac2d578579063fbfa8e1b327
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Thu Dec 17 10:03:05 2020 +0000
+
+    aarch64: use PTR_ARG and SIZE_ARG instead of DELOUSE
+    
+    DELOUSE was added to asm code to make them compatible with non-LP64
+    ABIs, but it is an unfortunate name and the code was not compatible
+    with ABIs where pointer and size_t are different. Glibc currently
+    only supports the LP64 ABI so these macros are not really needed or
+    tested, but for now the name is changed to be more meaningful instead
+    of removing them completely.
+    
+    Some DELOUSE macros were dropped: clone, strlen and strnlen used it
+    unnecessarily.
+    
+    The out of tree ILP32 patches are currently not maintained and will
+    likely need a rework to rebase them on top of the time64 changes.
+
+Keeping the DELOUSE macro avoids the need to update all string
+functions.  Lack of BTI markers and architecture variants cause many
+conflicts in a full upstream backport.
+
+diff --git a/sysdeps/aarch64/sysdep.h b/sysdeps/aarch64/sysdep.h
+index 5b30709436d3acea..1bcf15d4f18586ba 100644
+--- a/sysdeps/aarch64/sysdep.h
++++ b/sysdeps/aarch64/sysdep.h
+@@ -32,6 +32,8 @@
+ # define PTR_LOG_SIZE		2
+ # define DELOUSE(n)		mov     w##n, w##n
+ #endif
++#define PTR_ARG(n) DELOUSE(n)
++#define SIZE_ARG(n) DELOUSE(n)
+ 
+ #define PTR_SIZE	(1<<PTR_LOG_SIZE)
+ 

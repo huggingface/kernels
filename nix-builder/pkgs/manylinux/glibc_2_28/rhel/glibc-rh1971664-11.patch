@@ -1,0 +1,53 @@
+Changes specific to RHEL-8:
+
+- lstat64 is a macro, so undefine it first
+
+commit f3629a4be82a393ff56646c388da2fda0101f557
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Thu Jun 10 14:56:37 2021 +0530
+
+    Handle DT_UNKNOWN in gconv-modules.d
+    
+    On filesystems that do not support dt_type, a regular file shows up as
+    DT_UNKNOWN.  Fall back to using lstat64 to read file properties in
+    such cases.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/iconv/gconv_parseconfdir.h b/iconv/gconv_parseconfdir.h
+index 3d4d58d4be10a250..ba9b3fd36d9e30f9 100644
+--- a/iconv/gconv_parseconfdir.h
++++ b/iconv/gconv_parseconfdir.h
+@@ -32,6 +32,8 @@
+ # define readdir __readdir
+ # define closedir __closedir
+ # define mempcpy __mempcpy
++# undef lstat64
++# define lstat64 __lstat64
+ #endif
+ 
+ /* Name of the file containing the module information in the directories
+@@ -138,7 +140,7 @@ gconv_parseconfdir (const char *dir, size_t dir_len)
+       struct dirent *ent;
+       while ((ent = readdir (confdir)) != NULL)
+ 	{
+-	  if (ent->d_type != DT_REG)
++	  if (ent->d_type != DT_REG && ent->d_type != DT_UNKNOWN)
+ 	    continue;
+ 
+ 	  size_t len = strlen (ent->d_name);
+@@ -148,8 +150,14 @@ gconv_parseconfdir (const char *dir, size_t dir_len)
+ 	      && strcmp (ent->d_name + len - strlen (suffix), suffix) == 0)
+ 	    {
+ 	      char *conf;
++	      struct stat64 st;
+ 	      if (asprintf (&conf, "%s/%s", buf, ent->d_name) < 0)
+ 		continue;
++	      if (ent->d_type == DT_UNKNOWN
++		  && (lstat64 (conf, &st) == -1
++		      || !S_ISREG (st.st_mode)))
++		continue;
++
+ 	      found |= read_conf_file (conf, dir, dir_len);
+ 	      free (conf);
+ 	    }

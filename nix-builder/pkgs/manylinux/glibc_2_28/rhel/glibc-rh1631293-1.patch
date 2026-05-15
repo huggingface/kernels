@@ -1,0 +1,29 @@
+commit e7d22db29cfdd2f1fb97a70a76fa53d151569945
+Author: Mingli Yu <Mingli.Yu@windriver.com>
+Date:   Thu Sep 20 12:41:13 2018 +0200
+
+    Linux gethostid: Check for NULL value from gethostbyname_r [BZ #23679]
+    
+    A NULL value can happen with certain gethostbyname_r failures.
+    
+    (cherry picked from commit 1214ba06e6771acb953a190091b0f6055c64fd25)
+
+diff --git a/sysdeps/unix/sysv/linux/gethostid.c b/sysdeps/unix/sysv/linux/gethostid.c
+index 2e20f034dc134cc7..ee0190e7f945db1f 100644
+--- a/sysdeps/unix/sysv/linux/gethostid.c
++++ b/sysdeps/unix/sysv/linux/gethostid.c
+@@ -102,12 +102,12 @@ gethostid (void)
+     {
+       int ret = __gethostbyname_r (hostname, &hostbuf,
+ 				   tmpbuf.data, tmpbuf.length, &hp, &herr);
+-      if (ret == 0)
++      if (ret == 0 && hp != NULL)
+ 	break;
+       else
+ 	{
+ 	  /* Enlarge the buffer on ERANGE.  */
+-	  if (herr == NETDB_INTERNAL && errno == ERANGE)
++	  if (ret != 0 && herr == NETDB_INTERNAL && errno == ERANGE)
+ 	    {
+ 	      if (!scratch_buffer_grow (&tmpbuf))
+ 		return 0;

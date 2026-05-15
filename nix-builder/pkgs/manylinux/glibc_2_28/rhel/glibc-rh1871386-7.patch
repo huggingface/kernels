@@ -1,0 +1,37 @@
+commit 83908b3a1ea51e3aa7ff422275940e56dbba989f
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Feb 19 21:16:27 2021 +0000
+
+    Update syscall lists for Linux 5.11.
+    
+    Linux 5.11 has one new syscall, epoll_pwait2.  Update
+    syscall-names.list and regenerate the arch-syscall.h headers with
+    build-many-glibcs.py update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list for RHEL 8.5.0.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 4df7eeab96..f6cb34089d 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.10.
+-kernel 5.10
++# The list of system calls is current as of Linux 5.11.
++kernel 5.11
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -95,6 +95,7 @@ epoll_create1
+ epoll_ctl
+ epoll_ctl_old
+ epoll_pwait
++epoll_pwait2
+ epoll_wait
+ epoll_wait_old
+ eventfd

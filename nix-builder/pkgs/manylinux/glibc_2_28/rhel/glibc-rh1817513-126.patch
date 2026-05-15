@@ -1,0 +1,25 @@
+commit 1bb8d05b9c751f6909e85ee96f6c78d536987bfd
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Dec 10 12:24:53 2020 +0100
+
+    elf: Fix run-time dependencies of tst-dlopen-fail-2
+    
+    The misattributed dependencies can cause failures in parallel testing
+    if the dependencies have not been built yet.
+    
+    Fixes commit a332bd1518af518c984fad73eba6f46dc5b2b2d4
+    ("elf: Add elf/tst-dlopenfail-2 [BZ #25396]").
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 57e3a8982297f79a..63c61ad63677ec63 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -1655,7 +1655,7 @@ $(objpfx)tst-dlopenfailmod1.so: \
+ LDFLAGS-tst-dlopenfaillinkmod.so = -Wl,-soname,tst-dlopenfail-missingmod.so
+ $(objpfx)tst-dlopenfailmod2.so: $(shared-thread-library)
+ $(objpfx)tst-dlopenfail-2: $(libdl)
+-$(objpfx)tst-dlopenfail.out: \
++$(objpfx)tst-dlopenfail-2.out: \
+   $(objpfx)tst-dlopenfailmod1.so $(objpfx)tst-dlopenfailmod2.so \
+   $(objpfx)tst-dlopenfailmod3.so
+ 

@@ -1,0 +1,269 @@
+commit de10e44dda686e3ed6a7a1463869df846ea39825
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:10 2018 +0100
+
+    S390: Refactor strnlen ifunc handling.
+    
+    The ifunc handling for strnlen is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strnlen variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strnlen variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strnlen.
+            * sysdeps/s390/multiarch/strnlen-c.c: Move to ...
+            * sysdeps/s390/strnlen-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strnlen-vx.S: Move to ...
+            * sysdeps/s390/strnlen-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strnlen.c: Move to ...
+            * sysdeps/s390/strnlen.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strnlen.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 600d8e629df7090e..f092355743e3908f 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -37,5 +37,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   memmove memmove-c \
+ 		   strstr strstr-vx strstr-c \
+ 		   memmem memmem-vx memmem-c \
+-		   strlen strlen-vx strlen-c
++		   strlen strlen-vx strlen-c \
++		   strnlen strnlen-vx strnlen-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strnlen.h b/sysdeps/s390/ifunc-strnlen.h
+new file mode 100644
+index 0000000000000000..e92329888773304d
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strnlen.h
+@@ -0,0 +1,52 @@
++/* strnlen variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRNLEN_IFUNC	1
++#else
++# define HAVE_STRNLEN_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRNLEN_IFUNC_AND_VX_SUPPORT HAVE_STRNLEN_IFUNC
++#else
++# define HAVE_STRNLEN_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRNLEN_DEFAULT	STRNLEN_Z13
++# define HAVE_STRNLEN_C		0
++# define HAVE_STRNLEN_Z13	1
++#else
++# define STRNLEN_DEFAULT	STRNLEN_C
++# define HAVE_STRNLEN_C		1
++# define HAVE_STRNLEN_Z13	HAVE_STRNLEN_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRNLEN_C
++# define STRNLEN_C		__strnlen_c
++#else
++# define STRNLEN_C		NULL
++#endif
++
++#if HAVE_STRNLEN_Z13
++# define STRNLEN_Z13		__strnlen_vx
++#else
++# define STRNLEN_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 601523919c235f76..35ba223c5d4fb52f 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strnlen strnlen-vx strnlen-c \
+-		   strcpy strcpy-vx \
++sysdep_routines += strcpy strcpy-vx \
+ 		   stpcpy stpcpy-vx stpcpy-c \
+ 		   strncpy strncpy-vx \
+ 		   stpncpy stpncpy-vx stpncpy-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index c531be4bc7eb3f55..680e5b738bfb7f32 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -27,6 +27,7 @@
+ #include <ifunc-strstr.h>
+ #include <ifunc-memmem.h>
+ #include <ifunc-strlen.h>
++#include <ifunc-strnlen.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -177,6 +178,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRLEN_IFUNC  */
+ 
++#if HAVE_STRNLEN_IFUNC
++    IFUNC_IMPL (i, name, strnlen,
++# if HAVE_STRNLEN_Z13
++		IFUNC_IMPL_ADD (array, i, strnlen,
++				dl_hwcap & HWCAP_S390_VX, STRNLEN_Z13)
++# endif
++# if HAVE_STRNLEN_C
++		IFUNC_IMPL_ADD (array, i, strnlen, 1, STRNLEN_C)
++# endif
++		)
++#endif /* HAVE_STRNLEN_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -187,7 +200,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcslen);
+ 
+-  IFUNC_VX_IMPL (strnlen);
+   IFUNC_VX_IMPL (wcsnlen);
+ 
+   IFUNC_VX_IMPL (strcpy);
+diff --git a/sysdeps/s390/multiarch/strnlen-c.c b/sysdeps/s390/strnlen-c.c
+similarity index 81%
+rename from sysdeps/s390/multiarch/strnlen-c.c
+rename to sysdeps/s390/strnlen-c.c
+index 353e83ed356ca080..c2d887f1e4f504e8 100644
+--- a/sysdeps/s390/multiarch/strnlen-c.c
++++ b/sysdeps/s390/strnlen-c.c
+@@ -16,15 +16,19 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STRNLEN  __strnlen_c
+-# ifdef SHARED
+-#  undef libc_hidden_def
+-#  define libc_hidden_def(name)					\
++#include <ifunc-strnlen.h>
++
++#if HAVE_STRNLEN_C
++# if HAVE_STRNLEN_IFUNC
++#  define STRNLEN STRNLEN_C
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   define libc_hidden_def(name)					\
+   __hidden_ver1 (__strnlen_c, __GI_strnlen, __strnlen_c);	\
+   strong_alias (__strnlen_c, __strnlen_c_1);			\
+   __hidden_ver1 (__strnlen_c_1, __GI___strnlen, __strnlen_c_1);
+-# endif /* SHARED */
++#  endif
++# endif
+ 
+ # include <string/strnlen.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/strnlen-vx.S b/sysdeps/s390/strnlen-vx.S
+similarity index 90%
+rename from sysdeps/s390/multiarch/strnlen-vx.S
+rename to sysdeps/s390/strnlen-vx.S
+index fc659a956cfc1fa1..0b8fe3da342f6803 100644
+--- a/sysdeps/s390/multiarch/strnlen-vx.S
++++ b/sysdeps/s390/strnlen-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strnlen.h>
++
++#if HAVE_STRNLEN_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -34,7 +36,7 @@
+    -r5=current_len and return_value
+    -v16=part of s
+ */
+-ENTRY(__strnlen_vx)
++ENTRY(STRNLEN_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -130,5 +132,16 @@ ENTRY(__strnlen_vx)
+ 	clgrjl	%r1,%r3,.Lloop64
+ 
+ 	j	.Llt64
+-END(__strnlen_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STRNLEN_Z13)
++
++# if ! HAVE_STRNLEN_IFUNC
++strong_alias (STRNLEN_Z13, __strnlen)
++weak_alias (__strnlen, strnlen)
++# endif
++
++# if ! HAVE_STRNLEN_C && defined SHARED && IS_IN (libc)
++strong_alias (STRNLEN_Z13, __GI_strnlen)
++strong_alias (STRNLEN_Z13, __GI___strnlen)
++# endif
++
++#endif /* HAVE_STRNLEN_Z13  */
+diff --git a/sysdeps/s390/multiarch/strnlen.c b/sysdeps/s390/strnlen.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/strnlen.c
+rename to sysdeps/s390/strnlen.c
+index 0f9cff5d69b017ae..aa4953d5035bc2fc 100644
+--- a/sysdeps/s390/multiarch/strnlen.c
++++ b/sysdeps/s390/strnlen.c
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strnlen.h>
++
++#if HAVE_STRNLEN_IFUNC
+ # define strnlen __redirect_strnlen
+ # define __strnlen __redirect___strnlen
+ # include <string.h>
+@@ -24,9 +26,18 @@
+ # undef __strnlen
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc_redirected (__redirect___strnlen, __strnlen)
+-weak_alias (__strnlen, strnlen)
++# if HAVE_STRNLEN_C
++extern __typeof (__redirect_strnlen) STRNLEN_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/strnlen.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_STRNLEN_Z13
++extern __typeof (__redirect_strnlen) STRNLEN_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect___strnlen, __strnlen,
++		      (HAVE_STRNLEN_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRNLEN_Z13
++		      : STRNLEN_DEFAULT
++		      )
++weak_alias (__strnlen, strnlen)
++#endif /* HAVE_STRNLEN_IFUNC  */

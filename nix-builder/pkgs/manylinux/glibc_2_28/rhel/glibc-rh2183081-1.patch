@@ -1,0 +1,35 @@
+commit 5d1ccdda7b0c625751661d50977f3dfbc73f8eae
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Apr 3 17:23:11 2023 +0200
+
+    x86_64: Fix asm constraints in feraiseexcept (bug 30305)
+    
+    The divss instruction clobbers its first argument, and the constraints
+    need to reflect that.  Fortunately, with GCC 12, generated code does
+    not actually change, so there is no externally visible bug.
+    
+    Suggested-by: Jakub Jelinek <jakub@redhat.com>
+    Reviewed-by: Noah Goldstein <goldstein.w.n@gmail.com>
+
+diff --git a/sysdeps/x86_64/fpu/fraiseexcpt.c b/sysdeps/x86_64/fpu/fraiseexcpt.c
+index ca1c223053bf016b..fb886ed540b52100 100644
+--- a/sysdeps/x86_64/fpu/fraiseexcpt.c
++++ b/sysdeps/x86_64/fpu/fraiseexcpt.c
+@@ -33,7 +33,7 @@ __feraiseexcept (int excepts)
+       /* One example of an invalid operation is 0.0 / 0.0.  */
+       float f = 0.0;
+ 
+-      __asm__ __volatile__ ("divss %0, %0 " : : "x" (f));
++      __asm__ __volatile__ ("divss %0, %0 " : "+x" (f));
+       (void) &f;
+     }
+ 
+@@ -43,7 +43,7 @@ __feraiseexcept (int excepts)
+       float f = 1.0;
+       float g = 0.0;
+ 
+-      __asm__ __volatile__ ("divss %1, %0" : : "x" (f), "x" (g));
++      __asm__ __volatile__ ("divss %1, %0" : "+x" (f) : "x" (g));
+       (void) &f;
+     }
+ 

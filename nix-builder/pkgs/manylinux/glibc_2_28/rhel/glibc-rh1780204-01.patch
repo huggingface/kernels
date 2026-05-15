@@ -1,0 +1,48 @@
+From 34e75eb497941f829115e6e8f34e899575f4e342 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Fri, 18 Oct 2019 14:57:14 +0200
+Subject: [PATCH 01/28] S390: Add new s390 platform z15.
+
+The new IBM z15 is added to platform string array.
+The macro _DL_PLATFORMS_COUNT is incremented.
+
+(cherry picked from commit 2901743568452403849be7295c8732faa7732339)
+---
+ sysdeps/s390/dl-procinfo.c | 4 ++--
+ sysdeps/s390/dl-procinfo.h | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/sysdeps/s390/dl-procinfo.c b/sysdeps/s390/dl-procinfo.c
+index 6ea220a171..6d76d7d008 100644
+--- a/sysdeps/s390/dl-procinfo.c
++++ b/sysdeps/s390/dl-procinfo.c
+@@ -63,11 +63,11 @@ PROCINFO_CLASS const char _dl_s390_cap_flags[19][9]
+ #if !defined PROCINFO_DECL && defined SHARED
+   ._dl_s390_platforms
+ #else
+-PROCINFO_CLASS const char _dl_s390_platforms[9][7]
++PROCINFO_CLASS const char _dl_s390_platforms[10][7]
+ #endif
+ #ifndef PROCINFO_DECL
+ = {
+-    "g5", "z900", "z990", "z9-109", "z10", "z196", "zEC12", "z13", "z14"
++    "g5", "z900", "z990", "z9-109", "z10", "z196", "zEC12", "z13", "z14", "z15"
+   }
+ #endif
+ #if !defined SHARED || defined PROCINFO_DECL
+diff --git a/sysdeps/s390/dl-procinfo.h b/sysdeps/s390/dl-procinfo.h
+index d03c69fffd..b367bbe8ce 100644
+--- a/sysdeps/s390/dl-procinfo.h
++++ b/sysdeps/s390/dl-procinfo.h
+@@ -23,7 +23,7 @@
+ 
+ #define _DL_HWCAP_COUNT 19
+ 
+-#define _DL_PLATFORMS_COUNT	9
++#define _DL_PLATFORMS_COUNT	10
+ 
+ /* The kernel provides up to 32 capability bits with elf_hwcap.  */
+ #define _DL_FIRST_PLATFORM	32
+-- 
+2.18.2
+

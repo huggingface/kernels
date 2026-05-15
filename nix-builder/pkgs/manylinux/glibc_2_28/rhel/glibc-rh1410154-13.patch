@@ -1,0 +1,328 @@
+commit f8ed116aa574435c6e28260f21963233682d3b57
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 13 10:18:46 2019 +0100
+
+    dlopen: Rework handling of pending NODELETE status
+    
+    Commit a2e8aa0d9ea648068d8be52dd7b15f1b6a008e23 ("Block signals during
+    the initial part of dlopen") was deemed necessary because of
+    read-modify-write operations like the one in  add_dependency in
+    elf/dl-lookup.c.  In the old code, we check for any kind of NODELETE
+    status and bail out:
+    
+          /* Redo the NODELETE check, as when dl_load_lock wasn't held
+             yet this could have changed.  */
+          if (map->l_nodelete != link_map_nodelete_inactive)
+            goto out;
+    
+    And then set pending status (during relocation):
+    
+              if (flags & DL_LOOKUP_FOR_RELOCATE)
+                map->l_nodelete = link_map_nodelete_pending;
+              else
+                map->l_nodelete = link_map_nodelete_active;
+    
+    If a signal arrives during relocation and the signal handler, through
+    lazy binding, adds a global scope dependency on the same map, it will
+    set map->l_nodelete to link_map_nodelete_active.  This will be
+    overwritten with link_map_nodelete_pending by the dlopen relocation
+    code.
+    
+    To avoid such problems in relation to the l_nodelete member, this
+    commit introduces two flags for active NODELETE status (irrevocable)
+    and pending NODELETE status (revocable until activate_nodelete is
+    invoked).  As a result, NODELETE processing in dlopen does not
+    introduce further reasons why lazy binding from signal handlers
+    is unsafe during dlopen, and a subsequent commit can remove signal
+    blocking from dlopen.
+    
+    This does not address pre-existing issues (unrelated to the NODELETE
+    changes) which make lazy binding in a signal handler during dlopen
+    unsafe, such as the use of malloc in both cases.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 243a028c443173c1..fa7f3e8174576e46 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -197,7 +197,7 @@ _dl_close_worker (struct link_map *map, bool force)
+       /* Check whether this object is still used.  */
+       if (l->l_type == lt_loaded
+ 	  && l->l_direct_opencount == 0
+-	  && l->l_nodelete != link_map_nodelete_active
++	  && !l->l_nodelete_active
+ 	  /* See CONCURRENCY NOTES in cxa_thread_atexit_impl.c to know why
+ 	     acquire is sufficient and correct.  */
+ 	  && atomic_load_acquire (&l->l_tls_dtor_count) == 0
+@@ -279,8 +279,7 @@ _dl_close_worker (struct link_map *map, bool force)
+ 
+       if (!used[i])
+ 	{
+-	  assert (imap->l_type == lt_loaded
+-		  && imap->l_nodelete != link_map_nodelete_active);
++	  assert (imap->l_type == lt_loaded && !imap->l_nodelete_active);
+ 
+ 	  /* Call its termination function.  Do not do it for
+ 	     half-cooked objects.  Temporarily disable exception
+@@ -820,7 +819,7 @@ _dl_close (void *_map)
+      before we took the lock. There is no way to detect this (see below)
+      so we proceed assuming this isn't the case.  First see whether we
+      can remove the object at all.  */
+-  if (__glibc_unlikely (map->l_nodelete == link_map_nodelete_active))
++  if (__glibc_unlikely (map->l_nodelete_active))
+     {
+       /* Nope.  Do nothing.  */
+       __rtld_lock_unlock_recursive (GL(dl_load_lock));
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index 35a3f96a6296294a..01724a54f8840f9f 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -187,6 +187,28 @@ enter_unique_sym (struct unique_sym *table, size_t size,
+   table[idx].map = map;
+ }
+ 
++/* Mark MAP as NODELETE according to the lookup mode in FLAGS.  During
++   initial relocation, NODELETE state is pending only.  */
++static void
++mark_nodelete (struct link_map *map, int flags)
++{
++  if (flags & DL_LOOKUP_FOR_RELOCATE)
++    map->l_nodelete_pending = true;
++  else
++    map->l_nodelete_active = true;
++}
++
++/* Return true if MAP is marked as NODELETE according to the lookup
++   mode in FLAGS> */
++static bool
++is_nodelete (struct link_map *map, int flags)
++{
++  /* Non-pending NODELETE always counts.  Pending NODELETE only counts
++     during initial relocation processing.  */
++  return map->l_nodelete_active
++    || ((flags & DL_LOOKUP_FOR_RELOCATE) && map->l_nodelete_pending);
++}
++
+ /* Utility function for do_lookup_x. Lookup an STB_GNU_UNIQUE symbol
+    in the unique symbol table, creating a new entry if necessary.
+    Return the matching symbol in RESULT.  */
+@@ -311,8 +333,7 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+       enter_unique_sym (entries, size,
+                         new_hash, strtab + sym->st_name, sym, map);
+ 
+-      if (map->l_type == lt_loaded
+-	  && map->l_nodelete == link_map_nodelete_inactive)
++      if (map->l_type == lt_loaded && !is_nodelete (map, flags))
+ 	{
+ 	  /* Make sure we don't unload this object by
+ 	     setting the appropriate flag.  */
+@@ -320,10 +341,7 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+ 	    _dl_debug_printf ("\
+ marking %s [%lu] as NODELETE due to unique symbol\n",
+ 			      map->l_name, map->l_ns);
+-	  if (flags & DL_LOOKUP_FOR_RELOCATE)
+-	    map->l_nodelete = link_map_nodelete_pending;
+-	  else
+-	    map->l_nodelete = link_map_nodelete_active;
++	  mark_nodelete (map, flags);
+ 	}
+     }
+   ++tab->n_elements;
+@@ -586,7 +604,7 @@ add_dependency (struct link_map *undef_map, struct link_map *map, int flags)
+      dependencies may pick an dependency which can be dlclose'd, but
+      such IFUNC resolvers are undefined anyway.  */
+   assert (map->l_type == lt_loaded);
+-  if (map->l_nodelete != link_map_nodelete_inactive)
++  if (is_nodelete (map, flags))
+     return 0;
+ 
+   struct link_map_reldeps *l_reldeps
+@@ -694,17 +712,16 @@ add_dependency (struct link_map *undef_map, struct link_map *map, int flags)
+ 
+       /* Redo the NODELETE check, as when dl_load_lock wasn't held
+ 	 yet this could have changed.  */
+-      if (map->l_nodelete != link_map_nodelete_inactive)
++      if (is_nodelete (map, flags))
+ 	goto out;
+ 
+       /* If the object with the undefined reference cannot be removed ever
+ 	 just make sure the same is true for the object which contains the
+ 	 definition.  */
+-      if (undef_map->l_type != lt_loaded
+-	  || (undef_map->l_nodelete != link_map_nodelete_inactive))
++      if (undef_map->l_type != lt_loaded || is_nodelete (map, flags))
+ 	{
+ 	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS)
+-	      && map->l_nodelete == link_map_nodelete_inactive)
++	      && !is_nodelete (map, flags))
+ 	    {
+ 	      if (undef_map->l_name[0] == '\0')
+ 		_dl_debug_printf ("\
+@@ -716,11 +733,7 @@ marking %s [%lu] as NODELETE due to reference to %s [%lu]\n",
+ 				  map->l_name, map->l_ns,
+ 				  undef_map->l_name, undef_map->l_ns);
+ 	    }
+-
+-	  if (flags & DL_LOOKUP_FOR_RELOCATE)
+-	    map->l_nodelete = link_map_nodelete_pending;
+-	  else
+-	    map->l_nodelete = link_map_nodelete_active;
++	  mark_nodelete (map, flags);
+ 	  goto out;
+ 	}
+ 
+@@ -746,17 +759,14 @@ marking %s [%lu] as NODELETE due to reference to %s [%lu]\n",
+ 		 cannot be unloaded.  This is semantically the correct
+ 		 behavior.  */
+ 	      if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS)
+-		  && map->l_nodelete == link_map_nodelete_inactive)
++		  && !is_nodelete (map, flags))
+ 		_dl_debug_printf ("\
+ marking %s [%lu] as NODELETE due to memory allocation failure\n",
+ 				  map->l_name, map->l_ns);
+-	      if (flags & DL_LOOKUP_FOR_RELOCATE)
+-		/* In case of non-lazy binding, we could actually
+-		   report the memory allocation error, but for now, we
+-		   use the conservative approximation as well. */
+-		map->l_nodelete = link_map_nodelete_pending;
+-	      else
+-		map->l_nodelete = link_map_nodelete_active;
++	      /* In case of non-lazy binding, we could actually report
++		 the memory allocation error, but for now, we use the
++		 conservative approximation as well.  */
++	      mark_nodelete (map, flags);
+ 	      goto out;
+ 	    }
+ 	  else
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index c7ed85b7ee99a296..a382bfae8aa3a2f8 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -440,13 +440,17 @@ activate_nodelete (struct link_map *new)
+      NODELETE status for objects outside the local scope.  */
+   for (struct link_map *l = GL (dl_ns)[new->l_ns]._ns_loaded; l != NULL;
+        l = l->l_next)
+-    if (l->l_nodelete == link_map_nodelete_pending)
++    if (l->l_nodelete_pending)
+       {
+ 	if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES))
+ 	  _dl_debug_printf ("activating NODELETE for %s [%lu]\n",
+ 			    l->l_name, l->l_ns);
+ 
+-	l->l_nodelete = link_map_nodelete_active;
++	l->l_nodelete_active = true;
++
++	/* This is just a debugging aid, to indicate that
++	   activate_nodelete has run for this map.  */
++	l->l_nodelete_pending = false;
+       }
+ }
+ 
+@@ -549,10 +553,10 @@ dl_open_worker (void *a)
+       if (__glibc_unlikely (mode & RTLD_NODELETE))
+ 	{
+ 	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES)
+-	      && new->l_nodelete == link_map_nodelete_inactive)
++	      && !new->l_nodelete_active)
+ 	    _dl_debug_printf ("marking %s [%lu] as NODELETE\n",
+ 			      new->l_name, new->l_ns);
+-	  new->l_nodelete = link_map_nodelete_active;
++	  new->l_nodelete_active = true;
+ 	}
+ 
+       /* Finalize the addition to the global scope.  */
+@@ -568,7 +572,7 @@ dl_open_worker (void *a)
+   /* Schedule NODELETE marking for the directly loaded object if
+      requested.  */
+   if (__glibc_unlikely (mode & RTLD_NODELETE))
+-    new->l_nodelete = link_map_nodelete_pending;
++    new->l_nodelete_pending = true;
+ 
+   /* Load that object's dependencies.  */
+   _dl_map_object_deps (new, NULL, 0, 0,
+@@ -680,7 +684,7 @@ dl_open_worker (void *a)
+ 	      _dl_start_profile ();
+ 
+ 	      /* Prevent unloading the object.  */
+-	      GL(dl_profile_map)->l_nodelete = link_map_nodelete_active;
++	      GL(dl_profile_map)->l_nodelete_active = true;
+ 	    }
+ 	}
+       else
+@@ -879,9 +883,9 @@ no more namespaces available for dlmopen()"));
+ 	     happens inside dl_open_worker.  */
+ 	  __libc_signal_restore_set (&args.original_signal_mask);
+ 
+-	  /* All link_map_nodelete_pending objects should have been
+-	     deleted at this point, which is why it is not necessary
+-	     to reset the flag here.  */
++	  /* All l_nodelete_pending objects should have been deleted
++	     at this point, which is why it is not necessary to reset
++	     the flag here.  */
+ 	}
+       else
+ 	__libc_signal_restore_set (&args.original_signal_mask);
+diff --git a/elf/get-dynamic-info.h b/elf/get-dynamic-info.h
+index ea286abaea0128d1..78ba7e76db9706cc 100644
+--- a/elf/get-dynamic-info.h
++++ b/elf/get-dynamic-info.h
+@@ -164,7 +164,7 @@ elf_get_dynamic_info (struct link_map *l, ElfW(Dyn) *temp)
+     {
+       l->l_flags_1 = info[VERSYMIDX (DT_FLAGS_1)]->d_un.d_val;
+       if (l->l_flags_1 & DF_1_NODELETE)
+-	l->l_nodelete = link_map_nodelete_pending;
++	l->l_nodelete_pending = true;
+ 
+       /* Only DT_1_SUPPORTED_MASK bits are supported, and we would like
+ 	 to assert this, but we can't. Users have been setting
+diff --git a/include/link.h b/include/link.h
+index a277b77cad6b52b1..e90fa79a0b332087 100644
+--- a/include/link.h
++++ b/include/link.h
+@@ -79,22 +79,6 @@ struct r_search_path_struct
+     int malloced;
+   };
+ 
+-/* Type used by the l_nodelete member.  */
+-enum link_map_nodelete
+-{
+- /* This link map can be deallocated.  */
+- link_map_nodelete_inactive = 0, /* Zero-initialized in _dl_new_object.  */
+-
+- /* This link map cannot be deallocated.  */
+- link_map_nodelete_active,
+-
+- /* This link map cannot be deallocated after dlopen has succeded.
+-    dlopen turns this into link_map_nodelete_active.  dlclose treats
+-    this intermediate state as link_map_nodelete_active.  */
+- link_map_nodelete_pending,
+-};
+-
+-
+ /* Structure describing a loaded shared object.  The `l_next' and `l_prev'
+    members form a chain of all the shared objects loaded at startup.
+ 
+@@ -218,10 +202,17 @@ struct link_map
+ 				       freed, ie. not allocated with
+ 				       the dummy malloc in ld.so.  */
+ 
+-    /* Actually of type enum link_map_nodelete.  Separate byte due to
+-       a read in add_dependency in elf/dl-lookup.c outside the loader
+-       lock.  Only valid for l_type == lt_loaded.  */
+-    unsigned char l_nodelete;
++    /* NODELETE status of the map.  Only valid for maps of type
++       lt_loaded.  Lazy binding sets l_nodelete_active directly,
++       potentially from signal handlers.  Initial loading of an
++       DF_1_NODELETE object set l_nodelete_pending.  Relocation may
++       set l_nodelete_pending as well.  l_nodelete_pending maps are
++       promoted to l_nodelete_active status in the final stages of
++       dlopen, prior to calling ELF constructors.  dlclose only
++       refuses to unload l_nodelete_active maps, the pending status is
++       ignored.  */
++    bool l_nodelete_active;
++    bool l_nodelete_pending;
+ 
+ #include <link_map.h>
+ 

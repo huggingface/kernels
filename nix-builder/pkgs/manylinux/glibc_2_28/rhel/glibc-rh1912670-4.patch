@@ -1,0 +1,98 @@
+This is a rewrite of the commit for the pre-64-bit time_t version of
+the msgctl handling. Similar to semctl we want the RHEL8 handling of
+the unknown commands to be the same as upstream.
+
+commit be9b0b9a012780a403a266c90878efffb9a5f3ca
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Sep 29 14:45:09 2020 -0300
+
+    sysvipc: Return EINVAL for invalid msgctl commands
+    
+    It avoids regressions on possible future commands that might require
+    additional libc support.  The downside is new commands added by newer
+    kernels will need further glibc support.
+    
+    Checked on x86_64-linux-gnu and i686-linux-gnu (Linux v4.15 and v5.4).
+
+diff --git a/sysdeps/unix/sysv/linux/msgctl.c b/sysdeps/unix/sysv/linux/msgctl.c
+index 7280cba31a8815a2..6a2c79d188b875b9 100644
+--- a/sysdeps/unix/sysv/linux/msgctl.c
++++ b/sysdeps/unix/sysv/linux/msgctl.c
+@@ -29,6 +29,20 @@
+ int
+ __new_msgctl (int msqid, int cmd, struct msqid_ds *buf)
+ {
++  switch (cmd)
++    {
++    case IPC_RMID:
++    case IPC_SET:
++    case IPC_STAT:
++    case MSG_STAT:
++    case MSG_STAT_ANY:
++    case IPC_INFO:
++    case MSG_INFO:
++      break;
++    default:
++      __set_errno (EINVAL);
++      return -1;
++    }
+ #ifdef __ASSUME_DIRECT_SYSVIPC_SYSCALLS
+   return INLINE_SYSCALL_CALL (msgctl, msqid, cmd | __IPC_64, buf);
+ #else
+diff --git a/sysvipc/test-sysvipc.h b/sysvipc/test-sysvipc.h
+index ed0057b7871e505c..133fb71c6113a2b5 100644
+--- a/sysvipc/test-sysvipc.h
++++ b/sysvipc/test-sysvipc.h
+@@ -134,4 +134,29 @@ first_shm_invalid_cmd (void)
+   return invalid;
+ }
+ 
++/* Return the first invalid command SysV IPC command for message queue.  */
++static inline int
++first_msg_invalid_cmd (void)
++{
++  const int msg_cmds[] = {
++    MSG_STAT,
++    MSG_INFO,
++#ifdef MSG_STAT_ANY
++    MSG_STAT_ANY,
++#endif
++  };
++
++  int invalid = first_common_invalid_cmd ();
++  for (int i = 0; i < array_length (msg_cmds); i++)
++    {
++      if (invalid == msg_cmds[i])
++	{
++	  invalid++;
++	  i = 0;
++	}
++    }
++
++  return invalid;
++}
++
+ #endif /* _TEST_SYSV_H  */
+diff --git a/sysvipc/test-sysvmsg.c b/sysvipc/test-sysvmsg.c
+index 1e0471807cd26da1..74a907ad39ee114e 100644
+--- a/sysvipc/test-sysvmsg.c
++++ b/sysvipc/test-sysvmsg.c
+@@ -24,6 +24,8 @@
+ #include <sys/ipc.h>
+ #include <sys/msg.h>
+ 
++#include <test-sysvipc.h>
++
+ #include <support/support.h>
+ #include <support/check.h>
+ #include <support/temp_file.h>
+@@ -86,6 +88,9 @@ do_test (void)
+       FAIL_EXIT1 ("msgget failed (errno=%d)", errno);
+     }
+ 
++  TEST_COMPARE (msgctl (msqid, first_msg_invalid_cmd (), NULL), -1);
++  TEST_COMPARE (errno, EINVAL);
++
+   /* Get message queue kernel information and do some sanity checks.  */
+   struct msqid_ds msginfo;
+   if (msgctl (msqid, IPC_STAT, &msginfo) == -1)

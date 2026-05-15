@@ -1,0 +1,57 @@
+From f6e3f49613f4a31bce8c5f52ae440f9c7b3646fb Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:28 +0100
+Subject: [PATCH 18/28] Adjust s_copysignl.c regarding code style.
+
+This patch just adjusts the generic implementation regarding code style.
+No functional change.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 1902d5d5ff04771f16b67648789c75a18af06222)
+---
+ sysdeps/ieee754/ldbl-128/s_copysignl.c | 17 +++++++++--------
+ 1 file changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/sysdeps/ieee754/ldbl-128/s_copysignl.c b/sysdeps/ieee754/ldbl-128/s_copysignl.c
+index 4cae8612dc..9b0e44cf1d 100644
+--- a/sysdeps/ieee754/ldbl-128/s_copysignl.c
++++ b/sysdeps/ieee754/ldbl-128/s_copysignl.c
+@@ -13,7 +13,7 @@
+  * ====================================================
+  */
+ 
+-#if defined(LIBM_SCCS) && !defined(lint)
++#if defined (LIBM_SCCS) && ! defined (lint)
+ static char rcsid[] = "$NetBSD: $";
+ #endif
+ 
+@@ -28,18 +28,19 @@ static char rcsid[] = "$NetBSD: $";
+ #include <libm-alias-ldouble.h>
+ #include <math-use-builtins.h>
+ 
+-_Float128 __copysignl(_Float128 x, _Float128 y)
++_Float128
++__copysignl (_Float128 x, _Float128 y)
+ {
+ #if USE_COPYSIGNL_BUILTIN
+   return __builtin_copysignl (x, y);
+ #else
+   /* Use generic implementation.  */
+-	uint64_t hx,hy;
+-	GET_LDOUBLE_MSW64(hx,x);
+-	GET_LDOUBLE_MSW64(hy,y);
+-	SET_LDOUBLE_MSW64(x,(hx&0x7fffffffffffffffULL)
+-			    |(hy&0x8000000000000000ULL));
+-        return x;
++  uint64_t hx, hy;
++  GET_LDOUBLE_MSW64 (hx, x);
++  GET_LDOUBLE_MSW64 (hy, y);
++  SET_LDOUBLE_MSW64 (x, (hx & 0x7fffffffffffffffULL)
++		     | (hy & 0x8000000000000000ULL));
++  return x;
+ #endif /* ! USE_COPYSIGNL_BUILTIN  */
+ }
+ libm_alias_ldouble (__copysign, copysign)
+-- 
+2.18.2
+

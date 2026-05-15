@@ -1,0 +1,64 @@
+commit 430388d5dc0e1861b869096f4f5d946d7d74232a
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Fri Aug 3 08:04:49 2018 -0700
+
+    x86: Don't include <init-arch.h> in assembly codes
+    
+    There is no need to include <init-arch.h> in assembly codes since all
+    x86 IFUNC selector functions are written in C.  Tested on i686 and
+    x86-64.  There is no code change in libc.so, ld.so and libmvec.so.
+    
+            * sysdeps/i386/i686/multiarch/bzero-ia32.S: Don't include
+            <init-arch.h>.
+            * sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core-avx2.S: Likewise.
+            * sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core-avx2.S: Likewise.
+            * sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S: Likewise.
+
+diff --git a/sysdeps/i386/i686/multiarch/bzero-ia32.S b/sysdeps/i386/i686/multiarch/bzero-ia32.S
+index 68ff9e1e903f7c4c..94d13e88f7532bc0 100644
+--- a/sysdeps/i386/i686/multiarch/bzero-ia32.S
++++ b/sysdeps/i386/i686/multiarch/bzero-ia32.S
+@@ -17,7 +17,6 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <sysdep.h>
+-#include <init-arch.h>
+ 
+ #if IS_IN (libc)
+ # define __bzero __bzero_ia32
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core-avx2.S b/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core-avx2.S
+index b64c3390d6169d18..87536a06a3ed54c6 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core-avx2.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core-avx2.S
+@@ -17,7 +17,6 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <sysdep.h>
+-#include <init-arch.h>
+ 
+ #define _ZGVeN8v_sin _ZGVeN8v_sin_avx2_wrapper
+ #include "../svml_d_sin8_core.S"
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core-avx2.S b/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core-avx2.S
+index e0b7fd787fa6428d..16713ba7142ecad6 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core-avx2.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core-avx2.S
+@@ -17,7 +17,6 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <sysdep.h>
+-#include <init-arch.h>
+ 
+ #define _ZGVeN16v_expf _ZGVeN16v_expf_avx2_wrapper
+ #include "../svml_s_expf16_core.S"
+diff --git a/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
+index be6671759beaaa84..56b81f5cc5288808 100644
+--- a/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
+@@ -19,7 +19,6 @@
+ 
+ #include <sysdep.h>
+ #include <shlib-compat.h>
+-#include <init-arch.h>
+ 
+ #if IS_IN (libc)
+ # define MEMSET_SYMBOL(p,s)	p##_sse2_##s

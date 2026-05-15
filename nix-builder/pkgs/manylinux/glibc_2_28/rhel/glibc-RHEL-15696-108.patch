@@ -1,0 +1,55 @@
+From c6272098323153db373f2986c67786ea8c85f1cf Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Tue, 15 Feb 2022 08:18:15 -0600
+Subject: [PATCH] x86: Fallback {str|wcs}cmp RTM in the ncmp overflow case [BZ
+ #28896]
+Content-type: text/plain; charset=UTF-8
+
+In the overflow fallback strncmp-avx2-rtm and wcsncmp-avx2-rtm would
+call strcmp-avx2 and wcscmp-avx2 respectively. This would have
+not checks around vzeroupper and would trigger spurious
+aborts. This commit fixes that.
+
+test-strcmp, test-strncmp, test-wcscmp, and test-wcsncmp all pass on
+AVX2 machines with and without RTM.
+
+Co-authored-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ sysdeps/x86_64/multiarch/strcmp-avx2.S | 8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
+
+Conflicts:
+	sysdeps/x86_64/multiarch/strcmp-avx2.S
+	(split into two patches due to upstream bug differences)
+
+diff --git a/sysdeps/x86_64/multiarch/strcmp-avx2.S b/sysdeps/x86_64/multiarch/strcmp-avx2.S
+index 28cc98b6..e267c6cb 100644
+--- a/sysdeps/x86_64/multiarch/strcmp-avx2.S
++++ b/sysdeps/x86_64/multiarch/strcmp-avx2.S
+@@ -345,10 +345,10 @@ L(one_or_less):
+ 	movq	%LOCALE_REG, %rdx
+ #  endif
+ 	jb	L(ret_zero)
+-#  ifdef USE_AS_WCSCMP
+ 	/* 'nbe' covers the case where length is negative (large
+ 	   unsigned).  */
+-	jnbe	__wcscmp_avx2
++	jnbe	OVERFLOW_STRCMP
++#  ifdef USE_AS_WCSCMP
+ 	movl	(%rdi), %edx
+ 	xorl	%eax, %eax
+ 	cmpl	(%rsi), %edx
+@@ -357,10 +357,6 @@ L(one_or_less):
+ 	negl	%eax
+ 	orl	$1, %eax
+ #  else
+-	/* 'nbe' covers the case where length is negative (large
+-	   unsigned).  */
+-
+-	jnbe	__strcmp_avx2
+ 	movzbl	(%rdi), %eax
+ 	movzbl	(%rsi), %ecx
+ 	TOLOWER_gpr (%rax, %eax)
+-- 
+GitLab
+

@@ -1,0 +1,48 @@
+commit bd598da9f454bc1091b4ebe0303b07e6f96ca130
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Tue Dec 4 16:52:39 2018 +0000
+
+    Stop test-in-container trying to run other-OS binaries.
+    
+    I noticed that, now that build-many-glibcs.py no longer copies glibc
+    sources, I was getting core dumps in my glibc source directories.  The
+    cause appears to be, from the i686-gnu build:
+    
+    for dso in ` env LD_TRACE_LOADED_OBJECTS=1  \
+            /scratch/jmyers/glibc-bot/build/glibcs/i686-gnu/glibc/elf/ld.so.1 \
+            /scratch/jmyers/glibc-bot/build/glibcs/i686-gnu/glibc/testroot.pristine/bin/sh \
+    [...]
+    Segmentation fault (core dumped)
+    
+    In this case, the x86 architecture means the binary executes, but
+    dumps core rather than actually working.
+    
+    Anything involving running the newly built glibc should only be done
+    ifeq ($(run-built-tests),yes).  This patch conditions the relevant
+    part of the testroot setup accordingly.
+    
+    Tested for x86_64, and with build-many-glibcs.py for i686-gnu.
+    
+    	* Makefile ($(objpfx)testroot.pristine/install.stamp): Do not run
+    	dynamic linker unless [$(run-built-tests) = yes].
+
+diff --git a/Makefile b/Makefile
+index b4703e4..fd73d9b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -374,6 +374,7 @@ $(objpfx)testroot.pristine/install.stamp :
+ 	cp $(objpfx)support/shell-container $(objpfx)testroot.pristine/bin/sh
+ 	cp $(objpfx)support/echo-container $(objpfx)testroot.pristine/bin/echo
+ 	cp $(objpfx)support/true-container $(objpfx)testroot.pristine/bin/true
++ifeq ($(run-built-tests),yes)
+ 	# Copy these DSOs first so we can overwrite them with our own.
+ 	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
+ 		$(objpfx)elf/$(rtld-installed-name) \
+@@ -393,6 +394,7 @@ $(objpfx)testroot.pristine/install.stamp :
+ 	      mkdir -p `dirname $(objpfx)testroot.pristine$$dso` ;\
+ 	    $(test-wrapper) cp $$dso $(objpfx)testroot.pristine$$dso ;\
+ 	  done
++endif
+ 	$(MAKE) install DESTDIR=$(objpfx)testroot.pristine
+ 	touch $(objpfx)testroot.pristine/install.stamp
+ 

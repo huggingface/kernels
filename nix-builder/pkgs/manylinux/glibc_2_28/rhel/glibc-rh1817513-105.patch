@@ -1,0 +1,107 @@
+commit 428985c436f442e91e27173bccaf28f547233586
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Oct 8 08:50:44 2020 -0700
+
+    <sys/platform/x86.h>: Add FSRCS/FSRS/FZLRM support
+    
+    Add Fast Short REP CMP and SCA (FSRCS), Fast Short REP STO (FSRS) and
+    Fast Zero-Length REP MOV (FZLRM) support to <sys/platform/x86.h>.
+
+diff --git a/manual/platform.texi b/manual/platform.texi
+index 1e44525552f5bda5..8fec2933d6442823 100644
+--- a/manual/platform.texi
++++ b/manual/platform.texi
+@@ -331,12 +331,21 @@ extensions.
+ @item
+ @code{FSGSBASE} -- RDFSBASE/RDGSBASE/WRFSBASE/WRGSBASE instructions.
+ 
++@item
++@code{FSRCS} -- Fast Short REP CMP and SCA.
++
+ @item
+ @code{FSRM} -- Fast Short REP MOV.
+ 
++@item
++@code{FSRS} -- Fast Short REP STO.
++
+ @item
+ @code{FXSR} -- FXSAVE and FXRSTOR instructions.
+ 
++@item
++@code{FZLRM} -- Fast Zero-Length REP MOV.
++
+ @item
+ @code{GFNI} -- GFNI instruction extensions.
+ 
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 3e5b9341c9756009..5f0548fe08134236 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -93,6 +93,9 @@ update_usable (struct cpu_features *cpu_features)
+   CPU_FEATURE_SET_USABLE (cpu_features, TBM);
+   CPU_FEATURE_SET_USABLE (cpu_features, RDTSCP);
+   CPU_FEATURE_SET_USABLE (cpu_features, WBNOINVD);
++  CPU_FEATURE_SET_USABLE (cpu_features, FZLRM);
++  CPU_FEATURE_SET_USABLE (cpu_features, FSRS);
++  CPU_FEATURE_SET_USABLE (cpu_features, FSRCS);
+ 
+   /* Can we call xgetbv?  */
+   if (CPU_FEATURES_CPU_P (cpu_features, OSXSAVE))
+diff --git a/sysdeps/x86/sys/platform/x86.h b/sysdeps/x86/sys/platform/x86.h
+index 357c6f1c5605d82d..e5cc7c683a20b5a0 100644
+--- a/sysdeps/x86/sys/platform/x86.h
++++ b/sysdeps/x86/sys/platform/x86.h
+@@ -313,6 +313,9 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define bit_cpu_AVX_VNNI	(1u << 4)
+ #define bit_cpu_AVX512_BF16	(1u << 5)
++#define bit_cpu_FZLRM		(1u << 10)
++#define bit_cpu_FSRS		(1u << 11)
++#define bit_cpu_FSRCS		(1u << 12)
+ #define bit_cpu_HRESET		(1u << 22)
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+@@ -534,6 +537,9 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define index_cpu_AVX_VNNI	COMMON_CPUID_INDEX_7_ECX_1
+ #define index_cpu_AVX512_BF16	COMMON_CPUID_INDEX_7_ECX_1
++#define index_cpu_FZLRM		COMMON_CPUID_INDEX_7_ECX_1
++#define index_cpu_FSRS		COMMON_CPUID_INDEX_7_ECX_1
++#define index_cpu_FSRCS		COMMON_CPUID_INDEX_7_ECX_1
+ #define index_cpu_HRESET	COMMON_CPUID_INDEX_7_ECX_1
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+@@ -755,6 +761,9 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define reg_AVX_VNNI		eax
+ #define reg_AVX512_BF16		eax
++#define reg_FZLRM		eax
++#define reg_FSRS		eax
++#define reg_FSRCS		eax
+ #define reg_HRESET		eax
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 1516af1d461a801b..2763deb6d008597f 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -221,6 +221,9 @@ do_test (void)
+   CHECK_CPU_FEATURE (WBNOINVD);
+   CHECK_CPU_FEATURE (AVX_VNNI);
+   CHECK_CPU_FEATURE (AVX512_BF16);
++  CHECK_CPU_FEATURE (FZLRM);
++  CHECK_CPU_FEATURE (FSRS);
++  CHECK_CPU_FEATURE (FSRCS);
+   CHECK_CPU_FEATURE (HRESET);
+   CHECK_CPU_FEATURE (AESKLE);
+   CHECK_CPU_FEATURE (WIDE_KL);
+@@ -378,6 +381,9 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (WBNOINVD);
+   CHECK_CPU_FEATURE_USABLE (AVX_VNNI);
+   CHECK_CPU_FEATURE_USABLE (AVX512_BF16);
++  CHECK_CPU_FEATURE_USABLE (FZLRM);
++  CHECK_CPU_FEATURE_USABLE (FSRS);
++  CHECK_CPU_FEATURE_USABLE (FSRCS);
+   CHECK_CPU_FEATURE_USABLE (AESKLE);
+   CHECK_CPU_FEATURE_USABLE (WIDE_KL);
+ 

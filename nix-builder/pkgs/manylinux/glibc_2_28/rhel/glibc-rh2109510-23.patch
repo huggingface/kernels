@@ -1,0 +1,108 @@
+Downstream-only adjustments to scripts/glibcelf.py.  We do not have
+CSKY nor RISC-V constants in <elf.h>, so glibcelf cannot extract
+those.  PT_AARCH64_* constants are missing as well.
+
+Adjust elf/tst-glibcelf.py to use PT_MIPS_OPTIONS instead of
+PT_AARCH64_MEMTAG_MTE for testing.  It has the same numeric value
+(0x70000002).
+
+diff --git a/elf/tst-glibcelf.py b/elf/tst-glibcelf.py
+index a5bff45eae55edea..9cb0861589d6ae2e 100644
+--- a/elf/tst-glibcelf.py
++++ b/elf/tst-glibcelf.py
+@@ -75,15 +75,17 @@ def check_basic():
+     if repr(glibcelf.Pt(17609)) != 'Pt(17609)':
+         error('repr(Pt(17609))')
+ 
+-    if glibcelf.Pt('PT_AARCH64_MEMTAG_MTE') \
+-       is not glibcelf.Pt.PT_AARCH64_MEMTAG_MTE:
+-        error('PT_AARCH64_MEMTAG_MTE identity')
+-    if glibcelf.Pt(0x70000002) is glibcelf.Pt.PT_AARCH64_MEMTAG_MTE:
++    # Note: Upstream uses PT_AARCH64_MEMTAG_MTE instead of PT_MIPS_OPTIONS.
++    # PT_AARCH64_MEMTAG_MTE is not yet available downstream.
++    if glibcelf.Pt('PT_MIPS_OPTIONS') \
++       is not glibcelf.Pt.PT_MIPS_OPTIONS:
++        error('PT_MIPS_OPTIONS identity')
++    if glibcelf.Pt(0x70000002) is glibcelf.Pt.PT_MIPS_OPTIONS:
+         error('Pt(0x70000002) identity')
+-    if glibcelf.PtAARCH64(0x70000002) is not glibcelf.Pt.PT_AARCH64_MEMTAG_MTE:
+-        error('PtAARCH64(0x70000002) identity')
+-    if glibcelf.Pt.PT_AARCH64_MEMTAG_MTE.short_name != 'AARCH64_MEMTAG_MTE':
+-        error('PT_AARCH64_MEMTAG_MTE short name')
++    if glibcelf.PtMIPS(0x70000002) is not glibcelf.Pt.PT_MIPS_OPTIONS:
++        error('PtMIPS(0x70000002) identity')
++    if glibcelf.Pt.PT_MIPS_OPTIONS.short_name != 'MIPS_OPTIONS':
++        error('PT_MIPS_OPTIONS short name')
+ 
+     # Special cases for int-like Shn.
+     if glibcelf.Shn(32) == glibcelf.Shn.SHN_XINDEX:
+diff --git a/scripts/glibcelf.py b/scripts/glibcelf.py
+index 59aab56ecf9deb3e..5980d7cc906005e2 100644
+--- a/scripts/glibcelf.py
++++ b/scripts/glibcelf.py
+@@ -306,23 +306,17 @@ class ShtALPHA(Sht):
+     """Supplemental SHT_* constants for EM_ALPHA."""
+ class ShtARM(Sht):
+     """Supplemental SHT_* constants for EM_ARM."""
+-class ShtCSKY(Sht):
+-    """Supplemental SHT_* constants for EM_CSKY."""
+ class ShtIA_64(Sht):
+     """Supplemental SHT_* constants for EM_IA_64."""
+ class ShtMIPS(Sht):
+     """Supplemental SHT_* constants for EM_MIPS."""
+ class ShtPARISC(Sht):
+     """Supplemental SHT_* constants for EM_PARISC."""
+-class ShtRISCV(Sht):
+-    """Supplemental SHT_* constants for EM_RISCV."""
+ _register_elf_h(ShtALPHA, prefix='SHT_ALPHA_', parent=Sht)
+ _register_elf_h(ShtARM, prefix='SHT_ARM_', parent=Sht)
+-_register_elf_h(ShtCSKY, prefix='SHT_CSKY_', parent=Sht)
+ _register_elf_h(ShtIA_64, prefix='SHT_IA_64_', parent=Sht)
+ _register_elf_h(ShtMIPS, prefix='SHT_MIPS_', parent=Sht)
+ _register_elf_h(ShtPARISC, prefix='SHT_PARISC_', parent=Sht)
+-_register_elf_h(ShtRISCV, prefix='SHT_RISCV_', parent=Sht)
+ _register_elf_h(Sht, ranges=True,
+                 skip='SHT_LOSUNW SHT_HISUNW SHT_LOUSER SHT_HIUSER'.split())
+ 
+@@ -392,8 +386,6 @@ _register_elf_h(Stt, ranges=True)
+ class Pt(_TypedConstant):
+     """ELF program header types.  Type of Phdr.p_type."""
+     prefix = 'PT_'
+-class PtAARCH64(Pt):
+-    """Supplemental PT_* constants for EM_AARCH64."""
+ class PtARM(Pt):
+     """Supplemental PT_* constants for EM_ARM."""
+ class PtHP(Pt):
+@@ -404,15 +396,11 @@ class PtMIPS(Pt):
+     """Supplemental PT_* constants for EM_MIPS."""
+ class PtPARISC(Pt):
+     """Supplemental PT_* constants for EM_PARISC."""
+-class PtRISCV(Pt):
+-    """Supplemental PT_* constants for EM_RISCV."""
+-_register_elf_h(PtAARCH64, prefix='PT_AARCH64_', parent=Pt)
+ _register_elf_h(PtARM, prefix='PT_ARM_', parent=Pt)
+ _register_elf_h(PtHP, prefix='PT_HP_', parent=Pt)
+ _register_elf_h(PtIA_64, prefix='PT_IA_64_', parent=Pt)
+ _register_elf_h(PtMIPS, prefix='PT_MIPS_', parent=Pt)
+ _register_elf_h(PtPARISC, prefix='PT_PARISC_', parent=Pt)
+-_register_elf_h(PtRISCV, prefix='PT_RISCV_', parent=Pt)
+ _register_elf_h(Pt, skip='PT_LOSUNW PT_HISUNW'.split(), ranges=True)
+ 
+ class Dt(_TypedConstant):
+@@ -432,8 +420,6 @@ class DtPPC(Dt):
+     """Supplemental DT_* constants for EM_PPC."""
+ class DtPPC64(Dt):
+     """Supplemental DT_* constants for EM_PPC64."""
+-class DtRISCV(Dt):
+-    """Supplemental DT_* constants for EM_RISCV."""
+ class DtSPARC(Dt):
+     """Supplemental DT_* constants for EM_SPARC."""
+ _dt_skip = '''
+@@ -456,7 +442,6 @@ _register_elf_h(DtIA_64, prefix='DT_IA_64_', skip=_dt_skip, parent=Dt)
+ _register_elf_h(DtMIPS, prefix='DT_MIPS_', skip=_dt_skip, parent=Dt)
+ _register_elf_h(DtPPC, prefix='DT_PPC_', skip=_dt_skip, parent=Dt)
+ _register_elf_h(DtPPC64, prefix='DT_PPC64_', skip=_dt_skip, parent=Dt)
+-_register_elf_h(DtRISCV, prefix='DT_RISCV_', skip=_dt_skip, parent=Dt)
+ _register_elf_h(DtSPARC, prefix='DT_SPARC_', skip=_dt_skip, parent=Dt)
+ _register_elf_h(Dt, skip=_dt_skip, ranges=True)
+ del _dt_skip

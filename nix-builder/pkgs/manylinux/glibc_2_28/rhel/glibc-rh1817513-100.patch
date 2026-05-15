@@ -1,0 +1,82 @@
+commit bb5fd5ce64b598085bdb8a05cb53777480fe093c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Oct 9 10:13:14 2020 +0200
+
+    elf: Do not pass GLRO(dl_platform), GLRO(dl_platformlen) to _dl_important_hwcaps
+    
+    In the current code, the function can easily obtain the information
+    on its own.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-hwcaps.c b/elf/dl-hwcaps.c
+index ae2e4ca7fe91d407..82ee89c36a1eb4ab 100644
+--- a/elf/dl-hwcaps.c
++++ b/elf/dl-hwcaps.c
+@@ -28,13 +28,12 @@
+ 
+ /* Return an array of useful/necessary hardware capability names.  */
+ const struct r_strlenpair *
+-_dl_important_hwcaps (const char *platform, size_t platform_len, size_t *sz,
+-		      size_t *max_capstrlen)
++_dl_important_hwcaps (size_t *sz, size_t *max_capstrlen)
+ {
+   uint64_t hwcap_mask = GET_HWCAP_MASK();
+   /* Determine how many important bits are set.  */
+   uint64_t masked = GLRO(dl_hwcap) & hwcap_mask;
+-  size_t cnt = platform != NULL;
++  size_t cnt = GLRO (dl_platform) != NULL;
+   size_t n, m;
+   size_t total;
+   struct r_strlenpair *result;
+@@ -60,10 +59,10 @@ _dl_important_hwcaps (const char *platform, size_t platform_len, size_t *sz,
+ 	masked ^= 1ULL << n;
+ 	++m;
+       }
+-  if (platform != NULL)
++  if (GLRO (dl_platform) != NULL)
+     {
+-      temp[m].str = platform;
+-      temp[m].len = platform_len;
++      temp[m].str = GLRO (dl_platform);
++      temp[m].len = GLRO (dl_platformlen);
+       ++m;
+     }
+ 
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 2eb4f35b2467f7d8..d2be21ea7d1545fe 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -697,8 +697,7 @@ _dl_init_paths (const char *llp, const char *source)
+ 
+ #ifdef SHARED
+   /* Get the capabilities.  */
+-  capstr = _dl_important_hwcaps (GLRO(dl_platform), GLRO(dl_platformlen),
+-				 &ncapstr, &max_capstrlen);
++  capstr = _dl_important_hwcaps (&ncapstr, &max_capstrlen);
+ #endif
+ 
+   /* First set up the rest of the default search directory entries.  */
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index aa006afafaf46dee..2c9fdeb286bdaadf 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1069,12 +1069,12 @@ extern void _dl_show_auxv (void) attribute_hidden;
+    other.  */
+ extern char *_dl_next_ld_env_entry (char ***position) attribute_hidden;
+ 
+-/* Return an array with the names of the important hardware capabilities.  */
+-extern const struct r_strlenpair *_dl_important_hwcaps (const char *platform,
+-							size_t paltform_len,
+-							size_t *sz,
+-							size_t *max_capstrlen)
+-     attribute_hidden;
++/* Return an array with the names of the important hardware
++   capabilities.  The length of the array is written to *SZ, and the
++   maximum of all strings length is written to *MAX_CAPSTRLEN.  */
++const struct r_strlenpair *_dl_important_hwcaps (size_t *sz,
++						 size_t *max_capstrlen)
++  attribute_hidden;
+ 
+ /* Look up NAME in ld.so.cache and return the file name stored there,
+    or null if none is found.  Caller must free returned string.  */

@@ -1,0 +1,35 @@
+Downstream-specific patch to link DSO sorting tests with -ldl
+if needed.  Upstream does not need this because <dlfcn.h> interfaces
+are part of libc.
+
+diff --git a/scripts/dso-ordering-test.py b/scripts/dso-ordering-test.py
+index 43b5ec4d920ad6a3..ae85e0f4a6ae5b3e 100644
+--- a/scripts/dso-ordering-test.py
++++ b/scripts/dso-ordering-test.py
+@@ -657,6 +657,8 @@ def process_testcase(t):
+                                  % (test_name + "-" + dep + ".FAKE.so",
+                                     ("$(objpfx)" + test_subdir + "/"
+                                      + test_name + "-" + dep + ".so")))
++                            makefile.write(
++                                "LDLIBS-%s += -Wl,--as-needed -ldl -Wl,--no-as-needed\n" % dso)
+                             rule = ("$(objpfx)" + test_subdir + "/"
+                                     + test_name + "-" + dep + ".FAKE.os: "
+                                     "$(objpfx)" + test_srcdir
+@@ -685,6 +687,8 @@ def process_testcase(t):
+                           + test_descr.soname_map[o] + ".so")
+                 ldflags += (" -Wl,-soname=" + soname)
+             makefile.write("LDFLAGS-%s = %s\n" % (dso, ldflags))
++            makefile.write(
++                "LDLIBS-%s += -Wl,--as-needed -ldl -Wl,--no-as-needed\n" % dso)
+             if o in test_descr.callrefs:
+                 makefile.write("%s-no-z-defs = yes\n" % (dso))
+ 
+@@ -702,6 +706,8 @@ def process_testcase(t):
+                       + test_descr.soname_map['#'] + ".so")
+             ldflags += (" -Wl,-soname=" + soname)
+         makefile.write("LDFLAGS-%s = %s\n" % (test_name, ldflags))
++        makefile.write(
++            "LDLIBS-%s += -Wl,--as-needed -ldl -Wl,--no-as-needed\n" % test_name)
+         rule = ("$(objpfx)" + test_subdir + "/" + test_name + ".o: "
+                 "$(objpfx)" + test_srcdir + test_name + ".c\n"
+                 "\t$(compile.c) $(OUTPUT_OPTION)\n")

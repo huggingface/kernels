@@ -1,0 +1,544 @@
+commit 09e1b0e3f6facc1af2dbcfef204f0aaa8718772b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon May 20 21:54:57 2019 +0200
+
+    libio: Remove codecvt vtable [BZ #24588]
+    
+    The codecvt vtable is not a real vtable because it also contains the
+    conversion state data.  Furthermore, wide stream support was added to
+    GCC 3.0, after a C++ ABI bump, so there is no compatibility
+    requirement with libstdc++.
+    
+    This change removes several unmangled function pointers which could
+    be used with a corrupted FILE object to redirect execution.  (libio
+    vtable verification did not cover the codecvt vtable.)
+    
+    Reviewed-by: Yann Droneaud <ydroneaud@opteya.com>
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+diff --git a/libio/fileops.c b/libio/fileops.c
+index d2070a856e..daa5a05877 100644
+--- a/libio/fileops.c
++++ b/libio/fileops.c
+@@ -331,9 +331,6 @@ _IO_new_file_fopen (FILE *fp, const char *filename, const char *mode,
+ 
+ 	  cc = fp->_codecvt = &fp->_wide_data->_codecvt;
+ 
+-	  /* The functions are always the same.  */
+-	  *cc = __libio_codecvt;
+-
+ 	  cc->__cd_in.__cd.__nsteps = fcts.towc_nsteps;
+ 	  cc->__cd_in.__cd.__steps = fcts.towc;
+ 
+diff --git a/libio/iofgetpos.c b/libio/iofgetpos.c
+index 8032192440..388c4a0708 100644
+--- a/libio/iofgetpos.c
++++ b/libio/iofgetpos.c
+@@ -70,8 +70,7 @@ _IO_new_fgetpos (FILE *fp, __fpos_t *posp)
+   else
+     {
+       posp->__pos = pos;
+-      if (fp->_mode > 0
+-	  && (*fp->_codecvt->__codecvt_do_encoding) (fp->_codecvt) < 0)
++      if (fp->_mode > 0 && __libio_codecvt_encoding (fp->_codecvt) < 0)
+ 	/* This is a stateful encoding, safe the state.  */
+ 	posp->__state = fp->_wide_data->_IO_state;
+     }
+diff --git a/libio/iofgetpos64.c b/libio/iofgetpos64.c
+index 54de6a8205..6a0ba50d29 100644
+--- a/libio/iofgetpos64.c
++++ b/libio/iofgetpos64.c
+@@ -54,8 +54,7 @@ _IO_new_fgetpos64 (FILE *fp, __fpos64_t *posp)
+   else
+     {
+       posp->__pos = pos;
+-      if (fp->_mode > 0
+-	  && (*fp->_codecvt->__codecvt_do_encoding) (fp->_codecvt) < 0)
++      if (fp->_mode > 0 && __libio_codecvt_encoding (fp->_codecvt) < 0)
+ 	/* This is a stateful encoding, safe the state.  */
+ 	posp->__state = fp->_wide_data->_IO_state;
+     }
+diff --git a/libio/iofsetpos.c b/libio/iofsetpos.c
+index d7b1abbc61..4df1aae082 100644
+--- a/libio/iofsetpos.c
++++ b/libio/iofsetpos.c
+@@ -58,8 +58,7 @@ _IO_new_fsetpos (FILE *fp, const __fpos_t *posp)
+   else
+     {
+       result = 0;
+-      if (fp->_mode > 0
+-	  && (*fp->_codecvt->__codecvt_do_encoding) (fp->_codecvt) < 0)
++      if (fp->_mode > 0 && __libio_codecvt_encoding (fp->_codecvt) < 0)
+ 	/* This is a stateful encoding, restore the state.  */
+ 	fp->_wide_data->_IO_state = posp->__state;
+     }
+diff --git a/libio/iofsetpos64.c b/libio/iofsetpos64.c
+index d1865b728e..f382ba0dc1 100644
+--- a/libio/iofsetpos64.c
++++ b/libio/iofsetpos64.c
+@@ -48,8 +48,7 @@ _IO_new_fsetpos64 (FILE *fp, const fpos64_t *posp)
+   else
+     {
+       result = 0;
+-      if (fp->_mode > 0
+-	  && (*fp->_codecvt->__codecvt_do_encoding) (fp->_codecvt) < 0)
++      if (fp->_mode > 0 && __libio_codecvt_encoding (fp->_codecvt) < 0)
+ 	/* This is a stateful encoding, safe the state.  */
+ 	fp->_wide_data->_IO_state = posp->__state;
+     }
+diff --git a/libio/iofwide.c b/libio/iofwide.c
+index 247cfde3d0..80cb2d5074 100644
+--- a/libio/iofwide.c
++++ b/libio/iofwide.c
+@@ -39,44 +39,6 @@
+ #include <sysdep.h>
+ 
+ 
+-/* Prototypes of libio's codecvt functions.  */
+-static enum __codecvt_result do_out (struct _IO_codecvt *codecvt,
+-				     __mbstate_t *statep,
+-				     const wchar_t *from_start,
+-				     const wchar_t *from_end,
+-				     const wchar_t **from_stop, char *to_start,
+-				     char *to_end, char **to_stop);
+-static enum __codecvt_result do_unshift (struct _IO_codecvt *codecvt,
+-					 __mbstate_t *statep, char *to_start,
+-					 char *to_end, char **to_stop);
+-static enum __codecvt_result do_in (struct _IO_codecvt *codecvt,
+-				    __mbstate_t *statep,
+-				    const char *from_start,
+-				    const char *from_end,
+-				    const char **from_stop, wchar_t *to_start,
+-				    wchar_t *to_end, wchar_t **to_stop);
+-static int do_encoding (struct _IO_codecvt *codecvt);
+-static int do_length (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+-		      const char *from_start,
+-		      const char *from_end, size_t max);
+-static int do_max_length (struct _IO_codecvt *codecvt);
+-static int do_always_noconv (struct _IO_codecvt *codecvt);
+-
+-
+-/* The functions used in `codecvt' for libio are always the same.  */
+-const struct _IO_codecvt __libio_codecvt =
+-{
+-  .__codecvt_destr = NULL,		/* Destructor, never used.  */
+-  .__codecvt_do_out = do_out,
+-  .__codecvt_do_unshift = do_unshift,
+-  .__codecvt_do_in = do_in,
+-  .__codecvt_do_encoding = do_encoding,
+-  .__codecvt_do_always_noconv = do_always_noconv,
+-  .__codecvt_do_length = do_length,
+-  .__codecvt_do_max_length = do_max_length
+-};
+-
+-
+ /* Return orientation of stream.  If mode is nonzero try to change
+    the orientation first.  */
+ #undef _IO_fwide
+@@ -118,9 +80,6 @@ _IO_fwide (FILE *fp, int mode)
+ 	assert (fcts.towc_nsteps == 1);
+ 	assert (fcts.tomb_nsteps == 1);
+ 
+-	/* The functions are always the same.  */
+-	*cc = __libio_codecvt;
+-
+ 	cc->__cd_in.__cd.__nsteps = fcts.towc_nsteps;
+ 	cc->__cd_in.__cd.__steps = fcts.towc;
+ 
+@@ -150,11 +109,11 @@ _IO_fwide (FILE *fp, int mode)
+ }
+ 
+ 
+-static enum __codecvt_result
+-do_out (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+-	const wchar_t *from_start, const wchar_t *from_end,
+-	const wchar_t **from_stop, char *to_start, char *to_end,
+-	char **to_stop)
++enum __codecvt_result
++__libio_codecvt_out (struct _IO_codecvt *codecvt, __mbstate_t *statep,
++		     const wchar_t *from_start, const wchar_t *from_end,
++		     const wchar_t **from_stop, char *to_start, char *to_end,
++		     char **to_stop)
+ {
+   enum __codecvt_result result;
+ 
+@@ -202,57 +161,11 @@ do_out (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+ }
+ 
+ 
+-static enum __codecvt_result
+-do_unshift (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+-	    char *to_start, char *to_end, char **to_stop)
+-{
+-  enum __codecvt_result result;
+-
+-  struct __gconv_step *gs = codecvt->__cd_out.__cd.__steps;
+-  int status;
+-  size_t dummy;
+-
+-  codecvt->__cd_out.__cd.__data[0].__outbuf = (unsigned char *) to_start;
+-  codecvt->__cd_out.__cd.__data[0].__outbufend = (unsigned char *) to_end;
+-  codecvt->__cd_out.__cd.__data[0].__statep = statep;
+-
+-  __gconv_fct fct = gs->__fct;
+-#ifdef PTR_DEMANGLE
+-  if (gs->__shlib_handle != NULL)
+-    PTR_DEMANGLE (fct);
+-#endif
+-
+-  status = DL_CALL_FCT (fct,
+-			(gs, codecvt->__cd_out.__cd.__data, NULL, NULL,
+-			 NULL, &dummy, 1, 0));
+-
+-  *to_stop = (char *) codecvt->__cd_out.__cd.__data[0].__outbuf;
+-
+-  switch (status)
+-    {
+-    case __GCONV_OK:
+-    case __GCONV_EMPTY_INPUT:
+-      result = __codecvt_ok;
+-      break;
+-
+-    case __GCONV_FULL_OUTPUT:
+-    case __GCONV_INCOMPLETE_INPUT:
+-      result = __codecvt_partial;
+-      break;
+-
+-    default:
+-      result = __codecvt_error;
+-      break;
+-    }
+-
+-  return result;
+-}
+-
+-
+-static enum __codecvt_result
+-do_in (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+-       const char *from_start, const char *from_end, const char **from_stop,
+-       wchar_t *to_start, wchar_t *to_end, wchar_t **to_stop)
++enum __codecvt_result
++__libio_codecvt_in (struct _IO_codecvt *codecvt, __mbstate_t *statep,
++		    const char *from_start, const char *from_end,
++		    const char **from_stop,
++		    wchar_t *to_start, wchar_t *to_end, wchar_t **to_stop)
+ {
+   enum __codecvt_result result;
+ 
+@@ -300,8 +213,8 @@ do_in (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+ }
+ 
+ 
+-static int
+-do_encoding (struct _IO_codecvt *codecvt)
++int
++__libio_codecvt_encoding (struct _IO_codecvt *codecvt)
+ {
+   /* See whether the encoding is stateful.  */
+   if (codecvt->__cd_in.__cd.__steps[0].__stateful)
+@@ -317,16 +230,10 @@ do_encoding (struct _IO_codecvt *codecvt)
+ }
+ 
+ 
+-static int
+-do_always_noconv (struct _IO_codecvt *codecvt)
+-{
+-  return 0;
+-}
+-
+-
+-static int
+-do_length (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+-	   const char *from_start, const char *from_end, size_t max)
++int
++__libio_codecvt_length (struct _IO_codecvt *codecvt, __mbstate_t *statep,
++			const char *from_start, const char *from_end,
++			size_t max)
+ {
+   int result;
+   const unsigned char *cp = (const unsigned char *) from_start;
+@@ -353,10 +260,3 @@ do_length (struct _IO_codecvt *codecvt, __mbstate_t *statep,
+ 
+   return result;
+ }
+-
+-
+-static int
+-do_max_length (struct _IO_codecvt *codecvt)
+-{
+-  return codecvt->__cd_in.__cd.__steps[0].__max_needed_from;
+-}
+diff --git a/libio/libio.h b/libio/libio.h
+index c38095ff77..b985c386a2 100644
+--- a/libio/libio.h
++++ b/libio/libio.h
+@@ -116,40 +116,8 @@ struct _IO_marker {
+   int _pos;
+ };
+ 
+-/* This is the structure from the libstdc++ codecvt class.  */
+-enum __codecvt_result
+-{
+-  __codecvt_ok,
+-  __codecvt_partial,
+-  __codecvt_error,
+-  __codecvt_noconv
+-};
+-
+-/* The order of the elements in the following struct must match the order
+-   of the virtual functions in the libstdc++ codecvt class.  */
+ struct _IO_codecvt
+ {
+-  void (*__codecvt_destr) (struct _IO_codecvt *);
+-  enum __codecvt_result (*__codecvt_do_out) (struct _IO_codecvt *,
+-					     __mbstate_t *,
+-					     const wchar_t *,
+-					     const wchar_t *,
+-					     const wchar_t **, char *,
+-					     char *, char **);
+-  enum __codecvt_result (*__codecvt_do_unshift) (struct _IO_codecvt *,
+-						 __mbstate_t *, char *,
+-						 char *, char **);
+-  enum __codecvt_result (*__codecvt_do_in) (struct _IO_codecvt *,
+-					    __mbstate_t *,
+-					    const char *, const char *,
+-					    const char **, wchar_t *,
+-					    wchar_t *, wchar_t **);
+-  int (*__codecvt_do_encoding) (struct _IO_codecvt *);
+-  int (*__codecvt_do_always_noconv) (struct _IO_codecvt *);
+-  int (*__codecvt_do_length) (struct _IO_codecvt *, __mbstate_t *,
+-			      const char *, const char *, size_t);
+-  int (*__codecvt_do_max_length) (struct _IO_codecvt *);
+-
+   _IO_iconv_t __cd_in;
+   _IO_iconv_t __cd_out;
+ };
+diff --git a/libio/libioP.h b/libio/libioP.h
+index 7bdec86a62..66afaa8968 100644
+--- a/libio/libioP.h
++++ b/libio/libioP.h
+@@ -476,7 +476,6 @@ extern const struct _IO_jump_t _IO_streambuf_jumps;
+ extern const struct _IO_jump_t _IO_old_proc_jumps attribute_hidden;
+ extern const struct _IO_jump_t _IO_str_jumps attribute_hidden;
+ extern const struct _IO_jump_t _IO_wstr_jumps attribute_hidden;
+-extern const struct _IO_codecvt __libio_codecvt attribute_hidden;
+ extern int _IO_do_write (FILE *, const char *, size_t);
+ libc_hidden_proto (_IO_do_write)
+ extern int _IO_new_do_write (FILE *, const char *, size_t);
+@@ -932,4 +931,32 @@ IO_validate_vtable (const struct _IO_jump_t *vtable)
+   return vtable;
+ }
+ 
++/* Character set conversion.  */
++
++enum __codecvt_result
++{
++  __codecvt_ok,
++  __codecvt_partial,
++  __codecvt_error,
++  __codecvt_noconv
++};
++
++enum __codecvt_result __libio_codecvt_out (struct _IO_codecvt *,
++					   __mbstate_t *,
++					   const wchar_t *,
++					   const wchar_t *,
++					   const wchar_t **, char *,
++					   char *, char **)
++  attribute_hidden;
++enum __codecvt_result __libio_codecvt_in (struct _IO_codecvt *,
++					  __mbstate_t *,
++					  const char *, const char *,
++					  const char **, wchar_t *,
++					  wchar_t *, wchar_t **)
++  attribute_hidden;
++int __libio_codecvt_encoding (struct _IO_codecvt *) attribute_hidden;
++int __libio_codecvt_length (struct _IO_codecvt *, __mbstate_t *,
++			    const char *, const char *, size_t)
++  attribute_hidden;
++
+ #endif /* libioP.h.  */
+diff --git a/libio/wfileops.c b/libio/wfileops.c
+index 69fbb62a02..f1863db638 100644
+--- a/libio/wfileops.c
++++ b/libio/wfileops.c
+@@ -72,11 +72,11 @@ _IO_wdo_write (FILE *fp, const wchar_t *data, size_t to_do)
+ 	    }
+ 
+ 	  /* Now convert from the internal format into the external buffer.  */
+-	  result = (*cc->__codecvt_do_out) (cc, &fp->_wide_data->_IO_state,
+-					    data, data + to_do, &new_data,
+-					    write_ptr,
+-					    buf_end,
+-					    &write_ptr);
++	  result = __libio_codecvt_out (cc, &fp->_wide_data->_IO_state,
++					data, data + to_do, &new_data,
++					write_ptr,
++					buf_end,
++					&write_ptr);
+ 
+ 	  /* Write out what we produced so far.  */
+ 	  if (_IO_new_do_write (fp, write_base, write_ptr - write_base) == EOF)
+@@ -140,12 +140,12 @@ _IO_wfile_underflow (FILE *fp)
+       fp->_wide_data->_IO_last_state = fp->_wide_data->_IO_state;
+       fp->_wide_data->_IO_read_base = fp->_wide_data->_IO_read_ptr =
+ 	fp->_wide_data->_IO_buf_base;
+-      status = (*cd->__codecvt_do_in) (cd, &fp->_wide_data->_IO_state,
+-				       fp->_IO_read_ptr, fp->_IO_read_end,
+-				       &read_stop,
+-				       fp->_wide_data->_IO_read_ptr,
+-				       fp->_wide_data->_IO_buf_end,
+-				       &fp->_wide_data->_IO_read_end);
++      status = __libio_codecvt_in (cd, &fp->_wide_data->_IO_state,
++				   fp->_IO_read_ptr, fp->_IO_read_end,
++				   &read_stop,
++				   fp->_wide_data->_IO_read_ptr,
++				   fp->_wide_data->_IO_buf_end,
++				   &fp->_wide_data->_IO_read_end);
+ 
+       fp->_IO_read_base = fp->_IO_read_ptr;
+       fp->_IO_read_ptr = (char *) read_stop;
+@@ -266,11 +266,11 @@ _IO_wfile_underflow (FILE *fp)
+       naccbuf += to_copy;
+       from = accbuf;
+     }
+-  status = (*cd->__codecvt_do_in) (cd, &fp->_wide_data->_IO_state,
+-				   from, to, &read_ptr_copy,
+-				   fp->_wide_data->_IO_read_end,
+-				   fp->_wide_data->_IO_buf_end,
+-				   &fp->_wide_data->_IO_read_end);
++  status = __libio_codecvt_in (cd, &fp->_wide_data->_IO_state,
++			       from, to, &read_ptr_copy,
++			       fp->_wide_data->_IO_read_end,
++			       fp->_wide_data->_IO_buf_end,
++			       &fp->_wide_data->_IO_read_end);
+ 
+   if (__glibc_unlikely (naccbuf != 0))
+     fp->_IO_read_ptr += MAX (0, read_ptr_copy - &accbuf[naccbuf - to_copy]);
+@@ -372,12 +372,12 @@ _IO_wfile_underflow_mmap (FILE *fp)
+   fp->_wide_data->_IO_last_state = fp->_wide_data->_IO_state;
+   fp->_wide_data->_IO_read_base = fp->_wide_data->_IO_read_ptr =
+     fp->_wide_data->_IO_buf_base;
+-  (*cd->__codecvt_do_in) (cd, &fp->_wide_data->_IO_state,
+-			  fp->_IO_read_ptr, fp->_IO_read_end,
+-			  &read_stop,
+-			  fp->_wide_data->_IO_read_ptr,
+-			  fp->_wide_data->_IO_buf_end,
+-			  &fp->_wide_data->_IO_read_end);
++  __libio_codecvt_in (cd, &fp->_wide_data->_IO_state,
++		      fp->_IO_read_ptr, fp->_IO_read_end,
++		      &read_stop,
++		      fp->_wide_data->_IO_read_ptr,
++		      fp->_wide_data->_IO_buf_end,
++		      &fp->_wide_data->_IO_read_end);
+ 
+   fp->_IO_read_ptr = (char *) read_stop;
+ 
+@@ -495,7 +495,7 @@ _IO_wfile_sync (FILE *fp)
+       struct _IO_codecvt *cv = fp->_codecvt;
+       off64_t new_pos;
+ 
+-      int clen = (*cv->__codecvt_do_encoding) (cv);
++      int clen = __libio_codecvt_encoding (cv);
+ 
+       if (clen > 0)
+ 	/* It is easy, a fixed number of input bytes are used for each
+@@ -511,9 +511,9 @@ _IO_wfile_sync (FILE *fp)
+ 	  size_t wnread = (fp->_wide_data->_IO_read_ptr
+ 			   - fp->_wide_data->_IO_read_base);
+ 	  fp->_wide_data->_IO_state = fp->_wide_data->_IO_last_state;
+-	  nread = (*cv->__codecvt_do_length) (cv, &fp->_wide_data->_IO_state,
+-					      fp->_IO_read_base,
+-					      fp->_IO_read_end, wnread);
++	  nread = __libio_codecvt_length (cv, &fp->_wide_data->_IO_state,
++					  fp->_IO_read_base,
++					  fp->_IO_read_end, wnread);
+ 	  fp->_IO_read_ptr = fp->_IO_read_base + nread;
+ 	  delta = -(fp->_IO_read_end - fp->_IO_read_base - nread);
+ 	}
+@@ -548,7 +548,7 @@ adjust_wide_data (FILE *fp, bool do_convert)
+ {
+   struct _IO_codecvt *cv = fp->_codecvt;
+ 
+-  int clen = (*cv->__codecvt_do_encoding) (cv);
++  int clen = __libio_codecvt_encoding (cv);
+ 
+   /* Take the easy way out for constant length encodings if we don't need to
+      convert.  */
+@@ -565,12 +565,12 @@ adjust_wide_data (FILE *fp, bool do_convert)
+     {
+ 
+       fp->_wide_data->_IO_last_state = fp->_wide_data->_IO_state;
+-      status = (*cv->__codecvt_do_in) (cv, &fp->_wide_data->_IO_state,
+-				       fp->_IO_read_base, fp->_IO_read_ptr,
+-				       &read_stop,
+-				       fp->_wide_data->_IO_read_base,
+-				       fp->_wide_data->_IO_buf_end,
+-				       &fp->_wide_data->_IO_read_end);
++      status = __libio_codecvt_in (cv, &fp->_wide_data->_IO_state,
++				   fp->_IO_read_base, fp->_IO_read_ptr,
++				   &read_stop,
++				   fp->_wide_data->_IO_read_base,
++				   fp->_wide_data->_IO_buf_end,
++				   &fp->_wide_data->_IO_read_end);
+ 
+       /* Should we return EILSEQ?  */
+       if (__glibc_unlikely (status == __codecvt_error))
+@@ -648,7 +648,7 @@ do_ftell_wide (FILE *fp)
+ 	}
+ 
+       struct _IO_codecvt *cv = fp->_codecvt;
+-      int clen = (*cv->__codecvt_do_encoding) (cv);
++      int clen = __libio_codecvt_encoding (cv);
+ 
+       if (!unflushed_writes)
+ 	{
+@@ -663,9 +663,9 @@ do_ftell_wide (FILE *fp)
+ 
+ 	      size_t delta = wide_read_ptr - wide_read_base;
+ 	      __mbstate_t state = fp->_wide_data->_IO_last_state;
+-	      nread = (*cv->__codecvt_do_length) (cv, &state,
+-						  fp->_IO_read_base,
+-						  fp->_IO_read_end, delta);
++	      nread = __libio_codecvt_length (cv, &state,
++					      fp->_IO_read_base,
++					      fp->_IO_read_end, delta);
+ 	      offset -= fp->_IO_read_end - fp->_IO_read_base - nread;
+ 	    }
+ 	}
+@@ -688,9 +688,8 @@ do_ftell_wide (FILE *fp)
+ 	      enum __codecvt_result status;
+ 
+ 	      __mbstate_t state = fp->_wide_data->_IO_last_state;
+-	      status = (*cv->__codecvt_do_out) (cv, &state,
+-						in, in + delta, &in,
+-						out, out + outsize, &outstop);
++	      status = __libio_codecvt_out (cv, &state, in, in + delta, &in,
++					    out, out + outsize, &outstop);
+ 
+ 	      /* We don't check for __codecvt_partial because it can be
+ 		 returned on one of two conditions: either the output
+@@ -801,7 +800,7 @@ _IO_wfile_seekoff (FILE *fp, off64_t offset, int dir, int mode)
+ 	 find out which position in the external buffer corresponds to
+ 	 the current position in the internal buffer.  */
+       cv = fp->_codecvt;
+-      clen = (*cv->__codecvt_do_encoding) (cv);
++      clen = __libio_codecvt_encoding (cv);
+ 
+       if (mode != 0 || !was_writing)
+ 	{
+@@ -819,10 +818,10 @@ _IO_wfile_seekoff (FILE *fp, off64_t offset, int dir, int mode)
+ 	      delta = (fp->_wide_data->_IO_read_ptr
+ 		       - fp->_wide_data->_IO_read_base);
+ 	      fp->_wide_data->_IO_state = fp->_wide_data->_IO_last_state;
+-	      nread = (*cv->__codecvt_do_length) (cv,
+-						  &fp->_wide_data->_IO_state,
+-						  fp->_IO_read_base,
+-						  fp->_IO_read_end, delta);
++	      nread = __libio_codecvt_length (cv,
++					      &fp->_wide_data->_IO_state,
++					      fp->_IO_read_base,
++					      fp->_IO_read_end, delta);
+ 	      fp->_IO_read_ptr = fp->_IO_read_base + nread;
+ 	      fp->_wide_data->_IO_read_end = fp->_wide_data->_IO_read_ptr;
+ 	      offset -= fp->_IO_read_end - fp->_IO_read_base - nread;

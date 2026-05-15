@@ -1,0 +1,85 @@
+commit 603ae243f6fe03208a3bb92adecf72403367bd95
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Nov 26 16:59:44 2020 +0100
+
+    support: Add support_copy_file
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/support/Makefile b/support/Makefile
+index 895b83a426369b0c..35b21b19a248ba7f 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -46,6 +46,7 @@ libsupport-routines = \
+   support_capture_subprocess \
+   support_capture_subprocess_check \
+   support_chroot \
++  support_copy_file \
+   support_copy_file_range \
+   support_descriptor_supports_holes \
+   support_descriptors \
+diff --git a/support/support.h b/support/support.h
+index 3af87f85fe1b762d..6f7f804847f67600 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -115,6 +115,11 @@ extern const char support_install_rootsbindir[];
+ /* Corresponds to the install's compiled locale directory.  */
+ extern const char support_complocaledir_prefix[];
+ 
++/* Copies the file at the path FROM to TO.  If TO does not exist, it
++   is created.  If TO is a regular file, it is truncated before
++   copying.  The file mode is copied, but the permissions are not.  */
++extern void support_copy_file (const char *from, const char *to);
++
+ extern ssize_t support_copy_file_range (int, off64_t *, int, off64_t *,
+ 					size_t, unsigned int);
+ 
+diff --git a/support/support_copy_file.c b/support/support_copy_file.c
+new file mode 100644
+index 0000000000000000..c93e1e58c81b749d
+--- /dev/null
++++ b/support/support_copy_file.c
+@@ -0,0 +1,43 @@
++/* Copy a file from one path to another.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <fcntl.h>
++#include <support/check.h>
++#include <support/support.h>
++#include <support/xunistd.h>
++
++void
++support_copy_file (const char *from, const char *to)
++{
++  struct stat64 st;
++  xstat (from, &st);
++  int fd_from = xopen (from, O_RDONLY, 0);
++  mode_t mode = st.st_mode & 0777;
++  int fd_to = xopen (to, O_WRONLY | O_TRUNC | O_CREAT, mode);
++  ssize_t ret = support_copy_file_range (fd_from, NULL, fd_to, NULL,
++                                         st.st_size, 0);
++  if (ret < 0)
++    FAIL_EXIT1 ("copying from \"%s\" to \"%s\": %m", from, to);
++  if (ret != st.st_size)
++    FAIL_EXIT1 ("copying from \"%s\" to \"%s\": only %zd of %llu bytes copied",
++                from, to, ret, (unsigned long long int) st.st_size);
++  if (fchmod (fd_to, mode) < 0)
++    FAIL_EXIT1 ("fchmod on %s to 0%o: %m", to, mode);
++  xclose (fd_to);
++  xclose (fd_from);
++}

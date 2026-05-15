@@ -1,0 +1,74 @@
+commit d90c9b1a121295a5e31810b899ab637f68898857
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Thu Sep 20 12:43:41 2018 +0000
+
+    Invert sense of list of i686-class processors in sysdeps/x86/cpu-features.h.
+    
+    I noticed that sysdeps/x86/cpu-features.h had conditionals on whether
+    to define HAS_CPUID, HAS_I586 and HAS_I686 with a long list of
+    preprocessor macros for i686-and-later processors which however was
+    out of date.  This patch avoids the problem of the list getting out of
+    date by instead having conditionals on all the (few, old) pre-i686
+    processors for which GCC has preprocessor macros, rather than the
+    (many, expanding list) i686-and-later processors.  It seems HAS_I586
+    and HAS_I686 are unused so the only effect of these macros being
+    missing is that 32-bit glibc built for one of these processors would
+    end up doing runtime detection of CPUID availability.
+    
+    i386 builds are prevented by a configure test so there is no need to
+    allow for them here.  __geode__ (no long nops?) and __k6__ (no CMOV,
+    at least according to GCC) are conservatively handled as i586, not
+    i686, here (as noted above, this is a theoretical distinction at
+    present in that only HAS_CPUID appears to be used).
+    
+    Tested for x86.
+    
+            * sysdeps/x86/cpu-features.h [__geode__ || __k6__]: Handle like
+            [__i586__ || __pentium__].
+            [__i486__]: Handle explicitly.
+            (HAS_CPUID): Define to 1 if above macros are undefined.
+            (HAS_I586): Likewise.
+            (HAS_I686): Likewise.
+
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index d342664c64ab7aa1..fb22d7b9d6226a92 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -257,30 +257,19 @@ extern const struct cpu_features *__get_cpu_features (void)
+ 
+ #ifdef __x86_64__
+ # define HAS_CPUID 1
+-#elif defined __i586__ || defined __pentium__
++#elif (defined __i586__ || defined __pentium__	\
++       || defined __geode__ || defined __k6__)
+ # define HAS_CPUID 1
+ # define HAS_I586 1
+ # define HAS_I686 HAS_ARCH_FEATURE (I686)
+-#elif (defined __i686__ || defined __pentiumpro__		\
+-       || defined __pentium4__ || defined __nocona__		\
+-       || defined __atom__ || defined __core2__			\
+-       || defined __corei7__ || defined __corei7_avx__		\
+-       || defined __core_avx2__	|| defined __nehalem__		\
+-       || defined __sandybridge__ || defined __haswell__	\
+-       || defined __knl__ || defined __bonnell__		\
+-       || defined __silvermont__				\
+-       || defined __k6__ || defined __k8__			\
+-       || defined __athlon__ || defined __amdfam10__		\
+-       || defined __bdver1__ || defined __bdver2__		\
+-       || defined __bdver3__ || defined __bdver4__		\
+-       || defined __btver1__ || defined __btver2__)
+-# define HAS_CPUID 1
+-# define HAS_I586 1
+-# define HAS_I686 1
+-#else
++#elif defined __i486__
+ # define HAS_CPUID 0
+ # define HAS_I586 HAS_ARCH_FEATURE (I586)
+ # define HAS_I686 HAS_ARCH_FEATURE (I686)
++#else
++# define HAS_CPUID 1
++# define HAS_I586 1
++# define HAS_I686 1
+ #endif
+ 
+ #endif  /* cpu_features_h */

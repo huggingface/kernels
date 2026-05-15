@@ -1,0 +1,178 @@
+commit df648905e7d8340bb3e78813fd25e2077b9685d9
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Dec 17 18:29:36 2018 +0000
+
+    Add test that MAP_* constants agree with kernel.
+    
+    Continuing the process of building up and using Python infrastructure
+    for extracting and using values in headers, this patch adds a test
+    that MAP_* constants from sys/mman.h agree with those in the Linux
+    kernel headers.  (Other sys/mman.h constants could be added to the
+    test separately.)
+    
+    This set of constants has grown over time, so the generic code is
+    enhanced to allow saying extra constants are OK on either side of the
+    comparison (where the caller sets those parameters based on the Linux
+    kernel headers version, compared with the version the headers were
+    last updated from).  Although the test is a custom Python file, my
+    intention is to move in future to a single Python script for such
+    tests and text files it takes as inputs, once there are enough
+    examples to provide a guide to the common cases in such tests (I'd
+    like to end up with most or all such sets of constants copied from
+    kernel headers having such tests, and likewise for structure layouts
+    from the kernel).
+    
+    The Makefile code is essentially the same as for tst-signal-numbers,
+    but I didn't try to find an object file to depend on to represent the
+    dependency on the headers used by the test (the conform/ tests don't
+    try to represent such header dependencies at all, for example).
+    
+    Tested with build-many-glibcs.py, and also for x86_64 with older
+    kernel headers.
+    
+            * scripts/glibcextract.py (compare_macro_consts): Take parameters
+            to allow extra macros from first or second sources.
+            * sysdeps/unix/sysv/linux/tst-mman-consts.py: New file.
+            * sysdeps/unix/sysv/linux/Makefile [$(subdir) = misc]
+            (tests-special): Add $(objpfx)tst-mman-consts.out.
+            ($(objpfx)tst-mman-consts.out): New makefile target.
+
+diff --git a/scripts/glibcextract.py b/scripts/glibcextract.py
+index ecc4d5b6cc387c7d..06f712ad115e0f9e 100644
+--- a/scripts/glibcextract.py
++++ b/scripts/glibcextract.py
+@@ -136,12 +136,19 @@ def compute_macro_consts(source_text, cc, macro_re, exclude_re=None):
+     return compute_c_consts(sym_data, cc)
+ 
+ 
+-def compare_macro_consts(source_1, source_2, cc, macro_re, exclude_re=None):
++def compare_macro_consts(source_1, source_2, cc, macro_re, exclude_re=None,
++                         allow_extra_1=False, allow_extra_2=False):
+     """Compare the values of macros defined by two different sources.
+ 
+     The sources would typically be includes of a glibc header and a
+-    kernel header.  Return 1 if there were any differences, 0 if the
+-    macro values were the same.
++    kernel header.  If allow_extra_1, the first source may define
++    extra macros (typically if the kernel headers are older than the
++    version glibc has taken definitions from); if allow_extra_2, the
++    second source may define extra macros (typically if the kernel
++    headers are newer than the version glibc has taken definitions
++    from).  Return 1 if there were any differences other than those
++    allowed, 0 if the macro values were the same apart from any
++    allowed differences.
+ 
+     """
+     macros_1 = compute_macro_consts(source_1, cc, macro_re, exclude_re)
+@@ -150,13 +157,19 @@ def compare_macro_consts(source_1, source_2, cc, macro_re, exclude_re=None):
+         return 0
+     print('First source:\n%s\n' % source_1)
+     print('Second source:\n%s\n' % source_2)
++    ret = 0
+     for name, value in sorted(macros_1.items()):
+         if name not in macros_2:
+             print('Only in first source: %s' % name)
++            if not allow_extra_1:
++                ret = 1
+         elif macros_1[name] != macros_2[name]:
+             print('Different values for %s: %s != %s'
+                   % (name, macros_1[name], macros_2[name]))
++            ret = 1
+     for name in sorted(macros_2.keys()):
+         if name not in macros_1:
+             print('Only in second source: %s' % name)
+-    return 1
++            if not allow_extra_2:
++                ret = 1
++    return ret
+diff --git a/sysdeps/unix/sysv/linux/Makefile b/sysdeps/unix/sysv/linux/Makefile
+index 9c10ee53b26e1b1b..863ed80c2a2713d3 100644
+--- a/sysdeps/unix/sysv/linux/Makefile
++++ b/sysdeps/unix/sysv/linux/Makefile
+@@ -98,6 +98,15 @@ $(objpfx)tst-sysconf-iov_max: $(objpfx)tst-sysconf-iov_max-uapi.o
+ 
+ $(objpfx)tst-pkey: $(shared-thread-library)
+ 
++tests-special += $(objpfx)tst-mman-consts.out
++$(objpfx)tst-mman-consts.out: ../sysdeps/unix/sysv/linux/tst-mman-consts.py
++	PYTHONPATH=../scripts \
++	$(PYTHON) ../sysdeps/unix/sysv/linux/tst-mman-consts.py \
++		   --cc="$(CC) $(patsubst -DMODULE_NAME=%, \
++					  -DMODULE_NAME=testsuite, \
++					  $(CPPFLAGS))" \
++	< /dev/null > $@ 2>&1; $(evaluate-test)
++
+ endif # $(subdir) == misc
+ 
+ ifeq ($(subdir),time)
+diff --git a/sysdeps/unix/sysv/linux/tst-mman-consts.py b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+new file mode 100644
+index 0000000000000000..1a613beec0da16fb
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+@@ -0,0 +1,65 @@
++#!/usr/bin/python3
++# Test that glibc's sys/mman.h constants match the kernel's.
++# Copyright (C) 2018 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <http://www.gnu.org/licenses/>.
++
++import argparse
++import sys
++
++import glibcextract
++
++
++def linux_kernel_version(cc):
++    """Return the (major, minor) version of the Linux kernel headers."""
++    sym_data = ['#include <linux/version.h>', 'START',
++                ('LINUX_VERSION_CODE', 'LINUX_VERSION_CODE')]
++    val = glibcextract.compute_c_consts(sym_data, cc)['LINUX_VERSION_CODE']
++    val = int(val)
++    return ((val & 0xff0000) >> 16, (val & 0xff00) >> 8)
++
++
++def main():
++    """The main entry point."""
++    parser = argparse.ArgumentParser(
++        description="Test that glibc's sys/mman.h constants "
++        "match the kernel's.")
++    parser.add_argument('--cc', metavar='CC',
++                        help='C compiler (including options) to use')
++    args = parser.parse_args()
++    linux_version_headers = linux_kernel_version(args.cc)
++    linux_version_glibc = (4, 19)
++    sys.exit(glibcextract.compare_macro_consts(
++        '#define _GNU_SOURCE 1\n'
++        '#include <sys/mman.h>\n',
++        '#define _GNU_SOURCE 1\n'
++        '#include <linux/mman.h>\n',
++        args.cc,
++        'MAP_.*',
++        # A series of MAP_HUGE_<size> macros are defined by the kernel
++        # but not by glibc.  MAP_UNINITIALIZED is kernel-only.
++        # MAP_FAILED is not a MAP_* flag and is glibc-only, as is the
++        # MAP_ANON alias for MAP_ANONYMOUS.  MAP_RENAME, MAP_AUTOGROW,
++        # MAP_LOCAL and MAP_AUTORSRV are in the kernel header for
++        # MIPS, marked as "not used by linux"; SPARC has MAP_INHERIT
++        # in the kernel header, but does not use it.
++        'MAP_HUGE_[0-9].*|MAP_UNINITIALIZED|MAP_FAILED|MAP_ANON'
++        '|MAP_RENAME|MAP_AUTOGROW|MAP_LOCAL|MAP_AUTORSRV|MAP_INHERIT',
++        linux_version_glibc > linux_version_headers,
++        linux_version_headers > linux_version_glibc))
++
++if __name__ == '__main__':
++    main()

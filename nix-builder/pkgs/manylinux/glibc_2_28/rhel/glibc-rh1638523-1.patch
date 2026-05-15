@@ -1,0 +1,2823 @@
+This patch backports the support/ directory as of the upstream commit
+below.  (It does not include the required Makefile changes to enable
+test-in-container builds.)
+ 
+commit 00c86a37d1b63044e3169d1f2ebec23447c73f79
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Nov 7 11:09:02 2018 -0200
+
+    support: Fix printf format for TEST_COMPARE_STRING
+    
+    Fix the following on 32 bits targets:
+    
+    support_test_compare_string.c: In function ‘support_test_compare_string’:
+    support_test_compare_string.c:80:37: error: format ‘%lu’ expects argument of
+    type ‘long unsigned int’, but argument 2 has type ‘size_t’ {aka ‘unsigned int’}
+    [-Werror=format=]
+             printf ("  string length: %lu bytes\n", left_length);
+                                       ~~^           ~~~~~~~~~~~
+                                       %u
+    Checked on arm-linux-gnueabihf.
+    
+            * support/support_test_compare_string.c
+            (support_test_compare_string): Fix printf format.
+
+diff --git a/support/Makefile b/support/Makefile
+index 652d2cdf6945b2eb..2b663fbbfa334ea2 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -25,6 +25,7 @@ extra-libs-others = $(extra-libs)
+ extra-libs-noinstall := $(extra-libs)
+ 
+ libsupport-routines = \
++  blob_repeat \
+   check \
+   check_addrinfo \
+   check_dns_packet \
+@@ -43,6 +44,8 @@ libsupport-routines = \
+   support_capture_subprocess \
+   support_capture_subprocess_check \
+   support_chroot \
++  support_copy_file_range \
++  support_descriptor_supports_holes \
+   support_enter_mount_namespace \
+   support_enter_network_namespace \
+   support_format_address_family \
+@@ -53,12 +56,14 @@ libsupport-routines = \
+   support_format_netent \
+   support_isolate_in_subprocess \
+   support_openpty \
++  support_paths \
+   support_quote_blob \
+   support_record_failure \
+   support_run_diff \
+   support_shared_allocate \
+   support_test_compare_blob \
+   support_test_compare_failure \
++  support_test_compare_string \
+   support_write_file_string \
+   support_test_main \
+   support_test_verify_impl \
+@@ -72,6 +77,7 @@ libsupport-routines = \
+   xchroot \
+   xclose \
+   xconnect \
++  xcopy_file_range \
+   xdlfcn \
+   xdup2 \
+   xfclose \
+@@ -84,6 +90,7 @@ libsupport-routines = \
+   xmalloc \
+   xmemstream \
+   xmkdir \
++  xmkdirp \
+   xmmap \
+   xmprotect \
+   xmunmap \
+@@ -139,6 +146,7 @@ libsupport-routines = \
+   xsocket \
+   xstrdup \
+   xstrndup \
++  xsymlink \
+   xsysconf \
+   xunlink \
+   xwaitpid \
+@@ -151,15 +159,47 @@ ifeq ($(build-shared),yes)
+ libsupport-inhibit-o += .o
+ endif
+ 
++CFLAGS-support_paths.c = \
++		-DSRCDIR_PATH=\"`cd .. ; pwd`\" \
++		-DOBJDIR_PATH=\"`cd $(objpfx)/..; pwd`\" \
++		-DOBJDIR_ELF_LDSO_PATH=\"`cd $(objpfx)/..; pwd`/elf/$(rtld-installed-name)\" \
++		-DINSTDIR_PATH=\"$(prefix)\" \
++		-DLIBDIR_PATH=\"$(libdir)\"
++
++ifeq (,$(CXX))
++LINKS_DSO_PROGRAM = links-dso-program-c
++else
++LINKS_DSO_PROGRAM = links-dso-program
++LDLIBS-links-dso-program = -lstdc++ -lgcc -lgcc_s $(libunwind)
++endif
++
++LDLIBS-test-container = $(libsupport)
++
++others += test-container
++others-noinstall += test-container
++
++others += shell-container echo-container true-container
++others-noinstall += shell-container echo-container true-container
++
++others += $(LINKS_DSO_PROGRAM)
++others-noinstall += $(LINKS_DSO_PROGRAM)
++
++$(objpfx)test-container : $(libsupport)
++$(objpfx)shell-container : $(libsupport)
++$(objpfx)echo-container : $(libsupport)
++$(objpfx)true-container : $(libsupport)
++
+ tests = \
+   README-testing \
+   tst-support-namespace \
++  tst-support_blob_repeat \
+   tst-support_capture_subprocess \
+   tst-support_format_dns_packet \
+   tst-support_quote_blob \
+   tst-support_record_failure \
+   tst-test_compare \
+   tst-test_compare_blob \
++  tst-test_compare_string \
+   tst-xreadlink \
+ 
+ ifeq ($(run-built-tests),yes)
+diff --git a/support/blob_repeat.c b/support/blob_repeat.c
+new file mode 100644
+index 0000000000000000..16c1e448b990e386
+--- /dev/null
++++ b/support/blob_repeat.c
+@@ -0,0 +1,282 @@
++/* Repeating a memory blob, with alias mapping optimization.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <fcntl.h>
++#include <stdbool.h>
++#include <stdlib.h>
++#include <string.h>
++#include <support/blob_repeat.h>
++#include <support/check.h>
++#include <support/test-driver.h>
++#include <support/support.h>
++#include <support/xunistd.h>
++#include <sys/mman.h>
++#include <unistd.h>
++#include <wchar.h>
++
++/* Small allocations should use malloc directly instead of the mmap
++   optimization because mappings carry a lot of overhead.  */
++static const size_t maximum_small_size = 4 * 1024 * 1024;
++
++/* Internal helper for fill.  */
++static void
++fill0 (char *target, const char *element, size_t element_size,
++       size_t count)
++{
++  while (count > 0)
++    {
++      memcpy (target, element, element_size);
++      target += element_size;
++      --count;
++    }
++}
++
++/* Fill the buffer at TARGET with COUNT copies of the ELEMENT_SIZE
++   bytes starting at ELEMENT.  */
++static void
++fill (char *target, const char *element, size_t element_size,
++      size_t count)
++{
++  if (element_size == 0 || count == 0)
++    return;
++  else if (element_size == 1)
++    memset (target, element[0], count);
++  else if (element_size == sizeof (wchar_t))
++    {
++      wchar_t wc;
++      memcpy (&wc, element, sizeof (wc));
++      wmemset ((wchar_t *) target, wc, count);
++    }
++  else if (element_size < 1024 && count > 4096)
++    {
++      /* Use larger copies for really small element sizes.  */
++      char buffer[8192];
++      size_t buffer_count = sizeof (buffer) / element_size;
++      fill0 (buffer, element, element_size, buffer_count);
++      while (count > 0)
++        {
++          size_t copy_count = buffer_count;
++          if (copy_count > count)
++            copy_count = count;
++          size_t copy_bytes = copy_count * element_size;
++          memcpy (target, buffer, copy_bytes);
++          target += copy_bytes;
++          count -= copy_count;
++        }
++    }
++  else
++    fill0 (target, element, element_size, count);
++}
++
++/* Use malloc instead of mmap for small allocations and unusual size
++   combinations.  */
++static struct support_blob_repeat
++allocate_malloc (size_t total_size, const void *element, size_t element_size,
++                 size_t count)
++{
++  void *buffer = malloc (total_size);
++  if (buffer == NULL)
++    return (struct support_blob_repeat) { 0 };
++  fill (buffer, element, element_size, count);
++  return (struct support_blob_repeat)
++    {
++      .start = buffer,
++      .size = total_size,
++      .use_malloc = true
++    };
++}
++
++/* Return the least common multiple of PAGE_SIZE and ELEMENT_SIZE,
++   avoiding overflow.  This assumes that PAGE_SIZE is a power of
++   two.  */
++static size_t
++minimum_stride_size (size_t page_size, size_t element_size)
++{
++  TEST_VERIFY_EXIT (page_size > 0);
++  TEST_VERIFY_EXIT (element_size > 0);
++
++  /* Compute the number of trailing zeros common to both sizes.  */
++  unsigned int common_zeros = __builtin_ctzll (page_size | element_size);
++
++  /* In the product, this power of two appears twice, but in the least
++     common multiple, it appears only once.  Therefore, shift one
++     factor.  */
++  size_t multiple;
++  if (__builtin_mul_overflow (page_size >> common_zeros, element_size,
++                              &multiple))
++    return 0;
++  return multiple;
++}
++
++/* Allocations larger than maximum_small_size potentially use mmap
++   with alias mappings.  */
++static struct support_blob_repeat
++allocate_big (size_t total_size, const void *element, size_t element_size,
++              size_t count)
++{
++  unsigned long page_size = xsysconf (_SC_PAGESIZE);
++  size_t stride_size = minimum_stride_size (page_size, element_size);
++  if (stride_size == 0)
++    {
++      errno = EOVERFLOW;
++      return (struct support_blob_repeat) { 0 };
++    }
++
++  /* Ensure that the stride size is at least maximum_small_size.  This
++     is necessary to reduce the number of distinct mappings.  */
++  if (stride_size < maximum_small_size)
++    stride_size
++      = ((maximum_small_size + stride_size - 1) / stride_size) * stride_size;
++
++  if (stride_size > total_size)
++    /* The mmap optimization would not save anything.  */
++    return allocate_malloc (total_size, element, element_size, count);
++
++  /* Reserve the memory region.  If we cannot create the mapping,
++     there is no reason to set up the backing file.  */
++  void *target = mmap (NULL, total_size, PROT_NONE,
++                       MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
++  if (target == MAP_FAILED)
++    return (struct support_blob_repeat) { 0 };
++
++  /* Create the backing file for the repeated mapping.  Call mkstemp
++     directly to remove the resources backing the temporary file
++     immediately, once support_blob_repeat_free is called.  Using
++     create_temp_file would result in a warning during post-test
++     cleanup.  */
++  int fd;
++  {
++    char *temppath = xasprintf ("%s/support_blob_repeat-XXXXXX", test_dir);
++    fd = mkstemp (temppath);
++    if (fd < 0)
++      FAIL_EXIT1 ("mkstemp (\"%s\"): %m", temppath);
++    xunlink (temppath);
++    free (temppath);
++  }
++
++  /* Make sure that there is backing storage, so that the fill
++     operation will not fault.  */
++  if (posix_fallocate (fd, 0, stride_size) != 0)
++    FAIL_EXIT1 ("posix_fallocate (%zu): %m", stride_size);
++
++  /* The stride size must still be a multiple of the page size and
++     element size.  */
++  TEST_VERIFY_EXIT ((stride_size % page_size) == 0);
++  TEST_VERIFY_EXIT ((stride_size % element_size) == 0);
++
++  /* Fill the backing store.  */
++  {
++    void *ptr = mmap (target, stride_size, PROT_READ | PROT_WRITE,
++                      MAP_FIXED | MAP_FILE | MAP_SHARED, fd, 0);
++    if (ptr == MAP_FAILED)
++      {
++        int saved_errno = errno;
++        xmunmap (target, total_size);
++        xclose (fd);
++        errno = saved_errno;
++        return (struct support_blob_repeat) { 0 };
++      }
++    if (ptr != target)
++      FAIL_EXIT1 ("mapping of %zu bytes moved from %p to %p",
++                  stride_size, target, ptr);
++
++    /* Write the repeating data.  */
++    fill (target, element, element_size, stride_size / element_size);
++
++    /* Return to a PROT_NONE mapping, just to be on the safe side.  */
++    ptr = mmap (target, stride_size, PROT_NONE,
++                MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
++    if (ptr == MAP_FAILED)
++      FAIL_EXIT1 ("Failed to reinstate PROT_NONE mapping: %m");
++    if (ptr != target)
++      FAIL_EXIT1 ("PROT_NONE mapping of %zu bytes moved from %p to %p",
++                  stride_size, target, ptr);
++  }
++
++  /* Create the alias mappings.  */
++  {
++    size_t remaining_size = total_size;
++    char *current = target;
++    int flags = MAP_FIXED | MAP_FILE | MAP_PRIVATE;
++#ifdef MAP_NORESERVE
++    flags |= MAP_NORESERVE;
++#endif
++    while (remaining_size > 0)
++      {
++        size_t to_map = stride_size;
++        if (to_map > remaining_size)
++          to_map = remaining_size;
++        void *ptr = mmap (current, to_map, PROT_READ | PROT_WRITE,
++                          flags, fd, 0);
++        if (ptr == MAP_FAILED)
++          {
++            int saved_errno = errno;
++            xmunmap (target, total_size);
++            xclose (fd);
++            errno = saved_errno;
++            return (struct support_blob_repeat) { 0 };
++          }
++        if (ptr != current)
++          FAIL_EXIT1 ("MAP_PRIVATE mapping of %zu bytes moved from %p to %p",
++                      to_map, target, ptr);
++        remaining_size -= to_map;
++        current += to_map;
++      }
++  }
++
++  xclose (fd);
++
++  return (struct support_blob_repeat)
++    {
++      .start = target,
++      .size = total_size,
++      .use_malloc = false
++    };
++}
++
++struct support_blob_repeat
++support_blob_repeat_allocate (const void *element, size_t element_size,
++                              size_t count)
++{
++  size_t total_size;
++  if (__builtin_mul_overflow (element_size, count, &total_size))
++    {
++      errno = EOVERFLOW;
++      return (struct support_blob_repeat) { 0 };
++    }
++  if (total_size <= maximum_small_size)
++    return allocate_malloc (total_size, element, element_size, count);
++  else
++    return allocate_big (total_size, element, element_size, count);
++}
++
++void
++support_blob_repeat_free (struct support_blob_repeat *blob)
++{
++  if (blob->size > 0)
++    {
++      int saved_errno = errno;
++      if (blob->use_malloc)
++        free (blob->start);
++      else
++        xmunmap (blob->start, blob->size);
++      errno = saved_errno;
++    }
++  *blob = (struct support_blob_repeat) { 0 };
++}
+diff --git a/support/blob_repeat.h b/support/blob_repeat.h
+new file mode 100644
+index 0000000000000000..8e9d7ff5f1e01f66
+--- /dev/null
++++ b/support/blob_repeat.h
+@@ -0,0 +1,44 @@
++/* Repeating a memory blob, with alias mapping optimization.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifndef SUPPORT_BLOB_REPEAT_H
++#define SUPPORT_BLOB_REPEAT_H
++
++#include <stdbool.h>
++#include <stddef.h>
++
++struct support_blob_repeat
++{
++  void *start;
++  size_t size;
++  bool use_malloc;
++};
++
++/* Return an allocation of COUNT elements, each of ELEMENT_SIZE bytes,
++   initialized with the bytes starting at ELEMENT.  The memory is
++   writable (and thus counts towards the commit charge).  In case of
++   on error, all members of the return struct are zero-initialized,
++   and errno is set accordingly.  */
++struct support_blob_repeat support_blob_repeat_allocate (const void *element,
++                                                         size_t element_size,
++                                                         size_t count);
++
++/* Deallocate the blob created by support_blob_repeat_allocate.  */
++void support_blob_repeat_free (struct support_blob_repeat *);
++
++#endif /* SUPPORT_BLOB_REPEAT_H */
+diff --git a/support/check.h b/support/check.h
+index b3a4645e9255e90d..e6765289f2492501 100644
+--- a/support/check.h
++++ b/support/check.h
+@@ -163,6 +163,19 @@ void support_test_compare_blob (const void *left,
+                                 const char *right_exp,
+                                 const char *right_len_exp);
+ 
++/* Compare the strings LEFT and RIGHT and report a test failure if
++   they are different.  Also report failure if one of the arguments is
++   a null pointer and the other is not.  The strings should be
++   reasonably short because on mismatch, both are printed.  */
++#define TEST_COMPARE_STRING(left, right)                         \
++  (support_test_compare_string (left, right, __FILE__, __LINE__, \
++                                #left, #right))
++
++void support_test_compare_string (const char *left, const char *right,
++                                  const char *file, int line,
++                                  const char *left_expr,
++                                  const char *right_expr);
++
+ /* Internal function called by the test driver.  */
+ int support_report_failure (int status)
+   __attribute__ ((weak, warn_unused_result));
+diff --git a/support/echo-container.c b/support/echo-container.c
+new file mode 100644
+index 0000000000000000..e4d48df95722af2e
+--- /dev/null
++++ b/support/echo-container.c
+@@ -0,0 +1,34 @@
++/* Minimal /bin/echo for in-container use.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++
++int
++main (int argc, const char **argv)
++{
++  int i;
++
++  for (i = 1; i < argc; i++)
++    {
++      if (i > 1)
++	putchar (' ');
++      fputs (argv[i], stdout);
++    }
++  putchar ('\n');
++  return 0;
++}
+diff --git a/support/links-dso-program-c.c b/support/links-dso-program-c.c
+new file mode 100644
+index 0000000000000000..d28a28a0d09c743c
+--- /dev/null
++++ b/support/links-dso-program-c.c
+@@ -0,0 +1,9 @@
++#include <stdio.h>
++
++int
++main (int argc, char **argv)
++{
++  /* Complexity to keep gcc from optimizing this away.  */
++  printf ("This is a test %s.\n", argc > 1 ? argv[1] : "null");
++  return 0;
++}
+diff --git a/support/links-dso-program.cc b/support/links-dso-program.cc
+new file mode 100644
+index 0000000000000000..dba6976c0609a332
+--- /dev/null
++++ b/support/links-dso-program.cc
+@@ -0,0 +1,11 @@
++#include <iostream>
++
++using namespace std;
++
++int
++main (int argc, char **argv)
++{
++  /* Complexity to keep gcc from optimizing this away.  */
++  cout << (argc > 1 ? argv[1] : "null");
++  return 0;
++}
+diff --git a/support/shell-container.c b/support/shell-container.c
+new file mode 100644
+index 0000000000000000..9bd90d3f60529079
+--- /dev/null
++++ b/support/shell-container.c
+@@ -0,0 +1,395 @@
++/* Minimal /bin/sh for in-container use.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define _FILE_OFFSET_BITS 64
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sched.h>
++#include <sys/syscall.h>
++#include <unistd.h>
++#include <sys/types.h>
++#include <dirent.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <sys/fcntl.h>
++#include <sys/file.h>
++#include <sys/wait.h>
++#include <stdarg.h>
++#include <sys/sysmacros.h>
++#include <ctype.h>
++#include <utime.h>
++#include <errno.h>
++#include <error.h>
++
++#include <support/support.h>
++
++/* Design considerations
++
++ General rule: optimize for developer time, not run time.
++
++ Specifically:
++
++ * Don't worry about slow algorithms
++ * Don't worry about free'ing memory
++ * Don't implement anything the testsuite doesn't need.
++ * Line and argument counts are limited, see below.
++
++*/
++
++#define MAX_ARG_COUNT 100
++#define MAX_LINE_LENGTH 1000
++
++/* Debugging is enabled via --debug, which must be the first argument.  */
++static int debug_mode = 0;
++#define dprintf if (debug_mode) fprintf
++
++/* Emulate the "/bin/true" command.  Arguments are ignored.  */
++static int
++true_func (char **argv)
++{
++  return 0;
++}
++
++/* Emulate the "/bin/echo" command.  Options are ignored, arguments
++   are printed to stdout.  */
++static int
++echo_func (char **argv)
++{
++  int i;
++
++  for (i = 0; argv[i]; i++)
++    {
++      if (i > 0)
++	putchar (' ');
++      fputs (argv[i], stdout);
++    }
++  putchar ('\n');
++
++  return 0;
++}
++
++/* Emulate the "/bin/cp" command.  Options are ignored.  Only copies
++   one source file to one destination file.  Directory destinations
++   are not supported.  */
++static int
++copy_func (char **argv)
++{
++  char *sname = argv[0];
++  char *dname = argv[1];
++  int sfd, dfd;
++  struct stat st;
++
++  sfd = open (sname, O_RDONLY);
++  if (sfd < 0)
++    {
++      fprintf (stderr, "cp: unable to open %s for reading: %s\n",
++	       sname, strerror (errno));
++      return 1;
++    }
++
++  if (fstat (sfd, &st) < 0)
++    {
++      fprintf (stderr, "cp: unable to fstat %s: %s\n",
++	       sname, strerror (errno));
++      return 1;
++    }
++
++  dfd = open (dname, O_WRONLY | O_TRUNC | O_CREAT, 0600);
++  if (dfd < 0)
++    {
++      fprintf (stderr, "cp: unable to open %s for writing: %s\n",
++	       dname, strerror (errno));
++      return 1;
++    }
++
++  if (support_copy_file_range (sfd, 0, dfd, 0, st.st_size, 0) != st.st_size)
++    {
++      fprintf (stderr, "cp: cannot copy file %s to %s: %s\n",
++	       sname, dname, strerror (errno));
++      return 1;
++    }
++
++  close (sfd);
++  close (dfd);
++
++  chmod (dname, st.st_mode & 0777);
++
++  return 0;
++
++}
++
++/* This is a list of all the built-in commands we understand.  */
++static struct {
++  const char *name;
++  int (*func) (char **argv);
++} builtin_funcs[] = {
++  { "true", true_func },
++  { "echo", echo_func },
++  { "cp", copy_func },
++  { NULL, NULL }
++};
++
++/* Run one tokenized command.  argv[0] is the command.  argv is
++   NULL-terminated.  */
++static void
++run_command_array (char **argv)
++{
++  int i, j;
++  pid_t pid;
++  int status;
++  int (*builtin_func) (char **args);
++
++  if (argv[0] == NULL)
++    return;
++
++  builtin_func = NULL;
++
++  int new_stdin = 0;
++  int new_stdout = 1;
++  int new_stderr = 2;
++
++  dprintf (stderr, "run_command_array starting\n");
++  for (i = 0; argv[i]; i++)
++    dprintf (stderr, "   argv [%d] `%s'\n", i, argv[i]);
++
++  for (j = i = 0; argv[i]; i++)
++    {
++      if (strcmp (argv[i], "<") == 0 && argv[i + 1])
++	{
++	  new_stdin = open (argv[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0777);
++	  ++i;
++	  continue;
++	}
++      if (strcmp (argv[i], ">") == 0 && argv[i + 1])
++	{
++	  new_stdout = open (argv[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0777);
++	  ++i;
++	  continue;
++	}
++      if (strcmp (argv[i], ">>") == 0 && argv[i + 1])
++	{
++	  new_stdout = open (argv[i + 1], O_WRONLY|O_CREAT|O_APPEND, 0777);
++	  ++i;
++	  continue;
++	}
++      if (strcmp (argv[i], "2>") == 0 && argv[i + 1])
++	{
++	  new_stderr = open (argv[i + 1], O_WRONLY|O_CREAT|O_TRUNC, 0777);
++	  ++i;
++	  continue;
++	}
++      argv[j++] = argv[i];
++    }
++  argv[j] = NULL;
++
++
++  for (i = 0; builtin_funcs[i].name != NULL; i++)
++    if (strcmp (argv[0], builtin_funcs[i].name) == 0)
++       builtin_func = builtin_funcs[i].func;
++
++  dprintf (stderr, "builtin %p argv0 `%s'\n", builtin_func, argv[0]);
++
++  pid = fork ();
++  if (pid < 0)
++    {
++      fprintf (stderr, "sh: fork failed\n");
++      exit (1);
++    }
++
++  if (pid == 0)
++    {
++      if (new_stdin != 0)
++	{
++	  dup2 (new_stdin, 0);
++	  close (new_stdin);
++	}
++      if (new_stdout != 1)
++	{
++	  dup2 (new_stdout, 1);
++	  close (new_stdout);
++	}
++      if (new_stderr != 2)
++	{
++	  dup2 (new_stderr, 2);
++	  close (new_stdout);
++	}
++
++      if (builtin_func != NULL)
++	exit (builtin_func (argv + 1));
++
++      execvp (argv[0], argv);
++
++      fprintf (stderr, "sh: execing %s failed: %s",
++	       argv[0], strerror (errno));
++      exit (1);
++    }
++
++  waitpid (pid, &status, 0);
++
++  dprintf (stderr, "exiting run_command_array\n");
++
++  if (WIFEXITED (status))
++    {
++      int rv = WEXITSTATUS (status);
++      if (rv)
++	exit (rv);
++    }
++  else
++    exit (1);
++}
++
++/* Run one command-as-a-string, by tokenizing it.  Limited to
++   MAX_ARG_COUNT arguments.  Simple substitution is done of $1 to $9
++   (as whole separate tokens) from iargs[].  Quoted strings work if
++   the quotes wrap whole tokens; i.e. "foo bar" but not foo" bar".  */
++static void
++run_command_string (const char *cmdline, const char **iargs)
++{
++  char *args[MAX_ARG_COUNT+1];
++  int ap = 0;
++  const char *start, *end;
++  int nargs;
++
++  for (nargs = 0; iargs[nargs] != NULL; ++nargs)
++    ;
++
++  dprintf (stderr, "run_command_string starting: '%s'\n", cmdline);
++
++  while (ap < MAX_ARG_COUNT)
++    {
++      /* If the argument is quoted, this is the quote character, else NUL.  */
++      int in_quote = 0;
++
++      /* Skip whitespace up to the next token.  */
++      while (*cmdline && isspace (*cmdline))
++	cmdline ++;
++      if (*cmdline == 0)
++	break;
++
++      start = cmdline;
++      /* Check for quoted argument.  */
++      in_quote = (*cmdline == '\'' || *cmdline == '"') ? *cmdline : 0;
++
++      /* Skip to end of token; either by whitespace or matching quote.  */
++      dprintf (stderr, "in_quote %d\n", in_quote);
++      while (*cmdline
++	     && (!isspace (*cmdline) || in_quote))
++	{
++	  if (*cmdline == in_quote
++	      && cmdline != start)
++	    in_quote = 0;
++	  dprintf (stderr, "[%c]%d ", *cmdline, in_quote);
++	  cmdline ++;
++	}
++      dprintf (stderr, "\n");
++
++      /* Allocate space for this token and store it in args[].  */
++      end = cmdline;
++      dprintf (stderr, "start<%s> end<%s>\n", start, end);
++      args[ap] = (char *) xmalloc (end - start + 1);
++      memcpy (args[ap], start, end - start);
++      args[ap][end - start] = 0;
++
++      /* Strip off quotes, if found.  */
++      dprintf (stderr, "args[%d] = <%s>\n", ap, args[ap]);
++      if (args[ap][0] == '\''
++	  && args[ap][strlen (args[ap])-1] == '\'')
++	{
++	  args[ap][strlen (args[ap])-1] = 0;
++	  args[ap] ++;
++	}
++
++      else if (args[ap][0] == '"'
++	  && args[ap][strlen (args[ap])-1] == '"')
++	{
++	  args[ap][strlen (args[ap])-1] = 0;
++	  args[ap] ++;
++	}
++
++      /* Replace positional parameters like $4.  */
++      else if (args[ap][0] == '$'
++	       && isdigit (args[ap][1])
++	       && args[ap][2] == 0)
++	{
++	  int a = args[ap][1] - '1';
++	  if (0 <= a && a < nargs)
++	    args[ap] = strdup (iargs[a]);
++	}
++
++      ap ++;
++
++      if (*cmdline == 0)
++	break;
++    }
++
++  /* Lastly, NULL terminate the array and run it.  */
++  args[ap] = NULL;
++  run_command_array (args);
++}
++
++/* Run a script by reading lines and passing them to the above
++   function.  */
++static void
++run_script (const char *filename, const char **args)
++{
++  char line[MAX_LINE_LENGTH + 1];
++  dprintf (stderr, "run_script starting: '%s'\n", filename);
++  FILE *f = fopen (filename, "r");
++  if (f == NULL)
++    {
++      fprintf (stderr, "sh: %s: %s\n", filename, strerror (errno));
++      exit (1);
++    }
++  while (fgets (line, sizeof (line), f) != NULL)
++    {
++      if (line[0] == '#')
++	{
++	  dprintf (stderr, "comment: %s\n", line);
++	  continue;
++	}
++      run_command_string (line, args);
++    }
++  fclose (f);
++}
++
++int
++main (int argc, const char **argv)
++{
++  int i;
++
++  if (strcmp (argv[1], "--debug") == 0)
++    {
++      debug_mode = 1;
++      --argc;
++      ++argv;
++    }
++
++  dprintf (stderr, "container-sh starting:\n");
++  for (i = 0; i < argc; i++)
++    dprintf (stderr, "  argv[%d] is `%s'\n", i, argv[i]);
++
++  if (strcmp (argv[1], "-c") == 0)
++    run_command_string (argv[2], argv+3);
++  else
++    run_script (argv[1], argv+2);
++
++  dprintf (stderr, "normal exit 0\n");
++  return 0;
++}
+diff --git a/support/support.h b/support/support.h
+index b61fe0735c9204de..9418cd11ef6e684d 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -25,6 +25,10 @@
+ 
+ #include <stddef.h>
+ #include <sys/cdefs.h>
++/* For mode_t.  */
++#include <sys/stat.h>
++/* For ssize_t and off64_t.  */
++#include <sys/types.h>
+ 
+ __BEGIN_DECLS
+ 
+@@ -65,6 +69,12 @@ void support_write_file_string (const char *path, const char *contents);
+    the result).  */
+ char *support_quote_blob (const void *blob, size_t length);
+ 
++/* Returns non-zero if the file descriptor is a regular file on a file
++   system which supports holes (that is, seeking and writing does not
++   allocate storage for the range of zeros).  FD must refer to a
++   regular file open for writing, and initially empty.  */
++int support_descriptor_supports_holes (int fd);
++
+ /* Error-checking wrapper functions which terminate the process on
+    error.  */
+ 
+@@ -76,6 +86,23 @@ char *xasprintf (const char *format, ...)
+ char *xstrdup (const char *);
+ char *xstrndup (const char *, size_t);
+ 
++/* These point to the TOP of the source/build tree, not your (or
++   support's) subdirectory.  */
++extern const char support_srcdir_root[];
++extern const char support_objdir_root[];
++
++/* Corresponds to the path to the runtime linker used by the testsuite,
++   e.g. OBJDIR_PATH/elf/ld-linux-x86-64.so.2  */
++extern const char support_objdir_elf_ldso[];
++
++/* Corresponds to the --prefix= passed to configure.  */
++extern const char support_install_prefix[];
++/* Corresponds to the install's lib/ or lib64/ directory.  */
++extern const char support_libdir_prefix[];
++
++extern ssize_t support_copy_file_range (int, off64_t *, int, off64_t *,
++					size_t, unsigned int);
++
+ __END_DECLS
+ 
+ #endif /* SUPPORT_H */
+diff --git a/support/support_copy_file_range.c b/support/support_copy_file_range.c
+new file mode 100644
+index 0000000000000000..9a1e39773e0481c9
+--- /dev/null
++++ b/support/support_copy_file_range.c
+@@ -0,0 +1,143 @@
++/* Simplified copy_file_range with cross-device copy.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <fcntl.h>
++#include <inttypes.h>
++#include <limits.h>
++#include <sys/stat.h>
++#include <sys/types.h>
++#include <unistd.h>
++#include <support/support.h>
++
++ssize_t
++support_copy_file_range (int infd, __off64_t *pinoff,
++			 int outfd, __off64_t *poutoff,
++			 size_t length, unsigned int flags)
++{
++  if (flags != 0)
++    {
++      errno = EINVAL;
++      return -1;
++    }
++
++  struct stat64 instat;
++  struct stat64 outstat;
++  if (fstat64 (infd, &instat) != 0 || fstat64 (outfd, &outstat) != 0)
++    return -1;
++  if (S_ISDIR (instat.st_mode) || S_ISDIR (outstat.st_mode))
++    {
++      errno = EISDIR;
++      return -1;
++    }
++  if (!S_ISREG (instat.st_mode) || !S_ISREG (outstat.st_mode))
++    {
++      /* We need a regular input file so that the we can seek
++	 backwards in case of a write failure.  */
++      errno = EINVAL;
++      return -1;
++    }
++
++  /* The output descriptor must not have O_APPEND set.  */
++  if (fcntl (outfd, F_GETFL) & O_APPEND)
++    {
++      errno = EBADF;
++      return -1;
++    }
++
++  /* Avoid an overflow in the result.  */
++  if (length > SSIZE_MAX)
++    length = SSIZE_MAX;
++
++  /* Main copying loop.  The buffer size is arbitrary and is a
++     trade-off between stack size consumption, cache usage, and
++     amortization of system call overhead.  */
++  size_t copied = 0;
++  char buf[8192];
++  while (length > 0)
++    {
++      size_t to_read = length;
++      if (to_read > sizeof (buf))
++	to_read = sizeof (buf);
++
++      /* Fill the buffer.  */
++      ssize_t read_count;
++      if (pinoff == NULL)
++	read_count = read (infd, buf, to_read);
++      else
++	read_count = pread64 (infd, buf, to_read, *pinoff);
++      if (read_count == 0)
++	/* End of file reached prematurely.  */
++	return copied;
++      if (read_count < 0)
++	{
++	  if (copied > 0)
++	    /* Report the number of bytes copied so far.  */
++	    return copied;
++	  return -1;
++	}
++      if (pinoff != NULL)
++	*pinoff += read_count;
++
++      /* Write the buffer part which was read to the destination.  */
++      char *end = buf + read_count;
++      for (char *p = buf; p < end; )
++	{
++	  ssize_t write_count;
++	  if (poutoff == NULL)
++	    write_count = write (outfd, p, end - p);
++	  else
++	    write_count = pwrite64 (outfd, p, end - p, *poutoff);
++	  if (write_count < 0)
++	    {
++	      /* Adjust the input read position to match what we have
++		 written, so that the caller can pick up after the
++		 error.  */
++	      size_t written = p - buf;
++	      /* NB: This needs to be signed so that we can form the
++		 negative value below.  */
++	      ssize_t overread = read_count - written;
++	      if (pinoff == NULL)
++		{
++		  if (overread > 0)
++		    {
++		      /* We are on an error recovery path, so we
++			 cannot deal with failure here.  */
++		      int save_errno = errno;
++		      (void) lseek64 (infd, -overread, SEEK_CUR);
++		      errno = save_errno;
++		    }
++		}
++	      else /* pinoff != NULL */
++		*pinoff -= overread;
++
++	      if (copied + written > 0)
++		/* Report the number of bytes copied so far.  */
++		return copied + written;
++	      return -1;
++	    }
++	  p += write_count;
++	  if (poutoff != NULL)
++	    *poutoff += write_count;
++	} /* Write loop.  */
++
++      copied += read_count;
++      length -= read_count;
++    }
++  return copied;
++}
+diff --git a/support/support_descriptor_supports_holes.c b/support/support_descriptor_supports_holes.c
+new file mode 100644
+index 0000000000000000..c7099ca67caf803c
+--- /dev/null
++++ b/support/support_descriptor_supports_holes.c
+@@ -0,0 +1,87 @@
++/* Test for file system hole support.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdbool.h>
++#include <support.h>
++#include <support/check.h>
++#include <sys/stat.h>
++#include <xunistd.h>
++
++int
++support_descriptor_supports_holes (int fd)
++{
++  enum
++    {
++      /* Write offset for the enlarged file.  This value is arbitrary
++         and hopefully large enough to trigger the creation of holes.
++         We cannot use the file system block size as a reference here
++         because it is incorrect for network file systems.  */
++      write_offset = 16 * 1024 * 1024,
++
++      /* Our write may add this number of additional blocks (see
++         block_limit below).  */
++      block_headroom = 8,
++    };
++
++  struct stat64 st;
++  xfstat (fd, &st);
++  if (!S_ISREG (st.st_mode))
++    FAIL_EXIT1 ("descriptor %d does not refer to a regular file", fd);
++  if (st.st_size != 0)
++    FAIL_EXIT1 ("descriptor %d does not refer to an empty file", fd);
++  if (st.st_blocks > block_headroom)
++    FAIL_EXIT1 ("descriptor %d refers to a pre-allocated file (%lld blocks)",
++                fd, (long long int) st.st_blocks);
++
++  /* Write a single byte at the start of the file to compute the block
++     usage for a single byte.  */
++  xlseek (fd, 0, SEEK_SET);
++  char b = '@';
++  xwrite (fd, &b, 1);
++  /* Attempt to bypass delayed allocation.  */
++  TEST_COMPARE (fsync (fd), 0);
++  xfstat (fd, &st);
++
++  /* This limit is arbitrary.  The file system needs to store
++     somewhere that data exists at the write offset, and this may
++     moderately increase the number of blocks used by the file, in
++     proportion to the initial block count, but not in proportion to
++     the write offset.  */
++  unsigned long long int block_limit = 2 * st.st_blocks + block_headroom;
++
++  /* Write a single byte at 16 megabytes.  */
++  xlseek (fd, write_offset, SEEK_SET);
++  xwrite (fd, &b, 1);
++  /* Attempt to bypass delayed allocation.  */
++  TEST_COMPARE (fsync (fd), 0);
++  xfstat (fd, &st);
++  bool supports_holes = st.st_blocks <= block_limit;
++
++  /* Also check that extending the file does not fill up holes.  */
++  xftruncate (fd, 2 * write_offset);
++  /* Attempt to bypass delayed allocation.  */
++  TEST_COMPARE (fsync (fd), 0);
++  xfstat (fd, &st);
++  supports_holes = supports_holes && st.st_blocks <= block_limit;
++
++  /* Return to a zero-length file.  */
++  xftruncate (fd, 0);
++  xlseek (fd, 0, SEEK_SET);
++
++  return supports_holes;
++}
+diff --git a/support/support_paths.c b/support/support_paths.c
+new file mode 100644
+index 0000000000000000..6d0beb102c9b4bed
+--- /dev/null
++++ b/support/support_paths.c
+@@ -0,0 +1,59 @@
++/* Various paths that might be needed.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <support/support.h>
++#include <support/check.h>
++
++/* The idea here is to make various makefile-level paths available to
++   support programs, as canonicalized absolute paths.  */
++
++/* These point to the TOP of the source/build tree, not your (or
++   support's) subdirectory.  */
++#ifdef SRCDIR_PATH
++const char support_srcdir_root[] = SRCDIR_PATH;
++#else
++# error please -DSRCDIR_PATH=something in the Makefile
++#endif
++
++#ifdef OBJDIR_PATH
++const char support_objdir_root[] = OBJDIR_PATH;
++#else
++# error please -DOBJDIR_PATH=something in the Makefile
++#endif
++
++#ifdef OBJDIR_ELF_LDSO_PATH
++/* Corresponds to the path to the runtime linker used by the testsuite,
++   e.g. OBJDIR_PATH/elf/ld-linux-x86-64.so.2  */
++const char support_objdir_elf_ldso[] = OBJDIR_ELF_LDSO_PATH;
++#else
++# error please -DOBJDIR_ELF_LDSO_PATH=something in the Makefile
++#endif
++
++#ifdef INSTDIR_PATH
++/* Corresponds to the --prefix= passed to configure.  */
++const char support_install_prefix[] = INSTDIR_PATH;
++#else
++# error please -DINSTDIR_PATH=something in the Makefile
++#endif
++
++#ifdef LIBDIR_PATH
++/* Corresponds to the install's lib/ or lib64/ directory.  */
++const char support_libdir_prefix[] = LIBDIR_PATH;
++#else
++# error please -DLIBDIR_PATH=something in the Makefile
++#endif
+diff --git a/support/support_test_compare_string.c b/support/support_test_compare_string.c
+new file mode 100644
+index 0000000000000000..a76ba8eda7782d9d
+--- /dev/null
++++ b/support/support_test_compare_string.c
+@@ -0,0 +1,91 @@
++/* Check two strings for equality.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/support.h>
++#include <support/xmemstream.h>
++
++static void
++report_length (const char *what, const char *str, size_t length)
++{
++  if (str == NULL)
++    printf ("  %s string: NULL\n", what);
++  else
++    printf ("  %s string: %zu bytes\n", what, length);
++}
++
++static void
++report_string (const char *what, const unsigned char *blob,
++               size_t length, const char *expr)
++{
++  if (length > 0)
++    {
++      printf ("  %s (evaluated from %s):\n", what, expr);
++      char *quoted = support_quote_blob (blob, length);
++      printf ("      \"%s\"\n", quoted);
++      free (quoted);
++
++      fputs ("     ", stdout);
++      for (size_t i = 0; i < length; ++i)
++        printf (" %02X", blob[i]);
++      putc ('\n', stdout);
++    }
++}
++
++static size_t
++string_length_or_zero (const char *str)
++{
++  if (str == NULL)
++    return 0;
++  else
++    return strlen (str);
++}
++
++void
++support_test_compare_string (const char *left, const char *right,
++                             const char *file, int line,
++                             const char *left_expr, const char *right_expr)
++{
++  /* Two null pointers are accepted.  */
++  if (left == NULL && right == NULL)
++    return;
++
++  size_t left_length = string_length_or_zero (left);
++  size_t right_length = string_length_or_zero (right);
++
++  if (left_length != right_length || left == NULL || right == NULL
++      || memcmp (left, right, left_length) != 0)
++    {
++      support_record_failure ();
++      printf ("%s:%d: error: blob comparison failed\n", file, line);
++      if (left_length == right_length && right != NULL && left != NULL)
++        printf ("  string length: %zu bytes\n", left_length);
++      else
++        {
++          report_length ("left", left, left_length);
++          report_length ("right", right, right_length);
++        }
++      report_string ("left", (const unsigned char *) left,
++                     left_length, left_expr);
++      report_string ("right", (const unsigned char *) right,
++                     right_length, right_expr);
++    }
++}
+diff --git a/support/test-container.c b/support/test-container.c
+new file mode 100644
+index 0000000000000000..b58f0f7b3d1d4859
+--- /dev/null
++++ b/support/test-container.c
+@@ -0,0 +1,988 @@
++/* Run a test case in an isolated namespace.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define _FILE_OFFSET_BITS 64
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sched.h>
++#include <sys/syscall.h>
++#include <unistd.h>
++#include <sys/types.h>
++#include <dirent.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <sys/fcntl.h>
++#include <sys/file.h>
++#include <sys/wait.h>
++#include <stdarg.h>
++#include <sys/sysmacros.h>
++#include <ctype.h>
++#include <utime.h>
++#include <errno.h>
++#include <error.h>
++#include <libc-pointer-arith.h>
++
++#ifdef __linux__
++#include <sys/mount.h>
++#endif
++
++#include <support/support.h>
++#include <support/xunistd.h>
++#include "check.h"
++#include "test-driver.h"
++
++#ifndef __linux__
++#define mount(s,t,fs,f,d) no_mount()
++int no_mount (void)
++{
++  FAIL_UNSUPPORTED("mount not supported; port needed");
++}
++#endif
++
++int verbose = 0;
++
++/* Running a test in a container is tricky.  There are two main
++   categories of things to do:
++
++   1. "Once" actions, like setting up the container and doing an
++      install into it.
++
++   2. "Per-test" actions, like copying in support files and
++      configuring the container.
++
++
++   "Once" actions:
++
++   * mkdir $buildroot/testroot.pristine/
++   * install into it
++   * rsync to $buildroot/testroot.root/
++
++   "Per-test" actions:
++   * maybe rsync to $buildroot/testroot.root/
++   * copy support files and test binary
++   * chroot/unshare
++   * set up any mounts (like /proc)
++
++   Magic files:
++
++   For test $srcdir/foo/mytest.c we look for $srcdir/foo/mytest.root
++   and, if found...
++
++   * mytest.root/ is rsync'd into container
++   * mytest.root/preclean.req causes fresh rsync (with delete) before
++     test if present
++   * mytest.root/mytset.script has a list of "commands" to run:
++       syntax:
++         # comment
++         mv FILE FILE
++	 cp FILE FILE
++	 rm FILE
++	 FILE must start with $B/, $S/, $I/, $L/, or /
++	  (expands to build dir, source dir, install dir, library dir
++	   (in container), or container's root)
++   * mytest.root/postclean.req causes fresh rsync (with delete) after
++     test if present
++
++   Note that $srcdir/foo/mytest.script may be used instead of a
++   $srcdir/foo/mytest.root/mytest.script in the sysroot template, if
++   there is no other reason for a sysroot.
++
++   Design goals:
++
++   * independent of other packages which may not be installed (like
++     rsync or Docker, or even "cp")
++
++   * Simple, easy to review code (i.e. prefer simple naive code over
++     complex efficient code)
++
++   * The current implementation ist parallel-make-safe, but only in
++     that it uses a lock to prevent parallel access to the testroot.  */
++
++
++/* Utility Functions */
++
++/* Like xunlink, but it's OK if the file already doesn't exist.  */
++void
++maybe_xunlink (const char *path)
++{
++  int rv = unlink (path);
++  if (rv < 0 && errno != ENOENT)
++    FAIL_EXIT1 ("unlink (\"%s\"): %m", path);
++}
++
++/* Like xmkdir, but it's OK if the directory already exists.  */
++void
++maybe_xmkdir (const char *path, mode_t mode)
++{
++  struct stat st;
++
++  if (stat (path, &st) == 0
++      && S_ISDIR (st.st_mode))
++    return;
++  xmkdir (path, mode);
++}
++
++/* Temporarily concatenate multiple strings into one.  Allows up to 10
++   temporary results; use strdup () if you need them to be
++   permanent.  */
++static char *
++concat (const char *str, ...)
++{
++  /* Assume initialized to NULL/zero.  */
++  static char *bufs[10];
++  static size_t buflens[10];
++  static int bufn = 0;
++  int n;
++  size_t len;
++  va_list ap, ap2;
++  char *cp;
++  char *next;
++
++  va_start (ap, str);
++  va_copy (ap2, ap);
++
++  n = bufn;
++  bufn = (bufn + 1) % 10;
++  len = strlen (str);
++
++  while ((next = va_arg (ap, char *)) != NULL)
++    len = len + strlen (next);
++
++  va_end (ap);
++
++  if (bufs[n] == NULL)
++    {
++      bufs[n] = xmalloc (len + 1); /* NUL */
++      buflens[n] = len + 1;
++    }
++  else if (buflens[n] < len + 1)
++    {
++      bufs[n] = xrealloc (bufs[n], len + 1); /* NUL */
++      buflens[n] = len + 1;
++    }
++
++  strcpy (bufs[n], str);
++  cp = strchr (bufs[n], '\0');
++  while ((next = va_arg (ap2, char *)) != NULL)
++    {
++      strcpy (cp, next);
++      cp = strchr (cp, '\0');
++    }
++  *cp = 0;
++  va_end (ap2);
++
++  return bufs[n];
++}
++
++/* Try to mount SRC onto DEST.  */
++static void
++trymount (const char *src, const char *dest)
++{
++  if (mount (src, dest, "", MS_BIND, NULL) < 0)
++    FAIL_EXIT1 ("can't mount %s onto %s\n", src, dest);
++}
++
++/* Special case of above for devices like /dev/zero where we have to
++   mount a device over a device, not a directory over a directory.  */
++static void
++devmount (const char *new_root_path, const char *which)
++{
++  int fd;
++  fd = open (concat (new_root_path, "/dev/", which, NULL),
++	     O_CREAT | O_TRUNC | O_RDWR, 0777);
++  xclose (fd);
++
++  trymount (concat ("/dev/", which, NULL),
++	    concat (new_root_path, "/dev/", which, NULL));
++}
++
++/* Returns true if the string "looks like" an environement variable
++   being set.  */
++static int
++is_env_setting (const char *a)
++{
++  int count_name = 0;
++
++  while (*a)
++    {
++      if (isalnum (*a) || *a == '_')
++	++count_name;
++      else if (*a == '=' && count_name > 0)
++	return 1;
++      else
++	return 0;
++      ++a;
++    }
++  return 0;
++}
++
++/* Break the_line into words and store in the_words.  Max nwords,
++   returns actual count.  */
++static int
++tokenize (char *the_line, char **the_words, int nwords)
++{
++  int rv = 0;
++
++  while (nwords > 0)
++    {
++      /* Skip leading whitespace, if any.  */
++      while (*the_line && isspace (*the_line))
++	++the_line;
++
++      /* End of line?  */
++      if (*the_line == 0)
++	return rv;
++
++      /* THE_LINE points to a non-whitespace character, so we have a
++	 word.  */
++      *the_words = the_line;
++      ++the_words;
++      nwords--;
++      ++rv;
++
++      /* Skip leading whitespace, if any.  */
++      while (*the_line && ! isspace (*the_line))
++	++the_line;
++
++      /* We now point at the trailing NUL *or* some whitespace.  */
++      if (*the_line == 0)
++	return rv;
++
++      /* It was whitespace, skip and keep tokenizing.  */
++      *the_line++ = 0;
++    }
++
++  /* We get here if we filled the words buffer.  */
++  return rv;
++}
++
++
++/* Mini-RSYNC implementation.  Optimize later.      */
++
++/* A few routines for an "rsync buffer" which stores the paths we're
++   working on.  We continuously grow and shrink the paths in each
++   buffer so there's lot of re-use.  */
++
++/* We rely on "initialized to zero" to set these up.  */
++typedef struct
++{
++  char *buf;
++  size_t len;
++  size_t size;
++} path_buf;
++
++static path_buf spath, dpath;
++
++static void
++r_setup (char *path, path_buf * pb)
++{
++  size_t len = strlen (path);
++  if (pb->buf == NULL || pb->size < len + 1)
++    {
++      /* Round up.  This is an arbitrary number, just to keep from
++	 reallocing too often.  */
++      size_t sz = ALIGN_UP (len + 1, 512);
++      if (pb->buf == NULL)
++	pb->buf = (char *) xmalloc (sz);
++      else
++	pb->buf = (char *) xrealloc (pb->buf, sz);
++      if (pb->buf == NULL)
++	FAIL_EXIT1 ("Out of memory while rsyncing\n");
++
++      pb->size = sz;
++    }
++  strcpy (pb->buf, path);
++  pb->len = len;
++}
++
++static void
++r_append (const char *path, path_buf * pb)
++{
++  size_t len = strlen (path) + pb->len;
++  if (pb->size < len + 1)
++    {
++      /* Round up */
++      size_t sz = ALIGN_UP (len + 1, 512);
++      pb->buf = (char *) xrealloc (pb->buf, sz);
++      if (pb->buf == NULL)
++	FAIL_EXIT1 ("Out of memory while rsyncing\n");
++
++      pb->size = sz;
++    }
++  strcpy (pb->buf + pb->len, path);
++  pb->len = len;
++}
++
++static int
++file_exists (char *path)
++{
++  struct stat st;
++  if (lstat (path, &st) == 0)
++    return 1;
++  return 0;
++}
++
++static void
++recursive_remove (char *path)
++{
++  pid_t child;
++  int status;
++
++  child = fork ();
++
++  switch (child) {
++  case -1:
++    FAIL_EXIT1 ("Unable to fork");
++  case 0:
++    /* Child.  */
++    execlp ("rm", "rm", "-rf", path, NULL);
++  default:
++    /* Parent.  */
++    waitpid (child, &status, 0);
++    /* "rm" would have already printed a suitable error message.  */
++    if (! WIFEXITED (status)
++	|| WEXITSTATUS (status) != 0)
++      exit (1);
++
++    break;
++  }
++}
++
++/* Used for both rsync and the mytest.script "cp" command.  */
++static void
++copy_one_file (const char *sname, const char *dname)
++{
++  int sfd, dfd;
++  struct stat st;
++  struct utimbuf times;
++
++  sfd = open (sname, O_RDONLY);
++  if (sfd < 0)
++    FAIL_EXIT1 ("unable to open %s for reading\n", sname);
++
++  if (fstat (sfd, &st) < 0)
++    FAIL_EXIT1 ("unable to fstat %s\n", sname);
++
++  dfd = open (dname, O_WRONLY | O_TRUNC | O_CREAT, 0600);
++  if (dfd < 0)
++    FAIL_EXIT1 ("unable to open %s for writing\n", dname);
++
++  xcopy_file_range (sfd, 0, dfd, 0, st.st_size, 0);
++
++  xclose (sfd);
++  xclose (dfd);
++
++  if (chmod (dname, st.st_mode & 0777) < 0)
++    FAIL_EXIT1 ("chmod %s: %s\n", dname, strerror (errno));
++
++  times.actime = st.st_atime;
++  times.modtime = st.st_mtime;
++  if (utime (dname, &times) < 0)
++    FAIL_EXIT1 ("utime %s: %s\n", dname, strerror (errno));
++}
++
++/* We don't check *everything* about the two files to see if a copy is
++   needed, just the minimum to make sure we get the latest copy.  */
++static int
++need_sync (char *ap, char *bp, struct stat *a, struct stat *b)
++{
++  if ((a->st_mode & S_IFMT) != (b->st_mode & S_IFMT))
++    return 1;
++
++  if (S_ISLNK (a->st_mode))
++    {
++      int rv;
++      char *al, *bl;
++
++      if (a->st_size != b->st_size)
++	return 1;
++
++      al = xreadlink (ap);
++      bl = xreadlink (bp);
++      rv = strcmp (al, bl);
++      free (al);
++      free (bl);
++      if (rv == 0)
++	return 0; /* links are same */
++      return 1; /* links differ */
++    }
++
++  if (verbose)
++    {
++      if (a->st_size != b->st_size)
++	printf ("SIZE\n");
++      if ((a->st_mode & 0777) != (b->st_mode & 0777))
++	printf ("MODE\n");
++      if (a->st_mtime != b->st_mtime)
++	printf ("TIME\n");
++    }
++
++  if (a->st_size == b->st_size
++      && ((a->st_mode & 0777) == (b->st_mode & 0777))
++      && a->st_mtime == b->st_mtime)
++    return 0;
++
++  return 1;
++}
++
++static void
++rsync_1 (path_buf * src, path_buf * dest, int and_delete)
++{
++  DIR *dir;
++  struct dirent *de;
++  struct stat s, d;
++
++  r_append ("/", src);
++  r_append ("/", dest);
++
++  if (verbose)
++    printf ("sync %s to %s %s\n", src->buf, dest->buf,
++	    and_delete ? "and delete" : "");
++
++  size_t staillen = src->len;
++
++  size_t dtaillen = dest->len;
++
++  dir = opendir (src->buf);
++
++  while ((de = readdir (dir)) != NULL)
++    {
++      if (strcmp (de->d_name, ".") == 0
++	  || strcmp (de->d_name, "..") == 0)
++	continue;
++
++      src->len = staillen;
++      r_append (de->d_name, src);
++      dest->len = dtaillen;
++      r_append (de->d_name, dest);
++
++      s.st_mode = ~0;
++      d.st_mode = ~0;
++
++      if (lstat (src->buf, &s) != 0)
++	FAIL_EXIT1 ("%s obtained by readdir, but stat failed.\n", src->buf);
++
++      /* It's OK if this one fails, since we know the file might be
++	 missing.  */
++      lstat (dest->buf, &d);
++
++      if (! need_sync (src->buf, dest->buf, &s, &d))
++	{
++	  if (S_ISDIR (s.st_mode))
++	    rsync_1 (src, dest, and_delete);
++	  continue;
++	}
++
++      if (d.st_mode != ~0)
++	switch (d.st_mode & S_IFMT)
++	  {
++	  case S_IFDIR:
++	    if (!S_ISDIR (s.st_mode))
++	      {
++		if (verbose)
++		  printf ("-D %s\n", dest->buf);
++		recursive_remove (dest->buf);
++	      }
++	    break;
++
++	  default:
++	    if (verbose)
++	      printf ("-F %s\n", dest->buf);
++	    maybe_xunlink (dest->buf);
++	    break;
++	  }
++
++      switch (s.st_mode & S_IFMT)
++	{
++	case S_IFREG:
++	  if (verbose)
++	    printf ("+F %s\n", dest->buf);
++	  copy_one_file (src->buf, dest->buf);
++	  break;
++
++	case S_IFDIR:
++	  if (verbose)
++	    printf ("+D %s\n", dest->buf);
++	  maybe_xmkdir (dest->buf, (s.st_mode & 0777) | 0700);
++	  rsync_1 (src, dest, and_delete);
++	  break;
++
++	case S_IFLNK:
++	  {
++	    char *lp;
++	    if (verbose)
++	      printf ("+L %s\n", dest->buf);
++	    lp = xreadlink (src->buf);
++	    xsymlink (lp, dest->buf);
++	    free (lp);
++	    break;
++	  }
++
++	default:
++	  break;
++	}
++    }
++
++  closedir (dir);
++  src->len = staillen;
++  src->buf[staillen] = 0;
++  dest->len = dtaillen;
++  dest->buf[dtaillen] = 0;
++
++  if (!and_delete)
++    return;
++
++  /* The rest of this function removes any files/directories in DEST
++     that do not exist in SRC.  This is triggered as part of a
++     preclean or postsclean step.  */
++
++  dir = opendir (dest->buf);
++
++  while ((de = readdir (dir)) != NULL)
++    {
++      if (strcmp (de->d_name, ".") == 0
++	  || strcmp (de->d_name, "..") == 0)
++	continue;
++
++      src->len = staillen;
++      r_append (de->d_name, src);
++      dest->len = dtaillen;
++      r_append (de->d_name, dest);
++
++      s.st_mode = ~0;
++      d.st_mode = ~0;
++
++      lstat (src->buf, &s);
++
++      if (lstat (dest->buf, &d) != 0)
++	FAIL_EXIT1 ("%s obtained by readdir, but stat failed.\n", dest->buf);
++
++      if (s.st_mode == ~0)
++	{
++	  /* dest exists and src doesn't, clean it.  */
++	  switch (d.st_mode & S_IFMT)
++	    {
++	    case S_IFDIR:
++	      if (!S_ISDIR (s.st_mode))
++		{
++		  if (verbose)
++		    printf ("-D %s\n", dest->buf);
++		  recursive_remove (dest->buf);
++		}
++	      break;
++
++	    default:
++	      if (verbose)
++		printf ("-F %s\n", dest->buf);
++	      maybe_xunlink (dest->buf);
++	      break;
++	    }
++	}
++    }
++
++  closedir (dir);
++}
++
++static void
++rsync (char *src, char *dest, int and_delete)
++{
++  r_setup (src, &spath);
++  r_setup (dest, &dpath);
++
++  rsync_1 (&spath, &dpath, and_delete);
++}
++
++
++int
++main (int argc, char **argv)
++{
++  pid_t child;
++  char *pristine_root_path;
++  char *new_root_path;
++  char *new_cwd_path;
++  char *new_objdir_path;
++  char *new_srcdir_path;
++  char **new_child_proc;
++  char *command_root;
++  char *command_base;
++  char *command_basename;
++  char *so_base;
++  int do_postclean = 0;
++
++  uid_t original_uid;
++  gid_t original_gid;
++  int UMAP;
++  int GMAP;
++  /* Used for "%lld %lld 1" so need not be large.  */
++  char tmp[100];
++  struct stat st;
++  int lock_fd;
++
++  setbuf (stdout, NULL);
++
++  /* The command line we're expecting looks like this:
++     env <set some vars> ld.so <library path> test-binary
++
++     We need to peel off any "env" or "ld.so" portion of the command
++     line, and keep track of which env vars we should preserve and
++     which we drop.  */
++
++  if (argc < 2)
++    {
++      fprintf (stderr, "Usage: containerize <program to run> <args...>\n");
++      exit (1);
++    }
++
++  if (strcmp (argv[1], "-v") == 0)
++    {
++      verbose = 1;
++      ++argv;
++      --argc;
++    }
++
++  if (strcmp (argv[1], "env") == 0)
++    {
++      ++argv;
++      --argc;
++      while (is_env_setting (argv[1]))
++	{
++	  /* If there are variables we do NOT want to propogate, this
++	     is where the test for them goes.  */
++	    {
++	      /* Need to keep these.  Note that putenv stores a
++	         pointer to our argv.  */
++	      putenv (argv[1]);
++	    }
++	  ++argv;
++	  --argc;
++	}
++    }
++
++  if (strcmp (argv[1], support_objdir_elf_ldso) == 0)
++    {
++      ++argv;
++      --argc;
++      while (argv[1][0] == '-')
++	{
++	  if (strcmp (argv[1], "--library-path") == 0)
++	    {
++	      ++argv;
++	      --argc;
++	    }
++	  ++argv;
++	  --argc;
++	}
++    }
++
++  pristine_root_path = strdup (concat (support_objdir_root,
++				       "/testroot.pristine", NULL));
++  new_root_path = strdup (concat (support_objdir_root,
++				  "/testroot.root", NULL));
++  new_cwd_path = get_current_dir_name ();
++  new_child_proc = argv + 1;
++
++  lock_fd = open (concat (pristine_root_path, "/lock.fd", NULL),
++		 O_CREAT | O_TRUNC | O_RDWR, 0666);
++  if (lock_fd < 0)
++    FAIL_EXIT1 ("Cannot create testroot lock.\n");
++
++  while (flock (lock_fd, LOCK_EX) != 0)
++    {
++      if (errno != EINTR)
++	FAIL_EXIT1 ("Cannot lock testroot.\n");
++    }
++
++  xmkdirp (new_root_path, 0755);
++
++  /* We look for extra setup info in a subdir in the same spot as the
++     test, with the same name but a ".root" extension.  This is that
++     directory.  We try to look in the source tree if the path we're
++     given refers to the build tree, but we rely on the path to be
++     absolute.  This is what the glibc makefiles do.  */
++  command_root = concat (argv[1], ".root", NULL);
++  if (strncmp (command_root, support_objdir_root,
++	       strlen (support_objdir_root)) == 0
++      && command_root[strlen (support_objdir_root)] == '/')
++    command_root = concat (support_srcdir_root,
++			   argv[1] + strlen (support_objdir_root),
++			   ".root", NULL);
++  command_root = strdup (command_root);
++
++  /* This cuts off the ".root" we appended above.  */
++  command_base = strdup (command_root);
++  command_base[strlen (command_base) - 5] = 0;
++
++  /* This is the basename of the test we're running.  */
++  command_basename = strrchr (command_base, '/');
++  if (command_basename == NULL)
++    command_basename = command_base;
++  else
++    ++command_basename;
++
++  /* Shared object base directory.  */
++  so_base = strdup (argv[1]);
++  if (strrchr (so_base, '/') != NULL)
++    strrchr (so_base, '/')[1] = 0;
++
++  if (file_exists (concat (command_root, "/postclean.req", NULL)))
++    do_postclean = 1;
++
++  rsync (pristine_root_path, new_root_path,
++	 file_exists (concat (command_root, "/preclean.req", NULL)));
++
++  if (stat (command_root, &st) >= 0
++      && S_ISDIR (st.st_mode))
++    rsync (command_root, new_root_path, 0);
++
++  new_objdir_path = strdup (concat (new_root_path,
++				    support_objdir_root, NULL));
++  new_srcdir_path = strdup (concat (new_root_path,
++				    support_srcdir_root, NULL));
++
++  /* new_cwd_path starts with '/' so no "/" needed between the two.  */
++  xmkdirp (concat (new_root_path, new_cwd_path, NULL), 0755);
++  xmkdirp (new_srcdir_path, 0755);
++  xmkdirp (new_objdir_path, 0755);
++
++  original_uid = getuid ();
++  original_gid = getgid ();
++
++  /* Handle the cp/mv/rm "script" here.  */
++  {
++    char *the_line = NULL;
++    size_t line_len = 0;
++    char *fname = concat (command_root, "/",
++			  command_basename, ".script", NULL);
++    char *the_words[3];
++    FILE *f = fopen (fname, "r");
++
++    if (verbose && f)
++      fprintf (stderr, "running %s\n", fname);
++
++    if (f == NULL)
++      {
++	/* Try foo.script instead of foo.root/foo.script, as a shortcut.  */
++	fname = concat (command_base, ".script", NULL);
++	f = fopen (fname, "r");
++	if (verbose && f)
++	  fprintf (stderr, "running %s\n", fname);
++      }
++
++    /* Note that we do NOT look for a Makefile-generated foo.script in
++       the build directory.  If that is ever needed, this is the place
++       to add it.  */
++
++    /* This is where we "interpret" the mini-script which is <test>.script.  */
++    if (f != NULL)
++      {
++	while (getline (&the_line, &line_len, f) > 0)
++	  {
++	    int nt = tokenize (the_line, the_words, 3);
++	    int i;
++
++	    for (i = 1; i < nt; ++i)
++	      {
++		if (memcmp (the_words[i], "$B/", 3) == 0)
++		  the_words[i] = concat (support_objdir_root,
++					 the_words[i] + 2, NULL);
++		else if (memcmp (the_words[i], "$S/", 3) == 0)
++		  the_words[i] = concat (support_srcdir_root,
++					 the_words[i] + 2, NULL);
++		else if (memcmp (the_words[i], "$I/", 3) == 0)
++		  the_words[i] = concat (new_root_path,
++					 support_install_prefix,
++					 the_words[i] + 2, NULL);
++		else if (memcmp (the_words[i], "$L/", 3) == 0)
++		  the_words[i] = concat (new_root_path,
++					 support_libdir_prefix,
++					 the_words[i] + 2, NULL);
++		else if (the_words[i][0] == '/')
++		  the_words[i] = concat (new_root_path,
++					 the_words[i], NULL);
++	      }
++
++	    if (nt == 3 && the_words[2][strlen (the_words[2]) - 1] == '/')
++	      {
++		char *r = strrchr (the_words[1], '/');
++		if (r)
++		  the_words[2] = concat (the_words[2], r + 1, NULL);
++		else
++		  the_words[2] = concat (the_words[2], the_words[1], NULL);
++	      }
++
++	    if (nt == 2 && strcmp (the_words[0], "so") == 0)
++	      {
++		the_words[2] = concat (new_root_path, support_libdir_prefix,
++				       "/", the_words[1], NULL);
++		the_words[1] = concat (so_base, the_words[1], NULL);
++		copy_one_file (the_words[1], the_words[2]);
++	      }
++	    else if (nt == 3 && strcmp (the_words[0], "cp") == 0)
++	      {
++		copy_one_file (the_words[1], the_words[2]);
++	      }
++	    else if (nt == 3 && strcmp (the_words[0], "mv") == 0)
++	      {
++		if (rename (the_words[1], the_words[2]) < 0)
++		  FAIL_EXIT1 ("rename %s -> %s: %s", the_words[1],
++			      the_words[2], strerror (errno));
++	      }
++	    else if (nt == 3 && strcmp (the_words[0], "chmod") == 0)
++	      {
++		long int m;
++		m = strtol (the_words[1], NULL, 0);
++		if (chmod (the_words[2], m) < 0)
++		    FAIL_EXIT1 ("chmod %s: %s\n",
++				the_words[2], strerror (errno));
++
++	      }
++	    else if (nt == 2 && strcmp (the_words[0], "rm") == 0)
++	      {
++		maybe_xunlink (the_words[1]);
++	      }
++	    else if (nt > 0 && the_words[0][0] != '#')
++	      {
++		printf ("\033[31minvalid [%s]\033[0m\n", the_words[0]);
++	      }
++	  }
++	fclose (f);
++      }
++  }
++
++#ifdef CLONE_NEWNS
++  /* The unshare here gives us our own spaces and capabilities.  */
++  if (unshare (CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNS) < 0)
++    {
++      /* Older kernels may not support all the options, or security
++	 policy may block this call.  */
++      if (errno == EINVAL || errno == EPERM)
++	FAIL_UNSUPPORTED ("unable to unshare user/fs: %s", strerror (errno));
++      else
++	FAIL_EXIT1 ("unable to unshare user/fs: %s", strerror (errno));
++    }
++#else
++  /* Some targets may not support unshare at all.  */
++  FAIL_UNSUPPORTED ("unshare support missing");
++#endif
++
++  /* Some systems, by default, all mounts leak out of the namespace.  */
++  if (mount ("none", "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0)
++    FAIL_EXIT1 ("could not create a private mount namespace\n");
++
++  trymount (support_srcdir_root, new_srcdir_path);
++  trymount (support_objdir_root, new_objdir_path);
++
++  xmkdirp (concat (new_root_path, "/dev", NULL), 0755);
++  devmount (new_root_path, "null");
++  devmount (new_root_path, "zero");
++  devmount (new_root_path, "urandom");
++
++  /* We're done with the "old" root, switch to the new one.  */
++  if (chroot (new_root_path) < 0)
++    FAIL_EXIT1 ("Can't chroot to %s - ", new_root_path);
++
++  if (chdir (new_cwd_path) < 0)
++    FAIL_EXIT1 ("Can't cd to new %s - ", new_cwd_path);
++
++  /* To complete the containerization, we need to fork () at least
++     once.  We can't exec, nor can we somehow link the new child to
++     our parent.  So we run the child and propogate it's exit status
++     up.  */
++  child = fork ();
++  if (child < 0)
++    FAIL_EXIT1 ("Unable to fork");
++  else if (child > 0)
++    {
++      /* Parent.  */
++      int status;
++      waitpid (child, &status, 0);
++
++      /* There's a bit of magic here, since the buildroot is mounted
++	 in our space, the paths are still valid, and since the mounts
++	 aren't recursive, it sees *only* the built root, not anything
++	 we would normally se if we rsync'd to "/" like mounted /dev
++	 files.  */
++      if (do_postclean)
++	  rsync (pristine_root_path, new_root_path, 1);
++
++      if (WIFEXITED (status))
++	exit (WEXITSTATUS (status));
++
++      if (WIFSIGNALED (status))
++	{
++	  printf ("%%SIGNALLED%%\n");
++	  exit (77);
++	}
++
++      printf ("%%EXITERROR%%\n");
++      exit (78);
++    }
++
++  /* The rest is the child process, which is now PID 1 and "in" the
++     new root.  */
++
++  maybe_xmkdir ("/tmp", 0755);
++
++  /* Now that we're pid 1 (effectively "root") we can mount /proc  */
++  maybe_xmkdir ("/proc", 0777);
++  if (mount ("proc", "/proc", "proc", 0, NULL) < 0)
++    FAIL_EXIT1 ("Unable to mount /proc: ");
++
++  /* We map our original UID to the same UID in the container so we
++     can own our own files normally.  */
++  UMAP = open ("/proc/self/uid_map", O_WRONLY);
++  if (UMAP < 0)
++    FAIL_EXIT1 ("can't write to /proc/self/uid_map\n");
++
++  sprintf (tmp, "%lld %lld 1\n",
++	   (long long) original_uid, (long long) original_uid);
++  write (UMAP, tmp, strlen (tmp));
++  xclose (UMAP);
++
++  /* We must disable setgroups () before we can map our groups, else we
++     get EPERM.  */
++  GMAP = open ("/proc/self/setgroups", O_WRONLY);
++  if (GMAP >= 0)
++    {
++      /* We support kernels old enough to not have this.  */
++      write (GMAP, "deny\n", 5);
++      xclose (GMAP);
++    }
++
++  /* We map our original GID to the same GID in the container so we
++     can own our own files normally.  */
++  GMAP = open ("/proc/self/gid_map", O_WRONLY);
++  if (GMAP < 0)
++    FAIL_EXIT1 ("can't write to /proc/self/gid_map\n");
++
++  sprintf (tmp, "%lld %lld 1\n",
++	   (long long) original_gid, (long long) original_gid);
++  write (GMAP, tmp, strlen (tmp));
++  xclose (GMAP);
++
++  /* Now run the child.  */
++  execvp (new_child_proc[0], new_child_proc);
++
++  /* Or don't run the child?  */
++  FAIL_EXIT1 ("Unable to exec %s\n", new_child_proc[0]);
++
++  /* Because gcc won't know error () never returns...  */
++  exit (EXIT_UNSUPPORTED);
++}
+diff --git a/support/true-container.c b/support/true-container.c
+new file mode 100644
+index 0000000000000000..57dc57e252a96acc
+--- /dev/null
++++ b/support/true-container.c
+@@ -0,0 +1,26 @@
++/* Minimal /bin/true for in-container use.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Implements the in-container /bin/true, which always returns true
++   (0).  */
++
++int
++main (void)
++{
++  return 0;
++}
+diff --git a/support/tst-support_blob_repeat.c b/support/tst-support_blob_repeat.c
+new file mode 100644
+index 0000000000000000..1978c14488106ff2
+--- /dev/null
++++ b/support/tst-support_blob_repeat.c
+@@ -0,0 +1,85 @@
++/* Tests for <support/blob_repeat.h>
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <support/blob_repeat.h>
++#include <support/check.h>
++
++static int
++do_test (void)
++{
++  struct support_blob_repeat repeat
++    = support_blob_repeat_allocate ("5", 1, 5);
++  TEST_COMPARE_BLOB (repeat.start, repeat.size, "55555", 5);
++  support_blob_repeat_free (&repeat);
++
++  repeat = support_blob_repeat_allocate ("ABC", 3, 3);
++  TEST_COMPARE_BLOB (repeat.start, repeat.size, "ABCABCABC", 9);
++  support_blob_repeat_free (&repeat);
++
++  repeat = support_blob_repeat_allocate ("abc", 4, 3);
++  TEST_COMPARE_BLOB (repeat.start, repeat.size, "abc\0abc\0abc", 12);
++  support_blob_repeat_free (&repeat);
++
++  size_t gigabyte = 1U << 30;
++  repeat = support_blob_repeat_allocate ("X", 1, gigabyte + 1);
++  if (repeat.start == NULL)
++    puts ("warning: not enough memory for 1 GiB mapping");
++  else
++    {
++      TEST_COMPARE (repeat.size, gigabyte + 1);
++      {
++        unsigned char *p = repeat.start;
++        for (size_t i = 0; i < gigabyte + 1; ++i)
++          if (p[i] != 'X')
++            FAIL_EXIT1 ("invalid byte 0x%02x at %zu", p[i], i);
++
++        /* Check that there is no sharing across the mapping.  */
++        p[0] = 'Y';
++        p[1U << 24] = 'Z';
++        for (size_t i = 0; i < gigabyte + 1; ++i)
++          if (i == 0)
++            TEST_COMPARE (p[i], 'Y');
++          else if (i == 1U << 24)
++            TEST_COMPARE (p[i], 'Z');
++          else if (p[i] != 'X')
++            FAIL_EXIT1 ("invalid byte 0x%02x at %zu", p[i], i);
++      }
++    }
++  support_blob_repeat_free (&repeat);
++
++  repeat = support_blob_repeat_allocate ("012345678", 9, 10 * 1000 * 1000);
++  if (repeat.start == NULL)
++    puts ("warning: not enough memory for large mapping");
++  else
++    {
++      unsigned char *p = repeat.start;
++      for (int i = 0; i < 10 * 1000 * 1000; ++i)
++        for (int j = 0; j <= 8; ++j)
++          if (p[i * 9 + j] != '0' + j)
++            {
++              printf ("error: element %d index %d\n", i, j);
++              TEST_COMPARE (p[i * 9 + j], '0' + j);
++            }
++    }
++  support_blob_repeat_free (&repeat);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/support/tst-test_compare_string.c b/support/tst-test_compare_string.c
+new file mode 100644
+index 0000000000000000..2a4b258587a7c8ec
+--- /dev/null
++++ b/support/tst-test_compare_string.c
+@@ -0,0 +1,107 @@
++/* Basic test for the TEST_COMPARE_STRING macro.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <string.h>
++#include <support/check.h>
++#include <support/capture_subprocess.h>
++
++static void
++subprocess (void *closure)
++{
++  /* These tests should fail.  They were chosen to cover differences
++     in length (with the same contents), single-bit mismatches, and
++     mismatching null pointers.  */
++  TEST_COMPARE_STRING ("", NULL);             /* Line 29.  */
++  TEST_COMPARE_STRING ("X", "");              /* Line 30.  */
++  TEST_COMPARE_STRING (NULL, "X");            /* Line 31.  */
++  TEST_COMPARE_STRING ("abcd", "abcD");       /* Line 32.  */
++  TEST_COMPARE_STRING ("abcd", NULL);         /* Line 33.  */
++  TEST_COMPARE_STRING (NULL, "abcd");         /* Line 34.  */
++}
++
++/* Same contents, different addresses.  */
++char buffer_abc_1[] = "abc";
++char buffer_abc_2[] = "abc";
++
++static int
++do_test (void)
++{
++  /* This should succeed.  Even if the pointers and array contents are
++     different, zero-length inputs are not different.  */
++  TEST_COMPARE_STRING (NULL, NULL);
++  TEST_COMPARE_STRING ("", "");
++  TEST_COMPARE_STRING (buffer_abc_1, buffer_abc_2);
++  TEST_COMPARE_STRING (buffer_abc_1, "abc");
++
++  struct support_capture_subprocess proc = support_capture_subprocess
++    (&subprocess, NULL);
++
++  /* Discard the reported error.  */
++  support_record_failure_reset ();
++
++  puts ("info: *** subprocess output starts ***");
++  fputs (proc.out.buffer, stdout);
++  puts ("info: *** subprocess output ends ***");
++
++  TEST_VERIFY
++    (strcmp (proc.out.buffer,
++"tst-test_compare_string.c:29: error: blob comparison failed\n"
++"  left string: 0 bytes\n"
++"  right string: NULL\n"
++"tst-test_compare_string.c:30: error: blob comparison failed\n"
++"  left string: 1 bytes\n"
++"  right string: 0 bytes\n"
++"  left (evaluated from \"X\"):\n"
++"      \"X\"\n"
++"      58\n"
++"tst-test_compare_string.c:31: error: blob comparison failed\n"
++"  left string: NULL\n"
++"  right string: 1 bytes\n"
++"  right (evaluated from \"X\"):\n"
++"      \"X\"\n"
++"      58\n"
++"tst-test_compare_string.c:32: error: blob comparison failed\n"
++"  string length: 4 bytes\n"
++"  left (evaluated from \"abcd\"):\n"
++"      \"abcd\"\n"
++"      61 62 63 64\n"
++"  right (evaluated from \"abcD\"):\n"
++"      \"abcD\"\n"
++"      61 62 63 44\n"
++"tst-test_compare_string.c:33: error: blob comparison failed\n"
++"  left string: 4 bytes\n"
++"  right string: NULL\n"
++"  left (evaluated from \"abcd\"):\n"
++"      \"abcd\"\n"
++"      61 62 63 64\n"
++"tst-test_compare_string.c:34: error: blob comparison failed\n"
++"  left string: NULL\n"
++"  right string: 4 bytes\n"
++"  right (evaluated from \"abcd\"):\n"
++"      \"abcd\"\n"
++"      61 62 63 64\n"
++             ) == 0);
++
++  /* Check that there is no output on standard error.  */
++  support_capture_subprocess_check (&proc, "TEST_COMPARE_STRING",
++                                    0, sc_allow_stdout);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/support/xcopy_file_range.c b/support/xcopy_file_range.c
+new file mode 100644
+index 0000000000000000..b3501a4d5ec3fdfd
+--- /dev/null
++++ b/support/xcopy_file_range.c
+@@ -0,0 +1,32 @@
++/* copy_file_range with error checking.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <support/support.h>
++#include <support/xunistd.h>
++#include <support/check.h>
++
++ssize_t
++xcopy_file_range (int infd, off64_t *pinoff, int outfd, off64_t *poutoff,
++		  size_t length, unsigned int flags)
++{
++  ssize_t status = support_copy_file_range (infd, pinoff, outfd,
++					    poutoff, length, flags);
++  if (status == -1)
++    FAIL_EXIT1 ("cannot copy file: %m\n");
++  return status;
++}
+diff --git a/support/xmkdirp.c b/support/xmkdirp.c
+new file mode 100644
+index 0000000000000000..fada0452eafe269e
+--- /dev/null
++++ b/support/xmkdirp.c
+@@ -0,0 +1,66 @@
++/* Error-checking replacement for "mkdir -p".
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <support/support.h>
++#include <support/check.h>
++#include <support/xunistd.h>
++
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++
++/* Equivalent of "mkdir -p".  Any failures cause FAIL_EXIT1 so no
++   return code is needed.  */
++
++void
++xmkdirp (const char *path, mode_t mode)
++{
++  struct stat s;
++  const char *slash_p;
++  int rv;
++
++  if (path[0] == 0)
++    return;
++
++  if (stat (path, &s) == 0)
++    {
++      if (S_ISDIR (s.st_mode))
++	return;
++      errno = EEXIST;
++      FAIL_EXIT1 ("mkdir_p (\"%s\", 0%o): %m", path, mode);
++    }
++
++  slash_p = strrchr (path, '/');
++  if (slash_p != NULL)
++    {
++      while (slash_p > path && slash_p[-1] == '/')
++	--slash_p;
++      if (slash_p > path)
++	{
++	  char *parent = xstrndup (path, slash_p - path);
++	  xmkdirp (parent, mode);
++	  free (parent);
++	}
++    }
++
++  rv = mkdir (path, mode);
++  if (rv != 0)
++    FAIL_EXIT1 ("mkdir_p (\"%s\", 0%o): %m", path, mode);
++
++  return;
++}
+diff --git a/support/xsymlink.c b/support/xsymlink.c
+new file mode 100644
+index 0000000000000000..0f3edf640a1a99a6
+--- /dev/null
++++ b/support/xsymlink.c
+@@ -0,0 +1,29 @@
++/* Error-checking replacement for "symlink".
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <support/support.h>
++#include <support/check.h>
++
++#include <unistd.h>
++
++void
++xsymlink (const char *target, const char *linkpath)
++{
++  if (symlink (target, linkpath) < 0)
++    FAIL_EXIT1 ("symlink (\"%s\", \"%s\")", target, linkpath);
++}
+diff --git a/support/xunistd.h b/support/xunistd.h
+index 5fe5dae818def4ec..f99f362cb4763c5b 100644
+--- a/support/xunistd.h
++++ b/support/xunistd.h
+@@ -43,6 +43,10 @@ void xunlink (const char *path);
+ long xsysconf (int name);
+ long long xlseek (int fd, long long offset, int whence);
+ void xftruncate (int fd, long long length);
++void xsymlink (const char *target, const char *linkpath);
++
++/* Equivalent of "mkdir -p".  */
++void xmkdirp (const char *, mode_t);
+ 
+ /* Read the link at PATH.  The caller should free the returned string
+    with free.  */
+@@ -60,6 +64,9 @@ void *xmmap (void *addr, size_t length, int prot, int flags, int fd);
+ void xmprotect (void *addr, size_t length, int prot);
+ void xmunmap (void *addr, size_t length);
+ 
++ssize_t xcopy_file_range(int fd_in, loff_t *off_in, int fd_out,
++			 loff_t *off_out, size_t len, unsigned int flags);
++
+ __END_DECLS
+ 
+ #endif /* SUPPORT_XUNISTD_H */

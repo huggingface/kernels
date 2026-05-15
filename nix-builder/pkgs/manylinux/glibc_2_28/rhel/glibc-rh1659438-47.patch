@@ -1,0 +1,252 @@
+commit c09c1b6f014a45f6c4ba189f5ae94b1fb1a2982a
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:22 2018 +0100
+
+    S390: Refactor wcschrnul ifunc handling.
+    
+    The ifunc handling for wcschrnul is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcschrnul variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcschrnul variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcschrnul.
+            * sysdeps/s390/multiarch/wcschrnul-c.c: Move to ...
+            * sysdeps/s390/wcschrnul-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcschrnul-vx.S: Move to ...
+            * sysdeps/s390/wcschrnul-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcschrnul.c: Move to ...
+            * sysdeps/s390/wcschrnul.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcschrnul.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 91ee84a54b713e4a..a6ebf11ad1913cc4 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -70,5 +70,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcsncat wcsncat-vx wcsncat-c \
+ 		   wcscmp wcscmp-vx wcscmp-c \
+ 		   wcsncmp wcsncmp-vx wcsncmp-c \
+-		   wcschr wcschr-vx wcschr-c
++		   wcschr wcschr-vx wcschr-c \
++		   wcschrnul wcschrnul-vx wcschrnul-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcschrnul.h b/sysdeps/s390/ifunc-wcschrnul.h
+new file mode 100644
+index 0000000000000000..39d4120eb3cfafdf
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcschrnul.h
+@@ -0,0 +1,53 @@
++/* wcschrnul variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSCHRNUL_IFUNC	1
++#else
++# define HAVE_WCSCHRNUL_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSCHRNUL_IFUNC_AND_VX_SUPPORT HAVE_WCSCHRNUL_IFUNC
++#else
++# define HAVE_WCSCHRNUL_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSCHRNUL_DEFAULT	WCSCHRNUL_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSCHRNUL_C	1
++# define HAVE_WCSCHRNUL_Z13	1
++#else
++# define WCSCHRNUL_DEFAULT	WCSCHRNUL_C
++# define HAVE_WCSCHRNUL_C	1
++# define HAVE_WCSCHRNUL_Z13	HAVE_WCSCHRNUL_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSCHRNUL_C
++# define WCSCHRNUL_C		__wcschrnul_c
++#else
++# define WCSCHRNUL_C		NULL
++#endif
++
++#if HAVE_WCSCHRNUL_Z13
++# define WCSCHRNUL_Z13		__wcschrnul_vx
++#else
++# define WCSCHRNUL_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index b282613b4705bb14..0eb01d5d84c60408 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcschrnul wcschrnul-vx wcschrnul-c \
+-		   wcsrchr wcsrchr-vx wcsrchr-c \
++sysdep_routines += wcsrchr wcsrchr-vx wcsrchr-c \
+ 		   wcsspn wcsspn-vx wcsspn-c \
+ 		   wcspbrk wcspbrk-vx wcspbrk-c \
+ 		   wcscspn wcscspn-vx wcscspn-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index c69165465dc97111..553a76c39ecc87ae 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -57,6 +57,7 @@
+ #include <ifunc-wcscmp.h>
+ #include <ifunc-wcsncmp.h>
+ #include <ifunc-wcschr.h>
++#include <ifunc-wcschrnul.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -567,6 +568,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSCHR_IFUNC  */
+ 
++#if HAVE_WCSCHRNUL_IFUNC
++    IFUNC_IMPL (i, name, wcschrnul,
++# if HAVE_WCSCHRNUL_Z13
++		IFUNC_IMPL_ADD (array, i, wcschrnul,
++				dl_hwcap & HWCAP_S390_VX, WCSCHRNUL_Z13)
++# endif
++# if HAVE_WCSCHRNUL_C
++		IFUNC_IMPL_ADD (array, i, wcschrnul, 1, WCSCHRNUL_C)
++# endif
++		)
++#endif /* HAVE_WCSCHRNUL_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -575,8 +588,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcschrnul);
+-
+   IFUNC_VX_IMPL (wcsrchr);
+ 
+   IFUNC_VX_IMPL (wcsspn);
+diff --git a/sysdeps/s390/multiarch/wcschrnul-c.c b/sysdeps/s390/wcschrnul-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/wcschrnul-c.c
+rename to sysdeps/s390/wcschrnul-c.c
+index 00e776a3adc11e67..410cee1399a67914 100644
+--- a/sysdeps/s390/multiarch/wcschrnul-c.c
++++ b/sysdeps/s390/wcschrnul-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSCHRNUL  __wcschrnul_c
++#include <ifunc-wcschrnul.h>
++
++#if HAVE_WCSCHRNUL_C
++# if HAVE_WCSCHRNUL_IFUNC || HAVE_WCSCHRNUL_Z13
++#  define WCSCHRNUL WCSCHRNUL_C
++# endif
+ 
+-# include <wchar.h>
+-extern __typeof (__wcschrnul) __wcschrnul_c;
+ # include <wcsmbs/wcschrnul.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcschrnul-vx.S b/sysdeps/s390/wcschrnul-vx.S
+similarity index 92%
+rename from sysdeps/s390/multiarch/wcschrnul-vx.S
+rename to sysdeps/s390/wcschrnul-vx.S
+index ebcd32b8703608d6..4ffb937c6bbd7008 100644
+--- a/sysdeps/s390/multiarch/wcschrnul-vx.S
++++ b/sysdeps/s390/wcschrnul-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcschrnul.h>
++#if HAVE_WCSCHRNUL_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -35,7 +36,7 @@
+    -v16=part of s
+    -v18=vector with c replicated in every byte
+ */
+-ENTRY(__wcschrnul_vx)
++ENTRY(WCSCHRNUL_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -92,6 +93,11 @@ ENTRY(__wcschrnul_vx)
+ .Lend:
+ 	br	%r14
+ .Lfallback:
+-	jg	__wcschrnul_c
+-END(__wcschrnul_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSCHRNUL_C
++END(WCSCHRNUL_Z13)
++
++# if ! HAVE_WCSCHRNUL_IFUNC
++strong_alias (WCSCHRNUL_Z13, __wcschrnul)
++weak_alias (__wcschrnul, wcschrnul)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcschrnul.c b/sysdeps/s390/wcschrnul.c
+similarity index 68%
+rename from sysdeps/s390/multiarch/wcschrnul.c
+rename to sysdeps/s390/wcschrnul.c
+index 807d7ee08963a601..ab5aaf04020bb571 100644
+--- a/sysdeps/s390/multiarch/wcschrnul.c
++++ b/sysdeps/s390/wcschrnul.c
+@@ -16,13 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcschrnul.h>
++
++#if HAVE_WCSCHRNUL_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc (__wcschrnul)
+-weak_alias (__wcschrnul, wcschrnul)
++# if HAVE_WCSCHRNUL_C
++extern __typeof (__wcschrnul) WCSCHRNUL_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcschrnul.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_WCSCHRNUL_Z13
++extern __typeof (__wcschrnul) WCSCHRNUL_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__wcschrnul, __wcschrnul,
++		      (HAVE_WCSCHRNUL_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSCHRNUL_Z13
++		      : WCSCHRNUL_DEFAULT
++		      )
++weak_alias (__wcschrnul, wcschrnul)
++#endif

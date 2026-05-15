@@ -1,0 +1,38 @@
+Short description: Do not define _XOPEN_STREAMS.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Bug-Fedora: #436349
+Upstream status: not-submitted
+
+This patch should go upstream. Not defining _XOPEN_STREAMS is the
+same as setting it to -1 for POSIX conformance. The headers setting
+needs to be reviewed indepedently.
+
+This is part of commit glibc-2.3.3-1564-gd0b6ac6
+
+* Fri Mar 14 2008 Jakub Jelinek <jakub@redhat.com> 2.7.90-11
+- remove <stropts.h>, define _XOPEN_STREAMS -1 (#436349)
+
+diff -Nrup a/nptl/sysdeps/unix/sysv/linux/bits/posix_opt.h b/nptl/sysdeps/unix/sysv/linux/bits/posix_opt.h
+--- a/sysdeps/unix/sysv/linux/bits/posix_opt.h	2012-06-05 07:42:49.000000000 -0600
++++ b/sysdeps/unix/sysv/linux/bits/posix_opt.h	2012-06-07 12:15:21.817318674 -0600
+@@ -188,4 +188,7 @@
+ /* Typed memory objects are not available.  */
+ #define _POSIX_TYPED_MEMORY_OBJECTS	-1
+ 
++/* Streams are not available.  */
++#define _XOPEN_STREAMS	-1
++
+ #endif /* bits/posix_opt.h */
+diff -Nrup a/streams/Makefile b/streams/Makefile
+--- a/streams/Makefile	2012-06-05 07:42:49.000000000 -0600
++++ b/streams/Makefile	2012-06-07 12:15:21.824318649 -0600
+@@ -20,7 +20,7 @@
+ 
+ include ../Makeconfig
+ 
+-headers		= stropts.h sys/stropts.h bits/stropts.h bits/xtitypes.h
++#headers		= stropts.h sys/stropts.h bits/stropts.h bits/xtitypes.h
+ routines	= isastream getmsg getpmsg putmsg putpmsg fattach fdetach
+ 
+ include ../Rules

@@ -1,0 +1,49 @@
+commit 0884724a95b60452ad483dbe086d237d02ba624d
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Dec 14 12:37:44 2021 +0100
+
+    elf: Use new dependency sorting algorithm by default
+    
+    The default has to change eventually, and there are no known failures
+    that require a delay.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index 54ef2a921310b229..f11ca5b3e8b09b43 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -146,7 +146,7 @@ glibc {
+       type: INT_32
+       minval: 1
+       maxval: 2
+-      default: 1
++      default: 2
+     }
+   }
+ }
+diff --git a/elf/tst-rtld-list-tunables.exp b/elf/tst-rtld-list-tunables.exp
+index 118afc271057afd4..478ee8ab091685eb 100644
+--- a/elf/tst-rtld-list-tunables.exp
++++ b/elf/tst-rtld-list-tunables.exp
+@@ -10,6 +10,6 @@ glibc.malloc.tcache_max: 0x0 (min: 0x0, max: 0x[f]+)
+ glibc.malloc.tcache_unsorted_limit: 0x0 (min: 0x0, max: 0x[f]+)
+ glibc.malloc.top_pad: 0x0 (min: 0x0, max: 0x[f]+)
+ glibc.malloc.trim_threshold: 0x0 (min: 0x0, max: 0x[f]+)
+-glibc.rtld.dynamic_sort: 1 (min: 1, max: 2)
++glibc.rtld.dynamic_sort: 2 (min: 1, max: 2)
+ glibc.rtld.nns: 0x4 (min: 0x1, max: 0x10)
+ glibc.rtld.optional_static_tls: 0x200 (min: 0x0, max: 0x[f]+)
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index c3f96cdc85208926..7b70e80391ee87f7 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -312,7 +312,7 @@ value of @samp{2}, a different algorithm is used, which implements a
+ topological sort through depth-first search, and does not exhibit the
+ performance issues of @samp{1}.
+ 
+-The default value of this tunable is @samp{1}.
++The default value of this tunable is @samp{2}.
+ @end deftp
+ 
+ @node Elision Tunables

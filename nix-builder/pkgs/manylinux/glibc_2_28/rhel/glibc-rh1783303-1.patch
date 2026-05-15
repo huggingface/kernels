@@ -1,0 +1,1188 @@
+commit 6cac323c8dd78668e65aaa29f044cbd33c1a66a5
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Mar 15 18:42:00 2019 +0000
+
+    powerpc: ceil/ceilf refactor
+    
+    This patches consolidates all the powerpc ceil{f} implementations on
+    the generic sysdeps/powerpc/fpu/s_ceil{f}.  The generic implementation
+    uses either the compiler builts for ISA 2.03+ (which generates the frip
+    instruction) or a generic implementation which uses FP only operations.
+    
+    It adds a generic implementation (round_to_integer.h) which is shared
+    with other rounding to integer routines.  The resulting code should be
+    similar in term os performance to previous assembly one.
+    
+    The IFUNC organization for powerpc64 is also change to be enabled only
+    for powerpc64 and not for powerpc64le (since minium ISA of 2.08 does not
+    require the fallback generic implementation).
+    
+    Checked on powerpc-linux-gnu (built without --with-cpu, with
+    --with-cpu=power4 and with --with-cpu=power5+ and --disable-multi-arch),
+    powerpc64-linux-gnu (built without --with-cp and with --with-cpu=power5+
+    and --disable-multi-arch).
+    
+            * sysdeps/powerpc/fpu/fenv_libc.h (__fesetround_inline_nocheck): New
+            function.
+            * sysdeps/powerpc/fpu/round_to_integer.h: New file.
+            * sysdeps/powerpc/fpu/s_ceil.c: Likewise.
+            * sysdeps/powerpc/fpu/s_ceilf.c: Likewise.
+            * sysdeps/powerpc/powerpc32/fpu/s_ceil.S: Remove file.
+            * sysdeps/powerpc/powerpc32/fpu/s_ceilf.S: Likewise.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/Makefile
+            (CFLAGS-s_ceil-power5+.c, CFLAGS-s_ceilf-power5+.c): New rule.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.S:
+            Remove file.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.S:
+            Likewise.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.S:
+            Likewise.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.S:
+            Likewise.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.c:
+            New file.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.c:
+            Likewise.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.c:
+            Likewise.
+            * sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.c:
+            Likewise.
+            * sysdeps/powerpc/powerpc32/power5+/fpu/s_ceil.S: Remove file.
+            * sysdeps/powerpc/powerpc32/power5+/fpu/s_ceilf.S: Likewise.
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/Makefile: New file.
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-power5+.c:
+            Likewise.
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-ppc64.c:
+            Likewise.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil.c: Move to ...
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil.c: ... here.
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-power5+.c: New
+            file.
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-ppc64.c:
+            Likewise.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf.c: Move to ...
+            * sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf.c: ...
+            * here.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/Makefile
+            (libm-sysdep_routines): Remove s_ceil-power5+, s_ceil-ppc64,
+            s_ceilf-power5+, and s_ceilf-ppc64.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-power5+.S: Remove
+            file.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-ppc64.S: Likewise.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-power5+.S: Likewise.
+            * sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-ppc64.S: Likewise.
+            * sysdeps/powerpc/powerpc64/fpu/s_ceil.S: Likewise.
+            * sysdeps/powerpc/powerpc64/fpu/s_ceilf.S: Likewise.
+            * sysdeps/powerpc/powerpc64/power5+/fpu/s_ceil.S: Likewise.
+            * sysdeps/powerpc/powerpc64/power5+/fpu/s_ceilf.S: Likewise.
+    
+    Reviewed-by: Gabriel F. T. Gomes <gabriel@inconstante.eti.br>
+
+Conflicts:
+	sysdeps/powerpc/powerpc32/fpu/s_ceil.S
+	sysdeps/powerpc/powerpc32/fpu/s_ceilf.S
+	sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.S
+	sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.S
+	sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.S
+	sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.S
+	sysdeps/powerpc/powerpc32/power5+/fpu/s_ceil.S
+	sysdeps/powerpc/powerpc32/power5+/fpu/s_ceilf.S
+	sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-power5+.S
+	sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-ppc64.S
+	sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-power5+.S
+	sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-ppc64.S
+	sysdeps/powerpc/powerpc64/fpu/s_ceil.S
+	sysdeps/powerpc/powerpc64/fpu/s_ceilf.S
+	sysdeps/powerpc/powerpc64/power5+/fpu/s_ceil.S
+	sysdeps/powerpc/powerpc64/power5+/fpu/s_ceilf.S
+	  (Removal after the copyright year header change upstream.)
+
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index 4c19d12b0b31c1f9..a0128c66444a3e46 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -98,6 +98,14 @@ __fesetround_inline (int round)
+   return 0;
+ }
+ 
++/* Same as __fesetround_inline, however without runtime check to use DFP
++   mtfsfi syntax (as relax_fenv_state) or if round value is valid.  */
++static inline void
++__fesetround_inline_nocheck (const int round)
++{
++  asm volatile ("mtfsfi 7,%0" : : "i" (round));
++}
++
+ /* Definitions of all the FPSCR bit numbers */
+ enum {
+   FPSCR_FX = 0,    /* exception summary */
+diff --git a/sysdeps/powerpc/fpu/round_to_integer.h b/sysdeps/powerpc/fpu/round_to_integer.h
+new file mode 100644
+index 0000000000000000..c70afbb10f600d81
+--- /dev/null
++++ b/sysdeps/powerpc/fpu/round_to_integer.h
+@@ -0,0 +1,105 @@
++/* Round to integer generic implementation.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public License as
++   published by the Free Software Foundation; either version 2 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public
++   License along with the GNU C Library; see the file COPYING.LIB.  If
++   not, see <http://www.gnu.org/licenses/>.  */
++
++#ifndef _ROUND_TO_INTEGER_H
++#define _ROUND_TO_INTEGER_H
++
++#include <fenv_private.h>
++
++enum round_mode
++{
++  CEIL
++};
++
++static inline void
++set_fenv_mode (enum round_mode mode)
++{
++  int rmode;
++  switch (mode)
++  {
++  case CEIL:  rmode = FE_UPWARD; break;
++  default:    rmode = FE_TONEAREST; break;
++  }
++  __fesetround_inline_nocheck (rmode);
++}
++
++static inline float
++round_to_integer_float (enum round_mode mode, float x)
++{
++  /* Ensure sNaN input is converted to qNaN.  */
++  if (__glibc_unlikely (isnan (x)))
++    return x + x;
++
++  if (fabs (x) > 0x1p+23)
++    return x;
++
++  float r = x;
++
++  /* Save current FPU rounding mode and inexact state.  */
++  fenv_t fe = fegetenv_register ();
++  set_fenv_mode (mode);
++  if (x > 0.0)
++    {
++      r += 0x1p+23;
++      r -= 0x1p+23;
++      r = fabs (r);
++    }
++  else if (x < 0.0)
++    {
++      r -= 0x1p+23;
++      r += 0x1p+23;
++      r = -fabs (r);
++    }
++  __builtin_mtfsf (0xff, fe);
++
++  return r;
++}
++
++static inline double
++round_to_integer_double (enum round_mode mode, double x)
++{
++  /* Ensure sNaN input is converted to qNaN.  */
++  if (__glibc_unlikely (isnan (x)))
++    return x + x;
++
++  if (fabs (x) > 0x1p+52)
++    return x;
++
++  double r = x;
++
++  /* Save current FPU rounding mode and inexact state.  */
++  fenv_t fe = fegetenv_register ();
++  set_fenv_mode (mode);
++  if (x > 0.0)
++    {
++      r += 0x1p+52;
++      r -= 0x1p+52;
++      r = fabs (r);
++    }
++  else if (x < 0.0)
++    {
++      r -= 0x1p+52;
++      r += 0x1p+52;
++      r = -fabs (r);
++    }
++  __builtin_mtfsf (0xff, fe);
++
++  return r;
++}
++
++#endif
+diff --git a/sysdeps/powerpc/fpu/s_ceil.c b/sysdeps/powerpc/fpu/s_ceil.c
+new file mode 100644
+index 0000000000000000..49008c7af87d6d55
+--- /dev/null
++++ b/sysdeps/powerpc/fpu/s_ceil.c
+@@ -0,0 +1,35 @@
++/* Smallest integral value not less than argument.  PowerPC version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public License as
++   published by the Free Software Foundation; either version 2 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public
++   License along with the GNU C Library; see the file COPYING.LIB.  If
++   not, see <http://www.gnu.org/licenses/>.  */
++
++#define NO_MATH_REDIRECT
++#include <math.h>
++#include <libm-alias-double.h>
++#include <round_to_integer.h>
++
++double
++__ceil (double x)
++{
++#ifdef _ARCH_PWR5X
++  return __builtin_ceil (x);
++#else
++  return round_to_integer_double (CEIL, x);
++#endif
++}
++#ifndef __ceil
++libm_alias_double (__ceil, ceil)
++#endif
+diff --git a/sysdeps/powerpc/fpu/s_ceilf.c b/sysdeps/powerpc/fpu/s_ceilf.c
+new file mode 100644
+index 0000000000000000..8c86bf30a34df4cf
+--- /dev/null
++++ b/sysdeps/powerpc/fpu/s_ceilf.c
+@@ -0,0 +1,35 @@
++/* Smallest integral value not less than argument.  PowerPC version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Library General Public License as
++   published by the Free Software Foundation; either version 2 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Library General Public License for more details.
++
++   You should have received a copy of the GNU Library General Public
++   License along with the GNU C Library; see the file COPYING.LIB.  If
++   not, see <http://www.gnu.org/licenses/>.  */
++
++#define NO_MATH_REDIRECT
++#include <math.h>
++#include <libm-alias-float.h>
++#include <round_to_integer.h>
++
++float
++__ceilf (float x)
++{
++#ifdef _ARCH_PWR5X
++  return __builtin_ceilf (x);
++#else
++  return round_to_integer_float (CEIL, x);
++#endif
++}
++#ifndef __ceilf
++libm_alias_float (__ceil, ceil)
++#endif
+diff --git a/sysdeps/powerpc/powerpc32/fpu/s_ceil.S b/sysdeps/powerpc/powerpc32/fpu/s_ceil.S
+deleted file mode 100644
+index 7f2f97ada1a14a52..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/fpu/s_ceil.S
++++ /dev/null
+@@ -1,76 +0,0 @@
+-/* ceil function.  PowerPC32 version.
+-   Copyright (C) 2004-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-#include <libm-alias-double.h>
+-
+-	.section	.rodata.cst4,"aM",@progbits,4
+-	.align	2
+-.LC0:	/* 2**52 */
+-	.long 0x59800000
+-
+-	.section	".text"
+-ENTRY (__ceil)
+-#ifdef SHARED
+-	mflr	r11
+-	cfi_register(lr,r11)
+-	SETUP_GOT_ACCESS(r9,got_label)
+-	addis	r9,r9,.LC0-got_label@ha
+-	lfs	fp13,.LC0-got_label@l(r9)
+-	mtlr	r11
+-	cfi_same_value (lr)
+-#else
+-	lis	r9,.LC0@ha
+-	lfs	fp13,.LC0@l(r9)
+-#endif
+-	fabs	fp0,fp1
+-	fsub	fp12,fp13,fp13	/* generate 0.0  */
+-	fcmpu	cr7,fp0,fp13	/* if (fabs(x) > TWO52)  */
+-	mffs	fp11		/* Save current FPU rounding mode and
+-				   "inexact" state.  */
+-	fcmpu	cr6,fp1,fp12	/* if (x > 0.0)  */
+-	bnl-	cr7,.L10
+-	mtfsfi	7,2		/* Set rounding mode toward +inf.  */
+-	ble-	cr6,.L4
+-	fadd	fp1,fp1,fp13	/* x+= TWO52;  */
+-	fsub	fp1,fp1,fp13	/* x-= TWO52;  */
+-	fabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = 0.0; */
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L4:
+-	bge-	cr6,.L9		/* if (x < 0.0)  */
+-	fsub	fp1,fp1,fp13	/* x-= TWO52;  */
+-	fadd	fp1,fp1,fp13	/* x+= TWO52;  */
+-	fnabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = -0.0; */
+-.L9:
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L10:
+-	/* Ensure sNaN input is converted to qNaN.  */
+-	fcmpu	cr7,fp1,fp1
+-	beqlr	cr7
+-	fadd	fp1,fp1,fp1
+-	blr
+-	END (__ceil)
+-
+-libm_alias_double (__ceil, ceil)
+diff --git a/sysdeps/powerpc/powerpc32/fpu/s_ceilf.S b/sysdeps/powerpc/powerpc32/fpu/s_ceilf.S
+deleted file mode 100644
+index 3f5949004fa51baf..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/fpu/s_ceilf.S
++++ /dev/null
+@@ -1,76 +0,0 @@
+-/* float ceil function.  PowerPC32 version.
+-   Copyright (C) 2004-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <libm-alias-float.h>
+-
+-	.section	.rodata.cst4,"aM",@progbits,4
+-	.align	2
+-.LC0:	/* 2**23 */
+-	.long 0x4b000000
+-
+-	.section	".text"
+-ENTRY (__ceilf)
+-#ifdef SHARED
+-	mflr	r11
+-	cfi_register(lr,r11)
+-	SETUP_GOT_ACCESS(r9,got_label)
+-	addis	r9,r9,.LC0-got_label@ha
+-	lfs	fp13,.LC0-got_label@l(r9)
+-	mtlr	r11
+-	cfi_same_value (lr)
+-#else
+-	lis	r9,.LC0@ha
+-	lfs	fp13,.LC0@l(r9)
+-#endif
+-	fabs	fp0,fp1
+-	fsubs	fp12,fp13,fp13	/* generate 0.0  */
+-	fcmpu	cr7,fp0,fp13	/* if (fabs(x) > TWO23)  */
+-	mffs	fp11		/* Save current FPU rounding mode and
+-				   "inexact" state.  */
+-	fcmpu	cr6,fp1,fp12	/* if (x > 0.0)  */
+-	bnl-	cr7,.L10
+-	mtfsfi	7,2		/* Set rounding mode toward +inf.  */
+-	ble-	cr6,.L4
+-	fadds	fp1,fp1,fp13	/* x+= TWO23;  */
+-	fsubs	fp1,fp1,fp13	/* x-= TWO23;  */
+-	fabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = 0.0; */
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L4:
+-	bge-	cr6,.L9		/* if (x < 0.0)  */
+-	fsubs	fp1,fp1,fp13	/* x-= TWO23;  */
+-	fadds	fp1,fp1,fp13	/* x+= TWO23;  */
+-	fnabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = -0.0; */
+-.L9:
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L10:
+-	/* Ensure sNaN input is converted to qNaN.  */
+-	fcmpu	cr7,fp1,fp1
+-	beqlr	cr7
+-	fadds	fp1,fp1,fp1
+-	blr
+-	END (__ceilf)
+-
+-libm_alias_float (__ceil, ceil)
+-
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/Makefile b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/Makefile
+index 4e85021d50831eb6..cf38e347f2da74e9 100644
+--- a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/Makefile
++++ b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/Makefile
+@@ -26,6 +26,8 @@ libm-sysdep_routines += s_llrintf-power6 s_llrintf-ppc32 s_llrint-power6 \
+ 			s_logbf-power7 s_logbf-ppc32 e_hypot-power7 \
+ 			e_hypot-ppc32 e_hypotf-power7 e_hypotf-ppc32
+ 
++CFLAGS-s_ceil-power5+.c = -mcpu=power5+
++CFLAGS-s_ceilf-power5+.c = -mcpu=power5+
+ CFLAGS-s_modf-power5+.c = -mcpu=power5+
+ CFLAGS-s_modff-power5+.c = -mcpu=power5+
+ CFLAGS-s_logbl-power7.c = -mcpu=power7
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.S b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.S
+deleted file mode 100644
+index b8181585a869bd8a..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.S
++++ /dev/null
+@@ -1,33 +0,0 @@
+-/* ceil function.  PowerPC32/power5+ version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-
+-#undef hidden_def
+-#define hidden_def(name)
+-#undef weak_alias
+-#define weak_alias(name, alias)
+-#undef strong_alias
+-#define strong_alias(name, alias)
+-#undef compat_symbol
+-#define compat_symbol(lib, name, alias, ver)
+-
+-#define __ceil __ceil_power5plus
+-
+-#include <sysdeps/powerpc/powerpc32/power5+/fpu/s_ceil.S>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.c b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.c
+new file mode 100644
+index 0000000000000000..87bc66cdb0322c59
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-power5+.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceil __ceil_power5plus
++#include <sysdeps/powerpc/fpu/s_ceil.c>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.S b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.S
+deleted file mode 100644
+index cd2bc69b677e76db..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.S
++++ /dev/null
+@@ -1,31 +0,0 @@
+-/* ceil function.  PowerPC32 default version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-
+-#undef weak_alias
+-#define weak_alias(a,b)
+-#undef strong_alias
+-#define strong_alias(a,b)
+-#undef compat_symbol
+-#define compat_symbol(a,b,c,d)
+-
+-#define __ceil __ceil_ppc32
+-
+-#include <sysdeps/powerpc/powerpc32/fpu/s_ceil.S>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.c b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.c
+new file mode 100644
+index 0000000000000000..93c098476b915f9d
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceil-ppc32.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceil __ceil_ppc32
++#include <sysdeps/powerpc/fpu/s_ceil.c>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.S b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.S
+deleted file mode 100644
+index d01aa6e7db3d0b9d..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.S
++++ /dev/null
+@@ -1,26 +0,0 @@
+-/* ceilf function.  PowerPC32/power5+ version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-
+-#undef weak_alias
+-#define weak_alias(name, alias)
+-
+-#define __ceilf __ceilf_power5plus
+-
+-#include <sysdeps/powerpc/powerpc32/power5+/fpu/s_ceilf.S>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.c b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.c
+new file mode 100644
+index 0000000000000000..a5bfa98535c088a0
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-power5+.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceilf __ceilf_power5plus
++#include <sysdeps/powerpc/fpu/s_ceilf.c>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.S b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.S
+deleted file mode 100644
+index 264e032b3b27f9b3..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.S
++++ /dev/null
+@@ -1,27 +0,0 @@
+-/* ceilf function.  PowerPC32 default version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-
+-#undef weak_alias
+-#define weak_alias(a,b)
+-
+-#define __ceilf __ceilf_ppc32
+-
+-#include <sysdeps/powerpc/powerpc32/fpu/s_ceilf.S>
+diff --git a/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.c b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.c
+new file mode 100644
+index 0000000000000000..a4dcdcb4069289d6
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc32/power4/fpu/multiarch/s_ceilf-ppc32.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceilf __ceilf_ppc32
++#include <sysdeps/powerpc/fpu/s_ceilf.c>
+diff --git a/sysdeps/powerpc/powerpc32/power5+/fpu/s_ceil.S b/sysdeps/powerpc/powerpc32/power5+/fpu/s_ceil.S
+deleted file mode 100644
+index 356c7a79edf79940..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/power5+/fpu/s_ceil.S
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/* ceil function.  PowerPC32/power5+ version.
+-   Copyright (C) 2006-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-#include <libm-alias-double.h>
+-
+-	.machine	"power5"
+-EALIGN (__ceil, 4, 0)
+-	frip	fp1, fp1
+-	blr
+-	END (__ceil)
+-
+-libm_alias_double (__ceil, ceil)
+diff --git a/sysdeps/powerpc/powerpc32/power5+/fpu/s_ceilf.S b/sysdeps/powerpc/powerpc32/power5+/fpu/s_ceilf.S
+deleted file mode 100644
+index a0bcda17fde0c0f6..0000000000000000
+--- a/sysdeps/powerpc/powerpc32/power5+/fpu/s_ceilf.S
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/* ceilf function.  PowerPC32/power5+ version.
+-   Copyright (C) 2006-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <libm-alias-float.h>
+-
+-	.machine	"power5"
+-EALIGN (__ceilf, 4, 0)
+-	frip	fp1, fp1	/* The rounding instructions are double.  */
+-	frsp	fp1, fp1	/* But we need to set ooverflow for float.  */
+-	blr
+-	END (__ceilf)
+-
+-libm_alias_float (__ceil, ceil)
+-
+diff --git a/sysdeps/powerpc/powerpc64/be/fpu/multiarch/Makefile b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/Makefile
+new file mode 100644
+index 0000000000000000..932c3c7e6c6ad27e
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/Makefile
+@@ -0,0 +1,9 @@
++ifeq ($(subdir),math)
++libm-sysdep_routines += s_ceil-power5+ \
++			s_ceil-ppc64 \
++			s_ceilf-power5+ \
++			s_ceilf-ppc64
++
++CFLAGS-s_ceil-power5+.c = -mcpu=power5+
++CFLAGS-s_ceilf-power5+.c = -mcpu=power5+
++endif
+diff --git a/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-power5+.c b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-power5+.c
+new file mode 100644
+index 0000000000000000..87bc66cdb0322c59
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-power5+.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceil __ceil_power5plus
++#include <sysdeps/powerpc/fpu/s_ceil.c>
+diff --git a/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-ppc64.c b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-ppc64.c
+new file mode 100644
+index 0000000000000000..8711ff3229467026
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil-ppc64.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceil __ceil_ppc64
++#include <sysdeps/powerpc/fpu/s_ceil.c>
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil.c b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil.c
+similarity index 95%
+rename from sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil.c
+rename to sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil.c
+index 5cde4eb46f26ec82..1abca7ef63d6a852 100644
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil.c
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceil.c
+@@ -17,10 +17,8 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <math.h>
+-#include <math_ldbl_opt.h>
+-#include <shlib-compat.h>
+-#include "init-arch.h"
+ #include <libm-alias-double.h>
++#include "init-arch.h"
+ 
+ extern __typeof (__ceil) __ceil_ppc64 attribute_hidden;
+ extern __typeof (__ceil) __ceil_power5plus attribute_hidden;
+diff --git a/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-power5+.c b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-power5+.c
+new file mode 100644
+index 0000000000000000..a5bfa98535c088a0
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-power5+.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceilf __ceilf_power5plus
++#include <sysdeps/powerpc/fpu/s_ceilf.c>
+diff --git a/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-ppc64.c b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-ppc64.c
+new file mode 100644
+index 0000000000000000..086251dc0937acfa
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf-ppc64.c
+@@ -0,0 +1,3 @@
++#include <math.h>
++#define __ceilf __ceilf_ppc64
++#include <sysdeps/powerpc/fpu/s_ceilf.c>
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf.c b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf.c
+similarity index 95%
+rename from sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf.c
+rename to sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf.c
+index 18697e52b3ac1616..33245968a86ddcf5 100644
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf.c
++++ b/sysdeps/powerpc/powerpc64/be/fpu/multiarch/s_ceilf.c
+@@ -17,10 +17,8 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <math.h>
+-#include <math_ldbl_opt.h>
+-#include <shlib-compat.h>
+-#include "init-arch.h"
+ #include <libm-alias-float.h>
++#include "init-arch.h"
+ 
+ extern __typeof (__ceilf) __ceilf_ppc64 attribute_hidden;
+ extern __typeof (__ceilf) __ceilf_power5plus attribute_hidden;
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/Makefile b/sysdeps/powerpc/powerpc64/fpu/multiarch/Makefile
+index 73f2f693771027a9..2805e4e0d66f3175 100644
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/Makefile
++++ b/sysdeps/powerpc/powerpc64/fpu/multiarch/Makefile
+@@ -14,8 +14,7 @@ sysdep_calls := s_copysign-power6 s_copysign-ppc64 \
+ 
+ sysdep_routines += $(sysdep_calls)
+ libm-sysdep_routines += s_llround-power6x \
+-			s_llround-power5+ s_llround-ppc64 s_ceil-power5+ \
+-			s_ceil-ppc64 s_ceilf-power5+ s_ceilf-ppc64 \
++			s_llround-power5+ s_llround-ppc64 \
+ 			s_floor-power5+ s_floor-ppc64 s_floorf-power5+ \
+ 			s_floorf-ppc64 s_round-power5+ s_round-ppc64 \
+ 			s_roundf-power5+ s_roundf-ppc64 s_trunc-power5+ \
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-power5+.S b/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-power5+.S
+deleted file mode 100644
+index 76651b694c251bb4..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-power5+.S
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/* ceil function.  PowerPC64/power5+ version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <shlib-compat.h>
+-
+-#undef weak_alias
+-#define weak_alias(a,b)
+-#undef strong_alias
+-#define strong_alias(a,b)
+-#undef compat_symbol
+-#define compat_symbol(a,b,c,d)
+-
+-#define __ceil __ceil_power5plus
+-
+-#include <sysdeps/powerpc/powerpc64/power5+/fpu/s_ceil.S>
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-ppc64.S b/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-ppc64.S
+deleted file mode 100644
+index c75c66ba3bbf49c8..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceil-ppc64.S
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/* ceil function.  PowerPC64 default version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <shlib-compat.h>
+-
+-#undef weak_alias
+-#define weak_alias(a,b)
+-#undef strong_alias
+-#define strong_alias(a,b)
+-#undef compat_symbol
+-#define compat_symbol(a,b,c,d)
+-
+-#define __ceil __ceil_ppc64
+-
+-#include <sysdeps/powerpc/powerpc64/fpu/s_ceil.S>
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-power5+.S b/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-power5+.S
+deleted file mode 100644
+index b9c9e14fba6ee134..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-power5+.S
++++ /dev/null
+@@ -1,24 +0,0 @@
+-/* ceilf function.  PowerPC64/power5+ version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#undef weak_alias
+-#define weak_alias(a,b)
+-
+-#define __ceilf __ceilf_power5plus
+-
+-#include <sysdeps/powerpc/powerpc64/power5+/fpu/s_ceilf.S>
+diff --git a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-ppc64.S b/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-ppc64.S
+deleted file mode 100644
+index ce5cc49770fdfdee..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/fpu/multiarch/s_ceilf-ppc64.S
++++ /dev/null
+@@ -1,24 +0,0 @@
+-/* ceilf function.  PowerPC64 default version.
+-   Copyright (C) 2013-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#undef weak_alias
+-#define weak_alias(a,b)
+-
+-#define __ceilf __ceilf_ppc64
+-
+-#include <sysdeps/powerpc/powerpc64/fpu/s_ceilf.S>
+diff --git a/sysdeps/powerpc/powerpc64/fpu/s_ceil.S b/sysdeps/powerpc/powerpc64/fpu/s_ceil.S
+deleted file mode 100644
+index 252d94f51ea1a167..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/fpu/s_ceil.S
++++ /dev/null
+@@ -1,65 +0,0 @@
+-/* ceil function.  PowerPC64 version.
+-   Copyright (C) 2004-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-#include <libm-alias-double.h>
+-
+-	.section	".toc","aw"
+-.LC0:	/* 2**52 */
+-	.tc FD_43300000_0[TC],0x4330000000000000
+-	.section	".text"
+-
+-ENTRY (__ceil, 4)
+-	CALL_MCOUNT 0
+-	lfd	fp13,.LC0@toc(2)
+-	fabs	fp0,fp1
+-	fsub	fp12,fp13,fp13	/* generate 0.0  */
+-	fcmpu	cr7,fp0,fp13	/* if (fabs(x) > TWO52)  */
+-	mffs	fp11		/* Save current FPU rounding mode and
+-				   "inexact" state.  */
+-	fcmpu	cr6,fp1,fp12	/* if (x > 0.0)  */
+-	bnl-	cr7,.L10
+-	mtfsfi	7,2		/* Set rounding mode toward +inf.  */
+-	ble-	cr6,.L4
+-	fadd	fp1,fp1,fp13	/* x+= TWO52;  */
+-	fsub	fp1,fp1,fp13	/* x-= TWO52;  */
+-	fabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = 0.0; */
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L4:
+-	bge-	cr6,.L9		/* if (x < 0.0)  */
+-	fsub	fp1,fp1,fp13	/* x-= TWO52;  */
+-	fadd	fp1,fp1,fp13	/* x+= TWO52;  */
+-	fnabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = -0.0; */
+-.L9:
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L10:
+-	/* Ensure sNaN input is converted to qNaN.  */
+-	fcmpu	cr7,fp1,fp1
+-	beqlr	cr7
+-	fadd	fp1,fp1,fp1
+-	blr
+-	END (__ceil)
+-
+-libm_alias_double (__ceil, ceil)
+diff --git a/sysdeps/powerpc/powerpc64/fpu/s_ceilf.S b/sysdeps/powerpc/powerpc64/fpu/s_ceilf.S
+deleted file mode 100644
+index 3c62077c143eeced..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/fpu/s_ceilf.S
++++ /dev/null
+@@ -1,67 +0,0 @@
+-/* float ceil function.  PowerPC64 version.
+-   Copyright (C) 2004-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <libm-alias-float.h>
+-
+-	.section	".toc","aw"
+-	.p2align 3
+-.LC0:	/* 2**23 */
+-	.long 0x4b000000
+-	.long 0x0
+-	.section	".text"
+-
+-ENTRY (__ceilf, 4)
+-	CALL_MCOUNT 0
+-	lfs	fp13,.LC0@toc(2)
+-	fabs	fp0,fp1
+-	fsubs	fp12,fp13,fp13	/* generate 0.0  */
+-	fcmpu	cr7,fp0,fp13	/* if (fabs(x) > TWO23)  */
+-	mffs	fp11		/* Save current FPU rounding mode and
+-				   "inexact" state.  */
+-	fcmpu	cr6,fp1,fp12	/* if (x > 0.0)  */
+-	bnl-	cr7,.L10
+-	mtfsfi	7,2		/* Set rounding mode toward +inf.  */
+-	ble-	cr6,.L4
+-	fadds	fp1,fp1,fp13	/* x+= TWO23;  */
+-	fsubs	fp1,fp1,fp13	/* x-= TWO23;  */
+-	fabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = 0.0; */
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L4:
+-	bge-	cr6,.L9		/* if (x < 0.0)  */
+-	fsubs	fp1,fp1,fp13	/* x-= TWO23;  */
+-	fadds	fp1,fp1,fp13	/* x+= TWO23;  */
+-	fnabs	fp1,fp1		/* if (x == 0.0)  */
+-				/* x = -0.0; */
+-.L9:
+-	mtfsf	0xff,fp11	/* Restore previous rounding mode and
+-				   "inexact" state.  */
+-	blr
+-.L10:
+-	/* Ensure sNaN input is converted to qNaN.  */
+-	fcmpu	cr7,fp1,fp1
+-	beqlr	cr7
+-	fadds	fp1,fp1,fp1
+-	blr
+-	END (__ceilf)
+-
+-libm_alias_float (__ceil, ceil)
+-
+diff --git a/sysdeps/powerpc/powerpc64/power5+/fpu/s_ceil.S b/sysdeps/powerpc/powerpc64/power5+/fpu/s_ceil.S
+deleted file mode 100644
+index e500932573c07503..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/power5+/fpu/s_ceil.S
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/* ceil function.  PowerPC64/power5+ version.
+-   Copyright (C) 2006-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <math_ldbl_opt.h>
+-#include <libm-alias-double.h>
+-
+-	.machine	"power5"
+-ENTRY_TOCLESS (__ceil, 4)
+-	CALL_MCOUNT 0
+-	frip	fp1, fp1
+-	blr
+-	END (__ceil)
+-
+-libm_alias_double (__ceil, ceil)
+diff --git a/sysdeps/powerpc/powerpc64/power5+/fpu/s_ceilf.S b/sysdeps/powerpc/powerpc64/power5+/fpu/s_ceilf.S
+deleted file mode 100644
+index d0b2118c2a3f81be..0000000000000000
+--- a/sysdeps/powerpc/powerpc64/power5+/fpu/s_ceilf.S
++++ /dev/null
+@@ -1,31 +0,0 @@
+-/* ceilf function.  PowerPC64/power5+ version.
+-   Copyright (C) 2006-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <libm-alias-float.h>
+-
+-	.machine	"power5"
+-ENTRY_TOCLESS (__ceilf, 4)
+-	CALL_MCOUNT 0
+-	frip	fp1, fp1	/* The rounding instructions are double.  */
+-	frsp	fp1, fp1	/* But we need to set ooverflow for float.  */
+-	blr
+-	END (__ceilf)
+-
+-libm_alias_float (__ceil, ceil)
+-

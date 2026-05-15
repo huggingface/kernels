@@ -1,0 +1,56 @@
+commit 7b9c3260bcca73781dda6bc2ddee84869bedfb8c
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Dec 14 11:42:33 2020 -0300
+
+    support: Add xchmod wrapper
+    
+    Checked on x86_64-linux-gnu.
+
+diff --git a/support/xchmod.c b/support/xchmod.c
+new file mode 100644
+index 0000000000000000..5e403c7cc2705aef
+--- /dev/null
++++ b/support/xchmod.c
+@@ -0,0 +1,30 @@
++/* chmod with error checking.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/xunistd.h>
++#include <support/check.h>
++
++#include <sys/stat.h>
++
++void
++xchmod (const char *pathname, mode_t mode)
++{
++  int r = chmod (pathname, mode);
++  if (r < 0)
++    FAIL_EXIT1 ("chmod (%s, %d): %m", pathname, mode);
++}
+diff --git a/support/xunistd.h b/support/xunistd.h
+index ced8cb1dd9ee356c..e92056c65efe8d6a 100644
+--- a/support/xunistd.h
++++ b/support/xunistd.h
+@@ -46,6 +46,7 @@ void xftruncate (int fd, long long length);
+ void xsymlink (const char *target, const char *linkpath);
+ void xchdir (const char *path);
+ void xfchmod (int fd, mode_t mode);
++void xchmod (const char *pathname, mode_t mode);
+ 
+ /* Equivalent of "mkdir -p".  */
+ void xmkdirp (const char *, mode_t);

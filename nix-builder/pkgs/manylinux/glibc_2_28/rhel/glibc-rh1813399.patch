@@ -1,0 +1,59 @@
+commit d93769405996dfc11d216ddbe415946617b5a494
+Author: Andreas Schwab <schwab@suse.de>
+Date:   Mon Jan 20 17:01:50 2020 +0100
+
+    Fix array overflow in backtrace on PowerPC (bug 25423)
+    
+    When unwinding through a signal frame the backtrace function on PowerPC
+    didn't check array bounds when storing the frame address.  Fixes commit
+    d400dcac5e ("PowerPC: fix backtrace to handle signal trampolines").
+
+diff --git a/debug/tst-backtrace5.c b/debug/tst-backtrace5.c
+index e7ce410845..b2f46160e7 100644
+--- a/debug/tst-backtrace5.c
++++ b/debug/tst-backtrace5.c
+@@ -89,6 +89,18 @@ handle_signal (int signum)
+       }
+   /* Symbol names are not available for static functions, so we do not
+      check do_test.  */
++
++  /* Check that backtrace does not return more than what fits in the array
++     (bug 25423).  */
++  for (int j = 0; j < NUM_FUNCTIONS; j++)
++    {
++      n = backtrace (addresses, j);
++      if (n > j)
++	{
++	  FAIL ();
++	  return;
++	}
++    }
+ }
+ 
+ NO_INLINE int
+diff --git a/sysdeps/powerpc/powerpc32/backtrace.c b/sysdeps/powerpc/powerpc32/backtrace.c
+index 7c2d4726f8..d1456c8ae4 100644
+--- a/sysdeps/powerpc/powerpc32/backtrace.c
++++ b/sysdeps/powerpc/powerpc32/backtrace.c
+@@ -114,6 +114,8 @@ __backtrace (void **array, int size)
+         }
+       if (gregset)
+ 	{
++	  if (count + 1 == size)
++	    break;
+ 	  array[++count] = (void*)((*gregset)[PT_NIP]);
+ 	  current = (void*)((*gregset)[PT_R1]);
+ 	}
+diff --git a/sysdeps/powerpc/powerpc64/backtrace.c b/sysdeps/powerpc/powerpc64/backtrace.c
+index 65c260ab76..8a53a1088f 100644
+--- a/sysdeps/powerpc/powerpc64/backtrace.c
++++ b/sysdeps/powerpc/powerpc64/backtrace.c
+@@ -87,6 +87,8 @@ __backtrace (void **array, int size)
+       if (is_sigtramp_address (current->return_address))
+         {
+ 	  struct signal_frame_64 *sigframe = (struct signal_frame_64*) current;
++	  if (count + 1 == size)
++	    break;
+           array[++count] = (void*) sigframe->uc.uc_mcontext.gp_regs[PT_NIP];
+ 	  current = (void*) sigframe->uc.uc_mcontext.gp_regs[PT_R1];
+ 	}

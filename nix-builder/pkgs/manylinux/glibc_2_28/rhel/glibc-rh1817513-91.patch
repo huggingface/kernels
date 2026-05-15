@@ -1,0 +1,161 @@
+commit 9590a71adcf134c77f2d0f5711b0d6ab1b4193e6
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 8 10:57:10 2020 +0200
+
+    elf: Move ld.so error/help output to _dl_usage
+    
+    Also add a comment to elf/Makefile, explaining why we cannot use
+    config.status for autoconf template processing.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index e2078f6bc325b7e0..e5666e5bf7817c3c 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -59,7 +59,7 @@ elide-routines.os = $(all-dl-routines) dl-support enbl-secure dl-origin \
+ # ld.so uses those routines, plus some special stuff for being the program
+ # interpreter and operating independent of libc.
+ rtld-routines	= rtld $(all-dl-routines) dl-sysdep dl-environ dl-minimal \
+-  dl-error-minimal dl-conflict dl-hwcaps
++  dl-error-minimal dl-conflict dl-hwcaps dl-usage
+ all-rtld-routines = $(rtld-routines) $(sysdep-rtld-routines)
+ 
+ CFLAGS-dl-runtime.c += -fexceptions -fasynchronous-unwind-tables
+@@ -598,6 +598,12 @@ ldso_install: $(inst_rtlddir)/$(rtld-installed-name)
+ endif
+ 
+ 
++# Workarounds for ${exec_prefix} expansion in configure variables.
++# config.status cannot be used directly for processing ldd.bash.in or
++# expanding variables such as sysconfdir because the expansion
++# contains the literal string ${exec_prefix}, which is not valid in C
++# headers or installed shell scripts.
++
+ ldd-rewrite = -e 's%@RTLD@%$(rtlddir)/$(rtld-installed-name)%g' \
+ 	      -e 's%@VERSION@%$(version)%g' \
+ 	      -e 's|@PKGVERSION@|$(PKGVERSION)|g' \
+@@ -635,6 +641,7 @@ libof-ldconfig = ldconfig
+ CFLAGS-dl-cache.c += $(SYSCONF-FLAGS)
+ CFLAGS-cache.c += $(SYSCONF-FLAGS)
+ CFLAGS-rtld.c += $(SYSCONF-FLAGS)
++CFLAGS-dl-usage.c += $(SYSCONF-FLAGS)
+ 
+ cpp-srcs-left := $(all-rtld-routines:=.os)
+ lib := rtld
+diff --git a/elf/dl-main.h b/elf/dl-main.h
+index bcc9bcf2e8fee6e7..b01f433f9c8d9e1a 100644
+--- a/elf/dl-main.h
++++ b/elf/dl-main.h
+@@ -19,7 +19,9 @@
+ #ifndef _DL_MAIN
+ #define _DL_MAIN
+ 
++#include <ldsodefs.h>
+ #include <limits.h>
++#include <stdlib.h>
+ 
+ /* Length limits for names and paths, to protect the dynamic linker,
+    particularly when __libc_enable_secure is active.  */
+@@ -95,4 +97,7 @@ call_init_paths (const struct dl_main_state *state)
+   _dl_init_paths (state->library_path);
+ }
+ 
++/* Print ld.so usage information and exit.  */
++_Noreturn void _dl_usage (void) attribute_hidden;
++
+ #endif /* _DL_MAIN */
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+new file mode 100644
+index 0000000000000000..f3d89d22b71d7d12
+--- /dev/null
++++ b/elf/dl-usage.c
+@@ -0,0 +1,51 @@
++/* Print usage information and help for ld.so.
++   Copyright (C) 1995-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-cache.h>
++#include <dl-main.h>
++#include <ldsodefs.h>
++
++void
++_dl_usage (void)
++{
++  _dl_fatal_printf ("\
++Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]\n\
++You have invoked `ld.so', the helper program for shared library executables.\n\
++This program usually lives in the file `/lib/ld.so', and special directives\n\
++in executable files using ELF shared libraries tell the system's program\n\
++loader to load the helper program from this file.  This helper program loads\n\
++the shared libraries needed by the program executable, prepares the program\n\
++to run, and runs it.  You may invoke this helper program directly from the\n\
++command line to load and run an ELF executable file; this is like executing\n\
++that file itself, but always uses this helper program from the file you\n\
++specified, instead of the helper program file specified in the executable\n\
++file you run.  This is mostly of use for maintainers to test new versions\n\
++of this helper program; chances are you did not intend to run this program.\n\
++\n\
++  --list                list all dependencies and how they are resolved\n\
++  --verify              verify that given object really is a dynamically linked\n\
++                        object we can handle\n\
++  --inhibit-cache       Do not use " LD_SO_CACHE "\n\
++  --library-path PATH   use given PATH instead of content of the environment\n\
++                        variable LD_LIBRARY_PATH\n\
++  --inhibit-rpath LIST  ignore RUNPATH and RPATH information in object names\n\
++                        in LIST\n\
++  --audit LIST          use objects named in LIST as auditors\n\
++  --preload LIST        preload objects named in LIST\n\
++  --argv0 STRING        set argv[0] to STRING before running\n");
++}
+diff --git a/elf/rtld.c b/elf/rtld.c
+index fbfa441bf3b050ff..a12a56b550bbc837 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1240,31 +1240,7 @@ dl_main (const ElfW(Phdr) *phdr,
+       /* If we have no further argument the program was called incorrectly.
+ 	 Grant the user some education.  */
+       if (_dl_argc < 2)
+-	_dl_fatal_printf ("\
+-Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]\n\
+-You have invoked `ld.so', the helper program for shared library executables.\n\
+-This program usually lives in the file `/lib/ld.so', and special directives\n\
+-in executable files using ELF shared libraries tell the system's program\n\
+-loader to load the helper program from this file.  This helper program loads\n\
+-the shared libraries needed by the program executable, prepares the program\n\
+-to run, and runs it.  You may invoke this helper program directly from the\n\
+-command line to load and run an ELF executable file; this is like executing\n\
+-that file itself, but always uses this helper program from the file you\n\
+-specified, instead of the helper program file specified in the executable\n\
+-file you run.  This is mostly of use for maintainers to test new versions\n\
+-of this helper program; chances are you did not intend to run this program.\n\
+-\n\
+-  --list                list all dependencies and how they are resolved\n\
+-  --verify              verify that given object really is a dynamically linked\n\
+-			object we can handle\n\
+-  --inhibit-cache       Do not use " LD_SO_CACHE "\n\
+-  --library-path PATH   use given PATH instead of content of the environment\n\
+-			variable LD_LIBRARY_PATH\n\
+-  --inhibit-rpath LIST  ignore RUNPATH and RPATH information in object names\n\
+-			in LIST\n\
+-  --audit LIST          use objects named in LIST as auditors\n\
+-  --preload LIST        preload objects named in LIST\n\
+-  --argv0 STRING        set argv[0] to STRING before running\n");
++	_dl_usage ();
+ 
+       ++_dl_skip_args;
+       --_dl_argc;

@@ -1,0 +1,501 @@
+commit 018f0fc3b818d4d1460a4e2384c24802504b1d20
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Jul 1 17:42:04 2024 +0200
+
+    elf: Support recursive use of dynamic TLS in interposed malloc
+    
+    It turns out that quite a few applications use bundled mallocs that
+    have been built to use global-dynamic TLS (instead of the recommended
+    initial-exec TLS).  The previous workaround from
+    commit afe42e935b3ee97bac9a7064157587777259c60e ("elf: Avoid some
+    free (NULL) calls in _dl_update_slotinfo") does not fix all
+    encountered cases unfortunatelly.
+    
+    This change avoids the TLS generation update for recursive use
+    of TLS from a malloc that was called during a TLS update.  This
+    is possible because an interposed malloc has a fixed module ID and
+    TLS slot.  (It cannot be unloaded.)  If an initially-loaded module ID
+    is encountered in __tls_get_addr and the dynamic linker is already
+    in the middle of a TLS update, use the outdated DTV, thus avoiding
+    another call into malloc.  It's still necessary to update the
+    DTV to the most recent generation, to get out of the slow path,
+    which is why the check for recursion is needed.
+    
+    The bookkeeping is done using a global counter instead of per-thread
+    flag because TLS access in the dynamic linker is tricky.
+    
+    All this will go away once the dynamic linker stops using malloc
+    for TLS, likely as part of a change that pre-allocates all TLS
+    during pthread_create/dlopen.
+    
+    Fixes commit d2123d68275acc0f061e73d5f86ca504e0d5a344 ("elf: Fix slow
+    tls access after dlopen [BZ #19924]").
+    
+    Reviewed-by: Szabolcs Nagy <szabolcs.nagy@arm.com>
+    
+    Conflicts:
+	elf/Makefile - tests and module-names differences
+	elf/Makefile - add $(libdl) for tst-recursive-tlsmallocmod
+
+diff -Nrup a/elf/Makefile b/elf/Makefile
+--- a/elf/Makefile	2024-07-28 20:45:16.055243849 -0400
++++ b/elf/Makefile	2024-07-28 20:44:23.446952825 -0400
+@@ -391,6 +391,7 @@ tests += \
+   tst-nodeps2 \
+   tst-noload \
+   tst-null-argv \
++  tst-recursive-tls \
+   tst-relsort1 \
+   tst-rtld-run-static \
+   tst-sonamemove-dlopen \
+@@ -749,6 +750,23 @@ modules-names = \
+   tst-nodeps1-mod \
+   tst-nodeps2-mod \
+   tst-null-argv-lib \
++  tst-recursive-tlsmallocmod \
++  tst-recursive-tlsmod0 \
++  tst-recursive-tlsmod1 \
++  tst-recursive-tlsmod2 \
++  tst-recursive-tlsmod3 \
++  tst-recursive-tlsmod4 \
++  tst-recursive-tlsmod5 \
++  tst-recursive-tlsmod6 \
++  tst-recursive-tlsmod7 \
++  tst-recursive-tlsmod8 \
++  tst-recursive-tlsmod9 \
++  tst-recursive-tlsmod10 \
++  tst-recursive-tlsmod11 \
++  tst-recursive-tlsmod12 \
++  tst-recursive-tlsmod13 \
++  tst-recursive-tlsmod14 \
++  tst-recursive-tlsmod15 \
+   tst-relsort1mod1 \
+   tst-relsort1mod2 \
+   tst-sonamemove-linkmod1 \
+@@ -2358,6 +2376,9 @@ LDLIBS-tst-absolute-zero-lib.so = tst-ab
+ $(objpfx)tst-absolute-zero-lib.so: $(LDLIBS-tst-absolute-zero-lib.so)
+ $(objpfx)tst-absolute-zero: $(objpfx)tst-absolute-zero-lib.so
+ 
++$(objpfx)tst-recursive-tlsmallocmod: $(libdl)
++$(objpfx)tst-recursive-tlsmallocmod.so: $(libdl)
++
+ # Both the main program and the DSO for tst-libc_dlvsym need to link
+ # against libdl.
+ $(objpfx)tst-libc_dlvsym: $(libdl)
+@@ -2746,3 +2767,11 @@ CFLAGS-tst-tlsgap-mod0.c += -mtls-dialec
+ CFLAGS-tst-tlsgap-mod1.c += -mtls-dialect=gnu2
+ CFLAGS-tst-tlsgap-mod2.c += -mtls-dialect=gnu2
+ endif
++
++$(objpfx)tst-recursive-tls: $(objpfx)tst-recursive-tlsmallocmod.so $(libdl)
++# More objects than DTV_SURPLUS, to trigger DTV reallocation.
++$(objpfx)tst-recursive-tls.out: \
++  $(patsubst %,$(objpfx)tst-recursive-tlsmod%.so, \
++    0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15)
++$(objpfx)tst-recursive-tlsmod%.os: tst-recursive-tlsmodN.c
++	$(compile-command.c) -DVAR=thread_$* -DFUNC=get_threadvar_$*
+diff -Nrup a/elf/dl-tls.c b/elf/dl-tls.c
+--- a/elf/dl-tls.c	2024-07-28 20:45:16.086244021 -0400
++++ b/elf/dl-tls.c	2024-07-28 20:44:23.443952808 -0400
+@@ -71,6 +71,31 @@
+ /* Default for dl_tls_static_optional.  */
+ #define OPTIONAL_TLS 512
+ 
++/* Used to count the number of threads currently executing dynamic TLS
++   updates.  Used to avoid recursive malloc calls in __tls_get_addr
++   for an interposed malloc that uses global-dynamic TLS (which is not
++   recommended); see _dl_tls_allocate_active checks.  This could be a
++   per-thread flag, but would need TLS access in the dynamic linker.  */
++unsigned int _dl_tls_threads_in_update;
++
++static inline void
++_dl_tls_allocate_begin (void)
++{
++  atomic_fetch_add_relaxed (&_dl_tls_threads_in_update, 1);
++}
++
++static inline void
++_dl_tls_allocate_end (void)
++{
++  atomic_fetch_add_relaxed (&_dl_tls_threads_in_update, -1);
++}
++
++static inline bool
++_dl_tls_allocate_active (void)
++{
++  return atomic_load_relaxed (&_dl_tls_threads_in_update) > 0;
++}
++
+ /* Compute the static TLS surplus based on the namespace count and the
+    TLS space that can be used for optimizations.  */
+ static inline int
+@@ -426,12 +451,18 @@ _dl_allocate_tls_storage (void)
+   size += TLS_PRE_TCB_SIZE;
+ #endif
+ 
+-  /* Perform the allocation.  Reserve space for the required alignment
+-     and the pointer to the original allocation.  */
++  /* Reserve space for the required alignment and the pointer to the
++     original allocation.  */  
+   size_t alignment = GL(dl_tls_static_align);
++  
++  /* Perform the allocation.  */
++  _dl_tls_allocate_begin ();
+   void *allocated = malloc (size + alignment + sizeof (void *));
+   if (__glibc_unlikely (allocated == NULL))
+-    return NULL;
++    {
++      _dl_tls_allocate_end ();
++      return NULL;
++    }
+ 
+   /* Perform alignment and allocate the DTV.  */
+ #if TLS_TCB_AT_TP
+@@ -467,6 +498,8 @@ _dl_allocate_tls_storage (void)
+   result = allocate_dtv (result);
+   if (result == NULL)
+     free (allocated);
++
++  _dl_tls_allocate_end ();
+   return result;
+ }
+ 
+@@ -484,6 +517,7 @@ _dl_resize_dtv (dtv_t *dtv, size_t max_m
+   size_t newsize = max_modid + DTV_SURPLUS;
+   size_t oldsize = dtv[-1].counter;
+ 
++  _dl_tls_allocate_begin ();
+   if (dtv == GL(dl_initial_dtv))
+     {
+       /* This is the initial dtv that was either statically allocated in
+@@ -503,6 +537,7 @@ _dl_resize_dtv (dtv_t *dtv, size_t max_m
+       if (newp == NULL)
+ 	oom ();
+     }
++  _dl_tls_allocate_end ();
+ 
+   newp[0].counter = newsize;
+ 
+@@ -677,7 +712,9 @@ allocate_dtv_entry (size_t alignment, si
+   if (powerof2 (alignment) && alignment <= _Alignof (max_align_t))
+     {
+       /* The alignment is supported by malloc.  */
++      _dl_tls_allocate_begin ();
+       void *ptr = malloc (size);
++      _dl_tls_allocate_end ();
+       return (struct dtv_pointer) { ptr, ptr };
+     }
+ 
+@@ -689,7 +726,10 @@ allocate_dtv_entry (size_t alignment, si
+ 
+   /* Perform the allocation.  This is the pointer we need to free
+      later.  */
++  _dl_tls_allocate_begin ();
+   void *start = malloc (alloc_size);
++  _dl_tls_allocate_end ();
++
+   if (start == NULL)
+     return (struct dtv_pointer) {};
+ 
+@@ -827,7 +867,11 @@ _dl_update_slotinfo (unsigned long int r
+ 		 free implementation.  Checking here papers over at
+ 		 least some dynamic TLS usage by interposed mallocs.  */
+ 	      if (dtv[modid].pointer.to_free != NULL)
+-		free (dtv[modid].pointer.to_free);
++		{
++		  _dl_tls_allocate_begin ();
++		  free (dtv[modid].pointer.to_free);
++		  _dl_tls_allocate_end ();
++		}
+ 	      dtv[modid].pointer.val = TLS_DTV_UNALLOCATED;
+ 	      dtv[modid].pointer.to_free = NULL;
+ 
+@@ -957,10 +1001,22 @@ __tls_get_addr (GET_ADDR_ARGS)
+   size_t gen = atomic_load_relaxed (&GL(dl_tls_generation));
+   if (__glibc_unlikely (dtv[0].counter != gen))
+     {
+-      /* Update DTV up to the global generation, see CONCURRENCY NOTES
+-         in _dl_update_slotinfo.  */
+-      gen = atomic_load_acquire (&GL(dl_tls_generation));
+-      return update_get_addr (GET_ADDR_PARAM, gen);
++      if (_dl_tls_allocate_active ()
++	  && GET_ADDR_MODULE < _dl_tls_initial_modid_limit)
++	  /* This is a reentrant __tls_get_addr call, but we can
++	     satisfy it because it's an initially-loaded module ID.
++	     These TLS slotinfo slots do not change, so the
++	     out-of-date generation counter does not matter.  However,
++	     if not in a TLS update, still update_get_addr below, to
++	     get off the slow path eventually.  */
++	;
++      else
++	{
++	  /* Update DTV up to the global generation, see CONCURRENCY NOTES
++	     in _dl_update_slotinfo.  */
++	  gen = atomic_load_acquire (&GL(dl_tls_generation));
++	  return update_get_addr (GET_ADDR_PARAM, gen);
++	}
+     }
+ 
+   void *p = dtv[GET_ADDR_MODULE].pointer.val;
+@@ -970,7 +1026,7 @@ __tls_get_addr (GET_ADDR_ARGS)
+ 
+   return (char *) p + GET_ADDR_OFFSET;
+ }
+-#endif
++#endif /* SHARED */
+ 
+ 
+ /* Look up the module's TLS block as for __tls_get_addr,
+@@ -1019,6 +1075,25 @@ _dl_tls_get_addr_soft (struct link_map *
+   return data;
+ }
+ 
++size_t _dl_tls_initial_modid_limit;
++
++void
++_dl_tls_initial_modid_limit_setup (void)
++{
++  struct dtv_slotinfo_list *listp = GL(dl_tls_dtv_slotinfo_list);
++  size_t idx;
++  for (idx = 0; idx < listp->len; ++idx)
++    {
++      struct link_map *l = listp->slotinfo[idx].map;
++      if (l == NULL
++	  /* The object can be unloaded, so its modid can be
++	     reassociated.  */
++	  || !(l->l_type == lt_executable || l->l_type == lt_library))
++	break;
++    }
++  _dl_tls_initial_modid_limit = idx;
++}
++
+ 
+ void
+ _dl_add_to_slotinfo (struct link_map *l, bool do_add)
+@@ -1051,9 +1126,11 @@ _dl_add_to_slotinfo (struct link_map *l,
+ 	 the first slot.  */
+       assert (idx == 0);
+ 
++      _dl_tls_allocate_begin ();
+       listp = (struct dtv_slotinfo_list *)
+ 	malloc (sizeof (struct dtv_slotinfo_list)
+ 		+ TLS_SLOTINFO_SURPLUS * sizeof (struct dtv_slotinfo));
++      _dl_tls_allocate_end ();
+       if (listp == NULL)
+ 	{
+ 	  /* We ran out of memory while resizing the dtv slotinfo list.  */
+diff -Nrup a/elf/rtld.c b/elf/rtld.c
+--- a/elf/rtld.c	2024-07-28 20:45:15.726242029 -0400
++++ b/elf/rtld.c	2024-07-28 20:44:23.443952808 -0400
+@@ -797,6 +797,8 @@ init_tls (size_t naudit)
+     _dl_fatal_printf ("\
+ cannot allocate TLS data structures for initial thread\n");
+ 
++  _dl_tls_initial_modid_limit_setup ();
++
+   /* Store for detection of the special case by __tls_get_addr
+      so it knows not to pass this dtv to the normal realloc.  */
+   GL(dl_initial_dtv) = GET_DTV (tcbp);
+diff -Nrup a/elf/tst-recursive-tls.c b/elf/tst-recursive-tls.c
+--- a/elf/tst-recursive-tls.c	1969-12-31 19:00:00.000000000 -0500
++++ b/elf/tst-recursive-tls.c	2024-07-28 20:44:23.443952808 -0400
+@@ -0,0 +1,60 @@
++/* Test with interposed malloc with dynamic TLS.
++   Copyright (C) 2024 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <stdio.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++/* Defined in tst-recursive-tlsmallocmod.so.  */
++extern __thread unsigned int malloc_subsytem_counter;
++
++static int
++do_test (void)
++{
++  /* 16 is large enough to exercise the DTV resizing case.  */
++  void *handles[16];
++
++  for (unsigned int i = 0; i < array_length (handles); ++i)
++    {
++      /* Re-use the TLS slot for module 0.  */
++      if (i > 0)
++        xdlclose (handles[0]);
++
++      char soname[30];
++      snprintf (soname, sizeof (soname), "tst-recursive-tlsmod%u.so", i);
++      handles[i] = xdlopen (soname, RTLD_NOW);
++
++      if (i > 0)
++        {
++          handles[0] = xdlopen ("tst-recursive-tlsmod0.so", RTLD_NOW);
++          int (*fptr) (void) = xdlsym (handles[0], "get_threadvar_0");
++          /* May trigger TLS storage allocation using malloc.  */
++          TEST_COMPARE (fptr (), 0);
++        }
++    }
++
++  for (unsigned int i = 0; i < array_length (handles); ++i)
++    xdlclose (handles[i]);
++
++  printf ("info: malloc subsystem calls: %u\n", malloc_subsytem_counter);
++  TEST_VERIFY (malloc_subsytem_counter > 0);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff -Nrup a/elf/tst-recursive-tlsmallocmod.c b/elf/tst-recursive-tlsmallocmod.c
+--- a/elf/tst-recursive-tlsmallocmod.c	1969-12-31 19:00:00.000000000 -0500
++++ b/elf/tst-recursive-tlsmallocmod.c	2024-07-28 20:44:23.443952808 -0400
+@@ -0,0 +1,64 @@
++/* Interposed malloc with dynamic TLS.
++   Copyright (C) 2024 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++#include <dlfcn.h>
++
++__thread unsigned int malloc_subsytem_counter;
++
++static __typeof (malloc) *malloc_fptr;
++static __typeof (free) *free_fptr;
++static __typeof (calloc) *calloc_fptr;
++static __typeof (realloc) *realloc_fptr;
++
++static void __attribute__ ((constructor))
++init (void)
++{
++  malloc_fptr = dlsym (RTLD_NEXT, "malloc");
++  free_fptr = dlsym (RTLD_NEXT, "free");
++  calloc_fptr = dlsym (RTLD_NEXT, "calloc");
++  realloc_fptr = dlsym (RTLD_NEXT, "realloc");
++}
++
++void *
++malloc (size_t size)
++{
++  ++malloc_subsytem_counter;
++  return malloc_fptr (size);
++}
++
++void
++free (void *ptr)
++{
++  ++malloc_subsytem_counter;
++  return free_fptr (ptr);
++}
++
++void *
++calloc (size_t a, size_t b)
++{
++  ++malloc_subsytem_counter;
++  return calloc_fptr (a, b);
++}
++
++void *
++realloc (void *ptr, size_t size)
++{
++  ++malloc_subsytem_counter;
++  return realloc_fptr (ptr, size);
++}
+diff -Nrup a/elf/tst-recursive-tlsmodN.c b/elf/tst-recursive-tlsmodN.c
+--- a/elf/tst-recursive-tlsmodN.c	1969-12-31 19:00:00.000000000 -0500
++++ b/elf/tst-recursive-tlsmodN.c	2024-07-28 20:44:23.443952808 -0400
+@@ -0,0 +1,28 @@
++/* Test module with global-dynamic TLS.  Used to trigger DTV reallocation.
++   Copyright (C) 2024 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* Compiled with VAR and FUNC set via -D.  FUNC requires some
++   relocation against TLS variable VAR.  */
++
++__thread int VAR;
++
++int
++FUNC (void)
++{
++  return VAR;
++}
+diff -Nrup a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+--- a/sysdeps/generic/ldsodefs.h	2024-07-28 20:45:15.698241875 -0400
++++ b/sysdeps/generic/ldsodefs.h	2024-07-28 20:44:23.444952814 -0400
+@@ -1235,6 +1235,20 @@ extern struct link_map *_dl_update_sloti
+ 					     size_t gen)
+      attribute_hidden;
+ 
++/* The last TLS module ID that is initially loaded, plus 1.  TLS
++   addresses for modules with IDs lower than that can be obtained from
++   the DTV even if its generation is outdated.  */
++extern size_t _dl_tls_initial_modid_limit attribute_hidden attribute_relro;
++
++/* Compute _dl_tls_initial_modid_limit.  To be called after initial
++   relocation.  */
++void _dl_tls_initial_modid_limit_setup (void) attribute_hidden;
++
++/* Number of threads currently in a TLS update.  This is used to
++   detect reentrant __tls_get_addr calls without a per-thread
++   flag.  */
++extern unsigned int _dl_tls_threads_in_update attribute_hidden;
++
+ /* Look up the module's TLS block as for __tls_get_addr,
+    but never touch anything.  Return null if it's not allocated yet.  */
+ extern void *_dl_tls_get_addr_soft (struct link_map *l) attribute_hidden;
+diff -Nrup a/sysdeps/x86_64/dl-tls.c b/sysdeps/x86_64/dl-tls.c
+--- a/sysdeps/x86_64/dl-tls.c	2024-07-28 20:45:15.699241880 -0400
++++ b/sysdeps/x86_64/dl-tls.c	2024-07-28 20:44:23.444952814 -0400
+@@ -41,7 +41,10 @@ __tls_get_addr_slow (GET_ADDR_ARGS)
+   dtv_t *dtv = THREAD_DTV ();
+ 
+   size_t gen = atomic_load_acquire (&GL(dl_tls_generation));
+-  if (__glibc_unlikely (dtv[0].counter != gen))
++  if (__glibc_unlikely (dtv[0].counter != gen)
++      /* See comment in __tls_get_addr in elf/dl-tls.c.  */
++      && !(_dl_tls_allocate_active ()
++           && GET_ADDR_MODULE < _dl_tls_initial_modid_limit))
+     return update_get_addr (GET_ADDR_PARAM, gen);
+ 
+   return tls_get_addr_tail (GET_ADDR_PARAM, dtv, NULL);

@@ -1,0 +1,37 @@
+commit 4a7c342605bc653f72d60c36abe698986fb5cb47
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Apr 28 17:19:24 2021 +0000
+
+    Update syscall lists for Linux 5.12.
+    
+    Linux 5.12 has one new syscall, mount_setattr.  Update
+    syscall-names.list and regenerate the arch-syscall.h headers with
+    build-many-glibcs.py update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list to Linux 5.12.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index f6cb34089d..8e3cfa0e77 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.11.
+-kernel 5.11
++# The list of system calls is current as of Linux 5.12.
++kernel 5.12
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -258,6 +258,7 @@ mmap
+ mmap2
+ modify_ldt
+ mount
++mount_setattr
+ move_mount
+ move_pages
+ mprotect

@@ -1,0 +1,265 @@
+From f53790272ce7bdc5ecd14b45f65d0464d2a61a3a Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Mon, 19 Apr 2021 17:48:10 -0400
+Subject: [PATCH] x86: Optimize less_vec evex and avx512
+ memset-vec-unaligned-erms.S
+Content-type: text/plain; charset=UTF-8
+
+No bug. This commit adds optimized cased for less_vec memset case that
+uses the avx512vl/avx512bw mask store avoiding the excessive
+branches. test-memset and test-wmemset are passing.
+
+Signed-off-by: Noah Goldstein <goldstein.w.n@gmail.com>
+---
+ sysdeps/x86_64/multiarch/ifunc-impl-list.c    | 40 ++++++++++-----
+ sysdeps/x86_64/multiarch/ifunc-memset.h       |  6 ++-
+ .../multiarch/memset-avx512-unaligned-erms.S  |  2 +-
+ .../multiarch/memset-evex-unaligned-erms.S    |  2 +-
+ .../multiarch/memset-vec-unaligned-erms.S     | 51 +++++++++++++++----
+ 5 files changed, 74 insertions(+), 27 deletions(-)
+
+diff --git a/sysdeps/x86_64/multiarch/ifunc-impl-list.c b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+index 85b8863a..d59d65f8 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+@@ -204,19 +204,23 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __memset_chk_avx2_unaligned_erms_rtm)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_chk_evex_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_chk_evex_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_chk_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_chk_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+ 			      CPU_FEATURE_USABLE (AVX512F),
+@@ -247,19 +251,23 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __memset_avx2_unaligned_erms_rtm)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_evex_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_evex_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+ 			      (CPU_FEATURE_USABLE (AVX512VL)
+-			       && CPU_FEATURE_USABLE (AVX512BW)),
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __memset_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+ 			      CPU_FEATURE_USABLE (AVX512F),
+@@ -739,10 +747,14 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			       && CPU_FEATURE_USABLE (RTM)),
+ 			      __wmemset_avx2_unaligned_rtm)
+ 	      IFUNC_IMPL_ADD (array, i, wmemset,
+-			      CPU_FEATURE_USABLE (AVX512VL),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __wmemset_evex_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, wmemset,
+-			      CPU_FEATURE_USABLE (AVX512VL),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __wmemset_avx512_unaligned))
+ 
+ #ifdef SHARED
+@@ -946,10 +958,14 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wmemset_chk_avx2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __wmemset_chk,
+-			      CPU_FEATURE_USABLE (AVX512VL),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __wmemset_chk_evex_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __wmemset_chk,
+-			      CPU_FEATURE_USABLE (AVX512F),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
+ 			      __wmemset_chk_avx512_unaligned))
+ #endif
+ 
+diff --git a/sysdeps/x86_64/multiarch/ifunc-memset.h b/sysdeps/x86_64/multiarch/ifunc-memset.h
+index 19795938..100e3707 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-memset.h
++++ b/sysdeps/x86_64/multiarch/ifunc-memset.h
+@@ -54,7 +54,8 @@ IFUNC_SELECTOR (void)
+       && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
+     {
+       if (CPU_FEATURE_USABLE_P (cpu_features, AVX512VL)
+-	  && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW))
++          && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW)
++          && CPU_FEATURE_USABLE_P (cpu_features, BMI2))
+ 	{
+ 	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	    return OPTIMIZE (avx512_unaligned_erms);
+@@ -68,7 +69,8 @@ IFUNC_SELECTOR (void)
+   if (CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+     {
+       if (CPU_FEATURE_USABLE_P (cpu_features, AVX512VL)
+-	  && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW))
++          && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW)
++          && CPU_FEATURE_USABLE_P (cpu_features, BMI2))
+ 	{
+ 	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	    return OPTIMIZE (evex_unaligned_erms);
+diff --git a/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
+index 22e7b187..8ad842fc 100644
+--- a/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
+@@ -19,6 +19,6 @@
+ # define SECTION(p)		p##.evex512
+ # define MEMSET_SYMBOL(p,s)	p##_avx512_##s
+ # define WMEMSET_SYMBOL(p,s)	p##_avx512_##s
+-
++# define USE_LESS_VEC_MASK_STORE	1
+ # include "memset-vec-unaligned-erms.S"
+ #endif
+diff --git a/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S
+index ae0a4d6e..640f0929 100644
+--- a/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S
+@@ -19,6 +19,6 @@
+ # define SECTION(p)		p##.evex
+ # define MEMSET_SYMBOL(p,s)	p##_evex_##s
+ # define WMEMSET_SYMBOL(p,s)	p##_evex_##s
+-
++# define USE_LESS_VEC_MASK_STORE	1
+ # include "memset-vec-unaligned-erms.S"
+ #endif
+diff --git a/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+index bae5cba4..f877ac9d 100644
+--- a/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+@@ -63,6 +63,8 @@
+ # endif
+ #endif
+ 
++#define PAGE_SIZE 4096
++
+ #ifndef SECTION
+ # error SECTION is not defined!
+ #endif
+@@ -213,11 +215,38 @@ L(loop):
+ 	cmpq	%rcx, %rdx
+ 	jne	L(loop)
+ 	VZEROUPPER_SHORT_RETURN
++
++	.p2align 4
+ L(less_vec):
+ 	/* Less than 1 VEC.  */
+ # if VEC_SIZE != 16 && VEC_SIZE != 32 && VEC_SIZE != 64
+ #  error Unsupported VEC_SIZE!
+ # endif
++# ifdef USE_LESS_VEC_MASK_STORE
++	/* Clear high bits from edi. Only keeping bits relevant to page
++	   cross check. Note that we are using rax which is set in
++	   MEMSET_VDUP_TO_VEC0_AND_SET_RETURN as ptr from here on out.
++	 */
++	andl	$(PAGE_SIZE - 1), %edi
++	/* Check if VEC_SIZE store cross page. Mask stores suffer serious
++	   performance degradation when it has to fault supress.  */
++	cmpl	$(PAGE_SIZE - VEC_SIZE), %edi
++	ja	L(cross_page)
++# if VEC_SIZE > 32
++	movq	$-1, %rcx
++	bzhiq	%rdx, %rcx, %rcx
++	kmovq	%rcx, %k1
++# else
++	movl	$-1, %ecx
++	bzhil	%edx, %ecx, %ecx
++	kmovd	%ecx, %k1
++# endif
++	vmovdqu8	%VEC(0), (%rax) {%k1}
++	VZEROUPPER_RETURN
++
++	.p2align 4
++L(cross_page):
++# endif
+ # if VEC_SIZE > 32
+ 	cmpb	$32, %dl
+ 	jae	L(between_32_63)
+@@ -234,36 +263,36 @@ L(less_vec):
+ 	cmpb	$1, %dl
+ 	ja	L(between_2_3)
+ 	jb	1f
+-	movb	%cl, (%rdi)
++	movb	%cl, (%rax)
+ 1:
+ 	VZEROUPPER_RETURN
+ # if VEC_SIZE > 32
+ 	/* From 32 to 63.  No branch when size == 32.  */
+ L(between_32_63):
+-	VMOVU	%YMM0, -32(%rdi,%rdx)
+-	VMOVU	%YMM0, (%rdi)
++	VMOVU	%YMM0, -32(%rax,%rdx)
++	VMOVU	%YMM0, (%rax)
+ 	VZEROUPPER_RETURN
+ # endif
+ # if VEC_SIZE > 16
+ 	/* From 16 to 31.  No branch when size == 16.  */
+ L(between_16_31):
+-	VMOVU	%XMM0, -16(%rdi,%rdx)
+-	VMOVU	%XMM0, (%rdi)
++	VMOVU	%XMM0, -16(%rax,%rdx)
++	VMOVU	%XMM0, (%rax)
+ 	VZEROUPPER_RETURN
+ # endif
+ 	/* From 8 to 15.  No branch when size == 8.  */
+ L(between_8_15):
+-	movq	%rcx, -8(%rdi,%rdx)
+-	movq	%rcx, (%rdi)
++	movq	%rcx, -8(%rax,%rdx)
++	movq	%rcx, (%rax)
+ 	VZEROUPPER_RETURN
+ L(between_4_7):
+ 	/* From 4 to 7.  No branch when size == 4.  */
+-	movl	%ecx, -4(%rdi,%rdx)
+-	movl	%ecx, (%rdi)
++	movl	%ecx, -4(%rax,%rdx)
++	movl	%ecx, (%rax)
+ 	VZEROUPPER_RETURN
+ L(between_2_3):
+ 	/* From 2 to 3.  No branch when size == 2.  */
+-	movw	%cx, -2(%rdi,%rdx)
+-	movw	%cx, (%rdi)
++	movw	%cx, -2(%rax,%rdx)
++	movw	%cx, (%rax)
+ 	VZEROUPPER_RETURN
+ END (MEMSET_SYMBOL (__memset, unaligned_erms))
+-- 
+GitLab
+

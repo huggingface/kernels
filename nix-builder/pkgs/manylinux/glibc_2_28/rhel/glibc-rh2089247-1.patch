@@ -1,0 +1,47 @@
+commit e1df30fbc2e2167a982c0e77a7ebee28f4dd0800
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Jul 25 11:22:17 2019 -0300
+
+    Get new entropy on each attempt __gen_tempname (BZ #15813)
+    
+    This is missing bit for fully fix BZ#15813 (the other two were fixed
+    by 359653aaacad463).
+    
+    Checked on x86_64-linux-gnu.
+    
+            [BZ #15813]
+            sysdeps/posix/tempname.c (__gen_tempname): get entrypy on each
+            attempt.
+
+diff --git a/sysdeps/posix/tempname.c b/sysdeps/posix/tempname.c
+index 3d26f378021680ae..61d7a9f36d37abae 100644
+--- a/sysdeps/posix/tempname.c
++++ b/sysdeps/posix/tempname.c
+@@ -186,7 +186,6 @@ __gen_tempname (char *tmpl, int suffixlen, int flags, int kind)
+ {
+   int len;
+   char *XXXXXX;
+-  uint64_t value;
+   unsigned int count;
+   int fd = -1;
+   int save_errno = errno;
+@@ -218,13 +217,13 @@ __gen_tempname (char *tmpl, int suffixlen, int flags, int kind)
+   /* This is where the Xs start.  */
+   XXXXXX = &tmpl[len - 6 - suffixlen];
+ 
+-  /* Get some more or less random data.  */
+-  RANDOM_BITS (value);
+-  value ^= (uint64_t)__getpid () << 32;
+-
+-  for (count = 0; count < attempts; value += 7777, ++count)
++  uint64_t pid = (uint64_t) __getpid () << 32;
++  for (count = 0; count < attempts; ++count)
+     {
+-      uint64_t v = value;
++      uint64_t v;
++      /* Get some more or less random data.  */
++      RANDOM_BITS (v);
++      v ^= pid;
+ 
+       /* Fill in the random bits.  */
+       XXXXXX[0] = letters[v % 62];

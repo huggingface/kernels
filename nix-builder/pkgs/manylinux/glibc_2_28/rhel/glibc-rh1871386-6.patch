@@ -1,0 +1,42 @@
+commit 2b778ceb4010c28d70de9b8eab20e8d88eed586b
+Author: Paul Eggert <eggert@cs.ucla.edu>
+Date:   Sat Jan 2 11:32:25 2021 -0800
+
+    Update copyright dates with scripts/update-copyrights
+
+    I used these shell commands:
+
+    ../glibc/scripts/update-copyrights $PWD/../gnulib/build-aux/update-copyright
+    (cd ../glibc && git commit -am"[this commit message]")
+
+    and then ignored the output, which consisted lines saying "FOO: warning:
+    copyright statement not found" for each of 6694 files FOO.
+    I then removed trailing white space from benchtests/bench-pthread-locks.c
+    and iconvdata/tst-iconv-big5-hkscs-to-2ucs4.c, to work around this
+    diagnostic from Savannah:
+    remote: *** pre-commit check failed ...
+    remote: *** error: lines with trailing whitespace found
+    remote: error: hook declined to update refs/heads/master
+
+Modified to only update copyright for syscall-names.list for RHEL 8.5.0. Also
+update licenses link to use https.
+
+diff -Nrup a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+--- a/sysdeps/unix/sysv/linux/syscall-names.list	2021-03-16 14:12:27.828571456 -0400
++++ b/sysdeps/unix/sysv/linux/syscall-names.list	2021-03-16 14:13:23.950145631 -0400
+@@ -1,5 +1,5 @@
+ # List of all known Linux system calls.
+-# Copyright (C) 2017-2018 Free Software Foundation, Inc.
++# Copyright (C) 2017-2021 Free Software Foundation, Inc.
+ # This file is part of the GNU C Library.
+ #
+ # The GNU C Library is free software; you can redistribute it and/or
+@@ -14,7 +14,7 @@
+ #
+ # You should have received a copy of the GNU Lesser General Public
+ # License along with the GNU C Library; if not, see
+-# <http://www.gnu.org/licenses/>.
++# <https://www.gnu.org/licenses/>.
+ 
+ # This file contains the list of system call names.  It has to remain in
+ # alphabetical order.  Lines which start with # are treated as comments.

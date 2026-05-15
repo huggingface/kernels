@@ -1,0 +1,192 @@
+From d3833cb69c7ff42ac8df68ed7b646c98c3a32eb8 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:16 +0100
+Subject: [PATCH 04/28] Always use wordsize-64 version of s_ceil.c.
+
+This patch replaces s_ceil.c in sysdeps/dbl-64 with the one in
+sysdeps/dbl-64/wordsize-64 and removes the latter one.
+The code is not changed except changes in code style.
+
+Also adjusted the include path in x86_64 and sparc64 files.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 9f234eafe8698fd9a441ca2309a299d0bd771156)
+---
+ sysdeps/ieee754/dbl-64/s_ceil.c               | 59 ++++++-------------
+ sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c   | 51 ----------------
+ .../sparc64/fpu/multiarch/s_ceil-generic.c    |  2 +-
+ .../sparc/sparc64/fpu/multiarch/s_ceil-vis3.c |  2 +-
+ sysdeps/x86_64/fpu/multiarch/s_ceil-c.c       |  2 +-
+ 5 files changed, 21 insertions(+), 95 deletions(-)
+ delete mode 100644 sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c
+
+diff --git a/sysdeps/ieee754/dbl-64/s_ceil.c b/sysdeps/ieee754/dbl-64/s_ceil.c
+index 5a7434c737..3becdfc515 100644
+--- a/sysdeps/ieee754/dbl-64/s_ceil.c
++++ b/sysdeps/ieee754/dbl-64/s_ceil.c
+@@ -24,61 +24,38 @@
+ double
+ __ceil (double x)
+ {
+-  int32_t i0, i1, j0;
+-  uint32_t i, j;
+-  EXTRACT_WORDS (i0, i1, x);
+-  j0 = ((i0 >> 20) & 0x7ff) - 0x3ff;
+-  if (j0 < 20)
++  int64_t i0, i;
++  int32_t j0;
++  EXTRACT_WORDS64 (i0, x);
++  j0 = ((i0 >> 52) & 0x7ff) - 0x3ff;
++  if (j0 <= 51)
+     {
+       if (j0 < 0)
+ 	{
+-	  /* return 0*sign(x) if |x|<1 */
++	  /* return 0 * sign(x) if |x| < 1  */
+ 	  if (i0 < 0)
+-	    {
+-	      i0 = 0x80000000; i1 = 0;
+-	    }
+-	  else if ((i0 | i1) != 0)
+-	    {
+-	      i0 = 0x3ff00000; i1 = 0;
+-	    }
++	    i0 = INT64_C (0x8000000000000000);
++	  else if (i0 != 0)
++	    i0 = INT64_C (0x3ff0000000000000);
+ 	}
+       else
+ 	{
+-	  i = (0x000fffff) >> j0;
+-	  if (((i0 & i) | i1) == 0)
+-	    return x;                        /* x is integral */
++	  i = INT64_C (0x000fffffffffffff) >> j0;
++	  if ((i0 & i) == 0)
++	    return x;			/* x is integral  */
+ 	  if (i0 > 0)
+-	    i0 += (0x00100000) >> j0;
+-	  i0 &= (~i); i1 = 0;
++	    i0 += UINT64_C (0x0010000000000000) >> j0;
++	  i0 &= ~i;
+ 	}
+     }
+-  else if (j0 > 51)
++  else
+     {
+       if (j0 == 0x400)
+-	return x + x;                   /* inf or NaN */
++	return x + x;			/* inf or NaN  */
+       else
+-	return x;                       /* x is integral */
+-    }
+-  else
+-    {
+-      i = ((uint32_t) (0xffffffff)) >> (j0 - 20);
+-      if ((i1 & i) == 0)
+-	return x;                       /* x is integral */
+-      if (i0 > 0)
+-	{
+-	  if (j0 == 20)
+-	    i0 += 1;
+-	  else
+-	    {
+-	      j = i1 + (1 << (52 - j0));
+-	      if (j < i1)
+-		i0 += 1;                /* got a carry */
+-	      i1 = j;
+-	    }
+-	}
+-      i1 &= (~i);
++	return x;			/* x is integral  */
+     }
+-  INSERT_WORDS (x, i0, i1);
++  INSERT_WORDS64 (x, i0);
+   return x;
+ }
+ #ifndef __ceil
+diff --git a/sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c b/sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c
+deleted file mode 100644
+index b99829d2b0..0000000000
+--- a/sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c
++++ /dev/null
+@@ -1,51 +0,0 @@
+-/* @(#)s_ceil.c 5.1 93/09/24 */
+-/*
+- * ====================================================
+- * Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+- *
+- * Developed at SunPro, a Sun Microsystems, Inc. business.
+- * Permission to use, copy, modify, and distribute this
+- * software is freely granted, provided that this notice
+- * is preserved.
+- * ====================================================
+- */
+-
+-/*
+- * ceil(x)
+- * Return x rounded toward -inf to integral value
+- * Method:
+- *	Bit twiddling.
+- */
+-
+-#include <math.h>
+-#include <math_private.h>
+-#include <libm-alias-double.h>
+-
+-double
+-__ceil(double x)
+-{
+-	int64_t i0,i;
+-	int32_t j0;
+-	EXTRACT_WORDS64(i0,x);
+-	j0 = ((i0>>52)&0x7ff)-0x3ff;
+-	if(j0<=51) {
+-	    if(j0<0) {
+-	      /* return 0*sign(x) if |x|<1 */
+-	      if(i0<0) {i0=INT64_C(0x8000000000000000);}
+-	      else if(i0!=0) { i0=INT64_C(0x3ff0000000000000);}
+-	    } else {
+-		i = INT64_C(0x000fffffffffffff)>>j0;
+-		if((i0&i)==0) return x; /* x is integral */
+-		if(i0>0) i0 += UINT64_C(0x0010000000000000)>>j0;
+-		i0 &= (~i);
+-	    }
+-	} else {
+-	    if(j0==0x400) return x+x;	/* inf or NaN */
+-	    else return x;		/* x is integral */
+-	}
+-	INSERT_WORDS64(x,i0);
+-	return x;
+-}
+-#ifndef __ceil
+-libm_alias_double (__ceil, ceil)
+-#endif
+diff --git a/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-generic.c b/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-generic.c
+index febea745e1..80f68b6766 100644
+--- a/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-generic.c
++++ b/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-generic.c
+@@ -1,2 +1,2 @@
+ #define __ceil __ceil_generic
+-#include <sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c>
++#include <sysdeps/ieee754/dbl-64/s_ceil.c>
+diff --git a/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-vis3.c b/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-vis3.c
+index a03a0090f0..59822e0f8c 100644
+--- a/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-vis3.c
++++ b/sysdeps/sparc/sparc64/fpu/multiarch/s_ceil-vis3.c
+@@ -20,4 +20,4 @@
+ 
+ #define __ceil __ceil_vis3
+ 
+-#include <sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c>
++#include <sysdeps/ieee754/dbl-64/s_ceil.c>
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_ceil-c.c b/sysdeps/x86_64/fpu/multiarch/s_ceil-c.c
+index 6a5ea3ff27..ada28baa1a 100644
+--- a/sysdeps/x86_64/fpu/multiarch/s_ceil-c.c
++++ b/sysdeps/x86_64/fpu/multiarch/s_ceil-c.c
+@@ -1,2 +1,2 @@
+ #define __ceil __ceil_c
+-#include <sysdeps/ieee754/dbl-64/wordsize-64/s_ceil.c>
++#include <sysdeps/ieee754/dbl-64/s_ceil.c>
+-- 
+2.18.2
+

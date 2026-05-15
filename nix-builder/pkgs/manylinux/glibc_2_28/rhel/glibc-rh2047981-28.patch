@@ -1,0 +1,77 @@
+commit bfb5ed5df3dd4d9507b4922248dc445b690d19c0
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Fri Oct 15 10:44:49 2021 -0700
+
+    elf: Also try DT_RUNPATH for LD_AUDIT dlopen [BZ #28455]
+    
+    DT_RUNPATH is only used to find the immediate dependencies of the
+    executable or shared object containing the DT_RUNPATH entry.  Update
+    LD_AUDIT dlopen call to try the DT_RUNPATH entry of the executable.
+    
+    Add tst-audit14a, which is copied from tst-audit14, to DT_RUNPATH and
+    build tst-audit14 with -Wl,--disable-new-dtags to test DT_RPATH.
+    
+    This partially fixes BZ #28455.
+
+Conflicts:
+	elf/Makefile
+		Rewrite test inclusion to use older stdout pattern.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 914cb5ad2f2c3aea..4ec4e9a049156755 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -227,6 +227,7 @@ tests += \
+   tst-audit12 \
+   tst-audit13 \
+   tst-audit14 \
++  tst-audit14a \
+   tst-audit15 \
+   tst-audit16 \
+   tst-audit17 \
+@@ -1788,9 +1789,11 @@ $(objpfx)tst-auditmany.out: $(objpfx)tst-auditmanymod1.so \
+ tst-auditmany-ENV = \
+   LD_AUDIT=tst-auditmanymod1.so:tst-auditmanymod2.so:tst-auditmanymod3.so:tst-auditmanymod4.so:tst-auditmanymod5.so:tst-auditmanymod6.so:tst-auditmanymod7.so:tst-auditmanymod8.so:tst-auditmanymod9.so
+ 
+-LDFLAGS-tst-audit14 = -Wl,--audit=tst-auditlogmod-1.so
++LDFLAGS-tst-audit14 = -Wl,--audit=tst-auditlogmod-1.so,--disable-new-dtags
+ $(objpfx)tst-auditlogmod-1.so: $(libsupport)
+ $(objpfx)tst-audit14.out: $(objpfx)tst-auditlogmod-1.so
++LDFLAGS-tst-audit14a = -Wl,--audit=tst-auditlogmod-1.so,--enable-new-dtags
++$(objpfx)tst-audit14a.out: $(objpfx)tst-auditlogmod-1.so
+ LDFLAGS-tst-audit15 = \
+   -Wl,--audit=tst-auditlogmod-1.so,--depaudit=tst-auditlogmod-2.so
+ $(objpfx)tst-auditlogmod-2.so: $(libsupport)
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 1613217a236c7fc3..0b45e6e3db31c70d 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -2042,6 +2042,21 @@ _dl_map_object (struct link_map *loader, const char *name,
+ 			    &main_map->l_rpath_dirs,
+ 			    &realname, &fb, loader ?: main_map, LA_SER_RUNPATH,
+ 			    &found_other_class);
++
++	  /* Also try DT_RUNPATH in the executable for LD_AUDIT dlopen
++	     call.  */
++	  if (__glibc_unlikely (mode & __RTLD_AUDIT)
++	      && fd == -1 && !did_main_map
++	      && main_map != NULL && main_map->l_type != lt_loaded)
++	    {
++	      struct r_search_path_struct l_rpath_dirs;
++	      l_rpath_dirs.dirs = NULL;
++	      if (cache_rpath (main_map, &l_rpath_dirs,
++			       DT_RUNPATH, "RUNPATH"))
++		fd = open_path (name, namelen, mode, &l_rpath_dirs,
++				&realname, &fb, loader ?: main_map,
++				LA_SER_RUNPATH, &found_other_class);
++	    }
+ 	}
+ 
+       /* Try the LD_LIBRARY_PATH environment variable.  */
+diff --git a/elf/tst-audit14a.c b/elf/tst-audit14a.c
+new file mode 100644
+index 0000000000000000..c6232eacf2946e4e
+--- /dev/null
++++ b/elf/tst-audit14a.c
+@@ -0,0 +1 @@
++#include "tst-audit14.c"

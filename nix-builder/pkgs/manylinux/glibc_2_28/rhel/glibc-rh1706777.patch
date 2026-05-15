@@ -1,0 +1,44 @@
+commit 38b0593e9a862c3b35392a0f5b202696b8116aa3
+Author: Tobias Klauser <tklauser@distanz.ch>
+Date:   Tue Aug 21 17:22:53 2018 +0000
+
+    Add PF_XDP, AF_XDP and SOL_XDP from Linux 4.18 to bits/socket.h.
+    
+    This patch adds the PF_XDP, AF_XDP and SOL_XDP macros from Linux 4.18 to
+    sysdeps/unix/sysv/linux/bits/socket.h.
+    
+            * sysdeps/unix/sysv/linux/bits/socket.h (PF_MAX): Set to 45.
+            (PF_XDP): New macro.
+            (AF_XDP): New macro.
+            (SOL_XDP): New macro.
+
+diff --git a/sysdeps/unix/sysv/linux/bits/socket.h b/sysdeps/unix/sysv/linux/bits/socket.h
+index fa409f0fabc22d33..c3fbb2110296273c 100644
+--- a/sysdeps/unix/sysv/linux/bits/socket.h
++++ b/sysdeps/unix/sysv/linux/bits/socket.h
+@@ -85,7 +85,8 @@ typedef __socklen_t socklen_t;
+ #define PF_KCM		41	/* Kernel Connection Multiplexor.  */
+ #define PF_QIPCRTR	42	/* Qualcomm IPC Router.  */
+ #define PF_SMC		43	/* SMC sockets.  */
+-#define PF_MAX		44	/* For now..  */
++#define PF_XDP		44	/* XDP sockets.  */
++#define PF_MAX		45	/* For now..  */
+ 
+ /* Address families.  */
+ #define AF_UNSPEC	PF_UNSPEC
+@@ -135,6 +136,7 @@ typedef __socklen_t socklen_t;
+ #define AF_KCM		PF_KCM
+ #define AF_QIPCRTR	PF_QIPCRTR
+ #define AF_SMC		PF_SMC
++#define AF_XDP		PF_XDP
+ #define AF_MAX		PF_MAX
+ 
+ /* Socket level values.  Others are defined in the appropriate headers.
+@@ -164,6 +166,7 @@ typedef __socklen_t socklen_t;
+ #define SOL_NFC		280
+ #define SOL_KCM		281
+ #define SOL_TLS		282
++#define SOL_XDP		283
+ 
+ /* Maximum queue length specifiable by listen.  */
+ #define SOMAXCONN	128

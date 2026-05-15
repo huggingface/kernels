@@ -1,0 +1,183 @@
+From 9f3ee7825b1eae00431ea6477fce8210aaced7db Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:30 +0100
+Subject: [PATCH 22/28] S390: Use convert-to-fixed instruction for lround
+ functions.
+
+If compiled with z196 zarch support, the convert-to-fixed instruction
+is used to implement lround, lroundf, lroundl.
+Otherwise the common-code implementation is used.
+
+(cherry picked from commit 9d9f3527daf65fdca0eb46eaa324b81b8f94d88c)
+---
+ sysdeps/s390/fpu/s_lround.c  | 47 +++++++++++++++++++++++++++++++++++
+ sysdeps/s390/fpu/s_lroundf.c | 47 +++++++++++++++++++++++++++++++++++
+ sysdeps/s390/fpu/s_lroundl.c | 48 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 142 insertions(+)
+ create mode 100644 sysdeps/s390/fpu/s_lround.c
+ create mode 100644 sysdeps/s390/fpu/s_lroundf.c
+ create mode 100644 sysdeps/s390/fpu/s_lroundl.c
+
+diff --git a/sysdeps/s390/fpu/s_lround.c b/sysdeps/s390/fpu/s_lround.c
+new file mode 100644
+index 0000000000..9290ec32cd
+--- /dev/null
++++ b/sysdeps/s390/fpu/s_lround.c
+@@ -0,0 +1,47 @@
++/* lround() - S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# include <math.h>
++# include <libm-alias-double.h>
++
++/* The sizeof (long int) differs between s390x (8byte) and s390 (4byte).
++   Thus we need different instructions as the target size is encoded there.
++   Note: On s390 this instruction is only used if build with -mzarch.  */
++# ifdef __s390x__
++#  define INSN "cgdbra"
++# else
++#  define INSN "cfdbra"
++# endif
++
++long int
++__lround (double x)
++{
++  long int y;
++  /* The z196 zarch "convert to fixed" (cgdbra) instruction is rounding
++     x to the nearest integer with "ties away from 0" rounding mode
++     (M3-field: 1) where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ (INSN " %0,1,%1,4" : "=d" (y) : "f" (x) : "cc");
++  return y;
++}
++libm_alias_double (__lround, lround)
++
++#else
++# include <sysdeps/ieee754/dbl-64/s_lround.c>
++#endif
+diff --git a/sysdeps/s390/fpu/s_lroundf.c b/sysdeps/s390/fpu/s_lroundf.c
+new file mode 100644
+index 0000000000..097b924c91
+--- /dev/null
++++ b/sysdeps/s390/fpu/s_lroundf.c
+@@ -0,0 +1,47 @@
++/* lroundf() - S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# include <math.h>
++# include <libm-alias-float.h>
++
++/* The sizeof (long int) differs between s390x (8byte) and s390 (4byte).
++   Thus we need different instructions as the target size is encoded there.
++   Note: On s390 this instruction is only used if build with -mzarch.  */
++# ifdef __s390x__
++#  define INSN "cgebra"
++# else
++#  define INSN "cfebra"
++# endif
++
++long int
++__lroundf (float x)
++{
++  long int y;
++  /* The z196 zarch "convert to fixed" (cgebra) instruction is rounding
++     x to the nearest integer with "ties away from 0" rounding mode
++     (M3-field: 1) where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ (INSN " %0,1,%1,4" : "=d" (y) : "f" (x) : "cc");
++  return y;
++}
++libm_alias_float (__lround, lround)
++
++#else
++# include <sysdeps/ieee754/flt-32/s_lroundf.c>
++#endif
+diff --git a/sysdeps/s390/fpu/s_lroundl.c b/sysdeps/s390/fpu/s_lroundl.c
+new file mode 100644
+index 0000000000..0ef77dc667
+--- /dev/null
++++ b/sysdeps/s390/fpu/s_lroundl.c
+@@ -0,0 +1,48 @@
++/* lroundl() - S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# include <math.h>
++# include <math_private.h>
++# include <libm-alias-ldouble.h>
++
++/* The sizeof (long int) differs between s390x (8byte) and s390 (4byte).
++   Thus we need different instructions as the target size is encoded there.
++   Note: On s390 this instruction is only used if build with -mzarch.  */
++# ifdef __s390x__
++#  define INSN "cgxbra"
++# else
++#  define INSN "cfxbra"
++# endif
++
++long int
++__lroundl (_Float128 x)
++{
++  long int y;
++  /* The z196 zarch "convert to fixed" (cgxbra) instruction is rounding
++     x to the nearest integer with "ties away from 0" rounding mode
++     (M3-field: 1) where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ (INSN " %0,1,%1,4" : "=d" (y) : "f" (x) : "cc");
++  return y;
++}
++libm_alias_ldouble (__lround, lround)
++
++#else
++# include <sysdeps/ieee754/ldbl-128/s_lroundl.c>
++#endif
+-- 
+2.18.2
+

@@ -1,0 +1,43 @@
+commit d097d97626e44bc6e76d5daf80ce3ff7d147b623
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:07 2018 +0100
+
+    S390: Use memcpy for forward cases in memmove.
+    
+    The s390/s390x memcpy implementations are safe to be
+    used by memmove.  Starting with this commit, memmove is
+    using memcpy for the forward cases on s390.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/memcopy.h: New file.
+
+diff --git a/sysdeps/s390/memcopy.h b/sysdeps/s390/memcopy.h
+new file mode 100644
+index 0000000000000000..9a76196502f25bbf
+--- /dev/null
++++ b/sysdeps/s390/memcopy.h
+@@ -0,0 +1,23 @@
++/* memcopy.h -- definitions for memory copy functions.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <sysdeps/generic/memcopy.h>
++
++/* The s390/s390x memcpy implementations are safe to be used by memmove.  */
++#undef MEMCPY_OK_FOR_FWD_MEMMOVE
++#define MEMCPY_OK_FOR_FWD_MEMMOVE 1

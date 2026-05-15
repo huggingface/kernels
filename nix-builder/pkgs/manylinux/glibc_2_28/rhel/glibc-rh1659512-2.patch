@@ -1,0 +1,62 @@
+commit 114f792eaea2505cd8aee02d330aad37238da6a5
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Fri Feb 1 11:03:35 2019 +0100
+
+    posix/tst-spawn: Fix racy tests in spawned processes.
+    
+    From time to time I get fails in tst-spawn like:
+    tst-spawn.c:111: numeric comparison failure
+       left: 0 (0x0); from: xlseek (fd2, 0, SEEK_CUR)
+      right: 28 (0x1c); from: strlen (fd2string)
+    error: 1 test failures
+    tst-spawn.c:252: numeric comparison failure
+       left: 1 (0x1); from: WEXITSTATUS (status)
+      right: 0 (0x0); from: 0
+    error: 1 test failures
+    
+    It turned out, that a child process is testing it's open file descriptors
+    with e.g. a sequence of testing the current position, setting the position
+    to zero and reading a specific amount of bytes.
+    
+    Unfortunately starting with commit 2a69f853c03034c2e383e0f9c35b5402ce8b5473
+    the test is spawning a second child process which is sharing some of the
+    file descriptors.  If the test sequence as mentioned above is running in parallel
+    it leads to test failures.
+    
+    As the second call of posix_spawn shall test a NULL pid argument,
+    this patch is just moving the waitpid of the first child
+    before the posix_spawn of the second child.
+    
+    ChangeLog:
+    
+            * posix/tst-spawn do_test(): Move waitpid before posix_spawn.
+
+diff --git a/posix/tst-spawn.c b/posix/tst-spawn.c
+index eea5addbf3..9aa7e621e6 100644
+--- a/posix/tst-spawn.c
++++ b/posix/tst-spawn.c
+@@ -237,6 +237,12 @@ do_test (int argc, char *argv[])
+   TEST_COMPARE (posix_spawn (&pid, argv[1], &actions, NULL, spargv, environ),
+ 		0);
+ 
++  /* Wait for the children.  */
++  TEST_COMPARE (xwaitpid (pid, &status, 0), pid);
++  TEST_VERIFY (WIFEXITED (status));
++  TEST_VERIFY (!WIFSIGNALED (status));
++  TEST_COMPARE (WEXITSTATUS (status), 0);
++
+   /* Same test but with a NULL pid argument.  */
+   TEST_COMPARE (posix_spawn (NULL, argv[1], &actions, NULL, spargv, environ),
+ 		0);
+@@ -246,11 +252,6 @@ do_test (int argc, char *argv[])
+   free (name3_copy);
+ 
+   /* Wait for the children.  */
+-  TEST_COMPARE (xwaitpid (pid, &status, 0), pid);
+-  TEST_VERIFY (WIFEXITED (status));
+-  TEST_VERIFY (!WIFSIGNALED (status));
+-  TEST_COMPARE (WEXITSTATUS (status), 0);
+-
+   xwaitpid (-1, &status, 0);
+   TEST_VERIFY (WIFEXITED (status));
+   TEST_VERIFY (!WIFSIGNALED (status));

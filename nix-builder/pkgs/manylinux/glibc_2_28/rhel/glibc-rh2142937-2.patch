@@ -1,0 +1,24 @@
+commit b2cd93fce666fdc8c9a5c64af2741a8a6940ac99
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Mar 25 11:16:49 2022 -0300
+
+    elf: Fix wrong fscanf usage on tst-pldd
+    
+    To take in consideration the extra '\0'.
+    
+    Checked on x86_64-linux-gnu.
+
+diff --git a/elf/tst-pldd.c b/elf/tst-pldd.c
+index 45ac033a0f897088..ab89798e250fdccc 100644
+--- a/elf/tst-pldd.c
++++ b/elf/tst-pldd.c
+@@ -115,7 +115,8 @@ do_test (void)
+     TEST_VERIFY (out != NULL);
+ 
+     /* First line is in the form of <pid>: <full path of executable>  */
+-    TEST_COMPARE (fscanf (out, "%u: " STRINPUT (512), &pid, buffer), 2);
++    TEST_COMPARE (fscanf (out, "%u: " STRINPUT (sizeof (buffer) - 1), &pid,
++			  buffer), 2);
+ 
+     TEST_COMPARE (pid, *target_pid_ptr);
+     TEST_COMPARE (strcmp (basename (buffer), "tst-pldd"), 0);

@@ -1,0 +1,37 @@
+commit b5232c9f9e6048b8f780d3cbfadbc8e59bb90ce4
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Mon Jul 8 17:06:19 2019 -0500
+
+    [powerpc] fenv_libc.h: protect use of __builtin_cpu_supports
+    
+    Using __builtin_cpu_supports() requires support in GCC and Glibc.
+    My recent patch to fenv_libc.h added an unprotected use of
+    __builtin_cpu_supports().  Compilation of Glibc itself will fail
+    with a sufficiently new GCC and sufficiently old Glibc:
+    
+    ../sysdeps/powerpc/fpu/fegetexcept.c: In function ‘__fegetexcept’:
+    ../sysdeps/powerpc/fpu/fenv_libc.h:52:20: error: builtin ‘__builtin_cpu_supports’ needs GLIBC (2.23 and newer) that exports hardware capability bits [-Werror]
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+    Fixes 3db85a9814784a74536a1f0e7b7ddbfef7dc84bb.
+
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index cc00df033da47c1a..9dca6e760cc51946 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -48,12 +48,14 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ 
+ #ifdef _ARCH_PWR9
+ # define fegetenv_status() fegetenv_status_ISA300()
+-#else
++#elif defined __BUILTIN_CPU_SUPPORTS__
+ # define fegetenv_status()						\
+   (__glibc_likely (__builtin_cpu_supports ("arch_3_00"))		\
+    ? fegetenv_status_ISA300()						\
+    : fegetenv_register()						\
+   )
++#else
++# define fegetenv_status() fegetenv_register ()
+ #endif
+ 
+ /* Equivalent to fesetenv, but takes a fenv_t instead of a pointer.  */

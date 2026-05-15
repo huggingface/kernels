@@ -1,0 +1,67 @@
+commit 62a321b12d0e397af88fa422db65079332f971dc
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Jun 24 18:16:41 2022 +0200
+
+    support: Change non-address output format of support_format_dns_packet
+    
+    It makes sense to include the owner name (LHS) and record type in the
+    output, so that they can be checked for correctness.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/support/support_format_dns_packet.c b/support/support_format_dns_packet.c
+index 1170eafb0f008fee..ef862bc4c8d14af0 100644
+--- a/support/support_format_dns_packet.c
++++ b/support/support_format_dns_packet.c
+@@ -101,6 +101,17 @@ extract_name (struct in_buffer full, struct in_buffer *in, struct dname *value)
+   return true;
+ }
+ 
++static void
++extract_name_data (struct in_buffer full, struct in_buffer *rdata,
++                   const struct dname *owner, const char *typename, FILE *out)
++{
++  struct dname name;
++  if (extract_name (full, rdata, &name))
++    fprintf (out, "data: %s %s %s\n", owner->name, typename, name.name);
++  else
++    fprintf (out, "error: malformed CNAME/PTR record\n");
++}
++
+ char *
+ support_format_dns_packet (const unsigned char *buffer, size_t length)
+ {
+@@ -206,14 +217,11 @@ support_format_dns_packet (const unsigned char *buffer, size_t length)
+           }
+           break;
+         case T_CNAME:
++          extract_name_data (full, &rdata, &rname, "CNAME", mem.out);
++          break;
+         case T_PTR:
+-          {
+-            struct dname name;
+-            if (extract_name (full, &rdata, &name))
+-              fprintf (mem.out, "name: %s\n", name.name);
+-            else
+-              fprintf (mem.out, "error: malformed CNAME/PTR record\n");
+-          }
++          extract_name_data (full, &rdata, &rname, "PTR", mem.out);
++          break;
+         }
+     }
+ 
+diff --git a/support/tst-support_format_dns_packet.c b/support/tst-support_format_dns_packet.c
+index b1135eebc6c02d55..35f475fe86177772 100644
+--- a/support/tst-support_format_dns_packet.c
++++ b/support/tst-support_format_dns_packet.c
+@@ -85,8 +85,8 @@ test_multiple_cnames (void)
+     "\xc0\x00\x02\x01";
+   check_packet (packet, sizeof (packet) - 1, __func__,
+                 "name: www.example\n"
+-                "name: www1.example\n"
+-                "name: www2.example\n"
++                "data: www.example CNAME www1.example\n"
++                "data: www1.example CNAME www2.example\n"
+                 "address: 192.0.2.1\n");
+ }
+ 

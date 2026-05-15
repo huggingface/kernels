@@ -1,0 +1,48 @@
+commit 17b26500f9bb926d85e86821d014f7c1bb88043c
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Aug 13 21:35:27 2018 +0000
+
+    Update syscall-names.list for Linux 4.18.
+    
+    This patch updates sysdeps/unix/sysv/linux/syscall-names.list for
+    Linux 4.18.  The io_pgetevents and rseq syscalls are added to the
+    kernel on various architectures, so need to be mentioned in this file.
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update kernel
+            version to 4.18.
+            (io_pgetevents): New syscall.
+            (rseq): Likewise.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 5306d538e6448163..9982a6334d46ae62 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 4.17.
+-kernel 4.17
++# The list of system calls is current as of Linux 4.18.
++kernel 4.18
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -186,6 +186,7 @@ inotify_rm_watch
+ io_cancel
+ io_destroy
+ io_getevents
++io_pgetevents
+ io_setup
+ io_submit
+ ioctl
+@@ -431,6 +432,7 @@ renameat2
+ request_key
+ restart_syscall
+ rmdir
++rseq
+ rt_sigaction
+ rt_sigpending
+ rt_sigprocmask

@@ -1,0 +1,1365 @@
+commit 91927b7c76437db860cd86a7714476b56bb39d07
+Author: Arjun Shankar <arjun@redhat.com>
+Date:   Tue Jul 7 20:31:48 2020 +0200
+
+    Rewrite iconv option parsing [BZ #19519]
+    
+    This commit replaces string manipulation during `iconv_open' and iconv_prog
+    option parsing with a structured, flag based conversion specification.  In
+    doing so, it alters the internal `__gconv_open' interface and accordingly
+    adjusts its uses.
+    
+    This change fixes several hangs in the iconv program and therefore includes
+    a new test to exercise iconv_prog options that originally led to these hangs.
+    It also includes a new regression test for option handling in the iconv
+    function.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+    Reviewed-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/iconv/Makefile b/iconv/Makefile
+index d71319b39e772fde..d09b8ac842731780 100644
+--- a/iconv/Makefile
++++ b/iconv/Makefile
+@@ -26,7 +26,7 @@ headers		= iconv.h gconv.h
+ routines	= iconv_open iconv iconv_close \
+ 		  gconv_open gconv gconv_close gconv_db gconv_conf \
+ 		  gconv_builtin gconv_simple gconv_trans gconv_cache
+-routines	+= gconv_dl
++routines	+= gconv_dl gconv_charset
+ 
+ vpath %.c ../locale/programs ../intl
+ 
+@@ -43,7 +43,8 @@ CFLAGS-charmap.c += -DCHARMAP_PATH='"$(i18ndir)/charmaps"' \
+ CFLAGS-linereader.c += -DNO_TRANSLITERATION
+ CFLAGS-simple-hash.c += -I../locale
+ 
+-tests	= tst-iconv1 tst-iconv2 tst-iconv3 tst-iconv4 tst-iconv5 tst-iconv6
++tests	= tst-iconv1 tst-iconv2 tst-iconv3 tst-iconv4 tst-iconv5 tst-iconv6 \
++	  tst-iconv-opt
+ 
+ others		= iconv_prog iconvconfig
+ install-others-programs	= $(inst_bindir)/iconv
+@@ -60,6 +61,7 @@ include $(patsubst %,$(..)libof-iterator.mk,$(cpp-srcs-left))
+ 
+ ifeq ($(run-built-tests),yes)
+ xtests-special += $(objpfx)test-iconvconfig.out
++tests-special += $(objpfx)tst-iconv_prog.out
+ endif
+ 
+ # Make a copy of the file because gconv module names are constructed
+@@ -78,6 +80,13 @@ endif
+ 
+ include ../Rules
+ 
++ifeq ($(run-built-tests),yes)
++LOCALES := en_US.UTF-8
++include ../gen-locales.mk
++
++$(objpfx)tst-iconv-opt.out: $(gen-locales)
++endif
++
+ $(inst_bindir)/iconv: $(objpfx)iconv_prog $(+force)
+ 	$(do-install-program)
+ 
+@@ -92,3 +101,8 @@ $(objpfx)test-iconvconfig.out: /dev/null $(objpfx)iconvconfig
+ 	 cmp $$tmp $(inst_gconvdir)/gconv-modules.cache; \
+ 	 rm -f $$tmp) > $@; \
+ 	$(evaluate-test)
++
++$(objpfx)tst-iconv_prog.out: tst-iconv_prog.sh $(objpfx)iconv_prog
++	$(BASH) $< $(common-objdir) '$(test-wrapper-env)' \
++		 '$(run-program-env)' > $@; \
++	$(evaluate-test)
+diff --git a/iconv/Versions b/iconv/Versions
+index 60ab10a277588515..8a5f4cf780b18925 100644
+--- a/iconv/Versions
++++ b/iconv/Versions
+@@ -6,6 +6,7 @@ libc {
+   GLIBC_PRIVATE {
+     # functions shared with iconv program
+     __gconv_get_alias_db; __gconv_get_cache; __gconv_get_modules_db;
++    __gconv_open; __gconv_create_spec;
+ 
+     # function used by the gconv modules
+     __gconv_transliterate;
+diff --git a/iconv/gconv_charset.c b/iconv/gconv_charset.c
+new file mode 100644
+index 0000000000000000..6ccd0773ccb6cd27
+--- /dev/null
++++ b/iconv/gconv_charset.c
+@@ -0,0 +1,218 @@
++/* Charset name normalization.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++
++#include <stdlib.h>
++#include <ctype.h>
++#include <locale.h>
++#include <stdbool.h>
++#include <string.h>
++#include <sys/stat.h>
++#include "gconv_int.h"
++#include "gconv_charset.h"
++
++
++/* This function returns a pointer to the last suffix in a conversion code
++   string.  Valid suffixes matched by this function are of the form: '/' or ','
++   followed by arbitrary text that doesn't contain '/' or ','.  It does not
++   edit the string in any way.  The caller is expected to parse the suffix and
++   remove it (by e.g. truncating the string) before the next call.  */
++static char *
++find_suffix (char *s)
++{
++  /* The conversion code is in the form of a triplet, separated by '/' chars.
++     The third component of the triplet contains suffixes. If we don't have two
++     slashes, we don't have a suffix.  */
++
++  int slash_count = 0;
++  char *suffix_term = NULL;
++
++  for (int i = 0; s[i] != '\0'; i++)
++    switch (s[i])
++      {
++        case '/':
++          slash_count++;
++          /* Fallthrough */
++        case ',':
++          suffix_term = &s[i];
++      }
++
++  if (slash_count >= 2)
++    return suffix_term;
++
++  return NULL;
++}
++
++
++struct gconv_parsed_code
++{
++  char *code;
++  bool translit;
++  bool ignore;
++};
++
++
++/* This function parses an iconv_open encoding PC.CODE, strips any suffixes
++   (such as TRANSLIT or IGNORE) from it and sets corresponding flags in it.  */
++static void
++gconv_parse_code (struct gconv_parsed_code *pc)
++{
++  pc->translit = false;
++  pc->ignore = false;
++
++  while (1)
++    {
++      /* First drop any trailing whitespaces and separators.  */
++      size_t len = strlen (pc->code);
++      while ((len > 0)
++             && (isspace (pc->code[len - 1])
++                 || pc->code[len - 1] == ','
++                 || pc->code[len - 1] == '/'))
++        len--;
++
++      pc->code[len] = '\0';
++
++      if (len == 0)
++        return;
++
++      char * suffix = find_suffix (pc->code);
++      if (suffix == NULL)
++        {
++          /* At this point, we have processed and removed all suffixes from the
++             code and what remains of the code is suffix free.  */
++          return;
++        }
++      else
++        {
++          /* A suffix is processed from the end of the code array going
++             backwards, one suffix at a time.  The suffix is an index into the
++             code character array and points to: one past the end of the code
++             and any unprocessed suffixes, and to the beginning of the suffix
++             currently being processed during this iteration.  We must process
++             this suffix and then drop it from the code by terminating the
++             preceding text with NULL.
++
++             We want to allow and recognize suffixes such as:
++
++             "/TRANSLIT"         i.e. single suffix
++             "//TRANSLIT"        i.e. single suffix and multiple separators
++             "//TRANSLIT/IGNORE" i.e. suffixes separated by "/"
++             "/TRANSLIT//IGNORE" i.e. suffixes separated by "//"
++             "//IGNORE,TRANSLIT" i.e. suffixes separated by ","
++             "//IGNORE,"         i.e. trailing ","
++             "//TRANSLIT/"       i.e. trailing "/"
++             "//TRANSLIT//"      i.e. trailing "//"
++             "/"                 i.e. empty suffix.
++
++             Unknown suffixes are silently discarded and ignored.  */
++
++          if ((__strcasecmp_l (suffix,
++                               GCONV_TRIPLE_SEPARATOR
++                               GCONV_TRANSLIT_SUFFIX,
++                               _nl_C_locobj_ptr) == 0)
++              || (__strcasecmp_l (suffix,
++                                  GCONV_SUFFIX_SEPARATOR
++                                  GCONV_TRANSLIT_SUFFIX,
++                                  _nl_C_locobj_ptr) == 0))
++            pc->translit = true;
++
++          if ((__strcasecmp_l (suffix,
++                               GCONV_TRIPLE_SEPARATOR
++                               GCONV_IGNORE_ERRORS_SUFFIX,
++                               _nl_C_locobj_ptr) == 0)
++              || (__strcasecmp_l (suffix,
++                                  GCONV_SUFFIX_SEPARATOR
++                                  GCONV_IGNORE_ERRORS_SUFFIX,
++                                  _nl_C_locobj_ptr) == 0))
++            pc->ignore = true;
++
++          /* We just processed this suffix.  We can now drop it from the
++             code string by truncating it at the suffix's position.  */
++          suffix[0] = '\0';
++        }
++    }
++}
++
++
++/* This function accepts the charset names of the source and destination of the
++   conversion and populates *conv_spec with an equivalent conversion
++   specification that may later be used by __gconv_open.  The charset names
++   might contain options in the form of suffixes that alter the conversion,
++   e.g. "ISO-10646/UTF-8/TRANSLIT".  It processes the charset names, ignoring
++   and truncating any suffix options in fromcode, and processing and truncating
++   any suffix options in tocode.  Supported suffix options ("TRANSLIT" or
++   "IGNORE") when found in tocode lead to the corresponding flag in *conv_spec
++   to be set to true.  Unrecognized suffix options are silently discarded.  If
++   the function succeeds, it returns conv_spec back to the caller.  It returns
++   NULL upon failure.  conv_spec must be allocated and freed by the caller.  */
++struct gconv_spec *
++__gconv_create_spec (struct gconv_spec *conv_spec, const char *fromcode,
++                   const char *tocode)
++{
++  struct gconv_parsed_code pfc, ptc;
++  struct gconv_spec *ret = NULL;
++
++  pfc.code = __strdup (fromcode);
++  ptc.code = __strdup (tocode);
++
++  if ((pfc.code == NULL)
++      || (ptc.code == NULL))
++    goto out;
++
++  gconv_parse_code (&pfc);
++  gconv_parse_code (&ptc);
++
++  /* We ignore suffixes in the fromcode because that is how the current
++     implementation has always handled them.  Only suffixes in the tocode are
++     processed and handled.  The reality is that invalid input in the input
++     character set should only be ignored if the fromcode specifies IGNORE.
++     The current implementation ignores invalid intput in the input character
++     set if the tocode contains IGNORE.  We preserve this behavior for
++     backwards compatibility.  In the future we may split the handling of
++     IGNORE to allow a finer grained specification of ignorning invalid input
++     and/or ignoring invalid output.  */
++  conv_spec->translit = ptc.translit;
++  conv_spec->ignore = ptc.ignore;
++
++  /* 3 extra bytes because 1 extra for '\0', and 2 extra so strip might
++     be able to add one or two trailing '/' characters if necessary.  */
++  conv_spec->fromcode = malloc (strlen (fromcode) + 3);
++  if (conv_spec->fromcode == NULL)
++    goto out;
++
++  conv_spec->tocode = malloc (strlen (tocode) + 3);
++  if (conv_spec->tocode == NULL)
++    {
++      free (conv_spec->fromcode);
++      conv_spec->fromcode = NULL;
++      goto out;
++    }
++
++  /* Strip unrecognized characters and ensure that the code has two '/'
++     characters as per conversion code triplet specification.  */
++  strip (conv_spec->fromcode, pfc.code);
++  strip (conv_spec->tocode, ptc.code);
++  ret = conv_spec;
++
++out:
++  free (pfc.code);
++  free (ptc.code);
++
++  return ret;
++}
++libc_hidden_def (__gconv_create_spec)
+diff --git a/iconv/gconv_charset.h b/iconv/gconv_charset.h
+index 123e2a62cefdc017..b85d80313030b649 100644
+--- a/iconv/gconv_charset.h
++++ b/iconv/gconv_charset.h
+@@ -19,9 +19,68 @@
+ 
+ #include <ctype.h>
+ #include <locale.h>
++#include <stdbool.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <stdlib.h>
++#include "gconv_int.h"
+ 
+ 
+-static void
++/* An iconv encoding is in the form of a triplet, with parts separated by
++   a '/' character.  The first part is the standard name, the second part is
++   the character set, and the third part is the error handler.  If the first
++   part is sufficient to identify both the standard and the character set
++   then the second part can be empty e.g. UTF-8//.  If the first part is not
++   sufficient to identify both the standard and the character set then the
++   second part is required e.g. ISO-10646/UTF8/.  If neither the first or
++   second parts are provided e.g. //, then the current locale is used.
++   The actual values used in the first and second parts are not entirely
++   relevant to the implementation.  The values themselves are used in a hash
++   table to lookup modules and so the naming convention of the first two parts
++   is somewhat arbitrary and only helps locate the entries in the cache.
++   The third part is the error handler and is comprised of a ',' or '/'
++   separated list of suffixes.  Currently, we support "TRANSLIT" for
++   transliteration and "IGNORE" for ignoring conversion errors due to
++   unrecognized input characters.  */
++#define GCONV_TRIPLE_SEPARATOR "/"
++#define GCONV_SUFFIX_SEPARATOR ","
++#define GCONV_TRANSLIT_SUFFIX "TRANSLIT"
++#define GCONV_IGNORE_ERRORS_SUFFIX "IGNORE"
++
++
++/* This function accepts the charset names of the source and destination of the
++   conversion and populates *conv_spec with an equivalent conversion
++   specification that may later be used by __gconv_open.  The charset names
++   might contain options in the form of suffixes that alter the conversion,
++   e.g. "ISO-10646/UTF-8/TRANSLIT".  It processes the charset names, ignoring
++   and truncating any suffix options in fromcode, and processing and truncating
++   any suffix options in tocode.  Supported suffix options ("TRANSLIT" or
++   "IGNORE") when found in tocode lead to the corresponding flag in *conv_spec
++   to be set to true.  Unrecognized suffix options are silently discarded.  If
++   the function succeeds, it returns conv_spec back to the caller.  It returns
++   NULL upon failure.  */
++struct gconv_spec *
++__gconv_create_spec (struct gconv_spec *conv_spec, const char *fromcode,
++                     const char *tocode);
++libc_hidden_proto (__gconv_create_spec)
++
++
++/* This function frees all heap memory allocated by __gconv_create_spec.  */
++static void __attribute__ ((unused))
++gconv_destroy_spec (struct gconv_spec *conv_spec)
++{
++  free (conv_spec->fromcode);
++  free (conv_spec->tocode);
++  return;
++}
++
++
++/* This function copies in-order, characters from the source 's' that are
++   either alpha-numeric or one in one of these: "_-.,:/" - into the destination
++   'wp' while dropping all other characters.  In the process, it converts all
++   alphabetical characters to upper case.  It then appends up to two '/'
++   characters so that the total number of '/'es in the destination is 2.  */
++static inline void __attribute__ ((unused, always_inline))
+ strip (char *wp, const char *s)
+ {
+   int slash_count = 0;
+diff --git a/iconv/gconv_int.h b/iconv/gconv_int.h
+index 3742557caed05c9a..4748e9b1fa3b5426 100644
+--- a/iconv/gconv_int.h
++++ b/iconv/gconv_int.h
+@@ -92,6 +92,15 @@ struct gconv_module
+ };
+ 
+ 
++/* The specification of the conversion that needs to be performed.  */
++struct gconv_spec
++{
++  char *fromcode;
++  char *tocode;
++  bool translit;
++  bool ignore;
++};
++
+ /* Flags for `gconv_open'.  */
+ enum
+ {
+@@ -154,10 +163,12 @@ __libc_lock_define (extern, __gconv_lock attribute_hidden)
+   })
+ 
+ 
+-/* Return in *HANDLE decriptor for transformation from FROMSET to TOSET.  */
+-extern int __gconv_open (const char *toset, const char *fromset,
+-			 __gconv_t *handle, int flags)
+-     attribute_hidden;
++/* Return in *HANDLE, a decriptor for the transformation.  The function expects
++   the specification of the transformation in the structure pointed to by
++   CONV_SPEC.  It only reads *CONV_SPEC and does not take ownership of it.  */
++extern int __gconv_open (struct gconv_spec *conv_spec,
++                         __gconv_t *handle, int flags);
++libc_hidden_proto (__gconv_open)
+ 
+ /* Free resources associated with transformation descriptor CD.  */
+ extern int __gconv_close (__gconv_t cd)
+diff --git a/iconv/gconv_open.c b/iconv/gconv_open.c
+index f739561f6edba8a8..002faa111a0b9016 100644
+--- a/iconv/gconv_open.c
++++ b/iconv/gconv_open.c
+@@ -27,7 +27,7 @@
+ 
+ 
+ int
+-__gconv_open (const char *toset, const char *fromset, __gconv_t *handle,
++__gconv_open (struct gconv_spec *conv_spec, __gconv_t *handle,
+ 	      int flags)
+ {
+   struct __gconv_step *steps;
+@@ -36,77 +36,38 @@ __gconv_open (const char *toset, const char *fromset, __gconv_t *handle,
+   size_t cnt = 0;
+   int res;
+   int conv_flags = 0;
+-  const char *errhand;
+-  const char *ignore;
+   bool translit = false;
++  char *tocode, *fromcode;
+ 
+   /* Find out whether any error handling method is specified.  */
+-  errhand = strchr (toset, '/');
+-  if (errhand != NULL)
+-    errhand = strchr (errhand + 1, '/');
+-  if (__glibc_likely (errhand != NULL))
+-    {
+-      if (*++errhand == '\0')
+-	errhand = NULL;
+-      else
+-	{
+-	  /* Make copy without the error handling description.  */
+-	  char *newtoset = (char *) alloca (errhand - toset + 1);
+-	  char *tok;
+-	  char *ptr = NULL /* Work around a bogus warning */;
+-
+-	  newtoset[errhand - toset] = '\0';
+-	  toset = memcpy (newtoset, toset, errhand - toset);
++  translit = conv_spec->translit;
+ 
+-	  /* Find the appropriate transliteration handlers.  */
+-	  tok = strdupa (errhand);
++  if (conv_spec->ignore)
++    conv_flags |= __GCONV_IGNORE_ERRORS;
+ 
+-	  tok = __strtok_r (tok, ",", &ptr);
+-	  while (tok != NULL)
+-	    {
+-	      if (__strcasecmp_l (tok, "TRANSLIT", _nl_C_locobj_ptr) == 0)
+-		translit = true;
+-	      else if (__strcasecmp_l (tok, "IGNORE", _nl_C_locobj_ptr) == 0)
+-		/* Set the flag to ignore all errors.  */
+-		conv_flags |= __GCONV_IGNORE_ERRORS;
+-
+-	      tok = __strtok_r (NULL, ",", &ptr);
+-	    }
+-	}
+-    }
+-
+-  /* For the source character set we ignore the error handler specification.
+-     XXX Is this really always the best?  */
+-  ignore = strchr (fromset, '/');
+-  if (ignore != NULL && (ignore = strchr (ignore + 1, '/')) != NULL
+-      && *++ignore != '\0')
+-    {
+-      char *newfromset = (char *) alloca (ignore - fromset + 1);
+-
+-      newfromset[ignore - fromset] = '\0';
+-      fromset = memcpy (newfromset, fromset, ignore - fromset);
+-    }
++  tocode = conv_spec->tocode;
++  fromcode = conv_spec->fromcode;
+ 
+   /* If the string is empty define this to mean the charset of the
+      currently selected locale.  */
+-  if (strcmp (toset, "//") == 0)
++  if (strcmp (tocode, "//") == 0)
+     {
+       const char *codeset = _NL_CURRENT (LC_CTYPE, CODESET);
+       size_t len = strlen (codeset);
+       char *dest;
+-      toset = dest = (char *) alloca (len + 3);
++      tocode = dest = (char *) alloca (len + 3);
+       memcpy (__mempcpy (dest, codeset, len), "//", 3);
+     }
+-  if (strcmp (fromset, "//") == 0)
++  if (strcmp (fromcode, "//") == 0)
+     {
+       const char *codeset = _NL_CURRENT (LC_CTYPE, CODESET);
+       size_t len = strlen (codeset);
+       char *dest;
+-      fromset = dest = (char *) alloca (len + 3);
++      fromcode = dest = (char *) alloca (len + 3);
+       memcpy (__mempcpy (dest, codeset, len), "//", 3);
+     }
+ 
+-  res = __gconv_find_transform (toset, fromset, &steps, &nsteps, flags);
++  res = __gconv_find_transform (tocode, fromcode, &steps, &nsteps, flags);
+   if (res == __GCONV_OK)
+     {
+       /* Allocate room for handle.  */
+@@ -205,3 +166,4 @@ __gconv_open (const char *toset, const char *fromset, __gconv_t *handle,
+   *handle = result;
+   return res;
+ }
++libc_hidden_def (__gconv_open)
+diff --git a/iconv/iconv_open.c b/iconv/iconv_open.c
+index 9f5c32c02096254a..59d1ef4f07ed1022 100644
+--- a/iconv/iconv_open.c
++++ b/iconv/iconv_open.c
+@@ -31,49 +31,15 @@
+ iconv_t
+ iconv_open (const char *tocode, const char *fromcode)
+ {
+-  /* Normalize the name.  We remove all characters beside alpha-numeric,
+-     '_', '-', '/', '.', and ':'.  */
+-  size_t tocode_len = strlen (tocode) + 3;
+-  char *tocode_conv;
+-  bool tocode_usealloca = __libc_use_alloca (tocode_len);
+-  if (tocode_usealloca)
+-    tocode_conv = (char *) alloca (tocode_len);
+-  else
+-    {
+-      tocode_conv = (char *) malloc (tocode_len);
+-      if (tocode_conv == NULL)
+-	return (iconv_t) -1;
+-    }
+-  strip (tocode_conv, tocode);
+-  tocode = (tocode_conv[2] == '\0' && tocode[0] != '\0'
+-	    ? upstr (tocode_conv, tocode) : tocode_conv);
++  __gconv_t cd;
++  struct gconv_spec conv_spec;
+ 
+-  size_t fromcode_len = strlen (fromcode) + 3;
+-  char *fromcode_conv;
+-  bool fromcode_usealloca = __libc_use_alloca (fromcode_len);
+-  if (fromcode_usealloca)
+-    fromcode_conv = (char *) alloca (fromcode_len);
+-  else
+-    {
+-      fromcode_conv = (char *) malloc (fromcode_len);
+-      if (fromcode_conv == NULL)
+-	{
+-	  if (! tocode_usealloca)
+-	    free (tocode_conv);
+-	  return (iconv_t) -1;
+-	}
+-    }
+-  strip (fromcode_conv, fromcode);
+-  fromcode = (fromcode_conv[2] == '\0' && fromcode[0] != '\0'
+-	      ? upstr (fromcode_conv, fromcode) : fromcode_conv);
++  if (__gconv_create_spec (&conv_spec, fromcode, tocode) == NULL)
++    return (iconv_t) -1;
+ 
+-  __gconv_t cd;
+-  int res = __gconv_open (tocode, fromcode, &cd, 0);
++  int res = __gconv_open (&conv_spec, &cd, 0);
+ 
+-  if (! fromcode_usealloca)
+-    free (fromcode_conv);
+-  if (! tocode_usealloca)
+-    free (tocode_conv);
++  gconv_destroy_spec (&conv_spec);
+ 
+   if (__builtin_expect (res, __GCONV_OK) != __GCONV_OK)
+     {
+diff --git a/iconv/iconv_prog.c b/iconv/iconv_prog.c
+index 52e9d3f3ddec3b2e..552efac81660e82a 100644
+--- a/iconv/iconv_prog.c
++++ b/iconv/iconv_prog.c
+@@ -39,6 +39,7 @@
+ #include <gconv_int.h>
+ #include "iconv_prog.h"
+ #include "iconvconfig.h"
++#include "gconv_charset.h"
+ 
+ /* Get libc version number.  */
+ #include "../version.h"
+@@ -118,8 +119,7 @@ main (int argc, char *argv[])
+ {
+   int status = EXIT_SUCCESS;
+   int remaining;
+-  iconv_t cd;
+-  const char *orig_to_code;
++  __gconv_t cd;
+   struct charmap_t *from_charmap = NULL;
+   struct charmap_t *to_charmap = NULL;
+ 
+@@ -139,39 +139,6 @@ main (int argc, char *argv[])
+       exit (EXIT_SUCCESS);
+     }
+ 
+-  /* If we have to ignore errors make sure we use the appropriate name for
+-     the to-character-set.  */
+-  orig_to_code = to_code;
+-  if (omit_invalid)
+-    {
+-      const char *errhand = strchrnul (to_code, '/');
+-      int nslash = 2;
+-      char *newp;
+-      char *cp;
+-
+-      if (*errhand == '/')
+-	{
+-	  --nslash;
+-	  errhand = strchrnul (errhand + 1, '/');
+-
+-	  if (*errhand == '/')
+-	    {
+-	      --nslash;
+-	      errhand = strchr (errhand, '\0');
+-	    }
+-	}
+-
+-      newp = (char *) alloca (errhand - to_code + nslash + 7 + 1);
+-      cp = mempcpy (newp, to_code, errhand - to_code);
+-      while (nslash-- > 0)
+-	*cp++ = '/';
+-      if (cp[-1] != '/')
+-	*cp++ = ',';
+-      memcpy (cp, "IGNORE", sizeof ("IGNORE"));
+-
+-      to_code = newp;
+-    }
+-
+   /* POSIX 1003.2b introduces a silly thing: the arguments to -t anf -f
+      can be file names of charmaps.  In this case iconv will have to read
+      those charmaps and use them to do the conversion.  But there are
+@@ -184,10 +151,10 @@ main (int argc, char *argv[])
+        file.  */
+     from_charmap = charmap_read (from_code, /*0, 1*/1, 0, 0, 0);
+ 
+-  if (strchr (orig_to_code, '/') != NULL)
++  if (strchr (to_code, '/') != NULL)
+     /* The to-name might be a charmap file name.  Try reading the
+        file.  */
+-    to_charmap = charmap_read (orig_to_code, /*0, 1,*/1, 0, 0, 0);
++    to_charmap = charmap_read (to_code, /*0, 1,*/1, 0, 0, 0);
+ 
+ 
+   /* At this point we have to handle two cases.  The first one is
+@@ -201,9 +168,25 @@ main (int argc, char *argv[])
+ 				 argc, remaining, argv, output_file);
+   else
+     {
++      struct gconv_spec conv_spec;
++      int res;
++
++      if (__gconv_create_spec (&conv_spec, from_code, to_code) == NULL)
++        {
++          error (EXIT_FAILURE, errno,
++                 _("failed to start conversion processing"));
++          exit (1);
++        }
++
++      if (omit_invalid)
++        conv_spec.ignore = true;
++
+       /* Let's see whether we have these coded character sets.  */
+-      cd = iconv_open (to_code, from_code);
+-      if (cd == (iconv_t) -1)
++      res = __gconv_open (&conv_spec, &cd, 0);
++
++      gconv_destroy_spec (&conv_spec);
++
++      if (res != __GCONV_OK)
+ 	{
+ 	  if (errno == EINVAL)
+ 	    {
+@@ -221,7 +204,7 @@ main (int argc, char *argv[])
+ 	      const char *from_pretty =
+ 		(from_code[0] ? from_code : nl_langinfo (CODESET));
+ 	      const char *to_pretty =
+-		(orig_to_code[0] ? orig_to_code : nl_langinfo (CODESET));
++		(to_code[0] ? to_code : nl_langinfo (CODESET));
+ 
+ 	      if (from_wrong)
+ 		{
+diff --git a/iconv/tst-iconv-opt.c b/iconv/tst-iconv-opt.c
+new file mode 100644
+index 0000000000000000..669d812a6a9b8749
+--- /dev/null
++++ b/iconv/tst-iconv-opt.c
+@@ -0,0 +1,347 @@
++/* Test iconv's TRANSLIT and IGNORE option handling
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++
++#include <iconv.h>
++#include <locale.h>
++#include <errno.h>
++#include <string.h>
++#include <support/support.h>
++#include <support/check.h>
++
++
++/* Run one iconv test.  Arguments:
++   to: destination character set and options
++   from: source character set
++   input: input string to be converted
++   exp_in: expected number of bytes consumed
++   exp_ret: expected return value (error or number of irreversible conversions)
++   exp_out: expected output string
++   exp_err: expected value of `errno' after iconv returns.  */
++static void
++test_iconv (const char *to, const char *from, char *input, size_t exp_in,
++            size_t exp_ret, const char *exp_out, int exp_err)
++{
++  iconv_t cd;
++  char outbuf[500];
++  size_t inlen, outlen;
++  char *inptr, *outptr;
++  size_t n;
++
++  cd = iconv_open (to, from);
++  TEST_VERIFY (cd != (iconv_t) -1);
++
++  inlen = strlen (input);
++  outlen = sizeof (outbuf);
++  inptr = input;
++  outptr = outbuf;
++
++  errno = 0;
++  n = iconv (cd, &inptr, &inlen, &outptr, &outlen);
++
++  TEST_COMPARE (n, exp_ret);
++  TEST_VERIFY (inptr == input + exp_in);
++  TEST_COMPARE (errno, exp_err);
++  TEST_COMPARE_BLOB (outbuf, outptr - outbuf, exp_out, strlen (exp_out));
++  TEST_VERIFY (iconv_close (cd) == 0);
++}
++
++
++/* We test option parsing by converting UTF-8 inputs to ASCII under various
++   option combinations. The UTF-8 inputs fall into three categories:
++   - ASCII-only,
++   - non-ASCII,
++   - non-ASCII with invalid UTF-8 characters.  */
++
++/* 1.  */
++char ascii[] = "Just some ASCII text";
++
++/* 2. Valid UTF-8 input and some corresponding expected outputs with various
++   options.  The two non-ASCII characters below are accented alphabets:
++   an `a' then an `o'.  */
++char utf8[] = "UTF-8 text with \u00E1 couple \u00F3f non-ASCII characters";
++char u2a[] = "UTF-8 text with ";
++char u2a_translit[] = "UTF-8 text with a couple of non-ASCII characters";
++char u2a_ignore[] = "UTF-8 text with  couple f non-ASCII characters";
++
++/* 3. Invalid UTF-8 input and some corresponding expected outputs.  \xff is
++   invalid UTF-8. It's followed by some valid but non-ASCII UTF-8.  */
++char iutf8[] = "Invalid UTF-8 \xff\u27E6text\u27E7";
++char iu2a[] = "Invalid UTF-8 ";
++char iu2a_ignore[] = "Invalid UTF-8 text";
++char iu2a_both[] = "Invalid UTF-8 [|text|]";
++
++/* 4. Another invalid UTF-8 input and corresponding expected outputs. This time
++   the valid non-ASCII UTF-8 characters appear before the invalid \xff.  */
++char jutf8[] = "Invalid \u27E6UTF-8\u27E7 \xfftext";
++char ju2a[] = "Invalid ";
++char ju2a_translit[] = "Invalid [|UTF-8|] ";
++char ju2a_ignore[] = "Invalid UTF-8 text";
++char ju2a_both[] = "Invalid [|UTF-8|] text";
++
++/* We also test option handling for character set names that have the form
++   "A/B".  In this test, we test conversions "ISO-10646/UTF-8", and either
++   ISO-8859-1 or ASCII.  */
++
++/* 5. Accented 'A' and 'a' characters in ISO-8859-1 and UTF-8, and an
++   equivalent ASCII transliteration.  */
++char iso8859_1_a[] = {0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, /* Accented A's.  */
++                      0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, /* Accented a's.  */
++                      0x00};
++char utf8_a[] = "\u00C0\u00C1\u00C2\u00C3\u00C4\u00C5"
++                "\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5";
++char ascii_a[] = "AAAAAAaaaaaa";
++
++/* 6. An invalid ASCII string where [0] is invalid and [1] is '~'.  */
++char iascii [] = {0x80, '~', '\0'};
++char empty[] = "";
++char ia2u_ignore[] = "~";
++
++static int
++do_test (void)
++{
++  xsetlocale (LC_ALL, "en_US.UTF-8");
++
++
++  /* 0. iconv_open should gracefully fail for invalid character sets.  */
++
++  TEST_VERIFY (iconv_open ("INVALID", "UTF-8") == (iconv_t) -1);
++  TEST_VERIFY (iconv_open ("UTF-8", "INVALID") == (iconv_t) -1);
++  TEST_VERIFY (iconv_open ("INVALID", "INVALID") == (iconv_t) -1);
++
++
++  /* 1. ASCII-only UTF-8 input should convert to ASCII with no changes:  */
++
++  test_iconv ("ASCII", "UTF-8", ascii, strlen (ascii), 0, ascii, 0);
++  test_iconv ("ASCII//", "UTF-8", ascii, strlen (ascii), 0, ascii, 0);
++  test_iconv ("ASCII//TRANSLIT", "UTF-8", ascii, strlen (ascii), 0, ascii, 0);
++  test_iconv ("ASCII//TRANSLIT//", "UTF-8", ascii, strlen (ascii), 0, ascii,
++              0);
++  test_iconv ("ASCII//IGNORE", "UTF-8", ascii, strlen (ascii), 0, ascii, 0);
++  test_iconv ("ASCII//IGNORE//", "UTF-8", ascii, strlen (ascii), 0, ascii, 0);
++
++
++  /* 2. Valid UTF-8 input with non-ASCII characters:  */
++
++  /* EILSEQ when converted to ASCII.  */
++  test_iconv ("ASCII", "UTF-8", utf8, strlen (u2a), (size_t) -1, u2a, EILSEQ);
++
++  /* Converted without error with TRANSLIT enabled.  */
++  test_iconv ("ASCII//TRANSLIT", "UTF-8", utf8, strlen (utf8), 2, u2a_translit,
++              0);
++
++  /* EILSEQ with IGNORE enabled.  Non-ASCII chars dropped from output.  */
++  test_iconv ("ASCII//IGNORE", "UTF-8", utf8, strlen (utf8), (size_t) -1,
++              u2a_ignore, EILSEQ);
++
++  /* With TRANSLIT and IGNORE enabled, transliterated without error.  We test
++     four combinations.  */
++
++  test_iconv ("ASCII//TRANSLIT,IGNORE", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++  test_iconv ("ASCII//TRANSLIT//IGNORE", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++  /* Due to bug 19519, iconv was ignoring TRANSLIT for the following input.  */
++  test_iconv ("ASCII//IGNORE//TRANSLIT", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++
++  /* Misspellings of TRANSLIT and IGNORE are ignored, but conversion still
++     works while respecting any other correctly spelled options.  */
++
++  test_iconv ("ASCII//T", "UTF-8", utf8, strlen (u2a), (size_t) -1, u2a,
++              EILSEQ);
++  test_iconv ("ASCII//TRANSLITERATE", "UTF-8", utf8, strlen (u2a), (size_t) -1,
++              u2a, EILSEQ);
++  test_iconv ("ASCII//I", "UTF-8", utf8, strlen (u2a), (size_t) -1, u2a,
++              EILSEQ);
++  test_iconv ("ASCII//IGNORED", "UTF-8", utf8, strlen (u2a), (size_t) -1, u2a,
++              EILSEQ);
++  test_iconv ("ASCII//TRANSLITERATE//IGNORED", "UTF-8", utf8, strlen (u2a),
++              (size_t) -1, u2a, EILSEQ);
++  test_iconv ("ASCII//IGNORED,TRANSLITERATE", "UTF-8", utf8, strlen (u2a),
++              (size_t) -1, u2a, EILSEQ);
++  test_iconv ("ASCII//T//I", "UTF-8", utf8, strlen (u2a), (size_t) -1, u2a,
++              EILSEQ);
++
++  test_iconv ("ASCII//TRANSLIT//I", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++  /* Due to bug 19519, iconv was ignoring TRANSLIT for the following input.  */
++  test_iconv ("ASCII//I//TRANSLIT", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++  test_iconv ("ASCII//IGNORED,TRANSLIT", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++  test_iconv ("ASCII//TRANSLIT,IGNORED", "UTF-8", utf8, strlen (utf8), 2,
++              u2a_translit, 0);
++
++  test_iconv ("ASCII//IGNORE,T", "UTF-8", utf8, strlen (utf8), (size_t) -1,
++              u2a_ignore, EILSEQ);
++  test_iconv ("ASCII//T,IGNORE", "UTF-8", utf8, strlen (utf8), (size_t) -1,
++              u2a_ignore, EILSEQ);
++  /* Due to bug 19519, iconv was ignoring IGNORE for the following input.  */
++  test_iconv ("ASCII//TRANSLITERATE//IGNORE", "UTF-8", utf8, strlen (utf8),
++              (size_t) -1, u2a_ignore, EILSEQ);
++  test_iconv ("ASCII//IGNORE//TRANSLITERATE", "UTF-8", utf8, strlen (utf8),
++              (size_t) -1, u2a_ignore, EILSEQ);
++
++
++  /* 3. Invalid UTF-8 followed by some valid non-ASCII UTF-8 characters:  */
++
++  /* EILSEQ; output is truncated at the first invalid UTF-8 character.  */
++  test_iconv ("ASCII", "UTF-8", iutf8, strlen (iu2a), (size_t) -1, iu2a,
++              EILSEQ);
++
++  /* With TRANSLIT enabled: EILSEQ; output still truncated at the first invalid
++     UTF-8 character.  */
++  test_iconv ("ASCII//TRANSLIT", "UTF-8", iutf8, strlen (iu2a), (size_t) -1,
++              iu2a, EILSEQ);
++
++  /* With IGNORE enabled: EILSEQ; output omits invalid UTF-8 characters and
++     valid UTF-8 non-ASCII characters.  */
++  test_iconv ("ASCII//IGNORE", "UTF-8", iutf8, strlen (iutf8), (size_t) -1,
++              iu2a_ignore, EILSEQ);
++
++  /* With TRANSLIT and IGNORE enabled, output omits only invalid UTF-8
++     characters and transliterates valid non-ASCII UTF-8 characters.  We test
++     four combinations.  */
++
++  test_iconv ("ASCII//TRANSLIT,IGNORE", "UTF-8", iutf8, strlen (iutf8), 2,
++              iu2a_both, 0);
++  /* Due to bug 19519, iconv was ignoring IGNORE for the following input.  */
++  test_iconv ("ASCII//TRANSLIT//IGNORE", "UTF-8", iutf8, strlen (iutf8), 2,
++              iu2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT", "UTF-8", iutf8, strlen (iutf8), 2,
++              iu2a_both, 0);
++  /* Due to bug 19519, iconv was ignoring TRANSLIT for the following input.  */
++  test_iconv ("ASCII//IGNORE//TRANSLIT", "UTF-8", iutf8, strlen (iutf8), 2,
++              iu2a_both, 0);
++
++
++  /* 4. Invalid UTF-8 with valid non-ASCII UTF-8 chars appearing first:  */
++
++  /* EILSEQ; output is truncated at the first non-ASCII character.  */
++  test_iconv ("ASCII", "UTF-8", jutf8, strlen (ju2a), (size_t) -1, ju2a,
++              EILSEQ);
++
++  /* With TRANSLIT enabled: EILSEQ; output now truncated at the first invalid
++     UTF-8 character.  */
++  test_iconv ("ASCII//TRANSLIT", "UTF-8", jutf8, strlen (jutf8) - 5,
++              (size_t) -1, ju2a_translit, EILSEQ);
++  test_iconv ("ASCII//translit", "UTF-8", jutf8, strlen (jutf8) - 5,
++              (size_t) -1, ju2a_translit, EILSEQ);
++
++  /* With IGNORE enabled: EILSEQ; output omits invalid UTF-8 characters and
++     valid UTF-8 non-ASCII characters.  */
++  test_iconv ("ASCII//IGNORE", "UTF-8", jutf8, strlen (jutf8), (size_t) -1,
++              ju2a_ignore, EILSEQ);
++  test_iconv ("ASCII//ignore", "UTF-8", jutf8, strlen (jutf8), (size_t) -1,
++              ju2a_ignore, EILSEQ);
++
++  /* With TRANSLIT and IGNORE enabled, output omits only invalid UTF-8
++     characters and transliterates valid non-ASCII UTF-8 characters.  We test
++     several combinations.  */
++
++  test_iconv ("ASCII//TRANSLIT,IGNORE", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  /* Due to bug 19519, iconv was ignoring IGNORE for the following input.  */
++  test_iconv ("ASCII//TRANSLIT//IGNORE", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  /* Due to bug 19519, iconv was ignoring TRANSLIT for the following input.  */
++  test_iconv ("ASCII//IGNORE//TRANSLIT", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//translit,ignore", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  /* Trailing whitespace and separators should be ignored.  */
++  test_iconv ("ASCII//IGNORE,TRANSLIT ", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT/", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT//", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT,", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT,,", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++  test_iconv ("ASCII//IGNORE,TRANSLIT /,", "UTF-8", jutf8, strlen (jutf8), 2,
++              ju2a_both, 0);
++
++  /* TRANSLIT or IGNORE suffixes in fromcode should be ignored.  */
++  test_iconv ("ASCII", "UTF-8//TRANSLIT", jutf8, strlen (ju2a), (size_t) -1,
++              ju2a, EILSEQ);
++  test_iconv ("ASCII", "UTF-8//IGNORE", jutf8, strlen (ju2a), (size_t) -1,
++              ju2a, EILSEQ);
++  test_iconv ("ASCII", "UTF-8//TRANSLIT,IGNORE", jutf8, strlen (ju2a),
++              (size_t) -1, ju2a, EILSEQ);
++
++
++  /* 5. Charset names of the form "A/B/":  */
++
++  /* ISO-8859-1 is converted to UTF-8 without needing transliteration.  */
++  test_iconv ("ISO-10646/UTF-8", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8/", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8/IGNORE", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8//IGNORE", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8/TRANSLIT", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8//TRANSLIT", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8//TRANSLIT/IGNORE", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8//TRANSLIT//IGNORE", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++  test_iconv ("ISO-10646/UTF-8/TRANSLIT,IGNORE", "ISO-8859-1", iso8859_1_a,
++              strlen (iso8859_1_a), 0, utf8_a, 0);
++
++  /* UTF-8 with accented A's is converted to ASCII with transliteration.  */
++  test_iconv ("ASCII", "ISO-10646/UTF-8", utf8_a,
++              0, (size_t) -1, empty, EILSEQ);
++  test_iconv ("ASCII//IGNORE", "ISO-10646/UTF-8", utf8_a,
++              strlen (utf8_a), (size_t) -1, empty, EILSEQ);
++  test_iconv ("ASCII//TRANSLIT", "ISO-10646/UTF-8", utf8_a,
++              strlen (utf8_a), 12, ascii_a, 0);
++
++  /* Invalid ASCII is converted to UTF-8 only with IGNORE.  */
++  test_iconv ("ISO-10646/UTF-8", "ASCII", iascii, strlen (empty), (size_t) -1,
++              empty, EILSEQ);
++  test_iconv ("ISO-10646/UTF-8/TRANSLIT", "ASCII", iascii, strlen (empty),
++              (size_t) -1, empty, EILSEQ);
++  test_iconv ("ISO-10646/UTF-8/IGNORE", "ASCII", iascii, strlen (iascii),
++              (size_t) -1, ia2u_ignore, EILSEQ);
++  test_iconv ("ISO-10646/UTF-8/TRANSLIT,IGNORE", "ASCII", iascii,
++              strlen (iascii), (size_t) -1, ia2u_ignore, EILSEQ);
++  /* Due to bug 19519, iconv was ignoring IGNORE for the following three
++     inputs: */
++  test_iconv ("ISO-10646/UTF-8/TRANSLIT/IGNORE", "ASCII", iascii,
++              strlen (iascii), (size_t) -1, ia2u_ignore, EILSEQ);
++  test_iconv ("ISO-10646/UTF-8//TRANSLIT,IGNORE", "ASCII", iascii,
++              strlen (iascii), (size_t) -1, ia2u_ignore, EILSEQ);
++  test_iconv ("ISO-10646/UTF-8//TRANSLIT//IGNORE", "ASCII", iascii,
++              strlen (iascii), (size_t) -1, ia2u_ignore, EILSEQ);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/iconv/tst-iconv_prog.sh b/iconv/tst-iconv_prog.sh
+new file mode 100644
+index 0000000000000000..8298136b7f45d855
+--- /dev/null
++++ b/iconv/tst-iconv_prog.sh
+@@ -0,0 +1,280 @@
++#!/bin/bash
++# Test for some known iconv(1) hangs from bug 19519, and miscellaneous
++# iconv(1) program error conditions.
++# Copyright (C) 2020 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <https://www.gnu.org/licenses/>.
++
++codir=$1
++test_wrapper_env="$2"
++run_program_env="$3"
++
++# We have to have some directories in the library path.
++LIBPATH=$codir:$codir/iconvdata
++
++# How the start the iconv(1) program.  $from is not defined/expanded yet.
++ICONV='
++$codir/elf/ld.so --library-path $LIBPATH --inhibit-rpath ${from}.so
++$codir/iconv/iconv_prog
++'
++ICONV="$test_wrapper_env $run_program_env $ICONV"
++
++# List of known hangs;
++# Gathered by running an exhaustive 2 byte input search against glibc-2.28
++hangarray=(
++"\x00\x23;-c;ANSI_X3.110;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa1;-c;ARMSCII-8;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa1;-c;ASMO_449;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;BIG5;UTF-8//TRANSLIT//IGNORE"
++"\x00\xff;-c;BIG5HKSCS;UTF-8//TRANSLIT//IGNORE"
++"\x00\xff;-c;BRF;UTF-8//TRANSLIT//IGNORE"
++"\x00\xff;-c;BS_4730;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1250;UTF-8//TRANSLIT//IGNORE"
++"\x00\x98;-c;CP1251;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1252;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1253;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1254;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1255;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1257;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;CP1258;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;CP932;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;CSA_Z243.4-1985-1;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;CSA_Z243.4-1985-2;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;DEC-MCS;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;DIN_66003;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;DS_2089;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-AT-DE;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-AT-DE-A;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-CA-FR;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-DK-NO;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-DK-NO-A;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-ES;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-ES-A;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-ES-S;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-FI-SE;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-FI-SE-A;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-FR;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-IS-FRISS;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-IT;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-PT;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-UK;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;EBCDIC-US;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ES;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ES2;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;EUC-CN;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;EUC-JISX0213;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;EUC-JP;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;EUC-JP-MS;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;EUC-KR;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;EUC-TW;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GB18030;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GB_1988-80;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GBK;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GOST_19768-74;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GREEK7;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GREEK7-OLD;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;GREEK-CCITT;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;HP-GREEK8;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;HP-ROMAN8;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;HP-ROMAN9;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;HP-THAI8;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;HP-TURKISH8;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM038;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IBM1004;UTF-8//TRANSLIT//IGNORE"
++"\x00\xff;-c;IBM1008;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;IBM1046;UTF-8//TRANSLIT//IGNORE"
++"\x00\x51;-c;IBM1132;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa0;-c;IBM1133;UTF-8//TRANSLIT//IGNORE"
++"\x00\xce;-c;IBM1137;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IBM1161;UTF-8//TRANSLIT//IGNORE"
++"\x00\xdb;-c;IBM1162;UTF-8//TRANSLIT//IGNORE"
++"\x00\x70;-c;IBM12712;UTF-8//TRANSLIT//IGNORE"
++# These are known hangs that are yet to be fixed:
++# "\x00\x0f;-c;IBM1364;UTF-8"
++# "\x00\x0f;-c;IBM1371;UTF-8"
++# "\x00\x0f;-c;IBM1388;UTF-8"
++# "\x00\x0f;-c;IBM1390;UTF-8"
++# "\x00\x0f;-c;IBM1399;UTF-8"
++"\x00\x53;-c;IBM16804;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM274;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM275;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM281;UTF-8//TRANSLIT//IGNORE"
++"\x00\x57;-c;IBM290;UTF-8//TRANSLIT//IGNORE"
++"\x00\x45;-c;IBM420;UTF-8//TRANSLIT//IGNORE"
++"\x00\x68;-c;IBM423;UTF-8//TRANSLIT//IGNORE"
++"\x00\x70;-c;IBM424;UTF-8//TRANSLIT//IGNORE"
++"\x00\x53;-c;IBM4517;UTF-8//TRANSLIT//IGNORE"
++"\x00\x53;-c;IBM4899;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa5;-c;IBM4909;UTF-8//TRANSLIT//IGNORE"
++"\x00\xdc;-c;IBM4971;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM803;UTF-8//TRANSLIT//IGNORE"
++"\x00\x91;-c;IBM851;UTF-8//TRANSLIT//IGNORE"
++"\x00\x9b;-c;IBM856;UTF-8//TRANSLIT//IGNORE"
++"\x00\xd5;-c;IBM857;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;IBM864;UTF-8//TRANSLIT//IGNORE"
++"\x00\x94;-c;IBM868;UTF-8//TRANSLIT//IGNORE"
++"\x00\x94;-c;IBM869;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;IBM874;UTF-8//TRANSLIT//IGNORE"
++"\x00\x6a;-c;IBM875;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM880;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IBM891;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;IBM903;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;IBM904;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM905;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IBM9066;UTF-8//TRANSLIT//IGNORE"
++"\x00\x48;-c;IBM918;UTF-8//TRANSLIT//IGNORE"
++"\x00\x57;-c;IBM930;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IBM932;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM933;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM935;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM937;UTF-8//TRANSLIT//IGNORE"
++"\x00\x41;-c;IBM939;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IBM943;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;INIS;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;INIS-8;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;INIS-CYRILLIC;UTF-8//TRANSLIT//IGNORE"
++"\x00\xec;-c;ISIRI-3342;UTF-8//TRANSLIT//IGNORE"
++"\x00\xec;-c;ISO_10367-BOX;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-2022-CN;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-2022-CN-EXT;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-2022-JP;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-2022-JP-2;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-2022-JP-3;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-2022-KR;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO_2033;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO_5427;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO_5427-EXT;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO_5428;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa4;-c;ISO_6937;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa0;-c;ISO_6937-2;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-8859-11;UTF-8//TRANSLIT//IGNORE"
++"\x00\xa5;-c;ISO-8859-3;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-8859-6;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-8859-7;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;ISO-8859-8;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;ISO-IR-197;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;ISO-IR-209;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;IT;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;JIS_C6220-1969-RO;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;JIS_C6229-1984-B;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;JOHAB;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;JUS_I.B1.002;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;KOI-8;UTF-8//TRANSLIT//IGNORE"
++"\x00\x88;-c;KOI8-T;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;KSC5636;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;LATIN-GREEK;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;LATIN-GREEK-1;UTF-8//TRANSLIT//IGNORE"
++"\x00\xf6;-c;MAC-IS;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;MSZ_7795.3;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NATS-DANO;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NATS-SEFI;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NC_NC00-10;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NF_Z_62-010;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NF_Z_62-010_1973;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NS_4551-1;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;NS_4551-2;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;PT;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;PT2;UTF-8//TRANSLIT//IGNORE"
++"\x00\x98;-c;RK1048;UTF-8//TRANSLIT//IGNORE"
++"\x00\x98;-c;SEN_850200_B;UTF-8//TRANSLIT//IGNORE"
++"\x00\x98;-c;SEN_850200_C;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;Shift_JISX0213;UTF-8//TRANSLIT//IGNORE"
++"\x00\x80;-c;SJIS;UTF-8//TRANSLIT//IGNORE"
++"\x00\x23;-c;T.61-8BIT;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;TIS-620;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;TSCII;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;UHC;UTF-8//TRANSLIT//IGNORE"
++"\x00\xd8;-c;UNICODE;UTF-8//TRANSLIT//IGNORE"
++"\x00\xdc;-c;UTF-16;UTF-8//TRANSLIT//IGNORE"
++"\xdc\x00;-c;UTF-16BE;UTF-8//TRANSLIT//IGNORE"
++"\x00\xdc;-c;UTF-16LE;UTF-8//TRANSLIT//IGNORE"
++"\xff\xff;-c;UTF-7;UTF-8//TRANSLIT//IGNORE"
++"\x00\x81;-c;WIN-SAMI-2;UTF-8//TRANSLIT//IGNORE"
++)
++
++# List of option combinations that *should* lead to an error
++errorarray=(
++# Converting from/to invalid character sets should cause error
++"\x00\x00;;INVALID;INVALID"
++"\x00\x00;;INVALID;UTF-8"
++"\x00\x00;;UTF-8;INVALID"
++)
++
++# Requires $twobyte input, $c flag, $from, and $to to be set; sets $ret
++execute_test ()
++{
++  eval PROG=\"$ICONV\"
++  echo -en "$twobyte" \
++    | timeout -k 4 3 $PROG $c -f $from -t "$to" &>/dev/null
++  ret=$?
++}
++
++check_hangtest_result ()
++{
++  if [ "$ret" -eq "124" ] || [ "$ret" -eq "137" ]; then # timeout/hang
++    result="HANG"
++  else
++    if [ "$ret" -eq "139" ]; then # segfault
++      result="SEGFAULT"
++    else
++      if [ "$ret" -gt "127" ]; then # unexpected error
++        result="UNEXPECTED"
++      else
++        result="OK"
++      fi
++    fi
++  fi
++
++  echo -n "$result: from: \"$from\", to: \"$to\","
++  echo    " input \"$twobyte\", flags \"$c\""
++
++  if [ "$result" != "OK" ]; then
++    exit 1
++  fi
++}
++
++for hangcommand in "${hangarray[@]}"; do
++  twobyte="$(echo "$hangcommand" | cut -d";" -f 1)"
++  c="$(echo "$hangcommand" | cut -d";" -f 2)"
++  from="$(echo "$hangcommand" | cut -d";" -f 3)"
++  to="$(echo "$hangcommand" | cut -d";" -f 4)"
++  execute_test
++  check_hangtest_result
++done
++
++check_errtest_result ()
++{
++  if [ "$ret" -eq "1" ]; then # we errored out as expected
++    result="PASS"
++  else
++    result="FAIL"
++  fi
++  echo -n "$result: from: \"$from\", to: \"$to\","
++  echo    " input \"$twobyte\", flags \"$c\", return code $ret"
++
++  if [ "$result" != "PASS" ]; then
++    exit 1
++  fi
++}
++
++for errorcommand in "${errorarray[@]}"; do
++  twobyte="$(echo "$errorcommand" | cut -d";" -f 1)"
++  c="$(echo "$errorcommand" | cut -d";" -f 2)"
++  from="$(echo "$errorcommand" | cut -d";" -f 3)"
++  to="$(echo "$errorcommand" | cut -d";" -f 4)"
++  execute_test
++  check_errtest_result
++done
+diff --git a/intl/dcigettext.c b/intl/dcigettext.c
+index 25f47c5bd3b0ea04..ed48fc8d3e96c7ba 100644
+--- a/intl/dcigettext.c
++++ b/intl/dcigettext.c
+@@ -1120,11 +1120,16 @@ _nl_find_msg (struct loaded_l10nfile *domain_file,
+ 		      outcharset = encoding;
+ 
+ # ifdef _LIBC
+-		      /* We always want to use transliteration.  */
+-		      outcharset = norm_add_slashes (outcharset, "TRANSLIT");
+-		      charset = norm_add_slashes (charset, "");
+-		      int r = __gconv_open (outcharset, charset, &convd->conv,
+-					    GCONV_AVOID_NOCONV);
++
++		      struct gconv_spec conv_spec
++		        = { .fromcode = norm_add_slashes (charset, ""),
++		            .tocode = norm_add_slashes (outcharset, ""),
++		            /* We always want to use transliteration.  */
++		            .translit = true,
++		            .ignore = false
++		          };
++		      int r = __gconv_open (&conv_spec, &convd->conv,
++		                            GCONV_AVOID_NOCONV);
+ 		      if (__builtin_expect (r != __GCONV_OK, 0))
+ 			{
+ 			  /* If the output encoding is the same there is

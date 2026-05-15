@@ -1,0 +1,642 @@
+commit ffb17e7ba3a5ba9632cee97330b325072fbe41dd
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Wed Jun 10 13:40:40 2020 +0100
+
+    rtld: Avoid using up static TLS surplus for optimizations [BZ #25051]
+    
+    On some targets static TLS surplus area can be used opportunistically
+    for dynamically loaded modules such that the TLS access then becomes
+    faster (TLSDESC and powerpc TLS optimization). However we don't want
+    all surplus TLS to be used for this optimization because dynamically
+    loaded modules with initial-exec model TLS can only use surplus TLS.
+    
+    The new contract for surplus static TLS use is:
+    
+    - libc.so can have up to 192 bytes of IE TLS,
+    - other system libraries together can have up to 144 bytes of IE TLS.
+    - Some "optional" static TLS is available for opportunistic use.
+    
+    The optional TLS is now tunable: rtld.optional_static_tls, so users
+    can directly affect the allocated static TLS size. (Note that module
+    unloading with dlclose does not reclaim static TLS. After the optional
+    TLS runs out, TLS access is no longer optimized to use static TLS.)
+    
+    The default setting of rtld.optional_static_tls is 512 so the surplus
+    TLS is 3*192 + 4*144 + 512 = 1664 by default, the same as before.
+    
+    Fixes BZ #25051.
+    
+    Tested on aarch64-linux-gnu and x86_64-linux-gnu.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/Makefile
+	  (Missing __libc_single_threaded downstream.)
+
+diff --git a/csu/libc-tls.c b/csu/libc-tls.c
+index 6f2a47dc86222407..76aa1b98ea059a43 100644
+--- a/csu/libc-tls.c
++++ b/csu/libc-tls.c
+@@ -62,6 +62,9 @@ size_t _dl_tls_static_align;
+    loaded modules with IE-model TLS or for TLSDESC optimization.
+    See comments in elf/dl-tls.c where it is initialized.  */
+ size_t _dl_tls_static_surplus;
++/* Remaining amount of static TLS that may be used for optimizing
++   dynamic TLS access (e.g. with TLSDESC).  */
++size_t _dl_tls_static_optional;
+ 
+ /* Generation counter for the dtv.  */
+ size_t _dl_tls_generation;
+diff --git a/elf/Makefile b/elf/Makefile
+index cbced7605ebe2443..8b96bfefd852b79f 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -197,7 +197,8 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-auditmany tst-initfinilazyfail \
+ 	 tst-dlopenfail tst-dlopenfail-2 \
+ 	 tst-filterobj tst-filterobj-dlopen tst-auxobj tst-auxobj-dlopen \
+-	 tst-audit14 tst-audit15 tst-audit16
++	 tst-audit14 tst-audit15 tst-audit16 \
++	 tst-tls-ie tst-tls-ie-dlmopen
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -313,7 +314,10 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2 \
+ 		tst-dlopenfailmod3 \
+ 		tst-filterobj-flt tst-filterobj-aux tst-filterobj-filtee \
+-		tst-auditlogmod-1 tst-auditlogmod-2 tst-auditlogmod-3
++		tst-auditlogmod-1 tst-auditlogmod-2 tst-auditlogmod-3 \
++		tst-tls-ie-mod0 tst-tls-ie-mod1 tst-tls-ie-mod2 \
++		tst-tls-ie-mod3 tst-tls-ie-mod4 tst-tls-ie-mod5 \
++		tst-tls-ie-mod6
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1690,3 +1694,23 @@ $(objpfx)tst-auxobj: $(objpfx)tst-filterobj-aux.so
+ $(objpfx)tst-auxobj-dlopen: $(libdl)
+ $(objpfx)tst-auxobj.out: $(objpfx)tst-filterobj-filtee.so
+ $(objpfx)tst-auxobj-dlopen.out: $(objpfx)tst-filterobj-filtee.so
++
++$(objpfx)tst-tls-ie: $(libdl) $(shared-thread-library)
++$(objpfx)tst-tls-ie.out: \
++  $(objpfx)tst-tls-ie-mod0.so \
++  $(objpfx)tst-tls-ie-mod1.so \
++  $(objpfx)tst-tls-ie-mod2.so \
++  $(objpfx)tst-tls-ie-mod3.so \
++  $(objpfx)tst-tls-ie-mod4.so \
++  $(objpfx)tst-tls-ie-mod5.so \
++  $(objpfx)tst-tls-ie-mod6.so
++
++$(objpfx)tst-tls-ie-dlmopen: $(libdl) $(shared-thread-library)
++$(objpfx)tst-tls-ie-dlmopen.out: \
++  $(objpfx)tst-tls-ie-mod0.so \
++  $(objpfx)tst-tls-ie-mod1.so \
++  $(objpfx)tst-tls-ie-mod2.so \
++  $(objpfx)tst-tls-ie-mod3.so \
++  $(objpfx)tst-tls-ie-mod4.so \
++  $(objpfx)tst-tls-ie-mod5.so \
++  $(objpfx)tst-tls-ie-mod6.so
+diff --git a/elf/dl-reloc.c b/elf/dl-reloc.c
+index afeace4d3e49180c..c6139b89d4ecddc8 100644
+--- a/elf/dl-reloc.c
++++ b/elf/dl-reloc.c
+@@ -39,13 +39,16 @@
+ /* We are trying to perform a static TLS relocation in MAP, but it was
+    dynamically loaded.  This can only work if there is enough surplus in
+    the static TLS area already allocated for each running thread.  If this
+-   object's TLS segment is too big to fit, we fail.  If it fits,
+-   we set MAP->l_tls_offset and return.
+-   This function intentionally does not return any value but signals error
+-   directly, as static TLS should be rare and code handling it should
+-   not be inlined as much as possible.  */
++   object's TLS segment is too big to fit, we fail with -1.  If it fits,
++   we set MAP->l_tls_offset and return 0.
++   A portion of the surplus static TLS can be optionally used to optimize
++   dynamic TLS access (with TLSDESC or powerpc TLS optimizations).
++   If OPTIONAL is true then TLS is allocated for such optimization and
++   the caller must have a fallback in case the optional portion of surplus
++   TLS runs out.  If OPTIONAL is false then the entire surplus TLS area is
++   considered and the allocation only fails if that runs out.  */
+ int
+-_dl_try_allocate_static_tls (struct link_map *map)
++_dl_try_allocate_static_tls (struct link_map *map, bool optional)
+ {
+   /* If we've already used the variable with dynamic access, or if the
+      alignment requirements are too high, fail.  */
+@@ -68,8 +71,14 @@ _dl_try_allocate_static_tls (struct link_map *map)
+ 
+   size_t n = (freebytes - blsize) / map->l_tls_align;
+ 
+-  size_t offset = GL(dl_tls_static_used) + (freebytes - n * map->l_tls_align
+-					    - map->l_tls_firstbyte_offset);
++  /* Account optional static TLS surplus usage.  */
++  size_t use = freebytes - n * map->l_tls_align - map->l_tls_firstbyte_offset;
++  if (optional && use > GL(dl_tls_static_optional))
++    goto fail;
++  else if (optional)
++    GL(dl_tls_static_optional) -= use;
++
++  size_t offset = GL(dl_tls_static_used) + use;
+ 
+   map->l_tls_offset = GL(dl_tls_static_used) = offset;
+ #elif TLS_DTV_AT_TP
+@@ -83,6 +92,13 @@ _dl_try_allocate_static_tls (struct link_map *map)
+   if (used > GL(dl_tls_static_size))
+     goto fail;
+ 
++  /* Account optional static TLS surplus usage.  */
++  size_t use = used - GL(dl_tls_static_used);
++  if (optional && use > GL(dl_tls_static_optional))
++    goto fail;
++  else if (optional)
++    GL(dl_tls_static_optional) -= use;
++
+   map->l_tls_offset = offset;
+   map->l_tls_firstbyte_offset = GL(dl_tls_static_used);
+   GL(dl_tls_static_used) = used;
+@@ -110,12 +126,15 @@ _dl_try_allocate_static_tls (struct link_map *map)
+   return 0;
+ }
+ 
++/* This function intentionally does not return any value but signals error
++   directly, as static TLS should be rare and code handling it should
++   not be inlined as much as possible.  */
+ void
+ __attribute_noinline__
+ _dl_allocate_static_tls (struct link_map *map)
+ {
+   if (map->l_tls_offset == FORCED_DYNAMIC_TLS_OFFSET
+-      || _dl_try_allocate_static_tls (map))
++      || _dl_try_allocate_static_tls (map, false))
+     {
+       _dl_signal_error (0, map->l_name, NULL, N_("\
+ cannot allocate memory in static TLS block"));
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index cfda76f6de96df57..4f8c35b7d37bfc18 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -60,8 +60,6 @@
+    This should be large enough to cover runtime libraries of the
+    compiler such as libgomp and libraries in libc other than libc.so.  */
+ #define OTHER_IE_TLS 144
+-/* Size of additional surplus TLS, placeholder for TLS optimizations.  */
+-#define OPT_SURPLUS_TLS 512
+ 
+ /* Calculate the size of the static TLS surplus, when the given
+    number of audit modules are loaded.  Must be called after the
+@@ -69,13 +67,15 @@
+ void
+ _dl_tls_static_surplus_init (size_t naudit)
+ {
+-  size_t nns;
++  size_t nns, opt_tls;
+ 
+ #if HAVE_TUNABLES
+   nns = TUNABLE_GET (nns, size_t, NULL);
++  opt_tls = TUNABLE_GET (optional_static_tls, size_t, NULL);
+ #else
+   /* Default values of the tunables.  */
+   nns = 4;
++  opt_tls = 512;
+ #endif
+   if (nns > DL_NNS)
+     nns = DL_NNS;
+@@ -84,9 +84,10 @@ _dl_tls_static_surplus_init (size_t naudit)
+ 		      (unsigned long) naudit, (unsigned long) (DL_NNS - nns));
+   nns += naudit;
+ 
++  GL(dl_tls_static_optional) = opt_tls;
+   GLRO(dl_tls_static_surplus) = ((nns - 1) * LIBC_IE_TLS
+ 				 + nns * OTHER_IE_TLS
+-				 + OPT_SURPLUS_TLS);
++				 + opt_tls);
+ }
+ 
+ /* Out-of-memory handler.  */
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index 7337fb85062c91a7..6408a8e5ae92d2c6 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -134,5 +134,10 @@ glibc {
+       maxval: 16
+       default: 4
+     }
++    optional_static_tls {
++      type: SIZE_T
++      minval: 0
++      default: 512
++    }
+   }
+ }
+diff --git a/elf/dynamic-link.h b/elf/dynamic-link.h
+index 9e9d5a3b28bc06c5..2fc3c91b7defe84e 100644
+--- a/elf/dynamic-link.h
++++ b/elf/dynamic-link.h
+@@ -40,9 +40,10 @@
+     (__builtin_expect ((sym_map)->l_tls_offset				\
+ 		       != FORCED_DYNAMIC_TLS_OFFSET, 1)			\
+      && (__builtin_expect ((sym_map)->l_tls_offset != NO_TLS_OFFSET, 1)	\
+-	 || _dl_try_allocate_static_tls (sym_map) == 0))
++	 || _dl_try_allocate_static_tls (sym_map, true) == 0))
+ 
+-int _dl_try_allocate_static_tls (struct link_map *map) attribute_hidden;
++int _dl_try_allocate_static_tls (struct link_map *map, bool optional)
++  attribute_hidden;
+ 
+ #include <elf.h>
+ 
+diff --git a/elf/tst-tls-ie-dlmopen.c b/elf/tst-tls-ie-dlmopen.c
+new file mode 100644
+index 0000000000000000..c7b5c688e362c861
+--- /dev/null
++++ b/elf/tst-tls-ie-dlmopen.c
+@@ -0,0 +1,112 @@
++/* Test dlopen of modules with initial-exec TLS after dlmopen.
++   Copyright (C) 2016-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This test tries to check that surplus static TLS is not used up for
++   dynamic TLS optimizations and 4*144 = 576 bytes of static TLS is
++   still available for dlopening modules with initial-exec TLS after 3
++   new dlmopen namespaces are created.  It depends on rtld.nns=4 and
++   rtld.optional_static_tls=512 tunable settings.  */
++
++#include <errno.h>
++#include <pthread.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++static int do_test (void);
++#include <support/xthread.h>
++#include <support/xdlfcn.h>
++#include <support/check.h>
++#include <support/test-driver.c>
++
++/* Have some big TLS in the main exe: should not use surplus TLS.  */
++__thread char maintls[1000];
++
++static pthread_barrier_t barrier;
++
++/* Forces multi-threaded behaviour.  */
++static void *
++blocked_thread_func (void *closure)
++{
++  xpthread_barrier_wait (&barrier);
++  /* TLS load and access tests run here in the main thread.  */
++  xpthread_barrier_wait (&barrier);
++  return NULL;
++}
++
++static void *
++load_and_access (Lmid_t lmid, const char *mod, const char *func)
++{
++  /* Load module with TLS.  */
++  void *p = xdlmopen (lmid, mod, RTLD_NOW);
++  /* Access the TLS variable to ensure it is allocated.  */
++  void (*f) (void) = (void (*) (void))xdlsym (p, func);
++  f ();
++  return p;
++}
++
++static int
++do_test (void)
++{
++  void *mods[5];
++
++  {
++    int ret = pthread_barrier_init (&barrier, NULL, 2);
++    if (ret != 0)
++      {
++        errno = ret;
++        printf ("error: pthread_barrier_init: %m\n");
++        exit (1);
++      }
++  }
++
++  pthread_t blocked_thread = xpthread_create (NULL, blocked_thread_func, NULL);
++  xpthread_barrier_wait (&barrier);
++
++  printf ("maintls[%zu]:\t %p .. %p\n",
++	   sizeof maintls, maintls, maintls + sizeof maintls);
++  memset (maintls, 1, sizeof maintls);
++
++  /* Load modules with dynamic TLS (use surplus static TLS for libc
++     in new namespaces and may be for TLS optimizations too).  */
++  mods[0] = load_and_access (LM_ID_BASE, "tst-tls-ie-mod0.so", "access0");
++  mods[1] = load_and_access (LM_ID_NEWLM, "tst-tls-ie-mod1.so", "access1");
++  mods[2] = load_and_access (LM_ID_NEWLM, "tst-tls-ie-mod2.so", "access2");
++  mods[3] = load_and_access (LM_ID_NEWLM, "tst-tls-ie-mod3.so", "access3");
++  /* Load modules with initial-exec TLS (can only use surplus static TLS).  */
++  mods[4] = load_and_access (LM_ID_BASE, "tst-tls-ie-mod6.so", "access6");
++
++  /* Here 576 bytes + 3 * libc use of surplus static TLS is in use so less
++     than 1024 bytes are available (exact number depends on TLS optimizations
++     and the libc TLS use).  */
++  printf ("The next dlmopen should fail...\n");
++  void *p = dlmopen (LM_ID_BASE, "tst-tls-ie-mod4.so", RTLD_NOW);
++  if (p != NULL)
++    FAIL_EXIT1 ("error: expected dlmopen to fail because there is "
++		"not enough surplus static TLS.\n");
++  printf ("...OK failed with: %s.\n", dlerror ());
++
++  xpthread_barrier_wait (&barrier);
++  xpthread_join (blocked_thread);
++
++  /* Close the modules.  */
++  for (int i = 0; i < 5; ++i)
++    xdlclose (mods[i]);
++
++  return 0;
++}
+diff --git a/elf/tst-tls-ie-mod.h b/elf/tst-tls-ie-mod.h
+new file mode 100644
+index 0000000000000000..46b362a9b783d214
+--- /dev/null
++++ b/elf/tst-tls-ie-mod.h
+@@ -0,0 +1,40 @@
++/* Module with specified TLS size and model.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This file is parameterized by macros N, SIZE and MODEL.  */
++
++#include <stdio.h>
++#include <string.h>
++
++#define CONCATX(x, y) x ## y
++#define CONCAT(x, y) CONCATX (x, y)
++#define STRX(x) #x
++#define STR(x) STRX (x)
++
++#define VAR CONCAT (var, N)
++
++__attribute__ ((aligned (8), tls_model (MODEL)))
++__thread char VAR[SIZE];
++
++void
++CONCAT (access, N) (void)
++{
++  printf (STR (VAR) "[%d]:\t %p .. %p " MODEL "\n", SIZE, VAR, VAR + SIZE);
++  fflush (stdout);
++  memset (VAR, 1, SIZE);
++}
+diff --git a/elf/tst-tls-ie-mod0.c b/elf/tst-tls-ie-mod0.c
+new file mode 100644
+index 0000000000000000..2450686e400e1141
+--- /dev/null
++++ b/elf/tst-tls-ie-mod0.c
+@@ -0,0 +1,4 @@
++#define N 0
++#define SIZE 480
++#define MODEL "global-dynamic"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie-mod1.c b/elf/tst-tls-ie-mod1.c
+new file mode 100644
+index 0000000000000000..849ff91e53b0a518
+--- /dev/null
++++ b/elf/tst-tls-ie-mod1.c
+@@ -0,0 +1,4 @@
++#define N 1
++#define SIZE 120
++#define MODEL "global-dynamic"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie-mod2.c b/elf/tst-tls-ie-mod2.c
+new file mode 100644
+index 0000000000000000..23915ab67bab0ada
+--- /dev/null
++++ b/elf/tst-tls-ie-mod2.c
+@@ -0,0 +1,4 @@
++#define N 2
++#define SIZE 24
++#define MODEL "global-dynamic"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie-mod3.c b/elf/tst-tls-ie-mod3.c
+new file mode 100644
+index 0000000000000000..5395f844a5999ea9
+--- /dev/null
++++ b/elf/tst-tls-ie-mod3.c
+@@ -0,0 +1,4 @@
++#define N 3
++#define SIZE 16
++#define MODEL "global-dynamic"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie-mod4.c b/elf/tst-tls-ie-mod4.c
+new file mode 100644
+index 0000000000000000..93ac2eacae292d86
+--- /dev/null
++++ b/elf/tst-tls-ie-mod4.c
+@@ -0,0 +1,4 @@
++#define N 4
++#define SIZE 1024
++#define MODEL "initial-exec"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie-mod5.c b/elf/tst-tls-ie-mod5.c
+new file mode 100644
+index 0000000000000000..84b3fd285b5b5a3e
+--- /dev/null
++++ b/elf/tst-tls-ie-mod5.c
+@@ -0,0 +1,4 @@
++#define N 5
++#define SIZE 128
++#define MODEL "initial-exec"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie-mod6.c b/elf/tst-tls-ie-mod6.c
+new file mode 100644
+index 0000000000000000..c736bf0684f3b08f
+--- /dev/null
++++ b/elf/tst-tls-ie-mod6.c
+@@ -0,0 +1,4 @@
++#define N 6
++#define SIZE 576
++#define MODEL "initial-exec"
++#include "tst-tls-ie-mod.h"
+diff --git a/elf/tst-tls-ie.c b/elf/tst-tls-ie.c
+new file mode 100644
+index 0000000000000000..2dc0894480417389
+--- /dev/null
++++ b/elf/tst-tls-ie.c
+@@ -0,0 +1,111 @@
++/* Test dlopen of modules with initial-exec TLS.
++   Copyright (C) 2016-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This test tries to check that surplus static TLS is not used up for
++   dynamic TLS optimizations and 3*192 + 4*144 = 1152 bytes of static
++   TLS is available for dlopening modules with initial-exec TLS.  It
++   depends on rtld.nns=4 and rtld.optional_static_tls=512 tunable setting.  */
++
++#include <errno.h>
++#include <pthread.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++static int do_test (void);
++#include <support/xthread.h>
++#include <support/xdlfcn.h>
++#include <support/check.h>
++#include <support/test-driver.c>
++
++/* Have some big TLS in the main exe: should not use surplus TLS.  */
++__thread char maintls[1000];
++
++static pthread_barrier_t barrier;
++
++/* Forces multi-threaded behaviour.  */
++static void *
++blocked_thread_func (void *closure)
++{
++  xpthread_barrier_wait (&barrier);
++  /* TLS load and access tests run here in the main thread.  */
++  xpthread_barrier_wait (&barrier);
++  return NULL;
++}
++
++static void *
++load_and_access (const char *mod, const char *func)
++{
++  /* Load module with TLS.  */
++  void *p = xdlopen (mod, RTLD_NOW);
++  /* Access the TLS variable to ensure it is allocated.  */
++  void (*f) (void) = (void (*) (void))xdlsym (p, func);
++  f ();
++  return p;
++}
++
++static int
++do_test (void)
++{
++  void *mods[6];
++
++  {
++    int ret = pthread_barrier_init (&barrier, NULL, 2);
++    if (ret != 0)
++      {
++        errno = ret;
++        printf ("error: pthread_barrier_init: %m\n");
++        exit (1);
++      }
++  }
++
++  pthread_t blocked_thread = xpthread_create (NULL, blocked_thread_func, NULL);
++  xpthread_barrier_wait (&barrier);
++
++  printf ("maintls[%zu]:\t %p .. %p\n",
++	   sizeof maintls, maintls, maintls + sizeof maintls);
++  memset (maintls, 1, sizeof maintls);
++
++  /* Load modules with dynamic TLS (may use surplus static TLS
++     opportunistically).  */
++  mods[0] = load_and_access ("tst-tls-ie-mod0.so", "access0");
++  mods[1] = load_and_access ("tst-tls-ie-mod1.so", "access1");
++  mods[2] = load_and_access ("tst-tls-ie-mod2.so", "access2");
++  mods[3] = load_and_access ("tst-tls-ie-mod3.so", "access3");
++  /* Load modules with initial-exec TLS (can only use surplus static TLS).  */
++  mods[4] = load_and_access ("tst-tls-ie-mod4.so", "access4");
++  mods[5] = load_and_access ("tst-tls-ie-mod5.so", "access5");
++
++  /* Here 1152 bytes of surplus static TLS is in use and at most 512 bytes
++     are available (depending on TLS optimizations).  */
++  printf ("The next dlopen should fail...\n");
++  void *p = dlopen ("tst-tls-ie-mod6.so", RTLD_NOW);
++  if (p != NULL)
++    FAIL_EXIT1 ("error: expected dlopen to fail because there is "
++		"not enough surplus static TLS.\n");
++  printf ("...OK failed with: %s.\n", dlerror ());
++
++  xpthread_barrier_wait (&barrier);
++  xpthread_join (blocked_thread);
++
++  /* Close the modules.  */
++  for (int i = 0; i < 6; ++i)
++    xdlclose (mods[i]);
++
++  return 0;
++}
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index e6a3e9a2cf5c959c..bd737b5d57080462 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -249,6 +249,23 @@ increase the per-thread memory usage as necessary, so this tunable does
+ not need to be changed to allow many audit modules e.g. via @env{LD_AUDIT}.
+ @end deftp
+ 
++@deftp Tunable glibc.rtld.optional_static_tls
++Sets the amount of surplus static TLS in bytes to allocate at program
++startup.  Every thread created allocates this amount of specified surplus
++static TLS. This is a minimum value and additional space may be allocated
++for internal purposes including alignment.  Optional static TLS is used for
++optimizing dynamic TLS access for platforms that support such optimizations
++e.g. TLS descriptors or optimized TLS access for POWER (@code{DT_PPC64_OPT}
++and @code{DT_PPC_OPT}).  In order to make the best use of such optimizations
++the value should be as many bytes as would be required to hold all TLS
++variables in all dynamic loaded shared libraries.  The value cannot be known
++by the dynamic loader because it doesn't know the expected set of shared
++libraries which will be loaded.  The existing static TLS space cannot be
++changed once allocated at process startup.  The default allocation of
++optional static TLS is 512 bytes and is allocated in every thread.
++@end deftp
++
++
+ @node Elision Tunables
+ @section Elision Tunables
+ @cindex elision tunables
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 293f3ab5a496afdf..37f1915b0c75a020 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -441,6 +441,9 @@ struct rtld_global
+   EXTERN size_t _dl_tls_static_used;
+   /* Alignment requirement of the static TLS block.  */
+   EXTERN size_t _dl_tls_static_align;
++  /* Remaining amount of static TLS that may be used for optimizing
++     dynamic TLS access (e.g. with TLSDESC).  */
++  EXTERN size_t _dl_tls_static_optional;
+ 
+ /* Number of additional entries in the slotinfo array of each slotinfo
+    list element.  A large number makes it almost certain take we never

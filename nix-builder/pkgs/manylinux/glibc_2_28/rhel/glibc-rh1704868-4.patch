@@ -1,0 +1,66 @@
+commit cce35a50c1de0cec5cd1f6c18979ff6ee3ea1dd1
+Author: Arjun Shankar <arjun@redhat.com>
+Date:   Mon Nov 11 14:57:23 2019 +0100
+
+    support: Add xsetlocale function
+
+diff --git a/support/Makefile b/support/Makefile
+index 37d5dcc92a5c6dee..6afaa6836c944398 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -148,6 +148,7 @@ libsupport-routines = \
+   xrealloc \
+   xrecvfrom \
+   xsendto \
++  xsetlocale \
+   xsetsockopt \
+   xsigaction \
+   xsignal \
+diff --git a/support/support.h b/support/support.h
+index 61a10c34982134ff..97d142e9b6f68188 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -91,6 +91,7 @@ char *xasprintf (const char *format, ...)
+   __attribute__ ((format (printf, 1, 2), malloc));
+ char *xstrdup (const char *);
+ char *xstrndup (const char *, size_t);
++char *xsetlocale (int category, const char *locale);
+ 
+ /* These point to the TOP of the source/build tree, not your (or
+    support's) subdirectory.  */
+diff --git a/support/xsetlocale.c b/support/xsetlocale.c
+new file mode 100644
+index 0000000000000000..063ed4b0d63af884
+--- /dev/null
++++ b/support/xsetlocale.c
+@@ -0,0 +1,30 @@
++/* setlocale with error checking.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++
++#include <locale.h>
++
++char *
++xsetlocale (int category, const char *locale)
++{
++  char *p = setlocale (category, locale);
++  if (p == NULL)
++    FAIL_EXIT1 ("error: setlocale (%d, \"%s\")\n", category, locale);
++  return p;
++}

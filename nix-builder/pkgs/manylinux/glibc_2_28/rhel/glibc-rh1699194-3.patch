@@ -1,0 +1,28 @@
+commit 8d141877e07cc594e9fefc3795b8ba729288093c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Jun 14 15:46:02 2019 +0200
+
+    <sys/cdefs.h>: Inhibit macro expansion for __glibc_has_include
+    
+    This is currently ineffective with GCC because of GCC PR 80005, but
+    it makes sense to anticipate a fix for this defect.
+    
+    Suggested by Zack Weinberg.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/misc/sys/cdefs.h b/misc/sys/cdefs.h
+index 0500779d0c1b64c2..9e840e602f815d86 100644
+--- a/misc/sys/cdefs.h
++++ b/misc/sys/cdefs.h
+@@ -413,7 +413,9 @@
+ #endif
+ 
+ #ifdef __has_include
+-# define __glibc_has_include(header)	__has_include (header)
++/* Do not use a function-like macro, so that __has_include can inhibit
++   macro expansion.  */
++# define __glibc_has_include __has_include
+ #else
+ # define __glibc_has_include(header)	0
+ #endif

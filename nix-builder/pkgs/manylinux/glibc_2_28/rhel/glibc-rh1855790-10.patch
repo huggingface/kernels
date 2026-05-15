@@ -1,0 +1,380 @@
+commit 9e38f455a6c602be86b7b5a8d6523cbdcd7ec051
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Mon Apr 27 15:44:07 2020 -0700
+
+    x86: Add --enable-cet=permissive
+    
+    When CET is enabled, it is an error to dlopen a non CET enabled shared
+    library in CET enabled application.  It may be desirable to make CET
+    permissive, that is disable CET when dlopening a non CET enabled shared
+    library.  With the new --enable-cet=permissive configure option, CET is
+    disabled when dlopening a non CET enabled shared library.
+    
+    Add DEFAULT_DL_X86_CET_CONTROL to config.h.in:
+    
+     /* The default value of x86 CET control.  */
+     #define DEFAULT_DL_X86_CET_CONTROL cet_elf_property
+    
+    which enables CET features based on ELF property note.
+    
+    --enable-cet=permissive it to
+    
+     /* The default value of x86 CET control.  */
+     #define DEFAULT_DL_X86_CET_CONTROL cet_permissive
+    
+    which enables CET features permissively.
+    
+    Update tst-cet-legacy-5a, tst-cet-legacy-5b, tst-cet-legacy-6a and
+    tst-cet-legacy-6b to check --enable-cet and --enable-cet=permissive.
+---
+
+diff --git a/INSTALL b/INSTALL
+index d56e102..0655650 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -116,20 +116,24 @@ if 'CFLAGS' is specified it must enable optimization.  For example:
+      executables (PIE) by default.
+ 
+ '--enable-cet'
++'--enable-cet=permissive'
+      Enable Intel Control-flow Enforcement Technology (CET) support.
+-     When the GNU C Library is built with '--enable-cet', the resulting
+-     library is protected with indirect branch tracking (IBT) and shadow
+-     stack (SHSTK).  When CET is enabled, the GNU C Library is
+-     compatible with all existing executables and shared libraries.
+-     This feature is currently supported on i386, x86_64 and x32 with
+-     GCC 8 and binutils 2.29 or later.  Note that when CET is enabled,
+-     the GNU C Library requires CPUs capable of multi-byte NOPs, like
+-     x86-64 processors as well as Intel Pentium Pro or newer.
++     When the GNU C Library is built with '--enable-cet' or
++     '--enable-cet=permissive', the resulting library is protected with
++     indirect branch tracking (IBT) and shadow stack (SHSTK).  When CET
++     is enabled, the GNU C Library is compatible with all existing
++     executables and shared libraries.  This feature is currently
++     supported on i386, x86_64 and x32 with GCC 8 and binutils 2.29 or
++     later.  Note that when CET is enabled, the GNU C Library requires
++     CPUs capable of multi-byte NOPs, like x86-64 processors as well as
++     Intel Pentium Pro or newer.  With '--enable-cet', it is an error to
++     dlopen a non CET enabled shared library in CET enabled application.
++     With '--enable-cet=permissive', CET is disabled when dlopening a
++     non CET enabled shared library in CET enabled application.
+ 
+      NOTE: '--enable-cet' has been tested for i686, x86_64 and x32 on
+-     non-CET processors.  '--enable-cet' has been tested for x86_64 and
+-     x32 on CET SDVs, but Intel CET support hasn't been validated for
+-     i686.
++     non-CET processors.  '--enable-cet' has been tested for i686,
++     x86_64 and x32 on CET processors.
+ 
+ '--disable-profile'
+      Don't build libraries with profiling information.  You may want to
+diff --git a/config.h.in b/config.h.in
+index f63f6c8..8520b0f 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -259,4 +259,7 @@
+    in i386 6 argument syscall issue).  */
+ #define CAN_USE_REGISTER_ASM_EBP 0
+ 
++/* The default value of x86 CET control.  */
++#define DEFAULT_DL_X86_CET_CONTROL cet_elf_property
++
+ #endif
+diff --git a/manual/install.texi b/manual/install.texi
+index 351d67c..7e9f2be 100644
+--- a/manual/install.texi
++++ b/manual/install.texi
+@@ -147,20 +147,24 @@ PIE.  This option also implies that glibc programs and tests are created
+ as dynamic position independent executables (PIE) by default.
+ 
+ @item --enable-cet
++@itemx --enable-cet=permissive
+ Enable Intel Control-flow Enforcement Technology (CET) support.  When
+-@theglibc{} is built with @option{--enable-cet}, the resulting library
++@theglibc{} is built with @option{--enable-cet} or
++@option{--enable-cet=permissive}, the resulting library
+ is protected with indirect branch tracking (IBT) and shadow stack
+ (SHSTK)@.  When CET is enabled, @theglibc{} is compatible with all
+ existing executables and shared libraries.  This feature is currently
+ supported on i386, x86_64 and x32 with GCC 8 and binutils 2.29 or later.
+ Note that when CET is enabled, @theglibc{} requires CPUs capable of
+ multi-byte NOPs, like x86-64 processors as well as Intel Pentium Pro or
+-newer.
++newer.  With @option{--enable-cet}, it is an error to dlopen a non CET
++enabled shared library in CET enabled application.  With
++@option{--enable-cet=permissive}, CET is disabled when dlopening a
++non CET enabled shared library in CET enabled application.
+ 
+ NOTE: @option{--enable-cet} has been tested for i686, x86_64 and x32
+ on non-CET processors.  @option{--enable-cet} has been tested for
+-x86_64 and x32 on CET SDVs, but Intel CET support hasn't been validated
+-for i686.
++i686, x86_64 and x32 on CET processors.
+ 
+ @item --disable-profile
+ Don't build libraries with profiling information.  You may want to use
+diff --git a/sysdeps/unix/sysv/linux/x86/Makefile b/sysdeps/unix/sysv/linux/x86/Makefile
+index 7dc4e61..8ac2fd4 100644
+--- a/sysdeps/unix/sysv/linux/x86/Makefile
++++ b/sysdeps/unix/sysv/linux/x86/Makefile
+@@ -24,7 +24,7 @@ ifeq ($(subdir),setjmp)
+ tests += tst-saved_mask-1
+ endif
+ 
+-ifeq ($(enable-cet),yes)
++ifneq ($(enable-cet),no)
+ ifeq ($(subdir),elf)
+ tests += tst-cet-property-1 tst-cet-property-2
+ 
+diff --git a/sysdeps/x86/Makefile b/sysdeps/x86/Makefile
+index d9bdf0b..d5f821e 100644
+--- a/sysdeps/x86/Makefile
++++ b/sysdeps/x86/Makefile
+@@ -14,7 +14,7 @@ gen-as-const-headers += jmp_buf-ssp.sym
+ sysdep_routines += __longjmp_cancel
+ endif
+ 
+-ifeq ($(enable-cet),yes)
++ifneq ($(enable-cet),no)
+ ifeq ($(subdir),elf)
+ sysdep-dl-routines += dl-cet
+ 
+@@ -41,13 +41,21 @@ CFLAGS-tst-cet-legacy-4.c += -fcf-protection=branch
+ CFLAGS-tst-cet-legacy-4a.c += -fcf-protection
+ CFLAGS-tst-cet-legacy-4b.c += -fcf-protection
+ CFLAGS-tst-cet-legacy-mod-4.c += -fcf-protection=none
+-CFLAGS-tst-cet-legacy-5a.c += -fcf-protection
+-CFLAGS-tst-cet-legacy-5b.c += -fcf-protection
++CFLAGS-tst-cet-legacy-5a.c += -fcf-protection -mshstk
++ifeq ($(enable-cet),permissive)
++CPPFLAGS-tst-cet-legacy-5a.c += -DCET_IS_PERMISSIVE=1
++endif
++CFLAGS-tst-cet-legacy-5b.c += -fcf-protection -mshstk
++CPPFLAGS-tst-cet-legacy-5b.c += -DCET_DISABLED_BY_ENV=1
+ CFLAGS-tst-cet-legacy-mod-5a.c += -fcf-protection=branch
+ CFLAGS-tst-cet-legacy-mod-5b.c += -fcf-protection
+ CFLAGS-tst-cet-legacy-mod-5c.c += -fcf-protection
+-CFLAGS-tst-cet-legacy-6a.c += -fcf-protection
+-CFLAGS-tst-cet-legacy-6b.c += -fcf-protection
++CFLAGS-tst-cet-legacy-6a.c += -fcf-protection -mshstk
++ifeq ($(enable-cet),permissive)
++CPPFLAGS-tst-cet-legacy-6a.c += -DCET_IS_PERMISSIVE=1
++endif
++CFLAGS-tst-cet-legacy-6b.c += -fcf-protection -mshstk
++CPPFLAGS-tst-cet-legacy-6b.c += -DCET_DISABLED_BY_ENV=1
+ CFLAGS-tst-cet-legacy-mod-6a.c += -fcf-protection=branch
+ CFLAGS-tst-cet-legacy-mod-6b.c += -fcf-protection
+ CFLAGS-tst-cet-legacy-mod-6c.c += -fcf-protection
+diff --git a/sysdeps/x86/configure b/sysdeps/x86/configure
+index b1ff281..81cc4e8 100644
+--- a/sysdeps/x86/configure
++++ b/sysdeps/x86/configure
+@@ -1,7 +1,7 @@
+ # This file is generated from configure.ac by Autoconf.  DO NOT EDIT!
+  # Local configure fragment for sysdeps/x86.
+ 
+-if test x"$enable_cet" = xyes; then
++if test $enable_cet != no; then
+   # Check if CET can be enabled.
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CET can be enabled" >&5
+ $as_echo_n "checking whether CET can be enabled... " >&6; }
+@@ -27,17 +27,11 @@ EOF
+ fi
+ { $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_x86_cet_available" >&5
+ $as_echo "$libc_cv_x86_cet_available" >&6; }
+-  if test $libc_cv_x86_cet_available = yes; then
+-    enable_cet=yes
+-  else
+-    if test x"$enable_cet" = xdefault; then
+-      enable_cet=no
+-    else
+-      as_fn_error $? "$CC doesn't support CET" "$LINENO" 5
+-    fi
++  if test $libc_cv_x86_cet_available != yes; then
++    as_fn_error $? "$CC doesn't support CET" "$LINENO" 5
+   fi
+ fi
+-if test $enable_cet = yes; then
++if test $enable_cet != no; then
+   # Check if assembler supports CET.
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $AS supports CET" >&5
+ $as_echo_n "checking whether $AS supports CET... " >&6; }
+@@ -65,5 +59,12 @@ $as_echo "$libc_cv_x86_cet_as" >&6; }
+     as_fn_error $? "$AS doesn't support CET" "$LINENO" 5
+   fi
+ fi
++if test $enable_cet = yes; then
++  $as_echo "#define DEFAULT_DL_X86_CET_CONTROL cet_elf_property" >>confdefs.h
++
++elif test $enable_cet = permissive; then
++  $as_echo "#define DEFAULT_DL_X86_CET_CONTROL cet_permissive" >>confdefs.h
++
++fi
+ config_vars="$config_vars
+ enable-cet = $enable_cet"
+diff --git a/sysdeps/x86/configure.ac b/sysdeps/x86/configure.ac
+index a909b07..8f3e119 100644
+--- a/sysdeps/x86/configure.ac
++++ b/sysdeps/x86/configure.ac
+@@ -1,7 +1,7 @@
+ GLIBC_PROVIDES dnl See aclocal.m4 in the top level source directory.
+ # Local configure fragment for sysdeps/x86.
+ 
+-if test x"$enable_cet" = xyes; then
++if test $enable_cet != no; then
+   # Check if CET can be enabled.
+   AC_CACHE_CHECK(whether CET can be enabled,
+ 		 libc_cv_x86_cet_available, [dnl
+@@ -16,17 +16,11 @@ EOF
+ 		   libc_cv_x86_cet_available=no
+ 		 fi
+ 		 rm -rf conftest*])
+-  if test $libc_cv_x86_cet_available = yes; then
+-    enable_cet=yes
+-  else
+-    if test x"$enable_cet" = xdefault; then
+-      enable_cet=no
+-    else
+-      AC_MSG_ERROR([$CC doesn't support CET])
+-    fi
++  if test $libc_cv_x86_cet_available != yes; then
++    AC_MSG_ERROR([$CC doesn't support CET])
+   fi
+ fi
+-if test $enable_cet = yes; then
++if test $enable_cet != no; then
+   # Check if assembler supports CET.
+   AC_CACHE_CHECK(whether $AS supports CET,
+ 		 libc_cv_x86_cet_as, [dnl
+@@ -43,4 +37,9 @@ EOF
+     AC_MSG_ERROR([$AS doesn't support CET])
+   fi
+ fi
++if test $enable_cet = yes; then
++  AC_DEFINE(DEFAULT_DL_X86_CET_CONTROL, cet_elf_property)
++elif test $enable_cet = permissive; then
++  AC_DEFINE(DEFAULT_DL_X86_CET_CONTROL, cet_permissive)
++fi
+ LIBC_CONFIG_VAR([enable-cet], [$enable_cet])
+diff --git a/sysdeps/x86/dl-procruntime.c b/sysdeps/x86/dl-procruntime.c
+index 26b2b39..72b16fa 100644
+--- a/sysdeps/x86/dl-procruntime.c
++++ b/sysdeps/x86/dl-procruntime.c
+@@ -65,8 +65,8 @@ PROCINFO_CLASS struct dl_x86_feature_control _dl_x86_feature_control
+ # endif
+ # ifndef PROCINFO_DECL
+ = {
+-    .ibt = cet_elf_property,
+-    .shstk = cet_elf_property
++    .ibt = DEFAULT_DL_X86_CET_CONTROL,
++    .shstk = DEFAULT_DL_X86_CET_CONTROL,
+   }
+ # endif
+ # if !defined SHARED || defined PROCINFO_DECL
+diff --git a/sysdeps/x86/tst-cet-legacy-5.c b/sysdeps/x86/tst-cet-legacy-5.c
+index 0a34d37..c578979 100644
+--- a/sysdeps/x86/tst-cet-legacy-5.c
++++ b/sysdeps/x86/tst-cet-legacy-5.c
+@@ -22,6 +22,14 @@
+ #include <stdlib.h>
+ #include <stdbool.h>
+ #include <string.h>
++#include <x86intrin.h>
++#include <support/check.h>
++
++#if defined CET_IS_PERMISSIVE || defined CET_DISABLED_BY_ENV
++# define CET_MAYBE_DISABLED 1
++#else
++# define CET_MAYBE_DISABLED 0
++#endif
+ 
+ static void
+ do_test_1 (const char *modname, bool fail)
+@@ -32,24 +40,25 @@ do_test_1 (const char *modname, bool fail)
+   h = dlopen (modname, RTLD_LAZY);
+   if (h == NULL)
+     {
++      const char *err = dlerror ();
+       if (fail)
+ 	{
+-	  const char *err = dlerror ();
+ 	  if (strstr (err, "rebuild shared object with SHSTK support enabled")
+ 	      == NULL)
+-	    {
+-	      printf ("incorrect dlopen '%s' error: %s\n", modname,
+-		      err);
+-	      exit (1);
+-	    }
++	    FAIL_EXIT1 ("incorrect dlopen '%s' error: %s\n", modname, err);
+ 
+ 	  return;
+ 	}
+ 
+-      printf ("cannot open '%s': %s\n", modname, dlerror ());
+-      exit (1);
++      FAIL_EXIT1 ("cannot open '%s': %s\n", modname, err);
+     }
+ 
++  /* NB: dlopen should never fail on non-CET platforms.  If SHSTK is
++     disabled, assuming IBT is also disabled.  */
++  bool cet_enabled = _get_ssp () != 0 && !CET_MAYBE_DISABLED;
++  if (fail && cet_enabled)
++    FAIL_EXIT1 ("dlopen should have failed\n");
++
+   fp = dlsym (h, "test");
+   if (fp == NULL)
+     {
+diff --git a/sysdeps/x86/tst-cet-legacy-6.c b/sysdeps/x86/tst-cet-legacy-6.c
+index bd45218..78e72ba 100644
+--- a/sysdeps/x86/tst-cet-legacy-6.c
++++ b/sysdeps/x86/tst-cet-legacy-6.c
+@@ -22,6 +22,14 @@
+ #include <stdlib.h>
+ #include <stdbool.h>
+ #include <string.h>
++#include <x86intrin.h>
++#include <support/check.h>
++
++#if defined CET_IS_PERMISSIVE || defined CET_DISABLED_BY_ENV
++# define CET_MAYBE_DISABLED 1
++#else
++# define CET_MAYBE_DISABLED 0
++#endif
+ 
+ static void
+ do_test_1 (const char *modname, bool fail)
+@@ -32,24 +40,25 @@ do_test_1 (const char *modname, bool fail)
+   h = dlopen (modname, RTLD_LAZY);
+   if (h == NULL)
+     {
++      const char *err = dlerror ();
+       if (fail)
+ 	{
+-	  const char *err = dlerror ();
+ 	  if (strstr (err, "rebuild shared object with SHSTK support enabled")
+ 	      == NULL)
+-	    {
+-	      printf ("incorrect dlopen '%s' error: %s\n", modname,
+-		      err);
+-	      exit (1);
+-	    }
++	    FAIL_EXIT1 ("incorrect dlopen '%s' error: %s\n", modname, err);
+ 
+ 	  return;
+ 	}
+ 
+-      printf ("cannot open '%s': %s\n", modname, dlerror ());
+-      exit (1);
++      FAIL_EXIT1 ("cannot open '%s': %s\n", modname, err);
+     }
+ 
++  /* NB: dlopen should never fail on non-CET platforms.  If SHSTK is
++     disabled, assuming IBT is also disabled.  */
++  bool cet_enabled = _get_ssp () != 0 && !CET_MAYBE_DISABLED;
++  if (fail && cet_enabled)
++    FAIL_EXIT1 ("dlopen should have failed\n");
++
+   fp = dlsym (h, "test");
+   if (fp == NULL)
+     {
+

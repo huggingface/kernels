@@ -1,0 +1,86 @@
+commit 33e03f9cd2be4f2cd62f93fda539cc07d9c8130e
+Author: Joan Bruguera <joanbrugueram@gmail.com>
+Date:   Mon Apr 11 19:49:56 2022 +0200
+
+    misc: Fix rare fortify crash on wchar funcs. [BZ 29030]
+    
+    If `__glibc_objsize (__o) == (size_t) -1` (i.e. `__o` is unknown size), fortify
+    checks should pass, and `__whatever_alias` should be called.
+    
+    Previously, `__glibc_objsize (__o) == (size_t) -1` was explicitly checked, but
+    on commit a643f60c53876b, this was moved into `__glibc_safe_or_unknown_len`.
+    
+    A comment says the -1 case should work as: "The -1 check is redundant because
+    since it implies that __glibc_safe_len_cond is true.". But this fails when:
+    * `__s > 1`
+    * `__osz == -1` (i.e. unknown size at compile time)
+    * `__l` is big enough
+    * `__l * __s <= __osz` can be folded to a constant
+    (I only found this to be true for `mbsrtowcs` and other functions in wchar2.h)
+    
+    In this case `__l * __s <= __osz` is false, and `__whatever_chk_warn` will be
+    called by `__glibc_fortify` or `__glibc_fortify_n` and crash the program.
+    
+    This commit adds the explicit `__osz == -1` check again.
+    moc crashes on startup due to this, see: https://bugs.archlinux.org/task/74041
+    
+    Minimal test case (test.c):
+        #include <wchar.h>
+    
+        int main (void)
+        {
+            const char *hw = "HelloWorld";
+            mbsrtowcs (NULL, &hw, (size_t)-1, NULL);
+            return 0;
+        }
+    
+    Build with:
+        gcc -O2 -Wp,-D_FORTIFY_SOURCE=2 test.c -o test && ./test
+    
+    Output:
+        *** buffer overflow detected ***: terminated
+    
+    Fixes: BZ #29030
+    Signed-off-by: Joan Bruguera <joanbrugueram@gmail.com>
+    Signed-off-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+diff --git a/debug/tst-fortify.c b/debug/tst-fortify.c
+index 1668294e48b5c63c..701bffd1d664f289 100644
+--- a/debug/tst-fortify.c
++++ b/debug/tst-fortify.c
+@@ -1505,6 +1505,11 @@ do_test (void)
+       CHK_FAIL_END
+ #endif
+ 
++      /* Bug 29030 regresion check */
++      cp = "HelloWorld";
++      if (mbsrtowcs (NULL, &cp, (size_t)-1, &s) != 10)
++        FAIL ();
++
+       cp = "A";
+       if (mbstowcs (wenough, cp, 10) != 1
+ 	  || wcscmp (wenough, L"A") != 0)
+diff --git a/misc/sys/cdefs.h b/misc/sys/cdefs.h
+index a17ae0ed87e6163f..404496c7d6da4fb3 100644
+--- a/misc/sys/cdefs.h
++++ b/misc/sys/cdefs.h
+@@ -143,13 +143,13 @@
+    || (__builtin_constant_p (__l) && (__l) > 0))
+ 
+ /* Length is known to be safe at compile time if the __L * __S <= __OBJSZ
+-   condition can be folded to a constant and if it is true.  The -1 check is
+-   redundant because since it implies that __glibc_safe_len_cond is true.  */
++   condition can be folded to a constant and if it is true, or unknown (-1) */
+ #define __glibc_safe_or_unknown_len(__l, __s, __osz) \
+-  (__glibc_unsigned_or_positive (__l)					      \
+-   && __builtin_constant_p (__glibc_safe_len_cond ((__SIZE_TYPE__) (__l),     \
+-						   __s, __osz))		      \
+-   && __glibc_safe_len_cond ((__SIZE_TYPE__) (__l), __s, __osz))
++  ((__osz) == (__SIZE_TYPE__) -1					      \
++   || (__glibc_unsigned_or_positive (__l)				      \
++       && __builtin_constant_p (__glibc_safe_len_cond ((__SIZE_TYPE__) (__l), \
++						       (__s), (__osz)))	      \
++       && __glibc_safe_len_cond ((__SIZE_TYPE__) (__l), (__s), (__osz))))
+ 
+ /* Conversely, we know at compile time that the length is unsafe if the
+    __L * __S <= __OBJSZ condition can be folded to a constant and if it is

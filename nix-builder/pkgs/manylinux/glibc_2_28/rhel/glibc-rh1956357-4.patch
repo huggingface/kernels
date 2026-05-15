@@ -1,0 +1,527 @@
+commit dd59655e9371af86043b97e38953f43bd9496699
+Author: Lucas A. M. Magalhaes <lamm@linux.ibm.com>
+Date:   Fri Apr 30 18:12:08 2021 -0300
+
+    powerpc64le: Optimized memmove for POWER10
+    
+    This patch was initially based on the __memmove_power7 with some ideas
+    from strncpy implementation for Power 9.
+    
+    Improvements from __memmove_power7:
+    
+    1. Use lxvl/stxvl for alignment code.
+    
+       The code for Power 7 uses branches when the input is not naturally
+       aligned to the width of a vector. The new implementation uses
+       lxvl/stxvl instead which reduces pressure on GPRs. It also allows
+       the removal of branch instructions, implicitly removing branch stalls
+       and mispredictions.
+    
+    2. Use of lxv/stxv and lxvl/stxvl pair is safe to use on Cache Inhibited
+       memory.
+    
+       On Power 10 vector load and stores are safe to use on CI memory for
+       addresses unaligned to 16B. This code takes advantage of this to
+       do unaligned loads.
+    
+       The unaligned loads don't have a significant performance impact by
+       themselves. However doing so decreases register pressure on GPRs
+       and interdependence stalls on load/store pairs. This also improved
+       readability as there are now less code paths for different alignments.
+       Finally this reduces the overall code size.
+    
+    3. Improved performance.
+    
+       This version runs on average about 30% better than memmove_power7
+       for lengths  larger than 8KB. For input lengths shorter than 8KB
+       the improvement is smaller, it has on average about 17% better
+       performance.
+    
+       This version has a degradation of about 50% for input lengths
+       in the 0 to 31 bytes range when dest is unaligned.
+    
+    Reviewed-by: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+
+diff --git a/sysdeps/powerpc/powerpc64/le/power10/memmove.S b/sysdeps/powerpc/powerpc64/le/power10/memmove.S
+new file mode 100644
+index 0000000000000000..7dfd57edeb37e8e4
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/power10/memmove.S
+@@ -0,0 +1,320 @@
++/* Optimized memmove implementation for POWER10.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <sysdep.h>
++
++
++/* void* [r3] memmove (void *dest [r3], const void *src [r4], size_t len [r5])
++
++   This optimization checks if 'src' and 'dst' overlap.  If they do not
++   or 'src' is ahead of 'dest' then it copies forward.
++   Otherwise, an optimized backward copy is used.  */
++
++#ifndef MEMMOVE
++# define MEMMOVE memmove
++#endif
++	.machine power9
++ENTRY_TOCLESS (MEMMOVE, 5)
++	CALL_MCOUNT 3
++
++L(_memmove):
++	.p2align 5
++	/* Check if there is overlap, if so it will branch to backward copy.  */
++	subf	r9,r4,r3
++	cmpld	cr7,r9,r5
++	blt	cr7,L(memmove_bwd)
++
++	/* Fast path for length shorter than 16 bytes.  */
++	sldi	r7,r5,56
++	lxvl	32+v2,r4,r7
++	stxvl	32+v2,r3,r7
++	subic.	r8,r5,16
++	blelr
++
++	/* For shorter lengths aligning the dest address to 16 bytes either
++	   decreases performance or is irrelevant.  I'm making use of this
++	   comparison to skip the alignment in.  */
++	cmpldi	cr6,r5,256
++	bge	cr6,L(ge_256)
++	/* Account for the first 16-byte copy.  */
++	addi	r4,r4,16
++	addi	r11,r3,16	/* use r11 to keep dest address on r3.  */
++	subi	r5,r5,16
++	b	L(loop_head)
++
++	.p2align 5
++L(ge_256):
++	/* Account for the first copy <= 16 bytes.  This is necessary for
++	   memmove because at this point the src address can be in front of the
++	   dest address.  */
++	clrldi	r9,r5,56
++	li	r8,16
++	cmpldi	r9,16
++	iselgt	r9,r8,r9
++	add	r4,r4,r9
++	add	r11,r3,r9	/* use r11 to keep dest address on r3.  */
++	sub	r5,r5,r9
++
++	/* Align dest to 16 bytes.  */
++	neg	r7,r3
++	clrldi.	r9,r7,60
++	beq	L(loop_head)
++
++	.p2align 5
++	sldi	r6,r9,56
++	lxvl	32+v0,r4,r6
++	stxvl	32+v0,r11,r6
++	sub	r5,r5,r9
++	add	r4,r4,r9
++	add	r11,r11,r9
++
++L(loop_head):
++	cmpldi	r5,63
++	ble	L(final_64)
++
++	srdi.	r7,r5,7
++	beq	L(loop_tail)
++
++	mtctr	r7
++
++/* Main loop that copies 128 bytes each iteration.  */
++	.p2align 5
++L(loop):
++	addi	r9,r4,64
++	addi	r10,r11,64
++
++	lxv	32+v0,0(r4)
++	lxv	32+v1,16(r4)
++	lxv	32+v2,32(r4)
++	lxv	32+v3,48(r4)
++
++	stxv	32+v0,0(r11)
++	stxv	32+v1,16(r11)
++	stxv	32+v2,32(r11)
++	stxv	32+v3,48(r11)
++
++	addi	r4,r4,128
++	addi	r11,r11,128
++
++	lxv	32+v4,0(r9)
++	lxv	32+v5,16(r9)
++	lxv	32+v6,32(r9)
++	lxv	32+v7,48(r9)
++
++	stxv	32+v4,0(r10)
++	stxv	32+v5,16(r10)
++	stxv	32+v6,32(r10)
++	stxv	32+v7,48(r10)
++
++	bdnz	L(loop)
++	clrldi.	r5,r5,57
++	beqlr
++
++/* Copy 64 bytes.  */
++	.p2align 5
++L(loop_tail):
++	cmpldi 	cr5,r5,63
++	ble	cr5,L(final_64)
++
++	lxv	32+v0,0(r4)
++	lxv	32+v1,16(r4)
++	lxv	32+v2,32(r4)
++	lxv	32+v3,48(r4)
++
++	stxv	32+v0,0(r11)
++	stxv	32+v1,16(r11)
++	stxv	32+v2,32(r11)
++	stxv	32+v3,48(r11)
++
++	addi	r4,r4,64
++	addi	r11,r11,64
++	subi	r5,r5,64
++
++/* Copies the last 1-63 bytes.  */
++	.p2align 5
++L(final_64):
++	/* r8 holds the number of bytes that will be copied with lxv/stxv.  */
++	clrrdi.	r8,r5,4
++	beq	L(tail1)
++
++	cmpldi  cr5,r5,32
++	lxv	32+v0,0(r4)
++	blt	cr5,L(tail2)
++
++	cmpldi	cr6,r5,48
++	lxv	32+v1,16(r4)
++	blt	cr6,L(tail3)
++
++	.p2align 5
++	lxv	32+v2,32(r4)
++	stxv	32+v2,32(r11)
++L(tail3):
++	stxv	32+v1,16(r11)
++L(tail2):
++	stxv	32+v0,0(r11)
++	sub	r5,r5,r8
++	add	r4,r4,r8
++	add	r11,r11,r8
++	.p2align 5
++L(tail1):
++	sldi	r6,r5,56
++	lxvl	v4,r4,r6
++	stxvl	v4,r11,r6
++	blr
++
++/* If dest and src overlap, we should copy backwards.  */
++L(memmove_bwd):
++	add	r11,r3,r5
++	add	r4,r4,r5
++
++	/* Optimization for length smaller than 16 bytes.  */
++	cmpldi	cr5,r5,15
++	ble	cr5,L(tail1_bwd)
++
++	/* For shorter lengths the alignment either slows down or is irrelevant.
++	   The forward copy uses a already need 256 comparison for that.  Here
++	   it's using 128 as it will reduce code and improve readability.  */
++	cmpldi	cr7,r5,128
++	blt	cr7,L(bwd_loop_tail)
++
++	/* Align dest address to 16 bytes.  */
++	.p2align 5
++	clrldi.	r9,r11,60
++	beq	L(bwd_loop_head)
++	sub	r4,r4,r9
++	sub	r11,r11,r9
++	lxv	32+v0,0(r4)
++	sldi	r6,r9,56
++	stxvl   32+v0,r11,r6
++	sub	r5,r5,r9
++
++L(bwd_loop_head):
++	srdi.	r7,r5,7
++	beq	L(bwd_loop_tail)
++
++	mtctr	r7
++
++/* Main loop that copies 128 bytes every iteration.  */
++	.p2align 5
++L(bwd_loop):
++	addi	r9,r4,-64
++	addi	r10,r11,-64
++
++	lxv	32+v0,-16(r4)
++	lxv	32+v1,-32(r4)
++	lxv	32+v2,-48(r4)
++	lxv	32+v3,-64(r4)
++
++	stxv	32+v0,-16(r11)
++	stxv	32+v1,-32(r11)
++	stxv	32+v2,-48(r11)
++	stxv	32+v3,-64(r11)
++
++	addi	r4,r4,-128
++	addi	r11,r11,-128
++
++	lxv	32+v0,-16(r9)
++	lxv	32+v1,-32(r9)
++	lxv	32+v2,-48(r9)
++	lxv	32+v3,-64(r9)
++
++	stxv	32+v0,-16(r10)
++	stxv	32+v1,-32(r10)
++	stxv	32+v2,-48(r10)
++	stxv	32+v3,-64(r10)
++
++	bdnz	L(bwd_loop)
++	clrldi.	r5,r5,57
++	beqlr
++
++/* Copy 64 bytes.  */
++	.p2align 5
++L(bwd_loop_tail):
++	cmpldi 	cr5,r5,63
++	ble	cr5,L(bwd_final_64)
++
++	addi	r4,r4,-64
++	addi	r11,r11,-64
++
++	lxv	32+v0,0(r4)
++	lxv	32+v1,16(r4)
++	lxv	32+v2,32(r4)
++	lxv	32+v3,48(r4)
++
++	stxv	32+v0,0(r11)
++	stxv	32+v1,16(r11)
++	stxv	32+v2,32(r11)
++	stxv	32+v3,48(r11)
++
++	subi	r5,r5,64
++
++/* Copies the last 1-63 bytes.  */
++	.p2align 5
++L(bwd_final_64):
++	/* r8 holds the number of bytes that will be copied with lxv/stxv.  */
++	clrrdi.	r8,r5,4
++	beq	L(tail1_bwd)
++
++	cmpldi	cr5,r5,32
++	lxv	32+v2,-16(r4)
++	blt	cr5,L(tail2_bwd)
++
++	cmpldi	cr6,r5,48
++	lxv	32+v1,-32(r4)
++	blt	cr6,L(tail3_bwd)
++
++	.p2align 5
++	lxv	32+v0,-48(r4)
++	stxv	32+v0,-48(r11)
++L(tail3_bwd):
++	stxv	32+v1,-32(r11)
++L(tail2_bwd):
++	stxv	32+v2,-16(r11)
++	sub	r4,r4,r5
++	sub	r11,r11,r5
++	sub	r5,r5,r8
++	sldi	r6,r5,56
++	lxvl	v4,r4,r6
++	stxvl	v4,r11,r6
++	blr
++
++/* Copy last 16 bytes.  */
++	.p2align 5
++L(tail1_bwd):
++	sub	r4,r4,r5
++	sub	r11,r11,r5
++	sldi	r6,r5,56
++	lxvl	v4,r4,r6
++	stxvl	v4,r11,r6
++	blr
++
++END_GEN_TB (MEMMOVE,TB_TOCLESS)
++libc_hidden_builtin_def (memmove)
++
++/* void bcopy(const void *src [r3], void *dest [r4], size_t n [r5])
++   Implemented in this file to avoid linker create a stub function call
++   in the branch to '_memmove'.  */
++ENTRY_TOCLESS (__bcopy)
++	mr	r6,r3
++	mr	r3,r4
++	mr	r4,r6
++	b	L(_memmove)
++END (__bcopy)
++#ifndef __bcopy
++weak_alias (__bcopy, bcopy)
++#endif
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/Makefile b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+index 61652b65dd223018..66f8c6ace9824d4a 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/Makefile
++++ b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+@@ -32,7 +32,8 @@ sysdep_routines += memcpy-power8-cached memcpy-power7 memcpy-a2 memcpy-power6 \
+ 		   strncase-power8
+ 
+ ifneq (,$(filter %le,$(config-machine)))
+-sysdep_routines += strcmp-power9 strncmp-power9 strcpy-power9 stpcpy-power9 \
++sysdep_routines += memmove-power10 \
++		   strcmp-power9 strncmp-power9 strcpy-power9 stpcpy-power9 \
+ 		   rawmemchr-power9 strlen-power9 strncpy-power9 stpncpy-power9 \
+ 		   strlen-power10
+ endif
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/bcopy.c b/sysdeps/powerpc/powerpc64/multiarch/bcopy.c
+index 1c4a229b1fc5654a..705fef33d4e57557 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/bcopy.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/bcopy.c
+@@ -22,8 +22,17 @@
+ extern __typeof (bcopy) __bcopy_ppc attribute_hidden;
+ /* __bcopy_power7 symbol is implemented at memmove-power7.S  */
+ extern __typeof (bcopy) __bcopy_power7 attribute_hidden;
++#ifdef __LITTLE_ENDIAN__
++extern __typeof (bcopy) __bcopy_power10 attribute_hidden;
++#endif
+ 
+ libc_ifunc (bcopy,
++#ifdef __LITTLE_ENDIAN__
++	     hwcap2 & (PPC_FEATURE2_ARCH_3_1 |
++		       PPC_FEATURE2_HAS_ISEL)
++	     && (hwcap & PPC_FEATURE_HAS_VSX)
++	     ? __bcopy_power10 :
++#endif
+             (hwcap & PPC_FEATURE_HAS_VSX)
+             ? __bcopy_power7
+             : __bcopy_ppc);
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+index 46d5956adda72b86..4ce04bc51574cca1 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+@@ -67,6 +67,13 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/powerpc/powerpc64/multiarch/memmove.c.  */
+   IFUNC_IMPL (i, name, memmove,
++#ifdef __LITTLE_ENDIAN__
++	      IFUNC_IMPL_ADD (array, i, memmove,
++			      hwcap2 & (PPC_FEATURE2_ARCH_3_1 |
++					PPC_FEATURE2_HAS_ISEL)
++			      && (hwcap & PPC_FEATURE_HAS_VSX),
++			      __memmove_power10)
++#endif
+ 	      IFUNC_IMPL_ADD (array, i, memmove, hwcap & PPC_FEATURE_HAS_VSX,
+ 			      __memmove_power7)
+ 	      IFUNC_IMPL_ADD (array, i, memmove, 1, __memmove_ppc))
+@@ -186,6 +193,13 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/powerpc/powerpc64/multiarch/bcopy.c.  */
+   IFUNC_IMPL (i, name, bcopy,
++#ifdef __LITTLE_ENDIAN__
++	      IFUNC_IMPL_ADD (array, i, bcopy,
++			      hwcap2 & (PPC_FEATURE2_ARCH_3_1 |
++					PPC_FEATURE2_HAS_ISEL)
++			      && (hwcap & PPC_FEATURE_HAS_VSX),
++			      __bcopy_power10)
++#endif
+ 	      IFUNC_IMPL_ADD (array, i, bcopy, hwcap & PPC_FEATURE_HAS_VSX,
+ 			      __bcopy_power7)
+ 	      IFUNC_IMPL_ADD (array, i, bcopy, 1, __bcopy_ppc))
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/memmove-power10.S b/sysdeps/powerpc/powerpc64/multiarch/memmove-power10.S
+new file mode 100644
+index 0000000000000000..171b32921a0a4d47
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/multiarch/memmove-power10.S
+@@ -0,0 +1,27 @@
++/* Optimized memmove implementation for POWER10.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#define MEMMOVE __memmove_power10
++
++#undef libc_hidden_builtin_def
++#define libc_hidden_builtin_def(name)
++
++#undef __bcopy
++#define __bcopy __bcopy_power10
++
++#include <sysdeps/powerpc/powerpc64/le/power10/memmove.S>
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/memmove-power7.S b/sysdeps/powerpc/powerpc64/multiarch/memmove-power7.S
+index 0b251d0f5f087874..fb5261ecda64d061 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/memmove-power7.S
++++ b/sysdeps/powerpc/powerpc64/multiarch/memmove-power7.S
+@@ -21,7 +21,7 @@
+ #undef libc_hidden_builtin_def
+ #define libc_hidden_builtin_def(name)
+ 
+-#undef bcopy
+-#define bcopy __bcopy_power7
++#undef __bcopy
++#define __bcopy __bcopy_power7
+ 
+ #include <sysdeps/powerpc/powerpc64/power7/memmove.S>
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/memmove.c b/sysdeps/powerpc/powerpc64/multiarch/memmove.c
+index 39987155cc7d3624..2fd7b6d309e4bedd 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/memmove.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/memmove.c
+@@ -28,14 +28,22 @@
+ # include "init-arch.h"
+ 
+ extern __typeof (__redirect_memmove) __libc_memmove;
+-
+ extern __typeof (__redirect_memmove) __memmove_ppc attribute_hidden;
+ extern __typeof (__redirect_memmove) __memmove_power7 attribute_hidden;
++#ifdef __LITTLE_ENDIAN__
++extern __typeof (__redirect_memmove) __memmove_power10 attribute_hidden;
++#endif
+ 
+ libc_ifunc (__libc_memmove,
+-            (hwcap & PPC_FEATURE_HAS_VSX)
+-            ? __memmove_power7
+-            : __memmove_ppc);
++#ifdef __LITTLE_ENDIAN__
++	     hwcap2 & (PPC_FEATURE2_ARCH_3_1 |
++		       PPC_FEATURE2_HAS_ISEL)
++	     && (hwcap & PPC_FEATURE_HAS_VSX)
++	     ? __memmove_power10 :
++#endif
++		     (hwcap & PPC_FEATURE_HAS_VSX)
++		     ? __memmove_power7
++		     : __memmove_ppc);
+ 
+ #undef memmove
+ strong_alias (__libc_memmove, memmove);
+diff --git a/sysdeps/powerpc/powerpc64/power7/memmove.S b/sysdeps/powerpc/powerpc64/power7/memmove.S
+index b7f3dc28d1a8eac3..9e4cabb07ef9b732 100644
+--- a/sysdeps/powerpc/powerpc64/power7/memmove.S
++++ b/sysdeps/powerpc/powerpc64/power7/memmove.S
+@@ -832,4 +832,6 @@ ENTRY_TOCLESS (__bcopy)
+ 	mr	r4,r6
+ 	b	L(_memmove)
+ END (__bcopy)
++#ifndef __bcopy
+ weak_alias (__bcopy, bcopy)
++#endif

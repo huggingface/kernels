@@ -1,0 +1,58 @@
+commit 0bb8f8c791862a4ff38a584af23bbb5bf3f90acd
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri May 31 13:52:16 2019 +0200
+
+    Linux: Add oddly-named arm syscalls to syscall-names.list
+    
+    <asm/unistd.h> on arm defines the following macros:
+    
+    #define __ARM_NR_breakpoint             (__ARM_NR_BASE+1)
+    #define __ARM_NR_cacheflush             (__ARM_NR_BASE+2)
+    #define __ARM_NR_usr26                  (__ARM_NR_BASE+3)
+    #define __ARM_NR_usr32                  (__ARM_NR_BASE+4)
+    #define __ARM_NR_set_tls                (__ARM_NR_BASE+5)
+    #define __ARM_NR_get_tls                (__ARM_NR_BASE+6)
+    
+    These do not follow the regular __NR_* naming convention and
+    have so far been ignored by the syscall-names.list consistency
+    checks.  This commit adds these names to the file, preparing
+    for the availability of these names in the regular __NR_*
+    namespace.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 2d0354b8b3..ae8adabb70 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -52,6 +52,7 @@ bdflush
+ bind
+ bpf
+ break
++breakpoint
+ brk
+ cachectl
+ cacheflush
+@@ -139,6 +140,7 @@ get_kernel_syms
+ get_mempolicy
+ get_robust_list
+ get_thread_area
++get_tls
+ getcpu
+ getcwd
+ getdents
+@@ -499,6 +501,7 @@ set_mempolicy
+ set_robust_list
+ set_thread_area
+ set_tid_address
++set_tls
+ setdomainname
+ setfsgid
+ setfsgid32
+@@ -611,6 +614,8 @@ unlinkat
+ unshare
+ uselib
+ userfaultfd
++usr26
++usr32
+ ustat
+ utime
+ utimensat

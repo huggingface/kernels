@@ -1,0 +1,85 @@
+commit 856bab7717ef6d1033fd7cbf7cfb2ddefbfffb07
+Author: Andreas Schwab <schwab@suse.de>
+Date:   Thu Feb 9 14:56:21 2023 +0100
+
+    x86/dl-cacheinfo: remove unsused parameter from handle_amd
+    
+    Also replace an unreachable assert with __builtin_unreachable.
+
+Conflicts:
+	sysdeps/x86/dl-cacheinfo.h
+	  (missing backport of commit 2d651eb9265d1366d7b9e881bfddd4
+	  ("x86: Move x86 processor cache info to cpu_features"))
+
+diff --git a/sysdeps/x86/cacheinfo.h b/sysdeps/x86/cacheinfo.h
+index b6f111e6668cc212..85e5731281c62503 100644
+--- a/sysdeps/x86/cacheinfo.h
++++ b/sysdeps/x86/cacheinfo.h
+@@ -299,9 +299,9 @@ init_cacheinfo (void)
+     }
+   else if (cpu_features->basic.kind == arch_kind_amd)
+     {
+-      data   = handle_amd (_SC_LEVEL1_DCACHE_SIZE, cpu_features);
+-      long int core = handle_amd (_SC_LEVEL2_CACHE_SIZE, cpu_features);
+-      shared = handle_amd (_SC_LEVEL3_CACHE_SIZE, cpu_features);
++      data   = handle_amd (_SC_LEVEL1_DCACHE_SIZE);
++      long int core = handle_amd (_SC_LEVEL2_CACHE_SIZE);
++      shared = handle_amd (_SC_LEVEL3_CACHE_SIZE);
+       shared_per_thread = shared;
+ 
+       if (shared <= 0)
+diff --git a/sysdeps/x86/dl-cacheinfo.h b/sysdeps/x86/dl-cacheinfo.h
+index 294a7d8bfc564aef..74cd5072a9d10756 100644
+--- a/sysdeps/x86/dl-cacheinfo.h
++++ b/sysdeps/x86/dl-cacheinfo.h
+@@ -311,7 +311,7 @@ handle_intel (int name, const struct cpu_features *cpu_features)
+ 
+ 
+ static long int __attribute__ ((noinline))
+-handle_amd (int name, const struct cpu_features *cpu_features)
++handle_amd (int name)
+ {
+   unsigned int eax;
+   unsigned int ebx;
+@@ -334,24 +334,23 @@ handle_amd (int name, const struct cpu_features *cpu_features)
+ 
+   switch (name)
+     {
+-       case _SC_LEVEL1_ICACHE_ASSOC:
+-       case _SC_LEVEL1_DCACHE_ASSOC:
+-       case _SC_LEVEL2_CACHE_ASSOC:
+-       case _SC_LEVEL3_CACHE_ASSOC:
+-         return ecx?((ebx >> 22) & 0x3ff) + 1 : 0;
+-       case _SC_LEVEL1_ICACHE_LINESIZE:
+-       case _SC_LEVEL1_DCACHE_LINESIZE:
+-       case _SC_LEVEL2_CACHE_LINESIZE:
+-       case _SC_LEVEL3_CACHE_LINESIZE:
+-         return ecx?(ebx & 0xfff) + 1 : 0;
+-       case _SC_LEVEL1_ICACHE_SIZE:
+-       case _SC_LEVEL1_DCACHE_SIZE:
+-       case _SC_LEVEL2_CACHE_SIZE:
+-       case _SC_LEVEL3_CACHE_SIZE:
+-         return ecx?(((ebx >> 22) & 0x3ff) + 1)*((ebx & 0xfff) + 1)\
+-                                                    *(ecx + 1):0;
+-       default:
+-         assert (! "cannot happen");
++    case _SC_LEVEL1_ICACHE_ASSOC:
++    case _SC_LEVEL1_DCACHE_ASSOC:
++    case _SC_LEVEL2_CACHE_ASSOC:
++    case _SC_LEVEL3_CACHE_ASSOC:
++      return ecx ? ((ebx >> 22) & 0x3ff) + 1 : 0;
++    case _SC_LEVEL1_ICACHE_LINESIZE:
++    case _SC_LEVEL1_DCACHE_LINESIZE:
++    case _SC_LEVEL2_CACHE_LINESIZE:
++    case _SC_LEVEL3_CACHE_LINESIZE:
++      return ecx ? (ebx & 0xfff) + 1 : 0;
++    case _SC_LEVEL1_ICACHE_SIZE:
++    case _SC_LEVEL1_DCACHE_SIZE:
++    case _SC_LEVEL2_CACHE_SIZE:
++    case _SC_LEVEL3_CACHE_SIZE:
++      return ecx ? (((ebx >> 22) & 0x3ff) + 1) * ((ebx & 0xfff) + 1) * (ecx + 1): 0;
++    default:
++      __builtin_unreachable ();
+     }
+   return -1;
+ }

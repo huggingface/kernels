@@ -1,0 +1,255 @@
+commit c1cb2deeca1a85c6fc5bd41b90816d48a95bc434
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Sun Dec 5 11:28:34 2021 +0100
+
+    elf: execve statically linked programs instead of crashing [BZ #28648]
+
+    Programs without dynamic dependencies and without a program
+    interpreter are now run via execve.
+
+    Previously, the dynamic linker either crashed while attempting to
+    read a non-existing dynamic segment (looking for DT_AUDIT/DT_DEPAUDIT
+    data), or the self-relocated in the static PIE executable crashed
+    because the outer dynamic linker had already applied RELRO protection.
+
+    <dl-execve.h> is needed because execve is not available in the
+    dynamic loader on Hurd.
+
+    Reviewed-by: H.J. Lu <hjl.tools@gmail.com>
+
+Conflicts:
+	elf/Makefile
+	  (some missing backports)
+	elf/rtld.c
+	  (missing rework of ld.so self-relocation downstream,
+	  always print error as a number due to missing
+	  sterrorname_np, also fix errcode/errno glitch)
+	sysdeps/unix/sysv/linux/dl-execve.h
+	  (missing INTERNAL_SYSCALL_CALL refactoring to Linux-like
+	  calling convention)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index d246f1c0d9e019fd..b3e8ab2792608de7 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -214,7 +214,8 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-tls-ie tst-tls-ie-dlmopen \
+ 	 argv0test \
+ 	 tst-glibc-hwcaps tst-glibc-hwcaps-prepend tst-glibc-hwcaps-mask \
+-	 tst-tls20 tst-tls21
++	 tst-tls20 tst-tls21 \
++	 tst-rtld-run-static \
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -1917,3 +1918,5 @@ $(objpfx)tst-tls20.out: $(objpfx)tst-tls20mod-bad.so \
+ $(objpfx)tst-tls21: $(libdl) $(shared-thread-library)
+ $(objpfx)tst-tls21.out: $(objpfx)tst-tls21mod.so
+ $(objpfx)tst-tls21mod.so: $(tst-tls-many-dynamic-modules:%=$(objpfx)%.so)
++
++$(objpfx)tst-rtld-run-static.out: $(objpfx)/ldconfig
+diff --git a/elf/rtld.c b/elf/rtld.c
+index d14c388f548d6d51..461d8c114a875a9b 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -48,6 +48,7 @@
+ #include <dl-main.h>
+ #include <gnu/lib-names.h>
+ #include <dl-tunables.h>
++#include <dl-execve.h>
+ 
+ #include <assert.h>
+ 
+@@ -1114,6 +1115,40 @@ load_audit_modules (struct link_map *main_map, struct audit_list *audit_list)
+     }
+ }
+ 
++/* Check if the executable is not actualy dynamically linked, and
++   invoke it directly in that case.  */
++static void
++rtld_chain_load (struct link_map *main_map, char *argv0)
++{
++  /* The dynamic loader run against itself.  */
++  const char *rtld_soname
++    = ((const char *) D_PTR (&GL(dl_rtld_map), l_info[DT_STRTAB])
++       + GL(dl_rtld_map).l_info[DT_SONAME]->d_un.d_val);
++  if (main_map->l_info[DT_SONAME] != NULL
++      && strcmp (rtld_soname,
++		 ((const char *) D_PTR (main_map, l_info[DT_STRTAB])
++		  + main_map->l_info[DT_SONAME]->d_un.d_val)) == 0)
++    _dl_fatal_printf ("%s: loader cannot load itself\n", rtld_soname);
++
++  /* With DT_NEEDED dependencies, the executable is dynamically
++     linked.  */
++  if (__glibc_unlikely (main_map->l_info[DT_NEEDED] != NULL))
++    return;
++
++  /* If the executable has program interpreter, it is dynamically
++     linked.  */
++  for (size_t i = 0; i < main_map->l_phnum; ++i)
++    if (main_map->l_phdr[i].p_type == PT_INTERP)
++      return;
++
++  const char *pathname = _dl_argv[0];
++  if (argv0 != NULL)
++    _dl_argv[0] = argv0;
++  int errcode = __rtld_execve (pathname, _dl_argv, _environ);
++  _dl_fatal_printf("%s: cannot execute %s: %d\n",
++		   rtld_soname, pathname, errcode);
++}
++
+ static void
+ dl_main (const ElfW(Phdr) *phdr,
+ 	 ElfW(Word) phnum,
+@@ -1384,14 +1419,8 @@ dl_main (const ElfW(Phdr) *phdr,
+       /* Now the map for the main executable is available.  */
+       main_map = GL(dl_ns)[LM_ID_BASE]._ns_loaded;
+ 
+-      if (__glibc_likely (state.mode == rtld_mode_normal)
+-	  && GL(dl_rtld_map).l_info[DT_SONAME] != NULL
+-	  && main_map->l_info[DT_SONAME] != NULL
+-	  && strcmp ((const char *) D_PTR (&GL(dl_rtld_map), l_info[DT_STRTAB])
+-		     + GL(dl_rtld_map).l_info[DT_SONAME]->d_un.d_val,
+-		     (const char *) D_PTR (main_map, l_info[DT_STRTAB])
+-		     + main_map->l_info[DT_SONAME]->d_un.d_val) == 0)
+-	_dl_fatal_printf ("loader cannot load itself\n");
++      if (__glibc_likely (state.mode == rtld_mode_normal))
++	rtld_chain_load (main_map, argv0);
+ 
+       phdr = main_map->l_phdr;
+       phnum = main_map->l_phnum;
+diff --git a/elf/tst-rtld-run-static.c b/elf/tst-rtld-run-static.c
+new file mode 100644
+index 0000000000000000..7281093504b675c4
+--- /dev/null
++++ b/elf/tst-rtld-run-static.c
+@@ -0,0 +1,62 @@
++/* Test running statically linked programs using ld.so.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++#include <support/support.h>
++#include <support/capture_subprocess.h>
++#include <string.h>
++#include <stdlib.h>
++
++static int
++do_test (void)
++{
++  char *ldconfig_path = xasprintf ("%s/elf/ldconfig", support_objdir_root);
++
++  {
++    char *argv[] = { (char *) "ld.so", ldconfig_path, (char *) "--help", NULL };
++    struct support_capture_subprocess cap
++      = support_capture_subprogram (support_objdir_elf_ldso, argv);
++    support_capture_subprocess_check (&cap, "no --argv0", 0, sc_allow_stdout);
++    puts ("info: output without --argv0:");
++    puts (cap.out.buffer);
++    TEST_VERIFY (strstr (cap.out.buffer, "Usage: ldconfig [OPTION...]\n")
++                 == cap.out.buffer);
++    support_capture_subprocess_free (&cap);
++  }
++
++  {
++    char *argv[] =
++      {
++        (char *) "ld.so", (char *) "--argv0", (char *) "ldconfig-argv0",
++        ldconfig_path, (char *) "--help", NULL
++      };
++    struct support_capture_subprocess cap
++      = support_capture_subprogram (support_objdir_elf_ldso, argv);
++    support_capture_subprocess_check (&cap, "with --argv0", 0, sc_allow_stdout);
++    puts ("info: output with --argv0:");
++    puts (cap.out.buffer);
++    TEST_VERIFY (strstr (cap.out.buffer, "Usage: ldconfig-argv0 [OPTION...]\n")
++                 == cap.out.buffer);
++    support_capture_subprocess_free (&cap);
++  }
++
++  free (ldconfig_path);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/generic/dl-execve.h b/sysdeps/generic/dl-execve.h
+new file mode 100644
+index 0000000000000000..5fd097df69e1770c
+--- /dev/null
++++ b/sysdeps/generic/dl-execve.h
+@@ -0,0 +1,25 @@
++/* execve for the dynamic linker.  Generic stub version.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++
++static int
++__rtld_execve (const char *path, char *const *argv, char *const *envp)
++{
++  return ENOSYS;
++}
+diff --git a/sysdeps/unix/sysv/linux/dl-execve.h b/sysdeps/unix/sysv/linux/dl-execve.h
+new file mode 100644
+index 0000000000000000..9ec6539286bb0589
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/dl-execve.h
+@@ -0,0 +1,30 @@
++/* execve for the dynamic linker.  Linux version.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++
++static inline int
++__rtld_execve (const char *path, char *const *argv, char *const *envp)
++{
++  INTERNAL_SYSCALL_DECL (err);
++  long int r = INTERNAL_SYSCALL_CALL (execve, err, path, argv, envp);
++  if (INTERNAL_SYSCALL_ERROR_P (r, err))
++    return INTERNAL_SYSCALL_ERRNO (r, err);
++  else
++    return 0;
++}

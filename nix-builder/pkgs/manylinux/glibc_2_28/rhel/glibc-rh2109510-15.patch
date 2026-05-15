@@ -1,0 +1,26 @@
+commit 8521001731d6539382fa875f1cac9864c466ef27
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Jun 6 14:41:24 2022 -0300
+
+    scripts/glibcelf.py: Add PT_AARCH64_MEMTAG_MTE constant
+    
+    It was added in commit 603e5c8ba7257483c162cabb06eb6f79096429b6.
+    This caused the elf/tst-glibcelf consistency check to fail.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/scripts/glibcelf.py b/scripts/glibcelf.py
+index 07bef940433b4c99..47f95d07baefb4ae 100644
+--- a/scripts/glibcelf.py
++++ b/scripts/glibcelf.py
+@@ -523,6 +523,10 @@ class Pt(_OpenIntEnum):
+     PT_SUNWBSS = 0x6ffffffa
+     PT_SUNWSTACK = 0x6ffffffb
+ 
++class PtAARCH64(enum.Enum):
++    """Supplemental PT_* constants for EM_AARCH64."""
++    PT_AARCH64_MEMTAG_MTE = 0x70000002
++
+ class PtARM(enum.Enum):
+     """Supplemental PT_* constants for EM_ARM."""
+     PT_ARM_EXIDX = 0x70000001

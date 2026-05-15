@@ -1,0 +1,170 @@
+commit e4a2fb76efb45210c541ee3f8ef32f317783c3a8
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed May 11 20:30:49 2022 +0200
+
+    manual: Document the dlinfo function
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Tested-by: Carlos O'Donell <carlos@rehdat.com>
+    (cherry picked from commit 93804a1ee084d4bdc620b2b9f91615c7da0fabe1)
+    
+    Also includes partial backport of commit 5d28a8962dcb6ec056b81d730e
+    (the addition of manual/dynlink.texi).
+
+diff --git a/manual/Makefile b/manual/Makefile
+index c2756640a785afe1..4c835e568f3bab67 100644
+--- a/manual/Makefile
++++ b/manual/Makefile
+@@ -39,7 +39,7 @@ chapters = $(addsuffix .texi, \
+ 		       pipe socket terminal syslog math arith time	\
+ 		       resource setjmp signal startup process ipc job	\
+ 		       nss users sysinfo conf crypt debug threads	\
+-		       probes tunables)
++		       dynlink probes tunables)
+ appendices = lang.texi header.texi install.texi maint.texi platform.texi \
+ 	     contrib.texi
+ licenses = freemanuals.texi lgpl-2.1.texi fdl-1.3.texi
+diff --git a/manual/dynlink.texi b/manual/dynlink.texi
+new file mode 100644
+index 0000000000000000..dbf3de11769d8e57
+--- /dev/null
++++ b/manual/dynlink.texi
+@@ -0,0 +1,100 @@
++@node Dynamic Linker
++@c @node Dynamic Linker, Internal Probes, Threads, Top
++@c %MENU% Loading programs and shared objects.
++@chapter Dynamic Linker
++@cindex dynamic linker
++@cindex dynamic loader
++
++The @dfn{dynamic linker} is responsible for loading dynamically linked
++programs and their dependencies (in the form of shared objects).  The
++dynamic linker in @theglibc{} also supports loading shared objects (such
++as plugins) later at run time.
++
++Dynamic linkers are sometimes called @dfn{dynamic loaders}.
++
++@menu
++* Dynamic Linker Introspection::    Interfaces for querying mapping information.
++@end menu
++
++@node Dynamic Linker Introspection
++@section Dynamic Linker Introspection
++
++@Theglibc{} provides various functions for querying information from the
++dynamic linker.
++
++@deftypefun {int} dlinfo (void *@var{handle}, int @var{request}, void *@var{arg})
++@safety{@mtsafe{}@asunsafe{@asucorrupt{}}@acunsafe{@acucorrupt{}}}
++@standards{GNU, dlfcn.h}
++This function returns information about @var{handle} in the memory
++location @var{arg}, based on @var{request}.  The @var{handle} argument
++must be a pointer returned by @code{dlopen} or @code{dlmopen}; it must
++not have been closed by @code{dlclose}.
++
++On success, @code{dlinfo} returns 0.  If there is an error, the function
++returns @math{-1}, and @code{dlerror} can be used to obtain a
++corresponding error message.
++
++The following operations are defined for use with @var{request}:
++
++@vtable @code
++@item RTLD_DI_LINKMAP
++The corresponding @code{struct link_map} pointer for @var{handle} is
++written to @code{*@var{arg}}.  The @var{arg} argument must be the
++address of an object of type @code{struct link_map *}.
++
++@item RTLD_DI_LMID
++The namespace identifier of @var{handle} is written to
++@code{*@var{arg}}.  The @var{arg} argument must be the address of an
++object of type @code{Lmid_t}.
++
++@item RTLD_DI_ORIGIN
++The value of the @code{$ORIGIN} dynamic string token for @var{handle} is
++written to the character array starting at @var{arg} as a
++null-terminated string.
++
++This request type should not be used because it is prone to buffer
++overflows.
++
++@item RTLD_DI_SERINFO
++@itemx RTLD_DI_SERINFOSIZE
++These requests can be used to obtain search path information for
++@var{handle}.  For both requests, @var{arg} must point to a
++@code{Dl_serinfo} object.  The @code{RTLD_DI_SERINFOSIZE} request must
++be made first; it updates the @code{dls_size} and @code{dls_cnt} members
++of the @code{Dl_serinfo} object.  The caller should then allocate memory
++to store at least @code{dls_size} bytes and pass that buffer to a
++@code{RTLD_DI_SERINFO} request.  This second request fills the
++@code{dls_serpath} array.  The number of array elements was returned in
++the @code{dls_cnt} member in the initial @code{RTLD_DI_SERINFOSIZE}
++request.  The caller is responsible for freeing the allocated buffer.
++
++This interface is prone to buffer overflows in multi-threaded processes
++because the required size can change between the
++@code{RTLD_DI_SERINFOSIZE} and @code{RTLD_DI_SERINFO} requests.
++
++@item RTLD_DI_TLS_DATA
++This request writes the address of the TLS block (in the current thread)
++for the shared object identified by @var{handle} to @code{*@var{arg}}.
++The argument @var{arg} must be the address of an object of type
++@code{void *}.  A null pointer is written if the object does not have
++any associated TLS block.
++
++@item RTLD_DI_TLS_MODID
++This request writes the TLS module ID for the shared object @var{handle}
++to @code{*@var{arg}}.  The argument @var{arg} must be the address of an
++object of type @code{size_t}.  The module ID is zero if the object
++does not have an associated TLS block.
++@end vtable
++
++The @code{dlinfo} function is a GNU extension.
++@end deftypefun
++
++@c FIXME these are undocumented:
++@c dladdr
++@c dladdr1
++@c dlclose
++@c dlerror
++@c dlmopen
++@c dlopen
++@c dlsym
++@c dlvsym
+diff --git a/manual/libdl.texi b/manual/libdl.texi
+deleted file mode 100644
+index e3fe0452d9f41d47..0000000000000000
+--- a/manual/libdl.texi
++++ /dev/null
+@@ -1,10 +0,0 @@
+-@c FIXME these are undocumented:
+-@c dladdr
+-@c dladdr1
+-@c dlclose
+-@c dlerror
+-@c dlinfo
+-@c dlmopen
+-@c dlopen
+-@c dlsym
+-@c dlvsym
+diff --git a/manual/probes.texi b/manual/probes.texi
+index 0ea560ed78bcfd7e..892d2451938eb379 100644
+--- a/manual/probes.texi
++++ b/manual/probes.texi
+@@ -1,5 +1,5 @@
+ @node Internal Probes
+-@c @node Internal Probes, Tunables, Threads, Top
++@c @node Internal Probes, Tunables, Dynamic Linker, Top
+ @c %MENU% Probes to monitor libc internal behavior
+ @chapter Internal probes
+ 
+diff --git a/manual/threads.texi b/manual/threads.texi
+index 87fda7d8e716e08c..1c26c57540746e3b 100644
+--- a/manual/threads.texi
++++ b/manual/threads.texi
+@@ -1,5 +1,5 @@
+ @node Threads
+-@c @node Threads, Internal Probes, Debugging Support, Top
++@c @node Threads, Dynamic Linker, Debugging Support, Top
+ @c %MENU% Functions, constants, and data types for working with threads
+ @chapter Threads
+ @cindex threads

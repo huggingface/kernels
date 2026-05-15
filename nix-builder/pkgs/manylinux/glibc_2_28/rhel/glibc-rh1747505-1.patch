@@ -1,0 +1,196 @@
+commit 4b7c74179c8928d971d370e1137d202f891a4cf5
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Wed Mar 20 12:40:18 2019 -0400
+
+    nss: Make nsswitch.conf more distribution friendly.
+    
+    The current default nsswitch.conf file provided by glibc is not very
+    distribution friendly. The file contains some minimal directives that no
+    real distribution uses. This update aims to provide a rich set of
+    comments which are useful for all distributions, and a broader set of
+    service defines which should work for all distributions.
+    
+    Tested defaults on x86_64 and they work. The nsswitch.conf file more
+    closely matches what we have in Fedora now, and I'll adjust Fedora to
+    use this version with minor changes to enable Fedora-specific service
+    providers.
+    
+    v2
+    - Add missing databases to manual.
+    - Add link to manual from default nsswitch.conf.
+    - Sort nsswitch.conf according to most used database first.
+    
+    v3
+    - Only mention implemented services in 'NSS Basics.'
+    - Mention 'automount' in 'Services in the NSS configuration.'
+    - Sort services in alphabetical order.
+    
+    v4
+    - Project name is 'Samba'.
+    
+    v5
+    - Fix typo in manual/nss.texi.
+    
+    v6
+    - Fix another typo in manual/nss.texi. Ran spell checker this time.
+
+diff --git a/manual/nss.texi b/manual/nss.texi
+index 164ae33246..821469a78a 100644
+--- a/manual/nss.texi
++++ b/manual/nss.texi
+@@ -56,13 +56,17 @@ functions to access the databases.
+ @noindent
+ The databases available in the NSS are
+ 
++@cindex aliases
+ @cindex ethers
+ @cindex group
++@cindex gshadow
+ @cindex hosts
++@cindex initgroups
+ @cindex netgroup
+ @cindex networks
+-@cindex protocols
+ @cindex passwd
++@cindex protocols
++@cindex publickey
+ @cindex rpc
+ @cindex services
+ @cindex shadow
+@@ -75,16 +79,22 @@ Ethernet numbers,
+ @comment @pxref{Ethernet Numbers}.
+ @item group
+ Groups of users, @pxref{Group Database}.
++@item gshadow
++Group passphrase hashes and related information.
+ @item hosts
+ Host names and numbers, @pxref{Host Names}.
++@item initgroups
++Supplementary group access list.
+ @item netgroup
+ Network wide list of host and users, @pxref{Netgroup Database}.
+ @item networks
+ Network names and numbers, @pxref{Networks Database}.
+-@item protocols
+-Network protocols, @pxref{Protocols Database}.
+ @item passwd
+ User identities, @pxref{User Database}.
++@item protocols
++Network protocols, @pxref{Protocols Database}.
++@item publickey
++Public keys for Secure RPC.
+ @item rpc
+ Remote procedure call names and numbers.
+ @comment @pxref{RPC Database}.
+@@ -96,8 +106,8 @@ User passphrase hashes and related information.
+ @end table
+ 
+ @noindent
+-There will be some more added later (@code{automount}, @code{bootparams},
+-@code{netmasks}, and @code{publickey}).
++@c We currently don't implement automount, netmasks, or bootparams.
++More databases may be added later.
+ 
+ @node NSS Configuration File, NSS Module Internals, NSS Basics, Name Service Switch
+ @section The NSS Configuration File
+@@ -159,6 +169,10 @@ these files since they should be placed in a directory where they are
+ found automatically.  Only the names of all available services are
+ important.
+ 
++Lastly, some system software may make use of the NSS configuration file
++to store their own configuration for similar purposes.  Examples of this
++include the @code{automount} service which is used by @code{autofs}.
++
+ @node Actions in the NSS configuration, Notes on NSS Configuration File, Services in the NSS configuration, NSS Configuration File
+ @subsection Actions in the NSS configuration
+ 
+diff --git a/nss/nsswitch.conf b/nss/nsswitch.conf
+index 39ca88bf51..f553588114 100644
+--- a/nss/nsswitch.conf
++++ b/nss/nsswitch.conf
+@@ -1,20 +1,69 @@
++#
+ # /etc/nsswitch.conf
+ #
+-# Example configuration of GNU Name Service Switch functionality.
++# An example Name Service Switch config file. This file should be
++# sorted with the most-used services at the beginning.
+ #
++# Valid databases are: aliases, ethers, group, gshadow, hosts,
++# initgroups, netgroup, networks, passwd, protocols, publickey,
++# rpc, services, and shadow.
++#
++# Valid service provider entries include (in alphabetical order):
++#
++#	compat			Use /etc files plus *_compat pseudo-db
++#	db			Use the pre-processed /var/db files
++#	dns			Use DNS (Domain Name Service)
++#	files			Use the local files in /etc
++#	hesiod			Use Hesiod (DNS) for user lookups
++#	nis			Use NIS (NIS version 2), also called YP
++#	nisplus			Use NIS+ (NIS version 3)
++#
++# See `info libc 'NSS Basics'` for more information.
++#
++# Commonly used alternative service providers (may need installation):
++#
++#	ldap			Use LDAP directory server
++#	myhostname		Use systemd host names
++#	mymachines		Use systemd machine names
++#	mdns*, mdns*_minimal	Use Avahi mDNS/DNS-SD
++#	resolve			Use systemd resolved resolver
++#	sss			Use System Security Services Daemon (sssd)
++#	systemd			Use systemd for dynamic user option
++#	winbind			Use Samba winbind support
++#	wins			Use Samba wins support
++#	wrapper			Use wrapper module for testing
++#
++# Notes:
++#
++# 'sssd' performs its own 'files'-based caching, so it should generally
++# come before 'files'.
++#
++# WARNING: Running nscd with a secondary caching service like sssd may
++# 	   lead to unexpected behaviour, especially with how long
++# 	   entries are cached.
++#
++# Installation instructions:
++#
++# To use 'db', install the appropriate package(s) (provide 'makedb' and
++# libnss_db.so.*), and place the 'db' in front of 'files' for entries
++# you want to be looked up first in the databases, like this:
++#
++# passwd:    db files
++# shadow:    db files
++# group:     db files
+ 
+-passwd:		db files
+-group:		db files
+-initgroups:	db [SUCCESS=continue] files
+-shadow:		db files
+-gshadow:	files
+-
+-hosts:		files dns
+-networks:	files dns
+-
+-protocols:	db files
+-services:	db files
+-ethers:		db files
+-rpc:		db files
+-
+-netgroup:	db files
++# In alphabetical order. Re-order as required to optimize peformance.
++aliases:    files
++ethers:     files
++group:      files
++gshadow:    files
++hosts:      files dns
++initgroups: files
++netgroup:   files
++networks:   files dns
++passwd:     files
++protocols:  files
++publickey:  files
++rpc:        files
++shadow:     files
++services:   files

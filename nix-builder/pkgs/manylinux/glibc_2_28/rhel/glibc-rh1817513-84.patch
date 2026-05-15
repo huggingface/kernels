@@ -1,0 +1,207 @@
+commit f2c679d4b2c73a95f437c705f960a4af1fa23498
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Tue Sep 15 05:49:27 2020 -0700
+
+    <sys/platform/x86.h>: Add Intel Key Locker support
+    
+    Add Intel Key Locker:
+    
+    https://software.intel.com/content/www/us/en/develop/download/intel-key-locker-specification.html
+    
+    support to <sys/platform/x86.h>.  Intel Key Locker has
+    
+    1. KL: AES Key Locker instructions.
+    2. WIDE_KL: AES wide Key Locker instructions.
+    3. AESKLE: AES Key Locker instructions are enabled by OS.
+    
+    Applications should use
+    
+    if (CPU_FEATURE_USABLE (KL))
+    
+    and
+    
+    if (CPU_FEATURE_USABLE (WIDE_KL))
+    
+    to check if AES Key Locker instructions and AES wide Key Locker
+    instructions are usable.
+
+diff --git a/manual/platform.texi b/manual/platform.texi
+index 2c145acdc3564cbb..95b0ed0642c9f8a9 100644
+--- a/manual/platform.texi
++++ b/manual/platform.texi
+@@ -177,6 +177,9 @@ The supported processor features are:
+ @item
+ @code{AES} -- The AES instruction extensions.
+ 
++@item
++@code{AESKLE} -- AES Key Locker instructions are enabled by OS.
++
+ @item
+ @code{AMX_BF16} -- Tile computational operations on bfloat16 numbers.
+ 
+@@ -353,6 +356,9 @@ the indirect branch predictor barrier (IBPB).
+ @item
+ @code{INVPCID} -- INVPCID instruction.
+ 
++@item
++@code{KL} -- AES Key Locker instructions.
++
+ @item
+ @code{L1D_FLUSH} -- IA32_FLUSH_CMD MSR.
+ 
+@@ -598,6 +604,9 @@ using a TSC deadline value.
+ @item
+ @code{WBNOINVD} -- WBINVD/WBNOINVD instructions.
+ 
++@item
++@code{WIDE_KL} -- AES wide Key Locker instructions.
++
+ @item
+ @code{X2APIC} -- x2APIC.
+ 
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 6954728c47d0126b..77a596a15404b575 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -269,6 +269,14 @@ update_usable (struct cpu_features *cpu_features)
+   /* Determine if PKU is usable.  */
+   if (CPU_FEATURES_CPU_P (cpu_features, OSPKE))
+     CPU_FEATURE_SET (cpu_features, PKU);
++
++  /* Determine if Key Locker instructions are usable.  */
++  if (CPU_FEATURES_CPU_P (cpu_features, AESKLE))
++    {
++      CPU_FEATURE_SET (cpu_features, AESKLE);
++      CPU_FEATURE_SET_USABLE (cpu_features, KL);
++      CPU_FEATURE_SET_USABLE (cpu_features, WIDE_KL);
++    }
+ }
+ 
+ static void
+@@ -341,6 +349,12 @@ get_common_indices (struct cpu_features *cpu_features,
+ 		   cpu_features->features[COMMON_CPUID_INDEX_D_ECX_1].cpuid.ecx,
+ 		   cpu_features->features[COMMON_CPUID_INDEX_D_ECX_1].cpuid.edx);
+ 
++  if (cpu_features->basic.max_cpuid >= 0x19)
++    __cpuid_count (0x19, 0,
++		   cpu_features->features[COMMON_CPUID_INDEX_19].cpuid.eax,
++		   cpu_features->features[COMMON_CPUID_INDEX_19].cpuid.ebx,
++		   cpu_features->features[COMMON_CPUID_INDEX_19].cpuid.ecx,
++		   cpu_features->features[COMMON_CPUID_INDEX_19].cpuid.edx);
+ }
+ 
+ _Static_assert (((index_arch_Fast_Unaligned_Load
+diff --git a/sysdeps/x86/sys/platform/x86.h b/sysdeps/x86/sys/platform/x86.h
+index ebc5f6fc16cb8104..bcc81ab5f8ac8265 100644
+--- a/sysdeps/x86/sys/platform/x86.h
++++ b/sysdeps/x86/sys/platform/x86.h
+@@ -28,6 +28,7 @@ enum
+   COMMON_CPUID_INDEX_80000007,
+   COMMON_CPUID_INDEX_80000008,
+   COMMON_CPUID_INDEX_7_ECX_1,
++  COMMON_CPUID_INDEX_19,
+   /* Keep the following line at the end.  */
+   COMMON_CPUID_INDEX_MAX
+ };
+@@ -224,7 +225,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* Note: Bits 17-21: The value of MAWAU used by the BNDLDX and BNDSTX
+    instructions in 64-bit mode.  */
+ #define bit_cpu_RDPID		(1u << 22)
+-#define bit_cpu_INDEX_7_ECX_23	(1u << 23)
++#define bit_cpu_KL		(1u << 23)
+ #define bit_cpu_INDEX_7_ECX_24	(1u << 24)
+ #define bit_cpu_CLDEMOTE	(1u << 25)
+ #define bit_cpu_INDEX_7_ECX_26	(1u << 26)
+@@ -312,6 +313,12 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define bit_cpu_AVX512_BF16	(1u << 5)
+ 
++/* COMMON_CPUID_INDEX_19.  */
++
++/* EBX.  */
++#define bit_cpu_AESKLE		(1u << 0)
++#define bit_cpu_WIDE_KL		(1u << 2)
++
+ /* COMMON_CPUID_INDEX_1.  */
+ 
+ /* ECX.  */
+@@ -437,7 +444,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define index_cpu_INDEX_7_ECX_15 COMMON_CPUID_INDEX_7
+ #define index_cpu_INDEX_7_ECX_16 COMMON_CPUID_INDEX_7
+ #define index_cpu_RDPID		COMMON_CPUID_INDEX_7
+-#define index_cpu_INDEX_7_ECX_23 COMMON_CPUID_INDEX_7
++#define index_cpu_KL		COMMON_CPUID_INDEX_7
+ #define index_cpu_INDEX_7_ECX_24 COMMON_CPUID_INDEX_7
+ #define index_cpu_CLDEMOTE	COMMON_CPUID_INDEX_7
+ #define index_cpu_INDEX_7_ECX_26 COMMON_CPUID_INDEX_7
+@@ -525,6 +532,12 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define index_cpu_AVX512_BF16	COMMON_CPUID_INDEX_7_ECX_1
+ 
++/* COMMON_CPUID_INDEX_19.  */
++
++/* EBX.  */
++#define index_cpu_AESKLE	COMMON_CPUID_INDEX_19
++#define index_cpu_WIDE_KL	COMMON_CPUID_INDEX_19
++
+ /* COMMON_CPUID_INDEX_1.  */
+ 
+ /* ECX.  */
+@@ -650,7 +663,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define reg_INDEX_7_ECX_15	ecx
+ #define reg_INDEX_7_ECX_16	ecx
+ #define reg_RDPID		ecx
+-#define reg_INDEX_7_ECX_23	ecx
++#define reg_KL			ecx
+ #define reg_INDEX_7_ECX_24	ecx
+ #define reg_CLDEMOTE		ecx
+ #define reg_INDEX_7_ECX_26	ecx
+@@ -738,4 +751,10 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define reg_AVX512_BF16		eax
+ 
++/* COMMON_CPUID_INDEX_19.  */
++
++/* EBX.  */
++#define reg_AESKLE		ebx
++#define reg_WIDE_KL		ebx
++
+ #endif  /* _SYS_PLATFORM_X86_H */
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 95e0d33f6c7eeace..c01d701b52090983 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -170,6 +170,7 @@ do_test (void)
+   CHECK_CPU_FEATURE (AVX512_BITALG);
+   CHECK_CPU_FEATURE (AVX512_VPOPCNTDQ);
+   CHECK_CPU_FEATURE (RDPID);
++  CHECK_CPU_FEATURE (KL);
+   CHECK_CPU_FEATURE (CLDEMOTE);
+   CHECK_CPU_FEATURE (MOVDIRI);
+   CHECK_CPU_FEATURE (MOVDIR64B);
+@@ -217,6 +218,8 @@ do_test (void)
+   CHECK_CPU_FEATURE (INVARIANT_TSC);
+   CHECK_CPU_FEATURE (WBNOINVD);
+   CHECK_CPU_FEATURE (AVX512_BF16);
++  CHECK_CPU_FEATURE (AESKLE);
++  CHECK_CPU_FEATURE (WIDE_KL);
+ 
+   printf ("Usable CPU features:\n");
+   CHECK_CPU_FEATURE_USABLE (SSE3);
+@@ -323,6 +326,7 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (AVX512_BITALG);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VPOPCNTDQ);
+   CHECK_CPU_FEATURE_USABLE (RDPID);
++  CHECK_CPU_FEATURE_USABLE (KL);
+   CHECK_CPU_FEATURE_USABLE (CLDEMOTE);
+   CHECK_CPU_FEATURE_USABLE (MOVDIRI);
+   CHECK_CPU_FEATURE_USABLE (MOVDIR64B);
+@@ -370,6 +374,8 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (INVARIANT_TSC);
+   CHECK_CPU_FEATURE_USABLE (WBNOINVD);
+   CHECK_CPU_FEATURE_USABLE (AVX512_BF16);
++  CHECK_CPU_FEATURE_USABLE (AESKLE);
++  CHECK_CPU_FEATURE_USABLE (WIDE_KL);
+ 
+   return 0;
+ }

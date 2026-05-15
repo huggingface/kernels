@@ -1,0 +1,45 @@
+commit 89dc0372a9055e7ef86fe19be6201fa0b16b2f0e
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Sep 8 12:42:06 2021 +0000
+
+    Update syscall lists for Linux 5.14
+    
+    Linux 5.14 has two new syscalls, memfd_secret (on some architectures
+    only) and quotactl_fd.  Update syscall-names.list and regenerate the
+    arch-syscall.h headers with build-many-glibcs.py update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list to Linux 5.14.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 89c5895b9b..fd98893b0e 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.13.
+-kernel 5.13
++# The list of system calls is current as of Linux 5.14.
++kernel 5.14
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -247,6 +247,7 @@ madvise
+ mbind
+ membarrier
+ memfd_create
++memfd_secret
+ memory_ordering
+ migrate_pages
+ mincore
+@@ -452,6 +453,7 @@ pwritev
+ pwritev2
+ query_module
+ quotactl
++quotactl_fd
+ read
+ readahead
+ readdir

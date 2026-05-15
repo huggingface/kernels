@@ -1,0 +1,92 @@
+commit f88c59f4657ac2e0bab8f51f60022ecbe7f12e2e
+Author: Wilco Dijkstra <wdijkstr@arm.com>
+Date:   Fri May 17 18:16:20 2019 +0100
+
+    Small tcache improvements
+    
+    Change the tcache->counts[] entries to uint16_t - this removes
+    the limit set by char and allows a larger tcache.  Remove a few
+    redundant asserts.
+    
+    bench-malloc-thread with 4 threads is ~15% faster on Cortex-A72.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+    
+            * malloc/malloc.c (MAX_TCACHE_COUNT): Increase to UINT16_MAX.
+            (tcache_put): Remove redundant assert.
+            (tcache_get): Remove redundant asserts.
+            (__libc_malloc): Check tcache count is not zero.
+            * manual/tunables.texi (glibc.malloc.tcache_count): Update maximum.
+    
+    (cherry picked from commit 1f50f2ad854c84ead522bfc7331b46dbe6057d53)
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 998879aededf0d7c..e6a483d5cf7c4312 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -321,6 +321,10 @@ __malloc_assert (const char *assertion, const char *file, unsigned int line,
+ /* This is another arbitrary limit, which tunables can change.  Each
+    tcache bin will hold at most this number of chunks.  */
+ # define TCACHE_FILL_COUNT 7
++
++/* Maximum chunks in tcache bins for tunables.  This value must fit the range
++   of tcache->counts[] entries, else they may overflow.  */
++# define MAX_TCACHE_COUNT UINT16_MAX
+ #endif
+ 
+ 
+@@ -2915,12 +2919,10 @@ typedef struct tcache_entry
+    time), this is for performance reasons.  */
+ typedef struct tcache_perthread_struct
+ {
+-  char counts[TCACHE_MAX_BINS];
++  uint16_t counts[TCACHE_MAX_BINS];
+   tcache_entry *entries[TCACHE_MAX_BINS];
+ } tcache_perthread_struct;
+ 
+-#define MAX_TCACHE_COUNT 127	/* Maximum value of counts[] entries.  */
+-
+ static __thread bool tcache_shutting_down = false;
+ static __thread tcache_perthread_struct *tcache = NULL;
+ 
+@@ -2930,7 +2932,6 @@ static __always_inline void
+ tcache_put (mchunkptr chunk, size_t tc_idx)
+ {
+   tcache_entry *e = (tcache_entry *) chunk2mem (chunk);
+-  assert (tc_idx < TCACHE_MAX_BINS);
+ 
+   /* Mark this chunk as "in the tcache" so the test in _int_free will
+      detect a double free.  */
+@@ -2947,8 +2948,6 @@ static __always_inline void *
+ tcache_get (size_t tc_idx)
+ {
+   tcache_entry *e = tcache->entries[tc_idx];
+-  assert (tc_idx < TCACHE_MAX_BINS);
+-  assert (tcache->counts[tc_idx] > 0);
+   tcache->entries[tc_idx] = e->next;
+   --(tcache->counts[tc_idx]);
+   e->key = NULL;
+@@ -3053,9 +3052,8 @@ __libc_malloc (size_t bytes)
+ 
+   DIAG_PUSH_NEEDS_COMMENT;
+   if (tc_idx < mp_.tcache_bins
+-      /*&& tc_idx < TCACHE_MAX_BINS*/ /* to appease gcc */
+       && tcache
+-      && tcache->entries[tc_idx] != NULL)
++      && tcache->counts[tc_idx] > 0)
+     {
+       return tcache_get (tc_idx);
+     }
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index 9dccf2ee7f8eec17..f6c49250e3889ddd 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -188,7 +188,7 @@ per-thread cache.  The default (and maximum) value is 1032 bytes on
+ 
+ @deftp Tunable glibc.malloc.tcache_count
+ The maximum number of chunks of each size to cache. The default is 7.
+-The upper limit is 127.  If set to zero, the per-thread cache is effectively
++The upper limit is 65535.  If set to zero, the per-thread cache is effectively
+ disabled.
+ 
+ The approximate maximum overhead of the per-thread cache is thus equal

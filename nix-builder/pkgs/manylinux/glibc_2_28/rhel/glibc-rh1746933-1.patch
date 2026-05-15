@@ -1,0 +1,60 @@
+commit 58d2672f64176fcb323859d3bd5240fb1cf8f25c
+Author: Wilco Dijkstra <wdijkstr@arm.com>
+Date:   Fri May 10 16:38:21 2019 +0100
+
+    Fix tcache count maximum (BZ #24531)
+    
+    The tcache counts[] array is a char, which has a very small range and thus
+    may overflow.  When setting tcache_count tunable, there is no overflow check.
+    However the tunable must not be larger than the maximum value of the tcache
+    counts[] array, otherwise it can overflow when filling the tcache.
+    
+            [BZ #24531]
+            * malloc/malloc.c (MAX_TCACHE_COUNT): New define.
+            (do_set_tcache_count): Only update if count is small enough.
+            * manual/tunables.texi (glibc.malloc.tcache_count): Document max value.
+    
+    (cherry picked from commit 5ad533e8e65092be962e414e0417112c65d154fb)
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 723d393f529bdb4c..92239b3324584060 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -2919,6 +2919,8 @@ typedef struct tcache_perthread_struct
+   tcache_entry *entries[TCACHE_MAX_BINS];
+ } tcache_perthread_struct;
+ 
++#define MAX_TCACHE_COUNT 127	/* Maximum value of counts[] entries.  */
++
+ static __thread bool tcache_shutting_down = false;
+ static __thread tcache_perthread_struct *tcache = NULL;
+ 
+@@ -5124,8 +5126,11 @@ static inline int
+ __always_inline
+ do_set_tcache_count (size_t value)
+ {
+-  LIBC_PROBE (memory_tunable_tcache_count, 2, value, mp_.tcache_count);
+-  mp_.tcache_count = value;
++  if (value <= MAX_TCACHE_COUNT)
++    {
++      LIBC_PROBE (memory_tunable_tcache_count, 2, value, mp_.tcache_count);
++      mp_.tcache_count = value;
++    }
+   return 1;
+ }
+ 
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index bb4819bdf1de273e..9dccf2ee7f8eec17 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -188,8 +188,8 @@ per-thread cache.  The default (and maximum) value is 1032 bytes on
+ 
+ @deftp Tunable glibc.malloc.tcache_count
+ The maximum number of chunks of each size to cache. The default is 7.
+-There is no upper limit, other than available system memory.  If set
+-to zero, the per-thread cache is effectively disabled.
++The upper limit is 127.  If set to zero, the per-thread cache is effectively
++disabled.
+ 
+ The approximate maximum overhead of the per-thread cache is thus equal
+ to the number of bins times the chunk count in each bin times the size

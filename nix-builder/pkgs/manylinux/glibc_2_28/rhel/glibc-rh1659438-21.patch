@@ -1,0 +1,267 @@
+commit 25218822bdbfb49b8ea0f419e8a20d2b9bd47cd0
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:11 2018 +0100
+
+    S390: Refactor stpncpy ifunc handling.
+    
+    The ifunc handling for stpncpy is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove stpncpy variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add stpncpy variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for stpncpy.
+            * sysdeps/s390/multiarch/stpncpy-c.c: Move to ...
+            * sysdeps/s390/stpncpy-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/stpncpy-vx.S: Move to ...
+            * sysdeps/s390/stpncpy-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/stpncpy.c: Move to ...
+            * sysdeps/s390/stpncpy.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-stpncpy.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index db060c81aade84ca..a9882b3996c30322 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -41,5 +41,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strnlen strnlen-vx strnlen-c \
+ 		   strcpy strcpy-vx strcpy-z900 \
+ 		   stpcpy stpcpy-vx stpcpy-c \
+-		   strncpy strncpy-vx strncpy-z900
++		   strncpy strncpy-vx strncpy-z900 \
++		   stpncpy stpncpy-vx stpncpy-c
+ endif
+diff --git a/sysdeps/s390/ifunc-stpncpy.h b/sysdeps/s390/ifunc-stpncpy.h
+new file mode 100644
+index 0000000000000000..46e57334e8439c1c
+--- /dev/null
++++ b/sysdeps/s390/ifunc-stpncpy.h
+@@ -0,0 +1,52 @@
++/* stpncpy variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STPNCPY_IFUNC	1
++#else
++# define HAVE_STPNCPY_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STPNCPY_IFUNC_AND_VX_SUPPORT HAVE_STPNCPY_IFUNC
++#else
++# define HAVE_STPNCPY_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STPNCPY_DEFAULT	STPNCPY_Z13
++# define HAVE_STPNCPY_C		0
++# define HAVE_STPNCPY_Z13	1
++#else
++# define STPNCPY_DEFAULT	STPNCPY_C
++# define HAVE_STPNCPY_C		1
++# define HAVE_STPNCPY_Z13	HAVE_STPNCPY_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STPNCPY_C
++# define STPNCPY_C		__stpncpy_c
++#else
++# define STPNCPY_C		NULL
++#endif
++
++#if HAVE_STPNCPY_Z13
++# define STPNCPY_Z13		__stpncpy_vx
++#else
++# define STPNCPY_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index c5189b556cf3762d..3d97d21da1fc852b 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += stpncpy stpncpy-vx stpncpy-c \
+-		   strcat strcat-vx strcat-c \
++sysdep_routines += strcat strcat-vx strcat-c \
+ 		   strncat strncat-vx strncat-c \
+ 		   strcmp strcmp-vx \
+ 		   strncmp strncmp-vx strncmp-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index d598fc5c22050da2..021e9f247fff44df 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -31,6 +31,7 @@
+ #include <ifunc-strcpy.h>
+ #include <ifunc-stpcpy.h>
+ #include <ifunc-strncpy.h>
++#include <ifunc-stpncpy.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -229,6 +230,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRNCPY_IFUNC  */
+ 
++#if HAVE_STPNCPY_IFUNC
++    IFUNC_IMPL (i, name, stpncpy,
++# if HAVE_STPNCPY_Z13
++		IFUNC_IMPL_ADD (array, i, stpncpy,
++				dl_hwcap & HWCAP_S390_VX, STPNCPY_Z13)
++# endif
++# if HAVE_STPNCPY_C
++		IFUNC_IMPL_ADD (array, i, stpncpy, 1, STPNCPY_C)
++# endif
++		)
++#endif /* HAVE_STPNCPY_IFUNC  */
++
+ 
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+@@ -248,7 +261,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcsncpy);
+ 
+-  IFUNC_VX_IMPL (stpncpy);
+   IFUNC_VX_IMPL (wcpncpy);
+ 
+   IFUNC_VX_IMPL (strcat);
+diff --git a/sysdeps/s390/multiarch/stpncpy-c.c b/sysdeps/s390/stpncpy-c.c
+similarity index 74%
+rename from sysdeps/s390/multiarch/stpncpy-c.c
+rename to sysdeps/s390/stpncpy-c.c
+index 45e50aa9e7df0b5e..e5d1ae867562da6c 100644
+--- a/sysdeps/s390/multiarch/stpncpy-c.c
++++ b/sysdeps/s390/stpncpy-c.c
+@@ -16,13 +16,18 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STPNCPY  __stpncpy_c
+-# ifdef SHARED
+-#  undef libc_hidden_def
+-#  define libc_hidden_def(name)  \
+-     __hidden_ver1 (__stpncpy_c, __GI___stpncpy, __stpncpy_c);
+-# endif /* SHARED */
++#include <ifunc-stpncpy.h>
++
++#if HAVE_STPNCPY_C
++# if HAVE_STPNCPY_IFUNC
++#  define STPNCPY STPNCPY_C
++
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   define libc_hidden_def(name)				\
++  __hidden_ver1 (__stpncpy_c, __GI___stpncpy, __stpncpy_c);
++#  endif
++# endif
+ 
+ # include <string/stpncpy.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/stpncpy-vx.S b/sysdeps/s390/stpncpy-vx.S
+similarity index 95%
+rename from sysdeps/s390/multiarch/stpncpy-vx.S
+rename to sysdeps/s390/stpncpy-vx.S
+index 922bd7a355a2d8a0..3dccc10be3b58d8d 100644
+--- a/sysdeps/s390/multiarch/stpncpy-vx.S
++++ b/sysdeps/s390/stpncpy-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-stpncpy.h>
++
++#if HAVE_STPNCPY_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -38,7 +40,7 @@
+    -%r6 = loaded bytes
+    -%r7 = border, tmp
+ */
+-ENTRY(__stpncpy_vx)
++ENTRY(STPNCPY_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -196,5 +198,14 @@ ENTRY(__stpncpy_vx)
+ 
+ 	vl	%v16,0(%r5,%r3)	/* Load s.  */
+ 	j	.Llt64
+-END(__stpncpy_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STPNCPY_Z13)
++
++# if ! HAVE_STPNCPY_IFUNC
++strong_alias (STPNCPY_Z13, __stpncpy)
++weak_alias (__stpncpy, stpncpy)
++# endif
++
++# if ! HAVE_STPNCPY_C && defined SHARED && IS_IN (libc)
++strong_alias (STPNCPY_Z13, __GI___stpncpy)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/stpncpy.c b/sysdeps/s390/stpncpy.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/stpncpy.c
+rename to sysdeps/s390/stpncpy.c
+index f7f9d51a50db47d7..250dc68ed19bf6d9 100644
+--- a/sysdeps/s390/multiarch/stpncpy.c
++++ b/sysdeps/s390/stpncpy.c
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-stpncpy.h>
++
++#if HAVE_STPNCPY_IFUNC
+ # define stpncpy __redirect_stpncpy
+ # define __stpncpy __redirect___stpncpy
+ # include <string.h>
+@@ -24,9 +26,18 @@
+ # undef __stpncpy
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc_redirected (__redirect___stpncpy, __stpncpy)
+-weak_alias (__stpncpy, stpncpy)
++# if HAVE_STPNCPY_C
++extern __typeof (__redirect_stpncpy) STPNCPY_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/stpncpy.c>
+-#endif  /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_STPNCPY_Z13
++extern __typeof (__redirect_stpncpy) STPNCPY_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect___stpncpy, __stpncpy,
++		      (HAVE_STPNCPY_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STPNCPY_Z13
++		      : STPNCPY_DEFAULT
++		      )
++weak_alias (__stpncpy, stpncpy)
++#endif

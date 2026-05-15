@@ -1,0 +1,181 @@
+commit 7621676f7a5130c030f7fff1cab72dbf2993b837
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Tue May 7 23:57:26 2019 +0000
+
+    Update syscall-names.list for Linux 5.1.
+    
+    This patch updates syscall-names.list for Linux 5.1 (which has many
+    new syscalls, mainly but not entirely ones for 64-bit time).
+    
+    Tested with build-many-glibcs.py (before the revert of the move to
+    Linux 5.1 there; verified there were no tst-syscall-list failures).
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update kernel
+            version to 5.1.
+            (clock_adjtime64) New syscall.
+            (clock_getres_time64) Likewise.
+            (clock_gettime64) Likewise.
+            (clock_nanosleep_time64) Likewise.
+            (clock_settime64) Likewise.
+            (futex_time64) Likewise.
+            (io_pgetevents_time64) Likewise.
+            (io_uring_enter) Likewise.
+            (io_uring_register) Likewise.
+            (io_uring_setup) Likewise.
+            (mq_timedreceive_time64) Likewise.
+            (mq_timedsend_time64) Likewise.
+            (pidfd_send_signal) Likewise.
+            (ppoll_time64) Likewise.
+            (pselect6_time64) Likewise.
+            (recvmmsg_time64) Likewise.
+            (rt_sigtimedwait_time64) Likewise.
+            (sched_rr_get_interval_time64) Likewise.
+            (semtimedop_time64) Likewise.
+            (timer_gettime64) Likewise.
+            (timer_settime64) Likewise.
+            (timerfd_gettime64) Likewise.
+            (timerfd_settime64) Likewise.
+            (utimensat_time64) Likewise.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 0227e52a5f..2d0354b8b3 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 5.0.
+-kernel 5.0
++# The list of system calls is current as of Linux 5.1.
++kernel 5.1
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -63,10 +63,15 @@ chown
+ chown32
+ chroot
+ clock_adjtime
++clock_adjtime64
+ clock_getres
++clock_getres_time64
+ clock_gettime
++clock_gettime64
+ clock_nanosleep
++clock_nanosleep_time64
+ clock_settime
++clock_settime64
+ clone
+ clone2
+ close
+@@ -128,6 +133,7 @@ ftime
+ ftruncate
+ ftruncate64
+ futex
++futex_time64
+ futimesat
+ get_kernel_syms
+ get_mempolicy
+@@ -187,8 +193,12 @@ io_cancel
+ io_destroy
+ io_getevents
+ io_pgetevents
++io_pgetevents_time64
+ io_setup
+ io_submit
++io_uring_enter
++io_uring_register
++io_uring_setup
+ ioctl
+ ioperm
+ iopl
+@@ -242,7 +252,9 @@ mq_getsetattr
+ mq_notify
+ mq_open
+ mq_timedreceive
++mq_timedreceive_time64
+ mq_timedsend
++mq_timedsend_time64
+ mq_unlink
+ mremap
+ msgctl
+@@ -389,6 +401,7 @@ perf_event_open
+ perfctr
+ perfmonctl
+ personality
++pidfd_send_signal
+ pipe
+ pipe2
+ pivot_root
+@@ -397,6 +410,7 @@ pkey_free
+ pkey_mprotect
+ poll
+ ppoll
++ppoll_time64
+ prctl
+ pread64
+ preadv
+@@ -407,6 +421,7 @@ process_vm_writev
+ prof
+ profil
+ pselect6
++pselect6_time64
+ ptrace
+ putpmsg
+ pwrite64
+@@ -424,6 +439,7 @@ reboot
+ recv
+ recvfrom
+ recvmmsg
++recvmmsg_time64
+ recvmsg
+ remap_file_pages
+ removexattr
+@@ -442,6 +458,7 @@ rt_sigqueueinfo
+ rt_sigreturn
+ rt_sigsuspend
+ rt_sigtimedwait
++rt_sigtimedwait_time64
+ rt_tgsigqueueinfo
+ rtas
+ s390_guarded_storage
+@@ -457,6 +474,7 @@ sched_getattr
+ sched_getparam
+ sched_getscheduler
+ sched_rr_get_interval
++sched_rr_get_interval_time64
+ sched_set_affinity
+ sched_setaffinity
+ sched_setattr
+@@ -470,6 +488,7 @@ semctl
+ semget
+ semop
+ semtimedop
++semtimedop_time64
+ send
+ sendfile
+ sendfile64
+@@ -567,11 +586,15 @@ timer_create
+ timer_delete
+ timer_getoverrun
+ timer_gettime
++timer_gettime64
+ timer_settime
++timer_settime64
+ timerfd
+ timerfd_create
+ timerfd_gettime
++timerfd_gettime64
+ timerfd_settime
++timerfd_settime64
+ times
+ tkill
+ truncate
+@@ -591,6 +614,7 @@ userfaultfd
+ ustat
+ utime
+ utimensat
++utimensat_time64
+ utimes
+ utrap_install
+ vfork

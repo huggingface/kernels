@@ -1,0 +1,37 @@
+commit 1cfb4715288845ebc55ad664421b48b32de9599c
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Aug 7 14:38:43 2020 +0000
+
+    Update syscall lists for Linux 5.8.
+    
+    Linux 5.8 has one new syscall, faccessat2.  Update syscall-names.list
+    and regenerate the arch-syscall.h headers with build-many-glibcs.py
+    update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list for RHEL 8.5.0.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 15dec5b98f..a462318ecf 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.7.
+-kernel 5.7
++# The list of system calls is current as of Linux 5.8.
++kernel 5.8
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -105,6 +105,7 @@ execveat
+ exit
+ exit_group
+ faccessat
++faccessat2
+ fadvise64
+ fadvise64_64
+ fallocate

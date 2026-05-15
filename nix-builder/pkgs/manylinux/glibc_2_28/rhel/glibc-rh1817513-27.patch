@@ -1,0 +1,49 @@
+commit 75c51570c710aa9c6df6b7a1e131392e1408c63f
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon May 20 21:08:40 2019 +0200
+
+    support: Expose sbindir as support_sbindir_prefix
+
+diff --git a/support/Makefile b/support/Makefile
+index 6afaa6836c944398..65b16299573af1ed 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -178,6 +178,7 @@ CFLAGS-support_paths.c = \
+ 		-DINSTDIR_PATH=\"$(prefix)\" \
+ 		-DLIBDIR_PATH=\"$(libdir)\" \
+ 		-DBINDIR_PATH=\"$(bindir)\" \
++		-DSBINDIR_PATH=\"$(sbindir)\" \
+ 		-DROOTSBINDIR_PATH=\"$(rootsbindir)\"
+ 
+ ifeq (,$(CXX))
+diff --git a/support/support.h b/support/support.h
+index 97d142e9b6f68188..121cc9e9b7c98ca6 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -109,6 +109,8 @@ extern const char support_libdir_prefix[];
+ /* Corresponds to the install's bin/ directory.  */
+ extern const char support_bindir_prefix[];
+ /* Corresponds to the install's sbin/ directory.  */
++extern const char support_sbindir_prefix[];
++/* Corresponds to the install's sbin/ directory (without prefix).  */
+ extern const char support_install_rootsbindir[];
+ 
+ extern ssize_t support_copy_file_range (int, off64_t *, int, off64_t *,
+diff --git a/support/support_paths.c b/support/support_paths.c
+index a37a0720dc7339f0..eb2390227433aa70 100644
+--- a/support/support_paths.c
++++ b/support/support_paths.c
+@@ -65,6 +65,13 @@ const char support_bindir_prefix[] = BINDIR_PATH;
+ # error please -DBINDIR_PATH=something in the Makefile
+ #endif
+ 
++#ifdef SBINDIR_PATH
++/* Corresponds to the install's bin/ directory.  */
++const char support_sbindir_prefix[] = SBINDIR_PATH;
++#else
++# error please -DSBINDIR_PATH=something in the Makefile
++#endif
++
+ #ifdef ROOTSBINDIR_PATH
+ /* Corresponds to the install's sbin/ directory.  */
+ const char support_install_rootsbindir[] = ROOTSBINDIR_PATH;

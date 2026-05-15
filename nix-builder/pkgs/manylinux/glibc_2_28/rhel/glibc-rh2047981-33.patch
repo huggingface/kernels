@@ -1,0 +1,1777 @@
+commit 32612615c58b394c3eb09f020f31310797ad3854
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Jan 24 10:46:17 2022 -0300
+
+    elf: Issue la_symbind for bind-now (BZ #23734)
+    
+    The audit symbind callback is not called for binaries built with
+    -Wl,-z,now or when LD_BIND_NOW=1 is used, nor the PLT tracking callbacks
+    (plt_enter and plt_exit) since this would change the expected
+    program semantics (where no PLT is expected) and would have performance
+    implications (such as for BZ#15533).
+    
+    LAV_CURRENT is also bumped to indicate the audit ABI change (where
+    la_symbind flags are set by the loader to indicate no possible PLT
+    trace).
+    
+    To handle powerpc64 ELFv1 function descriptor, _dl_audit_symbind
+    requires to know whether bind-now is used so the symbol value is
+    updated to function text segment instead of the OPD (for lazy binding
+    this is done by PPC64_LOAD_FUNCPTR on _dl_runtime_resolve).
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, aarch64-linux-gnu,
+    powerpc64-linux-gnu.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Tested-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/Makefile
+
+diff --git a/bits/link_lavcurrent.h b/bits/link_lavcurrent.h
+index 44fbea1e8060997f..c48835d12b512355 100644
+--- a/bits/link_lavcurrent.h
++++ b/bits/link_lavcurrent.h
+@@ -22,4 +22,4 @@
+ #endif
+ 
+ /* Version numbers for la_version handshake interface.  */
+-#define LAV_CURRENT	1
++#define LAV_CURRENT	2
+diff --git a/elf/Makefile b/elf/Makefile
+index 3f5f72257a5fbea4..78147ed2dbcaf4c0 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -347,6 +347,12 @@ tests += \
+   tst-audit21 \
+   tst-audit22 \
+   tst-audit23 \
++  tst-audit24a \
++  tst-audit24b \
++  tst-audit24c \
++  tst-audit24d \
++  tst-audit25a \
++  tst-audit25b \
+   tst-audit8 \
+   tst-audit9 \
+   tst-auditmany \
+@@ -611,6 +617,18 @@ modules-names = \
+   tst-audit18mod \
+   tst-audit19bmod \
+   tst-audit23mod \
++  tst-audit24amod1 \
++  tst-audit24amod2 \
++  tst-audit24bmod1 \
++  tst-audit24bmod2 \
++  tst-audit24dmod1 \
++  tst-audit24dmod2 \
++  tst-audit24dmod3 \
++  tst-audit24dmod4 \
++  tst-audit25mod1 \
++  tst-audit25mod2 \
++  tst-audit25mod3 \
++  tst-audit25mod4 \
+   tst-auditlogmod-1 \
+   tst-auditlogmod-2 \
+   tst-auditlogmod-3 \
+@@ -636,6 +654,11 @@ modules-names = \
+   tst-auditmod21b \
+   tst-auditmod22 \
+   tst-auditmod23 \
++  tst-auditmod24a \
++  tst-auditmod24b \
++  tst-auditmod24c \
++  tst-auditmod24d \
++  tst-auditmod25 \
+   tst-big-note-lib \
+   tst-deep1mod1 \
+   tst-deep1mod2 \
+@@ -831,7 +854,8 @@ modules-execstack-yes = tst-execstack-mod
+ extra-test-objs += $(addsuffix .os,$(strip $(modules-names)))
+ 
+ # filtmod1.so has a special rule
+-modules-names-nobuild := filtmod1
++modules-names-nobuild := filtmod1 \
++			 tst-audit24bmod1 tst-audit24bmod2.so
+ 
+ tests += $(tests-static)
+ 
+@@ -2057,6 +2081,69 @@ $(objpfx)tst-audit23.out: $(objpfx)tst-auditmod23.so \
+ 			  $(objpfx)tst-audit23mod.so
+ tst-audit23-ARGS = -- $(host-test-program-cmd)
+ 
++$(objpfx)tst-audit24a.out: $(objpfx)tst-auditmod24a.so
++$(objpfx)tst-audit24a: $(objpfx)tst-audit24amod1.so \
++		       $(objpfx)tst-audit24amod2.so
++tst-audit24a-ENV = LD_AUDIT=$(objpfx)tst-auditmod24a.so
++LDFLAGS-tst-audit24a = -Wl,-z,now
++
++$(objpfx)tst-audit24b.out: $(objpfx)tst-auditmod24b.so
++$(objpfx)tst-audit24b: $(objpfx)tst-audit24bmod1.so \
++		       $(objpfx)tst-audit24bmod2.so
++$(objpfx)tst-audit24bmod1: $(objpfx)tst-audit24bmod2.so
++# The test checks if a library without .gnu.version correctly calls the
++# audit callbacks.  So it uses an explicit link rule to avoid linking
++# against libc.so.
++$(objpfx)tst-audit24bmod1.so: $(objpfx)tst-audit24bmod1.os
++	$(CC) -nostdlib -nostartfiles -shared -o $@.new $(objpfx)tst-audit24bmod1.os \
++	  -Wl,-z,now
++	$(call after-link,$@.new)
++	mv -f $@.new $@
++CFLAGS-.os += $(call elide-stack-protector,.os,tst-audit24bmod1)
++$(objpfx)tst-audit24bmod2.so: $(objpfx)tst-audit24bmod2.os
++	$(CC) -nostdlib -nostartfiles -shared -o $@.new $(objpfx)tst-audit24bmod2.os
++	$(call after-link,$@.new)
++	mv -f $@.new $@
++CFLAGS-.os += $(call elide-stack-protector,.os,tst-audit24bmod2)
++tst-audit24b-ENV = LD_AUDIT=$(objpfx)tst-auditmod24b.so
++LDFLAGS-tst-audit24b = -Wl,-z,now
++
++# Same as tst-audit24a, but tests LD_BIND_NOW
++$(objpfx)tst-audit24c.out: $(objpfx)tst-auditmod24c.so
++$(objpfx)tst-audit24c: $(objpfx)tst-audit24amod1.so \
++		       $(objpfx)tst-audit24amod2.so
++tst-audit24c-ENV = LD_BIND_NOW=1 LD_AUDIT=$(objpfx)tst-auditmod24c.so
++LDFLAGS-tst-audit24b = -Wl,-z,lazy
++
++$(objpfx)tst-audit24d.out: $(objpfx)tst-auditmod24d.so
++$(objpfx)tst-audit24d: $(objpfx)tst-audit24dmod1.so \
++		       $(objpfx)tst-audit24dmod2.so
++$(objpfx)tst-audit24dmod1.so: $(objpfx)tst-audit24dmod3.so
++LDFLAGS-tst-audit24dmod1.so = -Wl,-z,now
++$(objpfx)tst-audit24dmod2.so: $(objpfx)tst-audit24dmod4.so
++LDFLAGS-tst-audit24dmod2.so = -Wl,-z,lazy
++tst-audit24d-ENV = LD_AUDIT=$(objpfx)tst-auditmod24d.so
++LDFLAGS-tst-audit24d = -Wl,-z,lazy
++
++$(objpfx)tst-audit25a.out: $(objpfx)tst-auditmod25.so
++$(objpfx)tst-audit25a: $(objpfx)tst-audit25mod1.so \
++		       $(objpfx)tst-audit25mod2.so \
++		       $(objpfx)tst-audit25mod3.so \
++		       $(objpfx)tst-audit25mod4.so
++$(objpfx)tst-audit25mod1.so: $(objpfx)tst-audit25mod3.so
++LDFLAGS-tst-audit25mod1.so = -Wl,-z,now
++$(objpfx)tst-audit25mod2.so: $(objpfx)tst-audit25mod4.so
++LDFLAGS-tst-audit25mod2.so = -Wl,-z,lazy
++tst-audit25a-ARGS = -- $(host-test-program-cmd)
++
++$(objpfx)tst-audit25b.out: $(objpfx)tst-auditmod25.so
++$(objpfx)tst-audit25b: $(objpfx)tst-audit25mod1.so \
++		       $(objpfx)tst-audit25mod2.so \
++		       $(objpfx)tst-audit25mod3.so \
++		       $(objpfx)tst-audit25mod4.so
++LDFLAGS-tst-audit25b = -Wl,-z,now
++tst-audit25b-ARGS = -- $(host-test-program-cmd)
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index 152712b12fed6de2..72a50717ef60a357 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -178,16 +178,23 @@ _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
+ 		   const ElfW(Sym) *defsym, DL_FIXUP_VALUE_TYPE *value,
+ 		   lookup_t result)
+ {
+-  reloc_result->bound = result;
+-  /* Compute index of the symbol entry in the symbol table of the DSO with the
+-     definition.  */
+-  reloc_result->boundndx = (defsym - (ElfW(Sym) *) D_PTR (result,
+-							  l_info[DT_SYMTAB]));
++  bool for_jmp_slot = reloc_result == NULL;
++
++  /* Compute index of the symbol entry in the symbol table of the DSO
++     with the definition.  */
++  unsigned int boundndx = defsym - (ElfW(Sym) *) D_PTR (result,
++							l_info[DT_SYMTAB]);
++  if (!for_jmp_slot)
++    {
++      reloc_result->bound = result;
++      reloc_result->boundndx = boundndx;
++    }
+ 
+   if ((l->l_audit_any_plt | result->l_audit_any_plt) == 0)
+     {
+       /* Set all bits since this symbol binding is not interesting.  */
+-      reloc_result->enterexit = (1u << DL_NNS) - 1;
++      if (!for_jmp_slot)
++	reloc_result->enterexit = (1u << DL_NNS) - 1;
+       return;
+     }
+ 
+@@ -199,12 +206,13 @@ _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
+      two bits.  */
+   assert (DL_NNS * 2 <= sizeof (reloc_result->flags) * 8);
+   assert ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT) == 3);
+-  reloc_result->enterexit = LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT;
++  uint32_t enterexit = LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT;
+ 
+   const char *strtab2 = (const void *) D_PTR (result, l_info[DT_STRTAB]);
+ 
+   unsigned int flags = 0;
+   struct audit_ifaces *afct = GLRO(dl_audit);
++  uintptr_t new_value = (uintptr_t) sym.st_value;
+   for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+     {
+       /* XXX Check whether both DSOs must request action or only one */
+@@ -215,37 +223,41 @@ _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
+ 	{
+ 	  if (afct->symbind != NULL)
+ 	    {
+-	      uintptr_t new_value = afct->symbind (&sym,
+-						   reloc_result->boundndx,
+-						   &l_state->cookie,
+-						   &result_state->cookie,
+-						   &flags,
+-						   strtab2 + defsym->st_name);
++	      flags |= for_jmp_slot ? LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT
++				    : 0;
++	      new_value = afct->symbind (&sym, boundndx,
++					 &l_state->cookie,
++					 &result_state->cookie, &flags,
++					 strtab2 + defsym->st_name);
+ 	      if (new_value != (uintptr_t) sym.st_value)
+ 		{
+ 		  flags |= LA_SYMB_ALTVALUE;
+-		  sym.st_value = new_value;
++		  sym.st_value = for_jmp_slot
++		    ? DL_FIXUP_BINDNOW_ADDR_VALUE (new_value) : new_value;
+ 		}
+ 	    }
+ 
+ 	  /* Remember the results for every audit library and store a summary
+ 	     in the first two bits.  */
+-	  reloc_result->enterexit &= flags & (LA_SYMB_NOPLTENTER
+-					      | LA_SYMB_NOPLTEXIT);
+-	  reloc_result->enterexit |= ((flags & (LA_SYMB_NOPLTENTER
+-						| LA_SYMB_NOPLTEXIT))
+-				      << ((cnt + 1) * 2));
++	  enterexit &= flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT);
++	  enterexit |= ((flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT))
++			<< ((cnt + 1) * 2));
+ 	}
+       else
+ 	/* If the bind flags say this auditor is not interested, set the bits
+ 	   manually.  */
+-	reloc_result->enterexit |= ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT)
+-				    << ((cnt + 1) * 2));
++	enterexit |= ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT)
++		      << ((cnt + 1) * 2));
+       afct = afct->next;
+     }
+ 
+-  reloc_result->flags = flags;
+-  *value = DL_FIXUP_ADDR_VALUE (sym.st_value);
++  if (!for_jmp_slot)
++    {
++      reloc_result->enterexit = enterexit;
++      reloc_result->flags = flags;
++    }
++
++  DL_FIXUP_BINDNOW_RELOC (value, new_value, sym.st_value);
+ }
+ 
+ void
+diff --git a/elf/do-rel.h b/elf/do-rel.h
+index 0b04d1a0bf28b9f4..43c80e1c0067d9ca 100644
+--- a/elf/do-rel.h
++++ b/elf/do-rel.h
+@@ -16,6 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <ldsodefs.h>
++
+ /* This file may be included twice, to define both
+    `elf_dynamic_do_rel' and `elf_dynamic_do_rela'.  */
+ 
+@@ -123,6 +125,10 @@ elf_dynamic_do_Rel (struct link_map *map, struct r_scope_elem *scope[],
+ 
+ 	  for (; r < end; ++r)
+ 	    {
++	      ElfW(Half) ndx = version[ELFW(R_SYM) (r->r_info)] & 0x7fff;
++	      const ElfW(Sym) *sym = &symtab[ELFW(R_SYM) (r->r_info)];
++	      void *const r_addr_arg = (void *) (l_addr + r->r_offset);
++	      const struct r_found_version *rversion = &map->l_versions[ndx];
+ #if defined ELF_MACHINE_IRELATIVE && !defined RTLD_BOOTSTRAP
+ 	      if (ELFW(R_TYPE) (r->r_info) == ELF_MACHINE_IRELATIVE)
+ 		{
+@@ -133,10 +139,19 @@ elf_dynamic_do_Rel (struct link_map *map, struct r_scope_elem *scope[],
+ 		}
+ #endif
+ 
+-	      ElfW(Half) ndx = version[ELFW(R_SYM) (r->r_info)] & 0x7fff;
+-	      elf_machine_rel (map, scope, r, &symtab[ELFW(R_SYM) (r->r_info)],
+-			       &map->l_versions[ndx],
+-			       (void *) (l_addr + r->r_offset), skip_ifunc);
++	      elf_machine_rel (map, scope, r, sym, rversion, r_addr_arg,
++			       skip_ifunc);
++#if defined SHARED && !defined RTLD_BOOTSTRAP
++	      if (ELFW(R_TYPE) (r->r_info) == ELF_MACHINE_JMP_SLOT
++		  && GLRO(dl_naudit) > 0)
++		{
++		  struct link_map *sym_map
++		    = RESOLVE_MAP (map, scope, &sym, rversion,
++				   ELF_MACHINE_JMP_SLOT);
++		  if (sym != NULL)
++		    _dl_audit_symbind (map, NULL, sym, r_addr_arg, sym_map);
++		}
++#endif
+ 	    }
+ 
+ #if defined ELF_MACHINE_IRELATIVE && !defined RTLD_BOOTSTRAP
+@@ -158,17 +173,33 @@ elf_dynamic_do_Rel (struct link_map *map, struct r_scope_elem *scope[],
+       else
+ 	{
+ 	  for (; r < end; ++r)
++	    {
++	      const ElfW(Sym) *sym = &symtab[ELFW(R_SYM) (r->r_info)];
++	      void *const r_addr_arg = (void *) (l_addr + r->r_offset);
+ # ifdef ELF_MACHINE_IRELATIVE
+-	    if (ELFW(R_TYPE) (r->r_info) == ELF_MACHINE_IRELATIVE)
+-	      {
+-		if (r2 == NULL)
+-		  r2 = r;
+-		end2 = r;
+-	      }
+-	    else
++	      if (ELFW(R_TYPE) (r->r_info) == ELF_MACHINE_IRELATIVE)
++		{
++		  if (r2 == NULL)
++		    r2 = r;
++		  end2 = r;
++		  continue;
++		}
+ # endif
+-	      elf_machine_rel (map, scope, r, &symtab[ELFW(R_SYM) (r->r_info)], NULL,
+-			       (void *) (l_addr + r->r_offset), skip_ifunc);
++	      elf_machine_rel (map, scope, r, sym, NULL, r_addr_arg,
++			       skip_ifunc);
++# if defined SHARED && !defined RTLD_BOOTSTRAP
++	      if (ELFW(R_TYPE) (r->r_info) == ELF_MACHINE_JMP_SLOT
++		  && GLRO(dl_naudit) > 0)
++		{
++		  struct link_map *sym_map
++		    = RESOLVE_MAP (map, scope, &sym,
++				   (struct r_found_version *) NULL,
++				   ELF_MACHINE_JMP_SLOT);
++		  if (sym != NULL)
++		    _dl_audit_symbind (map, NULL , sym,r_addr_arg, sym_map);
++		}
++# endif
++	    }
+ 
+ # ifdef ELF_MACHINE_IRELATIVE
+ 	  if (r2 != NULL)
+diff --git a/elf/sotruss-lib.c b/elf/sotruss-lib.c
+index f0a7e55599d76714..e1ac53f327a7571b 100644
+--- a/elf/sotruss-lib.c
++++ b/elf/sotruss-lib.c
+@@ -17,6 +17,7 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <err.h>
+ #include <error.h>
+ #include <fcntl.h>
+ #include <stdio.h>
+@@ -232,6 +233,12 @@ uintptr_t
+ la_symbind (Elf_Sym *sym, unsigned int ndx, uintptr_t *refcook,
+ 	    uintptr_t *defcook, unsigned int *flags, const char *symname)
+ {
++  if (*flags & LA_SYMB_NOPLTENTER)
++    warnx ("cannot trace PLT enter (bind-now enabled)");
++
++  if (do_exit && *flags & LA_SYMB_NOPLTEXIT)
++    warnx ("cannot trace PLT exit (bind-now enabled)");
++
+   if (!do_exit)
+     *flags = LA_SYMB_NOPLTEXIT;
+ 
+diff --git a/elf/tst-audit24a.c b/elf/tst-audit24a.c
+new file mode 100644
+index 0000000000000000..a1781c9b45f18fa0
+--- /dev/null
++++ b/elf/tst-audit24a.c
+@@ -0,0 +1,36 @@
++/* LD_AUDIT test for la_symbind and bind-now.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++#include <support/support.h>
++
++int tst_audit24amod1_func1 (void);
++int tst_audit24amod1_func2 (void);
++int tst_audit24amod2_func1 (void);
++
++int
++do_test (void)
++{
++  TEST_COMPARE (tst_audit24amod1_func1 (), 1);
++  TEST_COMPARE (tst_audit24amod1_func2 (), 2);
++  TEST_COMPARE (tst_audit24amod2_func1 (), 10);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit24amod1.c b/elf/tst-audit24amod1.c
+new file mode 100644
+index 0000000000000000..0289a4abefbc7bbb
+--- /dev/null
++++ b/elf/tst-audit24amod1.c
+@@ -0,0 +1,31 @@
++/* Module used by tst-audit24a.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++_Noreturn int
++tst_audit24amod1_func1 (void)
++{
++  abort ();
++}
++
++int
++tst_audit24amod1_func2 (void)
++{
++  return 2;
++}
+diff --git a/elf/tst-audit24amod2.c b/elf/tst-audit24amod2.c
+new file mode 100644
+index 0000000000000000..1562afc9dfc1b9b3
+--- /dev/null
++++ b/elf/tst-audit24amod2.c
+@@ -0,0 +1,25 @@
++/* Module used by tst-audit24a.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++_Noreturn int
++tst_audit24amod2_func1 (void)
++{
++  abort ();
++}
+diff --git a/elf/tst-audit24b.c b/elf/tst-audit24b.c
+new file mode 100644
+index 0000000000000000..567bee52c27f4361
+--- /dev/null
++++ b/elf/tst-audit24b.c
+@@ -0,0 +1,37 @@
++/* LD_AUDIT test for la_symbind and bind-now.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This is similar to tst-audit24a, with the difference this modules
++   does not have the .gnu.version section header.  */
++
++#include <support/check.h>
++#include <support/support.h>
++
++int tst_audit24bmod1_func1 (void);
++int tst_audit24bmod1_func2 (void);
++
++int
++do_test (void)
++{
++  TEST_COMPARE (tst_audit24bmod1_func1 (), 1);
++  TEST_COMPARE (tst_audit24bmod1_func2 (), 2);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit24bmod1.c b/elf/tst-audit24bmod1.c
+new file mode 100644
+index 0000000000000000..57ce14a01bf72fb6
+--- /dev/null
++++ b/elf/tst-audit24bmod1.c
+@@ -0,0 +1,31 @@
++/* Module used by tst-audit24c.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++int tst_audit24bmod2_func1 (void);
++
++int
++tst_audit24bmod1_func1 (void)
++{
++  return -1;
++}
++
++int
++tst_audit24bmod1_func2 (void)
++{
++  return tst_audit24bmod2_func1 ();
++}
+diff --git a/elf/tst-audit24bmod2.c b/elf/tst-audit24bmod2.c
+new file mode 100644
+index 0000000000000000..b298ce0a05bf2db2
+--- /dev/null
++++ b/elf/tst-audit24bmod2.c
+@@ -0,0 +1,23 @@
++/* Module used by tst-audit24b.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++int
++tst_audit24bmod2_func1 (void)
++{
++  return -1;
++}
+diff --git a/elf/tst-audit24c.c b/elf/tst-audit24c.c
+new file mode 100644
+index 0000000000000000..46ed328756067276
+--- /dev/null
++++ b/elf/tst-audit24c.c
+@@ -0,0 +1,2 @@
++/* It tests LD_BIND_NOW=1 instead of linking with -Wl,-z,now  */
++#include "tst-audit24a.c"
+diff --git a/elf/tst-audit24d.c b/elf/tst-audit24d.c
+new file mode 100644
+index 0000000000000000..543f3b86a6bbdead
+--- /dev/null
++++ b/elf/tst-audit24d.c
+@@ -0,0 +1,36 @@
++/* LD_AUDIT test for la_symbind and bind-now.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++#include <support/support.h>
++
++int tst_audit24dmod1_func1 (void);
++int tst_audit24dmod1_func2 (void);
++int tst_audit24dmod2_func1 (void);
++
++int
++do_test (void)
++{
++  TEST_COMPARE (tst_audit24dmod1_func1 (), 1);
++  TEST_COMPARE (tst_audit24dmod1_func2 (), 32);
++  TEST_COMPARE (tst_audit24dmod2_func1 (), 10);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit24dmod1.c b/elf/tst-audit24dmod1.c
+new file mode 100644
+index 0000000000000000..e563f69d638ac3f5
+--- /dev/null
++++ b/elf/tst-audit24dmod1.c
+@@ -0,0 +1,33 @@
++/* Module used by tst-audit24d.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++int tst_audit24dmod3_func1 (void);
++
++_Noreturn int
++tst_audit24dmod1_func1 (void)
++{
++  abort ();
++}
++
++int
++tst_audit24dmod1_func2 (void)
++{
++  return 2 + tst_audit24dmod3_func1 ();;
++}
+diff --git a/elf/tst-audit24dmod2.c b/elf/tst-audit24dmod2.c
+new file mode 100644
+index 0000000000000000..03fe9381281e5790
+--- /dev/null
++++ b/elf/tst-audit24dmod2.c
+@@ -0,0 +1,28 @@
++/* Module for tst-audit24d.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++int tst_audit24dmod4_func1 (void);
++
++_Noreturn int
++tst_audit24dmod2_func1 (void)
++{
++  tst_audit24dmod4_func1 ();
++  abort ();
++}
+diff --git a/elf/tst-audit24dmod3.c b/elf/tst-audit24dmod3.c
+new file mode 100644
+index 0000000000000000..106d517d2887d76c
+--- /dev/null
++++ b/elf/tst-audit24dmod3.c
+@@ -0,0 +1,31 @@
++/* Module for tst-audit24d.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++_Noreturn int
++tst_audit24dmod3_func1 (void)
++{
++  abort ();
++}
++
++int
++tst_audit24dmod3_func2 (void)
++{
++  return 4;
++}
+diff --git a/elf/tst-audit24dmod4.c b/elf/tst-audit24dmod4.c
+new file mode 100644
+index 0000000000000000..1da3b46917ba1083
+--- /dev/null
++++ b/elf/tst-audit24dmod4.c
+@@ -0,0 +1,25 @@
++/* Module for tst-audit24d.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++_Noreturn int
++tst_audit24dmod4_func1 (void)
++{
++  abort ();
++}
+diff --git a/elf/tst-audit25a.c b/elf/tst-audit25a.c
+new file mode 100644
+index 0000000000000000..49173e862516e876
+--- /dev/null
++++ b/elf/tst-audit25a.c
+@@ -0,0 +1,129 @@
++/* Check LD_AUDIT and LD_BIND_NOW.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <errno.h>
++#include <getopt.h>
++#include <limits.h>
++#include <inttypes.h>
++#include <string.h>
++#include <stdlib.h>
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++#include <support/support.h>
++#include <sys/auxv.h>
++
++static int restart;
++#define CMDLINE_OPTIONS \
++  { "restart", no_argument, &restart, 1 },
++
++void tst_audit25mod1_func1 (void);
++void tst_audit25mod1_func2 (void);
++void tst_audit25mod2_func1 (void);
++void tst_audit25mod2_func2 (void);
++
++static int
++handle_restart (void)
++{
++  tst_audit25mod1_func1 ();
++  tst_audit25mod1_func2 ();
++  tst_audit25mod2_func1 ();
++  tst_audit25mod2_func2 ();
++
++  return 0;
++}
++
++static inline bool
++startswith (const char *str, const char *pre)
++{
++  size_t lenpre = strlen (pre);
++  size_t lenstr = strlen (str);
++  return lenstr < lenpre ? false : memcmp (pre, str, lenpre) == 0;
++}
++
++static int
++do_test (int argc, char *argv[])
++{
++  /* We must have either:
++     - One or four parameters left if called initially:
++       + path to ld.so         optional
++       + "--library-path"      optional
++       + the library path      optional
++       + the application name  */
++
++  if (restart)
++    return handle_restart ();
++
++  setenv ("LD_AUDIT", "tst-auditmod25.so", 0);
++
++  char *spargv[9];
++  int i = 0;
++  for (; i < argc - 1; i++)
++    spargv[i] = argv[i + 1];
++  spargv[i++] = (char *) "--direct";
++  spargv[i++] = (char *) "--restart";
++  spargv[i] = NULL;
++  TEST_VERIFY_EXIT (i < array_length (spargv));
++
++  {
++    struct support_capture_subprocess result
++      = support_capture_subprogram (spargv[0], spargv);
++    support_capture_subprocess_check (&result, "tst-audit25a", 0,
++				      sc_allow_stderr);
++
++    /* tst-audit25a is build with -Wl,-z,lazy and tst-audit25mod1 with
++       -Wl,-z,now; so only tst_audit25mod3_func1 should be expected to
++       have LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT.  */
++    TEST_COMPARE_STRING (result.err.buffer,
++			 "la_symbind: tst_audit25mod3_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func1 0\n"
++			 "la_symbind: tst_audit25mod1_func2 0\n"
++			 "la_symbind: tst_audit25mod2_func1 0\n"
++			 "la_symbind: tst_audit25mod4_func1 0\n"
++			 "la_symbind: tst_audit25mod2_func2 0\n");
++
++    support_capture_subprocess_free (&result);
++  }
++
++  {
++    setenv ("LD_BIND_NOW", "1", 0);
++    struct support_capture_subprocess result
++      = support_capture_subprogram (spargv[0], spargv);
++    support_capture_subprocess_check (&result, "tst-audit25a", 0,
++				      sc_allow_stderr);
++
++    /* With LD_BIND_NOW all symbols are expected to have
++       LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT.  Also the resolution
++       order is done in breadth-first order.  */
++    TEST_COMPARE_STRING (result.err.buffer,
++			 "la_symbind: tst_audit25mod4_func1 1\n"
++			 "la_symbind: tst_audit25mod3_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func1 1\n"
++			 "la_symbind: tst_audit25mod2_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func2 1\n"
++			 "la_symbind: tst_audit25mod2_func2 1\n");
++
++    support_capture_subprocess_free (&result);
++  }
++
++  return 0;
++}
++
++#define TEST_FUNCTION_ARGV do_test
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit25b.c b/elf/tst-audit25b.c
+new file mode 100644
+index 0000000000000000..a56638d501f9bff5
+--- /dev/null
++++ b/elf/tst-audit25b.c
+@@ -0,0 +1,128 @@
++/* Check LD_AUDIT and LD_BIND_NOW.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <getopt.h>
++#include <limits.h>
++#include <inttypes.h>
++#include <string.h>
++#include <stdlib.h>
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++#include <support/support.h>
++#include <sys/auxv.h>
++
++static int restart;
++#define CMDLINE_OPTIONS \
++  { "restart", no_argument, &restart, 1 },
++
++void tst_audit25mod1_func1 (void);
++void tst_audit25mod1_func2 (void);
++void tst_audit25mod2_func1 (void);
++void tst_audit25mod2_func2 (void);
++
++static int
++handle_restart (void)
++{
++  tst_audit25mod1_func1 ();
++  tst_audit25mod1_func2 ();
++  tst_audit25mod2_func1 ();
++  tst_audit25mod2_func2 ();
++
++  return 0;
++}
++
++static inline bool
++startswith (const char *str, const char *pre)
++{
++  size_t lenpre = strlen (pre);
++  size_t lenstr = strlen (str);
++  return lenstr >= lenpre && memcmp (pre, str, lenpre) == 0;
++}
++
++static int
++do_test (int argc, char *argv[])
++{
++  /* We must have either:
++     - One or four parameters left if called initially:
++       + path to ld.so         optional
++       + "--library-path"      optional
++       + the library path      optional
++       + the application name  */
++
++  if (restart)
++    return handle_restart ();
++
++  setenv ("LD_AUDIT", "tst-auditmod25.so", 0);
++
++  char *spargv[9];
++  int i = 0;
++  for (; i < argc - 1; i++)
++    spargv[i] = argv[i + 1];
++  spargv[i++] = (char *) "--direct";
++  spargv[i++] = (char *) "--restart";
++  spargv[i] = NULL;
++
++  {
++    struct support_capture_subprocess result
++      = support_capture_subprogram (spargv[0], spargv);
++    support_capture_subprocess_check (&result, "tst-audit25a", 0,
++				      sc_allow_stderr);
++
++    /* tst-audit25a and tst-audit25mod1 are built with -Wl,-z,now, but
++       tst-audit25mod2 is built with -Wl,-z,lazy.  So only
++       tst_audit25mod4_func1 (called by tst_audit25mod2_func1) should not
++       have LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT.  */
++    TEST_COMPARE_STRING (result.err.buffer,
++			 "la_symbind: tst_audit25mod3_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func1 1\n"
++			 "la_symbind: tst_audit25mod2_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func2 1\n"
++			 "la_symbind: tst_audit25mod2_func2 1\n"
++			 "la_symbind: tst_audit25mod4_func1 0\n");
++
++    support_capture_subprocess_free (&result);
++  }
++
++  {
++    setenv ("LD_BIND_NOW", "1", 0);
++    struct support_capture_subprocess result
++      = support_capture_subprogram (spargv[0], spargv);
++    support_capture_subprocess_check (&result, "tst-audit25a", 0,
++				      sc_allow_stderr);
++
++    /* With LD_BIND_NOW all symbols are expected to have
++       LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT.  Also the resolution
++       order is done in breadth-first order.  */
++    TEST_COMPARE_STRING (result.err.buffer,
++			 "la_symbind: tst_audit25mod4_func1 1\n"
++			 "la_symbind: tst_audit25mod3_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func1 1\n"
++			 "la_symbind: tst_audit25mod2_func1 1\n"
++			 "la_symbind: tst_audit25mod1_func2 1\n"
++			 "la_symbind: tst_audit25mod2_func2 1\n");
++
++    support_capture_subprocess_free (&result);
++  }
++
++  return 0;
++}
++
++#define TEST_FUNCTION_ARGV do_test
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit25mod1.c b/elf/tst-audit25mod1.c
+new file mode 100644
+index 0000000000000000..a132e34a9b2cf51f
+--- /dev/null
++++ b/elf/tst-audit25mod1.c
+@@ -0,0 +1,30 @@
++/* Module used by tst-audit25.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++void tst_audit25mod3_func1 (void);
++
++void
++tst_audit25mod1_func1 (void)
++{
++  tst_audit25mod3_func1 ();
++}
++
++void
++tst_audit25mod1_func2 (void)
++{
++}
+diff --git a/elf/tst-audit25mod2.c b/elf/tst-audit25mod2.c
+new file mode 100644
+index 0000000000000000..92da26fa80b202c2
+--- /dev/null
++++ b/elf/tst-audit25mod2.c
+@@ -0,0 +1,30 @@
++/* Module used by tst-audit25.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++void tst_audit25mod4_func1 (void);
++
++void
++tst_audit25mod2_func1 (void)
++{
++  tst_audit25mod4_func1 ();
++}
++
++void
++tst_audit25mod2_func2 (void)
++{
++}
+diff --git a/elf/tst-audit25mod3.c b/elf/tst-audit25mod3.c
+new file mode 100644
+index 0000000000000000..af83e8919083adef
+--- /dev/null
++++ b/elf/tst-audit25mod3.c
+@@ -0,0 +1,22 @@
++/* Module used by tst-audit25.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++void
++tst_audit25mod3_func1 (void)
++{
++}
+diff --git a/elf/tst-audit25mod4.c b/elf/tst-audit25mod4.c
+new file mode 100644
+index 0000000000000000..6cdf34357582da16
+--- /dev/null
++++ b/elf/tst-audit25mod4.c
+@@ -0,0 +1,22 @@
++/* Module used by tst-audit25.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++void
++tst_audit25mod4_func1 (void)
++{
++}
+diff --git a/elf/tst-auditmod24.h b/elf/tst-auditmod24.h
+new file mode 100644
+index 0000000000000000..5fdbfef12dac2b2a
+--- /dev/null
++++ b/elf/tst-auditmod24.h
+@@ -0,0 +1,29 @@
++/* Auxiliary functions for tst-audit24x.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _TST_AUDITMOD24_H
++#define _TST_AUDITMOD24_H
++
++static void
++test_symbind_flags (unsigned int flags)
++{
++  if ((flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT)) == 0)
++    abort ();
++}
++
++#endif
+diff --git a/elf/tst-auditmod24a.c b/elf/tst-auditmod24a.c
+new file mode 100644
+index 0000000000000000..d8e88f3984af1707
+--- /dev/null
++++ b/elf/tst-auditmod24a.c
+@@ -0,0 +1,114 @@
++/* Audit modules for tst-audit24a.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <inttypes.h>
++#include <stdlib.h>
++#include <string.h>
++#include <tst-auditmod24.h>
++
++#define AUDIT24_COOKIE     0x1
++#define AUDIT24MOD1_COOKIE 0x2
++#define AUDIT24MOD2_COOKIE 0x3
++
++#ifndef TEST_NAME
++# define TEST_NAME "tst-audit24a"
++#endif
++#ifndef TEST_MOD
++# define TEST_MOD TEST_NAME
++#endif
++#ifndef TEST_FUNC
++# define TEST_FUNC "tst_audit24a"
++#endif
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  const char *p = strrchr (map->l_name, '/');
++  const char *l_name = p == NULL ? TEST_NAME : p + 1;
++
++  uintptr_t ck = -1;
++  if (strcmp (l_name, TEST_MOD "mod1.so") == 0)
++    ck = AUDIT24MOD1_COOKIE;
++  else if (strcmp (l_name, TEST_MOD "mod2.so") == 0)
++    ck = AUDIT24MOD2_COOKIE;
++  else if (strcmp (l_name, TEST_NAME) == 0)
++    ck = AUDIT24_COOKIE;
++
++  *cookie = ck;
++  return ck == -1 ? 0 : LA_FLG_BINDFROM | LA_FLG_BINDTO;
++}
++
++static int
++tst_func1 (void)
++{
++  return 1;
++}
++
++static int
++tst_func2 (void)
++{
++  return 10;
++}
++
++#if __ELF_NATIVE_CLASS == 64
++uintptr_t
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#else
++uintptr_t
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#endif
++{
++  if (*refcook == AUDIT24_COOKIE)
++    {
++      if (*defcook == AUDIT24MOD1_COOKIE)
++	{
++	  /* Check if bind-now symbols are advertised to not call the PLT
++	     hooks.  */
++	  test_symbind_flags (*flags);
++
++	  if (strcmp (symname, TEST_FUNC "mod1_func1") == 0)
++	    return (uintptr_t) tst_func1;
++	  else if (strcmp (symname, TEST_FUNC "mod1_func2") == 0)
++	    return sym->st_value;
++	  abort ();
++	}
++      if (*defcook == AUDIT24MOD2_COOKIE
++	  && (strcmp (symname, TEST_FUNC "mod2_func1") == 0))
++	{
++	  test_symbind_flags (*flags);
++
++	  return (uintptr_t) tst_func2;
++	}
++
++      /* malloc functions.  */
++      return sym->st_value;
++    }
++
++  abort ();
++}
+diff --git a/elf/tst-auditmod24b.c b/elf/tst-auditmod24b.c
+new file mode 100644
+index 0000000000000000..e98f6d5ec528fe03
+--- /dev/null
++++ b/elf/tst-auditmod24b.c
+@@ -0,0 +1,104 @@
++/* Audit modules for tst-audit24b.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <inttypes.h>
++#include <stdlib.h>
++#include <string.h>
++#include <tst-auditmod24.h>
++
++#define TEST_NAME "tst-audit24b"
++#define TEST_FUNC "tst_audit24b"
++
++#define AUDIT24_COOKIE     0x1
++#define AUDIT24MOD1_COOKIE 0x2
++#define AUDIT24MOD2_COOKIE 0x3
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  const char *p = strrchr (map->l_name, '/');
++  const char *l_name = p == NULL ? TEST_NAME : p + 1;
++
++  uintptr_t ck = -1;
++  if (strcmp (l_name, TEST_NAME "mod1.so") == 0)
++    ck = AUDIT24MOD1_COOKIE;
++  else if (strcmp (l_name, TEST_NAME "mod2.so") == 0)
++    ck = AUDIT24MOD2_COOKIE;
++  else if (strcmp (l_name, TEST_NAME) == 0)
++    ck = AUDIT24_COOKIE;
++
++  *cookie = ck;
++  return ck == -1 ? 0 : LA_FLG_BINDFROM | LA_FLG_BINDTO;
++}
++
++static int
++tst_func1 (void)
++{
++  return 1;
++}
++
++static int
++tst_func2 (void)
++{
++  return 2;
++}
++
++#if __ELF_NATIVE_CLASS == 64
++uintptr_t
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#else
++uintptr_t
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#endif
++{
++  if (*refcook == AUDIT24_COOKIE)
++    {
++      if (*defcook == AUDIT24MOD1_COOKIE)
++	  {
++	    if (strcmp (symname, TEST_FUNC "mod1_func1") == 0)
++	      return (uintptr_t) tst_func1;
++	    else if (strcmp (symname, TEST_FUNC "mod1_func2") == 0)
++	      return sym->st_value;
++	    abort ();
++	  }
++      /* malloc functions.  */
++      return sym->st_value;
++    }
++  else if (*refcook == AUDIT24MOD1_COOKIE)
++    {
++      if (*defcook == AUDIT24MOD2_COOKIE
++	  && (strcmp (symname, TEST_FUNC "mod2_func1") == 0))
++	{
++	  test_symbind_flags (*flags);
++	  return (uintptr_t) tst_func2;
++	}
++    }
++
++  abort ();
++}
+diff --git a/elf/tst-auditmod24c.c b/elf/tst-auditmod24c.c
+new file mode 100644
+index 0000000000000000..67e62c9d332f48a7
+--- /dev/null
++++ b/elf/tst-auditmod24c.c
+@@ -0,0 +1,3 @@
++#define TEST_NAME "tst-audit24c"
++#define TEST_MOD  "tst-audit24a"
++#include "tst-auditmod24a.c"
+diff --git a/elf/tst-auditmod24d.c b/elf/tst-auditmod24d.c
+new file mode 100644
+index 0000000000000000..8c803ecc0a48f21b
+--- /dev/null
++++ b/elf/tst-auditmod24d.c
+@@ -0,0 +1,120 @@
++/* Audit module for tst-audit24d.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <inttypes.h>
++#include <stdlib.h>
++#include <string.h>
++#include <tst-auditmod24.h>
++
++#define AUDIT24_COOKIE     0x0
++#define AUDIT24MOD1_COOKIE 0x1
++#define AUDIT24MOD2_COOKIE 0x2
++#define AUDIT24MOD3_COOKIE 0x3
++#define AUDIT24MOD4_COOKIE 0x4
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  const char *p = strrchr (map->l_name, '/');
++  const char *l_name = p == NULL ? "tst-audit24d" : p + 1;
++
++  uintptr_t ck = -1;
++  if (strcmp (l_name, "tst-audit24dmod1.so") == 0)
++    ck = AUDIT24MOD1_COOKIE;
++  else if (strcmp (l_name, "tst-audit24dmod2.so") == 0)
++    ck = AUDIT24MOD2_COOKIE;
++  else if (strcmp (l_name, "tst-audit24dmod3.so") == 0)
++    ck = AUDIT24MOD3_COOKIE;
++  else if (strcmp (l_name, "tst-audit24dmod.so") == 0)
++    ck = AUDIT24MOD4_COOKIE;
++  else if (strcmp (l_name, "tst-audit24d") == 0)
++    ck = AUDIT24_COOKIE;
++
++  *cookie = ck;
++  return ck == -1 ? 0 : LA_FLG_BINDFROM | LA_FLG_BINDTO;
++}
++
++static int
++tst_audit24dmod1_func1 (void)
++{
++  return 1;
++}
++
++static int
++tst_audit24dmod2_func1 (void)
++{
++  return 10;
++}
++
++static int
++tst_audit24dmod3_func1 (void)
++{
++  return 30;
++}
++
++#include <stdio.h>
++
++#if __ELF_NATIVE_CLASS == 64
++uintptr_t
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#else
++uintptr_t
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#endif
++{
++  if (*refcook == AUDIT24_COOKIE)
++    {
++      if (*defcook == AUDIT24MOD1_COOKIE)
++	  {
++	    if (strcmp (symname, "tst_audit24dmod1_func1") == 0)
++	      return (uintptr_t) tst_audit24dmod1_func1;
++	    else if (strcmp (symname, "tst_audit24dmod1_func2") == 0)
++	      return sym->st_value;
++	    abort ();
++	  }
++      if (*defcook == AUDIT24MOD2_COOKIE
++	  && (strcmp (symname, "tst_audit24dmod2_func1") == 0))
++	return (uintptr_t) tst_audit24dmod2_func1;
++
++      /* malloc functions.  */
++      return sym->st_value;
++    }
++  else if (*refcook == AUDIT24MOD1_COOKIE)
++    {
++      if (*defcook == AUDIT24MOD3_COOKIE
++	  && strcmp (symname, "tst_audit24dmod3_func1") == 0)
++	{
++	  test_symbind_flags (*flags);
++
++	  return (uintptr_t) tst_audit24dmod3_func1;
++	}
++    }
++
++  abort ();
++}
+diff --git a/elf/tst-auditmod25.c b/elf/tst-auditmod25.c
+new file mode 100644
+index 0000000000000000..526f5c54bc2c3b8c
+--- /dev/null
++++ b/elf/tst-auditmod25.c
+@@ -0,0 +1,79 @@
++/* Audit modules for tst-audit25a.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <inttypes.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++
++#define AUDIT25_COOKIE     0x1
++#define AUDIT25MOD1_COOKIE 0x2
++#define AUDIT25MOD2_COOKIE 0x3
++#define AUDIT25MOD3_COOKIE 0x2
++#define AUDIT25MOD4_COOKIE 0x3
++
++#define TEST_NAME "tst-audit25"
++#define TEST_MOD  "tst-audit25"
++#define TEST_FUNC "tst_audit25"
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  const char *p = strrchr (map->l_name, '/');
++  const char *l_name = p == NULL ? TEST_NAME : p + 1;
++
++  uintptr_t ck = -1;
++  if (strcmp (l_name, TEST_MOD "mod1.so") == 0)
++    ck = AUDIT25MOD1_COOKIE;
++  else if (strcmp (l_name, TEST_MOD "mod2.so") == 0)
++    ck = AUDIT25MOD2_COOKIE;
++  else if (strcmp (l_name, TEST_MOD "mod3.so") == 0)
++    ck = AUDIT25MOD3_COOKIE;
++  else if (strcmp (l_name, TEST_MOD "mod4.so") == 0)
++    ck = AUDIT25MOD4_COOKIE;
++  else if (strncmp (l_name, TEST_NAME, strlen (TEST_NAME)) == 0)
++    ck = AUDIT25_COOKIE;
++
++  *cookie = ck;
++  return ck == -1 ? 0 : LA_FLG_BINDFROM | LA_FLG_BINDTO;
++}
++
++#if __ELF_NATIVE_CLASS == 64
++uintptr_t
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#else
++uintptr_t
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
++	      uintptr_t *refcook, uintptr_t *defcook,
++	      unsigned int *flags, const char *symname)
++#endif
++{
++  if (*refcook != -1 && *defcook != -1)
++    fprintf (stderr, "la_symbind: %s %u\n", symname,
++	     *flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT) ? 1 : 0);
++  return sym->st_value;
++}
+diff --git a/sysdeps/generic/dl-lookupcfg.h b/sysdeps/generic/dl-lookupcfg.h
+index e7d37170147aba83..7412c6391b0c3e02 100644
+--- a/sysdeps/generic/dl-lookupcfg.h
++++ b/sysdeps/generic/dl-lookupcfg.h
+@@ -26,3 +26,6 @@
+ #define DL_FIXUP_VALUE_CODE_ADDR(value) (value)
+ #define DL_FIXUP_VALUE_ADDR(value) (value)
+ #define DL_FIXUP_ADDR_VALUE(addr) (addr)
++#define DL_FIXUP_BINDNOW_ADDR_VALUE(addr) (addr)
++#define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value) \
++  (*value) = st_value;
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 73f4863fd43922b9..d4f70211c34d1c59 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1299,7 +1299,10 @@ void _dl_audit_objclose (struct link_map *l)
+ /* Call the la_preinit from the audit modules for the link_map L.  */
+ void _dl_audit_preinit (struct link_map *l);
+ 
+-/* Call the la_symbind{32,64} from the audit modules for the link_map L.  */
++/* Call the la_symbind{32,64} from the audit modules for the link_map L.  If
++   RELOC_RESULT is NULL it assumes the symbol to be bind-now and will set
++   the flags with LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT prior calling
++   la_symbind{32,64}.  */
+ void _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
+ 			const ElfW(Sym) *defsym, DL_FIXUP_VALUE_TYPE *value,
+ 			lookup_t result)
+diff --git a/sysdeps/hppa/dl-lookupcfg.h b/sysdeps/hppa/dl-lookupcfg.h
+index 38db345936cb6335..c3fea1fe5776b17a 100644
+--- a/sysdeps/hppa/dl-lookupcfg.h
++++ b/sysdeps/hppa/dl-lookupcfg.h
+@@ -80,3 +80,6 @@ void attribute_hidden _dl_unmap (struct link_map *map);
+ #define DL_FIXUP_VALUE_CODE_ADDR(value) ((value).ip)
+ #define DL_FIXUP_VALUE_ADDR(value) ((uintptr_t) &(value))
+ #define DL_FIXUP_ADDR_VALUE(addr) (*(struct fdesc *) (addr))
++#define DL_FIXUP_BINDNOW_ADDR_VALUE(addr) (addr)
++#define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value) \
++  (*value) = *(struct fdesc *) (st_value)
+diff --git a/sysdeps/ia64/dl-lookupcfg.h b/sysdeps/ia64/dl-lookupcfg.h
+index 48f91202c43f8fda..97ad4b70794135a2 100644
+--- a/sysdeps/ia64/dl-lookupcfg.h
++++ b/sysdeps/ia64/dl-lookupcfg.h
+@@ -74,3 +74,6 @@ extern void attribute_hidden _dl_unmap (struct link_map *map);
+ 
+ #define DL_FIXUP_VALUE_ADDR(value) ((uintptr_t) &(value))
+ #define DL_FIXUP_ADDR_VALUE(addr) (*(struct fdesc *) (addr))
++#define DL_FIXUP_BINDNOW_ADDR_VALUE(addr) (addr)
++#define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value) \
++  (*value) = *(struct fdesc *) (st_value)
+diff --git a/sysdeps/powerpc/dl-lookupcfg.h b/sysdeps/powerpc/dl-lookupcfg.h
+new file mode 100644
+index 0000000000000000..25abcc1d12b15bfc
+--- /dev/null
++++ b/sysdeps/powerpc/dl-lookupcfg.h
+@@ -0,0 +1,39 @@
++/* Configuration of lookup functions.  PowerPC version.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#define DL_FIXUP_VALUE_TYPE ElfW(Addr)
++#define DL_FIXUP_MAKE_VALUE(map, addr) (addr)
++#define DL_FIXUP_VALUE_CODE_ADDR(value) (value)
++#define DL_FIXUP_VALUE_ADDR(value) (value)
++#define DL_FIXUP_ADDR_VALUE(addr) (addr)
++#if __WORDSIZE == 64 && _CALL_ELF == 1
++/* We need to correctly set the audit modules value for bind-now.  */
++# define DL_FIXUP_BINDNOW_ADDR_VALUE(addr) \
++ (((Elf64_FuncDesc *)(addr))->fd_func)
++# define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value)	\
++ ({								\
++    Elf64_FuncDesc *opd = (Elf64_FuncDesc *) (value);		\
++    opd->fd_func = (st_value);					\
++    if ((new_value) != (uintptr_t) (st_value))			\
++     opd->fd_toc = ((Elf64_FuncDesc *)(new_value))->fd_toc;	\
++  })
++#else
++# define DL_FIXUP_BINDNOW_ADDR_VALUE(addr) (addr)
++# define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value)	\
++  (*value) = st_value;
++#endif

@@ -1,0 +1,157 @@
+From 855d045bc26175195dadafc28abf84e7b6613aac Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:28 +0100
+Subject: [PATCH 19/28] S390: Use load-fp-integer instruction for roundeven
+ functions.
+
+If compiled with z196 zarch support, the load-fp-integer instruction
+is used to implement roundeven, roundevenf, roundevenl.
+Otherwise the common-code implementation is used.
+
+(cherry picked from commit 4399b163376b331773e43917dcf56ce68e43e6a0)
+---
+ sysdeps/s390/fpu/s_roundeven.c  | 39 +++++++++++++++++++++++++++++++++
+ sysdeps/s390/fpu/s_roundevenf.c | 38 ++++++++++++++++++++++++++++++++
+ sysdeps/s390/fpu/s_roundevenl.c | 39 +++++++++++++++++++++++++++++++++
+ 3 files changed, 116 insertions(+)
+ create mode 100644 sysdeps/s390/fpu/s_roundeven.c
+ create mode 100644 sysdeps/s390/fpu/s_roundevenf.c
+ create mode 100644 sysdeps/s390/fpu/s_roundevenl.c
+
+diff --git a/sysdeps/s390/fpu/s_roundeven.c b/sysdeps/s390/fpu/s_roundeven.c
+new file mode 100644
+index 0000000000..95a83a70e8
+--- /dev/null
++++ b/sysdeps/s390/fpu/s_roundeven.c
+@@ -0,0 +1,39 @@
++/* roundeven() - S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# include <math.h>
++# include <libm-alias-double.h>
++
++double
++__roundeven (double x)
++{
++  double y;
++  /* The z196 zarch "load fp integer" (fidbra) instruction is rounding
++     x to the nearest integer with "ties to even" rounding mode
++     (M3-field: 4) where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ ("fidbra %0,4,%1,4" : "=f" (y) : "f" (x));
++  return y;
++}
++hidden_def (__roundeven)
++libm_alias_double (__roundeven, roundeven)
++
++#else
++# include <sysdeps/ieee754/dbl-64/s_roundeven.c>
++#endif
+diff --git a/sysdeps/s390/fpu/s_roundevenf.c b/sysdeps/s390/fpu/s_roundevenf.c
+new file mode 100644
+index 0000000000..c620a0189c
+--- /dev/null
++++ b/sysdeps/s390/fpu/s_roundevenf.c
+@@ -0,0 +1,38 @@
++/* roundevenf() - S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# include <math.h>
++# include <libm-alias-float.h>
++
++float
++__roundevenf (float x)
++{
++  float y;
++  /* The z196 zarch "load fp integer" (fiebra) instruction is rounding
++     x to the nearest integer with "ties to even" rounding mode
++     (M3-field: 4) where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ ("fiebra %0,4,%1,4" : "=f" (y) : "f" (x));
++  return y;
++}
++libm_alias_float (__roundeven, roundeven)
++
++#else
++# include <sysdeps/ieee754/flt-32/s_roundevenf.c>
++#endif
+diff --git a/sysdeps/s390/fpu/s_roundevenl.c b/sysdeps/s390/fpu/s_roundevenl.c
+new file mode 100644
+index 0000000000..3481af2665
+--- /dev/null
++++ b/sysdeps/s390/fpu/s_roundevenl.c
+@@ -0,0 +1,39 @@
++/* roundevenl() - S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# include <math.h>
++# include <math_private.h>
++# include <libm-alias-ldouble.h>
++
++_Float128
++__roundevenl (_Float128 x)
++{
++  _Float128 y;
++  /* The z196 zarch "load fp integer" (fixbra) instruction is rounding
++     x to the nearest integer with "ties to even" rounding mode
++     (M3-field: 4) where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ ("fixbra %0,4,%1,4" : "=f" (y) : "f" (x));
++  return y;
++}
++libm_alias_ldouble (__roundeven, roundeven)
++
++#else
++# include <sysdeps/ieee754/ldbl-128/s_roundevenl.c>
++#endif
+-- 
+2.18.2
+

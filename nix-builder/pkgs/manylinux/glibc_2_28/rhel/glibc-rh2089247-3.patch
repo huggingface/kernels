@@ -1,0 +1,67 @@
+Partial backport of:
+
+commit 04986243d1af37ac0177ed2f9db0a066ebd2b212
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jul 15 19:35:58 2020 +0000
+
+    Remove internal usage of extensible stat functions
+
+    It replaces the internal usage of __{f,l}xstat{at}{64} with the
+    __{f,l}stat{at}{64}.  It should not change the generate code since
+    sys/stat.h explicit defines redirections to internal calls back to
+    xstat* symbols.
+
+    Checked with a build for all affected ABIs.  I also check on
+    x86_64-linux-gnu and i686-linux-gnu.
+
+    Reviewed-by: Lukasz Majewski <lukma@denx.de>
+
+Only the changes to include/sys/stat.h and sysdeps/posix/tempname.c
+are included here.
+
+diff --git a/include/sys/stat.h b/include/sys/stat.h
+index b82d4527801d4797..c5b1938b87c9c5c3 100644
+--- a/include/sys/stat.h
++++ b/include/sys/stat.h
+@@ -52,6 +52,7 @@ extern __typeof (__fxstatat64) __fxstatat64 attribute_hidden;
+ #define lstat64(fname, buf)  __lxstat64 (_STAT_VER, fname, buf)
+ #define __lstat64(fname, buf)  __lxstat64 (_STAT_VER, fname, buf)
+ #define stat64(fname, buf) __xstat64 (_STAT_VER, fname, buf)
++#define __stat64(fname, buf) __xstat64 (_STAT_VER, fname, buf)
+ #define fstat64(fd, buf) __fxstat64 (_STAT_VER, fd, buf)
+ #define __fstat64(fd, buf) __fxstat64 (_STAT_VER, fd, buf)
+ #define fstat(fd, buf) __fxstat (_STAT_VER, fd, buf)
+diff --git a/sysdeps/posix/tempname.c b/sysdeps/posix/tempname.c
+index 61d7a9f36d37abae..a7b404cf4410cb00 100644
+--- a/sysdeps/posix/tempname.c
++++ b/sysdeps/posix/tempname.c
+@@ -66,7 +66,6 @@
+ # define __gettimeofday gettimeofday
+ # define __mkdir mkdir
+ # define __open open
+-# define __lxstat64(version, file, buf) lstat (file, buf)
+ # define __secure_getenv secure_getenv
+ #endif
+ 
+@@ -97,7 +96,7 @@ static int
+ direxists (const char *dir)
+ {
+   struct_stat64 buf;
+-  return __xstat64 (_STAT_VER, dir, &buf) == 0 && S_ISDIR (buf.st_mode);
++  return __stat64 (dir, &buf) == 0 && S_ISDIR (buf.st_mode);
+ }
+ 
+ /* Path search algorithm, for tmpnam, tmpfile, etc.  If DIR is
+@@ -252,10 +251,10 @@ __gen_tempname (char *tmpl, int suffixlen, int flags, int kind)
+ 
+ 	case __GT_NOCREATE:
+ 	  /* This case is backward from the other three.  __gen_tempname
+-	     succeeds if __xstat fails because the name does not exist.
++	     succeeds if lstat fails because the name does not exist.
+ 	     Note the continue to bypass the common logic at the bottom
+ 	     of the loop.  */
+-	  if (__lxstat64 (_STAT_VER, tmpl, &st) < 0)
++	  if (__lstat64 (tmpl, &st) < 0)
+ 	    {
+ 	      if (errno == ENOENT)
+ 		{

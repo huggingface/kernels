@@ -1,0 +1,26 @@
+commit b0a83ae71b2588bd2a9e6b40f95191602940e01e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Nov 7 09:53:41 2019 +0100
+
+    login: Remove double-assignment of fl.l_whence in try_file_lock
+    
+    Since l_whence is the second member of struct flock, it is written
+    twice.  The double-assignment is technically undefined behavior due to
+    the lack of a sequence point.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Change-Id: I2baf9e70690e723c61051b25ccbd510aec15976c
+
+diff --git a/login/utmp_file.c b/login/utmp_file.c
+index cbc53d06de280af9..9ad80364682bae92 100644
+--- a/login/utmp_file.c
++++ b/login/utmp_file.c
+@@ -79,7 +79,7 @@ try_file_lock (int fd, int type)
+  struct flock64 fl =
+    {
+     .l_type = type,
+-    fl.l_whence = SEEK_SET,
++    .l_whence = SEEK_SET,
+    };
+ 
+  bool status = __fcntl64_nocancel (fd, F_SETLKW, &fl) < 0;

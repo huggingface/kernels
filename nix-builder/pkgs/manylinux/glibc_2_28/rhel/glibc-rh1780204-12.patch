@@ -1,0 +1,187 @@
+From f49dd4cc4e295803e517190d1798bd84561d56f4 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:24 +0100
+Subject: [PATCH 12/28] Use GCC builtins for round functions if desired.
+
+This patch is using the corresponding GCC builtin for roundf, round,
+roundl and roundf128 if the USE_FUNCTION_BUILTIN macros are defined to one
+in math-use-builtins.h.
+
+This is the case for s390 if build with at least --march=z196 --mzarch.
+Otherwise the generic implementation is used.  The code of the generic
+implementation is not changed.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit f82996f8159981619ac7ed8a4c1838c2ad72ab61)
+---
+ sysdeps/generic/math-use-builtins.h         |  5 +++++
+ sysdeps/ieee754/dbl-64/s_round.c            |  6 ++++++
+ sysdeps/ieee754/float128/float128_private.h |  3 +++
+ sysdeps/ieee754/flt-32/s_roundf.c           |  6 ++++++
+ sysdeps/ieee754/ldbl-128/s_roundl.c         |  6 ++++++
+ sysdeps/s390/fpu/math-use-builtins.h        | 11 +++++++++++
+ 6 files changed, 37 insertions(+)
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+index ab379f45ba..34ca438a8c 100644
+--- a/sysdeps/generic/math-use-builtins.h
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -46,4 +46,9 @@
+ #define USE_TRUNCL_BUILTIN 0
+ #define USE_TRUNCF128_BUILTIN 0
+ 
++#define USE_ROUND_BUILTIN 0
++#define USE_ROUNDF_BUILTIN 0
++#define USE_ROUNDL_BUILTIN 0
++#define USE_ROUNDF128_BUILTIN 0
++
+ #endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_round.c b/sysdeps/ieee754/dbl-64/s_round.c
+index bf9922edca..1f8482adf8 100644
+--- a/sysdeps/ieee754/dbl-64/s_round.c
++++ b/sysdeps/ieee754/dbl-64/s_round.c
+@@ -22,11 +22,16 @@
+ #include <math_private.h>
+ #include <libm-alias-double.h>
+ #include <stdint.h>
++#include <math-use-builtins.h>
+ 
+ 
+ double
+ __round (double x)
+ {
++#if USE_ROUND_BUILTIN
++  return __builtin_round (x);
++#else
++  /* Use generic implementation.  */
+   int64_t i0, j0;
+ 
+   EXTRACT_WORDS64 (i0, x);
+@@ -61,5 +66,6 @@ __round (double x)
+ 
+   INSERT_WORDS64 (x, i0);
+   return x;
++#endif /* ! USE_ROUND_BUILTIN  */
+ }
+ libm_alias_double (__round, round)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index e248600ec2..3297a71e44 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -149,6 +149,8 @@
+ #define USE_CEILL_BUILTIN USE_CEILF128_BUILTIN
+ #undef USE_TRUNCL_BUILTIN
+ #define USE_TRUNCL_BUILTIN USE_TRUNCF128_BUILTIN
++#undef USE_ROUNDL_BUILTIN
++#define USE_ROUNDL_BUILTIN USE_ROUNDF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -355,6 +357,7 @@
+ #define __builtin_floorl __builtin_floorf128
+ #define __builtin_ceill __builtin_ceilf128
+ #define __builtin_truncl __builtin_truncf128
++#define __builtin_roundl __builtin_roundf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_roundf.c b/sysdeps/ieee754/flt-32/s_roundf.c
+index 7c95125d9c..6fdfbbbade 100644
+--- a/sysdeps/ieee754/flt-32/s_roundf.c
++++ b/sysdeps/ieee754/flt-32/s_roundf.c
+@@ -21,11 +21,16 @@
+ 
+ #include <math_private.h>
+ #include <libm-alias-float.h>
++#include <math-use-builtins.h>
+ 
+ 
+ float
+ __roundf (float x)
+ {
++#if USE_ROUNDF_BUILTIN
++  return __builtin_roundf (x);
++#else
++  /* Use generic implementation.  */
+   int32_t i0, j0;
+ 
+   GET_FLOAT_WORD (i0, x);
+@@ -60,5 +65,6 @@ __roundf (float x)
+ 
+   SET_FLOAT_WORD (x, i0);
+   return x;
++#endif /* ! USE_ROUNDF_BUILTIN  */
+ }
+ libm_alias_float (__round, round)
+diff --git a/sysdeps/ieee754/ldbl-128/s_roundl.c b/sysdeps/ieee754/ldbl-128/s_roundl.c
+index 22789cedf3..564f8ac1b8 100644
+--- a/sysdeps/ieee754/ldbl-128/s_roundl.c
++++ b/sysdeps/ieee754/ldbl-128/s_roundl.c
+@@ -22,11 +22,16 @@
+ 
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
++#include <math-use-builtins.h>
+ 
+ 
+ _Float128
+ __roundl (_Float128 x)
+ {
++#if USE_ROUNDL_BUILTIN
++  return __builtin_roundl (x);
++#else
++  /* Use generic implementation.  */
+   int32_t j0;
+   uint64_t i1, i0;
+ 
+@@ -77,5 +82,6 @@ __roundl (_Float128 x)
+ 
+   SET_LDOUBLE_WORDS64 (x, i0, i1);
+   return x;
++#endif /* ! USE_ROUNDL_BUILTIN  */
+ }
+ libm_alias_ldouble (__round, round)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+index a39715c612..51cb9f91ab 100644
+--- a/sysdeps/s390/fpu/math-use-builtins.h
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -46,18 +46,24 @@
+ # define USE_TRUNCF_BUILTIN 1
+ # define USE_TRUNCL_BUILTIN 1
+ 
++# define USE_ROUND_BUILTIN 1
++# define USE_ROUNDF_BUILTIN 1
++# define USE_ROUNDL_BUILTIN 1
++
+ # if __GNUC_PREREQ (8, 0)
+ #  define USE_NEARBYINTF128_BUILTIN 1
+ #  define USE_RINTF128_BUILTIN 1
+ #  define USE_FLOORF128_BUILTIN 1
+ #  define USE_CEILF128_BUILTIN 1
+ #  define USE_TRUNCF128_BUILTIN 1
++#  define USE_ROUNDF128_BUILTIN 1
+ # else
+ #  define USE_NEARBYINTF128_BUILTIN 0
+ #  define USE_RINTF128_BUILTIN 0
+ #  define USE_FLOORF128_BUILTIN 0
+ #  define USE_CEILF128_BUILTIN 0
+ #  define USE_TRUNCF128_BUILTIN 0
++#  define USE_ROUNDF128_BUILTIN 0
+ # endif
+ 
+ #else
+@@ -88,6 +94,11 @@
+ # define USE_TRUNCL_BUILTIN 0
+ # define USE_TRUNCF128_BUILTIN 0
+ 
++# define USE_ROUND_BUILTIN 0
++# define USE_ROUNDF_BUILTIN 0
++# define USE_ROUNDL_BUILTIN 0
++# define USE_ROUNDF128_BUILTIN 0
++
+ #endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
+ 
+ #endif /* math-use-builtins.h */
+-- 
+2.18.2
+

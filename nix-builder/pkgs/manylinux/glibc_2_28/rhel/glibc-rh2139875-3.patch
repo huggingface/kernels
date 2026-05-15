@@ -1,0 +1,61 @@
+commit 71bdf29ac1de04efcce96bc5ce50af3263851ac7
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Sep 30 15:49:25 2019 +0000
+
+    Update bits/mman.h constants and tst-mman-consts.py for Linux 5.3.
+    
+    The Linux 5.3 uapi headers have some rearrangement relating to MAP_*
+    constants, which includes the effect of adding definitions of MAP_SYNC
+    on powerpc and sparc.  This patch updates the corresponding glibc
+    bits/mman.h headers accordingly, and updates the Linux kernel version
+    number in tst-mman-consts.py to reflect that these constants are now
+    current with that kernel version.
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/powerpc/bits/mman.h [__USE_MISC]
+            (MAP_SYNC): New macro.
+            * sysdeps/unix/sysv/linux/sparc/bits/mman.h [__USE_MISC]
+            (MAP_SYNC): Likewise.
+            * sysdeps/unix/sysv/linux/tst-mman-consts.py (main): Update Linux
+            kernel version number to 5.3.
+
+diff --git a/sysdeps/unix/sysv/linux/powerpc/bits/mman.h b/sysdeps/unix/sysv/linux/powerpc/bits/mman.h
+index e652467c8c091381..0e7fa647793ed585 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/bits/mman.h
++++ b/sysdeps/unix/sysv/linux/powerpc/bits/mman.h
+@@ -36,6 +36,8 @@
+ # define MAP_NONBLOCK	0x10000		/* Do not block on IO.  */
+ # define MAP_STACK	0x20000		/* Allocation is for a stack.  */
+ # define MAP_HUGETLB	0x40000		/* Create huge page mapping.  */
++# define MAP_SYNC	0x80000		/* Perform synchronous page
++					   faults for the mapping.  */
+ # define MAP_FIXED_NOREPLACE 0x100000	/* MAP_FIXED but do not unmap
+ 					   underlying mapping.  */
+ #endif
+diff --git a/sysdeps/unix/sysv/linux/sparc/bits/mman.h b/sysdeps/unix/sysv/linux/sparc/bits/mman.h
+index 3a3ffb994631e2b6..03f6f732bb5efbe2 100644
+--- a/sysdeps/unix/sysv/linux/sparc/bits/mman.h
++++ b/sysdeps/unix/sysv/linux/sparc/bits/mman.h
+@@ -36,6 +36,8 @@
+ # define MAP_NONBLOCK	0x10000		/* Do not block on IO.  */
+ # define MAP_STACK	0x20000		/* Allocation is for a stack.  */
+ # define MAP_HUGETLB	0x40000		/* Create huge page mapping.  */
++# define MAP_SYNC	0x80000		/* Perform synchronous page
++					   faults for the mapping.  */
+ # define MAP_FIXED_NOREPLACE 0x100000	/* MAP_FIXED but do not unmap
+ 					   underlying mapping.  */
+ #endif
+diff --git a/sysdeps/unix/sysv/linux/tst-mman-consts.py b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+index 9e326b1f31799a72..42914e4e0ba84712 100644
+--- a/sysdeps/unix/sysv/linux/tst-mman-consts.py
++++ b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+@@ -41,7 +41,7 @@ def main():
+                         help='C compiler (including options) to use')
+     args = parser.parse_args()
+     linux_version_headers = linux_kernel_version(args.cc)
+-    linux_version_glibc = (5, 2)
++    linux_version_glibc = (5, 3)
+     sys.exit(glibcextract.compare_macro_consts(
+         '#define _GNU_SOURCE 1\n'
+         '#include <sys/mman.h>\n',

@@ -1,0 +1,37 @@
+commit dac8713629c8736a60aebec2f01657e46baa4c73
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Oct 23 16:31:11 2020 +0000
+
+    Update syscall lists for Linux 5.9.
+    
+    Linux 5.9 has one new syscall, close_range.  Update syscall-names.list
+    and regenerate the arch-syscall.h headers with build-many-glibcs.py
+    update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list for RHEL 8.5.0.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index a462318ecf..2d42aaf803 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.8.
+-kernel 5.8
++# The list of system calls is current as of Linux 5.9.
++kernel 5.9
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -79,6 +79,7 @@ clone
+ clone2
+ clone3
+ close
++close_range
+ cmpxchg_badaddr
+ connect
+ copy_file_range

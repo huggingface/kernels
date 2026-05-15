@@ -1,0 +1,98 @@
+commit 9429049c178b3af3d6afeb3717ff1f2214dc9572
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Mon Jun 28 09:15:55 2021 +0530
+
+    iconvconfig: Fix multiple issues
+    
+    It was noticed on big-endian systems that msgfmt would fail with the
+    following error:
+    
+    msgfmt: gconv_builtin.c:70: __gconv_get_builtin_trans: Assertion `cnt < sizeof (map) / sizeof (map[0])' failed.
+    Aborted (core dumped)
+    
+    This is only seen on installed systems because it was due to a
+    corrupted gconv-modules.cache.  iconvconfig had the following issues
+    (it was specifically freeing fulldir that caused this issue, but other
+    cleanups are also needed) that this patch fixes.
+    
+    - Add prefix only if dir starts with '/'
+    - Use asprintf instead of mempcpy so that the directory string is NULL
+      terminated
+    - Make a copy of the directory reference in new_module so that fulldir
+      can be freed within the same scope in handle_dir.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/iconv/Makefile b/iconv/Makefile
+index d09b8ac842731780..6df9862e748ae588 100644
+--- a/iconv/Makefile
++++ b/iconv/Makefile
+@@ -33,7 +33,7 @@ vpath %.c ../locale/programs ../intl
+ iconv_prog-modules = iconv_charmap charmap charmap-dir linereader \
+ 		     dummy-repertoire simple-hash xstrdup xmalloc \
+ 		     record-status
+-iconvconfig-modules = strtab xmalloc hash-string
++iconvconfig-modules = strtab xmalloc xasprintf xstrdup hash-string
+ extra-objs	   = $(iconv_prog-modules:=.o) $(iconvconfig-modules:=.o)
+ CFLAGS-iconv_prog.c += -I../locale/programs
+ CFLAGS-iconv_charmap.c += -I../locale/programs
+diff --git a/iconv/iconvconfig.c b/iconv/iconvconfig.c
+index 01ecf6f67d55dbbf..777da870d2f8e99a 100644
+--- a/iconv/iconvconfig.c
++++ b/iconv/iconvconfig.c
+@@ -250,6 +250,7 @@ static const char gconv_module_ext[] = MODULE_EXT;
+ 
+ 
+ #include <programs/xmalloc.h>
++#include <programs/xasprintf.h>
+ 
+ 
+ /* C string table handling.  */
+@@ -519,11 +520,12 @@ module_compare (const void *p1, const void *p2)
+ /* Create new module record.  */
+ static void
+ new_module (const char *fromname, size_t fromlen, const char *toname,
+-	    size_t tolen, const char *directory,
++	    size_t tolen, const char *dir_in,
+ 	    const char *filename, size_t filelen, int cost, size_t need_ext)
+ {
+   struct module *new_module;
+-  size_t dirlen = strlen (directory) + 1;
++  size_t dirlen = strlen (dir_in) + 1;
++  const char *directory = xstrdup (dir_in);
+   char *tmp;
+   void **inserted;
+ 
+@@ -654,20 +656,10 @@ handle_dir (const char *dir)
+   size_t dirlen = strlen (dir);
+   bool found = false;
+ 
+-  /* Add the prefix before sending it off to the parser.  */
+-  char *fulldir = xmalloc (prefix_len + dirlen + 2);
+-  char *cp = mempcpy (mempcpy (fulldir, prefix, prefix_len), dir, dirlen);
++  char *fulldir = xasprintf ("%s%s%s", dir[0] == '/' ? prefix : "",
++			     dir, dir[dirlen - 1] != '/' ? "/" : "");
+ 
+-  if (dir[dirlen - 1] != '/')
+-    {
+-      *cp++ = '/';
+-      *cp = '\0';
+-      dirlen++;
+-    }
+-
+-  found = gconv_parseconfdir (fulldir, dirlen + prefix_len);
+-
+-  free (fulldir);
++  found = gconv_parseconfdir (fulldir, strlen (fulldir));
+ 
+   if (!found)
+     {
+@@ -679,6 +671,8 @@ handle_dir (const char *dir)
+ 	     "configuration files with names ending in .conf.");
+     }
+ 
++  free (fulldir);
++
+   return found ? 0 : 1;
+ }
+ 

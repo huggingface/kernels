@@ -1,0 +1,449 @@
+Added $(objpfx)tst-audit19a: $(libdl) to elf/Makefile since
+we still need $(libdl) in RHEL8.
+
+commit 063f9ba220f434c7f30dd65c4cff17c0c458a7cf
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jun 30 10:24:09 2021 -0300
+
+    elf: Avoid unnecessary slowdown from profiling with audit (BZ#15533)
+    
+    The rtld-audit interfaces introduces a slowdown due to enabling
+    profiling instrumentation (as if LD_AUDIT implied LD_PROFILE).
+    However, instrumenting is only necessary if one of audit libraries
+    provides PLT callbacks (la_pltenter or la_pltexit symbols).  Otherwise,
+    the slowdown can be avoided.
+    
+    The following patch adjusts the logic that enables profiling to iterate
+    over all audit modules and check if any of those provides a PLT hook.
+    To keep la_symbind to work even without PLT callbacks, _dl_fixup now
+    calls the audit callback if the modules implements it.
+    
+    Co-authored-by: Alexander Monakov <amonakov@ispras.ru>
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+Conflicts:
+	elf/Makefile
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 08a32a712a34f2cc..0cc03ffe2984ee50 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -221,12 +221,14 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-dlmopen-gethostbyname \
+ 	 tst-audit17 \
+ 	 tst-audit18 \
++	 tst-audit19b \
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+ 	 tst-tls3 tst-tls6 tst-tls7 tst-tls8 tst-dlmopen2 \
+ 	 tst-ptrguard1 tst-stackguard1 tst-libc_dlvsym \
+-	 tst-create_format1 tst-tls-surplus tst-dl-hwcaps_split
++	 tst-create_format1 tst-tls-surplus tst-dl-hwcaps_split \
++	 tst-audit19a
+ tests-container += tst-pldd tst-preload-pthread-libc
+ ifeq ($(build-hardcoded-path-in-tests),yes)
+ tests += tst-dlopen-aout
+@@ -358,6 +360,9 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-dlmopen-gethostbyname-mod \
+ 		tst-auditmod18 \
+ 		tst-audit18mod \
++		tst-auditmod19a \
++		tst-auditmod19b \
++		tst-audit19bmod \
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1548,6 +1553,14 @@ $(objpfx)tst-audit18.out: $(objpfx)tst-auditmod18.so \
+ 			  $(objpfx)tst-audit18mod.so
+ tst-audit18-ARGS = -- $(host-test-program-cmd)
+ 
++$(objpfx)tst-audit19a: $(libdl)
++$(objpfx)tst-audit19a.out: $(objpfx)tst-auditmod19a.so
++tst-audit19a-ENV = LD_AUDIT=$(objpfx)tst-auditmod19a.so
++
++$(objpfx)tst-audit19b.out: $(objpfx)tst-auditmod19b.so
++$(objpfx)tst-audit19b: $(objpfx)tst-audit19bmod.so
++tst-audit19b-ARGS = -- $(host-test-program-cmd)
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/dl-reloc.c b/elf/dl-reloc.c
+index 19de5de067a5ef07..7a84b1fa8c3a7fdd 100644
+--- a/elf/dl-reloc.c
++++ b/elf/dl-reloc.c
+@@ -178,12 +178,28 @@ _dl_relocate_object (struct link_map *l, struct r_scope_elem *scope[],
+   int skip_ifunc = reloc_mode & __RTLD_NOIFUNC;
+ 
+ #ifdef SHARED
++  bool consider_symbind = false;
+   /* If we are auditing, install the same handlers we need for profiling.  */
+   if ((reloc_mode & __RTLD_AUDIT) == 0)
+-    consider_profiling |= GLRO(dl_audit) != NULL;
++    {
++      struct audit_ifaces *afct = GLRO(dl_audit);
++      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++	{
++	  /* Profiling is needed only if PLT hooks are provided.  */
++	  if (afct->ARCH_LA_PLTENTER != NULL
++	      || afct->ARCH_LA_PLTEXIT != NULL)
++	    consider_profiling = 1;
++	  if (afct->symbind != NULL)
++	    consider_symbind = true;
++
++	  afct = afct->next;
++	}
++    }
+ #elif defined PROF
+   /* Never use dynamic linker profiling for gprof profiling code.  */
+ # define consider_profiling 0
++#else
++# define consider_symbind 0
+ #endif
+ 
+   if (l->l_relocated)
+@@ -278,7 +294,7 @@ _dl_relocate_object (struct link_map *l, struct r_scope_elem *scope[],
+     ELF_DYNAMIC_RELOCATE (l, scope, lazy, consider_profiling, skip_ifunc);
+ 
+ #ifndef PROF
+-    if (__glibc_unlikely (consider_profiling)
++    if ((consider_profiling || consider_symbind)
+ 	&& l->l_info[DT_PLTRELSZ] != NULL)
+       {
+ 	/* Allocate the array which will contain the already found
+diff --git a/elf/dl-runtime.c b/elf/dl-runtime.c
+index ec0b2164825fa538..71ec65264ff780fb 100644
+--- a/elf/dl-runtime.c
++++ b/elf/dl-runtime.c
+@@ -123,6 +123,37 @@ _dl_fixup (
+       && __builtin_expect (ELFW(ST_TYPE) (sym->st_info) == STT_GNU_IFUNC, 0))
+     value = elf_ifunc_invoke (DL_FIXUP_VALUE_ADDR (value));
+ 
++#ifdef SHARED
++  /* Auditing checkpoint: we have a new binding.  Provide the auditing
++     libraries the possibility to change the value and tell us whether further
++     auditing is wanted.
++     The l_reloc_result is only allocated if there is an audit module which
++     provides a la_symbind.  */
++  if (l->l_reloc_result != NULL)
++    {
++      /* This is the address in the array where we store the result of previous
++	 relocations.  */
++      struct reloc_result *reloc_result
++	= &l->l_reloc_result[reloc_index (pltgot, reloc_arg, sizeof (PLTREL))];
++      unsigned int init = atomic_load_acquire (&reloc_result->init);
++      if (init == 0)
++	{
++	  _dl_audit_symbind (l, reloc_result, sym, &value, result);
++
++	  /* Store the result for later runs.  */
++	  if (__glibc_likely (! GLRO(dl_bind_not)))
++	    {
++	      reloc_result->addr = value;
++	      /* Guarantee all previous writes complete before init is
++		 updated.  See CONCURRENCY NOTES below.  */
++	      atomic_store_release (&reloc_result->init, 1);
++	    }
++	}
++      else
++	value = reloc_result->addr;
++    }
++#endif
++
+   /* Finally, fix up the plt itself.  */
+   if (__glibc_unlikely (GLRO(dl_bind_not)))
+     return value;
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 767acd122262b824..2994578ba3a5f911 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1027,13 +1027,7 @@ ERROR: audit interface '%s' requires version %d (maximum supported version %d);
+     "la_objsearch\0"
+     "la_objopen\0"
+     "la_preinit\0"
+-#if __ELF_NATIVE_CLASS == 32
+-    "la_symbind32\0"
+-#elif __ELF_NATIVE_CLASS == 64
+-    "la_symbind64\0"
+-#else
+-# error "__ELF_NATIVE_CLASS must be defined"
+-#endif
++    LA_SYMBIND "\0"
+ #define STRING(s) __STRING (s)
+     "la_" STRING (ARCH_LA_PLTENTER) "\0"
+     "la_" STRING (ARCH_LA_PLTEXIT) "\0"
+diff --git a/elf/tst-audit19a.c b/elf/tst-audit19a.c
+new file mode 100644
+index 0000000000000000..035cde9351c2711b
+--- /dev/null
++++ b/elf/tst-audit19a.c
+@@ -0,0 +1,38 @@
++/* Check if DT_AUDIT a module without la_plt{enter,exit} symbols does not incur
++   in profiling (BZ#15533).
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <support/xdlfcn.h>
++#include <support/check.h>
++
++static int
++do_test (void)
++{
++  void *h = xdlopen ("tst-auditmod19a.so", RTLD_NOW);
++
++  struct link_map *lmap;
++  TEST_VERIFY_EXIT (dlinfo (h, RTLD_DI_LINKMAP, &lmap) == 0);
++
++  /* The internal array is only allocated if profiling is enabled.  */
++  TEST_VERIFY (lmap->l_reloc_result == NULL);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit19b.c b/elf/tst-audit19b.c
+new file mode 100644
+index 0000000000000000..da015734f24e0d79
+--- /dev/null
++++ b/elf/tst-audit19b.c
+@@ -0,0 +1,94 @@
++/* Check if DT_AUDIT a module with la_plt{enter,exit} call la_symbind
++   for lazy resolution.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <getopt.h>
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdbool.h>
++
++static int restart;
++#define CMDLINE_OPTIONS \
++  { "restart", no_argument, &restart, 1 },
++
++int tst_audit18bmod1_func (void);
++
++static int
++handle_restart (void)
++{
++  TEST_COMPARE (tst_audit18bmod1_func (), 10);
++  return 0;
++}
++
++static inline bool
++startswith (const char *str, const char *pre)
++{
++  size_t lenpre = strlen (pre);
++  size_t lenstr = strlen (str);
++  return lenstr < lenpre ? false : memcmp (pre, str, lenpre) == 0;
++}
++
++static int
++do_test (int argc, char *argv[])
++{
++  /* We must have either:
++     - One our fource parameters left if called initially:
++       + path to ld.so         optional
++       + "--library-path"      optional
++       + the library path      optional
++       + the application name  */
++
++  if (restart)
++    return handle_restart ();
++
++  char *spargv[9];
++  int i = 0;
++  for (; i < argc - 1; i++)
++    spargv[i] = argv[i + 1];
++  spargv[i++] = (char *) "--direct";
++  spargv[i++] = (char *) "--restart";
++  spargv[i] = NULL;
++
++  setenv ("LD_AUDIT", "tst-auditmod18b.so", 0);
++  struct support_capture_subprocess result
++    = support_capture_subprogram (spargv[0], spargv);
++  support_capture_subprocess_check (&result, "tst-audit18b", 0, sc_allow_stderr);
++
++  bool find_symbind = false;
++
++  FILE *out = fmemopen (result.err.buffer, result.err.length, "r");
++  TEST_VERIFY (out != NULL);
++  char *buffer = NULL;
++  size_t buffer_length = 0;
++  while (xgetline (&buffer, &buffer_length, out))
++    if (startswith (buffer, "la_symbind: tst_audit18bmod1_func") == 0)
++      find_symbind = true;
++
++  TEST_COMPARE (find_symbind, true);
++
++  free (buffer);
++  xfclose (out);
++
++  return 0;
++}
++
++#define TEST_FUNCTION_ARGV do_test
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit19bmod.c b/elf/tst-audit19bmod.c
+new file mode 100644
+index 0000000000000000..9ffdcd8f3ffbc38e
+--- /dev/null
++++ b/elf/tst-audit19bmod.c
+@@ -0,0 +1,23 @@
++/* Extra module for tst-audit18b.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++int
++tst_audit18bmod1_func (void)
++{
++  return 10;
++}
+diff --git a/elf/tst-auditmod19a.c b/elf/tst-auditmod19a.c
+new file mode 100644
+index 0000000000000000..f58204099457743d
+--- /dev/null
++++ b/elf/tst-auditmod19a.c
+@@ -0,0 +1,25 @@
++/* Audit module for tst-audit18a.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
+diff --git a/elf/tst-auditmod19b.c b/elf/tst-auditmod19b.c
+new file mode 100644
+index 0000000000000000..e2248b2a75946746
+--- /dev/null
++++ b/elf/tst-auditmod19b.c
+@@ -0,0 +1,46 @@
++/* Audit module for tst-audit18b.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <string.h>
++#include <stdio.h>
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  return LA_FLG_BINDTO | LA_FLG_BINDFROM;
++}
++
++uintptr_t
++#if __ELF_NATIVE_CLASS == 32
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx, uintptr_t *refcook,
++	      uintptr_t *defcook, unsigned int *flags, const char *symname)
++#else
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx, uintptr_t *refcook,
++	      uintptr_t *defcook, unsigned int *flags, const char *symname)
++#endif
++{
++  fprintf (stderr, "la_symbind: %s\n", symname);
++  return sym->st_value;
++}
+diff --git a/include/link.h b/include/link.h
+index cdd011f59445e490..dd491989beb41353 100644
+--- a/include/link.h
++++ b/include/link.h
+@@ -353,8 +353,10 @@ struct link_map
+ 
+ #if __ELF_NATIVE_CLASS == 32
+ # define symbind symbind32
++# define LA_SYMBIND "la_symbind32"
+ #elif __ELF_NATIVE_CLASS == 64
+ # define symbind symbind64
++# define LA_SYMBIND "la_symbind64"
+ #else
+ # error "__ELF_NATIVE_CLASS must be defined"
+ #endif

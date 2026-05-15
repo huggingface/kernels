@@ -1,0 +1,41 @@
+commit c489c35054c39d7f2437ca61b369e3ede448f022
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Wed Nov 30 11:44:25 2016 +0000
+
+    elf: Fix comments and logic in _dl_add_to_slotinfo
+    
+    Since
+    
+      commit a509eb117fac1d764b15eba64993f4bdb63d7f3c
+      Avoid late dlopen failure due to scope, TLS slotinfo updates [BZ #25112]
+    
+    the generation counter update is not needed in the failure path.
+    That commit ensures allocation in _dl_add_to_slotinfo happens before
+    the demarcation point in dlopen (it is called twice, first time is for
+    allocation only where dlopen can still be reverted on failure, then
+    second time actual dtv updates are done which then cannot fail).
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index 0b96b1dceed99d58..9375650a3ab5247d 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -998,16 +998,7 @@ _dl_add_to_slotinfo (struct link_map *l, bool do_add)
+ 		+ TLS_SLOTINFO_SURPLUS * sizeof (struct dtv_slotinfo));
+       if (listp == NULL)
+ 	{
+-	  /* We ran out of memory.  We will simply fail this
+-	     call but don't undo anything we did so far.  The
+-	     application will crash or be terminated anyway very
+-	     soon.  */
+-
+-	  /* We have to do this since some entries in the dtv
+-	     slotinfo array might already point to this
+-	     generation.  */
+-	  ++GL(dl_tls_generation);
+-
++	  /* We ran out of memory while resizing the dtv slotinfo list.  */
+ 	  _dl_signal_error (ENOMEM, "dlopen", NULL, N_("\
+ cannot create TLS data structures"));
+ 	}

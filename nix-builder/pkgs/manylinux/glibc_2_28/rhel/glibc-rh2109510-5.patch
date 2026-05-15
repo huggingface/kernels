@@ -1,0 +1,483 @@
+commit a8110b727e508f7ddf34f940af622e6f95435201
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Dec 10 22:27:13 2018 +0000
+
+    Move tst-signal-numbers to Python.
+    
+    This patch converts the tst-signal-numbers test from shell + awk to
+    Python.
+    
+    As with gen-as-const, the point is not so much that shell and awk are
+    problematic for this code, as that it's useful to build up general
+    infrastructure in Python for use of a range of code involving
+    extracting values from C headers.  This patch moves some code from
+    gen-as-const.py to a new glibcextract.py, which also gains functions
+    relating to listing macros, and comparing the values of a set of
+    macros from compiling two different pieces of code.
+    
+    It's not just signal numbers that should have such tests; pretty much
+    any case where glibc copies constants from Linux kernel headers should
+    have such tests that the values and sets of constants agree except
+    where differences are known to be OK.  Much the same also applies to
+    structure layouts (although testing those without hardcoding lists of
+    fields to test will be more complicated).
+    
+    Given this patch, another test for a set of macros would essentially
+    be just a call to glibcextract.compare_macro_consts (plus boilerplate
+    code - and we could move to having separate text files defining such
+    tests, like the .sym inputs to gen-as-const, so that only a single
+    Python script is needed for most such tests).  Some such tests would
+    of course need new features, e.g. where the set of macros changes in
+    new kernel versions (so you need to allow new macro names on the
+    kernel side if the kernel headers are newer than the version known to
+    glibc, and extra macros on the glibc side if the kernel headers are
+    older).  tst-syscall-list.sh could become a Python script that uses
+    common code to generate lists of macros but does other things with its
+    own custom logic.
+    
+    There are a few differences from the existing shell + awk test.
+    Because the new test evaluates constants using the compiler, no
+    special handling is needed any more for one signal name being defined
+    to another.  Because asm/signal.h now needs to pass through the
+    compiler, not just the preprocessor, stddef.h is included as well
+    (given the asm/signal.h issue that it requires an externally provided
+    definition of size_t).  The previous code defined __ASSEMBLER__ with
+    asm/signal.h; this is removed (__ASSEMBLY__, a different macro,
+    eliminates the requirement for stddef.h on some but not all
+    architectures).
+    
+    Tested for x86_64, and with build-many-glibcs.py.
+    
+            * scripts/glibcextract.py: New file.
+            * scripts/gen-as-const.py: Do not import os.path, re, subprocess
+            or tempfile.  Import glibcexctract.
+            (compute_c_consts): Remove.  Moved to glibcextract.py.
+            (gen_test): Update reference to compute_c_consts.
+            (main): Likewise.
+            * sysdeps/unix/sysv/linux/tst-signal-numbers.py: New file.
+            * sysdeps/unix/sysv/linux/tst-signal-numbers.sh: Remove.
+            * sysdeps/unix/sysv/linux/Makefile
+            ($(objpfx)tst-signal-numbers.out): Use tst-signal-numbers.py.
+            Redirect stderr as well as stdout.
+
+diff --git a/scripts/gen-as-const.py b/scripts/gen-as-const.py
+index eb85ef1aa0f4934d..f85e359394acb1a4 100644
+--- a/scripts/gen-as-const.py
++++ b/scripts/gen-as-const.py
+@@ -24,68 +24,14 @@
+ # A line giving just a name implies an expression consisting of just that name.
+ 
+ import argparse
+-import os.path
+-import re
+-import subprocess
+-import tempfile
+ 
+-
+-def compute_c_consts(sym_data, cc):
+-    """Compute the values of some C constants.
+-
+-    The first argument is a list whose elements are either strings
+-    (preprocessor directives, or the special string 'START' to
+-    indicate this function should insert its initial boilerplate text
+-    in the output there) or pairs of strings (a name and a C
+-    expression for the corresponding value).  Preprocessor directives
+-    in the middle of the list may be used to select which constants
+-    end up being evaluated using which expressions.
+-
+-    """
+-    out_lines = []
+-    for arg in sym_data:
+-        if isinstance(arg, str):
+-            if arg == 'START':
+-                out_lines.append('void\ndummy (void)\n{')
+-            else:
+-                out_lines.append(arg)
+-            continue
+-        name = arg[0]
+-        value = arg[1]
+-        out_lines.append('asm ("@@@name@@@%s@@@value@@@%%0@@@end@@@" '
+-                         ': : \"i\" ((long int) (%s)));'
+-                         % (name, value))
+-    out_lines.append('}')
+-    out_lines.append('')
+-    out_text = '\n'.join(out_lines)
+-    with tempfile.TemporaryDirectory() as temp_dir:
+-        c_file_name = os.path.join(temp_dir, 'test.c')
+-        s_file_name = os.path.join(temp_dir, 'test.s')
+-        with open(c_file_name, 'w') as c_file:
+-            c_file.write(out_text)
+-        # Compilation has to be from stdin to avoid the temporary file
+-        # name being written into the generated dependencies.
+-        cmd = ('%s -S -o %s -x c - < %s' % (cc, s_file_name, c_file_name))
+-        subprocess.check_call(cmd, shell=True)
+-        consts = {}
+-        with open(s_file_name, 'r') as s_file:
+-            for line in s_file:
+-                match = re.search('@@@name@@@([^@]*)'
+-                                  '@@@value@@@[^0-9Xxa-fA-F-]*'
+-                                  '([0-9Xxa-fA-F-]+).*@@@end@@@', line)
+-                if match:
+-                    if (match.group(1) in consts
+-                        and match.group(2) != consts[match.group(1)]):
+-                        raise ValueError('duplicate constant %s'
+-                                         % match.group(1))
+-                    consts[match.group(1)] = match.group(2)
+-        return consts
++import glibcextract
+ 
+ 
+ def gen_test(sym_data):
+     """Generate a test for the values of some C constants.
+ 
+-    The first argument is as for compute_c_consts.
++    The first argument is as for glibcextract.compute_c_consts.
+ 
+     """
+     out_lines = []
+@@ -158,7 +104,7 @@ def main():
+     if args.test:
+         print(gen_test(sym_data))
+     else:
+-        consts = compute_c_consts(sym_data, args.cc)
++        consts = glibcextract.compute_c_consts(sym_data, args.cc)
+         print(''.join('#define %s %s\n' % c for c in sorted(consts.items())), end='')
+ 
+ if __name__ == '__main__':
+diff --git a/scripts/glibcextract.py b/scripts/glibcextract.py
+new file mode 100644
+index 0000000000000000..ecc4d5b6cc387c7d
+--- /dev/null
++++ b/scripts/glibcextract.py
+@@ -0,0 +1,162 @@
++#!/usr/bin/python3
++# Extract information from C headers.
++# Copyright (C) 2018 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <http://www.gnu.org/licenses/>.
++
++import os.path
++import re
++import subprocess
++import tempfile
++
++
++def compute_c_consts(sym_data, cc):
++    """Compute the values of some C constants.
++
++    The first argument is a list whose elements are either strings
++    (preprocessor directives, or the special string 'START' to
++    indicate this function should insert its initial boilerplate text
++    in the output there) or pairs of strings (a name and a C
++    expression for the corresponding value).  Preprocessor directives
++    in the middle of the list may be used to select which constants
++    end up being evaluated using which expressions.
++
++    """
++    out_lines = []
++    for arg in sym_data:
++        if isinstance(arg, str):
++            if arg == 'START':
++                out_lines.append('void\ndummy (void)\n{')
++            else:
++                out_lines.append(arg)
++            continue
++        name = arg[0]
++        value = arg[1]
++        out_lines.append('asm ("@@@name@@@%s@@@value@@@%%0@@@end@@@" '
++                         ': : \"i\" ((long int) (%s)));'
++                         % (name, value))
++    out_lines.append('}')
++    out_lines.append('')
++    out_text = '\n'.join(out_lines)
++    with tempfile.TemporaryDirectory() as temp_dir:
++        c_file_name = os.path.join(temp_dir, 'test.c')
++        s_file_name = os.path.join(temp_dir, 'test.s')
++        with open(c_file_name, 'w') as c_file:
++            c_file.write(out_text)
++        # Compilation has to be from stdin to avoid the temporary file
++        # name being written into the generated dependencies.
++        cmd = ('%s -S -o %s -x c - < %s' % (cc, s_file_name, c_file_name))
++        subprocess.check_call(cmd, shell=True)
++        consts = {}
++        with open(s_file_name, 'r') as s_file:
++            for line in s_file:
++                match = re.search('@@@name@@@([^@]*)'
++                                  '@@@value@@@[^0-9Xxa-fA-F-]*'
++                                  '([0-9Xxa-fA-F-]+).*@@@end@@@', line)
++                if match:
++                    if (match.group(1) in consts
++                        and match.group(2) != consts[match.group(1)]):
++                        raise ValueError('duplicate constant %s'
++                                         % match.group(1))
++                    consts[match.group(1)] = match.group(2)
++        return consts
++
++
++def list_macros(source_text, cc):
++    """List the preprocessor macros defined by the given source code.
++
++    The return value is a pair of dicts, the first one mapping macro
++    names to their expansions and the second one mapping macro names
++    to lists of their arguments, or to None for object-like macros.
++
++    """
++    with tempfile.TemporaryDirectory() as temp_dir:
++        c_file_name = os.path.join(temp_dir, 'test.c')
++        i_file_name = os.path.join(temp_dir, 'test.i')
++        with open(c_file_name, 'w') as c_file:
++            c_file.write(source_text)
++        cmd = ('%s -E -dM -o %s %s' % (cc, i_file_name, c_file_name))
++        subprocess.check_call(cmd, shell=True)
++        macros_exp = {}
++        macros_args = {}
++        with open(i_file_name, 'r') as i_file:
++            for line in i_file:
++                match = re.fullmatch('#define ([0-9A-Za-z_]+)(.*)\n', line)
++                if not match:
++                    raise ValueError('bad -dM output line: %s' % line)
++                name = match.group(1)
++                value = match.group(2)
++                if value.startswith(' '):
++                    value = value[1:]
++                    args = None
++                elif value.startswith('('):
++                    match = re.fullmatch(r'\((.*?)\) (.*)', value)
++                    if not match:
++                        raise ValueError('bad -dM output line: %s' % line)
++                    args = match.group(1).split(',')
++                    value = match.group(2)
++                else:
++                    raise ValueError('bad -dM output line: %s' % line)
++                if name in macros_exp:
++                    raise ValueError('duplicate macro: %s' % line)
++                macros_exp[name] = value
++                macros_args[name] = args
++    return macros_exp, macros_args
++
++
++def compute_macro_consts(source_text, cc, macro_re, exclude_re=None):
++    """Compute the integer constant values of macros defined by source_text.
++
++    Macros must match the regular expression macro_re, and if
++    exclude_re is defined they must not match exclude_re.  Values are
++    computed with compute_c_consts.
++
++    """
++    macros_exp, macros_args = list_macros(source_text, cc)
++    macros_set = {m for m in macros_exp
++                  if (macros_args[m] is None
++                      and re.fullmatch(macro_re, m)
++                      and (exclude_re is None
++                           or not re.fullmatch(exclude_re, m)))}
++    sym_data = [source_text, 'START']
++    sym_data.extend(sorted((m, m) for m in macros_set))
++    return compute_c_consts(sym_data, cc)
++
++
++def compare_macro_consts(source_1, source_2, cc, macro_re, exclude_re=None):
++    """Compare the values of macros defined by two different sources.
++
++    The sources would typically be includes of a glibc header and a
++    kernel header.  Return 1 if there were any differences, 0 if the
++    macro values were the same.
++
++    """
++    macros_1 = compute_macro_consts(source_1, cc, macro_re, exclude_re)
++    macros_2 = compute_macro_consts(source_2, cc, macro_re, exclude_re)
++    if macros_1 == macros_2:
++        return 0
++    print('First source:\n%s\n' % source_1)
++    print('Second source:\n%s\n' % source_2)
++    for name, value in sorted(macros_1.items()):
++        if name not in macros_2:
++            print('Only in first source: %s' % name)
++        elif macros_1[name] != macros_2[name]:
++            print('Different values for %s: %s != %s'
++                  % (name, macros_1[name], macros_2[name]))
++    for name in sorted(macros_2.keys()):
++        if name not in macros_1:
++            print('Only in second source: %s' % name)
++    return 1
+diff --git a/sysdeps/unix/sysv/linux/Makefile b/sysdeps/unix/sysv/linux/Makefile
+index bb055f9d6b841ff5..9c10ee53b26e1b1b 100644
+--- a/sysdeps/unix/sysv/linux/Makefile
++++ b/sysdeps/unix/sysv/linux/Makefile
+@@ -113,11 +113,14 @@ tests-special += $(objpfx)tst-signal-numbers.out
+ # in this context, but signal.c includes signal.h and not much else so it'll
+ # be conservatively correct.
+ $(objpfx)tst-signal-numbers.out: \
+-		../sysdeps/unix/sysv/linux/tst-signal-numbers.sh \
++		../sysdeps/unix/sysv/linux/tst-signal-numbers.py \
+ 		$(objpfx)signal.o*
+-	AWK=$(AWK) $(SHELL) ../sysdeps/unix/sysv/linux/tst-signal-numbers.sh \
+-	$(CC) $(patsubst -DMODULE_NAME=%,-DMODULE_NAME=testsuite,$(CPPFLAGS)) \
+-	< /dev/null > $@; $(evaluate-test)
++	PYTHONPATH=../scripts \
++	$(PYTHON) ../sysdeps/unix/sysv/linux/tst-signal-numbers.py \
++		   --cc="$(CC) $(patsubst -DMODULE_NAME=%, \
++					  -DMODULE_NAME=testsuite, \
++					  $(CPPFLAGS))" \
++	< /dev/null > $@ 2>&1; $(evaluate-test)
+ endif
+ 
+ ifeq ($(subdir),socket)
+diff --git a/sysdeps/unix/sysv/linux/tst-signal-numbers.py b/sysdeps/unix/sysv/linux/tst-signal-numbers.py
+new file mode 100644
+index 0000000000000000..48c63d1218e8303d
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/tst-signal-numbers.py
+@@ -0,0 +1,48 @@
++#!/usr/bin/python3
++# Test that glibc's signal numbers match the kernel's.
++# Copyright (C) 2018 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <http://www.gnu.org/licenses/>.
++
++import argparse
++import sys
++
++import glibcextract
++
++
++def main():
++    """The main entry point."""
++    parser = argparse.ArgumentParser(
++        description="Test that glibc's signal numbers match the kernel's.")
++    parser.add_argument('--cc', metavar='CC',
++                        help='C compiler (including options) to use')
++    args = parser.parse_args()
++    sys.exit(glibcextract.compare_macro_consts(
++        '#define _GNU_SOURCE 1\n'
++        '#include <signal.h>\n',
++        '#define _GNU_SOURCE 1\n'
++        '#include <stddef.h>\n'
++        '#include <asm/signal.h>\n',
++        args.cc,
++        # Filter out constants that aren't signal numbers.
++        'SIG[A-Z]+',
++        # Discard obsolete signal numbers and unrelated constants:
++        #    SIGCLD, SIGIOT, SIGSWI, SIGUNUSED.
++        #    SIGSTKSZ, SIGRTMIN, SIGRTMAX.
++        'SIG(CLD|IOT|RT(MIN|MAX)|STKSZ|SWI|UNUSED)'))
++
++if __name__ == '__main__':
++    main()
+diff --git a/sysdeps/unix/sysv/linux/tst-signal-numbers.sh b/sysdeps/unix/sysv/linux/tst-signal-numbers.sh
+deleted file mode 100644
+index e1f7be0337c720a6..0000000000000000
+--- a/sysdeps/unix/sysv/linux/tst-signal-numbers.sh
++++ /dev/null
+@@ -1,86 +0,0 @@
+-#! /bin/sh
+-# Test that glibc's signal numbers match the kernel's.
+-# Copyright (C) 2017-2018 Free Software Foundation, Inc.
+-# This file is part of the GNU C Library.
+-
+-# The GNU C Library is free software; you can redistribute it and/or
+-# modify it under the terms of the GNU Lesser General Public
+-# License as published by the Free Software Foundation; either
+-# version 2.1 of the License, or (at your option) any later version.
+-
+-# The GNU C Library is distributed in the hope that it will be useful,
+-# but WITHOUT ANY WARRANTY; without even the implied warranty of
+-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-# Lesser General Public License for more details.
+-
+-# You should have received a copy of the GNU Lesser General Public
+-# License along with the GNU C Library; if not, see
+-# <http://www.gnu.org/licenses/>.
+-
+-set -e
+-if [ -n "$BASH_VERSION" ]; then set -o pipefail; fi
+-LC_ALL=C; export LC_ALL
+-
+-# We cannot use Linux's asm/signal.h to define signal numbers, because
+-# it isn't sufficiently namespace-clean.  Instead, this test checks
+-# that our signal numbers match the kernel's.  This script expects
+-# "$@" to be $(CC) $(CPPFLAGS) as set by glibc's Makefiles, and $AWK
+-# to be set in the environment.
+-
+-# Before doing anything else, fail if the compiler doesn't work.
+-"$@" -E -xc -dM - < /dev/null > /dev/null
+-
+-tmpG=`mktemp -t signums_glibc.XXXXXXXXX`
+-tmpK=`mktemp -t signums_kernel.XXXXXXXXX`
+-trap "rm -f '$tmpG' '$tmpK'" 0
+-
+-# Filter out constants that aren't signal numbers.
+-# If SIGPOLL is defined as SIGIO, swap it around so SIGIO is defined as
+-# SIGPOLL. Similarly for SIGABRT and SIGIOT.
+-# Discard obsolete signal numbers and unrelated constants:
+-#    SIGCLD, SIGIOT, SIGSWI, SIGUNUSED.
+-#    SIGSTKSZ, SIGRTMIN, SIGRTMAX.
+-# Then sort the list.
+-filter_defines ()
+-{
+-    $AWK '
+-/^#define SIG[A-Z]+ ([0-9]+|SIG[A-Z0-9]+)$/ { signals[$2] = $3 }
+-END {
+-  if ("SIGPOLL" in signals && "SIGIO" in signals &&
+-      signals["SIGPOLL"] == "SIGIO") {
+-    signals["SIGPOLL"] = signals["SIGIO"]
+-    signals["SIGIO"] = "SIGPOLL"
+-  }
+-  if ("SIGABRT" in signals && "SIGIOT" in signals &&
+-      signals["SIGABRT"] == "SIGIOT") {
+-    signals["SIGABRT"] = signals["SIGIOT"]
+-    signals["SIGIOT"] = "SIGABRT"
+-  }
+-  for (sig in signals) {
+-    if (sig !~ /^SIG(CLD|IOT|RT(MIN|MAX)|STKSZ|SWI|UNUSED)$/) {
+-      printf("#define %s %s\n", sig, signals[sig])
+-    }
+-  }
+-}' | sort
+-}
+-
+-# $CC may contain command-line switches, so it should be word-split.
+-printf '%s' '#define _GNU_SOURCE 1
+-#include <signal.h>
+-' |
+-    "$@" -E -xc -dM - |
+-    filter_defines > "$tmpG"
+-
+-printf '%s' '#define _GNU_SOURCE 1
+-#define __ASSEMBLER__ 1
+-#include <asm/signal.h>
+-' |
+-    "$@" -E -xc -dM - |
+-    filter_defines > "$tmpK"
+-
+-if cmp -s "$tmpG" "$tmpK"; then
+-    exit 0
+-else
+-    diff -u "$tmpG" "$tmpK"
+-    exit 1
+-fi

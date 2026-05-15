@@ -1,0 +1,234 @@
+commit a6e8926f8d49a213a9abb1a61f6af964f612ab7f
+Author: Paul Pluzhnikov <ppluzhnikov@google.com>
+Date:   Fri Aug 31 18:04:32 2018 -0700
+
+    [BZ #20271] Add newlines in __libc_fatal calls.
+
+diff --git a/grp/initgroups.c b/grp/initgroups.c
+index f056fbf5aa6aa14c..93e7f5814da6286d 100644
+--- a/grp/initgroups.c
++++ b/grp/initgroups.c
+@@ -128,7 +128,7 @@ internal_getgrouplist (const char *user, gid_t group, long int *size,
+ 
+       /* This is really only for debugging.  */
+       if (NSS_STATUS_TRYAGAIN > status || status > NSS_STATUS_RETURN)
+-	__libc_fatal ("illegal status in internal_getgrouplist");
++	__libc_fatal ("Illegal status in internal_getgrouplist.\n");
+ 
+       /* For compatibility reason we will continue to look for more
+ 	 entries using the next service even though data has already
+diff --git a/include/stdio.h b/include/stdio.h
+index 9162d4e24717e31a..7a5c09089fc4d348 100644
+--- a/include/stdio.h
++++ b/include/stdio.h
+@@ -98,7 +98,8 @@ enum __libc_message_action
+   do_backtrace	= 1 << 1	/* Backtrace.  */
+ };
+ 
+-/* Print out MESSAGE on the error output and abort.  */
++/* Print out MESSAGE (which should end with a newline) on the error output
++   and abort.  */
+ extern void __libc_fatal (const char *__message)
+      __attribute__ ((__noreturn__));
+ extern void __libc_message (enum __libc_message_action action,
+diff --git a/nptl/pthread_cond_wait.c b/nptl/pthread_cond_wait.c
+index 3e1105418210288e..ebf07ca82d87de7d 100644
+--- a/nptl/pthread_cond_wait.c
++++ b/nptl/pthread_cond_wait.c
+@@ -516,7 +516,7 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
+ 		  struct timespec rt;
+ 		  if (__clock_gettime (CLOCK_MONOTONIC, &rt) != 0)
+ 		    __libc_fatal ("clock_gettime does not support "
+-				  "CLOCK_MONOTONIC");
++				  "CLOCK_MONOTONIC\n");
+ 		  /* Convert the absolute timeout value to a relative
+ 		     timeout.  */
+ 		  rt.tv_sec = abstime->tv_sec - rt.tv_sec;
+diff --git a/nscd/initgrcache.c b/nscd/initgrcache.c
+index 2c74951f579f4afd..4764f14a45f68e0a 100644
+--- a/nscd/initgrcache.c
++++ b/nscd/initgrcache.c
+@@ -159,7 +159,7 @@ addinitgroupsX (struct database_dyn *db, int fd, request_header *req,
+ 
+       /* This is really only for debugging.  */
+       if (NSS_STATUS_TRYAGAIN > status || status > NSS_STATUS_RETURN)
+-	__libc_fatal ("illegal status in internal_getgrouplist");
++	__libc_fatal ("Illegal status in internal_getgrouplist.\n");
+ 
+       any_success |= status == NSS_STATUS_SUCCESS;
+ 
+diff --git a/nss/nsswitch.c b/nss/nsswitch.c
+index ee46f24424bc1ca2..3c48b4b85e881cdb 100644
+--- a/nss/nsswitch.c
++++ b/nss/nsswitch.c
+@@ -235,7 +235,7 @@ __nss_next2 (service_user **ni, const char *fct_name, const char *fct2_name,
+       /* This is really only for debugging.  */
+       if (__builtin_expect (NSS_STATUS_TRYAGAIN > status
+ 			    || status > NSS_STATUS_RETURN, 0))
+-	 __libc_fatal ("illegal status in __nss_next");
++	 __libc_fatal ("Illegal status in __nss_next.\n");
+ 
+        if (nss_next_action (*ni, status) == NSS_ACTION_RETURN)
+ 	 return 1;
+diff --git a/sysdeps/aarch64/dl-irel.h b/sysdeps/aarch64/dl-irel.h
+index 5889ee187b7a1eaf..bef71ed0f31a6387 100644
+--- a/sysdeps/aarch64/dl-irel.h
++++ b/sysdeps/aarch64/dl-irel.h
+@@ -47,7 +47,7 @@ elf_irela (const ElfW(Rela) *reloc)
+       *reloc_addr = value;
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif
+diff --git a/sysdeps/arm/dl-irel.h b/sysdeps/arm/dl-irel.h
+index a7b6456075659baf..be6eb7743eb5f08d 100644
+--- a/sysdeps/arm/dl-irel.h
++++ b/sysdeps/arm/dl-irel.h
+@@ -46,7 +46,7 @@ elf_irel (const Elf32_Rel *reloc)
+       *reloc_addr = value;
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/generic/unwind-dw2.c b/sysdeps/generic/unwind-dw2.c
+index 082609b34a3f773b..724c16a7f0bf465b 100644
+--- a/sysdeps/generic/unwind-dw2.c
++++ b/sysdeps/generic/unwind-dw2.c
+@@ -843,7 +843,7 @@ execute_cfa_program (const unsigned char *insn_ptr,
+ 	    struct frame_state_reg_info *old_rs = fs->regs.prev;
+ #ifdef _LIBC
+ 	    if (old_rs == NULL)
+-	      __libc_fatal ("invalid DWARF unwind data");
++	      __libc_fatal ("Invalid DWARF unwind data.\n");
+ 	    else
+ #endif
+ 	      {
+diff --git a/sysdeps/i386/dl-irel.h b/sysdeps/i386/dl-irel.h
+index 55303180c7aca495..bcaf0668acf8e2f2 100644
+--- a/sysdeps/i386/dl-irel.h
++++ b/sysdeps/i386/dl-irel.h
+@@ -45,7 +45,7 @@ elf_irel (const Elf32_Rel *reloc)
+       *reloc_addr = value;
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/nptl/futex-internal.h b/sysdeps/nptl/futex-internal.h
+index 1a5624789d4ab117..6fd27f0df6c27b69 100644
+--- a/sysdeps/nptl/futex-internal.h
++++ b/sysdeps/nptl/futex-internal.h
+@@ -197,7 +197,7 @@ futex_wake (unsigned int* futex_word, int processes_to_wake, int private);
+ static __always_inline __attribute__ ((__noreturn__)) void
+ futex_fatal_error (void)
+ {
+-  __libc_fatal ("The futex facility returned an unexpected error code.");
++  __libc_fatal ("The futex facility returned an unexpected error code.\n");
+ }
+ 
+ #endif  /* futex-internal.h */
+diff --git a/sysdeps/powerpc/powerpc32/dl-irel.h b/sysdeps/powerpc/powerpc32/dl-irel.h
+index a7368b25829618cb..61d0e4cf61ec45d3 100644
+--- a/sysdeps/powerpc/powerpc32/dl-irel.h
++++ b/sysdeps/powerpc/powerpc32/dl-irel.h
+@@ -46,7 +46,7 @@ elf_irela (const Elf32_Rela *reloc)
+       *reloc_addr = value;
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/powerpc/powerpc64/dl-irel.h b/sysdeps/powerpc/powerpc64/dl-irel.h
+index ab13c04358868270..2fd0ee8a86e85ba0 100644
+--- a/sysdeps/powerpc/powerpc64/dl-irel.h
++++ b/sysdeps/powerpc/powerpc64/dl-irel.h
+@@ -57,7 +57,7 @@ elf_irela (const Elf64_Rela *reloc)
+ #endif
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/s390/dl-irel.h b/sysdeps/s390/dl-irel.h
+index d8ba7ba42709f45c..ecb24f0a9be0daa7 100644
+--- a/sysdeps/s390/dl-irel.h
++++ b/sysdeps/s390/dl-irel.h
+@@ -46,7 +46,7 @@ elf_irela (const ElfW(Rela) *reloc)
+       *reloc_addr = value;
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/sparc/sparc32/dl-irel.h b/sysdeps/sparc/sparc32/dl-irel.h
+index ffca36864f24d1fb..cf47cda8345b1a39 100644
+--- a/sysdeps/sparc/sparc32/dl-irel.h
++++ b/sysdeps/sparc/sparc32/dl-irel.h
+@@ -56,7 +56,7 @@ elf_irela (const Elf32_Rela *reloc)
+   else if (r_type == R_SPARC_NONE)
+     ;
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/sparc/sparc64/dl-irel.h b/sysdeps/sparc/sparc64/dl-irel.h
+index c5cd3057aca1baf6..446fed18365cfd13 100644
+--- a/sysdeps/sparc/sparc64/dl-irel.h
++++ b/sysdeps/sparc/sparc64/dl-irel.h
+@@ -59,7 +59,7 @@ elf_irela (const Elf64_Rela *reloc)
+   else if (r_type == R_SPARC_NONE)
+     ;
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */
+diff --git a/sysdeps/unix/sysv/linux/netlink_assert_response.c b/sysdeps/unix/sysv/linux/netlink_assert_response.c
+index f31ccb52ffa56436..6afc3a17ced18e1c 100644
+--- a/sysdeps/unix/sysv/linux/netlink_assert_response.c
++++ b/sysdeps/unix/sysv/linux/netlink_assert_response.c
+@@ -72,12 +72,12 @@ __netlink_assert_response (int fd, ssize_t result)
+           char message[200];
+           if (family < 0)
+             __snprintf (message, sizeof (message),
+-                        "Unexpected error %d on netlink descriptor %d",
++                        "Unexpected error %d on netlink descriptor %d.\n",
+                         error_code, fd);
+           else
+             __snprintf (message, sizeof (message),
+                         "Unexpected error %d on netlink descriptor %d"
+-                        " (address family %d)",
++                        " (address family %d).\n",
+                         error_code, fd, family);
+           __libc_fatal (message);
+         }
+diff --git a/sysdeps/x86_64/dl-irel.h b/sysdeps/x86_64/dl-irel.h
+index 6ecc50fb42333c19..33f100d8b1781ea7 100644
+--- a/sysdeps/x86_64/dl-irel.h
++++ b/sysdeps/x86_64/dl-irel.h
+@@ -45,7 +45,7 @@ elf_irela (const ElfW(Rela) *reloc)
+       *reloc_addr = value;
+     }
+   else
+-    __libc_fatal ("unexpected reloc type in static binary");
++    __libc_fatal ("Unexpected reloc type in static binary.\n");
+ }
+ 
+ #endif /* dl-irel.h */

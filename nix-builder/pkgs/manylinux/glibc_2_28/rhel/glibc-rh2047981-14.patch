@@ -1,0 +1,388 @@
+Added $(objpfx)tst-audit18: $(libdl) in elf/Makefile since
+we still have $(libdl) in RHEL8.
+
+commit ed3ce71f5c64c5f07cbde0ef03554ea8950d8f2c
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Nov 11 09:28:21 2021 -0300
+
+    elf: Move la_activity (LA_ACT_ADD) after _dl_add_to_namespace_list() (BZ #28062)
+    
+    It ensures that the the namespace is guaranteed to not be empty.
+    
+    Checked on x86_64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+Conflicts:
+	elf/Makefile
+	elf/dl-load.c
+		Conflict with missing MAP_ANON removal.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index b9751e8bd87c4f71..2312184692433313 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -219,6 +219,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-dlmopen-dlerror \
+ 	 tst-dlmopen-gethostbyname \
+ 	 tst-audit17 \
++	 tst-audit18 \
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -354,6 +355,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		libmarkermod5-5 tst-tls20mod-bad tst-tls21mod \
+ 		tst-dlmopen-dlerror-mod \
+ 		tst-dlmopen-gethostbyname-mod \
++		tst-auditmod18 \
++		tst-audit18mod \
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1539,6 +1542,11 @@ $(objpfx)tst-auditmod17.so: $(objpfx)tst-auditmod17.os
+ CFLAGS-.os += $(call elide-stack-protector,.os,tst-auditmod17)
+ tst-audit17-ENV = LD_AUDIT=$(objpfx)tst-auditmod17.so
+ 
++$(objpfx)tst-audit18: $(libdl)
++$(objpfx)tst-audit18.out: $(objpfx)tst-auditmod18.so \
++			  $(objpfx)tst-audit18mod.so
++tst-audit18-ARGS = -- $(host-test-program-cmd)
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 303e6594f9af9b7e..de5aef5777045da5 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -978,42 +978,6 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
+     }
+ #endif
+ 
+-  /* Signal that we are going to add new objects.  */
+-  if (r->r_state == RT_CONSISTENT)
+-    {
+-#ifdef SHARED
+-      /* Auditing checkpoint: we are going to add new objects.  */
+-      if ((mode & __RTLD_AUDIT) == 0
+-	  && __glibc_unlikely (GLRO(dl_naudit) > 0))
+-	{
+-	  struct link_map *head = GL(dl_ns)[nsid]._ns_loaded;
+-	  /* Do not call the functions for any auditing object.  */
+-	  if (head->l_auditing == 0)
+-	    {
+-	      struct audit_ifaces *afct = GLRO(dl_audit);
+-	      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-		{
+-		  if (afct->activity != NULL)
+-		    afct->activity (&link_map_audit_state (head, cnt)->cookie,
+-				    LA_ACT_ADD);
+-
+-		  afct = afct->next;
+-		}
+-	    }
+-	}
+-#endif
+-
+-      /* Notify the debugger we have added some objects.  We need to
+-	 call _dl_debug_initialize in a static program in case dynamic
+-	 linking has not been used before.  */
+-      r->r_state = RT_ADD;
+-      _dl_debug_state ();
+-      LIBC_PROBE (map_start, 2, nsid, r);
+-      make_consistent = true;
+-    }
+-  else
+-    assert (r->r_state == RT_ADD);
+-
+   /* Enter the new object in the list of loaded objects.  */
+   l = _dl_new_object (realname, name, l_type, loader, mode, nsid);
+   if (__glibc_unlikely (l == NULL))
+@@ -1432,6 +1396,44 @@ cannot enable executable stack as shared object requires");
+   /* Now that the object is fully initialized add it to the object list.  */
+   _dl_add_to_namespace_list (l, nsid);
+ 
++  /* Signal that we are going to add new objects.  */
++  if (r->r_state == RT_CONSISTENT)
++    {
++#ifdef SHARED
++      /* Auditing checkpoint: we are going to add new objects.  Since this
++         is called after _dl_add_to_namespace_list the namespace is guaranteed
++	 to not be empty.  */
++      if ((mode & __RTLD_AUDIT) == 0
++	  && __glibc_unlikely (GLRO(dl_naudit) > 0))
++	{
++	  struct link_map *head = GL(dl_ns)[nsid]._ns_loaded;
++	  /* Do not call the functions for any auditing object.  */
++	  if (head->l_auditing == 0)
++	    {
++	      struct audit_ifaces *afct = GLRO(dl_audit);
++	      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++		{
++		  if (afct->activity != NULL)
++		    afct->activity (&link_map_audit_state (head, cnt)->cookie,
++				    LA_ACT_ADD);
++
++		  afct = afct->next;
++		}
++	    }
++	}
++#endif
++
++      /* Notify the debugger we have added some objects.  We need to
++	 call _dl_debug_initialize in a static program in case dynamic
++	 linking has not been used before.  */
++      r->r_state = RT_ADD;
++      _dl_debug_state ();
++      LIBC_PROBE (map_start, 2, nsid, r);
++      make_consistent = true;
++    }
++  else
++    assert (r->r_state == RT_ADD);
++
+ #ifdef SHARED
+   /* Auditing checkpoint: we have a new object.  */
+   if (__glibc_unlikely (GLRO(dl_naudit) > 0)
+diff --git a/elf/tst-audit18.c b/elf/tst-audit18.c
+new file mode 100644
+index 0000000000000000..ef784908f60d50aa
+--- /dev/null
++++ b/elf/tst-audit18.c
+@@ -0,0 +1,129 @@
++/* Check DT_AUDIT with dlmopen.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <getopt.h>
++#include <string.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <gnu/lib-names.h>
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++#include <support/xstdio.h>
++#include <support/support.h>
++
++static int restart;
++#define CMDLINE_OPTIONS \
++  { "restart", no_argument, &restart, 1 },
++
++static int
++handle_restart (void)
++{
++  {
++    void *h = xdlmopen (LM_ID_NEWLM, LIBC_SO, RTLD_NOW);
++
++    pid_t (*s) (void) = xdlsym (h, "getpid");
++    TEST_COMPARE (s (), getpid ());
++
++    xdlclose (h);
++  }
++
++  {
++    void *h = xdlmopen (LM_ID_NEWLM, "tst-audit18mod.so", RTLD_NOW);
++
++    int (*foo) (void) = xdlsym (h, "foo");
++    TEST_COMPARE (foo (), 10);
++
++    xdlclose (h);
++  }
++
++  return 0;
++}
++
++static int
++do_test (int argc, char *argv[])
++{
++  /* We must have either:
++     - One our fource parameters left if called initially:
++       + path to ld.so         optional
++       + "--library-path"      optional
++       + the library path      optional
++       + the application name  */
++
++  if (restart)
++    return handle_restart ();
++
++  char *spargv[9];
++  int i = 0;
++  for (; i < argc - 1; i++)
++    spargv[i] = argv[i + 1];
++  spargv[i++] = (char *) "--direct";
++  spargv[i++] = (char *) "--restart";
++  spargv[i] = NULL;
++
++  setenv ("LD_AUDIT", "tst-auditmod18.so", 0);
++  struct support_capture_subprocess result
++    = support_capture_subprogram (spargv[0], spargv);
++  support_capture_subprocess_check (&result, "tst-audit18", 0, sc_allow_stderr);
++
++  struct
++  {
++    const char *name;
++    bool found;
++  } audit_iface[] =
++  {
++    { "la_version", false },
++    { "la_objsearch", false },
++    { "la_activity", false },
++    { "la_objopen", false },
++    { "la_objclose", false },
++    { "la_preinit", false },
++#if __WORDSIZE == 32
++    { "la_symbind32", false },
++#elif __WORDSIZE == 64
++    { "la_symbind64", false },
++#endif
++  };
++
++  /* Some hooks are called more than once but the test only check if any
++     is called at least once.  */
++  FILE *out = fmemopen (result.err.buffer, result.err.length, "r");
++  TEST_VERIFY (out != NULL);
++  char *buffer = NULL;
++  size_t buffer_length = 0;
++  while (xgetline (&buffer, &buffer_length, out))
++    {
++      for (int i = 0; i < array_length (audit_iface); i++)
++	if (strncmp (buffer, audit_iface[i].name,
++		     strlen (audit_iface[i].name)) == 0)
++	  audit_iface[i].found = true;
++    }
++  free (buffer);
++  xfclose (out);
++
++  for (int i = 0; i < array_length (audit_iface); i++)
++    TEST_COMPARE (audit_iface[i].found, true);
++
++  support_capture_subprocess_free (&result);
++
++  return 0;
++}
++
++#define TEST_FUNCTION_ARGV do_test
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit18mod.c b/elf/tst-audit18mod.c
+new file mode 100644
+index 0000000000000000..096a9167c9f8353f
+--- /dev/null
++++ b/elf/tst-audit18mod.c
+@@ -0,0 +1,23 @@
++/* Check DT_AUDIT with dlmopen.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++int
++foo (void)
++{
++  return 10;
++}
+diff --git a/elf/tst-auditmod18.c b/elf/tst-auditmod18.c
+new file mode 100644
+index 0000000000000000..182992e9fdb1620c
+--- /dev/null
++++ b/elf/tst-auditmod18.c
+@@ -0,0 +1,73 @@
++/* Check DT_AUDIT with dlmopen.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <link.h>
++
++unsigned int
++la_version (unsigned int version)
++{
++  fprintf (stderr, "%s\n", __func__);
++  return LAV_CURRENT;
++}
++
++char *
++la_objsearch (const char *name, uintptr_t *cookie, unsigned int flag)
++{
++  fprintf (stderr, "%s\n", __func__);
++  return (char *) name;
++}
++
++void
++la_activity (uintptr_t *cookie, unsigned int flag)
++{
++  fprintf (stderr, "%s\n", __func__);
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  fprintf (stderr, "%s\n", __func__);
++  return LA_FLG_BINDTO | LA_FLG_BINDFROM;
++}
++
++unsigned int
++la_objclose (uintptr_t *cookie)
++{
++  fprintf (stderr, "%s\n", __func__);
++  return 0;
++}
++
++void
++la_preinit (uintptr_t *cookie)
++{
++  fprintf (stderr, "%s\n", __func__);
++}
++
++uintptr_t
++#if __ELF_NATIVE_CLASS == 32
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx, uintptr_t *refcook,
++              uintptr_t *defcook, unsigned int *flags, const char *symname)
++#else
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx, uintptr_t *refcook,
++              uintptr_t *defcook, unsigned int *flags, const char *symname)
++#endif
++{
++  fprintf (stderr, "%s\n", __func__);
++  return sym->st_value;
++}

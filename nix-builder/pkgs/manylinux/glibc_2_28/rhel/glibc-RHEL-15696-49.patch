@@ -1,0 +1,55 @@
+From 08cbcd4dbc686bb38ec3093aff2f919fbff5ec17 Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Wed, 23 Jun 2021 19:19:34 -0400
+Subject: [PATCH] x86: Remove unnecessary overflow check from wcsnlen-sse4_1.S
+Content-type: text/plain; charset=UTF-8
+
+No bug. The way wcsnlen will check if near the end of maxlen
+is the following macro:
+
+	mov	%r11, %rsi;	\
+	subq	%rax, %rsi;	\
+	andq	$-64, %rax;	\
+	testq	$-64, %rsi;	\
+	je	L(strnlen_ret)
+
+Which words independently of s + maxlen overflowing. So the
+second overflow check is unnecissary for correctness and
+just extra overhead in the common no overflow case.
+
+test-strlen.c, test-wcslen.c, test-strnlen.c and test-wcsnlen.c are
+all passing
+
+Signed-off-by: Noah Goldstein <goldstein.w.n@gmail.com>
+Reviewed-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ sysdeps/x86_64/multiarch/strlen-vec.S | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/sysdeps/x86_64/multiarch/strlen-vec.S b/sysdeps/x86_64/multiarch/strlen-vec.S
+index 439e486a..b7657282 100644
+--- a/sysdeps/x86_64/multiarch/strlen-vec.S
++++ b/sysdeps/x86_64/multiarch/strlen-vec.S
+@@ -71,19 +71,12 @@ L(n_nonzero):
+    suffice.  */
+ 	mov	%RSI_LP, %R10_LP
+ 	sar	$62, %R10_LP
+-	test	%R10_LP, %R10_LP
+ 	jnz	__wcslen_sse4_1
+ 	sal	$2, %RSI_LP
+ # endif
+ 
+-
+ /* Initialize long lived registers.  */
+-
+ 	add	%RDI_LP, %RSI_LP
+-# ifdef AS_WCSLEN
+-/* Check for overflow again from s + maxlen * sizeof(wchar_t).  */
+-	jbe	__wcslen_sse4_1
+-# endif
+ 	mov	%RSI_LP, %R10_LP
+ 	and	$-64, %R10_LP
+ 	mov	%RSI_LP, %R11_LP
+-- 
+GitLab
+

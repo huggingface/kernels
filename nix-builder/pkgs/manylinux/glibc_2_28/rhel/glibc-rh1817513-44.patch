@@ -1,0 +1,24 @@
+commit 083d644d420f49c992667f4c7a54848ad3dee54d
+Author: Michael Hudson-Doyle <michael.hudson@canonical.com>
+Date:   Wed Mar 11 13:05:25 2020 +1300
+
+    test-container: print errno when execvp fails
+    
+    I'm debugging a situation where lots of tests using test-container fail
+    and it's possible knowing errno would help understand why.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/support/test-container.c b/support/test-container.c
+index 9488ec7b4a824380..9eff8baeef0e9d8a 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -1145,7 +1145,7 @@ main (int argc, char **argv)
+   execvp (new_child_exec, new_child_proc);
+ 
+   /* Or don't run the child?  */
+-  FAIL_EXIT1 ("Unable to exec %s\n", new_child_exec);
++  FAIL_EXIT1 ("Unable to exec %s: %s\n", new_child_exec, strerror (errno));
+ 
+   /* Because gcc won't know error () never returns...  */
+   exit (EXIT_UNSUPPORTED);

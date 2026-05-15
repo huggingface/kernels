@@ -1,0 +1,33 @@
+commit dae3ed958c3d0090838e49ff4f78c201262b1cf0
+Author: Rafal Luzynski <digitalfreak@lingonborough.com>
+Date:   Tue Oct 2 23:34:18 2018 +0200
+
+    kl_GL: Fix spelling of Sunday, should be "sapaat" (bug 20209).
+    
+    Although CLDR says otherwise, it is confirmed by Oqaasileriffik, the
+    official Greenlandic language regulator, that this change is correct.
+    
+            [BZ #20209]
+            * localedata/locales/kl_GL: (abday): Fix spelling of Sun (Sunday),
+            should be "sap" rather than "sab".
+            (day): Fix spelling of Sunday, should be "sapaat" rather than
+            "sabaat".
+
+diff --git a/localedata/locales/kl_GL b/localedata/locales/kl_GL
+index 5ab14a31aade8644..5723ce7dcf9c5742 100644
+--- a/localedata/locales/kl_GL
++++ b/localedata/locales/kl_GL
+@@ -70,11 +70,11 @@ copy "da_DK"
+ END LC_NUMERIC
+ 
+ LC_TIME
+-abday    "sab";"ata";/
++abday    "sap";"ata";/
+          "mar";"pin";/
+          "sis";"tal";/
+          "arf"
+-day      "sabaat";/
++day      "sapaat";/
+          "ataasinngorneq";/
+          "marlunngorneq";/
+          "pingasunngorneq";/

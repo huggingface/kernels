@@ -1,0 +1,73 @@
+commit b50dd3bc8cbb1efe85399b03d7e6c0310c2ead84
+Author: Florian Weimer <fw@deneb.enyo.de>
+Date:   Mon Dec 31 22:04:36 2018 +0100
+
+    malloc: Always call memcpy in _int_realloc [BZ #24027]
+    
+    This commit removes the custom memcpy implementation from _int_realloc
+    for small chunk sizes.  The ncopies variable has the wrong type, and
+    an integer wraparound could cause the existing code to copy too few
+    elements (leaving the new memory region mostly uninitialized).
+    Therefore, removing this code fixes bug 24027.
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 7bfa66a56786d110..0234d968c0ce65a0 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -4532,11 +4532,6 @@ _int_realloc(mstate av, mchunkptr oldp, INTERNAL_SIZE_T oldsize,
+   mchunkptr        remainder;       /* extra space at end of newp */
+   unsigned long    remainder_size;  /* its size */
+ 
+-  unsigned long    copysize;        /* bytes to copy */
+-  unsigned int     ncopies;         /* INTERNAL_SIZE_T words to copy */
+-  INTERNAL_SIZE_T* s;               /* copy source */
+-  INTERNAL_SIZE_T* d;               /* copy destination */
+-
+   /* oldmem size */
+   if (__builtin_expect (chunksize_nomask (oldp) <= 2 * SIZE_SZ, 0)
+       || __builtin_expect (oldsize >= av->system_mem, 0))
+@@ -4604,43 +4599,7 @@ _int_realloc(mstate av, mchunkptr oldp, INTERNAL_SIZE_T oldsize,
+             }
+           else
+             {
+-              /*
+-                 Unroll copy of <= 36 bytes (72 if 8byte sizes)
+-                 We know that contents have an odd number of
+-                 INTERNAL_SIZE_T-sized words; minimally 3.
+-               */
+-
+-              copysize = oldsize - SIZE_SZ;
+-              s = (INTERNAL_SIZE_T *) (chunk2mem (oldp));
+-              d = (INTERNAL_SIZE_T *) (newmem);
+-              ncopies = copysize / sizeof (INTERNAL_SIZE_T);
+-              assert (ncopies >= 3);
+-
+-              if (ncopies > 9)
+-                memcpy (d, s, copysize);
+-
+-              else
+-                {
+-                  *(d + 0) = *(s + 0);
+-                  *(d + 1) = *(s + 1);
+-                  *(d + 2) = *(s + 2);
+-                  if (ncopies > 4)
+-                    {
+-                      *(d + 3) = *(s + 3);
+-                      *(d + 4) = *(s + 4);
+-                      if (ncopies > 6)
+-                        {
+-                          *(d + 5) = *(s + 5);
+-                          *(d + 6) = *(s + 6);
+-                          if (ncopies > 8)
+-                            {
+-                              *(d + 7) = *(s + 7);
+-                              *(d + 8) = *(s + 8);
+-                            }
+-                        }
+-                    }
+-                }
+-
++	      memcpy (newmem, chunk2mem (oldp), oldsize - SIZE_SZ);
+               _int_free (av, oldp, 1);
+               check_inuse_chunk (av, newp);
+               return chunk2mem (newp);

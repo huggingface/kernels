@@ -1,0 +1,25 @@
+commit c57afec0a9b318bb691e0f5fa4e9681cf30df7a4
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Apr 26 07:16:56 2019 +0200
+
+    elf: Link sotruss-lib.so with BIND_NOW for --enable-bind-now
+    
+    The audit module itself can be linked with BIND_NOW; it does not
+    affect its functionality.
+    
+    This should complete the leftovers from commit
+    2d6ab5df3b675e96ee587ae6a8c2ce004c6b1ba9 ("Document and fix
+    --enable-bind-now [BZ #21015]").
+
+diff --git a/elf/Makefile b/elf/Makefile
+index f5285b99e22fe84d..9194339836900b9d 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -133,6 +133,7 @@ install-others += $(inst_auditdir)/sotruss-lib.so
+ install-bin-script += sotruss
+ generated += sotruss
+ libof-sotruss-lib = extramodules
++LDFLAGS-sotruss-lib.so += $(z-now-$(bind-now))
+ $(objpfx)sotruss-lib.so: $(objpfx)sotruss-lib.os
+ 	$(build-module-asneeded)
+ $(objpfx)sotruss-lib.so: $(common-objpfx)libc.so $(objpfx)ld.so \

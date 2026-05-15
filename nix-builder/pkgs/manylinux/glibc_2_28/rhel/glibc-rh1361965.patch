@@ -1,0 +1,49 @@
+Backport of this Fedora Rawhide commit but split out into a distinct
+patch.
+    
+commit 72195d44855ab96875f117acb75c37f98dcb26a9
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Thu Jun 6 23:58:21 2019 -0400
+
+    locale: Fix C.UTF-8 ranges.
+    
+    The ellipsis range support only allows <Uxxxx> or <Uxxxxxxxx> as
+    valid unicode code points, otherwise it treats it as a symbol and
+    since we don't define the symbol the entire range is unused.
+
+diff --git a/localedata/locales/C b/localedata/locales/C
+index b2c2d1dc417cde69..30d9563213b8cb0f 100644
+--- a/localedata/locales/C
++++ b/localedata/locales/C
+@@ -43,21 +43,21 @@ order_start forward
+ <U0000>
+ ..
+ <UFFFF>
+-<U10000>
++<U00010000>
+ ..
+-<U1FFFF>
+-<U20000>
++<U0001FFFF>
++<U00020000>
+ ..
+-<U2FFFF>
+-<UE0000>
++<U0002FFFF>
++<U000E0000>
+ ..
+-<UEFFFF>
+-<UF0000>
++<U000EFFFF>
++<U000F0000>
+ ..
+-<UFFFFF>
+-<U100000>
++<U000FFFFF>
++<U00100000>
+ ..
+-<U10FFFF>
++<U0010FFFF>
+ UNDEFINED
+ order_end
+ END LC_COLLATE

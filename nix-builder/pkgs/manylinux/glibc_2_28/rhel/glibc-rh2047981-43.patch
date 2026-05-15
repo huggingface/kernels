@@ -1,0 +1,22 @@
+commit 62c888b3375f82a659a55ec66b1315efa2ed026a
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Thu Jun 2 10:59:14 2022 -0400
+
+    elf: Add #include <sys/param.h> for MAX usage.
+    
+    In _dl_audit_pltenter we use MAX and so need to include param.h.
+    
+    Tested on x86_64 and i686 without regression.
+
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index ec9b032eae37c103..e20b7b40e08d79e7 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -22,6 +22,7 @@
+ #include <dl-machine.h>
+ #include <dl-runtime.h>
+ #include <dl-fixup-attribute.h>
++#include <sys/param.h>
+ 
+ void
+ _dl_audit_activity_map (struct link_map *l, int action)

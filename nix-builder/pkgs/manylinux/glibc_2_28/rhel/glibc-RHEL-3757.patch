@@ -1,0 +1,97 @@
+commit 2ac579f9c25388a7734948d77b03e4dd10f35334
+Author: DJ Delorie <dj@redhat.com>
+Date:   Mon Sep 30 16:04:52 2019 -0400
+
+    Add run-one-test convenience target and makefile help text
+    
+    Adds "make test" for re-running just one test.  Also adds
+    "make help" for help with our Makefile targets, and adds a
+    mini-help when you just run "make".
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/Makefile b/Makefile
+index 6d73241bbc811c13..6518f62ee0676b0d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -26,8 +26,17 @@ include Makeconfig
+ 
+ 
+ # This is the default target; it makes everything except the tests.
+-.PHONY: all
+-all: lib others
++.PHONY: all help minihelp
++all: minihelp lib others
++
++help:
++	@sed '0,/^help-starts-here$$/d' Makefile.help
++
++minihelp:
++	@echo
++	@echo type \"make help\" for help with common glibc makefile targets
++	@echo
++
+ 
+ ifneq ($(AUTOCONF),no)
+ 
+@@ -503,3 +512,12 @@ FORCE:
+ 
+ iconvdata/% localedata/% po/%: FORCE
+ 	$(MAKE) $(PARALLELMFLAGS) -C $(@D) $(@F)
++
++# Convenience target to rerun one test, from the top of the build tree
++# Example: make test t=wcsmbs/test-wcsnlen
++.PHONY: test
++test :
++	@-rm -f $(objpfx)$t.out
++	$(MAKE) subdir=$(dir $t) -C $(dir $t) ..=../ $(objpfx)$t.out
++	@cat $(objpfx)$t.test-result
++	@cat $(objpfx)$t.out
+diff --git a/Makefile.help b/Makefile.help
+new file mode 100644
+index 0000000000000000..3b043bce013cc2b4
+--- /dev/null
++++ b/Makefile.help
+@@ -0,0 +1,42 @@
++# Copyright (C) 2019 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <https://www.gnu.org/licenses/>.
++
++This is the file that gets printed when the user runs "make help",
++starting just after the "help-starts-here" line.
++
++help-starts-here
++
++all
++	The usual default; builds everything but doesn't run the
++	tests.
++
++check (or tests)
++	Runs the standard set of tests.
++
++test
++	Runs one test.  Use like this:
++		make test t=wcsmbs/test-wcsnlen
++	Note that this will rebuild the test if needed, but will not
++	rebuild what "make all" would have rebuilt.
++
++--
++Other useful hints:
++
++builddir$ rm testroot.pristine/install.stamp
++	Forces the testroot to be reinstalled the next time you run
++	the testsuite (or just rm -rf testroot.pristine)
++

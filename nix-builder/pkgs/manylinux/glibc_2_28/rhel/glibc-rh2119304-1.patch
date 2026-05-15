@@ -1,0 +1,49 @@
+Downstream-only patch to move the recently added members (from
+glibc-rh2047981-5.patch and glibc-rh2047981-6.patch) to the end
+of _rtld_global_ro.  This avoids changing the offset of
+GLRO (dl_naudit).
+
+Without this change, the audit invocation loop in the old
+__libc_start_main function in a not-yet-updated version of libc.so.6
+reads a non-zero garbage value for GLRO (dl_naudit), assumes that
+auditing is active, and reads further garbage pointers, leading to
+to a crash.  Preserving the old offset of GLRO (dl_naudit) avoids
+that.  This works because RPM updates /lib64/ld-* before
+/lib64/libc.so.6 because it sorts earlier (except on POWER9 due
+to the glibc-hwcaps/power9 multilib).
+
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 9dec9e3d3b6d6aa2..5e56550a4d556fa7 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -648,6 +648,15 @@ struct rtld_global_ro
+   void *(*_dl_open) (const char *file, int mode, const void *caller_dlopen,
+ 		     Lmid_t nsid, int argc, char *argv[], char *env[]);
+   void (*_dl_close) (void *map);
++  void *(*_dl_tls_get_addr_soft) (struct link_map *);
++#ifdef HAVE_DL_DISCOVER_OSVERSION
++  int (*_dl_discover_osversion) (void);
++#endif
++
++  /* List of auditing interfaces.  */
++  struct audit_ifaces *_dl_audit;
++  unsigned int _dl_naudit;
++
+   /* libdl in a secondary namespace (after dlopen) must use
+      _dl_catch_error from the main namespace, so it has to be
+      exported in some way.  */
+@@ -657,14 +666,6 @@ struct rtld_global_ro
+   /* libdl in a secondary namespace must use free from the base
+      namespace.  */
+   void (*_dl_error_free) (void *);
+-  void *(*_dl_tls_get_addr_soft) (struct link_map *);
+-#ifdef HAVE_DL_DISCOVER_OSVERSION
+-  int (*_dl_discover_osversion) (void);
+-#endif
+-
+-  /* List of auditing interfaces.  */
+-  struct audit_ifaces *_dl_audit;
+-  unsigned int _dl_naudit;
+ };
+ # define __rtld_global_attribute__
+ # if IS_IN (rtld)

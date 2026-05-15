@@ -1,0 +1,140 @@
+commit 38560563587ad8eafa700c56800ff844f18fbad1
+Author: Naohiro Tamura <naohirot@fujitsu.com>
+Date:   Thu May 20 07:34:37 2021 +0000
+
+    aarch64: Added Vector Length Set test helper script
+    
+    This patch is a test helper script to change Vector Length for child
+    process. This script can be used as test-wrapper for 'make check'.
+    
+    Usage examples:
+    
+    ~/build$ make check subdirs=string \
+    test-wrapper='~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 16'
+    
+    ~/build$ ~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 16 \
+    make test t=string/test-memcpy
+    
+    ~/build$ ~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 32 \
+    ./debugglibc.sh string/test-memmove
+    
+    ~/build$ ~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 64 \
+    ./testrun.sh string/test-memset
+
+diff --git a/INSTALL b/INSTALL
+index 065565093bd76d5b..b3a4370f592c5047 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -387,6 +387,10 @@ the same syntax as 'test-wrapper-env', the only difference in its
+ semantics being starting with an empty set of environment variables
+ rather than the ambient set.
+ 
++   For AArch64 with SVE, when testing the GNU C Library, 'test-wrapper'
++may be set to "SRCDIR/sysdeps/unix/sysv/linux/aarch64/vltest.py
++VECTOR-LENGTH" to change Vector Length.
++
+ Installing the C Library
+ ========================
+ 
+diff --git a/manual/install.texi b/manual/install.texi
+index 7e9f2be150e6f98a..c262fd56d0cef67b 100644
+--- a/manual/install.texi
++++ b/manual/install.texi
+@@ -425,6 +425,9 @@ use has the same syntax as @samp{test-wrapper-env}, the only
+ difference in its semantics being starting with an empty set of
+ environment variables rather than the ambient set.
+ 
++For AArch64 with SVE, when testing @theglibc{}, @samp{test-wrapper}
++may be set to "@var{srcdir}/sysdeps/unix/sysv/linux/aarch64/vltest.py
++@var{vector-length}" to change Vector Length.
+ 
+ @node Running make install
+ @appendixsec Installing the C Library
+diff --git a/sysdeps/unix/sysv/linux/aarch64/vltest.py b/sysdeps/unix/sysv/linux/aarch64/vltest.py
+new file mode 100755
+index 0000000000000000..bed62ad151e06868
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/vltest.py
+@@ -0,0 +1,82 @@
++#!/usr/bin/python3
++# Set Scalable Vector Length test helper
++# Copyright (C) 2021 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <https://www.gnu.org/licenses/>.
++"""Set Scalable Vector Length test helper.
++
++Set Scalable Vector Length for child process.
++
++examples:
++
++~/build$ make check subdirs=string \
++test-wrapper='~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 16'
++
++~/build$ ~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 16 \
++make test t=string/test-memcpy
++
++~/build$ ~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 32 \
++./debugglibc.sh string/test-memmove
++
++~/build$ ~/glibc/sysdeps/unix/sysv/linux/aarch64/vltest.py 64 \
++./testrun.sh string/test-memset
++"""
++import argparse
++from ctypes import cdll, CDLL
++import os
++import sys
++
++EXIT_SUCCESS = 0
++EXIT_FAILURE = 1
++EXIT_UNSUPPORTED = 77
++
++AT_HWCAP = 16
++HWCAP_SVE = (1 << 22)
++
++PR_SVE_GET_VL = 51
++PR_SVE_SET_VL = 50
++PR_SVE_SET_VL_ONEXEC = (1 << 18)
++PR_SVE_VL_INHERIT = (1 << 17)
++PR_SVE_VL_LEN_MASK = 0xffff
++
++def main(args):
++    libc = CDLL("libc.so.6")
++    if not libc.getauxval(AT_HWCAP) & HWCAP_SVE:
++        print("CPU doesn't support SVE")
++        sys.exit(EXIT_UNSUPPORTED)
++
++    libc.prctl(PR_SVE_SET_VL,
++               args.vl[0] | PR_SVE_SET_VL_ONEXEC | PR_SVE_VL_INHERIT)
++    os.execvp(args.args[0], args.args)
++    print("exec system call failure")
++    sys.exit(EXIT_FAILURE)
++
++if __name__ == '__main__':
++    parser = argparse.ArgumentParser(description=
++            "Set Scalable Vector Length test helper",
++            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
++
++    # positional argument
++    parser.add_argument("vl", nargs=1, type=int,
++                        choices=range(16, 257, 16),
++                        help=('vector length '\
++                              'which is multiples of 16 from 16 to 256'))
++    # remainDer arguments
++    parser.add_argument('args', nargs=argparse.REMAINDER,
++                        help=('args '\
++                              'which is passed to child process'))
++    args = parser.parse_args()
++    main(args)

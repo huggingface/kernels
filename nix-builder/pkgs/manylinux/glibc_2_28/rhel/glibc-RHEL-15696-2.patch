@@ -1,0 +1,230 @@
+From b304fc201d2f6baf52ea790df8643e99772243cd Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 21 Jan 2019 11:25:56 -0800
+Subject: [PATCH] x86-64 memcmp/wmemcmp: Properly handle the length parameter
+ [BZ# 24097]
+Content-type: text/plain; charset=UTF-8
+
+On x32, the size_t parameter may be passed in the lower 32 bits of a
+64-bit register with the non-zero upper 32 bits.  The string/memory
+functions written in assembly can only use the lower 32 bits of a
+64-bit register as length or must clear the upper 32 bits before using
+the full 64-bit register for length.
+
+This pach fixes memcmp/wmemcmp for x32.  Tested on x86-64 and x32.  On
+x86-64, libc.so is the same with and withou the fix.
+
+	[BZ# 24097]
+	CVE-2019-6488
+	* sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S: Use RDX_LP for
+	length.  Clear the upper 32 bits of RDX register.
+	* sysdeps/x86_64/multiarch/memcmp-sse4.S: Likewise.
+	* sysdeps/x86_64/multiarch/memcmp-ssse3.S: Likewise.
+	* sysdeps/x86_64/x32/Makefile (tests): Add tst-size_t-memcmp and
+	tst-size_t-wmemcmp.
+	* sysdeps/x86_64/x32/tst-size_t-memcmp.c: New file.
+	* sysdeps/x86_64/x32/tst-size_t-wmemcmp.c: Likewise.
+---
+ sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S |  7 +-
+ sysdeps/x86_64/multiarch/memcmp-sse4.S       |  9 ++-
+ sysdeps/x86_64/multiarch/memcmp-ssse3.S      |  7 +-
+ sysdeps/x86_64/x32/Makefile                  |  4 +-
+ sysdeps/x86_64/x32/tst-size_t-memcmp.c       | 76 ++++++++++++++++++++
+ sysdeps/x86_64/x32/tst-size_t-wmemcmp.c      | 20 ++++++
+ 6 files changed, 114 insertions(+), 9 deletions(-)
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-memcmp.c
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-wmemcmp.c
+
+Conflicts:
+	ChangeLog
+	(removed)
+
+diff --git a/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S b/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
+index 30f764c3..e3a35b89 100644
+--- a/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
++++ b/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
+@@ -58,9 +58,12 @@
+ 	.section .text.avx,"ax",@progbits
+ ENTRY (MEMCMP)
+ # ifdef USE_AS_WMEMCMP
+-	shl	$2, %rdx
++	shl	$2, %RDX_LP
++# elif defined __ILP32__
++	/* Clear the upper 32 bits.  */
++	movl	%edx, %edx
+ # endif
+-	cmpq	$VEC_SIZE, %rdx
++	cmp	$VEC_SIZE, %RDX_LP
+ 	jb	L(less_vec)
+ 
+ 	/* From VEC to 2 * VEC.  No branch when size == VEC_SIZE.  */
+diff --git a/sysdeps/x86_64/multiarch/memcmp-sse4.S b/sysdeps/x86_64/multiarch/memcmp-sse4.S
+index 8e164f2c..302900f5 100644
+--- a/sysdeps/x86_64/multiarch/memcmp-sse4.S
++++ b/sysdeps/x86_64/multiarch/memcmp-sse4.S
+@@ -42,13 +42,16 @@
+ 	.section .text.sse4.1,"ax",@progbits
+ ENTRY (MEMCMP)
+ # ifdef USE_AS_WMEMCMP
+-	shl	$2, %rdx
++	shl	$2, %RDX_LP
++# elif defined __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
+ # endif
+ 	pxor	%xmm0, %xmm0
+-	cmp	$79, %rdx
++	cmp	$79, %RDX_LP
+ 	ja	L(79bytesormore)
+ # ifndef USE_AS_WMEMCMP
+-	cmp	$1, %rdx
++	cmp	$1, %RDX_LP
+ 	je	L(firstbyte)
+ # endif
+ 	add	%rdx, %rsi
+diff --git a/sysdeps/x86_64/multiarch/memcmp-ssse3.S b/sysdeps/x86_64/multiarch/memcmp-ssse3.S
+index 6f76c641..69d030fc 100644
+--- a/sysdeps/x86_64/multiarch/memcmp-ssse3.S
++++ b/sysdeps/x86_64/multiarch/memcmp-ssse3.S
+@@ -33,9 +33,12 @@
+ 	atom_text_section
+ ENTRY (MEMCMP)
+ # ifdef USE_AS_WMEMCMP
+-	shl	$2, %rdx
+-	test	%rdx, %rdx
++	shl	$2, %RDX_LP
++	test	%RDX_LP, %RDX_LP
+ 	jz	L(equal)
++# elif defined __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
+ # endif
+ 	mov	%rdx, %rcx
+ 	mov	%rdi, %rdx
+diff --git a/sysdeps/x86_64/x32/Makefile b/sysdeps/x86_64/x32/Makefile
+index 7d528889..ddec7f04 100644
+--- a/sysdeps/x86_64/x32/Makefile
++++ b/sysdeps/x86_64/x32/Makefile
+@@ -6,9 +6,9 @@ CFLAGS-s_llround.c += -fno-builtin-lround
+ endif
+ 
+ ifeq ($(subdir),string)
+-tests += tst-size_t-memchr
++tests += tst-size_t-memchr tst-size_t-memcmp
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+-tests += tst-size_t-wmemchr
++tests += tst-size_t-wmemchr tst-size_t-wmemcmp
+ endif
+diff --git a/sysdeps/x86_64/x32/tst-size_t-memcmp.c b/sysdeps/x86_64/x32/tst-size_t-memcmp.c
+new file mode 100644
+index 00000000..9bd6fdb4
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-memcmp.c
+@@ -0,0 +1,76 @@
++/* Test memcmp with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define TEST_MAIN
++#ifdef WIDE
++# define TEST_NAME "wmemcmp"
++#else
++# define TEST_NAME "memcmp"
++#endif
++
++#include "test-size_t.h"
++
++#ifdef WIDE
++# include <inttypes.h>
++# include <wchar.h>
++
++# define MEMCMP wmemcmp
++# define CHAR wchar_t
++#else
++# define MEMCMP memcmp
++# define CHAR char
++#endif
++
++IMPL (MEMCMP, 1)
++
++typedef int (*proto_t) (const CHAR *, const CHAR *, size_t);
++
++static int
++__attribute__ ((noinline, noclone))
++do_memcmp (parameter_t a, parameter_t b)
++{
++  return CALL (&b, a.p, b.p, a.len);
++}
++
++static int
++test_main (void)
++{
++  test_init ();
++
++  parameter_t dest = { { page_size / sizeof (CHAR) }, buf1 };
++  parameter_t src = { { 0 }, buf2 };
++
++  memcpy (buf1, buf2, page_size);
++
++  int ret = 0;
++  FOR_EACH_IMPL (impl, 0)
++    {
++      src.fn = impl->fn;
++      int res = do_memcmp (dest, src);
++      if (res)
++	{
++	  error (0, 0, "Wrong result in function %s: %i != 0",
++		 impl->name, res);
++	  ret = 1;
++	}
++    }
++
++  return ret ? EXIT_FAILURE : EXIT_SUCCESS;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/x86_64/x32/tst-size_t-wmemcmp.c b/sysdeps/x86_64/x32/tst-size_t-wmemcmp.c
+new file mode 100644
+index 00000000..e8b5ffd0
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-wmemcmp.c
+@@ -0,0 +1,20 @@
++/* Test wmemcmp with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define WIDE 1
++#include "tst-size_t-memcmp.c"
+-- 
+GitLab
+

@@ -1,0 +1,44 @@
+From 8b9a0af8ca012217bf90d1dc0694f85b49ae09da Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Tue, 18 Jul 2023 10:27:59 -0500
+Subject: [PATCH] [PATCH v1] x86: Use `3/4*sizeof(per-thread-L3)` as low bound
+ for NT threshold.
+Content-type: text/plain; charset=UTF-8
+
+On some machines we end up with incomplete cache information. This can
+make the new calculation of `sizeof(total-L3)/custom-divisor` end up
+lower than intended (and lower than the prior value). So reintroduce
+the old bound as a lower bound to avoid potentially regressing code
+where we don't have complete information to make the decision.
+Reviewed-by: DJ Delorie <dj@redhat.com>
+---
+ sysdeps/x86/dl-cacheinfo.h | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+[DJ - ported to C8S]
+
+diff -rup b2/sysdeps/x86/cacheinfo.h b3/sysdeps/x86/cacheinfo.h
+--- b2/sysdeps/x86/cacheinfo.h	2023-08-08 13:55:16.474680016 -0400
++++ b3/sysdeps/x86/cacheinfo.h	2023-08-08 13:59:14.507988958 -0400
+@@ -401,12 +401,20 @@ init_cacheinfo (void)
+      provides proper LRU hints so that the maximum thrashing
+      capped at 1/associativity. */
+   unsigned long int non_temporal_threshold = shared / 4;
++  /* If the computed non_temporal_threshold <= 3/4 * per-thread L3, we most
++     likely have incorrect/incomplete cache info in which case, default to
++     3/4 * per-thread L3 to avoid regressions.  */
++  unsigned long int non_temporal_threshold_lowbound
++      = shared_per_thread * 3 / 4;
++  if (non_temporal_threshold < non_temporal_threshold_lowbound)
++    non_temporal_threshold = non_temporal_threshold_lowbound;
++
+   /* If no ERMS, we use the per-thread L3 chunking. Normal cacheable stores run
+      a higher risk of actually thrashing the cache as they don't have a HW LRU
+      hint. As well, their performance in highly parallel situations is
+      noticeably worse.  */
+   if (!CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+-    non_temporal_threshold = shared_per_thread * 3 / 4;
++    non_temporal_threshold = non_temporal_threshold_lowbound;
+ 
+   __x86_shared_non_temporal_threshold
+     = (cpu_features->non_temporal_threshold != 0

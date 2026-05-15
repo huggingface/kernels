@@ -1,0 +1,39 @@
+commit 02ca25fef2785974011e9c5beecc99b900b69fd7
+Author: Fabian Vogt <fvogt@suse.de>
+Date:   Wed Jul 27 11:44:07 2022 +0200
+
+    nscd: Fix netlink cache invalidation if epoll is used [BZ #29415]
+    
+    Processes cache network interface information such as whether IPv4 or IPv6
+    are enabled. This is only checked again if the "netlink timestamp" provided
+    by nscd changed, which is triggered by netlink socket activity.
+    
+    However, in the epoll handler for the netlink socket, it was missed to
+    assign the new timestamp to the nscd database. The handler for plain poll
+    did that properly, copy that over.
+    
+    This bug caused that e.g. processes which started before network
+    configuration got unusuable addresses from getaddrinfo, like IPv6 only even
+    though only IPv4 is available:
+    https://gitlab.freedesktop.org/NetworkManager/NetworkManager/-/issues/1041
+    
+    It's a bit hard to reproduce, so I verified this by checking the timestamp
+    on calls to __check_pf manually. Without this patch it's stuck at 1, now
+    it's increasing on network changes as expected.
+    
+    Signed-off-by: Fabian Vogt <fvogt@suse.de>
+
+diff --git a/nscd/connections.c b/nscd/connections.c
+index 98182007646a33d5..19039bdbb210466a 100644
+--- a/nscd/connections.c
++++ b/nscd/connections.c
+@@ -2286,7 +2286,8 @@ main_loop_epoll (int efd)
+ 					     sizeof (buf))) != -1)
+ 	      ;
+ 
+-	    __bump_nl_timestamp ();
++	    dbs[hstdb].head->extra_data[NSCD_HST_IDX_CONF_TIMESTAMP]
++	      = __bump_nl_timestamp ();
+ 	  }
+ # endif
+ 	else

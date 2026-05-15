@@ -1,0 +1,253 @@
+commit c7e7cd266ed123b6dfb722f599934ca5dcfd3e93
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:18 2018 +0100
+
+    S390: Refactor wcsnlen ifunc handling.
+    
+    The ifunc handling for wcsnlen is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    Glibc internal calls will use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcsnlen variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcsnlen variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcsnlen.
+            * sysdeps/s390/multiarch/wcsnlen-c.c: Move to ...
+            * sysdeps/s390/wcsnlen-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcsnlen-vx.S: Move to ...
+            * sysdeps/s390/wcsnlen-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcsnlen.c: Move to ...
+            * sysdeps/s390/wcsnlen.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcsnlen.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 65e89118936bb668..f5983815479a76da 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -60,5 +60,6 @@ sysdep_routines += bzero memset memset-z900 \
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcslen wcslen-vx wcslen-c
++sysdep_routines += wcslen wcslen-vx wcslen-c \
++		   wcsnlen wcsnlen-vx wcsnlen-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcsnlen.h b/sysdeps/s390/ifunc-wcsnlen.h
+new file mode 100644
+index 0000000000000000..b5b21da2f17d9cd9
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcsnlen.h
+@@ -0,0 +1,53 @@
++/* wcsnlen variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSNLEN_IFUNC	1
++#else
++# define HAVE_WCSNLEN_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSNLEN_IFUNC_AND_VX_SUPPORT HAVE_WCSNLEN_IFUNC
++#else
++# define HAVE_WCSNLEN_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSNLEN_DEFAULT	WCSNLEN_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSNLEN_C		1
++# define HAVE_WCSNLEN_Z13	1
++#else
++# define WCSNLEN_DEFAULT	WCSNLEN_C
++# define HAVE_WCSNLEN_C		1
++# define HAVE_WCSNLEN_Z13	HAVE_WCSNLEN_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSNLEN_C
++# define WCSNLEN_C		__wcsnlen_c
++#else
++# define WCSNLEN_C		NULL
++#endif
++
++#if HAVE_WCSNLEN_Z13
++# define WCSNLEN_Z13		__wcsnlen_vx
++#else
++# define WCSNLEN_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 421d40d020b81560..ce2e7ce5f4eef0fa 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcsnlen wcsnlen-vx wcsnlen-c \
+-		   wcscpy wcscpy-vx wcscpy-c \
++sysdep_routines += wcscpy wcscpy-vx wcscpy-c \
+ 		   wcpcpy wcpcpy-vx wcpcpy-c \
+ 		   wcsncpy wcsncpy-vx wcsncpy-c \
+ 		   wcpncpy wcpncpy-vx wcpncpy-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 7bf5f14c015b54fe..c199fd0e0b43e4b4 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -47,6 +47,7 @@
+ #include <ifunc-memccpy.h>
+ #include <ifunc-memrchr.h>
+ #include <ifunc-wcslen.h>
++#include <ifunc-wcsnlen.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -437,6 +438,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSLEN_IFUNC  */
+ 
++#if HAVE_WCSNLEN_IFUNC
++    IFUNC_IMPL (i, name, wcsnlen,
++# if HAVE_WCSNLEN_Z13
++		IFUNC_IMPL_ADD (array, i, wcsnlen,
++				dl_hwcap & HWCAP_S390_VX, WCSNLEN_Z13)
++# endif
++# if HAVE_WCSNLEN_C
++		IFUNC_IMPL_ADD (array, i, wcsnlen, 1, WCSNLEN_C)
++# endif
++		)
++#endif /* HAVE_WCSNLEN_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -445,8 +458,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcsnlen);
+-
+   IFUNC_VX_IMPL (wcscpy);
+ 
+   IFUNC_VX_IMPL (wcpcpy);
+diff --git a/sysdeps/s390/multiarch/wcsnlen-c.c b/sysdeps/s390/wcsnlen-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/wcsnlen-c.c
+rename to sysdeps/s390/wcsnlen-c.c
+index 8f43f5104f2eab3f..7495a6f97cfeca62 100644
+--- a/sysdeps/s390/multiarch/wcsnlen-c.c
++++ b/sysdeps/s390/wcsnlen-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSNLEN  __wcsnlen_c
++#include <ifunc-wcsnlen.h>
++
++#if HAVE_WCSNLEN_C
++# if HAVE_WCSNLEN_IFUNC || HAVE_WCSNLEN_Z13
++#  define WCSNLEN WCSNLEN_C
++# endif
+ 
+-# include <wchar.h>
+-extern __typeof (__wcsnlen) __wcsnlen_c;
+ # include <wcsmbs/wcsnlen.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcsnlen-vx.S b/sysdeps/s390/wcsnlen-vx.S
+similarity index 95%
+rename from sysdeps/s390/multiarch/wcsnlen-vx.S
+rename to sysdeps/s390/wcsnlen-vx.S
+index 420f29fbc0d2965a..47f4ca82840538d9 100644
+--- a/sysdeps/s390/multiarch/wcsnlen-vx.S
++++ b/sysdeps/s390/wcsnlen-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcsnlen.h>
++#if HAVE_WCSNLEN_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -34,7 +35,7 @@
+    -r5=current_len and return_value
+    -v16=part of s
+ */
+-ENTRY(__wcsnlen_vx)
++ENTRY(WCSNLEN_Z13)
+ 
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+@@ -146,6 +147,11 @@ ENTRY(__wcsnlen_vx)
+ 	j	.Llt64
+ 
+ .Lfallback:
+-	jg	__wcsnlen_c
+-END(__wcsnlen_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSNLEN_C
++END(WCSNLEN_Z13)
++
++# if ! HAVE_WCSNLEN_IFUNC
++strong_alias (WCSNLEN_Z13, __wcsnlen)
++weak_alias (__wcsnlen, wcsnlen)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcsnlen.c b/sysdeps/s390/wcsnlen.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/wcsnlen.c
+rename to sysdeps/s390/wcsnlen.c
+index 5234074b1fce8ca1..b5c8ad9fde5a9752 100644
+--- a/sysdeps/s390/multiarch/wcsnlen.c
++++ b/sysdeps/s390/wcsnlen.c
+@@ -16,13 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcsnlen.h>
++
++#if HAVE_WCSNLEN_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc (__wcsnlen)
+-weak_alias (__wcsnlen, wcsnlen)
++# if HAVE_WCSNLEN_C
++extern __typeof (__wcsnlen) WCSNLEN_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcsnlen.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_WCSNLEN_Z13
++extern __typeof (__wcsnlen) WCSNLEN_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__wcsnlen, __wcsnlen,
++		      (HAVE_WCSNLEN_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSNLEN_Z13
++		      : WCSNLEN_DEFAULT
++		      )
++weak_alias (__wcsnlen, wcsnlen)
++#endif

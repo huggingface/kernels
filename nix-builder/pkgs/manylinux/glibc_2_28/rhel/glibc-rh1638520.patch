@@ -1,0 +1,35 @@
+commit ed643089cd3251038863d32e67ec47b94cd557f3
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Tue Oct 9 14:31:28 2018 +0100
+
+    Increase timeout of libio/tst-readline
+    
+    Increase timeout from the default 20s to 100s. This test makes close to
+    20 million syscalls with distribution:
+    
+    12327675 read
+     4143204 lseek
+      929475 close
+      929471 openat
+       92817 fstat
+        1431 write
+    ...
+    
+    The default timeout assumes each can finish in 1us on average which
+    is not true on slow machines.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    
+            * libio/tst-readline.c (TIMEOUT): Define.
+
+diff --git a/libio/tst-readline.c b/libio/tst-readline.c
+index 9322ef68da5e38a9..63f5227760d88c63 100644
+--- a/libio/tst-readline.c
++++ b/libio/tst-readline.c
+@@ -232,5 +232,6 @@ do_test (void)
+   return 0;
+ }
+ 
++#define TIMEOUT 100
+ #define PREPARE prepare
+ #include <support/test-driver.c>

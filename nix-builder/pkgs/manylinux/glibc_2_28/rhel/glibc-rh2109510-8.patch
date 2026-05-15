@@ -1,0 +1,23 @@
+commit 46baeb61e16511f26db1b255e19dc9163f590367
+Author: Fangrui Song <maskray@google.com>
+Date:   Tue Oct 19 09:58:16 2021 -0700
+
+    glibcextract.py: Place un-assemblable @@@ in a comment
+    
+    Unlike GCC, Clang parses asm statements and verifies they are valid
+    instructions/directives. Place the magic @@@ into a comment to avoid
+    a parse error.
+
+diff --git a/scripts/glibcextract.py b/scripts/glibcextract.py
+index 06f712ad115e0f9e..8f2246aae6a9dfb7 100644
+--- a/scripts/glibcextract.py
++++ b/scripts/glibcextract.py
+@@ -45,7 +45,7 @@ def compute_c_consts(sym_data, cc):
+             continue
+         name = arg[0]
+         value = arg[1]
+-        out_lines.append('asm ("@@@name@@@%s@@@value@@@%%0@@@end@@@" '
++        out_lines.append('asm ("/* @@@name@@@%s@@@value@@@%%0@@@end@@@ */" '
+                          ': : \"i\" ((long int) (%s)));'
+                          % (name, value))
+     out_lines.append('}')

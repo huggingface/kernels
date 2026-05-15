@@ -1,0 +1,84 @@
+From 1b992204f68af851e905c16016756fd4421e1934 Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Sun, 23 May 2021 19:43:24 -0400
+Subject: [PATCH] x86: Improve memmove-vec-unaligned-erms.S
+Content-type: text/plain; charset=UTF-8
+
+This patch changes the condition for copy 4x VEC so that if length is
+exactly equal to 4 * VEC_SIZE it will use the 4x VEC case instead of
+8x VEC case.
+
+Results For Skylake memcpy-avx2-erms
+size, al1 , al2 , Cur T   , New T   , Win , New / Cur
+128 , 0   , 0   , 9.137   , 6.873   , New , 75.22
+128 , 7   , 0   , 12.933  , 7.732   , New , 59.79
+128 , 0   , 7   , 11.852  , 6.76    , New , 57.04
+128 , 7   , 7   , 12.587  , 6.808   , New , 54.09
+
+Results For Icelake memcpy-evex-erms
+size, al1 , al2 , Cur T   , New T   , Win , New / Cur
+128 , 0   , 0   , 9.963   , 5.416   , New , 54.36
+128 , 7   , 0   , 16.467  , 8.061   , New , 48.95
+128 , 0   , 7   , 14.388  , 7.644   , New , 53.13
+128 , 7   , 7   , 14.546  , 7.642   , New , 52.54
+
+Results For Tigerlake memcpy-evex-erms
+size, al1 , al2 , Cur T   , New T   , Win , New / Cur
+128 , 0   , 0   , 8.979   , 4.95    , New , 55.13
+128 , 7   , 0   , 14.245  , 7.122   , New , 50.0
+128 , 0   , 7   , 12.668  , 6.675   , New , 52.69
+128 , 7   , 7   , 13.042  , 6.802   , New , 52.15
+
+Results For Skylake memmove-avx2-erms
+size, al1 , al2 , Cur T   , New T   , Win , New / Cur
+128 , 0   , 32  , 6.181   , 5.691   , New , 92.07
+128 , 32  , 0   , 6.165   , 5.752   , New , 93.3
+128 , 0   , 7   , 13.923  , 9.37    , New , 67.3
+128 , 7   , 0   , 12.049  , 10.182  , New , 84.5
+
+Results For Icelake memmove-evex-erms
+size, al1 , al2 , Cur T   , New T   , Win , New / Cur
+128 , 0   , 32  , 5.479   , 4.889   , New , 89.23
+128 , 32  , 0   , 5.127   , 4.911   , New , 95.79
+128 , 0   , 7   , 18.885  , 13.547  , New , 71.73
+128 , 7   , 0   , 15.565  , 14.436  , New , 92.75
+
+Results For Tigerlake memmove-evex-erms
+size, al1 , al2 , Cur T   , New T   , Win , New / Cur
+128 , 0   , 32  , 5.275   , 4.815   , New , 91.28
+128 , 32  , 0   , 5.376   , 4.565   , New , 84.91
+128 , 0   , 7   , 19.426  , 14.273  , New , 73.47
+128 , 7   , 0   , 15.924  , 14.951  , New , 93.89
+
+Signed-off-by: Noah Goldstein <goldstein.w.n@gmail.com>
+---
+ sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S b/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S
+index 3e2dd6bc..572cef04 100644
+--- a/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S
+@@ -417,8 +417,8 @@ L(more_2x_vec):
+ 	cmpq	$(VEC_SIZE * 8), %rdx
+ 	ja	L(more_8x_vec)
+ 	cmpq	$(VEC_SIZE * 4), %rdx
+-	jb	L(last_4x_vec)
+-	/* Copy from 4 * VEC to 8 * VEC, inclusively. */
++	jbe	L(last_4x_vec)
++	/* Copy from 4 * VEC + 1 to 8 * VEC, inclusively. */
+ 	VMOVU	(%rsi), %VEC(0)
+ 	VMOVU	VEC_SIZE(%rsi), %VEC(1)
+ 	VMOVU	(VEC_SIZE * 2)(%rsi), %VEC(2)
+@@ -437,7 +437,7 @@ L(more_2x_vec):
+ 	VMOVU	%VEC(7), -(VEC_SIZE * 4)(%rdi,%rdx)
+ 	VZEROUPPER_RETURN
+ L(last_4x_vec):
+-	/* Copy from 2 * VEC to 4 * VEC. */
++	/* Copy from 2 * VEC + 1 to 4 * VEC, inclusively. */
+ 	VMOVU	(%rsi), %VEC(0)
+ 	VMOVU	VEC_SIZE(%rsi), %VEC(1)
+ 	VMOVU	-VEC_SIZE(%rsi,%rdx), %VEC(2)
+-- 
+GitLab
+

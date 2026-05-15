@@ -1,0 +1,39 @@
+From 1d9f99ce1b3788d1897cb53a76d57e973111b8fe Mon Sep 17 00:00:00 2001
+From: Naohiro Tamura <naohirot@fujitsu.com>
+Date: Fri, 27 Aug 2021 05:03:04 +0000
+Subject: [PATCH] AArch64: Update A64FX memset not to degrade at 16KB
+
+This patch updates unroll8 code so as not to degrade at the peak
+performance 16KB for both FX1000 and FX700.
+
+Inserted 2 instructions at the beginning of the unroll8 loop,
+cmp and branch, are a workaround that is found heuristically.
+
+Reviewed-by: Wilco Dijkstra <Wilco.Dijkstra@arm.com>
+---
+ sysdeps/aarch64/multiarch/memset_a64fx.S | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/sysdeps/aarch64/multiarch/memset_a64fx.S b/sysdeps/aarch64/multiarch/memset_a64fx.S
+index 7bf759b6a7..f7dfdaace7 100644
+--- a/sysdeps/aarch64/multiarch/memset_a64fx.S
++++ b/sysdeps/aarch64/multiarch/memset_a64fx.S
+@@ -96,7 +96,14 @@ L(vl_agnostic): // VL Agnostic
+ L(unroll8):
+ 	sub	count, count, tmp1
+ 	.p2align 4
+-1:	st1b_unroll 0, 7
++	// The 2 instructions at the beginning of the following loop,
++	// cmp and branch, are a workaround so as not to degrade at
++	// the peak performance 16KB.
++	// It is found heuristically and the branch condition, b.ne,
++	// is chosen intentionally never to jump.
++1:	cmp	xzr, xzr
++	b.ne	1b
++	st1b_unroll 0, 7
+ 	add	dst, dst, tmp1
+ 	subs	count, count, tmp1
+ 	b.hi	1b
+-- 
+2.31.1
+

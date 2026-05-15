@@ -1,0 +1,200 @@
+commit 3db85a9814784a74536a1f0e7b7ddbfef7dc84bb
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Jun 20 11:57:18 2019 -0500
+
+    powerpc: Use faster means to access FPSCR when possible in some cases
+    
+    Using 'mffs' instruction to read the Floating Point Status Control Register
+    (FPSCR) can force a processor flush in some cases, with undesirable
+    performance impact.  If the values of the bits in the FPSCR which force the
+    flush are not needed, an instruction that is new to POWER9 (ISA version 3.0),
+    'mffsl' can be used instead.
+    
+    Cases included:  get_rounding_mode, fegetround, fegetmode, fegetexcept.
+    
+            * sysdeps/powerpc/bits/fenvinline.h (__fegetround): Use
+            __fegetround_ISA300() or __fegetround_ISA2() as appropriate.
+            (__fegetround_ISA300) New.
+            (__fegetround_ISA2) New.
+            * sysdeps/powerpc/fpu_control.h (IS_ISA300): New.
+            (_FPU_MFFS): Move implementation...
+            (_FPU_GETCW): Here.
+            (_FPU_MFFSL): Move implementation....
+            (_FPU_GET_RC_ISA300): Here. New.
+            (_FPU_GET_RC): Use _FPU_GET_RC_ISA300() or _FPU_GETCW() as appropriate.
+            * sysdeps/powerpc/fpu/fenv_libc.h (fegetenv_status_ISA300): New.
+            (fegetenv_status): New.
+            * sysdeps/powerpc/fpu/fegetmode.c (fegetmode): Use fegetenv_status()
+            instead of fegetenv_register().
+            * sysdeps/powerpc/fpu/fegetexcept.c (__fegetexcept): Likewise.
+    
+    Reviewed-by: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+
+diff --git a/sysdeps/powerpc/bits/fenvinline.h b/sysdeps/powerpc/bits/fenvinline.h
+index 41316386ba75e903..caec8ead6e17219d 100644
+--- a/sysdeps/powerpc/bits/fenvinline.h
++++ b/sysdeps/powerpc/bits/fenvinline.h
+@@ -18,13 +18,36 @@
+ 
+ #if defined __GNUC__ && !defined _SOFT_FLOAT && !defined __NO_FPRS__
+ 
+-/* Inline definition for fegetround.  */
+-# define __fegetround() \
+-  (__extension__  ({ int __fegetround_result;				      \
+-		     __asm__ __volatile__				      \
+-		       ("mcrfs 7,7 ; mfcr %0"				      \
+-			: "=r"(__fegetround_result) : : "cr7");		      \
+-		     __fegetround_result & 3; }))
++/* Inline definitions for fegetround.  */
++# define __fegetround_ISA300()						\
++  (__extension__  ({							\
++    union { double __d; unsigned long long __ll; } __u;			\
++    __asm__ __volatile__ (						\
++      ".machine push; .machine \"power9\"; mffsl %0; .machine pop"	\
++      : "=f" (__u.__d));						\
++    __u.__ll & 0x0000000000000003LL;					\
++  }))
++
++# define __fegetround_ISA2()						\
++  (__extension__  ({							\
++     int __fegetround_result;						\
++     __asm__ __volatile__ ("mcrfs 7,7 ; mfcr %0"			\
++			   : "=r"(__fegetround_result) : : "cr7");	\
++     __fegetround_result & 3;						\
++  }))
++
++# ifdef _ARCH_PWR9
++#  define __fegetround() __fegetround_ISA300()
++# elif defined __BUILTIN_CPU_SUPPORTS__
++#  define __fegetround()						\
++  (__glibc_likely (__builtin_cpu_supports ("arch_3_00"))		\
++   ? __fegetround_ISA300()						\
++   : __fegetround_ISA2()						\
++  )
++# else
++#  define __fegetround() __fegetround_ISA2()
++# endif
++
+ # define fegetround() __fegetround ()
+ 
+ # ifndef __NO_MATH_INLINES
+diff --git a/sysdeps/powerpc/fpu/fegetexcept.c b/sysdeps/powerpc/fpu/fegetexcept.c
+index a053a32bfe11c0d4..9d77adea59939ece 100644
+--- a/sysdeps/powerpc/fpu/fegetexcept.c
++++ b/sysdeps/powerpc/fpu/fegetexcept.c
+@@ -25,7 +25,7 @@ __fegetexcept (void)
+   fenv_union_t fe;
+   int result = 0;
+ 
+-  fe.fenv = fegetenv_register ();
++  fe.fenv = fegetenv_status ();
+ 
+   if (fe.l & (1 << (31 - FPSCR_XE)))
+       result |= FE_INEXACT;
+diff --git a/sysdeps/powerpc/fpu/fegetmode.c b/sysdeps/powerpc/fpu/fegetmode.c
+index b83dc9f625d2248a..75493e5f24c8b05b 100644
+--- a/sysdeps/powerpc/fpu/fegetmode.c
++++ b/sysdeps/powerpc/fpu/fegetmode.c
+@@ -21,6 +21,6 @@
+ int
+ fegetmode (femode_t *modep)
+ {
+-  *modep = fegetenv_register ();
++  *modep = fegetenv_status ();
+   return 0;
+ }
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index d6945903b525748e..cc00df033da47c1a 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -35,6 +35,27 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ #define fegetenv_register() \
+         ({ fenv_t env; asm volatile ("mffs %0" : "=f" (env)); env; })
+ 
++/* Equivalent to fegetenv_register, but only returns bits for
++   status, exception enables, and mode.  */
++
++#define fegetenv_status_ISA300()					\
++  ({register double __fr;						\
++    __asm__ __volatile__ (						\
++      ".machine push; .machine \"power9\"; mffsl %0; .machine pop"	\
++      : "=f" (__fr));							\
++    __fr;								\
++  })
++
++#ifdef _ARCH_PWR9
++# define fegetenv_status() fegetenv_status_ISA300()
++#else
++# define fegetenv_status()						\
++  (__glibc_likely (__builtin_cpu_supports ("arch_3_00"))		\
++   ? fegetenv_status_ISA300()						\
++   : fegetenv_register()						\
++  )
++#endif
++
+ /* Equivalent to fesetenv, but takes a fenv_t instead of a pointer.  */
+ #define fesetenv_register(env) \
+ 	do { \
+diff --git a/sysdeps/powerpc/fpu_control.h b/sysdeps/powerpc/fpu_control.h
+index 90063d77bbbf794f..e0ee622e246c0d61 100644
+--- a/sysdeps/powerpc/fpu_control.h
++++ b/sysdeps/powerpc/fpu_control.h
+@@ -96,35 +96,37 @@ extern fpu_control_t __fpu_control;
+ typedef unsigned int fpu_control_t;
+ 
+ /* Macros for accessing the hardware control word.  */
+-# define __FPU_MFFS()						\
+-  ({register double __fr;					\
+-    __asm__ __volatile__("mffs %0" : "=f" (__fr));		\
+-    __fr;							\
+-  })
+-
+ # define _FPU_GETCW(cw)						\
+   ({union { double __d; unsigned long long __ll; } __u;		\
+-    __u.__d = __FPU_MFFS();					\
++    __asm__ __volatile__("mffs %0" : "=f" (__u.__d));		\
+     (cw) = (fpu_control_t) __u.__ll;				\
+     (fpu_control_t) __u.__ll;					\
+   })
+ 
+-#ifdef _ARCH_PWR9
+-# define __FPU_MFFSL()						\
+-  ({register double __fr;					\
+-    __asm__ __volatile__("mffsl %0" : "=f" (__fr));		\
+-    __fr;							\
++# define _FPU_GET_RC_ISA300()						\
++  ({union { double __d; unsigned long long __ll; } __u;			\
++    __asm__ __volatile__(						\
++      ".machine push; .machine \"power9\"; mffsl %0; .machine pop" 	\
++      : "=f" (__u.__d));						\
++    (fpu_control_t) (__u.__ll & _FPU_MASK_RC);				\
+   })
+-#else
+-# define __FPU_MFFSL() __FPU_MFFS()
+-#endif
+-    
+-# define _FPU_GET_RC()						\
+-  ({union { double __d; unsigned long long __ll; } __u;		\
+-    __u.__d = __FPU_MFFSL();					\
+-    __u.__ll &= _FPU_MASK_RC;					\
+-    (fpu_control_t) __u.__ll;					\
++
++# ifdef _ARCH_PWR9
++#  define _FPU_GET_RC() _FPU_GET_RC_ISA300()
++# elif defined __BUILTIN_CPU_SUPPORTS__
++#  define _FPU_GET_RC()							\
++  ({fpu_control_t __rc;							\
++    __rc = __glibc_likely (__builtin_cpu_supports ("arch_3_00"))	\
++      ? _FPU_GET_RC_ISA300 ()						\
++      : _FPU_GETCW (__rc) & _FPU_MASK_RC;				\
++    __rc;								\
++  })
++# else
++#  define _FPU_GET_RC()						\
++  ({fpu_control_t __rc = _FPU_GETCW (__rc) & _FPU_MASK_RC;	\
++    __rc;							\
+   })
++# endif
+ 
+ # define _FPU_SETCW(cw)						\
+   { union { double __d; unsigned long long __ll; } __u;		\

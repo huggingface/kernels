@@ -1,0 +1,71 @@
+commit 40ebfd016ad284872f434bdd76dbe9c708db4d6b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Jun 25 08:09:08 2021 +0200
+
+    elf: Disable most of TLS modid gaps processing [BZ #27135]
+    
+    Revert "elf: Fix DTV gap reuse logic [BZ #27135]"
+    
+    This reverts commit 572bd547d57a39b6cf0ea072545dc4048921f4c3.
+    
+    It turns out that the _dl_next_tls_modid in _dl_map_object_from_fd keeps
+    returning the same modid over and over again if there is a gap and
+    more than TLS-using module is loaded in one dlopen call.  This corrupts
+    TLS data structures.  The bug is still present after a revert, but
+    empirically it is much more difficult to trigger (because it involves a
+    dlopen failure).
+
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 41cb6c58491c364b..7d2dc2272cd643f5 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -88,11 +88,7 @@ remove_slotinfo (size_t idx, struct dtv_slotinfo_list *listp, size_t disp,
+       /* If this is not the last currently used entry no need to look
+ 	 further.  */
+       if (idx != GL(dl_tls_max_dtv_idx))
+-	{
+-	  /* There is an unused dtv entry in the middle.  */
+-	  GL(dl_tls_dtv_gaps) = true;
+-	  return true;
+-	}
++	return true;
+     }
+ 
+   while (idx - disp > (disp == 0 ? 1 + GL(dl_tls_static_nelem) : 0))
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 54727402750f4c0c..a67fb3aee40860e1 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -896,6 +896,16 @@ no more namespaces available for dlmopen()"));
+ 	 state if relocation failed, for example.  */
+       if (args.map)
+ 	{
++	  /* Maybe some of the modules which were loaded use TLS.
++	     Since it will be removed in the following _dl_close call
++	     we have to mark the dtv array as having gaps to fill the
++	     holes.  This is a pessimistic assumption which won't hurt
++	     if not true.  There is no need to do this when we are
++	     loading the auditing DSOs since TLS has not yet been set
++	     up.  */
++	  if ((mode & __RTLD_AUDIT) == 0)
++	    GL(dl_tls_dtv_gaps) = true;
++
+ 	  _dl_close_worker (args.map, true);
+ 
+ 	  /* All l_nodelete_pending objects should have been deleted
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index bacb4101e2e2c4e5..801eafad3961573c 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -187,7 +187,10 @@ _dl_next_tls_modid (void)
+ size_t
+ _dl_count_modids (void)
+ {
+-  /* The count is the max unless dlclose or failed dlopen created gaps.  */
++  /* It is rare that we have gaps; see elf/dl-open.c (_dl_open) where
++     we fail to load a module and unload it leaving a gap.  If we don't
++     have gaps then the number of modids is the current maximum so
++     return that.  */
+   if (__glibc_likely (!GL(dl_tls_dtv_gaps)))
+     return GL(dl_tls_max_dtv_idx);
+ 

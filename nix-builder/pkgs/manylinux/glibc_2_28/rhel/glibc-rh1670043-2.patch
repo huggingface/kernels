@@ -1,0 +1,47 @@
+commit 043440e761d395e1f507d9faa6e82b3fe4536c3f
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Mar 13 14:58:58 2019 +0100
+
+    hurd: Add no-op version of __res_enable_icmp [BZ #24047]
+    
+    Mach does not support IP_RECVERR, so replace this function with a
+    stub in a sysdeps override for Hurd.
+    
+    This fixes commit 08504de71813ddbd447bfbca4a325cbe8ce8bcda
+    ("resolv: Enable full ICMP errors for UDP DNS sockets [BZ #24047]").
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/sysdeps/mach/hurd/res_enable_icmp.c b/sysdeps/mach/hurd/res_enable_icmp.c
+new file mode 100644
+index 0000000000..4b0456340c
+--- /dev/null
++++ b/sysdeps/mach/hurd/res_enable_icmp.c
+@@ -0,0 +1,27 @@
++/* Enable full ICMP errors on a socket.  No-op version for Hurd.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Mach does not support the IP_RECVERR extension.  */
++
++#include <resolv.h>
++
++int
++__res_enable_icmp (int family, int fd)
++{
++  return 0;
++}

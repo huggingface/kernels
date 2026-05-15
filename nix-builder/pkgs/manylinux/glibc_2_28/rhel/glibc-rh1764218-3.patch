@@ -1,0 +1,31 @@
+commit f144981490bd2ab13189d85902ca74beecb307e4
+Author: DJ Delorie <dj@redhat.com>
+Date:   Wed Oct 30 18:03:14 2019 -0400
+
+    Base max_fast on alignment, not width, of bins (Bug 24903)
+    
+    set_max_fast sets the "impossibly small" value based on,
+    eventually, MALLOC_ALIGNMENT.  The comparisons for the smallest
+    chunk used is, eventually, MIN_CHUNK_SIZE.  Note that i386
+    is the only platform where these are the same, so a smallest
+    chunk *would* be put in a no-fastbins fastbin.
+    
+    This change calculates the "impossibly small" value
+    based on MIN_CHUNK_SIZE instead, so that we can know it will
+    always be impossibly small.
+    
+    (cherry picked from commit ff12e0fb91b9072800f031cb21fb2651ee7b6251)
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 9756ed0a0d28c5f6..90825b2aaed53761 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -1635,7 +1635,7 @@ static INTERNAL_SIZE_T global_max_fast;
+ 
+ #define set_max_fast(s) \
+   global_max_fast = (((s) == 0)						      \
+-                     ? SMALLBIN_WIDTH : ((s + SIZE_SZ) & ~MALLOC_ALIGN_MASK))
++                     ? MIN_CHUNK_SIZE / 2 : ((s + SIZE_SZ) & ~MALLOC_ALIGN_MASK))
+ 
+ static inline INTERNAL_SIZE_T
+ get_max_fast (void)

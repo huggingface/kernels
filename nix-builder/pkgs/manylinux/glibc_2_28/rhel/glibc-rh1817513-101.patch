@@ -1,0 +1,65 @@
+commit 7674695cf7e28528be7243ceb30c9a600bbaa7b5
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Oct 8 08:19:15 2020 -0700
+
+    <sys/platform/x86.h>: Add Intel UINTR support
+    
+    Add Intel UINTR support to <sys/platform/x86.h>.
+
+diff --git a/manual/platform.texi b/manual/platform.texi
+index 95b0ed0642c9f8a9..0dd12a4353a93bf2 100644
+--- a/manual/platform.texi
++++ b/manual/platform.texi
+@@ -583,6 +583,9 @@ using a TSC deadline value.
+ @item
+ @code{TSXLDTRK} -- TSXLDTRK instructions.
+ 
++@item
++@code{UINTR} -- User interrupts.
++
+ @item
+ @code{UMIP} -- User-mode instruction prevention.
+ 
+diff --git a/sysdeps/x86/sys/platform/x86.h b/sysdeps/x86/sys/platform/x86.h
+index bcc81ab5f8ac8265..2760b81a56e6c7d7 100644
+--- a/sysdeps/x86/sys/platform/x86.h
++++ b/sysdeps/x86/sys/platform/x86.h
+@@ -241,7 +241,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define bit_cpu_AVX512_4VNNIW	(1u << 2)
+ #define bit_cpu_AVX512_4FMAPS	(1u << 3)
+ #define bit_cpu_FSRM		(1u << 4)
+-#define bit_cpu_INDEX_7_EDX_5	(1u << 5)
++#define bit_cpu_UINTR		(1u << 5)
+ #define bit_cpu_INDEX_7_EDX_6	(1u << 6)
+ #define bit_cpu_INDEX_7_EDX_7	(1u << 7)
+ #define bit_cpu_AVX512_VP2INTERSECT (1u << 8)
+@@ -460,7 +460,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define index_cpu_AVX512_4VNNIW COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_4FMAPS	COMMON_CPUID_INDEX_7
+ #define index_cpu_FSRM		COMMON_CPUID_INDEX_7
+-#define index_cpu_INDEX_7_EDX_5	COMMON_CPUID_INDEX_7
++#define index_cpu_UINTR		COMMON_CPUID_INDEX_7
+ #define index_cpu_INDEX_7_EDX_6	COMMON_CPUID_INDEX_7
+ #define index_cpu_INDEX_7_EDX_7	COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_VP2INTERSECT COMMON_CPUID_INDEX_7
+@@ -679,7 +679,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define reg_AVX512_4VNNIW	edx
+ #define reg_AVX512_4FMAPS	edx
+ #define reg_FSRM		edx
+-#define reg_INDEX_7_EDX_5	edx
++#define reg_UINTR		edx
+ #define reg_INDEX_7_EDX_6	edx
+ #define reg_INDEX_7_EDX_7	edx
+ #define reg_AVX512_VP2INTERSECT	edx
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 3ec94e0c9a191f36..6fa092a8c10486a0 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -180,6 +180,7 @@ do_test (void)
+   CHECK_CPU_FEATURE (AVX512_4VNNIW);
+   CHECK_CPU_FEATURE (AVX512_4FMAPS);
+   CHECK_CPU_FEATURE (FSRM);
++  CHECK_CPU_FEATURE (UINTR);
+   CHECK_CPU_FEATURE (AVX512_VP2INTERSECT);
+   CHECK_CPU_FEATURE (MD_CLEAR);
+   CHECK_CPU_FEATURE (SERIALIZE);

@@ -1,0 +1,148 @@
+From 4e2d8f352774b56078c34648b14a2412c38384f4 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Sun, 7 Mar 2021 09:44:18 -0800
+Subject: [PATCH] x86-64: Use ZMM16-ZMM31 in AVX512 memset family functions
+Content-type: text/plain; charset=UTF-8
+
+Update ifunc-memset.h/ifunc-wmemset.h to select the function optimized
+with AVX512 instructions using ZMM16-ZMM31 registers to avoid RTM abort
+with usable AVX512VL and AVX512BW since VZEROUPPER isn't needed at
+function exit.
+---
+ sysdeps/x86_64/multiarch/ifunc-impl-list.c       | 14 +++++++++-----
+ sysdeps/x86_64/multiarch/ifunc-memset.h          | 13 ++++++++-----
+ sysdeps/x86_64/multiarch/ifunc-wmemset.h         | 12 ++++++------
+ .../multiarch/memset-avx512-unaligned-erms.S     | 16 ++++++++--------
+ 4 files changed, 31 insertions(+), 24 deletions(-)
+
+diff --git a/sysdeps/x86_64/multiarch/ifunc-impl-list.c b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+index c1efeec0..d969a156 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+@@ -211,10 +211,12 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			       && CPU_FEATURE_USABLE (AVX512BW)),
+ 			      __memset_chk_evex_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      CPU_FEATURE_USABLE (AVX512F),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)),
+ 			      __memset_chk_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      CPU_FEATURE_USABLE (AVX512F),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)),
+ 			      __memset_chk_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+ 			      CPU_FEATURE_USABLE (AVX512F),
+@@ -252,10 +254,12 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			       && CPU_FEATURE_USABLE (AVX512BW)),
+ 			      __memset_evex_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      CPU_FEATURE_USABLE (AVX512F),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)),
+ 			      __memset_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      CPU_FEATURE_USABLE (AVX512F),
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)),
+ 			      __memset_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+ 			      CPU_FEATURE_USABLE (AVX512F),
+@@ -719,7 +723,7 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      CPU_FEATURE_USABLE (AVX512VL),
+ 			      __wmemset_evex_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, wmemset,
+-			      CPU_FEATURE_USABLE (AVX512F),
++			      CPU_FEATURE_USABLE (AVX512VL),
+ 			      __wmemset_avx512_unaligned))
+ 
+ #ifdef SHARED
+diff --git a/sysdeps/x86_64/multiarch/ifunc-memset.h b/sysdeps/x86_64/multiarch/ifunc-memset.h
+index 6f3375cc..19795938 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-memset.h
++++ b/sysdeps/x86_64/multiarch/ifunc-memset.h
+@@ -53,13 +53,16 @@ IFUNC_SELECTOR (void)
+   if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
+       && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
+     {
+-      if (CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER))
+-	return OPTIMIZE (avx512_no_vzeroupper);
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512VL)
++	  && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW))
++	{
++	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
++	    return OPTIMIZE (avx512_unaligned_erms);
+ 
+-      if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+-	return OPTIMIZE (avx512_unaligned_erms);
++	  return OPTIMIZE (avx512_unaligned);
++	}
+ 
+-      return OPTIMIZE (avx512_unaligned);
++      return OPTIMIZE (avx512_no_vzeroupper);
+     }
+ 
+   if (CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+diff --git a/sysdeps/x86_64/multiarch/ifunc-wmemset.h b/sysdeps/x86_64/multiarch/ifunc-wmemset.h
+index bdc94c6c..98c5d406 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-wmemset.h
++++ b/sysdeps/x86_64/multiarch/ifunc-wmemset.h
+@@ -33,13 +33,13 @@ IFUNC_SELECTOR (void)
+   if (CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     {
+-      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
+-	  && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512)
+-	  && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER))
+-	return OPTIMIZE (avx512_unaligned);
+-
+       if (CPU_FEATURE_USABLE_P (cpu_features, AVX512VL))
+-	return OPTIMIZE (evex_unaligned);
++	{
++	  if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
++	    return OPTIMIZE (avx512_unaligned);
++
++	  return OPTIMIZE (evex_unaligned);
++	}
+ 
+       if (CPU_FEATURE_USABLE_P (cpu_features, RTM))
+ 	return OPTIMIZE (avx2_unaligned_rtm);
+diff --git a/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
+index 0783979c..22e7b187 100644
+--- a/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
+@@ -1,22 +1,22 @@
+ #if IS_IN (libc)
+ # define VEC_SIZE	64
+-# define VEC(i)		zmm##i
++# define XMM0		xmm16
++# define YMM0		ymm16
++# define VEC0		zmm16
++# define VEC(i)		VEC##i
+ # define VMOVU		vmovdqu64
+ # define VMOVA		vmovdqa64
++# define VZEROUPPER
+ 
+ # define MEMSET_VDUP_TO_VEC0_AND_SET_RETURN(d, r) \
+-  vmovd d, %xmm0; \
+   movq r, %rax; \
+-  vpbroadcastb %xmm0, %xmm0; \
+-  vpbroadcastq %xmm0, %zmm0
++  vpbroadcastb d, %VEC0
+ 
+ # define WMEMSET_VDUP_TO_VEC0_AND_SET_RETURN(d, r) \
+-  vmovd d, %xmm0; \
+   movq r, %rax; \
+-  vpbroadcastd %xmm0, %xmm0; \
+-  vpbroadcastq %xmm0, %zmm0
++  vpbroadcastd d, %VEC0
+ 
+-# define SECTION(p)		p##.avx512
++# define SECTION(p)		p##.evex512
+ # define MEMSET_SYMBOL(p,s)	p##_avx512_##s
+ # define WMEMSET_SYMBOL(p,s)	p##_avx512_##s
+ 
+-- 
+GitLab
+

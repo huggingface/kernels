@@ -1,0 +1,33 @@
+commit 0d5b2917530ccaf8ad312dfbb7bce69d569c23ad
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 15 16:09:20 2019 +0200
+
+    login: Use struct flock64 in utmp [BZ #24880]
+    
+    Commit 06ab719d30b01da401150068054d3b8ea93dd12f ("Fix Linux fcntl OFD
+    locks for non-LFS architectures (BZ#20251)") introduced the use of
+    fcntl64 into the utmp implementation.  However, the lock file
+    structure was not updated to struct flock64 at that point.
+
+diff --git a/login/utmp_file.c b/login/utmp_file.c
+index 54f424fd6165bae7..8b6fee96b623fa90 100644
+--- a/login/utmp_file.c
++++ b/login/utmp_file.c
+@@ -85,7 +85,7 @@ try_file_lock (struct file_locking *locking, int fd, int type)
+   alarm (TIMEOUT);
+ 
+   /* Try to get the lock.  */
+- struct flock fl =
++ struct flock64 fl =
+    {
+     .l_type = type,
+     fl.l_whence = SEEK_SET,
+@@ -96,7 +96,7 @@ try_file_lock (struct file_locking *locking, int fd, int type)
+ static void
+ file_unlock (int fd)
+ {
+-  struct flock fl =
++  struct flock64 fl =
+     {
+       .l_type = F_UNLCK,
+     };

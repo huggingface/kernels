@@ -1,0 +1,24 @@
+Patch by Hanataka Shinya <hanataka.shinya@gmail.com> from
+<https://sourceware.org/bugzilla/show_bug.cgi?id=24405>.  Confirmed by TAMUKI
+Shoichi's patch in
+<https://sourceware.org/ml/libc-alpha/2019-04/msg00005.html>.
+
+The official announcement by the Japanese Prime Minister in
+<https://www.kantei.go.jp/jp/tyoukanpress/201904/1_a.html> uses U+4EE4 U+548C
+as well.
+
+diff --git a/localedata/locales/ja_JP b/localedata/locales/ja_JP
+index 1fd2fee44b2879d9..30190b624856cc53 100644
+--- a/localedata/locales/ja_JP
++++ b/localedata/locales/ja_JP
+@@ -14946,7 +14946,9 @@ am_pm	"<U5348><U524D>";"<U5348><U5F8C>"
+ 
+ t_fmt_ampm "%p%I<U6642>%M<U5206>%S<U79D2>"
+ 
+-era	"+:2:1990//01//01:+*:<U5E73><U6210>:%EC%Ey<U5E74>";/
++era	"+:2:2020//01//01:+*:<U4EE4><U548C>:%EC%Ey<U5E74>";/
++	"+:1:2019//05//01:2019//12//31:<U4EE4><U548C>:%EC<U5143><U5E74>";/
++	"+:2:1990//01//01:2019//04//30:<U5E73><U6210>:%EC%Ey<U5E74>";/
+ 	"+:1:1989//01//08:1989//12//31:<U5E73><U6210>:%EC<U5143><U5E74>";/
+ 	"+:2:1927//01//01:1989//01//07:<U662D><U548C>:%EC%Ey<U5E74>";/
+ 	"+:1:1926//12//25:1926//12//31:<U662D><U548C>:%EC<U5143><U5E74>";/

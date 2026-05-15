@@ -1,0 +1,42 @@
+This patch is a RHEL-only patch which modifies the custom changes
+in the previous patches in this series to make the test case look
+more like the upstream test case.
+
+diff -rup a/stdlib/tst-system.c b/stdlib/tst-system.c
+--- a/stdlib/tst-system.c	2023-07-10 13:37:53.089505036 -0400
++++ b/stdlib/tst-system.c	2023-07-10 14:04:03.922610279 -0400
+@@ -173,10 +173,10 @@ do_test (void)
+   {
+     pthread_t long_sleep_thread = xpthread_create (NULL,
+                                                    sleep_and_check_sigchld,
+-                                                   &(double) { 2 });
++                                                   &(double) { 0.2 });
+     pthread_t short_sleep_thread = xpthread_create (NULL,
+                                                     sleep_and_check_sigchld,
+-                                                    &(double) { 1 });
++                                                    &(double) { 0.1 });
+     xpthread_join (short_sleep_thread);
+     xpthread_join (long_sleep_thread);
+   }
+diff -rup a/support/shell-container.c b/support/shell-container.c
+--- a/support/shell-container.c	2023-07-10 13:37:53.089505036 -0400
++++ b/support/shell-container.c	2023-07-10 14:03:20.392920627 -0400
+@@ -182,15 +182,15 @@ sleep_func (char **argv)
+       return 1;
+     }
+   char *endptr = NULL;
+-  long sec = strtol (argv[0], &endptr, 0);
++  double sec = strtod (argv[0], &endptr);
+   if (endptr == argv[0] || errno == ERANGE || sec < 0)
+     {
+       fprintf (stderr, "sleep: invalid time interval '%s'\n", argv[0]);
+       return 1;
+     }
+-  if (sleep (sec) < 0)
++  if (usleep ((useconds_t)(sec * 1000000.0)) < 0)
+     {
+-      fprintf (stderr, "sleep: failed to nanosleep\n");
++      fprintf (stderr, "sleep: failed to usleep: %s\n", strerror (errno));
+       return 1;
+     }
+   return 0;

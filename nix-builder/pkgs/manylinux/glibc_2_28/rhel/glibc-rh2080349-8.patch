@@ -1,0 +1,20 @@
+commit 9dde3a24f132090fa8f88d6eaa2bc4c48f2e942f
+Author: Stafford Horne <shorne@gmail.com>
+Date:   Sat May 23 12:41:31 2020 +0900
+
+    linux/syscalls: Add or1k_atomic syscall for OpenRISC
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 42701ce583..c80a9a59cb 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -304,6 +304,7 @@ open_by_handle_at
+ open_tree
+ openat
+ openat2
++or1k_atomic
+ osf_adjtime
+ osf_afs_syscall
+ osf_alt_plock

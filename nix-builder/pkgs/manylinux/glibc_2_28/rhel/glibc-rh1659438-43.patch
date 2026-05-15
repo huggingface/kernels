@@ -1,0 +1,249 @@
+commit 814a76e1bcc59e6c4899279ede887bf9fecf5a40
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:20 2018 +0100
+
+    S390: Refactor wcsncat ifunc handling.
+    
+    The ifunc handling for wcsncat is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcsncat variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcsncat variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcsncat.
+            * sysdeps/s390/multiarch/wcsncat-c.c: Move to ...
+            * sysdeps/s390/wcsncat-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcsncat-vx.S: Move to ...
+            * sysdeps/s390/wcsncat-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcsncat.c: Move to ...
+            * sysdeps/s390/wcsncat.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcsncat.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 5fd00ad4a8661c4c..cafabe62165f0213 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -66,5 +66,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcpcpy wcpcpy-vx wcpcpy-c \
+ 		   wcsncpy wcsncpy-vx wcsncpy-c \
+ 		   wcpncpy wcpncpy-vx wcpncpy-c \
+-		   wcscat wcscat-vx wcscat-c
++		   wcscat wcscat-vx wcscat-c \
++		   wcsncat wcsncat-vx wcsncat-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcsncat.h b/sysdeps/s390/ifunc-wcsncat.h
+new file mode 100644
+index 0000000000000000..99495e0e640611ca
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcsncat.h
+@@ -0,0 +1,53 @@
++/* wcsncat variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSNCAT_IFUNC	1
++#else
++# define HAVE_WCSNCAT_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSNCAT_IFUNC_AND_VX_SUPPORT HAVE_WCSNCAT_IFUNC
++#else
++# define HAVE_WCSNCAT_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSNCAT_DEFAULT	WCSNCAT_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSNCAT_C		1
++# define HAVE_WCSNCAT_Z13	1
++#else
++# define WCSNCAT_DEFAULT	WCSNCAT_C
++# define HAVE_WCSNCAT_C		1
++# define HAVE_WCSNCAT_Z13	HAVE_WCSNCAT_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSNCAT_C
++# define WCSNCAT_C		__wcsncat_c
++#else
++# define WCSNCAT_C		NULL
++#endif
++
++#if HAVE_WCSNCAT_Z13
++# define WCSNCAT_Z13		__wcsncat_vx
++#else
++# define WCSNCAT_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 617017496c79e2ca..6cb75950c2c453f6 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcsncat wcsncat-vx wcsncat-c \
+-		   wcscmp wcscmp-vx wcscmp-c \
++sysdep_routines += wcscmp wcscmp-vx wcscmp-c \
+ 		   wcsncmp wcsncmp-vx wcsncmp-c \
+ 		   wcschr wcschr-vx wcschr-c \
+ 		   wcschrnul wcschrnul-vx wcschrnul-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index b05bd35fd898d0a6..7b7b1e7497ec1a4f 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -53,6 +53,7 @@
+ #include <ifunc-wcsncpy.h>
+ #include <ifunc-wcpncpy.h>
+ #include <ifunc-wcscat.h>
++#include <ifunc-wcsncat.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -515,6 +516,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSCAT_IFUNC  */
+ 
++#if HAVE_WCSNCAT_IFUNC
++    IFUNC_IMPL (i, name, wcsncat,
++# if HAVE_WCSNCAT_Z13
++		IFUNC_IMPL_ADD (array, i, wcsncat,
++				dl_hwcap & HWCAP_S390_VX, WCSNCAT_Z13)
++# endif
++# if HAVE_WCSNCAT_C
++		IFUNC_IMPL_ADD (array, i, wcsncat, 1, WCSNCAT_C)
++# endif
++		)
++#endif /* HAVE_WCSNCAT_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -523,8 +536,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcsncat);
+-
+   IFUNC_VX_IMPL (wcscmp);
+ 
+   IFUNC_VX_IMPL (wcsncmp);
+diff --git a/sysdeps/s390/multiarch/wcsncat-c.c b/sysdeps/s390/wcsncat-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/wcsncat-c.c
+rename to sysdeps/s390/wcsncat-c.c
+index 2cf1a76385932c64..5782d5cb28c9e7f6 100644
+--- a/sysdeps/s390/multiarch/wcsncat-c.c
++++ b/sysdeps/s390/wcsncat-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSNCAT  __wcsncat_c
++#include <ifunc-wcsncat.h>
++
++#if HAVE_WCSNCAT_C
++# if HAVE_WCSNCAT_IFUNC || HAVE_WCSNCAT_Z13
++#  define WCSNCAT WCSNCAT_C
++# endif
+ 
+-# include <wchar.h>
+-extern __typeof (wcsncat) __wcsncat_c;
+ # include <wcsmbs/wcsncat.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcsncat-vx.S b/sysdeps/s390/wcsncat-vx.S
+similarity index 97%
+rename from sysdeps/s390/multiarch/wcsncat-vx.S
+rename to sysdeps/s390/wcsncat-vx.S
+index 1d3935690d9f91a3..7c89d3d856faee24 100644
+--- a/sysdeps/s390/multiarch/wcsncat-vx.S
++++ b/sysdeps/s390/wcsncat-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcsncat.h>
++#if HAVE_WCSNCAT_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -40,7 +41,7 @@
+    -v18=part of src
+    -v31=register save area for r6, r7
+ */
+-ENTRY(__wcsncat_vx)
++ENTRY(WCSNCAT_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -260,6 +261,10 @@ ENTRY(__wcsncat_vx)
+ 	j	.Lcpy_lt64
+ 
+ .Lfallback:
+-	jg	__wcsncat_c
+-END(__wcsncat_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSNCAT_C
++END(WCSNCAT_Z13)
++
++# if ! HAVE_WCSNCAT_IFUNC
++strong_alias (WCSNCAT_Z13, wcsncat)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcsncat.c b/sysdeps/s390/wcsncat.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/wcsncat.c
+rename to sysdeps/s390/wcsncat.c
+index c49b8ff78671cb99..722429fd5b5b4d9d 100644
+--- a/sysdeps/s390/multiarch/wcsncat.c
++++ b/sysdeps/s390/wcsncat.c
+@@ -16,12 +16,23 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcsncat.h>
++
++#if HAVE_WCSNCAT_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2 (__wcsncat, wcsncat)
++# if HAVE_WCSNCAT_C
++extern __typeof (wcsncat) WCSNCAT_C attribute_hidden;
++# endif
++
++# if HAVE_WCSNCAT_Z13
++extern __typeof (wcsncat) WCSNCAT_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcsncat.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (wcsncat, wcsncat,
++		      (HAVE_WCSNCAT_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSNCAT_Z13
++		      : WCSNCAT_DEFAULT
++		      )
++#endif

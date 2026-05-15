@@ -1,0 +1,22 @@
+commit 8dddf0bd5a3d57fba8da27e93f3d1a7032fce184
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Oct 30 17:44:09 2019 +0100
+
+    resolv/tst-idna_name_classify: Isolate from system libraries
+    
+    Loading NSS modules from static binaries uses installed system
+    libraries if LD_LIBRARY_PATH is not set.
+
+diff --git a/inet/Makefile b/inet/Makefile
+index 7782913b4c06f057..62d25f853538bb08 100644
+--- a/inet/Makefile
++++ b/inet/Makefile
+@@ -112,4 +112,8 @@ ifeq ($(build-static-nss),yes)
+ CFLAGS += -DSTATIC_NSS
+ endif
+ 
++# The test uses dlopen indirectly and would otherwise load system
++# objects.
++tst-idna_name_classify-ENV = \
++  LD_LIBRARY_PATH=$(objpfx):$(common-objpfx):$(common-objpfx)elf
+ $(objpfx)tst-idna_name_classify.out: $(gen-locales)

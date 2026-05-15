@@ -1,0 +1,227 @@
+Backport of the new test from this upstream commit:
+
+commit 8dcb6d0af07fda3607b541857e4f3970a74ed55b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Apr 26 14:23:02 2022 +0200
+
+    dlfcn: Do not use rtld_active () to determine ld.so state (bug 29078)
+
+    When audit modules are loaded, ld.so initialization is not yet
+    complete, and rtld_active () returns false even though ld.so is
+    mostly working.  Instead, the static dlopen hook is used, but that
+    does not work at all because this is not a static dlopen situation.
+
+    Commit 466c1ea15f461edb8e3ffaf5d86d708876343bbf ("dlfcn: Rework
+    static dlopen hooks") moved the hook pointer into _rtld_global_ro,
+    which means that separate protection is not needed anymore and the
+    hook pointer can be checked directly.
+
+    The guard for disabling libio vtable hardening in _IO_vtable_check
+    should stay for now.
+
+    Fixes commit 8e1472d2c1e25e6eabc2059170731365f6d5b3d1 ("ld.so:
+    Examine GLRO to detect inactive loader [BZ #20204]").
+
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+Conflicts:
+	dlfcn/dladdr.c
+	dlfcn/dladdr1.c
+	dlfcn/dlclose.c
+	dlfcn/dlerror.c
+	dlfcn/dlinfo.c
+	dlfcn/dlmopen.c
+	dlfcn/dlopen.c
+	dlfcn/dlopenold.c
+	dlfcn/dlsym.c
+	dlfcn/dlvsym.c
+	elf/dl-libc.c
+	  (Code changes not needed.)
+	elf/Makefile
+	  (Usual test list conflicts.  Also added $(libdl).)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 6d39b400060a73f3..3fae27d32676caf9 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -353,8 +353,7 @@ tests += \
+   tst-audit24d \
+   tst-audit25a \
+   tst-audit25b \
+-  tst-audit8 \
+-  tst-audit9 \
++  tst-audit26 \
+   tst-auditmany \
+   tst-auxobj \
+   tst-auxobj-dlopen \
+@@ -659,6 +658,7 @@ modules-names = \
+   tst-auditmod24c \
+   tst-auditmod24d \
+   tst-auditmod25 \
++  tst-auditmod26 \
+   tst-big-note-lib \
+   tst-deep1mod1 \
+   tst-deep1mod2 \
+@@ -2145,6 +2145,11 @@ $(objpfx)tst-audit25b: $(objpfx)tst-audit25mod1.so \
+ LDFLAGS-tst-audit25b = -Wl,-z,now
+ tst-audit25b-ARGS = -- $(host-test-program-cmd)
+ 
++$(objpfx)tst-audit26: $(libdl)
++$(objpfx)tst-audit26.out: $(objpfx)tst-auditmod26.so
++$(objpfx)tst-auditmod26.so: $(libsupport) $(libdl)
++tst-audit26-ENV = LD_AUDIT=$(objpfx)tst-auditmod26.so
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/tst-audit26.c b/elf/tst-audit26.c
+new file mode 100644
+index 0000000000000000..3f920e83bac247a5
+--- /dev/null
++++ b/elf/tst-audit26.c
+@@ -0,0 +1,35 @@
++/* Check the usability of <dlfcn.h> functions in audit modules.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <gnu/lib-names.h>
++
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int
++do_test (void)
++{
++  /* Check that the audit module has been loaded.  */
++  void *handle = xdlopen ("mapped to libc", RTLD_LOCAL | RTLD_NOW);
++  TEST_VERIFY (handle
++	       == xdlopen (LIBC_SO, RTLD_LOCAL | RTLD_NOW | RTLD_NOLOAD));
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-auditmod26.c b/elf/tst-auditmod26.c
+new file mode 100644
+index 0000000000000000..db7ba95abec20f53
+--- /dev/null
++++ b/elf/tst-auditmod26.c
+@@ -0,0 +1,104 @@
++/* Check the usability of <dlfcn.h> functions in audit modules.  Audit module.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <first-versions.h>
++#include <gnu/lib-names.h>
++#include <link.h>
++#include <stdio.h>
++#include <string.h>
++#include <unistd.h>
++
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++unsigned int
++la_version (unsigned int current)
++{
++  /* Exercise various <dlfcn.h> functions.  */
++
++  /* Check dlopen, dlsym, dlclose.   */
++  void *handle = xdlopen (LIBM_SO, RTLD_LOCAL | RTLD_NOW);
++  void *ptr = xdlsym (handle, "sincos");
++  TEST_VERIFY (ptr != NULL);
++  ptr = dlsym (handle, "SINCOS");
++  TEST_VERIFY (ptr == NULL);
++  const char *message = dlerror ();
++  TEST_VERIFY (strstr (message, ": undefined symbol: SINCOS") != NULL);
++  ptr = dlsym (handle, "SINCOS");
++  TEST_VERIFY (ptr == NULL);
++  xdlclose (handle);
++  TEST_COMPARE_STRING (dlerror (), NULL);
++
++  handle = xdlopen (LIBC_SO, RTLD_LOCAL | RTLD_NOW | RTLD_NOLOAD);
++
++  /* Check dlvsym.  _exit is unlikely to gain another symbol
++     version.  */
++  TEST_VERIFY (xdlsym (handle, "_exit")
++               == xdlvsym (handle, "_exit", FIRST_VERSION_libc__exit_STRING));
++
++  /* Check dlinfo.  */
++  {
++    void *handle2 = NULL;
++    TEST_COMPARE (dlinfo (handle, RTLD_DI_LINKMAP, &handle2), 0);
++    TEST_VERIFY (handle2 == handle);
++  }
++
++  /* Check dladdr and dladdr1.  */
++  Dl_info info = { };
++  TEST_VERIFY (dladdr (&_exit, &info) != 0);
++  if (strcmp (info.dli_sname, "_Exit") != 0) /* _Exit is an alias.  */
++    TEST_COMPARE_STRING (info.dli_sname, "_exit");
++  TEST_VERIFY (info.dli_saddr == &_exit);
++  TEST_VERIFY (strstr (info.dli_fname, LIBC_SO));
++  void *extra_info;
++  memset (&info, 0, sizeof (info));
++  TEST_VERIFY (dladdr1 (&_exit, &info, &extra_info, RTLD_DL_LINKMAP) != 0);
++  TEST_VERIFY (extra_info == handle);
++
++  /* Verify that dlmopen creates a new namespace.  */
++  void *dlmopen_handle = xdlmopen (LM_ID_NEWLM, LIBC_SO, RTLD_NOW);
++  TEST_VERIFY (dlmopen_handle != handle);
++  memset (&info, 0, sizeof (info));
++  extra_info = NULL;
++  ptr = xdlsym (dlmopen_handle, "_exit");
++  TEST_VERIFY (dladdr1 (ptr, &info, &extra_info, RTLD_DL_LINKMAP) != 0);
++  TEST_VERIFY (extra_info == dlmopen_handle);
++  xdlclose (dlmopen_handle);
++
++  /* Terminate the process with an error state.  This does not happen
++     automatically because the audit module state is not shared with
++     the main program.  */
++  if (support_record_failure_is_failed ())
++    {
++      fflush (stdout);
++      fflush (stderr);
++      _exit (1);
++    }
++
++  return LAV_CURRENT;
++}
++
++char *
++la_objsearch (const char *name, uintptr_t *cookie, unsigned int flag)
++{
++  if (strcmp (name, "mapped to libc") == 0)
++    return (char *) LIBC_SO;
++  else
++    return (char *) name;
++}

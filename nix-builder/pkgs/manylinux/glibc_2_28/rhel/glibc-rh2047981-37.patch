@@ -1,0 +1,112 @@
+commit 9e94f57484a2aba0fe67ea2059b5843f651887c2
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Feb 4 15:54:59 2022 -0300
+
+    hppa: Fix bind-now audit (BZ #28857)
+    
+    On hppa, a function pointer returned by la_symbind is actually a function
+    descriptor has the plabel bit set (bit 30).  This must be cleared to get
+    the actual address of the descriptor.  If the descriptor has been bound,
+    the first word of the descriptor is the physical address of theA function,
+    otherwise, the first word of the descriptor points to a trampoline in the
+    PLT.
+    
+    This patch also adds a workaround on tests because on hppa (and it seems
+    to be the only ABI I have see it), some shared library adds a dynamic PLT
+    relocation to am empty symbol name:
+    
+    $ readelf -r elf/tst-audit25mod1.so
+    [...]
+    Relocation section '.rela.plt' at offset 0x464 contains 6 entries:
+     Offset     Info    Type            Sym.Value  Sym. Name + Addend
+    00002008  00000081 R_PARISC_IPLT                508
+    [...]
+    
+    It breaks some assumptions on the test, where a symbol with an empty
+    name ("") is passed on la_symbind.
+    
+    Checked on x86_64-linux-gnu and hppa-linux-gnu.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 73d347339762fc9e..6d39b400060a73f3 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -2113,7 +2113,7 @@ $(objpfx)tst-audit24c.out: $(objpfx)tst-auditmod24c.so
+ $(objpfx)tst-audit24c: $(objpfx)tst-audit24amod1.so \
+ 		       $(objpfx)tst-audit24amod2.so
+ tst-audit24c-ENV = LD_BIND_NOW=1 LD_AUDIT=$(objpfx)tst-auditmod24c.so
+-LDFLAGS-tst-audit24b = -Wl,-z,lazy
++LDFLAGS-tst-audit24c = -Wl,-z,lazy
+ 
+ $(objpfx)tst-audit24d.out: $(objpfx)tst-auditmod24d.so
+ $(objpfx)tst-audit24d: $(objpfx)tst-audit24dmod1.so \
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index 72a50717ef60a357..ec9b032eae37c103 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -257,7 +257,8 @@ _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
+       reloc_result->flags = flags;
+     }
+ 
+-  DL_FIXUP_BINDNOW_RELOC (value, new_value, sym.st_value);
++  if (flags & LA_SYMB_ALTVALUE)
++    DL_FIXUP_BINDNOW_RELOC (value, new_value, sym.st_value);
+ }
+ 
+ void
+diff --git a/elf/tst-auditmod24a.c b/elf/tst-auditmod24a.c
+index d8e88f3984af1707..3075dfae2fd3d288 100644
+--- a/elf/tst-auditmod24a.c
++++ b/elf/tst-auditmod24a.c
+@@ -110,5 +110,7 @@ la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
+       return sym->st_value;
+     }
+ 
+-  abort ();
++  if (symname[0] != '\0')
++    abort ();
++  return sym->st_value;
+ }
+diff --git a/elf/tst-auditmod24d.c b/elf/tst-auditmod24d.c
+index 8c803ecc0a48f21b..badc6be451ee0357 100644
+--- a/elf/tst-auditmod24d.c
++++ b/elf/tst-auditmod24d.c
+@@ -116,5 +116,7 @@ la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
+ 	}
+     }
+ 
+-  abort ();
++  if (symname[0] != '\0')
++    abort ();
++  return sym->st_value;
+ }
+diff --git a/elf/tst-auditmod25.c b/elf/tst-auditmod25.c
+index 526f5c54bc2c3b8c..20640a8daf346b5f 100644
+--- a/elf/tst-auditmod25.c
++++ b/elf/tst-auditmod25.c
+@@ -72,7 +72,7 @@ la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
+ 	      unsigned int *flags, const char *symname)
+ #endif
+ {
+-  if (*refcook != -1 && *defcook != -1)
++  if (*refcook != -1 && *defcook != -1 && symname[0] != '\0')
+     fprintf (stderr, "la_symbind: %s %u\n", symname,
+ 	     *flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT) ? 1 : 0);
+   return sym->st_value;
+diff --git a/sysdeps/hppa/dl-lookupcfg.h b/sysdeps/hppa/dl-lookupcfg.h
+index c3fea1fe5776b17a..86f6a04af46c87ba 100644
+--- a/sysdeps/hppa/dl-lookupcfg.h
++++ b/sysdeps/hppa/dl-lookupcfg.h
+@@ -79,7 +79,9 @@ void attribute_hidden _dl_unmap (struct link_map *map);
+ /* Extract the code address from a fixup value */
+ #define DL_FIXUP_VALUE_CODE_ADDR(value) ((value).ip)
+ #define DL_FIXUP_VALUE_ADDR(value) ((uintptr_t) &(value))
+-#define DL_FIXUP_ADDR_VALUE(addr) (*(struct fdesc *) (addr))
++/* Clear the plabel bit to get the actual address of the descriptor.  */
++#define DL_FIXUP_ADDR_VALUE(addr) \
++  (*(DL_FIXUP_VALUE_TYPE *) ((uintptr_t) (addr) & ~2))
+ #define DL_FIXUP_BINDNOW_ADDR_VALUE(addr) (addr)
+-#define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value) \
+-  (*value) = *(struct fdesc *) (st_value)
++#define DL_FIXUP_BINDNOW_RELOC(value, new_value, st_value)	\
++  *(value) = *(DL_FIXUP_VALUE_TYPE *) ((uintptr_t) (new_value) & ~2)

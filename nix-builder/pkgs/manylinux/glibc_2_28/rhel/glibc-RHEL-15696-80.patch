@@ -1,0 +1,753 @@
+From 3d9f171bfb5325bd5f427e9fc386453358c6e840 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 7 Feb 2022 05:55:15 -0800
+Subject: [PATCH] x86-64: Optimize bzero
+Content-type: text/plain; charset=UTF-8
+
+memset with zero as the value to set is by far the majority value (99%+
+for Python3 and GCC).
+
+bzero can be slightly more optimized for this case by using a zero-idiom
+xor for broadcasting the set value to a register (vector or GPR).
+
+Co-developed-by: Noah Goldstein <goldstein.w.n@gmail.com>
+---
+ sysdeps/generic/ifunc-init.h                  |   5 +-
+ sysdeps/x86_64/memset.S                       |   8 +
+ sysdeps/x86_64/multiarch/Makefile             | 205 +++++++++++-------
+ sysdeps/x86_64/multiarch/bzero.c              | 106 +++++++++
+ sysdeps/x86_64/multiarch/ifunc-impl-list.c    |  42 ++++
+ .../memset-avx2-unaligned-erms-rtm.S          |   1 +
+ .../multiarch/memset-avx2-unaligned-erms.S    |   6 +
+ .../multiarch/memset-avx512-unaligned-erms.S  |   3 +
+ .../multiarch/memset-evex-unaligned-erms.S    |   3 +
+ .../multiarch/memset-sse2-unaligned-erms.S    |   1 +
+ .../multiarch/memset-vec-unaligned-erms.S     | 110 +++++++---
+ 11 files changed, 384 insertions(+), 106 deletions(-)
+ create mode 100644 sysdeps/x86_64/multiarch/bzero.c
+
+Conflicts:
+	sysdeps/generic/ifunc-init.h
+	(needs macros from cf4fd28ea453d1a9cec93939bc88b58ccef5437a (memcmpeq))
+	sysdeps/x86_64/multiarch/Makefile
+	(file ordering)
+
+diff --git a/sysdeps/generic/ifunc-init.h b/sysdeps/generic/ifunc-init.h
+index 241e4161..f7a72375 100644
+--- a/sysdeps/generic/ifunc-init.h
++++ b/sysdeps/generic/ifunc-init.h
+@@ -50,5 +50,8 @@
+    '__<symbol>_<variant>' as the optimized implementation and
+    '<symbol>_ifunc_selector' as the IFUNC selector.  */
+ #define REDIRECT_NAME	EVALUATOR1 (__redirect, SYMBOL_NAME)
+-#define OPTIMIZE(name)	EVALUATOR2 (SYMBOL_NAME, name)
++#define OPTIMIZE1(name)	EVALUATOR1 (SYMBOL_NAME, name)
++#define OPTIMIZE2(name)	EVALUATOR2 (SYMBOL_NAME, name)
++/* Default is to use OPTIMIZE2.  */
++#define OPTIMIZE(name)	OPTIMIZE2(name)
+ #define IFUNC_SELECTOR	EVALUATOR1 (SYMBOL_NAME, ifunc_selector)
+diff --git a/sysdeps/x86_64/memset.S b/sysdeps/x86_64/memset.S
+index 4cb4aa71..a1353f89 100644
+--- a/sysdeps/x86_64/memset.S
++++ b/sysdeps/x86_64/memset.S
+@@ -35,6 +35,9 @@
+   punpcklwd %xmm0, %xmm0; \
+   pshufd $0, %xmm0, %xmm0
+ 
++# define BZERO_ZERO_VEC0() \
++  pxor %xmm0, %xmm0
++
+ # define WMEMSET_SET_VEC0_AND_SET_RETURN(d, r) \
+   movd d, %xmm0; \
+   pshufd $0, %xmm0, %xmm0; \
+@@ -53,6 +56,10 @@
+ # define MEMSET_SYMBOL(p,s)	memset
+ #endif
+ 
++#ifndef BZERO_SYMBOL
++# define BZERO_SYMBOL(p,s)	__bzero
++#endif
++
+ #ifndef WMEMSET_SYMBOL
+ # define WMEMSET_CHK_SYMBOL(p,s) p
+ # define WMEMSET_SYMBOL(p,s)	__wmemset
+@@ -63,6 +70,7 @@
+ libc_hidden_builtin_def (memset)
+ 
+ #if IS_IN (libc)
++weak_alias (__bzero, bzero)
+ libc_hidden_def (__wmemset)
+ weak_alias (__wmemset, wmemset)
+ libc_hidden_weak (wmemset)
+diff --git a/sysdeps/x86_64/multiarch/Makefile b/sysdeps/x86_64/multiarch/Makefile
+index 26be4095..37d8d6f0 100644
+--- a/sysdeps/x86_64/multiarch/Makefile
++++ b/sysdeps/x86_64/multiarch/Makefile
+@@ -1,85 +1,130 @@
+ ifeq ($(subdir),string)
+ 
+-sysdep_routines += strncat-c stpncpy-c strncpy-c \
+-		   strcmp-sse2 strcmp-sse2-unaligned strcmp-ssse3  \
+-		   strcmp-sse4_2 strcmp-avx2 \
+-		   strncmp-sse2 strncmp-ssse3 strncmp-sse4_2 strncmp-avx2 \
+-		   memchr-sse2 rawmemchr-sse2 memchr-avx2 rawmemchr-avx2 \
+-		   memrchr-sse2 memrchr-avx2 \
+-		   memcmp-sse2 \
+-		   memcmp-avx2-movbe \
+-		   memcmp-sse4 memcpy-ssse3 \
+-		   memmove-ssse3 \
+-		   memcpy-ssse3-back \
+-		   memmove-ssse3-back \
+-		   memmove-avx512-no-vzeroupper \
+-		   strcasecmp_l-sse2 strcasecmp_l-ssse3 \
+-		   strcasecmp_l-sse4_2 strcasecmp_l-avx \
+-		   strncase_l-sse2 strncase_l-ssse3 \
+-		   strncase_l-sse4_2 strncase_l-avx \
+-		   strchr-sse2 strchrnul-sse2 strchr-avx2 strchrnul-avx2 \
+-		   strrchr-sse2 strrchr-avx2 \
+-		   strlen-sse2 strnlen-sse2 strlen-avx2 strnlen-avx2 \
+-		   strcat-avx2 strncat-avx2 \
+-		   strcat-ssse3 strncat-ssse3\
+-		   strcpy-avx2 strncpy-avx2 \
+-		   strcpy-sse2 stpcpy-sse2 \
+-		   strcpy-ssse3 strncpy-ssse3 stpcpy-ssse3 stpncpy-ssse3 \
+-		   strcpy-sse2-unaligned strncpy-sse2-unaligned \
+-		   stpcpy-sse2-unaligned stpncpy-sse2-unaligned \
+-		   stpcpy-avx2 stpncpy-avx2 \
+-		   strcat-sse2 \
+-		   strcat-sse2-unaligned strncat-sse2-unaligned \
+-		   strchr-sse2-no-bsf memcmp-ssse3 strstr-sse2-unaligned \
+-		   strcspn-sse2 strpbrk-sse2 strspn-sse2 \
+-		   strcspn-c strpbrk-c strspn-c varshift \
+-		   memset-avx512-no-vzeroupper \
+-		   memmove-sse2-unaligned-erms \
+-		   memmove-avx-unaligned-erms \
+-		   memmove-avx512-unaligned-erms \
+-		   memset-sse2-unaligned-erms \
+-		   memset-avx2-unaligned-erms \
+-		   memset-avx512-unaligned-erms \
+-		   memchr-avx2-rtm \
+-		   memcmp-avx2-movbe-rtm \
+-		   memmove-avx-unaligned-erms-rtm \
+-		   memrchr-avx2-rtm \
+-		   memset-avx2-unaligned-erms-rtm \
+-		   rawmemchr-avx2-rtm \
+-		   strchr-avx2-rtm \
+-		   strcmp-avx2-rtm \
+-		   strchrnul-avx2-rtm \
+-		   stpcpy-avx2-rtm \
+-		   stpncpy-avx2-rtm \
+-		   strcat-avx2-rtm \
+-		   strcpy-avx2-rtm \
+-		   strlen-avx2-rtm \
+-		   strncat-avx2-rtm \
+-		   strncmp-avx2-rtm \
+-		   strncpy-avx2-rtm \
+-		   strnlen-avx2-rtm \
+-		   strrchr-avx2-rtm \
+-		   memchr-evex \
+-		   memcmp-evex-movbe \
+-		   memmove-evex-unaligned-erms \
+-		   memrchr-evex \
+-		   memset-evex-unaligned-erms \
+-		   rawmemchr-evex \
+-		   stpcpy-evex \
+-		   stpncpy-evex \
+-		   strcat-evex \
+-		   strchr-evex \
+-		   strchrnul-evex \
+-		   strcmp-evex \
+-		   strcpy-evex \
+-		   strlen-evex \
+-		   strncat-evex \
+-		   strncmp-evex \
+-		   strncpy-evex \
+-		   strnlen-evex \
+-		   strrchr-evex \
+-		   memchr-evex-rtm \
+-		   rawmemchr-evex-rtm
++sysdep_routines += \
++  bzero \
++  memchr-avx2 \
++  memchr-avx2-rtm \
++  memchr-evex \
++  memchr-evex-rtm \
++  memchr-sse2 \
++  memcmp-avx2-movbe \
++  memcmp-avx2-movbe-rtm \
++  memcmp-evex-movbe \
++  memcmp-sse2 \
++  memcmp-sse4 \
++  memcmp-ssse3 \
++  memcpy-ssse3 \
++  memcpy-ssse3-back \
++  memmove-avx-unaligned-erms \
++  memmove-avx-unaligned-erms-rtm \
++  memmove-avx512-no-vzeroupper \
++  memmove-avx512-unaligned-erms \
++  memmove-evex-unaligned-erms \
++  memmove-sse2-unaligned-erms \
++  memmove-ssse3 \
++  memmove-ssse3-back \
++  memrchr-avx2 \
++  memrchr-avx2-rtm \
++  memrchr-evex \
++  memrchr-sse2 \
++  memset-avx2-unaligned-erms \
++  memset-avx2-unaligned-erms-rtm \
++  memset-avx512-no-vzeroupper \
++  memset-avx512-unaligned-erms \
++  memset-evex-unaligned-erms \
++  memset-sse2-unaligned-erms \
++  rawmemchr-avx2 \
++  rawmemchr-avx2-rtm \
++  rawmemchr-evex \
++  rawmemchr-evex-rtm \
++  rawmemchr-sse2 \
++  stpcpy-avx2 \
++  stpcpy-avx2-rtm \
++  stpcpy-evex \
++  stpcpy-sse2 \
++  stpcpy-sse2-unaligned \
++  stpcpy-ssse3 \
++  stpncpy-avx2 \
++  stpncpy-avx2-rtm \
++  stpncpy-c \
++  stpncpy-evex \
++  stpncpy-sse2-unaligned \
++  stpncpy-ssse3 \
++  strcasecmp_l-avx \
++  strcasecmp_l-sse2 \
++  strcasecmp_l-sse4_2 \
++  strcasecmp_l-ssse3 \
++  strcat-avx2 \
++  strcat-avx2-rtm \
++  strcat-evex \
++  strcat-sse2 \
++  strcat-sse2-unaligned \
++  strcat-ssse3 \
++  strchr-avx2 \
++  strchr-avx2-rtm \
++  strchr-evex \
++  strchr-sse2 \
++  strchr-sse2-no-bsf \
++  strchrnul-avx2 \
++  strchrnul-avx2-rtm \
++  strchrnul-evex \
++  strchrnul-sse2 \
++  strcmp-avx2 \
++  strcmp-avx2-rtm \
++  strcmp-evex \
++  strcmp-sse2 \
++  strcmp-sse2-unaligned \
++  strcmp-sse4_2 \
++  strcmp-ssse3 \
++  strcpy-avx2 \
++  strcpy-avx2-rtm \
++  strcpy-evex \
++  strcpy-sse2 \
++  strcpy-sse2-unaligned \
++  strcpy-ssse3 \
++  strcspn-c \
++  strcspn-sse2 \
++  strlen-avx2 \
++  strlen-avx2-rtm \
++  strlen-evex \
++  strlen-sse2 \
++  strncase_l-avx \
++  strncase_l-sse2 \
++  strncase_l-sse4_2 \
++  strncase_l-ssse3 \
++  strncat-avx2 \
++  strncat-avx2-rtm \
++  strncat-c \
++  strncat-evex \
++  strncat-sse2-unaligned \
++  strncat-ssse3 \
++  strncmp-avx2 \
++  strncmp-avx2-rtm \
++  strncmp-evex \
++  strncmp-sse2 \
++  strncmp-sse4_2 \
++  strncmp-ssse3 \
++  strncpy-avx2 \
++  strncpy-avx2-rtm \
++  strncpy-c \
++  strncpy-evex \
++  strncpy-sse2-unaligned \
++  strncpy-ssse3 \
++  strnlen-avx2 \
++  strnlen-avx2-rtm \
++  strnlen-evex \
++  strnlen-sse2 \
++  strpbrk-c \
++  strpbrk-sse2 \
++  strrchr-avx2 \
++  strrchr-avx2-rtm \
++  strrchr-evex \
++  strrchr-sse2 \
++  strspn-c \
++  strspn-sse2 \
++  strstr-sse2-unaligned \
++  varshift \
++# sysdep_routines
+ CFLAGS-varshift.c += -msse4
+ CFLAGS-strcspn-c.c += -msse4
+ CFLAGS-strpbrk-c.c += -msse4
+diff --git a/sysdeps/x86_64/multiarch/bzero.c b/sysdeps/x86_64/multiarch/bzero.c
+new file mode 100644
+index 00000000..58a14b2c
+--- /dev/null
++++ b/sysdeps/x86_64/multiarch/bzero.c
+@@ -0,0 +1,106 @@
++/* Multiple versions of bzero.
++   All versions must be listed in ifunc-impl-list.c.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* Define multiple versions only for the definition in libc.  */
++#if IS_IN (libc)
++# define __bzero __redirect___bzero
++# include <string.h>
++# undef __bzero
++
++# define SYMBOL_NAME __bzero
++# include <init-arch.h>
++
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (sse2_unaligned)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (sse2_unaligned_erms)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (avx2_unaligned) attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (avx2_unaligned_erms)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (avx2_unaligned_rtm)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (avx2_unaligned_erms_rtm)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (evex_unaligned)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (evex_unaligned_erms)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (avx512_unaligned)
++  attribute_hidden;
++extern __typeof (REDIRECT_NAME) OPTIMIZE1 (avx512_unaligned_erms)
++  attribute_hidden;
++
++static inline void *
++IFUNC_SELECTOR (void)
++{
++  const struct cpu_features* cpu_features = __get_cpu_features ();
++
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
++      && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
++    {
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512VL)
++          && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW)
++          && CPU_FEATURE_USABLE_P (cpu_features, BMI2))
++	{
++	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
++	    return OPTIMIZE1 (avx512_unaligned_erms);
++
++	  return OPTIMIZE1 (avx512_unaligned);
++	}
++    }
++
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX2))
++    {
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512VL)
++          && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW)
++          && CPU_FEATURE_USABLE_P (cpu_features, BMI2))
++	{
++	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
++	    return OPTIMIZE1 (evex_unaligned_erms);
++
++	  return OPTIMIZE1 (evex_unaligned);
++	}
++
++      if (CPU_FEATURE_USABLE_P (cpu_features, RTM))
++	{
++	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
++	    return OPTIMIZE1 (avx2_unaligned_erms_rtm);
++
++	  return OPTIMIZE1 (avx2_unaligned_rtm);
++	}
++
++      if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER))
++	{
++	  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
++	    return OPTIMIZE1 (avx2_unaligned_erms);
++
++	  return OPTIMIZE1 (avx2_unaligned);
++	}
++    }
++
++  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
++    return OPTIMIZE1 (sse2_unaligned_erms);
++
++  return OPTIMIZE1 (sse2_unaligned);
++}
++
++libc_ifunc_redirected (__redirect___bzero, __bzero, IFUNC_SELECTOR ());
++
++weak_alias (__bzero, bzero)
++#endif
+diff --git a/sysdeps/x86_64/multiarch/ifunc-impl-list.c b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+index 8be0d78a..c963d391 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+@@ -282,6 +282,48 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __memset_avx512_no_vzeroupper)
+ 	     )
+ 
++  /* Support sysdeps/x86_64/multiarch/bzero.c.  */
++  IFUNC_IMPL (i, name, bzero,
++	      IFUNC_IMPL_ADD (array, i, bzero, 1,
++			      __bzero_sse2_unaligned)
++	      IFUNC_IMPL_ADD (array, i, bzero, 1,
++			      __bzero_sse2_unaligned_erms)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      CPU_FEATURE_USABLE (AVX2),
++			      __bzero_avx2_unaligned)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      CPU_FEATURE_USABLE (AVX2),
++			      __bzero_avx2_unaligned_erms)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      (CPU_FEATURE_USABLE (AVX2)
++			       && CPU_FEATURE_USABLE (RTM)),
++			      __bzero_avx2_unaligned_rtm)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      (CPU_FEATURE_USABLE (AVX2)
++			       && CPU_FEATURE_USABLE (RTM)),
++			      __bzero_avx2_unaligned_erms_rtm)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
++			      __bzero_evex_unaligned)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
++			      __bzero_evex_unaligned_erms)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
++			      __bzero_avx512_unaligned_erms)
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      (CPU_FEATURE_USABLE (AVX512VL)
++			       && CPU_FEATURE_USABLE (AVX512BW)
++			       && CPU_FEATURE_USABLE (BMI2)),
++			      __bzero_avx512_unaligned)
++	     )
++
+   /* Support sysdeps/x86_64/multiarch/rawmemchr.c.  */
+   IFUNC_IMPL (i, name, rawmemchr,
+ 	      IFUNC_IMPL_ADD (array, i, rawmemchr,
+diff --git a/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms-rtm.S b/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms-rtm.S
+index 8ac3e479..5a5ee6f6 100644
+--- a/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms-rtm.S
++++ b/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms-rtm.S
+@@ -5,6 +5,7 @@
+ 
+ #define SECTION(p) p##.avx.rtm
+ #define MEMSET_SYMBOL(p,s)	p##_avx2_##s##_rtm
++#define BZERO_SYMBOL(p,s)	p##_avx2_##s##_rtm
+ #define WMEMSET_SYMBOL(p,s)	p##_avx2_##s##_rtm
+ 
+ #include "memset-avx2-unaligned-erms.S"
+diff --git a/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms.S
+index c0bf2875..a093a283 100644
+--- a/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-avx2-unaligned-erms.S
+@@ -14,6 +14,9 @@
+   vmovd d, %xmm0; \
+   movq r, %rax;
+ 
++# define BZERO_ZERO_VEC0() \
++  vpxor %xmm0, %xmm0, %xmm0
++
+ # define WMEMSET_SET_VEC0_AND_SET_RETURN(d, r) \
+   MEMSET_SET_VEC0_AND_SET_RETURN(d, r)
+ 
+@@ -29,6 +32,9 @@
+ # ifndef MEMSET_SYMBOL
+ #  define MEMSET_SYMBOL(p,s)	p##_avx2_##s
+ # endif
++# ifndef BZERO_SYMBOL
++#  define BZERO_SYMBOL(p,s)	p##_avx2_##s
++# endif
+ # ifndef WMEMSET_SYMBOL
+ #  define WMEMSET_SYMBOL(p,s)	p##_avx2_##s
+ # endif
+diff --git a/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
+index 5241216a..727c9213 100644
+--- a/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-avx512-unaligned-erms.S
+@@ -19,6 +19,9 @@
+   vpbroadcastb d, %VEC0; \
+   movq r, %rax
+ 
++# define BZERO_ZERO_VEC0() \
++  vpxorq %XMM0, %XMM0, %XMM0
++
+ # define WMEMSET_SET_VEC0_AND_SET_RETURN(d, r) \
+   vpbroadcastd d, %VEC0; \
+   movq r, %rax
+diff --git a/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S
+index 63700215..5d8fa78f 100644
+--- a/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-evex-unaligned-erms.S
+@@ -19,6 +19,9 @@
+   vpbroadcastb d, %VEC0; \
+   movq r, %rax
+ 
++# define BZERO_ZERO_VEC0() \
++  vpxorq %XMM0, %XMM0, %XMM0
++
+ # define WMEMSET_SET_VEC0_AND_SET_RETURN(d, r) \
+   vpbroadcastd d, %VEC0; \
+   movq r, %rax
+diff --git a/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
+index 56b81f5c..8f579ad6 100644
+--- a/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
+@@ -22,6 +22,7 @@
+ 
+ #if IS_IN (libc)
+ # define MEMSET_SYMBOL(p,s)	p##_sse2_##s
++# define BZERO_SYMBOL(p,s)	MEMSET_SYMBOL (p, s)
+ # define WMEMSET_SYMBOL(p,s)	p##_sse2_##s
+ 
+ # ifdef SHARED
+diff --git a/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+index a67f9833..06f5f5d7 100644
+--- a/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+@@ -26,6 +26,10 @@
+ 
+ #include <sysdep.h>
+ 
++#ifndef BZERO_SYMBOL
++# define BZERO_SYMBOL(p,s)		MEMSET_SYMBOL (p, s)
++#endif
++
+ #ifndef MEMSET_CHK_SYMBOL
+ # define MEMSET_CHK_SYMBOL(p,s)		MEMSET_SYMBOL(p, s)
+ #endif
+@@ -87,6 +91,18 @@
+ # define XMM_SMALL	0
+ #endif
+ 
++#ifdef USE_LESS_VEC_MASK_STORE
++# define SET_REG64	rcx
++# define SET_REG32	ecx
++# define SET_REG16	cx
++# define SET_REG8	cl
++#else
++# define SET_REG64	rsi
++# define SET_REG32	esi
++# define SET_REG16	si
++# define SET_REG8	sil
++#endif
++
+ #define PAGE_SIZE 4096
+ 
+ /* Macro to calculate size of small memset block for aligning
+@@ -96,18 +112,6 @@
+ 
+ #ifndef SECTION
+ # error SECTION is not defined!
+-#endif
+-
+-	.section SECTION(.text),"ax",@progbits
+-#if VEC_SIZE == 16 && IS_IN (libc)
+-ENTRY (__bzero)
+-	mov	%RDI_LP, %RAX_LP /* Set return value.  */
+-	mov	%RSI_LP, %RDX_LP /* Set n.  */
+-	xorl	%esi, %esi
+-	pxor	%XMM0, %XMM0
+-	jmp	L(entry_from_bzero)
+-END (__bzero)
+-weak_alias (__bzero, bzero)
+ #endif
+ 
+ #if IS_IN (libc)
+@@ -123,12 +127,37 @@ ENTRY (WMEMSET_SYMBOL (__wmemset, unaligned))
+ 	WMEMSET_SET_VEC0_AND_SET_RETURN (%esi, %rdi)
+ 	WMEMSET_VDUP_TO_VEC0_LOW()
+ 	cmpq	$VEC_SIZE, %rdx
+-	jb	L(less_vec_no_vdup)
++	jb	L(less_vec_from_wmemset)
+ 	WMEMSET_VDUP_TO_VEC0_HIGH()
+ 	jmp	L(entry_from_wmemset)
+ END (WMEMSET_SYMBOL (__wmemset, unaligned))
+ #endif
+ 
++ENTRY (BZERO_SYMBOL(__bzero, unaligned))
++#if VEC_SIZE > 16
++	BZERO_ZERO_VEC0 ()
++#endif
++	mov	%RDI_LP, %RAX_LP
++	mov	%RSI_LP, %RDX_LP
++#ifndef USE_LESS_VEC_MASK_STORE
++	xorl	%esi, %esi
++#endif
++	cmp	$VEC_SIZE, %RDX_LP
++	jb	L(less_vec_no_vdup)
++#ifdef USE_LESS_VEC_MASK_STORE
++	xorl	%esi, %esi
++#endif
++#if VEC_SIZE <= 16
++	BZERO_ZERO_VEC0 ()
++#endif
++	cmp	$(VEC_SIZE * 2), %RDX_LP
++	ja	L(more_2x_vec)
++	/* From VEC and to 2 * VEC.  No branch when size == VEC_SIZE.  */
++	VMOVU	%VEC(0), (%rdi)
++	VMOVU	%VEC(0), (VEC_SIZE * -1)(%rdi, %rdx)
++	VZEROUPPER_RETURN
++END (BZERO_SYMBOL(__bzero, unaligned))
++
+ #if defined SHARED && IS_IN (libc)
+ ENTRY_CHK (MEMSET_CHK_SYMBOL (__memset_chk, unaligned))
+ 	cmp	%RDX_LP, %RCX_LP
+@@ -142,7 +171,6 @@ ENTRY (MEMSET_SYMBOL (__memset, unaligned))
+ 	/* Clear the upper 32 bits.  */
+ 	mov	%edx, %edx
+ # endif
+-L(entry_from_bzero):
+ 	cmpq	$VEC_SIZE, %rdx
+ 	jb	L(less_vec)
+ 	MEMSET_VDUP_TO_VEC0_HIGH()
+@@ -187,6 +215,31 @@ END (__memset_erms)
+ END (MEMSET_SYMBOL (__memset, erms))
+ # endif
+ 
++ENTRY_P2ALIGN (BZERO_SYMBOL(__bzero, unaligned_erms), 6)
++# if VEC_SIZE > 16
++	BZERO_ZERO_VEC0 ()
++# endif
++	mov	%RDI_LP, %RAX_LP
++	mov	%RSI_LP, %RDX_LP
++# ifndef USE_LESS_VEC_MASK_STORE
++	xorl	%esi, %esi
++# endif
++	cmp	$VEC_SIZE, %RDX_LP
++	jb	L(less_vec_no_vdup)
++# ifdef USE_LESS_VEC_MASK_STORE
++	xorl	%esi, %esi
++# endif
++# if VEC_SIZE <= 16
++	BZERO_ZERO_VEC0 ()
++# endif
++	cmp	$(VEC_SIZE * 2), %RDX_LP
++	ja	L(stosb_more_2x_vec)
++	/* From VEC and to 2 * VEC.  No branch when size == VEC_SIZE.  */
++	VMOVU	%VEC(0), (%rdi)
++	VMOVU	%VEC(0), (VEC_SIZE * -1)(%rdi, %rdx)
++	VZEROUPPER_RETURN
++END (BZERO_SYMBOL(__bzero, unaligned_erms))
++
+ # if defined SHARED && IS_IN (libc)
+ ENTRY_CHK (MEMSET_CHK_SYMBOL (__memset_chk, unaligned_erms))
+ 	cmp	%RDX_LP, %RCX_LP
+@@ -229,6 +282,7 @@ L(last_2x_vec):
+ 	.p2align 4,, 10
+ L(less_vec):
+ L(less_vec_no_vdup):
++L(less_vec_from_wmemset):
+ 	/* Less than 1 VEC.  */
+ # if VEC_SIZE != 16 && VEC_SIZE != 32 && VEC_SIZE != 64
+ #  error Unsupported VEC_SIZE!
+@@ -374,8 +428,11 @@ L(less_vec):
+ 	/* Broadcast esi to partial register (i.e VEC_SIZE == 32 broadcast to
+ 	   xmm). This is only does anything for AVX2.  */
+ 	MEMSET_VDUP_TO_VEC0_LOW ()
++L(less_vec_from_wmemset):
++#if VEC_SIZE > 16
+ L(less_vec_no_vdup):
+ #endif
++#endif
+ L(cross_page):
+ #if VEC_SIZE > 32
+ 	cmpl	$32, %edx
+@@ -386,7 +443,10 @@ L(cross_page):
+ 	jge	L(between_16_31)
+ #endif
+ #ifndef USE_XMM_LESS_VEC
+-	MOVQ	%XMM0, %rcx
++	MOVQ	%XMM0, %SET_REG64
++#endif
++#if VEC_SIZE <= 16
++L(less_vec_no_vdup):
+ #endif
+ 	cmpl	$8, %edx
+ 	jge	L(between_8_15)
+@@ -395,7 +455,7 @@ L(cross_page):
+ 	cmpl	$1, %edx
+ 	jg	L(between_2_3)
+ 	jl	L(between_0_0)
+-	movb	%sil, (%LESS_VEC_REG)
++	movb	%SET_REG8, (%LESS_VEC_REG)
+ L(between_0_0):
+ 	ret
+ 
+@@ -428,8 +488,8 @@ L(between_8_15):
+ 	MOVQ	%XMM0, (%rdi)
+ 	MOVQ	%XMM0, -8(%rdi, %rdx)
+ #else
+-	movq	%rcx, (%LESS_VEC_REG)
+-	movq	%rcx, -8(%LESS_VEC_REG, %rdx)
++	movq	%SET_REG64, (%LESS_VEC_REG)
++	movq	%SET_REG64, -8(%LESS_VEC_REG, %rdx)
+ #endif
+ 	ret
+ 
+@@ -442,8 +502,8 @@ L(between_4_7):
+ 	MOVD	%XMM0, (%rdi)
+ 	MOVD	%XMM0, -4(%rdi, %rdx)
+ #else
+-	movl	%ecx, (%LESS_VEC_REG)
+-	movl	%ecx, -4(%LESS_VEC_REG, %rdx)
++	movl	%SET_REG32, (%LESS_VEC_REG)
++	movl	%SET_REG32, -4(%LESS_VEC_REG, %rdx)
+ #endif
+ 	ret
+ 
+@@ -452,12 +512,12 @@ L(between_4_7):
+ L(between_2_3):
+ 	/* From 2 to 3.  No branch when size == 2.  */
+ #ifdef USE_XMM_LESS_VEC
+-	movb	%sil, (%rdi)
+-	movb	%sil, 1(%rdi)
+-	movb	%sil, -1(%rdi, %rdx)
++	movb	%SET_REG8, (%rdi)
++	movb	%SET_REG8, 1(%rdi)
++	movb	%SET_REG8, -1(%rdi, %rdx)
+ #else
+-	movw	%cx, (%LESS_VEC_REG)
+-	movb	%sil, -1(%LESS_VEC_REG, %rdx)
++	movw	%SET_REG16, (%LESS_VEC_REG)
++	movb	%SET_REG8, -1(%LESS_VEC_REG, %rdx)
+ #endif
+ 	ret
+ END (MEMSET_SYMBOL (__memset, unaligned_erms))
+-- 
+GitLab
+

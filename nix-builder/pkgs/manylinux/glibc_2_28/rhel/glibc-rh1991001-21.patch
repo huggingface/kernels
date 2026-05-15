@@ -1,0 +1,20 @@
+commit df4cb2280e32187380520f71bd27ab32252cbc85
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Nov 30 15:39:17 2021 +0100
+
+    elf: Include <stdbool.h> in tst-tls20.c
+    
+    The test uses the bool type.
+
+diff --git a/elf/tst-tls20.c b/elf/tst-tls20.c
+index 18067e6b0a6093f9..200dacb748af21a8 100644
+--- a/elf/tst-tls20.c
++++ b/elf/tst-tls20.c
+@@ -19,6 +19,7 @@
+ #include <array_length.h>
+ #include <dlfcn.h>
+ #include <pthread.h>
++#include <stdbool.h>
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>

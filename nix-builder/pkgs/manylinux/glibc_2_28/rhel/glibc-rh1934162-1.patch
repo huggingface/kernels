@@ -1,0 +1,159 @@
+From 332421312576bd7095e70589154af99b124dd2d1 Mon Sep 17 00:00:00 2001
+From: Carlos O'Donell <carlos@redhat.com>
+Date: Fri, 12 Mar 2021 16:44:47 +0100
+Subject: elf: Always set l in _dl_init_paths (bug 23462)
+
+After d1d5471579eb0426671bf94f2d71e61dfb204c30 ("Remove dead
+DL_DST_REQ_STATIC code.") we always setup the link map l to make the
+static and shared cases the same.  The bug is that in elf/dl-load.c
+(_dl_init_paths) we conditionally set l only in the #ifdef SHARED
+case, but unconditionally use it later.  The simple solution is to
+remove the #ifdef SHARED conditional, because it's no longer needed,
+and unconditionally setup l for both the static and shared cases. A
+regression test is added to run a static binary with
+LD_LIBRARY_PATH='$ORIGIN' which crashes before the fix and runs after
+the fix.
+
+Co-Authored-By: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/elf/Makefile b/elf/Makefile
+--- a/elf/Makefile	2021-11-02 16:28:14.720143774 -0400
++++ b/elf/Makefile	2021-11-02 18:42:38.763843571 -0400
+@@ -151,7 +151,8 @@ endif
+ tests-static-normal := tst-leaks1-static tst-array1-static tst-array5-static \
+ 	       tst-dl-iter-static \
+ 	       tst-tlsalign-static tst-tlsalign-extern-static \
+-	       tst-linkall-static tst-env-setuid tst-env-setuid-tunables
++	       tst-linkall-static tst-env-setuid tst-env-setuid-tunables \
++	       tst-dst-static
+ tests-static-internal := tst-tls1-static tst-tls2-static \
+ 	       tst-ptrguard1-static tst-stackguard1-static \
+ 	       tst-tls1-static-non-pie tst-libc_dlvsym-static
+@@ -1811,3 +1812,5 @@ $(objpfx)tst-glibc-hwcaps-mask.out: \
+ # Generic dependency for sysdeps implementation of
+ # tst-glibc-hwcaps-cache.
+ $(objpfx)tst-glibc-hwcaps-cache.out: $(objpfx)tst-glibc-hwcaps
++
++tst-dst-static-ENV = LD_LIBRARY_PATH='$$ORIGIN'
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 9e2089cfaa..376a2e64d6 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -758,50 +758,45 @@ _dl_init_paths (const char *llp, const char *source,
+   max_dirnamelen = SYSTEM_DIRS_MAX_LEN;
+   *aelem = NULL;
+ 
+-#ifdef SHARED
+   /* This points to the map of the main object.  */
+   l = GL(dl_ns)[LM_ID_BASE]._ns_loaded;
+-  if (l != NULL)
++  assert (l->l_type != lt_loaded);
++
++  if (l->l_info[DT_RUNPATH])
++    {
++      /* Allocate room for the search path and fill in information
++	 from RUNPATH.  */
++      decompose_rpath (&l->l_runpath_dirs,
++		       (const void *) (D_PTR (l, l_info[DT_STRTAB])
++				       + l->l_info[DT_RUNPATH]->d_un.d_val),
++		       l, "RUNPATH");
++      /* During rtld init the memory is allocated by the stub malloc,
++	 prevent any attempt to free it by the normal malloc.  */
++      l->l_runpath_dirs.malloced = 0;
++
++      /* The RPATH is ignored.  */
++      l->l_rpath_dirs.dirs = (void *) -1;
++    }
++  else
+     {
+-      assert (l->l_type != lt_loaded);
++      l->l_runpath_dirs.dirs = (void *) -1;
+ 
+-      if (l->l_info[DT_RUNPATH])
++      if (l->l_info[DT_RPATH])
+ 	{
+ 	  /* Allocate room for the search path and fill in information
+-	     from RUNPATH.  */
+-	  decompose_rpath (&l->l_runpath_dirs,
++	     from RPATH.  */
++	  decompose_rpath (&l->l_rpath_dirs,
+ 			   (const void *) (D_PTR (l, l_info[DT_STRTAB])
+-					   + l->l_info[DT_RUNPATH]->d_un.d_val),
+-			   l, "RUNPATH");
+-	  /* During rtld init the memory is allocated by the stub malloc,
+-	     prevent any attempt to free it by the normal malloc.  */
+-	  l->l_runpath_dirs.malloced = 0;
+-
+-	  /* The RPATH is ignored.  */
+-	  l->l_rpath_dirs.dirs = (void *) -1;
++					   + l->l_info[DT_RPATH]->d_un.d_val),
++			   l, "RPATH");
++	  /* During rtld init the memory is allocated by the stub
++	     malloc, prevent any attempt to free it by the normal
++	     malloc.  */
++	  l->l_rpath_dirs.malloced = 0;
+ 	}
+       else
+-	{
+-	  l->l_runpath_dirs.dirs = (void *) -1;
+-
+-	  if (l->l_info[DT_RPATH])
+-	    {
+-	      /* Allocate room for the search path and fill in information
+-		 from RPATH.  */
+-	      decompose_rpath (&l->l_rpath_dirs,
+-			       (const void *) (D_PTR (l, l_info[DT_STRTAB])
+-					       + l->l_info[DT_RPATH]->d_un.d_val),
+-			       l, "RPATH");
+-	      /* During rtld init the memory is allocated by the stub
+-		 malloc, prevent any attempt to free it by the normal
+-		 malloc.  */
+-	      l->l_rpath_dirs.malloced = 0;
+-	    }
+-	  else
+-	    l->l_rpath_dirs.dirs = (void *) -1;
+-	}
++	l->l_rpath_dirs.dirs = (void *) -1;
+     }
+-#endif	/* SHARED */
+ 
+   if (llp != NULL && *llp != '\0')
+     {
+diff --git a/elf/tst-dst-static.c b/elf/tst-dst-static.c
+new file mode 100644
+index 0000000000..56eb371c96
+--- /dev/null
++++ b/elf/tst-dst-static.c
+@@ -0,0 +1,32 @@
++/* Test DST expansion for static binaries doesn't carsh.  Bug 23462.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* The purpose of this test is to exercise the code in elf/dl-loac.c
++   (_dl_init_paths) or thereabout and ensure that static binaries
++   don't crash when expanding DSTs.
++
++   If the dynamic loader code linked into the static binary cannot
++   handle expanding the DSTs e.g. null-deref on an incomplete link
++   map, then it will crash before reaching main, so the test harness
++   is unnecessary.  */
++
++int
++main (void)
++{
++  return 0;
++}

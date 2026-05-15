@@ -1,0 +1,86 @@
+commit c2adefbafcdd2519ff43eca6891c77cd7b29ab62
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 15 16:09:43 2019 +0200
+
+    login: Add nonstring attributes to struct utmp, struct utmpx [BZ #24899]
+    
+    Commit 7532837d7b03b3ca5b9a63d77a5bd81dd23f3d9c ("The
+    -Wstringop-truncation option new in GCC 8 detects common misuses")
+    added __attribute_nonstring__ to bits/utmp.h, but it did not update
+    the parallel bits/utmpx.h header.  In struct utmp, the nonstring
+    attribute for ut_id was missing.
+
+diff --git a/bits/utmp.h b/bits/utmp.h
+index 3c02dd4f3fe4e99b..854b342164b785e0 100644
+--- a/bits/utmp.h
++++ b/bits/utmp.h
+@@ -61,7 +61,8 @@ struct utmp
+   pid_t ut_pid;			/* Process ID of login process.  */
+   char ut_line[UT_LINESIZE]
+     __attribute_nonstring__;	/* Devicename.  */
+-  char ut_id[4];		/* Inittab ID.  */
++  char ut_id[4]
++    __attribute_nonstring__;	/* Inittab ID.  */
+   char ut_user[UT_NAMESIZE]
+     __attribute_nonstring__;	/* Username.  */
+   char ut_host[UT_HOSTSIZE]
+diff --git a/sysdeps/gnu/bits/utmpx.h b/sysdeps/gnu/bits/utmpx.h
+index 2a77efc607ae2ac0..71c743ebfcd41194 100644
+--- a/sysdeps/gnu/bits/utmpx.h
++++ b/sysdeps/gnu/bits/utmpx.h
+@@ -56,10 +56,14 @@ struct utmpx
+ {
+   short int ut_type;		/* Type of login.  */
+   __pid_t ut_pid;		/* Process ID of login process.  */
+-  char ut_line[__UT_LINESIZE];	/* Devicename.  */
+-  char ut_id[4];		/* Inittab ID. */
+-  char ut_user[__UT_NAMESIZE];	/* Username.  */
+-  char ut_host[__UT_HOSTSIZE];	/* Hostname for remote login.  */
++  char ut_line[__UT_LINESIZE]
++    __attribute_nonstring__;	/* Devicename.  */
++  char ut_id[4]
++    __attribute_nonstring__;	/* Inittab ID.  */
++  char ut_user[__UT_NAMESIZE]
++    __attribute_nonstring__;	/* Username.  */
++  char ut_host[__UT_HOSTSIZE]
++    __attribute_nonstring__;	/* Hostname for remote login.  */
+   struct __exit_status ut_exit;	/* Exit status of a process marked
+ 				   as DEAD_PROCESS.  */
+ 
+diff --git a/sysdeps/unix/sysv/linux/s390/bits/utmp.h b/sysdeps/unix/sysv/linux/s390/bits/utmp.h
+index b3fa362f478ae6fe..82e8d17e2e8cc031 100644
+--- a/sysdeps/unix/sysv/linux/s390/bits/utmp.h
++++ b/sysdeps/unix/sysv/linux/s390/bits/utmp.h
+@@ -61,7 +61,8 @@ struct utmp
+   pid_t ut_pid;			/* Process ID of login process.  */
+   char ut_line[UT_LINESIZE]
+      __attribute_nonstring__;	/* Devicename.  */
+-  char ut_id[4];		/* Inittab ID.  */
++  char ut_id[4]
++    __attribute_nonstring__;	/* Inittab ID.  */
+   char ut_user[UT_NAMESIZE]
+      __attribute_nonstring__;	/* Username.  */
+   char ut_host[UT_HOSTSIZE]
+diff --git a/sysdeps/unix/sysv/linux/s390/bits/utmpx.h b/sysdeps/unix/sysv/linux/s390/bits/utmpx.h
+index 3d3036c3b91e6f57..3818ed3aa4df1e65 100644
+--- a/sysdeps/unix/sysv/linux/s390/bits/utmpx.h
++++ b/sysdeps/unix/sysv/linux/s390/bits/utmpx.h
+@@ -56,10 +56,14 @@ struct utmpx
+ {
+   short int ut_type;		/* Type of login.  */
+   __pid_t ut_pid;		/* Process ID of login process.  */
+-  char ut_line[__UT_LINESIZE];	/* Devicename.  */
+-  char ut_id[4];		/* Inittab ID. */
+-  char ut_user[__UT_NAMESIZE];	/* Username.  */
+-  char ut_host[__UT_HOSTSIZE];	/* Hostname for remote login.  */
++  char ut_line[__UT_LINESIZE]
++    __attribute_nonstring__;	/* Devicename.  */
++  char ut_id[4]
++    __attribute_nonstring__;	/* Inittab ID.  */
++  char ut_user[__UT_NAMESIZE]
++    __attribute_nonstring__;	/* Username.  */
++  char ut_host[__UT_HOSTSIZE]
++    __attribute_nonstring__;	/* Hostname for remote login.  */
+   struct __exit_status ut_exit;	/* Exit status of a process marked
+ 				   as DEAD_PROCESS.  */
+ 

@@ -1,0 +1,249 @@
+commit 79b44cf61115bd48006227bb325b709f294c56f9
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:23 2018 +0100
+
+    S390: Refactor wcscspn ifunc handling.
+    
+    The ifunc handling for wcscspn is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcscspn variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcscspn variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcscspn.
+            * sysdeps/s390/multiarch/wcscspn-c.c: Move to ...
+            * sysdeps/s390/wcscspn-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcscspn-vx.S: Move to ...
+            * sysdeps/s390/wcscspn-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcscspn.c: Move to ...
+            * sysdeps/s390/wcscspn.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcscspn.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index af595050d43c63ed..da96ac3a36bd7f4e 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -74,5 +74,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcschrnul wcschrnul-vx wcschrnul-c \
+ 		   wcsrchr wcsrchr-vx wcsrchr-c \
+ 		   wcsspn wcsspn-vx wcsspn-c \
+-		   wcspbrk wcspbrk-vx wcspbrk-c
++		   wcspbrk wcspbrk-vx wcspbrk-c \
++		   wcscspn wcscspn-vx wcscspn-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcscspn.h b/sysdeps/s390/ifunc-wcscspn.h
+new file mode 100644
+index 0000000000000000..23f3667ba3823e99
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcscspn.h
+@@ -0,0 +1,53 @@
++/* wcscspn variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSCSPN_IFUNC	1
++#else
++# define HAVE_WCSCSPN_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSCSPN_IFUNC_AND_VX_SUPPORT HAVE_WCSCSPN_IFUNC
++#else
++# define HAVE_WCSCSPN_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSCSPN_DEFAULT	WCSCSPN_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSCSPN_C		1
++# define HAVE_WCSCSPN_Z13	1
++#else
++# define WCSCSPN_DEFAULT	WCSCSPN_C
++# define HAVE_WCSCSPN_C		1
++# define HAVE_WCSCSPN_Z13	HAVE_WCSCSPN_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSCSPN_C
++# define WCSCSPN_C		__wcscspn_c
++#else
++# define WCSCSPN_C		NULL
++#endif
++
++#if HAVE_WCSCSPN_Z13
++# define WCSCSPN_Z13		__wcscspn_vx
++#else
++# define WCSCSPN_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index e1e2d9dc7495ebdc..5be635542361b355 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcscspn wcscspn-vx wcscspn-c \
+-		   wmemchr wmemchr-vx wmemchr-c \
++sysdep_routines += wmemchr wmemchr-vx wmemchr-c \
+ 		   wmemset wmemset-vx wmemset-c \
+ 		   wmemcmp wmemcmp-vx wmemcmp-c
+ endif
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 89d6e8ad7e323fec..7d8031a069bd23ba 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -61,6 +61,7 @@
+ #include <ifunc-wcsrchr.h>
+ #include <ifunc-wcsspn.h>
+ #include <ifunc-wcspbrk.h>
++#include <ifunc-wcscspn.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -619,6 +620,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSPBRK_IFUNC  */
+ 
++#if HAVE_WCSCSPN_IFUNC
++    IFUNC_IMPL (i, name, wcscspn,
++# if HAVE_WCSCSPN_Z13
++		IFUNC_IMPL_ADD (array, i, wcscspn,
++				dl_hwcap & HWCAP_S390_VX, WCSCSPN_Z13)
++# endif
++# if HAVE_WCSCSPN_C
++		IFUNC_IMPL_ADD (array, i, wcscspn, 1, WCSCSPN_C)
++# endif
++		)
++#endif /* HAVE_WCSCSPN_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -627,8 +640,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcscspn);
+-
+   IFUNC_VX_IMPL (wmemchr);
+ 
+   IFUNC_VX_IMPL (wmemset);
+diff --git a/sysdeps/s390/multiarch/wcscspn-c.c b/sysdeps/s390/wcscspn-c.c
+similarity index 86%
+rename from sysdeps/s390/multiarch/wcscspn-c.c
+rename to sysdeps/s390/wcscspn-c.c
+index 161e52e686c73907..d47cb6b75be14e14 100644
+--- a/sysdeps/s390/multiarch/wcscspn-c.c
++++ b/sysdeps/s390/wcscspn-c.c
+@@ -16,11 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSCSPN  __wcscspn_c
++#include <ifunc-wcscspn.h>
+ 
+-# include <wchar.h>
+-extern __typeof (wcscspn) __wcscspn_c;
++#if HAVE_WCSCSPN_C
++# if HAVE_WCSCSPN_IFUNC || HAVE_WCSCSPN_Z13
++#  define WCSCSPN WCSCSPN_C
++# endif
+ 
+ # include <wcsmbs/wcscspn.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcscspn-vx.S b/sysdeps/s390/wcscspn-vx.S
+similarity index 98%
+rename from sysdeps/s390/multiarch/wcscspn-vx.S
+rename to sysdeps/s390/wcscspn-vx.S
+index 06bc4e25d0456aea..882cb93fb807caa1 100644
+--- a/sysdeps/s390/multiarch/wcscspn-vx.S
++++ b/sysdeps/s390/wcscspn-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcscspn.h>
++#if HAVE_WCSCSPN_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -57,7 +58,7 @@
+ 			otherwise =0;
+    r9:  loaded byte count of vlbb reject-string
+ */
+-ENTRY(__wcscspn_vx)
++ENTRY(WCSCSPN_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -288,6 +289,10 @@ ENTRY(__wcscspn_vx)
+ 	vlgvg	%r9,%v31,1
+ 	br	%r14
+ .Lfallback:
+-	jg	__wcscspn_c
+-END(__wcscspn_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSCSPN_C
++END(WCSCSPN_Z13)
++
++# if ! HAVE_WCSCSPN_IFUNC
++strong_alias (WCSCSPN_Z13, wcscspn)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcscspn.c b/sysdeps/s390/wcscspn.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/wcscspn.c
+rename to sysdeps/s390/wcscspn.c
+index 707327522ad20287..0ce31b8aabf3b429 100644
+--- a/sysdeps/s390/multiarch/wcscspn.c
++++ b/sysdeps/s390/wcscspn.c
+@@ -16,12 +16,23 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcscspn.h>
++
++#if HAVE_WCSCSPN_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2 (__wcscspn, wcscspn)
++# if HAVE_WCSCSPN_C
++extern __typeof (wcscspn) WCSCSPN_C attribute_hidden;
++# endif
++
++# if HAVE_WCSCSPN_Z13
++extern __typeof (wcscspn) WCSCSPN_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcscspn.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (wcscspn, wcscspn,
++		      (HAVE_WCSCSPN_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSCSPN_Z13
++		      : WCSCSPN_DEFAULT
++		      )
++#endif

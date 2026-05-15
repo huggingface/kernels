@@ -1,0 +1,50 @@
+commit d50f09181eca10a91fd9035bb90711b265770dc9
+Author: Alexandra Hájková <ahajkova@redhat.com>
+Date:   Mon May 13 19:31:53 2019 +0200
+
+    support: Add support_install_rootsbindir
+    
+    Reviewed by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+diff --git a/support/Makefile b/support/Makefile
+index fe416cd..18d39f5 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -180,7 +180,8 @@ CFLAGS-support_paths.c = \
+ 		-DOBJDIR_ELF_LDSO_PATH=\"`cd $(objpfx)/..; pwd`/elf/$(rtld-installed-name)\" \
+ 		-DINSTDIR_PATH=\"$(prefix)\" \
+ 		-DLIBDIR_PATH=\"$(libdir)\" \
+-		-DBINDIR_PATH=\"$(bindir)\"
++		-DBINDIR_PATH=\"$(bindir)\" \
++		-DROOTSBINDIR_PATH=\"$(rootsbindir)\"
+ 
+ ifeq (,$(CXX))
+ LINKS_DSO_PROGRAM = links-dso-program-c
+diff --git a/support/support.h b/support/support.h
+index b162491..13076b7 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -107,6 +107,8 @@ extern const char support_install_prefix[];
+ extern const char support_libdir_prefix[];
+ /* Corresponds to the install's bin/ directory.  */
+ extern const char support_bindir_prefix[];
++/* Corresponds to the install's sbin/ directory.  */
++extern const char support_install_rootsbindir[];
+ 
+ extern ssize_t support_copy_file_range (int, off64_t *, int, off64_t *,
+ 					size_t, unsigned int);
+diff --git a/support/support_paths.c b/support/support_paths.c
+index 75634aa..1fe3283 100644
+--- a/support/support_paths.c
++++ b/support/support_paths.c
+@@ -64,3 +64,10 @@ const char support_bindir_prefix[] = BINDIR_PATH;
+ #else
+ # error please -DBINDIR_PATH=something in the Makefile
+ #endif
++
++#ifdef ROOTSBINDIR_PATH
++/* Corresponds to the install's sbin/ directory.  */
++const char support_install_rootsbindir[] = ROOTSBINDIR_PATH;
++#else
++# error please -DROOTSBINDIR_PATH=something in the Makefile
++#endif

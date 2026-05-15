@@ -1,0 +1,142 @@
+commit 2c75b545de6fe3c44138799c68217a94bc669a88
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Jun 18 16:42:10 2019 +0200
+
+    elf: Refuse to dlopen PIE objects [BZ #24323]
+    
+    Another executable has already been mapped, so the dynamic linker
+    cannot perform relocations correctly for the second executable.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 08e2f99..27a2fa8 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -310,7 +310,7 @@ test-xfail-tst-protected1b = yes
+ endif
+ ifeq (yesyes,$(have-fpie)$(build-shared))
+ modules-names += tst-piemod1
+-tests += tst-pie1 tst-pie2
++tests += tst-pie1 tst-pie2 tst-dlopen-pie
+ tests-pie += tst-pie1 tst-pie2
+ ifeq (yes,$(have-protected-data))
+ tests += vismain
+@@ -1084,6 +1084,8 @@ CFLAGS-tst-pie2.c += $(pie-ccflag)
+ 
+ $(objpfx)tst-piemod1.so: $(libsupport)
+ $(objpfx)tst-pie1: $(objpfx)tst-piemod1.so
++$(objpfx)tst-dlopen-pie: $(libdl)
++$(objpfx)tst-dlopen-pie.out: $(objpfx)tst-pie1
+ 
+ ifeq (yes,$(build-shared))
+ # NB: Please keep cet-built-dso in sysdeps/x86/Makefile in sync with
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 2bbef81..5abeb86 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -1158,6 +1158,10 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
+ 	goto call_lose;
+       }
+ 
++    /* dlopen of an executable is not valid because it is not possible
++       to perform proper relocations, handle static TLS, or run the
++       ELF constructors.  For PIE, the check needs the dynamic
++       section, so there is another check below.  */
+     if (__glibc_unlikely (type != ET_DYN)
+ 	&& __glibc_unlikely ((mode & __RTLD_OPENEXEC) == 0))
+       {
+@@ -1194,9 +1198,11 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
+   elf_get_dynamic_info (l, NULL);
+ 
+   /* Make sure we are not dlopen'ing an object that has the
+-     DF_1_NOOPEN flag set.  */
+-  if (__glibc_unlikely (l->l_flags_1 & DF_1_NOOPEN)
+-      && (mode & __RTLD_DLOPEN))
++     DF_1_NOOPEN flag set, or a PIE object.  */
++  if ((__glibc_unlikely (l->l_flags_1 & DF_1_NOOPEN)
++       && (mode & __RTLD_DLOPEN))
++      || (__glibc_unlikely (l->l_flags_1 & DF_1_PIE)
++	  && __glibc_unlikely ((mode & __RTLD_OPENEXEC) == 0)))
+     {
+       /* We are not supposed to load this object.  Free all resources.  */
+       _dl_unmap_segments (l);
+@@ -1207,7 +1213,11 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
+       if (l->l_phdr_allocated)
+ 	free ((void *) l->l_phdr);
+ 
+-      errstring = N_("shared object cannot be dlopen()ed");
++      if (l->l_flags_1 & DF_1_PIE)
++	errstring
++	  = N_("cannot dynamically load position-independent executable");
++      else
++	errstring = N_("shared object cannot be dlopen()ed");
+       goto call_lose;
+     }
+ 
+diff --git a/elf/tst-dlopen-pie.c b/elf/tst-dlopen-pie.c
+new file mode 100644
+index 0000000..6a41c73
+--- /dev/null
++++ b/elf/tst-dlopen-pie.c
+@@ -0,0 +1,49 @@
++/* dlopen test for PIE objects.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* This test attempts to open the (otherwise unrelated) PIE test
++   program elf/tst-pie1 and expects the attempt to fail.  */
++
++#include <dlfcn.h>
++#include <stddef.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/support.h>
++
++static void
++test_mode (int mode)
++{
++  char *pie_path = xasprintf ("%s/elf/tst-pie1", support_objdir_root);
++  if (dlopen (pie_path, mode) != NULL)
++    FAIL_EXIT1 ("dlopen succeeded unexpectedly (%d)", mode);
++  const char *message = dlerror ();
++  const char *expected
++    = "cannot dynamically load position-independent executable";
++  if (strstr (message, expected) == NULL)
++    FAIL_EXIT1 ("unexpected error message (mode %d): %s", mode, message);
++}
++
++static int
++do_test (void)
++{
++  test_mode (RTLD_LAZY);
++  test_mode (RTLD_NOW);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/include/elf.h b/include/elf.h
+index ab76aaf..14ed67f 100644
+--- a/include/elf.h
++++ b/include/elf.h
+@@ -23,7 +23,7 @@
+ # endif
+ # define DT_1_SUPPORTED_MASK \
+    (DF_1_NOW | DF_1_NODELETE | DF_1_INITFIRST | DF_1_NOOPEN \
+-    | DF_1_ORIGIN | DF_1_NODEFLIB)
++    | DF_1_ORIGIN | DF_1_NODEFLIB | DF_1_PIE)
+ 
+ #endif /* !_ISOMAC */
+ #endif /* elf.h */

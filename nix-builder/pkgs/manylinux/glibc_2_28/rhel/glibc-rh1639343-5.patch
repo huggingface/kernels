@@ -1,0 +1,74 @@
+commit a8ff215e56050a907189e713fd449bcafe99ff6b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Apr 26 07:16:30 2019 +0200
+
+    Makeconfig: Move -Wl,-rpath-link options before library references
+    
+    Previously, the -Wl,-rpath-link options came after the libraries
+    injected using LDLIBS-* variables on the link editor command line for
+    main programs.  As a result, it could happen that installed libraries
+    that reference glibc libraries used the installed glibc from the system
+    directories, instead of the glibc from the build tree.  This can lead to
+    link failures if the wrong version of libpthread.so.0 is used, for
+    instance, due to differences in the internal GLIBC_PRIVATE interfaces,
+    as seen with memusagestat and -lgd after commit
+    f9b645b4b0a10c43753296ce3fa40053fa44606a ("memusagestat: use local glibc
+    when linking [BZ #18465]").
+    
+    The isolation is necessarily imperfect because these installed
+    libraries are linked against the installed glibc in the system
+    directories.  However, in most cases, the built glibc will be newer
+    than the installed glibc, and this link is permitted because of the
+    ABI backwards compatibility glibc provides.
+
+diff --git a/Makeconfig b/Makeconfig
+index 1ad25fc5a7251aea..e315fb8a75ca5063 100644
+--- a/Makeconfig
++++ b/Makeconfig
+@@ -428,8 +428,8 @@ ifndef +link-pie
+ 	     $(link-extra-libs)
+ +link-pie-after-libc = $(+postctorS) $(+postinit)
+ define +link-pie
+-$(CC) $(+link-pie-before-libc) $(rtld-LDFLAGS) $(link-extra-flags) \
+-  $(link-libc) $(+link-pie-after-libc)
++$(CC) $(link-libc-rpath-link) $(+link-pie-before-libc) $(rtld-LDFLAGS) \
++  $(link-extra-flags) $(link-libc) $(+link-pie-after-libc)
+ $(call after-link,$@)
+ endef
+ define +link-pie-tests
+@@ -490,8 +490,8 @@ else  # not build-pie-default
+ 	      $(link-extra-libs)
+ +link-after-libc = $(+postctor) $(+postinit)
+ define +link
+-$(CC) $(+link-before-libc) $(rtld-LDFLAGS) $(link-extra-flags) $(link-libc) \
+-  $(+link-after-libc)
++$(CC) $(link-libc-rpath-link) $(+link-before-libc) $(rtld-LDFLAGS) \
++  $(link-extra-flags) $(link-libc) $(+link-after-libc)
+ $(call after-link,$@)
+ endef
+ define +link-tests
+@@ -552,6 +552,15 @@ ifeq (yes,$(build-shared))
+ link-libc-rpath = -Wl,-rpath=$(rpath-link)
+ link-libc-rpath-link = -Wl,-rpath-link=$(rpath-link)
+ 
++# For programs which are not tests, $(link-libc-rpath-link) is added
++# directly in $(+link), $(+link-pie) above, so that -Wl,-rpath-link
++# comes before the expansion of LDLIBS-* and affects libraries added
++# there.  For shared objects, -Wl,-rpath-link is added via
++# $(build-shlib-helper) and $(build-module-helper) in Makerules (also
++# before the expansion of LDLIBS-* variables).
++
++# Tests use -Wl,-rpath instead of -Wl,-rpath-link for
++# build-hardcoded-path-in-tests.
+ ifeq (yes,$(build-hardcoded-path-in-tests))
+ link-libc-tests-rpath-link = $(link-libc-rpath)
+ else
+@@ -562,7 +571,7 @@ link-libc-before-gnulib = $(common-objpfx)libc.so$(libc.so-version) \
+ 			  $(common-objpfx)$(patsubst %,$(libtype.oS),c) \
+ 			  $(as-needed) $(elf-objpfx)ld.so \
+ 			  $(no-as-needed)
+-link-libc = $(link-libc-rpath-link) $(link-libc-before-gnulib) $(gnulib)
++link-libc = $(link-libc-before-gnulib) $(gnulib)
+ 
+ link-libc-tests-after-rpath-link = $(link-libc-before-gnulib) $(gnulib-tests)
+ link-libc-tests = $(link-libc-tests-rpath-link) \

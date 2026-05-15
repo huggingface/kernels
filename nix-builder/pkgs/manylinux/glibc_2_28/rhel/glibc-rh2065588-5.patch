@@ -1,0 +1,64 @@
+commit 7a7226543611897103c7483bec160547294dcf0d
+Author: Alexandra Hájková <ahajkova@redhat.com>
+Date:   Sat Dec 26 20:44:34 2020 +0100
+
+     Add xfchmod to libsupport
+
+diff --git a/support/Makefile b/support/Makefile
+index d2b95539403e416c..4875f52495ef292d 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -91,6 +91,7 @@ libsupport-routines = \
+   xdlfcn \
+   xdlmopen \
+   xdup2 \
++  xfchmod \
+   xfclose \
+   xfopen \
+   xfork \
+diff --git a/support/xfchmod.c b/support/xfchmod.c
+new file mode 100644
+index 0000000000000000..4323b9ca8e078c98
+--- /dev/null
++++ b/support/xfchmod.c
+@@ -0,0 +1,28 @@
++/* fchmod with error checking.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++#include <support/xunistd.h>
++#include <sys/stat.h>
++
++void
++xfchmod (int fd, mode_t mode)
++{
++  if (fchmod (fd, mode) != 0)
++    FAIL_EXIT1 ("fchmod (%d, 0%o): %m", fd, mode);
++}
+diff --git a/support/xunistd.h b/support/xunistd.h
+index 74fd2771d12c36fe..ced8cb1dd9ee356c 100644
+--- a/support/xunistd.h
++++ b/support/xunistd.h
+@@ -45,6 +45,7 @@ long long xlseek (int fd, long long offset, int whence);
+ void xftruncate (int fd, long long length);
+ void xsymlink (const char *target, const char *linkpath);
+ void xchdir (const char *path);
++void xfchmod (int fd, mode_t mode);
+ 
+ /* Equivalent of "mkdir -p".  */
+ void xmkdirp (const char *, mode_t);

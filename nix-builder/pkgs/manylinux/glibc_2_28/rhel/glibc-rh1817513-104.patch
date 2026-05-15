@@ -1,0 +1,62 @@
+commit c712401bc641b66d9bd558884751d8979e2e0e96
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Oct 8 08:38:03 2020 -0700
+
+    <sys/platform/x86.h>: Add Intel HRESET support
+    
+    Add Intel HRESET support to <sys/platform/x86.h>.
+
+diff --git a/manual/platform.texi b/manual/platform.texi
+index 283f255679643d3e..1e44525552f5bda5 100644
+--- a/manual/platform.texi
++++ b/manual/platform.texi
+@@ -346,6 +346,9 @@ extensions.
+ @item
+ @code{HTT} -- Max APIC IDs reserved field is Valid.
+ 
++@item
++@code{HRESET} -- History reset.
++
+ @item
+ @code{HYBRID} -- Hybrid processor.
+ 
+diff --git a/sysdeps/x86/sys/platform/x86.h b/sysdeps/x86/sys/platform/x86.h
+index 0942ad7a7f7d4ce2..357c6f1c5605d82d 100644
+--- a/sysdeps/x86/sys/platform/x86.h
++++ b/sysdeps/x86/sys/platform/x86.h
+@@ -313,6 +313,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define bit_cpu_AVX_VNNI	(1u << 4)
+ #define bit_cpu_AVX512_BF16	(1u << 5)
++#define bit_cpu_HRESET		(1u << 22)
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+ 
+@@ -533,6 +534,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define index_cpu_AVX_VNNI	COMMON_CPUID_INDEX_7_ECX_1
+ #define index_cpu_AVX512_BF16	COMMON_CPUID_INDEX_7_ECX_1
++#define index_cpu_HRESET	COMMON_CPUID_INDEX_7_ECX_1
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+ 
+@@ -753,6 +755,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* EAX.  */
+ #define reg_AVX_VNNI		eax
+ #define reg_AVX512_BF16		eax
++#define reg_HRESET		eax
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+ 
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 8894d9f08ac36633..1516af1d461a801b 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -221,6 +221,7 @@ do_test (void)
+   CHECK_CPU_FEATURE (WBNOINVD);
+   CHECK_CPU_FEATURE (AVX_VNNI);
+   CHECK_CPU_FEATURE (AVX512_BF16);
++  CHECK_CPU_FEATURE (HRESET);
+   CHECK_CPU_FEATURE (AESKLE);
+   CHECK_CPU_FEATURE (WIDE_KL);
+ 

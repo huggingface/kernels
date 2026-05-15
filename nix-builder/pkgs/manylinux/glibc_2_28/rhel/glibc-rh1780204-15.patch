@@ -1,0 +1,156 @@
+From ce4f299c02be0a06130b70a62aa79b77385f4326 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:26 +0100
+Subject: [PATCH 15/28] Adjust s_rintf.c and s_rintl.c regarding code style.
+
+This patch just adjusts the generic implementation regarding code style.
+No functional change.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 99b39a83e72f4b58e2f284fd844622df26b3b5fe)
+---
+ sysdeps/ieee754/flt-32/s_rintf.c   | 44 +++++++++++++++------------
+ sysdeps/ieee754/ldbl-128/s_rintl.c | 49 +++++++++++++++++-------------
+ 2 files changed, 53 insertions(+), 40 deletions(-)
+
+diff --git a/sysdeps/ieee754/flt-32/s_rintf.c b/sysdeps/ieee754/flt-32/s_rintf.c
+index a266b1999e..3463a044e1 100644
+--- a/sysdeps/ieee754/flt-32/s_rintf.c
++++ b/sysdeps/ieee754/flt-32/s_rintf.c
+@@ -19,7 +19,7 @@
+ #include <math-use-builtins.h>
+ 
+ float
+-__rintf(float x)
++__rintf (float x)
+ {
+ #if USE_RINTF_BUILTIN
+   return __builtin_rintf (x);
+@@ -30,25 +30,31 @@ __rintf(float x)
+ 		8.3886080000e+06, /* 0x4b000000 */
+ 		-8.3886080000e+06, /* 0xcb000000 */
+   };
+-	int32_t i0,j0,sx;
+-	float w,t;
+-	GET_FLOAT_WORD(i0,x);
+-	sx = (i0>>31)&1;
+-	j0 = ((i0>>23)&0xff)-0x7f;
+-	if(j0<23) {
+-	    if(j0<0) {
+-		w = TWO23[sx]+x;
+-		t =  w-TWO23[sx];
+-		GET_FLOAT_WORD(i0,t);
+-		SET_FLOAT_WORD(t,(i0&0x7fffffff)|(sx<<31));
+-		return t;
+-	    }
+-	} else {
+-	    if(j0==0x80) return x+x;	/* inf or NaN */
+-	    else return x;		/* x is integral */
++  int32_t i0, j0, sx;
++  float w, t;
++  GET_FLOAT_WORD (i0, x);
++  sx = (i0 >> 31) & 1;
++  j0 = ((i0 >> 23) & 0xff) - 0x7f;
++  if (j0 < 23)
++    {
++      if(j0 < 0)
++	{
++	  w = TWO23[sx] + x;
++	  t =  w - TWO23[sx];
++	  GET_FLOAT_WORD (i0, t);
++	  SET_FLOAT_WORD (t, (i0 & 0x7fffffff) | (sx << 31));
++	  return t;
+ 	}
+-	w = TWO23[sx]+x;
+-	return w-TWO23[sx];
++    }
++  else
++    {
++      if (j0 == 0x80)
++	return x + x;		/* inf or NaN  */
++      else
++	return x;		/* x is integral  */
++    }
++  w = TWO23[sx] + x;
++  return w - TWO23[sx];
+ #endif /* ! USE_RINTF_BUILTIN  */
+ }
+ #ifndef __rintf
+diff --git a/sysdeps/ieee754/ldbl-128/s_rintl.c b/sysdeps/ieee754/ldbl-128/s_rintl.c
+index f060503066..260f3aa9b9 100644
+--- a/sysdeps/ieee754/ldbl-128/s_rintl.c
++++ b/sysdeps/ieee754/ldbl-128/s_rintl.c
+@@ -13,7 +13,7 @@
+  * ====================================================
+  */
+ 
+-#if defined(LIBM_SCCS) && !defined(lint)
++#if defined (LIBM_SCCS) && ! defined (lint)
+ static char rcsid[] = "$NetBSD: $";
+ #endif
+ 
+@@ -32,7 +32,8 @@ static char rcsid[] = "$NetBSD: $";
+ #include <libm-alias-ldouble.h>
+ #include <math-use-builtins.h>
+ 
+-_Float128 __rintl(_Float128 x)
++_Float128
++__rintl (_Float128 x)
+ {
+ #if USE_RINTL_BUILTIN
+   return __builtin_rintl (x);
+@@ -43,26 +44,32 @@ _Float128 __rintl(_Float128 x)
+ 		 5.19229685853482762853049632922009600E+33L, /* 0x406F000000000000, 0 */
+ 		 -5.19229685853482762853049632922009600E+33L  /* 0xC06F000000000000, 0 */
+   };
+-	int64_t i0,j0,sx;
+-	uint64_t i1 __attribute__ ((unused));
+-	_Float128 w,t;
+-	GET_LDOUBLE_WORDS64(i0,i1,x);
+-	sx = (((uint64_t)i0)>>63);
+-	j0 = ((i0>>48)&0x7fff)-0x3fff;
+-	if(j0<112) {
+-	    if(j0<0) {
+-	        w = TWO112[sx]+x;
+-	        t = w-TWO112[sx];
+-		GET_LDOUBLE_MSW64(i0,t);
+-		SET_LDOUBLE_MSW64(t,(i0&0x7fffffffffffffffLL)|(sx<<63));
+-	        return t;
+-	    }
+-	} else {
+-	    if(j0==0x4000) return x+x;	/* inf or NaN */
+-	    else return x;		/* x is integral */
++  int64_t i0, j0, sx;
++  uint64_t i1 __attribute__ ((unused));
++  _Float128 w, t;
++  GET_LDOUBLE_WORDS64 (i0, i1, x);
++  sx = (((uint64_t) i0) >> 63);
++  j0 = ((i0 >> 48) & 0x7fff) - 0x3fff;
++  if (j0 < 112)
++    {
++      if (j0 < 0)
++	{
++	  w = TWO112[sx] + x;
++	  t = w - TWO112[sx];
++	  GET_LDOUBLE_MSW64 (i0, t);
++	  SET_LDOUBLE_MSW64 (t, (i0 & 0x7fffffffffffffffLL) | (sx << 63));
++	  return t;
+ 	}
+-	w = TWO112[sx]+x;
+-	return w-TWO112[sx];
++    }
++  else
++    {
++      if (j0 == 0x4000)
++	return x + x;		/* inf or NaN  */
++      else
++	return x;		/* x is integral  */
++    }
++  w = TWO112[sx] + x;
++  return w - TWO112[sx];
+ #endif /* ! USE_RINTL_BUILTIN  */
+ }
+ libm_alias_ldouble (__rint, rint)
+-- 
+2.18.2
+

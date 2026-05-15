@@ -1,0 +1,20 @@
+commit 2976082a385a7fb3d0294c6acf745b4f93e834ee
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Dec 3 15:02:44 2020 -0800
+
+    x86: Set RDRAND usable if CPU supports RDRAND
+    
+    Set RDRAND usable if CPU supports RDRAND.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 4c9c15a44b618fed..805d00a43309fc23 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -85,6 +85,7 @@ update_usable (struct cpu_features *cpu_features)
+   CPU_FEATURE_SET_USABLE (cpu_features, WAITPKG);
+   CPU_FEATURE_SET_USABLE (cpu_features, GFNI);
+   CPU_FEATURE_SET_USABLE (cpu_features, RDPID);
++  CPU_FEATURE_SET_USABLE (cpu_features, RDRAND);
+   CPU_FEATURE_SET_USABLE (cpu_features, CLDEMOTE);
+   CPU_FEATURE_SET_USABLE (cpu_features, MOVDIRI);
+   CPU_FEATURE_SET_USABLE (cpu_features, MOVDIR64B);

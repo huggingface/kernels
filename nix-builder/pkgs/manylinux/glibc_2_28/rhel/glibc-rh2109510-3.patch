@@ -1,0 +1,32 @@
+commit 7b36d26b22d147ffc347f427f9fd584700578a94
+Author: Samuel Thibault <samuel.thibault@ens-lyon.org>
+Date:   Mon Dec 3 14:40:48 2018 +0100
+
+    Fix test-as-const-jmp_buf-ssp.c generation on gnu-i386
+    
+    hurd's jmp_buf-ssp.sym does not define any symbol.
+    scripts/gen-as-const.py currently was emitting an empty line in that
+    case, and the gawk invocation was prepending "asconst_" to it, ending up
+    with:
+    
+    .../build/glibc/setjmp/test-as-const-jmp_buf-ssp.c:1:2: error: expected « = », « , », « ; », « asm » or
+    « __attribute__ » at end of input
+        1 |  asconst_
+          |  ^~~~~~~~
+    
+            * scripts/gen-as-const.py (main): Avoid emitting empty line when
+            there is no element in `consts'.
+
+diff --git a/scripts/gen-as-const.py b/scripts/gen-as-const.py
+index b7a5744bb192dd67..cabf401ed15e8367 100644
+--- a/scripts/gen-as-const.py
++++ b/scripts/gen-as-const.py
+@@ -153,7 +153,7 @@ def main():
+         print(gen_test(sym_data))
+     else:
+         consts = compute_c_consts(sym_data, args.cc)
+-        print('\n'.join('#define %s %s' % c for c in sorted(consts.items())))
++        print(''.join('#define %s %s\n' % c for c in sorted(consts.items())), end='')
+ 
+ if __name__ == '__main__':
+     main()

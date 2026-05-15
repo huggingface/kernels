@@ -1,0 +1,246 @@
+commit 25654a8c74dce51e162c29749c6bd6d2a67490e6
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:25 2018 +0100
+
+    S390: Refactor wmemcmp ifunc handling.
+    
+    The ifunc handling for wmemcmp is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wmemcmp variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wmemcmp variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wmemcmp.
+            * sysdeps/s390/multiarch/wmemcmp-c.c: Move to ...
+            * sysdeps/s390/wmemcmp-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wmemcmp-vx.S: Move to ...
+            * sysdeps/s390/wmemcmp-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wmemcmp.c: Move to ...
+            * sysdeps/s390/wmemcmp.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wmemcmp.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index f9a71276331b396a..3f7de6613c343819 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -77,5 +77,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcspbrk wcspbrk-vx wcspbrk-c \
+ 		   wcscspn wcscspn-vx wcscspn-c \
+ 		   wmemchr wmemchr-vx wmemchr-c \
+-		   wmemset wmemset-vx wmemset-c
++		   wmemset wmemset-vx wmemset-c \
++		   wmemcmp wmemcmp-vx wmemcmp-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wmemcmp.h b/sysdeps/s390/ifunc-wmemcmp.h
+new file mode 100644
+index 0000000000000000..1b38a014590ec060
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wmemcmp.h
+@@ -0,0 +1,52 @@
++/* wmemcmp variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WMEMCMP_IFUNC	1
++#else
++# define HAVE_WMEMCMP_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WMEMCMP_IFUNC_AND_VX_SUPPORT HAVE_WMEMCMP_IFUNC
++#else
++# define HAVE_WMEMCMP_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WMEMCMP_DEFAULT	WMEMCMP_Z13
++# define HAVE_WMEMCMP_C		0
++# define HAVE_WMEMCMP_Z13	1
++#else
++# define WMEMCMP_DEFAULT	WMEMCMP_C
++# define HAVE_WMEMCMP_C		1
++# define HAVE_WMEMCMP_Z13	HAVE_WMEMCMP_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WMEMCMP_C
++# define WMEMCMP_C		__wmemcmp_c
++#else
++# define WMEMCMP_C		NULL
++#endif
++
++#if HAVE_WMEMCMP_Z13
++# define WMEMCMP_Z13		__wmemcmp_vx
++#else
++# define WMEMCMP_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index cc6dd7adb10ee8ad..fec36153047e4585 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,7 +1,3 @@
+-ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wmemcmp wmemcmp-vx wmemcmp-c
+-endif
+-
+ ifeq ($(subdir),iconvdata)
+ override define generate-8bit-table
+ $(make-target-directory)
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 7040959269c1612b..177c5fd6fe269d9b 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -64,6 +64,7 @@
+ #include <ifunc-wcscspn.h>
+ #include <ifunc-wmemchr.h>
+ #include <ifunc-wmemset.h>
++#include <ifunc-wmemcmp.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -658,17 +659,17 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WMEMSET_IFUNC  */
+ 
+-#ifdef HAVE_S390_VX_ASM_SUPPORT
+-
+-# define IFUNC_VX_IMPL(FUNC)						\
+-  IFUNC_IMPL (i, name, FUNC,						\
+-	      IFUNC_IMPL_ADD (array, i, FUNC, dl_hwcap & HWCAP_S390_VX, \
+-			      __##FUNC##_vx)				\
+-	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+-
+-  IFUNC_VX_IMPL (wmemcmp);
+-
+-#endif /* HAVE_S390_VX_ASM_SUPPORT */
++#if HAVE_WMEMCMP_IFUNC
++    IFUNC_IMPL (i, name, wmemcmp,
++# if HAVE_WMEMCMP_Z13
++		IFUNC_IMPL_ADD (array, i, wmemcmp,
++				dl_hwcap & HWCAP_S390_VX, WMEMCMP_Z13)
++# endif
++# if HAVE_WMEMCMP_C
++		IFUNC_IMPL_ADD (array, i, wmemcmp, 1, WMEMCMP_C)
++# endif
++		)
++#endif /* HAVE_WMEMCMP_IFUNC  */
+ 
+   return i;
+ }
+diff --git a/sysdeps/s390/multiarch/wmemcmp-c.c b/sysdeps/s390/wmemcmp-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/wmemcmp-c.c
+rename to sysdeps/s390/wmemcmp-c.c
+index 2fd39d501360e6f8..0c73636adda82f8b 100644
+--- a/sysdeps/s390/multiarch/wmemcmp-c.c
++++ b/sysdeps/s390/wmemcmp-c.c
+@@ -16,11 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WMEMCMP  __wmemcmp_c
++#include <ifunc-wmemcmp.h>
+ 
+-# include <wchar.h>
+-extern __typeof (wmemcmp) __wmemcmp_c;
++#if HAVE_WMEMCMP_C
++# if HAVE_WMEMCMP_IFUNC
++#  define WMEMCMP WMEMCMP_C
++# endif
+ 
+ # include <wcsmbs/wmemcmp.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wmemcmp-vx.S b/sysdeps/s390/wmemcmp-vx.S
+similarity index 95%
+rename from sysdeps/s390/multiarch/wmemcmp-vx.S
+rename to sysdeps/s390/wmemcmp-vx.S
+index e2fc21e4192b0dd8..87ae21b4f13c5d69 100644
+--- a/sysdeps/s390/multiarch/wmemcmp-vx.S
++++ b/sysdeps/s390/wmemcmp-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wmemcmp.h>
++#if HAVE_WMEMCMP_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -37,7 +38,7 @@
+    -v17=part of s2
+    -v18=index of unequal
+ */
+-ENTRY(__wmemcmp_vx)
++ENTRY(WMEMCMP_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -145,5 +146,9 @@ ENTRY(__wmemcmp_vx)
+ 	la	%r2,0(%r5,%r2)
+ 	la	%r3,0(%r5,%r3)
+ 	j	.Lremaining
+-END(__wmemcmp_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(WMEMCMP_Z13)
++
++# if ! HAVE_WMEMCMP_IFUNC
++strong_alias (WMEMCMP_Z13, wmemcmp)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wmemcmp.c b/sysdeps/s390/wmemcmp.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/wmemcmp.c
+rename to sysdeps/s390/wmemcmp.c
+index a4cb440c452fd6a9..6c8ca5f0e8ffdb50 100644
+--- a/sysdeps/s390/multiarch/wmemcmp.c
++++ b/sysdeps/s390/wmemcmp.c
+@@ -16,12 +16,23 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wmemcmp.h>
++
++#if HAVE_WMEMCMP_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2 (__wmemcmp, wmemcmp)
++# if HAVE_WMEMCMP_C
++extern __typeof (wmemcmp) WMEMCMP_C attribute_hidden;
++# endif
++
++# if HAVE_WMEMCMP_Z13
++extern __typeof (wmemcmp) WMEMCMP_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wmemcmp.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (wmemcmp, wmemcmp,
++		      (HAVE_WMEMCMP_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WMEMCMP_Z13
++		      : WMEMCMP_DEFAULT
++		      )
++#endif

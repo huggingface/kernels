@@ -1,0 +1,122 @@
+commit 311c9ee54ea963ff69bd3a2e6981c37e893b4c3e
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Jul 20 14:04:51 2021 -0300
+
+    elf: Add _dl_audit_objclose
+    
+    It consolidates the code required to call la_objclose audit
+    callback.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index 5682427220569d90..cb1c3de93cba447b 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -85,3 +85,24 @@ _dl_audit_objopen (struct link_map *l, Lmid_t nsid)
+       afct = afct->next;
+    }
+ }
++
++void
++_dl_audit_objclose (struct link_map *l)
++{
++  if (__glibc_likely (GLRO(dl_naudit) == 0)
++      || GL(dl_ns)[l->l_ns]._ns_loaded->l_auditing)
++    return;
++
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      if (afct->objclose != NULL)
++	{
++	  struct auditstate *state= link_map_audit_state (l, cnt);
++	  /* Return value is ignored.  */
++	  afct->objclose (&state->cookie);
++	}
++
++      afct = afct->next;
++    }
++}
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 1ba594b600c4c87a..74ca9a85dd309780 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -266,9 +266,6 @@ _dl_close_worker (struct link_map *map, bool force)
+ 		 used + (nsid == LM_ID_BASE), true);
+ 
+   /* Call all termination functions at once.  */
+-#ifdef SHARED
+-  bool do_audit = GLRO(dl_naudit) > 0 && !ns->_ns_loaded->l_auditing;
+-#endif
+   bool unload_any = false;
+   bool scope_mem_left = false;
+   unsigned int unload_global = 0;
+@@ -302,22 +299,7 @@ _dl_close_worker (struct link_map *map, bool force)
+ 
+ #ifdef SHARED
+ 	  /* Auditing checkpoint: we remove an object.  */
+-	  if (__glibc_unlikely (do_audit))
+-	    {
+-	      struct audit_ifaces *afct = GLRO(dl_audit);
+-	      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-		{
+-		  if (afct->objclose != NULL)
+-		    {
+-		      struct auditstate *state
+-			= link_map_audit_state (imap, cnt);
+-		      /* Return value is ignored.  */
+-		      (void) afct->objclose (&state->cookie);
+-		    }
+-
+-		  afct = afct->next;
+-		}
+-	    }
++	  _dl_audit_objclose (imap);
+ #endif
+ 
+ 	  /* This object must not be used anymore.  */
+diff --git a/elf/dl-fini.c b/elf/dl-fini.c
+index 915ceb104e1c81d6..e102d93647cb8c47 100644
+--- a/elf/dl-fini.c
++++ b/elf/dl-fini.c
+@@ -146,21 +146,7 @@ _dl_fini (void)
+ 
+ #ifdef SHARED
+ 		  /* Auditing checkpoint: another object closed.  */
+-		  if (!do_audit && __builtin_expect (GLRO(dl_naudit) > 0, 0))
+-		    {
+-		      struct audit_ifaces *afct = GLRO(dl_audit);
+-		      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-			{
+-			  if (afct->objclose != NULL)
+-			    {
+-			      struct auditstate *state
+-				= link_map_audit_state (l, cnt);
+-			      /* Return value is ignored.  */
+-			      (void) afct->objclose (&state->cookie);
+-			    }
+-			  afct = afct->next;
+-			}
+-		    }
++		  _dl_audit_objclose (l);
+ #endif
+ 		}
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index da83e717e8cd8e0b..3db25c5be1acf871 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1290,6 +1290,10 @@ void _dl_audit_activity_nsid (Lmid_t nsid, int action)
+    namespace identification NSID.  */
+ void _dl_audit_objopen (struct link_map *l, Lmid_t nsid)
+   attribute_hidden;
++
++/* Call the la_objclose from the audit modules for the link_map L.  */
++void _dl_audit_objclose (struct link_map *l)
++  attribute_hidden;
+ #endif /* SHARED */
+ 
+ __END_DECLS

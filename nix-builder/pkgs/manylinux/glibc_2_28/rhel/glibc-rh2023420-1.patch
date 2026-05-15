@@ -1,0 +1,304 @@
+commit 86f65dffc2396d408beb628f1cad2b8f63e197bd
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sun Jul 12 06:04:53 2020 -0700
+
+    ld.so: Add --list-tunables to print tunable values
+    
+    Pass --list-tunables to ld.so to print tunables with min and max values.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+Conflicts:
+	elf/Makefile
+	  (different backporting order)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 3e71939d3234c4c3..aa65ec59f143bccf 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -44,6 +44,10 @@ dl-routines += dl-tunables
+ tunables-type = $(addprefix TUNABLES_FRONTEND_,$(have-tunables))
+ CPPFLAGS-dl-tunables.c += -DTUNABLES_FRONTEND=$(tunables-type)
+ 
++ifeq (yesyes,$(build-shared)$(run-built-tests))
++tests-special += $(objpfx)list-tunables.out
++endif
++
+ # Make sure that the compiler does not insert any library calls in tunables
+ # code paths.
+ ifeq (yes,$(have-loop-to-function))
+@@ -1825,6 +1829,13 @@ $(objpfx)tst-glibc-hwcaps-mask.out: \
+ # tst-glibc-hwcaps-cache.
+ $(objpfx)tst-glibc-hwcaps-cache.out: $(objpfx)tst-glibc-hwcaps
+ 
++$(objpfx)list-tunables.out: tst-rtld-list-tunables.sh $(objpfx)ld.so
++	$(SHELL) $< $(objpfx)ld.so '$(test-wrapper-env)' \
++	    '$(run_program_env)' > $(objpfx)/tst-rtld-list-tunables.out
++	cmp tst-rtld-list-tunables.exp \
++	    $(objpfx)/tst-rtld-list-tunables.out > $@; \
++	$(evaluate-test)
++
+ tst-dst-static-ENV = LD_LIBRARY_PATH='$$ORIGIN'
+ 
+ $(objpfx)tst-rtld-help.out: $(objpfx)ld.so
+diff --git a/elf/dl-main.h b/elf/dl-main.h
+index 566713a0d10cfdb7..9e7b51d8f010e904 100644
+--- a/elf/dl-main.h
++++ b/elf/dl-main.h
+@@ -63,7 +63,7 @@ struct audit_list
+ enum rtld_mode
+   {
+     rtld_mode_normal, rtld_mode_list, rtld_mode_verify, rtld_mode_trace,
+-    rtld_mode_help,
++    rtld_mode_list_tunables, rtld_mode_help,
+   };
+ 
+ /* Aggregated state information extracted from environment variables
+diff --git a/elf/dl-tunables.c b/elf/dl-tunables.c
+index bbc3679e3564a766..3c84809d44381241 100644
+--- a/elf/dl-tunables.c
++++ b/elf/dl-tunables.c
+@@ -26,6 +26,7 @@
+ #include <sysdep.h>
+ #include <fcntl.h>
+ #include <ldsodefs.h>
++#include <array_length.h>
+ 
+ #define TUNABLES_INTERNAL 1
+ #include "dl-tunables.h"
+@@ -359,6 +360,48 @@ __tunables_init (char **envp)
+     }
+ }
+ 
++void
++__tunables_print (void)
++{
++  for (int i = 0; i < array_length (tunable_list); i++)
++    {
++      const tunable_t *cur = &tunable_list[i];
++      if (cur->type.type_code == TUNABLE_TYPE_STRING
++	  && cur->val.strval == NULL)
++	_dl_printf ("%s:\n", cur->name);
++      else
++	{
++	  _dl_printf ("%s: ", cur->name);
++	  switch (cur->type.type_code)
++	    {
++	    case TUNABLE_TYPE_INT_32:
++	      _dl_printf ("%d (min: %d, max: %d)\n",
++			  (int) cur->val.numval,
++			  (int) cur->type.min,
++			  (int) cur->type.max);
++	      break;
++	    case TUNABLE_TYPE_UINT_64:
++	      _dl_printf ("0x%lx (min: 0x%lx, max: 0x%lx)\n",
++			  (long int) cur->val.numval,
++			  (long int) cur->type.min,
++			  (long int) cur->type.max);
++	      break;
++	    case TUNABLE_TYPE_SIZE_T:
++	      _dl_printf ("0x%Zx (min: 0x%Zx, max: 0x%Zx)\n",
++			  (size_t) cur->val.numval,
++			  (size_t) cur->type.min,
++			  (size_t) cur->type.max);
++	      break;
++	    case TUNABLE_TYPE_STRING:
++	      _dl_printf ("%s\n", cur->val.strval);
++	      break;
++	    default:
++	      __builtin_unreachable ();
++	    }
++	}
++    }
++}
++
+ /* Set the tunable value.  This is called by the module that the tunable exists
+    in. */
+ void
+diff --git a/elf/dl-tunables.h b/elf/dl-tunables.h
+index 7f181f3316cd9fc1..f4f2cfaeb9828599 100644
+--- a/elf/dl-tunables.h
++++ b/elf/dl-tunables.h
+@@ -69,9 +69,11 @@ typedef struct _tunable tunable_t;
+ # include "dl-tunable-list.h"
+ 
+ extern void __tunables_init (char **);
++extern void __tunables_print (void);
+ extern void __tunable_get_val (tunable_id_t, void *, tunable_callback_t);
+ extern void __tunable_set_val (tunable_id_t, void *);
+ rtld_hidden_proto (__tunables_init)
++rtld_hidden_proto (__tunables_print)
+ rtld_hidden_proto (__tunable_get_val)
+ 
+ /* Define TUNABLE_GET and TUNABLE_SET in short form if TOP_NAMESPACE and
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+index e22a9c39427187d1..908b4894b3014b2d 100644
+--- a/elf/dl-usage.c
++++ b/elf/dl-usage.c
+@@ -255,7 +255,12 @@ setting environment variables (which would be inherited by subprocesses).\n\
+                         in LIST\n\
+   --audit LIST          use objects named in LIST as auditors\n\
+   --preload LIST        preload objects named in LIST\n\
+-  --argv0 STRING        set argv[0] to STRING before running\n\
++  --argv0 STRING        set argv[0] to STRING before running\n"
++#if HAVE_TUNABLES
++"\
++  --list-tunables       list all tunables with minimum and maximum values\n"
++#endif
++"\
+   --help                display this help and exit\n\
+   --version             output version information and exit\n\
+ \n\
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 9e09896da078274d..54b621ec5ca014fa 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -47,6 +47,7 @@
+ #include <libc-early-init.h>
+ #include <dl-main.h>
+ #include <gnu/lib-names.h>
++#include <dl-tunables.h>
+ 
+ #include <assert.h>
+ 
+@@ -1262,6 +1263,16 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	    _dl_argc -= 2;
+ 	    _dl_argv += 2;
+ 	  }
++#if HAVE_TUNABLES
++	else if (! strcmp (_dl_argv[1], "--list-tunables"))
++	  {
++	    state.mode = rtld_mode_list_tunables;
++
++	    ++_dl_skip_args;
++	    --_dl_argc;
++	    ++_dl_argv;
++	  }
++#endif
+ 	else if (strcmp (_dl_argv[1], "--help") == 0)
+ 	  {
+ 	    state.mode = rtld_mode_help;
+@@ -1282,6 +1293,14 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	else
+ 	  break;
+ 
++#if HAVE_TUNABLES
++      if (__glibc_unlikely (state.mode == rtld_mode_list_tunables))
++	{
++	  __tunables_print ();
++	  _exit (0);
++	}
++#endif
++
+       /* If we have no further argument the program was called incorrectly.
+ 	 Grant the user some education.  */
+       if (_dl_argc < 2)
+diff --git a/elf/tst-rtld-list-tunables.exp b/elf/tst-rtld-list-tunables.exp
+new file mode 100644
+index 0000000000000000..4f3f7ee4e30a2b42
+--- /dev/null
++++ b/elf/tst-rtld-list-tunables.exp
+@@ -0,0 +1,14 @@
++glibc.malloc.arena_max: 0x0 (min: 0x1, max: 0x[f]+)
++glibc.malloc.arena_test: 0x0 (min: 0x1, max: 0x[f]+)
++glibc.malloc.check: 0 (min: 0, max: 3)
++glibc.malloc.mmap_max: 0 (min: -2147483648, max: 2147483647)
++glibc.malloc.mmap_threshold: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.malloc.mxfast: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.malloc.perturb: 0 (min: 0, max: 255)
++glibc.malloc.tcache_count: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.malloc.tcache_max: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.malloc.tcache_unsorted_limit: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.malloc.top_pad: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.malloc.trim_threshold: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.rtld.nns: 0x4 (min: 0x1, max: 0x10)
++glibc.rtld.optional_static_tls: 0x200 (min: 0x0, max: 0x[f]+)
+diff --git a/elf/tst-rtld-list-tunables.sh b/elf/tst-rtld-list-tunables.sh
+new file mode 100755
+index 0000000000000000..e7bbdde94952b872
+--- /dev/null
++++ b/elf/tst-rtld-list-tunables.sh
+@@ -0,0 +1,34 @@
++#!/bin/sh
++# Test for --list-tunables option ld.so.
++# Copyright (C) 2021 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <https://www.gnu.org/licenses/>.
++
++set -e
++
++rtld=$1
++test_wrapper_env=$2
++run_program_env=$3
++
++LC_ALL=C
++export LC_ALL
++
++${test_wrapper_env} \
++${run_program_env} \
++$rtld --list-tunables \
++| sort -u \
++| egrep "(rtld|malloc)" \
++| sed -e "s/0xf\+/0x[f]+/"
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index 07887981748bc44b..43272cf885d1e3e6 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -28,6 +28,44 @@ Finally, the set of tunables available may vary between distributions as
+ the tunables feature allows distributions to add their own tunables under
+ their own namespace.
+ 
++Passing @option{--list-tunables} to the dynamic loader to print all
++tunables with minimum and maximum values:
++
++@example
++$ /lib64/ld-linux-x86-64.so.2 --list-tunables
++glibc.rtld.nns: 0x4 (min: 0x1, max: 0x10)
++glibc.elision.skip_lock_after_retries: 3 (min: -2147483648, max: 2147483647)
++glibc.malloc.trim_threshold: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.malloc.perturb: 0 (min: 0, max: 255)
++glibc.cpu.x86_shared_cache_size: 0x100000 (min: 0x0, max: 0xffffffffffffffff)
++glibc.mem.tagging: 0 (min: 0, max: 255)
++glibc.elision.tries: 3 (min: -2147483648, max: 2147483647)
++glibc.elision.enable: 0 (min: 0, max: 1)
++glibc.cpu.x86_rep_movsb_threshold: 0x1000 (min: 0x100, max: 0xffffffffffffffff)
++glibc.malloc.mxfast: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.elision.skip_lock_busy: 3 (min: -2147483648, max: 2147483647)
++glibc.malloc.top_pad: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.cpu.x86_rep_stosb_threshold: 0x800 (min: 0x1, max: 0xffffffffffffffff)
++glibc.cpu.x86_non_temporal_threshold: 0xc0000 (min: 0x0, max: 0xffffffffffffffff)
++glibc.cpu.x86_shstk:
++glibc.cpu.hwcap_mask: 0x6 (min: 0x0, max: 0xffffffffffffffff)
++glibc.malloc.mmap_max: 0 (min: -2147483648, max: 2147483647)
++glibc.elision.skip_trylock_internal_abort: 3 (min: -2147483648, max: 2147483647)
++glibc.malloc.tcache_unsorted_limit: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.cpu.x86_ibt:
++glibc.cpu.hwcaps:
++glibc.elision.skip_lock_internal_abort: 3 (min: -2147483648, max: 2147483647)
++glibc.malloc.arena_max: 0x0 (min: 0x1, max: 0xffffffffffffffff)
++glibc.malloc.mmap_threshold: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.cpu.x86_data_cache_size: 0x8000 (min: 0x0, max: 0xffffffffffffffff)
++glibc.malloc.tcache_count: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.malloc.arena_test: 0x0 (min: 0x1, max: 0xffffffffffffffff)
++glibc.pthread.mutex_spin_count: 100 (min: 0, max: 32767)
++glibc.rtld.optional_static_tls: 0x200 (min: 0x0, max: 0xffffffffffffffff)
++glibc.malloc.tcache_max: 0x0 (min: 0x0, max: 0xffffffffffffffff)
++glibc.malloc.check: 0 (min: 0, max: 3)
++@end example
++
+ @menu
+ * Tunable names::  The structure of a tunable name
+ * Memory Allocation Tunables::  Tunables in the memory allocation subsystem

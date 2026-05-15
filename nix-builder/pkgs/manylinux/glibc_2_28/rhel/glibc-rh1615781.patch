@@ -1,0 +1,28 @@
+commit d05b05d1570ba3ae354a2f5a3cfeefb373b09979
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Aug 13 14:28:07 2018 +0200
+
+    error, error_at_line: Add missing va_end calls
+    
+    (cherry picked from commit b7b52b9dec337a08a89bc67638773be652eba332)
+
+diff --git a/misc/error.c b/misc/error.c
+index b4e8b6c93886b737..03378e2f2aa6251e 100644
+--- a/misc/error.c
++++ b/misc/error.c
+@@ -319,6 +319,7 @@ error (int status, int errnum, const char *message, ...)
+ 
+   va_start (args, message);
+   error_tail (status, errnum, message, args);
++  va_end (args);
+ 
+ #ifdef _LIBC
+   _IO_funlockfile (stderr);
+@@ -390,6 +391,7 @@ error_at_line (int status, int errnum, const char *file_name,
+ 
+   va_start (args, message);
+   error_tail (status, errnum, message, args);
++  va_end (args);
+ 
+ #ifdef _LIBC
+   _IO_funlockfile (stderr);

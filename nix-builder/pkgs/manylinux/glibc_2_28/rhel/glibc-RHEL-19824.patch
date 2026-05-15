@@ -1,0 +1,27 @@
+commit ecc7c3deb9f347649c2078fcc0f94d4cedf92d60
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Jan 2 14:36:17 2024 +0100
+
+    libio: Check remaining buffer size in _IO_wdo_write (bug 31183)
+    
+    The multibyte character needs to fit into the remaining buffer space,
+    not the already-written buffer space.  Without the fix, we were never
+    moving the write pointer from the start of the buffer, always using
+    the single-character fallback buffer.
+    
+    Fixes commit 04b76b5aa8b2d1d19066e42dd1 ("Don't error out writing
+    a multibyte character to an unbuffered stream (bug 17522)").
+
+diff --git a/libio/wfileops.c b/libio/wfileops.c
+index d3deb34ba058ca39..6a6421f8880f9356 100644
+--- a/libio/wfileops.c
++++ b/libio/wfileops.c
+@@ -57,7 +57,7 @@ _IO_wdo_write (FILE *fp, const wchar_t *data, size_t to_do)
+ 	  char mb_buf[MB_LEN_MAX];
+ 	  char *write_base, *write_ptr, *buf_end;
+ 
+-	  if (fp->_IO_write_ptr - fp->_IO_write_base < sizeof (mb_buf))
++	  if (fp->_IO_buf_end - fp->_IO_write_ptr < sizeof (mb_buf))
+ 	    {
+ 	      /* Make sure we have room for at least one multibyte
+ 		 character.  */

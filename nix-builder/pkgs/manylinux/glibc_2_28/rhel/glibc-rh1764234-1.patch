@@ -1,0 +1,40 @@
+commit 47ad5e1a2a3ab8eeda491454cbef3b1c5239dc02
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Tue Jan 1 02:01:02 2019 +0000
+
+    Update syscall-names.list for Linux 4.20.
+    
+    This patch updates sysdeps/unix/sysv/linux/syscall-names.list for
+    Linux 4.20.  Although there are no new syscalls, the
+    riscv_flush_icache syscall has moved to asm/unistd.h (previously in
+    asm/syscalls.h) and so now needs to be added to the list.
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update kernel
+            version to 4.20.
+            (riscv_flush_icache): New syscall.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 698069a52d..b650dc07cc 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 4.19.
+-kernel 4.19
++# The list of system calls is current as of Linux 4.20.
++kernel 4.20
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -431,6 +431,7 @@ renameat
+ renameat2
+ request_key
+ restart_syscall
++riscv_flush_icache
+ rmdir
+ rseq
+ rt_sigaction

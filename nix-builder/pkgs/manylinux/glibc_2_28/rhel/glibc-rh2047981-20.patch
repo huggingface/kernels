@@ -1,0 +1,113 @@
+commit 0b98a8748759e88b58927882a8714109abe0a2d6
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Jul 22 17:10:57 2021 -0300
+
+    elf: Add _dl_audit_preinit
+    
+    It consolidates the code required to call la_preinit audit
+    callback.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+Conflicts:
+	csu/libc-start.c
+		Rework to existing init call code.
+
+diff --git a/csu/libc-start.c b/csu/libc-start.c
+index fd0f8640eaeae34c..ae703cfa620163fd 100644
+--- a/csu/libc-start.c
++++ b/csu/libc-start.c
+@@ -265,32 +265,20 @@ LIBC_START_MAIN (int (*main) (int, char **, char ** MAIN_AUXVEC_DECL),
+ #ifdef SHARED
+   if (__builtin_expect (GLRO(dl_debug_mask) & DL_DEBUG_IMPCALLS, 0))
+     GLRO(dl_debug_printf) ("\ninitialize program: %s\n\n", argv[0]);
+-#endif
++
+   if (init)
+     (*init) (argc, argv, __environ MAIN_AUXVEC_PARAM);
+ 
+-#ifdef SHARED
+   /* Auditing checkpoint: we have a new object.  */
+-  if (__glibc_unlikely (GLRO(dl_naudit) > 0))
+-    {
+-      struct audit_ifaces *afct = GLRO(dl_audit);
+-      struct link_map *head = GL(dl_ns)[LM_ID_BASE]._ns_loaded;
+-      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	{
+-	  if (afct->preinit != NULL)
+-	    afct->preinit (&link_map_audit_state (head, cnt)->cookie);
+-
+-	  afct = afct->next;
+-	}
+-    }
+-#endif
++  _dl_audit_preinit (GL(dl_ns)[LM_ID_BASE]._ns_loaded);
+ 
+-#ifdef SHARED
+   if (__glibc_unlikely (GLRO(dl_debug_mask) & DL_DEBUG_IMPCALLS))
+     GLRO(dl_debug_printf) ("\ntransferring control: %s\n\n", argv[0]);
+-#endif
+ 
+-#ifndef SHARED
++#else /* !SHARED */
++  if (init)
++    (*init) (argc, argv, __environ MAIN_AUXVEC_PARAM);
++
+   _dl_debug_initialize (0, LM_ID_BASE);
+ #endif
+ #ifdef HAVE_CLEANUP_JMP_BUF
+diff --git a/elf/Versions b/elf/Versions
+index c5d4342cf1f5124c..35ac181bdb099af8 100644
+--- a/elf/Versions
++++ b/elf/Versions
+@@ -59,7 +59,7 @@ ld {
+     _dl_argv; _dl_find_dso_for_object; _dl_get_tls_static_info;
+     _dl_deallocate_tls; _dl_make_stack_executable;
+     _dl_rtld_di_serinfo; _dl_starting_up; _dl_fatal_printf;
+-    _dl_audit_symbind_alt;
++    _dl_audit_symbind_alt; _dl_audit_preinit;
+     _rtld_global; _rtld_global_ro;
+ 
+     # Only here for gdb while a better method is developed.
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index a21530f30bc5524b..0b6fac8e48877c93 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -108,6 +108,21 @@ _dl_audit_objclose (struct link_map *l)
+     }
+ }
+ 
++void
++_dl_audit_preinit (struct link_map *l)
++{
++  if (__glibc_likely (GLRO(dl_naudit) == 0))
++    return;
++
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      if (afct->preinit != NULL)
++	afct->preinit (&link_map_audit_state (l, cnt)->cookie);
++      afct = afct->next;
++    }
++}
++
+ void
+ _dl_audit_symbind_alt (struct link_map *l, const ElfW(Sym) *ref, void **value,
+ 		       lookup_t result)
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index fa55c3bde10de52e..03676b474c3d37a3 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1295,6 +1295,9 @@ void _dl_audit_objopen (struct link_map *l, Lmid_t nsid)
+ void _dl_audit_objclose (struct link_map *l)
+   attribute_hidden;
+ 
++/* Call the la_preinit from the audit modules for the link_map L.  */
++void _dl_audit_preinit (struct link_map *l);
++
+ /* Call the la_symbind{32,64} from the audit modules for the link_map L.  */
+ void _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
+ 			const ElfW(Sym) *defsym, DL_FIXUP_VALUE_TYPE *value,

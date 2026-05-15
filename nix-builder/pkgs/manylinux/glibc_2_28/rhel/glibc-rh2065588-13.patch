@@ -1,0 +1,66 @@
+commit 75fe6d1a1620d84e0e487868feba9b2c0f109610
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Wed May 12 10:13:41 2021 +0530
+
+    support: Close fds in copy_func
+    
+    copy_func may leave file descriptors open on error, so close them on
+    function exit.
+
+diff --git a/support/shell-container.c b/support/shell-container.c
+index 3869e14683fb74dd..f0a9814ae230d167 100644
+--- a/support/shell-container.c
++++ b/support/shell-container.c
+@@ -93,8 +93,9 @@ copy_func (char **argv)
+ {
+   char *sname = argv[0];
+   char *dname = argv[1];
+-  int sfd, dfd;
++  int sfd = -1, dfd = -1;
+   struct stat st;
++  int ret = 1;
+ 
+   sfd = open (sname, O_RDONLY);
+   if (sfd < 0)
+@@ -108,7 +109,7 @@ copy_func (char **argv)
+     {
+       fprintf (stderr, "cp: unable to fstat %s: %s\n",
+ 	       sname, strerror (errno));
+-      return 1;
++      goto out;
+     }
+ 
+   dfd = open (dname, O_WRONLY | O_TRUNC | O_CREAT, 0600);
+@@ -116,22 +117,26 @@ copy_func (char **argv)
+     {
+       fprintf (stderr, "cp: unable to open %s for writing: %s\n",
+ 	       dname, strerror (errno));
+-      return 1;
++      goto out;
+     }
+ 
+   if (support_copy_file_range (sfd, 0, dfd, 0, st.st_size, 0) != st.st_size)
+     {
+       fprintf (stderr, "cp: cannot copy file %s to %s: %s\n",
+ 	       sname, dname, strerror (errno));
+-      return 1;
++      goto out;
+     }
+ 
+-  close (sfd);
+-  close (dfd);
+-
++  ret = 0;
+   chmod (dname, st.st_mode & 0777);
+ 
+-  return 0;
++out:
++  if (sfd >= 0)
++    close (sfd);
++  if (dfd >= 0)
++    close (dfd);
++
++  return ret;
+ 
+ }
+ 

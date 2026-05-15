@@ -1,0 +1,202 @@
+commit e0f1a58f3d1f4f55591b524e9dcff23cc98a509e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 8 10:57:10 2020 +0200
+
+    elf: Implement ld.so --help
+    
+    --help processing is deferred to the point where the executable has
+    been loaded, so that it is possible to eventually include information
+    from the main executable in the help output.
+    
+    As suggested in the GNU command-line interface guidelines, the help
+    message is printed to standard output, and the exit status is
+    successful.
+    
+    Handle usage errors closer to the GNU command-line interface
+    guidelines.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-main.h b/elf/dl-main.h
+index 79c9c40056504f80..ac7249a580214860 100644
+--- a/elf/dl-main.h
++++ b/elf/dl-main.h
+@@ -63,6 +63,7 @@ struct audit_list
+ enum rtld_mode
+   {
+     rtld_mode_normal, rtld_mode_list, rtld_mode_verify, rtld_mode_trace,
++    rtld_mode_help,
+   };
+ 
+ /* Aggregated state information extracted from environment variables
+@@ -101,6 +102,11 @@ call_init_paths (const struct dl_main_state *state)
+ }
+ 
+ /* Print ld.so usage information and exit.  */
+-_Noreturn void _dl_usage (void) attribute_hidden;
++_Noreturn void _dl_usage (const char *argv0, const char *wrong_option)
++  attribute_hidden;
++
++/* Print ld.so --help output and exit.  */
++_Noreturn void _dl_help (const char *argv0, struct dl_main_state *state)
++  attribute_hidden;
+ 
+ #endif /* _DL_MAIN */
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+index f3d89d22b71d7d12..c1820dca2fa117ee 100644
+--- a/elf/dl-usage.c
++++ b/elf/dl-usage.c
+@@ -19,12 +19,24 @@
+ #include <dl-cache.h>
+ #include <dl-main.h>
+ #include <ldsodefs.h>
++#include <unistd.h>
+ 
+ void
+-_dl_usage (void)
++_dl_usage (const char *argv0, const char *wrong_option)
+ {
+-  _dl_fatal_printf ("\
+-Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]\n\
++  if (wrong_option != NULL)
++    _dl_error_printf ("%s: unrecognized option '%s'\n", argv0, wrong_option);
++  else
++    _dl_error_printf ("%s: missing program name\n", argv0);
++  _dl_error_printf ("Try '%s --help' for more information.\n", argv0);
++  _exit (EXIT_FAILURE);
++}
++
++void
++_dl_help (const char *argv0, struct dl_main_state *state)
++{
++  _dl_printf ("\
++Usage: %s [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]\n\
+ You have invoked `ld.so', the helper program for shared library executables.\n\
+ This program usually lives in the file `/lib/ld.so', and special directives\n\
+ in executable files using ELF shared libraries tell the system's program\n\
+@@ -47,5 +59,9 @@ of this helper program; chances are you did not intend to run this program.\n\
+                         in LIST\n\
+   --audit LIST          use objects named in LIST as auditors\n\
+   --preload LIST        preload objects named in LIST\n\
+-  --argv0 STRING        set argv[0] to STRING before running\n");
++  --argv0 STRING        set argv[0] to STRING before running\n\
++  --help                display this help and exit\n\
++",
++              argv0);
++  _exit (EXIT_SUCCESS);
+ }
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 8e91cee41b62b894..b92641cb1c2d99a6 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1145,6 +1145,7 @@ dl_main (const ElfW(Phdr) *phdr,
+   /* Set up a flag which tells we are just starting.  */
+   _dl_starting_up = 1;
+ 
++  const char *ld_so_name = _dl_argv[0];
+   if (*user_entry == (ElfW(Addr)) ENTRY_POINT)
+     {
+       /* Ho ho.  We are not the program interpreter!  We are the program
+@@ -1172,8 +1173,12 @@ dl_main (const ElfW(Phdr) *phdr,
+       while (_dl_argc > 1)
+ 	if (! strcmp (_dl_argv[1], "--list"))
+ 	  {
+-	    state.mode = rtld_mode_list;
+-	    GLRO(dl_lazy) = -1;	/* This means do no dependency analysis.  */
++	    if (state.mode != rtld_mode_help)
++	      {
++	       state.mode = rtld_mode_list;
++		/* This means do no dependency analysis.  */
++		GLRO(dl_lazy) = -1;
++	      }
+ 
+ 	    ++_dl_skip_args;
+ 	    --_dl_argc;
+@@ -1181,7 +1186,8 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	  }
+ 	else if (! strcmp (_dl_argv[1], "--verify"))
+ 	  {
+-	    state.mode = rtld_mode_verify;
++	    if (state.mode != rtld_mode_help)
++	      state.mode = rtld_mode_verify;
+ 
+ 	    ++_dl_skip_args;
+ 	    --_dl_argc;
+@@ -1236,13 +1242,34 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	    _dl_argc -= 2;
+ 	    _dl_argv += 2;
+ 	  }
++	else if (strcmp (_dl_argv[1], "--help") == 0)
++	  {
++	    state.mode = rtld_mode_help;
++	    --_dl_argc;
++	    ++_dl_argv;
++	  }
++	else if (_dl_argv[1][0] == '-' && _dl_argv[1][1] == '-')
++	  {
++	   if (_dl_argv[1][1] == '\0')
++	     /* End of option list.  */
++	     break;
++	   else
++	     /* Unrecognized option.  */
++	     _dl_usage (ld_so_name, _dl_argv[1]);
++	  }
+ 	else
+ 	  break;
+ 
+       /* If we have no further argument the program was called incorrectly.
+ 	 Grant the user some education.  */
+       if (_dl_argc < 2)
+-	_dl_usage ();
++	{
++	  if (state.mode == rtld_mode_help)
++	    /* --help without an executable is not an error.  */
++	    _dl_help (ld_so_name, &state);
++	  else
++	    _dl_usage (ld_so_name, NULL);
++	}
+ 
+       ++_dl_skip_args;
+       --_dl_argc;
+@@ -1267,7 +1294,8 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	    break;
+ 	  }
+ 
+-      if (__glibc_unlikely (state.mode == rtld_mode_verify))
++      if (__glibc_unlikely (state.mode == rtld_mode_verify
++			    || state.mode == rtld_mode_help))
+ 	{
+ 	  const char *objname;
+ 	  const char *err_str = NULL;
+@@ -1280,9 +1308,16 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	  (void) _dl_catch_error (&objname, &err_str, &malloced, map_doit,
+ 				  &args);
+ 	  if (__glibc_unlikely (err_str != NULL))
+-	    /* We don't free the returned string, the programs stops
+-	       anyway.  */
+-	    _exit (EXIT_FAILURE);
++	    {
++	      /* We don't free the returned string, the programs stops
++		 anyway.  */
++	      if (state.mode == rtld_mode_help)
++		/* Mask the failure to load the main object.  The help
++		   message contains less information in this case.  */
++		_dl_help (ld_so_name, &state);
++	      else
++		_exit (EXIT_FAILURE);
++	    }
+ 	}
+       else
+ 	{
+@@ -1632,6 +1667,11 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+   audit_list_add_dynamic_tag (&state.audit_list, main_map, DT_AUDIT);
+   audit_list_add_dynamic_tag (&state.audit_list, main_map, DT_DEPAUDIT);
+ 
++  /* At this point, all data has been obtained that is included in the
++     --help output.  */
++  if (__glibc_unlikely (state.mode == rtld_mode_help))
++    _dl_help (ld_so_name, &state);
++
+   /* If we have auditing DSOs to load, do it now.  */
+   bool need_security_init = true;
+   if (state.audit_list.length > 0)

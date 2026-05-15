@@ -1,0 +1,79 @@
+From cf5397eb5b33bab37c16bcb2d1bbddbce1a27de2 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:33 +0100
+Subject: [PATCH 25/28] S390: Implement roundtoint and converttoint and define
+ TOINT_INTRINSICS.
+
+This patch implements roundtoint and convertoint for s390
+by using the load-fp-integer and convert-to-fixed instructions.
+Both functions are using "round to nearest with ties away from zero"
+rounding mode and do not raise inexact exceptions.
+
+(cherry picked from commit 2763d3145a326aa9afa613fe9e1b444cf912a883)
+---
+ sysdeps/s390/fpu/math_private.h | 53 +++++++++++++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+ create mode 100644 sysdeps/s390/fpu/math_private.h
+
+diff --git a/sysdeps/s390/fpu/math_private.h b/sysdeps/s390/fpu/math_private.h
+new file mode 100644
+index 0000000000..a1ae91a87c
+--- /dev/null
++++ b/sysdeps/s390/fpu/math_private.h
+@@ -0,0 +1,53 @@
++/* Configure optimized libm functions.  S390 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef S390_MATH_PRIVATE_H
++#define S390_MATH_PRIVATE_H 1
++
++#include <stdint.h>
++#include <math.h>
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# define TOINT_INTRINSICS 1
++
++static inline double_t
++roundtoint (double_t x)
++{
++  double_t y;
++  /* The z196 zarch "load fp integer" (fidbra) instruction is rounding
++     x to the nearest integer with ties away from zero (M3-field: 1)
++     where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ ("fidbra %0,1,%1,4" : "=f" (y) : "f" (x));
++  return y;
++}
++
++static inline int32_t
++converttoint (double_t x)
++{
++  int32_t y;
++  /* The z196 zarch "convert to fixed" (cfdbra) instruction is rounding
++     x to the nearest integer with ties away from zero (M3-field: 1)
++     where inexact exceptions are suppressed (M4-field: 4).  */
++  __asm__ ("cfdbra %0,1,%1,4" : "=d" (y) : "f" (x) : "cc");
++  return y;
++}
++#endif
++
++#include_next <math_private.h>
++
++#endif
+-- 
+2.18.2
+

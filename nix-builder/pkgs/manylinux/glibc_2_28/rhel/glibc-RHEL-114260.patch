@@ -1,0 +1,45 @@
+commit 0fceed254559836b57ee05188deac649bc505d05
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Sep 12 21:33:34 2025 +0200
+
+    nss: Group merge does not react to ERANGE during merge (bug 33361)
+    
+    The break statement in CHECK_MERGE is expected to exit the surrounding
+    while loop, not the do-while loop with in the macro.  Remove the
+    do-while loop from the macro.  It is not needed to turn the macro
+    expansion into a single statement due to the way CHECK_MERGE is used
+    (and the statement expression would cover this anyway).
+    
+    Reviewed-by: Collin Funk <collin.funk1@gmail.com>
+
+diff --git a/nss/getXXbyYY_r.c b/nss/getXXbyYY_r.c
+index eae6c3480e..2b0735fb6a 100644
+--- a/nss/getXXbyYY_r.c
++++ b/nss/getXXbyYY_r.c
+@@ -157,19 +157,15 @@ __merge_einval (LOOKUP_TYPE *a,
+ 
+ #define CHECK_MERGE(err, status)		\
+   ({						\
+-    do						\
++    if (err)					\
+       {						\
+-	if (err)				\
+-	  {					\
+-	    __set_errno (err);			\
+-	    if (err == ERANGE)			\
+-	      status = NSS_STATUS_TRYAGAIN;	\
+-	    else				\
+-	      status = NSS_STATUS_UNAVAIL;	\
+-	    break;				\
+-	  }					\
++	__set_errno (err);			\
++	if (err == ERANGE)			\
++	  status = NSS_STATUS_TRYAGAIN;		\
++	else					\
++	  status = NSS_STATUS_UNAVAIL;		\
++	break;					\
+       }						\
+-    while (0);					\
+   })
+ 
+ /* Type of the lookup function we need here.  */

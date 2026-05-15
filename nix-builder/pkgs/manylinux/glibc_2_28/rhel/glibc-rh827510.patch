@@ -1,0 +1,37 @@
+Short description: Fix newlocale error return.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Bug-RHEL: #832516
+Bug-Fedora: #827510
+Bug-Upstream: #14247
+Upstream status: not-submitted
+
+This needs to go upstream right away to fix the error case for
+newlocale not correctly returning an error.
+
+2012-06-14  Jeff Law  <law@redhat.com>
+
+	* locale/loadlocale.c (_nl_load_locale): Delay setting
+	file->decided until we have successfully loaded the file's
+	data.
+
+diff --git a/locale/loadlocale.c b/locale/loadlocale.c
+index e3fa187..9fd9216 100644
+--- a/locale/loadlocale.c
++++ b/locale/loadlocale.c
+@@ -169,7 +169,6 @@ _nl_load_locale (struct loaded_l10nfile *file, int category)
+   int save_err;
+   int alloc = ld_mapped;
+ 
+-  file->decided = 1;
+   file->data = NULL;
+ 
+   fd = __open_nocancel (file->filename, O_RDONLY | O_CLOEXEC);
+@@ -278,6 +277,7 @@ _nl_load_locale (struct loaded_l10nfile *file, int category)
+   newdata->alloc = alloc;
+ 
+   file->data = newdata;
++  file->decided = 1;
+ }
+ 
+ void

@@ -1,0 +1,40 @@
+commit 95da14dac04b494149290d85bc5306226e30839e
+Author: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+Date:   Mon Jul 22 16:30:45 2019 -0300
+
+    test-container: Avoid copying unintended system libraries
+    
+    Some DSOs are distributed in hardware capability directories, e.g.
+    /usr/lib64/power7/libc.so.6
+    Whenever the processor is able to use one of these hardware-enabled
+    DSOs, testroot.pristine ends up with copies of glibc-provided libraries
+    from the system because it can't overwrite or remove them.
+    
+    This patch avoids the unintended copies by executing ld.so with the same
+    arguments passed to each glibc test.
+    
+    	* Makefile (testroot.pristine/install.stamp): Execute ld.so with
+    	the same arguments used in all tests.
+
+diff --git a/Makefile b/Makefile
+index dc5de7a..a4ed747 100644
+--- a/Makefile
++++ b/Makefile
+@@ -383,7 +383,7 @@ $(objpfx)testroot.pristine/install.stamp :
+ ifeq ($(run-built-tests),yes)
+ 	# Copy these DSOs first so we can overwrite them with our own.
+ 	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
+-		$(objpfx)elf/$(rtld-installed-name) \
++		$(rtld-prefix) \
+ 		$(objpfx)testroot.pristine/bin/sh \
+ 	        | grep / | sed 's/^[^/]*//' | sed 's/ .*//'` ;\
+ 	  do \
+@@ -392,7 +392,7 @@ ifeq ($(run-built-tests),yes)
+ 	    $(test-wrapper) cp $$dso $(objpfx)testroot.pristine$$dso ;\
+ 	  done
+ 	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
+-		$(objpfx)elf/$(rtld-installed-name) \
++		$(rtld-prefix) \
+ 		$(objpfx)support/$(LINKS_DSO_PROGRAM) \
+ 	        | grep / | sed 's/^[^/]*//' | sed 's/ .*//'` ;\
+ 	  do \

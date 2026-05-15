@@ -1,0 +1,51 @@
+commit 07da99aad93c9364acb7efdab47c27ba698f6313
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Oct 30 13:55:01 2018 +0100
+
+    stdlib/tst-strtod-overflow: Switch to support_blob_repeat
+    
+    This is another test with an avoidable large memory allocation.
+
+diff --git a/stdlib/tst-strtod-overflow.c b/stdlib/tst-strtod-overflow.c
+index d14638d68ef4f471..dc53c1e521443e1d 100644
+--- a/stdlib/tst-strtod-overflow.c
++++ b/stdlib/tst-strtod-overflow.c
+@@ -19,6 +19,8 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <support/blob_repeat.h>
++#include <support/test-driver.h>
+ 
+ #define EXPONENT "e-2147483649"
+ #define SIZE 214748364
+@@ -26,21 +28,23 @@
+ static int
+ do_test (void)
+ {
+-  char *p = malloc (1 + SIZE + sizeof (EXPONENT));
+-  if (p == NULL)
++  struct support_blob_repeat repeat = support_blob_repeat_allocate
++    ("0", 1, 1 + SIZE + sizeof (EXPONENT));
++  if (repeat.size == 0)
+     {
+-      puts ("malloc failed, cannot test for overflow");
+-      return 0;
++      puts ("warning: memory allocation failed, cannot test for overflow");
++      return EXIT_UNSUPPORTED;
+     }
++  char *p = repeat.start;
+   p[0] = '1';
+-  memset (p + 1, '0', SIZE);
+   memcpy (p + 1 + SIZE, EXPONENT, sizeof (EXPONENT));
+   double d = strtod (p, NULL);
+   if (d != 0)
+     {
+-      printf ("strtod returned wrong value: %a\n", d);
++      printf ("error: strtod returned wrong value: %a\n", d);
+       return 1;
+     }
++  support_blob_repeat_free (&repeat);
+   return 0;
+ }
+ 

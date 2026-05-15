@@ -1,0 +1,79 @@
+commit dbb75513f5cf9285c77c9e55777c5c35b653f890
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Sep 6 07:38:10 2022 +0200
+
+    elf: Rename _dl_sort_maps parameter from skip to force_first
+    
+    The new implementation will not be able to skip an arbitrary number
+    of objects.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-sort-maps.c b/elf/dl-sort-maps.c
+index 99354dc08a010dd3..7a586749adc3fa7d 100644
+--- a/elf/dl-sort-maps.c
++++ b/elf/dl-sort-maps.c
+@@ -27,12 +27,12 @@
+    If FOR_FINI is true, this is called for finishing an object.  */
+ static void
+ _dl_sort_maps_original (struct link_map **maps, unsigned int nmaps,
+-			unsigned int skip, bool for_fini)
++			bool force_first, bool for_fini)
+ {
+   /* Allows caller to do the common optimization of skipping the first map,
+      usually the main binary.  */
+-  maps += skip;
+-  nmaps -= skip;
++  maps += force_first;
++  nmaps -= force_first;
+ 
+   /* A list of one element need not be sorted.  */
+   if (nmaps <= 1)
+@@ -182,7 +182,7 @@ dfs_traversal (struct link_map ***rpo, struct link_map *map,
+ 
+ static void
+ _dl_sort_maps_dfs (struct link_map **maps, unsigned int nmaps,
+-		   unsigned int skip __attribute__ ((unused)), bool for_fini)
++		   bool force_first __attribute__ ((unused)), bool for_fini)
+ {
+   for (int i = nmaps - 1; i >= 0; i--)
+     maps[i]->l_visited = 0;
+@@ -286,7 +286,7 @@ _dl_sort_maps_init (void)
+ 
+ void
+ _dl_sort_maps (struct link_map **maps, unsigned int nmaps,
+-	       unsigned int skip, bool for_fini)
++	       bool force_first, bool for_fini)
+ {
+   /* It can be tempting to use a static function pointer to store and call
+      the current selected sorting algorithm routine, but experimentation
+@@ -296,9 +296,9 @@ _dl_sort_maps (struct link_map **maps, unsigned int nmaps,
+      input cases. A simple if-case with direct function calls appears to
+      be the fastest.  */
+   if (__glibc_likely (GLRO(dl_dso_sort_algo) == dso_sort_algorithm_original))
+-    _dl_sort_maps_original (maps, nmaps, skip, for_fini);
++    _dl_sort_maps_original (maps, nmaps, force_first, for_fini);
+   else
+-    _dl_sort_maps_dfs (maps, nmaps, skip, for_fini);
++    _dl_sort_maps_dfs (maps, nmaps, force_first, for_fini);
+ }
+ 
+ #endif /* HAVE_TUNABLES.  */
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 9f09a4a280396659..2c1b4c47c6a6c643 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1056,9 +1056,11 @@ extern void _dl_init (struct link_map *main_map, int argc, char **argv,
+    initializer functions have completed.  */
+ extern void _dl_fini (void) attribute_hidden;
+ 
+-/* Sort array MAPS according to dependencies of the contained objects.  */
++/* Sort array MAPS according to dependencies of the contained objects.
++   If FORCE_FIRST, MAPS[0] keeps its place even if the dependencies
++   say otherwise.  */
+ extern void _dl_sort_maps (struct link_map **maps, unsigned int nmaps,
+-			   unsigned int skip, bool for_fini) attribute_hidden;
++			   bool force_first, bool for_fini) attribute_hidden;
+ 
+ /* The dynamic linker calls this function before and having changing
+    any shared object mappings.  The `r_state' member of `struct r_debug'

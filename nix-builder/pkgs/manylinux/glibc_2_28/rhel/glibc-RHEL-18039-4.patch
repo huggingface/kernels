@@ -1,0 +1,81 @@
+commit 95f61610f3e481d191b6184432342236fd59186d
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Jul 24 12:06:47 2024 +0200
+
+    resolv: Support clearing option flags with a “-” prefix (bug 14799)
+    
+    I think using a “-” prefix is less confusing than introducing
+    double-negation construct (“no-no-tld-query”).
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+Conflicts:
+	NEWS: Dropped
+	resolv/res_init.c: DEPRECATED_RES_USE_INET6 and RES_TRUSTAD
+
+diff -Nrup a/resolv/res_init.c b/resolv/res_init.c
+--- a/resolv/res_init.c	2025-05-21 08:57:39.108958310 -0400
++++ b/resolv/res_init.c	2025-05-21 08:59:11.528419481 -0400
+@@ -682,27 +682,29 @@ res_setoptions (struct resolv_conf_parse
+           {
+             char str[22];
+             uint8_t len;
+-            uint8_t clear;
+             unsigned long int flag;
+           } options[] = {
+ #define STRnLEN(str) str, sizeof (str) - 1
+-            { STRnLEN ("inet6"), 0, DEPRECATED_RES_USE_INET6 },
+-            { STRnLEN ("rotate"), 0, RES_ROTATE },
+-            { STRnLEN ("edns0"), 0, RES_USE_EDNS0 },
+-            { STRnLEN ("single-request-reopen"), 0, RES_SNGLKUPREOP },
+-            { STRnLEN ("single-request"), 0, RES_SNGLKUP },
+-            { STRnLEN ("no_tld_query"), 0, RES_NOTLDQUERY },
+-            { STRnLEN ("no-tld-query"), 0, RES_NOTLDQUERY },
+-            { STRnLEN ("no-reload"), 0, RES_NORELOAD },
+-            { STRnLEN ("use-vc"), 0, RES_USEVC },
+-            { STRnLEN ("no-aaaa"), 0, RES_NOAAAA },
++            { STRnLEN ("inet6"), DEPRECATED_RES_USE_INET6 },
++            { STRnLEN ("rotate"), RES_ROTATE },
++            { STRnLEN ("edns0"),  RES_USE_EDNS0 },
++            { STRnLEN ("single-request-reopen"), RES_SNGLKUPREOP },
++            { STRnLEN ("single-request"), RES_SNGLKUP },
++            { STRnLEN ("no_tld_query"), RES_NOTLDQUERY },
++            { STRnLEN ("no-tld-query"), RES_NOTLDQUERY },
++            { STRnLEN ("no-reload"), RES_NORELOAD },
++            { STRnLEN ("use-vc"),  RES_USEVC },
++            { STRnLEN ("no-aaaa"), RES_NOAAAA },
+           };
+ #define noptions (sizeof (options) / sizeof (options[0]))
++          bool negate_option = *cp == '-';
++          if (negate_option)
++            ++cp;
+           for (int i = 0; i < noptions; ++i)
+             if (strncmp (cp, options[i].str, options[i].len) == 0)
+               {
+-                if (options[i].clear)
+-                  parser->template.options &= options[i].flag;
++                if (negate_option)
++                  parser->template.options &= ~options[i].flag;
+                 else
+                   parser->template.options |= options[i].flag;
+                 break;
+diff -Nrup a/resolv/tst-resolv-res_init-skeleton.c b/resolv/tst-resolv-res_init-skeleton.c
+--- a/resolv/tst-resolv-res_init-skeleton.c	2025-05-21 08:57:39.109958315 -0400
++++ b/resolv/tst-resolv-res_init-skeleton.c	2025-05-21 08:58:09.541110166 -0400
+@@ -680,6 +680,16 @@ struct test_case test_cases[] =
+      "; nameserver[0]: [192.0.2.1]:53\n",
+      .res_options = "attempts:5 ndots:3 edns0 ",
+     },
++    {.name = "RES_OPTIONS can clear flags",
++     .conf = "options ndots:2 use-vc no-aaaa edns0\n"
++     "nameserver 192.0.2.1\n",
++     .expected = "options ndots:3 use-vc\n"
++     "search example.com\n"
++     "; search[0]: example.com\n"
++     "nameserver 192.0.2.1\n"
++     "; nameserver[0]: [192.0.2.1]:53\n",
++     .res_options = "ndots:3 -edns0 -no-aaaa",
++    },
+     {.name = "many search list entries (bug 19569)",
+      .conf = "nameserver 192.0.2.1\n"
+      "search corp.example.com support.example.com"

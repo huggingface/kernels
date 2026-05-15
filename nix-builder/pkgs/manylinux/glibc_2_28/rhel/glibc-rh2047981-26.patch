@@ -1,0 +1,170 @@
+Added $(objpfx)tst-auditmod20: $(libdl) in elf/Makefile since
+we still have $(libdl) in RHEL8.
+
+commit 484e672ddabe0a919a692520e6ac8f2580866235
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jun 30 17:33:57 2021 -0300
+
+    elf: Do not fail for failed dlmopen on audit modules (BZ #28061)
+    
+    The dl_main sets the LM_ID_BASE to RT_ADD just before starting to
+    add load new shared objects.  The state is set to RT_CONSISTENT just
+    after all objects are loaded.
+    
+    However if a audit modules tries to dlmopen an inexistent module,
+    the _dl_open will assert that the namespace is in an inconsistent
+    state.
+    
+    This is different than dlopen, since first it will not use
+    LM_ID_BASE and second _dl_map_object_from_fd is the sole responsible
+    to set and reset the r_state value.
+    
+    So the assert on _dl_open can not really be seen if the state is
+    consistent, since _dt_main resets it.  This patch removes the assert.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+Conflicts:
+	elf/dl-open.c
+		Uses dl_debug_initialize instead of dl_debug_update.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index f047c1cce0c55da0..7c7b9e1937d3e41c 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -222,6 +222,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-audit17 \
+ 	 tst-audit18 \
+ 	 tst-audit19b \
++	 tst-audit20 \
+ 	 tst-audit22 \
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+@@ -364,6 +365,7 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-auditmod19a \
+ 		tst-auditmod19b \
+ 		tst-audit19bmod \
++		tst-auditmod20 \
+ 		tst-auditmod22 \
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+@@ -1579,6 +1581,10 @@ $(objpfx)tst-audit19b.out: $(objpfx)tst-auditmod19b.so
+ $(objpfx)tst-audit19b: $(objpfx)tst-audit19bmod.so
+ tst-audit19b-ARGS = -- $(host-test-program-cmd)
+ 
++$(objpfx)tst-audit20.out: $(objpfx)tst-auditmod20.so
++tst-audit20-ENV = LD_AUDIT=$(objpfx)tst-auditmod20.so
++$(objpfx)tst-auditmod20.so: $(libdl)
++
+ $(objpfx)tst-audit22.out: $(objpfx)tst-auditmod22.so
+ tst-audit22-ARGS = -- $(host-test-program-cmd)
+ 
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 660a56b2fb2639cd..6b85e9ab4e249f86 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -911,8 +911,6 @@ no more namespaces available for dlmopen()"));
+ 	     the flag here.  */
+ 	}
+ 
+-      assert (_dl_debug_initialize (0, args.nsid)->r_state == RT_CONSISTENT);
+-
+       /* Release the lock.  */
+       __rtld_lock_unlock_recursive (GL(dl_load_lock));
+ 
+diff --git a/elf/tst-audit20.c b/elf/tst-audit20.c
+new file mode 100644
+index 0000000000000000..6f39ccee865b012b
+--- /dev/null
++++ b/elf/tst-audit20.c
+@@ -0,0 +1,25 @@
++/* Check dlopen failure on audit modules.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++static int
++do_test (void)
++{
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-auditmod20.c b/elf/tst-auditmod20.c
+new file mode 100644
+index 0000000000000000..c57e50ee4e88dd6b
+--- /dev/null
++++ b/elf/tst-auditmod20.c
+@@ -0,0 +1,57 @@
++/* Check dlopen failure on audit modules.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <link.h>
++#include <stdlib.h>
++
++unsigned int
++la_version (unsigned int v)
++{
++  return LAV_CURRENT;
++}
++
++static void
++check (void)
++{
++  {
++    void *mod = dlopen ("nonexistent.so", RTLD_NOW);
++    if (mod != NULL)
++      abort ();
++  }
++
++  {
++    void *mod = dlmopen (LM_ID_BASE, "nonexistent.so", RTLD_NOW);
++    if (mod != NULL)
++      abort ();
++  }
++}
++
++void
++la_activity (uintptr_t *cookie, unsigned int flag)
++{
++  if (flag != LA_ACT_CONSISTENT)
++    return;
++  check ();
++}
++
++void
++la_preinit (uintptr_t *cookie)
++{
++  check ();
++}

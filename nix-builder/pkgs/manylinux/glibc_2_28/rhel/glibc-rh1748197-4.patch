@@ -1,0 +1,256 @@
+commit b06f4c0094d3c68be39ada0ed26ae99d51f48013
+Author: Wilco Dijkstra <wdijkstr@arm.com>
+Date:   Fri Feb 1 12:19:42 2019 +0000
+
+    Cleanup clock_*time includes
+    
+    Clock_gettime, settime and getres implementations are unncessarily
+    complex due to using defines and C file inclusion.  Simplify the
+    code by replacing the redundant defines and removing the inclusion,
+    making it much easier to understand.  No functional changes.
+    
+            * sysdeps/posix/clock_getres.c (__clock_getres): Cleanup.
+            * sysdeps/unix/clock_gettime.c (__clock_gettime): Cleanup.
+            * sysdeps/unix/clock_settime.c (__clock_settime): Cleanup.
+            * sysdeps/unix/sysv/linux/clock_getres.c (__clock_getres): Cleanup.
+            * sysdeps/unix/sysv/linux/clock_gettime.c (__clock_gettime): Cleanup.
+            * sysdeps/unix/sysv/linux/clock_settime.c (__clock_settime): Cleanup.
+
+diff --git a/sysdeps/posix/clock_getres.c b/sysdeps/posix/clock_getres.c
+index e7924e0891b0a476..43228c381e6a73f1 100644
+--- a/sysdeps/posix/clock_getres.c
++++ b/sysdeps/posix/clock_getres.c
+@@ -82,20 +82,11 @@ __clock_getres (clockid_t clock_id, struct timespec *res)
+ 
+   switch (clock_id)
+     {
+-#ifdef SYSDEP_GETRES
+-      SYSDEP_GETRES;
+-#endif
+-
+-#ifndef HANDLED_REALTIME
+     case CLOCK_REALTIME:
+       retval = realtime_getres (res);
+       break;
+-#endif	/* handled REALTIME */
+ 
+     default:
+-#ifdef SYSDEP_GETRES_CPU
+-      SYSDEP_GETRES_CPU;
+-#endif
+ #if HP_TIMING_AVAIL
+       if ((clock_id & ((1 << CLOCK_IDFIELD_SIZE) - 1))
+ 	  == CLOCK_THREAD_CPUTIME_ID)
+@@ -105,7 +96,7 @@ __clock_getres (clockid_t clock_id, struct timespec *res)
+ 	__set_errno (EINVAL);
+       break;
+ 
+-#if HP_TIMING_AVAIL && !defined HANDLED_CPUTIME
++#if HP_TIMING_AVAIL
+     case CLOCK_PROCESS_CPUTIME_ID:
+     case CLOCK_THREAD_CPUTIME_ID:
+       retval = hp_timing_getres (res);
+diff --git a/sysdeps/unix/clock_gettime.c b/sysdeps/unix/clock_gettime.c
+index 96df78ab1ed09c04..f19fdf7e5f310973 100644
+--- a/sysdeps/unix/clock_gettime.c
++++ b/sysdeps/unix/clock_gettime.c
+@@ -95,11 +95,6 @@ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+ 
+   switch (clock_id)
+     {
+-#ifdef SYSDEP_GETTIME
+-      SYSDEP_GETTIME;
+-#endif
+-
+-#ifndef HANDLED_REALTIME
+     case CLOCK_REALTIME:
+       {
+ 	struct timeval tv;
+@@ -108,12 +103,8 @@ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+ 	  TIMEVAL_TO_TIMESPEC (&tv, tp);
+       }
+       break;
+-#endif
+ 
+     default:
+-#ifdef SYSDEP_GETTIME_CPU
+-      SYSDEP_GETTIME_CPU (clock_id, tp);
+-#endif
+ #if HP_TIMING_AVAIL
+       if ((clock_id & ((1 << CLOCK_IDFIELD_SIZE) - 1))
+ 	  == CLOCK_THREAD_CPUTIME_ID)
+@@ -123,7 +114,7 @@ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+ 	__set_errno (EINVAL);
+       break;
+ 
+-#if HP_TIMING_AVAIL && !defined HANDLED_CPUTIME
++#if HP_TIMING_AVAIL
+     case CLOCK_PROCESS_CPUTIME_ID:
+       retval = hp_timing_gettime (clock_id, tp);
+       break;
+diff --git a/sysdeps/unix/clock_settime.c b/sysdeps/unix/clock_settime.c
+index 38813eddf7b66ca1..9d5857e61b966b44 100644
+--- a/sysdeps/unix/clock_settime.c
++++ b/sysdeps/unix/clock_settime.c
+@@ -21,7 +21,7 @@
+ #include <ldsodefs.h>
+ 
+ 
+-#if HP_TIMING_AVAIL && !defined HANDLED_CPUTIME
++#if HP_TIMING_AVAIL
+ /* Clock frequency of the processor.  We make it a 64-bit variable
+    because some jokers are already playing with processors with more
+    than 4GHz.  */
+@@ -84,29 +84,15 @@ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+ 
+   switch (clock_id)
+     {
+-#define HANDLE_REALTIME \
+-      do {								      \
+-	struct timeval tv;						      \
+-	TIMESPEC_TO_TIMEVAL (&tv, tp);					      \
+-									      \
+-	retval = __settimeofday (&tv, NULL);				      \
+-      } while (0)
+-
+-#ifdef SYSDEP_SETTIME
+-      SYSDEP_SETTIME;
+-#endif
+-
+-#ifndef HANDLED_REALTIME
+     case CLOCK_REALTIME:
+-      HANDLE_REALTIME;
++      {
++	struct timeval tv;
++	TIMESPEC_TO_TIMEVAL (&tv, tp);
++	retval = __settimeofday (&tv, NULL);
++      }
+       break;
+-#endif
+ 
+     default:
+-#ifdef SYSDEP_SETTIME_CPU
+-      SYSDEP_SETTIME_CPU;
+-#endif
+-#ifndef HANDLED_CPUTIME
+ # if HP_TIMING_AVAIL
+       if (CPUCLOCK_WHICH (clock_id) == CLOCK_PROCESS_CPUTIME_ID
+ 	  || CPUCLOCK_WHICH (clock_id) == CLOCK_THREAD_CPUTIME_ID)
+@@ -117,7 +103,6 @@ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+ 	  __set_errno (EINVAL);
+ 	  retval = -1;
+ 	}
+-#endif
+       break;
+     }
+ 
+diff --git a/sysdeps/unix/sysv/linux/clock_getres.c b/sysdeps/unix/sysv/linux/clock_getres.c
+index 5d94f59afee80fa9..2517e66910a79d93 100644
+--- a/sysdeps/unix/sysv/linux/clock_getres.c
++++ b/sysdeps/unix/sysv/linux/clock_getres.c
+@@ -26,26 +26,10 @@
+ #endif
+ #include <sysdep-vdso.h>
+ 
+-#define SYSCALL_GETRES \
+-  retval = INLINE_VSYSCALL (clock_getres, 2, clock_id, res); \
+-  break
+-
+-/* The REALTIME and MONOTONIC clock are definitely supported in the
+-   kernel.  */
+-#define SYSDEP_GETRES							      \
+-  SYSDEP_GETRES_CPUTIME							      \
+-  case CLOCK_REALTIME:							      \
+-  case CLOCK_MONOTONIC:							      \
+-  case CLOCK_MONOTONIC_RAW:						      \
+-  case CLOCK_REALTIME_COARSE:						      \
+-  case CLOCK_MONOTONIC_COARSE:						      \
+-    SYSCALL_GETRES
+-
+-/* We handled the REALTIME clock here.  */
+-#define HANDLED_REALTIME	1
+-#define HANDLED_CPUTIME		1
+-
+-#define SYSDEP_GETRES_CPU SYSCALL_GETRES
+-#define SYSDEP_GETRES_CPUTIME	/* Default catches them too.  */
+-
+-#include <sysdeps/posix/clock_getres.c>
++/* Get resolution of clock.  */
++int
++__clock_getres (clockid_t clock_id, struct timespec *res)
++{
++  return INLINE_VSYSCALL (clock_getres, 2, clock_id, res);
++}
++weak_alias (__clock_getres, clock_getres)
+diff --git a/sysdeps/unix/sysv/linux/clock_gettime.c b/sysdeps/unix/sysv/linux/clock_gettime.c
+index d837fa36b1b901e5..dadfc518b74baea0 100644
+--- a/sysdeps/unix/sysv/linux/clock_gettime.c
++++ b/sysdeps/unix/sysv/linux/clock_gettime.c
+@@ -26,22 +26,11 @@
+ #endif
+ #include <sysdep-vdso.h>
+ 
+-/* The REALTIME and MONOTONIC clock are definitely supported in the
+-   kernel.  */
+-#define SYSDEP_GETTIME \
+-  SYSDEP_GETTIME_CPUTIME;						      \
+-  case CLOCK_REALTIME:							      \
+-  case CLOCK_MONOTONIC:							      \
+-    retval = INLINE_VSYSCALL (clock_gettime, 2, clock_id, tp);		      \
+-    break
+-
+-/* We handled the REALTIME clock here.  */
+-#define HANDLED_REALTIME	1
+-#define HANDLED_CPUTIME	1
+-
+-#define SYSDEP_GETTIME_CPU(clock_id, tp) \
+-  retval = INLINE_VSYSCALL (clock_gettime, 2, clock_id, tp); \
+-  break
+-#define SYSDEP_GETTIME_CPUTIME	/* Default catches them too.  */
+-
+-#include <sysdeps/unix/clock_gettime.c>
++/* Get current value of CLOCK and store it in TP.  */
++int
++__clock_gettime (clockid_t clock_id, struct timespec *tp)
++{
++  return INLINE_VSYSCALL (clock_gettime, 2, clock_id, tp);
++}
++weak_alias (__clock_gettime, clock_gettime)
++libc_hidden_def (__clock_gettime)
+diff --git a/sysdeps/unix/sysv/linux/clock_settime.c b/sysdeps/unix/sysv/linux/clock_settime.c
+index 5f3f22f74b3e745c..c71461a4f6deac5a 100644
+--- a/sysdeps/unix/sysv/linux/clock_settime.c
++++ b/sysdeps/unix/sysv/linux/clock_settime.c
+@@ -21,18 +21,17 @@
+ 
+ #include "kernel-posix-cpu-timers.h"
+ 
+-
+-/* The REALTIME clock is definitely supported in the kernel.  */
+-#define SYSDEP_SETTIME \
+-  case CLOCK_REALTIME:							      \
+-    retval = INLINE_SYSCALL (clock_settime, 2, clock_id, tp);		      \
+-    break
+-
+-/* We handled the REALTIME clock here.  */
+-#define HANDLED_REALTIME	1
+-
+-#define HANDLED_CPUTIME 1
+-#define SYSDEP_SETTIME_CPU \
+-  retval = INLINE_SYSCALL (clock_settime, 2, clock_id, tp)
+-
+-#include <sysdeps/unix/clock_settime.c>
++/* Set CLOCK to value TP.  */
++int
++__clock_settime (clockid_t clock_id, const struct timespec *tp)
++{
++  /* Make sure the time cvalue is OK.  */
++  if (tp->tv_nsec < 0 || tp->tv_nsec >= 1000000000)
++    {
++      __set_errno (EINVAL);
++      return -1;
++    }
++
++  return INLINE_SYSCALL_CALL (clock_settime, clock_id, tp);
++}
++weak_alias (__clock_settime, clock_settime)

@@ -1,0 +1,199 @@
+commit a5275ba5378c9256d18e582572b4315e8edfcbfb
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Nov 29 14:15:01 2018 -0800
+
+    _dl_exception_create_format: Support %x/%lx/%zx
+    
+    Add support for %x, %lx and %zx to _dl_exception_create_format and pad
+    to the full width with 0.
+    
+            * elf/Makefile (tests-internal): Add tst-create_format1.
+            * elf/dl-exception.c (_dl_exception_create_format): Support
+            %x, %lx and %zx.
+            * elf/tst-create_format1.c: New file.
+
+Conflicts:
+	elf/Makefile
+	  (Different backport order of tests.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 89dff92adfc417f5..6d1962b2e4deb871 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -198,7 +198,8 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+ 	 tst-tls3 tst-tls6 tst-tls7 tst-tls8 tst-dlmopen2 \
+-	 tst-ptrguard1 tst-stackguard1 tst-libc_dlvsym
++	 tst-ptrguard1 tst-stackguard1 tst-libc_dlvsym \
++	 tst-create_format1
+ tests-container += tst-pldd
+ ifeq ($(build-hardcoded-path-in-tests),yes)
+ tests += tst-dlopen-aout
+diff --git a/elf/dl-exception.c b/elf/dl-exception.c
+index 1c63e4a3a65b6d55..1e41d89a7db52683 100644
+--- a/elf/dl-exception.c
++++ b/elf/dl-exception.c
+@@ -111,6 +111,20 @@ _dl_exception_create_format (struct dl_exception *exception, const char *objname
+             case 's':
+               length += strlen (va_arg (ap, const char *));
+               break;
++	      /* Recognize the l modifier.  It is only important on some
++		 platforms where long and int have a different size.  We
++		 can use the same code for size_t.  */
++	    case 'l':
++	    case 'z':
++	      if (p[1] == 'x')
++		{
++		  length += LONG_WIDTH / 4;
++		  ++p;
++		  break;
++		}
++	    case 'x':
++	      length += INT_WIDTH / 4;
++	      break;
+             default:
+               /* Assumed to be '%'.  */
+               ++length;
+@@ -167,6 +181,32 @@ _dl_exception_create_format (struct dl_exception *exception, const char *objname
+               *wptr = '%';
+               ++wptr;
+               break;
++	    case 'x':
++	      {
++		unsigned long int num = va_arg (ap, unsigned int);
++		char *start = wptr;
++		wptr += INT_WIDTH / 4;
++		char *cp = _itoa (num, wptr, 16, 0);
++		/* Pad to the full width with 0.  */
++		while (cp != start)
++		  *--cp = '0';
++	      }
++	      break;
++	    case 'l':
++	    case 'z':
++	      if (p[1] == 'x')
++		{
++		  unsigned long int num = va_arg (ap, unsigned long int);
++		  char *start = wptr;
++		  wptr += LONG_WIDTH / 4;
++		  char *cp = _itoa (num, wptr, 16, 0);
++		  /* Pad to the full width with 0.  */
++		  while (cp != start)
++		    *--cp = '0';
++		  ++p;
++		  break;
++		}
++	       /* FALLTHROUGH */
+             default:
+               _dl_fatal_printf ("Fatal error:"
+                                 " invalid format in exception string\n");
+diff --git a/elf/tst-create_format1.c b/elf/tst-create_format1.c
+new file mode 100644
+index 0000000000000000..8b9edfdc69ea4ced
+--- /dev/null
++++ b/elf/tst-create_format1.c
+@@ -0,0 +1,103 @@
++/* Check _dl_exception_create_format.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ldsodefs.h>
++#include <array_length.h>
++
++#include <support/check.h>
++#include <support/xunistd.h>
++#include <support/capture_subprocess.h>
++
++#define TEST(es, objn, fmt, ...)					\
++  ({									\
++     struct dl_exception exception;					\
++     _dl_exception_create_format (&exception, objn, fmt, __VA_ARGS__);	\
++     TEST_COMPARE_STRING (exception.objname, objn == NULL ? "" : objn);	\
++     TEST_COMPARE_STRING (exception.errstring, es);			\
++     _dl_exception_free (&exception);					\
++   })
++
++static void
++do_test_invalid_conversion (void *closure)
++{
++  TEST ("(null)", NULL, "%p", NULL);
++}
++
++/* Exit status after abnormal termination.  */
++static int invalid_status;
++
++static void
++init_invalid_status (void)
++{
++  pid_t pid = xfork ();
++  if (pid == 0)
++    _exit (127);
++  xwaitpid (pid, &invalid_status, 0);
++  if (WIFEXITED (invalid_status))
++    invalid_status = WEXITSTATUS (invalid_status);
++}
++
++static int
++do_test (void)
++{
++  init_invalid_status ();
++
++  TEST ("test",      NULL,   "%s",      "test");
++  TEST ("test-test", NULL,   "%s-test", "test");
++  TEST ("test",      "test", "%s",      "test");
++  TEST ("test-test", "test", "%s-test", "test");
++
++  TEST ("test%",      NULL,   "%s%%",      "test");
++  TEST ("test%-test", NULL,   "%s%%-test", "test");
++  TEST ("test%",      "test", "%s%%",      "test");
++  TEST ("test%-test", "test", "%s%%-test", "test");
++
++  TEST ("0000007b",      NULL,   "%x",      123);
++  TEST ("0000007b-test", NULL,   "%x-test", 123);
++  TEST ("0000007b",      "test", "%x",      123);
++  TEST ("0000007b-test", "test", "%x-test", 123);
++
++#define TEST_LONG(es, objn, fmt, ...)				\
++  ({								\
++     if (sizeof (int) == sizeof (long int))			\
++       TEST (es, objn, fmt, __VA_ARGS__);			\
++     else							\
++       TEST ("ffffffff" es, objn, fmt, __VA_ARGS__);		\
++   })
++
++  TEST_LONG ("fffffffd",      NULL,   "%lx",      (long int)~2ul);
++  TEST_LONG ("fffffffd-test", NULL,   "%lx-test", (long int)~2ul);
++  TEST_LONG ("fffffffd",      "test", "%lx",      (long int)~2ul);
++  TEST_LONG ("fffffffd-test", "test", "%lx-test", (long int)~2ul);
++
++  TEST_LONG ("fffffffe",      NULL,   "%zx",      (size_t)~1ul);
++  TEST_LONG ("fffffffe-test", NULL,   "%zx-test", (size_t)~1ul);
++  TEST_LONG ("fffffffe",      "test", "%zx",      (size_t)~1ul);
++  TEST_LONG ("fffffffe-test", "test", "%zx-test", (size_t)~1ul);
++
++  struct support_capture_subprocess result;
++  result = support_capture_subprocess (do_test_invalid_conversion, NULL);
++  support_capture_subprocess_check (&result, "dl-exception",
++				    invalid_status, sc_allow_stderr);
++  TEST_COMPARE_STRING (result.err.buffer,
++		       "Fatal error: invalid format in exception string\n");
++
++  return 0;
++}
++
++#include <support/test-driver.c>

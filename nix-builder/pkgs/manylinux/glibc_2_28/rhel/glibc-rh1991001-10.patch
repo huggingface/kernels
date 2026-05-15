@@ -1,0 +1,23 @@
+commit 52290d8c04569615fb011ee286d52dc5147afbd7
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Thu Apr 15 09:57:10 2021 +0100
+
+    elf: Fix missing include in test case [BZ #27136]
+    
+    Broken test was introduced in
+    
+      commit 8f85075a2e9c26ff7486d4bbaf358999807d215c
+      elf: Add a DTV setup test [BZ #27136]
+
+diff --git a/elf/tst-tls20.c b/elf/tst-tls20.c
+index ac5f8c8d39b66dd6..9977ec803208b9c8 100644
+--- a/elf/tst-tls20.c
++++ b/elf/tst-tls20.c
+@@ -21,6 +21,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <support/check.h>
++#include <support/support.h>
+ #include <support/xdlfcn.h>
+ #include <support/xthread.h>
+ 

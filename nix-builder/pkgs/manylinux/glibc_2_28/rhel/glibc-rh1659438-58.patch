@@ -1,0 +1,88 @@
+commit 1a7df49c92f62e14d8727f083fd055eba7c91ad9
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Fri Mar 22 11:14:07 2019 +0100
+
+    S390: Add new hwcap values for new cpu architecture arch13.
+    
+    The new hwcap values indicate support for:
+    -"Vector-Enhancements Facility 2" (tag "vxe2", hwcap 2^15)
+    -"Vector-Packed-Decimal-Enhancement Facility" (tag "vxp", hwcap 2^16)
+    -"Enhanced-Sort Facility" (tag "sort", hwcap 2^17)
+    -"Deflate-Conversion Facility" (tag "dflt", hwcap 2^18)
+    
+    The vxe2 hwcap is also marked as important hwcap.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/dl-procinfo.c (_dl_s390_cap_flags):
+            Add vxe2, vxp, dflt, sort flags.
+            * sysdeps/s390/dl-procinfo.h: Add HWCAP_S390_VXRS_EXT2,
+            HWCAP_S390_VXRS_PDE, HWCAP_S390_SORT, HWCAP_S390_DFLT
+            capabilities.
+            (HWCAP_IMPORTANT): Add HWCAP_S390_VXRS_EXT2.
+            * sysdeps/unix/sysv/linux/s390/bits/hwcap.h
+            (HWCAP_S390_VXRS_EXT2, HWCAP_S390_VXRS_PDE, HWCAP_S390_SORT,
+            HWCAP_S390_DFLT): Define.
+
+diff --git a/sysdeps/s390/dl-procinfo.c b/sysdeps/s390/dl-procinfo.c
+index 86c964caff6a1bc4..6ea220a171d8fab7 100644
+--- a/sysdeps/s390/dl-procinfo.c
++++ b/sysdeps/s390/dl-procinfo.c
+@@ -46,12 +46,12 @@
+ #if !defined PROCINFO_DECL && defined SHARED
+   ._dl_s390_cap_flags
+ #else
+-PROCINFO_CLASS const char _dl_s390_cap_flags[15][9]
++PROCINFO_CLASS const char _dl_s390_cap_flags[19][9]
+ #endif
+ #ifndef PROCINFO_DECL
+ = {
+      "esan3", "zarch", "stfle", "msa", "ldisp", "eimm", "dfp", "edat", "etf3eh",
+-     "highgprs", "te", "vx", "vxd", "vxe", "gs"
++     "highgprs", "te", "vx", "vxd", "vxe", "gs", "vxe2", "vxp", "sort", "dflt"
+   }
+ #endif
+ #if !defined SHARED || defined PROCINFO_DECL
+diff --git a/sysdeps/s390/dl-procinfo.h b/sysdeps/s390/dl-procinfo.h
+index f71d64c3ab24e715..d03c69fffdbd06de 100644
+--- a/sysdeps/s390/dl-procinfo.h
++++ b/sysdeps/s390/dl-procinfo.h
+@@ -21,7 +21,7 @@
+ #define _DL_PROCINFO_H	1
+ #include <ldsodefs.h>
+ 
+-#define _DL_HWCAP_COUNT 15
++#define _DL_HWCAP_COUNT 19
+ 
+ #define _DL_PLATFORMS_COUNT	9
+ 
+@@ -54,11 +54,16 @@ enum
+   HWCAP_S390_VXD = 1 << 12,
+   HWCAP_S390_VXE = 1 << 13,
+   HWCAP_S390_GS = 1 << 14,
++  HWCAP_S390_VXRS_EXT2 = 1 << 15,
++  HWCAP_S390_VXRS_PDE = 1 << 16,
++  HWCAP_S390_SORT = 1 << 17,
++  HWCAP_S390_DFLT = 1 << 18,
+ };
+ 
+ #define HWCAP_IMPORTANT (HWCAP_S390_ZARCH | HWCAP_S390_LDISP \
+ 			 | HWCAP_S390_EIMM | HWCAP_S390_DFP  \
+-			 | HWCAP_S390_VX | HWCAP_S390_VXE)
++			 | HWCAP_S390_VX | HWCAP_S390_VXE    \
++			 | HWCAP_S390_VXRS_EXT2)
+ 
+ /* We cannot provide a general printing function.  */
+ #define _dl_procinfo(type, word) -1
+diff --git a/sysdeps/unix/sysv/linux/s390/bits/hwcap.h b/sysdeps/unix/sysv/linux/s390/bits/hwcap.h
+index 2564712399948375..6b9b59522e3d3bec 100644
+--- a/sysdeps/unix/sysv/linux/s390/bits/hwcap.h
++++ b/sysdeps/unix/sysv/linux/s390/bits/hwcap.h
+@@ -39,3 +39,7 @@
+ #define HWCAP_S390_VXD          4096
+ #define HWCAP_S390_VXE          8192
+ #define HWCAP_S390_GS           16384
++#define HWCAP_S390_VXRS_EXT2    32768
++#define HWCAP_S390_VXRS_PDE     65536
++#define HWCAP_S390_SORT         131072
++#define HWCAP_S390_DFLT         262144

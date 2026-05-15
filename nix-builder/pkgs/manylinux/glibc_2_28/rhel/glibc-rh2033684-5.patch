@@ -1,0 +1,963 @@
+commit f9de8bfe1a731c309b91d175b4f6f4aeb786effa
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Tue Dec 15 23:50:09 2020 +0530
+
+    nonstring: Enable __FORTIFY_LEVEL=3
+    
+    Use __builtin_dynamic_object_size in the remaining functions that
+    don't have compiler builtins as is the case for string functions.
+
+diff --git a/io/bits/poll2.h b/io/bits/poll2.h
+index 7e8406b87d6319f8..f47fd9ad0945234f 100644
+--- a/io/bits/poll2.h
++++ b/io/bits/poll2.h
+@@ -35,12 +35,13 @@ extern int __REDIRECT (__poll_chk_warn, (struct pollfd *__fds, nfds_t __nfds,
+ __fortify_function int
+ poll (struct pollfd *__fds, nfds_t __nfds, int __timeout)
+ {
+-  if (__bos (__fds) != (__SIZE_TYPE__) -1)
++  if (__glibc_objsize (__fds) != (__SIZE_TYPE__) -1)
+     {
+       if (! __builtin_constant_p (__nfds))
+-	return __poll_chk (__fds, __nfds, __timeout, __bos (__fds));
+-      else if (__bos (__fds) / sizeof (*__fds) < __nfds)
+-	return __poll_chk_warn (__fds, __nfds, __timeout, __bos (__fds));
++	return __poll_chk (__fds, __nfds, __timeout, __glibc_objsize (__fds));
++      else if (__glibc_objsize (__fds) / sizeof (*__fds) < __nfds)
++	return __poll_chk_warn (__fds, __nfds, __timeout,
++				__glibc_objsize (__fds));
+     }
+ 
+   return __poll_alias (__fds, __nfds, __timeout);
+@@ -65,13 +66,14 @@ __fortify_function int
+ ppoll (struct pollfd *__fds, nfds_t __nfds, const struct timespec *__timeout,
+        const __sigset_t *__ss)
+ {
+-  if (__bos (__fds) != (__SIZE_TYPE__) -1)
++  if (__glibc_objsize (__fds) != (__SIZE_TYPE__) -1)
+     {
+       if (! __builtin_constant_p (__nfds))
+-	return __ppoll_chk (__fds, __nfds, __timeout, __ss, __bos (__fds));
+-      else if (__bos (__fds) / sizeof (*__fds) < __nfds)
++	return __ppoll_chk (__fds, __nfds, __timeout, __ss,
++			    __glibc_objsize (__fds));
++      else if (__glibc_objsize (__fds) / sizeof (*__fds) < __nfds)
+ 	return __ppoll_chk_warn (__fds, __nfds, __timeout, __ss,
+-				 __bos (__fds));
++				 __glibc_objsize (__fds));
+     }
+ 
+   return __ppoll_alias (__fds, __nfds, __timeout, __ss);
+diff --git a/libio/bits/stdio.h b/libio/bits/stdio.h
+index 4ab919031f77a960..1372d4bf70c43d53 100644
+--- a/libio/bits/stdio.h
++++ b/libio/bits/stdio.h
+@@ -31,7 +31,7 @@
+ 
+ 
+ #ifdef __USE_EXTERN_INLINES
+-/* For -D_FORTIFY_SOURCE{,=2} bits/stdio2.h will define a different
++/* For -D_FORTIFY_SOURCE{,=2,=3} bits/stdio2.h will define a different
+    inline.  */
+ # if !(__USE_FORTIFY_LEVEL > 0 && defined __fortify_function)
+ /* Write formatted output to stdout from argument list ARG.  */
+diff --git a/libio/bits/stdio2.h b/libio/bits/stdio2.h
+index 11651506a67daea0..2cd69f44cfadfc9f 100644
+--- a/libio/bits/stdio2.h
++++ b/libio/bits/stdio2.h
+@@ -34,12 +34,13 @@ __fortify_function int
+ __NTH (sprintf (char *__restrict __s, const char *__restrict __fmt, ...))
+ {
+   return __builtin___sprintf_chk (__s, __USE_FORTIFY_LEVEL - 1,
+-				  __bos (__s), __fmt, __va_arg_pack ());
++				  __glibc_objsize (__s), __fmt,
++				  __va_arg_pack ());
+ }
+ #elif !defined __cplusplus
+ # define sprintf(str, ...) \
+-  __builtin___sprintf_chk (str, __USE_FORTIFY_LEVEL - 1, __bos (str), \
+-			   __VA_ARGS__)
++  __builtin___sprintf_chk (str, __USE_FORTIFY_LEVEL - 1,		      \
++			   __glibc_objsize (str), __VA_ARGS__)
+ #endif
+ 
+ __fortify_function int
+@@ -47,7 +48,7 @@ __NTH (vsprintf (char *__restrict __s, const char *__restrict __fmt,
+ 		 __gnuc_va_list __ap))
+ {
+   return __builtin___vsprintf_chk (__s, __USE_FORTIFY_LEVEL - 1,
+-				   __bos (__s), __fmt, __ap);
++				   __glibc_objsize (__s), __fmt, __ap);
+ }
+ 
+ #if defined __USE_ISOC99 || defined __USE_UNIX98
+@@ -65,12 +66,13 @@ __NTH (snprintf (char *__restrict __s, size_t __n,
+ 		 const char *__restrict __fmt, ...))
+ {
+   return __builtin___snprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+-				   __bos (__s), __fmt, __va_arg_pack ());
++				   __glibc_objsize (__s), __fmt,
++				   __va_arg_pack ());
+ }
+ # elif !defined __cplusplus
+ #  define snprintf(str, len, ...) \
+-  __builtin___snprintf_chk (str, len, __USE_FORTIFY_LEVEL - 1, __bos (str), \
+-			    __VA_ARGS__)
++  __builtin___snprintf_chk (str, len, __USE_FORTIFY_LEVEL - 1,		      \
++			    __glibc_objsize (str), __VA_ARGS__)
+ # endif
+ 
+ __fortify_function int
+@@ -78,7 +80,7 @@ __NTH (vsnprintf (char *__restrict __s, size_t __n,
+ 		  const char *__restrict __fmt, __gnuc_va_list __ap))
+ {
+   return __builtin___vsnprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+-				    __bos (__s), __fmt, __ap);
++				    __glibc_objsize (__s), __fmt, __ap);
+ }
+ 
+ #endif
+@@ -234,8 +236,8 @@ extern char *__REDIRECT (__gets_warn, (char *__str), gets)
+ __fortify_function __wur char *
+ gets (char *__str)
+ {
+-  if (__bos (__str) != (size_t) -1)
+-    return __gets_chk (__str, __bos (__str));
++  if (__glibc_objsize (__str) != (size_t) -1)
++    return __gets_chk (__str, __glibc_objsize (__str));
+   return __gets_warn (__str);
+ }
+ #endif
+@@ -254,13 +256,13 @@ extern char *__REDIRECT (__fgets_chk_warn,
+ __fortify_function __wur char *
+ fgets (char *__restrict __s, int __n, FILE *__restrict __stream)
+ {
+-  if (__bos (__s) != (size_t) -1)
++  if (__glibc_objsize (__s) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n) || __n <= 0)
+-	return __fgets_chk (__s, __bos (__s), __n, __stream);
++	return __fgets_chk (__s, __glibc_objsize (__s), __n, __stream);
+ 
+-      if ((size_t) __n > __bos (__s))
+-	return __fgets_chk_warn (__s, __bos (__s), __n, __stream);
++      if ((size_t) __n > __glibc_objsize (__s))
++	return __fgets_chk_warn (__s, __glibc_objsize (__s), __n, __stream);
+     }
+   return __fgets_alias (__s, __n, __stream);
+ }
+@@ -284,15 +286,17 @@ __fortify_function __wur size_t
+ fread (void *__restrict __ptr, size_t __size, size_t __n,
+        FILE *__restrict __stream)
+ {
+-  if (__bos0 (__ptr) != (size_t) -1)
++  if (__glibc_objsize0 (__ptr) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__size)
+ 	  || !__builtin_constant_p (__n)
+ 	  || (__size | __n) >= (((size_t) 1) << (8 * sizeof (size_t) / 2)))
+-	return __fread_chk (__ptr, __bos0 (__ptr), __size, __n, __stream);
++	return __fread_chk (__ptr, __glibc_objsize0 (__ptr), __size, __n,
++			    __stream);
+ 
+-      if (__size * __n > __bos0 (__ptr))
+-	return __fread_chk_warn (__ptr, __bos0 (__ptr), __size, __n, __stream);
++      if (__size * __n > __glibc_objsize0 (__ptr))
++	return __fread_chk_warn (__ptr, __glibc_objsize0 (__ptr), __size, __n,
++				 __stream);
+     }
+   return __fread_alias (__ptr, __size, __n, __stream);
+ }
+@@ -312,13 +316,15 @@ extern char *__REDIRECT (__fgets_unlocked_chk_warn,
+ __fortify_function __wur char *
+ fgets_unlocked (char *__restrict __s, int __n, FILE *__restrict __stream)
+ {
+-  if (__bos (__s) != (size_t) -1)
++  if (__glibc_objsize (__s) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n) || __n <= 0)
+-	return __fgets_unlocked_chk (__s, __bos (__s), __n, __stream);
++	return __fgets_unlocked_chk (__s, __glibc_objsize (__s), __n,
++				     __stream);
+ 
+-      if ((size_t) __n > __bos (__s))
+-	return __fgets_unlocked_chk_warn (__s, __bos (__s), __n, __stream);
++      if ((size_t) __n > __glibc_objsize (__s))
++	return __fgets_unlocked_chk_warn (__s, __glibc_objsize (__s), __n,
++					  __stream);
+     }
+   return __fgets_unlocked_alias (__s, __n, __stream);
+ }
+@@ -345,17 +351,17 @@ __fortify_function __wur size_t
+ fread_unlocked (void *__restrict __ptr, size_t __size, size_t __n,
+ 		FILE *__restrict __stream)
+ {
+-  if (__bos0 (__ptr) != (size_t) -1)
++  if (__glibc_objsize0 (__ptr) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__size)
+ 	  || !__builtin_constant_p (__n)
+ 	  || (__size | __n) >= (((size_t) 1) << (8 * sizeof (size_t) / 2)))
+-	return __fread_unlocked_chk (__ptr, __bos0 (__ptr), __size, __n,
+-				     __stream);
++	return __fread_unlocked_chk (__ptr, __glibc_objsize0 (__ptr), __size,
++				     __n, __stream);
+ 
+-      if (__size * __n > __bos0 (__ptr))
+-	return __fread_unlocked_chk_warn (__ptr, __bos0 (__ptr), __size, __n,
+-					  __stream);
++      if (__size * __n > __glibc_objsize0 (__ptr))
++	return __fread_unlocked_chk_warn (__ptr, __glibc_objsize0 (__ptr),
++					  __size, __n, __stream);
+     }
+ 
+ # ifdef __USE_EXTERN_INLINES
+diff --git a/posix/bits/unistd.h b/posix/bits/unistd.h
+index 9a749dccf8de65cd..a0c4dcfe9c61a7b8 100644
+--- a/posix/bits/unistd.h
++++ b/posix/bits/unistd.h
+@@ -33,13 +33,14 @@ extern ssize_t __REDIRECT (__read_chk_warn,
+ __fortify_function __wur ssize_t
+ read (int __fd, void *__buf, size_t __nbytes)
+ {
+-  if (__bos0 (__buf) != (size_t) -1)
++  if (__glibc_objsize0 (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__nbytes))
+-	return __read_chk (__fd, __buf, __nbytes, __bos0 (__buf));
++	return __read_chk (__fd, __buf, __nbytes, __glibc_objsize0 (__buf));
+ 
+-      if (__nbytes > __bos0 (__buf))
+-	return __read_chk_warn (__fd, __buf, __nbytes, __bos0 (__buf));
++      if (__nbytes > __glibc_objsize0 (__buf))
++	return __read_chk_warn (__fd, __buf, __nbytes,
++				__glibc_objsize0 (__buf));
+     }
+   return __read_alias (__fd, __buf, __nbytes);
+ }
+@@ -71,14 +72,15 @@ extern ssize_t __REDIRECT (__pread64_chk_warn,
+ __fortify_function __wur ssize_t
+ pread (int __fd, void *__buf, size_t __nbytes, __off_t __offset)
+ {
+-  if (__bos0 (__buf) != (size_t) -1)
++  if (__glibc_objsize0 (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__nbytes))
+-	return __pread_chk (__fd, __buf, __nbytes, __offset, __bos0 (__buf));
++	return __pread_chk (__fd, __buf, __nbytes, __offset,
++			    __glibc_objsize0 (__buf));
+ 
+-      if ( __nbytes > __bos0 (__buf))
++      if ( __nbytes > __glibc_objsize0 (__buf))
+ 	return __pread_chk_warn (__fd, __buf, __nbytes, __offset,
+-				 __bos0 (__buf));
++				 __glibc_objsize0 (__buf));
+     }
+   return __pread_alias (__fd, __buf, __nbytes, __offset);
+ }
+@@ -86,14 +88,15 @@ pread (int __fd, void *__buf, size_t __nbytes, __off_t __offset)
+ __fortify_function __wur ssize_t
+ pread (int __fd, void *__buf, size_t __nbytes, __off64_t __offset)
+ {
+-  if (__bos0 (__buf) != (size_t) -1)
++  if (__glibc_objsize0 (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__nbytes))
+-	return __pread64_chk (__fd, __buf, __nbytes, __offset, __bos0 (__buf));
++	return __pread64_chk (__fd, __buf, __nbytes, __offset,
++			      __glibc_objsize0 (__buf));
+ 
+-      if ( __nbytes > __bos0 (__buf))
++      if ( __nbytes > __glibc_objsize0 (__buf))
+ 	return __pread64_chk_warn (__fd, __buf, __nbytes, __offset,
+-				   __bos0 (__buf));
++				   __glibc_objsize0 (__buf));
+     }
+ 
+   return __pread64_alias (__fd, __buf, __nbytes, __offset);
+@@ -104,14 +107,15 @@ pread (int __fd, void *__buf, size_t __nbytes, __off64_t __offset)
+ __fortify_function __wur ssize_t
+ pread64 (int __fd, void *__buf, size_t __nbytes, __off64_t __offset)
+ {
+-  if (__bos0 (__buf) != (size_t) -1)
++  if (__glibc_objsize0 (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__nbytes))
+-	return __pread64_chk (__fd, __buf, __nbytes, __offset, __bos0 (__buf));
++	return __pread64_chk (__fd, __buf, __nbytes, __offset,
++			      __glibc_objsize0 (__buf));
+ 
+-      if ( __nbytes > __bos0 (__buf))
++      if ( __nbytes > __glibc_objsize0 (__buf))
+ 	return __pread64_chk_warn (__fd, __buf, __nbytes, __offset,
+-				   __bos0 (__buf));
++				   __glibc_objsize0 (__buf));
+     }
+ 
+   return __pread64_alias (__fd, __buf, __nbytes, __offset);
+@@ -139,13 +143,14 @@ __fortify_function __nonnull ((1, 2)) __wur ssize_t
+ __NTH (readlink (const char *__restrict __path, char *__restrict __buf,
+ 		 size_t __len))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+-	return __readlink_chk (__path, __buf, __len, __bos (__buf));
++	return __readlink_chk (__path, __buf, __len, __glibc_objsize (__buf));
+ 
+-      if ( __len > __bos (__buf))
+-	return __readlink_chk_warn (__path, __buf, __len, __bos (__buf));
++      if ( __len > __glibc_objsize (__buf))
++	return __readlink_chk_warn (__path, __buf, __len,
++				    __glibc_objsize (__buf));
+     }
+   return __readlink_alias (__path, __buf, __len);
+ }
+@@ -173,14 +178,15 @@ __fortify_function __nonnull ((2, 3)) __wur ssize_t
+ __NTH (readlinkat (int __fd, const char *__restrict __path,
+ 		   char *__restrict __buf, size_t __len))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+-	return __readlinkat_chk (__fd, __path, __buf, __len, __bos (__buf));
++	return __readlinkat_chk (__fd, __path, __buf, __len,
++				 __glibc_objsize (__buf));
+ 
+-      if (__len > __bos (__buf))
++      if (__len > __glibc_objsize (__buf))
+ 	return __readlinkat_chk_warn (__fd, __path, __buf, __len,
+-				      __bos (__buf));
++				      __glibc_objsize (__buf));
+     }
+   return __readlinkat_alias (__fd, __path, __buf, __len);
+ }
+@@ -199,13 +205,13 @@ extern char *__REDIRECT_NTH (__getcwd_chk_warn,
+ __fortify_function __wur char *
+ __NTH (getcwd (char *__buf, size_t __size))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__size))
+-	return __getcwd_chk (__buf, __size, __bos (__buf));
++	return __getcwd_chk (__buf, __size, __glibc_objsize (__buf));
+ 
+-      if (__size > __bos (__buf))
+-	return __getcwd_chk_warn (__buf, __size, __bos (__buf));
++      if (__size > __glibc_objsize (__buf))
++	return __getcwd_chk_warn (__buf, __size, __glibc_objsize (__buf));
+     }
+   return __getcwd_alias (__buf, __size);
+ }
+@@ -220,8 +226,8 @@ extern char *__REDIRECT_NTH (__getwd_warn, (char *__buf), getwd)
+ __fortify_function __nonnull ((1)) __attribute_deprecated__ __wur char *
+ __NTH (getwd (char *__buf))
+ {
+-  if (__bos (__buf) != (size_t) -1)
+-    return __getwd_chk (__buf, __bos (__buf));
++  if (__glibc_objsize (__buf) != (size_t) -1)
++    return __getwd_chk (__buf, __glibc_objsize (__buf));
+   return __getwd_warn (__buf);
+ }
+ #endif
+@@ -239,13 +245,14 @@ extern size_t __REDIRECT_NTH (__confstr_chk_warn,
+ __fortify_function size_t
+ __NTH (confstr (int __name, char *__buf, size_t __len))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+-	return __confstr_chk (__name, __buf, __len, __bos (__buf));
++	return __confstr_chk (__name, __buf, __len, __glibc_objsize (__buf));
+ 
+-      if (__bos (__buf) < __len)
+-	return __confstr_chk_warn (__name, __buf, __len, __bos (__buf));
++      if (__glibc_objsize (__buf) < __len)
++	return __confstr_chk_warn (__name, __buf, __len,
++				   __glibc_objsize (__buf));
+     }
+   return __confstr_alias (__name, __buf, __len);
+ }
+@@ -264,13 +271,13 @@ extern int __REDIRECT_NTH (__getgroups_chk_warn,
+ __fortify_function int
+ __NTH (getgroups (int __size, __gid_t __list[]))
+ {
+-  if (__bos (__list) != (size_t) -1)
++  if (__glibc_objsize (__list) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__size) || __size < 0)
+-	return __getgroups_chk (__size, __list, __bos (__list));
++	return __getgroups_chk (__size, __list, __glibc_objsize (__list));
+ 
+-      if (__size * sizeof (__gid_t) > __bos (__list))
+-	return __getgroups_chk_warn (__size, __list, __bos (__list));
++      if (__size * sizeof (__gid_t) > __glibc_objsize (__list))
++	return __getgroups_chk_warn (__size, __list, __glibc_objsize (__list));
+     }
+   return __getgroups_alias (__size, __list);
+ }
+@@ -290,13 +297,15 @@ extern int __REDIRECT_NTH (__ttyname_r_chk_warn,
+ __fortify_function int
+ __NTH (ttyname_r (int __fd, char *__buf, size_t __buflen))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__buflen))
+-	return __ttyname_r_chk (__fd, __buf, __buflen, __bos (__buf));
++	return __ttyname_r_chk (__fd, __buf, __buflen,
++				__glibc_objsize (__buf));
+ 
+-      if (__buflen > __bos (__buf))
+-	return __ttyname_r_chk_warn (__fd, __buf, __buflen, __bos (__buf));
++      if (__buflen > __glibc_objsize (__buf))
++	return __ttyname_r_chk_warn (__fd, __buf, __buflen,
++				     __glibc_objsize (__buf));
+     }
+   return __ttyname_r_alias (__fd, __buf, __buflen);
+ }
+@@ -316,13 +325,14 @@ extern int __REDIRECT (__getlogin_r_chk_warn,
+ __fortify_function int
+ getlogin_r (char *__buf, size_t __buflen)
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__buflen))
+-	return __getlogin_r_chk (__buf, __buflen, __bos (__buf));
++	return __getlogin_r_chk (__buf, __buflen, __glibc_objsize (__buf));
+ 
+-      if (__buflen > __bos (__buf))
+-	return __getlogin_r_chk_warn (__buf, __buflen, __bos (__buf));
++      if (__buflen > __glibc_objsize (__buf))
++	return __getlogin_r_chk_warn (__buf, __buflen,
++				      __glibc_objsize (__buf));
+     }
+   return __getlogin_r_alias (__buf, __buflen);
+ }
+@@ -343,13 +353,14 @@ extern int __REDIRECT_NTH (__gethostname_chk_warn,
+ __fortify_function int
+ __NTH (gethostname (char *__buf, size_t __buflen))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__buflen))
+-	return __gethostname_chk (__buf, __buflen, __bos (__buf));
++	return __gethostname_chk (__buf, __buflen, __glibc_objsize (__buf));
+ 
+-      if (__buflen > __bos (__buf))
+-	return __gethostname_chk_warn (__buf, __buflen, __bos (__buf));
++      if (__buflen > __glibc_objsize (__buf))
++	return __gethostname_chk_warn (__buf, __buflen,
++				       __glibc_objsize (__buf));
+     }
+   return __gethostname_alias (__buf, __buflen);
+ }
+@@ -372,13 +383,14 @@ extern int __REDIRECT_NTH (__getdomainname_chk_warn,
+ __fortify_function int
+ __NTH (getdomainname (char *__buf, size_t __buflen))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__buflen))
+-	return __getdomainname_chk (__buf, __buflen, __bos (__buf));
++	return __getdomainname_chk (__buf, __buflen, __glibc_objsize (__buf));
+ 
+-      if (__buflen > __bos (__buf))
+-	return __getdomainname_chk_warn (__buf, __buflen, __bos (__buf));
++      if (__buflen > __glibc_objsize (__buf))
++	return __getdomainname_chk_warn (__buf, __buflen,
++					 __glibc_objsize (__buf));
+     }
+   return __getdomainname_alias (__buf, __buflen);
+ }
+diff --git a/socket/bits/socket2.h b/socket/bits/socket2.h
+index a129e697352fd7cb..729e5a4cc1f4cb92 100644
+--- a/socket/bits/socket2.h
++++ b/socket/bits/socket2.h
+@@ -33,13 +33,15 @@ extern ssize_t __REDIRECT (__recv_chk_warn,
+ __fortify_function ssize_t
+ recv (int __fd, void *__buf, size_t __n, int __flags)
+ {
+-  if (__bos0 (__buf) != (size_t) -1)
++  if (__glibc_objsize0 (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+-	return __recv_chk (__fd, __buf, __n, __bos0 (__buf), __flags);
++	return __recv_chk (__fd, __buf, __n, __glibc_objsize0 (__buf),
++			   __flags);
+ 
+-      if (__n > __bos0 (__buf))
+-	return __recv_chk_warn (__fd, __buf, __n, __bos0 (__buf), __flags);
++      if (__n > __glibc_objsize0 (__buf))
++	return __recv_chk_warn (__fd, __buf, __n, __glibc_objsize0 (__buf),
++				__flags);
+     }
+   return __recv_alias (__fd, __buf, __n, __flags);
+ }
+@@ -64,14 +66,14 @@ __fortify_function ssize_t
+ recvfrom (int __fd, void *__restrict __buf, size_t __n, int __flags,
+ 	  __SOCKADDR_ARG __addr, socklen_t *__restrict __addr_len)
+ {
+-  if (__bos0 (__buf) != (size_t) -1)
++  if (__glibc_objsize0 (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+-	return __recvfrom_chk (__fd, __buf, __n, __bos0 (__buf), __flags,
+-			       __addr, __addr_len);
+-      if (__n > __bos0 (__buf))
+-	return __recvfrom_chk_warn (__fd, __buf, __n, __bos0 (__buf), __flags,
+-				    __addr, __addr_len);
++	return __recvfrom_chk (__fd, __buf, __n, __glibc_objsize0 (__buf),
++			       __flags, __addr, __addr_len);
++      if (__n > __glibc_objsize0 (__buf))
++	return __recvfrom_chk_warn (__fd, __buf, __n, __glibc_objsize0 (__buf),
++				    __flags, __addr, __addr_len);
+     }
+   return __recvfrom_alias (__fd, __buf, __n, __flags, __addr, __addr_len);
+ }
+diff --git a/stdlib/bits/stdlib.h b/stdlib/bits/stdlib.h
+index 53c379b99ae9d5fe..5e4114ded33f2033 100644
+--- a/stdlib/bits/stdlib.h
++++ b/stdlib/bits/stdlib.h
+@@ -36,13 +36,14 @@ extern char *__REDIRECT_NTH (__realpath_chk_warn,
+ __fortify_function __wur char *
+ __NTH (realpath (const char *__restrict __name, char *__restrict __resolved))
+ {
+-  if (__bos (__resolved) != (size_t) -1)
++  if (__glibc_objsize (__resolved) != (size_t) -1)
+     {
+ #if defined _LIBC_LIMITS_H_ && defined PATH_MAX
+-      if (__bos (__resolved) < PATH_MAX)
+-	return __realpath_chk_warn (__name, __resolved, __bos (__resolved));
++      if (__glibc_objsize (__resolved) < PATH_MAX)
++	return __realpath_chk_warn (__name, __resolved,
++				    __glibc_objsize (__resolved));
+ #endif
+-      return __realpath_chk (__name, __resolved, __bos (__resolved));
++      return __realpath_chk (__name, __resolved, __glibc_objsize (__resolved));
+     }
+ 
+   return __realpath_alias (__name, __resolved);
+@@ -63,12 +64,14 @@ extern int __REDIRECT_NTH (__ptsname_r_chk_warn,
+ __fortify_function int
+ __NTH (ptsname_r (int __fd, char *__buf, size_t __buflen))
+ {
+-  if (__bos (__buf) != (size_t) -1)
++  if (__glibc_objsize (__buf) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__buflen))
+-	return __ptsname_r_chk (__fd, __buf, __buflen, __bos (__buf));
+-      if (__buflen > __bos (__buf))
+-	return __ptsname_r_chk_warn (__fd, __buf, __buflen, __bos (__buf));
++	return __ptsname_r_chk (__fd, __buf, __buflen,
++				__glibc_objsize (__buf));
++      if (__buflen > __glibc_objsize (__buf))
++	return __ptsname_r_chk_warn (__fd, __buf, __buflen,
++				     __glibc_objsize (__buf));
+     }
+   return __ptsname_r_alias (__fd, __buf, __buflen);
+ }
+@@ -89,8 +92,9 @@ __NTH (wctomb (char *__s, wchar_t __wchar))
+ #if defined MB_LEN_MAX && MB_LEN_MAX != __STDLIB_MB_LEN_MAX
+ # error "Assumed value of MB_LEN_MAX wrong"
+ #endif
+-  if (__bos (__s) != (size_t) -1 && __STDLIB_MB_LEN_MAX > __bos (__s))
+-    return __wctomb_chk (__s, __wchar, __bos (__s));
++  if (__glibc_objsize (__s) != (size_t) -1
++      && __STDLIB_MB_LEN_MAX > __glibc_objsize (__s))
++    return __wctomb_chk (__s, __wchar, __glibc_objsize (__s));
+   return __wctomb_alias (__s, __wchar);
+ }
+ 
+@@ -113,15 +117,16 @@ __fortify_function size_t
+ __NTH (mbstowcs (wchar_t *__restrict __dst, const char *__restrict __src,
+ 		 size_t __len))
+ {
+-  if (__bos (__dst) != (size_t) -1)
++  if (__glibc_objsize (__dst) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+ 	return __mbstowcs_chk (__dst, __src, __len,
+-			       __bos (__dst) / sizeof (wchar_t));
++			       __glibc_objsize (__dst) / sizeof (wchar_t));
+ 
+-      if (__len > __bos (__dst) / sizeof (wchar_t))
++      if (__len > __glibc_objsize (__dst) / sizeof (wchar_t))
+ 	return __mbstowcs_chk_warn (__dst, __src, __len,
+-				     __bos (__dst) / sizeof (wchar_t));
++				    (__glibc_objsize (__dst)
++				     / sizeof (wchar_t)));
+     }
+   return __mbstowcs_alias (__dst, __src, __len);
+ }
+@@ -144,12 +149,13 @@ __fortify_function size_t
+ __NTH (wcstombs (char *__restrict __dst, const wchar_t *__restrict __src,
+ 		 size_t __len))
+ {
+-  if (__bos (__dst) != (size_t) -1)
++  if (__glibc_objsize (__dst) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+-	return __wcstombs_chk (__dst, __src, __len, __bos (__dst));
+-      if (__len > __bos (__dst))
+-	return __wcstombs_chk_warn (__dst, __src, __len, __bos (__dst));
++	return __wcstombs_chk (__dst, __src, __len, __glibc_objsize (__dst));
++      if (__len > __glibc_objsize (__dst))
++	return __wcstombs_chk_warn (__dst, __src, __len,
++				    __glibc_objsize (__dst));
+     }
+   return __wcstombs_alias (__dst, __src, __len);
+ }
+diff --git a/wcsmbs/bits/wchar2.h b/wcsmbs/bits/wchar2.h
+index d62b86de3e288d53..838ba877ee4b4afe 100644
+--- a/wcsmbs/bits/wchar2.h
++++ b/wcsmbs/bits/wchar2.h
+@@ -39,15 +39,15 @@ __fortify_function wchar_t *
+ __NTH (wmemcpy (wchar_t *__restrict __s1, const wchar_t *__restrict __s2,
+ 		size_t __n))
+ {
+-  if (__bos0 (__s1) != (size_t) -1)
++  if (__glibc_objsize0 (__s1) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+ 	return __wmemcpy_chk (__s1, __s2, __n,
+-			      __bos0 (__s1) / sizeof (wchar_t));
++			      __glibc_objsize0 (__s1) / sizeof (wchar_t));
+ 
+-      if (__n > __bos0 (__s1) / sizeof (wchar_t))
++      if (__n > __glibc_objsize0 (__s1) / sizeof (wchar_t))
+ 	return __wmemcpy_chk_warn (__s1, __s2, __n,
+-				   __bos0 (__s1) / sizeof (wchar_t));
++				   __glibc_objsize0 (__s1) / sizeof (wchar_t));
+     }
+   return __wmemcpy_alias (__s1, __s2, __n);
+ }
+@@ -67,15 +67,16 @@ extern wchar_t *__REDIRECT_NTH (__wmemmove_chk_warn,
+ __fortify_function wchar_t *
+ __NTH (wmemmove (wchar_t *__s1, const wchar_t *__s2, size_t __n))
+ {
+-  if (__bos0 (__s1) != (size_t) -1)
++  if (__glibc_objsize0 (__s1) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+ 	return __wmemmove_chk (__s1, __s2, __n,
+-			       __bos0 (__s1) / sizeof (wchar_t));
++			       __glibc_objsize0 (__s1) / sizeof (wchar_t));
+ 
+-      if (__n > __bos0 (__s1) / sizeof (wchar_t))
++      if (__n > __glibc_objsize0 (__s1) / sizeof (wchar_t))
+ 	return __wmemmove_chk_warn (__s1, __s2, __n,
+-				    __bos0 (__s1) / sizeof (wchar_t));
++				    (__glibc_objsize0 (__s1)
++				     / sizeof (wchar_t)));
+     }
+   return __wmemmove_alias (__s1, __s2, __n);
+ }
+@@ -100,15 +101,16 @@ __fortify_function wchar_t *
+ __NTH (wmempcpy (wchar_t *__restrict __s1, const wchar_t *__restrict __s2,
+ 		 size_t __n))
+ {
+-  if (__bos0 (__s1) != (size_t) -1)
++  if (__glibc_objsize0 (__s1) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+ 	return __wmempcpy_chk (__s1, __s2, __n,
+-			       __bos0 (__s1) / sizeof (wchar_t));
++			       __glibc_objsize0 (__s1) / sizeof (wchar_t));
+ 
+-      if (__n > __bos0 (__s1) / sizeof (wchar_t))
++      if (__n > __glibc_objsize0 (__s1) / sizeof (wchar_t))
+ 	return __wmempcpy_chk_warn (__s1, __s2, __n,
+-				    __bos0 (__s1) / sizeof (wchar_t));
++				    (__glibc_objsize0 (__s1)
++				     / sizeof (wchar_t)));
+     }
+   return __wmempcpy_alias (__s1, __s2, __n);
+ }
+@@ -128,14 +130,15 @@ extern wchar_t *__REDIRECT_NTH (__wmemset_chk_warn,
+ __fortify_function wchar_t *
+ __NTH (wmemset (wchar_t *__s, wchar_t __c, size_t __n))
+ {
+-  if (__bos0 (__s) != (size_t) -1)
++  if (__glibc_objsize0 (__s) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+-	return __wmemset_chk (__s, __c, __n, __bos0 (__s) / sizeof (wchar_t));
++	return __wmemset_chk (__s, __c, __n,
++			      __glibc_objsize0 (__s) / sizeof (wchar_t));
+ 
+-      if (__n > __bos0 (__s) / sizeof (wchar_t))
++      if (__n > __glibc_objsize0 (__s) / sizeof (wchar_t))
+ 	return __wmemset_chk_warn (__s, __c, __n,
+-				   __bos0 (__s) / sizeof (wchar_t));
++				   __glibc_objsize0 (__s) / sizeof (wchar_t));
+     }
+   return __wmemset_alias (__s, __c, __n);
+ }
+@@ -151,8 +154,9 @@ extern wchar_t *__REDIRECT_NTH (__wcscpy_alias,
+ __fortify_function wchar_t *
+ __NTH (wcscpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src))
+ {
+-  if (__bos (__dest) != (size_t) -1)
+-    return __wcscpy_chk (__dest, __src, __bos (__dest) / sizeof (wchar_t));
++  if (__glibc_objsize (__dest) != (size_t) -1)
++    return __wcscpy_chk (__dest, __src,
++			 __glibc_objsize (__dest) / sizeof (wchar_t));
+   return __wcscpy_alias (__dest, __src);
+ }
+ 
+@@ -167,8 +171,9 @@ extern wchar_t *__REDIRECT_NTH (__wcpcpy_alias,
+ __fortify_function wchar_t *
+ __NTH (wcpcpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src))
+ {
+-  if (__bos (__dest) != (size_t) -1)
+-    return __wcpcpy_chk (__dest, __src, __bos (__dest) / sizeof (wchar_t));
++  if (__glibc_objsize (__dest) != (size_t) -1)
++    return __wcpcpy_chk (__dest, __src,
++			 __glibc_objsize (__dest) / sizeof (wchar_t));
+   return __wcpcpy_alias (__dest, __src);
+ }
+ 
+@@ -191,14 +196,15 @@ __fortify_function wchar_t *
+ __NTH (wcsncpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src,
+ 		size_t __n))
+ {
+-  if (__bos (__dest) != (size_t) -1)
++  if (__glibc_objsize (__dest) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+ 	return __wcsncpy_chk (__dest, __src, __n,
+-			      __bos (__dest) / sizeof (wchar_t));
+-      if (__n > __bos (__dest) / sizeof (wchar_t))
++			      __glibc_objsize (__dest) / sizeof (wchar_t));
++      if (__n > __glibc_objsize (__dest) / sizeof (wchar_t))
+ 	return __wcsncpy_chk_warn (__dest, __src, __n,
+-				   __bos (__dest) / sizeof (wchar_t));
++				   (__glibc_objsize (__dest)
++				    / sizeof (wchar_t)));
+     }
+   return __wcsncpy_alias (__dest, __src, __n);
+ }
+@@ -222,14 +228,15 @@ __fortify_function wchar_t *
+ __NTH (wcpncpy (wchar_t *__restrict __dest, const wchar_t *__restrict __src,
+ 		size_t __n))
+ {
+-  if (__bos (__dest) != (size_t) -1)
++  if (__glibc_objsize (__dest) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n))
+ 	return __wcpncpy_chk (__dest, __src, __n,
+-			      __bos (__dest) / sizeof (wchar_t));
+-      if (__n > __bos (__dest) / sizeof (wchar_t))
++			      __glibc_objsize (__dest) / sizeof (wchar_t));
++      if (__n > __glibc_objsize (__dest) / sizeof (wchar_t))
+ 	return __wcpncpy_chk_warn (__dest, __src, __n,
+-				   __bos (__dest) / sizeof (wchar_t));
++				   (__glibc_objsize (__dest)
++				    / sizeof (wchar_t)));
+     }
+   return __wcpncpy_alias (__dest, __src, __n);
+ }
+@@ -245,8 +252,9 @@ extern wchar_t *__REDIRECT_NTH (__wcscat_alias,
+ __fortify_function wchar_t *
+ __NTH (wcscat (wchar_t *__restrict __dest, const wchar_t *__restrict __src))
+ {
+-  if (__bos (__dest) != (size_t) -1)
+-    return __wcscat_chk (__dest, __src, __bos (__dest) / sizeof (wchar_t));
++  if (__glibc_objsize (__dest) != (size_t) -1)
++    return __wcscat_chk (__dest, __src,
++			 __glibc_objsize (__dest) / sizeof (wchar_t));
+   return __wcscat_alias (__dest, __src);
+ }
+ 
+@@ -263,9 +271,9 @@ __fortify_function wchar_t *
+ __NTH (wcsncat (wchar_t *__restrict __dest, const wchar_t *__restrict __src,
+ 		size_t __n))
+ {
+-  if (__bos (__dest) != (size_t) -1)
++  if (__glibc_objsize (__dest) != (size_t) -1)
+     return __wcsncat_chk (__dest, __src, __n,
+-			  __bos (__dest) / sizeof (wchar_t));
++			  __glibc_objsize (__dest) / sizeof (wchar_t));
+   return __wcsncat_alias (__dest, __src, __n);
+ }
+ 
+@@ -285,18 +293,18 @@ __fortify_function int
+ __NTH (swprintf (wchar_t *__restrict __s, size_t __n,
+ 		 const wchar_t *__restrict __fmt, ...))
+ {
+-  if (__bos (__s) != (size_t) -1 || __USE_FORTIFY_LEVEL > 1)
++  if (__glibc_objsize (__s) != (size_t) -1 || __USE_FORTIFY_LEVEL > 1)
+     return __swprintf_chk (__s, __n, __USE_FORTIFY_LEVEL - 1,
+-			   __bos (__s) / sizeof (wchar_t),
++			   __glibc_objsize (__s) / sizeof (wchar_t),
+ 			   __fmt, __va_arg_pack ());
+   return __swprintf_alias (__s, __n, __fmt, __va_arg_pack ());
+ }
+ #elif !defined __cplusplus
+ /* XXX We might want to have support in gcc for swprintf.  */
+ # define swprintf(s, n, ...) \
+-  (__bos (s) != (size_t) -1 || __USE_FORTIFY_LEVEL > 1			      \
++  (__glibc_objsize (s) != (size_t) -1 || __USE_FORTIFY_LEVEL > 1		      \
+    ? __swprintf_chk (s, n, __USE_FORTIFY_LEVEL - 1,			      \
+-		     __bos (s) / sizeof (wchar_t), __VA_ARGS__)		      \
++		     __glibc_objsize (s) / sizeof (wchar_t), __VA_ARGS__)	      \
+    : swprintf (s, n, __VA_ARGS__))
+ #endif
+ 
+@@ -315,9 +323,10 @@ __fortify_function int
+ __NTH (vswprintf (wchar_t *__restrict __s, size_t __n,
+ 		  const wchar_t *__restrict __fmt, __gnuc_va_list __ap))
+ {
+-  if (__bos (__s) != (size_t) -1 || __USE_FORTIFY_LEVEL > 1)
++  if (__glibc_objsize (__s) != (size_t) -1 || __USE_FORTIFY_LEVEL > 1)
+     return __vswprintf_chk (__s, __n,  __USE_FORTIFY_LEVEL - 1,
+-			    __bos (__s) / sizeof (wchar_t), __fmt, __ap);
++			    __glibc_objsize (__s) / sizeof (wchar_t), __fmt,
++			    __ap);
+   return __vswprintf_alias (__s, __n, __fmt, __ap);
+ }
+ 
+@@ -383,14 +392,15 @@ extern wchar_t *__REDIRECT (__fgetws_chk_warn,
+ __fortify_function __wur wchar_t *
+ fgetws (wchar_t *__restrict __s, int __n, __FILE *__restrict __stream)
+ {
+-  if (__bos (__s) != (size_t) -1)
++  if (__glibc_objsize (__s) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n) || __n <= 0)
+-	return __fgetws_chk (__s, __bos (__s) / sizeof (wchar_t),
++	return __fgetws_chk (__s, __glibc_objsize (__s) / sizeof (wchar_t),
+ 			     __n, __stream);
+ 
+-      if ((size_t) __n > __bos (__s) / sizeof (wchar_t))
+-	return __fgetws_chk_warn (__s, __bos (__s) / sizeof (wchar_t),
++      if ((size_t) __n > __glibc_objsize (__s) / sizeof (wchar_t))
++	return __fgetws_chk_warn (__s,
++				  __glibc_objsize (__s) / sizeof (wchar_t),
+ 				  __n, __stream);
+     }
+   return __fgetws_alias (__s, __n, __stream);
+@@ -414,14 +424,17 @@ extern wchar_t *__REDIRECT (__fgetws_unlocked_chk_warn,
+ __fortify_function __wur wchar_t *
+ fgetws_unlocked (wchar_t *__restrict __s, int __n, __FILE *__restrict __stream)
+ {
+-  if (__bos (__s) != (size_t) -1)
++  if (__glibc_objsize (__s) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__n) || __n <= 0)
+-	return __fgetws_unlocked_chk (__s, __bos (__s) / sizeof (wchar_t),
++	return __fgetws_unlocked_chk (__s,
++				      __glibc_objsize (__s) / sizeof (wchar_t),
+ 				      __n, __stream);
+ 
+-      if ((size_t) __n > __bos (__s) / sizeof (wchar_t))
+-	return __fgetws_unlocked_chk_warn (__s, __bos (__s) / sizeof (wchar_t),
++      if ((size_t) __n > __glibc_objsize (__s) / sizeof (wchar_t))
++	return __fgetws_unlocked_chk_warn (__s,
++					   (__glibc_objsize (__s)
++					    / sizeof (wchar_t)),
+ 					   __n, __stream);
+     }
+   return __fgetws_unlocked_alias (__s, __n, __stream);
+@@ -447,8 +460,9 @@ __NTH (wcrtomb (char *__restrict __s, wchar_t __wchar,
+ #if defined MB_LEN_MAX && MB_LEN_MAX != __WCHAR_MB_LEN_MAX
+ # error "Assumed value of MB_LEN_MAX wrong"
+ #endif
+-  if (__bos (__s) != (size_t) -1 && __WCHAR_MB_LEN_MAX > __bos (__s))
+-    return __wcrtomb_chk (__s, __wchar, __ps, __bos (__s));
++  if (__glibc_objsize (__s) != (size_t) -1
++      && __WCHAR_MB_LEN_MAX > __glibc_objsize (__s))
++    return __wcrtomb_chk (__s, __wchar, __ps, __glibc_objsize (__s));
+   return __wcrtomb_alias (__s, __wchar, __ps);
+ }
+ 
+@@ -474,15 +488,16 @@ __fortify_function size_t
+ __NTH (mbsrtowcs (wchar_t *__restrict __dst, const char **__restrict __src,
+ 		  size_t __len, mbstate_t *__restrict __ps))
+ {
+-  if (__bos (__dst) != (size_t) -1)
++  if (__glibc_objsize (__dst) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+ 	return __mbsrtowcs_chk (__dst, __src, __len, __ps,
+-				__bos (__dst) / sizeof (wchar_t));
++				__glibc_objsize (__dst) / sizeof (wchar_t));
+ 
+-      if (__len > __bos (__dst) / sizeof (wchar_t))
++      if (__len > __glibc_objsize (__dst) / sizeof (wchar_t))
+ 	return __mbsrtowcs_chk_warn (__dst, __src, __len, __ps,
+-				     __bos (__dst) / sizeof (wchar_t));
++				     (__glibc_objsize (__dst)
++				      / sizeof (wchar_t)));
+     }
+   return __mbsrtowcs_alias (__dst, __src, __len, __ps);
+ }
+@@ -508,13 +523,15 @@ __fortify_function size_t
+ __NTH (wcsrtombs (char *__restrict __dst, const wchar_t **__restrict __src,
+ 		  size_t __len, mbstate_t *__restrict __ps))
+ {
+-  if (__bos (__dst) != (size_t) -1)
++  if (__glibc_objsize (__dst) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+-	return __wcsrtombs_chk (__dst, __src, __len, __ps, __bos (__dst));
++	return __wcsrtombs_chk (__dst, __src, __len, __ps,
++				__glibc_objsize (__dst));
+ 
+-      if (__len > __bos (__dst))
+-	return __wcsrtombs_chk_warn (__dst, __src, __len, __ps, __bos (__dst));
++      if (__len > __glibc_objsize (__dst))
++	return __wcsrtombs_chk_warn (__dst, __src, __len, __ps,
++				     __glibc_objsize (__dst));
+     }
+   return __wcsrtombs_alias (__dst, __src, __len, __ps);
+ }
+@@ -542,15 +559,16 @@ __fortify_function size_t
+ __NTH (mbsnrtowcs (wchar_t *__restrict __dst, const char **__restrict __src,
+ 		   size_t __nmc, size_t __len, mbstate_t *__restrict __ps))
+ {
+-  if (__bos (__dst) != (size_t) -1)
++  if (__glibc_objsize (__dst) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+ 	return __mbsnrtowcs_chk (__dst, __src, __nmc, __len, __ps,
+-				 __bos (__dst) / sizeof (wchar_t));
++				 __glibc_objsize (__dst) / sizeof (wchar_t));
+ 
+-      if (__len > __bos (__dst) / sizeof (wchar_t))
++      if (__len > __glibc_objsize (__dst) / sizeof (wchar_t))
+ 	return __mbsnrtowcs_chk_warn (__dst, __src, __nmc, __len, __ps,
+-				      __bos (__dst) / sizeof (wchar_t));
++				      (__glibc_objsize (__dst)
++				       / sizeof (wchar_t)));
+     }
+   return __mbsnrtowcs_alias (__dst, __src, __nmc, __len, __ps);
+ }
+@@ -578,15 +596,15 @@ __fortify_function size_t
+ __NTH (wcsnrtombs (char *__restrict __dst, const wchar_t **__restrict __src,
+ 		   size_t __nwc, size_t __len, mbstate_t *__restrict __ps))
+ {
+-  if (__bos (__dst) != (size_t) -1)
++  if (__glibc_objsize (__dst) != (size_t) -1)
+     {
+       if (!__builtin_constant_p (__len))
+ 	return __wcsnrtombs_chk (__dst, __src, __nwc, __len, __ps,
+-				 __bos (__dst));
++				 __glibc_objsize (__dst));
+ 
+-      if (__len > __bos (__dst))
++      if (__len > __glibc_objsize (__dst))
+ 	return __wcsnrtombs_chk_warn (__dst, __src, __nwc, __len, __ps,
+-				      __bos (__dst));
++				      __glibc_objsize (__dst));
+     }
+   return __wcsnrtombs_alias (__dst, __src, __nwc, __len, __ps);
+ }

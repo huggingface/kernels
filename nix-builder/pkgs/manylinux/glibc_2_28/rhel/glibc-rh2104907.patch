@@ -1,0 +1,14 @@
+diff --git a/localedata/SUPPORTED b/localedata/SUPPORTED
+index a4bf79c6a6e6401b..fdf15fddf5178319 100644
+--- a/localedata/SUPPORTED
++++ b/localedata/SUPPORTED
+@@ -159,7 +159,8 @@ en_SG/ISO-8859-1 \
+ en_US.UTF-8/UTF-8 \
+ en_US/ISO-8859-1 \
+ en_US.ISO-8859-15/ISO-8859-15 \
+-en_US@ampm.UTF-8/UTF-8 \
++en_US@ampm/UTF-8 \
++en_US.UTF-8@ampm/UTF-8 \
+ en_ZA.UTF-8/UTF-8 \
+ en_ZA/ISO-8859-1 \
+ en_ZM/UTF-8 \

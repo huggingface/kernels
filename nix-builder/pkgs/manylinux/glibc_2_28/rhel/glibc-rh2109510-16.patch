@@ -1,0 +1,22 @@
+Partial backport of the scripts/glibcelf.py part of:
+
+commit 2d83247d90c9f0bfee7f3f2505bc1b13b6f36c04
+Author: caiyinyu <caiyinyu@loongson.cn>
+Date:   Tue Jul 19 09:20:45 2022 +0800
+
+    LoongArch: Add relocations and ELF flags to elf.h and scripts/glibcelf.py
+
+diff --git a/scripts/glibcelf.py b/scripts/glibcelf.py
+index 47f95d07baefb4ae..de0509130ed9ad47 100644
+--- a/scripts/glibcelf.py
++++ b/scripts/glibcelf.py
+@@ -252,7 +252,8 @@ class Machine(_OpenIntEnum):
+     EM_RISCV = 243
+     EM_BPF = 247
+     EM_CSKY = 252
+-    EM_NUM = 253
++    EM_LOONGARCH = 258
++    EM_NUM = 259
+     EM_ALPHA = 0x9026
+ 
+ class Et(_OpenIntEnum):

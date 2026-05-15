@@ -1,0 +1,96 @@
+From: Florian Weimer <fweimer@redhat.com>
+Date: Tue, 21 Jan 2020 16:25:39 +0000 (+0100)
+Subject: resolv: Enhance __resolv_conf_load to capture file change data
+X-Git-Url: https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=dd0b4df329ff7ff2a656404db271c8ee8379ff9d
+
+resolv: Enhance __resolv_conf_load to capture file change data
+
+The data is captured after reading the file.  This allows callers
+to check the change data against an earlier measurement.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+---
+
+diff --git a/resolv/res_init.c b/resolv/res_init.c
+index 09345718cd..98d84f264d 100644
+--- a/resolv/res_init.c
++++ b/resolv/res_init.c
+@@ -103,6 +103,7 @@
+ #include <inet/net-internal.h>
+ #include <errno.h>
+ #include <resolv_conf.h>
++#include <file_change_detection.h>
+ 
+ static uint32_t net_mask (struct in_addr);
+ 
+@@ -549,7 +550,8 @@ res_vinit_1 (FILE *fp, struct resolv_conf_parser *parser)
+ }
+ 
+ struct resolv_conf *
+-__resolv_conf_load (struct __res_state *preinit)
++__resolv_conf_load (struct __res_state *preinit,
++                    struct file_change_detection *change)
+ {
+   /* Ensure that /etc/hosts.conf has been loaded (once).  */
+   _res_hconf_init ();
+@@ -577,7 +579,13 @@ __resolv_conf_load (struct __res_state *preinit)
+   resolv_conf_parser_init (&parser, preinit);
+ 
+   struct resolv_conf *conf = NULL;
+-  if (res_vinit_1 (fp, &parser))
++  bool ok = res_vinit_1 (fp, &parser);
++  if (ok && change != NULL)
++    /* Update the file change information if the configuration was
++       loaded successfully.  */
++    ok = file_change_detection_for_fp (change, fp);
++
++  if (ok)
+     {
+       parser.template.nameserver_list
+         = nameserver_list_begin (&parser.nameserver_list);
+@@ -615,7 +623,7 @@ __res_vinit (res_state statp, int preinit)
+   if (preinit && has_preinit_values (statp))
+     /* For the preinit case, we cannot use the cached configuration
+        because some settings could be different.  */
+-    conf = __resolv_conf_load (statp);
++    conf = __resolv_conf_load (statp, NULL);
+   else
+     conf = __resolv_conf_get_current ();
+   if (conf == NULL)
+diff --git a/resolv/resolv_conf.c b/resolv/resolv_conf.c
+index d954ba9a5a..bdd2ebb909 100644
+--- a/resolv/resolv_conf.c
++++ b/resolv/resolv_conf.c
+@@ -136,7 +136,7 @@ __resolv_conf_get_current (void)
+     {
+       /* Parse configuration while holding the lock.  This avoids
+          duplicate work.  */
+-      conf = __resolv_conf_load (NULL);
++      conf = __resolv_conf_load (NULL, NULL);
+       if (conf != NULL)
+         {
+           if (global_copy->conf_current != NULL)
+diff --git a/resolv/resolv_conf.h b/resolv/resolv_conf.h
+index 01cbff9111..101e14bfe5 100644
+--- a/resolv/resolv_conf.h
++++ b/resolv/resolv_conf.h
+@@ -63,12 +63,16 @@ struct resolv_conf
+    and the struct resolv_context facility.  */
+ 
+ struct __res_state;
++struct file_change_detection;
+ 
+ /* Read /etc/resolv.conf and return a configuration object, or NULL if
+    /etc/resolv.conf cannot be read due to memory allocation errors.
+-   If PREINIT is not NULL, some configuration values are taken from the
+-   struct __res_state object.  */
+-struct resolv_conf *__resolv_conf_load (struct __res_state *preinit)
++   If PREINIT is not NULL, some configuration values are taken from
++   the struct __res_state object.  If CHANGE is not null, file change
++   detection data is written to *CHANGE, based on the state of the
++   file after reading it.  */
++struct resolv_conf *__resolv_conf_load (struct __res_state *preinit,
++                                        struct file_change_detection *change)
+   attribute_hidden __attribute__ ((warn_unused_result));
+ 
+ /* Return a configuration object for the current /etc/resolv.conf

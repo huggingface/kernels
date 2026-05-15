@@ -1,0 +1,1111 @@
+commit dad90d528259b669342757c37dedefa8577e2636
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 4 09:13:43 2020 +0100
+
+    elf: Add glibc-hwcaps support for LD_LIBRARY_PATH
+    
+    This hacks non-power-set processing into _dl_important_hwcaps.
+    Once the legacy hwcaps handling goes away, the subdirectory
+    handling needs to be reworked, but it is premature to do this
+    while both approaches are still supported.
+    
+    ld.so supports two new arguments, --glibc-hwcaps-prepend and
+    --glibc-hwcaps-mask.  Each accepts a colon-separated list of
+    glibc-hwcaps subdirectory names.  The prepend option adds additional
+    subdirectories that are searched first, in the specified order.  The
+    mask option restricts the automatically selected subdirectories to
+    those listed in the option argument.  For example, on systems where
+    /usr/lib64 is on the library search path,
+    --glibc-hwcaps-prepend=valgrind:debug causes the dynamic loader to
+    search the directories /usr/lib64/glibc-hwcaps/valgrind and
+    /usr/lib64/glibc-hwcaps/debug just before /usr/lib64 is searched.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+Conflicts:
+	elf/Makefile
+	  (Test backport differences.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index bc96b8fd65e376cc..f795617780b393ec 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -59,7 +59,8 @@ elide-routines.os = $(all-dl-routines) dl-support enbl-secure dl-origin \
+ # ld.so uses those routines, plus some special stuff for being the program
+ # interpreter and operating independent of libc.
+ rtld-routines	= rtld $(all-dl-routines) dl-sysdep dl-environ dl-minimal \
+-  dl-error-minimal dl-conflict dl-hwcaps dl-usage
++  dl-error-minimal dl-conflict dl-hwcaps dl-hwcaps_split dl-hwcaps-subdirs \
++  dl-usage
+ all-rtld-routines = $(rtld-routines) $(sysdep-rtld-routines)
+ 
+ CFLAGS-dl-runtime.c += -fexceptions -fasynchronous-unwind-tables
+@@ -199,13 +200,14 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-filterobj tst-filterobj-dlopen tst-auxobj tst-auxobj-dlopen \
+ 	 tst-audit14 tst-audit15 tst-audit16 \
+ 	 tst-tls-ie tst-tls-ie-dlmopen \
+-	 argv0test
++	 argv0test \
++	 tst-glibc-hwcaps tst-glibc-hwcaps-prepend tst-glibc-hwcaps-mask
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+ 	 tst-tls3 tst-tls6 tst-tls7 tst-tls8 tst-dlmopen2 \
+ 	 tst-ptrguard1 tst-stackguard1 tst-libc_dlvsym \
+-	 tst-create_format1 tst-tls-surplus
++	 tst-create_format1 tst-tls-surplus tst-dl-hwcaps_split
+ tests-container += tst-pldd
+ ifeq ($(build-hardcoded-path-in-tests),yes)
+ tests += tst-dlopen-aout
+@@ -318,7 +320,10 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-auditlogmod-1 tst-auditlogmod-2 tst-auditlogmod-3 \
+ 		tst-tls-ie-mod0 tst-tls-ie-mod1 tst-tls-ie-mod2 \
+ 		tst-tls-ie-mod3 tst-tls-ie-mod4 tst-tls-ie-mod5 \
+-		tst-tls-ie-mod6
++		tst-tls-ie-mod6 libmarkermod1-1 libmarkermod1-2 libmarkermod1-3 \
++		libmarkermod2-1 libmarkermod2-2 \
++		libmarkermod3-1 libmarkermod3-2 libmarkermod3-3 \
++		libmarkermod4-1 libmarkermod4-2 libmarkermod4-3 libmarkermod4-4 \
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1732,3 +1737,60 @@ $(objpfx)argv0test.out: tst-rtld-argv0.sh $(objpfx)ld.so \
+             '$(test-wrapper-env)' '$(run_program_env)' \
+             '$(rpath-link)' 'test-argv0' > $@; \
+     $(evaluate-test)
++
++# A list containing the name of the most likely searched subdirectory
++# of the glibc-hwcaps directory, for each supported architecture (in
++# other words, the oldest hardware level recognized by the
++# glibc-hwcaps mechanism for this architecture).  Used to obtain test
++# coverage for some glibc-hwcaps tests for the widest possible range
++# of systems.
++glibc-hwcaps-first-subdirs-for-tests =
++
++# The test modules are parameterized by preprocessor macros.
++LDFLAGS-libmarkermod1-1.so += -Wl,-soname,libmarkermod1.so
++LDFLAGS-libmarkermod2-1.so += -Wl,-soname,libmarkermod2.so
++LDFLAGS-libmarkermod3-1.so += -Wl,-soname,libmarkermod3.so
++LDFLAGS-libmarkermod4-1.so += -Wl,-soname,libmarkermod4.so
++$(objpfx)libmarkermod%.os : markermodMARKER-VALUE.c
++	$(compile-command.c) \
++	  -DMARKER=marker$(firstword $(subst -, ,$*)) \
++	  -DVALUE=$(lastword $(subst -, ,$*))
++$(objpfx)libmarkermod1.so: $(objpfx)libmarkermod1-1.so
++	cp $< $@
++$(objpfx)libmarkermod2.so: $(objpfx)libmarkermod2-1.so
++	cp $< $@
++$(objpfx)libmarkermod3.so: $(objpfx)libmarkermod3-1.so
++	cp $< $@
++$(objpfx)libmarkermod4.so: $(objpfx)libmarkermod4-1.so
++	cp $< $@
++
++# tst-glibc-hwcaps-prepend checks that --glibc-hwcaps-prepend is
++# preferred over auto-detected subdirectories.
++$(objpfx)tst-glibc-hwcaps-prepend: $(objpfx)libmarkermod1-1.so
++$(objpfx)glibc-hwcaps/prepend-markermod1/libmarkermod1.so: \
++  $(objpfx)libmarkermod1-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/%/libmarkermod1.so: $(objpfx)libmarkermod1-3.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)tst-glibc-hwcaps-prepend.out: \
++  $(objpfx)tst-glibc-hwcaps-prepend $(objpfx)libmarkermod1.so \
++  $(patsubst %,$(objpfx)glibc-hwcaps/%/libmarkermod1.so,prepend-markermod1 \
++    $(glibc-hwcaps-first-subdirs-for-tests))
++	$(test-wrapper) $(rtld-prefix) \
++	  --glibc-hwcaps-prepend prepend-markermod1 \
++	  $< > $@; \
++	$(evaluate-test)
++
++# tst-glibc-hwcaps-mask checks that --glibc-hwcaps-mask can be used to
++# suppress all auto-detected subdirectories.
++$(objpfx)tst-glibc-hwcaps-mask: $(objpfx)libmarkermod1-1.so
++$(objpfx)tst-glibc-hwcaps-mask.out: \
++  $(objpfx)tst-glibc-hwcaps-mask $(objpfx)libmarkermod1.so \
++  $(patsubst %,$(objpfx)glibc-hwcaps/%/libmarkermod1.so,\
++    $(glibc-hwcaps-first-subdirs-for-tests))
++	$(test-wrapper) $(rtld-prefix) \
++	  --glibc-hwcaps-mask does-not-exist \
++	  $< > $@; \
++	$(evaluate-test)
+diff --git a/elf/dl-hwcaps-subdirs.c b/elf/dl-hwcaps-subdirs.c
+new file mode 100644
+index 0000000000000000..60c6d59731ee3188
+--- /dev/null
++++ b/elf/dl-hwcaps-subdirs.c
+@@ -0,0 +1,29 @@
++/* Architecture-specific glibc-hwcaps subdirectories.  Generic version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-hwcaps.h>
++
++/* In the generic version, there are no subdirectories defined.  */
++
++const char _dl_hwcaps_subdirs[] = "";
++
++uint32_t
++_dl_hwcaps_subdirs_active (void)
++{
++  return 0;
++}
+diff --git a/elf/dl-hwcaps.c b/elf/dl-hwcaps.c
+index 82ee89c36a1eb4ab..e57d0d2d41741021 100644
+--- a/elf/dl-hwcaps.c
++++ b/elf/dl-hwcaps.c
+@@ -26,20 +26,97 @@
+ #include <dl-procinfo.h>
+ #include <dl-hwcaps.h>
+ 
++/* This is the result of counting the substrings in a colon-separated
++   hwcaps string.  */
++struct hwcaps_counts
++{
++  /* Number of substrings.  */
++  size_t count;
++
++  /* Sum of the individual substring lengths (without separators or
++     null terminators).  */
++  size_t total_length;
++
++  /* Maximum length of an individual substring.  */
++  size_t maximum_length;
++};
++
++/* Update *COUNTS according to the contents of HWCAPS.  Skip over
++   entries whose bit is not set in MASK.  */
++static void
++update_hwcaps_counts (struct hwcaps_counts *counts, const char *hwcaps,
++		      uint32_t bitmask, const char *mask)
++{
++  struct dl_hwcaps_split_masked sp;
++  _dl_hwcaps_split_masked_init (&sp, hwcaps, bitmask, mask);
++  while (_dl_hwcaps_split_masked (&sp))
++    {
++      ++counts->count;
++      counts->total_length += sp.split.length;
++      if (sp.split.length > counts->maximum_length)
++	counts->maximum_length = sp.split.length;
++    }
++}
++
++/* State for copy_hwcaps.  Must be initialized to point to
++   the storage areas for the array and the strings themselves.  */
++struct copy_hwcaps
++{
++  struct r_strlenpair *next_pair;
++  char *next_string;
++};
++
++/* Copy HWCAPS into the string pairs and strings, advancing *TARGET.
++   Skip over entries whose bit is not set in MASK.  */
++static void
++copy_hwcaps (struct copy_hwcaps *target, const char *hwcaps,
++	     uint32_t bitmask, const char *mask)
++{
++  struct dl_hwcaps_split_masked sp;
++  _dl_hwcaps_split_masked_init (&sp, hwcaps, bitmask, mask);
++  while (_dl_hwcaps_split_masked (&sp))
++    {
++      target->next_pair->str = target->next_string;
++      char *slash = __mempcpy (__mempcpy (target->next_string,
++					  GLIBC_HWCAPS_PREFIX,
++					  strlen (GLIBC_HWCAPS_PREFIX)),
++			       sp.split.segment, sp.split.length);
++      *slash = '/';
++      target->next_pair->len
++	= strlen (GLIBC_HWCAPS_PREFIX) + sp.split.length + 1;
++      ++target->next_pair;
++      target->next_string = slash + 1;
++    }
++}
++
+ /* Return an array of useful/necessary hardware capability names.  */
+ const struct r_strlenpair *
+-_dl_important_hwcaps (size_t *sz, size_t *max_capstrlen)
++_dl_important_hwcaps (const char *glibc_hwcaps_prepend,
++		      const char *glibc_hwcaps_mask,
++		      size_t *sz, size_t *max_capstrlen)
+ {
+   uint64_t hwcap_mask = GET_HWCAP_MASK();
+   /* Determine how many important bits are set.  */
+   uint64_t masked = GLRO(dl_hwcap) & hwcap_mask;
+   size_t cnt = GLRO (dl_platform) != NULL;
+   size_t n, m;
+-  size_t total;
+   struct r_strlenpair *result;
+   struct r_strlenpair *rp;
+   char *cp;
+ 
++  /* glibc-hwcaps subdirectories.  These are exempted from the power
++     set construction below.  */
++  uint32_t hwcaps_subdirs_active = _dl_hwcaps_subdirs_active ();
++  struct hwcaps_counts hwcaps_counts =  { 0, };
++  update_hwcaps_counts (&hwcaps_counts, glibc_hwcaps_prepend, -1, NULL);
++  update_hwcaps_counts (&hwcaps_counts, _dl_hwcaps_subdirs,
++			hwcaps_subdirs_active, glibc_hwcaps_mask);
++
++  /* Each hwcaps subdirectory has a GLIBC_HWCAPS_PREFIX string prefix
++     and a "/" suffix once stored in the result.  */
++  size_t total = (hwcaps_counts.count * (strlen (GLIBC_HWCAPS_PREFIX) + 1)
++		  + hwcaps_counts.total_length);
++
+   /* Count the number of bits set in the masked value.  */
+   for (n = 0; (~((1ULL << n) - 1) & masked) != 0; ++n)
+     if ((masked & (1ULL << n)) != 0)
+@@ -74,10 +151,10 @@ _dl_important_hwcaps (size_t *sz, size_t *max_capstrlen)
+ 
+   /* Determine the total size of all strings together.  */
+   if (cnt == 1)
+-    total = temp[0].len + 1;
++    total += temp[0].len + 1;
+   else
+     {
+-      total = temp[0].len + temp[cnt - 1].len + 2;
++      total += temp[0].len + temp[cnt - 1].len + 2;
+       if (cnt > 2)
+ 	{
+ 	  total <<= 1;
+@@ -94,26 +171,48 @@ _dl_important_hwcaps (size_t *sz, size_t *max_capstrlen)
+ 	}
+     }
+ 
+-  /* The result structure: we use a very compressed way to store the
+-     various combinations of capability names.  */
+-  *sz = 1 << cnt;
+-  result = (struct r_strlenpair *) malloc (*sz * sizeof (*result) + total);
+-  if (result == NULL)
++  *sz = hwcaps_counts.count + (1 << cnt);
++
++  /* This is the overall result, including both glibc-hwcaps
++     subdirectories and the legacy hwcaps subdirectories using the
++     power set construction.  */
++  struct r_strlenpair *overall_result
++    = malloc (*sz * sizeof (*result) + total);
++  if (overall_result == NULL)
+     _dl_signal_error (ENOMEM, NULL, NULL,
+ 		      N_("cannot create capability list"));
+ 
++  /* Fill in the glibc-hwcaps subdirectories.  */
++  {
++    struct copy_hwcaps target;
++    target.next_pair = overall_result;
++    target.next_string = (char *) (overall_result + *sz);
++    copy_hwcaps (&target, glibc_hwcaps_prepend, -1, NULL);
++    copy_hwcaps (&target, _dl_hwcaps_subdirs,
++		 hwcaps_subdirs_active, glibc_hwcaps_mask);
++    /* Set up the write target for the power set construction.  */
++    result = target.next_pair;
++    cp = target.next_string;
++  }
++
++
++  /* Power set construction begins here.  We use a very compressed way
++     to store the various combinations of capability names.  */
++
+   if (cnt == 1)
+     {
+-      result[0].str = (char *) (result + *sz);
++      result[0].str = cp;
+       result[0].len = temp[0].len + 1;
+-      result[1].str = (char *) (result + *sz);
++      result[1].str = cp;
+       result[1].len = 0;
+-      cp = __mempcpy ((char *) (result + *sz), temp[0].str, temp[0].len);
++      cp = __mempcpy (cp, temp[0].str, temp[0].len);
+       *cp = '/';
+-      *sz = 2;
+-      *max_capstrlen = result[0].len;
++      if (result[0].len > hwcaps_counts.maximum_length)
++	*max_capstrlen = result[0].len;
++      else
++	*max_capstrlen = hwcaps_counts.maximum_length;
+ 
+-      return result;
++      return overall_result;
+     }
+ 
+   /* Fill in the information.  This follows the following scheme
+@@ -124,7 +223,7 @@ _dl_important_hwcaps (size_t *sz, size_t *max_capstrlen)
+ 	      #3: 0, 3			1001
+      This allows the representation of all possible combinations of
+      capability names in the string.  First generate the strings.  */
+-  result[1].str = result[0].str = cp = (char *) (result + *sz);
++  result[1].str = result[0].str = cp;
+ #define add(idx) \
+       cp = __mempcpy (__mempcpy (cp, temp[idx].str, temp[idx].len), "/", 1);
+   if (cnt == 2)
+@@ -191,7 +290,10 @@ _dl_important_hwcaps (size_t *sz, size_t *max_capstrlen)
+   while (--n != 0);
+ 
+   /* The maximum string length.  */
+-  *max_capstrlen = result[0].len;
++  if (result[0].len > hwcaps_counts.maximum_length)
++    *max_capstrlen = result[0].len;
++  else
++    *max_capstrlen = hwcaps_counts.maximum_length;
+ 
+-  return result;
++  return overall_result;
+ }
+diff --git a/elf/dl-hwcaps.h b/elf/dl-hwcaps.h
+index d69ee11dc27bb5e5..3fcfbceb1a8fc1c8 100644
+--- a/elf/dl-hwcaps.h
++++ b/elf/dl-hwcaps.h
+@@ -16,6 +16,11 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#ifndef _DL_HWCAPS_H
++#define _DL_HWCAPS_H
++
++#include <stdint.h>
++
+ #include <elf/dl-tunables.h>
+ 
+ #if HAVE_TUNABLES
+@@ -28,3 +33,103 @@
+ #  define GET_HWCAP_MASK() (0)
+ # endif
+ #endif
++
++#define GLIBC_HWCAPS_SUBDIRECTORY "glibc-hwcaps"
++#define GLIBC_HWCAPS_PREFIX GLIBC_HWCAPS_SUBDIRECTORY "/"
++
++/* Used by _dl_hwcaps_split below, to split strings at ':'
++   separators.  */
++struct dl_hwcaps_split
++{
++  const char *segment;          /* Start of the current segment.  */
++  size_t length;                /* Number of bytes until ':' or NUL.  */
++};
++
++/* Prepare *S to parse SUBJECT, for future _dl_hwcaps_split calls.  If
++   SUBJECT is NULL, it is treated as the empty string.  */
++static inline void
++_dl_hwcaps_split_init (struct dl_hwcaps_split *s, const char *subject)
++{
++  s->segment = subject;
++  /* The initial call to _dl_hwcaps_split will not skip anything.  */
++  s->length = 0;
++}
++
++/* Extract the next non-empty string segment, up to ':' or the null
++   terminator.  Return true if one more segment was found, or false if
++   the end of the string was reached.  On success, S->segment is the
++   start of the segment found, and S->length is its length.
++   (Typically, S->segment[S->length] is not null.)  */
++_Bool _dl_hwcaps_split (struct dl_hwcaps_split *s) attribute_hidden;
++
++/* Similar to dl_hwcaps_split, but with bit-based and name-based
++   masking.  */
++struct dl_hwcaps_split_masked
++{
++  struct dl_hwcaps_split split;
++
++  /* For used by the iterator implementation.  */
++  const char *mask;
++  uint32_t bitmask;
++};
++
++/* Prepare *S for iteration with _dl_hwcaps_split_masked.  Only HWCAP
++   names in SUBJECT whose bit is set in BITMASK and whose name is in
++   MASK will be returned.  SUBJECT must not contain empty HWCAP names.
++   If MASK is NULL, no name-based masking is applied.  Likewise for
++   BITMASK if BITMASK is -1 (infinite number of bits).  */
++static inline void
++_dl_hwcaps_split_masked_init (struct dl_hwcaps_split_masked *s,
++                              const char *subject,
++                              uint32_t bitmask, const char *mask)
++{
++  _dl_hwcaps_split_init (&s->split, subject);
++  s->bitmask = bitmask;
++  s->mask = mask;
++}
++
++/* Like _dl_hwcaps_split, but apply masking.  */
++_Bool _dl_hwcaps_split_masked (struct dl_hwcaps_split_masked *s)
++  attribute_hidden;
++
++/* Returns true if the colon-separated HWCAP list HWCAPS contains the
++   capability NAME (with length NAME_LENGTH).  If HWCAPS is NULL, the
++   function returns true.  */
++_Bool _dl_hwcaps_contains (const char *hwcaps, const char *name,
++                           size_t name_length) attribute_hidden;
++
++/* Colon-separated string of glibc-hwcaps subdirectories, without the
++   "glibc-hwcaps/" prefix.  The most preferred subdirectory needs to
++   be listed first.  Up to 32 subdirectories are supported, limited by
++   the width of the uint32_t mask.  */
++extern const char _dl_hwcaps_subdirs[] attribute_hidden;
++
++/* Returns a bitmap of active subdirectories in _dl_hwcaps_subdirs.
++   Bit 0 (the LSB) corresponds to the first substring in
++   _dl_hwcaps_subdirs, bit 1 to the second substring, and so on.
++   There is no direct correspondence between HWCAP bitmasks and this
++   bitmask.  */
++uint32_t _dl_hwcaps_subdirs_active (void) attribute_hidden;
++
++/* Returns a bitmask that marks the last ACTIVE subdirectories in a
++   _dl_hwcaps_subdirs_active string (containing SUBDIRS directories in
++   total) as active.  Intended for use in _dl_hwcaps_subdirs_active
++   implementations (if a contiguous tail of the list in
++   _dl_hwcaps_subdirs is selected).  */
++static inline uint32_t
++_dl_hwcaps_subdirs_build_bitmask (int subdirs, int active)
++{
++  /* Leading subdirectories that are not active.  */
++  int inactive = subdirs - active;
++  if (inactive == 32)
++    return 0;
++
++  uint32_t mask;
++  if (subdirs != 32)
++    mask = (1U << subdirs) - 1;
++  else
++    mask = -1;
++  return mask ^ ((1U << inactive) - 1);
++}
++
++#endif /* _DL_HWCAPS_H */
+diff --git a/elf/dl-hwcaps_split.c b/elf/dl-hwcaps_split.c
+new file mode 100644
+index 0000000000000000..95225e9f409ca229
+--- /dev/null
++++ b/elf/dl-hwcaps_split.c
+@@ -0,0 +1,77 @@
++/* Hardware capability support for run-time dynamic loader.  String splitting.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-hwcaps.h>
++#include <stdbool.h>
++#include <string.h>
++
++_Bool
++_dl_hwcaps_split (struct dl_hwcaps_split *s)
++{
++  if (s->segment == NULL)
++    return false;
++
++  /* Skip over the previous segment.   */
++  s->segment += s->length;
++
++  /* Consume delimiters.  This also avoids returning an empty
++     segment.  */
++  while (*s->segment == ':')
++    ++s->segment;
++  if (*s->segment == '\0')
++    return false;
++
++  /* This could use strchrnul, but we would have to link the function
++     into ld.so for that.  */
++  const char *colon = strchr (s->segment, ':');
++  if (colon == NULL)
++    s->length = strlen (s->segment);
++  else
++    s->length = colon - s->segment;
++  return true;
++}
++
++_Bool
++_dl_hwcaps_split_masked (struct dl_hwcaps_split_masked *s)
++{
++  while (true)
++    {
++      if (!_dl_hwcaps_split (&s->split))
++        return false;
++      bool active = s->bitmask & 1;
++      s->bitmask >>= 1;
++      if (active && _dl_hwcaps_contains (s->mask,
++                                         s->split.segment, s->split.length))
++        return true;
++    }
++}
++
++_Bool
++_dl_hwcaps_contains (const char *hwcaps, const char *name, size_t name_length)
++{
++  if (hwcaps == NULL)
++    return true;
++
++  struct dl_hwcaps_split split;
++  _dl_hwcaps_split_init (&split, hwcaps);
++  while (_dl_hwcaps_split (&split))
++    if (split.length == name_length
++        && memcmp (split.segment, name, name_length) == 0)
++      return true;
++  return false;
++}
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index d2be21ea7d1545fe..fee08d7816714178 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -682,7 +682,9 @@ cache_rpath (struct link_map *l,
+ 
+ 
+ void
+-_dl_init_paths (const char *llp, const char *source)
++_dl_init_paths (const char *llp, const char *source,
++		const char *glibc_hwcaps_prepend,
++		const char *glibc_hwcaps_mask)
+ {
+   size_t idx;
+   const char *strp;
+@@ -697,7 +699,8 @@ _dl_init_paths (const char *llp, const char *source)
+ 
+ #ifdef SHARED
+   /* Get the capabilities.  */
+-  capstr = _dl_important_hwcaps (&ncapstr, &max_capstrlen);
++  capstr = _dl_important_hwcaps (glibc_hwcaps_prepend, glibc_hwcaps_mask,
++				 &ncapstr, &max_capstrlen);
+ #endif
+ 
+   /* First set up the rest of the default search directory entries.  */
+diff --git a/elf/dl-main.h b/elf/dl-main.h
+index b51256d3b48230b0..566713a0d10cfdb7 100644
+--- a/elf/dl-main.h
++++ b/elf/dl-main.h
+@@ -84,6 +84,14 @@ struct dl_main_state
+   /* The preload list passed as a command argument.  */
+   const char *preloadarg;
+ 
++  /* Additional glibc-hwcaps subdirectories to search first.
++     Colon-separated list.  */
++  const char *glibc_hwcaps_prepend;
++
++  /* Mask for the internal glibc-hwcaps subdirectories.
++     Colon-separated list.  */
++  const char *glibc_hwcaps_mask;
++
+   enum rtld_mode mode;
+ 
+   /* True if any of the debugging options is enabled.  */
+@@ -98,7 +106,8 @@ struct dl_main_state
+ static inline void
+ call_init_paths (const struct dl_main_state *state)
+ {
+-  _dl_init_paths (state->library_path, state->library_path_source);
++  _dl_init_paths (state->library_path, state->library_path_source,
++                  state->glibc_hwcaps_prepend, state->glibc_hwcaps_mask);
+ }
+ 
+ /* Print ld.so usage information and exit.  */
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index fb9672367f8d6abd..34be8e5babfb6af3 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -315,7 +315,10 @@ _dl_non_dynamic_init (void)
+ 
+   /* Initialize the data structures for the search paths for shared
+      objects.  */
+-  _dl_init_paths (getenv ("LD_LIBRARY_PATH"), "LD_LIBRARY_PATH");
++  _dl_init_paths (getenv ("LD_LIBRARY_PATH"), "LD_LIBRARY_PATH",
++		  /* No glibc-hwcaps selection support in statically
++		     linked binaries.  */
++		  NULL, NULL);
+ 
+   /* Remember the last search directory added at startup.  */
+   _dl_init_all_dirs = GL(dl_all_dirs);
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+index 796ad38b43c2211b..e22a9c39427187d1 100644
+--- a/elf/dl-usage.c
++++ b/elf/dl-usage.c
+@@ -83,7 +83,7 @@ print_search_path_for_help (struct dl_main_state *state)
+ {
+   if (__rtld_search_dirs.dirs == NULL)
+     /* The run-time search paths have not yet been initialized.  */
+-    _dl_init_paths (state->library_path, state->library_path_source);
++    call_init_paths (state);
+ 
+   _dl_printf ("\nShared library search path:\n");
+ 
+@@ -132,6 +132,67 @@ print_hwcap_1_finish (bool *first)
+     _dl_printf (")\n");
+ }
+ 
++/* Print the header for print_hwcaps_subdirectories.  */
++static void
++print_hwcaps_subdirectories_header (bool *nothing_printed)
++{
++  if (*nothing_printed)
++    {
++      _dl_printf ("\n\
++Subdirectories of glibc-hwcaps directories, in priority order:\n");
++      *nothing_printed = false;
++    }
++}
++
++/* Print the HWCAP name itself, indented.  */
++static void
++print_hwcaps_subdirectories_name (const struct dl_hwcaps_split *split)
++{
++  _dl_write (STDOUT_FILENO, "  ", 2);
++  _dl_write (STDOUT_FILENO, split->segment, split->length);
++}
++
++/* Print the list of recognized glibc-hwcaps subdirectories.  */
++static void
++print_hwcaps_subdirectories (const struct dl_main_state *state)
++{
++  bool nothing_printed = true;
++  struct dl_hwcaps_split split;
++
++  /* The prepended glibc-hwcaps subdirectories.  */
++  _dl_hwcaps_split_init (&split, state->glibc_hwcaps_prepend);
++  while (_dl_hwcaps_split (&split))
++    {
++      print_hwcaps_subdirectories_header (&nothing_printed);
++      print_hwcaps_subdirectories_name (&split);
++      bool first = true;
++      print_hwcap_1 (&first, true, "searched");
++      print_hwcap_1_finish (&first);
++    }
++
++  /* The built-in glibc-hwcaps subdirectories.  Do the filtering
++     manually, so that more precise diagnostics are possible.  */
++  uint32_t mask = _dl_hwcaps_subdirs_active ();
++  _dl_hwcaps_split_init (&split, _dl_hwcaps_subdirs);
++  while (_dl_hwcaps_split (&split))
++    {
++      print_hwcaps_subdirectories_header (&nothing_printed);
++      print_hwcaps_subdirectories_name (&split);
++      bool first = true;
++      print_hwcap_1 (&first, mask & 1, "supported");
++      bool listed = _dl_hwcaps_contains (state->glibc_hwcaps_mask,
++                                         split.segment, split.length);
++      print_hwcap_1 (&first, !listed, "masked");
++      print_hwcap_1 (&first, (mask & 1) && listed, "searched");
++      print_hwcap_1_finish (&first);
++      mask >>= 1;
++    }
++
++  if (nothing_printed)
++    _dl_printf ("\n\
++No subdirectories of glibc-hwcaps directories are searched.\n");
++}
++
+ /* Write a list of hwcap subdirectories to standard output.  See
+  _dl_important_hwcaps in dl-hwcaps.c.  */
+ static void
+@@ -186,6 +247,10 @@ setting environment variables (which would be inherited by subprocesses).\n\
+   --inhibit-cache       Do not use " LD_SO_CACHE "\n\
+   --library-path PATH   use given PATH instead of content of the environment\n\
+                         variable LD_LIBRARY_PATH\n\
++  --glibc-hwcaps-prepend LIST\n\
++                        search glibc-hwcaps subdirectories in LIST\n\
++  --glibc-hwcaps-mask LIST\n\
++                        only search built-in subdirectories if in LIST\n\
+   --inhibit-rpath LIST  ignore RUNPATH and RPATH information in object names\n\
+                         in LIST\n\
+   --audit LIST          use objects named in LIST as auditors\n\
+@@ -198,6 +263,7 @@ This program interpreter self-identifies as: " RTLD "\n\
+ ",
+               argv0);
+   print_search_path_for_help (state);
++  print_hwcaps_subdirectories (state);
+   print_legacy_hwcap_directories ();
+   _exit (EXIT_SUCCESS);
+ }
+diff --git a/elf/markermodMARKER-VALUE.c b/elf/markermodMARKER-VALUE.c
+new file mode 100644
+index 0000000000000000..99bdcf71a4e219c6
+--- /dev/null
++++ b/elf/markermodMARKER-VALUE.c
+@@ -0,0 +1,29 @@
++/* Source file template for building shared objects with marker functions.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* MARKER and VALUE must be set on the compiler command line.  */
++
++#ifndef MARKER
++# error MARKER not defined
++#endif
++
++int
++MARKER (void)
++{
++  return VALUE;
++}
+diff --git a/elf/rtld.c b/elf/rtld.c
+index da1eef108508b95f..fde5a6a4a485207e 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -287,6 +287,8 @@ dl_main_state_init (struct dl_main_state *state)
+   state->library_path_source = NULL;
+   state->preloadlist = NULL;
+   state->preloadarg = NULL;
++  state->glibc_hwcaps_prepend = NULL;
++  state->glibc_hwcaps_mask = NULL;
+   state->mode = rtld_mode_normal;
+   state->any_debug = false;
+   state->version_info = false;
+@@ -1238,6 +1240,22 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	  {
+ 	    argv0 = _dl_argv[2];
+ 
++	    _dl_skip_args += 2;
++	    _dl_argc -= 2;
++	    _dl_argv += 2;
++	  }
++	else if (strcmp (_dl_argv[1], "--glibc-hwcaps-prepend") == 0
++		 && _dl_argc > 2)
++	  {
++	    state.glibc_hwcaps_prepend = _dl_argv[2];
++	    _dl_skip_args += 2;
++	    _dl_argc -= 2;
++	    _dl_argv += 2;
++	  }
++	else if (strcmp (_dl_argv[1], "--glibc-hwcaps-mask") == 0
++		 && _dl_argc > 2)
++	  {
++	    state.glibc_hwcaps_mask = _dl_argv[2];
+ 	    _dl_skip_args += 2;
+ 	    _dl_argc -= 2;
+ 	    _dl_argv += 2;
+diff --git a/elf/tst-dl-hwcaps_split.c b/elf/tst-dl-hwcaps_split.c
+new file mode 100644
+index 0000000000000000..364159427074bd1c
+--- /dev/null
++++ b/elf/tst-dl-hwcaps_split.c
+@@ -0,0 +1,148 @@
++/* Unit tests for dl-hwcaps.c.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <dl-hwcaps.h>
++#include <string.h>
++#include <support/check.h>
++
++static void
++check_split_masked (const char *input, int32_t bitmask, const char *mask,
++                    const char *expected[], size_t expected_length)
++{
++  struct dl_hwcaps_split_masked split;
++  _dl_hwcaps_split_masked_init (&split, input, bitmask, mask);
++  size_t index = 0;
++  while (_dl_hwcaps_split_masked (&split))
++    {
++      TEST_VERIFY_EXIT (index < expected_length);
++      TEST_COMPARE_BLOB (expected[index], strlen (expected[index]),
++                         split.split.segment, split.split.length);
++      ++index;
++    }
++  TEST_COMPARE (index, expected_length);
++}
++
++static void
++check_split (const char *input,
++             const char *expected[], size_t expected_length)
++{
++  struct dl_hwcaps_split split;
++  _dl_hwcaps_split_init (&split, input);
++  size_t index = 0;
++  while (_dl_hwcaps_split (&split))
++    {
++      TEST_VERIFY_EXIT (index < expected_length);
++      TEST_COMPARE_BLOB (expected[index], strlen (expected[index]),
++                         split.segment, split.length);
++      ++index;
++    }
++  TEST_COMPARE (index, expected_length);
++
++  /* Reuse the test cases with masking that does not actually remove
++     anything.  */
++  check_split_masked (input, -1, NULL, expected, expected_length);
++  check_split_masked (input, -1, input, expected, expected_length);
++}
++
++static int
++do_test (void)
++{
++  /* Splitting tests, without masking.  */
++  check_split (NULL, NULL, 0);
++  check_split ("", NULL, 0);
++  check_split (":", NULL, 0);
++  check_split ("::", NULL, 0);
++
++  {
++    const char *expected[] = { "first" };
++    check_split ("first", expected, array_length (expected));
++    check_split (":first", expected, array_length (expected));
++    check_split ("first:", expected, array_length (expected));
++    check_split (":first:", expected, array_length (expected));
++  }
++
++  {
++    const char *expected[] = { "first", "second" };
++    check_split ("first:second", expected, array_length (expected));
++    check_split ("first::second", expected, array_length (expected));
++    check_split (":first:second", expected, array_length (expected));
++    check_split ("first:second:", expected, array_length (expected));
++    check_split (":first:second:", expected, array_length (expected));
++  }
++
++  /* Splitting tests with masking.  */
++  {
++    const char *expected[] = { "first" };
++    check_split_masked ("first", 3, "first:second",
++                        expected, array_length (expected));
++    check_split_masked ("first:second", 3, "first:",
++                        expected, array_length (expected));
++    check_split_masked ("first:second", 1, NULL,
++                        expected, array_length (expected));
++  }
++  {
++    const char *expected[] = { "second" };
++    check_split_masked ("first:second", 3, "second",
++                        expected, array_length (expected));
++    check_split_masked ("first:second:third", -1, "second:",
++                        expected, array_length (expected));
++    check_split_masked ("first:second", 2, NULL,
++                        expected, array_length (expected));
++    check_split_masked ("first:second:third", 2, "first:second",
++                        expected, array_length (expected));
++  }
++
++  /* Tests for _dl_hwcaps_contains.  */
++  TEST_VERIFY (_dl_hwcaps_contains (NULL, "first", strlen ("first")));
++  TEST_VERIFY (_dl_hwcaps_contains (NULL, "", 0));
++  TEST_VERIFY (! _dl_hwcaps_contains ("", "first", strlen ("first")));
++  TEST_VERIFY (! _dl_hwcaps_contains ("firs", "first", strlen ("first")));
++  TEST_VERIFY (_dl_hwcaps_contains ("firs", "first", strlen ("first") - 1));
++  for (int i = 0; i < strlen ("first"); ++i)
++    TEST_VERIFY (! _dl_hwcaps_contains ("first", "first", i));
++  TEST_VERIFY (_dl_hwcaps_contains ("first", "first", strlen ("first")));
++  TEST_VERIFY (_dl_hwcaps_contains ("first:", "first", strlen ("first")));
++  TEST_VERIFY (_dl_hwcaps_contains ("first:second",
++                                    "first", strlen ("first")));
++  TEST_VERIFY (_dl_hwcaps_contains (":first:second", "first",
++                                    strlen ("first")));
++  TEST_VERIFY (_dl_hwcaps_contains ("first:second", "second",
++                                    strlen ("second")));
++  TEST_VERIFY (_dl_hwcaps_contains ("first:second:", "second",
++                                    strlen ("second")));
++  TEST_VERIFY (_dl_hwcaps_contains ("first::second:", "second",
++                                    strlen ("second")));
++  TEST_VERIFY (_dl_hwcaps_contains ("first:second::", "second",
++                                    strlen ("second")));
++  for (int i = 0; i < strlen ("second"); ++i)
++    {
++      TEST_VERIFY (!_dl_hwcaps_contains ("first:second", "second", i));
++      TEST_VERIFY (!_dl_hwcaps_contains ("first:second:", "second", i));
++      TEST_VERIFY (!_dl_hwcaps_contains ("first:second::", "second", i));
++      TEST_VERIFY (!_dl_hwcaps_contains ("first::second", "second", i));
++    }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
++
++/* Rebuild the sources here because the object file is built for
++   inclusion into the dynamic loader.  */
++#include "dl-hwcaps_split.c"
+diff --git a/elf/tst-glibc-hwcaps-mask.c b/elf/tst-glibc-hwcaps-mask.c
+new file mode 100644
+index 0000000000000000..27b09b358caf7853
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps-mask.c
+@@ -0,0 +1,31 @@
++/* Test that --glibc-hwcaps-mask works.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++
++extern int marker1 (void);
++
++static int
++do_test (void)
++{
++  /* The marker1 function in elf/markermod1.so returns 1.  */
++  TEST_COMPARE (marker1 (), 1);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-glibc-hwcaps-prepend.c b/elf/tst-glibc-hwcaps-prepend.c
+new file mode 100644
+index 0000000000000000..57d7319f1484ca4b
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps-prepend.c
+@@ -0,0 +1,32 @@
++/* Test that --glibc-hwcaps-prepend works.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++
++extern int marker1 (void);
++
++static int
++do_test (void)
++{
++  /* The marker1 function in
++     glibc-hwcaps/prepend-markermod1/markermod1.so returns 2.  */
++  TEST_COMPARE (marker1 (), 2);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-glibc-hwcaps.c b/elf/tst-glibc-hwcaps.c
+new file mode 100644
+index 0000000000000000..28f47cf8914a1f2a
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps.c
+@@ -0,0 +1,28 @@
++/* Stub test for glibc-hwcaps.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++
++static int
++do_test (void)
++{
++  puts ("info: generic tst-glibc-hwcaps (tests nothing)");
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 2c9fdeb286bdaadf..77923499d3de4366 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1045,8 +1045,13 @@ extern struct r_debug *_dl_debug_initialize (ElfW(Addr) ldbase, Lmid_t ns)
+      attribute_hidden;
+ 
+ /* Initialize the basic data structure for the search paths.  SOURCE
+-   is either "LD_LIBRARY_PATH" or "--library-path".  */
+-extern void _dl_init_paths (const char *library_path, const char *source)
++   is either "LD_LIBRARY_PATH" or "--library-path".
++   GLIBC_HWCAPS_PREPEND adds additional glibc-hwcaps subdirectories to
++   search.  GLIBC_HWCAPS_MASK is used to filter the built-in
++   subdirectories if not NULL.  */
++extern void _dl_init_paths (const char *library_path, const char *source,
++			    const char *glibc_hwcaps_prepend,
++			    const char *glibc_hwcaps_mask)
+   attribute_hidden;
+ 
+ /* Gather the information needed to install the profiling tables and start
+@@ -1070,9 +1075,14 @@ extern void _dl_show_auxv (void) attribute_hidden;
+ extern char *_dl_next_ld_env_entry (char ***position) attribute_hidden;
+ 
+ /* Return an array with the names of the important hardware
+-   capabilities.  The length of the array is written to *SZ, and the
+-   maximum of all strings length is written to *MAX_CAPSTRLEN.  */
+-const struct r_strlenpair *_dl_important_hwcaps (size_t *sz,
++   capabilities.  PREPEND is a colon-separated list of glibc-hwcaps
++   directories to search first.  MASK is a colon-separated list used
++   to filter the built-in glibc-hwcaps subdirectories.  The length of
++   the array is written to *SZ, and the maximum of all strings length
++   is written to *MAX_CAPSTRLEN.  */
++const struct r_strlenpair *_dl_important_hwcaps (const char *prepend,
++						 const char *mask,
++						 size_t *sz,
+ 						 size_t *max_capstrlen)
+   attribute_hidden;
+ 

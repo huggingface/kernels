@@ -1,0 +1,187 @@
+commit 4c38c1a229bc3628269ad98bd7e8d31d118d91f6
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 4 09:13:43 2020 +0100
+
+    powerpc64le: Add glibc-hwcaps support
+    
+    The "power10" and "power9" subdirectories are selected in a way
+    that matches the -mcpu=power10 and -mcpu=power9 options of GCC.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 7f2fc73877f0a4c8..57e3a8982297f79a 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -1751,7 +1751,7 @@ $(objpfx)argv0test.out: tst-rtld-argv0.sh $(objpfx)ld.so \
+ # glibc-hwcaps mechanism for this architecture).  Used to obtain test
+ # coverage for some glibc-hwcaps tests for the widest possible range
+ # of systems.
+-glibc-hwcaps-first-subdirs-for-tests = x86-64-v2
++glibc-hwcaps-first-subdirs-for-tests = power9 x86-64-v2
+ 
+ # The test modules are parameterized by preprocessor macros.
+ LDFLAGS-libmarkermod1-1.so += -Wl,-soname,libmarkermod1.so
+diff --git a/elf/tst-glibc-hwcaps-cache.script b/elf/tst-glibc-hwcaps-cache.script
+index 66d6942402b7233b..6a4675f9bd30e02f 100644
+--- a/elf/tst-glibc-hwcaps-cache.script
++++ b/elf/tst-glibc-hwcaps-cache.script
+@@ -5,6 +5,12 @@ cp $B/elf/libmarkermod2-1.so $L/libmarkermod2.so
+ cp $B/elf/libmarkermod3-1.so $L/libmarkermod3.so
+ cp $B/elf/libmarkermod4-1.so $L/libmarkermod4.so
+ 
++mkdirp 0770 $L/glibc-hwcaps/power9
++cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/power9/libmarkermod2.so
++mkdirp 0770 $L/glibc-hwcaps/power10
++cp $B/elf/libmarkermod3-2.so $L/glibc-hwcaps/power9/libmarkermod3.so
++cp $B/elf/libmarkermod3-3.so $L/glibc-hwcaps/power10/libmarkermod3.so
++
+ mkdirp 0770 $L/glibc-hwcaps/x86-64-v2
+ cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/x86-64-v2/libmarkermod2.so
+ mkdirp 0770 $L/glibc-hwcaps/x86-64-v3
+diff --git a/sysdeps/powerpc/powerpc64/le/Makefile b/sysdeps/powerpc/powerpc64/le/Makefile
+index f59db1ca3c8ed454..7a4be6bfef729914 100644
+--- a/sysdeps/powerpc/powerpc64/le/Makefile
++++ b/sysdeps/powerpc/powerpc64/le/Makefile
+@@ -82,3 +82,31 @@ CFLAGS-printf_fp.c = -mfloat128
+ CFLAGS-printf_fphex.c = -mfloat128
+ CFLAGS-printf_size.c = -mfloat128
+ endif
++
++ifeq ($(subdir),elf)
++$(objpfx)tst-glibc-hwcaps: \
++  $(objpfx)libmarkermod2-1.so $(objpfx)libmarkermod3-1.so
++$(objpfx)tst-glibc-hwcaps.out: \
++  $(objpfx)libmarkermod2.so \
++    $(objpfx)glibc-hwcaps/power9/libmarkermod2.so \
++  $(objpfx)libmarkermod3.so \
++    $(objpfx)glibc-hwcaps/power9/libmarkermod3.so \
++    $(objpfx)glibc-hwcaps/power10/libmarkermod3.so \
++
++$(objpfx)glibc-hwcaps/power9/libmarkermod2.so: $(objpfx)libmarkermod2-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/power9/libmarkermod3.so: $(objpfx)libmarkermod3-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/power10/libmarkermod3.so: $(objpfx)libmarkermod3-3.so
++	$(make-target-directory)
++	cp $< $@
++
++ifeq (no,$(build-hardcoded-path-in-tests))
++# This is an ld.so.cache test, and RPATH/RUNPATH in the executable
++# interferes with its test objectives.
++tests-container += tst-glibc-hwcaps-cache
++endif
++
++endif # $(subdir) == elf
+diff --git a/sysdeps/powerpc/powerpc64/le/dl-hwcaps-subdirs.c b/sysdeps/powerpc/powerpc64/le/dl-hwcaps-subdirs.c
+new file mode 100644
+index 0000000000000000..6a21d77649f44dd4
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/dl-hwcaps-subdirs.c
+@@ -0,0 +1,46 @@
++/* Architecture-specific glibc-hwcaps subdirectories.  powerpc64le version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-hwcaps.h>
++#include <ldsodefs.h>
++
++const char _dl_hwcaps_subdirs[] = "power10:power9";
++enum { subdirs_count = 2 }; /* Number of components in _dl_hwcaps_subdirs.  */
++
++uint32_t
++_dl_hwcaps_subdirs_active (void)
++{
++  int active = 0;
++
++  /* Test in reverse preference order.  Altivec and VSX are implied by
++     the powerpc64le ABI definition.  */
++
++  /* POWER9.  GCC enables float128 hardware support for -mcpu=power9.  */
++  if ((GLRO (dl_hwcap2) & PPC_FEATURE2_ARCH_3_00) == 0
++      || (GLRO (dl_hwcap2) & PPC_FEATURE2_HAS_IEEE128) == 0)
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  /* POWER10.  GCC defines __MMA__ for -mcpu=power10.  */
++  if ((GLRO (dl_hwcap2) & PPC_FEATURE2_ARCH_3_1) == 0
++      || (GLRO (dl_hwcap2) & PPC_FEATURE2_MMA) == 0)
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++}
+diff --git a/sysdeps/powerpc/powerpc64/le/tst-glibc-hwcaps.c b/sysdeps/powerpc/powerpc64/le/tst-glibc-hwcaps.c
+new file mode 100644
+index 0000000000000000..e510fca80a22aaeb
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/tst-glibc-hwcaps.c
+@@ -0,0 +1,54 @@
++/* glibc-hwcaps subdirectory test.  powerpc64le version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <string.h>
++#include <support/check.h>
++#include <sys/auxv.h>
++#include <sys/param.h>
++
++extern int marker2 (void);
++extern int marker3 (void);
++
++/* Return the POWER level, 8 for the baseline.  */
++static int
++compute_level (void)
++{
++  const char *platform = (const char *) getauxval (AT_PLATFORM);
++  if (strcmp (platform, "power8") == 0)
++    return 8;
++  if (strcmp (platform, "power9") == 0)
++    return 9;
++  if (strcmp (platform, "power10") == 0)
++    return 10;
++  printf ("warning: unrecognized AT_PLATFORM value: %s\n", platform);
++  /* Assume that the new platform supports POWER10.  */
++  return 10;
++}
++
++static int
++do_test (void)
++{
++  int level = compute_level ();
++  printf ("info: detected POWER level: %d\n", level);
++  TEST_COMPARE (marker2 (), MIN (level - 7, 2));
++  TEST_COMPARE (marker3 (), MIN (level - 7, 3));
++  return 0;
++}
++
++#include <support/test-driver.c>

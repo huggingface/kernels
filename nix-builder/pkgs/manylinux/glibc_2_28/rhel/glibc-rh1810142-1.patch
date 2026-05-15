@@ -1,0 +1,382 @@
+From: Florian Weimer <fweimer@redhat.com>
+Date: Tue, 11 Feb 2020 12:52:06 +0000 (+0100)
+Subject: Add internal <file_change_detection.h> header file
+X-Git-Url: https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=6c80c6e8767b860a5e18e136d04a80be2a8dce15
+
+Add internal <file_change_detection.h> header file
+
+The code started out with bits form resolv/resolv_conf.c, but it
+was enhanced to deal with directories and FIFOs in a more predictable
+manner.  A test case is included as well.
+
+This will be used to implement the /etc/resolv.conf change detection.
+
+This currently lives in a header file only.  Once there are multiple
+users, the implementations should be moved into C files.
+---
+
+diff -rupN a/include/file_change_detection.h b/include/file_change_detection.h
+--- a/include/file_change_detection.h	1969-12-31 19:00:00.000000000 -0500
++++ b/include/file_change_detection.h	2020-03-25 16:57:24.227929816 -0400
+@@ -0,0 +1,140 @@
++/* Detecting file changes using modification times.
++   Copyright (C) 2017-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <sys/stat.h>
++#include <sys/types.h>
++
++/* Items for identifying a particular file version.  Excerpt from
++   struct stat64.  */
++struct file_change_detection
++{
++  /* Special values: 0 if file does not exist.  -1 to force mismatch
++     with the next comparison.  */
++  off64_t size;
++
++  ino64_t ino;
++  struct timespec mtime;
++  struct timespec ctime;
++};
++
++/* Returns true if *LEFT and *RIGHT describe the same version of the
++   same file.  */
++static bool __attribute__ ((unused))
++file_is_unchanged (const struct file_change_detection *left,
++                   const struct file_change_detection *right)
++{
++  if (left->size < 0 || right->size < 0)
++    /* Negative sizes are used as markers and never match.  */
++    return false;
++  else if (left->size == 0 && right->size == 0)
++    /* Both files are empty or do not exist, so they have the same
++       content, no matter what the other fields indicate.  */
++    return true;
++  else
++    return left->size == right->size
++      && left->ino == right->ino
++      && left->mtime.tv_sec == right->mtime.tv_sec
++      && left->mtime.tv_nsec == right->mtime.tv_nsec
++      && left->ctime.tv_sec == right->ctime.tv_sec
++      && left->ctime.tv_nsec == right->ctime.tv_nsec;
++}
++
++/* Extract file change information to *FILE from the stat buffer
++   *ST.  */
++static void __attribute__ ((unused))
++file_change_detection_for_stat (struct file_change_detection *file,
++                                const struct stat64 *st)
++{
++  if (S_ISDIR (st->st_mode))
++    /* Treat as empty file.  */
++    file->size = 0;
++  else if (!S_ISREG (st->st_mode))
++    /* Non-regular files cannot be cached.  */
++    file->size = -1;
++  else
++    {
++      file->size = st->st_size;
++      file->ino = st->st_ino;
++      file->mtime = st->st_mtim;
++      file->ctime = st->st_ctim;
++    }
++}
++
++/* Writes file change information for PATH to *FILE.  Returns true on
++   success.  For benign errors, *FILE is cleared, and true is
++   returned.  For errors indicating resource outages and the like,
++   false is returned.  */
++static bool __attribute__ ((unused))
++file_change_detection_for_path (struct file_change_detection *file,
++                                const char *path)
++{
++  struct stat64 st;
++  if (stat64 (path, &st) != 0)
++    switch (errno)
++      {
++      case EACCES:
++      case EISDIR:
++      case ELOOP:
++      case ENOENT:
++      case ENOTDIR:
++      case EPERM:
++        /* Ignore errors due to file system contents.  Instead, treat
++           the file as empty.  */
++        file->size = 0;
++        return true;
++      default:
++        /* Other errors are fatal.  */
++        return false;
++      }
++  else /* stat64 was successfull.  */
++    {
++      file_change_detection_for_stat (file, &st);
++      return true;
++    }
++}
++
++/* Writes file change information for the stream FP to *FILE.  Returns
++   ture on success, false on failure.  If FP is NULL, treat the file
++   as non-existing.  */
++static bool __attribute__ ((unused))
++file_change_detection_for_fp (struct file_change_detection *file,
++                              FILE *fp)
++{
++  if (fp == NULL)
++    {
++      /* The file does not exist.  */
++      file->size = 0;
++      return true;
++    }
++  else
++    {
++      struct stat64 st;
++      if (fstat64 (__fileno (fp), &st) != 0)
++        /* If we already have a file descriptor, all errors are fatal.  */
++        return false;
++      else
++        {
++          file_change_detection_for_stat (file, &st);
++          return true;
++        }
++    }
++}
+diff -rupN a/io/Makefile b/io/Makefile
+--- a/io/Makefile	2020-03-25 16:55:42.442195992 -0400
++++ b/io/Makefile	2020-03-25 16:58:48.571023810 -0400
+@@ -74,6 +74,7 @@ tests		:= test-utime test-stat test-stat
+ 		   tst-posix_fallocate tst-posix_fallocate64 \
+ 		   tst-fts tst-fts-lfs tst-open-tmpfile \
+ 		   tst-copy_file_range tst-getcwd-abspath \
++		   tst-file_change_detection
+ 
+ # Likewise for statx, but we do not need static linking here.
+ tests-internal += tst-statx
+diff -rupN a/io/tst-file_change_detection.c b/io/tst-file_change_detection.c
+--- a/io/tst-file_change_detection.c	1969-12-31 19:00:00.000000000 -0500
++++ b/io/tst-file_change_detection.c	2020-03-25 16:57:24.242930366 -0400
+@@ -0,0 +1,206 @@
++/* Test for <file_change_detection.c>.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* The header uses the internal __fileno symbol, which is not
++   available outside of libc (even to internal tests).  */
++#define __fileno(fp) fileno (fp)
++
++#include <file_change_detection.h>
++
++#include <array_length.h>
++#include <stdlib.h>
++#include <support/check.h>
++#include <support/support.h>
++#include <support/temp_file.h>
++#include <support/test-driver.h>
++#include <support/xstdio.h>
++#include <support/xunistd.h>
++#include <unistd.h>
++
++static void
++all_same (struct file_change_detection *array, size_t length)
++{
++  for (size_t i = 0; i < length; ++i)
++    for (size_t j = 0; j < length; ++j)
++      {
++        if (test_verbose > 0)
++          printf ("info: comparing %zu and %zu\n", i, j);
++        TEST_VERIFY (file_is_unchanged (array + i, array + j));
++      }
++}
++
++static void
++all_different (struct file_change_detection *array, size_t length)
++{
++  for (size_t i = 0; i < length; ++i)
++    for (size_t j = 0; j < length; ++j)
++      {
++        if (i == j)
++          continue;
++        if (test_verbose > 0)
++          printf ("info: comparing %zu and %zu\n", i, j);
++        TEST_VERIFY (!file_is_unchanged (array + i, array + j));
++      }
++}
++
++static int
++do_test (void)
++{
++  /* Use a temporary directory with various paths.  */
++  char *tempdir = support_create_temp_directory ("tst-file_change_detection-");
++
++  char *path_dangling = xasprintf ("%s/dangling", tempdir);
++  char *path_does_not_exist = xasprintf ("%s/does-not-exist", tempdir);
++  char *path_empty1 = xasprintf ("%s/empty1", tempdir);
++  char *path_empty2 = xasprintf ("%s/empty2", tempdir);
++  char *path_fifo = xasprintf ("%s/fifo", tempdir);
++  char *path_file1 = xasprintf ("%s/file1", tempdir);
++  char *path_file2 = xasprintf ("%s/file2", tempdir);
++  char *path_loop = xasprintf ("%s/loop", tempdir);
++  char *path_to_empty1 = xasprintf ("%s/to-empty1", tempdir);
++  char *path_to_file1 = xasprintf ("%s/to-file1", tempdir);
++
++  add_temp_file (path_dangling);
++  add_temp_file (path_empty1);
++  add_temp_file (path_empty2);
++  add_temp_file (path_fifo);
++  add_temp_file (path_file1);
++  add_temp_file (path_file2);
++  add_temp_file (path_loop);
++  add_temp_file (path_to_empty1);
++  add_temp_file (path_to_file1);
++
++  xsymlink ("target-does-not-exist", path_dangling);
++  support_write_file_string (path_empty1, "");
++  support_write_file_string (path_empty2, "");
++  TEST_COMPARE (mknod (path_fifo, 0777 | S_IFIFO, 0), 0);
++  support_write_file_string (path_file1, "line\n");
++  support_write_file_string (path_file2, "line\n");
++  xsymlink ("loop", path_loop);
++  xsymlink ("empty1", path_to_empty1);
++  xsymlink ("file1", path_to_file1);
++
++  FILE *fp_file1 = xfopen (path_file1, "r");
++  FILE *fp_file2 = xfopen (path_file2, "r");
++  FILE *fp_empty1 = xfopen (path_empty1, "r");
++  FILE *fp_empty2 = xfopen (path_empty2, "r");
++
++  /* Test for the same (empty) files.  */
++  {
++    struct file_change_detection fcd[10];
++    int i = 0;
++    /* Two empty files always have the same contents.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_empty1));
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_empty2));
++    /* So does a missing file (which is treated as empty).  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++],
++                                                 path_does_not_exist));
++    /* And a symbolic link loop.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_loop));
++    /* And a dangling symbolic link.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_dangling));
++    /* And a directory.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], tempdir));
++    /* And a symbolic link to an empty file.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_to_empty1));
++    /* Likewise for access the file via a FILE *.  */
++    TEST_VERIFY (file_change_detection_for_fp (&fcd[i++], fp_empty1));
++    TEST_VERIFY (file_change_detection_for_fp (&fcd[i++], fp_empty2));
++    /* And a NULL FILE * (missing file).  */
++    TEST_VERIFY (file_change_detection_for_fp (&fcd[i++], NULL));
++    TEST_COMPARE (i, array_length (fcd));
++
++    all_same (fcd, array_length (fcd));
++  }
++
++  /* Symbolic links are resolved.  */
++  {
++    struct file_change_detection fcd[3];
++    int i = 0;
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_file1));
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_to_file1));
++    TEST_VERIFY (file_change_detection_for_fp (&fcd[i++], fp_file1));
++    TEST_COMPARE (i, array_length (fcd));
++    all_same (fcd, array_length (fcd));
++  }
++
++  /* Test for different files.  */
++  {
++    struct file_change_detection fcd[5];
++    int i = 0;
++    /* The other files are not empty.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_empty1));
++    /* These two files have the same contents, but have different file
++       identity.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_file1));
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_file2));
++    /* FIFOs are always different, even with themselves.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_fifo));
++    TEST_VERIFY (file_change_detection_for_path (&fcd[i++], path_fifo));
++    TEST_COMPARE (i, array_length (fcd));
++    all_different (fcd, array_length (fcd));
++
++    /* Replacing the file with its symbolic link does not make a
++       difference.  */
++    TEST_VERIFY (file_change_detection_for_path (&fcd[1], path_to_file1));
++    all_different (fcd, array_length (fcd));
++  }
++
++  /* Wait for a file change.  Depending on file system time stamp
++     resolution, this subtest blocks for a while.  */
++  for (int use_stdio = 0; use_stdio < 2; ++use_stdio)
++    {
++      struct file_change_detection initial;
++      TEST_VERIFY (file_change_detection_for_path (&initial, path_file1));
++      while (true)
++        {
++          support_write_file_string (path_file1, "line\n");
++          struct file_change_detection current;
++          if (use_stdio)
++            TEST_VERIFY (file_change_detection_for_fp (&current, fp_file1));
++          else
++            TEST_VERIFY (file_change_detection_for_path (&current, path_file1));
++          if (!file_is_unchanged (&initial, &current))
++            break;
++          /* Wait for a bit to reduce system load.  */
++          usleep (100 * 1000);
++        }
++    }
++
++  fclose (fp_empty1);
++  fclose (fp_empty2);
++  fclose (fp_file1);
++  fclose (fp_file2);
++
++  free (path_dangling);
++  free (path_does_not_exist);
++  free (path_empty1);
++  free (path_empty2);
++  free (path_fifo);
++  free (path_file1);
++  free (path_file2);
++  free (path_loop);
++  free (path_to_empty1);
++  free (path_to_file1);
++
++  free (tempdir);
++
++  return 0;
++}
++
++#include <support/test-driver.c>

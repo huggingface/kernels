@@ -1,0 +1,277 @@
+commit 55c9f3238080e9aba733bc0902779c46cfa16446
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Thu Feb 11 11:52:24 2021 +0000
+
+    x86_64: Remove lazy tlsdesc relocation related code
+    
+    _dl_tlsdesc_resolve_rela and _dl_tlsdesc_resolve_hold are only used for
+    lazy tlsdesc relocation processing which is no longer supported.
+
+diff --git a/sysdeps/x86_64/dl-machine.h b/sysdeps/x86_64/dl-machine.h
+index ef5740ba281c7282..b94d3b39ec1dca64 100644
+--- a/sysdeps/x86_64/dl-machine.h
++++ b/sysdeps/x86_64/dl-machine.h
+@@ -127,10 +127,6 @@ elf_machine_runtime_setup (struct link_map *l, int lazy, int profile)
+ 	}
+     }
+ 
+-  if (l->l_info[ADDRIDX (DT_TLSDESC_GOT)] && lazy)
+-    *(ElfW(Addr)*)(D_PTR (l, l_info[ADDRIDX (DT_TLSDESC_GOT)]) + l->l_addr)
+-      = (ElfW(Addr)) &_dl_tlsdesc_resolve_rela;
+-
+   return lazy;
+ }
+ 
+diff --git a/sysdeps/x86_64/dl-tlsdesc.S b/sysdeps/x86_64/dl-tlsdesc.S
+index 80d771cd887dd626..77e78cf0a6d8babc 100644
+--- a/sysdeps/x86_64/dl-tlsdesc.S
++++ b/sysdeps/x86_64/dl-tlsdesc.S
+@@ -148,107 +148,3 @@ _dl_tlsdesc_dynamic:
+ 	cfi_endproc
+ 	.size	_dl_tlsdesc_dynamic, .-_dl_tlsdesc_dynamic
+ #endif /* SHARED */
+-
+-     /* This function is a wrapper for a lazy resolver for TLS_DESC
+-	RELA relocations.  The incoming 0(%rsp) points to the caller's
+-	link map, pushed by the dynamic object's internal lazy TLS
+-	resolver front-end before tail-calling us.  We need to pop it
+-	ourselves.  %rax points to a TLS descriptor, such that 0(%rax)
+-	holds the address of the internal resolver front-end (unless
+-	some other thread beat us to resolving it) and 8(%rax) holds a
+-	pointer to the relocation.
+-
+-	When the actual resolver returns, it will have adjusted the
+-	TLS descriptor such that we can tail-call it for it to return
+-	the TP offset of the symbol.  */
+-
+-	.hidden _dl_tlsdesc_resolve_rela
+-	.global	_dl_tlsdesc_resolve_rela
+-	.type	_dl_tlsdesc_resolve_rela,@function
+-	cfi_startproc
+-	.align 16
+-	/* The PLT entry will have pushed the link_map pointer.  */
+-_dl_tlsdesc_resolve_rela:
+-	_CET_ENDBR
+-	cfi_adjust_cfa_offset (8)
+-	/* Save all call-clobbered registers.  Add 8 bytes for push in
+-	   the PLT entry to align the stack.  */
+-	subq	$80, %rsp
+-	cfi_adjust_cfa_offset (80)
+-	movq	%rax, (%rsp)
+-	movq	%rdi, 8(%rsp)
+-	movq	%rax, %rdi	/* Pass tlsdesc* in %rdi.  */
+-	movq	%rsi, 16(%rsp)
+-	movq	80(%rsp), %rsi	/* Pass link_map* in %rsi.  */
+-	movq	%r8, 24(%rsp)
+-	movq	%r9, 32(%rsp)
+-	movq	%r10, 40(%rsp)
+-	movq	%r11, 48(%rsp)
+-	movq	%rdx, 56(%rsp)
+-	movq	%rcx, 64(%rsp)
+-	call	_dl_tlsdesc_resolve_rela_fixup
+-	movq	(%rsp), %rax
+-	movq	8(%rsp), %rdi
+-	movq	16(%rsp), %rsi
+-	movq	24(%rsp), %r8
+-	movq	32(%rsp), %r9
+-	movq	40(%rsp), %r10
+-	movq	48(%rsp), %r11
+-	movq	56(%rsp), %rdx
+-	movq	64(%rsp), %rcx
+-	addq	$88, %rsp
+-	cfi_adjust_cfa_offset (-88)
+-	jmp	*(%rax)
+-	cfi_endproc
+-	.size	_dl_tlsdesc_resolve_rela, .-_dl_tlsdesc_resolve_rela
+-
+-     /* This function is a placeholder for lazy resolving of TLS
+-	relocations.  Once some thread starts resolving a TLS
+-	relocation, it sets up the TLS descriptor to use this
+-	resolver, such that other threads that would attempt to
+-	resolve it concurrently may skip the call to the original lazy
+-	resolver and go straight to a condition wait.
+-
+-	When the actual resolver returns, it will have adjusted the
+-	TLS descriptor such that we can tail-call it for it to return
+-	the TP offset of the symbol.  */
+-
+-	.hidden _dl_tlsdesc_resolve_hold
+-	.global	_dl_tlsdesc_resolve_hold
+-	.type	_dl_tlsdesc_resolve_hold,@function
+-	cfi_startproc
+-	.align 16
+-_dl_tlsdesc_resolve_hold:
+-0:
+-	_CET_ENDBR
+-	/* Save all call-clobbered registers.  */
+-	subq	$72, %rsp
+-	cfi_adjust_cfa_offset (72)
+-	movq	%rax, (%rsp)
+-	movq	%rdi, 8(%rsp)
+-	movq	%rax, %rdi	/* Pass tlsdesc* in %rdi.  */
+-	movq	%rsi, 16(%rsp)
+-	/* Pass _dl_tlsdesc_resolve_hold's address in %rsi.  */
+-	leaq	. - _dl_tlsdesc_resolve_hold(%rip), %rsi
+-	movq	%r8, 24(%rsp)
+-	movq	%r9, 32(%rsp)
+-	movq	%r10, 40(%rsp)
+-	movq	%r11, 48(%rsp)
+-	movq	%rdx, 56(%rsp)
+-	movq	%rcx, 64(%rsp)
+-	call	_dl_tlsdesc_resolve_hold_fixup
+-1:
+-	movq	(%rsp), %rax
+-	movq	8(%rsp), %rdi
+-	movq	16(%rsp), %rsi
+-	movq	24(%rsp), %r8
+-	movq	32(%rsp), %r9
+-	movq	40(%rsp), %r10
+-	movq	48(%rsp), %r11
+-	movq	56(%rsp), %rdx
+-	movq	64(%rsp), %rcx
+-	addq	$72, %rsp
+-	cfi_adjust_cfa_offset (-72)
+-	jmp	*(%rax)
+-	cfi_endproc
+-	.size	_dl_tlsdesc_resolve_hold, .-_dl_tlsdesc_resolve_hold
+diff --git a/sysdeps/x86_64/dl-tlsdesc.h b/sysdeps/x86_64/dl-tlsdesc.h
+index 66e659bb5c7ede74..1cde1ee9664f4908 100644
+--- a/sysdeps/x86_64/dl-tlsdesc.h
++++ b/sysdeps/x86_64/dl-tlsdesc.h
+@@ -55,9 +55,7 @@ struct tlsdesc_dynamic_arg
+ 
+ extern ptrdiff_t attribute_hidden
+   _dl_tlsdesc_return(struct tlsdesc *on_rax),
+-  _dl_tlsdesc_undefweak(struct tlsdesc *on_rax),
+-  _dl_tlsdesc_resolve_rela(struct tlsdesc *on_rax),
+-  _dl_tlsdesc_resolve_hold(struct tlsdesc *on_rax);
++  _dl_tlsdesc_undefweak(struct tlsdesc *on_rax);
+ 
+ # ifdef SHARED
+ extern void *_dl_make_tlsdesc_dynamic (struct link_map *map,
+diff --git a/sysdeps/x86_64/tlsdesc.c b/sysdeps/x86_64/tlsdesc.c
+index 302d097dbb0c4f1e..61a19ae26944c84f 100644
+--- a/sysdeps/x86_64/tlsdesc.c
++++ b/sysdeps/x86_64/tlsdesc.c
+@@ -16,120 +16,13 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <link.h>
+ #include <ldsodefs.h>
+-#include <elf/dynamic-link.h>
+ #include <tls.h>
+ #include <dl-tlsdesc.h>
+ #include <dl-unmap-segments.h>
++#define _dl_tlsdesc_resolve_hold 0
+ #include <tlsdeschtab.h>
+ 
+-/* The following 2 functions take a caller argument, that contains the
+-   address expected to be in the TLS descriptor.  If it's changed, we
+-   want to return immediately.  */
+-
+-/* This function is used to lazily resolve TLS_DESC RELA relocations.
+-   The argument location is used to hold a pointer to the relocation.  */
+-
+-void
+-attribute_hidden
+-_dl_tlsdesc_resolve_rela_fixup (struct tlsdesc volatile *td,
+-				struct link_map *l)
+-{
+-  const ElfW(Rela) *reloc = td->arg;
+-
+-  if (_dl_tlsdesc_resolve_early_return_p
+-      (td, (void*)(D_PTR (l, l_info[ADDRIDX (DT_TLSDESC_PLT)]) + l->l_addr)))
+-    return;
+-
+-  /* The code below was borrowed from _dl_fixup().  */
+-  const ElfW(Sym) *const symtab
+-    = (const void *) D_PTR (l, l_info[DT_SYMTAB]);
+-  const char *strtab = (const void *) D_PTR (l, l_info[DT_STRTAB]);
+-  const ElfW(Sym) *sym = &symtab[ELFW(R_SYM) (reloc->r_info)];
+-  lookup_t result;
+-
+-   /* Look up the target symbol.  If the normal lookup rules are not
+-      used don't look in the global scope.  */
+-  if (ELFW(ST_BIND) (sym->st_info) != STB_LOCAL
+-      && __builtin_expect (ELFW(ST_VISIBILITY) (sym->st_other), 0) == 0)
+-    {
+-      const struct r_found_version *version = NULL;
+-
+-      if (l->l_info[VERSYMIDX (DT_VERSYM)] != NULL)
+-	{
+-	  const ElfW(Half) *vernum =
+-	    (const void *) D_PTR (l, l_info[VERSYMIDX (DT_VERSYM)]);
+-	  ElfW(Half) ndx = vernum[ELFW(R_SYM) (reloc->r_info)] & 0x7fff;
+-	  version = &l->l_versions[ndx];
+-	  if (version->hash == 0)
+-	    version = NULL;
+-	}
+-
+-      result = _dl_lookup_symbol_x (strtab + sym->st_name, l, &sym,
+-				    l->l_scope, version, ELF_RTYPE_CLASS_PLT,
+-				    DL_LOOKUP_ADD_DEPENDENCY, NULL);
+-    }
+-  else
+-    {
+-      /* We already found the symbol.  The module (and therefore its load
+-	 address) is also known.  */
+-      result = l;
+-    }
+-
+-  if (! sym)
+-    {
+-      td->arg = (void*)reloc->r_addend;
+-      td->entry = _dl_tlsdesc_undefweak;
+-    }
+-  else
+-    {
+-#  ifndef SHARED
+-      CHECK_STATIC_TLS (l, result);
+-#  else
+-      if (!TRY_STATIC_TLS (l, result))
+-	{
+-	  td->arg = _dl_make_tlsdesc_dynamic (result, sym->st_value
+-					      + reloc->r_addend);
+-	  td->entry = _dl_tlsdesc_dynamic;
+-	}
+-      else
+-#  endif
+-	{
+-	  td->arg = (void*)(sym->st_value - result->l_tls_offset
+-			    + reloc->r_addend);
+-	  td->entry = _dl_tlsdesc_return;
+-	}
+-    }
+-
+-  _dl_tlsdesc_wake_up_held_fixups ();
+-}
+-
+-/* This function is used to avoid busy waiting for other threads to
+-   complete the lazy relocation.  Once another thread wins the race to
+-   relocate a TLS descriptor, it sets the descriptor up such that this
+-   function is called to wait until the resolver releases the
+-   lock.  */
+-
+-void
+-attribute_hidden
+-_dl_tlsdesc_resolve_hold_fixup (struct tlsdesc volatile *td,
+-				void *caller)
+-{
+-  /* Maybe we're lucky and can return early.  */
+-  if (caller != td->entry)
+-    return;
+-
+-  /* Locking here will stop execution until the running resolver runs
+-     _dl_tlsdesc_wake_up_held_fixups(), releasing the lock.
+-
+-     FIXME: We'd be better off waiting on a condition variable, such
+-     that we didn't have to hold the lock throughout the relocation
+-     processing.  */
+-  __rtld_lock_lock_recursive (GL(dl_load_lock));
+-  __rtld_lock_unlock_recursive (GL(dl_load_lock));
+-}
+-
+ /* Unmap the dynamic object, but also release its TLS descriptor table
+    if there is one.  */
+ 

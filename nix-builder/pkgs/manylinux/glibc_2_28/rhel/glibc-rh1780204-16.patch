@@ -1,0 +1,198 @@
+From e96879644e4a9f4304725d1da9cc76b0c685b0b8 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:26 +0100
+Subject: [PATCH 16/28] Adjust s_floorf.c and s_floorl.c regarding code style.
+
+This patch just adjusts the generic implementation regarding code style.
+No functional change.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit d3a0409ab615e133ff3ea27b492de75a607cff4a)
+---
+ sysdeps/ieee754/flt-32/s_floorf.c   | 55 +++++++++++-------
+ sysdeps/ieee754/ldbl-128/s_floorl.c | 89 ++++++++++++++++++-----------
+ 2 files changed, 90 insertions(+), 54 deletions(-)
+
+diff --git a/sysdeps/ieee754/flt-32/s_floorf.c b/sysdeps/ieee754/flt-32/s_floorf.c
+index 6d37ab90a1..c45816e3bd 100644
+--- a/sysdeps/ieee754/flt-32/s_floorf.c
++++ b/sysdeps/ieee754/flt-32/s_floorf.c
+@@ -26,34 +26,45 @@
+ #include <math-use-builtins.h>
+ 
+ float
+-__floorf(float x)
++__floorf (float x)
+ {
+ #if USE_FLOORF_BUILTIN
+   return __builtin_floorf (x);
+ #else
+   /* Use generic implementation.  */
+-	int32_t i0,j0;
+-	uint32_t i;
+-	GET_FLOAT_WORD(i0,x);
+-	j0 = ((i0>>23)&0xff)-0x7f;
+-	if(j0<23) {
+-	    if(j0<0) {
+-		/* return 0*sign(x) if |x|<1 */
+-		if(i0>=0) {i0=0;}
+-		else if((i0&0x7fffffff)!=0)
+-		  { i0=0xbf800000;}
+-	    } else {
+-		i = (0x007fffff)>>j0;
+-		if((i0&i)==0) return x; /* x is integral */
+-		if(i0<0) i0 += (0x00800000)>>j0;
+-		i0 &= (~i);
+-	    }
+-	} else {
+-	    if(__builtin_expect(j0==0x80, 0)) return x+x; /* inf or NaN */
+-	    else return x;		/* x is integral */
++  int32_t i0, j0;
++  uint32_t i;
++  GET_FLOAT_WORD (i0, x);
++  j0 = ((i0 >> 23) & 0xff) - 0x7f;
++  if (j0 < 23)
++    {
++      if (j0 < 0)
++	{
++	  /* return 0 * sign (x) if |x| < 1  */
++	  if (i0 >= 0)
++	    i0 = 0;
++	  else if ((i0 & 0x7fffffff) != 0)
++	    i0 = 0xbf800000;
+ 	}
+-	SET_FLOAT_WORD(x,i0);
+-	return x;
++      else
++	{
++	  i = (0x007fffff) >> j0;
++	  if ((i0 & i) == 0)
++	    return x;		/* x is integral  */
++	  if (i0 < 0)
++	    i0 += (0x00800000) >> j0;
++	  i0 &= (~i);
++	}
++    }
++  else
++    {
++      if (__glibc_unlikely (j0 == 0x80))
++	return x + x;		/* inf or NaN  */
++      else
++	return x;		/* x is integral  */
++    }
++  SET_FLOAT_WORD (x, i0);
++  return x;
+ #endif /* ! USE_FLOORF_BUILTIN  */
+ }
+ #ifndef __floorf
+diff --git a/sysdeps/ieee754/ldbl-128/s_floorl.c b/sysdeps/ieee754/ldbl-128/s_floorl.c
+index 6143fe6ec5..4fc10992c2 100644
+--- a/sysdeps/ieee754/ldbl-128/s_floorl.c
++++ b/sysdeps/ieee754/ldbl-128/s_floorl.c
+@@ -29,46 +29,71 @@ static char rcsid[] = "$NetBSD: $";
+ #include <libm-alias-ldouble.h>
+ #include <math-use-builtins.h>
+ 
+-_Float128 __floorl(_Float128 x)
++_Float128
++__floorl (_Float128 x)
+ {
+ #if USE_FLOORL_BUILTIN
+   return __builtin_floorl (x);
+ #else
+   /* Use generic implementation.  */
+-	int64_t i0,i1,j0;
+-	uint64_t i,j;
+-	GET_LDOUBLE_WORDS64(i0,i1,x);
+-	j0 = ((i0>>48)&0x7fff)-0x3fff;
+-	if(j0<48) {
+-	    if(j0<0) {
+-		/* return 0*sign(x) if |x|<1 */
+-		if(i0>=0) {i0=i1=0;}
+-		else if(((i0&0x7fffffffffffffffLL)|i1)!=0)
+-		    { i0=0xbfff000000000000ULL;i1=0;}
+-	    } else {
+-		i = (0x0000ffffffffffffULL)>>j0;
+-		if(((i0&i)|i1)==0) return x; /* x is integral */
+-		if(i0<0) i0 += (0x0001000000000000LL)>>j0;
+-		i0 &= (~i); i1=0;
++  int64_t i0, i1, j0;
++  uint64_t i, j;
++  GET_LDOUBLE_WORDS64 (i0, i1, x);
++  j0 = ((i0 >> 48) & 0x7fff) - 0x3fff;
++  if (j0 < 48)
++    {
++      if (j0 < 0)
++	{
++	  /* return 0 * sign (x) if |x| < 1 */
++	  if (i0 >= 0)
++	    {
++	      i0 = i1 = 0;
+ 	    }
+-	} else if (j0>111) {
+-	    if(j0==0x4000) return x+x;	/* inf or NaN */
+-	    else return x;		/* x is integral */
+-	} else {
+-	    i = -1ULL>>(j0-48);
+-	    if((i1&i)==0) return x;	/* x is integral */
+-	    if(i0<0) {
+-		if(j0==48) i0+=1;
+-		else {
+-		    j = i1+(1LL<<(112-j0));
+-		    if(j<i1) i0 +=1 ; 	/* got a carry */
+-		    i1=j;
+-		}
++	  else if (((i0 & 0x7fffffffffffffffLL) | i1) != 0)
++	    {
++	      i0 = 0xbfff000000000000ULL;
++	      i1 = 0;
+ 	    }
+-	    i1 &= (~i);
+ 	}
+-	SET_LDOUBLE_WORDS64(x,i0,i1);
+-	return x;
++      else
++	{
++	  i = (0x0000ffffffffffffULL) >> j0;
++	  if (((i0 & i) | i1) == 0)
++	    return x;		/* x is integral  */
++	  if (i0 < 0)
++	    i0 += (0x0001000000000000LL) >> j0;
++	  i0 &= (~i);
++	  i1 = 0;
++	}
++    }
++  else if (j0 > 111)
++    {
++      if (j0 == 0x4000)
++	return x + x;		/* inf or NaN  */
++      else
++	return x;		/* x is integral  */
++    }
++  else
++    {
++      i = -1ULL >> (j0 - 48);
++      if ((i1 & i) == 0)
++	return x;		/* x is integral  */
++      if (i0 < 0)
++	{
++	  if (j0 == 48)
++	    i0 += 1;
++	  else
++	    {
++	      j = i1 + (1LL << (112 - j0));
++	      if (j < i1)
++		i0 += 1 ;	/* got a carry */
++	      i1 = j;
++	    }
++	}
++      i1 &= (~i);
++    }
++  SET_LDOUBLE_WORDS64 (x, i0, i1);
++  return x;
+ #endif /* ! USE_FLOORL_BUILTIN  */
+ }
+ libm_alias_ldouble (__floor, floor)
+-- 
+2.18.2
+

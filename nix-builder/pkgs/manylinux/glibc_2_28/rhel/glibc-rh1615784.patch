@@ -1,0 +1,35 @@
+commit bfcfa22589f2b4277a65e60c6b736b6bbfbd87d0
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Aug 14 10:51:07 2018 +0200
+
+    nscd: Deallocate existing user names in file parser
+    
+    This avoids a theoretical memory leak (theoretical because it depends on
+    multiple server-user/stat-user directives in the configuration file).
+    
+    (cherry picked from commit 2d7acfac3ebf266dcbc82d0d6cc576f626953a03)
+
+diff --git a/nscd/nscd_conf.c b/nscd/nscd_conf.c
+index 265a02434dd26c29..7293b795b6bcf71e 100644
+--- a/nscd/nscd_conf.c
++++ b/nscd/nscd_conf.c
+@@ -190,7 +190,10 @@ nscd_parse_file (const char *fname, struct database_dyn dbs[lastdb])
+ 	  if (!arg1)
+ 	    error (0, 0, _("Must specify user name for server-user option"));
+ 	  else
+-	    server_user = xstrdup (arg1);
++	    {
++	      free ((char *) server_user);
++	      server_user = xstrdup (arg1);
++	    }
+ 	}
+       else if (strcmp (entry, "stat-user") == 0)
+ 	{
+@@ -198,6 +201,7 @@ nscd_parse_file (const char *fname, struct database_dyn dbs[lastdb])
+ 	    error (0, 0, _("Must specify user name for stat-user option"));
+ 	  else
+ 	    {
++	      free ((char *) stat_user);
+ 	      stat_user = xstrdup (arg1);
+ 
+ 	      struct passwd *pw = getpwnam (stat_user);

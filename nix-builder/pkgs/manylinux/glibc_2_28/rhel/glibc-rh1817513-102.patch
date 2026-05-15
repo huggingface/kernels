@@ -1,0 +1,86 @@
+commit ebe454bcca6a5421512ad228595a5391506e990a
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Oct 8 08:24:47 2020 -0700
+
+    <sys/platform/x86.h>: Add AVX512_FP16 support
+    
+    Add AVX512_FP16 support to <sys/platform/x86.h>.
+
+diff --git a/manual/platform.texi b/manual/platform.texi
+index 0dd12a4353a93bf2..4f5fdff9d9ef16fd 100644
+--- a/manual/platform.texi
++++ b/manual/platform.texi
+@@ -210,6 +210,9 @@ The supported processor features are:
+ @item
+ @code{AVX512_BITALG} -- The AVX512_BITALG instruction extensions.
+ 
++@item
++@code{AVX512_FP16} -- The AVX512_FP16 instruction extensions.
++
+ @item
+ @code{AVX512_IFMA} -- The AVX512_IFMA instruction extensions.
+ 
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 7f2ff00f2b4b45f2..67f137259fccf4ad 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -175,6 +175,8 @@ update_usable (struct cpu_features *cpu_features)
+ 					  AVX512_VP2INTERSECT);
+ 		  /* Determine if AVX512_BF16 is usable.  */
+ 		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_BF16);
++		  /* Determine if AVX512_FP16 is usable.  */
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_FP16);
+ 		}
+ 	    }
+ 	}
+diff --git a/sysdeps/x86/sys/platform/x86.h b/sysdeps/x86/sys/platform/x86.h
+index 2760b81a56e6c7d7..0b18257e20105ea4 100644
+--- a/sysdeps/x86/sys/platform/x86.h
++++ b/sysdeps/x86/sys/platform/x86.h
+@@ -259,7 +259,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define bit_cpu_IBT		(1u << 20)
+ #define bit_cpu_INDEX_7_EDX_21	(1u << 21)
+ #define bit_cpu_AMX_BF16	(1u << 22)
+-#define bit_cpu_INDEX_7_EDX_23	(1u << 23)
++#define bit_cpu_AVX512_FP16	(1u << 23)
+ #define bit_cpu_AMX_TILE	(1u << 24)
+ #define bit_cpu_AMX_INT8	(1u << 25)
+ #define bit_cpu_IBRS_IBPB	(1u << 26)
+@@ -478,7 +478,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define index_cpu_IBT		COMMON_CPUID_INDEX_7
+ #define index_cpu_INDEX_7_EDX_21 COMMON_CPUID_INDEX_7
+ #define index_cpu_AMX_BF16	COMMON_CPUID_INDEX_7
+-#define index_cpu_INDEX_7_EDX_23 COMMON_CPUID_INDEX_7
++#define index_cpu_AVX512_FP16	COMMON_CPUID_INDEX_7
+ #define index_cpu_AMX_TILE	COMMON_CPUID_INDEX_7
+ #define index_cpu_AMX_INT8	COMMON_CPUID_INDEX_7
+ #define index_cpu_IBRS_IBPB	COMMON_CPUID_INDEX_7
+@@ -697,7 +697,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ #define reg_IBT			edx
+ #define reg_INDEX_7_EDX_21	edx
+ #define reg_AMX_BF16		edx
+-#define reg_INDEX_7_EDX_23	edx
++#define reg_AVX512_FP16		edx
+ #define reg_AMX_TILE		edx
+ #define reg_AMX_INT8		edx
+ #define reg_IBRS_IBPB		edx
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 6fa092a8c10486a0..bcdeb243a82c4adc 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -189,6 +189,7 @@ do_test (void)
+   CHECK_CPU_FEATURE (PCONFIG);
+   CHECK_CPU_FEATURE (IBT);
+   CHECK_CPU_FEATURE (AMX_BF16);
++  CHECK_CPU_FEATURE (AVX512_FP16);
+   CHECK_CPU_FEATURE (AMX_TILE);
+   CHECK_CPU_FEATURE (AMX_INT8);
+   CHECK_CPU_FEATURE (IBRS_IBPB);
+@@ -343,6 +344,7 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (TSXLDTRK);
+   CHECK_CPU_FEATURE_USABLE (PCONFIG);
+   CHECK_CPU_FEATURE_USABLE (AMX_BF16);
++  CHECK_CPU_FEATURE_USABLE (AVX512_FP16);
+   CHECK_CPU_FEATURE_USABLE (AMX_TILE);
+   CHECK_CPU_FEATURE_USABLE (AMX_INT8);
+   CHECK_CPU_FEATURE_USABLE (IBRS_IBPB);

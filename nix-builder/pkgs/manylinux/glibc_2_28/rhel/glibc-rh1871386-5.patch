@@ -1,0 +1,37 @@
+commit bcf47eb0fba4c6278aadd6a377d6b7b3f673e17c
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Dec 16 02:08:52 2020 +0000
+
+    Update syscall lists for Linux 5.10.
+    
+    Linux 5.10 has one new syscall, process_madvise.  Update
+    syscall-names.list and regenerate the arch-syscall.h headers with
+    build-many-glibcs.py update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list for RHEL 8.5.0.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 2d42aaf803..4bd42be2b9 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.9.
+-kernel 5.9
++# The list of system calls is current as of Linux 5.10.
++kernel 5.10
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -433,6 +433,7 @@ pread64
+ preadv
+ preadv2
+ prlimit64
++process_madvise
+ process_vm_readv
+ process_vm_writev
+ prof

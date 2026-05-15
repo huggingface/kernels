@@ -1,0 +1,40 @@
+commit 98966749f2b418825ff2ea496a0ee89fe63d2cc8
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Nov 10 15:21:37 2021 +0100
+
+    s390: Use long branches across object boundaries (jgh instead of jh)
+    
+    Depending on the layout chosen by the linker, the 16-bit displacement
+    of the jh instruction is insufficient to reach the target label.
+    
+    Analysis of the linker failure was carried out by Nick Clifton.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Reviewed-by: Stefan Liebler <stli@linux.ibm.com>
+
+diff --git a/sysdeps/s390/memmem-arch13.S b/sysdeps/s390/memmem-arch13.S
+index b59d60acf0f6aaa0..4faede0cd2f942e3 100644
+--- a/sysdeps/s390/memmem-arch13.S
++++ b/sysdeps/s390/memmem-arch13.S
+@@ -41,7 +41,7 @@ ENTRY(MEMMEM_ARCH13)
+ #  error The arch13 variant of memmem needs the z13 variant of memmem!
+ # endif
+ 	clgfi	%r5,9
+-	jh	MEMMEM_Z13
++	jgh	MEMMEM_Z13
+ 
+ 	aghik	%r0,%r5,-1		/* vll needs highest index.  */
+ 	bc	4,0(%r14)		/* cc==1: return if needle-len == 0.  */
+diff --git a/sysdeps/s390/strstr-arch13.S b/sysdeps/s390/strstr-arch13.S
+index faa969849e09c2e1..ffc34c2523ce635a 100644
+--- a/sysdeps/s390/strstr-arch13.S
++++ b/sysdeps/s390/strstr-arch13.S
+@@ -49,7 +49,7 @@ ENTRY(STRSTR_ARCH13)
+ #  error The arch13 variant of strstr needs the z13 variant of strstr!
+ # endif
+ 	clgfi	%r4,9
+-	jh	STRSTR_Z13
++	jgh	STRSTR_Z13
+ 
+ 	/* In case of a partial match, the vstrs instruction returns the index
+ 	   of the partial match in a vector-register.  Then we have to

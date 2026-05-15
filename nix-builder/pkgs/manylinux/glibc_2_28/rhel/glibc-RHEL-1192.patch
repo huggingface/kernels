@@ -1,0 +1,83 @@
+commit c00b984fcd53f679ca2dafcd1aee2c89836e6e73
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Aug 29 08:28:31 2023 +0200
+
+    nscd: Skip unusable entries in first pass in prune_cache (bug 30800)
+    
+    Previously, if an entry was marked unusable for any reason, but had
+    not timed out yet, the assert would trigger.
+    
+    One way to get into such state is if a data change is detected during
+    re-validation of an entry.  This causes the entry to be marked as not
+    usable.  If exits nscd soon after that, then the clock jumps
+    backwards, and nscd restarted, the cache re-validation run after
+    startup triggers the removed assert.
+    
+    The change is more complicated than just the removal of the assert
+    because entries marked as not usable should be garbage-collected in
+    the second pass.  To make this happen, it is necessary to update some
+    book-keeping data.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/nscd/cache.c b/nscd/cache.c
+index efe4214d953edb30..2fd3f78ebb567bbe 100644
+--- a/nscd/cache.c
++++ b/nscd/cache.c
+@@ -371,8 +371,11 @@ prune_cache (struct database_dyn *table, time_t now, int fd)
+ 		       serv2str[runp->type], str, dh->timeout);
+ 	    }
+ 
+-	  /* Check whether the entry timed out.  */
+-	  if (dh->timeout < now)
++	  /* Check whether the entry timed out.  Timed out entries
++	     will be revalidated.  For unusable records, it is still
++	     necessary to record that the bucket needs to be scanned
++	     again below.  */
++	  if (dh->timeout < now || !dh->usable)
+ 	    {
+ 	      /* This hash bucket could contain entries which need to
+ 		 be looked at.  */
+@@ -384,7 +387,7 @@ prune_cache (struct database_dyn *table, time_t now, int fd)
+ 	      /* We only have to look at the data of the first entries
+ 		 since the count information is kept in the data part
+ 		 which is shared.  */
+-	      if (runp->first)
++	      if (runp->first && dh->usable)
+ 		{
+ 
+ 		  /* At this point there are two choices: we reload the
+@@ -400,9 +403,6 @@ prune_cache (struct database_dyn *table, time_t now, int fd)
+ 		    {
+ 		      /* Remove the value.  */
+ 		      dh->usable = false;
+-
+-		      /* We definitely have some garbage entries now.  */
+-		      any = true;
+ 		    }
+ 		  else
+ 		    {
+@@ -414,18 +414,15 @@ prune_cache (struct database_dyn *table, time_t now, int fd)
+ 
+ 		      time_t timeout = readdfcts[runp->type] (table, runp, dh);
+ 		      next_timeout = MIN (next_timeout, timeout);
+-
+-		      /* If the entry has been replaced, we might need
+-			 cleanup.  */
+-		      any |= !dh->usable;
+ 		    }
+ 		}
++
++	      /* If the entry has been replaced, we might need cleanup.  */
++	      any |= !dh->usable;
+ 	    }
+ 	  else
+-	    {
+-	      assert (dh->usable);
+-	      next_timeout = MIN (next_timeout, dh->timeout);
+-	    }
++	    /* Entry has not timed out and is usable.  */
++	    next_timeout = MIN (next_timeout, dh->timeout);
+ 
+ 	  run = runp->next;
+ 	}

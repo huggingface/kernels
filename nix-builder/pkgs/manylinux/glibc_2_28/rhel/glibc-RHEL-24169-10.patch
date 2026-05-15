@@ -1,0 +1,43 @@
+commit f8cfb6836e8d91bb789b2e7fd65338d6f5bd459c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Nov 8 15:18:02 2023 +0100
+
+    stdlib: Avoid element self-comparisons in qsort
+    
+    This improves compatibility with applications which assume that qsort
+    does not invoke the comparison function with equal pointer arguments.
+    
+    The newly introduced branches should be predictable, as leading to a
+    call to the comparison function.  If the prediction fails, we avoid
+    calling the function.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+diff --git a/stdlib/qsort.c b/stdlib/qsort.c
+index cb1619aa0ae7de72..2ee39e2c492f792e 100644
+--- a/stdlib/qsort.c
++++ b/stdlib/qsort.c
+@@ -137,7 +137,7 @@ siftdown (void *base, size_t size, size_t k, size_t n,
+       if (j < n && cmp (base + (j * size), base + ((j + 1) * size), arg) < 0)
+ 	j++;
+ 
+-      if (cmp (base + (k * size), base + (j * size), arg) >= 0)
++      if (j == k || cmp (base + (k * size), base + (j * size), arg) >= 0)
+ 	break;
+ 
+       do_swap (base + (size * j), base + (k * size), size, swap_type);
+@@ -333,10 +333,12 @@ __qsort_r (void *const pbase, size_t total_elems, size_t size,
+ 	     that this algorithm runs much faster than others. */
+ 	  do
+ 	    {
+-	      while ((*cmp) ((void *) left_ptr, (void *) mid, arg) < 0)
++	      while (left_ptr != mid
++		     && (*cmp) ((void *) left_ptr, (void *) mid, arg) < 0)
+ 		left_ptr += size;
+ 
+-	      while ((*cmp) ((void *) mid, (void *) right_ptr, arg) < 0)
++	      while (right_ptr != mid
++		     && (*cmp) ((void *) mid, (void *) right_ptr, arg) < 0)
+ 		right_ptr -= size;
+ 
+ 	      if (left_ptr < right_ptr)

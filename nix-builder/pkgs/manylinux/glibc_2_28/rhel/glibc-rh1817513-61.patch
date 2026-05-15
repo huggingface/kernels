@@ -1,0 +1,21 @@
+commit 9e2dc874e62b0950891b319c000b009ea12ac8c2
+Author: Girish Joshi <girish946@gmail.com>
+Date:   Fri May 29 10:11:24 2020 -0300
+
+    build: Use FAIL_EXIT1 () on failure to exec child [BZ #23990]
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/support/test-container.c b/support/test-container.c
+index d7ed073812305f71..9975c8cb7bc9a955 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -392,7 +392,7 @@ recursive_remove (char *path)
+     /* "rm" would have already printed a suitable error message.  */
+     if (! WIFEXITED (status)
+ 	|| WEXITSTATUS (status) != 0)
+-      exit (1);
++      FAIL_EXIT1 ("exec child returned status: %d", status);
+ 
+     break;
+   }

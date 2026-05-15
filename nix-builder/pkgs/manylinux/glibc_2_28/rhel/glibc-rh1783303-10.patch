@@ -1,0 +1,57 @@
+commit 0b3c9e57a41d9f7c26fb6aa45b99f671bef9c7e0
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Tue Aug 20 15:57:35 2019 -0500
+
+    [powerpc] fegetenv_status: simplify instruction generation
+    
+    fegetenv_status() wants to use the lighter weight instruction 'mffsl'
+    for reading the Floating-Point Status and Control Register (FPSCR).
+    It currently will use it directly if compiled '-mcpu=power9', and will
+    perform a runtime check (cpu_supports("arch_3_00")) otherwise.
+    
+    Nicely, it turns out that the 'mffsl' instruction will decode to
+    'mffs' on architectures older than "arch_3_00" because the additional
+    bits set for 'mffsl' are "don't care" for 'mffs'.  'mffs' is a superset
+    of 'mffsl'.
+    
+    So, just generate 'mffsl'.
+
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index b244770d115ea7bb..e8d40ea256b6c5bc 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -36,9 +36,12 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+         ({ fenv_t env; asm volatile ("mffs %0" : "=f" (env)); env; })
+ 
+ /* Equivalent to fegetenv_register, but only returns bits for
+-   status, exception enables, and mode.  */
+-
+-#define fegetenv_status_ISA300()					\
++   status, exception enables, and mode.
++   Nicely, it turns out that the 'mffsl' instruction will decode to
++   'mffs' on architectures older than "power9" because the additional
++   bits set for 'mffsl' are "don't care" for 'mffs'.  'mffs' is a superset
++   of 'mffsl'.  */
++#define fegetenv_status()					\
+   ({register double __fr;						\
+     __asm__ __volatile__ (						\
+       ".machine push; .machine \"power9\"; mffsl %0; .machine pop"	\
+@@ -46,18 +49,6 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+     __fr;								\
+   })
+ 
+-#ifdef _ARCH_PWR9
+-# define fegetenv_status() fegetenv_status_ISA300()
+-#elif defined __BUILTIN_CPU_SUPPORTS__
+-# define fegetenv_status()						\
+-  (__glibc_likely (__builtin_cpu_supports ("arch_3_00"))		\
+-   ? fegetenv_status_ISA300()						\
+-   : fegetenv_register()						\
+-  )
+-#else
+-# define fegetenv_status() fegetenv_register ()
+-#endif
+-
+ /* Equivalent to fesetenv, but takes a fenv_t instead of a pointer.  */
+ #define fesetenv_register(env) \
+ 	do { \

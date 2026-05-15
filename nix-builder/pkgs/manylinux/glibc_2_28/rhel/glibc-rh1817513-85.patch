@@ -1,0 +1,73 @@
+commit 94cd37ebb293321115a36a422b091fdb72d2fb08
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Wed Sep 16 05:27:32 2020 -0700
+
+    x86: Use HAS_CPU_FEATURE with IBT and SHSTK [BZ #26625]
+    
+    commit 04bba1e5d84b6fd8d3a3b006bc240cd5d241ee30
+    Author: H.J. Lu <hjl.tools@gmail.com>
+    Date:   Wed Aug 5 13:51:56 2020 -0700
+    
+        x86: Set CPU usable feature bits conservatively [BZ #26552]
+    
+        Set CPU usable feature bits only for CPU features which are usable in
+        user space and whose usability can be detected from user space, excluding
+        features like FSGSBASE whose enable bit can only be checked in the kernel.
+    
+    no longer turns on the usable bits of IBT and SHSTK since we don't know
+    if IBT and SHSTK are usable until much later.  Use HAS_CPU_FEATURE to
+    check if the processor supports IBT and SHSTK.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 77a596a15404b575..7f2ff00f2b4b45f2 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -722,9 +722,9 @@ no_cpuid:
+ 	     GLIBC_TUNABLES=glibc.cpu.hwcaps=-IBT,-SHSTK
+ 	   */
+ 	  unsigned int cet_feature = 0;
+-	  if (!CPU_FEATURE_USABLE (IBT))
++	  if (!HAS_CPU_FEATURE (IBT))
+ 	    cet_feature |= GNU_PROPERTY_X86_FEATURE_1_IBT;
+-	  if (!CPU_FEATURE_USABLE (SHSTK))
++	  if (!HAS_CPU_FEATURE (SHSTK))
+ 	    cet_feature |= GNU_PROPERTY_X86_FEATURE_1_SHSTK;
+ 
+ 	  if (cet_feature)
+diff --git a/sysdeps/x86/dl-cet.c b/sysdeps/x86/dl-cet.c
+index 11ff0618fae7230f..d481bddc27e5d7cc 100644
+--- a/sysdeps/x86/dl-cet.c
++++ b/sysdeps/x86/dl-cet.c
+@@ -74,10 +74,10 @@ dl_cet_check (struct link_map *m, const char *program)
+ 
+ 	     GLIBC_TUNABLES=glibc.cpu.hwcaps=-IBT,-SHSTK
+ 	   */
+-	  enable_ibt &= (CPU_FEATURE_USABLE (IBT)
++	  enable_ibt &= (HAS_CPU_FEATURE (IBT)
+ 			 && (enable_ibt_type == cet_always_on
+ 			     || (m->l_cet & lc_ibt) != 0));
+-	  enable_shstk &= (CPU_FEATURE_USABLE (SHSTK)
++	  enable_shstk &= (HAS_CPU_FEATURE (SHSTK)
+ 			   && (enable_shstk_type == cet_always_on
+ 			       || (m->l_cet & lc_shstk) != 0));
+ 	}
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index c01d701b52090983..3ec94e0c9a191f36 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -318,7 +318,6 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (OSPKE);
+   CHECK_CPU_FEATURE_USABLE (WAITPKG);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VBMI2);
+-  CHECK_CPU_FEATURE_USABLE (SHSTK);
+   CHECK_CPU_FEATURE_USABLE (GFNI);
+   CHECK_CPU_FEATURE_USABLE (VAES);
+   CHECK_CPU_FEATURE_USABLE (VPCLMULQDQ);
+@@ -342,7 +341,6 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (HYBRID);
+   CHECK_CPU_FEATURE_USABLE (TSXLDTRK);
+   CHECK_CPU_FEATURE_USABLE (PCONFIG);
+-  CHECK_CPU_FEATURE_USABLE (IBT);
+   CHECK_CPU_FEATURE_USABLE (AMX_BF16);
+   CHECK_CPU_FEATURE_USABLE (AMX_TILE);
+   CHECK_CPU_FEATURE_USABLE (AMX_INT8);

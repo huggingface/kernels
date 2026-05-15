@@ -1,0 +1,24 @@
+commit 3842ba494963b1d76ad5f68b8d1e5c2279160e31
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Tue Jun 1 09:23:40 2021 +0100
+
+    aarch64: align stack in clone [BZ #27939]
+    
+    The AArch64 PCS requires 16 byte aligned stack.  Previously if the
+    caller passed an unaligned stack to clone then the child crashed.
+    
+    Fixes bug 27939.
+
+diff --git a/sysdeps/unix/sysv/linux/aarch64/clone.S b/sysdeps/unix/sysv/linux/aarch64/clone.S
+index e0653048259dd9a3..4a1a999447ee5cf1 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/clone.S
++++ b/sysdeps/unix/sysv/linux/aarch64/clone.S
+@@ -48,6 +48,8 @@ ENTRY(__clone)
+ 	/* Sanity check args.  */
+ 	mov	x0, #-EINVAL
+ 	cbz	x10, .Lsyscall_error
++	/* Align sp.  */
++	and	x1, x1, -16
+ 	cbz	x1, .Lsyscall_error
+ 
+ 	/* Do the system call.  */

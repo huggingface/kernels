@@ -1,0 +1,81 @@
+Move _dl_dso_sort_algo out of _rtld_global_ro.  It is only used
+locally in elf/dl-sort-maps.c.  This avoids changing the internal
+_rtld_global_ro ABI.
+
+diff --git a/elf/dl-sort-maps.c b/elf/dl-sort-maps.c
+index 6f5c17b47b98fbc7..aeb79b40b45054c0 100644
+--- a/elf/dl-sort-maps.c
++++ b/elf/dl-sort-maps.c
+@@ -290,12 +290,21 @@ _dl_sort_maps_dfs (struct link_map **maps, unsigned int nmaps,
+     }
+ }
+ 
++/* DSO sort algorithm to use.  */
++enum dso_sort_algorithm
++  {
++    dso_sort_algorithm_original,
++    dso_sort_algorithm_dfs
++  };
++
++static enum dso_sort_algorithm _dl_dso_sort_algo;
++
+ void
+ _dl_sort_maps_init (void)
+ {
+   int32_t algorithm = TUNABLE_GET (glibc, rtld, dynamic_sort, int32_t, NULL);
+-  GLRO(dl_dso_sort_algo) = algorithm == 1 ? dso_sort_algorithm_original
+-					  : dso_sort_algorithm_dfs;
++  _dl_dso_sort_algo = (algorithm == 1 ? dso_sort_algorithm_original
++		       : dso_sort_algorithm_dfs);
+ }
+ 
+ void
+@@ -309,7 +318,7 @@ _dl_sort_maps (struct link_map **maps, unsigned int nmaps,
+      PTR_MANGLE/DEMANGLE, further impairing performance of small, common
+      input cases. A simple if-case with direct function calls appears to
+      be the fastest.  */
+-  if (__glibc_likely (GLRO(dl_dso_sort_algo) == dso_sort_algorithm_original))
++  if (__glibc_likely (_dl_dso_sort_algo == dso_sort_algorithm_original))
+     _dl_sort_maps_original (maps, nmaps, force_first, for_fini);
+   else
+     _dl_sort_maps_dfs (maps, nmaps, force_first, for_fini);
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index ae03aec9764e29d3..e9943e889ef447ad 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -155,8 +155,6 @@ size_t _dl_phnum;
+ uint64_t _dl_hwcap __attribute__ ((nocommon));
+ uint64_t _dl_hwcap2 __attribute__ ((nocommon));
+ 
+-enum dso_sort_algorithm _dl_dso_sort_algo;
+-
+ /* The value of the FPU control word the kernel will preset in hardware.  */
+ fpu_control_t _dl_fpu_control = _FPU_DEFAULT;
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 2c1b4c47c6a6c643..29bbde3e83e37d7e 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -240,13 +240,6 @@ enum allowmask
+   };
+ 
+ 
+-/* DSO sort algorithm to use (check dl-sort-maps.c).  */
+-enum dso_sort_algorithm
+-  {
+-    dso_sort_algorithm_original,
+-    dso_sort_algorithm_dfs
+-  };
+-
+ struct audit_ifaces
+ {
+   void (*activity) (uintptr_t *, unsigned int);
+@@ -640,8 +633,6 @@ struct rtld_global_ro
+      platforms.  */
+   EXTERN uint64_t _dl_hwcap2;
+ 
+-  EXTERN enum dso_sort_algorithm _dl_dso_sort_algo;
+-
+ #ifdef SHARED
+   /* We add a function table to _rtld_global which is then used to
+      call the function instead of going through the PLT.  The result

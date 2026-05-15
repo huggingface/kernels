@@ -1,0 +1,68 @@
+commit 0a8ce6a0966283b17f373f430929bcadef1ae205
+Author: David Kilroy <David.Kilroy@arm.com>
+Date:   Wed Feb 12 14:31:17 2020 -0300
+
+    elf: avoid stack allocation in dl_open_worker
+    
+    As the sort was removed, there's no need to keep a separate map of
+    links. Instead, when relocating objects iterate over l_initfini
+    directly.
+    
+    This allows us to remove the loop copying l_initfini elements into
+    map. We still need a loop to identify the first and last elements that
+    need relocation.
+    
+    Tested by running the testsuite on x86_64.
+
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 980a28c836ca9a7a..46a4c1e5a3f8d2dd 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -618,25 +618,18 @@ dl_open_worker (void *a)
+      This allows IFUNC relocations to work and it also means copy
+      relocation of dependencies are if necessary overwritten.
+      __dl_map_object_deps has already sorted l_initfini for us.  */
+-  unsigned int nmaps = 0;
++  unsigned int first = UINT_MAX;
++  unsigned int last = 0;
+   unsigned int j = 0;
+   struct link_map *l = new->l_initfini[0];
+   do
+     {
+       if (! l->l_real->l_relocated)
+-	++nmaps;
+-      l = new->l_initfini[++j];
+-    }
+-  while (l != NULL);
+-  /* Stack allocation is limited by the number of loaded objects.  */
+-  struct link_map *maps[nmaps];
+-  nmaps = 0;
+-  j = 0;
+-  l = new->l_initfini[0];
+-  do
+-    {
+-      if (! l->l_real->l_relocated)
+-	maps[nmaps++] = l;
++	{
++	  if (first == UINT_MAX)
++	    first = j;
++	  last = j + 1;
++	}
+       l = new->l_initfini[++j];
+     }
+   while (l != NULL);
+@@ -651,9 +644,12 @@ dl_open_worker (void *a)
+      them.  However, such relocation dependencies in IFUNC resolvers
+      are undefined anyway, so this is not a problem.  */
+ 
+-  for (unsigned int i = nmaps; i-- > 0; )
++  for (unsigned int i = last; i-- > first; )
+     {
+-      l = maps[i];
++      l = new->l_initfini[i];
++
++      if (l->l_real->l_relocated)
++	continue;
+ 
+       if (! relocation_in_progress)
+ 	{

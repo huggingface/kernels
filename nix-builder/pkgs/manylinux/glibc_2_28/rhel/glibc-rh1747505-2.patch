@@ -1,0 +1,38 @@
+commit d34d4c80226b3f5a1b51a8e5b005a52fba07d7ba
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Wed Mar 20 22:11:32 2019 -0400
+
+    nscd: Improve nscd.conf comments.
+    
+    This change adds a warning to nscd.conf about running multiple caching
+    services together and that it may lead to unexpected behaviours. Also we
+    add a note that enabling the 'shared' option will cause cache hit rates
+    to be misreported (a side effect of the implementation).
+    
+    v2
+    - Rewrite comment to avoid implementation details.
+
+diff --git a/nscd/nscd.conf b/nscd/nscd.conf
+index 39b875912d..487ffe461d 100644
+--- a/nscd/nscd.conf
++++ b/nscd/nscd.conf
+@@ -3,6 +3,9 @@
+ #
+ # An example Name Service Cache config file.  This file is needed by nscd.
+ #
++# WARNING: Running nscd with a secondary caching service like sssd may lead to
++#          unexpected behaviour, especially with how long entries are cached.
++#
+ # Legal entries are:
+ #
+ #	logfile			<file>
+@@ -23,6 +26,9 @@
+ #	check-files		<service> <yes|no>
+ #	persistent		<service> <yes|no>
+ #	shared			<service> <yes|no>
++#	NOTE: Setting 'shared' to a value of 'yes' will accelerate the lookup,
++#	      but those lookups will not be counted as cache hits
++#	      i.e. 'nscd -g' may show '0%'.
+ #	max-db-size		<service> <number bytes>
+ #	auto-propagate		<service> <yes|no>
+ #

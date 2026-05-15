@@ -1,0 +1,300 @@
+commit a23bd00f9d810c28d9e83ce1d7cf53968375937d
+Author: Paul E. Murphy <murphyp@linux.vnet.ibm.com>
+Date:   Mon May 18 11:16:06 2020 -0500
+
+    powerpc64le: add optimized strlen for P9
+    
+    This started as a trivial change to Anton's rawmemchr.  I got
+    carried away.  This is a hybrid between P8's asympotically
+    faster 64B checks with extremely efficient small string checks
+    e.g <64B (and sometimes a little bit more depending on alignment).
+    
+    The second trick is to align to 64B by running a 48B checking loop
+    16B at a time until we naturally align to 64B (i.e checking 48/96/144
+    bytes/iteration based on the alignment after the first 5 comparisons).
+    This allieviates the need to check page boundaries.
+    
+    Finally, explicly use the P7 strlen with the runtime loader when building
+    P9.  We need to be cautious about vector/vsx extensions here on P9 only
+    builds.
+
+diff --git a/sysdeps/powerpc/powerpc64/le/power9/rtld-strlen.S b/sysdeps/powerpc/powerpc64/le/power9/rtld-strlen.S
+new file mode 100644
+index 0000000000000000..e9d83323acacfbca
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/power9/rtld-strlen.S
+@@ -0,0 +1 @@
++#include <sysdeps/powerpc/powerpc64/power7/strlen.S>
+diff --git a/sysdeps/powerpc/powerpc64/le/power9/strlen.S b/sysdeps/powerpc/powerpc64/le/power9/strlen.S
+new file mode 100644
+index 0000000000000000..66a9b79647eebbd8
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/power9/strlen.S
+@@ -0,0 +1,213 @@
++/* Optimized strlen implementation for PowerPC64/POWER9.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <sysdep.h>
++
++#ifndef STRLEN
++# define STRLEN __strlen
++# define DEFINE_STRLEN_HIDDEN_DEF 1
++#endif
++
++/* Implements the function
++
++   int [r3] strlen (const void *s [r3])
++
++   The implementation can load bytes past a matching byte, but only
++   up to the next 64B boundary, so it never crosses a page.  */
++
++.machine power9
++ENTRY_TOCLESS (STRLEN, 4)
++	CALL_MCOUNT 2
++
++	vspltisb  v18,0
++	vspltisb  v19,-1
++
++	neg	  r5,r3
++	rldicl	  r9,r5,0,60   /* How many bytes to get source 16B aligned?  */
++
++	/* Align data and fill bytes not loaded with non matching char.  */
++	lvx	  v0,0,r3
++	lvsr	  v1,0,r3
++	vperm	  v0,v19,v0,v1
++
++	vcmpequb. v6,v0,v18
++	beq	  cr6,L(aligned)
++
++	vctzlsbb  r3,v6
++	blr
++
++	/* Test 64B 16B at a time.  The 64B vector loop is optimized for
++	   longer strings.  Likewise, we check a multiple of 64B to avoid
++	   breaking the alignment calculation below.  */
++L(aligned):
++	add	  r4,r3,r9
++	rldicl.	  r5,r4,60,62  /* Determine the number of 48B loops needed for
++                                  alignment to 64B.  And test for zero.  */
++
++	lxv	  v0+32,0(r4)
++	vcmpequb. v6,v0,v18
++	bne	  cr6,L(tail1)
++
++	lxv	  v0+32,16(r4)
++	vcmpequb. v6,v0,v18
++	bne 	  cr6,L(tail2)
++
++	lxv	  v0+32,32(r4)
++	vcmpequb. v6,v0,v18
++	bne 	  cr6,L(tail3)
++
++	lxv	  v0+32,48(r4)
++	vcmpequb. v6,v0,v18
++	bne 	  cr6,L(tail4)
++	addi	  r4,r4,64
++
++	/* Speculatively generate a fake 16B aligned address to generate the
++	   vector byte constant 0,1,..,15 using lvsl during reduction.  */
++	li	  r0,0
++
++	/* Skip the alignment if already 64B aligned.  */
++	beq	  L(loop_64b)
++	mtctr	  r5
++
++	/* Test 48B per iteration until 64B aligned.  */
++	.p2align  5
++L(loop):
++	lxv	  v0+32,0(r4)
++	vcmpequb. v6,v0,v18
++	bne	  cr6,L(tail1)
++
++	lxv	  v0+32,16(r4)
++	vcmpequb. v6,v0,v18
++	bne	  cr6,L(tail2)
++
++	lxv 	  v0+32,32(r4)
++	vcmpequb. v6,v0,v18
++	bne	  cr6,L(tail3)
++
++	addi	  r4,r4,48
++	bdnz	  L(loop)
++
++	.p2align  5
++L(loop_64b):
++	lxv	  v1+32,0(r4)     /* Load 4 quadwords.  */
++	lxv	  v2+32,16(r4)
++	lxv	  v3+32,32(r4)
++	lxv	  v4+32,48(r4)
++	vminub	  v5,v1,v2        /* Compare and merge into one VR for speed.  */
++	vminub	  v6,v3,v4
++	vminub	  v7,v5,v6
++	vcmpequb. v7,v7,v18       /* Check for NULLs.  */
++	addi	  r4,r4,64        /* Adjust address for the next iteration.  */
++	bne	  cr6,L(vmx_zero)
++
++	lxv	  v1+32,0(r4)     /* Load 4 quadwords.  */
++	lxv	  v2+32,16(r4)
++	lxv	  v3+32,32(r4)
++	lxv	  v4+32,48(r4)
++	vminub	  v5,v1,v2        /* Compare and merge into one VR for speed.  */
++	vminub	  v6,v3,v4
++	vminub	  v7,v5,v6
++	vcmpequb. v7,v7,v18       /* Check for NULLs.  */
++	addi	  r4,r4,64        /* Adjust address for the next iteration.  */
++	bne	  cr6,L(vmx_zero)
++
++	lxv	  v1+32,0(r4)     /* Load 4 quadwords.  */
++	lxv	  v2+32,16(r4)
++	lxv	  v3+32,32(r4)
++	lxv	  v4+32,48(r4)
++	vminub	  v5,v1,v2        /* Compare and merge into one VR for speed.  */
++	vminub	  v6,v3,v4
++	vminub	  v7,v5,v6
++	vcmpequb. v7,v7,v18       /* Check for NULLs.  */
++	addi	  r4,r4,64        /* Adjust address for the next iteration.  */
++	beq	  cr6,L(loop_64b)
++
++L(vmx_zero):
++	/* OK, we found a null byte.  Let's look for it in the current 64-byte
++	   block and mark it in its corresponding VR.  */
++	vcmpequb  v1,v1,v18
++	vcmpequb  v2,v2,v18
++	vcmpequb  v3,v3,v18
++	vcmpequb  v4,v4,v18
++
++	/* We will now 'compress' the result into a single doubleword, so it
++	   can be moved to a GPR for the final calculation.  First, we
++	   generate an appropriate mask for vbpermq, so we can permute bits into
++	   the first halfword.  */
++	vspltisb  v10,3
++	lvsl	  v11,0,r0
++	vslb	  v10,v11,v10
++
++	/* Permute the first bit of each byte into bits 48-63.  */
++	vbpermq	  v1,v1,v10
++	vbpermq	  v2,v2,v10
++	vbpermq	  v3,v3,v10
++	vbpermq	  v4,v4,v10
++
++	/* Shift each component into its correct position for merging.  */
++	vsldoi	  v2,v2,v2,2
++	vsldoi	  v3,v3,v3,4
++	vsldoi	  v4,v4,v4,6
++
++	/* Merge the results and move to a GPR.  */
++	vor	  v1,v2,v1
++	vor	  v2,v3,v4
++	vor	  v4,v1,v2
++	mfvrd	  r10,v4
++
++	/* Adjust address to the begninning of the current 64-byte block.  */
++	addi	  r4,r4,-64
++
++	cnttzd	  r0,r10           /* Count trailing zeros before the match.  */
++	subf	  r5,r3,r4
++	add	  r3,r5,r0         /* Compute final length.  */
++	blr
++
++L(tail1):
++	vctzlsbb  r0,v6
++	add	  r4,r4,r0
++	subf	  r3,r3,r4
++	blr
++
++L(tail2):
++	vctzlsbb  r0,v6
++	add	  r4,r4,r0
++	addi	  r4,r4,16
++	subf	  r3,r3,r4
++	blr
++
++L(tail3):
++	vctzlsbb  r0,v6
++	add	  r4,r4,r0
++	addi	  r4,r4,32
++	subf	  r3,r3,r4
++	blr
++
++L(tail4):
++	vctzlsbb  r0,v6
++	add	  r4,r4,r0
++	addi	  r4,r4,48
++	subf	  r3,r3,r4
++	blr
++
++END (STRLEN)
++
++#ifdef DEFINE_STRLEN_HIDDEN_DEF
++weak_alias (__strlen, strlen)
++libc_hidden_builtin_def (strlen)
++#endif
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/Makefile b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+index 1a8ef5fb73c3b0db..6d5661d08257b7a0 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/Makefile
++++ b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+@@ -33,7 +33,7 @@ sysdep_routines += memcpy-power8-cached memcpy-power7 memcpy-a2 memcpy-power6 \
+ 
+ ifneq (,$(filter %le,$(config-machine)))
+ sysdep_routines += strcmp-power9 strncmp-power9 strcpy-power9 stpcpy-power9 \
+-		   rawmemchr-power9
++		   rawmemchr-power9 strlen-power9
+ endif
+ CFLAGS-strncase-power7.c += -mcpu=power7 -funroll-loops
+ CFLAGS-strncase_l-power7.c += -mcpu=power7 -funroll-loops
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+index 297935863e44c0e1..daa30d3907395680 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+@@ -111,6 +111,10 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/powerpc/powerpc64/multiarch/strlen.c.  */
+   IFUNC_IMPL (i, name, strlen,
++#ifdef __LITTLE_ENDIAN__
++	      IFUNC_IMPL_ADD (array, i, strcpy, hwcap2 & PPC_FEATURE2_ARCH_3_00,
++			      __strlen_power9)
++#endif
+ 	      IFUNC_IMPL_ADD (array, i, strlen, hwcap2 & PPC_FEATURE2_ARCH_2_07,
+ 			      __strlen_power8)
+ 	      IFUNC_IMPL_ADD (array, i, strlen, hwcap & PPC_FEATURE_HAS_VSX,
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/strlen-power9.S b/sysdeps/powerpc/powerpc64/multiarch/strlen-power9.S
+new file mode 100644
+index 0000000000000000..68c8d54b5f5876a2
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/multiarch/strlen-power9.S
+@@ -0,0 +1,2 @@
++#define STRLEN __strlen_power9
++#include <sysdeps/powerpc/powerpc64/le/power9/strlen.S>
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/strlen.c b/sysdeps/powerpc/powerpc64/multiarch/strlen.c
+index 74810dab9929d505..b7f0fbb13fb97783 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/strlen.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/strlen.c
+@@ -30,8 +30,13 @@ extern __typeof (__redirect_strlen) __libc_strlen;
+ extern __typeof (__redirect_strlen) __strlen_ppc attribute_hidden;
+ extern __typeof (__redirect_strlen) __strlen_power7 attribute_hidden;
+ extern __typeof (__redirect_strlen) __strlen_power8 attribute_hidden;
++extern __typeof (__redirect_strlen) __strlen_power9 attribute_hidden;
+ 
+ libc_ifunc (__libc_strlen,
++# ifdef __LITTLE_ENDIAN__
++	  (hwcap2 & PPC_FEATURE2_ARCH_3_00)
++	  ? __strlen_power9 :
++# endif
+ 	    (hwcap2 & PPC_FEATURE2_ARCH_2_07)
+ 	    ? __strlen_power8 :
+ 	      (hwcap & PPC_FEATURE_HAS_VSX)

@@ -1,0 +1,31 @@
+commit b8b53b338f6da91e86d115a39da860cefac736ad
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 15 12:33:13 2020 +0200
+
+    resolv: Serialize processing in resolv/tst-resolv-txnid-collision
+    
+    When switching name servers, response processing by two server
+    threads clobbers the global test state.  (There is still some
+    risk that this test is negatively impact by packet drops and
+    packet reordering, but this applies to many of the resolver tests
+    and is difficult to avoid.)
+    
+    Fixes commit f1f00c072138af90ae6da180f260111f09afe7a3 ("resolv:
+    Handle transaction ID collisions in parallel queries (bug 26600)").
+
+diff --git a/resolv/tst-resolv-txnid-collision.c b/resolv/tst-resolv-txnid-collision.c
+index 611d37362f3e5e89..189b76f1268f4e4d 100644
+--- a/resolv/tst-resolv-txnid-collision.c
++++ b/resolv/tst-resolv-txnid-collision.c
+@@ -309,6 +309,11 @@ do_test (void)
+     ((struct resolv_redirect_config)
+      {
+        .response_callback = response,
++
++       /* The response callback use global state (the previous_*
++          variables), and query processing must therefore be
++          serialized.  */
++       .single_thread_udp = true,
+      });
+ 
+   for (int rcode = 0; rcode <= 5; ++rcode)

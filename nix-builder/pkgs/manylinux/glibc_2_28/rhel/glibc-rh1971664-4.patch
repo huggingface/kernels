@@ -1,0 +1,179 @@
+commit fc5bfade69ca12d034967dc6b929dbe3dd715172
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Mon Jun 7 14:22:20 2021 +0530
+
+    iconvdata: Move gconv-modules configuration to gconv-modules.conf
+    
+    Move all gconv-modules configuration files to gconv-modules.conf.
+    That is, the S390 extensions now become gconv-modules-s390.conf.  Move
+    both configuration files into gconv-modules.d.
+    
+    Now GCONV_PATH/gconv-modules is read only for backward compatibility
+    for third-party gconv modules directories.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+# Conflicts:
+#	iconvdata/Makefile
+
+diff --git a/iconvdata/Makefile b/iconvdata/Makefile
+index 32656ad31d9b434b..fc403e8abe3cc11f 100644
+--- a/iconvdata/Makefile
++++ b/iconvdata/Makefile
+@@ -136,10 +136,13 @@ charmaps = ../localedata/charmaps
+ extra-modules-left := $(modules)
+ include extra-module.mk
+ 
++gconv-modules = gconv-modules.conf
++modpfx = $(objpfx)gconv-modules.d/
+ 
+ extra-objs	+= $(modules.so)
+ install-others	= $(addprefix $(inst_gconvdir)/, $(modules.so))	\
+-		  $(inst_gconvdir)/gconv-modules
++		  $(addprefix $(inst_gconvdir)/gconv-modules.d/, \
++			      $(gconv-modules))
+ 
+ # We can build the conversion tables for numerous charsets automatically.
+ 
+@@ -181,7 +184,7 @@ generated += $(generated-modules:=.h) $(generated-modules:=.stmp) \
+ 	     iconv-test.out iconv-rules tst-loading.mtrace	 \
+ 	     mtrace-tst-loading.out tst-tables.out iconv-test.xxx
+ ifdef objpfx
+-generated += gconv-modules
++generated += $(addprefix gconv-modules.d/,$(gconv-modules))
+ endif
+ 
+ # Rules to generate the headers.
+@@ -249,7 +252,8 @@ headers: $(addprefix $(objpfx), $(generated-modules:=.h))
+ $(addprefix $(inst_gconvdir)/, $(modules.so)): \
+     $(inst_gconvdir)/%: $(objpfx)% $(+force)
+ 	$(do-install-program)
+-$(inst_gconvdir)/gconv-modules: $(objpfx)gconv-modules $(+force)
++$(addprefix $(inst_gconvdir)/gconv-modules.d/, $(gconv-modules)): \
++    $(inst_gconvdir)/gconv-modules.d/%: $(modpfx)% $(+force)
+ 	$(do-install)
+ ifeq (no,$(cross-compiling))
+ # Update the $(prefix)/lib/gconv/gconv-modules.cache file. This is necessary
+@@ -297,29 +301,30 @@ $(objpfx)mtrace-tst-loading.out: $(objpfx)tst-loading.out
+ 	$(common-objpfx)malloc/mtrace $(objpfx)tst-loading.mtrace > $@; \
+ 	$(evaluate-test)
+ 
+-$(objpfx)bug-iconv1.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv1.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)bug-iconv2.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv2.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so))
+ $(objpfx)bug-iconv3: $(libdl)
+-$(objpfx)bug-iconv3.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv3.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)bug-iconv5.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv5.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)tst-loading.out: $(objpfx)gconv-modules \
++$(objpfx)tst-loading.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			  $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)tst-iconv4.out: $(objpfx)gconv-modules \
++$(objpfx)tst-iconv4.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)tst-iconv7.out: $(objpfx)gconv-modules \
++$(objpfx)tst-iconv7.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)bug-iconv10.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv10.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			  $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)bug-iconv12.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv12.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			  $(addprefix $(objpfx),$(modules.so))
+-$(objpfx)bug-iconv14.out: $(objpfx)gconv-modules \
++$(objpfx)bug-iconv14.out: $(addprefix $(modpfx), $(gconv-modules)) \
+ 			  $(addprefix $(objpfx),$(modules.so))
+ 
+-$(objpfx)iconv-test.out: run-iconv-test.sh $(objpfx)gconv-modules \
++$(objpfx)iconv-test.out: run-iconv-test.sh \
++			 $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so)) \
+ 			 $(common-objdir)/iconv/iconv_prog TESTS
+ 	iconv_modules="$(modules)" \
+@@ -327,7 +332,8 @@ $(objpfx)iconv-test.out: run-iconv-test.sh $(objpfx)gconv-modules \
+ 		 '$(run-program-env)' > $@; \
+ 	$(evaluate-test)
+ 
+-$(objpfx)tst-tables.out: tst-tables.sh $(objpfx)gconv-modules \
++$(objpfx)tst-tables.out: tst-tables.sh \
++			 $(addprefix $(modpfx), $(gconv-modules)) \
+ 			 $(addprefix $(objpfx),$(modules.so)) \
+ 			 $(objpfx)tst-table-from $(objpfx)tst-table-to
+ 	$(SHELL) $< $(common-objpfx) $(common-objpfx)iconvdata/ \
+@@ -340,5 +346,8 @@ do-tests-clean common-mostlyclean: tst-tables-clean
+ tst-tables-clean:
+ 	-rm -f $(objpfx)tst-*.table $(objpfx)tst-EUC-TW.irreversible
+ 
+-$(objpfx)gconv-modules: gconv-modules
+-	cat $(sysdeps-gconv-modules) $^ > $@
++$(modpfx):
++	mkdir -p $@
++
++$(modpfx)%: % $(modpfx)
++	cp $< $@
+diff --git a/iconvdata/gconv-modules b/iconvdata/gconv-modules.conf
+similarity index 100%
+rename from iconvdata/gconv-modules
+rename to iconvdata/gconv-modules.conf
+diff --git a/localedata/Makefile b/localedata/Makefile
+index 14fcc37fed21e740..a5ca7a31f43d50c3 100644
+--- a/localedata/Makefile
++++ b/localedata/Makefile
+@@ -179,7 +179,7 @@ install-others := $(addprefix $(inst_i18ndir)/, \
+ 			      $(locales))
+ endif
+ 
+-tests: $(objdir)/iconvdata/gconv-modules
++tests: $(objdir)/iconvdata/gconv-modules.d/gconv-modules.conf
+ 
+ tests-static += tst-langinfo-newlocale-static tst-langinfo-setlocale-static
+ 
+@@ -442,5 +442,5 @@ $(objpfx)mtrace-tst-leaks.out: $(objpfx)tst-leaks.out
+ bug-setlocale1-ENV-only = LOCPATH=$(objpfx) LC_CTYPE=de_DE.UTF-8
+ bug-setlocale1-static-ENV-only = $(bug-setlocale1-ENV-only)
+ 
+-$(objdir)/iconvdata/gconv-modules:
++$(objdir)/iconvdata/gconv-modules.d/gconv-modules.conf:
+ 	$(MAKE) -C ../iconvdata subdir=iconvdata $@
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 8bc82e523f9049db..5c8e1170b4d799ba 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -21,13 +21,25 @@ lib := iconvdata
+ include $(patsubst %,$(..)libof-iterator.mk,$(cpp-srcs-left))
+ 
+ extra-objs      += $(addsuffix .so, $(s390x-iconv-modules))
+-install-others  += $(patsubst %, $(inst_gconvdir)/%.so, $(s390x-iconv-modules))
++install-others  += $(patsubst %, $(inst_gconvdir)/%.so, \
++				 $(s390x-iconv-modules)) \
++		   $(inst_gconvdir)/gconv-modules.d/gconv-modules-s390.conf
+ 
+ $(patsubst %, $(inst_gconvdir)/%.so, $(s390x-iconv-modules)) : \
+ $(inst_gconvdir)/%.so: $(objpfx)%.so $(+force)
+ 	$(do-install-program)
+ 
+-sysdeps-gconv-modules = ../sysdeps/s390/gconv-modules
++ifdef objpfx
++generated += gconv-modules.d/gconv-modules-s390.conf
++endif
++
++$(inst_gconvdir)/gconv-modules.d/gconv-modules-s390.conf: \
++		$(modpfx)gconv-modules-s390.conf $(+force)
++	$(do-install)
++
++$(modpfx)gconv-modules-s390.conf: ../sysdeps/s390/gconv-modules-s390.conf \
++				  $(modpfx)
++	cp $< $@
+ endif
+ 
+ ifeq ($(subdir),string)
+diff --git a/sysdeps/s390/gconv-modules b/sysdeps/s390/gconv-modules-s390.conf
+similarity index 100%
+rename from sysdeps/s390/gconv-modules
+rename to sysdeps/s390/gconv-modules-s390.conf

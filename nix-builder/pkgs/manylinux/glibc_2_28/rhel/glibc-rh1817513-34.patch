@@ -1,0 +1,155 @@
+commit 4052fa22f69c0964bb42c0f13daa791617253de5
+Author: DJ Delorie <dj@redhat.com>
+Date:   Wed Oct 2 14:46:46 2019 -0400
+
+    Add wait-for-debugger test harness hooks
+    
+    If WAIT_FOR_DEBUGGER is set to a non-zero value in the environment,
+    any test that runs will print some useful gdb information and wait
+    for gdb to attach to it and clear the "wait_for_debugger" variable.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/support/support_test_main.c b/support/support_test_main.c
+index fa3c2e06dee5ae0f..def84d803928176b 100644
+--- a/support/support_test_main.c
++++ b/support/support_test_main.c
+@@ -19,6 +19,7 @@
+ #include <support/test-driver.h>
+ #include <support/check.h>
+ #include <support/temp_file-internal.h>
++#include <support/support.h>
+ 
+ #include <assert.h>
+ #include <errno.h>
+@@ -36,6 +37,8 @@
+ #include <time.h>
+ #include <unistd.h>
+ 
++#include <xstdio.h>
++
+ static const struct option default_options[] =
+ {
+   TEST_DEFAULT_OPTIONS
+@@ -176,10 +179,55 @@ signal_handler (int sig)
+   exit (1);
+ }
+ 
++/* This must be volatile as it will be modified by the debugger.  */
++static volatile int wait_for_debugger = 0;
++
+ /* Run test_function or test_function_argv.  */
+ static int
+ run_test_function (int argc, char **argv, const struct test_config *config)
+ {
++  const char *wfd = getenv("WAIT_FOR_DEBUGGER");
++  if (wfd != NULL)
++    wait_for_debugger = atoi (wfd);
++  if (wait_for_debugger)
++    {
++      pid_t mypid;
++      FILE *gdb_script;
++      char *gdb_script_name;
++      int inside_container = 0;
++
++      mypid = getpid();
++      if (mypid < 3)
++	{
++	  const char *outside_pid = getenv("PID_OUTSIDE_CONTAINER");
++	  if (outside_pid)
++	    {
++	      mypid = atoi (outside_pid);
++	      inside_container = 1;
++	    }
++	}
++
++      gdb_script_name = (char *) xmalloc (strlen (argv[0]) + strlen (".gdb") + 1);
++      sprintf (gdb_script_name, "%s.gdb", argv[0]);
++      gdb_script = xfopen (gdb_script_name, "w");
++
++      fprintf (stderr, "Waiting for debugger, test process is pid %d\n", mypid);
++      fprintf (stderr, "gdb -x %s\n", gdb_script_name);
++      if (inside_container)
++	fprintf (gdb_script, "set sysroot %s/testroot.root\n", support_objdir_root);
++      fprintf (gdb_script, "file\n");
++      fprintf (gdb_script, "file %s\n", argv[0]);
++      fprintf (gdb_script, "symbol-file %s\n", argv[0]);
++      fprintf (gdb_script, "exec-file %s\n", argv[0]);
++      fprintf (gdb_script, "attach %ld\n", (long int) mypid);
++      fprintf (gdb_script, "set wait_for_debugger = 0\n");
++      fclose (gdb_script);
++    }
++
++  /* Wait for the debugger to set wait_for_debugger to zero.  */
++  while (wait_for_debugger)
++    usleep (1000);
++
+   if (config->test_function != NULL)
+     return config->test_function ();
+   else if (config->test_function_argv != NULL)
+@@ -229,6 +277,11 @@ support_test_main (int argc, char **argv, const struct test_config *config)
+   unsigned int timeoutfactor = 1;
+   pid_t termpid;
+ 
++  /* If we're debugging the test, we need to disable timeouts and use
++     the initial pid (esp if we're running inside a container).  */
++  if (getenv("WAIT_FOR_DEBUGGER") != NULL)
++    direct = 1;
++
+   if (!config->no_mallopt)
+     {
+       /* Make uses of freed and uninitialized memory known.  Do not
+diff --git a/support/test-container.c b/support/test-container.c
+index f0d9e3060e80bda5..6503cea90309b9b0 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -676,6 +676,9 @@ main (int argc, char **argv)
+   char *so_base;
+   int do_postclean = 0;
+ 
++  int pipes[2];
++  char pid_buf[20];
++
+   uid_t original_uid;
+   gid_t original_gid;
+   /* If set, the test runs as root instead of the user running the testsuite.  */
+@@ -999,6 +1002,11 @@ main (int argc, char **argv)
+   if (chdir (new_cwd_path) < 0)
+     FAIL_EXIT1 ("Can't cd to new %s - ", new_cwd_path);
+ 
++  /* This is to pass the "outside" PID to the child, which will be PID
++     1.  */
++  if (pipe2 (pipes, O_CLOEXEC) < 0)
++    FAIL_EXIT1 ("Can't create pid pipe");
++
+   /* To complete the containerization, we need to fork () at least
+      once.  We can't exec, nor can we somehow link the new child to
+      our parent.  So we run the child and propogate it's exit status
+@@ -1010,6 +1018,12 @@ main (int argc, char **argv)
+     {
+       /* Parent.  */
+       int status;
++
++      /* Send the child's "outside" pid to it.  */
++      write (pipes[1], &child, sizeof(child));
++      close (pipes[0]);
++      close (pipes[1]);
++
+       waitpid (child, &status, 0);
+ 
+       if (WIFEXITED (status))
+@@ -1028,6 +1042,14 @@ main (int argc, char **argv)
+   /* The rest is the child process, which is now PID 1 and "in" the
+      new root.  */
+ 
++  /* Get our "outside" pid from our parent.  We use this to help with
++     debugging from outside the container.  */
++  read (pipes[0], &child, sizeof(child));
++  close (pipes[0]);
++  close (pipes[1]);
++  sprintf (pid_buf, "%lu", (long unsigned)child);
++  setenv ("PID_OUTSIDE_CONTAINER", pid_buf, 0);
++
+   maybe_xmkdir ("/tmp", 0755);
+ 
+   /* Now that we're pid 1 (effectively "root") we can mount /proc  */

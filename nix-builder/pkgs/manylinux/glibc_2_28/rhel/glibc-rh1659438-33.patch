@@ -1,0 +1,287 @@
+commit 4c7b3cec113d9bb7dfc004e22c7a98e310ab9bcc
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:16 2018 +0100
+
+    S390: Refactor rawmemchr ifunc handling.
+    
+    The ifunc handling for rawmemchr is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove rawmemchr variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add rawmemchr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for rawmemchr.
+            * sysdeps/s390/multiarch/rawmemchr-c.c: Move to ...
+            * sysdeps/s390/rawmemchr-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/rawmemchr-vx.S: Move to ...
+            * sysdeps/s390/rawmemchr-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/rawmemchr.c: Move to ...
+            * sysdeps/s390/rawmemchr.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-rawmemchr.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 816b2fccdc75e4cf..9b38b461b34176b0 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -53,5 +53,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strspn strspn-vx strspn-c \
+ 		   strpbrk strpbrk-vx strpbrk-c \
+ 		   strcspn strcspn-vx strcspn-c \
+-		   memchr memchr-vx memchr-z900
++		   memchr memchr-vx memchr-z900 \
++		   rawmemchr rawmemchr-vx rawmemchr-c
+ endif
+diff --git a/sysdeps/s390/ifunc-rawmemchr.h b/sysdeps/s390/ifunc-rawmemchr.h
+new file mode 100644
+index 0000000000000000..bfcbeae802fb372e
+--- /dev/null
++++ b/sysdeps/s390/ifunc-rawmemchr.h
+@@ -0,0 +1,52 @@
++/* rawmemchr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_RAWMEMCHR_IFUNC	1
++#else
++# define HAVE_RAWMEMCHR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_RAWMEMCHR_IFUNC_AND_VX_SUPPORT HAVE_RAWMEMCHR_IFUNC
++#else
++# define HAVE_RAWMEMCHR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define RAWMEMCHR_DEFAULT	RAWMEMCHR_Z13
++# define HAVE_RAWMEMCHR_C	0
++# define HAVE_RAWMEMCHR_Z13	1
++#else
++# define RAWMEMCHR_DEFAULT	RAWMEMCHR_C
++# define HAVE_RAWMEMCHR_C	1
++# define HAVE_RAWMEMCHR_Z13	HAVE_RAWMEMCHR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_RAWMEMCHR_C
++# define RAWMEMCHR_C		__rawmemchr_c
++#else
++# define RAWMEMCHR_C		NULL
++#endif
++
++#if HAVE_RAWMEMCHR_Z13
++# define RAWMEMCHR_Z13		__rawmemchr_vx
++#else
++# define RAWMEMCHR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index fa1f7b81db912be0..ac6cfcf9c7dbbc3a 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += rawmemchr rawmemchr-vx rawmemchr-c \
+-		   memccpy memccpy-vx memccpy-c \
++sysdep_routines += memccpy memccpy-vx memccpy-c \
+ 		   memrchr memrchr-vx memrchr-c
+ endif
+ 
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index b4be0140424aed69..bf3b40e111a6bd31 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -43,6 +43,7 @@
+ #include <ifunc-strpbrk.h>
+ #include <ifunc-strcspn.h>
+ #include <ifunc-memchr.h>
++#include <ifunc-rawmemchr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -385,6 +386,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_MEMCHR_IFUNC  */
+ 
++#if HAVE_RAWMEMCHR_IFUNC
++    IFUNC_IMPL (i, name, rawmemchr,
++# if HAVE_RAWMEMCHR_Z13
++		IFUNC_IMPL_ADD (array, i, rawmemchr,
++				dl_hwcap & HWCAP_S390_VX, RAWMEMCHR_Z13)
++# endif
++# if HAVE_RAWMEMCHR_C
++		IFUNC_IMPL_ADD (array, i, rawmemchr, 1, RAWMEMCHR_C)
++# endif
++		)
++#endif /* HAVE_RAWMEMCHR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -426,7 +439,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   IFUNC_VX_IMPL (wcscspn);
+ 
+   IFUNC_VX_IMPL (wmemchr);
+-  IFUNC_VX_IMPL (rawmemchr);
+ 
+   IFUNC_VX_IMPL (memccpy);
+ 
+diff --git a/sysdeps/s390/multiarch/rawmemchr.c b/sysdeps/s390/rawmemchr-c.c
+similarity index 67%
+rename from sysdeps/s390/multiarch/rawmemchr.c
+rename to sysdeps/s390/rawmemchr-c.c
+index 5fdb2252df7f8fa1..8b8208e542092383 100644
+--- a/sysdeps/s390/multiarch/rawmemchr.c
++++ b/sysdeps/s390/rawmemchr-c.c
+@@ -1,4 +1,4 @@
+-/* Multiple versions of rawmemchr.
++/* Default rawmemchr implementation for S/390.
+    Copyright (C) 2015-2018 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+@@ -16,16 +16,19 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define __rawmemchr __redirect___rawmemchr
+-# include <string.h>
+-# undef __rawmemchr
+-# include <ifunc-resolve.h>
++#include <ifunc-rawmemchr.h>
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect___rawmemchr, __rawmemchr
+-				, __rawmemchr)
+-weak_alias (__rawmemchr, rawmemchr)
++#if HAVE_RAWMEMCHR_C
++# if HAVE_RAWMEMCHR_IFUNC
++#  define RAWMEMCHR RAWMEMCHR_C
++#  undef weak_alias
++#  define weak_alias(a, b)
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   define libc_hidden_def(name)					\
++  __hidden_ver1 (__rawmemchr_c, __GI___rawmemchr, __rawmemchr_c);
++#  endif
++# endif
+ 
+-#else
+ # include <string/rawmemchr.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++#endif
+diff --git a/sysdeps/s390/multiarch/rawmemchr-vx.S b/sysdeps/s390/rawmemchr-vx.S
+similarity index 87%
+rename from sysdeps/s390/multiarch/rawmemchr-vx.S
+rename to sysdeps/s390/rawmemchr-vx.S
+index d5778be068394394..f04c0e8b616a76ea 100644
+--- a/sysdeps/s390/multiarch/rawmemchr-vx.S
++++ b/sysdeps/s390/rawmemchr-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-rawmemchr.h>
++
++#if HAVE_RAWMEMCHR_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -37,7 +39,7 @@
+    -v17=index of unequal
+    -v18=c replicated
+ */
+-ENTRY(__rawmemchr_vx)
++ENTRY(RAWMEMCHR_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -88,5 +90,15 @@ ENTRY(__rawmemchr_vx)
+ .Lend_found:
+ 	la	%r2,0(%r5,%r2)	/* Return pointer to character.  */
+ 	br	%r14
+-END(__rawmemchr_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(RAWMEMCHR_Z13)
++
++# if ! HAVE_RAWMEMCHR_IFUNC
++strong_alias (RAWMEMCHR_Z13, __rawmemchr)
++weak_alias (__rawmemchr, rawmemchr)
++# endif
++
++# if ! HAVE_RAWMEMCHR_C && defined SHARED && IS_IN (libc)
++strong_alias (RAWMEMCHR_Z13, __GI___rawmemchr)
++# endif
++
++#endif /* HAVE_RAWMEMCHR_Z13  */
+diff --git a/sysdeps/s390/multiarch/rawmemchr-c.c b/sysdeps/s390/rawmemchr.c
+similarity index 56%
+rename from sysdeps/s390/multiarch/rawmemchr-c.c
+rename to sysdeps/s390/rawmemchr.c
+index f43c883a76e52480..d9263ce208ea6361 100644
+--- a/sysdeps/s390/multiarch/rawmemchr-c.c
++++ b/sysdeps/s390/rawmemchr.c
+@@ -1,4 +1,4 @@
+-/* Default rawmemchr implementation for S/390.
++/* Multiple versions of rawmemchr.
+    Copyright (C) 2015-2018 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+@@ -16,19 +16,26 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-rawmemchr.h>
++
++#if HAVE_RAWMEMCHR_IFUNC
++# define __rawmemchr __redirect___rawmemchr
+ # include <string.h>
++# undef __rawmemchr
++# include <ifunc-resolve.h>
+ 
+-# define RAWMEMCHR  __rawmemchr_c
+-# undef weak_alias
+-# define weak_alias(a, b)
+-# ifdef SHARED
+-#  undef libc_hidden_def
+-#  define libc_hidden_def(name)				\
+-     __hidden_ver1 (__rawmemchr_c, __GI___rawmemchr, __rawmemchr_c);
+-# endif /* SHARED */
++# if HAVE_RAWMEMCHR_C
++extern __typeof (__redirect___rawmemchr) RAWMEMCHR_C attribute_hidden;
++# endif
+ 
+-extern __typeof (rawmemchr) __rawmemchr_c attribute_hidden;
++# if HAVE_RAWMEMCHR_Z13
++extern __typeof (__redirect___rawmemchr) RAWMEMCHR_Z13 attribute_hidden;
++# endif
+ 
+-# include <string/rawmemchr.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (__redirect___rawmemchr, __rawmemchr,
++		      (HAVE_RAWMEMCHR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? RAWMEMCHR_Z13
++		      : RAWMEMCHR_DEFAULT
++		      )
++weak_alias (__rawmemchr, rawmemchr)
++#endif /* HAVE_RAWMEMCHR_IFUNC  */

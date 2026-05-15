@@ -1,0 +1,32 @@
+commit acb55dcb892d4321ada6fd9b663b28fada432682
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Jan 2 18:35:50 2019 +0000
+
+    Update Linux kernel version in tst-mman-consts.py.
+    
+    This patch updates the Linux kernel version in tst-mman-consts.py to
+    4.20 (meaning that's the version for which glibc is expected to have
+    the same constants as the kernel, up to the exceptions listed in the
+    test).  (Once we have more such tests sharing common infrastructure, I
+    expect the kernel version will be something set in the infrastructure
+    shared by all such tests, rather than something needing updating
+    separately for each test for each new kernel version.)
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/tst-mman-consts.py (main): Expect
+            constants to match with Linux 4.20.
+
+diff --git a/sysdeps/unix/sysv/linux/tst-mman-consts.py b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+index 1a613beec0da16fb..4a2ddd49c4c7282b 100644
+--- a/sysdeps/unix/sysv/linux/tst-mman-consts.py
++++ b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+@@ -41,7 +41,7 @@ def main():
+                         help='C compiler (including options) to use')
+     args = parser.parse_args()
+     linux_version_headers = linux_kernel_version(args.cc)
+-    linux_version_glibc = (4, 19)
++    linux_version_glibc = (4, 20)
+     sys.exit(glibcextract.compare_macro_consts(
+         '#define _GNU_SOURCE 1\n'
+         '#include <sys/mman.h>\n',

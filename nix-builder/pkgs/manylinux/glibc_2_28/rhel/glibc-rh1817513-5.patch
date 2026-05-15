@@ -1,0 +1,82 @@
+commit fb4c32aef64500c65c7fc95ca06d7e17d467be45
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Mon Aug 6 06:25:28 2018 -0700
+
+    x86: Move STATE_SAVE_OFFSET/STATE_SAVE_MASK to sysdep.h
+    
+    Move STATE_SAVE_OFFSET and STATE_SAVE_MASK to sysdep.h to make
+    sysdeps/x86/cpu-features.h a C header file.
+    
+            * sysdeps/x86/cpu-features.h (STATE_SAVE_OFFSET): Removed.
+            (STATE_SAVE_MASK): Likewise.
+            Don't check __ASSEMBLER__ to include <cpu-features-offsets.h>.
+            * sysdeps/x86/sysdep.h (STATE_SAVE_OFFSET): New.
+            (STATE_SAVE_MASK): Likewise.
+            * sysdeps/x86_64/dl-trampoline.S: Include <cpu-features-offsets.h>
+            instead of <cpu-features.h>.
+
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index 4c6d08c709eea204..d342664c64ab7aa1 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -92,18 +92,6 @@
+ /* The current maximum size of the feature integer bit array.  */
+ #define FEATURE_INDEX_MAX 1
+ 
+-/* Offset for fxsave/xsave area used by _dl_runtime_resolve.  Also need
+-   space to preserve RCX, RDX, RSI, RDI, R8, R9 and RAX.  It must be
+-   aligned to 16 bytes for fxsave and 64 bytes for xsave.  */
+-#define STATE_SAVE_OFFSET (8 * 7 + 8)
+-
+-/* Save SSE, AVX, AVX512, mask and bound registers.  */
+-#define STATE_SAVE_MASK \
+-  ((1 << 1) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 6) | (1 << 7))
+-
+-#ifdef	__ASSEMBLER__
+-# include <cpu-features-offsets.h>
+-#else	/* __ASSEMBLER__ */
+ enum
+   {
+     COMMON_CPUID_INDEX_1 = 0,
+@@ -267,8 +255,6 @@ extern const struct cpu_features *__get_cpu_features (void)
+ # define index_arch_XSAVEC_Usable	FEATURE_INDEX_1
+ # define index_arch_Prefer_FSRM		FEATURE_INDEX_1
+ 
+-#endif	/* !__ASSEMBLER__ */
+-
+ #ifdef __x86_64__
+ # define HAS_CPUID 1
+ #elif defined __i586__ || defined __pentium__
+diff --git a/sysdeps/x86/sysdep.h b/sysdeps/x86/sysdep.h
+index 8776ad8374e056d3..f41f4ebd425cfbaf 100644
+--- a/sysdeps/x86/sysdep.h
++++ b/sysdeps/x86/sysdep.h
+@@ -48,6 +48,15 @@ enum cf_protection_level
+ # define SHSTK_ENABLED	0
+ #endif
+ 
++/* Offset for fxsave/xsave area used by _dl_runtime_resolve.  Also need
++   space to preserve RCX, RDX, RSI, RDI, R8, R9 and RAX.  It must be
++   aligned to 16 bytes for fxsave and 64 bytes for xsave.  */
++#define STATE_SAVE_OFFSET (8 * 7 + 8)
++
++/* Save SSE, AVX, AVX512, mask and bound registers.  */
++#define STATE_SAVE_MASK \
++  ((1 << 1) | (1 << 2) | (1 << 3) | (1 << 5) | (1 << 6) | (1 << 7))
++
+ #ifdef	__ASSEMBLER__
+ 
+ /* Syntactic details of assembler.  */
+diff --git a/sysdeps/x86_64/dl-trampoline.S b/sysdeps/x86_64/dl-trampoline.S
+index ef1425cbb909529a..fd918510fe155733 100644
+--- a/sysdeps/x86_64/dl-trampoline.S
++++ b/sysdeps/x86_64/dl-trampoline.S
+@@ -18,7 +18,7 @@
+ 
+ #include <config.h>
+ #include <sysdep.h>
+-#include <cpu-features.h>
++#include <cpu-features-offsets.h>
+ #include <link-defines.h>
+ 
+ #ifndef DL_STACK_ALIGNMENT

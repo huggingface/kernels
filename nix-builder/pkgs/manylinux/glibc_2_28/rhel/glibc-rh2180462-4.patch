@@ -1,0 +1,39 @@
+Adjusted for backport to c8s by modifying sysdeps/x86/cacheinfo.h.
+
+commit 885a7f0feee951f514a121788f46f33b2867110f
+Author: Noah Goldstein <goldstein.w.n@gmail.com>
+Date:   Fri Aug 11 12:29:11 2023 -0500
+
+    x86: Fix incorrect scope of setting `shared_per_thread` [BZ# 30745]
+    
+    The:
+    
+    ```
+        if (shared_per_thread > 0 && threads > 0)
+          shared_per_thread /= threads;
+    ```
+    
+    Code was accidentally moved to inside the else scope.  This doesn't
+    match how it was previously (before af992e7abd).
+    
+    This patch fixes that by putting the division after the `else` block.
+
+diff --git a/sysdeps/x86/cacheinfo.h b/sysdeps/x86/cacheinfo.h
+index 4dbfa979ef052eaa..e53fa25106c95253 100644
+--- a/sysdeps/x86/cacheinfo.h
++++ b/sysdeps/x86/cacheinfo.h
+@@ -243,11 +243,10 @@ get_common_cache_info (long int *shared_ptr, long int * shared_per_thread_ptr, u
+ 	     level.  */
+ 	  threads = ((cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.ebx >> 16)
+ 		     & 0xff);
+-
+-	  /* Get per-thread size of highest level cache.  */
+-	  if (shared_per_thread > 0 && threads > 0)
+-	    shared_per_thread /= threads;
+ 	}
++      /* Get per-thread size of highest level cache.  */
++      if (shared_per_thread > 0 && threads > 0)
++	shared_per_thread /= threads;
+     }
+ 
+   /* Account for non-inclusive L2 and L3 caches.  */

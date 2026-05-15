@@ -1,0 +1,241 @@
+commit 23c1c256ae7b0f010d0fcaff60682b620887b164
+Author: Mihailo Stojanovic <mihailo.stojanovic@rt-rk.com>
+Date:   Thu Aug 29 20:11:42 2019 +0000
+
+    MIPS support for GNU hash
+    
+    This patch is a reimplementation of [1], which was submitted back in
+    2015. Copyright issue has been sorted [2] last year. It proposed a new
+    section (.gnu.xhash) and related dynamic tag (GT_GNU_XHASH). The new
+    section would be virtually identical to the existing .gnu.hash except
+    for the translation table (xlat) which would contain correct MIPS
+    .dynsym indexes corresponding to the hashvals in chains. This is because
+    MIPS ABI imposes a different ordering of the dynsyms than the one
+    expected by the .gnu.hash section. Another addition would be a leading
+    word at the beggining of the section, which would contain the number of
+    entries in the translation table.
+    
+    In this patch, the new section name and dynamic tag are changed to
+    reflect the fact that the section should be treated as MIPS specific
+    (.MIPS.xhash and DT_MIPS_XHASH).
+    
+    This patch addresses the alignment issue reported in [3] which is caused
+    by the leading word of the .MIPS.xhash section. Leading word is now
+    removed in the corresponding binutils patch, and the number of entries
+    in the translation table is computed using DT_MIPS_SYMTABNO dynamic tag.
+    
+    Since the MIPS specific dl-lookup.c file was removed following the
+    initial patch submission, I opted for the definition of three new macros
+    in the generic ldsodefs.h. ELF_MACHINE_GNU_HASH_ADDRIDX defines the
+    index of the dynamic tag in the l_info array. ELF_MACHINE_HASH_SYMIDX is
+    used to calculate the index of a symbol in GNU hash. On MIPS, it is
+    defined to look up the symbol index in the translation table.
+    ELF_MACHINE_XHASH_SETUP is defined for MIPS only. It initializes the
+    .MIPS.xhash pointer in the link_map_machine struct.
+    
+    The other major change is bumping the highest EI_ABIVERSION value for
+    MIPS to suggest that the dynamic linker now supports GNU hash.
+    
+    The patch was tested by running the glibc testsuite for the three MIPS
+    ABIs (o32, n32 and n64) and for x86_64-linux-gnu.
+    
+    [1] https://sourceware.org/ml/binutils/2015-10/msg00057.html
+    [2] https://sourceware.org/ml/binutils/2018-03/msg00025.html
+    [3] https://sourceware.org/ml/binutils/2016-01/msg00006.html
+    
+            * elf/dl-addr.c (determine_info): Calculate the symbol index
+            using the newly defined ELF_MACHINE_HASH_SYMIDX macro.
+            * elf/dl-lookup.c (do_lookup_x): Ditto.
+            (_dl_setup_hash): Initialize MIPS xhash translation table.
+            * elf/elf.h (SHT_MIPS_XHASH): New define.
+            (DT_MIPS_XHASH): New define.
+            * sysdeps/generic/ldsodefs.h (ELF_MACHINE_GNU_HASH_ADDRIDX): New
+            define.
+            (ELF_MACHINE_HASH_SYMIDX): Ditto.
+            (ELF_MACHINE_XHASH_SETUP): Ditto.
+            * sysdeps/mips/ldsodefs.h (ELF_MACHINE_GNU_HASH_ADDRIDX): New
+            define.
+            (ELF_MACHINE_HASH_SYMIDX): Ditto.
+            (ELF_MACHINE_XHASH_SETUP): Ditto.
+            * sysdeps/mips/linkmap.h (struct link_map_machine): New member.
+            * sysdeps/unix/sysv/linux/mips/ldsodefs.h: Increment valid ABI
+            version.
+            * sysdeps/unix/sysv/linux/mips/libc-abis: New ABI version.
+
+diff --git a/elf/dl-addr.c b/elf/dl-addr.c
+index e6c7d020945c51d2..b146fed09a46ff76 100644
+--- a/elf/dl-addr.c
++++ b/elf/dl-addr.c
+@@ -42,7 +42,7 @@ determine_info (const ElfW(Addr) addr, struct link_map *match, Dl_info *info,
+   ElfW(Word) strtabsize = match->l_info[DT_STRSZ]->d_un.d_val;
+ 
+   const ElfW(Sym) *matchsym = NULL;
+-  if (match->l_info[ADDRIDX (DT_GNU_HASH)] != NULL)
++  if (match->l_info[ELF_MACHINE_GNU_HASH_ADDRIDX] != NULL)
+     {
+       /* We look at all symbol table entries referenced by the hash
+ 	 table.  */
+@@ -57,6 +57,7 @@ determine_info (const ElfW(Addr) addr, struct link_map *match, Dl_info *info,
+ 		{
+ 		  /* The hash table never references local symbols so
+ 		     we can omit that test here.  */
++		  symndx = ELF_MACHINE_HASH_SYMIDX (match, hasharr);
+ 		  if ((symtab[symndx].st_shndx != SHN_UNDEF
+ 		       || symtab[symndx].st_value != 0)
+ 		      && symtab[symndx].st_shndx != SHN_ABS
+@@ -65,8 +66,6 @@ determine_info (const ElfW(Addr) addr, struct link_map *match, Dl_info *info,
+ 					    matchsym, addr)
+ 		      && symtab[symndx].st_name < strtabsize)
+ 		    matchsym = (ElfW(Sym) *) &symtab[symndx];
+-
+-		  ++symndx;
+ 		}
+ 	      while ((*hasharr++ & 1u) == 0);
+ 	    }
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index 01724a54f8840f9f..42fdaed99296137f 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -432,7 +432,7 @@ do_lookup_x (const char *undef_name, uint_fast32_t new_hash,
+ 		  do
+ 		    if (((*hasharr ^ new_hash) >> 1) == 0)
+ 		      {
+-			symidx = hasharr - map->l_gnu_chain_zero;
++			symidx = ELF_MACHINE_HASH_SYMIDX (map, hasharr);
+ 			sym = check_match (undef_name, ref, version, flags,
+ 					   type_class, &symtab[symidx], symidx,
+ 					   strtab, map, &versioned_sym,
+@@ -961,10 +961,10 @@ _dl_setup_hash (struct link_map *map)
+ {
+   Elf_Symndx *hash;
+ 
+-  if (__glibc_likely (map->l_info[ADDRIDX (DT_GNU_HASH)] != NULL))
++  if (__glibc_likely (map->l_info[ELF_MACHINE_GNU_HASH_ADDRIDX] != NULL))
+     {
+       Elf32_Word *hash32
+-	= (void *) D_PTR (map, l_info[ADDRIDX (DT_GNU_HASH)]);
++	= (void *) D_PTR (map, l_info[ELF_MACHINE_GNU_HASH_ADDRIDX]);
+       map->l_nbuckets = *hash32++;
+       Elf32_Word symbias = *hash32++;
+       Elf32_Word bitmask_nwords = *hash32++;
+@@ -979,6 +979,10 @@ _dl_setup_hash (struct link_map *map)
+       map->l_gnu_buckets = hash32;
+       hash32 += map->l_nbuckets;
+       map->l_gnu_chain_zero = hash32 - symbias;
++
++      /* Initialize MIPS xhash translation table.  */
++      ELF_MACHINE_XHASH_SETUP (hash32, symbias, map);
++
+       return;
+     }
+ 
+diff --git a/elf/elf.h b/elf/elf.h
+index 74f7f479ce817040..d6506ea1c7160dea 100644
+--- a/elf/elf.h
++++ b/elf/elf.h
+@@ -1698,6 +1698,7 @@ typedef struct
+ #define SHT_MIPS_EH_REGION	0x70000027
+ #define SHT_MIPS_XLATE_OLD	0x70000028
+ #define SHT_MIPS_PDR_EXCEPTION	0x70000029
++#define SHT_MIPS_XHASH		0x7000002b
+ 
+ /* Legal values for sh_flags field of Elf32_Shdr.  */
+ 
+@@ -1945,7 +1946,9 @@ typedef struct
+    in a PIE as it stores a relative offset from the address of the tag
+    rather than an absolute address.  */
+ #define DT_MIPS_RLD_MAP_REL  0x70000035
+-#define DT_MIPS_NUM	     0x36
++/* GNU-style hash table with xlat.  */
++#define DT_MIPS_XHASH	     0x70000036
++#define DT_MIPS_NUM	     0x37
+ 
+ /* Legal values for DT_MIPS_FLAGS Elf32_Dyn entry.  */
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index f0185ce0d16c0f69..3bdbdd6e67dacc85 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -47,6 +47,23 @@ __BEGIN_DECLS
+ #define ADDRIDX(tag)	(DT_NUM + DT_THISPROCNUM + DT_VERSIONTAGNUM \
+ 			 + DT_EXTRANUM + DT_VALNUM + DT_ADDRTAGIDX (tag))
+ 
++/* Type of GNU hash which the machine uses.  */
++#ifndef ELF_MACHINE_GNU_HASH_ADDRIDX
++# define ELF_MACHINE_GNU_HASH_ADDRIDX ADDRIDX (DT_GNU_HASH)
++#endif
++
++/* Calculate the index of a symbol in GNU hash.  */
++#ifndef ELF_MACHINE_HASH_SYMIDX
++# define ELF_MACHINE_HASH_SYMIDX(map, hasharr) \
++  ((hasharr) - (map)->l_gnu_chain_zero)
++#endif
++
++/* Setup MIPS xhash.  Defined only for MIPS.  */
++#ifndef ELF_MACHINE_XHASH_SETUP
++# define ELF_MACHINE_XHASH_SETUP(hash32, symbias, map) \
++  ((void) (hash32), (void) (symbias), (void) (map))
++#endif
++
+ /* We use this macro to refer to ELF types independent of the native wordsize.
+    `ElfW(TYPE)' is used in place of `Elf32_TYPE' or `Elf64_TYPE'.  */
+ #define ELFW(type)	_ElfW (ELF, __ELF_NATIVE_CLASS, type)
+diff --git a/sysdeps/mips/ldsodefs.h b/sysdeps/mips/ldsodefs.h
+index c6e5ce7e660325c1..35043b7c6d416c50 100644
+--- a/sysdeps/mips/ldsodefs.h
++++ b/sysdeps/mips/ldsodefs.h
+@@ -26,6 +26,21 @@ struct La_mips_32_retval;
+ struct La_mips_64_regs;
+ struct La_mips_64_retval;
+ 
++#define ELF_MACHINE_GNU_HASH_ADDRIDX (DT_MIPS_XHASH - DT_LOPROC + DT_NUM)
++
++/* Calculate the index of a symbol in MIPS xhash.  */
++#define ELF_MACHINE_HASH_SYMIDX(map, hasharr) \
++  ((map)->l_mach.mips_xlat_zero[(hasharr) - (map)->l_gnu_chain_zero])
++
++/* Setup MIPS xhash.  */
++#define ELF_MACHINE_XHASH_SETUP(hash32, symbias, map)			    \
++  do									    \
++    {									    \
++      (hash32) += (map)->l_info[DT_MIPS (SYMTABNO)]->d_un.d_val - (symbias); \
++      (map)->l_mach.mips_xlat_zero = (hash32) - (symbias);		    \
++    }									    \
++  while (0)
++
+ #define ARCH_PLTENTER_MEMBERS						    \
+     Elf32_Addr (*mips_o32_gnu_pltenter) (Elf32_Sym *, unsigned int,	    \
+ 					 uintptr_t *, uintptr_t *,	    \
+diff --git a/sysdeps/mips/linkmap.h b/sysdeps/mips/linkmap.h
+index 1fb9678a6d1625fd..1e640c3ba9bd18e4 100644
+--- a/sysdeps/mips/linkmap.h
++++ b/sysdeps/mips/linkmap.h
+@@ -3,4 +3,5 @@ struct link_map_machine
+     ElfW(Addr) plt; /* Address of .plt */
+     ElfW(Word) fpabi; /* FP ABI of the object */
+     unsigned int odd_spreg; /* Does the object require odd_spreg support? */
++    const Elf32_Word *mips_xlat_zero; /* .MIPS.xhash */
+   };
+diff --git a/sysdeps/unix/sysv/linux/mips/ldsodefs.h b/sysdeps/unix/sysv/linux/mips/ldsodefs.h
+index d2912cadabfd6877..03f3e12f202a0563 100644
+--- a/sysdeps/unix/sysv/linux/mips/ldsodefs.h
++++ b/sysdeps/unix/sysv/linux/mips/ldsodefs.h
+@@ -34,7 +34,7 @@ extern void _dl_static_init (struct link_map *map);
+ #undef VALID_ELF_ABIVERSION
+ #define VALID_ELF_ABIVERSION(osabi,ver)			\
+   (ver == 0						\
+-   || (osabi == ELFOSABI_SYSV && ver < 5)		\
++   || (osabi == ELFOSABI_SYSV && ver < 6)		\
+    || (osabi == ELFOSABI_GNU && ver < LIBC_ABI_MAX))
+ 
+ #endif /* ldsodefs.h */
+diff --git a/sysdeps/unix/sysv/linux/mips/libc-abis b/sysdeps/unix/sysv/linux/mips/libc-abis
+index eaea558720f42a48..c0b67dae3ece1511 100644
+--- a/sysdeps/unix/sysv/linux/mips/libc-abis
++++ b/sysdeps/unix/sysv/linux/mips/libc-abis
+@@ -16,3 +16,5 @@ UNIQUE
+ MIPS_O32_FP64   mips*-*-linux*
+ # Absolute (SHN_ABS) symbols working correctly.
+ ABSOLUTE
++# GNU-style hash table with translation table.
++MIPS_XHASH

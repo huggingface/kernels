@@ -1,0 +1,46 @@
+Only backport po/it.po and po/ja.po changes for the ESTALE message
+translation which we use during CI testing.
+
+commit 7ff33eca6860648fb909df954da4996ce853d01d
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Fri Jul 7 11:27:08 2023 -0400
+
+    Translations: Add new ro support and update others.
+
+    This brings in the new Romanian language translations, and updates
+    nine other translations. Important translations in this update
+    include the Italian and Japanese translations for ESTALE which
+    remove the mention of "NFS" from the error message translation.
+
+diff --git a/po/it.po b/po/it.po
+index 2750575a1082f1db..6c2be3a4df5611ff 100644
+--- a/po/it.po
++++ b/po/it.po
+@@ -6793,10 +6793,8 @@ msgstr "Quota disco superata"
+ #. TRANS Repairing this condition usually requires unmounting, possibly repairing
+ #. TRANS and remounting the file system.
+ #: sysdeps/gnu/errlist.c:788
+-#, fuzzy
+-#| msgid "Stale NFS file handle"
+ msgid "Stale file handle"
+-msgstr "Gestione del file NFS interrotta"
++msgstr "Riferimento al file obsoleto"
+ 
+ # lf
+ #. TRANS An attempt was made to NFS-mount a remote file system with a file name that
+diff --git a/po/ja.po b/po/ja.po
+index bd9b7ffbbd3e3bf6..8fb598c5edbc5891 100644
+--- a/po/ja.po
++++ b/po/ja.po
+@@ -6360,10 +6360,8 @@ msgstr "ディスク使用量制限を超過しました"
+ #. TRANS Repairing this condition usually requires unmounting, possibly repairing
+ #. TRANS and remounting the file system.
+ #: sysdeps/gnu/errlist.c:788
+-#, fuzzy
+-#| msgid "Stale NFS file handle"
+ msgid "Stale file handle"
+-msgstr "実効性のないNFSファイルハンドルです"
++msgstr "古いファイルハンドルです"
+ 
+ #. TRANS An attempt was made to NFS-mount a remote file system with a file name that
+ #. TRANS already specifies an NFS-mounted file.

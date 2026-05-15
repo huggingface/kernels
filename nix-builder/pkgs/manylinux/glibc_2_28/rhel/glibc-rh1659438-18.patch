@@ -1,0 +1,398 @@
+commit 914a4e05572e108201d71dcd3e47da8aeeecd70d
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:10 2018 +0100
+
+    S390: Refactor strcpy ifunc handling.
+    
+    The ifunc handling for strcpy is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    Note: The fallback s390-32/s390-64 ifunc variants with mvst instruction
+    are now moved to the unified strcpy-z900.S file which can be used for
+    31/64bit. The s390-32/s390-64 files multiarch/strcpy.c and strcpy.S
+    are deleted.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strcpy variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strcpy variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strcpy.
+            * sysdeps/s390/multiarch/strcpy-vx.S: Move to ...
+            * sysdeps/s390/strcpy-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strcpy.c: Move to ...
+            * sysdeps/s390/strcpy.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strcpy.h: New file.
+            * sysdeps/s390/s390-64/strcpy.S: Move to ...
+            * sysdeps/s390/strcpy-z900.S: ... here and adjust to be usable
+            for 31/64bit and ifunc handling.
+            * sysdeps/s390/s390-32/multiarch/strcpy.c: Delete file.
+            * sysdeps/s390/s390-64/multiarch/strcpy.c: Likewise.
+            * sysdeps/s390/s390-32/strcpy.S: Likewise.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index f092355743e3908f..e4191319531ecb01 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -38,5 +38,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strstr strstr-vx strstr-c \
+ 		   memmem memmem-vx memmem-c \
+ 		   strlen strlen-vx strlen-c \
+-		   strnlen strnlen-vx strnlen-c
++		   strnlen strnlen-vx strnlen-c \
++		   strcpy strcpy-vx strcpy-z900
+ endif
+diff --git a/sysdeps/s390/ifunc-strcpy.h b/sysdeps/s390/ifunc-strcpy.h
+new file mode 100644
+index 0000000000000000..85e45556e6a61dd5
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strcpy.h
+@@ -0,0 +1,52 @@
++/* strcpy variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRCPY_IFUNC	1
++#else
++# define HAVE_STRCPY_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRCPY_IFUNC_AND_VX_SUPPORT HAVE_STRCPY_IFUNC
++#else
++# define HAVE_STRCPY_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRCPY_DEFAULT		STRCPY_Z13
++# define HAVE_STRCPY_Z900_G5	0
++# define HAVE_STRCPY_Z13	1
++#else
++# define STRCPY_DEFAULT		STRCPY_Z900_G5
++# define HAVE_STRCPY_Z900_G5	1
++# define HAVE_STRCPY_Z13	HAVE_STRCPY_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRCPY_Z900_G5
++# define STRCPY_Z900_G5		__strcpy_default
++#else
++# define STRCPY_Z900_G5		NULL
++#endif
++
++#if HAVE_STRCPY_Z13
++# define STRCPY_Z13		__strcpy_vx
++#else
++# define STRCPY_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 35ba223c5d4fb52f..50f7f0b78df723bb 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strcpy strcpy-vx \
+-		   stpcpy stpcpy-vx stpcpy-c \
++sysdep_routines += stpcpy stpcpy-vx stpcpy-c \
+ 		   strncpy strncpy-vx \
+ 		   stpncpy stpncpy-vx stpncpy-c \
+ 		   strcat strcat-vx strcat-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 680e5b738bfb7f32..1784372db9828463 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -28,6 +28,7 @@
+ #include <ifunc-memmem.h>
+ #include <ifunc-strlen.h>
+ #include <ifunc-strnlen.h>
++#include <ifunc-strcpy.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -190,6 +191,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRNLEN_IFUNC  */
+ 
++#if HAVE_STRCPY_IFUNC
++    IFUNC_IMPL (i, name, strcpy,
++# if HAVE_STRCPY_Z13
++		IFUNC_IMPL_ADD (array, i, strcpy,
++				dl_hwcap & HWCAP_S390_VX, STRCPY_Z13)
++# endif
++# if HAVE_STRCPY_Z900_G5
++		IFUNC_IMPL_ADD (array, i, strcpy, 1, STRCPY_Z900_G5)
++# endif
++		)
++#endif /* HAVE_STRCPY_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -202,7 +215,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcsnlen);
+ 
+-  IFUNC_VX_IMPL (strcpy);
+   IFUNC_VX_IMPL (wcscpy);
+ 
+   IFUNC_VX_IMPL (stpcpy);
+diff --git a/sysdeps/s390/s390-32/multiarch/strcpy.c b/sysdeps/s390/s390-32/multiarch/strcpy.c
+deleted file mode 100644
+index 6a22e31a03c8c1c4..0000000000000000
+--- a/sysdeps/s390/s390-32/multiarch/strcpy.c
++++ /dev/null
+@@ -1,21 +0,0 @@
+-/* Multiple versions of strcpy.
+-   Copyright (C) 2015-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/* This wrapper-file is needed, because otherwise file
+-   sysdeps/s390/s390-[32|64]/strcpy.S will be used.  */
+-#include <sysdeps/s390/multiarch/strcpy.c>
+diff --git a/sysdeps/s390/s390-32/strcpy.S b/sysdeps/s390/s390-32/strcpy.S
+deleted file mode 100644
+index d49136ee92b83378..0000000000000000
+--- a/sysdeps/s390/s390-32/strcpy.S
++++ /dev/null
+@@ -1,36 +0,0 @@
+-/* strcpy - copy a string from source to destination. For IBM S390
+-   This file is part of the GNU C Library.
+-   Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/*
+- * R2 = address of destination
+- * R3 = address of source
+- */
+-
+-#include "sysdep.h"
+-#include "asm-syntax.h"
+-
+-	.text
+-ENTRY(strcpy)
+-	slr   %r0,%r0
+-	lr    %r1,%r2
+-0:      mvst  %r1,%r3
+-	jo    0b
+-	br    %r14
+-END(strcpy)
+-libc_hidden_builtin_def (strcpy)
+diff --git a/sysdeps/s390/s390-64/multiarch/strcpy.c b/sysdeps/s390/s390-64/multiarch/strcpy.c
+deleted file mode 100644
+index 6a22e31a03c8c1c4..0000000000000000
+--- a/sysdeps/s390/s390-64/multiarch/strcpy.c
++++ /dev/null
+@@ -1,21 +0,0 @@
+-/* Multiple versions of strcpy.
+-   Copyright (C) 2015-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/* This wrapper-file is needed, because otherwise file
+-   sysdeps/s390/s390-[32|64]/strcpy.S will be used.  */
+-#include <sysdeps/s390/multiarch/strcpy.c>
+diff --git a/sysdeps/s390/multiarch/strcpy-vx.S b/sysdeps/s390/strcpy-vx.S
+similarity index 85%
+rename from sysdeps/s390/multiarch/strcpy-vx.S
+rename to sysdeps/s390/strcpy-vx.S
+index 52197f57f7b5d5cf..844d23e4fee32c9b 100644
+--- a/sysdeps/s390/multiarch/strcpy-vx.S
++++ b/sysdeps/s390/strcpy-vx.S
+@@ -16,13 +16,13 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-
+-# include "sysdep.h"
+-# include "asm-syntax.h"
++#include <ifunc-strcpy.h>
++#include "sysdep.h"
++#include "asm-syntax.h"
+ 
+ 	.text
+ 
++#if HAVE_STRCPY_Z13
+ /* char * strcpy (const char *dest, const char *src)
+    Copy string src to dest.
+ 
+@@ -36,7 +36,7 @@
+    -v17=index of zero
+    -v18=part of src
+ */
+-ENTRY(__strcpy_vx)
++ENTRY(STRCPY_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -97,13 +97,13 @@ ENTRY(__strcpy_vx)
+ .Lfound_align:
+ 	vstl	%v16,%r5,0(%r2)	/* Copy characters including zero.  */
+ 	br	%r14
+-END(__strcpy_vx)
++END(STRCPY_Z13)
+ 
+-/* Use mvst-strcpy-implementation as default implementation.  */
+-# define strcpy __strcpy_c
+-# undef libc_hidden_builtin_def
+-# define libc_hidden_builtin_def(name) strong_alias(__strcpy_c, __GI_strcpy)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++# if ! HAVE_STRCPY_IFUNC
++strong_alias (STRCPY_Z13, strcpy)
++# endif
+ 
+-/* Include mvst-strcpy-implementation in s390-32/s390-64 subdirectory.  */
+-#include <strcpy.S>
++# if ! HAVE_STRCPY_Z900_G5 && defined SHARED && IS_IN (libc)
++strong_alias (STRCPY_Z13, __GI_strcpy)
++# endif
++#endif
+diff --git a/sysdeps/s390/s390-64/strcpy.S b/sysdeps/s390/strcpy-z900.S
+similarity index 66%
+rename from sysdeps/s390/s390-64/strcpy.S
+rename to sysdeps/s390/strcpy-z900.S
+index 203c73c905d0d86c..42798b1fd5c51187 100644
+--- a/sysdeps/s390/s390-64/strcpy.S
++++ b/sysdeps/s390/strcpy-z900.S
+@@ -1,4 +1,4 @@
+-/* strcpy - copy a string from source to destination.  64 bit S/390 version.
++/* strcpy - copy a string from source to destination.  64/31 bit S/390 version.
+    Copyright (C) 2001-2018 Free Software Foundation, Inc.
+    Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+    This file is part of the GNU C Library.
+@@ -21,15 +21,36 @@
+      %r2 = address of destination
+      %r3 = address of source.  */
+ 
++#include <ifunc-strcpy.h>
+ #include "sysdep.h"
+ #include "asm-syntax.h"
+ 
++#if HAVE_STRCPY_Z900_G5
++# if defined __s390x__
++#  define SLGR	slgr
++#  define LGR	lgr
++# else
++#  define SLGR	slr
++#  define LGR	lr
++# endif /* ! defined __s390x__  */
++
+         .text
+-ENTRY(strcpy)
+-	slgr  %r0,%r0
+-	lgr   %r1,%r2
++ENTRY(STRCPY_Z900_G5)
++	SLGR  %r0,%r0
++	LGR   %r1,%r2
+ 0:	mvst  %r1,%r3
+ 	jo    0b
+ 	br    %r14
+-END(strcpy)
+-libc_hidden_builtin_def (strcpy)
++END(STRCPY_Z900_G5)
++
++# undef SLGR
++# undef LGR
++
++# if ! HAVE_STRCPY_IFUNC
++strong_alias (STRCPY_Z900_G5, strcpy)
++# endif
++
++# if defined SHARED && IS_IN (libc)
++strong_alias (STRCPY_Z900_G5, __GI_strcpy)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/strcpy.c b/sysdeps/s390/strcpy.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/strcpy.c
+rename to sysdeps/s390/strcpy.c
+index 8f32a13f6730c427..f4e28e24c85b7162 100644
+--- a/sysdeps/s390/multiarch/strcpy.c
++++ b/sysdeps/s390/strcpy.c
+@@ -16,12 +16,25 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strcpy.h>
++
++#if HAVE_STRCPY_IFUNC
+ # define strcpy __redirect_strcpy
+ # include <string.h>
+ # undef strcpy
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect_strcpy, __strcpy, strcpy)
++# if HAVE_STRCPY_Z900_G5
++extern __typeof (__redirect_strcpy) STRCPY_Z900_G5 attribute_hidden;
++# endif
++
++# if HAVE_STRCPY_Z13
++extern __typeof (__redirect_strcpy) STRCPY_Z13 attribute_hidden;
++# endif
+ 
++s390_libc_ifunc_expr (__redirect_strcpy, strcpy,
++		      (HAVE_STRCPY_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRCPY_Z13
++		      : STRCPY_DEFAULT
++		      )
+ #endif

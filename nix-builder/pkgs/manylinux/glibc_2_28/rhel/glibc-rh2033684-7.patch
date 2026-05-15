@@ -1,0 +1,43 @@
+commit fadf75c370494da6a02274ebe79e45b2f22ebbd0
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Feb 10 14:37:10 2020 +0100
+
+    debug: Add missing locale dependencies of fortify tests
+    
+    The missing dependencies result in failures like this if make check
+    is invoked with sufficient parallelism for the debug subdirectory:
+    
+    FAIL: debug/tst-chk2
+    FAIL: debug/tst-chk3
+    FAIL: debug/tst-chk4
+    FAIL: debug/tst-chk5
+    FAIL: debug/tst-chk6
+    FAIL: debug/tst-lfschk1
+    FAIL: debug/tst-lfschk2
+    FAIL: debug/tst-lfschk3
+    FAIL: debug/tst-lfschk4
+    FAIL: debug/tst-lfschk5
+    FAIL: debug/tst-lfschk6
+
+diff --git a/debug/Makefile b/debug/Makefile
+index 506cebc3c4ca19ff..5e45c9b41077f2fd 100644
+--- a/debug/Makefile
++++ b/debug/Makefile
+@@ -188,6 +188,17 @@ LOCALES := de_DE.UTF-8
+ include ../gen-locales.mk
+ 
+ $(objpfx)tst-chk1.out: $(gen-locales)
++$(objpfx)tst-chk2.out: $(gen-locales)
++$(objpfx)tst-chk3.out: $(gen-locales)
++$(objpfx)tst-chk4.out: $(gen-locales)
++$(objpfx)tst-chk5.out: $(gen-locales)
++$(objpfx)tst-chk6.out: $(gen-locales)
++$(objpfx)tst-lfschk1.out: $(gen-locales)
++$(objpfx)tst-lfschk2.out: $(gen-locales)
++$(objpfx)tst-lfschk3.out: $(gen-locales)
++$(objpfx)tst-lfschk4.out: $(gen-locales)
++$(objpfx)tst-lfschk5.out: $(gen-locales)
++$(objpfx)tst-lfschk6.out: $(gen-locales)
+ endif
+ 
+ sLIBdir := $(shell echo $(slibdir) | sed 's,lib\(\|64\)$$,\\\\$$LIB,')

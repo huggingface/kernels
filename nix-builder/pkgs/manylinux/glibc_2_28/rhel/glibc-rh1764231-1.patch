@@ -1,0 +1,49 @@
+commit 17432d7150bdab3bce2ea66c70ad6c920f54077a
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Jun 28 10:15:30 2019 +0200
+
+    support: Add xdlvsym function
+
+diff --git a/support/xdlfcn.c b/support/xdlfcn.c
+index f34bb059c00f27f7..b4a6b85649d181c8 100644
+--- a/support/xdlfcn.c
++++ b/support/xdlfcn.c
+@@ -48,6 +48,26 @@ xdlsym (void *handle, const char *symbol)
+   return sym;
+ }
+ 
++void *
++xdlvsym (void *handle, const char *symbol, const char *version)
++{
++  /* Clear any pending errors.  */
++  dlerror ();
++
++  void *sym = dlvsym (handle, symbol, version);
++
++  if (sym == NULL)
++    {
++      const char *error = dlerror ();
++      if (error != NULL)
++        FAIL_EXIT1 ("error: dlvsym: %s\n", error);
++      /* If there was no error, we found a NULL symbol.  Return the
++         NULL value in this case.  */
++    }
++
++  return sym;
++}
++
+ void
+ xdlclose (void *handle)
+ {
+diff --git a/support/xdlfcn.h b/support/xdlfcn.h
+index 5ab7494e70924f52..ab1cbb3cb9bb1cc7 100644
+--- a/support/xdlfcn.h
++++ b/support/xdlfcn.h
+@@ -26,6 +26,7 @@ __BEGIN_DECLS
+ /* Each of these terminates process on failure with relevant error message.  */
+ void *xdlopen (const char *filename, int flags);
+ void *xdlsym (void *handle, const char *symbol);
++void *xdlvsym (void *handle, const char *symbol, const char *version);
+ void xdlclose (void *handle);
+ 
+ 

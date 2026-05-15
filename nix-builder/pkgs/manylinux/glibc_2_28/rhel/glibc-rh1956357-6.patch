@@ -1,0 +1,420 @@
+commit 23fdf8178cce3c2ec320dd5eca8b544245bcaef0
+Author: Raoni Fassina Firmino <raoni@linux.ibm.com>
+Date:   Fri Apr 30 18:12:08 2021 -0300
+
+    powerpc64le: Optimize memset for POWER10
+    
+    This implementation is based on __memset_power8 and integrates a lot
+    of suggestions from Anton Blanchard.
+    
+    The biggest difference is that it makes extensive use of stxvl to
+    alignment and tail code to avoid branches and small stores.  It has
+    three main execution paths:
+    
+    a) "Short lengths" for lengths up to 64 bytes, avoiding as many
+       branches as possible.
+    
+    b) "General case" for larger lengths, it has an alignment section
+       using stxvl to avoid branches, a 128 bytes loop and then a tail
+       code, again using stxvl with few branches.
+    
+    c) "Zeroing cache blocks" for lengths from 256 bytes upwards and set
+       value being zero.  It is mostly the __memset_power8 code but the
+       alignment phase was simplified because, at this point, address is
+       already 16-bytes aligned and also changed to use vector stores.
+       The tail code was also simplified to reuse the general case tail.
+    
+    All unaligned stores use stxvl instructions that do not generate
+    alignment interrupts on POWER10, making it safe to use on
+    caching-inhibited memory.
+    
+    On average, this implementation provides something around 30%
+    improvement when compared to __memset_power8.
+    
+    Reviewed-by: Matheus Castanho <msc@linux.ibm.com>
+    Reviewed-by: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+
+diff --git a/sysdeps/powerpc/powerpc64/le/power10/memset.S b/sysdeps/powerpc/powerpc64/le/power10/memset.S
+new file mode 100644
+index 0000000000000000..6b8e2cfdaf25fd30
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/power10/memset.S
+@@ -0,0 +1,256 @@
++/* Optimized memset implementation for POWER10 LE.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <sysdep.h>
++
++/* void * [r3] memset (void *s [r3], int c [r4], size_t n [r5]));
++   Returns 's'.  */
++
++#ifndef MEMSET
++# define MEMSET memset
++#endif
++
++	.machine  power9
++ENTRY_TOCLESS (MEMSET, 5)
++	CALL_MCOUNT 3
++
++L(_memset):
++	/* Assume memset of zero length is uncommon, and just let it go
++	   through the small path below.  */
++	cmpldi	r5,64
++
++	/* Replicate byte to quad word.  */
++	mtvsrd	v0+32,r4
++	vspltb	v0,v0,7
++
++	li	r7,16
++	sldi	r8,r7,56
++
++	bgt	L(large)
++
++	/* For short lengths we want to avoid as many branches as possible.
++	   We use store VSX vector with length instructions to do this.
++	   It takes advantage of the fact that if the length passed to stxvl
++	   is zero nothing is done, effectively a no-op.  */
++	sldi	r5,r5,56
++
++	addi	r10,r3,16
++
++	sub.	r11,r5,r8
++	isellt	r11,0,r11	/* Saturate the subtraction to zero.  */
++
++	stxvl	v0+32,r3,r5
++	stxvl	v0+32,r10,r11
++
++	addi	r9,r3,32
++	addi	r10,r3,48
++
++	sub.	r11,r11,r8
++	isellt	r11,0,r11
++
++	sub.	r5,r11,r8
++	isellt	r5,0,r5
++
++	stxvl	v0+32,r9,r11
++	stxvl	v0+32,r10,r5
++
++	blr
++
++	.balign	16
++L(large):
++	mr	r6,r3	/* Don't modify r3 since we need to return it.  */
++
++	/* Get dest 16B aligned.  */
++	neg	r0,r3
++	clrldi.	r7,r0,(64-4)
++	beq	L(aligned)
++	rldic	r9,r0,56,4	/* (~X & 0xf)<<56 "clrlsldi r9,r0,64-4,56".  */
++
++	stxvl	v0+32,r6,r9	/* Store up to 15B until aligned address.  */
++
++	add	r6,r6,r7
++	sub	r5,r5,r7
++
++	/* Go to tail if there is less than 64B left after alignment.  */
++	cmpldi	r5,64
++	blt	L(tail_64)
++
++	.balign	16
++L(aligned):
++	/* Go to tail if there is less than 128B left after alignment.  */
++	srdi.	r0,r5,7
++	beq	L(tail_128)
++
++	/* If c == 0 && n >= 256 use dcbz to zero out full cache blocks.  */
++	cmpldi	cr5,r5,255
++	cmpldi	cr6,r4,0
++	crand	27,26,21
++	bt	27,L(dcbz)
++
++	mtctr	r0
++
++	.balign	32
++L(loop):
++	stxv	v0+32,0(r6)
++	stxv	v0+32,16(r6)
++	stxv	v0+32,32(r6)
++	stxv	v0+32,48(r6)
++	stxv	v0+32,64(r6)
++	stxv	v0+32,80(r6)
++	stxv	v0+32,96(r6)
++	stxv	v0+32,112(r6)
++	addi	r6,r6,128
++	bdnz	L(loop)
++
++	.balign	16
++L(tail):
++	/* 127B or less left, finish the tail or return.  */
++	andi.	r5,r5,127
++	beqlr
++
++	cmpldi	r5,64
++	blt	L(tail_64)
++
++	.balign	16
++L(tail_128):
++	/* Stores a minimum of 64B and up to 128B and return.  */
++	stxv	v0+32,0(r6)
++	stxv	v0+32,16(r6)
++	stxv	v0+32,32(r6)
++	stxv	v0+32,48(r6)
++	addi	r6,r6,64
++	andi.	r5,r5,63
++	beqlr
++
++	.balign	16
++L(tail_64):
++	/* Stores up to 64B and return.  */
++	sldi	r5,r5,56
++
++	addi	r10,r6,16
++
++	sub.	r11,r5,r8
++	isellt	r11,0,r11
++
++	stxvl	v0+32,r6,r5
++	stxvl	v0+32,r10,r11
++
++	sub.	r11,r11,r8
++	blelr
++
++	addi	r9,r6,32
++	addi	r10,r6,48
++
++	isellt	r11,0,r11
++
++	sub.	r5,r11,r8
++	isellt	r5,0,r5
++
++	stxvl	v0+32,r9,r11
++	stxvl	v0+32,r10,r5
++
++	blr
++
++	.balign	16
++L(dcbz):
++	/* Special case when value is 0 and we have a long length to deal
++	   with.  Use dcbz to zero out a full cacheline of 128 bytes at a time.
++	   Before using dcbz though, we need to get the destination 128-byte
++	   aligned.  */
++	neg	r0,r6
++	clrldi.	r0,r0,(64-7)
++	beq	L(dcbz_aligned)
++
++	sub	r5,r5,r0
++	mtocrf	0x2,r0	/* copying bits 57..59 to cr6. The ones for sizes 64,
++			   32 and 16 which need to be checked.  */
++
++	/* Write 16-128 bytes until DST is aligned to 128 bytes.  */
++64:	bf	25,32f
++	stxv	v0+32,0(r6)
++	stxv	v0+32,16(r6)
++	stxv	v0+32,32(r6)
++	stxv	v0+32,48(r6)
++	addi	r6,r6,64
++
++32:	bf	26,16f
++	stxv	v0+32,0(r6)
++	stxv	v0+32,16(r6)
++	addi	r6,r6,32
++
++16:	bf	27,L(dcbz_aligned)
++	stxv	v0+32,0(r6)
++	addi	r6,r6,16
++
++	.balign	16
++L(dcbz_aligned):
++	/* Setup dcbz unroll offsets and count numbers.  */
++	srdi.	r0,r5,9
++	li	r9,128
++	beq	L(bcdz_tail)
++	li	r10,256
++	li	r11,384
++	mtctr	r0
++
++	.balign	16
++L(dcbz_loop):
++	/* Sets 512 bytes to zero in each iteration, the loop unrolling shows
++	   a throughput boost for large sizes (2048 bytes or higher).  */
++	dcbz	0,r6
++	dcbz	r9,r6
++	dcbz	r10,r6
++	dcbz	r11,r6
++	addi	r6,r6,512
++	bdnz	L(dcbz_loop)
++
++	andi.	r5,r5,511
++	beqlr
++
++	.balign	16
++L(bcdz_tail):
++	/* We have 1-511 bytes remaining.  */
++	srdi.	r0,r5,7
++	beq	L(tail)
++
++	mtocrf	0x1,r0
++
++256:	bf	30,128f
++	dcbz	0,r6
++	dcbz	r9,r6
++	addi	r6,r6,256
++
++128:	bf	31,L(tail)
++	dcbz	0,r6
++	addi	r6,r6,128
++
++	b	L(tail)
++
++END_GEN_TB (MEMSET,TB_TOCLESS)
++libc_hidden_builtin_def (memset)
++
++/* Copied from bzero.S to prevent the linker from inserting a stub
++   between bzero and memset.  */
++ENTRY_TOCLESS (__bzero)
++	CALL_MCOUNT 2
++	mr	r5,r4
++	li	r4,0
++	b	L(_memset)
++END (__bzero)
++#ifndef __bzero
++weak_alias (__bzero, bzero)
++#endif
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/Makefile b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+index 2e3c8f2e8a81cda4..1d517698429e1230 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/Makefile
++++ b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+@@ -32,7 +32,7 @@ sysdep_routines += memcpy-power8-cached memcpy-power7 memcpy-a2 memcpy-power6 \
+ 		   strncase-power8
+ 
+ ifneq (,$(filter %le,$(config-machine)))
+-sysdep_routines += memcpy-power10 memmove-power10 \
++sysdep_routines += memcpy-power10 memmove-power10 memset-power10 \
+ 		   strcmp-power9 strncmp-power9 strcpy-power9 stpcpy-power9 \
+ 		   rawmemchr-power9 strlen-power9 strncpy-power9 stpncpy-power9 \
+ 		   strlen-power10
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/bzero.c b/sysdeps/powerpc/powerpc64/multiarch/bzero.c
+index f8cb05bea8a3505b..4ce98e324d12a31e 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/bzero.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/bzero.c
+@@ -27,8 +27,16 @@ extern __typeof (bzero) __bzero_power4 attribute_hidden;
+ extern __typeof (bzero) __bzero_power6 attribute_hidden;
+ extern __typeof (bzero) __bzero_power7 attribute_hidden;
+ extern __typeof (bzero) __bzero_power8 attribute_hidden;
++# ifdef __LITTLE_ENDIAN__
++extern __typeof (bzero) __bzero_power10 attribute_hidden;
++# endif
+ 
+ libc_ifunc (__bzero,
++# ifdef __LITTLE_ENDIAN__
++	    (hwcap2 & (PPC_FEATURE2_ARCH_3_1 | PPC_FEATURE2_HAS_ISEL)
++	     && hwcap & PPC_FEATURE_HAS_VSX)
++	    ? __bzero_power10 :
++# endif
+             (hwcap2 & PPC_FEATURE2_ARCH_2_07)
+             ? __bzero_power8 :
+ 	      (hwcap & PPC_FEATURE_HAS_VSX)
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+index 9d5a14e480c02171..11532f77d4d03b2a 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+@@ -86,6 +86,13 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/powerpc/powerpc64/multiarch/memset.c.  */
+   IFUNC_IMPL (i, name, memset,
++#ifdef __LITTLE_ENDIAN__
++	      IFUNC_IMPL_ADD (array, i, memset,
++			      hwcap2 & (PPC_FEATURE2_ARCH_3_1 |
++					PPC_FEATURE2_HAS_ISEL)
++			      && hwcap & PPC_FEATURE_HAS_VSX,
++			      __memset_power10)
++#endif
+ 	      IFUNC_IMPL_ADD (array, i, memset, hwcap2 & PPC_FEATURE2_ARCH_2_07,
+ 			      __memset_power8)
+ 	      IFUNC_IMPL_ADD (array, i, memset, hwcap & PPC_FEATURE_HAS_VSX,
+@@ -187,6 +194,13 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/powerpc/powerpc64/multiarch/bzero.c.  */
+   IFUNC_IMPL (i, name, bzero,
++#ifdef __LITTLE_ENDIAN__
++	      IFUNC_IMPL_ADD (array, i, bzero,
++			      hwcap2 & (PPC_FEATURE2_ARCH_3_1 |
++					PPC_FEATURE2_HAS_ISEL)
++			      && hwcap & PPC_FEATURE_HAS_VSX,
++			      __bzero_power10)
++#endif
+ 	      IFUNC_IMPL_ADD (array, i, bzero, hwcap2 & PPC_FEATURE2_ARCH_2_07,
+ 			      __bzero_power8)
+ 	      IFUNC_IMPL_ADD (array, i, bzero, hwcap & PPC_FEATURE_HAS_VSX,
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/memset-power10.S b/sysdeps/powerpc/powerpc64/multiarch/memset-power10.S
+new file mode 100644
+index 0000000000000000..548e99789735296c
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/multiarch/memset-power10.S
+@@ -0,0 +1,27 @@
++/* Optimized memset implementation for POWER10 LE.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#define MEMSET __memset_power10
++
++#undef libc_hidden_builtin_def
++#define libc_hidden_builtin_def(name)
++
++#undef __bzero
++#define __bzero __bzero_power10
++
++#include <sysdeps/powerpc/powerpc64/le/power10/memset.S>
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/memset.c b/sysdeps/powerpc/powerpc64/multiarch/memset.c
+index 1a7c46fecf78ab1f..4c97622c7d7eb8aa 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/memset.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/memset.c
+@@ -33,10 +33,18 @@ extern __typeof (__redirect_memset) __memset_power4 attribute_hidden;
+ extern __typeof (__redirect_memset) __memset_power6 attribute_hidden;
+ extern __typeof (__redirect_memset) __memset_power7 attribute_hidden;
+ extern __typeof (__redirect_memset) __memset_power8 attribute_hidden;
++# ifdef __LITTLE_ENDIAN__
++extern __typeof (__redirect_memset) __memset_power10 attribute_hidden;
++# endif
+ 
+ /* Avoid DWARF definition DIE on ifunc symbol so that GDB can handle
+    ifunc symbol properly.  */
+ libc_ifunc (__libc_memset,
++# ifdef __LITTLE_ENDIAN__
++	    (hwcap2 & (PPC_FEATURE2_ARCH_3_1 | PPC_FEATURE2_HAS_ISEL)
++	     && hwcap & PPC_FEATURE_HAS_VSX)
++	    ? __memset_power10 :
++# endif
+             (hwcap2 & PPC_FEATURE2_ARCH_2_07)
+             ? __memset_power8 :
+ 	      (hwcap & PPC_FEATURE_HAS_VSX)

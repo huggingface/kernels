@@ -1,0 +1,30 @@
+commit 61a87530108ec9181e1b18a9b727ec3cc3ba7532
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Fri May 13 10:01:47 2022 +0530
+
+    fortify: Ensure that __glibc_fortify condition is a constant [BZ #29141]
+    
+    The fix c8ee1c85 introduced a -1 check for object size without also
+    checking that object size is a constant.  Because of this, the tree
+    optimizer passes in gcc fail to fold away one of the branches in
+    __glibc_fortify and trips on a spurious Wstringop-overflow.  The warning
+    itself is incorrect and the branch does go away eventually in DCE in the
+    rtl passes in gcc, but the constant check is a helpful hint to simplify
+    code early, so add it in.
+    
+    Resolves: BZ #29141
+    Signed-off-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+diff --git a/misc/sys/cdefs.h b/misc/sys/cdefs.h
+index 404496c7d6da4fb3..f3d7efdd2a9320f7 100644
+--- a/misc/sys/cdefs.h
++++ b/misc/sys/cdefs.h
+@@ -145,7 +145,7 @@
+ /* Length is known to be safe at compile time if the __L * __S <= __OBJSZ
+    condition can be folded to a constant and if it is true, or unknown (-1) */
+ #define __glibc_safe_or_unknown_len(__l, __s, __osz) \
+-  ((__osz) == (__SIZE_TYPE__) -1					      \
++  ((__builtin_constant_p (__osz) && (__osz) == (__SIZE_TYPE__) -1)	      \
+    || (__glibc_unsigned_or_positive (__l)				      \
+        && __builtin_constant_p (__glibc_safe_len_cond ((__SIZE_TYPE__) (__l), \
+ 						       (__s), (__osz)))	      \

@@ -1,0 +1,27 @@
+commit 2a08b6e8331a611dc29325bfa6e29fecc9a3a46e
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Thu Dec 10 16:47:02 2020 +0530
+
+    Warn on unsupported fortification levels
+    
+    Make the _FORTIFY_SOURCE macro soup in features.h warn about
+    unsupported fortification levels.  For example, it will warn about
+    _FORTIFY_SOURCE=3 and over with an indication of which level has been
+    selected.
+    
+    Co-authored-by: Paul Eggert <eggert@cs.ucla.edu>
+
+diff --git a/include/features.h b/include/features.h
+index 5bed0a499605a3a2..ea7673ee115bcf0a 100644
+--- a/include/features.h
++++ b/include/features.h
+@@ -382,6 +382,9 @@
+ # elif !__GNUC_PREREQ (4, 1)
+ #  warning _FORTIFY_SOURCE requires GCC 4.1 or later
+ # elif _FORTIFY_SOURCE > 1
++#  if _FORTIFY_SOURCE > 2
++#   warning _FORTIFY_SOURCE > 2 is treated like 2 on this platform
++#  endif
+ #  define __USE_FORTIFY_LEVEL 2
+ # else
+ #  define __USE_FORTIFY_LEVEL 1

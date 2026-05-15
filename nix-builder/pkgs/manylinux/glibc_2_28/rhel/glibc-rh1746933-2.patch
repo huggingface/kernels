@@ -1,0 +1,37 @@
+commit 3640758943c856268bc12a3307838c2a65d2f9ea
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Feb 4 23:46:58 2019 +0000
+
+    Fix assertion in malloc.c:tcache_get.
+    
+    One of the warnings that appears with -Wextra is "ordered comparison
+    of pointer with integer zero" in malloc.c:tcache_get, for the
+    assertion:
+    
+      assert (tcache->entries[tc_idx] > 0);
+    
+    Indeed, a "> 0" comparison does not make sense for
+    tcache->entries[tc_idx], which is a pointer.  My guess is that
+    tcache->counts[tc_idx] is what's intended here, and this patch changes
+    the assertion accordingly.
+    
+    Tested for x86_64.
+    
+            * malloc/malloc.c (tcache_get): Compare tcache->counts[tc_idx]
+            with 0, not tcache->entries[tc_idx].
+    
+    (cherry picked from commit 77dc0d8643aa99c92bf671352b0a8adde705896f)
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 92239b3324584060..998879aededf0d7c 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -2948,7 +2948,7 @@ tcache_get (size_t tc_idx)
+ {
+   tcache_entry *e = tcache->entries[tc_idx];
+   assert (tc_idx < TCACHE_MAX_BINS);
+-  assert (tcache->entries[tc_idx] > 0);
++  assert (tcache->counts[tc_idx] > 0);
+   tcache->entries[tc_idx] = e->next;
+   --(tcache->counts[tc_idx]);
+   e->key = NULL;

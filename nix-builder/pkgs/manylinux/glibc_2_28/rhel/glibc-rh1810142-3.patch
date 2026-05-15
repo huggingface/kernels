@@ -1,0 +1,46 @@
+From: Florian Weimer <fweimer@redhat.com>
+Date: Tue, 21 Jan 2020 16:11:01 +0000 (+0100)
+Subject: resolv: Fix file handle leak in __resolv_conf_load [BZ #25429]
+X-Git-Url: https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=a1a20f029299dc27170912bb9233070c8403444d
+
+resolv: Fix file handle leak in __resolv_conf_load [BZ #25429]
+
+res_vinit_1 did not close the stream on errors, only on success.
+This change moves closing the stream to __resolv_conf_load, for both
+the success and error cases.
+
+Fixes commit 89f187a40fc0ad4e22838526bfe34d73f758b776 ("resolv: Use
+getline for configuration file reading in res_vinit_1") and commit
+3f853f22c87f0b671c0366eb290919719fa56c0e ("resolv: Lift domain search
+list limits [BZ #19569] [BZ #21475]"), where memory allocation was
+introduced into res_vinit_1.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+---
+
+diff --git a/resolv/res_init.c b/resolv/res_init.c
+index 95dce098aa..09345718cd 100644
+--- a/resolv/res_init.c
++++ b/resolv/res_init.c
+@@ -508,7 +508,6 @@ res_vinit_1 (FILE *fp, struct resolv_conf_parser *parser)
+               continue;
+             }
+         }
+-      fclose (fp);
+     }
+   if (__glibc_unlikely (nameserver_list_size (&parser->nameserver_list) == 0))
+     {
+@@ -593,6 +592,13 @@ __resolv_conf_load (struct __res_state *preinit)
+     }
+   resolv_conf_parser_free (&parser);
+ 
++  if (fp != NULL)
++    {
++      int saved_errno = errno;
++      fclose (fp);
++      __set_errno (saved_errno);
++    }
++
+   return conf;
+ }
+ 

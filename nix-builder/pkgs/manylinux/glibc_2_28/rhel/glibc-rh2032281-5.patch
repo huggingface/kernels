@@ -1,0 +1,121 @@
+commit de8995a2a04163617c1a233b4b81356ef9f9741f
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Mar 10 12:26:30 2021 -0300
+
+    support: Add xclone
+    
+    It is a wrapper for Linux clone syscall, to simplify the call to the
+    use only the most common arguments and remove architecture specific
+    handling (such as ia64 different name and signature).
+
+# Conflicts:
+#	support/Makefile
+
+diff --git a/support/Makefile b/support/Makefile
+index fb95a69ed9158e78..d2b95539403e416c 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -84,6 +84,7 @@ libsupport-routines = \
+   xcalloc \
+   xchdir \
+   xchroot \
++  xclone \
+   xclose \
+   xconnect \
+   xcopy_file_range \
+diff --git a/support/xclone.c b/support/xclone.c
+new file mode 100644
+index 0000000000000000..924d2b875402a819
+--- /dev/null
++++ b/support/xclone.c
+@@ -0,0 +1,50 @@
++/* Auxiliary functions to issue the clone syscall.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifdef __linux__
++# include <support/check.h>
++# include <stackinfo.h>  /* For _STACK_GROWS_{UP,DOWN}.  */
++# include <xsched.h>
++
++pid_t
++xclone (int (*fn) (void *arg), void *arg, void *stack, size_t stack_size,
++	int flags)
++{
++  pid_t r = -1;
++
++# ifdef __ia64__
++  extern int __clone2 (int (*fn) (void *arg), void *stack, size_t stack_size,
++		       int flags, void *arg, ...);
++  r = __clone2 (f, stack, stack_size, flags, arg, /* ptid */ NULL,
++		/* tls */ NULL, /* ctid  */ ctid);
++# else
++#  if _STACK_GROWS_DOWN
++  r = clone (fn, stack + stack_size, flags, arg, /* ptid */ NULL,
++	     /* tls */ NULL, /* ctid */  NULL);
++#  elif _STACK_GROWS_UP
++  r = clone (fn, stack, flags, arg, /* ptid */ NULL, /* tls */ NULL,
++	     &ctid);
++#  endif
++# endif
++
++  if (r < 0)
++    FAIL_EXIT1 ("clone: %m");
++
++  return r;
++}
++#endif
+diff --git a/support/xsched.h b/support/xsched.h
+new file mode 100644
+index 0000000000000000..eefd731940187b39
+--- /dev/null
++++ b/support/xsched.h
+@@ -0,0 +1,34 @@
++/* Wrapper for sched.h functions.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef SUPPORT_XSCHED_H
++#define SUPPORT_XSCHED_H
++
++__BEGIN_DECLS
++
++#include <sched.h>
++#include <sys/types.h>
++
++#ifdef __linux__
++pid_t xclone (int (*fn) (void *arg), void *arg, void *stack,
++	      size_t stack_size, int flags);
++#endif
++
++__END_DECLS
++
++#endif

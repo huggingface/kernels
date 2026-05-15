@@ -1,0 +1,182 @@
+From 6c5e5f498cd004b3f42d97997898018df8f798a4 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:21 +0100
+Subject: [PATCH 10/28] Use GCC builtins for ceil functions if desired.
+
+This patch is using the corresponding GCC builtin for ceilf, ceil,
+ceill and ceilf128 if the USE_FUNCTION_BUILTIN macros are defined to one
+in math-use-builtins.h.
+
+This is the case for s390 if build with at least --march=z196 --mzarch.
+Otherwise the generic implementation is used.  The code of the generic
+implementation is not changed.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 62560ee84095274bab1050817f42e782df226a17)
+---
+ sysdeps/generic/math-use-builtins.h         |  5 +++++
+ sysdeps/ieee754/dbl-64/s_ceil.c             |  6 ++++++
+ sysdeps/ieee754/float128/float128_private.h |  3 +++
+ sysdeps/ieee754/flt-32/s_ceilf.c            |  7 ++++++-
+ sysdeps/ieee754/ldbl-128/s_ceill.c          |  6 ++++++
+ sysdeps/s390/fpu/math-use-builtins.h        | 11 +++++++++++
+ 6 files changed, 37 insertions(+), 1 deletion(-)
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+index e1c5df62e4..076ec661b0 100644
+--- a/sysdeps/generic/math-use-builtins.h
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -36,4 +36,9 @@
+ #define USE_FLOORL_BUILTIN 0
+ #define USE_FLOORF128_BUILTIN 0
+ 
++#define USE_CEIL_BUILTIN 0
++#define USE_CEILF_BUILTIN 0
++#define USE_CEILL_BUILTIN 0
++#define USE_CEILF128_BUILTIN 0
++
+ #endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_ceil.c b/sysdeps/ieee754/dbl-64/s_ceil.c
+index 3becdfc515..ee4a3abc19 100644
+--- a/sysdeps/ieee754/dbl-64/s_ceil.c
++++ b/sysdeps/ieee754/dbl-64/s_ceil.c
+@@ -20,10 +20,15 @@
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-double.h>
++#include <math-use-builtins.h>
+ 
+ double
+ __ceil (double x)
+ {
++#if USE_CEIL_BUILTIN
++  return __builtin_ceil (x);
++#else
++  /* Use generic implementation.  */
+   int64_t i0, i;
+   int32_t j0;
+   EXTRACT_WORDS64 (i0, x);
+@@ -57,6 +62,7 @@ __ceil (double x)
+     }
+   INSERT_WORDS64 (x, i0);
+   return x;
++#endif /* ! USE_CEIL_BUILTIN  */
+ }
+ #ifndef __ceil
+ libm_alias_double (__ceil, ceil)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index 667030ab06..19352ca26c 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -145,6 +145,8 @@
+ #define USE_RINTL_BUILTIN USE_RINTF128_BUILTIN
+ #undef USE_FLOORL_BUILTIN
+ #define USE_FLOORL_BUILTIN USE_FLOORF128_BUILTIN
++#undef USE_CEILL_BUILTIN
++#define USE_CEILL_BUILTIN USE_CEILF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -349,6 +351,7 @@
+ #define __builtin_nearbyintl __builtin_nearbyintf128
+ #define __builtin_rintl __builtin_rintf128
+ #define __builtin_floorl __builtin_floorf128
++#define __builtin_ceill __builtin_ceilf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_ceilf.c b/sysdeps/ieee754/flt-32/s_ceilf.c
+index f289ec2341..6cab7bdd62 100644
+--- a/sysdeps/ieee754/flt-32/s_ceilf.c
++++ b/sysdeps/ieee754/flt-32/s_ceilf.c
+@@ -16,11 +16,15 @@
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-float.h>
+-
++#include <math-use-builtins.h>
+ 
+ float
+ __ceilf(float x)
+ {
++#if USE_CEILF_BUILTIN
++  return __builtin_ceilf (x);
++#else
++  /* Use generic implementation.  */
+ 	int32_t i0,j0;
+ 	uint32_t i;
+ 
+@@ -43,6 +47,7 @@ __ceilf(float x)
+ 	}
+ 	SET_FLOAT_WORD(x,i0);
+ 	return x;
++#endif /* ! USE_CEILF_BUILTIN  */
+ }
+ #ifndef __ceilf
+ libm_alias_float (__ceil, ceil)
+diff --git a/sysdeps/ieee754/ldbl-128/s_ceill.c b/sysdeps/ieee754/ldbl-128/s_ceill.c
+index e6aba5f2af..d212d86179 100644
+--- a/sysdeps/ieee754/ldbl-128/s_ceill.c
++++ b/sysdeps/ieee754/ldbl-128/s_ceill.c
+@@ -27,9 +27,14 @@ static char rcsid[] = "$NetBSD: $";
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
++#include <math-use-builtins.h>
+ 
+ _Float128 __ceill(_Float128 x)
+ {
++#if USE_CEILL_BUILTIN
++  return __builtin_ceill (x);
++#else
++  /* Use generic implementation.  */
+ 	int64_t i0,i1,j0;
+ 	uint64_t i,j;
+ 	GET_LDOUBLE_WORDS64(i0,i1,x);
+@@ -63,5 +68,6 @@ _Float128 __ceill(_Float128 x)
+ 	}
+ 	SET_LDOUBLE_WORDS64(x,i0,i1);
+ 	return x;
++#endif /* ! USE_CEILL_BUILTIN  */
+ }
+ libm_alias_ldouble (__ceil, ceil)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+index c213c16c6f..5435cbb65f 100644
+--- a/sysdeps/s390/fpu/math-use-builtins.h
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -38,14 +38,20 @@
+ # define USE_FLOORF_BUILTIN 1
+ # define USE_FLOORL_BUILTIN 1
+ 
++# define USE_CEIL_BUILTIN 1
++# define USE_CEILF_BUILTIN 1
++# define USE_CEILL_BUILTIN 1
++
+ # if __GNUC_PREREQ (8, 0)
+ #  define USE_NEARBYINTF128_BUILTIN 1
+ #  define USE_RINTF128_BUILTIN 1
+ #  define USE_FLOORF128_BUILTIN 1
++#  define USE_CEILF128_BUILTIN 1
+ # else
+ #  define USE_NEARBYINTF128_BUILTIN 0
+ #  define USE_RINTF128_BUILTIN 0
+ #  define USE_FLOORF128_BUILTIN 0
++#  define USE_CEILF128_BUILTIN 0
+ # endif
+ 
+ #else
+@@ -66,6 +72,11 @@
+ # define USE_FLOORL_BUILTIN 0
+ # define USE_FLOORF128_BUILTIN 0
+ 
++# define USE_CEIL_BUILTIN 0
++# define USE_CEILF_BUILTIN 0
++# define USE_CEILL_BUILTIN 0
++# define USE_CEILF128_BUILTIN 0
++
+ #endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
+ 
+ #endif /* math-use-builtins.h */
+-- 
+2.18.2
+

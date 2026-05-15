@@ -1,0 +1,33 @@
+commit ca136bb0a36d0a7056c926bfe5126873566efe40
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 31 13:28:26 2019 +0100
+
+    Clarify purpose of assert in _dl_lookup_symbol_x
+    
+    Only one of the currently defined flags is incompatible with versioned
+    symbol lookups, so it makes sense to check for that flag and not its
+    complement.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Reviewed-by: Gabriel F. T. Gomes <gabrielftg@linux.ibm.com>
+    Change-Id: I3384349cef90cfd91862ebc34a4053f0c0a99404
+
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index 1d046caf017b582b..efbdb8deb3c0a9d4 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -792,11 +792,9 @@ _dl_lookup_symbol_x (const char *undef_name, struct link_map *undef_map,
+ 
+   bump_num_relocations ();
+ 
+-  /* No other flag than DL_LOOKUP_ADD_DEPENDENCY or DL_LOOKUP_GSCOPE_LOCK
+-     is allowed if we look up a versioned symbol.  */
+-  assert (version == NULL
+-	  || (flags & ~(DL_LOOKUP_ADD_DEPENDENCY | DL_LOOKUP_GSCOPE_LOCK))
+-	     == 0);
++  /* DL_LOOKUP_RETURN_NEWEST does not make sense for versioned
++     lookups.  */
++  assert (version == NULL || !(flags & DL_LOOKUP_RETURN_NEWEST));
+ 
+   size_t i = 0;
+   if (__glibc_unlikely (skip_map != NULL))

@@ -1,0 +1,92 @@
+commit dc0afac3252d0c53716ccaf0b424f7769a66d695
+Author: marxin <mliska@suse.cz>
+Date:   Wed Feb 20 14:54:35 2019 +0100
+
+    Add new Fortran vector math header file.
+
+diff --git a/bits/math-vector-fortran.h b/bits/math-vector-fortran.h
+new file mode 100644
+index 0000000000000000..7c1e095094e24571
+--- /dev/null
++++ b/bits/math-vector-fortran.h
+@@ -0,0 +1,19 @@
++! Platform-specific declarations of SIMD math functions for Fortran. -*- f90 -*-
++!   Copyright (C) 2019 Free Software Foundation, Inc.
++!   This file is part of the GNU C Library.
++!
++!   The GNU C Library is free software; you can redistribute it and/or
++!   modify it under the terms of the GNU Lesser General Public
++!   License as published by the Free Software Foundation; either
++!   version 2.1 of the License, or (at your option) any later version.
++!
++!   The GNU C Library is distributed in the hope that it will be useful,
++!   but WITHOUT ANY WARRANTY; without even the implied warranty of
++!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++!   Lesser General Public License for more details.
++!
++!   You should have received a copy of the GNU Lesser General Public
++!   License along with the GNU C Library; if not, see
++!   <http://www.gnu.org/licenses/>.
++
++! No SIMD math functions are available for this platform.
+diff --git a/math/Makefile b/math/Makefile
+index 90b3b68916e12d85..16e68754fc863ea2 100644
+--- a/math/Makefile
++++ b/math/Makefile
+@@ -26,6 +26,7 @@ headers		:= math.h bits/mathcalls.h bits/mathinline.h \
+ 		   fpu_control.h complex.h bits/cmathcalls.h fenv.h \
+ 		   bits/fenv.h bits/fenvinline.h bits/mathdef.h tgmath.h \
+ 		   bits/math-finite.h bits/math-vector.h \
++		   bits/math-vector-fortran.h \
+ 		   bits/libm-simd-decl-stubs.h bits/iscanonical.h \
+ 		   bits/flt-eval-method.h bits/fp-fast.h bits/fp-logb.h \
+ 		   bits/long-double.h bits/mathcalls-helper-functions.h \
+diff --git a/sysdeps/x86/fpu/bits/math-vector-fortran.h b/sysdeps/x86/fpu/bits/math-vector-fortran.h
+new file mode 100644
+index 0000000000000000..36051cc73ea03602
+--- /dev/null
++++ b/sysdeps/x86/fpu/bits/math-vector-fortran.h
+@@ -0,0 +1,43 @@
++! Platform-specific declarations of SIMD math functions for Fortran. -*- f90 -*-
++!   Copyright (C) 2019 Free Software Foundation, Inc.
++!   This file is part of the GNU C Library.
++!
++!   The GNU C Library is free software; you can redistribute it and/or
++!   modify it under the terms of the GNU Lesser General Public
++!   License as published by the Free Software Foundation; either
++!   version 2.1 of the License, or (at your option) any later version.
++!
++!   The GNU C Library is distributed in the hope that it will be useful,
++!   but WITHOUT ANY WARRANTY; without even the implied warranty of
++!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++!   Lesser General Public License for more details.
++!
++!   You should have received a copy of the GNU Lesser General Public
++!   License along with the GNU C Library; if not, see
++!   <http://www.gnu.org/licenses/>.
++
++!GCC$ builtin (cos) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (cosf) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (sin) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (sinf) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (sincos) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (sincosf) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (log) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (logf) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (exp) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (expf) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (pow) attributes simd (notinbranch) if('x86_64')
++!GCC$ builtin (powf) attributes simd (notinbranch) if('x86_64')
++
++!GCC$ builtin (cos) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (cosf) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (sin) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (sinf) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (sincos) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (sincosf) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (log) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (logf) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (exp) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (expf) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (pow) attributes simd (notinbranch) if('x32')
++!GCC$ builtin (powf) attributes simd (notinbranch) if('x32')

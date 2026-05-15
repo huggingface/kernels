@@ -1,0 +1,177 @@
+From e93b17fad37a61f7ae9a663c617926b0f510921a Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:24 +0100
+Subject: [PATCH 13/28] Use GCC builtins for copysign functions if desired.
+
+This patch is always using the corresponding GCC builtin for copysignf, copysign,
+and is using the builtin for copysignl, copysignf128 if the USE_FUNCTION_BUILTIN
+macros are defined to one in math-use-builtins.h.
+
+Altough the long double version is enabled by default we still need
+the macro and the alternative implementation as the _Float128 version
+of the builtin is not available with all supported GCC versions.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit f818afdd3b29d7eef2010448457c9f5c16e684cd)
+---
+ sysdeps/generic/math-use-builtins.h         |  9 +++++++++
+ sysdeps/ieee754/dbl-64/s_copysign.c         |  9 ++-------
+ sysdeps/ieee754/float128/float128_private.h |  3 +++
+ sysdeps/ieee754/flt-32/s_copysignf.c        | 12 ++++--------
+ sysdeps/ieee754/ldbl-128/s_copysignl.c      |  6 ++++++
+ sysdeps/s390/fpu/math-use-builtins.h        |  7 +++++++
+ 6 files changed, 31 insertions(+), 15 deletions(-)
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+index 34ca438a8c..770b54ce61 100644
+--- a/sysdeps/generic/math-use-builtins.h
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -19,6 +19,8 @@
+ #ifndef MATH_USE_BUILTINS_H
+ #define MATH_USE_BUILTINS_H	1
+ 
++#include <features.h> /* For __GNUC_PREREQ.  */
++
+ /* Define these macros to 1 to use __builtin_xyz instead of the
+    generic implementation.  */
+ #define USE_NEARBYINT_BUILTIN 0
+@@ -51,4 +53,11 @@
+ #define USE_ROUNDL_BUILTIN 0
+ #define USE_ROUNDF128_BUILTIN 0
+ 
++#define USE_COPYSIGNL_BUILTIN 1
++#if __GNUC_PREREQ (7, 0)
++# define USE_COPYSIGNF128_BUILTIN 1
++#else
++# define USE_COPYSIGNF128_BUILTIN 0
++#endif
++
+ #endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_copysign.c b/sysdeps/ieee754/dbl-64/s_copysign.c
+index ab81d732ab..b95f1575d9 100644
+--- a/sysdeps/ieee754/dbl-64/s_copysign.c
++++ b/sysdeps/ieee754/dbl-64/s_copysign.c
+@@ -10,7 +10,7 @@
+  * ====================================================
+  */
+ 
+-#if defined(LIBM_SCCS) && !defined(lint)
++#if defined (LIBM_SCCS) && ! defined (lint)
+ static char rcsid[] = "$NetBSD: s_copysign.c,v 1.8 1995/05/10 20:46:57 jtc Exp $";
+ #endif
+ 
+@@ -21,16 +21,11 @@ static char rcsid[] = "$NetBSD: s_copysign.c,v 1.8 1995/05/10 20:46:57 jtc Exp $
+  */
+ 
+ #include <math.h>
+-#include <math_private.h>
+ #include <libm-alias-double.h>
+ 
+ double
+ __copysign (double x, double y)
+ {
+-  uint32_t hx, hy;
+-  GET_HIGH_WORD (hx, x);
+-  GET_HIGH_WORD (hy, y);
+-  SET_HIGH_WORD (x, (hx & 0x7fffffff) | (hy & 0x80000000));
+-  return x;
++  return __builtin_copysign (x, y);
+ }
+ libm_alias_double (__copysign, copysign)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index 3297a71e44..077df0e09f 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -151,6 +151,8 @@
+ #define USE_TRUNCL_BUILTIN USE_TRUNCF128_BUILTIN
+ #undef USE_ROUNDL_BUILTIN
+ #define USE_ROUNDL_BUILTIN USE_ROUNDF128_BUILTIN
++#undef USE_COPYSIGNL_BUILTIN
++#define USE_COPYSIGNL_BUILTIN USE_COPYSIGNF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -358,6 +360,7 @@
+ #define __builtin_ceill __builtin_ceilf128
+ #define __builtin_truncl __builtin_truncf128
+ #define __builtin_roundl __builtin_roundf128
++#define __builtin_copysignl __builtin_copysignf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_copysignf.c b/sysdeps/ieee754/flt-32/s_copysignf.c
+index 3c4ac7ce68..0247abd152 100644
+--- a/sysdeps/ieee754/flt-32/s_copysignf.c
++++ b/sysdeps/ieee754/flt-32/s_copysignf.c
+@@ -13,7 +13,7 @@
+  * ====================================================
+  */
+ 
+-#if defined(LIBM_SCCS) && !defined(lint)
++#if defined (LIBM_SCCS) && ! defined (lint)
+ static char rcsid[] = "$NetBSD: s_copysignf.c,v 1.4 1995/05/10 20:46:59 jtc Exp $";
+ #endif
+ 
+@@ -24,15 +24,11 @@ static char rcsid[] = "$NetBSD: s_copysignf.c,v 1.4 1995/05/10 20:46:59 jtc Exp
+  */
+ 
+ #include <math.h>
+-#include <math_private.h>
+ #include <libm-alias-float.h>
+ 
+-float __copysignf(float x, float y)
++float
++__copysignf (float x, float y)
+ {
+-	uint32_t ix,iy;
+-	GET_FLOAT_WORD(ix,x);
+-	GET_FLOAT_WORD(iy,y);
+-	SET_FLOAT_WORD(x,(ix&0x7fffffff)|(iy&0x80000000));
+-        return x;
++  return __builtin_copysignf (x, y);
+ }
+ libm_alias_float (__copysign, copysign)
+diff --git a/sysdeps/ieee754/ldbl-128/s_copysignl.c b/sysdeps/ieee754/ldbl-128/s_copysignl.c
+index d23e0f72ea..4cae8612dc 100644
+--- a/sysdeps/ieee754/ldbl-128/s_copysignl.c
++++ b/sysdeps/ieee754/ldbl-128/s_copysignl.c
+@@ -26,14 +26,20 @@ static char rcsid[] = "$NetBSD: $";
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
++#include <math-use-builtins.h>
+ 
+ _Float128 __copysignl(_Float128 x, _Float128 y)
+ {
++#if USE_COPYSIGNL_BUILTIN
++  return __builtin_copysignl (x, y);
++#else
++  /* Use generic implementation.  */
+ 	uint64_t hx,hy;
+ 	GET_LDOUBLE_MSW64(hx,x);
+ 	GET_LDOUBLE_MSW64(hy,y);
+ 	SET_LDOUBLE_MSW64(x,(hx&0x7fffffffffffffffULL)
+ 			    |(hy&0x8000000000000000ULL));
+         return x;
++#endif /* ! USE_COPYSIGNL_BUILTIN  */
+ }
+ libm_alias_ldouble (__copysign, copysign)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+index 51cb9f91ab..4c4aad2ab5 100644
+--- a/sysdeps/s390/fpu/math-use-builtins.h
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -101,4 +101,11 @@
+ 
+ #endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
+ 
++#define USE_COPYSIGNL_BUILTIN 1
++#if __GNUC_PREREQ (7, 0)
++# define USE_COPYSIGNF128_BUILTIN 1
++#else
++# define USE_COPYSIGNF128_BUILTIN 0
++#endif
++
+ #endif /* math-use-builtins.h */
+-- 
+2.18.2
+

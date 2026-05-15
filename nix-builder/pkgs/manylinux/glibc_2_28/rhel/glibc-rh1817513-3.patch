@@ -1,0 +1,56 @@
+commit ae67f2e562603a0b58f59aef4f31aa33de05ba88
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Fri Aug 3 06:40:48 2018 -0700
+
+    x86: Cleanup cpu-features-offsets.sym
+    
+    Remove the unused macros.  There is no code changes in libc.so nor
+    ld.so on i686 and x86-64.
+    
+            * sysdeps/x86/cpu-features-offsets.sym
+            (rtld_global_ro_offsetof): Removed.
+            (CPU_FEATURES_SIZE): Likewise.
+            (CPUID_OFFSET): Likewise.
+            (CPUID_SIZE): Likewise.
+            (CPUID_EAX_OFFSET): Likewise.
+            (CPUID_EBX_OFFSET): Likewise.
+            (CPUID_ECX_OFFSET): Likewise.
+            (CPUID_EDX_OFFSET): Likewise.
+            (FAMILY_OFFSET): Likewise.
+            (MODEL_OFFSET): Likewise.
+            (FEATURE_OFFSET): Likewise.
+            (FEATURE_SIZ): Likewise.
+            (COMMON_CPUID_INDEX_1): Likewise.
+            (COMMON_CPUID_INDEX_7): Likewise.
+            (FEATURE_INDEX_1): Likewise.
+            (RTLD_GLOBAL_RO_DL_X86_CPU_FEATURES_OFFSET): Updated.
+
+diff --git a/sysdeps/x86/cpu-features-offsets.sym b/sysdeps/x86/cpu-features-offsets.sym
+index 33dd094e37f0fec7..6d03cea8e8fcdc36 100644
+--- a/sysdeps/x86/cpu-features-offsets.sym
++++ b/sysdeps/x86/cpu-features-offsets.sym
+@@ -2,23 +2,5 @@
+ 
+ #include <ldsodefs.h>
+ 
+-#define rtld_global_ro_offsetof(mem) offsetof (struct rtld_global_ro, mem)
+-
+-RTLD_GLOBAL_RO_DL_X86_CPU_FEATURES_OFFSET rtld_global_ro_offsetof (_dl_x86_cpu_features)
+-
+-CPU_FEATURES_SIZE	sizeof (struct cpu_features)
+-CPUID_OFFSET		offsetof (struct cpu_features, cpuid)
+-CPUID_SIZE		sizeof (struct cpuid_registers)
+-CPUID_EAX_OFFSET	offsetof (struct cpuid_registers, eax)
+-CPUID_EBX_OFFSET	offsetof (struct cpuid_registers, ebx)
+-CPUID_ECX_OFFSET	offsetof (struct cpuid_registers, ecx)
+-CPUID_EDX_OFFSET	offsetof (struct cpuid_registers, edx)
+-FAMILY_OFFSET		offsetof (struct cpu_features, family)
+-MODEL_OFFSET		offsetof (struct cpu_features, model)
++RTLD_GLOBAL_RO_DL_X86_CPU_FEATURES_OFFSET offsetof (struct rtld_global_ro, _dl_x86_cpu_features)
+ XSAVE_STATE_SIZE_OFFSET	offsetof (struct cpu_features, xsave_state_size)
+-FEATURE_OFFSET		offsetof (struct cpu_features, feature)
+-FEATURE_SIZE		sizeof (unsigned int)
+-
+-COMMON_CPUID_INDEX_1
+-COMMON_CPUID_INDEX_7
+-FEATURE_INDEX_1

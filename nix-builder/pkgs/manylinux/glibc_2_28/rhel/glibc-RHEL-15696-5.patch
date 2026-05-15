@@ -1,0 +1,290 @@
+From 82d0b4a4d76db554eb6757acb790fcea30b19965 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 21 Jan 2019 11:32:24 -0800
+Subject: [PATCH] x86-64 memset/wmemset: Properly handle the length parameter
+ [BZ# 24097]
+Content-type: text/plain; charset=UTF-8
+
+On x32, the size_t parameter may be passed in the lower 32 bits of a
+64-bit register with the non-zero upper 32 bits.  The string/memory
+functions written in assembly can only use the lower 32 bits of a
+64-bit register as length or must clear the upper 32 bits before using
+the full 64-bit register for length.
+
+This pach fixes memset/wmemset for x32.  Tested on x86-64 and x32.  On
+x86-64, libc.so is the same with and withou the fix.
+
+	[BZ# 24097]
+	CVE-2019-6488
+	* sysdeps/x86_64/multiarch/memset-avx512-no-vzeroupper.S: Use
+	RDX_LP for length.  Clear the upper 32 bits of RDX register.
+	* sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S: Likewise.
+	* sysdeps/x86_64/x32/Makefile (tests): Add tst-size_t-wmemset.
+	* sysdeps/x86_64/x32/tst-size_t-memset.c: New file.
+	* sysdeps/x86_64/x32/tst-size_t-wmemset.c: Likewise.
+---
+ .../multiarch/memset-avx512-no-vzeroupper.S   |  6 +-
+ .../multiarch/memset-vec-unaligned-erms.S     | 34 +++++----
+ sysdeps/x86_64/x32/Makefile                   |  4 +-
+ sysdeps/x86_64/x32/tst-size_t-memset.c        | 73 +++++++++++++++++++
+ sysdeps/x86_64/x32/tst-size_t-wmemset.c       | 20 +++++
+ 5 files changed, 121 insertions(+), 16 deletions(-)
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-memset.c
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-wmemset.c
+
+Conflicts:
+	ChangeLog
+	(removed)
+
+diff --git a/sysdeps/x86_64/multiarch/memset-avx512-no-vzeroupper.S b/sysdeps/x86_64/multiarch/memset-avx512-no-vzeroupper.S
+index 689cc119..99e25519 100644
+--- a/sysdeps/x86_64/multiarch/memset-avx512-no-vzeroupper.S
++++ b/sysdeps/x86_64/multiarch/memset-avx512-no-vzeroupper.S
+@@ -29,12 +29,16 @@
+ 	.section .text.avx512,"ax",@progbits
+ #if defined PIC
+ ENTRY (MEMSET_CHK)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMSET_CHK)
+ #endif
+ 
+ ENTRY (MEMSET)
++# ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
++# endif
+ 	vpxor	%xmm0, %xmm0, %xmm0
+ 	vmovd	%esi, %xmm1
+ 	lea	(%rdi, %rdx), %rsi
+diff --git a/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+index 270a1d49..9a0fd818 100644
+--- a/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S
+@@ -65,8 +65,8 @@
+ 	.section SECTION(.text),"ax",@progbits
+ #if VEC_SIZE == 16 && IS_IN (libc)
+ ENTRY (__bzero)
+-	movq	%rdi, %rax /* Set return value.  */
+-	movq	%rsi, %rdx /* Set n.  */
++	mov	%RDI_LP, %RAX_LP /* Set return value.  */
++	mov	%RSI_LP, %RDX_LP /* Set n.  */
+ 	pxor	%xmm0, %xmm0
+ 	jmp	L(entry_from_bzero)
+ END (__bzero)
+@@ -76,13 +76,13 @@ weak_alias (__bzero, bzero)
+ #if IS_IN (libc)
+ # if defined SHARED
+ ENTRY_CHK (WMEMSET_CHK_SYMBOL (__wmemset_chk, unaligned))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END_CHK (WMEMSET_CHK_SYMBOL (__wmemset_chk, unaligned))
+ # endif
+ 
+ ENTRY (WMEMSET_SYMBOL (__wmemset, unaligned))
+-	shlq	$2, %rdx
++	shl	$2, %RDX_LP
+ 	WMEMSET_VDUP_TO_VEC0_AND_SET_RETURN (%esi, %rdi)
+ 	jmp	L(entry_from_bzero)
+ END (WMEMSET_SYMBOL (__wmemset, unaligned))
+@@ -90,13 +90,17 @@ END (WMEMSET_SYMBOL (__wmemset, unaligned))
+ 
+ #if defined SHARED && IS_IN (libc)
+ ENTRY_CHK (MEMSET_CHK_SYMBOL (__memset_chk, unaligned))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END_CHK (MEMSET_CHK_SYMBOL (__memset_chk, unaligned))
+ #endif
+ 
+ ENTRY (MEMSET_SYMBOL (__memset, unaligned))
+ 	MEMSET_VDUP_TO_VEC0_AND_SET_RETURN (%esi, %rdi)
++# ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
++# endif
+ L(entry_from_bzero):
+ 	cmpq	$VEC_SIZE, %rdx
+ 	jb	L(less_vec)
+@@ -112,14 +116,14 @@ END (MEMSET_SYMBOL (__memset, unaligned))
+ 
+ # if VEC_SIZE == 16
+ ENTRY (__memset_chk_erms)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (__memset_chk_erms)
+ 
+ /* Only used to measure performance of REP STOSB.  */
+ ENTRY (__memset_erms)
+ 	/* Skip zero length.  */
+-	testq	%rdx, %rdx
++	test	%RDX_LP, %RDX_LP
+ 	jnz	 L(stosb)
+ 	movq	%rdi, %rax
+ 	ret
+@@ -131,11 +135,11 @@ ENTRY (MEMSET_SYMBOL (__memset, erms))
+ L(stosb):
+ 	/* Issue vzeroupper before rep stosb.  */
+ 	VZEROUPPER
+-	movq	%rdx, %rcx
++	mov	%RDX_LP, %RCX_LP
+ 	movzbl	%sil, %eax
+-	movq	%rdi, %rdx
++	mov	%RDI_LP, %RDX_LP
+ 	rep stosb
+-	movq	%rdx, %rax
++	mov	%RDX_LP, %RAX_LP
+ 	ret
+ # if VEC_SIZE == 16
+ END (__memset_erms)
+@@ -145,16 +149,20 @@ END (MEMSET_SYMBOL (__memset, erms))
+ 
+ # if defined SHARED && IS_IN (libc)
+ ENTRY_CHK (MEMSET_CHK_SYMBOL (__memset_chk, unaligned_erms))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END_CHK (MEMSET_CHK_SYMBOL (__memset_chk, unaligned_erms))
+ # endif
+ 
+ ENTRY (MEMSET_SYMBOL (__memset, unaligned_erms))
+ 	MEMSET_VDUP_TO_VEC0_AND_SET_RETURN (%esi, %rdi)
+-	cmpq	$VEC_SIZE, %rdx
++# ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
++# endif
++	cmp	$VEC_SIZE, %RDX_LP
+ 	jb	L(less_vec)
+-	cmpq	$(VEC_SIZE * 2), %rdx
++	cmp	$(VEC_SIZE * 2), %RDX_LP
+ 	ja	L(stosb_more_2x_vec)
+ 	/* From VEC and to 2 * VEC.  No branch when size == VEC_SIZE.  */
+ 	VMOVU	%VEC(0), -VEC_SIZE(%rdi,%rdx)
+diff --git a/sysdeps/x86_64/x32/Makefile b/sysdeps/x86_64/x32/Makefile
+index e99dbd7c..98bd9ae9 100644
+--- a/sysdeps/x86_64/x32/Makefile
++++ b/sysdeps/x86_64/x32/Makefile
+@@ -7,9 +7,9 @@ endif
+ 
+ ifeq ($(subdir),string)
+ tests += tst-size_t-memchr tst-size_t-memcmp tst-size_t-memcpy \
+-	 tst-size_t-memrchr
++	 tst-size_t-memrchr tst-size_t-memset
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+-tests += tst-size_t-wmemchr tst-size_t-wmemcmp
++tests += tst-size_t-wmemchr tst-size_t-wmemcmp tst-size_t-wmemset
+ endif
+diff --git a/sysdeps/x86_64/x32/tst-size_t-memset.c b/sysdeps/x86_64/x32/tst-size_t-memset.c
+new file mode 100644
+index 00000000..2c367af6
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-memset.c
+@@ -0,0 +1,73 @@
++/* Test memset with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifdef WIDE
++# define TEST_NAME "wmemset"
++#else
++# define TEST_NAME "memset"
++#endif /* WIDE */
++
++#include "test-size_t.h"
++
++#ifdef WIDE
++# include <wchar.h>
++# define MEMSET wmemset
++# define CHAR wchar_t
++#else
++# define MEMSET memset
++# define CHAR char
++#endif /* WIDE */
++
++IMPL (MEMSET, 1)
++
++typedef CHAR *(*proto_t) (CHAR *, int, size_t);
++
++static void *
++__attribute__ ((noinline, noclone))
++do_memset (parameter_t a, parameter_t b)
++{
++  return CALL (&b, a.p, (uintptr_t) b.p, a.len);
++}
++
++static int
++test_main (void)
++{
++  test_init ();
++
++  CHAR ch = 0x23;
++  parameter_t src = { { page_size / sizeof (CHAR) }, buf2 };
++  parameter_t c = { { 0 }, (void *) (uintptr_t) ch };
++
++  int ret = 0;
++  FOR_EACH_IMPL (impl, 0)
++    {
++      c.fn = impl->fn;
++      CHAR *p = (CHAR *) do_memset (src, c);
++      size_t i;
++      for (i = 0; i < src.len; i++)
++	if (p[i] != ch)
++	  {
++	    error (0, 0, "Wrong result in function %s", impl->name);
++	    ret = 1;
++	  }
++    }
++
++  return ret ? EXIT_FAILURE : EXIT_SUCCESS;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/x86_64/x32/tst-size_t-wmemset.c b/sysdeps/x86_64/x32/tst-size_t-wmemset.c
+new file mode 100644
+index 00000000..955eb488
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-wmemset.c
+@@ -0,0 +1,20 @@
++/* Test wmemset with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define WIDE 1
++#include "tst-size_t-memset.c"
+-- 
+GitLab
+

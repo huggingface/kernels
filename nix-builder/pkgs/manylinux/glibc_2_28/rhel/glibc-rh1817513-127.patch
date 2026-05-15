@@ -1,0 +1,241 @@
+commit fdf8fbca455ca3ef57235bde907bcc6a624ac5aa
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Dec 10 13:51:18 2020 +0100
+
+    s390x: Add glibc-hwcaps support
+    
+    Subdirectories z13, z14, z15 can be selected, mostly based on the
+    level of support for vector instructions.
+    
+    Co-Authored-By: Stefan Liebler <stli@linux.ibm.com>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 63c61ad63677ec63..67029930dd2cb461 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -1751,7 +1751,7 @@ $(objpfx)argv0test.out: tst-rtld-argv0.sh $(objpfx)ld.so \
+ # glibc-hwcaps mechanism for this architecture).  Used to obtain test
+ # coverage for some glibc-hwcaps tests for the widest possible range
+ # of systems.
+-glibc-hwcaps-first-subdirs-for-tests = power9 x86-64-v2
++glibc-hwcaps-first-subdirs-for-tests = power9 x86-64-v2 z13
+ 
+ # The test modules are parameterized by preprocessor macros.
+ LDFLAGS-libmarkermod1-1.so += -Wl,-soname,libmarkermod1.so
+diff --git a/elf/tst-glibc-hwcaps-cache.script b/elf/tst-glibc-hwcaps-cache.script
+index 6a4675f9bd30e02f..c3271f61f9e50f2e 100644
+--- a/elf/tst-glibc-hwcaps-cache.script
++++ b/elf/tst-glibc-hwcaps-cache.script
+@@ -11,6 +11,16 @@ mkdirp 0770 $L/glibc-hwcaps/power10
+ cp $B/elf/libmarkermod3-2.so $L/glibc-hwcaps/power9/libmarkermod3.so
+ cp $B/elf/libmarkermod3-3.so $L/glibc-hwcaps/power10/libmarkermod3.so
+ 
++mkdirp 0770 $L/glibc-hwcaps/z13
++cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/z13/libmarkermod2.so
++mkdirp 0770 $L/glibc-hwcaps/z14
++cp $B/elf/libmarkermod3-2.so $L/glibc-hwcaps/z13/libmarkermod3.so
++cp $B/elf/libmarkermod3-3.so $L/glibc-hwcaps/z14/libmarkermod3.so
++mkdirp 0770 $L/glibc-hwcaps/z15
++cp $B/elf/libmarkermod4-2.so $L/glibc-hwcaps/z13/libmarkermod4.so
++cp $B/elf/libmarkermod4-3.so $L/glibc-hwcaps/z14/libmarkermod4.so
++cp $B/elf/libmarkermod4-4.so $L/glibc-hwcaps/z15/libmarkermod4.so
++
+ mkdirp 0770 $L/glibc-hwcaps/x86-64-v2
+ cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/x86-64-v2/libmarkermod2.so
+ mkdirp 0770 $L/glibc-hwcaps/x86-64-v3
+diff --git a/sysdeps/s390/s390-64/Makefile b/sysdeps/s390/s390-64/Makefile
+index b4d793bb3dd1f703..e5da26871c862e63 100644
+--- a/sysdeps/s390/s390-64/Makefile
++++ b/sysdeps/s390/s390-64/Makefile
+@@ -6,4 +6,43 @@ ifeq ($(subdir),elf)
+ CFLAGS-rtld.c += -Wno-uninitialized -Wno-unused
+ CFLAGS-dl-load.c += -Wno-unused
+ CFLAGS-dl-reloc.c += -Wno-unused
++
++$(objpfx)tst-glibc-hwcaps: $(objpfx)libmarkermod2-1.so \
++  $(objpfx)libmarkermod3-1.so $(objpfx)libmarkermod4-1.so
++$(objpfx)tst-glibc-hwcaps.out: \
++  $(objpfx)libmarkermod2.so \
++    $(objpfx)glibc-hwcaps/z13/libmarkermod2.so \
++  $(objpfx)libmarkermod3.so \
++    $(objpfx)glibc-hwcaps/z13/libmarkermod3.so \
++    $(objpfx)glibc-hwcaps/z14/libmarkermod3.so \
++  $(objpfx)libmarkermod4.so \
++    $(objpfx)glibc-hwcaps/z13/libmarkermod4.so \
++    $(objpfx)glibc-hwcaps/z14/libmarkermod4.so \
++    $(objpfx)glibc-hwcaps/z15/libmarkermod4.so \
++
++$(objpfx)glibc-hwcaps/z13/libmarkermod2.so: $(objpfx)libmarkermod2-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z13/libmarkermod3.so: $(objpfx)libmarkermod3-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z14/libmarkermod3.so: $(objpfx)libmarkermod3-3.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z13/libmarkermod4.so: $(objpfx)libmarkermod4-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z14/libmarkermod4.so: $(objpfx)libmarkermod4-3.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z15/libmarkermod4.so: $(objpfx)libmarkermod4-4.so
++	$(make-target-directory)
++	cp $< $@
++
++ifeq (no,$(build-hardcoded-path-in-tests))
++# This is an ld.so.cache test, and RPATH/RUNPATH in the executable
++# interferes with its test objectives.
++tests-container += tst-glibc-hwcaps-cache
+ endif
++
++endif # $(subdir) == elf
+diff --git a/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c b/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c
+new file mode 100644
+index 0000000000000000..3673808a458350ad
+--- /dev/null
++++ b/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c
+@@ -0,0 +1,54 @@
++/* Architecture-specific glibc-hwcaps subdirectories.  s390x version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-hwcaps.h>
++#include <ldsodefs.h>
++
++const char _dl_hwcaps_subdirs[] = "z15:z14:z13";
++enum { subdirs_count = 3 }; /* Number of components in _dl_hwcaps_subdirs.  */
++
++uint32_t
++_dl_hwcaps_subdirs_active (void)
++{
++  int active = 0;
++
++  /* Test in reverse preference order.  */
++
++  /* z13.  */
++  if (!(GLRO (dl_hwcap) & HWCAP_S390_VX))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  /* z14.  */
++  if (!((GLRO (dl_hwcap) & HWCAP_S390_VXD)
++        && (GLRO (dl_hwcap) & HWCAP_S390_VXE)
++        && (GLRO (dl_hwcap) & HWCAP_S390_GS)))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  /* z15.
++     Note: We do not list HWCAP_S390_SORT and HWCAP_S390_DFLT here as,
++     according to the Principles of Operation, those may be replaced or removed
++     in future.  */
++  if (!((GLRO (dl_hwcap) & HWCAP_S390_VXRS_EXT2)
++        && (GLRO (dl_hwcap) & HWCAP_S390_VXRS_PDE)))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++}
+diff --git a/sysdeps/s390/s390-64/tst-glibc-hwcaps.c b/sysdeps/s390/s390-64/tst-glibc-hwcaps.c
+new file mode 100644
+index 0000000000000000..690f0d5fab36eb59
+--- /dev/null
++++ b/sysdeps/s390/s390-64/tst-glibc-hwcaps.c
+@@ -0,0 +1,82 @@
++/* glibc-hwcaps subdirectory test.  s390x version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <string.h>
++#include <support/check.h>
++#include <sys/auxv.h>
++#include <sys/param.h>
++
++extern int marker2 (void);
++extern int marker3 (void);
++extern int marker4 (void);
++
++/* Return the arch level, 10 for the baseline libmarkermod*.so's.  */
++static int
++compute_level (void)
++{
++  const char *platform = (const char *) getauxval (AT_PLATFORM);
++
++  /* The arch* versions refer to the edition of the Principles of
++     Operation, and they are off by two when compared with the recent
++     product names.  (The code below should not be considered an
++     accurate mapping to Principles of Operation editions for earlier
++     AT_PLATFORM strings).  */
++  if (strcmp (platform, "z900") == 0)
++    return 10;
++  if (strcmp (platform, "z990") == 0)
++    return 10;
++  if (strcmp (platform, "z9-109") == 0)
++    return 10;
++  if (strcmp (platform, "z10") == 0)
++    return 10;
++  if (strcmp (platform, "z196") == 0)
++    return 10;
++  if (strcmp (platform, "zEC12") == 0)
++    return 10;
++
++  /* If we are running on z13 or newer and the kernel was booted with novx,
++     then AT_PLATFORM is z13 or newer, but _dl_hwcaps_subdirs_active will
++     return zero and the _dl_hwcaps_subdirs are not searched.  */
++  const unsigned long int hwcap = getauxval (AT_HWCAP);
++  if ((hwcap & HWCAP_S390_VX) == 0)
++    return 10;
++
++  if (strcmp (platform, "z13") == 0)
++    return 11;
++  if (strcmp (platform, "z14") == 0)
++    return 12;
++  if (strcmp (platform, "z15") == 0)
++    return 13;
++  printf ("warning: unrecognized AT_PLATFORM value: %s\n", platform);
++  /* Assume that the new platform supports z15.  */
++  return 13;
++}
++
++static int
++do_test (void)
++{
++  int level = compute_level ();
++  printf ("info: detected architecture level: arch%d\n", level);
++  TEST_COMPARE (marker2 (), MIN (level - 9, 2));
++  TEST_COMPARE (marker3 (), MIN (level - 9, 3));
++  TEST_COMPARE (marker4 (), MIN (level - 9, 4));
++  return 0;
++}
++
++#include <support/test-driver.c>

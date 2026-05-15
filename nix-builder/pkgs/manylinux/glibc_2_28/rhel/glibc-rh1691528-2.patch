@@ -1,0 +1,49 @@
+commit 5abcddd7949270998c6e8d99fdbbba821b664f8b
+Author: Gabriel F. T. Gomes <gabriel@inconstante.eti.br>
+Date:   Thu Mar 21 17:24:30 2019 -0300
+
+    Fix parentheses error in iconvconfig.c and ld-collate.c [BZ #24372]
+    
+    When -Werror=parentheses is in use, iconvconfig.c builds fail with:
+    
+      iconvconfig.c: In function ‘write_output’:
+      iconvconfig.c:1084:34: error: suggest parentheses around ‘+’ inside ‘>>’ [-Werror=parentheses]
+         hash_size = next_prime (nnames + nnames >> 1);
+                                 ~~~~~~~^~~~~~~~
+    
+    This patch adds parentheses to the expression.  Not where suggested by
+    the compiler warning, but where it produces the expected result, i.e.:
+    where it has the effect of multiplying nnames by 1.5.
+    
+    Likewise for elem_size in ld-collate.c.
+    
+    Tested for powerpc64le.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/iconv/iconvconfig.c b/iconv/iconvconfig.c
+index 696fc8d31231ca2d..b6fef1553cbbdd3d 100644
+--- a/iconv/iconvconfig.c
++++ b/iconv/iconvconfig.c
+@@ -1081,7 +1081,7 @@ write_output (void)
+      Creating a perfect hash table is not reasonable here.  Therefore
+      we use open hashing and a table size which is the next prime 50%
+      larger than the number of strings.  */
+-  hash_size = next_prime (nnames + nnames >> 1);
++  hash_size = next_prime (nnames + (nnames >> 1));
+   hash_table = (struct hash_entry *) xcalloc (hash_size,
+ 					      sizeof (struct hash_entry));
+   /* Fill the hash table.  */
+diff --git a/locale/programs/ld-collate.c b/locale/programs/ld-collate.c
+index 9a1639b999d0e2aa..a5530655fd5638b5 100644
+--- a/locale/programs/ld-collate.c
++++ b/locale/programs/ld-collate.c
+@@ -2402,7 +2402,7 @@ collate_output (struct localedef_t *locale, const struct charmap_t *charmap,
+       runp = runp->next;
+     }
+   /* Add 50% and find the next prime number.  */
+-  elem_size = next_prime (elem_size + elem_size >> 1);
++  elem_size = next_prime (elem_size + (elem_size >> 1));
+ 
+   /* Allocate the table.  Each entry consists of two words: the hash
+      value and an index in a secondary table which provides the index

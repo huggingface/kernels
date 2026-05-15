@@ -1,0 +1,64 @@
+commit 8813b2682e4094e43b0cf1634e99619f1b8b2c62
+Author: Sajan Karumanchi <sajan.karumanchi@amd.com>
+Date:   Wed Oct 28 13:05:33 2020 +0530
+
+    x86: Optimizing memcpy for AMD Zen architecture.
+
+    Modifying the shareable cache '__x86_shared_cache_size', which is a
+    factor in computing the non-temporal threshold parameter
+    '__x86_shared_non_temporal_threshold' to optimize memcpy for AMD Zen
+    architectures.
+    In the existing implementation, the shareable cache is computed as 'L3
+    per thread, L2 per core'. Recomputing this shareable cache as 'L3 per
+    CCX(Core-Complex)' has brought in performance gains.
+    As per the large bench variant results, this patch also addresses the
+    regression problem on AMD Zen architectures.
+
+    Backport of commit 59803e81f96b479c17f583b31eac44b57591a1bf upstream,
+    with the fix from cb3a749a22a55645dc6a52659eea765300623f98 ("x86:
+    Restore processing of cache size tunables in init_cacheinfo") applied.
+
+    Reviewed-by: Premachandra Mallappa <premachandra.mallappa@amd.com>
+    Co-Authored-by: Florian Weimer <fweimer@redhat.com>
+
+Backport is off the release/2.32/master branch upstream, to minimize
+conflicts.  Adjusted for missing "basic" member in struct cpu_features.
+
+diff --git a/sysdeps/x86/cacheinfo.c b/sysdeps/x86/cacheinfo.c
+index 42b468d0c4885bad..57c36d030a76c8b2 100644
+--- a/sysdeps/x86/cacheinfo.c
++++ b/sysdeps/x86/cacheinfo.c
+@@ -722,7 +722,7 @@ intel_bug_no_cache_info:
+ 	      threads = 1 << ((ecx >> 12) & 0x0f);
+ 	    }
+ 
+-	  if (threads == 0)
++	  if (threads == 0 || cpu_features->family >= 0x17)
+ 	    {
+ 	      /* If APIC ID width is not available, use logical
+ 		 processor count.  */
+@@ -737,8 +737,22 @@ intel_bug_no_cache_info:
+ 	  if (threads > 0)
+ 	    shared /= threads;
+ 
+-	  /* Account for exclusive L2 and L3 caches.  */
+-	  shared += core;
++	  /* Get shared cache per ccx for Zen architectures.  */
++	  if (cpu_features->family >= 0x17)
++	    {
++	      unsigned int eax;
++
++	      /* Get number of threads share the L3 cache in CCX.  */
++	      __cpuid_count (0x8000001D, 0x3, eax, ebx, ecx, edx);
++
++	      unsigned int threads_per_ccx = ((eax >> 14) & 0xfff) + 1;
++	      shared *= threads_per_ccx;
++	    }
++	  else
++	    {
++	      /* Account for exclusive L2 and L3 caches.  */
++	      shared += core;
++            }
+ 	}
+ 
+ #ifndef DISABLE_PREFETCHW

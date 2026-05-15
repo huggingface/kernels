@@ -1,0 +1,41 @@
+commit b3bee76c5f59498b9c189608f0a3132e2013fa1a
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 8 09:51:34 2023 +0100
+
+    elf: Initialize GLRO(dl_lazy) before relocating libc in dynamic startup
+
+    GLRO(dl_lazy) is used to set the parameters for the early
+    _dl_relocate_object call, so the consider_profiling setting has to
+    be applied before the call.
+
+    Fixes commit 78ca44da0160a0b442f0ca1f253e3360f044b2ec ("elf: Relocate
+    libc.so early during startup and dlmopen (bug 31083)").
+
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/rtld.c
+	  (removal of prelink support upstream)
+
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 502d2a1c58505d88..4f317a2a874e6af7 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2420,14 +2420,14 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+ 
+       int consider_profiling = GLRO(dl_profile) != NULL;
+ 
++      /* If we are profiling we also must do lazy reloaction.  */
++      GLRO(dl_lazy) |= consider_profiling;
++
+       if (GL(dl_ns)[LM_ID_BASE].libc_map != NULL)
+ 	_dl_relocate_object (GL(dl_ns)[LM_ID_BASE].libc_map,
+ 			     GL(dl_ns)[LM_ID_BASE].libc_map->l_scope,
+ 			     GLRO(dl_lazy) ? RTLD_LAZY : 0, consider_profiling);
+ 
+-      /* If we are profiling we also must do lazy reloaction.  */
+-      GLRO(dl_lazy) |= consider_profiling;
+-
+       RTLD_TIMING_VAR (start);
+       rtld_timer_start (&start);
+       unsigned i = main_map->l_searchlist.r_nlist;

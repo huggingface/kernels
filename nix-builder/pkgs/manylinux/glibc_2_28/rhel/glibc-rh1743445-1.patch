@@ -1,0 +1,151 @@
+From: Ian Kent <ikent@redhat.com>
+Date: Mon, 2 Sep 2019 11:26:14 +0000 (+0200)
+Subject: Use autofs "ignore" mount hint in getmntent_r/getmntent
+X-Git-Tag: changelog-ends-here~75
+X-Git-Url: https://sourceware.org/git/?p=glibc.git;a=commitdiff_plain;h=08b7e9988272113ca5640cf5e115ea51449fb392
+
+Use autofs "ignore" mount hint in getmntent_r/getmntent
+
+Historically autofs mounts were not included in mount table
+listings. This is the case in other SysV autofs implementations
+and was also the case with Linux autofs.
+
+But now that /etc/mtab is a symlink to the proc filesystem
+mount table the autofs mount entries appear in the mount table
+on Linux.
+
+Prior to the symlinking of /etc/mtab mount table it was
+sufficient to call mount(2) and simply not update /etc/mtab
+to exclude autofs mounts from mount listings.
+
+Also, with the symlinking of /etc/mtab we have seen a shift in
+usage toward using the proc mount tables directly.
+
+But the autofs mount entries need to be retained when coming
+from the proc file system for applications that need them
+(largely autofs file system users themselves) so filtering out
+these entries within the kernel itself can't be done. So it
+needs be done in user space.
+
+There are three reasons to omit the autofs mount entries.
+
+One is that certain types of auto-mounts have an autofs mount
+for every entry in their autofs mount map and these maps can
+be quite large. This leads to mount table listings containing
+a lot of unnecessary entries.
+
+Also, this change in behaviour between autofs implementations
+can cause problems for applications that use getmntent(3) in
+other OS implementations as well as Linux.
+
+Lastly, there's very little that user space can do with autofs
+mount entries since this must be left to the autofs mount owner,
+typically the automount daemon. But it can also lead to attempts
+to access automount managed paths resulting mounts being triggered
+when they aren't needed or mounts staying mounted for much longer
+thay they need be. While the point of this change ins't to help
+with these problems (and it can be quite a problem) it may be
+a welcome side effect.
+
+So the Linux autofs file system has been modified to accept a
+pseudo mount option of "ignore" (as is used in other OS
+implementations) so that user space can use this as a hint to
+skip autofs entries on reading the mount table.
+
+The Linux autofs automount daemon used getmntent(3) itself and
+has been modified to use the proc file system directly so that
+it can "ignore" mount option.
+
+The use of this mount option is opt-in and a configuration
+option has been added which defaults to not use this option
+so if there are applications that need these entries, other
+than autofs itself, they can be retained. Also, since this
+filtering is based on an added mount option earlier versions
+of Linux autofs iand other autofs file system users will not
+use the option and so won't be affected by the change.
+---
+
+diff --git a/misc/mntent_r.c b/misc/mntent_r.c
+index 5d88c45c6f..d90e8d7087 100644
+--- a/misc/mntent_r.c
++++ b/misc/mntent_r.c
+@@ -18,6 +18,7 @@
+ 
+ #include <alloca.h>
+ #include <mntent.h>
++#include <stdbool.h>
+ #include <stdio.h>
+ #include <stdio_ext.h>
+ #include <string.h>
+@@ -112,26 +113,18 @@ decode_name (char *buf)
+   return buf;
+ }
+ 
+-
+-/* Read one mount table entry from STREAM.  Returns a pointer to storage
+-   reused on the next call, or null for EOF or error (use feof/ferror to
+-   check).  */
+-struct mntent *
+-__getmntent_r (FILE *stream, struct mntent *mp, char *buffer, int bufsiz)
++static bool
++get_mnt_entry (FILE *stream, struct mntent *mp, char *buffer, int bufsiz)
+ {
+   char *cp;
+   char *head;
+ 
+-  flockfile (stream);
+   do
+     {
+       char *end_ptr;
+ 
+       if (__fgets_unlocked (buffer, bufsiz, stream) == NULL)
+-	{
+-	  funlockfile (stream);
+-	  return NULL;
+-	}
++	  return false;
+ 
+       end_ptr = strchr (buffer, '\n');
+       if (end_ptr != NULL)	/* chop newline */
+@@ -181,9 +174,40 @@ __getmntent_r (FILE *stream, struct mntent *mp, char *buffer, int bufsiz)
+     case 2:
+       break;
+     }
++
++  return true;
++}
++
++/* Read one mount table entry from STREAM.  Returns a pointer to storage
++   reused on the next call, or null for EOF or error (use feof/ferror to
++   check).  */
++struct mntent *
++__getmntent_r (FILE *stream, struct mntent *mp, char *buffer, int bufsiz)
++{
++  struct mntent *result;
++
++  flockfile (stream);
++  while (true)
++    if (get_mnt_entry (stream, mp, buffer, bufsiz))
++      {
++	/* If the file system is autofs look for a mount option hint
++	   ("ignore") to skip the entry.  */
++	if (strcmp (mp->mnt_type, "autofs") == 0 && __hasmntopt (mp, "ignore"))
++	  memset (mp, 0, sizeof (*mp));
++	else
++	  {
++	    result = mp;
++	    break;
++	  }
++      }
++    else
++      {
++	result = NULL;
++	break;
++      }
+   funlockfile (stream);
+ 
+-  return mp;
++  return result;
+ }
+ libc_hidden_def (__getmntent_r)
+ weak_alias (__getmntent_r, getmntent_r)

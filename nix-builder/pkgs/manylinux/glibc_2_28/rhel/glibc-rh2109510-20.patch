@@ -1,0 +1,36 @@
+commit 29eb7961197bee68470730aecfdda4d0e206812e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Sep 5 12:11:19 2022 +0200
+
+    elf.h: Remove duplicate definition of VER_FLG_WEAK
+    
+    This did not cause a warning before because the token sequence for
+    the two definitions was identical.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/elf.h b/elf/elf.h
+index d6506ea1c7160dea..ec09040be639a52a 100644
+--- a/elf/elf.h
++++ b/elf/elf.h
+@@ -1027,7 +1027,8 @@ typedef struct
+ 
+ /* Legal values for vd_flags (version information flags).  */
+ #define VER_FLG_BASE	0x1		/* Version definition of file itself */
+-#define VER_FLG_WEAK	0x2		/* Weak version identifier */
++#define VER_FLG_WEAK	0x2		/* Weak version identifier.  Also
++					   used by vna_flags below.  */
+ 
+ /* Versym symbol index values.  */
+ #define	VER_NDX_LOCAL		0	/* Symbol is local.  */
+@@ -1105,10 +1106,6 @@ typedef struct
+ } Elf64_Vernaux;
+ 
+ 
+-/* Legal values for vna_flags.  */
+-#define VER_FLG_WEAK	0x2		/* Weak version identifier */
+-
+-
+ /* Auxiliary vector.  */
+ 
+ /* This vector is normally only used by the program interpreter.  The

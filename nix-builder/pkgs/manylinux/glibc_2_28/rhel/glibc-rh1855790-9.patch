@@ -1,0 +1,42 @@
+commit 635d6fae03257129b4672591b700a495cb6cb6c7
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Feb 1 05:43:34 2020 -0800
+
+    x86: Don't make 2 calls to dlerror () in a row
+    
+    We shouldn't make 2 calls to dlerror () in a row since the first call
+    will clear the error.  We should just use the return value from the
+    first call.
+    
+    Tested on Linux/x86-64.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+---
+
+diff --git a/sysdeps/x86/tst-cet-legacy-5.c b/sysdeps/x86/tst-cet-legacy-5.c
+index e1ca09d..0a34d37 100644
+--- a/sysdeps/x86/tst-cet-legacy-5.c
++++ b/sysdeps/x86/tst-cet-legacy-5.c
+@@ -39,7 +39,7 @@ do_test_1 (const char *modname, bool fail)
+ 	      == NULL)
+ 	    {
+ 	      printf ("incorrect dlopen '%s' error: %s\n", modname,
+-		      dlerror ());
++		      err);
+ 	      exit (1);
+ 	    }
+ 
+diff --git a/sysdeps/x86/tst-cet-legacy-6.c b/sysdeps/x86/tst-cet-legacy-6.c
+index 184a35b..bd45218 100644
+--- a/sysdeps/x86/tst-cet-legacy-6.c
++++ b/sysdeps/x86/tst-cet-legacy-6.c
+@@ -39,7 +39,7 @@ do_test_1 (const char *modname, bool fail)
+ 	      == NULL)
+ 	    {
+ 	      printf ("incorrect dlopen '%s' error: %s\n", modname,
+-		      dlerror ());
++		      err);
+ 	      exit (1);
+ 	    }
+ 
+

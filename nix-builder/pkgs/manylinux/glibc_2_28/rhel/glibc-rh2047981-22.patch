@@ -1,0 +1,795 @@
+commit 8c0664e2b861fd3789602cc0b0b1922b0e20cb3a
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Jul 22 18:02:42 2021 -0300
+
+    elf: Add _dl_audit_pltexit
+    
+    It consolidates the code required to call la_pltexit audit
+    callback.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+Conflicts:
+	nptl/tst-atfork4mod.c
+	sysdeps/powerpc/fpu/s_fmaf.S
+	sysdeps/powerpc/powerpc32/power4/multiarch/wcscpy-ppc32.c
+	sysdeps/powerpc/powerpc64/power5+/fpu/s_floor.S
+		Without d6d89608ac8cf2b37c75debad1fff653f6939f90 we
+		don't have dl-machine-rel.h so git picks a match for
+		all four files above, instead we modify dl-machine.h
+		for the targets:
+			sysdeps/i386/dl-machine.h
+			sysdeps/arm/dl-machine.h
+			sysdeps/mips/dl-machine.h
+		The fourth is the generic file and without it we
+		add the PLTREL macro to each target:
+			sysdeps/aarch64/dl-machine.h
+			sysdeps/powerpc/powerpc32/dl-machine.h
+			sysdeps/powerpc/powerpc64/dl-machine.h
+			sysdeps/s390/s390-32/dl-machine.h
+			sysdeps/s390/s390-64/dl-machine.h
+			sysdeps/x86_64/dl-machine.h
+	sysdeps/s390/s390-32/dl-trampoline.h
+	sysdeps/s390/s390-64/dl-trampoline.h
+
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index 15250c67e8ac1658..152712b12fed6de2 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -20,6 +20,8 @@
+ #include <link.h>
+ #include <ldsodefs.h>
+ #include <dl-machine.h>
++#include <dl-runtime.h>
++#include <dl-fixup-attribute.h>
+ 
+ void
+ _dl_audit_activity_map (struct link_map *l, int action)
+@@ -320,3 +322,48 @@ _dl_audit_pltenter (struct link_map *l, struct reloc_result *reloc_result,
+ 
+   *value = DL_FIXUP_ADDR_VALUE (sym.st_value);
+ }
++
++void
++DL_ARCH_FIXUP_ATTRIBUTE
++_dl_audit_pltexit (struct link_map *l, ElfW(Word) reloc_arg,
++		   const void *inregs, void *outregs)
++{
++  const uintptr_t pltgot = (uintptr_t) D_PTR (l, l_info[DT_PLTGOT]);
++
++  /* This is the address in the array where we store the result of previous
++     relocations.  */
++  // XXX Maybe the bound information must be stored on the stack since
++  // XXX with bind_not a new value could have been stored in the meantime.
++  struct reloc_result *reloc_result =
++    &l->l_reloc_result[reloc_index (pltgot, reloc_arg, sizeof (PLTREL))];
++  ElfW(Sym) *defsym = ((ElfW(Sym) *) D_PTR (reloc_result->bound,
++					    l_info[DT_SYMTAB])
++		       + reloc_result->boundndx);
++
++  /* Set up the sym parameter.  */
++  ElfW(Sym) sym = *defsym;
++  sym.st_value = DL_FIXUP_VALUE_ADDR (reloc_result->addr);
++
++  /* Get the symbol name.  */
++  const char *strtab = (const void *) D_PTR (reloc_result->bound,
++					     l_info[DT_STRTAB]);
++  const char *symname = strtab + sym.st_name;
++
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      if (afct->ARCH_LA_PLTEXIT != NULL
++	  && (reloc_result->enterexit
++	      & (LA_SYMB_NOPLTEXIT >> (2 * cnt))) == 0)
++	{
++	  struct auditstate *l_state = link_map_audit_state (l, cnt);
++	  struct auditstate *bound_state
++	    = link_map_audit_state (reloc_result->bound, cnt);
++	  afct->ARCH_LA_PLTEXIT (&sym, reloc_result->boundndx,
++				 &l_state->cookie, &bound_state->cookie,
++				 inregs, outregs, symname);
++	}
++
++      afct = afct->next;
++    }
++}
+diff --git a/elf/dl-runtime.c b/elf/dl-runtime.c
+index b46f7d7376e65361..ec0b2164825fa538 100644
+--- a/elf/dl-runtime.c
++++ b/elf/dl-runtime.c
+@@ -16,8 +16,6 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#define IN_DL_RUNTIME 1		/* This can be tested in dl-machine.h.  */
+-
+ #include <alloca.h>
+ #include <stdlib.h>
+ #include <unistd.h>
+@@ -30,19 +28,6 @@
+ #include <dl-runtime.h>
+ 
+ 
+-#if (!ELF_MACHINE_NO_RELA && !defined ELF_MACHINE_PLT_REL) \
+-    || ELF_MACHINE_NO_REL
+-# define PLTREL  ElfW(Rela)
+-#else
+-# define PLTREL  ElfW(Rel)
+-#endif
+-
+-/* The fixup functions might have need special attributes.  If none
+-   are provided define the macro as empty.  */
+-#ifndef ARCH_FIXUP_ATTRIBUTE
+-# define ARCH_FIXUP_ATTRIBUTE
+-#endif
+-
+ /* This function is called through a special trampoline from the PLT the
+    first time each PLT entry is called.  We must perform the relocation
+    specified in the PLT of the given shared object, and return the resolved
+@@ -51,7 +36,7 @@
+    function.  */
+ 
+ DL_FIXUP_VALUE_TYPE
+-attribute_hidden __attribute ((noinline)) ARCH_FIXUP_ATTRIBUTE
++attribute_hidden __attribute ((noinline)) DL_ARCH_FIXUP_ATTRIBUTE
+ _dl_fixup (
+ # ifdef ELF_MACHINE_RUNTIME_FIXUP_ARGS
+ 	   ELF_MACHINE_RUNTIME_FIXUP_ARGS,
+@@ -147,7 +132,8 @@ _dl_fixup (
+ 
+ #ifndef PROF
+ DL_FIXUP_VALUE_TYPE
+-__attribute ((noinline)) ARCH_FIXUP_ATTRIBUTE
++__attribute ((noinline))
++DL_ARCH_FIXUP_ATTRIBUTE
+ _dl_profile_fixup (
+ #ifdef ELF_MACHINE_RUNTIME_FIXUP_ARGS
+ 		   ELF_MACHINE_RUNTIME_FIXUP_ARGS,
+@@ -331,52 +317,3 @@ _dl_profile_fixup (
+ }
+ 
+ #endif /* PROF */
+-
+-
+-#include <stdio.h>
+-void
+-ARCH_FIXUP_ATTRIBUTE
+-_dl_call_pltexit (struct link_map *l, ElfW(Word) reloc_arg,
+-		  const void *inregs, void *outregs)
+-{
+-#ifdef SHARED
+-  const uintptr_t pltgot = (uintptr_t) D_PTR (l, l_info[DT_PLTGOT]);
+-
+-  /* This is the address in the array where we store the result of previous
+-     relocations.  */
+-  // XXX Maybe the bound information must be stored on the stack since
+-  // XXX with bind_not a new value could have been stored in the meantime.
+-  struct reloc_result *reloc_result =
+-    &l->l_reloc_result[reloc_index (pltgot, reloc_arg, sizeof (PLTREL))];
+-  ElfW(Sym) *defsym = ((ElfW(Sym) *) D_PTR (reloc_result->bound,
+-					    l_info[DT_SYMTAB])
+-		       + reloc_result->boundndx);
+-
+-  /* Set up the sym parameter.  */
+-  ElfW(Sym) sym = *defsym;
+-  sym.st_value = DL_FIXUP_VALUE_ADDR (reloc_result->addr);
+-
+-  /* Get the symbol name.  */
+-  const char *strtab = (const void *) D_PTR (reloc_result->bound,
+-					     l_info[DT_STRTAB]);
+-  const char *symname = strtab + sym.st_name;
+-
+-  struct audit_ifaces *afct = GLRO(dl_audit);
+-  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-    {
+-      if (afct->ARCH_LA_PLTEXIT != NULL
+-	  && (reloc_result->enterexit
+-	      & (LA_SYMB_NOPLTEXIT >> (2 * cnt))) == 0)
+-	{
+-	  struct auditstate *l_state = link_map_audit_state (l, cnt);
+-	  struct auditstate *bound_state
+-	    = link_map_audit_state (reloc_result->bound, cnt);
+-	  afct->ARCH_LA_PLTEXIT (&sym, reloc_result->boundndx,
+-				 &l_state->cookie, &bound_state->cookie,
+-				 inregs, outregs, symname);
+-	}
+-
+-      afct = afct->next;
+-    }
+-#endif
+-}
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index 3e5531138eaa18f8..e9943e889ef447ad 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -399,3 +399,11 @@ _dl_get_dl_main_map (void)
+   return &_dl_main_map;
+ }
+ #endif
++
++/* This is used by _dl_runtime_profile, not used on static code.  */
++void
++DL_ARCH_FIXUP_ATTRIBUTE
++_dl_audit_pltexit (struct link_map *l, ElfW(Word) reloc_arg,
++		   const void *inregs, void *outregs)
++{
++}
+diff --git a/sysdeps/aarch64/dl-machine.h b/sysdeps/aarch64/dl-machine.h
+index 5eab544afe2717f7..c13d896a57811c7d 100644
+--- a/sysdeps/aarch64/dl-machine.h
++++ b/sysdeps/aarch64/dl-machine.h
+@@ -196,6 +196,7 @@ _dl_start_user:								\n\
+ /* AArch64 uses RELA not REL */
+ #define ELF_MACHINE_NO_REL 1
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rela)
+ 
+ #define DL_PLATFORM_INIT dl_platform_init ()
+ 
+diff --git a/sysdeps/aarch64/dl-trampoline.S b/sysdeps/aarch64/dl-trampoline.S
+index a86d0722d4a0415b..18740398e63fdf97 100644
+--- a/sysdeps/aarch64/dl-trampoline.S
++++ b/sysdeps/aarch64/dl-trampoline.S
+@@ -277,7 +277,7 @@ _dl_runtime_profile:
+ 	ldp	x0, x1, [x29, #OFFSET_SAVED_CALL_X0]
+ 	add	x2, x29, #OFFSET_RG
+ 	add	x3, x29, #OFFSET_RV
+-	bl	_dl_call_pltexit
++	bl	_dl_audit_pltexit
+ 
+ 	ldp	x0, x1, [x29, #OFFSET_RV + DL_OFFSET_RV_X0]
+ 	ldp	d0, d1, [x29, #OFFSET_RV + DL_OFFSET_RV_D0 + 16*0]
+diff --git a/sysdeps/alpha/dl-trampoline.S b/sysdeps/alpha/dl-trampoline.S
+index b326b37acedb5eaa..3acf5dec8d9585da 100644
+--- a/sysdeps/alpha/dl-trampoline.S
++++ b/sysdeps/alpha/dl-trampoline.S
+@@ -187,7 +187,7 @@ _dl_runtime_profile_new:
+ 	jsr	$26, ($27), 0
+ 	ldgp	$29, 0($26)
+ 
+-	/* Set up for call to _dl_call_pltexit.  */
++	/* Set up for call to _dl_audit_pltexit.  */
+ 	ldq	$16, 16*8($15)
+ 	ldq	$17, 17*8($15)
+ 	stq	$0, 16*8($15)
+@@ -196,7 +196,7 @@ _dl_runtime_profile_new:
+ 	lda	$19, 16*8($15)
+ 	stt	$f0, 18*8($15)
+ 	stt	$f1, 19*8($15)
+-	bsr	$26, _dl_call_pltexit	!samegp
++	bsr	$26, _dl_audit_pltexit	!samegp
+ 
+ 	mov	$15, $30
+ 	cfi_def_cfa_register (30)
+@@ -518,7 +518,7 @@ _dl_runtime_profile_old:
+ 	jsr	$26, ($27), 0
+ 	ldgp	$29, 0($26)
+ 
+-	/* Set up for call to _dl_call_pltexit.  */
++	/* Set up for call to _dl_audit_pltexit.  */
+ 	ldq	$16, 48*8($15)
+ 	ldq	$17, 49*8($15)
+ 	stq	$0, 46*8($15)
+@@ -527,7 +527,7 @@ _dl_runtime_profile_old:
+ 	lda	$19, 46*8($15)
+ 	stt	$f0, 48*8($15)
+ 	stt	$f1, 49*8($15)
+-	bsr	$26, _dl_call_pltexit	!samegp
++	bsr	$26, _dl_audit_pltexit	!samegp
+ 
+ 	mov	$15, $30
+ 	cfi_def_cfa_register (30)
+diff --git a/sysdeps/arm/dl-machine.h b/sysdeps/arm/dl-machine.h
+index 1a4fd3f17b6df7da..9b5d0567df984c5d 100644
+--- a/sysdeps/arm/dl-machine.h
++++ b/sysdeps/arm/dl-machine.h
+@@ -260,6 +260,8 @@ _dl_start_user:\n\
+    Prelinked libraries may use Elf32_Rela though.  */
+ #define ELF_MACHINE_PLT_REL 1
+ 
++#define PLTREL ElfW(Rel)
++
+ /* We define an initialization functions.  This is called very early in
+    _dl_sysdep_start.  */
+ #define DL_PLATFORM_INIT dl_platform_init ()
+diff --git a/sysdeps/arm/dl-trampoline.S b/sysdeps/arm/dl-trampoline.S
+index c731b012869a9cbc..ced1b1cb1017d677 100644
+--- a/sysdeps/arm/dl-trampoline.S
++++ b/sysdeps/arm/dl-trampoline.S
+@@ -194,7 +194,7 @@ _dl_runtime_profile:
+ 	ldmia	ip, {r0,r1}
+ 	add	r2, r7, #72
+ 	add	r3, r7, #0
+-	bl	_dl_call_pltexit
++	bl	_dl_audit_pltexit
+ 
+ 	@ Return to caller.
+ 	ldmia	r7, {r0-r3}
+diff --git a/sysdeps/generic/dl-fixup-attribute.h b/sysdeps/generic/dl-fixup-attribute.h
+new file mode 100644
+index 0000000000000000..aa92169b709b3fea
+--- /dev/null
++++ b/sysdeps/generic/dl-fixup-attribute.h
+@@ -0,0 +1,24 @@
++/* ABI specifics for lazy resolution functions.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _DL_FIXUP_ATTRIBUTE_H
++#define _DL_FIXUP_ATTRIBUTE_H
++
++#define DL_ARCH_FIXUP_ATTRIBUTE
++
++#endif
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 47a9dee5b1c0ca63..29b77b35175c1116 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -35,6 +35,7 @@
+ #include <link.h>
+ #include <dl-lookupcfg.h>
+ #include <dl-sysdep.h>
++#include <dl-fixup-attribute.h>
+ #include <libc-lock.h>
+ #include <hp-timing.h>
+ #include <tls.h>
+@@ -1311,6 +1312,11 @@ void _dl_audit_pltenter (struct link_map *l, struct reloc_result *reloc_result,
+ 			 DL_FIXUP_VALUE_TYPE *value, void *regs,
+ 			 long int *framesize)
+   attribute_hidden;
++void DL_ARCH_FIXUP_ATTRIBUTE _dl_audit_pltexit (struct link_map *l,
++						ElfW(Word) reloc_arg,
++						const void *inregs,
++						void *outregs)
++  attribute_hidden;
+ #endif /* SHARED */
+ 
+ __END_DECLS
+diff --git a/sysdeps/hppa/dl-runtime.c b/sysdeps/hppa/dl-runtime.c
+index 2d061b150f0602c1..4c323131f937094b 100644
+--- a/sysdeps/hppa/dl-runtime.c
++++ b/sysdeps/hppa/dl-runtime.c
+@@ -26,7 +26,7 @@
+    _dl_fixup with the relocation offset.  */
+ 
+ ElfW(Word)
+-attribute_hidden __attribute ((noinline)) ARCH_FIXUP_ATTRIBUTE
++attribute_hidden __attribute ((noinline)) DL_ARCH_FIXUP_ATTRIBUTE
+ _dl_fix_reloc_arg (struct fdesc *fptr, struct link_map *l)
+ {
+   Elf32_Addr l_addr, iplt, jmprel, end_jmprel, r_type;
+diff --git a/sysdeps/hppa/dl-trampoline.S b/sysdeps/hppa/dl-trampoline.S
+index 7ee4331cc2e7deff..3c83c8542f4fc63f 100644
+--- a/sysdeps/hppa/dl-trampoline.S
++++ b/sysdeps/hppa/dl-trampoline.S
+@@ -275,7 +275,7 @@ L(cont):
+ 	ldw	-4(%sp),%r1
+ 	copy	%r1, %sp
+ 
+-	/* Arguments to _dl_call_pltexit */
++	/* Arguments to _dl_audit_pltexit */
+ 	ldw	-116(%sp), %r26		/* (1) got[1] == struct link_map */
+ 	ldw	-120(%sp), %r25		/* (2) reloc offsets */
+ 	ldo	-56(%sp), %r24		/* (3) *La_hppa_regs */
+@@ -287,8 +287,8 @@ L(cont):
+ 	ldo	-128(%sp), %r1
+ 	fstd	%fr4,0(%r1)
+ 
+-	/* Call _dl_call_pltexit */
+-	bl	_dl_call_pltexit,%rp
++	/* Call _dl_audit_pltexit */
++	bl	_dl_audit_pltexit,%rp
+ 	nop
+ 
+ 	/* Restore *La_hppa_retval */
+diff --git a/sysdeps/i386/dl-fixup-attribute.h b/sysdeps/i386/dl-fixup-attribute.h
+new file mode 100644
+index 0000000000000000..c10e9936f4db7254
+--- /dev/null
++++ b/sysdeps/i386/dl-fixup-attribute.h
+@@ -0,0 +1,30 @@
++/* ABI specifics for lazy resolution functions.  i386 version.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _DL_FIXUP_ATTRIBUTE_H
++#define _DL_FIXUP_ATTRIBUTE_H
++
++/* We cannot use this scheme for profiling because the _mcount call destroys
++   the passed register information.  */
++#ifndef PROF
++# define DL_ARCH_FIXUP_ATTRIBUTE __attribute__ ((regparm (3), stdcall, unused))
++#else
++# define DL_ARCH_FIXUP_ATTRIBUTE
++#endif
++
++#endif
+diff --git a/sysdeps/i386/dl-machine.h b/sysdeps/i386/dl-machine.h
+index 5ba95b9e4af49942..30c3464fc4ac19d8 100644
+--- a/sysdeps/i386/dl-machine.h
++++ b/sysdeps/i386/dl-machine.h
+@@ -119,29 +119,6 @@ elf_machine_runtime_setup (struct link_map *l, struct r_scope_elem *scope[],
+   return lazy;
+ }
+ 
+-#ifdef IN_DL_RUNTIME
+-
+-# ifndef PROF
+-/* We add a declaration of this function here so that in dl-runtime.c
+-   the ELF_MACHINE_RUNTIME_TRAMPOLINE macro really can pass the parameters
+-   in registers.
+-
+-   We cannot use this scheme for profiling because the _mcount call
+-   destroys the passed register information.  */
+-#define ARCH_FIXUP_ATTRIBUTE __attribute__ ((regparm (3), stdcall, unused))
+-
+-extern ElfW(Addr) _dl_fixup (struct link_map *l,
+-			     ElfW(Word) reloc_offset)
+-     ARCH_FIXUP_ATTRIBUTE;
+-extern ElfW(Addr) _dl_profile_fixup (struct link_map *l,
+-				     ElfW(Word) reloc_offset,
+-				     ElfW(Addr) retaddr, void *regs,
+-				     long int *framesizep)
+-     ARCH_FIXUP_ATTRIBUTE;
+-# endif
+-
+-#endif
+-
+ /* Mask identifying addresses reserved for the user program,
+    where the dynamic linker should not map anything.  */
+ #define ELF_MACHINE_USER_ADDRESS_MASK	0xf8000000UL
+@@ -240,6 +217,8 @@ _dl_start_user:\n\
+    Prelinked libraries may use Elf32_Rela though.  */
+ #define ELF_MACHINE_PLT_REL 1
+ 
++#define PLTREL ElfW(Rel)
++
+ /* We define an initialization functions.  This is called very early in
+    _dl_sysdep_start.  */
+ #define DL_PLATFORM_INIT dl_platform_init ()
+diff --git a/sysdeps/i386/dl-trampoline.S b/sysdeps/i386/dl-trampoline.S
+index 6dc03192168ae2f3..a738b291a79bf8c2 100644
+--- a/sysdeps/i386/dl-trampoline.S
++++ b/sysdeps/i386/dl-trampoline.S
+@@ -265,7 +265,7 @@ _dl_runtime_profile:
+ 	movl (LRV_SIZE + 4 + LR_SIZE)(%esp), %eax
+ 	# PLT1
+ 	movl (LRV_SIZE + 4 + LR_SIZE + 4)(%esp), %edx
+-	call _dl_call_pltexit
++	call _dl_audit_pltexit
+ 	movl LRV_EAX_OFFSET(%esp), %eax
+ 	movl LRV_EDX_OFFSET(%esp), %edx
+ 	fldt LRV_ST1_OFFSET(%esp)
+diff --git a/sysdeps/ia64/dl-trampoline.S b/sysdeps/ia64/dl-trampoline.S
+index fc24c425bfe6907b..caeca3afcd7db6b6 100644
+--- a/sysdeps/ia64/dl-trampoline.S
++++ b/sysdeps/ia64/dl-trampoline.S
+@@ -133,7 +133,7 @@ END(_dl_runtime_resolve)
+ 
+ 
+ /* The fourth argument to _dl_profile_fixup and the third one to
+-   _dl_call_pltexit are a pointer to La_ia64_regs:
++   _dl_audit_pltexit are a pointer to La_ia64_regs:
+ 
+    8byte r8
+    8byte r9
+@@ -159,7 +159,7 @@ END(_dl_runtime_resolve)
+    8byte sp
+ 
+    The fifth argument to _dl_profile_fixup is a pointer to long int.
+-   The fourth argument to _dl_call_pltexit is a pointer to
++   The fourth argument to _dl_audit_pltexit is a pointer to
+    La_ia64_retval:
+ 
+    8byte r8
+@@ -261,7 +261,7 @@ ENTRY(_dl_runtime_profile)
+ 	}
+ 	{ .mii
+ 	  mov r18 = ar.unat	/* save it in La_ia64_regs */
+-	  mov loc7 = out3	/* save it for _dl_call_pltexit */
++	  mov loc7 = out3	/* save it for _dl_audit_pltexit */
+ 	  mov loc5 = r11	/* preserve language specific register */
+ 	}
+ 	{ .mmi
+@@ -272,7 +272,7 @@ ENTRY(_dl_runtime_profile)
+ 	}
+ 	{ .mii
+ 	  mov ar.unat = r17	/* restore it for function call */
+-	  mov loc8 = r16	/* save it for _dl_call_pltexit */
++	  mov loc8 = r16	/* save it for _dl_audit_pltexit */
+ 	  nop.i 0x0
+ 	}
+ 	{ .mmi
+@@ -291,7 +291,7 @@ ENTRY(_dl_runtime_profile)
+ 	{ .mmi
+ 	  stf.spill [r2] = f14, 32
+ 	  stf.spill [r3] = f15, 24
+-	  mov loc9 = out1	/* save it for _dl_call_pltexit */
++	  mov loc9 = out1	/* save it for _dl_audit_pltexit */
+ 	  ;;
+ 	}
+ 	{ .mmb
+@@ -426,7 +426,7 @@ ENTRY(_dl_runtime_profile)
+ 	  br.call.sptk.many b0 = b6
+ 	}
+ 	{ .mii
+-	  /* Prepare stack for _dl_call_pltexit. Loc10 has the original
++	  /* Prepare stack for _dl_audit_pltexit. Loc10 has the original
+ 	     stack pointer.  */
+ 	  adds r12 = -PLTEXIT_FRAME_SIZE, loc10
+ 	  adds r2 = -(PLTEXIT_FRAME_SIZE - 16), loc10
+@@ -461,14 +461,14 @@ ENTRY(_dl_runtime_profile)
+ 	{ .mmi
+ 	  stf.spill [r2] = f12, 32
+ 	  stf.spill [r3] = f13, 32
+-	  /* We need to restore gp for _dl_call_pltexit. */
++	  /* We need to restore gp for _dl_audit_pltexit. */
+ 	  mov gp = loc11
+ 	  ;;
+ 	}
+ 	{ .mmb
+ 	  stf.spill [r2] = f14
+ 	  stf.spill [r3] = f15
+-	  br.call.sptk.many b0 = _dl_call_pltexit
++	  br.call.sptk.many b0 = _dl_audit_pltexit
+ 	}
+ 	{ .mmi
+ 	  /* Load all the non-floating and floating return values. Skip
+diff --git a/sysdeps/m68k/dl-trampoline.S b/sysdeps/m68k/dl-trampoline.S
+index 7e1eace26b4a519d..27282ca8a6b1dada 100644
+--- a/sysdeps/m68k/dl-trampoline.S
++++ b/sysdeps/m68k/dl-trampoline.S
+@@ -202,7 +202,7 @@ _dl_runtime_profile:
+ 	cfi_adjust_cfa_offset (4)
+ 	move.l (32+FPSPACE)(%sp), -(%sp)
+ 	cfi_adjust_cfa_offset (4)
+-	jbsr _dl_call_pltexit
++	jbsr _dl_audit_pltexit
+ 	lea 16(%sp), %sp
+ 	cfi_adjust_cfa_offset (-16)
+ 	move.l (%sp)+, %d0
+diff --git a/sysdeps/mips/dl-machine.h b/sysdeps/mips/dl-machine.h
+index b41e10647d81843b..d4bd8b62f4b036a3 100644
+--- a/sysdeps/mips/dl-machine.h
++++ b/sysdeps/mips/dl-machine.h
+@@ -63,6 +63,7 @@
+ #define ELF_MACHINE_PLT_REL 1
+ #define ELF_MACHINE_NO_REL 0
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rel)
+ 
+ /* Translate a processor specific dynamic tag to the index
+    in l_info array.  */
+diff --git a/sysdeps/powerpc/powerpc32/dl-machine.h b/sysdeps/powerpc/powerpc32/dl-machine.h
+index 31c7f3f95a2ce1b2..84322595793dc8bb 100644
+--- a/sysdeps/powerpc/powerpc32/dl-machine.h
++++ b/sysdeps/powerpc/powerpc32/dl-machine.h
+@@ -150,6 +150,7 @@ __elf_preferred_address(struct link_map *loader, size_t maplength,
+ /* The PowerPC never uses REL relocations.  */
+ #define ELF_MACHINE_NO_REL 1
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rela)
+ 
+ /* We define an initialization function to initialize HWCAP/HWCAP2 and
+    platform data so it can be copied into the TCB later.  This is called
+diff --git a/sysdeps/powerpc/powerpc64/dl-machine.h b/sysdeps/powerpc/powerpc64/dl-machine.h
+index 35996bb9173da231..3af1f708378f9a3c 100644
+--- a/sysdeps/powerpc/powerpc64/dl-machine.h
++++ b/sysdeps/powerpc/powerpc64/dl-machine.h
+@@ -297,6 +297,7 @@ BODY_PREFIX "_dl_start_user:\n"						\
+ /* The PowerPC never uses REL relocations.  */
+ #define ELF_MACHINE_NO_REL 1
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rela)
+ 
+ /* We define an initialization function to initialize HWCAP/HWCAP2 and
+    platform data so it can be copied into the TCB later.  This is called
+diff --git a/sysdeps/powerpc/powerpc64/dl-trampoline.S b/sysdeps/powerpc/powerpc64/dl-trampoline.S
+index aa141dc44b980d9b..23290d32360507fd 100644
+--- a/sysdeps/powerpc/powerpc64/dl-trampoline.S
++++ b/sysdeps/powerpc/powerpc64/dl-trampoline.S
+@@ -197,7 +197,7 @@ END(_dl_runtime_resolve)
+ #ifndef PROF
+ ENTRY (_dl_profile_resolve, 4)
+ /* Spill r30, r31 to preserve the link_map* and reloc_addr, in case we
+-   need to call _dl_call_pltexit.  */
++   need to call _dl_audit_pltexit.  */
+ 	std	r31,-8(r1)
+ 	std	r30,-16(r1)
+ /* We need to save the registers used to pass parameters, ie. r3 thru
+@@ -452,7 +452,7 @@ L(restoreFXR2):
+ L(callpltexit):
+ 	addi	r5,r1,INT_PARMS
+ 	addi	r6,r1,INT_RTN
+-	bl	JUMPTARGET(_dl_call_pltexit)
++	bl	JUMPTARGET(_dl_audit_pltexit)
+ #ifndef SHARED
+ 	nop
+ #endif
+diff --git a/sysdeps/s390/s390-32/dl-machine.h b/sysdeps/s390/s390-32/dl-machine.h
+index ded41adff80346b6..2f3bb085ae2b6794 100644
+--- a/sysdeps/s390/s390-32/dl-machine.h
++++ b/sysdeps/s390/s390-32/dl-machine.h
+@@ -279,6 +279,7 @@ _dl_start_user:\n\
+ /* The S390 never uses Elf32_Rel relocations.  */
+ #define ELF_MACHINE_NO_REL 1
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rela)
+ 
+ /* We define an initialization functions.  This is called very early in
+    _dl_sysdep_start.  */
+diff --git a/sysdeps/s390/s390-32/dl-trampoline.h b/sysdeps/s390/s390-32/dl-trampoline.h
+index d36c002743bf2f0c..c447a41f067c462b 100644
+--- a/sysdeps/s390/s390-32/dl-trampoline.h
++++ b/sysdeps/s390/s390-32/dl-trampoline.h
+@@ -207,7 +207,7 @@ _dl_runtime_profile:
+ 	basr   %r1,0
+ 5:	l      %r14,7f-5b(%r1)
+ 	la     %r5,40(%r12)		# pointer to struct La_s390_32_retval
+-	bas    %r14,0(%r14,%r1)		# call _dl_call_pltexit
++	bas    %r14,0(%r14,%r1)		# call _dl_audit_pltexit
+ 
+ 	lr     %r15,%r12		# remove stack frame
+ 	cfi_def_cfa_register (15)
+@@ -224,7 +224,7 @@ _dl_runtime_profile:
+ 	br     %r14
+ 
+ 6:	.long  _dl_profile_fixup - 0b
+-7:	.long  _dl_call_pltexit - 5b
++7:	.long  _dl_audit_pltexit - 5b
+ 	cfi_endproc
+ 	.size _dl_runtime_profile, .-_dl_runtime_profile
+ #endif
+diff --git a/sysdeps/s390/s390-64/dl-machine.h b/sysdeps/s390/s390-64/dl-machine.h
+index 36327c40a1972dd7..033e7c9916e751f4 100644
+--- a/sysdeps/s390/s390-64/dl-machine.h
++++ b/sysdeps/s390/s390-64/dl-machine.h
+@@ -228,6 +228,7 @@ _dl_start_user:\n\
+ /* The 64 bit S/390 never uses Elf64_Rel relocations.  */
+ #define ELF_MACHINE_NO_REL 1
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rela)
+ 
+ /* We define an initialization functions.  This is called very early in
+    _dl_sysdep_start.  */
+diff --git a/sysdeps/s390/s390-64/dl-trampoline.h b/sysdeps/s390/s390-64/dl-trampoline.h
+index d313fd521db0b859..18534d629ebc00e2 100644
+--- a/sysdeps/s390/s390-64/dl-trampoline.h
++++ b/sysdeps/s390/s390-64/dl-trampoline.h
+@@ -203,7 +203,7 @@ _dl_runtime_profile:
+ 	lmg    %r2,%r4,48(%r12)		# r2, r3: load arguments saved by PLT
+ 					# r4: pointer to struct La_s390_64_regs
+ 	la     %r5,72(%r12)		# pointer to struct La_s390_64_retval
+-	brasl  %r14,_dl_call_pltexit
++	brasl  %r14,_dl_audit_pltexit
+ 
+ 	lgr    %r15,%r12		# remove stack frame
+ 	cfi_def_cfa_register (15)
+diff --git a/sysdeps/sh/dl-trampoline.S b/sysdeps/sh/dl-trampoline.S
+index 0c8f84d26d3015ca..73f865f2af4e2d48 100644
+--- a/sysdeps/sh/dl-trampoline.S
++++ b/sysdeps/sh/dl-trampoline.S
+@@ -423,8 +423,8 @@ _dl_runtime_profile:
+ 	.align 2
+ #ifdef SHARED
+ 7:	.long _GLOBAL_OFFSET_TABLE_
+-8:	.long _dl_call_pltexit@GOTOFF
++8:	.long _dl_audit_pltexit@GOTOFF
+ #else
+-8:	.long _dl_call_pltexit
++8:	.long _dl_audit_pltexit
+ #endif
+ 	.size _dl_runtime_profile, .-_dl_runtime_profile
+diff --git a/sysdeps/sparc/sparc32/dl-trampoline.S b/sysdeps/sparc/sparc32/dl-trampoline.S
+index 098ffcfacc55d0b6..18ef2f0d3655b3de 100644
+--- a/sysdeps/sparc/sparc32/dl-trampoline.S
++++ b/sysdeps/sparc/sparc32/dl-trampoline.S
+@@ -127,7 +127,7 @@ _dl_profile_invoke:
+ 	mov	%l5, %o0
+ 	mov	%l6, %o1
+ 	add	%sp, (11 * 8), %o2
+-	call	_dl_call_pltexit
++	call	_dl_audit_pltexit
+ 	 add	%sp, ( 9 * 8), %o3
+ 
+ 	ldd	[%sp + ( 9 * 8)], %i0
+diff --git a/sysdeps/sparc/sparc64/dl-trampoline.S b/sysdeps/sparc/sparc64/dl-trampoline.S
+index 4948b88b9640691d..9c18ceb131c9a25b 100644
+--- a/sysdeps/sparc/sparc64/dl-trampoline.S
++++ b/sysdeps/sparc/sparc64/dl-trampoline.S
+@@ -196,7 +196,7 @@ _dl_profile_invoke:
+ 	mov	%l5, %o0
+ 	mov	%l6, %o1
+ 	add	%sp, STACK_BIAS + (24 * 8), %o2
+-	call	_dl_call_pltexit
++	call	_dl_audit_pltexit
+ 	 add	%sp, STACK_BIAS + (16 * 8), %o3
+ 
+ 	ldx	[%sp + STACK_BIAS + (16 * 8)], %i0
+diff --git a/sysdeps/x86_64/dl-machine.h b/sysdeps/x86_64/dl-machine.h
+index 5262aa69c06aa8db..d30317980882ac51 100644
+--- a/sysdeps/x86_64/dl-machine.h
++++ b/sysdeps/x86_64/dl-machine.h
+@@ -210,6 +210,7 @@ _dl_start_user:\n\
+ /* The x86-64 never uses Elf64_Rel/Elf32_Rel relocations.  */
+ #define ELF_MACHINE_NO_REL 1
+ #define ELF_MACHINE_NO_RELA 0
++#define PLTREL ElfW(Rela)
+ 
+ /* We define an initialization function.  This is called very early in
+    _dl_sysdep_start.  */
+diff --git a/sysdeps/x86_64/dl-runtime.h b/sysdeps/x86_64/dl-runtime.h
+index 3fa61d7a4697cf3f..379f8bd4dea8ef97 100644
+--- a/sysdeps/x86_64/dl-runtime.h
++++ b/sysdeps/x86_64/dl-runtime.h
+@@ -18,7 +18,7 @@
+    02111-1307 USA.  */
+ 
+ /* The ABI calls for the PLT stubs to pass the index of the relocation
+-   and not its offset.  In _dl_profile_fixup and _dl_call_pltexit we
++   and not its offset.  In _dl_profile_fixup and _dl_audit_pltexit we
+    also use the index.  Therefore it is wasteful to compute the offset
+    in the trampoline just to reverse the operation immediately
+    afterwards.  */
+diff --git a/sysdeps/x86_64/dl-trampoline.h b/sysdeps/x86_64/dl-trampoline.h
+index a28b1e73a4b187ba..256dfbb64df9f03d 100644
+--- a/sysdeps/x86_64/dl-trampoline.h
++++ b/sysdeps/x86_64/dl-trampoline.h
+@@ -388,7 +388,7 @@ _dl_runtime_profile:
+ 	jns 3f
+ 
+ 	/* There's nothing in the frame size, so there
+-	   will be no call to the _dl_call_pltexit. */
++	   will be no call to the _dl_audit_pltexit. */
+ 
+ 	/* Get back registers content.  */
+ 	movq LR_RCX_OFFSET(%rsp), %rcx
+@@ -436,7 +436,7 @@ _dl_runtime_profile:
+ 	mov 24(%rbx), %RSP_LP	# Drop the copied stack content
+ 
+ 	/* Now we have to prepare the La_x86_64_retval structure for the
+-	   _dl_call_pltexit.  The La_x86_64_regs is being pointed by rsp now,
++	   _dl_audit_pltexit.  The La_x86_64_regs is being pointed by rsp now,
+ 	   so we just need to allocate the sizeof(La_x86_64_retval) space on
+ 	   the stack, since the alignment has already been taken care of. */
+ # ifdef RESTORE_AVX
+@@ -491,7 +491,7 @@ _dl_runtime_profile:
+ 	movq 24(%rbx), %rdx	# La_x86_64_regs argument to %rdx.
+ 	movq 40(%rbx), %rsi	# Copy args pushed by PLT in register.
+ 	movq 32(%rbx), %rdi	# %rdi: link_map, %rsi: reloc_index
+-	call _dl_call_pltexit
++	call _dl_audit_pltexit
+ 
+ 	/* Restore return registers.  */
+ 	movq LRV_RAX_OFFSET(%rsp), %rax

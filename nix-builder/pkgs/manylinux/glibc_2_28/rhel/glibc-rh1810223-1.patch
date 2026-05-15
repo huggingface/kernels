@@ -1,0 +1,170 @@
+commit 0499a353a6e196f468e7ec554cb13c82011f0e36
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Mar 2 14:24:27 2020 +0100
+
+    elf: Add elf/check-wx-segment, a test for the presence of WX segments
+    
+    Writable, executable segments defeat security hardening.  The
+    existing check for DT_TEXTREL does not catch this.
+    
+    hppa and SPARC currently keep the PLT in an RWX load segment.
+
+# Conflicts:
+#	sysdeps/sparc/Makefile
+
+diff --git a/elf/Makefile b/elf/Makefile
+index f1a16fe8ca594c57..a52d9b1f6a4364a7 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -378,6 +378,7 @@ tests-special += $(objpfx)tst-pathopt.out $(objpfx)tst-rtld-load-self.out \
+ 		 $(objpfx)tst-rtld-preload.out
+ endif
+ tests-special += $(objpfx)check-textrel.out $(objpfx)check-execstack.out \
++		 $(objpfx)check-wx-segment.out \
+ 		 $(objpfx)check-localplt.out $(objpfx)check-initfini.out
+ endif
+ 
+@@ -1148,6 +1149,12 @@ $(objpfx)check-execstack.out: $(..)scripts/check-execstack.awk \
+ 	$(evaluate-test)
+ generated += check-execstack.out
+ 
++$(objpfx)check-wx-segment.out: $(..)scripts/check-wx-segment.py \
++			      $(all-built-dso:=.phdr)
++	$(PYTHON) $^ --xfail="$(check-wx-segment-xfail)" > $@; \
++	$(evaluate-test)
++generated += check-wx-segment.out
++
+ $(objpfx)tst-dlmodcount: $(libdl)
+ $(objpfx)tst-dlmodcount.out: $(test-modules)
+ 
+diff --git a/scripts/check-wx-segment.py b/scripts/check-wx-segment.py
+new file mode 100644
+index 0000000000000000..e1fa79387ce22c4b
+--- /dev/null
++++ b/scripts/check-wx-segment.py
+@@ -0,0 +1,85 @@
++#!/usr/bin/python3
++# Check ELF program headers for WX segments.
++# Copyright (C) 2020 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <https://www.gnu.org/licenses/>.
++
++"""Check that the program headers do not contain write-exec segments."""
++
++import argparse
++import os.path
++import re
++import sys
++
++# Regular expression to extract the RWE flags field.  The
++# address/offset columns have varying width.
++RE_LOAD = re.compile(
++    r'^  LOAD +(?:0x[0-9a-fA-F]+ +){5}([R ][W ][ E]) +0x[0-9a-fA-F]+\n\Z')
++
++def process_file(path, inp, xfail):
++    """Analyze one input file."""
++
++    errors = 0
++    for line in inp:
++        error = None
++        if line.startswith('  LOAD '):
++            match = RE_LOAD.match(line)
++            if match is None:
++                error = 'Invalid LOAD line'
++            else:
++                flags, = match.groups()
++                if 'W' in flags and 'E' in flags:
++                    if xfail:
++                        print('{}: warning: WX segment (as expected)'.format(
++                            path))
++                    else:
++                        error = 'WX segment'
++
++        if error is not None:
++            print('{}: error: {}: {!r}'.format(path, error, line.strip()))
++            errors += 1
++
++    if xfail and errors == 0:
++        print('{}: warning: missing expected WX segment'.format(path))
++    return errors
++
++
++def main():
++    """The main entry point."""
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--xfail',
++                        help='Mark input files as XFAILed ("*" for all)',
++                        type=str, default='')
++    parser.add_argument('phdrs',
++                        help='Files containing readelf -Wl output',
++                        nargs='*')
++    opts = parser.parse_args(sys.argv)
++
++    xfails = set(opts.xfail.split(' '))
++    xfails_all = opts.xfail.strip() == '*'
++
++    errors = 0
++    for path in opts.phdrs:
++        xfail = ((os.path.basename(path) + '.phdrs') in xfails
++                 or xfails_all)
++        with open(path) as inp:
++            errors += process_file(path, inp, xfail)
++    if errors > 0:
++        sys.exit(1)
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/sysdeps/sparc/Makefile b/sysdeps/sparc/Makefile
+index 3f0c0964002560f0..a1004e819c9b0c38 100644
+--- a/sysdeps/sparc/Makefile
++++ b/sysdeps/sparc/Makefile
+@@ -16,5 +16,14 @@ CPPFLAGS-crti.S += -fPIC
+ CPPFLAGS-crtn.S += -fPIC
+ endif
+ 
++ifeq ($(subdir),elf)
++
++# Lazy binding on SPARC rewrites the PLT sequence.  See the Solaris
++# Linker and Libraries Guide, section SPARC: Procedure Linkage Table.
++# <https://docs.oracle.com/cd/E19455-01/816-0559/chapter6-1236/index.html>
++test-xfail-check-wx-segment = *
++
++endif # $(subdir) == elf
++
+ # The assembler on SPARC needs the -fPIC flag even when it's assembler code.
+ ASFLAGS-.os += -fPIC
+diff --git a/sysdeps/unix/sysv/linux/hppa/Makefile b/sysdeps/unix/sysv/linux/hppa/Makefile
+index e1637f54f508c007..c89ec8318208205d 100644
+--- a/sysdeps/unix/sysv/linux/hppa/Makefile
++++ b/sysdeps/unix/sysv/linux/hppa/Makefile
+@@ -3,9 +3,14 @@ ifeq ($(subdir),stdlib)
+ gen-as-const-headers += ucontext_i.sym
+ endif
+ 
++ifeq ($(subdir),elf)
+ # Supporting non-executable stacks on HPPA requires changes to both
+ # the Linux kernel and glibc. The kernel currently needs an executable
+ # stack for syscall restarts and signal returns.
+-ifeq ($(subdir),elf)
+ test-xfail-check-execstack = yes
+-endif
++
++# On hppa, the PLT is executable because it contains an executable
++# trampoline used during lazy binding.
++test-xfail-check-wx-segment = *
++
++endif # $(subdir) == elf

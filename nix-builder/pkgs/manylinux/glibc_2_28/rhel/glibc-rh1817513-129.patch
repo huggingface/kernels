@@ -1,0 +1,121 @@
+commit de42613540de8d3d70b5f14a14923cab7bd694d0
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon May 25 18:17:27 2020 +0200
+
+    elf: Turn _dl_printf, _dl_error_printf, _dl_fatal_printf into functions
+    
+    This change makes it easier to set a breakpoint on these calls.
+    
+    This also addresses the issue that including <ldsodefs.h> without
+    <unistd.h> does not result usable _dl_*printf macros because of the
+    use of the STD*_FILENO macros there.
+    
+    (The private symbol for _dl_fatal_printf will go away again
+    once the exception handling implementation is unified between
+    libc and ld.so.)
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/Versions b/elf/Versions
+index 3be879c4adfa74c7..be88c48e6d45a937 100644
+--- a/elf/Versions
++++ b/elf/Versions
+@@ -58,7 +58,7 @@ ld {
+     _dl_allocate_tls; _dl_allocate_tls_init;
+     _dl_argv; _dl_find_dso_for_object; _dl_get_tls_static_info;
+     _dl_deallocate_tls; _dl_make_stack_executable;
+-    _dl_rtld_di_serinfo; _dl_starting_up;
++    _dl_rtld_di_serinfo; _dl_starting_up; _dl_fatal_printf;
+     _rtld_global; _rtld_global_ro;
+ 
+     # Only here for gdb while a better method is developed.
+diff --git a/elf/dl-misc.c b/elf/dl-misc.c
+index 3f28de3ee9d68368..508630e444d2a00c 100644
+--- a/elf/dl-misc.c
++++ b/elf/dl-misc.c
+@@ -302,6 +302,37 @@ _dl_dprintf (int fd, const char *fmt, ...)
+   va_end (arg);
+ }
+ 
++void
++_dl_printf (const char *fmt, ...)
++{
++  va_list arg;
++
++  va_start (arg, fmt);
++  _dl_debug_vdprintf (STDOUT_FILENO, 0, fmt, arg);
++  va_end (arg);
++}
++
++void
++_dl_error_printf (const char *fmt, ...)
++{
++  va_list arg;
++
++  va_start (arg, fmt);
++  _dl_debug_vdprintf (STDERR_FILENO, 0, fmt, arg);
++  va_end (arg);
++}
++
++void
++_dl_fatal_printf (const char *fmt, ...)
++{
++  va_list arg;
++
++  va_start (arg, fmt);
++  _dl_debug_vdprintf (STDERR_FILENO, 0, fmt, arg);
++  va_end (arg);
++  _exit (127);
++}
++rtld_hidden_def (_dl_fatal_printf)
+ 
+ /* Test whether given NAME matches any of the names of the given object.  */
+ int
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 77923499d3de4366..6cbbaa808a596f77 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -762,24 +762,19 @@ ssize_t _dl_write (int fd, const void *buffer, size_t length)
+ 
+ /* Write a message on the specified descriptor standard output.  The
+    parameters are interpreted as for a `printf' call.  */
+-#define _dl_printf(fmt, args...) \
+-  _dl_dprintf (STDOUT_FILENO, fmt, ##args)
++void _dl_printf (const char *fmt, ...)
++  attribute_hidden __attribute__ ((__format__ (__printf__, 1, 2)));
+ 
+ /* Write a message on the specified descriptor standard error.  The
+    parameters are interpreted as for a `printf' call.  */
+-#define _dl_error_printf(fmt, args...) \
+-  _dl_dprintf (STDERR_FILENO, fmt, ##args)
++void _dl_error_printf (const char *fmt, ...)
++  attribute_hidden __attribute__ ((__format__ (__printf__, 1, 2)));
+ 
+ /* Write a message on the specified descriptor standard error and exit
+    the program.  The parameters are interpreted as for a `printf' call.  */
+-#define _dl_fatal_printf(fmt, args...) \
+-  do									      \
+-    {									      \
+-      _dl_dprintf (STDERR_FILENO, fmt, ##args);				      \
+-      _exit (127);							      \
+-    }									      \
+-  while (1)
+-
++void _dl_fatal_printf (const char *fmt, ...)
++  __attribute__ ((__format__ (__printf__, 1, 2), __noreturn__));
++rtld_hidden_proto (_dl_fatal_printf)
+ 
+ /* An exception raised by the _dl_signal_error function family and
+    caught by _dl_catch_error function family.  Exceptions themselves
+diff --git a/sysdeps/mach/hurd/i386/localplt.data b/sysdeps/mach/hurd/i386/localplt.data
+index 4b9dbf5acc088cff..eb79216e3b494486 100644
+--- a/sysdeps/mach/hurd/i386/localplt.data
++++ b/sysdeps/mach/hurd/i386/localplt.data
+@@ -43,6 +43,7 @@ ld.so: _dl_allocate_tls_init
+ ld.so: _dl_exception_create
+ ld.so: _dl_exception_create_format
+ ld.so: _dl_exception_free
++ld.so: _dl_fatal_printf
+ ld.so: _dl_find_dso_for_object
+ ld.so: _dl_init_first
+ ld.so: _dl_mcount

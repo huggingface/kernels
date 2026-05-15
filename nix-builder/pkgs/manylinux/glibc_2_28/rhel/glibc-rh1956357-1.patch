@@ -1,0 +1,100 @@
+commit 56c81132ccc6f468fa4fc29c536db060e18e9d87
+Author: Raphael Moreira Zinsly <rzinsly@linux.ibm.com>
+Date:   Tue Feb 23 14:14:37 2021 -0300
+
+    powerpc: Add optimized ilogb* for POWER9
+    
+    The instructions xsxexpdp and xsxexpqp introduced on POWER9 extract
+    the exponent from a double-precision and quad-precision floating-point
+    respectively, thus they can be used to improve ilogb, ilogbf and ilogbf128.
+
+diff --git a/sysdeps/powerpc/fpu/math_private.h b/sysdeps/powerpc/fpu/math_private.h
+index e642d6c8237578ea..5bbc468829062a48 100644
+--- a/sysdeps/powerpc/fpu/math_private.h
++++ b/sysdeps/powerpc/fpu/math_private.h
+@@ -26,7 +26,28 @@
+ 
+ #include_next <math_private.h>
+ 
+-#if defined _ARCH_PWR9 && __HAVE_DISTINCT_FLOAT128
++#ifdef _ARCH_PWR9
++
++#if __GNUC_PREREQ (8, 0)
++# define _GL_HAS_BUILTIN_ILOGB 1
++#elif defined __has_builtin
++# define _GL_HAS_BUILTIN_ILOGB __has_builtin (__builtin_vsx_scalar_extract_exp)
++#else
++# define _GL_HAS_BUILTIN_ILOGB 0
++#endif
++
++#define __builtin_test_dc_ilogbf __builtin_test_dc_ilogb
++#define __builtin_ilogbf __builtin_ilogb
++
++#define __builtin_test_dc_ilogb(x, y) \
++        __builtin_vsx_scalar_test_data_class_dp(x, y)
++#define __builtin_ilogb(x) __builtin_vsx_scalar_extract_exp(x) - 0x3ff
++
++#define __builtin_test_dc_ilogbf128(x, y) \
++        __builtin_vsx_scalar_test_data_class_qp(x, y)
++#define __builtin_ilogbf128(x) __builtin_vsx_scalar_extract_expq(x) - 0x3fff
++
++#if __HAVE_DISTINCT_FLOAT128
+ extern __always_inline _Float128
+ __ieee754_sqrtf128 (_Float128 __x)
+ {
+@@ -35,6 +56,9 @@ __ieee754_sqrtf128 (_Float128 __x)
+   return __z;
+ }
+ #endif
++#else /* !_ARCH_PWR9 */
++#define _GL_HAS_BUILTIN_ILOGB 0
++#endif
+ 
+ #if defined _ARCH_PWR5X
+ 
+diff --git a/sysdeps/powerpc/powerpc64/le/fpu/w_ilogb_template.c b/sysdeps/powerpc/powerpc64/le/fpu/w_ilogb_template.c
+new file mode 100644
+index 0000000000000000..b5c1c0aa9db86f3d
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/fpu/w_ilogb_template.c
+@@ -0,0 +1,30 @@
++#include <math.h>
++#include <errno.h>
++#include <limits.h>
++#include <math_private.h>
++#include <fenv.h>
++
++#if _GL_HAS_BUILTIN_ILOGB
++int
++M_DECL_FUNC (__ilogb) (FLOAT x)
++{
++  int r;
++  /* Check for exceptional cases.  */
++  if (! M_SUF(__builtin_test_dc_ilogb) (x, 0x7f))
++    r = M_SUF (__builtin_ilogb) (x);
++  else
++    /* Fallback to the generic ilogb if x is NaN, Inf or subnormal.  */
++    r = M_SUF (__ieee754_ilogb) (x);
++  if (__builtin_expect (r == FP_ILOGB0, 0)
++      || __builtin_expect (r == FP_ILOGBNAN, 0)
++      || __builtin_expect (r == INT_MAX, 0))
++    {
++      __set_errno (EDOM);
++      __feraiseexcept (FE_INVALID);
++    }
++  return r;
++}
++declare_mgen_alias (__ilogb, ilogb)
++#else
++#include <math/w_ilogb_template.c>
++#endif
+diff --git a/sysdeps/powerpc/powerpc64/le/fpu/w_ilogbl.c b/sysdeps/powerpc/powerpc64/le/fpu/w_ilogbl.c
+new file mode 100644
+index 0000000000000000..205f154f0089a269
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/fpu/w_ilogbl.c
+@@ -0,0 +1,4 @@
++/* Skip the optimization for long double as ibm128 does not provide an
++   optimized builtin. */
++#include <math-type-macros-ldouble.h>
++#include <math/w_ilogb_template.c>

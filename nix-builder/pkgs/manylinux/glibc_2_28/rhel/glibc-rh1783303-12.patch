@@ -1,0 +1,303 @@
+commit e3d85df50b083c9ba68a40f5d45b201cbec4e68b
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Sep 19 09:13:14 2019 -0500
+
+    [powerpc] fenv_private.h clean up
+    
+    fenv_private.h includes unused functions, magic macro constants, and
+    some replicated common code fragments.
+    
+    Remove unused functions, replace magic constants with constants from
+    fenv_libc.h, and refactor replicated code.
+    
+    Suggested-by: Paul E. Murphy <murphyp@linux.ibm.com>
+    Reviewed-By: Paul E Murphy <murphyp@linux.ibm.com>
+
+diff --git a/sysdeps/powerpc/fpu/fedisblxcpt.c b/sysdeps/powerpc/fpu/fedisblxcpt.c
+index 2a776c72fb5a2b70..bdf55ac62f1ffe4f 100644
+--- a/sysdeps/powerpc/fpu/fedisblxcpt.c
++++ b/sysdeps/powerpc/fpu/fedisblxcpt.c
+@@ -43,8 +43,7 @@ fedisableexcept (int excepts)
+   if (fe.l != curr.l)
+     fesetenv_mode (fe.fenv);
+ 
+-  if (new == 0 && result != 0)
+-    (void)__fe_mask_env ();
++  __TEST_AND_ENTER_NON_STOP (-1ULL, fe.l);
+ 
+   return result;
+ }
+diff --git a/sysdeps/powerpc/fpu/feenablxcpt.c b/sysdeps/powerpc/fpu/feenablxcpt.c
+index 6f5a828e80965bfa..78ebabed9232c0ad 100644
+--- a/sysdeps/powerpc/fpu/feenablxcpt.c
++++ b/sysdeps/powerpc/fpu/feenablxcpt.c
+@@ -43,8 +43,7 @@ feenableexcept (int excepts)
+   if (fe.l != curr.l)
+     fesetenv_mode (fe.fenv);
+ 
+-  if (new != 0 && result == 0)
+-    (void) __fe_nomask_env_priv ();
++  __TEST_AND_EXIT_NON_STOP (0ULL, fe.l);
+ 
+   return result;
+ }
+diff --git a/sysdeps/powerpc/fpu/feholdexcpt.c b/sysdeps/powerpc/fpu/feholdexcpt.c
+index 8ec3fbff82b22f51..9636ecaa0b600b0d 100644
+--- a/sysdeps/powerpc/fpu/feholdexcpt.c
++++ b/sysdeps/powerpc/fpu/feholdexcpt.c
+@@ -18,7 +18,6 @@
+ 
+ #include <fenv_libc.h>
+ #include <fpu_control.h>
+-#define _FPU_MASK_ALL (_FPU_MASK_ZM | _FPU_MASK_OM | _FPU_MASK_UM | _FPU_MASK_XM | _FPU_MASK_IM)
+ 
+ int
+ __feholdexcept (fenv_t *envp)
+@@ -35,11 +34,7 @@ __feholdexcept (fenv_t *envp)
+   if (new.l == old.l)
+     return 0;
+ 
+-  /* If the old env had any enabled exceptions, then mask SIGFPE in the
+-     MSR FE0/FE1 bits.  This may allow the FPU to run faster because it
+-     always takes the default action and can not generate SIGFPE. */
+-  if ((old.l & _FPU_MASK_ALL) != 0)
+-    (void)__fe_mask_env ();
++  __TEST_AND_ENTER_NON_STOP (old.l, 0ULL);
+ 
+   /* Put the new state in effect.  */
+   fesetenv_register (new.fenv);
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index b10b6a141ded4bfd..36b639c3939586f6 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -27,6 +27,26 @@ extern const fenv_t *__fe_nomask_env_priv (void);
+ 
+ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ 
++/* If the old env had any enabled exceptions and the new env has no enabled
++   exceptions, then mask SIGFPE in the MSR FE0/FE1 bits.  This may allow the
++   FPU to run faster because it always takes the default action and can not
++   generate SIGFPE.  */
++#define __TEST_AND_ENTER_NON_STOP(old, new) \
++  do { \
++    if (((old) & FPSCR_ENABLES_MASK) != 0 && ((new) & FPSCR_ENABLES_MASK) == 0) \
++      (void) __fe_mask_env (); \
++  } while (0)
++
++/* If the old env has no enabled exceptions and the new env has any enabled
++   exceptions, then unmask SIGFPE in the MSR FE0/FE1 bits.  This will put the
++   hardware into "precise mode" and may cause the FPU to run slower on some
++   hardware.  */
++#define __TEST_AND_EXIT_NON_STOP(old, new) \
++  do { \
++    if (((old) & FPSCR_ENABLES_MASK) == 0 && ((new) & FPSCR_ENABLES_MASK) != 0) \
++      (void) __fe_nomask_env_priv (); \
++  } while (0)
++
+ /* The sticky bits in the FPSCR indicating exceptions have occurred.  */
+ #define FPSCR_STICKY_BITS ((FE_ALL_EXCEPT | FE_ALL_INVALID) & ~FE_INVALID)
+ 
+diff --git a/sysdeps/powerpc/fpu/fenv_private.h b/sysdeps/powerpc/fpu/fenv_private.h
+index 30df92c9a4700dee..c236d45db2f399a4 100644
+--- a/sysdeps/powerpc/fpu/fenv_private.h
++++ b/sysdeps/powerpc/fpu/fenv_private.h
+@@ -23,73 +23,20 @@
+ #include <fenv_libc.h>
+ #include <fpu_control.h>
+ 
+-/* Mask for the exception enable bits.  */
+-#define _FPU_ALL_TRAPS (_FPU_MASK_ZM | _FPU_MASK_OM | _FPU_MASK_UM \
+-                      | _FPU_MASK_XM | _FPU_MASK_IM)
+-
+-/* Mask the rounding mode bits.  */
+-#define _FPU_MASK_RN 0xfffffffffffffffcLL
+-
+-/* Mask everything but the rounding modes and non-IEEE arithmetic flags.  */
+-#define _FPU_MASK_NOT_RN_NI 0xffffffff00000807LL
+-
+-/* Mask restore rounding mode and exception enabled.  */
+-#define _FPU_MASK_TRAPS_RN 0xffffffffffffff00LL
+-
+-/* Mask FP result flags, preserve fraction rounded/inexact bits.  */
+-#define _FPU_MASK_FRAC_INEX_RET_CC 0xfffffffffff80fffLL
+-
+ static __always_inline void
+-__libc_feholdbits_ppc (fenv_t *envp, unsigned long long mask,
+-	unsigned long long bits)
++libc_feholdexcept_setround_ppc (fenv_t *envp, int r)
+ {
+   fenv_union_t old, new;
+ 
+   old.fenv = *envp = fegetenv_register ();
+ 
+-  new.l = (old.l & mask) | bits;
+-
+-  /* If the old env had any enabled exceptions, then mask SIGFPE in the
+-     MSR FE0/FE1 bits.  This may allow the FPU to run faster because it
+-     always takes the default action and can not generate SIGFPE.  */
+-  if ((old.l & _FPU_ALL_TRAPS) != 0)
+-    (void) __fe_mask_env ();
++  __TEST_AND_ENTER_NON_STOP (old.l, 0ULL);
+ 
++  /* Clear everything and set the rounding mode.  */
++  new.l = r;
+   fesetenv_register (new.fenv);
+ }
+ 
+-static __always_inline void
+-libc_feholdexcept_ppc (fenv_t *envp)
+-{
+-  __libc_feholdbits_ppc (envp, _FPU_MASK_NOT_RN_NI, 0LL);
+-}
+-
+-static __always_inline void
+-libc_feholdexcept_setround_ppc (fenv_t *envp, int r)
+-{
+-  __libc_feholdbits_ppc (envp, _FPU_MASK_NOT_RN_NI & _FPU_MASK_RN, r);
+-}
+-
+-static __always_inline void
+-libc_fesetround_ppc (int r)
+-{
+-  __fesetround_inline (r);
+-}
+-
+-static __always_inline int
+-libc_fetestexcept_ppc (int e)
+-{
+-  fenv_union_t u;
+-  u.fenv = fegetenv_register ();
+-  return u.l & e;
+-}
+-
+-static __always_inline void
+-libc_feholdsetround_ppc (fenv_t *e, int r)
+-{
+-  __libc_feholdbits_ppc (e, _FPU_MASK_TRAPS_RN, r);
+-}
+-
+ static __always_inline unsigned long long
+ __libc_femergeenv_ppc (const fenv_t *envp, unsigned long long old_mask,
+ 	unsigned long long new_mask)
+@@ -102,19 +49,8 @@ __libc_femergeenv_ppc (const fenv_t *envp, unsigned long long old_mask,
+   /* Merge bits while masking unwanted bits from new and old env.  */
+   new.l = (old.l & old_mask) | (new.l & new_mask);
+ 
+-  /* If the old env has no enabled exceptions and the new env has any enabled
+-     exceptions, then unmask SIGFPE in the MSR FE0/FE1 bits.  This will put the
+-     hardware into "precise mode" and may cause the FPU to run slower on some
+-     hardware.  */
+-  if ((old.l & _FPU_ALL_TRAPS) == 0 && (new.l & _FPU_ALL_TRAPS) != 0)
+-    (void) __fe_nomask_env_priv ();
+-
+-  /* If the old env had any enabled exceptions and the new env has no enabled
+-     exceptions, then mask SIGFPE in the MSR FE0/FE1 bits.  This may allow the
+-     FPU to run faster because it always takes the default action and can not
+-     generate SIGFPE.  */
+-  if ((old.l & _FPU_ALL_TRAPS) != 0 && (new.l & _FPU_ALL_TRAPS) == 0)
+-    (void) __fe_mask_env ();
++  __TEST_AND_EXIT_NON_STOP (old.l, new.l);
++  __TEST_AND_ENTER_NON_STOP (old.l, new.l);
+ 
+   /* Atomically enable and raise (if appropriate) exceptions set in `new'.  */
+   fesetenv_register (new.fenv);
+@@ -139,8 +75,8 @@ libc_feresetround_ppc (fenv_t *envp)
+ static __always_inline int
+ libc_feupdateenv_test_ppc (fenv_t *envp, int ex)
+ {
+-  return __libc_femergeenv_ppc (envp, _FPU_MASK_TRAPS_RN,
+-				_FPU_MASK_FRAC_INEX_RET_CC) & ex;
++  return __libc_femergeenv_ppc (envp, ~FPSCR_CONTROL_MASK,
++				~FPSCR_STATUS_MASK) & ex;
+ }
+ 
+ static __always_inline void
+@@ -193,8 +129,7 @@ libc_feholdsetround_noex_ppc_ctx (struct rm_ctx *ctx, int r)
+   ctx->env = old.fenv;
+   if (__glibc_unlikely (new.l != old.l))
+     {
+-      if ((old.l & _FPU_ALL_TRAPS) != 0)
+-	(void) __fe_mask_env ();
++      __TEST_AND_ENTER_NON_STOP (old.l, 0ULL);
+       fesetenv_register (new.fenv);
+       ctx->updated_status = true;
+     }
+diff --git a/sysdeps/powerpc/fpu/fesetenv.c b/sysdeps/powerpc/fpu/fesetenv.c
+index ac927c8f3ada40b4..4eab5045c48105e3 100644
+--- a/sysdeps/powerpc/fpu/fesetenv.c
++++ b/sysdeps/powerpc/fpu/fesetenv.c
+@@ -28,19 +28,8 @@ __fesetenv (const fenv_t *envp)
+   new.fenv = *envp;
+   old.fenv = fegetenv_status ();
+ 
+-  /* If the old env has no enabled exceptions and the new env has any enabled
+-     exceptions, then unmask SIGFPE in the MSR FE0/FE1 bits.  This will put the
+-     hardware into "precise mode" and may cause the FPU to run slower on some
+-     hardware.  */
+-  if ((old.l & FPSCR_ENABLES_MASK) == 0 && (new.l & FPSCR_ENABLES_MASK) != 0)
+-    (void) __fe_nomask_env_priv ();
+-
+-  /* If the old env had any enabled exceptions and the new env has no enabled
+-     exceptions, then mask SIGFPE in the MSR FE0/FE1 bits.  This may allow the
+-     FPU to run faster because it always takes the default action and can not
+-     generate SIGFPE. */
+-  if ((old.l & FPSCR_ENABLES_MASK) != 0 && (new.l & FPSCR_ENABLES_MASK) == 0)
+-    (void)__fe_mask_env ();
++  __TEST_AND_EXIT_NON_STOP (old.l, new.l);
++  __TEST_AND_ENTER_NON_STOP (old.l, new.l);
+ 
+   fesetenv_register (new.fenv);
+ 
+diff --git a/sysdeps/powerpc/fpu/fesetmode.c b/sysdeps/powerpc/fpu/fesetmode.c
+index 29e088d5ab1c0d93..58ba02c0a1e64c27 100644
+--- a/sysdeps/powerpc/fpu/fesetmode.c
++++ b/sysdeps/powerpc/fpu/fesetmode.c
+@@ -33,11 +33,8 @@ fesetmode (const femode_t *modep)
+   if (old.l == new.l)
+     return 0;
+ 
+-  if ((old.l & FPSCR_ENABLES_MASK) == 0 && (new.l & FPSCR_ENABLES_MASK) != 0)
+-    (void) __fe_nomask_env_priv ();
+-
+-  if ((old.l & FPSCR_ENABLES_MASK) != 0 && (new.l & FPSCR_ENABLES_MASK) == 0)
+-    (void) __fe_mask_env ();
++  __TEST_AND_EXIT_NON_STOP (old.l, new.l);
++  __TEST_AND_ENTER_NON_STOP (old.l, new.l);
+ 
+   fesetenv_mode (new.fenv);
+   return 0;
+diff --git a/sysdeps/powerpc/fpu/feupdateenv.c b/sysdeps/powerpc/fpu/feupdateenv.c
+index 2dbd1c4e9ec65ed0..fdd15651e0101f9e 100644
+--- a/sysdeps/powerpc/fpu/feupdateenv.c
++++ b/sysdeps/powerpc/fpu/feupdateenv.c
+@@ -20,8 +20,6 @@
+ #include <fenv_libc.h>
+ #include <fpu_control.h>
+ 
+-#define _FPU_MASK_ALL (_FPU_MASK_ZM | _FPU_MASK_OM | _FPU_MASK_UM | _FPU_MASK_XM | _FPU_MASK_IM)
+-
+ int
+ __feupdateenv (const fenv_t *envp)
+ {
+@@ -36,19 +34,8 @@ __feupdateenv (const fenv_t *envp)
+      unchanged.  */
+   new.l = (old.l & 0xffffffff1fffff00LL) | (new.l & 0x1ff80fff);
+ 
+-  /* If the old env has no enabled exceptions and the new env has any enabled
+-     exceptions, then unmask SIGFPE in the MSR FE0/FE1 bits.  This will put
+-     the hardware into "precise mode" and may cause the FPU to run slower on
+-     some hardware.  */
+-  if ((old.l & _FPU_MASK_ALL) == 0 && (new.l & _FPU_MASK_ALL) != 0)
+-    (void) __fe_nomask_env_priv ();
+-
+-  /* If the old env had any enabled exceptions and the new env has no enabled
+-     exceptions, then mask SIGFPE in the MSR FE0/FE1 bits.  This may allow the
+-     FPU to run faster because it always takes the default action and can not
+-     generate SIGFPE. */
+-  if ((old.l & _FPU_MASK_ALL) != 0 && (new.l & _FPU_MASK_ALL) == 0)
+-    (void)__fe_mask_env ();
++  __TEST_AND_EXIT_NON_STOP (old.l, new.l);
++  __TEST_AND_ENTER_NON_STOP (old.l, new.l);
+ 
+   /* Atomically enable and raise (if appropriate) exceptions set in `new'. */
+   fesetenv_register (new.fenv);

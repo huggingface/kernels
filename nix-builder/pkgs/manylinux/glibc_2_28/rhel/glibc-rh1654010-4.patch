@@ -1,0 +1,32 @@
+commit 02cd5c1a8d033d7f91fea12a66bb44d1bbf85f76
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Sat Dec 1 21:43:36 2018 +0100
+
+    support: Close original descriptors in support_capture_subprocess
+
+diff --git a/support/support_capture_subprocess.c b/support/support_capture_subprocess.c
+index 6d2029e13bd6ae73..93f6ea310290000a 100644
+--- a/support/support_capture_subprocess.c
++++ b/support/support_capture_subprocess.c
+@@ -59,8 +59,12 @@ support_capture_subprocess (void (*callback) (void *), void *closure)
+ 
+   int stdout_pipe[2];
+   xpipe (stdout_pipe);
++  TEST_VERIFY (stdout_pipe[0] > STDERR_FILENO);
++  TEST_VERIFY (stdout_pipe[1] > STDERR_FILENO);
+   int stderr_pipe[2];
+   xpipe (stderr_pipe);
++  TEST_VERIFY (stderr_pipe[0] > STDERR_FILENO);
++  TEST_VERIFY (stderr_pipe[1] > STDERR_FILENO);
+ 
+   TEST_VERIFY (fflush (stdout) == 0);
+   TEST_VERIFY (fflush (stderr) == 0);
+@@ -72,6 +76,8 @@ support_capture_subprocess (void (*callback) (void *), void *closure)
+       xclose (stderr_pipe[0]);
+       xdup2 (stdout_pipe[1], STDOUT_FILENO);
+       xdup2 (stderr_pipe[1], STDERR_FILENO);
++      xclose (stdout_pipe[1]);
++      xclose (stderr_pipe[1]);
+       callback (closure);
+       _exit (0);
+     }

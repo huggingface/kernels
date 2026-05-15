@@ -1,0 +1,242 @@
+From 1683249d17e14827b6579529742eb895027dfa84 Mon Sep 17 00:00:00 2001
+From: Shen-Ta Hsieh <ibmibmibm.tw@gmail.com>
+Date: Mon, 24 May 2021 09:43:11 +0800
+Subject: [PATCH] x86_64: roundeven with sse4.1 support
+Content-type: text/plain; charset=UTF-8
+
+This patch adds support for the sse4.1 hardware floating point
+roundeven.
+
+Here is some benchmark results on my systems:
+
+=AMD Ryzen 9 3900X 12-Core Processor=
+
+* benchmark result before this commit
+|            |    roundeven |   roundevenf |
+|------------|--------------|--------------|
+| duration   |  3.75587e+09 |  3.75114e+09 |
+| iterations |  3.93053e+08 |  4.35402e+08 |
+| max        | 52.592       | 58.71        |
+| min        |  7.98        |  7.22        |
+| mean       |  9.55563     |  8.61535     |
+
+* benchmark result after this commit
+|            |     roundeven |   roundevenf |
+|------------|---------------|--------------|
+| duration   |   3.73815e+09 |  3.73738e+09 |
+| iterations |   5.82692e+08 |  5.91498e+08 |
+| max        |  56.468       | 51.642       |
+| min        |   6.27        |  6.156       |
+| mean       |   6.41532     |  6.3185      |
+
+=Intel(R) Pentium(R) CPU D1508 @ 2.20GHz=
+
+* benchmark result before this commit
+|            |    roundeven |   roundevenf |
+|------------|--------------|--------------|
+| duration   |  2.18208e+09 |  2.18258e+09 |
+| iterations |  2.39932e+08 |  2.46924e+08 |
+| max        | 96.378       | 98.035       |
+| min        |  6.776       |  5.94        |
+| mean       |  9.09456     |  8.83907     |
+
+* benchmark result after this commit
+|            |    roundeven |   roundevenf |
+|------------|--------------|--------------|
+| duration   |  2.17415e+09 |  2.17005e+09 |
+| iterations |  3.56193e+08 |  4.09824e+08 |
+| max        | 51.693       | 97.192       |
+| min        |  5.926       |  5.093       |
+| mean       |  6.10385     |  5.29507     |
+
+Signed-off-by: Shen-Ta Hsieh <ibmibmibm.tw@gmail.com>
+Reviewed-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ sysdeps/x86_64/fpu/multiarch/Makefile         |  5 +--
+ sysdeps/x86_64/fpu/multiarch/s_roundeven-c.c  |  2 ++
+ .../x86_64/fpu/multiarch/s_roundeven-sse4_1.S | 24 ++++++++++++++
+ sysdeps/x86_64/fpu/multiarch/s_roundeven.c    | 31 +++++++++++++++++++
+ sysdeps/x86_64/fpu/multiarch/s_roundevenf-c.c |  3 ++
+ .../fpu/multiarch/s_roundevenf-sse4_1.S       | 24 ++++++++++++++
+ sysdeps/x86_64/fpu/multiarch/s_roundevenf.c   | 31 +++++++++++++++++++
+ 7 files changed, 118 insertions(+), 2 deletions(-)
+ create mode 100644 sysdeps/x86_64/fpu/multiarch/s_roundeven-c.c
+ create mode 100644 sysdeps/x86_64/fpu/multiarch/s_roundeven-sse4_1.S
+ create mode 100644 sysdeps/x86_64/fpu/multiarch/s_roundeven.c
+ create mode 100644 sysdeps/x86_64/fpu/multiarch/s_roundevenf-c.c
+ create mode 100644 sysdeps/x86_64/fpu/multiarch/s_roundevenf-sse4_1.S
+ create mode 100644 sysdeps/x86_64/fpu/multiarch/s_roundevenf.c
+
+diff --git a/sysdeps/x86_64/fpu/multiarch/Makefile b/sysdeps/x86_64/fpu/multiarch/Makefile
+index 9f387248..6ddd1c01 100644
+--- a/sysdeps/x86_64/fpu/multiarch/Makefile
++++ b/sysdeps/x86_64/fpu/multiarch/Makefile
+@@ -1,11 +1,12 @@
+ ifeq ($(subdir),math)
+ libm-sysdep_routines += s_floor-c s_ceil-c s_floorf-c s_ceilf-c \
+ 			s_rint-c s_rintf-c s_nearbyint-c s_nearbyintf-c \
+-			s_trunc-c s_truncf-c
++			s_roundeven-c s_roundevenf-c s_trunc-c s_truncf-c
+ 
+ libm-sysdep_routines += s_ceil-sse4_1 s_ceilf-sse4_1 s_floor-sse4_1 \
+ 			s_floorf-sse4_1 s_nearbyint-sse4_1 \
+-			s_nearbyintf-sse4_1 s_rint-sse4_1 s_rintf-sse4_1 \
++			s_nearbyintf-sse4_1 s_roundeven-sse4_1 \
++			s_roundevenf-sse4_1 s_rint-sse4_1 s_rintf-sse4_1 \
+ 			s_trunc-sse4_1 s_truncf-sse4_1
+ 
+ libm-sysdep_routines += e_exp-fma e_log-fma e_pow-fma s_atan-fma \
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_roundeven-c.c b/sysdeps/x86_64/fpu/multiarch/s_roundeven-c.c
+new file mode 100644
+index 00000000..c7be43cb
+--- /dev/null
++++ b/sysdeps/x86_64/fpu/multiarch/s_roundeven-c.c
+@@ -0,0 +1,2 @@
++#define __roundeven __roundeven_c
++#include <sysdeps/ieee754/dbl-64/s_roundeven.c>
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_roundeven-sse4_1.S b/sysdeps/x86_64/fpu/multiarch/s_roundeven-sse4_1.S
+new file mode 100644
+index 00000000..6ae8f6b1
+--- /dev/null
++++ b/sysdeps/x86_64/fpu/multiarch/s_roundeven-sse4_1.S
+@@ -0,0 +1,24 @@
++/* Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <sysdep.h>
++
++	.section .text.sse4.1,"ax",@progbits
++ENTRY(__roundeven_sse41)
++	roundsd	$8, %xmm0, %xmm0
++	ret
++END(__roundeven_sse41)
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_roundeven.c b/sysdeps/x86_64/fpu/multiarch/s_roundeven.c
+new file mode 100644
+index 00000000..d92eda65
+--- /dev/null
++++ b/sysdeps/x86_64/fpu/multiarch/s_roundeven.c
+@@ -0,0 +1,31 @@
++/* Multiple versions of __roundeven.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <libm-alias-double.h>
++
++#define roundeven __redirect_roundeven
++#define __roundeven __redirect___roundeven
++#include <math.h>
++#undef roundeven
++#undef __roundeven
++
++#define SYMBOL_NAME roundeven
++#include "ifunc-sse4_1.h"
++
++libc_ifunc_redirected (__redirect_roundeven, __roundeven, IFUNC_SELECTOR ());
++libm_alias_double (__roundeven, roundeven)
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_roundevenf-c.c b/sysdeps/x86_64/fpu/multiarch/s_roundevenf-c.c
+new file mode 100644
+index 00000000..72a6e7d1
+--- /dev/null
++++ b/sysdeps/x86_64/fpu/multiarch/s_roundevenf-c.c
+@@ -0,0 +1,3 @@
++#undef __roundevenf
++#define __roundevenf __roundevenf_c
++#include <sysdeps/ieee754/flt-32/s_roundevenf.c>
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_roundevenf-sse4_1.S b/sysdeps/x86_64/fpu/multiarch/s_roundevenf-sse4_1.S
+new file mode 100644
+index 00000000..a76e1080
+--- /dev/null
++++ b/sysdeps/x86_64/fpu/multiarch/s_roundevenf-sse4_1.S
+@@ -0,0 +1,24 @@
++/* Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <sysdep.h>
++
++	.section .text.sse4.1,"ax",@progbits
++ENTRY(__roundevenf_sse41)
++	roundss	$8, %xmm0, %xmm0
++	ret
++END(__roundevenf_sse41)
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_roundevenf.c b/sysdeps/x86_64/fpu/multiarch/s_roundevenf.c
+new file mode 100644
+index 00000000..2ee196e6
+--- /dev/null
++++ b/sysdeps/x86_64/fpu/multiarch/s_roundevenf.c
+@@ -0,0 +1,31 @@
++/* Multiple versions of __roundevenf.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <libm-alias-float.h>
++
++#define roundevenf __redirect_roundevenf
++#define __roundevenf __redirect___roundevenf
++#include <math.h>
++#undef roundevenf
++#undef __roundevenf
++
++#define SYMBOL_NAME roundevenf
++#include "ifunc-sse4_1.h"
++
++libc_ifunc_redirected (__redirect_roundevenf, __roundevenf, IFUNC_SELECTOR ());
++libm_alias_float (__roundeven, roundeven)
+-- 
+GitLab
+

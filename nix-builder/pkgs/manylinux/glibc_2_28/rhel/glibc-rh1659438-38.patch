@@ -1,0 +1,249 @@
+commit 804f2e5c73b1363836ce5db29a0abb3d36e1286a
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:18 2018 +0100
+
+    S390: Refactor wcscpy ifunc handling.
+    
+    The ifunc handling for wcscpy is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcscpy variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcscpy variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcscpy.
+            * sysdeps/s390/multiarch/wcscpy-c.c: Move to ...
+            * sysdeps/s390/wcscpy-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcscpy-vx.S: Move to ...
+            * sysdeps/s390/wcscpy-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcscpy.c: Move to ...
+            * sysdeps/s390/wcscpy.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcscpy.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index f5983815479a76da..8bdbd1b5d8e9df01 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -61,5 +61,6 @@ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+ sysdep_routines += wcslen wcslen-vx wcslen-c \
+-		   wcsnlen wcsnlen-vx wcsnlen-c
++		   wcsnlen wcsnlen-vx wcsnlen-c \
++		   wcscpy wcscpy-vx wcscpy-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcscpy.h b/sysdeps/s390/ifunc-wcscpy.h
+new file mode 100644
+index 0000000000000000..fba7c9c7a7c354d1
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcscpy.h
+@@ -0,0 +1,53 @@
++/* wcscpy variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSCPY_IFUNC	1
++#else
++# define HAVE_WCSCPY_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSCPY_IFUNC_AND_VX_SUPPORT HAVE_WCSCPY_IFUNC
++#else
++# define HAVE_WCSCPY_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSCPY_DEFAULT		WCSCPY_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSCPY_C		1
++# define HAVE_WCSCPY_Z13	1
++#else
++# define WCSCPY_DEFAULT		WCSCPY_C
++# define HAVE_WCSCPY_C		1
++# define HAVE_WCSCPY_Z13	HAVE_WCSCPY_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSCPY_C
++# define WCSCPY_C		__wcscpy_c
++#else
++# define WCSCPY_C		NULL
++#endif
++
++#if HAVE_WCSCPY_Z13
++# define WCSCPY_Z13		__wcscpy_vx
++#else
++# define WCSCPY_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index ce2e7ce5f4eef0fa..8828897a59ae580c 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcscpy wcscpy-vx wcscpy-c \
+-		   wcpcpy wcpcpy-vx wcpcpy-c \
++sysdep_routines += wcpcpy wcpcpy-vx wcpcpy-c \
+ 		   wcsncpy wcsncpy-vx wcsncpy-c \
+ 		   wcpncpy wcpncpy-vx wcpncpy-c \
+ 		   wcscat wcscat-vx wcscat-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index c199fd0e0b43e4b4..aac8f4ea4671d0cf 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -48,6 +48,7 @@
+ #include <ifunc-memrchr.h>
+ #include <ifunc-wcslen.h>
+ #include <ifunc-wcsnlen.h>
++#include <ifunc-wcscpy.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -450,6 +451,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSNLEN_IFUNC  */
+ 
++#if HAVE_WCSCPY_IFUNC
++    IFUNC_IMPL (i, name, wcscpy,
++# if HAVE_WCSCPY_Z13
++		IFUNC_IMPL_ADD (array, i, wcscpy,
++				dl_hwcap & HWCAP_S390_VX, WCSCPY_Z13)
++# endif
++# if HAVE_WCSCPY_C
++		IFUNC_IMPL_ADD (array, i, wcscpy, 1, WCSCPY_C)
++# endif
++		)
++#endif /* HAVE_WCSCPY_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -458,8 +471,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcscpy);
+-
+   IFUNC_VX_IMPL (wcpcpy);
+ 
+   IFUNC_VX_IMPL (wcsncpy);
+diff --git a/sysdeps/s390/multiarch/wcscpy-c.c b/sysdeps/s390/wcscpy-c.c
+similarity index 86%
+rename from sysdeps/s390/multiarch/wcscpy-c.c
+rename to sysdeps/s390/wcscpy-c.c
+index 4a510f466be80679..db2967f47d7bc3cc 100644
+--- a/sysdeps/s390/multiarch/wcscpy-c.c
++++ b/sysdeps/s390/wcscpy-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSCPY  __wcscpy_c
++#include <ifunc-wcscpy.h>
++
++#if HAVE_WCSCPY_C
++# if HAVE_WCSCPY_IFUNC || HAVE_WCSCPY_Z13
++#  define WCSCPY WCSCPY_C
++# endif
+ 
+-# include <wchar.h>
+-extern __typeof (wcscpy) __wcscpy_c;
+ # include <wcsmbs/wcscpy.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcscpy-vx.S b/sysdeps/s390/wcscpy-vx.S
+similarity index 95%
+rename from sysdeps/s390/multiarch/wcscpy-vx.S
+rename to sysdeps/s390/wcscpy-vx.S
+index c2e81055be958907..8fe12f4d8b3e66a8 100644
+--- a/sysdeps/s390/multiarch/wcscpy-vx.S
++++ b/sysdeps/s390/wcscpy-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcscpy.h>
++#if HAVE_WCSCPY_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -37,7 +38,7 @@
+    -v17=index of zero
+    -v18=part of src
+ */
+-ENTRY(__wcscpy_vx)
++ENTRY(WCSCPY_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -106,6 +107,10 @@ ENTRY(__wcscpy_vx)
+ 	br	%r14
+ 
+ .Lfallback:
+-	jg	__wcscpy_c
+-END(__wcscpy_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSCPY_C
++END(WCSCPY_Z13)
++
++# if ! HAVE_WCSCPY_IFUNC
++strong_alias (WCSCPY_Z13, wcscpy)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcscpy.c b/sysdeps/s390/wcscpy.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/wcscpy.c
+rename to sysdeps/s390/wcscpy.c
+index e69baa6c59906df3..51f07327da1bec74 100644
+--- a/sysdeps/s390/multiarch/wcscpy.c
++++ b/sysdeps/s390/wcscpy.c
+@@ -16,12 +16,23 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcscpy.h>
++
++#if HAVE_WCSCPY_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2 (__wcscpy, wcscpy)
++# if HAVE_WCSCPY_C
++extern __typeof (wcscpy) WCSCPY_C attribute_hidden;
++# endif
++
++# if HAVE_WCSCPY_Z13
++extern __typeof (wcscpy) WCSCPY_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcscpy.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (wcscpy, wcscpy,
++		      (HAVE_WCSCPY_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSCPY_Z13
++		      : WCSCPY_DEFAULT
++		      )
++#endif

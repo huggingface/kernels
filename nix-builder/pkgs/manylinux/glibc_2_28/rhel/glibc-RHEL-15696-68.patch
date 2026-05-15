@@ -1,0 +1,60 @@
+From 4df1fa6ddc8925a75f3da644d5da3bb16eb33f02 Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Fri, 3 Dec 2021 15:29:25 -0800
+Subject: [PATCH] x86-64: Use notl in EVEX strcmp [BZ #28646]
+Content-type: text/plain; charset=UTF-8
+
+Must use notl %edi here as lower bits are for CHAR comparisons
+potentially out of range thus can be 0 without indicating mismatch.
+This fixes BZ #28646.
+
+Co-Authored-By: H.J. Lu <hjl.tools@gmail.com>
+---
+ sysdeps/x86_64/multiarch/strcmp-evex.S | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+Conflicts:
+	string/test-strcmp.c
+	(new check omitted)
+
+diff --git a/sysdeps/x86_64/multiarch/strcmp-evex.S b/sysdeps/x86_64/multiarch/strcmp-evex.S
+index 82f12ac8..6f5c4bf9 100644
+--- a/sysdeps/x86_64/multiarch/strcmp-evex.S
++++ b/sysdeps/x86_64/multiarch/strcmp-evex.S
+@@ -656,12 +656,13 @@ L(loop_cross_page):
+ 	   in YMM3 and 32 bytes at VEC_SIZE(%rdx, %r10).  */
+ 	VPCMP	$0, VEC_SIZE(%rdx, %r10), %YMM3, %k3{%k4}
+ 	kmovd	%k3, %edi
++    /* Must use notl %edi here as lower bits are for CHAR
++	   comparisons potentially out of range thus can be 0 without
++	   indicating mismatch.  */
++	notl	%edi
+ # ifdef USE_AS_WCSCMP
+ 	/* Don't use subl since it is the upper 8 bits of EDI below.  */
+-	notl	%edi
+ 	andl	$0xff, %edi
+-# else
+-	incl	%edi
+ # endif
+ 
+ # ifdef USE_AS_WCSCMP
+@@ -743,12 +744,13 @@ L(loop_cross_page_2_vec):
+ 	   in YMM1 and 32 bytes at (VEC_SIZE * 3)(%rdx, %r10).  */
+ 	VPCMP	$0, (VEC_SIZE * 3)(%rdx, %r10), %YMM1, %k3{%k4}
+ 	kmovd	%k3, %edi
++	/* Must use notl %edi here as lower bits are for CHAR
++	   comparisons potentially out of range thus can be 0 without
++	   indicating mismatch.  */
++	notl	%edi
+ # ifdef USE_AS_WCSCMP
+ 	/* Don't use subl since it is the upper 8 bits of EDI below.  */
+-	notl	%edi
+ 	andl	$0xff, %edi
+-# else
+-	incl	%edi
+ # endif
+ 
+ # ifdef USE_AS_WCSCMP
+-- 
+GitLab
+

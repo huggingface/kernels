@@ -1,0 +1,26 @@
+From abcf8db7fa46b73fd5b8193ce11f9312301b84c7 Mon Sep 17 00:00:00 2001
+From: Andreas Schwab <schwab@suse.de>
+Date: Wed, 7 Jun 2023 11:21:48 +0200
+Subject: resolv_conf: release lock on allocation failure (bug 30527)
+
+When the initial allocation of global fails, the local lock is left
+locked.
+
+Reported by Steffen Lammel of SAP HANA development.
+
+diff --git a/resolv/resolv_conf.c b/resolv/resolv_conf.c
+index bd5890773b..8bc9edc634 100644
+--- a/resolv/resolv_conf.c
++++ b/resolv/resolv_conf.c
+@@ -93,7 +93,10 @@ get_locked_global (void)
+     {
+       global_copy = calloc (1, sizeof (*global));
+       if (global_copy == NULL)
+-        return NULL;
++	{
++	  __libc_lock_unlock (lock);
++	  return NULL;
++	}
+       atomic_store_relaxed (&global, global_copy);
+       resolv_conf_array_init (&global_copy->array);
+     }

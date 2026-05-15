@@ -1,0 +1,151 @@
+Rewrite of the following commit but adjusted pre-64-bit time_t
+conversion. We want to follow the same upstream behaviour and return
+EINVAL for unknown commands rather than to attempt the command with an
+argument of {0} which has likely never been tested upstream.
+
+commit a16d2abd496bd974a88207d5599265aae5ae4880
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Sep 29 14:29:48 2020 -0300
+
+    sysvipc: Return EINVAL for invalid semctl commands
+    
+    It avoids regressions on possible future commands that might require
+    additional libc support.  The downside is new commands added by newer
+    kernels will need further glibc support.
+    
+    Checked on x86_64-linux-gnu and i686-linux-gnu (Linux v4.15 and v5.4).
+
+diff --git a/sysdeps/unix/sysv/linux/semctl.c b/sysdeps/unix/sysv/linux/semctl.c
+index bdf31ca7747fe5a4..03c56c69a5412c82 100644
+--- a/sysdeps/unix/sysv/linux/semctl.c
++++ b/sysdeps/unix/sysv/linux/semctl.c
+@@ -58,6 +58,15 @@ __new_semctl (int semid, int semnum, int cmd, ...)
+       arg = va_arg (ap, union semun);
+       va_end (ap);
+       break;
++    case IPC_RMID:      /* arg ignored.  */
++    case GETNCNT:
++    case GETPID:
++    case GETVAL:
++    case GETZCNT:
++      break;
++    default:
++      __set_errno (EINVAL);
++      return -1;
+     }
+ 
+ #ifdef __ASSUME_DIRECT_SYSVIPC_SYSCALLS
+diff --git a/sysvipc/test-sysvipc.h b/sysvipc/test-sysvipc.h
+new file mode 100644
+index 0000000000000000..d7ed496511c10afb
+--- /dev/null
++++ b/sysvipc/test-sysvipc.h
+@@ -0,0 +1,85 @@
++/* Basic definition for Sysv IPC test functions.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _TEST_SYSV_H
++#define _TEST_SYSV_H
++
++#include <sys/ipc.h>
++#include <sys/sem.h>
++#include <sys/msg.h>
++#include <sys/shm.h>
++#include <include/array_length.h>
++
++/* Return the first invalid command SysV IPC command from common shared
++   between message queue, shared memory, and semaphore.  */
++static inline int
++first_common_invalid_cmd (void)
++{
++  const int common_cmds[] = {
++    IPC_RMID,
++    IPC_SET,
++    IPC_STAT,
++    IPC_INFO,
++  };
++
++  int invalid = 0;
++  for (int i = 0; i < array_length (common_cmds); i++)
++    {
++      if (invalid == common_cmds[i])
++	{
++	  invalid++;
++	  i = 0;
++        }
++    }
++
++  return invalid;
++}
++
++/* Return the first invalid command SysV IPC command for semaphore.  */
++static inline int
++first_sem_invalid_cmd (void)
++{
++  const int sem_cmds[] = {
++    GETPID,
++    GETVAL,
++    GETALL,
++    GETNCNT,
++    GETZCNT,
++    SETVAL,
++    SETALL,
++    SEM_STAT,
++    SEM_INFO,
++#ifdef SEM_STAT_ANY
++    SEM_STAT_ANY,
++#endif
++  };
++
++  int invalid = first_common_invalid_cmd ();
++  for (int i = 0; i < array_length (sem_cmds); i++)
++    {
++      if (invalid == sem_cmds[i])
++	{
++	  invalid++;
++	  i = 0;
++	}
++    }
++
++  return invalid;
++}
++
++#endif /* _TEST_SYSV_H  */
+diff --git a/sysvipc/test-sysvsem.c b/sysvipc/test-sysvsem.c
+index d197772917a7579d..43a1460ec2b9308f 100644
+--- a/sysvipc/test-sysvsem.c
++++ b/sysvipc/test-sysvsem.c
+@@ -25,6 +25,8 @@
+ #include <sys/ipc.h>
+ #include <sys/sem.h>
+ 
++#include <test-sysvipc.h>
++
+ #include <support/support.h>
+ #include <support/check.h>
+ #include <support/temp_file.h>
+@@ -80,6 +82,9 @@ do_test (void)
+       FAIL_EXIT1 ("semget failed (errno=%d)", errno);
+     }
+ 
++  TEST_COMPARE (semctl (semid, 0, first_sem_invalid_cmd (), NULL), -1);
++  TEST_COMPARE (errno, EINVAL);
++
+   /* Get semaphore kernel information and do some sanity checks.  */
+   struct semid_ds seminfo;
+   if (semctl (semid, 0, IPC_STAT, (union semun) { .buf = &seminfo }) == -1)

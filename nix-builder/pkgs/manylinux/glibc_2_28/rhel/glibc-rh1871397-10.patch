@@ -1,0 +1,82 @@
+From 00bc6830e3fe3f10495917afe0835ddd19133c6a Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Thu, 16 Jul 2020 17:34:43 +0200
+Subject: [PATCH 10/11] shadow: Implement fgetspent_r using __nss_fgetent_r
+
+Tested-by: Carlos O'Donell <carlos@redhat.com>
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+---
+ gshadow/tst-fgetsgent_r.c |  1 +
+ shadow/fgetspent_r.c      | 43 ++++++-------------------------------------
+ 2 files changed, 7 insertions(+), 37 deletions(-)
+
+diff -rup a/gshadow/tst-fgetsgent_r.c b/gshadow/tst-fgetsgent_r.c
+--- a/gshadow/tst-fgetsgent_r.c	2020-09-14 18:00:57.174146151 -0400
++++ b/gshadow/tst-fgetsgent_r.c	2020-09-14 19:12:57.867548005 -0400
+@@ -168,6 +168,7 @@ run_test (const char *path, size_t buffe
+       free (result_storage);
+     }
+ 
++  xfclose (fp);
+   return resized;
+ }
+ 
+diff -rup a/shadow/fgetspent_r.c b/shadow/fgetspent_r.c
+--- a/shadow/fgetspent_r.c	2018-08-01 01:10:47.000000000 -0400
++++ b/shadow/fgetspent_r.c	2020-09-14 19:17:15.623285970 -0400
+@@ -20,9 +20,6 @@
+ #include <shadow.h>
+ #include <stdio.h>
+ 
+-#define flockfile(s) _IO_flockfile (s)
+-#define funlockfile(s) _IO_funlockfile (s)
+-
+ /* Define a line parsing function using the common code
+    used in the nss_files module.  */
+ 
+@@ -39,39 +36,11 @@ int
+ __fgetspent_r (FILE *stream, struct spwd *resbuf, char *buffer, size_t buflen,
+ 	       struct spwd **result)
+ {
+-  char *p;
+-
+-  flockfile (stream);
+-  do
+-    {
+-      buffer[buflen - 1] = '\xff';
+-      p = fgets_unlocked (buffer, buflen, stream);
+-      if (p == NULL && feof_unlocked (stream))
+-	{
+-	  funlockfile (stream);
+-	  *result = NULL;
+-	  __set_errno (ENOENT);
+-	  return errno;
+-	}
+-      if (p == NULL || buffer[buflen - 1] != '\xff')
+-	{
+-	  funlockfile (stream);
+-	  *result = NULL;
+-	  __set_errno (ERANGE);
+-	  return errno;
+-	}
+-
+-      /* Skip leading blanks.  */
+-      while (isspace (*p))
+-	++p;
+-    } while (*p == '\0' || *p == '#' ||	/* Ignore empty and comment lines.  */
+-	     /* Parse the line.  If it is invalid, loop to
+-		get the next line of the file to parse.  */
+-	     ! parse_line (buffer, (void *) resbuf, NULL, 0, &errno));
+-
+-  funlockfile (stream);
+-
+-  *result = resbuf;
+-  return 0;
++  int ret = __nss_fgetent_r (stream, resbuf, buffer, buflen, parse_line);
++  if (ret == 0)
++    *result = resbuf;
++  else
++    *result = NULL;
++  return ret;
+ }
+ weak_alias (__fgetspent_r, fgetspent_r)

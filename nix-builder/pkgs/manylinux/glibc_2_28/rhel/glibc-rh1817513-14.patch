@@ -1,0 +1,22 @@
+commit ce7387cc250a408d3fbb7a6fff7ad4d977166b00
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Nov 29 20:03:46 2018 -0800
+
+    elf/dl-exception.c: Include <_itoa.h> for _itoa prototype
+    
+    Tested with build-many-glibcs.py.
+    
+            * elf/dl-exception.c: Include <_itoa.h>.
+
+diff --git a/elf/dl-exception.c b/elf/dl-exception.c
+index 1e41d89a7db52683..3e8e0ba3f1442005 100644
+--- a/elf/dl-exception.c
++++ b/elf/dl-exception.c
+@@ -23,6 +23,7 @@
+ #include <stdint.h>
+ #include <string.h>
+ #include <unistd.h>
++#include <_itoa.h>
+ 
+ /* This message we return as a last resort.  We define the string in a
+    variable since we have to avoid freeing it and so have to enable

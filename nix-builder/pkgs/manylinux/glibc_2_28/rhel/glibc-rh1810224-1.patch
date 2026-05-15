@@ -1,0 +1,28 @@
+commit a331150af65477fc3fa72ab341eed5e0b2daf7f3
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Thu Nov 28 20:32:09 2019 +0000
+
+    Update syscall-names.list for Linux 5.4.
+
+    This patch updates syscall-names.list for Linux 5.4.  There are no new
+    syscalls, so this is just a matter of updating the version number
+    listed in the file.
+
+    Tested with build-many-glibcs.py.
+
+Reworked for RHEL 8.3.0.
+
+diff -Nrup a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+--- a/sysdeps/unix/sysv/linux/syscall-names.list	2020-04-05 20:20:41.471686371 -0400
++++ b/sysdeps/unix/sysv/linux/syscall-names.list	2020-04-05 20:21:56.871912297 -0400
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 5.3.
+-kernel 5.3
++# The list of system calls is current as of Linux 5.4.
++kernel 5.4
+ 
+ FAST_atomic_update
+ FAST_cmpxchg

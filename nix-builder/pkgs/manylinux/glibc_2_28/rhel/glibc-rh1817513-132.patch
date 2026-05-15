@@ -1,0 +1,33 @@
+commit 2ee7711bdd7de9dd30073b223ce29d5cd50320f6
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sun Dec 13 04:56:41 2020 -0800
+
+    x86: Remove the default REP MOVSB threshold tunable value [BZ #27061]
+    
+    Since we can't tell if the tunable value is set by user or not:
+    
+    https://sourceware.org/bugzilla/show_bug.cgi?id=27069
+    
+    remove the default REP MOVSB threshold tunable value so that the correct
+    default value will be set correctly by init_cacheinfo ().
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/sysdeps/x86/dl-tunables.list b/sysdeps/x86/dl-tunables.list
+index e066313a1d1dd009..89bf296626658900 100644
+--- a/sysdeps/x86/dl-tunables.list
++++ b/sysdeps/x86/dl-tunables.list
+@@ -39,9 +39,11 @@ glibc {
+       # REP MOVSB.  Since larger register size can move more data with a
+       # single load and store, the threshold is higher with larger register
+       # size.  Note: Since the REP MOVSB threshold must be greater than 8
+-      # times of vector size, the minium value must be updated at run-time.
++      # times of vector size and the default value is 2048 * (vector size
++      # / 16), the default value and the minimum value must be updated at
++      # run-time.  NB: Don't set the default value since we can't tell if
++      # the tunable value is set by user or not [BZ #27069].
+       minval: 1
+-      default: 2048
+     }
+     x86_rep_stosb_threshold {
+       type: SIZE_T

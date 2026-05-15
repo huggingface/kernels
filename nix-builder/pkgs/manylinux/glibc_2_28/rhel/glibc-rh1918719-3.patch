@@ -1,0 +1,30 @@
+From 3322ecbfe29a16e74c4f584d661b0b8018bb4031 Mon Sep 17 00:00:00 2001
+From: Raphael Moreira Zinsly <rzinsly@linux.ibm.com>
+Date: Mon, 14 Sep 2020 11:59:24 -0300
+Subject: [PATCH] powerpc: Protect dl_powerpc_cpu_features on INIT_ARCH() [BZ
+ #26615]
+
+dl_powerpc_cpu_features also needs to be protected by __GLRO to check
+for the _rtld_global_ro realocation before accessing it.
+
+Reviewed-by: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+---
+ sysdeps/powerpc/powerpc32/power4/multiarch/init-arch.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sysdeps/powerpc/powerpc32/power4/multiarch/init-arch.h b/sysdeps/powerpc/powerpc32/power4/multiarch/init-arch.h
+index 17ddfcf528..c8fa07fadc 100644
+--- a/sysdeps/powerpc/powerpc32/power4/multiarch/init-arch.h
++++ b/sysdeps/powerpc/powerpc32/power4/multiarch/init-arch.h
+@@ -38,7 +38,7 @@
+   unsigned long int hwcap = __GLRO(dl_hwcap); 			\
+   unsigned long int __attribute__((unused)) hwcap2 = __GLRO(dl_hwcap2); \
+   bool __attribute__((unused)) use_cached_memopt =		\
+-    GLRO(dl_powerpc_cpu_features).use_cached_memopt;		\
++    __GLRO(dl_powerpc_cpu_features.use_cached_memopt);		\
+   if (hwcap & PPC_FEATURE_ARCH_2_06)				\
+     hwcap |= PPC_FEATURE_ARCH_2_05 |				\
+ 	     PPC_FEATURE_POWER5_PLUS |				\
+-- 
+2.27.0
+

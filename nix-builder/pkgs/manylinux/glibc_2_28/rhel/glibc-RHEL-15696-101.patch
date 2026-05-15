@@ -1,0 +1,964 @@
+From 7cbc03d03091d5664060924789afe46d30a5477e Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Fri, 15 Apr 2022 12:28:00 -0500
+Subject: [PATCH] x86: Remove memcmp-sse4.S
+Content-type: text/plain; charset=UTF-8
+
+Code didn't actually use any sse4 instructions since `ptest` was
+removed in:
+
+commit 2f9062d7171850451e6044ef78d91ff8c017b9c0
+Author: Noah Goldstein <goldstein.w.n@gmail.com>
+Date:   Wed Nov 10 16:18:56 2021 -0600
+
+    x86: Shrink memcmp-sse4.S code size
+
+The new memcmp-sse2 implementation is also faster.
+
+geometric_mean(N=20) of page cross cases SSE2 / SSE4: 0.905
+
+Note there are two regressions preferring SSE2 for Size = 1 and Size =
+65.
+
+Size = 1:
+size, align0, align1, ret, New Time/Old Time
+   1,      1,      1,   0,               1.2
+   1,      1,      1,   1,             1.197
+   1,      1,      1,  -1,               1.2
+
+This is intentional. Size == 1 is significantly less hot based on
+profiles of GCC11 and Python3 than sizes [4, 8] (which is made
+hotter).
+
+Python3 Size = 1        -> 13.64%
+Python3 Size = [4, 8]   -> 60.92%
+
+GCC11   Size = 1        ->  1.29%
+GCC11   Size = [4, 8]   -> 33.86%
+
+size, align0, align1, ret, New Time/Old Time
+   4,      4,      4,   0,             0.622
+   4,      4,      4,   1,             0.797
+   4,      4,      4,  -1,             0.805
+   5,      5,      5,   0,             0.623
+   5,      5,      5,   1,             0.777
+   5,      5,      5,  -1,             0.802
+   6,      6,      6,   0,             0.625
+   6,      6,      6,   1,             0.813
+   6,      6,      6,  -1,             0.788
+   7,      7,      7,   0,             0.625
+   7,      7,      7,   1,             0.799
+   7,      7,      7,  -1,             0.795
+   8,      8,      8,   0,             0.625
+   8,      8,      8,   1,             0.848
+   8,      8,      8,  -1,             0.914
+   9,      9,      9,   0,             0.625
+
+Size = 65:
+size, align0, align1, ret, New Time/Old Time
+  65,      0,      0,   0,             1.103
+  65,      0,      0,   1,             1.216
+  65,      0,      0,  -1,             1.227
+  65,     65,      0,   0,             1.091
+  65,      0,     65,   1,              1.19
+  65,     65,     65,  -1,             1.215
+
+This is because A) the checks in range [65, 96] are now unrolled 2x
+and B) because smaller values <= 16 are now given a hotter path. By
+contrast the SSE4 version has a branch for Size = 80. The unrolled
+version has get better performance for returns which need both
+comparisons.
+
+size, align0, align1, ret, New Time/Old Time
+ 128,      4,      8,   0,             0.858
+ 128,      4,      8,   1,             0.879
+ 128,      4,      8,  -1,             0.888
+
+As well, out of microbenchmark environments that are not full
+predictable the branch will have a real-cost.
+Reviewed-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ sysdeps/x86_64/multiarch/Makefile          |   2 -
+ sysdeps/x86_64/multiarch/ifunc-impl-list.c |   4 -
+ sysdeps/x86_64/multiarch/ifunc-memcmp.h    |   4 -
+ sysdeps/x86_64/multiarch/memcmp-sse4.S     | 804 ---------------------
+ 4 files changed, 814 deletions(-)
+ delete mode 100644 sysdeps/x86_64/multiarch/memcmp-sse4.S
+
+diff --git a/sysdeps/x86_64/multiarch/Makefile b/sysdeps/x86_64/multiarch/Makefile
+index bca82e38..b503e4b8 100644
+--- a/sysdeps/x86_64/multiarch/Makefile
++++ b/sysdeps/x86_64/multiarch/Makefile
+@@ -11,7 +11,6 @@ sysdep_routines += \
+   memcmp-avx2-movbe-rtm \
+   memcmp-evex-movbe \
+   memcmp-sse2 \
+-  memcmp-sse4 \
+   memcmp-ssse3 \
+   memcpy-ssse3 \
+   memcpy-ssse3-back \
+@@ -174,7 +173,6 @@ sysdep_routines += \
+   wmemcmp-avx2-movbe-rtm \
+   wmemcmp-c \
+   wmemcmp-evex-movbe \
+-  wmemcmp-sse4 \
+   wmemcmp-ssse3 \
+ # sysdep_routines
+ endif
+diff --git a/sysdeps/x86_64/multiarch/ifunc-impl-list.c b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+index 14314367..450a2917 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+@@ -78,8 +78,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			       && CPU_FEATURE_USABLE (BMI2)
+ 			       && CPU_FEATURE_USABLE (MOVBE)),
+ 			      __memcmp_evex_movbe)
+-	      IFUNC_IMPL_ADD (array, i, memcmp, CPU_FEATURE_USABLE (SSE4_1),
+-			      __memcmp_sse4_1)
+ 	      IFUNC_IMPL_ADD (array, i, memcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, memcmp, 1, __memcmp_sse2))
+@@ -824,8 +822,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			       && CPU_FEATURE_USABLE (BMI2)
+ 			       && CPU_FEATURE_USABLE (MOVBE)),
+ 			      __wmemcmp_evex_movbe)
+-	      IFUNC_IMPL_ADD (array, i, wmemcmp, CPU_FEATURE_USABLE (SSE4_1),
+-			      __wmemcmp_sse4_1)
+ 	      IFUNC_IMPL_ADD (array, i, wmemcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __wmemcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, wmemcmp, 1, __wmemcmp_sse2))
+diff --git a/sysdeps/x86_64/multiarch/ifunc-memcmp.h b/sysdeps/x86_64/multiarch/ifunc-memcmp.h
+index 690dffe8..0bc47a7f 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-memcmp.h
++++ b/sysdeps/x86_64/multiarch/ifunc-memcmp.h
+@@ -21,7 +21,6 @@
+ 
+ extern __typeof (REDIRECT_NAME) OPTIMIZE (sse2) attribute_hidden;
+ extern __typeof (REDIRECT_NAME) OPTIMIZE (ssse3) attribute_hidden;
+-extern __typeof (REDIRECT_NAME) OPTIMIZE (sse4_1) attribute_hidden;
+ extern __typeof (REDIRECT_NAME) OPTIMIZE (avx2_movbe) attribute_hidden;
+ extern __typeof (REDIRECT_NAME) OPTIMIZE (avx2_movbe_rtm) attribute_hidden;
+ extern __typeof (REDIRECT_NAME) OPTIMIZE (evex_movbe) attribute_hidden;
+@@ -47,9 +46,6 @@ IFUNC_SELECTOR (void)
+ 	return OPTIMIZE (avx2_movbe);
+     }
+ 
+-  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_1))
+-    return OPTIMIZE (sse4_1);
+-
+   if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+diff --git a/sysdeps/x86_64/multiarch/memcmp-sse4.S b/sysdeps/x86_64/multiarch/memcmp-sse4.S
+deleted file mode 100644
+index 50060006..00000000
+--- a/sysdeps/x86_64/multiarch/memcmp-sse4.S
++++ /dev/null
+@@ -1,804 +0,0 @@
+-/* memcmp with SSE4.1, wmemcmp with SSE4.1
+-   Copyright (C) 2010-2018 Free Software Foundation, Inc.
+-   Contributed by Intel Corporation.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#if IS_IN (libc)
+-
+-# include <sysdep.h>
+-
+-# ifndef MEMCMP
+-#  define MEMCMP	__memcmp_sse4_1
+-# endif
+-
+-#ifdef USE_AS_WMEMCMP
+-# define CMPEQ	pcmpeqd
+-# define CHAR_SIZE	4
+-#else
+-# define CMPEQ	pcmpeqb
+-# define CHAR_SIZE	1
+-#endif
+-
+-
+-/* Warning!
+-           wmemcmp has to use SIGNED comparison for elements.
+-           memcmp has to use UNSIGNED comparison for elemnts.
+-*/
+-
+-	.section .text.sse4.1,"ax",@progbits
+-ENTRY (MEMCMP)
+-# ifdef USE_AS_WMEMCMP
+-	shl	$2, %RDX_LP
+-# elif defined __ILP32__
+-	/* Clear the upper 32 bits.  */
+-	mov	%edx, %edx
+-# endif
+-	cmp	$79, %RDX_LP
+-	ja	L(79bytesormore)
+-
+-	cmp	$CHAR_SIZE, %RDX_LP
+-	jbe	L(firstbyte)
+-
+-	/* N in (CHAR_SIZE, 79) bytes.  */
+-	cmpl	$32, %edx
+-	ja	L(more_32_bytes)
+-
+-	cmpl	$16, %edx
+-	jae	L(16_to_32_bytes)
+-
+-# ifndef USE_AS_WMEMCMP
+-	cmpl	$8, %edx
+-	jae	L(8_to_16_bytes)
+-
+-	cmpl	$4, %edx
+-	jb	L(2_to_3_bytes)
+-
+-	movl	(%rdi), %eax
+-	movl	(%rsi), %ecx
+-
+-	bswap	%eax
+-	bswap	%ecx
+-
+-	shlq	$32, %rax
+-	shlq	$32, %rcx
+-
+-	movl	-4(%rdi, %rdx), %edi
+-	movl	-4(%rsi, %rdx), %esi
+-
+-	bswap	%edi
+-	bswap	%esi
+-
+-	orq	%rdi, %rax
+-	orq	%rsi, %rcx
+-	subq	%rcx, %rax
+-	cmovne	%edx, %eax
+-	sbbl	%ecx, %ecx
+-	orl	%ecx, %eax
+-	ret
+-
+-	.p2align 4,, 8
+-L(2_to_3_bytes):
+-	movzwl	(%rdi), %eax
+-	movzwl	(%rsi), %ecx
+-	shll	$8, %eax
+-	shll	$8, %ecx
+-	bswap	%eax
+-	bswap	%ecx
+-	movzbl	-1(%rdi, %rdx), %edi
+-	movzbl	-1(%rsi, %rdx), %esi
+-	orl	%edi, %eax
+-	orl	%esi, %ecx
+-	subl	%ecx, %eax
+-	ret
+-
+-	.p2align 4,, 8
+-L(8_to_16_bytes):
+-	movq	(%rdi), %rax
+-	movq	(%rsi), %rcx
+-
+-	bswap	%rax
+-	bswap	%rcx
+-
+-	subq	%rcx, %rax
+-	jne	L(8_to_16_bytes_done)
+-
+-	movq	-8(%rdi, %rdx), %rax
+-	movq	-8(%rsi, %rdx), %rcx
+-
+-	bswap	%rax
+-	bswap	%rcx
+-
+-	subq	%rcx, %rax
+-
+-L(8_to_16_bytes_done):
+-	cmovne	%edx, %eax
+-	sbbl	%ecx, %ecx
+-	orl	%ecx, %eax
+-	ret
+-# else
+-	xorl	%eax, %eax
+-	movl	(%rdi), %ecx
+-	cmpl	(%rsi), %ecx
+-	jne	L(8_to_16_bytes_done)
+-	movl	4(%rdi), %ecx
+-	cmpl	4(%rsi), %ecx
+-	jne	L(8_to_16_bytes_done)
+-	movl	-4(%rdi, %rdx), %ecx
+-	cmpl	-4(%rsi, %rdx), %ecx
+-	jne	L(8_to_16_bytes_done)
+-	ret
+-# endif
+-
+-	.p2align 4,, 3
+-L(ret_zero):
+-	xorl	%eax, %eax
+-L(zero):
+-	ret
+-
+-	.p2align 4,, 8
+-L(firstbyte):
+-	jb	L(ret_zero)
+-# ifdef USE_AS_WMEMCMP
+-	xorl	%eax, %eax
+-	movl	(%rdi), %ecx
+-	cmpl	(%rsi), %ecx
+-	je	L(zero)
+-L(8_to_16_bytes_done):
+-	setg	%al
+-	leal	-1(%rax, %rax), %eax
+-# else
+-	movzbl	(%rdi), %eax
+-	movzbl	(%rsi), %ecx
+-	sub	%ecx, %eax
+-# endif
+-	ret
+-
+-	.p2align 4
+-L(vec_return_begin_48):
+-	addq	$16, %rdi
+-	addq	$16, %rsi
+-L(vec_return_begin_32):
+-	bsfl	%eax, %eax
+-# ifdef USE_AS_WMEMCMP
+-	movl	32(%rdi, %rax), %ecx
+-	xorl	%edx, %edx
+-	cmpl	32(%rsi, %rax), %ecx
+-	setg	%dl
+-	leal	-1(%rdx, %rdx), %eax
+-# else
+-	movzbl	32(%rsi, %rax), %ecx
+-	movzbl	32(%rdi, %rax), %eax
+-	subl	%ecx, %eax
+-# endif
+-	ret
+-
+-	.p2align 4
+-L(vec_return_begin_16):
+-	addq	$16, %rdi
+-	addq	$16, %rsi
+-L(vec_return_begin):
+-	bsfl	%eax, %eax
+-# ifdef USE_AS_WMEMCMP
+-	movl	(%rdi, %rax), %ecx
+-	xorl	%edx, %edx
+-	cmpl	(%rsi, %rax), %ecx
+-	setg	%dl
+-	leal	-1(%rdx, %rdx), %eax
+-# else
+-	movzbl	(%rsi, %rax), %ecx
+-	movzbl	(%rdi, %rax), %eax
+-	subl	%ecx, %eax
+-# endif
+-	ret
+-
+-	.p2align 4
+-L(vec_return_end_16):
+-	subl	$16, %edx
+-L(vec_return_end):
+-	bsfl	%eax, %eax
+-	addl	%edx, %eax
+-# ifdef USE_AS_WMEMCMP
+-	movl	-16(%rdi, %rax), %ecx
+-	xorl	%edx, %edx
+-	cmpl	-16(%rsi, %rax), %ecx
+-	setg	%dl
+-	leal	-1(%rdx, %rdx), %eax
+-# else
+-	movzbl	-16(%rsi, %rax), %ecx
+-	movzbl	-16(%rdi, %rax), %eax
+-	subl	%ecx, %eax
+-# endif
+-	ret
+-
+-	.p2align 4,, 8
+-L(more_32_bytes):
+-	movdqu	(%rdi), %xmm0
+-	movdqu	(%rsi), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqu	16(%rdi), %xmm0
+-	movdqu	16(%rsi), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	cmpl	$64, %edx
+-	jbe	L(32_to_64_bytes)
+-	movdqu	32(%rdi), %xmm0
+-	movdqu	32(%rsi), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	.p2align 4,, 6
+-L(32_to_64_bytes):
+-	movdqu	-32(%rdi, %rdx), %xmm0
+-	movdqu	-32(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end_16)
+-
+-	movdqu	-16(%rdi, %rdx), %xmm0
+-	movdqu	-16(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end)
+-	ret
+-
+-	.p2align 4
+-L(16_to_32_bytes):
+-	movdqu	(%rdi), %xmm0
+-	movdqu	(%rsi), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqu	-16(%rdi, %rdx), %xmm0
+-	movdqu	-16(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end)
+-	ret
+-
+-
+-	.p2align 4
+-L(79bytesormore):
+-	movdqu	(%rdi), %xmm0
+-	movdqu	(%rsi), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-
+-	mov	%rsi, %rcx
+-	and	$-16, %rsi
+-	add	$16, %rsi
+-	sub	%rsi, %rcx
+-
+-	sub	%rcx, %rdi
+-	add	%rcx, %rdx
+-	test	$0xf, %rdi
+-	jz	L(2aligned)
+-
+-	cmp	$128, %rdx
+-	ja	L(128bytesormore)
+-
+-	.p2align 4,, 6
+-L(less128bytes):
+-	movdqu	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqu	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqu	32(%rdi), %xmm1
+-	CMPEQ	32(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	movdqu	48(%rdi), %xmm1
+-	CMPEQ	48(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_48)
+-
+-	cmp	$96, %rdx
+-	jb	L(32_to_64_bytes)
+-
+-	addq	$64, %rdi
+-	addq	$64, %rsi
+-	subq	$64, %rdx
+-
+-	.p2align 4,, 6
+-L(last_64_bytes):
+-	movdqu	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqu	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqu	-32(%rdi, %rdx), %xmm0
+-	movdqu	-32(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end_16)
+-
+-	movdqu	-16(%rdi, %rdx), %xmm0
+-	movdqu	-16(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end)
+-	ret
+-
+-	.p2align 4
+-L(128bytesormore):
+-	cmp	$256, %rdx
+-	ja	L(unaligned_loop)
+-L(less256bytes):
+-	movdqu	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqu	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqu	32(%rdi), %xmm1
+-	CMPEQ	32(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	movdqu	48(%rdi), %xmm1
+-	CMPEQ	48(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_48)
+-
+-	addq	$64, %rdi
+-	addq	$64, %rsi
+-
+-	movdqu	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqu	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqu	32(%rdi), %xmm1
+-	CMPEQ	32(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	movdqu	48(%rdi), %xmm1
+-	CMPEQ	48(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_48)
+-
+-	addq	$-128, %rdx
+-	subq	$-64, %rsi
+-	subq	$-64, %rdi
+-
+-	cmp	$64, %rdx
+-	ja	L(less128bytes)
+-
+-	cmp	$32, %rdx
+-	ja	L(last_64_bytes)
+-
+-	movdqu	-32(%rdi, %rdx), %xmm0
+-	movdqu	-32(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end_16)
+-
+-	movdqu	-16(%rdi, %rdx), %xmm0
+-	movdqu	-16(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end)
+-	ret
+-
+-	.p2align 4
+-L(unaligned_loop):
+-# ifdef DATA_CACHE_SIZE_HALF
+-	mov	$DATA_CACHE_SIZE_HALF, %R8_LP
+-# else
+-	mov	__x86_data_cache_size_half(%rip), %R8_LP
+-# endif
+-	movq	%r8, %r9
+-	addq	%r8, %r8
+-	addq	%r9, %r8
+-	cmpq	%r8, %rdx
+-	ja	L(L2_L3_cache_unaligned)
+-	sub	$64, %rdx
+-	.p2align 4
+-L(64bytesormore_loop):
+-	movdqu	(%rdi), %xmm0
+-	movdqu	16(%rdi), %xmm1
+-	movdqu	32(%rdi), %xmm2
+-	movdqu	48(%rdi), %xmm3
+-
+-	CMPEQ	(%rsi), %xmm0
+-	CMPEQ	16(%rsi), %xmm1
+-	CMPEQ	32(%rsi), %xmm2
+-	CMPEQ	48(%rsi), %xmm3
+-
+-	pand	%xmm0, %xmm1
+-	pand	%xmm2, %xmm3
+-	pand	%xmm1, %xmm3
+-
+-	pmovmskb %xmm3, %eax
+-	incw	%ax
+-	jnz	L(64bytesormore_loop_end)
+-
+-	add	$64, %rsi
+-	add	$64, %rdi
+-	sub	$64, %rdx
+-	ja	L(64bytesormore_loop)
+-
+-	.p2align 4,, 6
+-L(loop_tail):
+-	addq	%rdx, %rdi
+-	movdqu	(%rdi), %xmm0
+-	movdqu	16(%rdi), %xmm1
+-	movdqu	32(%rdi), %xmm2
+-	movdqu	48(%rdi), %xmm3
+-
+-	addq	%rdx, %rsi
+-	movdqu	(%rsi), %xmm4
+-	movdqu	16(%rsi), %xmm5
+-	movdqu	32(%rsi), %xmm6
+-	movdqu	48(%rsi), %xmm7
+-
+-	CMPEQ	%xmm4, %xmm0
+-	CMPEQ	%xmm5, %xmm1
+-	CMPEQ	%xmm6, %xmm2
+-	CMPEQ	%xmm7, %xmm3
+-
+-	pand	%xmm0, %xmm1
+-	pand	%xmm2, %xmm3
+-	pand	%xmm1, %xmm3
+-
+-	pmovmskb %xmm3, %eax
+-	incw	%ax
+-	jnz	L(64bytesormore_loop_end)
+-	ret
+-
+-L(L2_L3_cache_unaligned):
+-	subq	$64, %rdx
+-	.p2align 4
+-L(L2_L3_unaligned_128bytes_loop):
+-	prefetchnta 0x1c0(%rdi)
+-	prefetchnta 0x1c0(%rsi)
+-
+-	movdqu	(%rdi), %xmm0
+-	movdqu	16(%rdi), %xmm1
+-	movdqu	32(%rdi), %xmm2
+-	movdqu	48(%rdi), %xmm3
+-
+-	CMPEQ	(%rsi), %xmm0
+-	CMPEQ	16(%rsi), %xmm1
+-	CMPEQ	32(%rsi), %xmm2
+-	CMPEQ	48(%rsi), %xmm3
+-
+-	pand	%xmm0, %xmm1
+-	pand	%xmm2, %xmm3
+-	pand	%xmm1, %xmm3
+-
+-	pmovmskb %xmm3, %eax
+-	incw	%ax
+-	jnz	L(64bytesormore_loop_end)
+-
+-	add	$64, %rsi
+-	add	$64, %rdi
+-	sub	$64, %rdx
+-	ja	L(L2_L3_unaligned_128bytes_loop)
+-	jmp	L(loop_tail)
+-
+-
+-	/* This case is for machines which are sensitive for unaligned
+-	 * instructions.  */
+-	.p2align 4
+-L(2aligned):
+-	cmp	$128, %rdx
+-	ja	L(128bytesormorein2aligned)
+-L(less128bytesin2aligned):
+-	movdqa	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqa	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqa	32(%rdi), %xmm1
+-	CMPEQ	32(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	movdqa	48(%rdi), %xmm1
+-	CMPEQ	48(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_48)
+-
+-	cmp	$96, %rdx
+-	jb	L(32_to_64_bytes)
+-
+-	addq	$64, %rdi
+-	addq	$64, %rsi
+-	subq	$64, %rdx
+-
+-	.p2align 4,, 6
+-L(aligned_last_64_bytes):
+-	movdqa	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqa	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqu	-32(%rdi, %rdx), %xmm0
+-	movdqu	-32(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end_16)
+-
+-	movdqu	-16(%rdi, %rdx), %xmm0
+-	movdqu	-16(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end)
+-	ret
+-
+-	.p2align 4
+-L(128bytesormorein2aligned):
+-	cmp	$256, %rdx
+-	ja	L(aligned_loop)
+-L(less256bytesin2alinged):
+-	movdqa	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqa	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqa	32(%rdi), %xmm1
+-	CMPEQ	32(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	movdqa	48(%rdi), %xmm1
+-	CMPEQ	48(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_48)
+-
+-	addq	$64, %rdi
+-	addq	$64, %rsi
+-
+-	movdqa	(%rdi), %xmm1
+-	CMPEQ	(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin)
+-
+-	movdqa	16(%rdi), %xmm1
+-	CMPEQ	16(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_16)
+-
+-	movdqa	32(%rdi), %xmm1
+-	CMPEQ	32(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_32)
+-
+-	movdqa	48(%rdi), %xmm1
+-	CMPEQ	48(%rsi), %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_begin_48)
+-
+-	addq	$-128, %rdx
+-	subq	$-64, %rsi
+-	subq	$-64, %rdi
+-
+-	cmp	$64, %rdx
+-	ja	L(less128bytesin2aligned)
+-
+-	cmp	$32, %rdx
+-	ja	L(aligned_last_64_bytes)
+-
+-	movdqu	-32(%rdi, %rdx), %xmm0
+-	movdqu	-32(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end_16)
+-
+-	movdqu	-16(%rdi, %rdx), %xmm0
+-	movdqu	-16(%rsi, %rdx), %xmm1
+-	CMPEQ	%xmm0, %xmm1
+-	pmovmskb %xmm1, %eax
+-	incw	%ax
+-	jnz	L(vec_return_end)
+-	ret
+-
+-	.p2align 4
+-L(aligned_loop):
+-# ifdef DATA_CACHE_SIZE_HALF
+-	mov	$DATA_CACHE_SIZE_HALF, %R8_LP
+-# else
+-	mov	__x86_data_cache_size_half(%rip), %R8_LP
+-# endif
+-	movq	%r8, %r9
+-	addq	%r8, %r8
+-	addq	%r9, %r8
+-	cmpq	%r8, %rdx
+-	ja	L(L2_L3_cache_aligned)
+-
+-	sub	$64, %rdx
+-	.p2align 4
+-L(64bytesormore_loopin2aligned):
+-	movdqa	(%rdi), %xmm0
+-	movdqa	16(%rdi), %xmm1
+-	movdqa	32(%rdi), %xmm2
+-	movdqa	48(%rdi), %xmm3
+-
+-	CMPEQ	(%rsi), %xmm0
+-	CMPEQ	16(%rsi), %xmm1
+-	CMPEQ	32(%rsi), %xmm2
+-	CMPEQ	48(%rsi), %xmm3
+-
+-	pand	%xmm0, %xmm1
+-	pand	%xmm2, %xmm3
+-	pand	%xmm1, %xmm3
+-
+-	pmovmskb %xmm3, %eax
+-	incw	%ax
+-	jnz	L(64bytesormore_loop_end)
+-	add	$64, %rsi
+-	add	$64, %rdi
+-	sub	$64, %rdx
+-	ja	L(64bytesormore_loopin2aligned)
+-	jmp	L(loop_tail)
+-
+-L(L2_L3_cache_aligned):
+-	subq	$64, %rdx
+-	.p2align 4
+-L(L2_L3_aligned_128bytes_loop):
+-	prefetchnta 0x1c0(%rdi)
+-	prefetchnta 0x1c0(%rsi)
+-	movdqa	(%rdi), %xmm0
+-	movdqa	16(%rdi), %xmm1
+-	movdqa	32(%rdi), %xmm2
+-	movdqa	48(%rdi), %xmm3
+-
+-	CMPEQ	(%rsi), %xmm0
+-	CMPEQ	16(%rsi), %xmm1
+-	CMPEQ	32(%rsi), %xmm2
+-	CMPEQ	48(%rsi), %xmm3
+-
+-	pand	%xmm0, %xmm1
+-	pand	%xmm2, %xmm3
+-	pand	%xmm1, %xmm3
+-
+-	pmovmskb %xmm3, %eax
+-	incw	%ax
+-	jnz	L(64bytesormore_loop_end)
+-
+-	addq	$64, %rsi
+-	addq	$64, %rdi
+-	subq	$64, %rdx
+-	ja	L(L2_L3_aligned_128bytes_loop)
+-	jmp	L(loop_tail)
+-
+-	.p2align 4
+-L(64bytesormore_loop_end):
+-	pmovmskb %xmm0, %ecx
+-	incw	%cx
+-	jnz	L(loop_end_ret)
+-
+-	pmovmskb %xmm1, %ecx
+-	notw	%cx
+-	sall	$16, %ecx
+-	jnz	L(loop_end_ret)
+-
+-	pmovmskb %xmm2, %ecx
+-	notw	%cx
+-	shlq	$32, %rcx
+-	jnz	L(loop_end_ret)
+-
+-	addq	$48, %rdi
+-	addq	$48, %rsi
+-	movq	%rax, %rcx
+-
+-	.p2align 4,, 6
+-L(loop_end_ret):
+-	bsfq	%rcx, %rcx
+-# ifdef USE_AS_WMEMCMP
+-	movl	(%rdi, %rcx), %eax
+-	xorl	%edx, %edx
+-	cmpl	(%rsi, %rcx), %eax
+-	setg	%dl
+-	leal	-1(%rdx, %rdx), %eax
+-# else
+-	movzbl	(%rdi, %rcx), %eax
+-	movzbl	(%rsi, %rcx), %ecx
+-	subl	%ecx, %eax
+-# endif
+-	ret
+-END (MEMCMP)
+-#endif
+-- 
+GitLab
+

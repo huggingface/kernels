@@ -1,0 +1,23 @@
+commit 4e75c2a43bb3208f32556a2b19c939cfe1f54ba6
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Jun 12 10:41:19 2019 +0200
+
+    <sys/cdefs.h>: Add __glibc_has_include macro
+
+diff --git a/misc/sys/cdefs.h b/misc/sys/cdefs.h
+index 3f6fe3cc8563b493..0500779d0c1b64c2 100644
+--- a/misc/sys/cdefs.h
++++ b/misc/sys/cdefs.h
+@@ -412,6 +412,12 @@
+ # define __glibc_has_attribute(attr)	0
+ #endif
+ 
++#ifdef __has_include
++# define __glibc_has_include(header)	__has_include (header)
++#else
++# define __glibc_has_include(header)	0
++#endif
++
+ #if (!defined _Noreturn \
+      && (defined __STDC_VERSION__ ? __STDC_VERSION__ : 0) < 201112 \
+      &&  !__GNUC_PREREQ (4,7))

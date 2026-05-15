@@ -1,0 +1,1102 @@
+commit 3a0ecccb599a6b1ad4b149dc569c0080e92d057b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Sat Feb 8 19:58:43 2020 +0100
+
+    ld.so: Do not export free/calloc/malloc/realloc functions [BZ #25486]
+    
+    Exporting functions and relying on symbol interposition from libc.so
+    makes the choice of implementation dependent on DT_NEEDED order, which
+    is not what some compiler drivers expect.
+    
+    This commit replaces one magic mechanism (symbol interposition) with
+    another one (preprocessor-/compiler-based redirection).  This makes
+    the hand-over from the minimal malloc to the full malloc more
+    explicit.
+    
+    Removing the ABI symbols is backwards-compatible because libc.so is
+    always in scope, and the dynamic loader will find the malloc-related
+    symbols there since commit f0b2132b35248c1f4a80f62a2c38cddcc802aa8c
+    ("ld.so: Support moving versioned symbols between sonames
+    [BZ #24741]").
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	sysdeps/unix/sysv/linux/arm/le/ld.abilist
+	sysdeps/unix/sysv/linux/sh/le/ld.abilist
+	  (Missing abilist split.)
+	sysdeps/unix/sysv/linux/csky/ld.abilist
+	sysdeps/unix/sysv/linux/csky/localplt.data
+	  (Missing architecture.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index a1ea44f231d8cec5..5b0aeccb0a53c182 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -478,7 +478,11 @@ $(objpfx)dl-allobjs.os: $(all-rtld-routines:%=$(objpfx)%.os)
+ # their implementation is provided differently in rtld, and the symbol
+ # discovery mechanism is not compatible with the libc implementation
+ # when compiled for libc.
+-rtld-stubbed-symbols =
++rtld-stubbed-symbols = \
++  calloc \
++  free \
++  malloc \
++  realloc \
+ 
+ # The GCC arguments that implement $(rtld-stubbed-symbols).
+ rtld-stubbed-symbols-args = \
+diff --git a/elf/Versions b/elf/Versions
+index 3b09901f6c31e3d4..705489fc51f4ac5f 100644
+--- a/elf/Versions
++++ b/elf/Versions
+@@ -35,9 +35,6 @@ libc {
+ 
+ ld {
+   GLIBC_2.0 {
+-    # Functions which are interposed from libc.so.
+-    calloc; free; malloc; realloc;
+-
+     _r_debug;
+   }
+   GLIBC_2.1 {
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index 42fdaed99296137f..e4c479de9a1fd6ec 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -291,7 +291,7 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+ 	  tab->size = newsize;
+ 	  size = newsize;
+ 	  entries = tab->entries = newentries;
+-	  tab->free = free;
++	  tab->free = __rtld_free;
+ 	}
+     }
+   else
+@@ -322,7 +322,7 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+ 
+       tab->entries = entries;
+       tab->size = size;
+-      tab->free = free;
++      tab->free = __rtld_free;
+     }
+ 
+   if ((type_class & ELF_RTYPE_CLASS_COPY) != 0)
+diff --git a/elf/dl-minimal.c b/elf/dl-minimal.c
+index 25ceded6fe120b07..95ea7b024044864f 100644
+--- a/elf/dl-minimal.c
++++ b/elf/dl-minimal.c
+@@ -26,11 +26,87 @@
+ #include <sys/param.h>
+ #include <sys/types.h>
+ #include <ldsodefs.h>
++#include <dl-irel.h>
++#include <dl-hash.h>
++#include <dl-sym-post.h>
+ #include <_itoa.h>
+ #include <malloc/malloc-internal.h>
+ 
+ #include <assert.h>
+ 
++/* The rtld startup code calls __rtld_malloc_init_stubs after the
++  first self-relocation to adjust the pointers to the minimal
++  implementation below.  Before the final relocation,
++  __rtld_malloc_init_real is called to replace the pointers with the
++  real implementation.  */
++__typeof (calloc) *__rtld_calloc;
++__typeof (free) *__rtld_free;
++__typeof (malloc) *__rtld_malloc;
++__typeof (realloc) *__rtld_realloc;
++
++/* Defined below.  */
++static __typeof (calloc) rtld_calloc attribute_relro;
++static __typeof (free) rtld_free attribute_relro;
++static __typeof (malloc) rtld_malloc attribute_relro;
++static __typeof (realloc) rtld_realloc attribute_relro;
++
++void
++__rtld_malloc_init_stubs (void)
++{
++  __rtld_calloc = &rtld_calloc;
++  __rtld_free = &rtld_free;
++  __rtld_malloc = &rtld_malloc;
++  __rtld_realloc = &rtld_realloc;
++}
++
++/* Lookup NAME at VERSION in the scope of MATCH.  */
++static void *
++lookup_malloc_symbol (struct link_map *main_map, const char *name,
++		      struct r_found_version *version)
++{
++
++  const ElfW(Sym) *ref = NULL;
++  lookup_t result = _dl_lookup_symbol_x (name, main_map, &ref,
++					 main_map->l_scope,
++					 version, 0, 0, NULL);
++
++  assert (ELFW(ST_TYPE) (ref->st_info) != STT_TLS);
++  void *value = DL_SYMBOL_ADDRESS (result, ref);
++
++  return _dl_sym_post (result, ref, value, 0, main_map);
++}
++
++void
++__rtld_malloc_init_real (struct link_map *main_map)
++{
++  /* We cannot use relocations and initializers for this because the
++     changes made by __rtld_malloc_init_stubs break REL-style
++     (non-RELA) relocations that depend on the previous pointer
++     contents.  Also avoid direct relocation depedencies for the
++     malloc symbols so this function can be called before the final
++     rtld relocation (which enables RELRO, after which the pointer
++     variables cannot be written to).  */
++
++  struct r_found_version version;
++  version.name = symbol_version_string (libc, GLIBC_2_0);
++  version.hidden = 0;
++  version.hash = _dl_elf_hash (version.name);
++  version.filename = NULL;
++
++  void *new_calloc = lookup_malloc_symbol (main_map, "calloc", &version);
++  void *new_free = lookup_malloc_symbol (main_map, "free", &version);
++  void *new_malloc = lookup_malloc_symbol (main_map, "malloc", &version);
++  void *new_realloc = lookup_malloc_symbol (main_map, "realloc", &version);
++
++  /* Update the pointers in one go, so that any internal allocations
++     performed by lookup_malloc_symbol see a consistent
++     implementation.  */
++  __rtld_calloc = new_calloc;
++  __rtld_free = new_free;
++  __rtld_malloc = new_malloc;
++  __rtld_realloc = new_realloc;
++}
++
+ /* Minimal malloc allocator for used during initial link.  After the
+    initial link, a full malloc implementation is interposed, either
+    the one in libc, or a different one supplied by the user through
+@@ -38,14 +114,9 @@
+ 
+ static void *alloc_ptr, *alloc_end, *alloc_last_block;
+ 
+-/* Declarations of global functions.  */
+-extern void weak_function free (void *ptr);
+-extern void * weak_function realloc (void *ptr, size_t n);
+-
+-
+ /* Allocate an aligned memory block.  */
+-void * weak_function
+-malloc (size_t n)
++static void *
++rtld_malloc (size_t n)
+ {
+   if (alloc_end == 0)
+     {
+@@ -87,8 +158,8 @@ malloc (size_t n)
+ /* We use this function occasionally since the real implementation may
+    be optimized when it can assume the memory it returns already is
+    set to NUL.  */
+-void * weak_function
+-calloc (size_t nmemb, size_t size)
++static void *
++rtld_calloc (size_t nmemb, size_t size)
+ {
+   /* New memory from the trivial malloc above is always already cleared.
+      (We make sure that's true in the rare occasion it might not be,
+@@ -104,8 +175,8 @@ calloc (size_t nmemb, size_t size)
+ }
+ 
+ /* This will rarely be called.  */
+-void weak_function
+-free (void *ptr)
++void
++rtld_free (void *ptr)
+ {
+   /* We can free only the last block allocated.  */
+   if (ptr == alloc_last_block)
+@@ -118,8 +189,8 @@ free (void *ptr)
+ }
+ 
+ /* This is only called with the most recent block returned by malloc.  */
+-void * weak_function
+-realloc (void *ptr, size_t n)
++void *
++rtld_realloc (void *ptr, size_t n)
+ {
+   if (ptr == NULL)
+     return malloc (n);
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 18335bc666f2b89d..f755dc30331f799f 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -532,6 +532,9 @@ _dl_start (void *arg)
+      header table in core.  Put the rest of _dl_start into a separate
+      function, that way the compiler cannot put accesses to the GOT
+      before ELF_DYNAMIC_RELOCATE.  */
++
++  __rtld_malloc_init_stubs ();
++
+   {
+ #ifdef DONT_USE_BOOTSTRAP_MAP
+     ElfW(Addr) entry = _dl_start_final (arg);
+@@ -2203,6 +2206,10 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+ 	  rtld_timer_stop (&relocate_time, start);
+ 	}
+ 
++      /* The library defining malloc has already been relocated due to
++	 prelinking.  Resolve the malloc symbols for the dynamic
++	 loader.  */
++      __rtld_malloc_init_real (main_map);
+ 
+       /* Mark all the objects so we know they have been already relocated.  */
+       for (struct link_map *l = main_map; l != NULL; l = l->l_next)
+@@ -2303,6 +2310,11 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+ 	 re-relocation, we might call a user-supplied function
+ 	 (e.g. calloc from _dl_relocate_object) that uses TLS data.  */
+ 
++      /* The malloc implementation has been relocated, so resolving
++	 its symbols (and potentially calling IFUNC resolvers) is safe
++	 at this point.  */
++      __rtld_malloc_init_real (main_map);
++
+       RTLD_TIMING_VAR (start);
+       rtld_timer_start (&start);
+ 
+diff --git a/include/inline-hashtab.h b/include/inline-hashtab.h
+index ad73650ecc59dec1..b658e4a54b9c8187 100644
+--- a/include/inline-hashtab.h
++++ b/include/inline-hashtab.h
+@@ -53,7 +53,7 @@ htab_create (void)
+     return NULL;
+   ht->size = 3;
+   ht->entries = malloc (sizeof (void *) * ht->size);
+-  ht->free = free;
++  ht->free = __rtld_free;
+   if (! ht->entries)
+     {
+       if (ht->free)
+@@ -172,7 +172,7 @@ htab_expand (struct hashtab *htab, int (*hash_fn) (void *))
+ 
+   /* Use the free() corresponding to the malloc() above to free this
+      up.  */
+-  htab->free = free;
++  htab->free = __rtld_free;
+ 
+   return 1;
+ }
+diff --git a/include/libc-symbols.h b/include/libc-symbols.h
+index 8b9273c13a19f265..41436050d060b89f 100644
+--- a/include/libc-symbols.h
++++ b/include/libc-symbols.h
+@@ -413,7 +413,14 @@ for linking")
+ #  define _default_symbol_version(real, name, version) \
+      __asm__ (".symver " #real "," #name "@@" #version)
+ # endif
+-#else
++
++/* Evalutes to a string literal for VERSION in LIB.  */
++# define symbol_version_string(lib, version) \
++  _symbol_version_stringify_1 (VERSION_##lib##_##version)
++# define _symbol_version_stringify_1(arg) _symbol_version_stringify_2 (arg)
++# define _symbol_version_stringify_2(arg) #arg
++
++#else /* !SHARED */
+ # define symbol_version(real, name, version)
+ # define default_symbol_version(real, name, version) \
+   strong_alias(real, name)
+diff --git a/include/malloc.h b/include/malloc.h
+index d4cd9a5ffc929a96..e528718ac0734e5e 100644
+--- a/include/malloc.h
++++ b/include/malloc.h
+@@ -1,7 +1,9 @@
+ #ifndef _MALLOC_H
++
+ #include <malloc/malloc.h>
+ 
+ # ifndef _ISOMAC
++#  include <rtld-malloc.h>
+ 
+ /* In the GNU libc we rename the global variable
+    `__malloc_initialized' to `__libc_malloc_initialized'.  */
+diff --git a/include/rtld-malloc.h b/include/rtld-malloc.h
+new file mode 100644
+index 0000000000000000..b026a3270cd24819
+--- /dev/null
++++ b/include/rtld-malloc.h
+@@ -0,0 +1,85 @@
++/* Redirection of malloc inside the dynamic linker.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* The dynamic linker needs to use its own minimal malloc before libc
++   has been relocated, and the libc malloc afterwards.  The active
++   malloc implementation is reached via the __rtld_* function pointers
++   declared below.  They are initialized to the minimal malloc by
++   __rtld_malloc_init_stubs, and set to the final implementation by
++   __rtld_malloc_init_real.  */
++
++#ifndef _RTLD_MALLOC_H
++#define _RTLD_MALLOC_H
++
++#if IS_IN (rtld)
++
++extern __typeof (calloc) *__rtld_calloc attribute_hidden;
++extern __typeof (free) *__rtld_free attribute_hidden;
++extern __typeof (malloc) *__rtld_malloc attribute_hidden;
++extern __typeof (realloc) *__rtld_realloc attribute_hidden;
++
++/* Wrapper functions which call through the function pointers above.
++   Note that it is not supported to take the address of those
++   functions.  Instead the function pointers must be used
++   directly.  */
++
++__extern_inline void *
++calloc (size_t a, size_t b)
++{
++  return __rtld_calloc (a, b);
++}
++
++__extern_inline void
++free (void *ptr)
++{
++   __rtld_free (ptr);
++}
++
++__extern_inline void *
++malloc (size_t size)
++{
++  return __rtld_malloc (size);
++}
++
++__extern_inline void *
++realloc (void *ptr, size_t size)
++{
++  return __rtld_realloc (ptr, size);
++}
++
++/* Called after the first self-relocation to activate the minimal malloc
++   implementation.  */
++void __rtld_malloc_init_stubs (void) attribute_hidden;
++
++/* Called shortly before the final self-relocation (when RELRO
++   variables are still writable) to activate the real malloc
++   implementation.  MAIN_MAP is the link map of the executable.  */
++struct link_map;
++void __rtld_malloc_init_real (struct link_map *main_map) attribute_hidden;
++
++#else /* !IS_IN (rtld) */
++
++/* This allows static/non-rtld builds to get a pointer to the
++   functions, in the same way that is required inside rtld.  */
++# define __rtld_calloc (&calloc)
++# define __rtld_free (&free)
++# define __rtld_malloc (&malloc)
++# define __rtld_realloc (&realloc)
++
++#endif /* !IS_IN (rtld) */
++#endif /* _RTLD_MALLOC_H */
+diff --git a/include/stdlib.h b/include/stdlib.h
+index 114e12d255977676..d7720967448f2a8f 100644
+--- a/include/stdlib.h
++++ b/include/stdlib.h
+@@ -9,6 +9,8 @@
+ #if !defined _ISOMAC
+ # include <sys/stat.h>
+ 
++# include <rtld-malloc.h>
++
+ extern __typeof (strtol_l) __strtol_l;
+ extern __typeof (strtoul_l) __strtoul_l;
+ extern __typeof (strtoll_l) __strtoll_l;
+diff --git a/sysdeps/generic/localplt.data b/sysdeps/generic/localplt.data
+index 2d5c66ae28a2e851..e2083c0ce6869572 100644
+--- a/sysdeps/generic/localplt.data
++++ b/sysdeps/generic/localplt.data
+@@ -7,12 +7,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/mach/hurd/i386/ld.abilist b/sysdeps/mach/hurd/i386/ld.abilist
+index c76b913486acf6d8..6f591b249699e10c 100644
+--- a/sysdeps/mach/hurd/i386/ld.abilist
++++ b/sysdeps/mach/hurd/i386/ld.abilist
+@@ -16,10 +16,6 @@ GLIBC_2.2.6 _dl_mcount F
+ GLIBC_2.2.6 _hurd_intr_rpc_mach_msg F
+ GLIBC_2.2.6 _r_debug D 0x14
+ GLIBC_2.2.6 abort F
+-GLIBC_2.2.6 calloc F
+-GLIBC_2.2.6 free F
+-GLIBC_2.2.6 malloc F
+-GLIBC_2.2.6 realloc F
+ GLIBC_2.3 ___tls_get_addr F
+ GLIBC_2.3 __tls_get_addr F
+ GLIBC_2.4 __stack_chk_guard D 0x4
+diff --git a/sysdeps/mach/hurd/i386/localplt.data b/sysdeps/mach/hurd/i386/localplt.data
+index a5b5241b84812425..4b9dbf5acc088cff 100644
+--- a/sysdeps/mach/hurd/i386/localplt.data
++++ b/sysdeps/mach/hurd/i386/localplt.data
+@@ -9,12 +9,6 @@ libc.so: malloc + REL R_386_GLOB_DAT
+ libc.so: memalign + REL R_386_GLOB_DAT
+ libc.so: realloc + REL R_386_GLOB_DAT
+ libm.so: matherr + REL R_386_GLOB_DAT
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc + REL R_386_GLOB_DAT
+-ld.so: calloc + REL R_386_GLOB_DAT
+-ld.so: realloc + REL R_386_GLOB_DAT
+-ld.so: free + REL R_386_GLOB_DAT
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error + REL R_386_GLOB_DAT
+ ld.so: _dl_catch_error + REL R_386_GLOB_DAT
+diff --git a/sysdeps/unix/sysv/linux/aarch64/ld.abilist b/sysdeps/unix/sysv/linux/aarch64/ld.abilist
+index 4ffe688649ca02e2..80b2fe672541c6e9 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/aarch64/ld.abilist
+@@ -3,7 +3,3 @@ GLIBC_2.17 __stack_chk_guard D 0x8
+ GLIBC_2.17 __tls_get_addr F
+ GLIBC_2.17 _dl_mcount F
+ GLIBC_2.17 _r_debug D 0x28
+-GLIBC_2.17 calloc F
+-GLIBC_2.17 free F
+-GLIBC_2.17 malloc F
+-GLIBC_2.17 realloc F
+diff --git a/sysdeps/unix/sysv/linux/aarch64/localplt.data b/sysdeps/unix/sysv/linux/aarch64/localplt.data
+index 08af68b5e840b5d8..2c14b652efbfdf44 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/localplt.data
++++ b/sysdeps/unix/sysv/linux/aarch64/localplt.data
+@@ -12,12 +12,6 @@ libm.so: matherr
+ libc.so: __getauxval ?
+ # The dynamic loader needs __tls_get_addr for TLS.
+ ld.so: __tls_get_addr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/alpha/ld.abilist b/sysdeps/unix/sysv/linux/alpha/ld.abilist
+index 98b66edabf1a79c7..98a03f611f98f3a4 100644
+--- a/sysdeps/unix/sysv/linux/alpha/ld.abilist
++++ b/sysdeps/unix/sysv/linux/alpha/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x28
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.1 __libc_stack_end D 0x8
+ GLIBC_2.1 _dl_mcount F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/alpha/localplt.data b/sysdeps/unix/sysv/linux/alpha/localplt.data
+index c69eb04ce53e292e..43f6fdaea18b25f3 100644
+--- a/sysdeps/unix/sysv/linux/alpha/localplt.data
++++ b/sysdeps/unix/sysv/linux/alpha/localplt.data
+@@ -26,12 +26,6 @@ libm.so: matherr + RELA R_ALPHA_GLOB_DAT
+ libm.so: __atan2
+ # The dynamic loader needs __tls_get_addr for TLS.
+ ld.so: __tls_get_addr ?
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc + RELA R_ALPHA_GLOB_DAT
+-ld.so: calloc + RELA R_ALPHA_GLOB_DAT
+-ld.so: realloc + RELA R_ALPHA_GLOB_DAT
+-ld.so: free + RELA R_ALPHA_GLOB_DAT
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error + RELA R_ALPHA_GLOB_DAT
+ ld.so: _dl_catch_error + RELA R_ALPHA_GLOB_DAT
+diff --git a/sysdeps/unix/sysv/linux/arm/ld.abilist b/sysdeps/unix/sysv/linux/arm/ld.abilist
+index a301c6ebc49db1d7..cc8825c3bc68ad4a 100644
+--- a/sysdeps/unix/sysv/linux/arm/ld.abilist
++++ b/sysdeps/unix/sysv/linux/arm/ld.abilist
+@@ -3,7 +3,3 @@ GLIBC_2.4 __stack_chk_guard D 0x4
+ GLIBC_2.4 __tls_get_addr F
+ GLIBC_2.4 _dl_mcount F
+ GLIBC_2.4 _r_debug D 0x14
+-GLIBC_2.4 calloc F
+-GLIBC_2.4 free F
+-GLIBC_2.4 malloc F
+-GLIBC_2.4 realloc F
+diff --git a/sysdeps/unix/sysv/linux/arm/localplt.data b/sysdeps/unix/sysv/linux/arm/localplt.data
+index 7bd541c28a842526..0c3af0c64e95df4b 100644
+--- a/sysdeps/unix/sysv/linux/arm/localplt.data
++++ b/sysdeps/unix/sysv/linux/arm/localplt.data
+@@ -8,12 +8,6 @@ libm.so: matherr
+ libpthread.so: raise
+ # The dynamic loader needs __tls_get_addr for TLS.
+ ld.so: __tls_get_addr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/hppa/ld.abilist b/sysdeps/unix/sysv/linux/hppa/ld.abilist
+index 0387614d8fd784eb..d155a59843df9091 100644
+--- a/sysdeps/unix/sysv/linux/hppa/ld.abilist
++++ b/sysdeps/unix/sysv/linux/hppa/ld.abilist
+@@ -1,9 +1,5 @@
+ GLIBC_2.2 __libc_stack_end D 0x4
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.2 _r_debug D 0x14
+-GLIBC_2.2 calloc F
+-GLIBC_2.2 free F
+-GLIBC_2.2 malloc F
+-GLIBC_2.2 realloc F
+ GLIBC_2.3 __tls_get_addr F
+ GLIBC_2.4 __stack_chk_guard D 0x4
+diff --git a/sysdeps/unix/sysv/linux/hppa/localplt.data b/sysdeps/unix/sysv/linux/hppa/localplt.data
+index 867413f0c54d3d71..09893d4dcfd3a1f3 100644
+--- a/sysdeps/unix/sysv/linux/hppa/localplt.data
++++ b/sysdeps/unix/sysv/linux/hppa/localplt.data
+@@ -10,12 +10,6 @@ libc.so: __sigsetjmp
+ libc.so: _IO_funlockfile
+ libc.so: __errno_location
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/i386/ld.abilist b/sysdeps/unix/sysv/linux/i386/ld.abilist
+index edb7307228110c33..0478e220712a55e6 100644
+--- a/sysdeps/unix/sysv/linux/i386/ld.abilist
++++ b/sysdeps/unix/sysv/linux/i386/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.1 __libc_stack_end D 0x4
+ GLIBC_2.1 _dl_mcount F
+ GLIBC_2.3 ___tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/i386/localplt.data b/sysdeps/unix/sysv/linux/i386/localplt.data
+index f6f20a5d15bc79e4..5334875b4b4a4dee 100644
+--- a/sysdeps/unix/sysv/linux/i386/localplt.data
++++ b/sysdeps/unix/sysv/linux/i386/localplt.data
+@@ -7,12 +7,6 @@ libc.so: malloc + REL R_386_GLOB_DAT
+ libc.so: memalign + REL R_386_GLOB_DAT
+ libc.so: realloc + REL R_386_GLOB_DAT
+ libm.so: matherr + REL R_386_GLOB_DAT
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc + REL R_386_GLOB_DAT
+-ld.so: calloc + REL R_386_GLOB_DAT
+-ld.so: realloc + REL R_386_GLOB_DAT
+-ld.so: free + REL R_386_GLOB_DAT
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error + REL R_386_GLOB_DAT
+ ld.so: _dl_catch_error + REL R_386_GLOB_DAT
+diff --git a/sysdeps/unix/sysv/linux/ia64/ld.abilist b/sysdeps/unix/sysv/linux/ia64/ld.abilist
+index 82042472c3089a29..33f91199bfa516fb 100644
+--- a/sysdeps/unix/sysv/linux/ia64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/ia64/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.2 __libc_stack_end D 0x8
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.2 _r_debug D 0x28
+-GLIBC_2.2 calloc F
+-GLIBC_2.2 free F
+-GLIBC_2.2 malloc F
+-GLIBC_2.2 realloc F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/ia64/localplt.data b/sysdeps/unix/sysv/linux/ia64/localplt.data
+index 3820e2a4e682af2e..1c566a503e2eba00 100644
+--- a/sysdeps/unix/sysv/linux/ia64/localplt.data
++++ b/sysdeps/unix/sysv/linux/ia64/localplt.data
+@@ -6,12 +6,6 @@ libc.so: realloc
+ libm.so: matherr
+ libm.so: matherrf
+ libm.so: matherrl
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/m68k/coldfire/ld.abilist b/sysdeps/unix/sysv/linux/m68k/coldfire/ld.abilist
+index a301c6ebc49db1d7..cc8825c3bc68ad4a 100644
+--- a/sysdeps/unix/sysv/linux/m68k/coldfire/ld.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/coldfire/ld.abilist
+@@ -3,7 +3,3 @@ GLIBC_2.4 __stack_chk_guard D 0x4
+ GLIBC_2.4 __tls_get_addr F
+ GLIBC_2.4 _dl_mcount F
+ GLIBC_2.4 _r_debug D 0x14
+-GLIBC_2.4 calloc F
+-GLIBC_2.4 free F
+-GLIBC_2.4 malloc F
+-GLIBC_2.4 realloc F
+diff --git a/sysdeps/unix/sysv/linux/m68k/coldfire/localplt.data b/sysdeps/unix/sysv/linux/m68k/coldfire/localplt.data
+index 4a07bf387e2da296..3c5efb7204281e2a 100644
+--- a/sysdeps/unix/sysv/linux/m68k/coldfire/localplt.data
++++ b/sysdeps/unix/sysv/linux/m68k/coldfire/localplt.data
+@@ -5,12 +5,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/m68k/m680x0/ld.abilist b/sysdeps/unix/sysv/linux/m68k/m680x0/ld.abilist
+index c9ec45cf1cf6c1c5..3ba474c27f62fb10 100644
+--- a/sysdeps/unix/sysv/linux/m68k/m680x0/ld.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/m680x0/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.1 __libc_stack_end D 0x4
+ GLIBC_2.1 _dl_mcount F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/m68k/m680x0/localplt.data b/sysdeps/unix/sysv/linux/m68k/m680x0/localplt.data
+index c70d6ea3011c4511..843f4e25f213d632 100644
+--- a/sysdeps/unix/sysv/linux/m68k/m680x0/localplt.data
++++ b/sysdeps/unix/sysv/linux/m68k/m680x0/localplt.data
+@@ -6,12 +6,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/microblaze/ld.abilist b/sysdeps/unix/sysv/linux/microblaze/ld.abilist
+index aa0d71150af8c62c..a4933c3541119538 100644
+--- a/sysdeps/unix/sysv/linux/microblaze/ld.abilist
++++ b/sysdeps/unix/sysv/linux/microblaze/ld.abilist
+@@ -3,7 +3,3 @@ GLIBC_2.18 __stack_chk_guard D 0x4
+ GLIBC_2.18 __tls_get_addr F
+ GLIBC_2.18 _dl_mcount F
+ GLIBC_2.18 _r_debug D 0x14
+-GLIBC_2.18 calloc F
+-GLIBC_2.18 free F
+-GLIBC_2.18 malloc F
+-GLIBC_2.18 realloc F
+diff --git a/sysdeps/unix/sysv/linux/microblaze/localplt.data b/sysdeps/unix/sysv/linux/microblaze/localplt.data
+index 8ca23897dfa5b01c..0e98d5251ee14475 100644
+--- a/sysdeps/unix/sysv/linux/microblaze/localplt.data
++++ b/sysdeps/unix/sysv/linux/microblaze/localplt.data
+@@ -7,12 +7,6 @@ libc.so: realloc
+ libm.so: matherr
+ # The dynamic loader needs __tls_get_addr for TLS.
+ ld.so: __tls_get_addr ?
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/ld.abilist b/sysdeps/unix/sysv/linux/mips/mips32/ld.abilist
+index 55d48868e8b686dc..be09641a48962434 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/ld.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.2 __libc_stack_end D 0x4
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/n32/ld.abilist b/sysdeps/unix/sysv/linux/mips/mips64/n32/ld.abilist
+index 55d48868e8b686dc..be09641a48962434 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/n32/ld.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/n32/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.2 __libc_stack_end D 0x4
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/n64/ld.abilist b/sysdeps/unix/sysv/linux/mips/mips64/n64/ld.abilist
+index 44b345b7cf31e854..1ea36e13f294a249 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/n64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/n64/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x28
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.2 __libc_stack_end D 0x8
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/nios2/ld.abilist b/sysdeps/unix/sysv/linux/nios2/ld.abilist
+index 110f1039fa39fb1c..52178802dd82b59a 100644
+--- a/sysdeps/unix/sysv/linux/nios2/ld.abilist
++++ b/sysdeps/unix/sysv/linux/nios2/ld.abilist
+@@ -3,7 +3,3 @@ GLIBC_2.21 __stack_chk_guard D 0x4
+ GLIBC_2.21 __tls_get_addr F
+ GLIBC_2.21 _dl_mcount F
+ GLIBC_2.21 _r_debug D 0x14
+-GLIBC_2.21 calloc F
+-GLIBC_2.21 free F
+-GLIBC_2.21 malloc F
+-GLIBC_2.21 realloc F
+diff --git a/sysdeps/unix/sysv/linux/nios2/localplt.data b/sysdeps/unix/sysv/linux/nios2/localplt.data
+index 4430a5891e847aed..39009a62d6385849 100644
+--- a/sysdeps/unix/sysv/linux/nios2/localplt.data
++++ b/sysdeps/unix/sysv/linux/nios2/localplt.data
+@@ -27,12 +27,6 @@ libc.so: __nedf2
+ libc.so: __eqdf2
+ libc.so: __extendsfdf2
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/localplt.data b/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/localplt.data
+index e822e0a4809e5088..a02dd5cc246329a0 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/localplt.data
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/localplt.data
+@@ -5,12 +5,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/ld.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/ld.abilist
+index e8b0ea3a9bd98b92..4bbfba7a61c7a5ef 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/ld.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.1 __libc_stack_end D 0x4
+ GLIBC_2.1 _dl_mcount F
+ GLIBC_2.22 __tls_get_addr_opt F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/localplt.data b/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/localplt.data
+index fead931d4e5c4bc4..a4cd7cfb04249ae3 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/localplt.data
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/localplt.data
+@@ -35,12 +35,6 @@ libc.so: realloc
+ libm.so: copysignl ?
+ libm.so: fabsl
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld-le.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld-le.abilist
+index 37c8f6684b54341b..b1f313c7cd33defc 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld-le.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld-le.abilist
+@@ -2,9 +2,5 @@ GLIBC_2.17 __libc_stack_end D 0x8
+ GLIBC_2.17 __tls_get_addr F
+ GLIBC_2.17 _dl_mcount F
+ GLIBC_2.17 _r_debug D 0x28
+-GLIBC_2.17 calloc F
+-GLIBC_2.17 free F
+-GLIBC_2.17 malloc F
+-GLIBC_2.17 realloc F
+ GLIBC_2.22 __tls_get_addr_opt F
+ GLIBC_2.23 __parse_hwcap_and_convert_at_platform F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld.abilist
+index edfc9ca56f2e4fee..283fb4510bea40ba 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/ld.abilist
+@@ -4,7 +4,3 @@ GLIBC_2.3 __libc_stack_end D 0x8
+ GLIBC_2.3 __tls_get_addr F
+ GLIBC_2.3 _dl_mcount F
+ GLIBC_2.3 _r_debug D 0x28
+-GLIBC_2.3 calloc F
+-GLIBC_2.3 free F
+-GLIBC_2.3 malloc F
+-GLIBC_2.3 realloc F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/localplt.data b/sysdeps/unix/sysv/linux/powerpc/powerpc64/localplt.data
+index c1209336d2d339d4..bb498fbe3ae28d03 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/localplt.data
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/localplt.data
+@@ -4,12 +4,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/riscv/localplt.data b/sysdeps/unix/sysv/linux/riscv/localplt.data
+index 14c02cb2d6c016d3..0ed8650b65a0ecbf 100644
+--- a/sysdeps/unix/sysv/linux/riscv/localplt.data
++++ b/sysdeps/unix/sysv/linux/riscv/localplt.data
+@@ -6,12 +6,6 @@ libc.so: free
+ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/riscv/rv64/ld.abilist b/sysdeps/unix/sysv/linux/riscv/rv64/ld.abilist
+index b411871d0631e1a3..845f356c3c3fad54 100644
+--- a/sysdeps/unix/sysv/linux/riscv/rv64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/riscv/rv64/ld.abilist
+@@ -3,7 +3,3 @@ GLIBC_2.27 __stack_chk_guard D 0x8
+ GLIBC_2.27 __tls_get_addr F
+ GLIBC_2.27 _dl_mcount F
+ GLIBC_2.27 _r_debug D 0x28
+-GLIBC_2.27 calloc F
+-GLIBC_2.27 free F
+-GLIBC_2.27 malloc F
+-GLIBC_2.27 realloc F
+diff --git a/sysdeps/unix/sysv/linux/s390/localplt.data b/sysdeps/unix/sysv/linux/s390/localplt.data
+index e822e0a4809e5088..a02dd5cc246329a0 100644
+--- a/sysdeps/unix/sysv/linux/s390/localplt.data
++++ b/sysdeps/unix/sysv/linux/s390/localplt.data
+@@ -5,12 +5,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-32/ld.abilist b/sysdeps/unix/sysv/linux/s390/s390-32/ld.abilist
+index 0576c9575ea6118e..b56f005bebd3baf1 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-32/ld.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-32/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.1 __libc_stack_end D 0x4
+ GLIBC_2.1 _dl_mcount F
+ GLIBC_2.3 __tls_get_offset F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-64/ld.abilist b/sysdeps/unix/sysv/linux/s390/s390-64/ld.abilist
+index 1fbb890d1dc495e5..6f788a086d68aaa5 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-64/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.2 __libc_stack_end D 0x8
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.2 _r_debug D 0x28
+-GLIBC_2.2 calloc F
+-GLIBC_2.2 free F
+-GLIBC_2.2 malloc F
+-GLIBC_2.2 realloc F
+ GLIBC_2.3 __tls_get_offset F
+diff --git a/sysdeps/unix/sysv/linux/sh/ld.abilist b/sysdeps/unix/sysv/linux/sh/ld.abilist
+index 0387614d8fd784eb..d155a59843df9091 100644
+--- a/sysdeps/unix/sysv/linux/sh/ld.abilist
++++ b/sysdeps/unix/sysv/linux/sh/ld.abilist
+@@ -1,9 +1,5 @@
+ GLIBC_2.2 __libc_stack_end D 0x4
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.2 _r_debug D 0x14
+-GLIBC_2.2 calloc F
+-GLIBC_2.2 free F
+-GLIBC_2.2 malloc F
+-GLIBC_2.2 realloc F
+ GLIBC_2.3 __tls_get_addr F
+ GLIBC_2.4 __stack_chk_guard D 0x4
+diff --git a/sysdeps/unix/sysv/linux/sh/localplt.data b/sysdeps/unix/sysv/linux/sh/localplt.data
+index babb19d71785515d..3225177c50956972 100644
+--- a/sysdeps/unix/sysv/linux/sh/localplt.data
++++ b/sysdeps/unix/sysv/linux/sh/localplt.data
+@@ -12,12 +12,6 @@ libc.so: __errno_location
+ libm.so: matherr
+ # Generated by the compiler because there is no trap insn pattern.
+ libc.so: abort ?
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc32/ld.abilist b/sysdeps/unix/sysv/linux/sparc/sparc32/ld.abilist
+index fd0b33f86d3f9c5c..0c6610e3c2f00cf3 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc32/ld.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc32/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.0 _r_debug D 0x14
+-GLIBC_2.0 calloc F
+-GLIBC_2.0 free F
+-GLIBC_2.0 malloc F
+-GLIBC_2.0 realloc F
+ GLIBC_2.1 __libc_stack_end D 0x4
+ GLIBC_2.1 _dl_mcount F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc32/localplt.data b/sysdeps/unix/sysv/linux/sparc/sparc32/localplt.data
+index 1668f4017e0f28f0..be40910c4de9859a 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc32/localplt.data
++++ b/sysdeps/unix/sysv/linux/sparc/sparc32/localplt.data
+@@ -17,12 +17,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/ld.abilist b/sysdeps/unix/sysv/linux/sparc/sparc64/ld.abilist
+index 82042472c3089a29..33f91199bfa516fb 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc64/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.2 __libc_stack_end D 0x8
+ GLIBC_2.2 _dl_mcount F
+ GLIBC_2.2 _r_debug D 0x28
+-GLIBC_2.2 calloc F
+-GLIBC_2.2 free F
+-GLIBC_2.2 malloc F
+-GLIBC_2.2 realloc F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/localplt.data b/sysdeps/unix/sysv/linux/sparc/sparc64/localplt.data
+index b881b9096d9fa38f..809062d46c1b4837 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/localplt.data
++++ b/sysdeps/unix/sysv/linux/sparc/sparc64/localplt.data
+@@ -18,12 +18,6 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc
+-ld.so: calloc
+-ld.so: realloc
+-ld.so: free
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error
+ ld.so: _dl_catch_error
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/ld.abilist b/sysdeps/unix/sysv/linux/x86_64/64/ld.abilist
+index 0dc943061197d374..d3cdf7611eb9cab3 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/ld.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/64/ld.abilist
+@@ -1,8 +1,4 @@
+ GLIBC_2.2.5 __libc_stack_end D 0x8
+ GLIBC_2.2.5 _dl_mcount F
+ GLIBC_2.2.5 _r_debug D 0x28
+-GLIBC_2.2.5 calloc F
+-GLIBC_2.2.5 free F
+-GLIBC_2.2.5 malloc F
+-GLIBC_2.2.5 realloc F
+ GLIBC_2.3 __tls_get_addr F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/x32/ld.abilist b/sysdeps/unix/sysv/linux/x86_64/x32/ld.abilist
+index 80f3161586414674..c70bccf78245a552 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/x32/ld.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/x32/ld.abilist
+@@ -2,7 +2,3 @@ GLIBC_2.16 __libc_stack_end D 0x4
+ GLIBC_2.16 __tls_get_addr F
+ GLIBC_2.16 _dl_mcount F
+ GLIBC_2.16 _r_debug D 0x14
+-GLIBC_2.16 calloc F
+-GLIBC_2.16 free F
+-GLIBC_2.16 malloc F
+-GLIBC_2.16 realloc F
+diff --git a/sysdeps/x86_64/localplt.data b/sysdeps/x86_64/localplt.data
+index c27a02b66acd2ab4..8f41e928708d9a42 100644
+--- a/sysdeps/x86_64/localplt.data
++++ b/sysdeps/x86_64/localplt.data
+@@ -9,12 +9,6 @@ libc.so: malloc + RELA R_X86_64_GLOB_DAT
+ libc.so: memalign + RELA R_X86_64_GLOB_DAT
+ libc.so: realloc + RELA R_X86_64_GLOB_DAT
+ libm.so: matherr + RELA R_X86_64_GLOB_DAT
+-# The main malloc is interposed into the dynamic linker, for
+-# allocations after the initial link (when dlopen is used).
+-ld.so: malloc + RELA R_X86_64_GLOB_DAT
+-ld.so: calloc + RELA R_X86_64_GLOB_DAT
+-ld.so: realloc + RELA R_X86_64_GLOB_DAT
+-ld.so: free + RELA R_X86_64_GLOB_DAT
+ # The TLS-enabled version of these functions is interposed from libc.so.
+ ld.so: _dl_signal_error + RELA R_X86_64_GLOB_DAT
+ ld.so: _dl_catch_error + RELA R_X86_64_GLOB_DAT

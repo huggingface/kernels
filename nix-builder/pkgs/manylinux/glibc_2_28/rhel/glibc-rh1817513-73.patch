@@ -1,0 +1,289 @@
+commit 0c7b002fac12dcb2f53ba83ee56bb3b5d2439447
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Tue Jun 9 09:57:28 2020 +0100
+
+    rtld: Add rtld.nns tunable for the number of supported namespaces
+    
+    TLS_STATIC_SURPLUS is 1664 bytes currently which is not enough to
+    support DL_NNS (== 16) number of dynamic link namespaces, if we
+    assume 192 bytes of TLS are reserved for libc use and 144 bytes
+    are reserved for other system libraries that use IE TLS.
+    
+    A new tunable is introduced to control the number of supported
+    namespaces and to adjust the surplus static TLS size as follows:
+    
+    surplus_tls = 192 * (rtld.nns-1) + 144 * rtld.nns + 512
+    
+    The default is rtld.nns == 4 and then the surplus TLS size is the
+    same as before, so the behaviour is unchanged by default. If an
+    application creates more namespaces than the rtld.nns setting
+    allows, then it is not guaranteed to work, but the limit is not
+    checked. So existing usage will continue to work, but in the
+    future if an application creates more than 4 dynamic link
+    namespaces then the tunable will need to be set.
+    
+    In this patch DL_NNS is a fixed value and provides a maximum to
+    the rtld.nns setting.
+    
+    Static linking used fixed 2048 bytes surplus TLS, this is changed
+    so the same contract is used as for dynamic linking.  With static
+    linking DL_NNS == 1 so rtld.nns tunable is forced to 1, so by
+    default the surplus TLS is reduced to 144 + 512 = 656 bytes. This
+    change is not expected to cause problems.
+    
+    Tested on aarch64-linux-gnu and x86_64-linux-gnu.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/dl-tls.c
+	  (Different per-namespace TLS reservation defaults before
+	  this backport.)
+
+diff --git a/csu/libc-tls.c b/csu/libc-tls.c
+index 28a79441cde379f7..08ed2b988b58ac6c 100644
+--- a/csu/libc-tls.c
++++ b/csu/libc-tls.c
+@@ -52,13 +52,16 @@ bool _dl_tls_dtv_gaps;
+ struct dtv_slotinfo_list *_dl_tls_dtv_slotinfo_list;
+ /* Number of modules in the static TLS block.  */
+ size_t _dl_tls_static_nelem;
+-/* Size of the static TLS block.  Giving this initialized value
+-   preallocates some surplus bytes in the static TLS area.  */
+-size_t _dl_tls_static_size = 2048;
++/* Size of the static TLS block.  */
++size_t _dl_tls_static_size;
+ /* Size actually allocated in the static TLS block.  */
+ size_t _dl_tls_static_used;
+ /* Alignment requirement of the static TLS block.  */
+ size_t _dl_tls_static_align;
++/* Size of surplus space in the static TLS area for dynamically
++   loaded modules with IE-model TLS or for TLSDESC optimization.
++   See comments in elf/dl-tls.c where it is initialized.  */
++size_t _dl_tls_static_surplus;
+ 
+ /* Generation counter for the dtv.  */
+ size_t _dl_tls_generation;
+@@ -87,10 +90,8 @@ init_slotinfo (void)
+ static void
+ init_static_tls (size_t memsz, size_t align)
+ {
+-  /* That is the size of the TLS memory for this object.  The initialized
+-     value of _dl_tls_static_size is provided by dl-open.c to request some
+-     surplus that permits dynamic loading of modules with IE-model TLS.  */
+-  GL(dl_tls_static_size) = roundup (memsz + GL(dl_tls_static_size),
++  /* That is the size of the TLS memory for this object.  */
++  GL(dl_tls_static_size) = roundup (memsz + GLRO(dl_tls_static_surplus),
+ 				    TLS_TCB_ALIGN);
+ #if TLS_TCB_AT_TP
+   GL(dl_tls_static_size) += TLS_TCB_SIZE;
+@@ -131,25 +132,24 @@ __libc_setup_tls (void)
+ 	  break;
+ 	}
+ 
++  /* Calculate the size of the static TLS surplus.  */
++  _dl_tls_static_surplus_init ();
++
+   /* We have to set up the TCB block which also (possibly) contains
+      'errno'.  Therefore we avoid 'malloc' which might touch 'errno'.
+      Instead we use 'sbrk' which would only uses 'errno' if it fails.
+      In this case we are right away out of memory and the user gets
+-     what she/he deserves.
+-
+-     The initialized value of _dl_tls_static_size is provided by dl-open.c
+-     to request some surplus that permits dynamic loading of modules with
+-     IE-model TLS.  */
++     what she/he deserves.  */
+ #if TLS_TCB_AT_TP
+   /* Align the TCB offset to the maximum alignment, as
+      _dl_allocate_tls_storage (in elf/dl-tls.c) does using __libc_memalign
+      and dl_tls_static_align.  */
+-  tcb_offset = roundup (memsz + GL(dl_tls_static_size), max_align);
++  tcb_offset = roundup (memsz + GLRO(dl_tls_static_surplus), max_align);
+   tlsblock = __sbrk (tcb_offset + TLS_INIT_TCB_SIZE + max_align);
+ #elif TLS_DTV_AT_TP
+   tcb_offset = roundup (TLS_INIT_TCB_SIZE, align ?: 1);
+   tlsblock = __sbrk (tcb_offset + memsz + max_align
+-		     + TLS_PRE_TCB_SIZE + GL(dl_tls_static_size));
++		     + TLS_PRE_TCB_SIZE + GLRO(dl_tls_static_surplus));
+   tlsblock += TLS_PRE_TCB_SIZE;
+ #else
+   /* In case a model with a different layout for the TCB and DTV
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index a2def280b7096960..ef57a21391bb36fa 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -29,10 +29,54 @@
+ #include <dl-tls.h>
+ #include <ldsodefs.h>
+ 
+-/* Amount of excess space to allocate in the static TLS area
+-   to allow dynamic loading of modules defining IE-model TLS data.  */
+-#define TLS_STATIC_SURPLUS	64 + DL_NNS * 100
++#define TUNABLE_NAMESPACE rtld
++#include <dl-tunables.h>
++
++/* Surplus static TLS, GLRO(dl_tls_static_surplus), is used for
++
++   - IE TLS in libc.so for all dlmopen namespaces except in the initial
++     one where libc.so is not loaded dynamically but at startup time,
++   - IE TLS in other libraries which may be dynamically loaded even in the
++     initial namespace,
++   - and optionally for optimizing dynamic TLS access.
++
++   The maximum number of namespaces is DL_NNS, but to support that many
++   namespaces correctly the static TLS allocation should be significantly
++   increased, which may cause problems with small thread stacks due to the
++   way static TLS is accounted (bug 11787).
++
++   So there is a rtld.nns tunable limit on the number of supported namespaces
++   that affects the size of the static TLS and by default it's small enough
++   not to cause problems with existing applications. The limit is not
++   enforced or checked: it is the user's responsibility to increase rtld.nns
++   if more dlmopen namespaces are used.  */
++
++/* Size of initial-exec TLS in libc.so.  */
++#define LIBC_IE_TLS 192
++/* Size of initial-exec TLS in libraries other than libc.so.
++   This should be large enough to cover runtime libraries of the
++   compiler such as libgomp and libraries in libc other than libc.so.  */
++#define OTHER_IE_TLS 144
++/* Size of additional surplus TLS, placeholder for TLS optimizations.  */
++#define OPT_SURPLUS_TLS 512
+ 
++void
++_dl_tls_static_surplus_init (void)
++{
++  size_t nns;
++
++#if HAVE_TUNABLES
++  nns = TUNABLE_GET (nns, size_t, NULL);
++#else
++  /* Default values of the tunables.  */
++  nns = 4;
++#endif
++  if (nns > DL_NNS)
++    nns = DL_NNS;
++  GLRO(dl_tls_static_surplus) = ((nns - 1) * LIBC_IE_TLS
++				 + nns * OTHER_IE_TLS
++				 + OPT_SURPLUS_TLS);
++}
+ 
+ /* Out-of-memory handler.  */
+ static void
+@@ -218,7 +262,8 @@ _dl_determine_tlsoffset (void)
+     }
+ 
+   GL(dl_tls_static_used) = offset;
+-  GL(dl_tls_static_size) = (roundup (offset + TLS_STATIC_SURPLUS, max_align)
++  GL(dl_tls_static_size) = (roundup (offset + GLRO(dl_tls_static_surplus),
++				     max_align)
+ 			    + TLS_TCB_SIZE);
+ #elif TLS_DTV_AT_TP
+   /* The TLS blocks start right after the TCB.  */
+@@ -262,7 +307,7 @@ _dl_determine_tlsoffset (void)
+     }
+ 
+   GL(dl_tls_static_used) = offset;
+-  GL(dl_tls_static_size) = roundup (offset + TLS_STATIC_SURPLUS,
++  GL(dl_tls_static_size) = roundup (offset + GLRO(dl_tls_static_surplus),
+ 				    TLS_TCB_ALIGN);
+ #else
+ # error "Either TLS_TCB_AT_TP or TLS_DTV_AT_TP must be defined"
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index b7cc79f8bfe0a7c6..7337fb85062c91a7 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -126,4 +126,13 @@ glibc {
+       default: 3
+     }
+   }
++
++  rtld {
++    nns {
++      type: SIZE_T
++      minval: 1
++      maxval: 16
++      default: 4
++    }
++  }
+ }
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 772aff5160359b7b..a440741f4c1b3c91 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -776,6 +776,9 @@ init_tls (void)
+       }
+   assert (i == GL(dl_tls_max_dtv_idx));
+ 
++  /* Calculate the size of the static TLS surplus.  */
++  _dl_tls_static_surplus_init ();
++
+   /* Compute the TLS offsets for the various blocks.  */
+   _dl_determine_tlsoffset ();
+ 
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index 55d5dfb14db4dfb8..e092b8e81a18d739 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -31,6 +31,7 @@ their own namespace.
+ @menu
+ * Tunable names::  The structure of a tunable name
+ * Memory Allocation Tunables::  Tunables in the memory allocation subsystem
++* Dynamic Linking Tunables:: Tunables in the dynamic linking subsystem
+ * Elision Tunables::  Tunables in elision subsystem
+ * Hardware Capability Tunables::  Tunables that modify the hardware
+ 				  capabilities seen by @theglibc{}
+@@ -225,6 +226,26 @@ pointer, so add 4 on 32-bit systems or 8 on 64-bit systems to the size
+ passed to @code{malloc} for the largest bin size to enable.
+ @end deftp
+ 
++@node Dynamic Linking Tunables
++@section Dynamic Linking Tunables
++@cindex dynamic linking tunables
++@cindex rtld tunables
++
++@deftp {Tunable namespace} glibc.rtld
++Dynamic linker behavior can be modified by setting the
++following tunables in the @code{rtld} namespace:
++@end deftp
++
++@deftp Tunable glibc.rtld.nns
++Sets the number of supported dynamic link namespaces (see @code{dlmopen}).
++Currently this limit can be set between 1 and 16 inclusive, the default is 4.
++Each link namespace consumes some memory in all thread, and thus raising the
++limit will increase the amount of memory each thread uses. Raising the limit
++is useful when your application uses more than 4 dynamic linker audit modules
++e.g. @env{LD_AUDIT}, or will use more than 4 dynamic link namespaces as created
++by @code{dlmopen} with an lmid argument of @code{LM_ID_NEWLM}.
++@end deftp
++
+ @node Elision Tunables
+ @section Elision Tunables
+ @cindex elision tunables
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index ccec08929e4ad4e7..e54105848c3cb7d1 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -582,6 +582,11 @@ struct rtld_global_ro
+      binaries, don't honor for PIEs).  */
+   EXTERN ElfW(Addr) _dl_use_load_bias;
+ 
++  /* Size of surplus space in the static TLS area for dynamically
++     loaded modules with IE-model TLS or for TLSDESC optimization.
++     See comments in elf/dl-tls.c where it is initialized.  */
++  EXTERN size_t _dl_tls_static_surplus;
++
+   /* Name of the shared object to be profiled (if any).  */
+   EXTERN const char *_dl_profile;
+   /* Filename of the output file.  */
+@@ -1099,6 +1104,9 @@ extern size_t _dl_count_modids (void) attribute_hidden;
+ /* Calculate offset of the TLS blocks in the static TLS block.  */
+ extern void _dl_determine_tlsoffset (void) attribute_hidden;
+ 
++/* Calculate the size of the static TLS surplus.  */
++void _dl_tls_static_surplus_init (void) attribute_hidden;
++
+ #ifndef SHARED
+ /* Set up the TCB for statically linked applications.  This is called
+    early during startup because we always use TLS (for errno and the

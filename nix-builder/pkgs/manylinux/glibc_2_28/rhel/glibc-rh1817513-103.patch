@@ -1,0 +1,83 @@
+commit 875a50ff63b2c86af770949d563ee851d08eb46e
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Oct 8 08:33:45 2020 -0700
+
+    <sys/platform/x86.h>: Add AVX-VNNI support
+    
+    Add AVX-VNNI support to <sys/platform/x86.h>.
+
+diff --git a/manual/platform.texi b/manual/platform.texi
+index 4f5fdff9d9ef16fd..283f255679643d3e 100644
+--- a/manual/platform.texi
++++ b/manual/platform.texi
+@@ -198,6 +198,9 @@ The supported processor features are:
+ @item
+ @code{AVX2} -- The AVX2 instruction extensions.
+ 
++@item
++@code{AVX_VNNI} -- The AVX-VNNI instruction extensions.
++
+ @item
+ @code{AVX512_4FMAPS} -- The AVX512_4FMAPS instruction extensions.
+ 
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 67f137259fccf4ad..3e5b9341c9756009 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -119,6 +119,8 @@ update_usable (struct cpu_features *cpu_features)
+ 		  cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
+ 		    |= bit_arch_AVX_Fast_Unaligned_Load;
+ 		}
++	      /* Determine if AVX-VNNI is usable.  */
++	      CPU_FEATURE_SET_USABLE (cpu_features, AVX_VNNI);
+ 	      /* Determine if FMA is usable.  */
+ 	      CPU_FEATURE_SET_USABLE (cpu_features, FMA);
+ 	      /* Determine if VAES is usable.  */
+diff --git a/sysdeps/x86/sys/platform/x86.h b/sysdeps/x86/sys/platform/x86.h
+index 0b18257e20105ea4..0942ad7a7f7d4ce2 100644
+--- a/sysdeps/x86/sys/platform/x86.h
++++ b/sysdeps/x86/sys/platform/x86.h
+@@ -311,6 +311,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* COMMON_CPUID_INDEX_7_ECX_1.  */
+ 
+ /* EAX.  */
++#define bit_cpu_AVX_VNNI	(1u << 4)
+ #define bit_cpu_AVX512_BF16	(1u << 5)
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+@@ -530,6 +531,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* COMMON_CPUID_INDEX_7_ECX_1.  */
+ 
+ /* EAX.  */
++#define index_cpu_AVX_VNNI	COMMON_CPUID_INDEX_7_ECX_1
+ #define index_cpu_AVX512_BF16	COMMON_CPUID_INDEX_7_ECX_1
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+@@ -749,6 +751,7 @@ extern const struct cpu_features *__x86_get_cpu_features (unsigned int)
+ /* COMMON_CPUID_INDEX_7_ECX_1.  */
+ 
+ /* EAX.  */
++#define reg_AVX_VNNI		eax
+ #define reg_AVX512_BF16		eax
+ 
+ /* COMMON_CPUID_INDEX_19.  */
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index bcdeb243a82c4adc..8894d9f08ac36633 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -219,6 +219,7 @@ do_test (void)
+   CHECK_CPU_FEATURE (XFD);
+   CHECK_CPU_FEATURE (INVARIANT_TSC);
+   CHECK_CPU_FEATURE (WBNOINVD);
++  CHECK_CPU_FEATURE (AVX_VNNI);
+   CHECK_CPU_FEATURE (AVX512_BF16);
+   CHECK_CPU_FEATURE (AESKLE);
+   CHECK_CPU_FEATURE (WIDE_KL);
+@@ -374,6 +375,7 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (XFD);
+   CHECK_CPU_FEATURE_USABLE (INVARIANT_TSC);
+   CHECK_CPU_FEATURE_USABLE (WBNOINVD);
++  CHECK_CPU_FEATURE_USABLE (AVX_VNNI);
+   CHECK_CPU_FEATURE_USABLE (AVX512_BF16);
+   CHECK_CPU_FEATURE_USABLE (AESKLE);
+   CHECK_CPU_FEATURE_USABLE (WIDE_KL);

@@ -1,0 +1,268 @@
+commit 32f12653d4ea2fbff409351bf8067f9a0b4a3963
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:14 2018 +0100
+
+    S390: Refactor strchr ifunc handling.
+    
+    The ifunc handling for strchr is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strchr variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strchr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strchr.
+            * sysdeps/s390/multiarch/strchr-c.c: Move to ...
+            * sysdeps/s390/strchr-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strchr-vx.S: Move to ...
+            * sysdeps/s390/strchr-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strchr.c: Move to ...
+            * sysdeps/s390/strchr.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strchr.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index adf3521876725ac8..8bb396f498e0b0b0 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -46,5 +46,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strcat strcat-vx strcat-c \
+ 		   strncat strncat-vx strncat-c \
+ 		   strcmp strcmp-vx strcmp-z900 \
+-		   strncmp strncmp-vx strncmp-c
++		   strncmp strncmp-vx strncmp-c \
++		   strchr strchr-vx strchr-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strchr.h b/sysdeps/s390/ifunc-strchr.h
+new file mode 100644
+index 0000000000000000..cfeb00eeda890512
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strchr.h
+@@ -0,0 +1,52 @@
++/* strchr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRCHR_IFUNC	1
++#else
++# define HAVE_STRCHR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRCHR_IFUNC_AND_VX_SUPPORT HAVE_STRCHR_IFUNC
++#else
++# define HAVE_STRCHR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRCHR_DEFAULT		STRCHR_Z13
++# define HAVE_STRCHR_C		0
++# define HAVE_STRCHR_Z13	1
++#else
++# define STRCHR_DEFAULT		STRCHR_C
++# define HAVE_STRCHR_C		1
++# define HAVE_STRCHR_Z13	HAVE_STRCHR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRCHR_C
++# define STRCHR_C		__strchr_c
++#else
++# define STRCHR_C		NULL
++#endif
++
++#if HAVE_STRCHR_Z13
++# define STRCHR_Z13		__strchr_vx
++#else
++# define STRCHR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 381376bf9fcb0f58..a8e9d0acd9ebf986 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strchr strchr-vx strchr-c \
+-		   strchrnul strchrnul-vx strchrnul-c \
++sysdep_routines += strchrnul strchrnul-vx strchrnul-c \
+ 		   strrchr strrchr-vx strrchr-c \
+ 		   strspn strspn-vx strspn-c \
+ 		   strpbrk strpbrk-vx strpbrk-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index d982de5788c0b5d5..e809ca3bacb18aa9 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -36,6 +36,7 @@
+ #include <ifunc-strncat.h>
+ #include <ifunc-strcmp.h>
+ #include <ifunc-strncmp.h>
++#include <ifunc-strchr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -294,6 +295,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRNCMP_IFUNC  */
+ 
++#if HAVE_STRCHR_IFUNC
++    IFUNC_IMPL (i, name, strchr,
++# if HAVE_STRCHR_Z13
++		IFUNC_IMPL_ADD (array, i, strchr,
++				dl_hwcap & HWCAP_S390_VX, STRCHR_Z13)
++# endif
++# if HAVE_STRCHR_C
++		IFUNC_IMPL_ADD (array, i, strchr, 1, STRCHR_C)
++# endif
++		)
++#endif /* HAVE_STRCHR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -322,7 +335,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcsncmp);
+ 
+-  IFUNC_VX_IMPL (strchr);
+   IFUNC_VX_IMPL (wcschr);
+ 
+   IFUNC_VX_IMPL (strchrnul);
+diff --git a/sysdeps/s390/multiarch/strchr-c.c b/sysdeps/s390/strchr-c.c
+similarity index 77%
+rename from sysdeps/s390/multiarch/strchr-c.c
+rename to sysdeps/s390/strchr-c.c
+index 606cb56788966153..3d3579a1d3bc06d0 100644
+--- a/sysdeps/s390/multiarch/strchr-c.c
++++ b/sysdeps/s390/strchr-c.c
+@@ -16,14 +16,18 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STRCHR  __strchr_c
+-# undef weak_alias
+-# ifdef SHARED
+-#  undef libc_hidden_builtin_def
+-#  define libc_hidden_builtin_def(name)				\
++#include <ifunc-strchr.h>
++
++#if HAVE_STRCHR_C
++# if HAVE_STRCHR_IFUNC
++#  define STRCHR STRCHR_C
++#  undef weak_alias
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_builtin_def
++#   define libc_hidden_builtin_def(name)			\
+      __hidden_ver1 (__strchr_c, __GI_strchr, __strchr_c);
+-# endif /* SHARED */
++#  endif
++# endif
+ 
+ # include <string/strchr.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/strchr-vx.S b/sysdeps/s390/strchr-vx.S
+similarity index 90%
+rename from sysdeps/s390/multiarch/strchr-vx.S
+rename to sysdeps/s390/strchr-vx.S
+index 6e744fb82f3249a6..6ffa06f78c14c8da 100644
+--- a/sysdeps/s390/multiarch/strchr-vx.S
++++ b/sysdeps/s390/strchr-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strchr.h>
++
++#if HAVE_STRCHR_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -36,7 +38,7 @@
+    -v17=index of unequal
+    -v18=replicated c
+ */
+-ENTRY(__strchr_vx)
++ENTRY(STRCHR_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -96,5 +98,15 @@ ENTRY(__strchr_vx)
+ 	clije	%r3,0,.Lcharacter /* Found zero and c is zero.  */
+ 	lghi	%r2,0		/* Return null if character not found.  */
+ 	br	%r14
+-END(__strchr_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STRCHR_Z13)
++
++# if ! HAVE_STRCHR_IFUNC
++strong_alias (STRCHR_Z13, strchr)
++weak_alias (strchr, index)
++# endif
++
++# if ! HAVE_STRCHR_C && defined SHARED && IS_IN (libc)
++strong_alias (STRCHR_Z13, __GI_strchr)
++# endif
++
++#endif /* HAVE_STRCHR_Z13  */
+diff --git a/sysdeps/s390/multiarch/strchr.c b/sysdeps/s390/strchr.c
+similarity index 71%
+rename from sysdeps/s390/multiarch/strchr.c
+rename to sysdeps/s390/strchr.c
+index 8aa33a51cc7e91de..a106c6106dcd5307 100644
+--- a/sysdeps/s390/multiarch/strchr.c
++++ b/sysdeps/s390/strchr.c
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strchr.h>
++
++#if HAVE_STRCHR_IFUNC
+ # define strchr __redirect_strchr
+ /* Omit the strchr inline definitions because it would redefine strchr.  */
+ # define __NO_STRING_INLINES
+@@ -24,9 +26,18 @@
+ # undef strchr
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect_strchr, __strchr, strchr)
+-weak_alias (strchr, index)
++# if HAVE_STRCHR_C
++extern __typeof (__redirect_strchr) STRCHR_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/strchr.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_STRCHR_Z13
++extern __typeof (__redirect_strchr) STRCHR_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect_strchr, strchr,
++		      (HAVE_STRCHR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRCHR_Z13
++		      : STRCHR_DEFAULT
++		      )
++weak_alias (strchr, index)
++#endif /* HAVE_STRCHR_IFUNC  */

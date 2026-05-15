@@ -1,0 +1,35 @@
+From 0e00b35704e67c499c3abfbd5b6224a13d38b012 Mon Sep 17 00:00:00 2001
+From: "W. Hashimoto" <ssmallkirby@gmail.com>
+Date: Fri, 11 Dec 2020 16:59:10 -0500
+Subject: malloc: Detect infinite-loop in _int_free when freeing tcache
+ [BZ#27052]
+
+If linked-list of tcache contains a loop, it invokes infinite
+loop in _int_free when freeing tcache. The PoC which invokes
+such infinite loop is on the Bugzilla(#27052). This loop
+should terminate when the loop exceeds mp_.tcache_count and
+the program should abort. The affected glibc version is
+2.29 or later.
+
+Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 5b87bdb081..ec2d934595 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -4224,11 +4224,14 @@ _int_free (mstate av, mchunkptr p, int have_lock)
+ 	if (__glibc_unlikely (e->key == tcache))
+ 	  {
+ 	    tcache_entry *tmp;
++	    size_t cnt = 0;
+ 	    LIBC_PROBE (memory_tcache_double_free, 2, e, tc_idx);
+ 	    for (tmp = tcache->entries[tc_idx];
+ 		 tmp;
+-		 tmp = REVEAL_PTR (tmp->next))
++		 tmp = REVEAL_PTR (tmp->next), ++cnt)
+ 	      {
++		if (cnt >= mp_.tcache_count)
++		  malloc_printerr ("free(): too many chunks detected in tcache");
+ 		if (__glibc_unlikely (!aligned_OK (tmp)))
+ 		  malloc_printerr ("free(): unaligned chunk detected in tcache 2");
+ 		if (tmp == e)

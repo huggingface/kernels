@@ -1,0 +1,51 @@
+commit dfa3394a605c8f6f25e4f827789bc89eca1d206c
+Author: Xi Ruoyao <xry111@xry111.site>
+Date:   Tue Jan 23 04:29:18 2024 +0800
+
+    qsort: Fix a typo causing unnecessary malloc/free (BZ 31276)
+    
+    In qsort_r we allocate a buffer sized QSORT_STACK_SIZE (1024) on stack
+    and we intend to use it if all elements can fit into it.  But there is a
+    typo:
+    
+        if (total_size < sizeof buf)
+          buf = tmp;
+        else
+          /* allocate a buffer on heap and use it ... */
+    
+    Here "buf" is a pointer, thus sizeof buf is just 4 or 8, instead of
+    1024.  There is also a minor issue that we should use "<=" instead of
+    "<".
+    
+    This bug is detected debugging some strange heap corruption running the
+    Ruby-3.3.0 test suite (on an experimental Linux From Scratch build using
+    Binutils-2.41.90 and Glibc trunk, and also Fedora Rawhide [1]).  It
+    seems Ruby is doing some wild "optimization" by jumping into somewhere
+    in qsort_r instead of calling it normally, resulting in a double free of
+    buf if we allocate it on heap.  The issue can be reproduced
+    deterministically with:
+    
+        LD_PRELOAD=/usr/lib/libc_malloc_debug.so MALLOC_CHECK_=3 \
+        LD_LIBRARY_PATH=. ./ruby test/runner.rb test/ruby/test_enum.rb
+    
+    in Ruby-3.3.0 tree after building it.  This change would hide the issue
+    for Ruby, but Ruby is likely still buggy (if using this "optimization"
+    sorting larger arrays).
+    
+    [1]:https://kojipkgs.fedoraproject.org/work/tasks/9729/111889729/build.log
+    
+    Signed-off-by: Xi Ruoyao <xry111@xry111.site>
+
+diff --git a/stdlib/qsort.c b/stdlib/qsort.c
+index 8db8a81d182dd1fc..2cdd5c1fe790f55c 100644
+--- a/stdlib/qsort.c
++++ b/stdlib/qsort.c
+@@ -354,7 +354,7 @@ __qsort_r (void *const pbase, size_t total_elems, size_t size,
+   if (size > INDIRECT_SORT_SIZE_THRES)
+     total_size = 2 * total_elems * sizeof (void *) + size;
+ 
+-  if (total_size < sizeof buf)
++  if (total_size <= sizeof tmp)
+     buf = tmp;
+   else
+     {

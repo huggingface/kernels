@@ -1,0 +1,23 @@
+From 363f9d7a6be5a3b400e3ea3daab583bccfcfa152 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:34 +0100
+Subject: [PATCH 26/28] S390: Use sysdeps/ieee754/dbl-64/wordsize-64 on s390x.
+
+This patch enables the usage of implementations in
+sysdeps/ieee754/dbl-64/wordsize-64 on 64bit s390x.
+
+(cherry picked from commit fcee34cc373daee6aa5320a6e1897cdf2005ab53)
+---
+ sysdeps/s390/s390-64/Implies | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/sysdeps/s390/s390-64/Implies b/sysdeps/s390/s390-64/Implies
+index a8cae95f9d..7603c9859c 100644
+--- a/sysdeps/s390/s390-64/Implies
++++ b/sysdeps/s390/s390-64/Implies
+@@ -1 +1,2 @@
+ wordsize-64
++ieee754/dbl-64/wordsize-64
+-- 
+2.18.2
+

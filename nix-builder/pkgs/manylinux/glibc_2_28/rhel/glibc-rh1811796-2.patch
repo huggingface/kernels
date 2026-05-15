@@ -1,0 +1,21 @@
+commit c10acd40262486dac597001aecc20ad9d3bd0e4a
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Feb 13 17:01:15 2020 +0100
+
+    math/test-sinl-pseudo: Use stack protector only if available
+    
+    This fixes commit 9333498794cde1d5cca518bad ("Avoid ldbl-96 stack
+    corruption from range reduction of pseudo-zero (bug 25487).").
+
+diff --git a/sysdeps/ieee754/ldbl-96/Makefile b/sysdeps/ieee754/ldbl-96/Makefile
+index 318628aed6..6030adf7e7 100644
+--- a/sysdeps/ieee754/ldbl-96/Makefile
++++ b/sysdeps/ieee754/ldbl-96/Makefile
+@@ -18,5 +18,7 @@
+ 
+ ifeq ($(subdir),math)
+ tests += test-canonical-ldbl-96 test-totalorderl-ldbl-96 test-sinl-pseudo
++ifeq ($(have-ssp),yes)
+ CFLAGS-test-sinl-pseudo.c += -fstack-protector-all
+ endif
++endif # $(subdir) == math

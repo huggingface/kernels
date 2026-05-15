@@ -1,0 +1,92 @@
+commit 0455f251f494d30db4b52f11b5b0b7f285f775ef
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Feb 1 05:44:55 2020 -0800
+
+    i386: Use ENTRY/END in assembly codes
+    
+    Use ENTRY and END in assembly codes so that ENDBR32 will be added at
+    function entries when CET is enabled.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+---
+
+diff --git a/sysdeps/i386/nptl/pthread_spin_lock.S b/sysdeps/i386/nptl/pthread_spin_lock.S
+index 1980fec..8aa081b 100644
+--- a/sysdeps/i386/nptl/pthread_spin_lock.S
++++ b/sysdeps/i386/nptl/pthread_spin_lock.S
+@@ -15,12 +15,10 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <sysdep.h>
+ #include <lowlevellock.h>
+ 
+-	.globl	pthread_spin_lock
+-	.type	pthread_spin_lock,@function
+-	.align	16
+-pthread_spin_lock:
++ENTRY (pthread_spin_lock)
+ 	mov	4(%esp), %eax
+ 1:	LOCK
+ 	decl	0(%eax)
+@@ -34,4 +32,4 @@ pthread_spin_lock:
+ 	cmpl	$0, 0(%eax)
+ 	jg	1b
+ 	jmp	2b
+-	.size	pthread_spin_lock,.-pthread_spin_lock
++END (pthread_spin_lock)
+diff --git a/sysdeps/i386/nptl/pthread_spin_unlock.S b/sysdeps/i386/nptl/pthread_spin_unlock.S
+index 2e71086..2995001 100644
+--- a/sysdeps/i386/nptl/pthread_spin_unlock.S
++++ b/sysdeps/i386/nptl/pthread_spin_unlock.S
+@@ -16,15 +16,14 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-	.globl	pthread_spin_unlock
+-	.type	pthread_spin_unlock,@function
+-	.align	16
+-pthread_spin_unlock:
++#include <sysdep.h>
++
++ENTRY (pthread_spin_unlock)
+ 	movl	4(%esp), %eax
+ 	movl	$1, (%eax)
+ 	xorl	%eax, %eax
+ 	ret
+-	.size	pthread_spin_unlock,.-pthread_spin_unlock
++END (pthread_spin_unlock)
+ 
+ 	/* The implementation of pthread_spin_init is identical.  */
+ 	.globl	pthread_spin_init
+diff --git a/sysdeps/i386/pthread_spin_trylock.S b/sysdeps/i386/pthread_spin_trylock.S
+index 686dd8c..42cbdb7 100644
+--- a/sysdeps/i386/pthread_spin_trylock.S
++++ b/sysdeps/i386/pthread_spin_trylock.S
+@@ -16,6 +16,7 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <sysdep.h>
+ #include <pthread-errnos.h>
+ 
+ 
+@@ -25,10 +26,7 @@
+ # define LOCK lock
+ #endif
+ 
+-	.globl	pthread_spin_trylock
+-	.type	pthread_spin_trylock,@function
+-	.align	16
+-pthread_spin_trylock:
++ENTRY (pthread_spin_trylock)
+ 	movl	4(%esp), %edx
+ 	movl	$1, %eax
+ 	xorl	%ecx, %ecx
+@@ -43,4 +41,4 @@ pthread_spin_trylock:
+ 0:
+ #endif
+ 	ret
+-	.size	pthread_spin_trylock,.-pthread_spin_trylock
++END (pthread_spin_trylock)
+

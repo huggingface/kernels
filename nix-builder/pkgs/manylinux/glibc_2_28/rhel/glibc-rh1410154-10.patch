@@ -1,0 +1,42 @@
+commit e37c2cf299b61ce18f62852f6c5624c27829b610
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 31 18:48:43 2019 +0100
+
+    Move _dl_open_check to its original place in dl_open_worker
+    
+    This reverts the non-test change from commit d0093c5cefb7f7a4143f
+    ("Call _dl_open_check after relocation [BZ #24259]"), given that
+    the underlying bug has been fixed properly in commit 61b74477fa7f63
+    ("Remove all loaded objects if dlopen fails, ignoring NODELETE
+    [BZ #20839]").
+    
+    Tested on x86-64-linux-gnu, with and without --enable-cet.
+    
+    Change-Id: I995a6cfb89f25d2b0cf5e606428c2a93eb48fc33
+
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 25838b073ac1edaf..e13968d4d7c4c83f 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -619,6 +619,8 @@ dl_open_worker (void *a)
+   _dl_debug_state ();
+   LIBC_PROBE (map_complete, 3, args->nsid, r, new);
+ 
++  _dl_open_check (new);
++
+   /* Print scope information.  */
+   if (__glibc_unlikely (GLRO(dl_debug_mask) & DL_DEBUG_SCOPES))
+     _dl_show_scope (new, 0);
+@@ -699,12 +701,6 @@ dl_open_worker (void *a)
+ 	_dl_relocate_object (l, l->l_scope, reloc_mode, 0);
+     }
+ 
+-  /* NB: Workaround for [BZ #20839] which doesn't remove the NODELETE
+-     object when _dl_open_check throws an exception.  Move it after
+-     relocation to avoid leaving the NODELETE object mapped without
+-     relocation.  */
+-  _dl_open_check (new);
+-
+   /* This only performs the memory allocations.  The actual update of
+      the scopes happens below, after failure is impossible.  */
+   resize_scopes (new);

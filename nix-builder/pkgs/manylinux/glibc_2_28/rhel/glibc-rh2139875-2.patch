@@ -1,0 +1,31 @@
+commit c7a26cba2ab949216ac9ef245ca78696815ea4c4
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Aug 2 11:36:07 2019 +0000
+
+    Update Linux kernel version number in tst-mman-consts.py to 5.2.
+    
+    The tst-mman-consts.py test includes a kernel version number, to avoid
+    failures because of newly added constants in the kernel (if kernel
+    headers are newer than this version of glibc) or missing constants in
+    the kernel (if kernel headers are older than this version of glibc).
+    This patch updates it to 5.2 to reflect that the MAP_* constants in
+    glibc are still current as of that kernel version.
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/tst-mman-consts.py (main): Update Linux
+            kernel version number to 5.2.
+
+diff --git a/sysdeps/unix/sysv/linux/tst-mman-consts.py b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+index 4a2ddd49c4c7282b..9e326b1f31799a72 100644
+--- a/sysdeps/unix/sysv/linux/tst-mman-consts.py
++++ b/sysdeps/unix/sysv/linux/tst-mman-consts.py
+@@ -41,7 +41,7 @@ def main():
+                         help='C compiler (including options) to use')
+     args = parser.parse_args()
+     linux_version_headers = linux_kernel_version(args.cc)
+-    linux_version_glibc = (4, 20)
++    linux_version_glibc = (5, 2)
+     sys.exit(glibcextract.compare_macro_consts(
+         '#define _GNU_SOURCE 1\n'
+         '#include <sys/mman.h>\n',

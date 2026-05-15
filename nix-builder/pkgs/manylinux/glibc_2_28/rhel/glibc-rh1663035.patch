@@ -1,0 +1,22 @@
+commit 8c1aafc1f34d090a5b41dc527c33e8687f6a1287
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 21 16:08:55 2018 +0100
+
+    intl: Do not return NULL on asprintf failure in gettext [BZ #24018]
+    
+    Fixes commit 9695dd0c9309712ed8e9c17a7040fe7af347f2dc ("DCIGETTEXT:
+    Use getcwd, asprintf to construct absolute pathname").
+
+diff --git a/intl/dcigettext.c b/intl/dcigettext.c
+index 2a5036994824875b..25f47c5bd3b0ea04 100644
+--- a/intl/dcigettext.c
++++ b/intl/dcigettext.c
+@@ -631,7 +631,7 @@ DCIGETTEXT (const char *domainname, const char *msgid1, const char *msgid2,
+ 	  int ret = __asprintf (&xdirname, "%s/%s", cwd, dirname);
+ 	  free (cwd);
+ 	  if (ret < 0)
+-	      return NULL;
++	    goto return_untranslated;
+ 	  dirname = xdirname;
+ 	}
+ #ifndef IN_LIBGLOCALE

@@ -1,0 +1,379 @@
+commit 8f7a75d700af809eeb4363895078fabfb3a9d7c3
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Feb 17 16:49:40 2020 +0100
+
+    elf: Implement DT_AUDIT, DT_DEPAUDIT support [BZ #24943]
+    
+    binutils ld has supported --audit, --depaudit for a long time,
+    only support in glibc has been missing.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/Makefile
+	  (Test backport differences.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 5b0aeccb0a53c182..a6601ba84c8f4017 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -195,7 +195,8 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-sonamemove-link tst-sonamemove-dlopen \
+ 	 tst-auditmany tst-initfinilazyfail \
+ 	 tst-dlopenfail tst-dlopenfail-2 \
+-	 tst-filterobj tst-filterobj-dlopen tst-auxobj tst-auxobj-dlopen
++	 tst-filterobj tst-filterobj-dlopen tst-auxobj tst-auxobj-dlopen \
++	 tst-audit14 tst-audit15 tst-audit16
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -310,7 +311,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-initlazyfailmod tst-finilazyfailmod \
+ 		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2 \
+ 		tst-dlopenfailmod3 \
+-		tst-filterobj-flt tst-filterobj-aux tst-filterobj-filtee
++		tst-filterobj-flt tst-filterobj-aux tst-filterobj-filtee \
++		tst-auditlogmod-1 tst-auditlogmod-2 tst-auditlogmod-3
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1453,6 +1455,22 @@ $(objpfx)tst-auditmany.out: $(objpfx)tst-auditmanymod1.so \
+ tst-auditmany-ENV = \
+   LD_AUDIT=tst-auditmanymod1.so:tst-auditmanymod2.so:tst-auditmanymod3.so:tst-auditmanymod4.so:tst-auditmanymod5.so:tst-auditmanymod6.so:tst-auditmanymod7.so:tst-auditmanymod8.so:tst-auditmanymod9.so
+ 
++LDFLAGS-tst-audit14 = -Wl,--audit=tst-auditlogmod-1.so
++$(objpfx)tst-auditlogmod-1.so: $(libsupport)
++$(objpfx)tst-audit14.out: $(objpfx)tst-auditlogmod-1.so
++LDFLAGS-tst-audit15 = \
++  -Wl,--audit=tst-auditlogmod-1.so,--depaudit=tst-auditlogmod-2.so
++$(objpfx)tst-auditlogmod-2.so: $(libsupport)
++$(objpfx)tst-audit15.out: \
++  $(objpfx)tst-auditlogmod-1.so $(objpfx)tst-auditlogmod-2.so
++LDFLAGS-tst-audit16 = \
++  -Wl,--audit=tst-auditlogmod-1.so:tst-auditlogmod-2.so \
++  -Wl,--depaudit=tst-auditlogmod-3.so
++$(objpfx)tst-auditlogmod-3.so: $(libsupport)
++$(objpfx)tst-audit16.out: \
++  $(objpfx)tst-auditlogmod-1.so $(objpfx)tst-auditlogmod-2.so \
++  $(objpfx)tst-auditlogmod-3.so
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/rtld.c b/elf/rtld.c
+index c39cb8f2cd4bb1cc..d44facf5343b3301 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -151,9 +151,17 @@ static void audit_list_init (struct audit_list *);
+    not be called after audit_list_next.  */
+ static void audit_list_add_string (struct audit_list *, const char *);
+ 
++/* Add the audit strings from the link map, found in the dynamic
++   segment at TG (either DT_AUDIT and DT_DEPAUDIT).  Must be called
++   before audit_list_next.  */
++static void audit_list_add_dynamic_tag (struct audit_list *,
++					struct link_map *,
++					unsigned int tag);
++
+ /* Extract the next audit module from the audit list.  Only modules
+    for which dso_name_valid_for_suid is true are returned.  Must be
+-   called after all the audit_list_add_string calls.  */
++   called after all the audit_list_add_string,
++   audit_list_add_dynamic_tags calls.  */
+ static const char *audit_list_next (struct audit_list *);
+ 
+ /* This is a list of all the modes the dynamic loader can be in.  */
+@@ -233,6 +241,16 @@ audit_list_add_string (struct audit_list *list, const char *string)
+     list->current_tail = string;
+ }
+ 
++static void
++audit_list_add_dynamic_tag (struct audit_list *list, struct link_map *main_map,
++			    unsigned int tag)
++{
++  ElfW(Dyn) *info = main_map->l_info[ADDRIDX (tag)];
++  const char *strtab = (const char *) D_PTR (main_map, l_info[DT_STRTAB]);
++  if (info != NULL)
++    audit_list_add_string (list, strtab + info->d_un.d_val);
++}
++
+ static const char *
+ audit_list_next (struct audit_list *list)
+ {
+@@ -1630,6 +1648,9 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+     /* Assign a module ID.  Do this before loading any audit modules.  */
+     GL(dl_rtld_map).l_tls_modid = _dl_next_tls_modid ();
+ 
++  audit_list_add_dynamic_tag (&audit_list, main_map, DT_AUDIT);
++  audit_list_add_dynamic_tag (&audit_list, main_map, DT_DEPAUDIT);
++
+   /* If we have auditing DSOs to load, do it now.  */
+   bool need_security_init = true;
+   if (audit_list.length > 0)
+diff --git a/elf/tst-audit14.c b/elf/tst-audit14.c
+new file mode 100644
+index 0000000000000000..27ff8db9480a98cc
+--- /dev/null
++++ b/elf/tst-audit14.c
+@@ -0,0 +1,46 @@
++/* Main program with DT_AUDIT.  One audit module.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++
++static int
++do_test (void)
++{
++  /* Verify what the audit module has written.  This test assumes that
++     standard output has been redirected to a regular file.  */
++  FILE *fp = xfopen ("/dev/stdout", "r");
++
++  char *buffer = NULL;
++  size_t buffer_length = 0;
++  size_t line_length = xgetline (&buffer, &buffer_length, fp);
++  const char *message = "info: tst-auditlogmod-1.so loaded\n";
++  TEST_COMPARE_BLOB (message, strlen (message), buffer, line_length);
++
++  /* No more audit module output.  */
++  line_length = xgetline (&buffer, &buffer_length, fp);
++  TEST_COMPARE_BLOB ("", 0, buffer, line_length);
++
++  free (buffer);
++  xfclose (fp);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit15.c b/elf/tst-audit15.c
+new file mode 100644
+index 0000000000000000..cbd1589ec40653d1
+--- /dev/null
++++ b/elf/tst-audit15.c
+@@ -0,0 +1,50 @@
++/* Main program with DT_AUDIT and DT_DEPAUDIT.  Two audit modules.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++
++static int
++do_test (void)
++{
++  /* Verify what the audit modules have written.  This test assumes
++     that standard output has been redirected to a regular file.  */
++  FILE *fp = xfopen ("/dev/stdout", "r");
++
++  char *buffer = NULL;
++  size_t buffer_length = 0;
++  size_t line_length = xgetline (&buffer, &buffer_length, fp);
++  const char *message = "info: tst-auditlogmod-1.so loaded\n";
++  TEST_COMPARE_BLOB (message, strlen (message), buffer, line_length);
++
++  line_length = xgetline (&buffer, &buffer_length, fp);
++  message = "info: tst-auditlogmod-2.so loaded\n";
++  TEST_COMPARE_BLOB (message, strlen (message), buffer, line_length);
++
++  /* No more audit module output.  */
++  line_length = xgetline (&buffer, &buffer_length, fp);
++  TEST_COMPARE_BLOB ("", 0, buffer, line_length);
++
++  free (buffer);
++  xfclose (fp);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit16.c b/elf/tst-audit16.c
+new file mode 100644
+index 0000000000000000..dd6ce189ea6fffa3
+--- /dev/null
++++ b/elf/tst-audit16.c
+@@ -0,0 +1,54 @@
++/* Main program with DT_AUDIT and DT_DEPAUDIT.  Three audit modules.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++
++static int
++do_test (void)
++{
++  /* Verify what the audit modules have written.  This test assumes
++     that standard output has been redirected to a regular file.  */
++  FILE *fp = xfopen ("/dev/stdout", "r");
++
++  char *buffer = NULL;
++  size_t buffer_length = 0;
++  size_t line_length = xgetline (&buffer, &buffer_length, fp);
++  const char *message = "info: tst-auditlogmod-1.so loaded\n";
++  TEST_COMPARE_BLOB (message, strlen (message), buffer, line_length);
++
++  line_length = xgetline (&buffer, &buffer_length, fp);
++  message = "info: tst-auditlogmod-2.so loaded\n";
++  TEST_COMPARE_BLOB (message, strlen (message), buffer, line_length);
++
++  line_length = xgetline (&buffer, &buffer_length, fp);
++  message = "info: tst-auditlogmod-3.so loaded\n";
++  TEST_COMPARE_BLOB (message, strlen (message), buffer, line_length);
++
++  /* No more audit module output.  */
++  line_length = xgetline (&buffer, &buffer_length, fp);
++  TEST_COMPARE_BLOB ("", 0, buffer, line_length);
++
++  free (buffer);
++  xfclose (fp);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-auditlogmod-1.c b/elf/tst-auditlogmod-1.c
+new file mode 100644
+index 0000000000000000..db9dac4c01a58dcd
+--- /dev/null
++++ b/elf/tst-auditlogmod-1.c
+@@ -0,0 +1,27 @@
++/* Audit module which logs that it was loaded.  Variant 1.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <support/support.h>
++
++unsigned int
++la_version (unsigned int v)
++{
++  write_message ("info: tst-auditlogmod-1.so loaded\n");
++  return LAV_CURRENT;
++}
+diff --git a/elf/tst-auditlogmod-2.c b/elf/tst-auditlogmod-2.c
+new file mode 100644
+index 0000000000000000..871c22641c47fed0
+--- /dev/null
++++ b/elf/tst-auditlogmod-2.c
+@@ -0,0 +1,27 @@
++/* Audit module which logs that it was loaded.  Variant 2.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <support/support.h>
++
++unsigned int
++la_version (unsigned int v)
++{
++  write_message ("info: tst-auditlogmod-2.so loaded\n");
++  return LAV_CURRENT;
++}
+diff --git a/elf/tst-auditlogmod-3.c b/elf/tst-auditlogmod-3.c
+new file mode 100644
+index 0000000000000000..da2ee19d4ab9e861
+--- /dev/null
++++ b/elf/tst-auditlogmod-3.c
+@@ -0,0 +1,27 @@
++/* Audit module which logs that it was loaded.  Variant 3.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <support/support.h>
++
++unsigned int
++la_version (unsigned int v)
++{
++  write_message ("info: tst-auditlogmod-3.so loaded\n");
++  return LAV_CURRENT;
++}

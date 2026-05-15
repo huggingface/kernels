@@ -1,0 +1,46 @@
+commit 70ba28f7ab2923d4e36ffc9d5d2e32357353b25c
+Author: Lucas A. M. Magalhaes <lamm@linux.ibm.com>
+Date:   Thu Jan 16 10:39:12 2020 -0300
+
+    Fix tst-pkey.c pkey_alloc return checks and manual
+    
+    This test was failing in some powerpc systems as it was not checking
+    for ENOSPC return.
+    
+    As said on the Linux man-pages and can be observed by the implementation
+    at mm/mprotect.c in the Linux Kernel source.  The syscall pkey_alloc can
+    return EINVAL or ENOSPC.  ENOSPC will indicate either that all keys are
+    in use or that the kernel does not support pkeys.
+    
+    Reviewed-by: Gabriel F. T. Gomes <gabriel@inconstante.net.br>
+
+diff --git a/manual/memory.texi b/manual/memory.texi
+index a1435aad1acd3239..4731a38bcc5701e0 100644
+--- a/manual/memory.texi
++++ b/manual/memory.texi
+@@ -3289,6 +3289,10 @@ in which memory protection keys are disabled.
+ 
+ @item ENOSPC
+ All available protection keys already have been allocated.
++
++The system does not implement memory protection keys or runs in a mode
++in which memory protection keys are disabled.
++
+ @end table
+ @end deftypefun
+ 
+diff --git a/sysdeps/unix/sysv/linux/tst-pkey.c b/sysdeps/unix/sysv/linux/tst-pkey.c
+index 600b6f0098def773..40d7e9f24dec3e57 100644
+--- a/sysdeps/unix/sysv/linux/tst-pkey.c
++++ b/sysdeps/unix/sysv/linux/tst-pkey.c
+@@ -199,6 +199,10 @@ do_test (void)
+       if (errno == EINVAL)
+         FAIL_UNSUPPORTED
+           ("CPU does not support memory protection keys: %m");
++      if (errno == ENOSPC)
++        FAIL_UNSUPPORTED
++          ("no keys available or kernel does not support memory"
++           " protection keys");
+       FAIL_EXIT1 ("pkey_alloc: %m");
+     }
+   TEST_COMPARE (pkey_get (keys[0]), 0);

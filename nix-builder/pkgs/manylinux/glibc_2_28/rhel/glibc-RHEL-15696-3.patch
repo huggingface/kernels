@@ -1,0 +1,396 @@
+From 231c56760c1e2ded21ad96bbb860b1f08c556c7a Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 21 Jan 2019 11:27:25 -0800
+Subject: [PATCH] x86-64 memcpy: Properly handle the length parameter [BZ#
+ 24097]
+Content-type: text/plain; charset=UTF-8
+
+On x32, the size_t parameter may be passed in the lower 32 bits of a
+64-bit register with the non-zero upper 32 bits.  The string/memory
+functions written in assembly can only use the lower 32 bits of a
+64-bit register as length or must clear the upper 32 bits before using
+the full 64-bit register for length.
+
+This pach fixes memcpy for x32.  Tested on x86-64 and x32.  On x86-64,
+libc.so is the same with and withou the fix.
+
+	[BZ# 24097]
+	CVE-2019-6488
+	* sysdeps/x86_64/multiarch/memcpy-ssse3-back.S: Use RDX_LP for
+	length.  Clear the upper 32 bits of RDX register.
+	* sysdeps/x86_64/multiarch/memcpy-ssse3.S: Likewise.
+	* sysdeps/x86_64/multiarch/memmove-avx512-no-vzeroupper.S:
+	Likewise.
+	* sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:
+	Likewise.
+	* sysdeps/x86_64/x32/Makefile (tests): Add tst-size_t-memcpy.
+	tst-size_t-wmemchr.
+	* sysdeps/x86_64/x32/tst-size_t-memcpy.c: New file.
+---
+ sysdeps/x86_64/multiarch/memcpy-ssse3-back.S  | 17 ++++--
+ sysdeps/x86_64/multiarch/memcpy-ssse3.S       | 17 ++++--
+ .../multiarch/memmove-avx512-no-vzeroupper.S  | 16 +++--
+ .../multiarch/memmove-vec-unaligned-erms.S    | 54 +++++++++--------
+ sysdeps/x86_64/x32/Makefile                   |  2 +-
+ sysdeps/x86_64/x32/tst-size_t-memcpy.c        | 58 +++++++++++++++++++
+ 6 files changed, 122 insertions(+), 42 deletions(-)
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-memcpy.c
+
+Conflicts:
+	ChangeLog
+	(removed)
+
+diff --git a/sysdeps/x86_64/multiarch/memcpy-ssse3-back.S b/sysdeps/x86_64/multiarch/memcpy-ssse3-back.S
+index 3cd11233..568eebd3 100644
+--- a/sysdeps/x86_64/multiarch/memcpy-ssse3-back.S
++++ b/sysdeps/x86_64/multiarch/memcpy-ssse3-back.S
+@@ -45,28 +45,33 @@
+ 	.section .text.ssse3,"ax",@progbits
+ #if !defined USE_AS_MEMPCPY && !defined USE_AS_MEMMOVE
+ ENTRY (MEMPCPY_CHK)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMPCPY_CHK)
+ 
+ ENTRY (MEMPCPY)
+-	movq	%rdi, %rax
+-	addq	%rdx, %rax
++	mov	%RDI_LP, %RAX_LP
++	add	%RDX_LP, %RAX_LP
+ 	jmp	L(start)
+ END (MEMPCPY)
+ #endif
+ 
+ #if !defined USE_AS_BCOPY
+ ENTRY (MEMCPY_CHK)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMCPY_CHK)
+ #endif
+ 
+ ENTRY (MEMCPY)
+-	mov	%rdi, %rax
++	mov	%RDI_LP, %RAX_LP
+ #ifdef USE_AS_MEMPCPY
+-	add	%rdx, %rax
++	add	%RDX_LP, %RAX_LP
++#endif
++
++#ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
+ #endif
+ 
+ #ifdef USE_AS_MEMMOVE
+diff --git a/sysdeps/x86_64/multiarch/memcpy-ssse3.S b/sysdeps/x86_64/multiarch/memcpy-ssse3.S
+index 0240bfa3..0bd5ee99 100644
+--- a/sysdeps/x86_64/multiarch/memcpy-ssse3.S
++++ b/sysdeps/x86_64/multiarch/memcpy-ssse3.S
+@@ -45,28 +45,33 @@
+ 	.section .text.ssse3,"ax",@progbits
+ #if !defined USE_AS_MEMPCPY && !defined USE_AS_MEMMOVE
+ ENTRY (MEMPCPY_CHK)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMPCPY_CHK)
+ 
+ ENTRY (MEMPCPY)
+-	movq	%rdi, %rax
+-	addq	%rdx, %rax
++	mov	%RDI_LP, %RAX_LP
++	add	%RDX_LP, %RAX_LP
+ 	jmp	L(start)
+ END (MEMPCPY)
+ #endif
+ 
+ #if !defined USE_AS_BCOPY
+ ENTRY (MEMCPY_CHK)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMCPY_CHK)
+ #endif
+ 
+ ENTRY (MEMCPY)
+-	mov	%rdi, %rax
++	mov	%RDI_LP, %RAX_LP
+ #ifdef USE_AS_MEMPCPY
+-	add	%rdx, %rax
++	add	%RDX_LP, %RAX_LP
++#endif
++
++#ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
+ #endif
+ 
+ #ifdef USE_AS_MEMMOVE
+diff --git a/sysdeps/x86_64/multiarch/memmove-avx512-no-vzeroupper.S b/sysdeps/x86_64/multiarch/memmove-avx512-no-vzeroupper.S
+index effc3ac2..6ca2bbc9 100644
+--- a/sysdeps/x86_64/multiarch/memmove-avx512-no-vzeroupper.S
++++ b/sysdeps/x86_64/multiarch/memmove-avx512-no-vzeroupper.S
+@@ -24,27 +24,31 @@
+ 
+ 	.section .text.avx512,"ax",@progbits
+ ENTRY (__mempcpy_chk_avx512_no_vzeroupper)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (__mempcpy_chk_avx512_no_vzeroupper)
+ 
+ ENTRY (__mempcpy_avx512_no_vzeroupper)
+-	movq	%rdi, %rax
+-	addq	%rdx, %rax
++	mov	%RDI_LP, %RAX_LP
++	add	%RDX_LP, %RAX_LP
+ 	jmp	L(start)
+ END (__mempcpy_avx512_no_vzeroupper)
+ 
+ ENTRY (__memmove_chk_avx512_no_vzeroupper)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (__memmove_chk_avx512_no_vzeroupper)
+ 
+ ENTRY (__memmove_avx512_no_vzeroupper)
+-	mov	%rdi, %rax
++	mov	%RDI_LP, %RAX_LP
+ # ifdef USE_AS_MEMPCPY
+-	add	%rdx, %rax
++	add	%RDX_LP, %RAX_LP
+ # endif
+ L(start):
++# ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	mov	%edx, %edx
++# endif
+ 	lea	(%rsi, %rdx), %rcx
+ 	lea	(%rdi, %rdx), %r9
+ 	cmp	$512, %rdx
+diff --git a/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S b/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S
+index c952576c..274aa1c7 100644
+--- a/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S
+@@ -95,20 +95,20 @@
+ 	.section SECTION(.text),"ax",@progbits
+ #if defined SHARED && IS_IN (libc)
+ ENTRY (MEMMOVE_CHK_SYMBOL (__mempcpy_chk, unaligned))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMMOVE_CHK_SYMBOL (__mempcpy_chk, unaligned))
+ #endif
+ 
+ ENTRY (MEMPCPY_SYMBOL (__mempcpy, unaligned))
+-	movq	%rdi, %rax
+-	addq	%rdx, %rax
++	mov	%RDI_LP, %RAX_LP
++	add	%RDX_LP, %RAX_LP
+ 	jmp	L(start)
+ END (MEMPCPY_SYMBOL (__mempcpy, unaligned))
+ 
+ #if defined SHARED && IS_IN (libc)
+ ENTRY (MEMMOVE_CHK_SYMBOL (__memmove_chk, unaligned))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMMOVE_CHK_SYMBOL (__memmove_chk, unaligned))
+ #endif
+@@ -116,9 +116,13 @@ END (MEMMOVE_CHK_SYMBOL (__memmove_chk, unaligned))
+ ENTRY (MEMMOVE_SYMBOL (__memmove, unaligned))
+ 	movq	%rdi, %rax
+ L(start):
+-	cmpq	$VEC_SIZE, %rdx
++# ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	movl	%edx, %edx
++# endif
++	cmp	$VEC_SIZE, %RDX_LP
+ 	jb	L(less_vec)
+-	cmpq	$(VEC_SIZE * 2), %rdx
++	cmp	$(VEC_SIZE * 2), %RDX_LP
+ 	ja	L(more_2x_vec)
+ #if !defined USE_MULTIARCH || !IS_IN (libc)
+ L(last_2x_vec):
+@@ -138,38 +142,38 @@ END (MEMMOVE_SYMBOL (__memmove, unaligned))
+ 
+ # if VEC_SIZE == 16
+ ENTRY (__mempcpy_chk_erms)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (__mempcpy_chk_erms)
+ 
+ /* Only used to measure performance of REP MOVSB.  */
+ ENTRY (__mempcpy_erms)
+-	movq	%rdi, %rax
++	mov	%RDI_LP, %RAX_LP
+ 	/* Skip zero length.  */
+-	testq	%rdx, %rdx
++	test	%RDX_LP, %RDX_LP
+ 	jz	2f
+-	addq	%rdx, %rax
++	add	%RDX_LP, %RAX_LP
+ 	jmp	L(start_movsb)
+ END (__mempcpy_erms)
+ 
+ ENTRY (__memmove_chk_erms)
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (__memmove_chk_erms)
+ 
+ ENTRY (__memmove_erms)
+ 	movq	%rdi, %rax
+ 	/* Skip zero length.  */
+-	testq	%rdx, %rdx
++	test	%RDX_LP, %RDX_LP
+ 	jz	2f
+ L(start_movsb):
+-	movq	%rdx, %rcx
+-	cmpq	%rsi, %rdi
++	mov	%RDX_LP, %RCX_LP
++	cmp	%RSI_LP, %RDI_LP
+ 	jb	1f
+ 	/* Source == destination is less common.  */
+ 	je	2f
+-	leaq	(%rsi,%rcx), %rdx
+-	cmpq	%rdx, %rdi
++	lea	(%rsi,%rcx), %RDX_LP
++	cmp	%RDX_LP, %RDI_LP
+ 	jb	L(movsb_backward)
+ 1:
+ 	rep movsb
+@@ -189,20 +193,20 @@ strong_alias (__memmove_chk_erms, __memcpy_chk_erms)
+ 
+ # ifdef SHARED
+ ENTRY (MEMMOVE_CHK_SYMBOL (__mempcpy_chk, unaligned_erms))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMMOVE_CHK_SYMBOL (__mempcpy_chk, unaligned_erms))
+ # endif
+ 
+ ENTRY (MEMMOVE_SYMBOL (__mempcpy, unaligned_erms))
+-	movq	%rdi, %rax
+-	addq	%rdx, %rax
++	mov	%RDI_LP, %RAX_LP
++	add	%RDX_LP, %RAX_LP
+ 	jmp	L(start_erms)
+ END (MEMMOVE_SYMBOL (__mempcpy, unaligned_erms))
+ 
+ # ifdef SHARED
+ ENTRY (MEMMOVE_CHK_SYMBOL (__memmove_chk, unaligned_erms))
+-	cmpq	%rdx, %rcx
++	cmp	%RDX_LP, %RCX_LP
+ 	jb	HIDDEN_JUMPTARGET (__chk_fail)
+ END (MEMMOVE_CHK_SYMBOL (__memmove_chk, unaligned_erms))
+ # endif
+@@ -210,9 +214,13 @@ END (MEMMOVE_CHK_SYMBOL (__memmove_chk, unaligned_erms))
+ ENTRY (MEMMOVE_SYMBOL (__memmove, unaligned_erms))
+ 	movq	%rdi, %rax
+ L(start_erms):
+-	cmpq	$VEC_SIZE, %rdx
++# ifdef __ILP32__
++	/* Clear the upper 32 bits.  */
++	movl	%edx, %edx
++# endif
++	cmp	$VEC_SIZE, %RDX_LP
+ 	jb	L(less_vec)
+-	cmpq	$(VEC_SIZE * 2), %rdx
++	cmp	$(VEC_SIZE * 2), %RDX_LP
+ 	ja	L(movsb_more_2x_vec)
+ L(last_2x_vec):
+ 	/* From VEC and to 2 * VEC.  No branch when size == VEC_SIZE. */
+@@ -236,7 +244,7 @@ L(movsb):
+ 	/* Avoid slow backward REP MOVSB.  */
+ 	jb	L(more_8x_vec_backward)
+ 1:
+-	movq	%rdx, %rcx
++	mov	%RDX_LP, %RCX_LP
+ 	rep movsb
+ L(nop):
+ 	ret
+diff --git a/sysdeps/x86_64/x32/Makefile b/sysdeps/x86_64/x32/Makefile
+index ddec7f04..2fe1e5ac 100644
+--- a/sysdeps/x86_64/x32/Makefile
++++ b/sysdeps/x86_64/x32/Makefile
+@@ -6,7 +6,7 @@ CFLAGS-s_llround.c += -fno-builtin-lround
+ endif
+ 
+ ifeq ($(subdir),string)
+-tests += tst-size_t-memchr tst-size_t-memcmp
++tests += tst-size_t-memchr tst-size_t-memcmp tst-size_t-memcpy
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+diff --git a/sysdeps/x86_64/x32/tst-size_t-memcpy.c b/sysdeps/x86_64/x32/tst-size_t-memcpy.c
+new file mode 100644
+index 00000000..66b71e17
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-memcpy.c
+@@ -0,0 +1,58 @@
++/* Test memcpy with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define TEST_NAME "memcpy"
++#include "test-size_t.h"
++
++IMPL (memcpy, 1)
++
++typedef void *(*proto_t) (void *, const void *, size_t);
++
++static void *
++__attribute__ ((noinline, noclone))
++do_memcpy (parameter_t a, parameter_t b)
++{
++  return CALL (&b, a.p, b.p, a.len);
++}
++
++static int
++test_main (void)
++{
++  test_init ();
++
++  parameter_t dest = { { page_size }, buf1 };
++  parameter_t src = { { 0 }, buf2 };
++
++  int ret = 0;
++  FOR_EACH_IMPL (impl, 0)
++    {
++      src.fn = impl->fn;
++      do_memcpy (dest, src);
++      int res = memcmp (dest.p, src.p, dest.len);
++      if (res)
++	{
++	  error (0, 0, "Wrong result in function %s: %i != 0",
++		 impl->name, res);
++	  ret = 1;
++	}
++    }
++
++  return ret ? EXIT_FAILURE : EXIT_SUCCESS;
++}
++
++#include <support/test-driver.c>
+-- 
+GitLab
+

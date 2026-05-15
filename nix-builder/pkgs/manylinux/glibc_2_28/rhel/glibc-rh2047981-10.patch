@@ -1,0 +1,31 @@
+commit 88361b408b9dbd313f15413cc2e6be0f1cafb01a
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Tue Aug 17 19:36:04 2021 -0700
+
+    elf: Copy l_addr/l_ld when adding ld.so to a new namespace
+    
+    When add ld.so to a new namespace, we don't actually load ld.so.  We
+    create a new link map and refers the real one for almost everything.
+    Copy l_addr and l_ld from the real ld.so link map to avoid GDB warning:
+    
+    warning: .dynamic section for ".../elf/ld-linux-x86-64.so.2" is not at the expected address (wrong library or version mismatch?)
+    
+    when handling shared library loaded by dlmopen.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index cdb5d4b5b67f1ca1..303e6594f9af9b7e 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -932,6 +932,10 @@ _dl_map_object_from_fd (const char *name, const char *origname, int fd,
+       /* Refer to the real descriptor.  */
+       l->l_real = &GL(dl_rtld_map);
+ 
++      /* Copy l_addr and l_ld to avoid a GDB warning with dlmopen().  */
++      l->l_addr = l->l_real->l_addr;
++      l->l_ld = l->l_real->l_ld;
++
+       /* No need to bump the refcount of the real object, ld.so will
+ 	 never be unloaded.  */
+       __close_nocancel (fd);

@@ -1,0 +1,318 @@
+commit 421749d693c4147017bc55f5ac3227c3a6e4bf31
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Fri Mar 22 11:14:09 2019 +0100
+
+    S390: Add arch13 memmem ifunc variant.
+    
+    This patch introduces the new arch13 ifunc variant for memmem.
+    For needles longer than 9 bytes it is relying on the common-code
+    implementation.  For shorter needles it is using the new vstrs instruction
+    which is able to search a substring within a vector register.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/Makefile (sysdep_routines): Add memmem-arch13.
+            * sysdeps/s390/ifunc-memmem.h (HAVE_MEMMEM_ARCH13, MEMMEM_ARCH13,
+            MEMMEM_Z13_ONLY_USED_AS_FALLBACK, HAVE_MEMMEM_IFUNC_AND_ARCH13_SUPPORT):
+            New defines.
+            * sysdeps/s390/memmem-arch13.S: New file.
+            * sysdeps/s390/memmem-vx.c: Omit GI symbol for z13 memmem ifunc variant
+            if it is only used as fallback.
+            * sysdeps/s390/memmem.c (memmem): Add arch13 variant in ifunc selector.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Add ifunc variant for arch13 memmem.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 7287b1833da9500f..8bc82e523f9049db 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -36,7 +36,7 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   mempcpy memcpy memcpy-z900 \
+ 		   memmove memmove-c \
+ 		   strstr strstr-arch13 strstr-vx strstr-c \
+-		   memmem memmem-vx memmem-c \
++		   memmem memmem-arch13 memmem-vx memmem-c \
+ 		   strlen strlen-vx strlen-c \
+ 		   strnlen strnlen-vx strnlen-c \
+ 		   strcpy strcpy-vx strcpy-z900 \
+diff --git a/sysdeps/s390/ifunc-memmem.h b/sysdeps/s390/ifunc-memmem.h
+index 0f860d8d40080acf..48079b22b070f381 100644
+--- a/sysdeps/s390/ifunc-memmem.h
++++ b/sysdeps/s390/ifunc-memmem.h
+@@ -17,7 +17,7 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #if defined USE_MULTIARCH && IS_IN (libc)		\
+-  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++  && ! defined HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
+ # define HAVE_MEMMEM_IFUNC	1
+ #else
+ # define HAVE_MEMMEM_IFUNC	0
+@@ -29,14 +29,32 @@
+ # define HAVE_MEMMEM_IFUNC_AND_VX_SUPPORT 0
+ #endif
+ 
+-#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++#ifdef HAVE_S390_ARCH13_ASM_SUPPORT
++# define HAVE_MEMMEM_IFUNC_AND_ARCH13_SUPPORT HAVE_MEMMEM_IFUNC
++#else
++# define HAVE_MEMMEM_IFUNC_AND_ARCH13_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
++# define MEMMEM_DEFAULT		MEMMEM_ARCH13
++# define HAVE_MEMMEM_C		0
++# define HAVE_MEMMEM_Z13	1
++# define MEMMEM_Z13_ONLY_USED_AS_FALLBACK 1
++# define HAVE_MEMMEM_ARCH13	1
++#elif defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
+ # define MEMMEM_DEFAULT		MEMMEM_Z13
+ # define HAVE_MEMMEM_C		0
+ # define HAVE_MEMMEM_Z13	1
++# define HAVE_MEMMEM_ARCH13	HAVE_MEMMEM_IFUNC_AND_ARCH13_SUPPORT
+ #else
+ # define MEMMEM_DEFAULT		MEMMEM_C
+ # define HAVE_MEMMEM_C		1
+ # define HAVE_MEMMEM_Z13	HAVE_MEMMEM_IFUNC_AND_VX_SUPPORT
++# define HAVE_MEMMEM_ARCH13	HAVE_MEMMEM_IFUNC_AND_ARCH13_SUPPORT
++#endif
++
++#ifndef MEMMEM_Z13_ONLY_USED_AS_FALLBACK
++# define MEMMEM_Z13_ONLY_USED_AS_FALLBACK 0
+ #endif
+ 
+ #if HAVE_MEMMEM_C
+@@ -50,3 +68,9 @@
+ #else
+ # define MEMMEM_Z13		NULL
+ #endif
++
++#if HAVE_MEMMEM_ARCH13
++# define MEMMEM_ARCH13		__memmem_arch13
++#else
++# define MEMMEM_ARCH13		NULL
++#endif
+diff --git a/sysdeps/s390/memmem-arch13.S b/sysdeps/s390/memmem-arch13.S
+new file mode 100644
+index 0000000000000000..b59d60acf0f6aaa0
+--- /dev/null
++++ b/sysdeps/s390/memmem-arch13.S
+@@ -0,0 +1,161 @@
++/* Vector optimized 32/64 bit S/390 version of memmem.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-memmem.h>
++#if HAVE_MEMMEM_ARCH13
++# include "sysdep.h"
++# include "asm-syntax.h"
++	.text
++
++/* void *memmem(const void *haystack=r2, size_t haystacklen=r3,
++		const void *needle=r4, size_t needlelen=r5);
++   Locate a substring.  */
++ENTRY(MEMMEM_ARCH13)
++	.machine "arch13"
++	.machinemode "zarch_nohighgprs"
++# if ! defined __s390x__
++	llgfr	%r3,%r3
++	llgfr	%r5,%r5
++	llgfr	%r4,%r4
++	llgfr	%r2,%r2
++# endif /* ! defined __s390x__ */
++	clgrjl	%r3,%r5,.Lend_no_match	/* Haystack < needle?  */
++
++	/* Jump to fallback if needle > 9.  See also strstr-arch13.S.  */
++# if ! HAVE_MEMMEM_Z13
++#  error The arch13 variant of memmem needs the z13 variant of memmem!
++# endif
++	clgfi	%r5,9
++	jh	MEMMEM_Z13
++
++	aghik	%r0,%r5,-1		/* vll needs highest index.  */
++	bc	4,0(%r14)		/* cc==1: return if needle-len == 0.  */
++	vll	%v18,%r0,0(%r4)		/* Load needle.  */
++	vlvgb	%v19,%r5,7		/* v19[7] contains length of needle.  */
++
++	clgijh	%r3,16,.Lhaystack_larger_16
++.Lhaystack_smaller_16_on_bb:
++	aghik	%r0,%r3,-1		/* vll needs highest index.  */
++	vll	%v16,%r0,0(%r2)		/* Load haystack.  */
++.Lhaystack_smaller_16:
++	sgr	%r3,%r5			/* r3 = largest valid match-index.  */
++	jl	.Lend_no_match		/* Haystack-len < needle-len?  */
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	/* Vector string search without zero search where v20 will contain
++	   the index of a partial/full match or 16 (index is named k).
++	   cc=0 (no match; k=16): .Lend_no_match
++	   cc=1 (only available with zero-search): Ignore
++	   cc=2 (full match; k<16): Needle found, but could be beyond haystack!
++	   cc=3 (partial match; k<16): Always at end of v16 and thus beyond!  */
++	brc	9,.Lend_no_match	/* Jump away if cc == 0 || cc == 3.  */
++	vlgvb	%r1,%v20,7
++	/* Verify that the full-match (cc=2) is valid!  */
++	clgrjh	%r1,%r3,.Lend_no_match	/* Jump away if match is beyond.  */
++	la	%r2,0(%r1,%r2)
++	br	%r14
++.Lend_no_match:
++	lghi	%r2,0
++	br	%r14
++
++.Lhaystack_larger_16:
++	vl	%v16,0(%r2)
++	lghi	%r1,17
++	lay	%r4,-16(%r3,%r2)	/* Boundary for loading with vl.  */
++	lay	%r0,-64(%r3,%r2)	/* Boundary for loading with 4xvl.  */
++	/* See also strstr-arch13.S:
++	   min-skip-partial-match-index = (16 - n_len) + 1  */
++	sgr	%r1,%r5
++	clgfi	%r3,64			/* Set Boundary to zero ...  */
++	la	%r3,0(%r3,%r2)
++	locghil	%r0,0			/* ... if haystack < 64bytes.  */
++	jh	.Lloop64
++.Lloop:
++	la	%r2,16(%r2)
++	/* Vector string search with zero search.  cc=0 => no match.  */
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jne	.Lloop_vstrs_nonzero_cc
++	clgrjh	%r2,%r4,.Lhaystack_too_small
++.Lloop16:
++	vl	%v16,0(%r2)
++	la	%r2,16(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jne	.Lloop_vstrs_nonzero_cc
++	clgrjle	%r2,%r4,.Lloop16
++.Lhaystack_too_small:
++	sgr	%r3,%r2			/* r3 = (haystack + len) - curr_pos  */
++	je	.Lend_no_match		/* Remaining haystack is empty.  */
++	lcbb	%r0,0(%r2),6
++	jo	.Lhaystack_smaller_16_on_bb
++	vl	%v16,0(%r2)		/* Load haystack.  */
++	j	.Lhaystack_smaller_16
++
++.Lend_match_found:
++	vlgvb	%r4,%v20,7
++	sgr	%r2,%r1
++	la	%r2,0(%r4,%r2)
++	br	%r14
++
++.Lloop_vstrs_nonzero_cc32:
++	la	%r2,16(%r2)
++.Lloop_vstrs_nonzero_cc16:
++	la	%r2,16(%r2)
++.Lloop_vstrs_nonzero_cc0:
++	la	%r2,16(%r2)
++.Lloop_vstrs_nonzero_cc:
++	lay	%r2,-16(%r1,%r2)	/* Compute next load address.  */
++	jh	.Lend_match_found	/* cc == 2 (full match)  */
++	clgrjh	%r2,%r4,.Lhaystack_too_small
++	vl	%v16,0(%r2)
++.Lloop_vstrs_nonzero_cc_loop:
++	la	%r2,0(%r1,%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jh	.Lend_match_found
++	clgrjh	%r2,%r4,.Lhaystack_too_small
++	vl	%v16,0(%r2)		/* Next part of haystack.  */
++	jo	.Lloop_vstrs_nonzero_cc_loop
++	/* Case: no-match.  */
++	clgrjh	%r2,%r0,.Lloop	/* Jump away if haystack has less than 64b.  */
++.Lloop64:
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jne	.Lloop_vstrs_nonzero_cc0
++	vl	%v16,16(%r2)		/* Next part of haystack.  */
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jne	.Lloop_vstrs_nonzero_cc16
++	vl	%v16,32(%r2)		/* Next part of haystack.  */
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jne	.Lloop_vstrs_nonzero_cc32
++	vl	%v16,48(%r2)		/* Next part of haystack.  */
++	la	%r2,64(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,0
++	jne	.Lloop_vstrs_nonzero_cc
++	clgrjh	%r2,%r4,.Lhaystack_too_small
++	vl	%v16,0(%r2)		/* Next part of haystack.  */
++	clgrjle	%r2,%r0,.Lloop64
++	j	.Lloop
++END(MEMMEM_ARCH13)
++
++# if ! HAVE_MEMMEM_IFUNC
++strong_alias (MEMMEM_ARCH13, __memmem)
++weak_alias (__memmem, memmem)
++# endif
++
++# if MEMMEM_Z13_ONLY_USED_AS_FALLBACK && defined SHARED && IS_IN (libc)
++weak_alias (MEMMEM_ARCH13, __GI_memmem)
++strong_alias (MEMMEM_ARCH13, __GI___memmem)
++# endif
++#endif
+diff --git a/sysdeps/s390/memmem-vx.c b/sysdeps/s390/memmem-vx.c
+index af6e200e4e0af1a5..e5608be77f05f2a9 100644
+--- a/sysdeps/s390/memmem-vx.c
++++ b/sysdeps/s390/memmem-vx.c
+@@ -20,7 +20,7 @@
+ 
+ #if HAVE_MEMMEM_Z13
+ # include <string.h>
+-# if HAVE_MEMMEM_IFUNC
++# if HAVE_MEMMEM_IFUNC || MEMMEM_Z13_ONLY_USED_AS_FALLBACK
+ 
+ #  ifndef _LIBC
+ #   define memmem MEMMEM_Z13
+@@ -32,7 +32,7 @@
+ #   undef libc_hidden_def
+ #   undef libc_hidden_weak
+ 
+-#   if HAVE_MEMMEM_C
++#   if HAVE_MEMMEM_C || MEMMEM_Z13_ONLY_USED_AS_FALLBACK
+ #    define libc_hidden_def(name)
+ #    define libc_hidden_weak(name)
+ #   else
+diff --git a/sysdeps/s390/memmem.c b/sysdeps/s390/memmem.c
+index 8c50b3f403eb8d1f..28871cd4b24868cc 100644
+--- a/sysdeps/s390/memmem.c
++++ b/sysdeps/s390/memmem.c
+@@ -34,8 +34,14 @@ extern __typeof (__redirect_memmem) MEMMEM_C attribute_hidden;
+ extern __typeof (__redirect_memmem) MEMMEM_Z13 attribute_hidden;
+ # endif
+ 
++# if HAVE_MEMMEM_ARCH13
++extern __typeof (__redirect_memmem) MEMMEM_ARCH13 attribute_hidden;
++# endif
++
+ s390_libc_ifunc_expr (__redirect_memmem, __memmem,
+-		      (HAVE_MEMMEM_Z13 && (hwcap & HWCAP_S390_VX))
++		      (HAVE_MEMMEM_ARCH13 && (hwcap & HWCAP_S390_VXRS_EXT2))
++		      ? MEMMEM_ARCH13
++		      : (HAVE_MEMMEM_Z13 && (hwcap & HWCAP_S390_VX))
+ 		      ? MEMMEM_Z13
+ 		      : MEMMEM_DEFAULT
+ 		      )
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 67a6a9c94afccd48..787d40688f4110ff 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -202,6 +202,10 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+ #if HAVE_MEMMEM_IFUNC
+     IFUNC_IMPL (i, name, memmem,
++# if HAVE_MEMMEM_ARCH13
++	      IFUNC_IMPL_ADD (array, i, memmem,
++			      dl_hwcap & HWCAP_S390_VXRS_EXT2, MEMMEM_ARCH13)
++# endif
+ # if HAVE_MEMMEM_Z13
+ 		IFUNC_IMPL_ADD (array, i, memmem,
+ 				dl_hwcap & HWCAP_S390_VX, MEMMEM_Z13)

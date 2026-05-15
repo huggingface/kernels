@@ -1,0 +1,268 @@
+From 78c9ec9000f873abe7a15a91b87080a2e4308260 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Fri, 20 Aug 2021 06:42:24 -0700
+Subject: [PATCH] x86-64: Optimize load of all bits set into ZMM register [BZ
+ #28252]
+Content-type: text/plain; charset=UTF-8
+
+Optimize loads of all bits set into ZMM register in AVX512 SVML codes
+by replacing
+
+	vpbroadcastq .L_2il0floatpacket.16(%rip), %zmmX
+
+and
+
+	vmovups   .L_2il0floatpacket.13(%rip), %zmmX
+
+with
+	vpternlogd $0xff, %zmmX, %zmmX, %zmmX
+
+This fixes BZ #28252.
+---
+ .../x86_64/fpu/multiarch/svml_d_cos8_core_avx512.S   |  7 +------
+ .../x86_64/fpu/multiarch/svml_d_log8_core_avx512.S   |  7 +------
+ .../x86_64/fpu/multiarch/svml_d_sin8_core_avx512.S   |  7 +------
+ .../fpu/multiarch/svml_d_sincos8_core_avx512.S       |  7 +------
+ .../x86_64/fpu/multiarch/svml_s_cosf16_core_avx512.S |  7 +------
+ .../x86_64/fpu/multiarch/svml_s_expf16_core_avx512.S |  7 +------
+ .../x86_64/fpu/multiarch/svml_s_logf16_core_avx512.S |  7 +------
+ .../x86_64/fpu/multiarch/svml_s_powf16_core_avx512.S | 12 ++----------
+ .../fpu/multiarch/svml_s_sincosf16_core_avx512.S     |  7 +------
+ .../x86_64/fpu/multiarch/svml_s_sinf16_core_avx512.S |  7 +------
+ 10 files changed, 11 insertions(+), 64 deletions(-)
+
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_d_cos8_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_d_cos8_core_avx512.S
+index 24e3b363..07dfed85 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_d_cos8_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_d_cos8_core_avx512.S
+@@ -265,7 +265,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN4v_cos
+         vmovaps   %zmm0, %zmm8
+ 
+ /* Check for large arguments path */
+-        vpbroadcastq .L_2il0floatpacket.16(%rip), %zmm2
++        vpternlogd $0xff, %zmm2, %zmm2, %zmm2
+ 
+ /*
+   ARGUMENT RANGE REDUCTION:
+@@ -456,8 +456,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN4v_cos
+         jmp       .LBL_2_7
+ #endif
+ END (_ZGVeN8v_cos_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.16:
+-	.long	0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.16,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_d_log8_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_d_log8_core_avx512.S
+index ae8af8d8..ddb60e5b 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_d_log8_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_d_log8_core_avx512.S
+@@ -274,7 +274,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN4v_log
+ 
+ /* preserve mantissa, set input exponent to 2^(-10) */
+         vpternlogq $248, _ExpMask(%rax), %zmm3, %zmm2
+-        vpbroadcastq .L_2il0floatpacket.12(%rip), %zmm1
++        vpternlogd $0xff, %zmm1, %zmm1, %zmm1
+         vpsrlq    $32, %zmm4, %zmm6
+ 
+ /* reciprocal approximation good to at least 11 bits */
+@@ -461,8 +461,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN4v_log
+         jmp       .LBL_2_7
+ #endif
+ END (_ZGVeN8v_log_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.12:
+-	.long	0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.12,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core_avx512.S
+index 2d4b14fd..529c454a 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_d_sin8_core_avx512.S
+@@ -261,7 +261,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN4v_sin
+         andq      $-64, %rsp
+         subq      $1280, %rsp
+         movq      __svml_d_trig_data@GOTPCREL(%rip), %rax
+-        vpbroadcastq .L_2il0floatpacket.14(%rip), %zmm14
++        vpternlogd $0xff, %zmm1, %zmm1, %zmm14
+         vmovups __dAbsMask(%rax), %zmm7
+         vmovups __dInvPI(%rax), %zmm2
+         vmovups __dRShifter(%rax), %zmm1
+@@ -458,8 +458,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN4v_sin
+         jmp       .LBL_2_7
+ #endif
+ END (_ZGVeN8v_sin_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.14:
+-	.long	0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.14,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_d_sincos8_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_d_sincos8_core_avx512.S
+index 2df626c0..e501a53a 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_d_sincos8_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_d_sincos8_core_avx512.S
+@@ -430,7 +430,7 @@ WRAPPER_IMPL_AVX512_fFF _ZGVdN4vl8l8_sincos
+ 
+ /* SinPoly = SinR*SinPoly */
+         vfmadd213pd %zmm5, %zmm5, %zmm4
+-        vpbroadcastq .L_2il0floatpacket.15(%rip), %zmm3
++        vpternlogd $0xff, %zmm3, %zmm3, %zmm3
+ 
+ /* Update Cos result's sign */
+         vxorpd    %zmm2, %zmm1, %zmm1
+@@ -741,8 +741,3 @@ END (_ZGVeN8vvv_sincos_knl)
+ ENTRY (_ZGVeN8vvv_sincos_skx)
+ WRAPPER_AVX512_vvv_vl8l8 _ZGVeN8vl8l8_sincos_skx
+ END (_ZGVeN8vvv_sincos_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.15:
+-	.long	0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.15,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_cosf16_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_s_cosf16_core_avx512.S
+index 6ea1137b..377af394 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_cosf16_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_cosf16_core_avx512.S
+@@ -278,7 +278,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_cosf
+   X = X - Y*PI1 - Y*PI2 - Y*PI3
+  */
+         vmovaps   %zmm0, %zmm6
+-        vmovups   .L_2il0floatpacket.13(%rip), %zmm12
++        vpternlogd $0xff, %zmm12, %zmm12, %zmm12
+         vmovups __sRShifter(%rax), %zmm3
+         vmovups __sPI1_FMA(%rax), %zmm5
+         vmovups __sA9_FMA(%rax), %zmm9
+@@ -453,8 +453,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_cosf
+         jmp       .LBL_2_7
+ #endif
+ END (_ZGVeN16v_cosf_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.13:
+-	.long	0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.13,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core_avx512.S
+index 89ba0df2..46f33d46 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_expf16_core_avx512.S
+@@ -264,7 +264,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_expf
+         vmovaps   %zmm0, %zmm7
+ 
+ /* compare against threshold */
+-        vmovups   .L_2il0floatpacket.13(%rip), %zmm3
++        vpternlogd $0xff, %zmm3, %zmm3, %zmm3
+         vmovups __sInvLn2(%rax), %zmm4
+         vmovups __sShifter(%rax), %zmm1
+         vmovups __sLn2hi(%rax), %zmm6
+@@ -440,8 +440,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_expf
+ 
+ #endif
+ END (_ZGVeN16v_expf_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.13:
+-	.long	0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.13,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_logf16_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_s_logf16_core_avx512.S
+index 4cf0a96f..9e254956 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_logf16_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_logf16_core_avx512.S
+@@ -235,7 +235,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_logf
+         andq      $-64, %rsp
+         subq      $1280, %rsp
+         movq      __svml_slog_data@GOTPCREL(%rip), %rax
+-        vmovups   .L_2il0floatpacket.7(%rip), %zmm6
++        vpternlogd $0xff, %zmm6, %zmm6, %zmm6
+         vmovups _iBrkValue(%rax), %zmm4
+         vmovups _sPoly_7(%rax), %zmm8
+ 
+@@ -409,8 +409,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_logf
+ 
+ #endif
+ END (_ZGVeN16v_logf_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.7:
+-	.long	0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.7,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_powf16_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_s_powf16_core_avx512.S
+index bdcd50af..e8331ba1 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_powf16_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_powf16_core_avx512.S
+@@ -385,7 +385,7 @@ WRAPPER_IMPL_AVX512_ff _ZGVdN8vv_powf
+         vpsrlq    $32, %zmm3, %zmm2
+         vpmovqd   %zmm2, %ymm11
+         vcvtps2pd %ymm14, %zmm13
+-        vmovups   .L_2il0floatpacket.23(%rip), %zmm14
++        vpternlogd $0xff, %zmm14, %zmm14, %zmm14
+         vmovaps   %zmm14, %zmm26
+         vpandd _ABSMASK(%rax), %zmm1, %zmm8
+         vpcmpd    $1, _INF(%rax), %zmm8, %k2
+@@ -427,7 +427,7 @@ WRAPPER_IMPL_AVX512_ff _ZGVdN8vv_powf
+         vpmovqd   %zmm11, %ymm5
+         vpxord    %zmm10, %zmm10, %zmm10
+         vgatherdpd _Log2Rcp_lookup(%rax,%ymm4), %zmm10{%k3}
+-        vpbroadcastq .L_2il0floatpacket.24(%rip), %zmm4
++        vpternlogd $0xff, %zmm4, %zmm4, %zmm4
+         vpxord    %zmm11, %zmm11, %zmm11
+         vcvtdq2pd %ymm7, %zmm7
+         vgatherdpd _Log2Rcp_lookup(%rax,%ymm5), %zmm11{%k1}
+@@ -643,11 +643,3 @@ WRAPPER_IMPL_AVX512_ff _ZGVdN8vv_powf
+         jmp       .LBL_2_7
+ #endif
+ END (_ZGVeN16vv_powf_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.23:
+-	.long	0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.23,@object
+-.L_2il0floatpacket.24:
+-	.long	0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.24,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_sincosf16_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_s_sincosf16_core_avx512.S
+index 5fa4bc41..1f46f334 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_sincosf16_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_sincosf16_core_avx512.S
+@@ -317,7 +317,7 @@ WRAPPER_IMPL_AVX512_fFF _ZGVdN8vvv_sincosf
+ 
+ /* Result sign calculations */
+         vpternlogd $150, %zmm0, %zmm14, %zmm1
+-        vmovups   .L_2il0floatpacket.13(%rip), %zmm14
++        vpternlogd $0xff, %zmm14, %zmm14, %zmm14
+ 
+ /* Add correction term 0.5 for cos() part */
+         vaddps    %zmm8, %zmm5, %zmm15
+@@ -748,8 +748,3 @@ END (_ZGVeN16vvv_sincosf_knl)
+ ENTRY (_ZGVeN16vvv_sincosf_skx)
+ WRAPPER_AVX512_vvv_vl4l4 _ZGVeN16vl4l4_sincosf_skx
+ END (_ZGVeN16vvv_sincosf_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.13:
+-	.long	0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.13,@object
+diff --git a/sysdeps/x86_64/fpu/multiarch/svml_s_sinf16_core_avx512.S b/sysdeps/x86_64/fpu/multiarch/svml_s_sinf16_core_avx512.S
+index 141f747e..1fc9308a 100644
+--- a/sysdeps/x86_64/fpu/multiarch/svml_s_sinf16_core_avx512.S
++++ b/sysdeps/x86_64/fpu/multiarch/svml_s_sinf16_core_avx512.S
+@@ -280,7 +280,7 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_sinf
+         movq      __svml_s_trig_data@GOTPCREL(%rip), %rax
+ 
+ /* Check for large and special values */
+-        vmovups   .L_2il0floatpacket.11(%rip), %zmm14
++        vpternlogd $0xff, %zmm14, %zmm14, %zmm14
+         vmovups __sAbsMask(%rax), %zmm5
+         vmovups __sInvPI(%rax), %zmm1
+         vmovups __sRShifter(%rax), %zmm2
+@@ -472,8 +472,3 @@ WRAPPER_IMPL_AVX512 _ZGVdN8v_sinf
+         jmp       .LBL_2_7
+ #endif
+ END (_ZGVeN16v_sinf_skx)
+-
+-	.section .rodata, "a"
+-.L_2il0floatpacket.11:
+-	.long	0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff,0xffffffff
+-	.type	.L_2il0floatpacket.11,@object
+-- 
+GitLab
+

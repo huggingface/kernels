@@ -1,0 +1,24 @@
+commit 4031d7484ab3f6327184b5973d91f46978ebe8cf
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Feb 1 05:44:55 2020 -0800
+
+    i386/sub_n.S: Add a missing _CET_ENDBR to indirect jump target
+    
+    Add a missing _CET_ENDBR to indirect jump targe in sysdeps/i386/sub_n.S.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+---
+
+diff --git a/sysdeps/i386/sub_n.S b/sysdeps/i386/sub_n.S
+index ada0cf5..949958a 100644
+--- a/sysdeps/i386/sub_n.S
++++ b/sysdeps/i386/sub_n.S
+@@ -91,6 +91,7 @@ L(oop):	movl	(%esi),%eax
+ 	movl	8(%esi),%eax
+ 	sbbl	8(%edx),%eax
+ 	movl	%eax,8(%edi)
++	_CET_ENDBR
+ 	movl	12(%esi),%eax
+ 	sbbl	12(%edx),%eax
+ 	movl	%eax,12(%edi)
+

@@ -1,0 +1,42 @@
+commit 5325233313c66aea13e86f5dd59618e9dd74b510
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Thu Apr 7 13:59:48 2022 +0200
+
+    S390: Fix elf/tst-audit25[ab]
+    
+    If glibc is configured with --disable-default-pie and build on
+    s390 with -O3, the tests elf/tst-audit25a and elf/tst-audit25b are
+    failing as there are additional la_symbind lines for free and malloc.
+    It turns out that those belong to the executable. In fact those are
+    the PLT-stubs. Furthermore la_symbind is also called for calloc and
+    realloc symbols, but those belong to libc.
+    
+    Those functions are not called at all, but dlsym'ed in
+    elf/dl-minimal.c:
+    __rtld_malloc_init_real (struct link_map *main_map)
+    {
+    ...
+      void *new_calloc = lookup_malloc_symbol (main_map, "calloc", &version);
+      void *new_free = lookup_malloc_symbol (main_map, "free", &version);
+      void *new_malloc = lookup_malloc_symbol (main_map, "malloc", &version);
+      void *new_realloc = lookup_malloc_symbol (main_map, "realloc", &version);
+    ...
+    }
+    
+    Therefore, this commit just ignored symbols with LA_SYMB_DLSYM flag.
+    Reviewed-by: Adheemrval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/tst-auditmod25.c b/elf/tst-auditmod25.c
+index 20640a8daf346b5f..0524c5aab17fabba 100644
+--- a/elf/tst-auditmod25.c
++++ b/elf/tst-auditmod25.c
+@@ -72,7 +72,8 @@ la_symbind32 (Elf32_Sym *sym, unsigned int ndx,
+ 	      unsigned int *flags, const char *symname)
+ #endif
+ {
+-  if (*refcook != -1 && *defcook != -1 && symname[0] != '\0')
++  if (*refcook != -1 && *defcook != -1 && symname[0] != '\0'
++      && (*flags & LA_SYMB_DLSYM) == 0)
+     fprintf (stderr, "la_symbind: %s %u\n", symname,
+ 	     *flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT) ? 1 : 0);
+   return sym->st_value;

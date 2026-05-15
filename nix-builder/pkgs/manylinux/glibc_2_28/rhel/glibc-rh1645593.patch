@@ -1,0 +1,34 @@
+commit 28669f86f6780a18daca264f32d66b1428c9c6f1
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Thu Sep 6 14:27:03 2018 +0200
+
+    Fix segfault in maybe_script_execute.
+    
+    If glibc is built with gcc 8 and -march=z900,
+    the testcase posix/tst-spawn4-compat crashes with a segfault.
+    
+    In function maybe_script_execute, the new_argv array is dynamically
+    initialized on stack with (argc + 1) elements.
+    The function wants to add _PATH_BSHELL as the first argument
+    and writes out of bounds of new_argv.
+    There is an off-by-one because maybe_script_execute fails to count
+    the terminating NULL when sizing new_argv.
+    
+    ChangeLog:
+    
+            * sysdeps/unix/sysv/linux/spawni.c (maybe_script_execute):
+            Increment size of new_argv by one.
+
+diff --git a/sysdeps/unix/sysv/linux/spawni.c b/sysdeps/unix/sysv/linux/spawni.c
+index cf0213ece55c675d..85239cedbf2a5ab5 100644
+--- a/sysdeps/unix/sysv/linux/spawni.c
++++ b/sysdeps/unix/sysv/linux/spawni.c
+@@ -101,7 +101,7 @@ maybe_script_execute (struct posix_spawn_args *args)
+       ptrdiff_t argc = args->argc;
+ 
+       /* Construct an argument list for the shell.  */
+-      char *new_argv[argc + 1];
++      char *new_argv[argc + 2];
+       new_argv[0] = (char *) _PATH_BSHELL;
+       new_argv[1] = (char *) args->file;
+       if (argc > 1)

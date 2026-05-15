@@ -1,0 +1,86 @@
+commit 32ac0b988466785d6e3cc1dffc364bb26fc63193
+Author: mayshao <mayshao-oc@zhaoxin.com>
+Date:   Fri Apr 24 12:55:38 2020 +0800
+
+    x86: Add CPU Vendor ID detection support for Zhaoxin processors
+    
+    To recognize Zhaoxin CPU Vendor ID, add a new architecture type
+    arch_kind_zhaoxin for Vendor Zhaoxin detection.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index ade37a9bb3de86cc..c432d646ce6806a6 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -464,6 +464,60 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	  }
+ 	}
+     }
++  /* This spells out "CentaurHauls" or " Shanghai ".  */
++  else if ((ebx == 0x746e6543 && ecx == 0x736c7561 && edx == 0x48727561)
++	   || (ebx == 0x68532020 && ecx == 0x20206961 && edx == 0x68676e61))
++    {
++      unsigned int extended_model, stepping;
++
++      kind = arch_kind_zhaoxin;
++
++      get_common_indices (cpu_features, &family, &model, &extended_model,
++			  &stepping);
++
++      get_extended_indices (cpu_features);
++
++      model += extended_model;
++      if (family == 0x6)
++        {
++          if (model == 0xf || model == 0x19)
++            {
++              cpu_features->feature[index_arch_AVX_Usable]
++                &= (~bit_arch_AVX_Usable
++                & ~bit_arch_AVX2_Usable);
++
++              cpu_features->feature[index_arch_Slow_SSE4_2]
++                |= (bit_arch_Slow_SSE4_2);
++
++              cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
++                &= ~bit_arch_AVX_Fast_Unaligned_Load;
++            }
++        }
++      else if (family == 0x7)
++        {
++          if (model == 0x1b)
++            {
++              cpu_features->feature[index_arch_AVX_Usable]
++                &= (~bit_arch_AVX_Usable
++                & ~bit_arch_AVX2_Usable);
++
++              cpu_features->feature[index_arch_Slow_SSE4_2]
++                |= bit_arch_Slow_SSE4_2;
++
++              cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
++                &= ~bit_arch_AVX_Fast_Unaligned_Load;
++           }
++         else if (model == 0x3b)
++           {
++             cpu_features->feature[index_arch_AVX_Usable]
++               &= (~bit_arch_AVX_Usable
++               & ~bit_arch_AVX2_Usable);
++
++               cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
++               &= ~bit_arch_AVX_Fast_Unaligned_Load;
++           }
++       }
++    }
+   else
+     {
+       kind = arch_kind_other;
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index 4917182e99a8ee90..388172a1c07bf979 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -53,6 +53,7 @@ enum cpu_features_kind
+   arch_kind_unknown = 0,
+   arch_kind_intel,
+   arch_kind_amd,
++  arch_kind_zhaoxin,
+   arch_kind_other
+ };
+ 

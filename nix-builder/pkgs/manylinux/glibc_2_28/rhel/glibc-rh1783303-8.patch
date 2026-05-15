@@ -1,0 +1,124 @@
+commit e905212627350d54b58426214b5a54ddc852b0c9
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Fri Aug 2 22:47:57 2019 -0400
+
+    [powerpc] SET_RESTORE_ROUND improvements
+    
+    SET_RESTORE_ROUND uses libc_feholdsetround_ppc_ctx and
+    libc_feresetround_ppc_ctx to bracket a block of code where the floating point
+    rounding mode must be set to a certain value.
+    
+    For the *prologue*, libc_feholdsetround_ppc_ctx is used and performs:
+    1. Read/save FPSCR.
+    2. Create new value for FPSCR with new rounding mode and enables cleared.
+    3. If new value is different than current value,
+       a. If transitioning from a state where some exceptions enabled,
+          enter "ignore exceptions / non-stop" mode.
+       b. Write new value to FPSCR.
+       c. Put a mark on the wall indicating the FPSCR was changed.
+    
+    (1) uses the 'mffs' instruction.  On POWER9, the lighter weight 'mffsl'
+    instruction can be used, but it doesn't return all of the bits in the FPSCR.
+    fegetenv_status uses 'mffsl' on POWER9, 'mffs' otherwise, and can thus be
+    used instead of fegetenv_register.
+    (3b) uses 'mtfsf 0b11111111' to write the entire FPSCR, so it must
+    instead use 'mtfsf 0b00000011' to write just the enables and the mode,
+    because some of the rest of the bits are not valid if 'mffsl' was used.
+    fesetenv_mode uses 'mtfsf 0b00000011' on POWER9, 'mtfsf 0b11111111'
+    otherwise.
+    
+    For the *epilogue*, libc_feresetround_ppc_ctx checks the mark on the wall, then
+    calls libc_feresetround_ppc, which just calls __libc_femergeenv_ppc with
+    parameters such that it performs:
+    1. Retreive saved value of FPSCR, saved in prologue above.
+    2. Read FPSCR.
+    3. Create new value of FPSCR where:
+       - Summary bits and exception indicators = current OR saved.
+       - Rounding mode and enables = saved.
+       - Status bits = current.
+    4. If transitioning from some exceptions enabled to none,
+       enter "ignore exceptions / non-stop" mode.
+    5. If transitioning from no exceptions enabled to some,
+       enter "catch exceptions" mode.
+    6. Write new value to FPSCR.
+    
+    The summary bits are hardwired to the exception indicators, so there is no
+    need to restore any saved summary bits.
+    The exception indicator bits, which are sticky and remain set unless
+    explicitly cleared, would only need to be restored if the code block
+    might explicitly clear any of them.  This is certainly not expected.
+    
+    So, the only bits that need to be restored are the enables and the mode.
+    If it is the case that only those bits are to be restored, there is no need to
+    read the FPSCR.  Steps (2) and (3) are unnecessary, and step (6) only needs to
+    write the bits being restored.
+    
+    We know we are transitioning out of "ignore exceptions" mode, so step (4) is
+    unnecessary, and in step (6), we only need to check the state we are
+    entering.
+
+diff --git a/sysdeps/powerpc/fpu/fenv_private.h b/sysdeps/powerpc/fpu/fenv_private.h
+index 945ab98018450092..b0149aa243e69f5a 100644
+--- a/sysdeps/powerpc/fpu/fenv_private.h
++++ b/sysdeps/powerpc/fpu/fenv_private.h
+@@ -132,7 +132,17 @@ libc_fesetenv_ppc (const fenv_t *envp)
+ static __always_inline void
+ libc_feresetround_ppc (fenv_t *envp)
+ {
+-  __libc_femergeenv_ppc (envp, _FPU_MASK_TRAPS_RN, _FPU_MASK_FRAC_INEX_RET_CC);
++  fenv_union_t new = { .fenv = *envp };
++
++  /* If the old env has no enabled exceptions and the new env has any enabled
++     exceptions, then unmask SIGFPE in the MSR FE0/FE1 bits.  This will put the
++     hardware into "precise mode" and may cause the FPU to run slower on some
++     hardware.  */
++  if ((new.l & _FPU_ALL_TRAPS) != 0)
++    (void) __fe_nomask_env_priv ();
++
++  /* Atomically enable and raise (if appropriate) exceptions set in `new'.  */
++  fesetenv_mode (new.fenv);
+ }
+ 
+ static __always_inline int
+@@ -176,9 +186,30 @@ libc_feholdsetround_ppc_ctx (struct rm_ctx *ctx, int r)
+ {
+   fenv_union_t old, new;
+ 
++  old.fenv = fegetenv_status ();
++
++  new.l = (old.l & ~(FPSCR_ENABLES_MASK|FPSCR_RN_MASK)) | r;
++
++  ctx->env = old.fenv;
++  if (__glibc_unlikely (new.l != old.l))
++    {
++      if ((old.l & _FPU_ALL_TRAPS) != 0)
++	(void) __fe_mask_env ();
++      fesetenv_mode (new.fenv);
++      ctx->updated_status = true;
++    }
++  else
++    ctx->updated_status = false;
++}
++
++static __always_inline void
++libc_feholdsetround_noex_ppc_ctx (struct rm_ctx *ctx, int r)
++{
++  fenv_union_t old, new;
++
+   old.fenv = fegetenv_register ();
+ 
+-  new.l = (old.l & _FPU_MASK_TRAPS_RN) | r;
++  new.l = (old.l & ~(FPSCR_ENABLES_MASK|FPSCR_RN_MASK)) | r;
+ 
+   ctx->env = old.fenv;
+   if (__glibc_unlikely (new.l != old.l))
+@@ -218,6 +249,9 @@ libc_feresetround_ppc_ctx (struct rm_ctx *ctx)
+ #define libc_feholdsetround_ctx          libc_feholdsetround_ppc_ctx
+ #define libc_feholdsetroundf_ctx         libc_feholdsetround_ppc_ctx
+ #define libc_feholdsetroundl_ctx         libc_feholdsetround_ppc_ctx
++#define libc_feholdsetround_noex_ctx     libc_feholdsetround_noex_ppc_ctx
++#define libc_feholdsetround_noexf_ctx    libc_feholdsetround_noex_ppc_ctx
++#define libc_feholdsetround_noexl_ctx    libc_feholdsetround_noex_ppc_ctx
+ #define libc_feresetround_ctx            libc_feresetround_ppc_ctx
+ #define libc_feresetroundf_ctx           libc_feresetround_ppc_ctx
+ #define libc_feresetroundl_ctx           libc_feresetround_ppc_ctx

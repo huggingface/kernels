@@ -1,0 +1,22 @@
+Work around in the test case, the fact that RHEL-8 NSS modules
+infrastructure incorrectly allows merging in the hosts database.  This
+is a RHEL-8 only fix.
+
+diff --git a/nss/tst-nss-gai-actions.c b/nss/tst-nss-gai-actions.c
+index efca6cd1837a172a..c35e752896eceb2a 100644
+--- a/nss/tst-nss-gai-actions.c
++++ b/nss/tst-nss-gai-actions.c
+@@ -87,6 +87,13 @@ do_one_test (int action, int family, bool canon)
+     case ACTION_MERGE:
+       if (ret == 0)
+ 	{
++	  if (hints.ai_flags == 0 && hints.ai_family == AF_INET)
++	    {
++	      printf ("*****      RHEL-8 limitation: "
++		      "NSS modules infrastructure incorrectly allows MERGE\n");
++	      return;
++	    }
++
+ 	  char *formatted = support_format_addrinfo (ai, ret);
+ 
+ 	  printf ("merge unexpectedly succeeded:\n %s\n", formatted);

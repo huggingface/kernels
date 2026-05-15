@@ -1,0 +1,263 @@
+commit 316b88421993d540513a6b25b59ec16df267e9b4
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:13 2018 +0100
+
+    S390: Refactor strncmp ifunc handling.
+    
+    The ifunc handling for strncmp is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strncmp variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strncmp variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strncmp.
+            * sysdeps/s390/multiarch/strncmp-c.c: Move to ...
+            * sysdeps/s390/strncmp-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strncmp-vx.S: Move to ...
+            * sysdeps/s390/strncmp-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strncmp.c: Move to ...
+            * sysdeps/s390/strncmp.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strncmp.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 71a4658b43aeb745..adf3521876725ac8 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -45,5 +45,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   stpncpy stpncpy-vx stpncpy-c \
+ 		   strcat strcat-vx strcat-c \
+ 		   strncat strncat-vx strncat-c \
+-		   strcmp strcmp-vx strcmp-z900
++		   strcmp strcmp-vx strcmp-z900 \
++		   strncmp strncmp-vx strncmp-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strncmp.h b/sysdeps/s390/ifunc-strncmp.h
+new file mode 100644
+index 0000000000000000..511b3e9720520a0c
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strncmp.h
+@@ -0,0 +1,52 @@
++/* strncmp variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRNCMP_IFUNC	1
++#else
++# define HAVE_STRNCMP_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRNCMP_IFUNC_AND_VX_SUPPORT HAVE_STRNCMP_IFUNC
++#else
++# define HAVE_STRNCMP_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRNCMP_DEFAULT	STRNCMP_Z13
++# define HAVE_STRNCMP_C		0
++# define HAVE_STRNCMP_Z13	1
++#else
++# define STRNCMP_DEFAULT	STRNCMP_C
++# define HAVE_STRNCMP_C		1
++# define HAVE_STRNCMP_Z13	HAVE_STRNCMP_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRNCMP_C
++# define STRNCMP_C		__strncmp_c
++#else
++# define STRNCMP_C		NULL
++#endif
++
++#if HAVE_STRNCMP_Z13
++# define STRNCMP_Z13		__strncmp_vx
++#else
++# define STRNCMP_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 97421a499625c7f2..381376bf9fcb0f58 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strncmp strncmp-vx strncmp-c \
+-		   strchr strchr-vx strchr-c \
++sysdep_routines += strchr strchr-vx strchr-c \
+ 		   strchrnul strchrnul-vx strchrnul-c \
+ 		   strrchr strrchr-vx strrchr-c \
+ 		   strspn strspn-vx strspn-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 44637c431b144c66..d982de5788c0b5d5 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -35,6 +35,7 @@
+ #include <ifunc-strcat.h>
+ #include <ifunc-strncat.h>
+ #include <ifunc-strcmp.h>
++#include <ifunc-strncmp.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -281,6 +282,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRCMP_IFUNC  */
+ 
++#if HAVE_STRNCMP_IFUNC
++    IFUNC_IMPL (i, name, strncmp,
++# if HAVE_STRNCMP_Z13
++		IFUNC_IMPL_ADD (array, i, strncmp,
++				dl_hwcap & HWCAP_S390_VX, STRNCMP_Z13)
++# endif
++# if HAVE_STRNCMP_C
++		IFUNC_IMPL_ADD (array, i, strncmp, 1, STRNCMP_C)
++# endif
++		)
++#endif /* HAVE_STRNCMP_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -307,7 +320,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcscmp);
+ 
+-  IFUNC_VX_IMPL (strncmp);
+   IFUNC_VX_IMPL (wcsncmp);
+ 
+   IFUNC_VX_IMPL (strchr);
+diff --git a/sysdeps/s390/multiarch/strncmp-c.c b/sysdeps/s390/strncmp-c.c
+similarity index 78%
+rename from sysdeps/s390/multiarch/strncmp-c.c
+rename to sysdeps/s390/strncmp-c.c
+index e54277ec1b10f8d7..c7ffdb03e37dc8d8 100644
+--- a/sysdeps/s390/multiarch/strncmp-c.c
++++ b/sysdeps/s390/strncmp-c.c
+@@ -16,13 +16,17 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STRNCMP  __strncmp_c
+-# ifdef SHARED
+-#  undef libc_hidden_builtin_def
+-#  define libc_hidden_builtin_def(name)			\
++#include <ifunc-strncmp.h>
++
++#if HAVE_STRNCMP_C
++# if HAVE_STRNCMP_IFUNC
++#  define STRNCMP STRNCMP_C
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_builtin_def
++#   define libc_hidden_builtin_def(name)			\
+   __hidden_ver1 (__strncmp_c, __GI_strncmp, __strncmp_c);
+-# endif /* SHARED */
++#  endif
++# endif
+ 
+ # include <string/strncmp.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/strncmp-vx.S b/sysdeps/s390/strncmp-vx.S
+similarity index 93%
+rename from sysdeps/s390/multiarch/strncmp-vx.S
+rename to sysdeps/s390/strncmp-vx.S
+index 168fd657da2a1173..f557afb336d418ff 100644
+--- a/sysdeps/s390/multiarch/strncmp-vx.S
++++ b/sysdeps/s390/strncmp-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strncmp.h>
++
++#if HAVE_STRNCMP_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -37,7 +39,7 @@
+    -v17=part of s2
+    -v18=index of unequal
+ */
+-ENTRY(__strncmp_vx)
++ENTRY(STRNCMP_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -133,5 +135,14 @@ ENTRY(__strncmp_vx)
+ .Lend_equal:
+ 	lghi	%r2,0
+ 	br	%r14
+-END(__strncmp_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STRNCMP_Z13)
++
++# if ! HAVE_STRNCMP_IFUNC
++strong_alias (STRNCMP_Z13, strncmp)
++# endif
++
++# if ! HAVE_STRNCMP_C && defined SHARED && IS_IN (libc)
++strong_alias (STRNCMP_Z13, __GI_strncmp)
++# endif
++
++#endif /* HAVE_STRNCMP_Z13  */
+diff --git a/sysdeps/s390/multiarch/strncmp.c b/sysdeps/s390/strncmp.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/strncmp.c
+rename to sysdeps/s390/strncmp.c
+index 0ec472c3b03419a3..71351273c4058129 100644
+--- a/sysdeps/s390/multiarch/strncmp.c
++++ b/sysdeps/s390/strncmp.c
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strncmp.h>
++
++#if HAVE_STRNCMP_IFUNC
+ # define strncmp __redirect_strncmp
+ /* Omit the strncmp inline definitions because it would redefine strncmp.  */
+ # define __NO_STRING_INLINES
+@@ -24,8 +26,17 @@
+ # undef strncmp
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect_strncmp, __strncmp, strncmp)
++# if HAVE_STRNCMP_C
++extern __typeof (__redirect_strncmp) STRNCMP_C attribute_hidden;
++# endif
++
++# if HAVE_STRNCMP_Z13
++extern __typeof (__redirect_strncmp) STRNCMP_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/strncmp.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (__redirect_strncmp, strncmp,
++		      (HAVE_STRNCMP_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRNCMP_Z13
++		      : STRNCMP_DEFAULT
++		      )
++#endif /* HAVE_STRNCMP_IFUNC  */

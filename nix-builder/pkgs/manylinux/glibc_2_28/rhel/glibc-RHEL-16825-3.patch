@@ -1,0 +1,223 @@
+commit 78ca44da0160a0b442f0ca1f253e3360f044b2ec
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Nov 27 11:28:13 2023 +0100
+
+    elf: Relocate libc.so early during startup and dlmopen (bug 31083)
+    
+    This makes it more likely that objects without dependencies can
+    use IFUNC resolvers in libc.so.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/Makefile
+	  (differences in test backports)
+	elf/rtld.c
+	  (removal of prelink support upstream)
+
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 42dc878209b11d29..ebf46a297d241d8f 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -387,6 +387,8 @@ tests += \
+   tst-nodelete2 \
+   tst-nodelete-dlclose \
+   tst-nodelete-opened \
++  tst-nodeps1 \
++  tst-nodeps2 \
+   tst-noload \
+   tst-null-argv \
+   tst-relsort1 \
+@@ -743,6 +745,8 @@ modules-names = \
+   tst-nodelete-dlclose-dso \
+   tst-nodelete-dlclose-plugin \
+   tst-nodelete-opened-lib \
++  tst-nodeps1-mod \
++  tst-nodeps2-mod \
+   tst-null-argv-lib \
+   tst-relsort1mod1 \
+   tst-relsort1mod2 \
+@@ -889,8 +893,13 @@ modules-execstack-yes = tst-execstack-mod
+ extra-test-objs += $(addsuffix .os,$(strip $(modules-names)))
+ 
+ # filtmod1.so has a special rule
+-modules-names-nobuild := filtmod1 \
+-			 tst-audit24bmod1 tst-audit24bmod2
++modules-names-nobuild += \
++  filtmod1 \
++  tst-audit24bmod1 \
++  tst-audit24bmod2 \
++  tst-nodeps1-mod \
++  tst-nodeps2-mod \
++  # modules-names-nobuild
+ 
+ tests += $(tests-static)
+ 
+@@ -2707,3 +2716,18 @@ $(objpfx)tst-dlclose-lazy: $(libdl)
+ $(objpfx)tst-dlclose-lazy.out: \
+   $(objpfx)tst-dlclose-lazy-mod1.so $(objpfx)tst-dlclose-lazy-mod2.so
+ 
++# The object tst-nodeps1-mod.so has no explicit dependencies on libc.so.
++$(objpfx)tst-nodeps1-mod.so: $(objpfx)tst-nodeps1-mod.os
++	$(LINK.o) -nostartfiles -nostdlib -shared -o $@ $^
++tst-nodeps1.so-no-z-defs = yes
++# Link libc.so before the test module with the IFUNC resolver reference.
++LDFLAGS-tst-nodeps1 = $(common-objpfx)libc.so $(objpfx)tst-nodeps1-mod.so
++$(objpfx)tst-nodeps1: $(objpfx)tst-nodeps1-mod.so
++# Reuse the tst-nodeps1 module.  Link libc.so before the test module
++# with the IFUNC resolver reference.
++$(objpfx)tst-nodeps2-mod.so: $(common-objpfx)libc.so \
++  $(objpfx)tst-nodeps1-mod.so $(objpfx)tst-nodeps2-mod.os
++	$(LINK.o) -Wl,--no-as-needed -nostartfiles -nostdlib -shared -o $@ $^
++$(objpfx)tst-nodeps2: $(libdl)
++$(objpfx)tst-nodeps2.out: \
++  $(objpfx)tst-nodeps1-mod.so $(objpfx)tst-nodeps2-mod.so
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 160451790bb88447..f32e2fd4ee39db93 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -692,6 +692,17 @@ dl_open_worker_begin (void *a)
+      them.  However, such relocation dependencies in IFUNC resolvers
+      are undefined anyway, so this is not a problem.  */
+ 
++  /* Ensure that libc is relocated first.  This helps with the
++     execution of IFUNC resolvers in libc, and matters only to newly
++     created dlmopen namespaces.  Do not do this for static dlopen
++     because libc has relocations against ld.so, which may not have
++     been relocated at this point.  */
++#ifdef SHARED
++  if (GL(dl_ns)[args->nsid].libc_map != NULL)
++    _dl_open_relocate_one_object (args, r, GL(dl_ns)[args->nsid].libc_map,
++				  reloc_mode, &relocation_in_progress);
++#endif
++
+   for (unsigned int i = last; i-- > first; )
+     _dl_open_relocate_one_object (args, r, new->l_initfini[i], reloc_mode,
+ 				  &relocation_in_progress);
+diff --git a/elf/rtld.c b/elf/rtld.c
+index cd2cc4024a3581c2..502d2a1c58505d88 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2414,11 +2414,17 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+ 	 objects.  We do not re-relocate the dynamic linker itself in this
+ 	 loop because that could result in the GOT entries for functions we
+ 	 call being changed, and that would break us.  It is safe to relocate
+-	 the dynamic linker out of order because it has no copy relocs (we
+-	 know that because it is self-contained).  */
++	 the dynamic linker out of order because it has no copy relocations.
++	 Likewise for libc, which is relocated early to ensure that IFUNC
++	 resolvers in libc work.  */
+ 
+       int consider_profiling = GLRO(dl_profile) != NULL;
+ 
++      if (GL(dl_ns)[LM_ID_BASE].libc_map != NULL)
++	_dl_relocate_object (GL(dl_ns)[LM_ID_BASE].libc_map,
++			     GL(dl_ns)[LM_ID_BASE].libc_map->l_scope,
++			     GLRO(dl_lazy) ? RTLD_LAZY : 0, consider_profiling);
++
+       /* If we are profiling we also must do lazy reloaction.  */
+       GLRO(dl_lazy) |= consider_profiling;
+ 
+diff --git a/elf/tst-nodeps1-mod.c b/elf/tst-nodeps1-mod.c
+new file mode 100644
+index 0000000000000000..45c8e3c631251a89
+--- /dev/null
++++ b/elf/tst-nodeps1-mod.c
+@@ -0,0 +1,25 @@
++/* Test module with no libc.so dependency and string function references.
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <string.h>
++
++/* Some references to libc symbols which are likely to have IFUNC
++   resolvers.  If they do not, this module does not exercise bug 31083.  */
++void *memcpy_pointer = memcpy;
++void *memmove_pointer = memmove;
++void *memset_pointer = memset;
+diff --git a/elf/tst-nodeps1.c b/elf/tst-nodeps1.c
+new file mode 100644
+index 0000000000000000..1a8bde36cdb71446
+--- /dev/null
++++ b/elf/tst-nodeps1.c
+@@ -0,0 +1,23 @@
++/* Test initially loaded module with implicit libc.so dependency (bug 31083).
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* Testing happens before main.  */
++int
++main (void)
++{
++}
+diff --git a/elf/tst-nodeps2-mod.c b/elf/tst-nodeps2-mod.c
+new file mode 100644
+index 0000000000000000..4913feee9b56e0e1
+--- /dev/null
++++ b/elf/tst-nodeps2-mod.c
+@@ -0,0 +1 @@
++/* Empty test module which depends on tst-nodeps1-mod.so.  */
+diff --git a/elf/tst-nodeps2.c b/elf/tst-nodeps2.c
+new file mode 100644
+index 0000000000000000..0bdc8eeb8cba3a99
+--- /dev/null
++++ b/elf/tst-nodeps2.c
+@@ -0,0 +1,29 @@
++/* Test dlmopen with implicit libc.so dependency (bug 31083).
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/xdlfcn.h>
++
++static int
++do_test (void)
++{
++  void *handle = xdlmopen (LM_ID_NEWLM, "tst-nodeps2-mod.so", RTLD_NOW);
++  xdlclose (handle);
++  return 0;
++}
++
++#include <support/test-driver.c>

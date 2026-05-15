@@ -1,0 +1,71 @@
+From 120ac6d238825452e8024e2f627da33b2508dfd3 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Fri, 12 Nov 2021 11:47:42 -0800
+Subject: [PATCH] Move assignment out of the CAS condition
+Content-type: text/plain; charset=UTF-8
+
+Update
+
+commit 49302b8fdf9103b6fc0a398678668a22fa19574c
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Nov 11 06:54:01 2021 -0800
+
+    Avoid extra load with CAS in __pthread_mutex_clocklock_common [BZ #28537]
+
+    Replace boolean CAS with value CAS to avoid the extra load.
+
+and
+
+commit 0b82747dc48d5bf0871bdc6da8cb6eec1256355f
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Nov 11 06:31:51 2021 -0800
+
+    Avoid extra load with CAS in __pthread_mutex_lock_full [BZ #28537]
+
+    Replace boolean CAS with value CAS to avoid the extra load.
+
+by moving assignment out of the CAS condition.
+---
+ nptl/pthread_mutex_lock.c      | 7 +++----
+ nptl/pthread_mutex_timedlock.c | 7 +++----
+ 2 files changed, 6 insertions(+), 8 deletions(-)
+
+diff --git a/nptl/pthread_mutex_lock.c b/nptl/pthread_mutex_lock.c
+index eb4d8baa..a633d95e 100644
+--- a/nptl/pthread_mutex_lock.c
++++ b/nptl/pthread_mutex_lock.c
+@@ -299,10 +299,9 @@ __pthread_mutex_lock_full (pthread_mutex_t *mutex)
+ 	     meantime.  */
+ 	  if ((oldval & FUTEX_WAITERS) == 0)
+ 	    {
+-	      int val;
+-	      if ((val = atomic_compare_and_exchange_val_acq
+-		   (&mutex->__data.__lock, oldval | FUTEX_WAITERS,
+-		    oldval)) != oldval)
++	      int val = atomic_compare_and_exchange_val_acq
++		(&mutex->__data.__lock, oldval | FUTEX_WAITERS, oldval);
++	      if (val != oldval)
+ 		{
+ 		  oldval = val;
+ 		  continue;
+diff --git a/nptl/pthread_mutex_timedlock.c b/nptl/pthread_mutex_timedlock.c
+index c4627ef6..a76c30b7 100644
+--- a/nptl/pthread_mutex_timedlock.c
++++ b/nptl/pthread_mutex_timedlock.c
+@@ -269,10 +269,9 @@ __pthread_mutex_timedlock (pthread_mutex_t *mutex,
+ 	     meantime.  */
+ 	  if ((oldval & FUTEX_WAITERS) == 0)
+ 	    {
+-	      int val;
+-	      if ((val = atomic_compare_and_exchange_val_acq
+-		   (&mutex->__data.__lock, oldval | FUTEX_WAITERS,
+-		    oldval)) != oldval)
++	      int val = atomic_compare_and_exchange_val_acq
++		(&mutex->__data.__lock, oldval | FUTEX_WAITERS, oldval);
++	      if (val != oldval)
+ 		{
+ 		  oldval = val;
+ 		  continue;
+-- 
+GitLab
+

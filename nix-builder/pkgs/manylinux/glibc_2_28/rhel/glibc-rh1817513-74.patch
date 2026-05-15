@@ -1,0 +1,205 @@
+commit 17796419b5fd694348cceb65c3f77601faae082c
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Tue Jul 7 10:49:11 2020 +0100
+
+    rtld: Account static TLS surplus for audit modules
+    
+    The new static TLS surplus size computation is
+    
+      surplus_tls = 192 * (nns-1) + 144 * nns + 512
+    
+    where nns is controlled via the rtld.nns tunable. This commit
+    accounts audit modules too so nns = rtld.nns + audit modules.
+    
+    rtld.nns should only include the namespaces required by the
+    application, namespaces for audit modules are accounted on top
+    of that so audit modules don't use up the static TLS that is
+    reserved for the application. This allows loading many audit
+    modules without tuning rtld.nns or using up static TLS, and it
+    fixes
+    
+    FAIL: elf/tst-auditmany
+    
+    Note that DL_NNS is currently a hard upper limit for nns, and
+    if rtld.nns + audit modules go over the limit that's a fatal
+    error. By default rtld.nns is 4 which allows 12 audit modules.
+    
+    Counting the audit modules is based on existing audit string
+    parsing code, we cannot use GLRO(dl_naudit) before the modules
+    are actually loaded.
+
+Conflicts:
+	elf/rtld.c
+	  (Caused by glibc-fedora-__libc_multiple_libcs.patch.)
+
+diff --git a/csu/libc-tls.c b/csu/libc-tls.c
+index 08ed2b988b58ac6c..6f2a47dc86222407 100644
+--- a/csu/libc-tls.c
++++ b/csu/libc-tls.c
+@@ -132,8 +132,8 @@ __libc_setup_tls (void)
+ 	  break;
+ 	}
+ 
+-  /* Calculate the size of the static TLS surplus.  */
+-  _dl_tls_static_surplus_init ();
++  /* Calculate the size of the static TLS surplus, with 0 auditors.  */
++  _dl_tls_static_surplus_init (0);
+ 
+   /* We have to set up the TCB block which also (possibly) contains
+      'errno'.  Therefore we avoid 'malloc' which might touch 'errno'.
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index ef57a21391bb36fa..cfda76f6de96df57 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -49,7 +49,10 @@
+    that affects the size of the static TLS and by default it's small enough
+    not to cause problems with existing applications. The limit is not
+    enforced or checked: it is the user's responsibility to increase rtld.nns
+-   if more dlmopen namespaces are used.  */
++   if more dlmopen namespaces are used.
++
++   Audit modules use their own namespaces, they are not included in rtld.nns,
++   but come on top when computing the number of namespaces.  */
+ 
+ /* Size of initial-exec TLS in libc.so.  */
+ #define LIBC_IE_TLS 192
+@@ -60,8 +63,11 @@
+ /* Size of additional surplus TLS, placeholder for TLS optimizations.  */
+ #define OPT_SURPLUS_TLS 512
+ 
++/* Calculate the size of the static TLS surplus, when the given
++   number of audit modules are loaded.  Must be called after the
++   number of audit modules is known and before static TLS allocation.  */
+ void
+-_dl_tls_static_surplus_init (void)
++_dl_tls_static_surplus_init (size_t naudit)
+ {
+   size_t nns;
+ 
+@@ -73,6 +79,11 @@ _dl_tls_static_surplus_init (void)
+ #endif
+   if (nns > DL_NNS)
+     nns = DL_NNS;
++  if (DL_NNS - nns < naudit)
++    _dl_fatal_printf ("Failed loading %lu audit modules, %lu are supported.\n",
++		      (unsigned long) naudit, (unsigned long) (DL_NNS - nns));
++  nns += naudit;
++
+   GLRO(dl_tls_static_surplus) = ((nns - 1) * LIBC_IE_TLS
+ 				 + nns * OTHER_IE_TLS
+ 				 + OPT_SURPLUS_TLS);
+diff --git a/elf/rtld.c b/elf/rtld.c
+index a440741f4c1b3c91..67441ac6f252350e 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -297,6 +297,23 @@ audit_list_next (struct audit_list *list)
+     }
+ }
+ 
++/* Count audit modules before they are loaded so GLRO(dl_naudit)
++   is not yet usable.  */
++static size_t
++audit_list_count (struct audit_list *list)
++{
++  /* Restore the audit_list iterator state at the end.  */
++  const char *saved_tail = list->current_tail;
++  size_t naudit = 0;
++
++  assert (list->current_index == 0);
++  while (audit_list_next (list) != NULL)
++    naudit++;
++  list->current_tail = saved_tail;
++  list->current_index = 0;
++  return naudit;
++}
++
+ /* Set nonzero during loading and initialization of executable and
+    libraries, cleared before the executable's entry point runs.  This
+    must not be initialized to nonzero, because the unused dynamic
+@@ -734,7 +751,7 @@ match_version (const char *string, struct link_map *map)
+ static bool tls_init_tp_called;
+ 
+ static void *
+-init_tls (void)
++init_tls (size_t naudit)
+ {
+   /* Number of elements in the static TLS block.  */
+   GL(dl_tls_static_nelem) = GL(dl_tls_max_dtv_idx);
+@@ -777,7 +794,7 @@ init_tls (void)
+   assert (i == GL(dl_tls_max_dtv_idx));
+ 
+   /* Calculate the size of the static TLS surplus.  */
+-  _dl_tls_static_surplus_init ();
++  _dl_tls_static_surplus_init (naudit);
+ 
+   /* Compute the TLS offsets for the various blocks.  */
+   _dl_determine_tlsoffset ();
+@@ -1659,9 +1676,11 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+   bool need_security_init = true;
+   if (audit_list.length > 0)
+     {
++      size_t naudit = audit_list_count (&audit_list);
++
+       /* Since we start using the auditing DSOs right away we need to
+ 	 initialize the data structures now.  */
+-      tcbp = init_tls ();
++      tcbp = init_tls (naudit);
+ 
+       /* Initialize security features.  We need to do it this early
+ 	 since otherwise the constructors of the audit libraries will
+@@ -1671,6 +1690,10 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+       need_security_init = false;
+ 
+       load_audit_modules (main_map, &audit_list);
++
++      /* The count based on audit strings may overestimate the number
++	 of audit modules that got loaded, but not underestimate.  */
++      assert (GLRO(dl_naudit) <= naudit);
+     }
+ 
+   /* Keep track of the currently loaded modules to count how many
+@@ -1914,7 +1937,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+      multiple threads (from a non-TLS-using libpthread).  */
+   bool was_tls_init_tp_called = tls_init_tp_called;
+   if (tcbp == NULL)
+-    tcbp = init_tls ();
++    tcbp = init_tls (0);
+ 
+   if (__glibc_likely (need_security_init))
+     /* Initialize security features.  But only if we have not done it
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index e092b8e81a18d739..e6a3e9a2cf5c959c 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -241,9 +241,12 @@ Sets the number of supported dynamic link namespaces (see @code{dlmopen}).
+ Currently this limit can be set between 1 and 16 inclusive, the default is 4.
+ Each link namespace consumes some memory in all thread, and thus raising the
+ limit will increase the amount of memory each thread uses. Raising the limit
+-is useful when your application uses more than 4 dynamic linker audit modules
+-e.g. @env{LD_AUDIT}, or will use more than 4 dynamic link namespaces as created
+-by @code{dlmopen} with an lmid argument of @code{LM_ID_NEWLM}.
++is useful when your application uses more than 4 dynamic link namespaces as
++created by @code{dlmopen} with an lmid argument of @code{LM_ID_NEWLM}.
++Dynamic linker audit modules are loaded in their own dynamic link namespaces,
++but they are not accounted for in @code{glibc.rtld.nns}.  They implicitly
++increase the per-thread memory usage as necessary, so this tunable does
++not need to be changed to allow many audit modules e.g. via @env{LD_AUDIT}.
+ @end deftp
+ 
+ @node Elision Tunables
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index e54105848c3cb7d1..293f3ab5a496afdf 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1104,8 +1104,9 @@ extern size_t _dl_count_modids (void) attribute_hidden;
+ /* Calculate offset of the TLS blocks in the static TLS block.  */
+ extern void _dl_determine_tlsoffset (void) attribute_hidden;
+ 
+-/* Calculate the size of the static TLS surplus.  */
+-void _dl_tls_static_surplus_init (void) attribute_hidden;
++/* Calculate the size of the static TLS surplus, when the given
++   number of audit modules are loaded.  */
++void _dl_tls_static_surplus_init (size_t naudit) attribute_hidden;
+ 
+ #ifndef SHARED
+ /* Set up the TCB for statically linked applications.  This is called

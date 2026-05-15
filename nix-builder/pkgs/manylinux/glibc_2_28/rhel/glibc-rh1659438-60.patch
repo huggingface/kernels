@@ -1,0 +1,202 @@
+commit 96fbb9a328232e42814334d6e29a9a9c7995c01d
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Fri Mar 22 11:14:08 2019 +0100
+
+    S390: Add arch13 memmove ifunc variant.
+    
+    This patch introduces the new arch13 ifunc variant for memmove.
+    For the forward or non-overlapping case it is just using memcpy.
+    For the backward case it relies on the new instruction mvcrl.
+    The instruction copies up to 256 bytes at once.
+    In case of an overlap, it copies the bytes like copying them
+    one by one starting from right to left.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/ifunc-memcpy.h (HAVE_MEMMOVE_ARCH13, MEMMOVE_ARCH13
+            HAVE_MEMMOVE_IFUNC_AND_ARCH13_SUPPORT): New defines.
+            * sysdeps/s390/memcpy-z900.S: Add arch13 memmove implementation.
+            * sysdeps/s390/memmove.c (memmove): Add arch13 variant in
+            ifunc selector.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Add ifunc variant for arch13 memmove.
+            * sysdeps/s390/multiarch/ifunc-resolve.h (S390_STFLE_BITS_ARCH13_MIE3,
+            S390_IS_ARCH13_MIE3): New defines.
+
+diff --git a/sysdeps/s390/ifunc-memcpy.h b/sysdeps/s390/ifunc-memcpy.h
+index 0e701968c8f39014..e8cd794587b44922 100644
+--- a/sysdeps/s390/ifunc-memcpy.h
++++ b/sysdeps/s390/ifunc-memcpy.h
+@@ -44,7 +44,7 @@
+ #endif
+ 
+ #if defined SHARED && defined USE_MULTIARCH && IS_IN (libc)	\
+-  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++  && ! defined HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
+ # define HAVE_MEMMOVE_IFUNC	1
+ #else
+ # define HAVE_MEMMOVE_IFUNC	0
+@@ -56,14 +56,27 @@
+ # define HAVE_MEMMOVE_IFUNC_AND_VX_SUPPORT 0
+ #endif
+ 
+-#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++#ifdef HAVE_S390_ARCH13_ASM_SUPPORT
++# define HAVE_MEMMOVE_IFUNC_AND_ARCH13_SUPPORT HAVE_MEMMOVE_IFUNC
++#else
++# define HAVE_MEMMOVE_IFUNC_AND_ARCH13_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
++# define MEMMOVE_DEFAULT	MEMMOVE_ARCH13
++# define HAVE_MEMMOVE_C		0
++# define HAVE_MEMMOVE_Z13	0
++# define HAVE_MEMMOVE_ARCH13	1
++#elif defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
+ # define MEMMOVE_DEFAULT	MEMMOVE_Z13
+ # define HAVE_MEMMOVE_C		0
+ # define HAVE_MEMMOVE_Z13	1
++# define HAVE_MEMMOVE_ARCH13	HAVE_MEMMOVE_IFUNC_AND_ARCH13_SUPPORT
+ #else
+ # define MEMMOVE_DEFAULT	MEMMOVE_C
+ # define HAVE_MEMMOVE_C		1
+ # define HAVE_MEMMOVE_Z13	HAVE_MEMMOVE_IFUNC_AND_VX_SUPPORT
++# define HAVE_MEMMOVE_ARCH13	HAVE_MEMMOVE_IFUNC_AND_ARCH13_SUPPORT
+ #endif
+ 
+ #if HAVE_MEMCPY_Z900_G5
+@@ -101,3 +114,9 @@
+ #else
+ # define MEMMOVE_Z13		NULL
+ #endif
++
++#if HAVE_MEMMOVE_ARCH13
++# define MEMMOVE_ARCH13		__memmove_arch13
++#else
++# define MEMMOVE_ARCH13		NULL
++#endif
+diff --git a/sysdeps/s390/memcpy-z900.S b/sysdeps/s390/memcpy-z900.S
+index bd3b1950ee442c0c..45eddc67a48e991e 100644
+--- a/sysdeps/s390/memcpy-z900.S
++++ b/sysdeps/s390/memcpy-z900.S
+@@ -277,6 +277,61 @@ ENTRY(MEMMOVE_Z13)
+ END(MEMMOVE_Z13)
+ #endif /* HAVE_MEMMOVE_Z13  */
+ 
++#if HAVE_MEMMOVE_ARCH13
++ENTRY(MEMMOVE_ARCH13)
++	.machine "arch13"
++	.machinemode "zarch_nohighgprs"
++# if ! defined __s390x__
++	/* Note: The 31bit dst and src pointers are prefixed with zeroes.  */
++	llgfr	%r4,%r4
++	llgfr	%r3,%r3
++	llgfr	%r2,%r2
++# endif /* ! defined __s390x__ */
++	sgrk	%r5,%r2,%r3
++	aghik	%r0,%r4,-1	/* Both vstl and mvcrl needs highest index.  */
++	clgijh	%r4,16,.L_MEMMOVE_ARCH13_LARGE
++.L_MEMMOVE_ARCH13_SMALL:
++	jl .L_MEMMOVE_ARCH13_END /* Return if len was zero (cc of aghik).  */
++	/* Store up to 16 bytes with vll/vstl (needs highest index).  */
++	vll	%v16,%r0,0(%r3)
++	vstl	%v16,%r0,0(%r2)
++.L_MEMMOVE_ARCH13_END:
++	br      %r14
++.L_MEMMOVE_ARCH13_LARGE:
++	lgr     %r1,%r2	/* For memcpy: r1: Use as dest ; r2: Return dest  */
++	/* The unsigned comparison (dst - src >= len) determines if we can
++	   execute the forward case with memcpy.  */
++#if ! HAVE_MEMCPY_Z196
++# error The arch13 variant of memmove needs the z196 variant of memcpy!
++#endif
++	/* Backward case.  */
++	clgrjhe %r5,%r4,.L_Z196_start2
++	clgijh	%r0,255,.L_MEMMOVE_ARCH13_LARGER_256B
++	/* Move up to 256bytes with mvcrl (move right to left).  */
++	mvcrl	0(%r1),0(%r3)	/* Move (r0 + 1) bytes from r3 to r1.  */
++	br      %r14
++.L_MEMMOVE_ARCH13_LARGER_256B:
++	/* First move the "remaining" block of up to 256 bytes at the end of
++	   src/dst buffers.  Then move blocks of 256bytes in a loop starting
++	   with the block at the end.
++	   (If src/dst pointers are aligned e.g. to 256 bytes, then the pointers
++	   passed to mvcrl instructions are aligned, too)  */
++	risbgn	%r5,%r0,8,128+63,56	/* r5 = r0 / 256  */
++	risbgn	%r0,%r0,56,128+63,0	/* r0 = r0 & 0xFF  */
++	slgr	%r4,%r0
++	lay	%r1,-1(%r4,%r1)
++	lay	%r3,-1(%r4,%r3)
++	mvcrl	0(%r1),0(%r3)	/* Move (r0 + 1) bytes from r3 to r1.  */
++	lghi	%r0,255		/* Always copy 256 bytes in the loop below!  */
++.L_MEMMOVE_ARCH13_LARGE_256B_LOOP:
++	aghi	%r1,-256
++	aghi	%r3,-256
++	mvcrl	0(%r1),0(%r3)	/* Move (r0 + 1) bytes from r3 to r1.  */
++	brctg	%r5,.L_MEMMOVE_ARCH13_LARGE_256B_LOOP
++	br      %r14
++END(MEMMOVE_ARCH13)
++#endif /* HAVE_MEMMOVE_ARCH13  */
++
+ #if ! HAVE_MEMCPY_IFUNC
+ /* If we don't use ifunc, define an alias for mem[p]cpy here.
+    Otherwise see sysdeps/s390/mem[p]cpy.c.  */
+diff --git a/sysdeps/s390/memmove.c b/sysdeps/s390/memmove.c
+index ac34edf80f2678cd..f6d31a4fcd56355b 100644
+--- a/sysdeps/s390/memmove.c
++++ b/sysdeps/s390/memmove.c
+@@ -36,9 +36,19 @@ extern __typeof (__redirect_memmove) MEMMOVE_C attribute_hidden;
+ extern __typeof (__redirect_memmove) MEMMOVE_Z13 attribute_hidden;
+ # endif
+ 
++# if HAVE_MEMMOVE_ARCH13
++extern __typeof (__redirect_memmove) MEMMOVE_ARCH13 attribute_hidden;
++# endif
++
+ s390_libc_ifunc_expr (__redirect_memmove, memmove,
+-		      (HAVE_MEMMOVE_Z13 && (hwcap & HWCAP_S390_VX))
+-		      ? MEMMOVE_Z13
+-		      : MEMMOVE_DEFAULT
++		      ({
++			s390_libc_ifunc_expr_stfle_init ();
++			(HAVE_MEMMOVE_ARCH13
++			 && S390_IS_ARCH13_MIE3 (stfle_bits))
++			  ? MEMMOVE_ARCH13
++			  : (HAVE_MEMMOVE_Z13 && (hwcap & HWCAP_S390_VX))
++			  ? MEMMOVE_Z13
++			  : MEMMOVE_DEFAULT;
++		      })
+ 		      )
+ #endif
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 177c5fd6fe269d9b..c24bfc95f2d7a22d 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -169,6 +169,11 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+ #if HAVE_MEMMOVE_IFUNC
+     IFUNC_IMPL (i, name, memmove,
++# if HAVE_MEMMOVE_ARCH13
++		IFUNC_IMPL_ADD (array, i, memmove,
++				S390_IS_ARCH13_MIE3 (stfle_bits),
++				MEMMOVE_ARCH13)
++# endif
+ # if HAVE_MEMMOVE_Z13
+ 		IFUNC_IMPL_ADD (array, i, memmove,
+ 				dl_hwcap & HWCAP_S390_VX, MEMMOVE_Z13)
+diff --git a/sysdeps/s390/multiarch/ifunc-resolve.h b/sysdeps/s390/multiarch/ifunc-resolve.h
+index b2be015401313d4b..db735bb341ab6b86 100644
+--- a/sysdeps/s390/multiarch/ifunc-resolve.h
++++ b/sysdeps/s390/multiarch/ifunc-resolve.h
+@@ -22,6 +22,11 @@
+ 
+ #define S390_STFLE_BITS_Z10  34 /* General instructions extension */
+ #define S390_STFLE_BITS_Z196 45 /* Distinct operands, pop ... */
++#define S390_STFLE_BITS_ARCH13_MIE3 61 /* Miscellaneous-Instruction-Extensions
++					  Facility 3, e.g. mvcrl.  */
++
++#define S390_IS_ARCH13_MIE3(STFLE_BITS)			\
++  ((STFLE_BITS & (1ULL << (63 - S390_STFLE_BITS_ARCH13_MIE3))) != 0)
+ 
+ #define S390_IS_Z196(STFLE_BITS)			\
+   ((STFLE_BITS & (1ULL << (63 - S390_STFLE_BITS_Z196))) != 0)

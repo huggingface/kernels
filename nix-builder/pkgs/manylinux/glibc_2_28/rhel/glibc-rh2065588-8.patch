@@ -1,0 +1,74 @@
+commit 42dda89dcb0407f6799dbfd0b9dab1529666ad51
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Dec 11 15:23:05 2020 -0300
+
+    posix: Fix return value of system if shell can not be executed [BZ #27053]
+    
+    POSIX states that system returned code for failure to execute the shell
+    shall be as if the shell had terminated using _exit(127).  This
+    behaviour was removed with 5fb7fc96350575.
+    
+    Checked on x86_64-linux-gnu.
+
+diff --git a/stdlib/tst-system.c b/stdlib/tst-system.c
+index 194e09828dd5c206..8681584f15ef3b47 100644
+--- a/stdlib/tst-system.c
++++ b/stdlib/tst-system.c
+@@ -26,6 +26,7 @@
+ #include <support/check.h>
+ #include <support/temp_file.h>
+ #include <support/support.h>
++#include <support/xunistd.h>
+ 
+ static char *tmpdir;
+ static long int namemax;
+@@ -138,6 +139,22 @@ do_test (void)
+     support_capture_subprocess_check (&result, "system", 0, sc_allow_none);
+   }
+ 
++  {
++    struct stat64 st;
++    xstat (_PATH_BSHELL, &st);
++    mode_t mode = st.st_mode;
++    xchmod (_PATH_BSHELL, mode & ~(S_IXUSR | S_IXGRP | S_IXOTH));
++
++    struct support_capture_subprocess result;
++    result = support_capture_subprocess (call_system,
++					 &(struct args) {
++					   "exit 1", 127, 0
++					 });
++    support_capture_subprocess_check (&result, "system", 0, sc_allow_none);
++
++    xchmod (_PATH_BSHELL, st.st_mode);
++  }
++
+   TEST_COMPARE (system (""), 0);
+ 
+   return 0;
+diff --git a/support/Makefile b/support/Makefile
+index 4875f52495ef292d..09b41b0d57e9239a 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -86,6 +86,7 @@ libsupport-routines = \
+   xchroot \
+   xclone \
+   xclose \
++  xchmod \
+   xconnect \
+   xcopy_file_range \
+   xdlfcn \
+diff --git a/sysdeps/posix/system.c b/sysdeps/posix/system.c
+index 7db09a05c3fbca43..047ded4badfddcab 100644
+--- a/sysdeps/posix/system.c
++++ b/sysdeps/posix/system.c
+@@ -171,6 +171,10 @@ do_system (const char *line)
+       __libc_cleanup_region_end (0);
+ #endif
+     }
++  else
++   /* POSIX states that failure to execute the shell should return
++      as if the shell had terminated using _exit(127).  */
++   status = W_EXITCODE (127, 0);
+ 
+   DO_LOCK ();
+   if (SUB_REF () == 0)

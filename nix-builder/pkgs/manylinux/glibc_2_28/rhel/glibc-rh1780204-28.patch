@@ -1,0 +1,317 @@
+From 2ab6ce8252a14e6ef0cfb33046dd565ae15085c2 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:32 +0100
+Subject: [PATCH 28/28] S390: Use libc_fe* macros in fe* functions.
+
+This patch updates the s390 specific functions fegetround,
+fesetround, feholdexcept, fesetenv, feupdateenv, fegetexceptflag,
+fetestexcept, fesetexceptflag, fetestexceptflag.
+Now those functions are using the libc_fe* macros if possible.
+
+Furthermore fegetexceptflag is now returning the exception from
+dxc field shifted to the usual exception-flags.
+Thus a special fetestexceptflag implementation is not needed anymore.
+
+(cherry picked from commit 238adf59db85646ebae47876819bd896dae597bc)
+---
+ sysdeps/s390/fpu/fegetround.c       |  9 ++-------
+ sysdeps/s390/fpu/feholdexcpt.c      | 12 ++---------
+ sysdeps/s390/fpu/fesetenv.c         | 21 +++----------------
+ sysdeps/s390/fpu/fesetround.c       |  9 +++------
+ sysdeps/s390/fpu/fetestexceptflag.c | 31 -----------------------------
+ sysdeps/s390/fpu/feupdateenv.c      | 14 +++----------
+ sysdeps/s390/fpu/fgetexcptflg.c     | 16 ++-------------
+ sysdeps/s390/fpu/fsetexcptflg.c     | 23 ++++++++++-----------
+ sysdeps/s390/fpu/ftestexcept.c      | 16 ++-------------
+ 9 files changed, 27 insertions(+), 124 deletions(-)
+ delete mode 100644 sysdeps/s390/fpu/fetestexceptflag.c
+
+diff --git a/sysdeps/s390/fpu/fegetround.c b/sysdeps/s390/fpu/fegetround.c
+index 3c38bc9189..f1be1d12e1 100644
+--- a/sysdeps/s390/fpu/fegetround.c
++++ b/sysdeps/s390/fpu/fegetround.c
+@@ -17,17 +17,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
++#include <get-rounding-mode.h>
+ 
+ int
+ __fegetround (void)
+ {
+-  fexcept_t cw;
+-
+-  _FPU_GETCW (cw);
+-
+-  return cw & FPC_RM_MASK;
++  return get_rounding_mode ();
+ }
+ libm_hidden_def (__fegetround)
+ weak_alias (__fegetround, fegetround)
+diff --git a/sysdeps/s390/fpu/feholdexcpt.c b/sysdeps/s390/fpu/feholdexcpt.c
+index 5daee5675d..48af7ff51b 100644
+--- a/sysdeps/s390/fpu/feholdexcpt.c
++++ b/sysdeps/s390/fpu/feholdexcpt.c
+@@ -17,19 +17,11 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
++#include <fenv_private.h>
+ 
+ int __feholdexcept (fenv_t *envp)
+ {
+-  fexcept_t fpc;
+-  /* Store the environment.  */
+-  __fegetenv (envp);
+-  /* Clear the current sticky bits as more than one exception
+-     may be generated.  */
+-  fpc = envp->__fpc & ~(FPC_FLAGS_MASK | FPC_DXC_MASK);
+-  /* Hold from generating fpu exceptions temporarily.  */
+-  _FPU_SETCW ((fpc & ~(FE_ALL_EXCEPT << FPC_EXCEPTION_MASK_SHIFT)));
++  libc_feholdexcept_s390 (envp);
+   return 0;
+ }
+ libm_hidden_def (__feholdexcept)
+diff --git a/sysdeps/s390/fpu/fesetenv.c b/sysdeps/s390/fpu/fesetenv.c
+index c6c275d79d..54ba2aa94a 100644
+--- a/sysdeps/s390/fpu/fesetenv.c
++++ b/sysdeps/s390/fpu/fesetenv.c
+@@ -17,28 +17,13 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
+-#include <stddef.h>
+-#include <unistd.h>
++#include <fenv_private.h>
+ 
+ int
+ __fesetenv (const fenv_t *envp)
+ {
+-  fenv_t env;
+-
+-  if (envp == FE_DFL_ENV)
+-    {
+-      env.__fpc = _FPU_DEFAULT;
+-    }
+-  else if (envp == FE_NOMASK_ENV)
+-    {
+-      env.__fpc = FPC_EXCEPTION_MASK;
+-    }
+-  else
+-    env = (*envp);
+-
+-  _FPU_SETCW (env.__fpc);
++  fenv_t env = libc_handle_user_fenv_s390 (envp);
++  libc_fesetenv_s390 (&env);
+ 
+   /* Success.  */
+   return 0;
+diff --git a/sysdeps/s390/fpu/fesetround.c b/sysdeps/s390/fpu/fesetround.c
+index d8a84d2c96..0a7fe2635b 100644
+--- a/sysdeps/s390/fpu/fesetround.c
++++ b/sysdeps/s390/fpu/fesetround.c
+@@ -17,21 +17,18 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
++#include <fenv_private.h>
+ 
+ int
+ __fesetround (int round)
+ {
+-  if ((round|FPC_RM_MASK) != FPC_RM_MASK)
++  if ((round | FPC_RM_MASK) != FPC_RM_MASK)
+     {
+       /* ROUND is not a valid rounding mode.  */
+       return 1;
+     }
+-  __asm__ __volatile__ ("srnm 0(%0)"
+-			:
+-			: "a" (round));
+ 
++  libc_fesetround_s390 (round);
+   return 0;
+ }
+ libm_hidden_def (__fesetround)
+diff --git a/sysdeps/s390/fpu/fetestexceptflag.c b/sysdeps/s390/fpu/fetestexceptflag.c
+deleted file mode 100644
+index 784d356f7b..0000000000
+--- a/sysdeps/s390/fpu/fetestexceptflag.c
++++ /dev/null
+@@ -1,31 +0,0 @@
+-/* Test exception in saved exception state.  S/390 version.
+-   Copyright (C) 2016-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <fenv.h>
+-#include <fenv_libc.h>
+-
+-int
+-fetestexceptflag (const fexcept_t *flagp, int excepts)
+-{
+-  /* As *flagp is obtained by an earlier call of fegetexceptflag the
+-     bits 0-5 of dxc-byte are either zero or correspond to the
+-     flag-bits.  Evaluate flags and last dxc-exception-code.  */
+-  return (((*flagp >> FPC_FLAGS_SHIFT) | (*flagp >> FPC_DXC_SHIFT))
+-	  & excepts
+-	  & FE_ALL_EXCEPT);
+-}
+diff --git a/sysdeps/s390/fpu/feupdateenv.c b/sysdeps/s390/fpu/feupdateenv.c
+index 4888e1a864..f6b3d7d2de 100644
+--- a/sysdeps/s390/fpu/feupdateenv.c
++++ b/sysdeps/s390/fpu/feupdateenv.c
+@@ -18,21 +18,13 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
++#include <fenv_private.h>
+ 
+ int
+ __feupdateenv (const fenv_t *envp)
+ {
+-  fexcept_t temp;
+-
+-  _FPU_GETCW (temp);
+-  temp = (temp & FPC_FLAGS_MASK) >> FPC_FLAGS_SHIFT;
+-
+-  /* Raise the exceptions since the last call to feholdenv  */
+-  /* re install saved environment.  */
+-  __fesetenv (envp);
+-  __feraiseexcept ((int) temp);
++  fenv_t env = libc_handle_user_fenv_s390 (envp);
++  libc_feupdateenv_s390 (&env);
+ 
+   /* Success.  */
+   return 0;
+diff --git a/sysdeps/s390/fpu/fgetexcptflg.c b/sysdeps/s390/fpu/fgetexcptflg.c
+index 2a0f6dc77c..1985b396c9 100644
+--- a/sysdeps/s390/fpu/fgetexcptflg.c
++++ b/sysdeps/s390/fpu/fgetexcptflg.c
+@@ -17,24 +17,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
++#include <fenv_private.h>
+ 
+ int
+ fegetexceptflag (fexcept_t *flagp, int excepts)
+ {
+-  fexcept_t temp, newexcepts;
+-
+-  /* Get the current exceptions.  */
+-  _FPU_GETCW (temp);
+-  newexcepts = excepts << FPC_FLAGS_SHIFT;
+-  if ((temp & FPC_NOT_FPU_EXCEPTION) == 0)
+-    /* Bits 6, 7 of dxc-byte are zero,
+-       thus bits 0-5 of dxc-byte correspond to the flag-bits.
+-       Evaluate flags and last dxc-exception-code.  */
+-    newexcepts |= excepts << FPC_DXC_SHIFT;
+-
+-  *flagp = temp & newexcepts;
++  *flagp = libc_fetestexcept_s390 (excepts);
+ 
+   /* Success.  */
+   return 0;
+diff --git a/sysdeps/s390/fpu/fsetexcptflg.c b/sysdeps/s390/fpu/fsetexcptflg.c
+index e50684c574..51d258cf17 100644
+--- a/sysdeps/s390/fpu/fsetexcptflg.c
++++ b/sysdeps/s390/fpu/fsetexcptflg.c
+@@ -24,29 +24,26 @@
+ int
+ fesetexceptflag (const fexcept_t *flagp, int excepts)
+ {
+-  fexcept_t temp, newexcepts;
++  fexcept_t fpc, fpc_new;
+ 
+   /* Get the current environment.  We have to do this since we cannot
+      separately set the status word.  */
+-  _FPU_GETCW (temp);
+-  /* Install the new exception bits in the Accrued Exception Byte.  */
+-  excepts = excepts & FE_ALL_EXCEPT;
+-  newexcepts = excepts << FPC_FLAGS_SHIFT;
+-  temp &= ~newexcepts;
+-  if ((temp & FPC_NOT_FPU_EXCEPTION) == 0)
++  _FPU_GETCW (fpc);
++
++  /* Clear the current exception bits.  */
++  fpc_new = fpc & ~((excepts & FE_ALL_EXCEPT) << FPC_FLAGS_SHIFT);
++  if ((fpc & FPC_NOT_FPU_EXCEPTION) == 0)
+     /* Bits 6, 7 of dxc-byte are zero,
+        thus bits 0-5 of dxc-byte correspond to the flag-bits.
+        Clear given exceptions in dxc-field.  */
+-    temp &= ~(excepts << FPC_DXC_SHIFT);
++    fpc_new &= ~((excepts & FE_ALL_EXCEPT) << FPC_DXC_SHIFT);
+ 
+-  /* Integrate dxc-byte of flagp into flags. The dxc-byte of flagp contains
+-     either an ieee-exception or 0 (see fegetexceptflag).  */
+-  temp |= (*flagp | ((*flagp >> FPC_DXC_SHIFT) << FPC_FLAGS_SHIFT))
+-    & newexcepts;
++  /* Set exceptions from flagp in flags-field.  */
++  fpc_new |= (*flagp & excepts & FE_ALL_EXCEPT) << FPC_FLAGS_SHIFT;
+ 
+   /* Store the new status word (along with the rest of the environment.
+      Possibly new exceptions are set but they won't get executed.  */
+-  _FPU_SETCW (temp);
++  _FPU_SETCW (fpc_new);
+ 
+   /* Success.  */
+   return 0;
+diff --git a/sysdeps/s390/fpu/ftestexcept.c b/sysdeps/s390/fpu/ftestexcept.c
+index 727b9b342d..f2acecc1af 100644
+--- a/sysdeps/s390/fpu/ftestexcept.c
++++ b/sysdeps/s390/fpu/ftestexcept.c
+@@ -17,23 +17,11 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <fenv_libc.h>
+-#include <fpu_control.h>
++#include <fenv_private.h>
+ 
+ int
+ fetestexcept (int excepts)
+ {
+-  fexcept_t temp, res;
+-
+-  /* Get current exceptions.  */
+-  _FPU_GETCW (temp);
+-  res = temp >> FPC_FLAGS_SHIFT;
+-  if ((temp & FPC_NOT_FPU_EXCEPTION) == 0)
+-    /* Bits 6, 7 of dxc-byte are zero,
+-       thus bits 0-5 of dxc-byte correspond to the flag-bits.
+-       Evaluate flags and last dxc-exception-code.  */
+-    res |= temp >> FPC_DXC_SHIFT;
+-
+-  return res & excepts & FE_ALL_EXCEPT;
++  return libc_fetestexcept_s390 (excepts);
+ }
+ libm_hidden_def (fetestexcept)
+-- 
+2.18.2
+

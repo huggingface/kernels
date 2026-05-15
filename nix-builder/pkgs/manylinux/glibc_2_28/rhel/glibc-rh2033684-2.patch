@@ -1,0 +1,101 @@
+commit c43c5796121bc5bcc0867f02e5536874aa8196c1
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Wed Dec 30 11:54:00 2020 +0530
+
+    Introduce _FORTIFY_SOURCE=3
+    
+    Introduce a new _FORTIFY_SOURCE level of 3 to enable additional
+    fortifications that may have a noticeable performance impact, allowing
+    more fortification coverage at the cost of some performance.
+    
+    With llvm 9.0 or later, this will replace the use of
+    __builtin_object_size with __builtin_dynamic_object_size.
+    
+    __builtin_dynamic_object_size
+    -----------------------------
+    
+    __builtin_dynamic_object_size is an LLVM builtin that is similar to
+    __builtin_object_size.  In addition to what __builtin_object_size
+    does, i.e. replace the builtin call with a constant object size,
+    __builtin_dynamic_object_size will replace the call site with an
+    expression that evaluates to the object size, thus expanding its
+    applicability.  In practice, __builtin_dynamic_object_size evaluates
+    these expressions through malloc/calloc calls that it can associate
+    with the object being evaluated.
+    
+    A simple motivating example is below; -D_FORTIFY_SOURCE=2 would miss
+    this and emit memcpy, but -D_FORTIFY_SOURCE=3 with the help of
+    __builtin_dynamic_object_size is able to emit __memcpy_chk with the
+    allocation size expression passed into the function:
+    
+    void *copy_obj (const void *src, size_t alloc, size_t copysize)
+    {
+      void *obj = malloc (alloc);
+      memcpy (obj, src, copysize);
+      return obj;
+    }
+    
+    Limitations
+    -----------
+    
+    If the object was allocated elsewhere that the compiler cannot see, or
+    if it was allocated in the function with a function that the compiler
+    does not recognize as an allocator then __builtin_dynamic_object_size
+    also returns -1.
+    
+    Further, the expression used to compute object size may be non-trivial
+    and may potentially incur a noticeable performance impact.  These
+    fortifications are hence enabled at a new _FORTIFY_SOURCE level to
+    allow developers to make a choice on the tradeoff according to their
+    environment.
+
+diff --git a/include/features.h b/include/features.h
+index ea7673ee115bcf0a..fe9fe16d034fad1b 100644
+--- a/include/features.h
++++ b/include/features.h
+@@ -381,6 +381,11 @@
+ #  warning _FORTIFY_SOURCE requires compiling with optimization (-O)
+ # elif !__GNUC_PREREQ (4, 1)
+ #  warning _FORTIFY_SOURCE requires GCC 4.1 or later
++# elif _FORTIFY_SOURCE > 2 && __glibc_clang_prereq (9, 0)
++#  if _FORTIFY_SOURCE > 3
++#   warning _FORTIFY_SOURCE > 3 is treated like 3 on this platform
++#  endif
++#  define __USE_FORTIFY_LEVEL 3
+ # elif _FORTIFY_SOURCE > 1
+ #  if _FORTIFY_SOURCE > 2
+ #   warning _FORTIFY_SOURCE > 2 is treated like 2 on this platform
+diff --git a/manual/creature.texi b/manual/creature.texi
+index 8876b2ab779c988f..64f361f27a7d6cdf 100644
+--- a/manual/creature.texi
++++ b/manual/creature.texi
+@@ -247,7 +247,8 @@ included.
+ @standards{GNU, (none)}
+ If this macro is defined to @math{1}, security hardening is added to
+ various library functions.  If defined to @math{2}, even stricter
+-checks are applied.
++checks are applied. If defined to @math{3}, @theglibc{} may also use
++checks that may have an additional performance overhead.
+ @end defvr
+ 
+ @defvr Macro _REENTRANT
+diff --git a/misc/sys/cdefs.h b/misc/sys/cdefs.h
+index 3f6fe3cc8563b493..1e39307b0ebcf38f 100644
+--- a/misc/sys/cdefs.h
++++ b/misc/sys/cdefs.h
+@@ -123,6 +123,15 @@
+ #define __bos(ptr) __builtin_object_size (ptr, __USE_FORTIFY_LEVEL > 1)
+ #define __bos0(ptr) __builtin_object_size (ptr, 0)
+ 
++/* Use __builtin_dynamic_object_size at _FORTIFY_SOURCE=3 when available.  */
++#if __USE_FORTIFY_LEVEL == 3 && __glibc_clang_prereq (9, 0)
++# define __glibc_objsize0(__o) __builtin_dynamic_object_size (__o, 0)
++# define __glibc_objsize(__o) __builtin_dynamic_object_size (__o, 1)
++#else
++# define __glibc_objsize0(__o) __bos0 (__o)
++# define __glibc_objsize(__o) __bos (__o)
++#endif
++
+ #if __GNUC_PREREQ (4,3)
+ # define __warndecl(name, msg) \
+   extern void name (void) __attribute__((__warning__ (msg)))

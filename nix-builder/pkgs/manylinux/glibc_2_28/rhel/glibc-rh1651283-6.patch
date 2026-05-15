@@ -1,0 +1,38 @@
+commit c0e82f117357a941e4d40fcc08babbd6a3c3a1b5
+Author: Istvan Kurucsai <pistukem@gmail.com>
+Date:   Fri Dec 21 00:13:01 2018 -0500
+
+    malloc: Check the alignment of mmapped chunks before unmapping.
+    
+    * malloc/malloc.c (munmap_chunk): Verify chunk alignment.
+
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index 4df5cb4862a7b854..4412a4ffc83b013b 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -2817,6 +2817,7 @@ systrim (size_t pad, mstate av)
+ static void
+ munmap_chunk (mchunkptr p)
+ {
++  size_t pagesize = GLRO (dl_pagesize);
+   INTERNAL_SIZE_T size = chunksize (p);
+ 
+   assert (chunk_is_mmapped (p));
+@@ -2826,6 +2827,7 @@ munmap_chunk (mchunkptr p)
+   if (DUMPED_MAIN_ARENA_CHUNK (p))
+     return;
+ 
++  uintptr_t mem = (uintptr_t) chunk2mem (p);
+   uintptr_t block = (uintptr_t) p - prev_size (p);
+   size_t total_size = prev_size (p) + size;
+   /* Unfortunately we have to do the compilers job by hand here.  Normally
+@@ -2833,7 +2835,8 @@ munmap_chunk (mchunkptr p)
+      page size.  But gcc does not recognize the optimization possibility
+      (in the moment at least) so we combine the two values into one before
+      the bit test.  */
+-  if (__builtin_expect (((block | total_size) & (GLRO (dl_pagesize) - 1)) != 0, 0))
++  if (__glibc_unlikely ((block | total_size) & (pagesize - 1)) != 0
++      || __glibc_unlikely (!powerof2 (mem & (pagesize - 1))))
+     malloc_printerr ("munmap_chunk(): invalid pointer");
+ 
+   atomic_decrement (&mp_.n_mmaps);

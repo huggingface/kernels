@@ -1,0 +1,27 @@
+commit 97f8225d22ef727ae9935cc231643efdc430d530
+Author: Zack Weinberg <zackw@panix.com>
+Date:   Thu Mar 14 09:44:22 2019 -0400
+
+    scripts/check-obsolete-constructs.py: Process all headers as UTF-8.
+    
+    A few of our installed headers contain UTF-8 in comments.
+    check-obsolete-constructs opened files without explicitly specifying
+    their encoding, so it would barf on these headers if “make check” was
+    run in a non-UTF-8 locale.
+    
+            * scripts/check-obsolete-constructs.py (HeaderChecker.check):
+            Specify encoding="utf-8" when opening headers to check.
+
+diff --git a/scripts/check-obsolete-constructs.py b/scripts/check-obsolete-constructs.py
+index ce5c72251f4d7cc0..89d21dea6e788783 100755
+--- a/scripts/check-obsolete-constructs.py
++++ b/scripts/check-obsolete-constructs.py
+@@ -437,7 +437,7 @@ class HeaderChecker:
+     def check(self, fname):
+         self.fname = fname
+         try:
+-            with open(fname, "rt") as fp:
++            with open(fname, "rt", encoding="utf-8") as fp:
+                 contents = fp.read()
+         except OSError as e:
+             sys.stderr.write("{}: {}\n".format(fname, e.strerror))

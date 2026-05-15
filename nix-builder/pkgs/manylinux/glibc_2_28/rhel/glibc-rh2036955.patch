@@ -1,0 +1,54 @@
+commit e5fa62b8db546f8792ec9e5c61e6419f4f8e3f4d
+Author: Wilco Dijkstra <wdijkstr@arm.com>
+Date:   Thu Jan 6 14:36:28 2022 +0000
+
+    AArch64: Check for SVE in ifuncs [BZ #28744]
+    
+    Add a check for SVE in the A64FX ifuncs for memcpy, memset and memmove.
+    This fixes BZ #28744.
+
+Conflicts:
+	sysdeps/aarch64/multiarch/memcpy.c
+	sysdeps/aarch64/multiarch/memmove.c
+	sysdeps/aarch64/multiarch/memset.c
+	  (IFUNC resolver differences in the backport.)
+
+diff --git a/sysdeps/aarch64/multiarch/memcpy.c b/sysdeps/aarch64/multiarch/memcpy.c
+index e0313c42e82a7b86..a6ebeb06d3bda00f 100644
+--- a/sysdeps/aarch64/multiarch/memcpy.c
++++ b/sysdeps/aarch64/multiarch/memcpy.c
+@@ -44,7 +44,7 @@ libc_ifunc (__libc_memcpy,
+ 		: (IS_THUNDERX2 (midr) || IS_THUNDERX2PA (midr)
+ 		  ? __memcpy_thunderx2
+ # if HAVE_AARCH64_SVE_ASM
+-		  : (IS_A64FX (midr)
++		  : (IS_A64FX (midr) && sve
+ 		     ? __memcpy_a64fx
+ 		     : __memcpy_generic)))));
+ # else
+diff --git a/sysdeps/aarch64/multiarch/memmove.c b/sysdeps/aarch64/multiarch/memmove.c
+index d96612b9cf7c3a4e..bea72b3eddde54c0 100644
+--- a/sysdeps/aarch64/multiarch/memmove.c
++++ b/sysdeps/aarch64/multiarch/memmove.c
+@@ -41,7 +41,7 @@ libc_ifunc (__libc_memmove,
+ 	     : (IS_FALKOR (midr) || IS_PHECDA (midr)
+ 		? __memmove_falkor
+ # if HAVE_AARCH64_SVE_ASM
+-		: (IS_A64FX (midr)
++		: (IS_A64FX (midr) && sve
+ 		   ? __memmove_a64fx
+ 		   : __memmove_generic))));
+ # else
+diff --git a/sysdeps/aarch64/multiarch/memset.c b/sysdeps/aarch64/multiarch/memset.c
+index 2c8cc72bb0b18474..e7bd412377533f18 100644
+--- a/sysdeps/aarch64/multiarch/memset.c
++++ b/sysdeps/aarch64/multiarch/memset.c
+@@ -38,7 +38,7 @@ libc_ifunc (__libc_memset,
+ 	    ((IS_FALKOR (midr) || IS_PHECDA (midr)) && zva_size == 64
+ 	     ? __memset_falkor
+ # if HAVE_AARCH64_SVE_ASM
+-	     : (IS_A64FX (midr)
++	     : (IS_A64FX (midr) && sve
+ 		? __memset_a64fx
+ 		: __memset_generic)));
+ # else

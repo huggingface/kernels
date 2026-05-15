@@ -1,0 +1,19 @@
+commit 6f3331f26d2ee5d210ba768389828c391750f7a0
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Jun 24 11:02:33 2020 +0200
+
+    elf: Include <stdbool.h> in <dl-tunables.h> because bool is used
+
+diff --git a/elf/dl-tunables.h b/elf/dl-tunables.h
+index 928b30dde9fa0489..7f181f3316cd9fc1 100644
+--- a/elf/dl-tunables.h
++++ b/elf/dl-tunables.h
+@@ -21,6 +21,8 @@
+ #ifndef _TUNABLES_H_
+ #define _TUNABLES_H_
+ 
++#include <stdbool.h>
++
+ #if !HAVE_TUNABLES
+ static inline void
+ __always_inline

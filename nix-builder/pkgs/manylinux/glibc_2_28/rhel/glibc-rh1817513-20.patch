@@ -1,0 +1,179 @@
+commit b3fbfe81961a1d14d7b54d1c9757e1f487073bcb
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Feb 12 13:51:43 2019 +0100
+
+    elf: Test for LD_AUDIT module returning zero from la_version [BZ #24122]
+    
+    This includes the original test case from commit
+    8e889c5da3c5981c5a46a93fec02de40131ac5a6 ("elf: Fix LD_AUDIT for
+    modules with invalid version (BZ#24122)).
+
+Conflicts:
+	elf/Makefile
+	  (Different backport order of tests.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 6d1962b2e4deb871..4e1356b9172aee02 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -191,6 +191,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-nodelete2 tst-audit11 tst-audit12 tst-dlsym-error tst-noload \
+ 	 tst-latepthread tst-tls-manydynamic tst-nodelete-dlclose \
+ 	 tst-debug1 tst-main1 tst-absolute-sym tst-absolute-zero tst-big-note \
++	 tst-audit13 \
+ 	 tst-sonamemove-link tst-sonamemove-dlopen tst-initfinilazyfail \
+ 	 tst-dlopenfail tst-dlopenfail-2 \
+ 	 tst-filterobj tst-filterobj-dlopen tst-auxobj tst-auxobj-dlopen
+@@ -300,7 +301,7 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-nodelete-dlclose-dso tst-nodelete-dlclose-plugin \
+ 		tst-main1mod tst-libc_dlvsym-dso tst-absolute-sym-lib \
+ 		tst-absolute-zero-lib tst-big-note-lib \
+-		tst-sonamemove-linkmod1 \
++		tst-audit13mod1 tst-sonamemove-linkmod1 \
+ 		tst-sonamemove-runmod1 tst-sonamemove-runmod2 \
+ 		tst-initlazyfailmod tst-finilazyfailmod \
+ 		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2 \
+@@ -1428,6 +1429,10 @@ tst-audit12-ENV = LD_AUDIT=$(objpfx)tst-auditmod12.so
+ $(objpfx)tst-audit12mod1.so: $(objpfx)tst-audit12mod2.so
+ LDFLAGS-tst-audit12mod2.so = -Wl,--version-script=tst-audit12mod2.map
+ 
++$(objpfx)tst-audit13.out: $(objpfx)tst-audit13mod1.so
++LDFLAGS-tst-audit13mod1.so = -Wl,-z,lazy
++tst-audit13-ENV = LD_AUDIT=$(objpfx)tst-audit13mod1.so
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/tst-audit13.c b/elf/tst-audit13.c
+new file mode 100644
+index 0000000000000000..6f587baf581ce32c
+--- /dev/null
++++ b/elf/tst-audit13.c
+@@ -0,0 +1,28 @@
++/* Check for invalid audit version (BZ#24122).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++
++static int
++do_test (void)
++{
++  puts ("plt call");
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit13mod1.c b/elf/tst-audit13mod1.c
+new file mode 100644
+index 0000000000000000..cf017e235c7ae030
+--- /dev/null
++++ b/elf/tst-audit13mod1.c
+@@ -0,0 +1,93 @@
++/* Check for invalid audit version (BZ#24122).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <stdlib.h>
++
++unsigned int
++la_version (unsigned int version)
++{
++  /* The audit specification says that a version of 0 or a version
++     greater than any version supported by the dynamic loader shall
++     cause the module to be ignored.  */
++  return 0;
++}
++
++void
++la_activity (uintptr_t *cookie, unsigned int flag)
++{
++  exit (EXIT_FAILURE);
++}
++
++char *
++la_objsearch (const char *name, uintptr_t *cookie, unsigned int flag)
++{
++  exit (EXIT_FAILURE);
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t * cookie)
++{
++  exit (EXIT_FAILURE);
++}
++
++void
++la_preinit (uintptr_t * cookie)
++{
++  exit (EXIT_FAILURE);
++}
++
++uintptr_t
++#if __ELF_NATIVE_CLASS == 32
++la_symbind32 (Elf32_Sym *sym, unsigned int ndx, uintptr_t *refcook,
++              uintptr_t *defcook, unsigned int *flags, const char *symname)
++#else
++la_symbind64 (Elf64_Sym *sym, unsigned int ndx, uintptr_t *refcook,
++              uintptr_t *defcook, unsigned int *flags, const char *symname)
++#endif
++{
++  exit (EXIT_FAILURE);
++}
++
++unsigned int
++la_objclose (uintptr_t * cookie)
++{
++  exit (EXIT_FAILURE);
++}
++
++#include <tst-audit.h>
++#if (!defined (pltenter) || !defined (pltexit) || !defined (La_regs) \
++     || !defined (La_retval) || !defined (int_retval))
++# error "architecture specific code needed in sysdeps/CPU/tst-audit.h"
++#endif
++
++ElfW(Addr)
++pltenter (ElfW(Sym) *sym, unsigned int ndx, uintptr_t *refcook,
++          uintptr_t *defcook, La_regs *regs, unsigned int *flags,
++          const char *symname, long int *framesizep)
++{
++  exit (EXIT_FAILURE);
++}
++
++unsigned int
++pltexit (ElfW(Sym) *sym, unsigned int ndx, uintptr_t *refcook,
++         uintptr_t *defcook, const La_regs *inregs, La_retval *outregs,
++         const char *symname)
++{
++  exit (EXIT_FAILURE);
++}

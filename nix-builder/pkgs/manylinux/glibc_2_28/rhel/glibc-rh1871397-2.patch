@@ -1,0 +1,123 @@
+From 23ed36735af09c258e542266aaed92cdd8571c6c Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Thu, 16 Jul 2020 16:21:28 +0200
+Subject: [PATCH 02/11] nss_compat: Do not use mmap to read database files (bug
+ 26258)
+
+This avoids crashes in case the files are truncated for some reason.
+For typically file sizes, it is also going to be slightly faster.
+Using __nss_files_fopen instead mirrors what nss_files does.
+
+Tested-by: Carlos O'Donell <carlos@redhat.com>
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+---
+ nss/nss_compat/compat-grp.c        | 6 ++----
+ nss/nss_compat/compat-initgroups.c | 6 ++----
+ nss/nss_compat/compat-pwd.c        | 6 ++----
+ nss/nss_compat/compat-spwd.c       | 6 ++----
+ 4 files changed, 8 insertions(+), 16 deletions(-)
+
+diff -rup a/nss/nss_compat/compat-grp.c b/nss/nss_compat/compat-grp.c
+--- a/nss/nss_compat/compat-grp.c	2020-09-14 15:49:18.248178627 -0400
++++ b/nss/nss_compat/compat-grp.c	2020-09-14 17:18:22.514977541 -0400
+@@ -26,6 +26,7 @@
+ #include <string.h>
+ #include <libc-lock.h>
+ #include <kernel-features.h>
++#include <nss_files.h>
+ 
+ static service_user *ni;
+ static enum nss_status (*nss_setgrent) (int stayopen);
+@@ -106,13 +107,10 @@ internal_setgrent (ent_t *ent, int stayo
+ 
+   if (ent->stream == NULL)
+     {
+-      ent->stream = fopen ("/etc/group", "rme");
++      ent->stream = __nss_files_fopen ("/etc/group");
+ 
+       if (ent->stream == NULL)
+ 	status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+-      else
+-	/* We take care of locking ourself.  */
+-	__fsetlocking (ent->stream, FSETLOCKING_BYCALLER);
+     }
+   else
+     rewind (ent->stream);
+diff -rup a/nss/nss_compat/compat-initgroups.c b/nss/nss_compat/compat-initgroups.c
+--- a/nss/nss_compat/compat-initgroups.c	2020-09-14 15:49:18.255178892 -0400
++++ b/nss/nss_compat/compat-initgroups.c	2020-09-14 17:18:22.519977728 -0400
+@@ -29,6 +29,7 @@
+ #include <libc-lock.h>
+ #include <kernel-features.h>
+ #include <scratch_buffer.h>
++#include <nss_files.h>
+ 
+ static service_user *ni;
+ /* Type of the lookup function.  */
+@@ -121,13 +122,10 @@ internal_setgrent (ent_t *ent)
+   else
+     ent->blacklist.current = 0;
+ 
+-  ent->stream = fopen ("/etc/group", "rme");
++  ent->stream = __nss_files_fopen ("/etc/group");
+ 
+   if (ent->stream == NULL)
+     status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+-  else
+-    /* We take care of locking ourself.  */
+-    __fsetlocking (ent->stream, FSETLOCKING_BYCALLER);
+ 
+   return status;
+ }
+diff -rup a/nss/nss_compat/compat-pwd.c b/nss/nss_compat/compat-pwd.c
+--- a/nss/nss_compat/compat-pwd.c	2020-09-14 15:49:18.260179081 -0400
++++ b/nss/nss_compat/compat-pwd.c	2020-09-14 17:18:22.523977879 -0400
+@@ -27,6 +27,7 @@
+ #include <string.h>
+ #include <libc-lock.h>
+ #include <kernel-features.h>
++#include <nss_files.h>
+ 
+ #include "netgroup.h"
+ #include "nisdomain.h"
+@@ -221,13 +222,10 @@ internal_setpwent (ent_t *ent, int stayo
+ 
+   if (ent->stream == NULL)
+     {
+-      ent->stream = fopen ("/etc/passwd", "rme");
++      ent->stream = __nss_files_fopen ("/etc/passwd");
+ 
+       if (ent->stream == NULL)
+ 	status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+-      else
+-	/* We take care of locking ourself.  */
+-	__fsetlocking (ent->stream, FSETLOCKING_BYCALLER);
+     }
+   else
+     rewind (ent->stream);
+diff -rup a/nss/nss_compat/compat-spwd.c b/nss/nss_compat/compat-spwd.c
+--- a/nss/nss_compat/compat-spwd.c	2020-09-14 15:49:18.264179232 -0400
++++ b/nss/nss_compat/compat-spwd.c	2020-09-14 17:18:22.527978029 -0400
+@@ -27,6 +27,7 @@
+ #include <string.h>
+ #include <libc-lock.h>
+ #include <kernel-features.h>
++#include <nss_files.h>
+ 
+ #include "netgroup.h"
+ #include "nisdomain.h"
+@@ -177,13 +178,10 @@ internal_setspent (ent_t *ent, int stayo
+ 
+   if (ent->stream == NULL)
+     {
+-      ent->stream = fopen ("/etc/shadow", "rme");
++      ent->stream = __nss_files_fopen ("/etc/shadow");
+ 
+       if (ent->stream == NULL)
+ 	status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+-      else
+-	/* We take care of locking ourself.  */
+-	__fsetlocking (ent->stream, FSETLOCKING_BYCALLER);
+     }
+   else
+     rewind (ent->stream);

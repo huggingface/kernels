@@ -1,0 +1,151 @@
+From ecd8b842cf37ea112e59cd9085ff1f1b6e208ae0 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 21 Jan 2019 11:29:58 -0800
+Subject: [PATCH] x86-64 memrchr: Properly handle the length parameter [BZ#
+ 24097]
+Content-type: text/plain; charset=UTF-8
+
+On x32, the size_t parameter may be passed in the lower 32 bits of a
+64-bit register with the non-zero upper 32 bits.  The string/memory
+functions written in assembly can only use the lower 32 bits of a
+64-bit register as length or must clear the upper 32 bits before using
+the full 64-bit register for length.
+
+This pach fixes memrchr for x32.  Tested on x86-64 and x32.  On x86-64,
+libc.so is the same with and withou the fix.
+
+	[BZ# 24097]
+	CVE-2019-6488
+	* sysdeps/x86_64/memrchr.S: Use RDX_LP for length.
+	* sysdeps/x86_64/multiarch/memrchr-avx2.S: Likewise.
+	* sysdeps/x86_64/x32/Makefile (tests): Add tst-size_t-memrchr.
+	* sysdeps/x86_64/x32/tst-size_t-memrchr.c: New file.
+---
+ sysdeps/x86_64/memrchr.S                |  4 +-
+ sysdeps/x86_64/multiarch/memrchr-avx2.S |  4 +-
+ sysdeps/x86_64/x32/Makefile             |  3 +-
+ sysdeps/x86_64/x32/tst-size_t-memrchr.c | 57 +++++++++++++++++++++++++
+ 4 files changed, 63 insertions(+), 5 deletions(-)
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-memrchr.c
+
+Conflicts:
+	ChangeLog
+	(removed)
+
+diff --git a/sysdeps/x86_64/memrchr.S b/sysdeps/x86_64/memrchr.S
+index b8e3fa1d..dc82f8f7 100644
+--- a/sysdeps/x86_64/memrchr.S
++++ b/sysdeps/x86_64/memrchr.S
+@@ -24,13 +24,13 @@
+ ENTRY (__memrchr)
+ 	movd	%esi, %xmm1
+ 
+-	sub	$16, %rdx
++	sub	$16, %RDX_LP
+ 	jbe	L(length_less16)
+ 
+ 	punpcklbw	%xmm1, %xmm1
+ 	punpcklbw	%xmm1, %xmm1
+ 
+-	add	%rdx, %rdi
++	add	%RDX_LP, %RDI_LP
+ 	pshufd	$0, %xmm1, %xmm1
+ 
+ 	movdqu	(%rdi), %xmm0
+diff --git a/sysdeps/x86_64/multiarch/memrchr-avx2.S b/sysdeps/x86_64/multiarch/memrchr-avx2.S
+index b41a58bc..ce488dd9 100644
+--- a/sysdeps/x86_64/multiarch/memrchr-avx2.S
++++ b/sysdeps/x86_64/multiarch/memrchr-avx2.S
+@@ -32,10 +32,10 @@ ENTRY (__memrchr_avx2)
+ 	vmovd	%esi, %xmm0
+ 	vpbroadcastb %xmm0, %ymm0
+ 
+-	subq	$VEC_SIZE, %rdx
++	sub	$VEC_SIZE, %RDX_LP
+ 	jbe	L(last_vec_or_less)
+ 
+-	addq	%rdx, %rdi
++	add	%RDX_LP, %RDI_LP
+ 
+ 	/* Check the last VEC_SIZE bytes.  */
+ 	vpcmpeqb (%rdi), %ymm0, %ymm1
+diff --git a/sysdeps/x86_64/x32/Makefile b/sysdeps/x86_64/x32/Makefile
+index 2fe1e5ac..e99dbd7c 100644
+--- a/sysdeps/x86_64/x32/Makefile
++++ b/sysdeps/x86_64/x32/Makefile
+@@ -6,7 +6,8 @@ CFLAGS-s_llround.c += -fno-builtin-lround
+ endif
+ 
+ ifeq ($(subdir),string)
+-tests += tst-size_t-memchr tst-size_t-memcmp tst-size_t-memcpy
++tests += tst-size_t-memchr tst-size_t-memcmp tst-size_t-memcpy \
++	 tst-size_t-memrchr
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+diff --git a/sysdeps/x86_64/x32/tst-size_t-memrchr.c b/sysdeps/x86_64/x32/tst-size_t-memrchr.c
+new file mode 100644
+index 00000000..c83699c0
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-memrchr.c
+@@ -0,0 +1,57 @@
++/* Test memrchr with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define TEST_NAME "memrchr"
++#include "test-size_t.h"
++
++IMPL (memchr, 1)
++
++typedef void * (*proto_t) (const void *, int, size_t);
++
++static void *
++__attribute__ ((noinline, noclone))
++do_memrchr (parameter_t a, parameter_t b)
++{
++  return CALL (&b, a.p, (uintptr_t) b.p, a.len);
++}
++
++static int
++test_main (void)
++{
++  test_init ();
++
++  parameter_t src = { { page_size }, buf2 };
++  parameter_t c = { { 0 }, (void *) (uintptr_t) 0x12 };
++
++  int ret = 0;
++  FOR_EACH_IMPL (impl, 0)
++    {
++      c.fn = impl->fn;
++      void * res = do_memrchr (src, c);
++      if (res)
++	{
++	  error (0, 0, "Wrong result in function %s: %p != NULL",
++		 impl->name, res);
++	  ret = 1;
++	}
++    }
++
++  return ret ? EXIT_FAILURE : EXIT_SUCCESS;
++}
++
++#include <support/test-driver.c>
+-- 
+GitLab
+

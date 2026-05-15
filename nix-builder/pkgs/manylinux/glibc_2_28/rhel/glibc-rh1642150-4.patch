@@ -1,0 +1,36 @@
+commit e627106266ad8785457fadbf5bf67ed604d2a353
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon May 11 11:20:02 2020 +0200
+
+    POWER: Add context-synchronizing instructions to pkey_write [BZ #25954]
+    
+    Sandipan Das reported that,
+    
+    "The Power ISA mandates that all writes to the Authority
+    Mask Register (AMR) must always be preceded as well as
+    succeeded by a context-synchronizing instruction. This
+    applies to both the privileged and unprivileged variants
+    of the Move To AMR instruction.
+    
+    This [requirement] is from Table 6 of Chapter 11 in page 1134 of Power
+    ISA 3.0B. The document can be found here:
+    <https://ibm.ent.box.com/s/1hzcwkwf8rbju5h9iyf44wm94amnlcrv>
+    "
+    
+    See this kernel patch submission:
+    
+    <https://lore.kernel.org/linuxppc-dev/5f65cf37be993760de8112a88da194e3ccbb2bf8.1588959697.git.sandipan@linux.ibm.com/>
+
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h b/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h
+index 623b073d5a585d51..25d080c9a6f30942 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h
+@@ -37,7 +37,7 @@ pkey_read (void)
+ static inline void
+ pkey_write (unsigned long int value)
+ {
+-  __asm__ volatile ("mtspr 13, %0" : : "r" (value));
++  __asm__ volatile ("isync; mtspr 13, %0; isync" : : "r" (value));
+ }
+ 
+ /* Number of the largest supported key.  This depends on the width of

@@ -1,0 +1,31 @@
+Short description: Place glibc info into "Libraries" category.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Upstream status: not-needed
+
+The category names for libraries is completely random including
+"Libraries", "GNU Libraries", "GNU libraries", and "Software libraries."
+In the GNU info manual the "Software libraries" category is given as an
+example, but really we need to standardize on a category for upstream.
+I suggest we drop this change after some upstream discussion.
+
+From 4820b9175535e13df79ce816106016040014916e Mon Sep 17 00:00:00 2001
+From: Jakub Jelinek <jakub@redhat.com>
+Date: Fri, 3 Nov 2006 16:31:21 +0000
+Subject: [PATCH] Change @dircategory.
+
+---
+ manual/libc.texinfo |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+--- a/manual/libc.texinfo
++++ b/manual/libc.texinfo
+@@ -7,7 +7,7 @@
+ @include macros.texi
+ 
+ @comment Tell install-info what to do.
+-@dircategory Software libraries
++@dircategory Libraries
+ @direntry
+ * Libc: (libc).                 C library.
+ @end direntry

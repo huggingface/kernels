@@ -1,0 +1,545 @@
+From 0d3905b110000463775b3fb189213833acaebf81 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 1 Jul 2019 12:23:10 -0700
+Subject: Call _dl_open_check after relocation [BZ #24259]
+
+This is a workaround for [BZ #20839] which doesn't remove the NODELETE
+object when _dl_open_check throws an exception.  Move it after relocation
+in dl_open_worker to avoid leaving the NODELETE object mapped without
+relocation.
+
+	[BZ #24259]
+	* elf/dl-open.c (dl_open_worker): Call _dl_open_check after
+	relocation.
+	* sysdeps/x86/Makefile (tests): Add tst-cet-legacy-5a,
+	tst-cet-legacy-5b, tst-cet-legacy-6a and tst-cet-legacy-6b.
+	(modules-names): Add tst-cet-legacy-mod-5a, tst-cet-legacy-mod-5b,
+	tst-cet-legacy-mod-5c, tst-cet-legacy-mod-6a, tst-cet-legacy-mod-6b
+	and tst-cet-legacy-mod-6c.
+	(CFLAGS-tst-cet-legacy-5a.c): New.
+	(CFLAGS-tst-cet-legacy-5b.c): Likewise.
+	(CFLAGS-tst-cet-legacy-mod-5a.c): Likewise.
+	(CFLAGS-tst-cet-legacy-mod-5b.c): Likewise.
+	(CFLAGS-tst-cet-legacy-mod-5c.c): Likewise.
+	(CFLAGS-tst-cet-legacy-6a.c): Likewise.
+	(CFLAGS-tst-cet-legacy-6b.c): Likewise.
+	(CFLAGS-tst-cet-legacy-mod-6a.c): Likewise.
+	(CFLAGS-tst-cet-legacy-mod-6b.c): Likewise.
+	(CFLAGS-tst-cet-legacy-mod-6c.c): Likewise.
+	($(objpfx)tst-cet-legacy-5a): Likewise.
+	($(objpfx)tst-cet-legacy-5a.out): Likewise.
+	($(objpfx)tst-cet-legacy-mod-5a.so): Likewise.
+	($(objpfx)tst-cet-legacy-mod-5b.so): Likewise.
+	($(objpfx)tst-cet-legacy-5b): Likewise.
+	($(objpfx)tst-cet-legacy-5b.out): Likewise.
+	(tst-cet-legacy-5b-ENV): Likewise.
+	($(objpfx)tst-cet-legacy-6a): Likewise.
+	($(objpfx)tst-cet-legacy-6a.out): Likewise.
+	($(objpfx)tst-cet-legacy-mod-6a.so): Likewise.
+	($(objpfx)tst-cet-legacy-mod-6b.so): Likewise.
+	($(objpfx)tst-cet-legacy-6b): Likewise.
+	($(objpfx)tst-cet-legacy-6b.out): Likewise.
+	(tst-cet-legacy-6b-ENV): Likewise.
+	* sysdeps/x86/tst-cet-legacy-5.c: New file.
+	* sysdeps/x86/tst-cet-legacy-5a.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-5b.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-6.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-6a.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-6b.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-5.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-5a.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-5b.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-5c.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-6.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-6a.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-6b.c: Likewise.
+	* sysdeps/x86/tst-cet-legacy-mod-6c.c: Likewise.
+
+(cherry picked from commit d0093c5cefb7f7a4143f3bb03743633823229cc6)
+
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index f6c8ef1043..518a6cad69 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -292,8 +292,6 @@ dl_open_worker (void *a)
+   _dl_debug_state ();
+   LIBC_PROBE (map_complete, 3, args->nsid, r, new);
+ 
+-  _dl_open_check (new);
+-
+   /* Print scope information.  */
+   if (__glibc_unlikely (GLRO(dl_debug_mask) & DL_DEBUG_SCOPES))
+     _dl_show_scope (new, 0);
+@@ -366,6 +364,12 @@ dl_open_worker (void *a)
+ 	_dl_relocate_object (l, l->l_scope, reloc_mode, 0);
+     }
+ 
++  /* NB: Workaround for [BZ #20839] which doesn't remove the NODELETE
++     object when _dl_open_check throws an exception.  Move it after
++     relocation to avoid leaving the NODELETE object mapped without
++     relocation.  */
++  _dl_open_check (new);
++
+   /* If the file is not loaded now as a dependency, add the search
+      list of the newly loaded object to the scope.  */
+   bool any_tls = false;
+diff --git a/sysdeps/x86/Makefile b/sysdeps/x86/Makefile
+index 337b0b63dc..43ad4a79ff 100644
+--- a/sysdeps/x86/Makefile
++++ b/sysdeps/x86/Makefile
+@@ -19,12 +19,17 @@ ifeq ($(subdir),elf)
+ sysdep-dl-routines += dl-cet
+ 
+ tests += tst-cet-legacy-1 tst-cet-legacy-2 tst-cet-legacy-2a \
+-	 tst-cet-legacy-3 tst-cet-legacy-4
++	 tst-cet-legacy-3 tst-cet-legacy-4 \
++	 tst-cet-legacy-5a tst-cet-legacy-6a
+ ifneq (no,$(have-tunables))
+-tests += tst-cet-legacy-4a tst-cet-legacy-4b tst-cet-legacy-4c
++tests += tst-cet-legacy-4a tst-cet-legacy-4b tst-cet-legacy-4c \
++	 tst-cet-legacy-5b tst-cet-legacy-6b
+ endif
+ modules-names += tst-cet-legacy-mod-1 tst-cet-legacy-mod-2 \
+-		 tst-cet-legacy-mod-4
++		 tst-cet-legacy-mod-4 tst-cet-legacy-mod-5a \
++		 tst-cet-legacy-mod-5b tst-cet-legacy-mod-5c \
++		 tst-cet-legacy-mod-6a tst-cet-legacy-mod-6b \
++		 tst-cet-legacy-mod-6c
+ 
+ CFLAGS-tst-cet-legacy-2.c += -fcf-protection=branch
+ CFLAGS-tst-cet-legacy-2a.c += -fcf-protection
+@@ -35,6 +40,16 @@ CFLAGS-tst-cet-legacy-4.c += -fcf-protection=branch
+ CFLAGS-tst-cet-legacy-4a.c += -fcf-protection
+ CFLAGS-tst-cet-legacy-4b.c += -fcf-protection
+ CFLAGS-tst-cet-legacy-mod-4.c += -fcf-protection=none
++CFLAGS-tst-cet-legacy-5a.c += -fcf-protection
++CFLAGS-tst-cet-legacy-5b.c += -fcf-protection
++CFLAGS-tst-cet-legacy-mod-5a.c += -fcf-protection=none
++CFLAGS-tst-cet-legacy-mod-5b.c += -fcf-protection
++CFLAGS-tst-cet-legacy-mod-5c.c += -fcf-protection
++CFLAGS-tst-cet-legacy-6a.c += -fcf-protection
++CFLAGS-tst-cet-legacy-6b.c += -fcf-protection
++CFLAGS-tst-cet-legacy-mod-6a.c += -fcf-protection=none
++CFLAGS-tst-cet-legacy-mod-6b.c += -fcf-protection
++CFLAGS-tst-cet-legacy-mod-6c.c += -fcf-protection
+ 
+ $(objpfx)tst-cet-legacy-1: $(objpfx)tst-cet-legacy-mod-1.so \
+ 		       $(objpfx)tst-cet-legacy-mod-2.so
+@@ -44,6 +59,17 @@ $(objpfx)tst-cet-legacy-2a: $(objpfx)tst-cet-legacy-mod-2.so $(libdl)
+ $(objpfx)tst-cet-legacy-2a.out: $(objpfx)tst-cet-legacy-mod-1.so
+ $(objpfx)tst-cet-legacy-4: $(libdl)
+ $(objpfx)tst-cet-legacy-4.out: $(objpfx)tst-cet-legacy-mod-4.so
++$(objpfx)tst-cet-legacy-5a: $(libdl)
++$(objpfx)tst-cet-legacy-5a.out: $(objpfx)tst-cet-legacy-mod-5a.so \
++				$(objpfx)tst-cet-legacy-mod-5b.so
++$(objpfx)tst-cet-legacy-mod-5a.so: $(objpfx)tst-cet-legacy-mod-5c.so
++$(objpfx)tst-cet-legacy-mod-5b.so: $(objpfx)tst-cet-legacy-mod-5c.so
++$(objpfx)tst-cet-legacy-6a: $(libdl)
++$(objpfx)tst-cet-legacy-6a.out: $(objpfx)tst-cet-legacy-mod-6a.so \
++				$(objpfx)tst-cet-legacy-mod-6b.so
++$(objpfx)tst-cet-legacy-mod-6a.so: $(objpfx)tst-cet-legacy-mod-6c.so
++$(objpfx)tst-cet-legacy-mod-6b.so: $(objpfx)tst-cet-legacy-mod-6c.so
++LDFLAGS-tst-cet-legacy-mod-6c.so = -Wl,--enable-new-dtags,-z,nodelete
+ ifneq (no,$(have-tunables))
+ $(objpfx)tst-cet-legacy-4a: $(libdl)
+ $(objpfx)tst-cet-legacy-4a.out: $(objpfx)tst-cet-legacy-mod-4.so
+@@ -54,6 +80,14 @@ tst-cet-legacy-4b-ENV = GLIBC_TUNABLES=glibc.tune.x86_shstk=on
+ $(objpfx)tst-cet-legacy-4c: $(libdl)
+ $(objpfx)tst-cet-legacy-4c.out: $(objpfx)tst-cet-legacy-mod-4.so
+ tst-cet-legacy-4c-ENV = GLIBC_TUNABLES=glibc.tune.x86_shstk=off
++$(objpfx)tst-cet-legacy-5b: $(libdl)
++$(objpfx)tst-cet-legacy-5b.out: $(objpfx)tst-cet-legacy-mod-5a.so \
++				$(objpfx)tst-cet-legacy-mod-5b.so
++tst-cet-legacy-5b-ENV = GLIBC_TUNABLES=glibc.tune.x86_ibt=off:glibc.tune.x86_shstk=off
++$(objpfx)tst-cet-legacy-6b: $(libdl)
++$(objpfx)tst-cet-legacy-6b.out: $(objpfx)tst-cet-legacy-mod-6a.so \
++				$(objpfx)tst-cet-legacy-mod-6b.so
++tst-cet-legacy-6b-ENV = GLIBC_TUNABLES=glibc.tune.x86_ibt=off:glibc.tune.x86_shstk=off
+ endif
+ endif
+ 
+diff --git a/sysdeps/x86/tst-cet-legacy-5.c b/sysdeps/x86/tst-cet-legacy-5.c
+new file mode 100644
+index 0000000000..fbf640f664
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-5.c
+@@ -0,0 +1,76 @@
++/* Check compatibility of CET-enabled executable with dlopened legacy
++   shared object.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdbool.h>
++#include <string.h>
++
++static void
++do_test_1 (const char *modname, bool fail)
++{
++  int (*fp) (void);
++  void *h;
++
++  h = dlopen (modname, RTLD_LAZY);
++  if (h == NULL)
++    {
++      if (fail)
++	{
++	  const char *err = dlerror ();
++	  if (strstr (err, "shadow stack isn't enabled") == NULL)
++	    {
++	      printf ("incorrect dlopen '%s' error: %s\n", modname,
++		      dlerror ());
++	      exit (1);
++	    }
++
++	  return;
++	}
++
++      printf ("cannot open '%s': %s\n", modname, dlerror ());
++      exit (1);
++    }
++
++  fp = dlsym (h, "test");
++  if (fp == NULL)
++    {
++      printf ("cannot get symbol 'test': %s\n", dlerror ());
++      exit (1);
++    }
++
++  if (fp () != 0)
++    {
++      puts ("test () != 0");
++      exit (1);
++    }
++
++  dlclose (h);
++}
++
++static int
++do_test (void)
++{
++  do_test_1 ("tst-cet-legacy-mod-5a.so", true);
++  do_test_1 ("tst-cet-legacy-mod-5b.so", false);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/x86/tst-cet-legacy-5a.c b/sysdeps/x86/tst-cet-legacy-5a.c
+new file mode 100644
+index 0000000000..fc5a609dff
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-5a.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-5.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-5b.c b/sysdeps/x86/tst-cet-legacy-5b.c
+new file mode 100644
+index 0000000000..fc5a609dff
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-5b.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-5.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-6.c b/sysdeps/x86/tst-cet-legacy-6.c
+new file mode 100644
+index 0000000000..9151225264
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-6.c
+@@ -0,0 +1,76 @@
++/* Check compatibility of CET-enabled executable with dlopened legacy
++   shared object.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdbool.h>
++#include <string.h>
++
++static void
++do_test_1 (const char *modname, bool fail)
++{
++  int (*fp) (void);
++  void *h;
++
++  h = dlopen (modname, RTLD_LAZY);
++  if (h == NULL)
++    {
++      if (fail)
++	{
++	  const char *err = dlerror ();
++	  if (strstr (err, "shadow stack isn't enabled") == NULL)
++	    {
++	      printf ("incorrect dlopen '%s' error: %s\n", modname,
++		      dlerror ());
++	      exit (1);
++	    }
++
++	  return;
++	}
++
++      printf ("cannot open '%s': %s\n", modname, dlerror ());
++      exit (1);
++    }
++
++  fp = dlsym (h, "test");
++  if (fp == NULL)
++    {
++      printf ("cannot get symbol 'test': %s\n", dlerror ());
++      exit (1);
++    }
++
++  if (fp () != 0)
++    {
++      puts ("test () != 0");
++      exit (1);
++    }
++
++  dlclose (h);
++}
++
++static int
++do_test (void)
++{
++  do_test_1 ("tst-cet-legacy-mod-6a.so", true);
++  do_test_1 ("tst-cet-legacy-mod-6b.so", false);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/x86/tst-cet-legacy-6a.c b/sysdeps/x86/tst-cet-legacy-6a.c
+new file mode 100644
+index 0000000000..2d1546d36b
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-6a.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-6.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-6b.c b/sysdeps/x86/tst-cet-legacy-6b.c
+new file mode 100644
+index 0000000000..2d1546d36b
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-6b.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-6.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-5.c b/sysdeps/x86/tst-cet-legacy-mod-5.c
+new file mode 100644
+index 0000000000..3c1071c2ef
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-5.c
+@@ -0,0 +1,31 @@
++/* Check compatibility of CET-enabled executable with dlopened legacy
++   shared object.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <error.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++extern void foo (void);
++
++int
++test (void)
++{
++  foo ();
++  return 0;
++}
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-5a.c b/sysdeps/x86/tst-cet-legacy-mod-5a.c
+new file mode 100644
+index 0000000000..daa43e4e8d
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-5a.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-mod-5.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-5b.c b/sysdeps/x86/tst-cet-legacy-mod-5b.c
+new file mode 100644
+index 0000000000..daa43e4e8d
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-5b.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-mod-5.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-5c.c b/sysdeps/x86/tst-cet-legacy-mod-5c.c
+new file mode 100644
+index 0000000000..e529a42ac0
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-5c.c
+@@ -0,0 +1,36 @@
++/* Check compatibility of CET-enabled executable with dlopened legacy
++   shared object.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++static int called = 0;
++
++static void
++__attribute__ ((constructor))
++init (void)
++{
++  called = 1;
++}
++
++void
++foo (void)
++{
++  if (!called)
++    abort ();
++}
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-6.c b/sysdeps/x86/tst-cet-legacy-mod-6.c
+new file mode 100644
+index 0000000000..3c1071c2ef
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-6.c
+@@ -0,0 +1,31 @@
++/* Check compatibility of CET-enabled executable with dlopened legacy
++   shared object.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <error.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++extern void foo (void);
++
++int
++test (void)
++{
++  foo ();
++  return 0;
++}
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-6a.c b/sysdeps/x86/tst-cet-legacy-mod-6a.c
+new file mode 100644
+index 0000000000..c89b8fe8ff
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-6a.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-mod-6.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-6b.c b/sysdeps/x86/tst-cet-legacy-mod-6b.c
+new file mode 100644
+index 0000000000..c89b8fe8ff
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-6b.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-mod-6.c"
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-6c.c b/sysdeps/x86/tst-cet-legacy-mod-6c.c
+new file mode 100644
+index 0000000000..e529a42ac0
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-6c.c
+@@ -0,0 +1,36 @@
++/* Check compatibility of CET-enabled executable with dlopened legacy
++   shared object.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++
++static int called = 0;
++
++static void
++__attribute__ ((constructor))
++init (void)
++{
++  called = 1;
++}
++
++void
++foo (void)
++{
++  if (!called)
++    abort ();
++}
+diff --git a/sysdeps/x86/tst-cet-legacy-mod-6d.c b/sysdeps/x86/tst-cet-legacy-mod-6d.c
+new file mode 100644
+index 0000000000..eb233a1d10
+--- /dev/null
++++ b/sysdeps/x86/tst-cet-legacy-mod-6d.c
+@@ -0,0 +1 @@
++#include "tst-cet-legacy-mod-6c.c"

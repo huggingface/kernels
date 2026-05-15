@@ -1,0 +1,51 @@
+commit cb81264fd9973cd95bbc71495185b98979d28918
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 11 17:24:08 2020 +0100
+
+    support: Add support_slibdir_prefix variable
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/support/Makefile b/support/Makefile
+index 35b21b19a248ba7f..dcf3c4baa2a31070 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -184,6 +184,7 @@ CFLAGS-support_paths.c = \
+ 		-DLIBDIR_PATH=\"$(libdir)\" \
+ 		-DBINDIR_PATH=\"$(bindir)\" \
+ 		-DSBINDIR_PATH=\"$(sbindir)\" \
++		-DSLIBDIR_PATH=\"$(slibdir)\" \
+ 		-DROOTSBINDIR_PATH=\"$(rootsbindir)\" \
+ 		-DCOMPLOCALEDIR_PATH=\"$(complocaledir)\"
+ 
+diff --git a/support/support.h b/support/support.h
+index 6f7f804847f67600..f50f8cc1496d657d 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -110,6 +110,8 @@ extern const char support_libdir_prefix[];
+ extern const char support_bindir_prefix[];
+ /* Corresponds to the install's sbin/ directory.  */
+ extern const char support_sbindir_prefix[];
++/* Corresponds to the install's system /lib or /lib64 directory.  */
++extern const char support_slibdir_prefix[];
+ /* Corresponds to the install's sbin/ directory (without prefix).  */
+ extern const char support_install_rootsbindir[];
+ /* Corresponds to the install's compiled locale directory.  */
+diff --git a/support/support_paths.c b/support/support_paths.c
+index 6b15fae0f0173b1e..be61c8acee3ec1a5 100644
+--- a/support/support_paths.c
++++ b/support/support_paths.c
+@@ -72,6 +72,13 @@ const char support_sbindir_prefix[] = SBINDIR_PATH;
+ # error please -DSBINDIR_PATH=something in the Makefile
+ #endif
+ 
++#ifdef SLIBDIR_PATH
++/* Corresponds to the system /lib or /lib64 directory.  */
++const char support_slibdir_prefix[] = SLIBDIR_PATH;
++#else
++# error please -DSLIBDIR_PATH=something in the Makefile
++#endif
++
+ #ifdef ROOTSBINDIR_PATH
+ /* Corresponds to the install's sbin/ directory.  */
+ const char support_install_rootsbindir[] = ROOTSBINDIR_PATH;

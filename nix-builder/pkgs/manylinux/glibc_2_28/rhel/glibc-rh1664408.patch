@@ -1,0 +1,131 @@
+commit 2ef427168818ce04b03cecb7b739f9db0156e3e4
+Author: Aurelien Jarno <aurelien@aurel32.net>
+Date:   Thu Jan 3 15:51:37 2019 +0100
+
+    Only build libm with -fno-math-errno (bug 24024)
+    
+    Commit 1294b1892e ("Add support for sqrt asm redirects") added the
+    -fno-math-errno flag to build most of the glibc in order to enable GCC
+    to inline math functions. Due to GCC bug #88576, saving and restoring
+    errno around calls to malloc are optimized-out. In turn this causes
+    strerror to set errno to ENOMEM if it get passed an invalid error number
+    and if malloc sets errno to ENOMEM (which might happen even if it
+    succeeds). This is not allowed by POSIX.
+    
+    This patch changes the build flags, building only libm with
+    -fno-math-errno and all the remaining code with -fno-math-errno. This
+    should be safe as libm doesn't contain any code saving and restoring
+    errno around malloc. This patch can probably be reverted once the GCC
+    bug is fixed and available in stable releases.
+    
+    Tested on x86-64, no regression in the testsuite.
+    
+    Changelog:
+            [BZ #24024]
+            * Makeconfig: Build libm with -fno-math-errno but build the remaining
+            code with -fmath-errno.
+            * string/Makefile [$(build-shared)] (tests): Add test-strerror-errno.
+            [$(build-shared)] (LDLIBS-test-strerror-errno): New variable.
+            * string/test-strerror-errno.c: New file.
+
+diff --git a/Makeconfig b/Makeconfig
+index 92e76d6200bbcd5b..8dc2fec9dc683416 100644
+--- a/Makeconfig
++++ b/Makeconfig
+@@ -831,8 +831,10 @@ endif
+ # disable any optimization that assume default rounding mode.
+ +math-flags = -frounding-math
+ 
+-# Build libc/libm using -fno-math-errno, but run testsuite with -fmath-errno.
+-+extra-math-flags = $(if $(filter libnldbl nonlib testsuite,$(in-module)),-fmath-errno,-fno-math-errno)
++# Logically only "libnldbl", "nonlib" and "testsuite" should be using
++# -fno-math-errno. However due to GCC bug #88576, only "libm" can use
++# -fno-math-errno.
+++extra-math-flags = $(if $(filter libm,$(in-module)),-fno-math-errno,-fmath-errno)
+ 
+ # We might want to compile with some stack-protection flag.
+ ifneq ($(stack-protector),)
+diff --git a/string/Makefile b/string/Makefile
+index 680431f92185f914..aa2da9ca72262886 100644
+--- a/string/Makefile
++++ b/string/Makefile
+@@ -64,6 +64,12 @@ tests		:= tester inl-tester noinl-tester testcopy test-ffs	\
+ # This test allocates a lot of memory and can run for a long time.
+ xtests = tst-strcoll-overflow
+ 
++# This test needs libdl.
++ifeq (yes,$(build-shared))
++tests += test-strerror-errno
++LDLIBS-test-strerror-errno = $(libdl)
++endif
++
+ ifeq ($(run-built-tests),yes)
+ tests-special += $(objpfx)tst-svc-cmp.out
+ endif
+diff --git a/string/test-strerror-errno.c b/string/test-strerror-errno.c
+new file mode 100644
+index 0000000000000000..8e744e7ed9df5924
+--- /dev/null
++++ b/string/test-strerror-errno.c
+@@ -0,0 +1,61 @@
++/* BZ #24024 strerror and errno test.
++
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <errno.h>
++#include <string.h>
++
++#include <support/check.h>
++#include <support/support.h>
++
++/* malloc is allowed to change errno to a value different than 0, even when
++   there is no actual error.  This happens for example when the memory
++   allocation through sbrk fails.  Simulate this by interposing our own
++   malloc implementation which sets errno to ENOMEM and calls the original
++   malloc.  */
++void
++*malloc (size_t size)
++{
++  static void *(*real_malloc) (size_t size);
++
++  if (!real_malloc)
++    real_malloc = dlsym (RTLD_NEXT, "malloc");
++
++  errno = ENOMEM;
++
++  return (*real_malloc) (size);
++}
++
++/* strerror must not change the value of errno.  Unfortunately due to GCC bug
++   #88576, this happens when -fmath-errno is used.  This simple test checks
++   that it doesn't happen.  */
++static int
++do_test (void)
++{
++  char *msg;
++
++  errno = 0;
++  msg = strerror (-3);
++  (void) msg;
++  TEST_COMPARE (errno, 0);
++
++  return 0;
++}
++
++#include <support/test-driver.c>

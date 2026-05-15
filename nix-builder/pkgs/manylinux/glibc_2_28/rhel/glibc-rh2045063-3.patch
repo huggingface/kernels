@@ -1,0 +1,80 @@
+commit ef972a4c50014a16132b5c75571cfb6b30bef136
+Author: Martin Sebor <msebor@redhat.com>
+Date:   Mon Jan 17 10:21:34 2022 +0100
+
+    sunrpc: Test case for clnt_create "unix" buffer overflow (bug 22542)
+    
+    Reviewed-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+# Conflicts:
+#	sunrpc/Makefile
+
+diff --git a/sunrpc/Makefile b/sunrpc/Makefile
+index 85b0b3356aaf81a3..2f8f0597c99e117f 100644
+--- a/sunrpc/Makefile
++++ b/sunrpc/Makefile
+@@ -95,7 +95,8 @@ others += rpcgen
+ endif
+ 
+ tests = tst-xdrmem tst-xdrmem2 test-rpcent tst-udp-error tst-udp-timeout \
+-  tst-udp-nonblocking
++  tst-udp-nonblocking tst-bug22542
++
+ xtests := tst-getmyaddr
+ 
+ ifeq ($(have-thread-library),yes)
+@@ -246,3 +247,4 @@ $(objpfx)tst-udp-timeout: $(common-objpfx)linkobj/libc.so
+ $(objpfx)tst-udp-nonblocking: $(common-objpfx)linkobj/libc.so
+ $(objpfx)tst-udp-garbage: \
+   $(common-objpfx)linkobj/libc.so $(shared-thread-library)
++$(objpfx)tst-bug22542: $(common-objpfx)linkobj/libc.so
+diff --git a/sunrpc/tst-bug22542.c b/sunrpc/tst-bug22542.c
+new file mode 100644
+index 0000000000000000..d6cd79787bdef21d
+--- /dev/null
++++ b/sunrpc/tst-bug22542.c
+@@ -0,0 +1,44 @@
++/* Test to verify that overlong hostname is rejected by clnt_create
++   and doesn't cause a buffer overflow (bug  22542).
++
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <rpc/clnt.h>
++#include <string.h>
++#include <support/check.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++
++static int
++do_test (void)
++{
++  /* Create an arbitrary hostname that's longer than fits in sun_path.  */
++  char name [sizeof ((struct sockaddr_un*)0)->sun_path * 2];
++  memset (name, 'x', sizeof name - 1);
++  name [sizeof name - 1] = '\0';
++
++  errno = 0;
++  CLIENT *clnt = clnt_create (name, 0, 0, "unix");
++
++  TEST_VERIFY (clnt == NULL);
++  TEST_COMPARE (errno, EINVAL);
++  return 0;
++}
++
++#include <support/test-driver.c>

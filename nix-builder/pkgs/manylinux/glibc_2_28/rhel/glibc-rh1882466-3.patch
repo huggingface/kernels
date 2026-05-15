@@ -1,0 +1,45 @@
+commit 4d0985543f479a6f421d4d8a9e0d1dc71c9c2c53
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Dec 15 20:56:04 2020 +0100
+
+    elf: Record libc.so link map when it is the main program (bug 20972)
+    
+    Otherwise, it will not participate in the dependency sorting.
+    
+    Fixes commit 9ffa50b26b0cb5d3043adf6d3d0b1ea735acc147
+    ("elf: Include libc.so.6 as main program in dependency sort
+    (bug 20972)").
+
+Conflicts:
+	elf/rtld.c
+	  (Missing backported header include.)
+
+diff --git a/elf/rtld.c b/elf/rtld.c
+index fde5a6a4a485207e..992f825ba00762a7 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -46,6 +46,7 @@
+ #include <array_length.h>
+ #include <libc-early-init.h>
+ #include <dl-main.h>
++#include <gnu/lib-names.h>
+ 
+ #include <assert.h>
+ 
+@@ -1588,6 +1589,16 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+     {
+       /* Extract the contents of the dynamic section for easy access.  */
+       elf_get_dynamic_info (main_map, NULL);
++
++      /* If the main map is libc.so, update the base namespace to
++	 refer to this map.  If libc.so is loaded later, this happens
++	 in _dl_map_object_from_fd.  */
++      if (main_map->l_info[DT_SONAME] != NULL
++	  && (strcmp (((const char *) D_PTR (main_map, l_info[DT_STRTAB])
++		      + main_map->l_info[DT_SONAME]->d_un.d_val), LIBC_SO)
++	      == 0))
++	GL(dl_ns)[LM_ID_BASE].libc_map = main_map;
++
+       /* Set up our cache of pointers into the hash table.  */
+       _dl_setup_hash (main_map);
+     }

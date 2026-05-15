@@ -1,0 +1,139 @@
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Jul 4 11:34:36 2018 +0200
+
+    Add --with-nonshared-cflags option to configure
+
+Submitted upstream:
+
+  https://sourceware.org/ml/libc-alpha/2018-07/msg00071.html
+
+diff --git a/INSTALL b/INSTALL
+index 0a22aa7d01e6e87b..0f80d9d615db6d42 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -90,6 +90,15 @@ if 'CFLAGS' is specified it must enable optimization.  For example:
+      library will still be usable, but functionality may be lost--for
+      example, you can't build a shared libc with old binutils.
+ 
++'--with-nonshared-cflags=CFLAGS'
++     Use additional compiler flags CFLAGS to build the parts of the
++     library which are always statically linked into applications and
++     libraries even with shared linking (that is, the object files
++     contained in 'lib*_nonshared.a' libraries).  The build process will
++     automatically use the appropriate flags, but this option can be
++     used to set additional flags required for building applications and
++     libraries, to match local policy.
++
+ '--disable-shared'
+      Don't build shared libraries even if it is possible.  Not all
+      systems support shared libraries; you need ELF support and
+diff --git a/Makeconfig b/Makeconfig
+index 608ffe648c80c724..b0b27f0113ac18b8 100644
+--- a/Makeconfig
++++ b/Makeconfig
+@@ -1038,7 +1038,7 @@ object-suffixes-for-libc += .oS
+ # Must build the routines as PIC, though, because they can end up in (users')
+ # shared objects.  We don't want to use CFLAGS-os because users may, for
+ # example, make that processor-specific.
+-CFLAGS-.oS = $(CFLAGS-.o) $(PIC-ccflag)
++CFLAGS-.oS = $(CFLAGS-.o) $(PIC-ccflag) $(extra-nonshared-cflags)
+ CPPFLAGS-.oS = $(CPPFLAGS-.o) -DPIC -DLIBC_NONSHARED=1
+ libtype.oS = lib%_nonshared.a
+ endif
+diff --git a/config.make.in b/config.make.in
+index d9891b2cd8ec3fbf..a6fe48d31f4d2725 100644
+--- a/config.make.in
++++ b/config.make.in
+@@ -110,6 +110,7 @@ BUILD_CC = @BUILD_CC@
+ CFLAGS = @CFLAGS@
+ CPPFLAGS-config = @CPPFLAGS@
+ CPPUNDEFS = @CPPUNDEFS@
++extra-nonshared-cflags = @extra_nonshared_cflags@
+ ASFLAGS-config = @ASFLAGS_config@
+ AR = @AR@
+ NM = @NM@
+diff --git a/configure b/configure
+index ef1830221522b7a5..fec0efff8216addd 100755
+--- a/configure
++++ b/configure
+@@ -684,6 +684,7 @@ force_install
+ bindnow
+ hardcoded_path_in_tests
+ enable_timezone_tools
++extra_nonshared_cflags
+ use_default_link
+ sysheaders
+ ac_ct_CXX
+@@ -762,6 +763,7 @@ with_binutils
+ with_selinux
+ with_headers
+ with_default_link
++with_nonshared_cflags
+ enable_sanity_checks
+ enable_shared
+ enable_profile
+@@ -1479,6 +1481,8 @@ Optional Packages:
+   --with-headers=PATH     location of system headers to use (for example
+                           /usr/src/linux/include) [default=compiler default]
+   --with-default-link     do not use explicit linker scripts
++  --with-nonshared-cflags=FLAGS
++                          build nonshared libraries with additional FLAGS
+   --with-cpu=CPU          select code for CPU variant
+ 
+ Some influential environment variables:
+@@ -3336,6 +3340,16 @@ else
+ fi
+ 
+ 
++
++# Check whether --with-nonshared-cflags was given.
++if test "${with_nonshared_cflags+set}" = set; then :
++  withval=$with_nonshared_cflags; extra_nonshared_cflags=$withval
++else
++  extra_nonshared_cflags=
++fi
++
++
++
+ # Check whether --enable-sanity-checks was given.
+ if test "${enable_sanity_checks+set}" = set; then :
+   enableval=$enable_sanity_checks; enable_sanity=$enableval
+diff --git a/configure.ac b/configure.ac
+index dc517017f588626a..154185d70de38928 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -154,6 +154,14 @@ AC_ARG_WITH([default-link],
+ 	    [use_default_link=$withval],
+ 	    [use_default_link=default])
+ 
++dnl Additional build flags injection.
++AC_ARG_WITH([nonshared-cflags],
++	    AC_HELP_STRING([--with-nonshared-cflags=FLAGS],
++			   [build nonshared libraries with additional FLAGS]),
++	    [extra_nonshared_cflags=$withval],
++	    [extra_nonshared_cflags=])
++AC_SUBST(extra_nonshared_cflags)
++
+ AC_ARG_ENABLE([sanity-checks],
+ 	      AC_HELP_STRING([--disable-sanity-checks],
+ 			     [really do not use threads (should not be used except in special situations) @<:@default=yes@:>@]),
+diff --git a/manual/install.texi b/manual/install.texi
+index 422da1447eb4dc68..eaf0cd09e7501b96 100644
+--- a/manual/install.texi
++++ b/manual/install.texi
+@@ -117,6 +117,15 @@ problem and suppress these constructs, so that the library will still be
+ usable, but functionality may be lost---for example, you can't build a
+ shared libc with old binutils.
+ 
++@item --with-nonshared-cflags=@var{cflags}
++Use additional compiler flags @var{cflags} to build the parts of the
++library which are always statically linked into applications and
++libraries even with shared linking (that is, the object files contained
++in @file{lib*_nonshared.a} libraries).  The build process will
++automatically use the appropriate flags, but this option can be used to
++set additional flags required for building applications and libraries,
++to match local policy.
++
+ @c disable static doesn't work currently
+ @c @item --disable-static
+ @c Don't build static libraries.  Static libraries aren't that useful these

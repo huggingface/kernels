@@ -1,0 +1,87 @@
+commit 8eaf34eda256ba3647ed6e7ed5c7c9aa19955d17
+Author: Samuel Thibault <samuel.thibault@ens-lyon.org>
+Date:   Fri Dec 13 10:10:59 2019 +0100
+
+    hurd: Fix local PLT
+
+    * include/sys/random.h (__getrandom): Add hidden prototype.
+    * stdlib/getrandom.c (getrandom): Rename to hidden definition __getrandom.
+    Add weak alias.
+    * sysdeps/mach/hurd/getrandom.c (getrandom): Likewise.
+    * sysdeps/unix/sysv/linux/getrandom.c (getrandom): Likewise.
+    * sysdeps/mach/hurd/getentropy.c (getentropy): Use __getrandom instead of
+    getrandom.
+
+Conflicts:
+	include/sys/random.h
+	  (Missing backport of include/ consistency patch,
+	  commit ebd32784ce2029d0461a90a79bc4e37f8d051765 upstream.)
+	sysdeps/mach/hurd/getentropy.c
+	  (Hurd change has been dropped.)
+	sysdeps/unix/sysv/linux/dl-write.c
+	  (Mismerge of sysdeps/mach/hurd/getrandom.c.)
+
+diff --git a/include/sys/random.h b/include/sys/random.h
+new file mode 100644
+index 0000000000000000..6aa313d35dbdce8a
+--- /dev/null
++++ b/include/sys/random.h
+@@ -0,0 +1,11 @@
++#ifndef _SYS_RANDOM_H
++#include <stdlib/sys/random.h>
++
++# ifndef _ISOMAC
++
++extern ssize_t __getrandom (void *__buffer, size_t __length,
++                            unsigned int __flags) __wur;
++libc_hidden_proto (__getrandom)
++
++# endif /* !_ISOMAC */
++#endif
+diff --git a/stdlib/getrandom.c b/stdlib/getrandom.c
+index 45234bea17c5c86c..f8056688e40a0215 100644
+--- a/stdlib/getrandom.c
++++ b/stdlib/getrandom.c
+@@ -22,10 +22,12 @@
+ /* Write up to LENGTH bytes of randomness starting at BUFFER.
+    Return the number of bytes written, or -1 on error.  */
+ ssize_t
+-getrandom (void *buffer, size_t length, unsigned int flags)
++__getrandom (void *buffer, size_t length, unsigned int flags)
+ {
+   __set_errno (ENOSYS);
+   return -1;
+ }
+-
+ stub_warning (getrandom)
++
++libc_hidden_def (__getrandom)
++weak_alias (__getrandom, getrandom)
+diff --git a/sysdeps/unix/sysv/linux/getrandom.c b/sysdeps/unix/sysv/linux/getrandom.c
+index 435b037399665654..e34d7fdcd89d9b06 100644
+--- a/sysdeps/unix/sysv/linux/getrandom.c
++++ b/sysdeps/unix/sysv/linux/getrandom.c
+@@ -25,7 +25,7 @@
+ /* Write up to LENGTH bytes of randomness starting at BUFFER.
+    Return the number of bytes written, or -1 on error.  */
+ ssize_t
+-getrandom (void *buffer, size_t length, unsigned int flags)
++__getrandom (void *buffer, size_t length, unsigned int flags)
+ {
+   return SYSCALL_CANCEL (getrandom, buffer, length, flags);
+ }
+@@ -33,7 +33,7 @@ getrandom (void *buffer, size_t length, unsigned int flags)
+ /* Always provide a definition, even if the kernel headers lack the
+    system call number. */
+ ssize_t
+-getrandom (void *buffer, size_t length, unsigned int flags)
++__getrandom (void *buffer, size_t length, unsigned int flags)
+ {
+   /* Ideally, we would add a cancellation point here, but we currently
+      cannot do so inside libc.  */
+@@ -41,3 +41,5 @@ getrandom (void *buffer, size_t length, unsigned int flags)
+   return -1;
+ }
+ #endif
++libc_hidden_def (__getrandom)
++weak_alias (__getrandom, getrandom)

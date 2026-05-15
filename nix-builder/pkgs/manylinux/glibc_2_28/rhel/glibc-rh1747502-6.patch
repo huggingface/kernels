@@ -1,0 +1,56 @@
+commit c7ac9caaae6f8d02d4e0c7618d4991324a084c66
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon May 13 13:57:37 2019 -0300
+
+    support: Export bindir path on support_path
+    
+    Checked on x86_64-linux-gnu.
+    
+    	* support/Makefile (CFLAGS-support_paths.c): Add -DBINDIR_PATH.
+    	* support/support.h (support_bindir_prefix): New variable.
+    	* support/support_paths.c [BINDIR_PATH] (support_bindir_prefix):
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/support/Makefile b/support/Makefile
+index 64044f6..fe416cd 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -179,7 +179,8 @@ CFLAGS-support_paths.c = \
+ 		-DOBJDIR_PATH=\"`cd $(objpfx)/..; pwd`\" \
+ 		-DOBJDIR_ELF_LDSO_PATH=\"`cd $(objpfx)/..; pwd`/elf/$(rtld-installed-name)\" \
+ 		-DINSTDIR_PATH=\"$(prefix)\" \
+-		-DLIBDIR_PATH=\"$(libdir)\"
++		-DLIBDIR_PATH=\"$(libdir)\" \
++		-DBINDIR_PATH=\"$(bindir)\"
+ 
+ ifeq (,$(CXX))
+ LINKS_DSO_PROGRAM = links-dso-program-c
+diff --git a/support/support.h b/support/support.h
+index 97fef2c..b162491 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -105,6 +105,8 @@ extern const char support_objdir_elf_ldso[];
+ extern const char support_install_prefix[];
+ /* Corresponds to the install's lib/ or lib64/ directory.  */
+ extern const char support_libdir_prefix[];
++/* Corresponds to the install's bin/ directory.  */
++extern const char support_bindir_prefix[];
+ 
+ extern ssize_t support_copy_file_range (int, off64_t *, int, off64_t *,
+ 					size_t, unsigned int);
+diff --git a/support/support_paths.c b/support/support_paths.c
+index 937e6e1..75634aa 100644
+--- a/support/support_paths.c
++++ b/support/support_paths.c
+@@ -57,3 +57,10 @@ const char support_libdir_prefix[] = LIBDIR_PATH;
+ #else
+ # error please -DLIBDIR_PATH=something in the Makefile
+ #endif
++
++#ifdef BINDIR_PATH
++/* Corresponds to the install's bin/ directory.  */
++const char support_bindir_prefix[] = BINDIR_PATH;
++#else
++# error please -DBINDIR_PATH=something in the Makefile
++#endif

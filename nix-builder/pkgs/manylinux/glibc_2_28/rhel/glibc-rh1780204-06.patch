@@ -1,0 +1,167 @@
+From 577943dac79a5657bdfe51e06e289eb2473c3d2e Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:17 +0100
+Subject: [PATCH 06/28] Always use wordsize-64 version of s_round.c.
+
+This patch replaces s_round.c in sysdeps/dbl-64 with the one in
+sysdeps/dbl-64/wordsize-64 and removes the latter one.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 36e9acbd5cb2c330c0d53195db4a0ee31f2c3097)
+---
+ sysdeps/ieee754/dbl-64/s_round.c             | 39 ++++--------
+ sysdeps/ieee754/dbl-64/wordsize-64/s_round.c | 65 --------------------
+ 2 files changed, 12 insertions(+), 92 deletions(-)
+ delete mode 100644 sysdeps/ieee754/dbl-64/wordsize-64/s_round.c
+
+diff --git a/sysdeps/ieee754/dbl-64/s_round.c b/sysdeps/ieee754/dbl-64/s_round.c
+index fa9e83196e..bf9922edca 100644
+--- a/sysdeps/ieee754/dbl-64/s_round.c
++++ b/sysdeps/ieee754/dbl-64/s_round.c
+@@ -21,38 +21,36 @@
+ 
+ #include <math_private.h>
+ #include <libm-alias-double.h>
++#include <stdint.h>
+ 
+ 
+ double
+ __round (double x)
+ {
+-  int32_t i0, j0;
+-  uint32_t i1;
++  int64_t i0, j0;
+ 
+-  EXTRACT_WORDS (i0, i1, x);
+-  j0 = ((i0 >> 20) & 0x7ff) - 0x3ff;
+-  if (j0 < 20)
++  EXTRACT_WORDS64 (i0, x);
++  j0 = ((i0 >> 52) & 0x7ff) - 0x3ff;
++  if (__glibc_likely (j0 < 52))
+     {
+       if (j0 < 0)
+ 	{
+-	  i0 &= 0x80000000;
++	  i0 &= UINT64_C (0x8000000000000000);
+ 	  if (j0 == -1)
+-	    i0 |= 0x3ff00000;
+-	  i1 = 0;
++	    i0 |= UINT64_C (0x3ff0000000000000);
+ 	}
+       else
+ 	{
+-	  uint32_t i = 0x000fffff >> j0;
+-	  if (((i0 & i) | i1) == 0)
++	  uint64_t i = UINT64_C (0x000fffffffffffff) >> j0;
++	  if ((i0 & i) == 0)
+ 	    /* X is integral.  */
+ 	    return x;
+ 
+-	  i0 += 0x00080000 >> j0;
++	  i0 += UINT64_C (0x0008000000000000) >> j0;
+ 	  i0 &= ~i;
+-	  i1 = 0;
+ 	}
+     }
+-  else if (j0 > 51)
++  else
+     {
+       if (j0 == 0x400)
+ 	/* Inf or NaN.  */
+@@ -60,21 +58,8 @@ __round (double x)
+       else
+ 	return x;
+     }
+-  else
+-    {
+-      uint32_t i = 0xffffffff >> (j0 - 20);
+-      if ((i1 & i) == 0)
+-	/* X is integral.  */
+-	return x;
+-
+-      uint32_t j = i1 + (1 << (51 - j0));
+-      if (j < i1)
+-	i0 += 1;
+-      i1 = j;
+-      i1 &= ~i;
+-    }
+ 
+-  INSERT_WORDS (x, i0, i1);
++  INSERT_WORDS64 (x, i0);
+   return x;
+ }
+ libm_alias_double (__round, round)
+diff --git a/sysdeps/ieee754/dbl-64/wordsize-64/s_round.c b/sysdeps/ieee754/dbl-64/wordsize-64/s_round.c
+deleted file mode 100644
+index 3323621ce3..0000000000
+--- a/sysdeps/ieee754/dbl-64/wordsize-64/s_round.c
++++ /dev/null
+@@ -1,65 +0,0 @@
+-/* Round double to integer away from zero.
+-   Copyright (C) 1997-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-   Contributed by Ulrich Drepper <drepper@cygnus.com>, 1997.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <math.h>
+-
+-#include <math_private.h>
+-#include <libm-alias-double.h>
+-#include <stdint.h>
+-
+-
+-double
+-__round (double x)
+-{
+-  int64_t i0, j0;
+-
+-  EXTRACT_WORDS64 (i0, x);
+-  j0 = ((i0 >> 52) & 0x7ff) - 0x3ff;
+-  if (__glibc_likely (j0 < 52))
+-    {
+-      if (j0 < 0)
+-	{
+-	  i0 &= UINT64_C(0x8000000000000000);
+-	  if (j0 == -1)
+-	    i0 |= UINT64_C(0x3ff0000000000000);
+-	}
+-      else
+-	{
+-	  uint64_t i = UINT64_C(0x000fffffffffffff) >> j0;
+-	  if ((i0 & i) == 0)
+-	    /* X is integral.  */
+-	    return x;
+-
+-	  i0 += UINT64_C(0x0008000000000000) >> j0;
+-	  i0 &= ~i;
+-	}
+-    }
+-  else
+-    {
+-      if (j0 == 0x400)
+-	/* Inf or NaN.  */
+-	return x + x;
+-      else
+-	return x;
+-    }
+-
+-  INSERT_WORDS64 (x, i0);
+-  return x;
+-}
+-libm_alias_double (__round, round)
+-- 
+2.18.2
+

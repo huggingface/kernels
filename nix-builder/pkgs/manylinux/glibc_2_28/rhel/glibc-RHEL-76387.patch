@@ -1,0 +1,32 @@
+commit 61c3450db96dce96ad2b24b4f0b548e6a46d68e5
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Dec 17 18:12:03 2024 +0100
+
+    x86: Avoid integer truncation with large cache sizes (bug 32470)
+    
+    Some hypervisors report 1 TiB L3 cache size.  This results
+    in some variables incorrectly getting zeroed, causing crashes
+    in memcpy/memmove because invariants are violated.
+
+Conflicts:
+	sysdeps/x86/dl-cacheinfo.h
+	  (missing backport of commit 2d651eb9265d1366d7b9e881bfddd4
+	  ("x86: Move x86 processor cache info to cpu_features"))
+
+diff -Nrup a/sysdeps/x86/cacheinfo.h b/sysdeps/x86/cacheinfo.h
+--- a/sysdeps/x86/cacheinfo.h	2025-04-09 11:11:06.532319998 -0400
++++ b/sysdeps/x86/cacheinfo.h	2025-04-09 11:17:39.493355111 -0400
+@@ -388,11 +388,11 @@ init_cacheinfo (void)
+        : non_temporal_threshold);
+ 
+   /* NB: The REP MOVSB threshold must be greater than VEC_SIZE * 8.  */
+-  unsigned int minimum_rep_movsb_threshold;
++  unsigned long int minimum_rep_movsb_threshold;
+   /* NB: The default REP MOVSB threshold is 4096 * (VEC_SIZE / 16) for
+      VEC_SIZE == 64 or 32.  For VEC_SIZE == 16, the default REP MOVSB
+      threshold is 2048 * (VEC_SIZE / 16).  */
+-  unsigned int rep_movsb_threshold;
++  unsigned long int rep_movsb_threshold;
+   if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
+       && !CPU_FEATURE_PREFERRED_P (cpu_features, Prefer_No_AVX512))
+     {

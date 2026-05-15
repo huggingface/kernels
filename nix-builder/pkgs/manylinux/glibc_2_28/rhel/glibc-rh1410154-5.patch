@@ -1,0 +1,343 @@
+commit 79e0cd7b3c997e211fad44a81fd839dc5b2546e8
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Nov 27 16:20:47 2019 +0100
+
+    Lazy binding failures during dlopen/dlclose must be fatal [BZ #24304]
+    
+    If a lazy binding failure happens during the execution of an ELF
+    constructor or destructor, the dynamic loader catches the error
+    and reports it using the dlerror mechanism.  This is undesirable
+    because there could be other constructors and destructors that
+    need processing (which are skipped), and the process is in an
+    inconsistent state at this point.  Therefore, we have to issue
+    a fatal dynamic loader error error and terminate the process.
+    
+    Note that the _dl_catch_exception in _dl_open is just an inner catch,
+    to roll back some state locally.  If called from dlopen, there is
+    still an outer catch, which is why calling _dl_init via call_dl_init
+    and a no-exception is required and cannot be avoiding by moving the
+    _dl_init call directly into _dl_open.
+    
+    _dl_fini does not need changes because it does not install an error
+    handler, so errors are already fatal there.
+    
+    Change-Id: I6b1addfe2e30f50a1781595f046f44173db9491a
+
+Conflicts:
+	elf/Makefile
+	  (Usual conflicts due to test backport differences.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 74a240b3a68ff5e2..b752f6366400d221 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -191,7 +191,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-nodelete2 tst-audit11 tst-audit12 tst-dlsym-error tst-noload \
+ 	 tst-latepthread tst-tls-manydynamic tst-nodelete-dlclose \
+ 	 tst-debug1 tst-main1 tst-absolute-sym tst-absolute-zero tst-big-note \
+-	 tst-sonamemove-link tst-sonamemove-dlopen
++	 tst-sonamemove-link tst-sonamemove-dlopen tst-initfinilazyfail
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -281,7 +281,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-main1mod tst-libc_dlvsym-dso tst-absolute-sym-lib \
+ 		tst-absolute-zero-lib tst-big-note-lib \
+ 		tst-sonamemove-linkmod1 \
+-		tst-sonamemove-runmod1 tst-sonamemove-runmod2
++		tst-sonamemove-runmod1 tst-sonamemove-runmod2 \
++		tst-initlazyfailmod tst-finilazyfailmod
+ 
+ ifeq (yes,$(have-mtls-dialect-gnu2))
+ tests += tst-gnu2-tls1
+@@ -1526,3 +1527,13 @@ tst-libc_dlvsym-static-ENV = \
+ $(objpfx)tst-libc_dlvsym-static.out: $(objpfx)tst-libc_dlvsym-dso.so
+ 
+ $(objpfx)tst-big-note: $(objpfx)tst-big-note-lib.so
++
++$(objpfx)tst-initfinilazyfail: $(libdl)
++$(objpfx)tst-initfinilazyfail.out: \
++  $(objpfx)tst-initlazyfailmod.so $(objpfx)tst-finilazyfailmod.so
++# Override -z defs, so that we can reference an undefined symbol.
++# Force lazy binding for the same reason.
++LDFLAGS-tst-initlazyfailmod.so = \
++  -Wl,-z,lazy -Wl,--unresolved-symbols=ignore-all
++LDFLAGS-tst-finilazyfailmod.so = \
++  -Wl,-z,lazy -Wl,--unresolved-symbols=ignore-all
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index ecd6729704ea3294..88aeea25839a34e0 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -106,6 +106,30 @@ remove_slotinfo (size_t idx, struct dtv_slotinfo_list *listp, size_t disp,
+   return false;
+ }
+ 
++/* Invoke dstructors for CLOSURE (a struct link_map *).  Called with
++   exception handling temporarily disabled, to make errors fatal.  */
++static void
++call_destructors (void *closure)
++{
++  struct link_map *map = closure;
++
++  if (map->l_info[DT_FINI_ARRAY] != NULL)
++    {
++      ElfW(Addr) *array =
++	(ElfW(Addr) *) (map->l_addr
++			+ map->l_info[DT_FINI_ARRAY]->d_un.d_ptr);
++      unsigned int sz = (map->l_info[DT_FINI_ARRAYSZ]->d_un.d_val
++			 / sizeof (ElfW(Addr)));
++
++      while (sz-- > 0)
++	((fini_t) array[sz]) ();
++    }
++
++  /* Next try the old-style destructor.  */
++  if (map->l_info[DT_FINI] != NULL)
++    DL_CALL_DT_FINI (map, ((void *) map->l_addr
++			   + map->l_info[DT_FINI]->d_un.d_ptr));
++}
+ 
+ void
+ _dl_close_worker (struct link_map *map, bool force)
+@@ -267,7 +291,8 @@ _dl_close_worker (struct link_map *map, bool force)
+ 		  && (imap->l_flags_1 & DF_1_NODELETE) == 0);
+ 
+ 	  /* Call its termination function.  Do not do it for
+-	     half-cooked objects.  */
++	     half-cooked objects.  Temporarily disable exception
++	     handling, so that errors are fatal.  */
+ 	  if (imap->l_init_called)
+ 	    {
+ 	      /* When debugging print a message first.  */
+@@ -276,22 +301,9 @@ _dl_close_worker (struct link_map *map, bool force)
+ 		_dl_debug_printf ("\ncalling fini: %s [%lu]\n\n",
+ 				  imap->l_name, nsid);
+ 
+-	      if (imap->l_info[DT_FINI_ARRAY] != NULL)
+-		{
+-		  ElfW(Addr) *array =
+-		    (ElfW(Addr) *) (imap->l_addr
+-				    + imap->l_info[DT_FINI_ARRAY]->d_un.d_ptr);
+-		  unsigned int sz = (imap->l_info[DT_FINI_ARRAYSZ]->d_un.d_val
+-				     / sizeof (ElfW(Addr)));
+-
+-		  while (sz-- > 0)
+-		    ((fini_t) array[sz]) ();
+-		}
+-
+-	      /* Next try the old-style destructor.  */
+-	      if (imap->l_info[DT_FINI] != NULL)
+-		DL_CALL_DT_FINI (imap, ((void *) imap->l_addr
+-			 + imap->l_info[DT_FINI]->d_un.d_ptr));
++	      if (imap->l_info[DT_FINI_ARRAY] != NULL
++		  || imap->l_info[DT_FINI] != NULL)
++		_dl_catch_exception (NULL, call_destructors, imap);
+ 	    }
+ 
+ #ifdef SHARED
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 518a6cad699ec6d0..c9c0254ee74c4f4b 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -177,6 +177,23 @@ _dl_find_dso_for_object (const ElfW(Addr) addr)
+ }
+ rtld_hidden_def (_dl_find_dso_for_object);
+ 
++/* struct dl_init_args and call_dl_init are used to call _dl_init with
++   exception handling disabled.  */
++struct dl_init_args
++{
++  struct link_map *new;
++  int argc;
++  char **argv;
++  char **env;
++};
++
++static void
++call_dl_init (void *closure)
++{
++  struct dl_init_args *args = closure;
++  _dl_init (args->new, args->argc, args->argv, args->env);
++}
++
+ static void
+ dl_open_worker (void *a)
+ {
+@@ -506,8 +523,19 @@ TLS generation counter wrapped!  Please report this."));
+   DL_STATIC_INIT (new);
+ #endif
+ 
+-  /* Run the initializer functions of new objects.  */
+-  _dl_init (new, args->argc, args->argv, args->env);
++  /* Run the initializer functions of new objects.  Temporarily
++     disable the exception handler, so that lazy binding failures are
++     fatal.  */
++  {
++    struct dl_init_args init_args =
++      {
++        .new = new,
++        .argc = args->argc,
++        .argv = args->argv,
++        .env = args->env
++      };
++    _dl_catch_exception (NULL, call_dl_init, &init_args);
++  }
+ 
+   /* Now we can make the new map available in the global scope.  */
+   if (mode & RTLD_GLOBAL)
+diff --git a/elf/tst-finilazyfailmod.c b/elf/tst-finilazyfailmod.c
+new file mode 100644
+index 0000000000000000..2670bd1a9400d0ef
+--- /dev/null
++++ b/elf/tst-finilazyfailmod.c
+@@ -0,0 +1,27 @@
++/* Helper module for tst-initfinilazyfail: lazy binding failure in destructor.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* An undefined function.  Calling it will cause a lazy binding
++   failure.  */
++void undefined_function (void);
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  undefined_function ();
++}
+diff --git a/elf/tst-initfinilazyfail.c b/elf/tst-initfinilazyfail.c
+new file mode 100644
+index 0000000000000000..9b4a3d0c0ffbb7c6
+--- /dev/null
++++ b/elf/tst-initfinilazyfail.c
+@@ -0,0 +1,84 @@
++/* Test that lazy binding failures in constructors and destructors are fatal.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <string.h>
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static void
++test_constructor (void *closure)
++{
++  void *handle = dlopen ("tst-initlazyfailmod.so", RTLD_LAZY);
++  if (handle == NULL)
++    FAIL_EXIT (2, "dlopen did not terminate the process: %s", dlerror ());
++  else
++    FAIL_EXIT (2, "dlopen did not terminate the process (%p)", handle);
++}
++
++static void
++test_destructor (void *closure)
++{
++  void *handle = xdlopen ("tst-finilazyfailmod.so", RTLD_LAZY);
++  int ret = dlclose (handle);
++  const char *message = dlerror ();
++  if (message != NULL)
++    FAIL_EXIT (2, "dlclose did not terminate the process: %d, %s",
++               ret, message);
++  else
++    FAIL_EXIT (2, "dlopen did not terminate the process: %d", ret);
++}
++
++static int
++do_test (void)
++{
++  {
++    struct support_capture_subprocess proc
++      = support_capture_subprocess (test_constructor, NULL);
++    support_capture_subprocess_check (&proc, "constructor", 127,
++                                      sc_allow_stderr);
++    printf ("info: constructor failure output: [[%s]]\n", proc.err.buffer);
++    TEST_VERIFY (strstr (proc.err.buffer,
++                         "tst-initfinilazyfail: symbol lookup error: ")
++                 != NULL);
++    TEST_VERIFY (strstr (proc.err.buffer,
++                         "tst-initlazyfailmod.so: undefined symbol:"
++                         " undefined_function\n") != NULL);
++    support_capture_subprocess_free (&proc);
++  }
++
++  {
++    struct support_capture_subprocess proc
++      = support_capture_subprocess (test_destructor, NULL);
++    support_capture_subprocess_check (&proc, "destructor", 127,
++                                      sc_allow_stderr);
++    printf ("info: destructor failure output: [[%s]]\n", proc.err.buffer);
++    TEST_VERIFY (strstr (proc.err.buffer,
++                         "tst-initfinilazyfail: symbol lookup error: ")
++                 != NULL);
++    TEST_VERIFY (strstr (proc.err.buffer,
++                         "tst-finilazyfailmod.so: undefined symbol:"
++                         " undefined_function\n") != NULL);
++    support_capture_subprocess_free (&proc);
++  }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-initlazyfailmod.c b/elf/tst-initlazyfailmod.c
+new file mode 100644
+index 0000000000000000..36348b58d634d2bb
+--- /dev/null
++++ b/elf/tst-initlazyfailmod.c
+@@ -0,0 +1,27 @@
++/* Helper module for tst-initfinilazyfail: lazy binding failure in constructor.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* An undefined function.  Calling it will cause a lazy binding
++   failure.  */
++void undefined_function (void);
++
++static void __attribute__ ((constructor))
++init (void)
++{
++  undefined_function ();
++}

@@ -1,0 +1,28 @@
+commit d2b997c7172e9a00895a9deb379f8782fbd2e36f
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Wed Dec 30 23:40:14 2020 +0000
+
+    elf: Fix a DTV setup issue [BZ #27136]
+    
+    The max modid is a valid index in the dtv, it should not be skipped.
+    
+    The bug is observable if the last module has modid == 64 and its
+    generation is same or less than the max generation of the previous
+    modules.  Then dtv[0].counter implies dtv[64] is initialized but
+    it isn't. Fixes bug 27136.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index cccf74b33481b866..0b96b1dceed99d58 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -590,7 +590,7 @@ _dl_allocate_tls_init (void *result)
+ 	}
+ 
+       total += cnt;
+-      if (total >= GL(dl_tls_max_dtv_idx))
++      if (total > GL(dl_tls_max_dtv_idx))
+ 	break;
+ 
+       listp = listp->next;

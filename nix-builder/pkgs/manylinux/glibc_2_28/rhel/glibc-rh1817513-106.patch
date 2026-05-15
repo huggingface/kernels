@@ -1,0 +1,18 @@
+commit 21181d1c7b181c4bb71e587c7944e100d923b393
+Author: Matheus Castanho <msc@linux.ibm.com>
+Date:   Mon Oct 12 11:28:18 2020 +0200
+
+    elf: Add missing <dl-procinfo.h> header to elf/dl-usage.c
+
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+index c07f43835bd771cf..796ad38b43c2211b 100644
+--- a/elf/dl-usage.c
++++ b/elf/dl-usage.c
+@@ -22,6 +22,7 @@
+ #include <unistd.h>
+ #include "version.h"
+ 
++#include <dl-procinfo.h>
+ #include <dl-hwcaps.h>
+ 
+ void

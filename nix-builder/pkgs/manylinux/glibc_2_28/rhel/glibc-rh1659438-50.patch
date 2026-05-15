@@ -1,0 +1,271 @@
+commit 8e87c1f6d45a63dc2175825c2dc5d66192a13aab
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:23 2018 +0100
+
+    S390: Refactor wcspbrk ifunc handling.
+    
+    The ifunc handling for wcspbrk is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    Glibc internal calls will use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcspbrk variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcspbrk variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcspbrk.
+            * sysdeps/s390/multiarch/wcspbrk-c.c: Move to ...
+            * sysdeps/s390/wcspbrk-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcspbrk-vx.S: Move to ...
+            * sysdeps/s390/wcspbrk-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcspbrk.c: Move to ...
+            * sysdeps/s390/wcspbrk.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcspbrk.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 38dbba8ccfd3cd66..af595050d43c63ed 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -73,5 +73,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcschr wcschr-vx wcschr-c \
+ 		   wcschrnul wcschrnul-vx wcschrnul-c \
+ 		   wcsrchr wcsrchr-vx wcsrchr-c \
+-		   wcsspn wcsspn-vx wcsspn-c
++		   wcsspn wcsspn-vx wcsspn-c \
++		   wcspbrk wcspbrk-vx wcspbrk-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcspbrk.h b/sysdeps/s390/ifunc-wcspbrk.h
+new file mode 100644
+index 0000000000000000..d3b9b7363a73fab0
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcspbrk.h
+@@ -0,0 +1,53 @@
++/* wcspbrk variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSPBRK_IFUNC	1
++#else
++# define HAVE_WCSPBRK_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSPBRK_IFUNC_AND_VX_SUPPORT HAVE_WCSPBRK_IFUNC
++#else
++# define HAVE_WCSPBRK_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSPBRK_DEFAULT	WCSPBRK_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSPBRK_C		1
++# define HAVE_WCSPBRK_Z13	1
++#else
++# define WCSPBRK_DEFAULT	WCSPBRK_C
++# define HAVE_WCSPBRK_C		1
++# define HAVE_WCSPBRK_Z13	HAVE_WCSPBRK_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSPBRK_C
++# define WCSPBRK_C		__wcspbrk_c
++#else
++# define WCSPBRK_C		NULL
++#endif
++
++#if HAVE_WCSPBRK_Z13
++# define WCSPBRK_Z13		__wcspbrk_vx
++#else
++# define WCSPBRK_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 091f5150847a404a..e1e2d9dc7495ebdc 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcspbrk wcspbrk-vx wcspbrk-c \
+-		   wcscspn wcscspn-vx wcscspn-c \
++sysdep_routines += wcscspn wcscspn-vx wcscspn-c \
+ 		   wmemchr wmemchr-vx wmemchr-c \
+ 		   wmemset wmemset-vx wmemset-c \
+ 		   wmemcmp wmemcmp-vx wmemcmp-c
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 6f4de2845ba0a378..89d6e8ad7e323fec 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -60,6 +60,7 @@
+ #include <ifunc-wcschrnul.h>
+ #include <ifunc-wcsrchr.h>
+ #include <ifunc-wcsspn.h>
++#include <ifunc-wcspbrk.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -606,6 +607,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSSPN_IFUNC  */
+ 
++#if HAVE_WCSPBRK_IFUNC
++    IFUNC_IMPL (i, name, wcspbrk,
++# if HAVE_WCSPBRK_Z13
++		IFUNC_IMPL_ADD (array, i, wcspbrk,
++				dl_hwcap & HWCAP_S390_VX, WCSPBRK_Z13)
++# endif
++# if HAVE_WCSPBRK_C
++		IFUNC_IMPL_ADD (array, i, wcspbrk, 1, WCSPBRK_C)
++# endif
++		)
++#endif /* HAVE_WCSPBRK_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -614,8 +627,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcspbrk);
+-
+   IFUNC_VX_IMPL (wcscspn);
+ 
+   IFUNC_VX_IMPL (wmemchr);
+diff --git a/sysdeps/s390/multiarch/wcspbrk-c.c b/sysdeps/s390/wcspbrk-c.c
+similarity index 72%
+rename from sysdeps/s390/multiarch/wcspbrk-c.c
+rename to sysdeps/s390/wcspbrk-c.c
+index 6b6e7aade46942ed..e79c6a85503dc32b 100644
+--- a/sysdeps/s390/multiarch/wcspbrk-c.c
++++ b/sysdeps/s390/wcspbrk-c.c
+@@ -16,16 +16,22 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSPBRK  __wcspbrk_c
++#include <ifunc-wcspbrk.h>
+ 
+-# include <wchar.h>
+-extern __typeof (wcspbrk) __wcspbrk_c;
+-# ifdef SHARED
+-#  undef libc_hidden_def
+-#  define libc_hidden_def(name)				\
++#if HAVE_WCSPBRK_C
++# if HAVE_WCSPBRK_IFUNC || HAVE_WCSPBRK_Z13
++#  define WCSPBRK WCSPBRK_C
++
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   if ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++#    define libc_hidden_def(name)			\
+   __hidden_ver1 (__wcspbrk_c, __GI_wcspbrk, __wcspbrk_c);
+-# endif /* SHARED */
++#   else
++#    define libc_hidden_def(name)
++#   endif
++#  endif
++# endif
+ 
+ # include <wcsmbs/wcspbrk.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/wcspbrk-vx.S b/sysdeps/s390/wcspbrk-vx.S
+similarity index 97%
+rename from sysdeps/s390/multiarch/wcspbrk-vx.S
+rename to sysdeps/s390/wcspbrk-vx.S
+index 5c89ec5d336c1acd..5870c4684d140ab0 100644
+--- a/sysdeps/s390/multiarch/wcspbrk-vx.S
++++ b/sysdeps/s390/wcspbrk-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcspbrk.h>
++#if HAVE_WCSPBRK_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -59,7 +60,7 @@
+ 	otherwise =0;
+    r9:  loaded byte count of vlbb accept-string
+ */
+-ENTRY(__wcspbrk_vx)
++ENTRY(WCSPBRK_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -310,6 +311,15 @@ ENTRY(__wcspbrk_vx)
+ 	lgr	%r2,%r1
+ 	br	%r14
+ .Lfallback:
+-	jg	__wcspbrk_c
+-END(__wcspbrk_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSPBRK_C
++END(WCSPBRK_Z13)
++
++# if ! HAVE_WCSPBRK_IFUNC
++strong_alias (WCSPBRK_Z13, wcspbrk)
++# endif
++
++# if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT \
++	&& defined SHARED && IS_IN (libc)
++strong_alias (WCSPBRK_Z13, __GI_wcspbrk)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcspbrk.c b/sysdeps/s390/wcspbrk.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/wcspbrk.c
+rename to sysdeps/s390/wcspbrk.c
+index 97876328b5ad9425..84ab911a24fba3c4 100644
+--- a/sysdeps/s390/multiarch/wcspbrk.c
++++ b/sysdeps/s390/wcspbrk.c
+@@ -16,14 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcspbrk.h>
++
++#if HAVE_WCSPBRK_IFUNC
+ # define wcspbrk __redirect_wcspbrk
+ # include <wchar.h>
+ # undef wcspbrk
+ # include <ifunc-resolve.h>
++# if HAVE_WCSPBRK_C
++extern __typeof (__redirect_wcspbrk) WCSPBRK_C attribute_hidden;
++# endif
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect_wcspbrk, __wcspbrk, wcspbrk)
++# if HAVE_WCSPBRK_Z13
++extern __typeof (__redirect_wcspbrk) WCSPBRK_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcspbrk.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (__redirect_wcspbrk, wcspbrk,
++		      (HAVE_WCSPBRK_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSPBRK_Z13
++		      : WCSPBRK_DEFAULT
++		      )
++#endif

@@ -1,0 +1,107 @@
+commit 32ff397533715988c19cbf3675dcbd727ec13e18
+Author: Andreas Schwab <schwab@suse.de>
+Date:   Tue May 14 17:14:59 2019 +0200
+
+    Fix crash in _IO_wfile_sync (bug 20568)
+    
+    When computing the length of the converted part of the stdio buffer, use
+    the number of consumed wide characters, not the (negative) distance to the
+    end of the wide buffer.
+
+Conflicts:
+	libio/Makefile
+	  (Usual conflict when adding tests due to missing backports.)
+
+diff --git a/libio/Makefile b/libio/Makefile
+index cab0eae946b1f307..cbfaf3832a45fc22 100644
+--- a/libio/Makefile
++++ b/libio/Makefile
+@@ -64,7 +64,8 @@ tests = tst_swprintf tst_wprintf tst_swscanf tst_wscanf tst_getwc tst_putwc   \
+ 	bug-memstream1 bug-wmemstream1 \
+ 	tst-setvbuf1 tst-popen1 tst-fgetwc bug-wsetpos tst-fseek \
+ 	tst-fwrite-error tst-ftell-partial-wide tst-ftell-active-handler \
+-	tst-ftell-append tst-fputws tst-bz22415 tst-fgetc-after-eof
++	tst-ftell-append tst-fputws tst-bz22415 tst-fgetc-after-eof \
++	tst-wfile-sync
+ 
+ tests-internal = tst-vtables tst-vtables-interposed tst-readline
+ 
+@@ -207,6 +208,7 @@ $(objpfx)tst-ungetwc1.out: $(gen-locales)
+ $(objpfx)tst-ungetwc2.out: $(gen-locales)
+ $(objpfx)tst-widetext.out: $(gen-locales)
+ $(objpfx)tst_wprintf2.out: $(gen-locales)
++$(objpfx)tst-wfile-sync.out: $(gen-locales)
+ endif
+ 
+ $(objpfx)test-freopen.out: test-freopen.sh $(objpfx)test-freopen
+diff --git a/libio/tst-wfile-sync.c b/libio/tst-wfile-sync.c
+new file mode 100644
+index 0000000000000000..618682064da4035c
+--- /dev/null
++++ b/libio/tst-wfile-sync.c
+@@ -0,0 +1,39 @@
++/* Test that _IO_wfile_sync does not crash (bug 20568).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <locale.h>
++#include <stdio.h>
++#include <wchar.h>
++#include <support/check.h>
++#include <support/xunistd.h>
++
++static int
++do_test (void)
++{
++  TEST_VERIFY_EXIT (setlocale (LC_ALL, "de_DE.UTF-8") != NULL);
++  /* Fill the stdio buffer and advance the read pointer.  */
++  TEST_VERIFY_EXIT (fgetwc (stdin) != WEOF);
++  /* This calls _IO_wfile_sync, it should not crash.  */
++  TEST_VERIFY_EXIT (setvbuf (stdin, NULL, _IONBF, 0) == 0);
++  /* Verify that the external file offset has been synchronized.  */
++  TEST_COMPARE (xlseek (0, 0, SEEK_CUR), 1);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/libio/tst-wfile-sync.input b/libio/tst-wfile-sync.input
+new file mode 100644
+index 0000000000000000..12d0958f7aaa3865
+--- /dev/null
++++ b/libio/tst-wfile-sync.input
+@@ -0,0 +1 @@
++This is a test of _IO_wfile_sync.
+diff --git a/libio/wfileops.c b/libio/wfileops.c
+index 63cb687652c72ce1..10e7343f8fdb8781 100644
+--- a/libio/wfileops.c
++++ b/libio/wfileops.c
+@@ -508,11 +508,12 @@ _IO_wfile_sync (FILE *fp)
+ 	     generate the wide characters up to the current reading
+ 	     position.  */
+ 	  int nread;
+-
++	  size_t wnread = (fp->_wide_data->_IO_read_ptr
++			   - fp->_wide_data->_IO_read_base);
+ 	  fp->_wide_data->_IO_state = fp->_wide_data->_IO_last_state;
+ 	  nread = (*cv->__codecvt_do_length) (cv, &fp->_wide_data->_IO_state,
+ 					      fp->_IO_read_base,
+-					      fp->_IO_read_end, delta);
++					      fp->_IO_read_end, wnread);
+ 	  fp->_IO_read_ptr = fp->_IO_read_base + nread;
+ 	  delta = -(fp->_IO_read_end - fp->_IO_read_base - nread);
+ 	}

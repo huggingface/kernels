@@ -1,0 +1,194 @@
+commit f09542c584b121da0322fde4b55306d512b85d93
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Mar 23 15:23:20 2020 -0300
+
+    posix: Fix system error return value [BZ #25715]
+    
+    It fixes 5fb7fc9635 when posix_spawn fails.
+    
+    Checked on x86_64-linux-gnu and i686-linux-gnu.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/stdlib/tst-system.c b/stdlib/tst-system.c
+index d14839f3ec3a7bad..b61bd347df7ec46a 100644
+--- a/stdlib/tst-system.c
++++ b/stdlib/tst-system.c
+@@ -17,14 +17,128 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <stdlib.h>
++#include <unistd.h>
++#include <string.h>
++#include <signal.h>
++#include <paths.h>
+ 
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/temp_file.h>
++#include <support/support.h>
++
++static char *tmpdir;
++static long int namemax;
++
++static void
++do_prepare (int argc, char *argv[])
++{
++  tmpdir = support_create_temp_directory ("tst-system-");
++  /* Include the last '/0'.  */
++  namemax = pathconf (tmpdir, _PC_NAME_MAX) + 1;
++  TEST_VERIFY_EXIT (namemax != -1);
++}
++#define PREPARE do_prepare
++
++struct args
++{
++  const char *command;
++  int exit_status;
++  int term_sig;
++  const char *path;
++};
++
++static void
++call_system (void *closure)
++{
++  struct args *args = (struct args *) closure;
++  int ret;
++
++  if (args->path != NULL)
++    TEST_COMPARE (setenv ("PATH", args->path, 1), 0);
++  ret = system (args->command);
++  if (args->term_sig == 0)
++    {
++      /* Expect regular termination.  */
++      TEST_VERIFY (WIFEXITED (ret) != 0);
++      TEST_COMPARE (WEXITSTATUS (ret), args->exit_status);
++    }
++  else
++    {
++      /* status_or_signal < 0.  Expect termination by signal.  */
++      TEST_VERIFY (WIFSIGNALED (ret) != 0);
++      TEST_COMPARE (WTERMSIG (ret), args->term_sig);
++    }
++}
+ 
+ static int
+ do_test (void)
+ {
+-  return system (":");
+-}
++  TEST_VERIFY (system (NULL) != 0);
+ 
++  {
++    char cmd[namemax];
++    memset (cmd, 'a', sizeof(cmd));
++    cmd[sizeof(cmd) - 1] = '\0';
++
++    struct support_capture_subprocess result;
++    result = support_capture_subprocess (call_system,
++					 &(struct args) {
++					   cmd, 127, 0, tmpdir
++					 });
++    support_capture_subprocess_check (&result, "system", 0, sc_allow_stderr);
++
++    char *returnerr = xasprintf ("%s: 1: %s: not found\n",
++				 basename(_PATH_BSHELL), cmd);
++    TEST_COMPARE_STRING (result.err.buffer, returnerr);
++    free (returnerr);
++  }
++
++  {
++    char cmd[namemax + 1];
++    memset (cmd, 'a', sizeof(cmd));
++    cmd[sizeof(cmd) - 1] = '\0';
++
++    struct support_capture_subprocess result;
++    result = support_capture_subprocess (call_system,
++					 &(struct args) {
++					   cmd, 127, 0, tmpdir
++					 });
++    support_capture_subprocess_check (&result, "system", 0, sc_allow_stderr);
++
++    char *returnerr = xasprintf ("%s: 1: %s: File name too long\n",
++				 basename(_PATH_BSHELL), cmd);
++    TEST_COMPARE_STRING (result.err.buffer, returnerr);
++    free (returnerr);
++  }
++
++  {
++    struct support_capture_subprocess result;
++    result = support_capture_subprocess (call_system,
++					 &(struct args) {
++					   "kill -USR1 $$", 0, SIGUSR1
++					 });
++    support_capture_subprocess_check (&result, "system", 0, sc_allow_none);
++  }
++
++  {
++    struct support_capture_subprocess result;
++    result = support_capture_subprocess (call_system,
++					 &(struct args) { "echo ...", 0 });
++    support_capture_subprocess_check (&result, "system", 0, sc_allow_stdout);
++    TEST_COMPARE_STRING (result.out.buffer, "...\n");
++  }
++
++  {
++    struct support_capture_subprocess result;
++    result = support_capture_subprocess (call_system,
++					 &(struct args) { "exit 1", 1 });
++    support_capture_subprocess_check (&result, "system", 0, sc_allow_none);
++  }
++
++  TEST_COMPARE (system (":"), 0);
++
++  return 0;
++}
+ 
+-#define TEST_FUNCTION do_test ()
+-#include "../test-skeleton.c"
++#include <support/test-driver.c>
+diff --git a/sysdeps/posix/system.c b/sysdeps/posix/system.c
+index 8a51a6b9919ec39b..7db09a05c3fbca43 100644
+--- a/sysdeps/posix/system.c
++++ b/sysdeps/posix/system.c
+@@ -97,7 +97,8 @@ cancel_handler (void *arg)
+ static int
+ do_system (const char *line)
+ {
+-  int status;
++  int status = -1;
++  int ret;
+   pid_t pid;
+   struct sigaction sa;
+ #ifndef _LIBC_REENTRANT
+@@ -140,14 +141,14 @@ do_system (const char *line)
+   __posix_spawnattr_setflags (&spawn_attr,
+ 			      POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
+ 
+-  status = __posix_spawn (&pid, SHELL_PATH, 0, &spawn_attr,
+-			  (char *const[]){ (char*) SHELL_NAME,
+-					   (char*) "-c",
+-					   (char *) line, NULL },
+-			  __environ);
++  ret = __posix_spawn (&pid, SHELL_PATH, 0, &spawn_attr,
++		       (char *const[]){ (char *) SHELL_NAME,
++					(char *) "-c",
++					(char *) line, NULL },
++		       __environ);
+   __posix_spawnattr_destroy (&spawn_attr);
+ 
+-  if (status == 0)
++  if (ret == 0)
+     {
+       /* Cancellation results in cleanup handlers running as exceptions in
+ 	 the block where they were installed, so it is safe to reference
+@@ -182,6 +183,9 @@ do_system (const char *line)
+     }
+   DO_UNLOCK ();
+ 
++  if (ret != 0)
++    __set_errno (ret);
++
+   return status;
+ }
+ 

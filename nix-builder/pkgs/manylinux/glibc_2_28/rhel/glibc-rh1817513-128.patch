@@ -1,0 +1,83 @@
+commit 97476447edff96e526daa1a22d6ed3665181ff93
+Author: DJ Delorie <dj@redhat.com>
+Date:   Wed Oct 23 17:52:26 2019 -0400
+
+    Install charmaps uncompressed in testroot
+    
+    The testroot does not have a gunzip command, so the charmap files
+    should not be installed gzipped else they cannot be used (and thus
+    tested).  With this patch, installing with INSTALL_UNCOMPRESSED=yes
+    installs uncompressed charmaps instead.
+    
+    Note that we must purge the $(symbolic_link_list) as it contains
+    references to $(DESTDIR), which we change during the testroot
+    installation.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/Makefile b/Makefile
+index 3748d6f7cfb6223b..6d73241bbc811c13 100644
+--- a/Makefile
++++ b/Makefile
+@@ -398,8 +398,15 @@ ifeq ($(run-built-tests),yes)
+ 	    $(test-wrapper) cp $$dso $(objpfx)testroot.pristine$$dso ;\
+ 	  done
+ endif
++	# $(symbolic-link-list) is a file that encodes $(DESTDIR) so we
++	# have to purge it
++	rm -f $(symbolic-link-list)
++	# Setting INSTALL_UNCOMPRESSED causes localedata/Makefile to
++	# install the charmaps uncompressed, as the testroot does not
++	# provide a gunzip program.
+ 	$(MAKE) install DESTDIR=$(objpfx)testroot.pristine \
+-	  subdirs='$(sorted-subdirs)'
++	  INSTALL_UNCOMPRESSED=yes subdirs='$(sorted-subdirs)'
++	rm -f $(symbolic-link-list)
+ 	touch $(objpfx)testroot.pristine/install.stamp
+ 
+ tests-special-notdir = $(patsubst $(objpfx)%, %, $(tests-special))
+diff --git a/localedata/Makefile b/localedata/Makefile
+index 0fed95dcae6a9183..14fcc37fed21e740 100644
+--- a/localedata/Makefile
++++ b/localedata/Makefile
+@@ -167,9 +167,17 @@ endif
+ endif
+ 
+ # Files to install.
++ifeq ($(INSTALL_UNCOMPRESSED),yes)
++# This option is for testing inside the testroot container, as the
++# container does not include a working gunzip program.
++install-others := $(addprefix $(inst_i18ndir)/, \
++			      $(charmaps) \
++			      $(locales))
++else
+ install-others := $(addprefix $(inst_i18ndir)/, \
+ 			      $(addsuffix .gz, $(charmaps)) \
+ 			      $(locales))
++endif
+ 
+ tests: $(objdir)/iconvdata/gconv-modules
+ 
+@@ -282,12 +290,22 @@ endif
+ 
+ include ../Rules
+ 
++ifeq ($(INSTALL_UNCOMPRESSED),yes)
++# Install the charmap files as-is.  This option is for testing inside
++# the testroot container, as the container does not include a working
++# gunzip program.
++$(inst_i18ndir)/charmaps/%: charmaps/% $(+force)
++	$(make-target-directory)
++	rm -f $@
++	$(INSTALL_DATA) $< $@
++else
+ # Install the charmap files in gzipped format.
+ $(inst_i18ndir)/charmaps/%.gz: charmaps/% $(+force)
+ 	$(make-target-directory)
+ 	rm -f $(@:.gz=) $@
+ 	$(INSTALL_DATA) $< $(@:.gz=)
+ 	gzip -9n $(@:.gz=)
++endif
+ 
+ # Install the locale source files in the appropriate directory.
+ $(inst_i18ndir)/locales/%: locales/% $(+force); $(do-install)

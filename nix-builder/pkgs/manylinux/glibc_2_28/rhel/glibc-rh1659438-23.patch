@@ -1,0 +1,252 @@
+commit b935335155d65971fe2a54e32c0eb74303d4e4fc
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:12 2018 +0100
+
+    S390: Refactor strncat ifunc handling.
+    
+    The ifunc handling for strncat is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strncat variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strncat variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strncat.
+            * sysdeps/s390/multiarch/strncat-c.c: Move to ...
+            * sysdeps/s390/strncat-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strncat-vx.S: Move to ...
+            * sysdeps/s390/strncat-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strncat.c: Move to ...
+            * sysdeps/s390/strncat.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strncat.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index de2d5e5652dde412..cb5dc1d4f95fd11c 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -43,5 +43,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   stpcpy stpcpy-vx stpcpy-c \
+ 		   strncpy strncpy-vx strncpy-z900 \
+ 		   stpncpy stpncpy-vx stpncpy-c \
+-		   strcat strcat-vx strcat-c
++		   strcat strcat-vx strcat-c \
++		   strncat strncat-vx strncat-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strncat.h b/sysdeps/s390/ifunc-strncat.h
+new file mode 100644
+index 0000000000000000..bb164dcc32905b18
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strncat.h
+@@ -0,0 +1,52 @@
++/* strncat variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRNCAT_IFUNC	1
++#else
++# define HAVE_STRNCAT_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRNCAT_IFUNC_AND_VX_SUPPORT HAVE_STRNCAT_IFUNC
++#else
++# define HAVE_STRNCAT_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRNCAT_DEFAULT	STRNCAT_Z13
++# define HAVE_STRNCAT_C		0
++# define HAVE_STRNCAT_Z13	1
++#else
++# define STRNCAT_DEFAULT	STRNCAT_C
++# define HAVE_STRNCAT_C		1
++# define HAVE_STRNCAT_Z13	HAVE_STRNCAT_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRNCAT_C
++# define STRNCAT_C		__strncat_c
++#else
++# define STRNCAT_C		NULL
++#endif
++
++#if HAVE_STRNCAT_Z13
++# define STRNCAT_Z13		__strncat_vx
++#else
++# define STRNCAT_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 9b66237aaf9eb47e..24be3eac5131fd4a 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strncat strncat-vx strncat-c \
+-		   strcmp strcmp-vx \
++sysdep_routines += strcmp strcmp-vx \
+ 		   strncmp strncmp-vx strncmp-c \
+ 		   strchr strchr-vx strchr-c \
+ 		   strchrnul strchrnul-vx strchrnul-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 1b7f3df3a3cfe561..3abcaf08e0ccd385 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -33,6 +33,7 @@
+ #include <ifunc-strncpy.h>
+ #include <ifunc-stpncpy.h>
+ #include <ifunc-strcat.h>
++#include <ifunc-strncat.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -255,6 +256,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRCAT_IFUNC  */
+ 
++#if HAVE_STRNCAT_IFUNC
++    IFUNC_IMPL (i, name, strncat,
++# if HAVE_STRNCAT_Z13
++		IFUNC_IMPL_ADD (array, i, strncat,
++				dl_hwcap & HWCAP_S390_VX, STRNCAT_Z13)
++# endif
++# if HAVE_STRNCAT_C
++		IFUNC_IMPL_ADD (array, i, strncat, 1, STRNCAT_C)
++# endif
++		)
++#endif /* HAVE_STRNCAT_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -277,7 +290,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcscat);
+ 
+-  IFUNC_VX_IMPL (strncat);
+   IFUNC_VX_IMPL (wcsncat);
+ 
+   IFUNC_VX_IMPL (strcmp);
+diff --git a/sysdeps/s390/multiarch/strncat-c.c b/sysdeps/s390/strncat-c.c
+similarity index 86%
+rename from sysdeps/s390/multiarch/strncat-c.c
+rename to sysdeps/s390/strncat-c.c
+index 9e6c245ccbbc2e23..86df89887c7b6293 100644
+--- a/sysdeps/s390/multiarch/strncat-c.c
++++ b/sysdeps/s390/strncat-c.c
+@@ -16,8 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STRNCAT  __strncat_c
+-# define STRNCAT_PRIMARY
++#include <ifunc-strncat.h>
++
++#if HAVE_STRNCAT_C
++# if HAVE_STRNCAT_IFUNC
++#  define STRNCAT STRNCAT_C
++#  define STRNCAT_PRIMARY
++# endif
+ # include <string/strncat.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/strncat-vx.S b/sysdeps/s390/strncat-vx.S
+similarity index 94%
+rename from sysdeps/s390/multiarch/strncat-vx.S
+rename to sysdeps/s390/strncat-vx.S
+index e6584d0f438f0e38..76345e7dd702dd85 100644
+--- a/sysdeps/s390/multiarch/strncat-vx.S
++++ b/sysdeps/s390/strncat-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strncat.h>
++#if HAVE_STRNCAT_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -40,7 +41,7 @@
+    -v18=part of src
+    -v31=register save area for r6, r7
+ */
+-ENTRY(__strncat_vx)
++ENTRY(STRNCAT_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -235,5 +236,17 @@ ENTRY(__strncat_vx)
+ 
+ 	vl	%v16,0(%r5,%r3)	/* Load s.  */
+ 	j	.Lcpy_lt64
+-END(__strncat_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STRNCAT_Z13)
++
++# if ! HAVE_STRNCAT_IFUNC
++strong_alias (STRNCAT_Z13, strncat)
++# endif
++
++# if ! HAVE_STRNCAT_C
++/* See string/strncat.c and define STRNCAT_PRIMARY.  */
++strong_alias (STRNCAT_Z13, __strncat)
++#  if defined SHARED && IS_IN (libc)
++strong_alias (__strncat, __GI___strncat)
++#  endif
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/strncat.c b/sysdeps/s390/strncat.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/strncat.c
+rename to sysdeps/s390/strncat.c
+index 94b8dffa85420cfa..b4b3656c5ae9c535 100644
+--- a/sysdeps/s390/multiarch/strncat.c
++++ b/sysdeps/s390/strncat.c
+@@ -16,12 +16,23 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strncat.h>
++
++#if HAVE_STRNCAT_IFUNC
+ # include <string.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2 (__strncat, strncat)
++# if HAVE_STRNCAT_C
++extern __typeof (__strncat) STRNCAT_C attribute_hidden;
++# endif
++
++# if HAVE_STRNCAT_Z13
++extern __typeof (__strncat) STRNCAT_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/strncat.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (__strncat, strncat,
++		      (HAVE_STRNCAT_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRNCAT_Z13
++		      : STRNCAT_DEFAULT
++		      )
++#endif

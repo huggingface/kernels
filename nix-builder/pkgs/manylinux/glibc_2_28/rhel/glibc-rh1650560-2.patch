@@ -1,0 +1,30 @@
+commit 029ad711b8ad4cf0e5d98e0c138a35a23a376a74
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Oct 22 23:26:37 2018 +0000
+
+    Update kernel version in syscall-names.list to 4.19.
+    
+    Linux 4.19 does not add any new syscalls (some existing ones are added
+    to more architectures); this patch updates the version number in
+    syscall-names.list to reflect that it's still current for 4.19.
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update kernel
+            version to 4.19.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 9982a6334d46ae62..f88001c9c38d5fc7 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 4.18.
+-kernel 4.18
++# The list of system calls is current as of Linux 4.19.
++kernel 4.19
+ 
+ FAST_atomic_update
+ FAST_cmpxchg

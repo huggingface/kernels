@@ -1,0 +1,144 @@
+From 436a604b7dc741fc76b5a6704c6cd8bb178518e7 Mon Sep 17 00:00:00 2001
+From: Adam Yi <ayi@janestreet.com>
+Date: Tue, 7 Mar 2023 07:30:02 -0500
+Subject: posix: Fix system blocks SIGCHLD erroneously [BZ #30163]
+
+Fix bug that SIGCHLD is erroneously blocked forever in the following
+scenario:
+
+1. Thread A calls system but hasn't returned yet
+2. Thread B calls another system but returns
+
+SIGCHLD would be blocked forever in thread B after its system() returns,
+even after the system() in thread A returns.
+
+Although POSIX does not require, glibc system implementation aims to be
+thread and cancellation safe. This bug was introduced in
+5fb7fc96350575c9adb1316833e48ca11553be49 when we moved reverting signal
+mask to happen when the last concurrently running system returns,
+despite that signal mask is per thread. This commit reverts this logic
+and adds a test.
+
+Signed-off-by: Adam Yi <ayi@janestreet.com>
+Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+[DJ: Edited to use integer sleep() instead of nanosleep() dependency rabbit hole]
+diff --git a/stdlib/tst-system.c b/stdlib/tst-system.c
+index 634acfe264..47a0afe6bf 100644
+--- a/stdlib/tst-system.c
++++ b/stdlib/tst-system.c
+@@ -25,6 +25,7 @@
+ #include <support/check.h>
+ #include <support/temp_file.h>
+ #include <support/support.h>
++#include <support/xthread.h>
+ #include <support/xunistd.h>
+ 
+ static char *tmpdir;
+@@ -71,6 +72,20 @@ call_system (void *closure)
+     }
+ }
+ 
++static void *
++sleep_and_check_sigchld (void *closure)
++{
++  double *seconds = (double *) closure;
++  char cmd[namemax];
++  sprintf (cmd, "sleep %lf" , *seconds);
++  TEST_COMPARE (system (cmd), 0);
++
++  sigset_t blocked = {0};
++  TEST_COMPARE (sigprocmask (SIG_BLOCK, NULL, &blocked), 0);
++  TEST_COMPARE (sigismember (&blocked, SIGCHLD), 0);
++  return NULL;
++}
++
+ static int
+ do_test (void)
+ {
+@@ -154,6 +169,17 @@ do_test (void)
+     xchmod (_PATH_BSHELL, st.st_mode);
+   }
+ 
++  {
++    pthread_t long_sleep_thread = xpthread_create (NULL,
++                                                   sleep_and_check_sigchld,
++                                                   &(double) { 2 });
++    pthread_t short_sleep_thread = xpthread_create (NULL,
++                                                    sleep_and_check_sigchld,
++                                                    &(double) { 1 });
++    xpthread_join (short_sleep_thread);
++    xpthread_join (long_sleep_thread);
++  }
++
+   TEST_COMPARE (system (""), 0);
+ 
+   return 0;
+diff --git a/support/shell-container.c b/support/shell-container.c
+index ffa3378b5e..b1f9e793c1 100644
+--- a/support/shell-container.c
++++ b/support/shell-container.c
+@@ -169,6 +170,31 @@ kill_func (char **argv)
+   return 0;
+ }
+ 
++/* Emulate the "/bin/sleep" command.  No suffix support.  Options are
++   ignored.  */
++static int
++sleep_func (char **argv)
++{
++  if (argv[0] == NULL)
++    {
++      fprintf (stderr, "sleep: missing operand\n");
++      return 1;
++    }
++  char *endptr = NULL;
++  long sec = strtol (argv[0], &endptr, 0);
++  if (endptr == argv[0] || errno == ERANGE || sec < 0)
++    {
++      fprintf (stderr, "sleep: invalid time interval '%s'\n", argv[0]);
++      return 1;
++    }
++  if (sleep (sec) < 0)
++    {
++      fprintf (stderr, "sleep: failed to nanosleep\n");
++      return 1;
++    }
++  return 0;
++}
++
+ /* This is a list of all the built-in commands we understand.  */
+ static struct {
+   const char *name;
+@@ -179,6 +206,7 @@ static struct {
+   { "cp", copy_func },
+   { "exit", exit_func },
+   { "kill", kill_func },
++  { "sleep", sleep_func },
+   { NULL, NULL }
+ };
+ 
+diff --git a/sysdeps/posix/system.c b/sysdeps/posix/system.c
+index 2335a99184..d77720a625 100644
+--- a/sysdeps/posix/system.c
++++ b/sysdeps/posix/system.c
+@@ -179,16 +179,16 @@ do_system (const char *line)
+       as if the shell had terminated using _exit(127).  */
+    status = W_EXITCODE (127, 0);
+ 
++  /* sigaction can not fail with SIGINT/SIGQUIT used with old
++     disposition.  Same applies for sigprocmask.  */
+   DO_LOCK ();
+   if (SUB_REF () == 0)
+     {
+-      /* sigaction can not fail with SIGINT/SIGQUIT used with old
+-	 disposition.  Same applies for sigprocmask.  */
+       __sigaction (SIGINT, &intr, NULL);
+       __sigaction (SIGQUIT, &quit, NULL);
+-      __sigprocmask (SIG_SETMASK, &omask, NULL);
+     }
+   DO_UNLOCK ();
++  __sigprocmask (SIG_SETMASK, &omask, NULL);
+ 
+   if (ret != 0)
+     __set_errno (ret);

@@ -1,0 +1,84 @@
+Short description: Work ld.so --verify crash on debuginfo files.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Bug-RHEL: #741105, #767146
+Upstream status: not-needed
+
+This change is designed to work around running ld.so on a debuginfo
+file. This is the wrong fix for this problem and should be dropped.
+The correct solution is to mark debuginfo files as new types of
+ELF files.
+
+Index: glibc-2.22-386-g95e8397/elf/dl-load.c
+===================================================================
+--- glibc-2.22-386-g95e8397.orig/elf/dl-load.c
++++ glibc-2.22-386-g95e8397/elf/dl-load.c
+@@ -881,7 +881,8 @@ _dl_map_object_from_fd (const char *name
+ 
+   /* Get file information.  */
+   struct r_file_id id;
+-  if (__glibc_unlikely (!_dl_get_file_id (fd, &id)))
++  struct stat64 st;
++  if (__glibc_unlikely (!_dl_get_file_id (fd, &id, &st)))
+     {
+       errstring = N_("cannot stat shared object");
+     call_lose_errno:
+@@ -1076,6 +1077,16 @@ _dl_map_object_from_fd (const char *name
+ 		= N_("ELF load command address/offset not properly aligned");
+ 	      goto call_lose;
+ 	    }
++	  if (__glibc_unlikely (ph->p_offset + ph->p_filesz > st.st_size))
++	    {
++	      /* If the segment requires zeroing of part of its last
++		 page, we'll crash when accessing the unmapped page.
++		 There's still a possibility of a race, if the shared
++		 object is truncated between the fxstat above and the
++		 memset below.  */
++	      errstring = N_("ELF load command past end of file");
++	      goto call_lose;
++	    }
+ 
+ 	  struct loadcmd *c = &loadcmds[nloadcmds++];
+ 	  c->mapstart = ALIGN_DOWN (ph->p_vaddr, GLRO(dl_pagesize));
+Index: glibc-2.22-386-g95e8397/sysdeps/generic/dl-fileid.h
+===================================================================
+--- glibc-2.22-386-g95e8397.orig/sysdeps/generic/dl-fileid.h
++++ glibc-2.22-386-g95e8397/sysdeps/generic/dl-fileid.h
+@@ -29,7 +29,8 @@ struct r_file_id
+    On error, returns false, with errno set.  */
+ static inline bool
+ _dl_get_file_id (int fd __attribute__ ((unused)),
+-		 struct r_file_id *id __attribute__ ((unused)))
++		 struct r_file_id *id __attribute__ ((unused)),
++		 struct stat64_t *st __attribute__((unused)))
+ {
+   return true;
+ }
+Index: glibc-2.22-386-g95e8397/sysdeps/posix/dl-fileid.h
+===================================================================
+--- glibc-2.22-386-g95e8397.orig/sysdeps/posix/dl-fileid.h
++++ glibc-2.22-386-g95e8397/sysdeps/posix/dl-fileid.h
+@@ -27,18 +27,16 @@ struct r_file_id
+     ino64_t ino;
+   };
+ 
+-/* Sample FD to fill in *ID.  Returns true on success.
++/* Sample FD to fill in *ID and *ST.  Returns true on success.
+    On error, returns false, with errno set.  */
+ static inline bool
+-_dl_get_file_id (int fd, struct r_file_id *id)
++_dl_get_file_id (int fd, struct r_file_id *id, struct stat64 *st)
+ {
+-  struct stat64 st;
+-
+-  if (__glibc_unlikely (__fxstat64 (_STAT_VER, fd, &st) < 0))
++  if (__glibc_unlikely (__fxstat64 (_STAT_VER, fd, st) < 0))
+     return false;
+ 
+-  id->dev = st.st_dev;
+-  id->ino = st.st_ino;
++  id->dev = st->st_dev;
++  id->ino = st->st_ino;
+   return true;
+ }
+ 

@@ -1,0 +1,249 @@
+commit 4753713aaed400d88cfc598e25d504478120b065
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:22 2018 +0100
+
+    S390: Refactor wcsrchr ifunc handling.
+    
+    The ifunc handling for wcsrchr is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcsrchr variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcsrchr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcsrchr.
+            * sysdeps/s390/multiarch/wcsrchr-c.c: Move to ...
+            * sysdeps/s390/wcsrchr-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcsrchr-vx.S: Move to ...
+            * sysdeps/s390/wcsrchr-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcsrchr.c: Move to ...
+            * sysdeps/s390/wcsrchr.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcsrchr.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index a6ebf11ad1913cc4..19a556eccf285e2f 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -71,5 +71,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcscmp wcscmp-vx wcscmp-c \
+ 		   wcsncmp wcsncmp-vx wcsncmp-c \
+ 		   wcschr wcschr-vx wcschr-c \
+-		   wcschrnul wcschrnul-vx wcschrnul-c
++		   wcschrnul wcschrnul-vx wcschrnul-c \
++		   wcsrchr wcsrchr-vx wcsrchr-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcsrchr.h b/sysdeps/s390/ifunc-wcsrchr.h
+new file mode 100644
+index 0000000000000000..4eec0c17074c99fc
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcsrchr.h
+@@ -0,0 +1,53 @@
++/* wcsrchr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSRCHR_IFUNC	1
++#else
++# define HAVE_WCSRCHR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSRCHR_IFUNC_AND_VX_SUPPORT HAVE_WCSRCHR_IFUNC
++#else
++# define HAVE_WCSRCHR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSRCHR_DEFAULT	WCSRCHR_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCSRCHR_C		1
++# define HAVE_WCSRCHR_Z13	1
++#else
++# define WCSRCHR_DEFAULT	WCSRCHR_C
++# define HAVE_WCSRCHR_C		1
++# define HAVE_WCSRCHR_Z13	HAVE_WCSRCHR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSRCHR_C
++# define WCSRCHR_C		__wcsrchr_c
++#else
++# define WCSRCHR_C		NULL
++#endif
++
++#if HAVE_WCSRCHR_Z13
++# define WCSRCHR_Z13		__wcsrchr_vx
++#else
++# define WCSRCHR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 0eb01d5d84c60408..3d72cbb5f32e68f3 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcsrchr wcsrchr-vx wcsrchr-c \
+-		   wcsspn wcsspn-vx wcsspn-c \
++sysdep_routines += wcsspn wcsspn-vx wcsspn-c \
+ 		   wcspbrk wcspbrk-vx wcspbrk-c \
+ 		   wcscspn wcscspn-vx wcscspn-c \
+ 		   wmemchr wmemchr-vx wmemchr-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 553a76c39ecc87ae..ffb4d5b6872ef9db 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -58,6 +58,7 @@
+ #include <ifunc-wcsncmp.h>
+ #include <ifunc-wcschr.h>
+ #include <ifunc-wcschrnul.h>
++#include <ifunc-wcsrchr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -580,6 +581,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSCHRNUL_IFUNC  */
+ 
++#if HAVE_WCSRCHR_IFUNC
++    IFUNC_IMPL (i, name, wcsrchr,
++# if HAVE_WCSRCHR_Z13
++		IFUNC_IMPL_ADD (array, i, wcsrchr,
++				dl_hwcap & HWCAP_S390_VX, WCSRCHR_Z13)
++# endif
++# if HAVE_WCSRCHR_C
++		IFUNC_IMPL_ADD (array, i, wcsrchr, 1, WCSRCHR_C)
++# endif
++		)
++#endif /* HAVE_WCSRCHR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -588,8 +601,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcsrchr);
+-
+   IFUNC_VX_IMPL (wcsspn);
+ 
+   IFUNC_VX_IMPL (wcspbrk);
+diff --git a/sysdeps/s390/multiarch/wcsrchr-c.c b/sysdeps/s390/wcsrchr-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/wcsrchr-c.c
+rename to sysdeps/s390/wcsrchr-c.c
+index 615250358ba9c00a..65164a897fb773f7 100644
+--- a/sysdeps/s390/multiarch/wcsrchr-c.c
++++ b/sysdeps/s390/wcsrchr-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSRCHR  __wcsrchr_c
++#include <ifunc-wcsrchr.h>
++
++#if HAVE_WCSRCHR_C
++# if HAVE_WCSRCHR_IFUNC || HAVE_WCSRCHR_Z13
++#  define WCSRCHR WCSRCHR_C
++# endif
+ 
+-# include <wchar.h>
+-extern __typeof (wcsrchr) __wcsrchr_c;
+ # include <wcsmbs/wcsrchr.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcsrchr-vx.S b/sysdeps/s390/wcsrchr-vx.S
+similarity index 97%
+rename from sysdeps/s390/multiarch/wcsrchr-vx.S
+rename to sysdeps/s390/wcsrchr-vx.S
+index e40a554e5d9a216d..c7b6585beaeaef53 100644
+--- a/sysdeps/s390/multiarch/wcsrchr-vx.S
++++ b/sysdeps/s390/wcsrchr-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcsrchr.h>
++#if HAVE_WCSRCHR_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -39,7 +40,7 @@
+    -v19=part of s with last occurence of c.
+    -v20=permute pattern
+ */
+-ENTRY(__wcsrchr_vx)
++ENTRY(WCSRCHR_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -185,6 +186,10 @@ ENTRY(__wcsrchr_vx)
+ 	.byte	0x0C,0x0D,0x0E,0x0F,0x08,0x09,0x0A,0x0B
+ 	.byte	0x04,0x05,0x06,0x07,0x00,0x01,0x02,0x03
+ .Lfallback:
+-	jg	__wcsrchr_c
+-END(__wcsrchr_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCSRCHR_C
++END(WCSRCHR_Z13)
++
++# if ! HAVE_WCSRCHR_IFUNC
++strong_alias (WCSRCHR_Z13, wcsrchr)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcsrchr.c b/sysdeps/s390/wcsrchr.c
+similarity index 69%
+rename from sysdeps/s390/multiarch/wcsrchr.c
+rename to sysdeps/s390/wcsrchr.c
+index aa0b8a8f82545f64..eb70f270383880f2 100644
+--- a/sysdeps/s390/multiarch/wcsrchr.c
++++ b/sysdeps/s390/wcsrchr.c
+@@ -16,12 +16,23 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcsrchr.h>
++
++#if HAVE_WCSRCHR_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2 (__wcsrchr, wcsrchr)
++# if HAVE_WCSRCHR_C
++extern __typeof (wcsrchr) WCSRCHR_C attribute_hidden;
++# endif
++
++# if HAVE_WCSRCHR_Z13
++extern __typeof (wcsrchr) WCSRCHR_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcsrchr.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (wcsrchr, wcsrchr,
++		      (HAVE_WCSRCHR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSRCHR_Z13
++		      : WCSRCHR_DEFAULT
++		      )
++#endif

@@ -1,0 +1,403 @@
+commit 581a051c2e09a847332d4750f6132de0f0ad15b6
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:16 2018 +0100
+
+    S390: Refactor memchr ifunc handling.
+    
+    The ifunc handling for memchr is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    Note: The fallback s390-32/s390-64 ifunc variants with srst instruction
+    are now moved to the unified memchr-z900.S file which can be used for
+    31/64bit. The s390-32/s390-64 files multiarch/memchr.c and memchr.S
+    are deleted.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove memchr variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add memchr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for memchr.
+            * sysdeps/s390/multiarch/memchr-vx.S: Move to ...
+            * sysdeps/s390/memchr-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/memchr.c: Move to ...
+            * sysdeps/s390/memchr.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-memchr.h: New file.
+            * sysdeps/s390/s390-64/memchr.S: Move to ...
+            * sysdeps/s390/memchr-z900.S: ... here and adjust to be usable
+            for 31/64bit and ifunc handling.
+            * sysdeps/s390/s390-32/multiarch/memchr.c: Delete file.
+            * sysdeps/s390/s390-64/multiarch/memchr.c: Likewise.
+            * sysdeps/s390/s390-32/memchr.S: Likewise.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 092d55826fbd15a5..816b2fccdc75e4cf 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -52,5 +52,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strrchr strrchr-vx strrchr-c \
+ 		   strspn strspn-vx strspn-c \
+ 		   strpbrk strpbrk-vx strpbrk-c \
+-		   strcspn strcspn-vx strcspn-c
++		   strcspn strcspn-vx strcspn-c \
++		   memchr memchr-vx memchr-z900
+ endif
+diff --git a/sysdeps/s390/ifunc-memchr.h b/sysdeps/s390/ifunc-memchr.h
+new file mode 100644
+index 0000000000000000..5d1327b45353322b
+--- /dev/null
++++ b/sysdeps/s390/ifunc-memchr.h
+@@ -0,0 +1,52 @@
++/* memchr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_MEMCHR_IFUNC	1
++#else
++# define HAVE_MEMCHR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_MEMCHR_IFUNC_AND_VX_SUPPORT HAVE_MEMCHR_IFUNC
++#else
++# define HAVE_MEMCHR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define MEMCHR_DEFAULT		MEMCHR_Z13
++# define HAVE_MEMCHR_Z900_G5	0
++# define HAVE_MEMCHR_Z13	1
++#else
++# define MEMCHR_DEFAULT		MEMCHR_Z900_G5
++# define HAVE_MEMCHR_Z900_G5	1
++# define HAVE_MEMCHR_Z13	HAVE_MEMCHR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_MEMCHR_Z900_G5
++# define MEMCHR_Z900_G5		__memchr_default
++#else
++# define MEMCHR_Z900_G5		NULL
++#endif
++
++#if HAVE_MEMCHR_Z13
++# define MEMCHR_Z13		__memchr_vx
++#else
++# define MEMCHR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/memchr-vx.S b/sysdeps/s390/memchr-vx.S
+similarity index 92%
+rename from sysdeps/s390/multiarch/memchr-vx.S
+rename to sysdeps/s390/memchr-vx.S
+index 77d31e0036915665..274e7971ca7e9413 100644
+--- a/sysdeps/s390/multiarch/memchr-vx.S
++++ b/sysdeps/s390/memchr-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-memchr.h>
++#if HAVE_MEMCHR_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -38,7 +39,7 @@
+    -v17=index of found c
+    -v18=c replicated
+ */
+-ENTRY(__memchr_vx)
++ENTRY(MEMCHR_Z13)
+ 
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+@@ -149,11 +150,14 @@ ENTRY(__memchr_vx)
+ 	clgrjl	%r0,%r4,.Lloop64
+ 
+ 	j	.Llt64
+-END(__memchr_vx)
++END(MEMCHR_Z13)
+ 
+-# define memchr __memchr_c
+-# undef libc_hidden_builtin_def
+-# define libc_hidden_builtin_def(name) strong_alias(__memchr_c, __GI_memchr)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++# if ! HAVE_MEMCHR_IFUNC
++strong_alias (MEMCHR_Z13, __memchr)
++weak_alias (__memchr, memchr)
++# endif
+ 
+-#include <memchr.S>
++# if ! HAVE_MEMCHR_Z900_G5 && defined SHARED && IS_IN (libc)
++strong_alias (MEMCHR_Z13, __GI_memchr)
++# endif
++#endif
+diff --git a/sysdeps/s390/s390-64/memchr.S b/sysdeps/s390/memchr-z900.S
+similarity index 63%
+rename from sysdeps/s390/s390-64/memchr.S
+rename to sysdeps/s390/memchr-z900.S
+index a19fcafa147dc338..c016bc41c61be2dc 100644
+--- a/sysdeps/s390/s390-64/memchr.S
++++ b/sysdeps/s390/memchr-z900.S
+@@ -1,4 +1,4 @@
+-/* Search a character in a block of memory.  64 bit S/390 version.
++/* Search a character in a block of memory.  31/64 bit S/390 version.
+    Copyright (C) 2001-2018 Free Software Foundation, Inc.
+    Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+    This file is part of the GNU C Library.
+@@ -22,19 +22,42 @@
+      %r3 = character to find
+      %r4 = number of bytes to search.  */
+ 
++#include <ifunc-memchr.h>
+ #include "sysdep.h"
+ #include "asm-syntax.h"
+ 
++#if HAVE_MEMCHR_Z900_G5
++# if defined __s390x__
++#  define SLGR	slgr
++#  define LGHI	lghi
++#  define NGR	ngr
++#  define LGR	lgr
++# else
++#  define SLGR	slr
++#  define LGHI	lhi
++#  define NGR	nr
++#  define LGR	lr
++# endif /* ! defined __s390x__  */
++
+ 	.text
+-ENTRY(memchr)
+-	lghi  %r0,0xff
+-	ngr   %r0,%r3
+-	lgr   %r1,%r2
++ENTRY(MEMCHR_Z900_G5)
++	LGHI  %r0,0xff
++	NGR   %r0,%r3
++	LGR   %r1,%r2
+ 	la    %r2,0(%r4,%r1)
+ 0:	srst  %r2,%r1
+ 	jo    0b
+ 	brc   13,1f
+-	slgr  %r2,%r2
++	SLGR  %r2,%r2
+ 1:	br    %r14
+-END(memchr)
+-libc_hidden_builtin_def (memchr)
++END(MEMCHR_Z900_G5)
++
++# if ! HAVE_MEMCHR_IFUNC
++strong_alias (MEMCHR_Z900_G5, __memchr)
++weak_alias (__memchr, memchr)
++# endif
++
++# if defined SHARED && IS_IN (libc)
++strong_alias (MEMCHR_Z900_G5, __GI_memchr)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/memchr.c b/sysdeps/s390/memchr.c
+similarity index 68%
+rename from sysdeps/s390/multiarch/memchr.c
+rename to sysdeps/s390/memchr.c
+index 3885ebaa4d90ed1a..490f1b66002aae05 100644
+--- a/sysdeps/s390/multiarch/memchr.c
++++ b/sysdeps/s390/memchr.c
+@@ -16,12 +16,26 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-memchr.h>
++
++#if HAVE_MEMCHR_IFUNC
+ # define memchr __redirect_memchr
+ # include <string.h>
+ # undef memchr
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect_memchr, __memchr, memchr)
++# if HAVE_MEMCHR_Z900_G5
++extern __typeof (__redirect_memchr) MEMCHR_Z900_G5 attribute_hidden;
++# endif
++
++# if HAVE_MEMCHR_Z13
++extern __typeof (__redirect_memchr) MEMCHR_Z13 attribute_hidden;
++# endif
+ 
++s390_libc_ifunc_expr (__redirect_memchr, __memchr,
++		      (HAVE_MEMCHR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? MEMCHR_Z13
++		      : MEMCHR_DEFAULT
++		      )
++weak_alias (__memchr, memchr)
+ #endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 1578f21af4a1bd06..fa1f7b81db912be0 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += memchr memchr-vx \
+-		   rawmemchr rawmemchr-vx rawmemchr-c \
++sysdep_routines += rawmemchr rawmemchr-vx rawmemchr-c \
+ 		   memccpy memccpy-vx memccpy-c \
+ 		   memrchr memrchr-vx memrchr-c
+ endif
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 2d48c99c8d5663fe..b4be0140424aed69 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -42,6 +42,7 @@
+ #include <ifunc-strspn.h>
+ #include <ifunc-strpbrk.h>
+ #include <ifunc-strcspn.h>
++#include <ifunc-memchr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -372,6 +373,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRCSPN_IFUNC  */
+ 
++#if HAVE_MEMCHR_IFUNC
++    IFUNC_IMPL (i, name, memchr,
++# if HAVE_MEMCHR_Z13
++		IFUNC_IMPL_ADD (array, i, memchr,
++				dl_hwcap & HWCAP_S390_VX, MEMCHR_Z13)
++# endif
++# if HAVE_MEMCHR_Z900_G5
++		IFUNC_IMPL_ADD (array, i, memchr, 1, MEMCHR_Z900_G5)
++# endif
++		)
++#endif /* HAVE_MEMCHR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -412,7 +425,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcscspn);
+ 
+-  IFUNC_VX_IMPL (memchr);
+   IFUNC_VX_IMPL (wmemchr);
+   IFUNC_VX_IMPL (rawmemchr);
+ 
+diff --git a/sysdeps/s390/s390-32/memchr.S b/sysdeps/s390/s390-32/memchr.S
+deleted file mode 100644
+index 54f9b85f578fa1c7..0000000000000000
+--- a/sysdeps/s390/s390-32/memchr.S
++++ /dev/null
+@@ -1,41 +0,0 @@
+-/* Search a character in a block of memory.  For IBM S390
+-   Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-   Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/*
+- * R2 = address to memory area
+- * R3 = character to find
+- * R4 = number of bytes to search
+- */
+-
+-#include "sysdep.h"
+-#include "asm-syntax.h"
+-
+-	.text
+-ENTRY(memchr)
+-	lhi   %r0,0xff
+-	nr    %r0,%r3
+-	lr    %r1,%r2
+-	la    %r2,0(%r4,%r1)
+-0:      srst  %r2,%r1
+-	jo    0b
+-	brc   13,1f
+-	slr   %r2,%r2
+-1:      br    %r14
+-END(memchr)
+-libc_hidden_builtin_def (memchr)
+diff --git a/sysdeps/s390/s390-32/multiarch/memchr.c b/sysdeps/s390/s390-32/multiarch/memchr.c
+deleted file mode 100644
+index 5e1610afa43ee549..0000000000000000
+--- a/sysdeps/s390/s390-32/multiarch/memchr.c
++++ /dev/null
+@@ -1,21 +0,0 @@
+-/* Multiple versions of memchr.
+-   Copyright (C) 2015-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/* This wrapper-file is needed, because otherwise file
+-   sysdeps/s390/s390-[32|64]/memchr.S will be used.  */
+-#include <sysdeps/s390/multiarch/memchr.c>
+diff --git a/sysdeps/s390/s390-64/multiarch/memchr.c b/sysdeps/s390/s390-64/multiarch/memchr.c
+deleted file mode 100644
+index 5e1610afa43ee549..0000000000000000
+--- a/sysdeps/s390/s390-64/multiarch/memchr.c
++++ /dev/null
+@@ -1,21 +0,0 @@
+-/* Multiple versions of memchr.
+-   Copyright (C) 2015-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/* This wrapper-file is needed, because otherwise file
+-   sysdeps/s390/s390-[32|64]/memchr.S will be used.  */
+-#include <sysdeps/s390/multiarch/memchr.c>

@@ -1,0 +1,152 @@
+commit db07fae8250401adb2b97ab3e53d41da2a6bd767
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Nov 26 16:59:44 2020 +0100
+
+    elf: Introduce enum opt_format in the ldconfig implementation
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/cache.c b/elf/cache.c
+index c4cd825c30e00e8e..edcdd4b7cc1a6a0b 100644
+--- a/elf/cache.c
++++ b/elf/cache.c
+@@ -321,13 +321,13 @@ save_cache (const char *cache_name)
+   struct cache_file *file_entries = NULL;
+   size_t file_entries_size = 0;
+ 
+-  if (opt_format != 2)
++  if (opt_format != opt_format_new)
+     {
+       /* struct cache_file_new is 64-bit aligned on some arches while
+ 	 only 32-bit aligned on other arches.  Duplicate last old
+ 	 cache entry so that new cache in ld.so.cache can be used by
+ 	 both.  */
+-      if (opt_format != 0)
++      if (opt_format != opt_format_old)
+ 	cache_entry_old_count = (cache_entry_old_count + 1) & ~1;
+ 
+       /* And the list of all entries in the old format.  */
+@@ -345,7 +345,7 @@ save_cache (const char *cache_name)
+   struct cache_file_new *file_entries_new = NULL;
+   size_t file_entries_new_size = 0;
+ 
+-  if (opt_format != 0)
++  if (opt_format != opt_format_old)
+     {
+       /* And the list of all entries in the new format.  */
+       file_entries_new_size = sizeof (struct cache_file_new)
+@@ -370,7 +370,7 @@ save_cache (const char *cache_name)
+      table, we have to adjust all string indices for this so that
+      old libc5/glibc 2 dynamic linkers just ignore them.  */
+   unsigned int str_offset;
+-  if (opt_format != 0)
++  if (opt_format != opt_format_old)
+     str_offset = file_entries_new_size;
+   else
+     str_offset = 0;
+@@ -385,13 +385,13 @@ save_cache (const char *cache_name)
+        entry = entry->next, ++idx_new)
+     {
+       /* First the library.  */
+-      if (opt_format != 2 && entry->hwcap == 0)
++      if (opt_format != opt_format_new && entry->hwcap == 0)
+ 	{
+ 	  file_entries->libs[idx_old].flags = entry->flags;
+ 	  /* XXX: Actually we can optimize here and remove duplicates.  */
+ 	  file_entries->libs[idx_old].key = str_offset + pad;
+ 	}
+-      if (opt_format != 0)
++      if (opt_format != opt_format_old)
+ 	{
+ 	  /* We could subtract file_entries_new_size from str_offset -
+ 	     not doing so makes the code easier, the string table
+@@ -407,9 +407,9 @@ save_cache (const char *cache_name)
+       str = mempcpy (str, entry->lib, len);
+       str_offset += len;
+       /* Then the path.  */
+-      if (opt_format != 2 && entry->hwcap == 0)
++      if (opt_format != opt_format_new && entry->hwcap == 0)
+ 	file_entries->libs[idx_old].value = str_offset + pad;
+-      if (opt_format != 0)
++      if (opt_format != opt_format_old)
+ 	file_entries_new->libs[idx_new].value = str_offset;
+       len = strlen (entry->path) + 1;
+       str = mempcpy (str, entry->path, len);
+@@ -420,7 +420,7 @@ save_cache (const char *cache_name)
+     }
+ 
+   /* Duplicate last old cache entry if needed.  */
+-  if (opt_format != 2
++  if (opt_format != opt_format_new
+       && idx_old < cache_entry_old_count)
+     file_entries->libs[idx_old] = file_entries->libs[idx_old - 1];
+ 
+@@ -438,16 +438,16 @@ save_cache (const char *cache_name)
+ 	   temp_name);
+ 
+   /* Write contents.  */
+-  if (opt_format != 2)
++  if (opt_format != opt_format_new)
+     {
+       if (write (fd, file_entries, file_entries_size)
+ 	  != (ssize_t) file_entries_size)
+ 	error (EXIT_FAILURE, errno, _("Writing of cache data failed"));
+     }
+-  if (opt_format != 0)
++  if (opt_format != opt_format_old)
+     {
+       /* Align cache.  */
+-      if (opt_format != 2)
++      if (opt_format != opt_format_new)
+ 	{
+ 	  char zero[pad];
+ 	  memset (zero, '\0', pad);
+diff --git a/elf/ldconfig.c b/elf/ldconfig.c
+index be730ceb075f6c1f..0fa5aef83f9cd86c 100644
+--- a/elf/ldconfig.c
++++ b/elf/ldconfig.c
+@@ -100,8 +100,7 @@ static int opt_print_cache;
+ int opt_verbose;
+ 
+ /* Format to support.  */
+-/* 0: only libc5/glibc2; 1: both; 2: only glibc 2.2.  */
+-int opt_format = 2;
++enum opt_format opt_format = opt_format_new;
+ 
+ /* Build cache.  */
+ static int opt_build_cache = 1;
+@@ -281,11 +280,11 @@ parse_opt (int key, char *arg, struct argp_state *state)
+       break;
+     case 'c':
+       if (strcmp (arg, "old") == 0)
+-	opt_format = 0;
++	opt_format = opt_format_old;
+       else if (strcmp (arg, "compat") == 0)
+-	opt_format = 1;
++	opt_format = opt_format_compat;
+       else if (strcmp (arg, "new") == 0)
+-	opt_format = 2;
++	opt_format = opt_format_new;
+       break;
+     default:
+       return ARGP_ERR_UNKNOWN;
+diff --git a/sysdeps/generic/ldconfig.h b/sysdeps/generic/ldconfig.h
+index 6774212110d23eae..b15b142511829436 100644
+--- a/sysdeps/generic/ldconfig.h
++++ b/sysdeps/generic/ldconfig.h
+@@ -90,7 +90,14 @@ extern char *chroot_canon (const char *chroot, const char *name);
+ /* Declared in ldconfig.c.  */
+ extern int opt_verbose;
+ 
+-extern int opt_format;
++enum opt_format
++  {
++    opt_format_old = 0,	/* Use struct cache_file.  */
++    opt_format_compat = 1, /* Use both, old format followed by new.  */
++    opt_format_new = 2,	/* Use struct cache_file_new.  */
++  };
++
++extern enum opt_format opt_format;
+ 
+ /* Prototypes for a few program-wide used functions.  */
+ #include <programs/xmalloc.h>

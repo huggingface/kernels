@@ -1,0 +1,84 @@
+commit 7b543dcdf97d07fd4346feb17916e08fe83ad0ae
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Jan 15 22:29:46 2026 +0100
+
+    elf: Ignore LD_PROFILE if LD_PROFILE_OUTPUT is not set (bug 33797)
+
+    The previous default for LD_PROFILE_OUTPUT, /var/tmp, is insecure
+    because it's typically a 1777 directory, and other systems could
+    place malicious files there which interfere with execution.
+
+    Requiring the user to specify a profiling directory mitigates
+    the impact of bug 33797.  Clear LD_PROFILE_OUTPUT alongside
+    with LD_PROFILE.
+
+    Rework the test not to use predictable file names.
+
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/rtld.c
+	  (different implementation of environment variable filtering
+	  downstream, incorporate changes from upstream commit
+	  4a133885a7c8ae7ebe34e36fcdb353f8e94c810f, adjust for
+	  GLRO(_dl_profile_output) use in glibc-rh2047981-44.patch)
+	elf/tst-env-setuid.c
+	  (no LD_PROFILE test downstream)
+
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 48698f93a4873a6d..848f6f51d093f313 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2684,11 +2684,9 @@ process_envvars (struct dl_main_state *state)
+   char *envline;
+   char *debug_output = NULL;
+ 
+-  /* This is the default place for profiling data file.  As a side
+-     effect, this marks ld.so as initialized, so that the rtld_active
+-     function returns true from now on.  */
+-  GLRO(dl_profile_output)
+-    = &"/var/tmp\0/var/profile"[__libc_enable_secure ? 9 : 0];
++  /* This marks ld.so as initialized, so that the rtld_active function
++     returns true from now on.  "" means no default.  */
++  GLRO(dl_profile_output) = "";
+ 
+   while ((envline = _dl_next_ld_env_entry (&runp)) != NULL)
+     {
+@@ -2738,7 +2736,8 @@ process_envvars (struct dl_main_state *state)
+ 	    }
+ 
+ 	  /* Which shared object shall be profiled.  */
+-	  if (memcmp (envline, "PROFILE", 7) == 0 && envline[8] != '\0')
++	  if (!__libc_enable_secure
++	      && memcmp (envline, "PROFILE", 7) == 0 && envline[8] != '\0')
+ 	    GLRO(dl_profile) = &envline[8];
+ 	  break;
+ 
+@@ -2899,6 +2898,15 @@ process_envvars (struct dl_main_state *state)
+ 	/* We use standard output if opening the file failed.  */
+ 	GLRO(dl_debug_fd) = STDOUT_FILENO;
+     }
++
++  /* There is no fixed, safe directory to store profiling data, so
++     activate LD_PROFILE only if LD_PROFILE_OUTPUT is set as well.  */
++  if (GLRO(dl_profile) != NULL && *GLRO(dl_profile_output) == '\0')
++    {
++      _dl_error_printf ("\
++warning: LD_PROFILE ignored because LD_PROFILE_OUTPUT not specified\n");
++      GLRO(dl_profile) = NULL;
++    }
+ }
+ 
+ #if HP_TIMING_INLINE
+diff --git a/sysdeps/generic/unsecvars.h b/sysdeps/generic/unsecvars.h
+index 5ea8a4a259ef753c..0b84642f71ae9351 100644
+--- a/sysdeps/generic/unsecvars.h
++++ b/sysdeps/generic/unsecvars.h
+@@ -21,6 +21,7 @@
+   "LD_ORIGIN_PATH\0"							      \
+   "LD_PRELOAD\0"							      \
+   "LD_PROFILE\0"							      \
++  "LD_PROFILE_OUTPUT\0"						              \
+   "LD_SHOW_AUXV\0"							      \
+   "LD_USE_LOAD_BIAS\0"							      \
+   "LOCALDOMAIN\0"							      \

@@ -1,0 +1,24 @@
+commit d5dfad4326fc683c813df1e37bbf5cf920591c8e
+Author: Marcin Kościelnicki <mwk@0x04.net>
+Date:   Thu Nov 21 00:20:15 2019 +0100
+
+    rtld: Check __libc_enable_secure before honoring LD_PREFER_MAP_32BIT_EXEC (CVE-2019-19126) [BZ #25204]
+    
+    The problem was introduced in glibc 2.23, in commit
+    b9eb92ab05204df772eb4929eccd018637c9f3e9
+    ("Add Prefer_MAP_32BIT_EXEC to map executable pages with MAP_32BIT").
+
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h b/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h
+index 194369174df08946..ac694c032e7baf87 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h
++++ b/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h
+@@ -31,7 +31,8 @@
+    environment variable, LD_PREFER_MAP_32BIT_EXEC.  */
+ #define EXTRA_LD_ENVVARS \
+   case 21:								  \
+-    if (memcmp (envline, "PREFER_MAP_32BIT_EXEC", 21) == 0)		  \
++    if (!__libc_enable_secure						  \
++	&& memcmp (envline, "PREFER_MAP_32BIT_EXEC", 21) == 0)		  \
+       GLRO(dl_x86_cpu_features).feature[index_arch_Prefer_MAP_32BIT_EXEC] \
+ 	|= bit_arch_Prefer_MAP_32BIT_EXEC;				  \
+     break;

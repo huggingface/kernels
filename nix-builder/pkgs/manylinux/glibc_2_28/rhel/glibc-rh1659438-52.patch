@@ -1,0 +1,292 @@
+commit c62534ae524111eae48b2c2adf3f9a2ca90824f5
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:24 2018 +0100
+
+    S390: Refactor wmemchr ifunc handling.
+    
+    The ifunc handling for wmemchr is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    Glibc internal calls will use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wmemchr variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wmemchr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wmemchr.
+            * sysdeps/s390/multiarch/wmemchr-c.c: Move to ...
+            * sysdeps/s390/wmemchr-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wmemchr-vx.S: Move to ...
+            * sysdeps/s390/wmemchr-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wmemchr.c: Move to ...
+            * sysdeps/s390/wmemchr.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wmemchr.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index da96ac3a36bd7f4e..fdfd1c605c28ddc7 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -75,5 +75,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcsrchr wcsrchr-vx wcsrchr-c \
+ 		   wcsspn wcsspn-vx wcsspn-c \
+ 		   wcspbrk wcspbrk-vx wcspbrk-c \
+-		   wcscspn wcscspn-vx wcscspn-c
++		   wcscspn wcscspn-vx wcscspn-c \
++		   wmemchr wmemchr-vx wmemchr-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wmemchr.h b/sysdeps/s390/ifunc-wmemchr.h
+new file mode 100644
+index 0000000000000000..0610cfb5d4a7fb18
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wmemchr.h
+@@ -0,0 +1,53 @@
++/* wmemchr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WMEMCHR_IFUNC	1
++#else
++# define HAVE_WMEMCHR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WMEMCHR_IFUNC_AND_VX_SUPPORT HAVE_WMEMCHR_IFUNC
++#else
++# define HAVE_WMEMCHR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WMEMCHR_DEFAULT	WMEMCHR_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WMEMCHR_C		1
++# define HAVE_WMEMCHR_Z13	1
++#else
++# define WMEMCHR_DEFAULT	WMEMCHR_C
++# define HAVE_WMEMCHR_C		1
++# define HAVE_WMEMCHR_Z13	HAVE_WMEMCHR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WMEMCHR_C
++# define WMEMCHR_C		__wmemchr_c
++#else
++# define WMEMCHR_C		NULL
++#endif
++
++#if HAVE_WMEMCHR_Z13
++# define WMEMCHR_Z13		__wmemchr_vx
++#else
++# define WMEMCHR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 5be635542361b355..92e28dc45ddbae37 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wmemchr wmemchr-vx wmemchr-c \
+-		   wmemset wmemset-vx wmemset-c \
++sysdep_routines += wmemset wmemset-vx wmemset-c \
+ 		   wmemcmp wmemcmp-vx wmemcmp-c
+ endif
+ 
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 7d8031a069bd23ba..b5f55deb7faae9c4 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -62,6 +62,7 @@
+ #include <ifunc-wcsspn.h>
+ #include <ifunc-wcspbrk.h>
+ #include <ifunc-wcscspn.h>
++#include <ifunc-wmemchr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -632,6 +633,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSCSPN_IFUNC  */
+ 
++#if HAVE_WMEMCHR_IFUNC
++    IFUNC_IMPL (i, name, wmemchr,
++# if HAVE_WMEMCHR_Z13
++		IFUNC_IMPL_ADD (array, i, wmemchr,
++				dl_hwcap & HWCAP_S390_VX, WMEMCHR_Z13)
++# endif
++# if HAVE_WMEMCHR_C
++		IFUNC_IMPL_ADD (array, i, wmemchr, 1, WMEMCHR_C)
++# endif
++		)
++#endif /* HAVE_WMEMCHR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -640,8 +653,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wmemchr);
+-
+   IFUNC_VX_IMPL (wmemset);
+ 
+   IFUNC_VX_IMPL (wmemcmp);
+diff --git a/sysdeps/s390/multiarch/wmemchr-c.c b/sysdeps/s390/wmemchr-c.c
+similarity index 59%
+rename from sysdeps/s390/multiarch/wmemchr-c.c
+rename to sysdeps/s390/wmemchr-c.c
+index 089392b512d29187..bb2526e76c41d0c7 100644
+--- a/sysdeps/s390/multiarch/wmemchr-c.c
++++ b/sysdeps/s390/wmemchr-c.c
+@@ -16,22 +16,29 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WMEMCHR  __wmemchr_c
+-
+-# include <wchar.h>
+-extern __typeof (wmemchr) __wmemchr_c;
+-# undef weak_alias
+-# define weak_alias(name, alias)
+-# ifdef SHARED
+-#  undef libc_hidden_def
+-#  define libc_hidden_def(name)			\
+-  __hidden_ver1 (__wmemchr_c, __GI___wmemchr, __wmemchr_c);
+-#  undef libc_hidden_weak
+-#  define libc_hidden_weak(name)					\
++#include <ifunc-wmemchr.h>
++
++#if HAVE_WMEMCHR_C
++# if HAVE_WMEMCHR_IFUNC || HAVE_WMEMCHR_Z13
++#  define WMEMCHR WMEMCHR_C
++
++#  undef weak_alias
++#  define weak_alias(name, alias)
++
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_weak
++#   define libc_hidden_weak(name)
++#   undef libc_hidden_def
++#   if ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++#    define libc_hidden_def(name)					\
++  __hidden_ver1 (__wmemchr_c, __GI_wmemchr, __wmemchr_c)  __attribute__((weak)); \
+   strong_alias (__wmemchr_c, __wmemchr_c_1);				\
+-  __hidden_ver1 (__wmemchr_c_1, __GI_wmemchr, __wmemchr_c_1);
+-# endif /* SHARED */
++  __hidden_ver1 (__wmemchr_c_1, __GI___wmemchr, __wmemchr_c_1);
++#   else
++#    define libc_hidden_def(name)
++#   endif
++#  endif
++# endif
+ 
+ # include <wcsmbs/wmemchr.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/wmemchr-vx.S b/sysdeps/s390/wmemchr-vx.S
+similarity index 92%
+rename from sysdeps/s390/multiarch/wmemchr-vx.S
+rename to sysdeps/s390/wmemchr-vx.S
+index db057b579a7230f0..72e9ef59af77b8f7 100644
+--- a/sysdeps/s390/multiarch/wmemchr-vx.S
++++ b/sysdeps/s390/wmemchr-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wmemchr.h>
++#if HAVE_WMEMCHR_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -38,7 +39,7 @@
+    -v17=index of found c
+    -v18=c replicated
+ */
+-ENTRY(__wmemchr_vx)
++ENTRY(WMEMCHR_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -161,6 +162,17 @@ ENTRY(__wmemchr_vx)
+ 
+ 	j	.Llt64
+ .Lfallback:
+-	jg	__wmemchr_c
+-END(__wmemchr_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WMEMCHR_C
++END(WMEMCHR_Z13)
++
++# if ! HAVE_WMEMCHR_IFUNC
++strong_alias (WMEMCHR_Z13, __wmemchr)
++weak_alias (__wmemchr, wmemchr)
++# endif
++
++# if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT \
++	&& defined SHARED && IS_IN (libc)
++strong_alias (WMEMCHR_Z13, __GI___wmemchr)
++weak_alias (WMEMCHR_Z13, __GI_wmemchr)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wmemchr.c b/sysdeps/s390/wmemchr.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/wmemchr.c
+rename to sysdeps/s390/wmemchr.c
+index 6b55c1d7fa10afb9..0d2fbb22c6d65a97 100644
+--- a/sysdeps/s390/multiarch/wmemchr.c
++++ b/sysdeps/s390/wmemchr.c
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wmemchr.h>
++
++#if HAVE_WMEMCHR_IFUNC
+ # define wmemchr __redirect_wmemchr
+ # define __wmemchr __redirect___wmemchr
+ # include <wchar.h>
+@@ -24,9 +26,18 @@
+ # undef __wmemchr
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc_redirected (__redirect___wmemchr, __wmemchr)
+-weak_alias (__wmemchr, wmemchr)
++# if HAVE_WMEMCHR_C
++extern __typeof (__redirect___wmemchr) WMEMCHR_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wmemchr.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_WMEMCHR_Z13
++extern __typeof (__redirect___wmemchr) WMEMCHR_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect___wmemchr, __wmemchr,
++		      (HAVE_WMEMCHR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WMEMCHR_Z13
++		      : WMEMCHR_DEFAULT
++		      )
++weak_alias (__wmemchr, wmemchr)
++#endif

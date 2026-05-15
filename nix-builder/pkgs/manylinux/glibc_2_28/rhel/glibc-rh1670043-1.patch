@@ -1,0 +1,104 @@
+commit 08504de71813ddbd447bfbca4a325cbe8ce8bcda
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Mar 12 11:40:47 2019 +0100
+
+    resolv: Enable full ICMP errors for UDP DNS sockets [BZ #24047]
+    
+    The Linux kernel suppresses some ICMP error messages by default for
+    UDP sockets.  This commit enables full ICMP error reporting,
+    hopefully resulting in faster failover to working name servers.
+
+diff --git a/resolv/Makefile b/resolv/Makefile
+index 8f22e6a154..ebe1b733f2 100644
+--- a/resolv/Makefile
++++ b/resolv/Makefile
+@@ -105,7 +105,7 @@ libresolv-routines := res_comp res_debug \
+ 		      res_data res_mkquery res_query res_send		\
+ 		      inet_net_ntop inet_net_pton inet_neta base64	\
+ 		      ns_parse ns_name ns_netint ns_ttl ns_print	\
+-		      ns_samedomain ns_date \
++		      ns_samedomain ns_date res_enable_icmp \
+ 		      compat-hooks compat-gethnamaddr
+ 
+ libanl-routines := gai_cancel gai_error gai_misc gai_notify gai_suspend \
+diff --git a/resolv/res_enable_icmp.c b/resolv/res_enable_icmp.c
+new file mode 100644
+index 0000000000..bdc9220f08
+--- /dev/null
++++ b/resolv/res_enable_icmp.c
+@@ -0,0 +1,37 @@
++/* Enable full ICMP errors on a socket.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <netinet/in.h>
++#include <sys/socket.h>
++
++int
++__res_enable_icmp (int family, int fd)
++{
++  int one = 1;
++  switch (family)
++    {
++    case AF_INET:
++      return setsockopt (fd, SOL_IP, IP_RECVERR, &one, sizeof (one));
++    case AF_INET6:
++      return setsockopt (fd, SOL_IPV6, IPV6_RECVERR, &one, sizeof (one));
++    default:
++      __set_errno (EAFNOSUPPORT);
++      return -1;
++    }
++}
+diff --git a/resolv/res_send.c b/resolv/res_send.c
+index fa040c1198..0f6ec83a7b 100644
+--- a/resolv/res_send.c
++++ b/resolv/res_send.c
+@@ -943,6 +943,18 @@ reopen (res_state statp, int *terrno, int ns)
+ 			return (-1);
+ 		}
+ 
++		/* Enable full ICMP error reporting for this
++		   socket.  */
++		if (__res_enable_icmp (nsap->sa_family,
++				       EXT (statp).nssocks[ns]) < 0)
++		  {
++		    int saved_errno = errno;
++		    __res_iclose (statp, false);
++		    __set_errno (saved_errno);
++		    *terrno = saved_errno;
++		    return -1;
++		  }
++
+ 		/*
+ 		 * On a 4.3BSD+ machine (client and server,
+ 		 * actually), sending to a nameserver datagram
+diff --git a/resolv/resolv-internal.h b/resolv/resolv-internal.h
+index 6ab8f2af09..1500adc607 100644
+--- a/resolv/resolv-internal.h
++++ b/resolv/resolv-internal.h
+@@ -100,4 +100,10 @@ libc_hidden_proto (__inet_pton_length)
+ /* Called as part of the thread shutdown sequence.  */
+ void __res_thread_freeres (void) attribute_hidden;
+ 
++/* The Linux kernel does not enable all ICMP messages on a UDP socket
++   by default.  A call this function enables full error reporting for
++   the socket FD.  FAMILY must be AF_INET or AF_INET6.  Returns 0 on
++   success, -1 on failure.  */
++int __res_enable_icmp (int family, int fd) attribute_hidden;
++
+ #endif  /* _RESOLV_INTERNAL_H */

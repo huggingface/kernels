@@ -1,0 +1,56 @@
+commit 7db1fe38de21831d53ceab9ae83493d8d1aec601
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Tue Oct 22 20:24:10 2019 +0000
+
+    Fix testroot.pristine creation copying dynamic linker.
+    
+    This patch addresses an issue reported in
+    <https://sourceware.org/ml/libc-alpha/2019-07/msg00661.html> where the
+    creation of testroot.pristine, on encountering
+    LD_TRACE_LOADED_OBJECTS=1 of the form
+    
+            libc.so.6 => /scratch/jmyers/glibc/mbs/obj/glibc-8-0-mips64-linux-gnu-x86_64-linux-gnu/default/libc.so.6 (0x772dd000)
+            /lib32/ld.so.1 => /scratch/jmyers/glibc/mbs/obj/glibc-8-0-mips64-linux-gnu-x86_64-linux-gnu/default/elf/ld.so.1 (0x7747b000)
+    
+    tries to copy /lib32/ld.so.1 (which does not exist) into the testroot
+    instead of copying the path on the RHS of "=>", which does exist,
+    because the Makefile logic assumes that the path on such a line with
+    '/' should be copied, when if there are such paths on both the LHS and
+    the RHS of "=>", only the one on the RHS necessarily exists and so
+    only that should be copied.  The patch follows the approach suggested
+    by DJ in <https://sourceware.org/ml/libc-alpha/2019-07/msg00662.html>,
+    with the suggestion from Andreas in
+    <https://sourceware.org/ml/libc-alpha/2019-10/msg00514.html> of a
+    single sed command in place of pipeline of grep and three sed
+    commands.
+    
+    Tested for x86_64, with and without --enable-hardcoded-path-in-tests;
+    a previous version with multiple sed commands, implementing the same
+    logic, also tested for MIPS, with and without
+    --enable-hardcoded-path-in-tests, to confirm it fixes the original
+    problem.
+    
+    Co-authored-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/Makefile b/Makefile
+index d7e4be9..0711b97 100644
+--- a/Makefile
++++ b/Makefile
+@@ -564,7 +564,7 @@ ifeq ($(run-built-tests),yes)
+ 	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
+ 		$(rtld-prefix) \
+ 		$(objpfx)testroot.pristine/bin/sh \
+-	        | grep / | sed 's/^[^/]*//' | sed 's/ .*//'` ;\
++	        | sed -n '/\//{s@.*=> /@/@;s/^[^/]*//;s/ .*//p;}'` ;\
+ 	  do \
+ 	    test -d `dirname $(objpfx)testroot.pristine$$dso` || \
+ 	      mkdir -p `dirname $(objpfx)testroot.pristine$$dso` ;\
+@@ -573,7 +573,7 @@ ifeq ($(run-built-tests),yes)
+ 	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
+ 		$(rtld-prefix) \
+ 		$(objpfx)support/$(LINKS_DSO_PROGRAM) \
+-	        | grep / | sed 's/^[^/]*//' | sed 's/ .*//'` ;\
++	        | sed -n '/\//{s@.*=> /@/@;s/^[^/]*//;s/ .*//p;}'` ;\
+ 	  do \
+ 	    test -d `dirname $(objpfx)testroot.pristine$$dso` || \
+ 	      mkdir -p `dirname $(objpfx)testroot.pristine$$dso` ;\

@@ -1,0 +1,235 @@
+commit d0f07f7df8d9758c838674b70144ac73bcbd1634
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue May 30 13:25:50 2023 +0200
+
+    elf: Make more functions available for binding during dlclose (bug 30425)
+    
+    Previously, after destructors for a DSO have been invoked, ld.so refused
+    to bind against that DSO in all cases.  Relax this restriction somewhat
+    if the referencing object is itself a DSO that is being unloaded.  This
+    assumes that the symbol reference is not going to be stored anywhere.
+    
+    The situation in the test case can arise fairly easily with C++ and
+    objects that are built with different optimization levels and therefore
+    define different functions with vague linkage.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/Makefile
+	  (usual test differences, link test with -ldl)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 634c3113227d64a6..42dc878209b11d29 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -362,6 +362,7 @@ tests += \
+   tst-big-note \
+   tst-debug1 \
+   tst-deep1 \
++  tst-dlclose-lazy \
+   tst-dlmodcount \
+   tst-dlmopen1 \
+   tst-dlmopen3 \
+@@ -709,6 +710,8 @@ modules-names = \
+   tst-deep1mod2 \
+   tst-deep1mod3 \
+   tst-dlmopen1mod \
++  tst-dlclose-lazy-mod1 \
++  tst-dlclose-lazy-mod2 \
+   tst-dlmopen-dlerror-mod \
+   tst-dlmopen-gethostbyname-mod \
+   tst-dlmopen-twice-mod1 \
+@@ -2697,3 +2700,10 @@ $(objpfx)tst-dlmopen-twice: $(libdl)
+ $(objpfx)tst-dlmopen-twice.out: \
+   $(objpfx)tst-dlmopen-twice-mod1.so \
+   $(objpfx)tst-dlmopen-twice-mod2.so
++
++LDFLAGS-tst-dlclose-lazy-mod1.so = -Wl,-z,lazy,--no-as-needed
++$(objpfx)tst-dlclose-lazy-mod1.so: $(objpfx)tst-dlclose-lazy-mod2.so
++$(objpfx)tst-dlclose-lazy: $(libdl)
++$(objpfx)tst-dlclose-lazy.out: \
++  $(objpfx)tst-dlclose-lazy-mod1.so $(objpfx)tst-dlclose-lazy-mod2.so
++
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index 47acd134600b44b5..9e8f14b8483f5eba 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -380,8 +380,25 @@ do_lookup_x (const char *undef_name, uint_fast32_t new_hash,
+       if ((type_class & ELF_RTYPE_CLASS_COPY) && map->l_type == lt_executable)
+ 	continue;
+ 
+-      /* Do not look into objects which are going to be removed.  */
+-      if (map->l_removed)
++      /* Do not look into objects which are going to be removed,
++	 except when the referencing object itself is being removed.
++
++	 The second part covers the situation when an object lazily
++	 binds to another object while running its destructor, but the
++	 destructor of the other object has already run, so that
++	 dlclose has set l_removed.  It may not always be obvious how
++	 to avoid such a scenario to programmers creating DSOs,
++	 particularly if C++ vague linkage is involved and triggers
++	 symbol interposition.
++
++	 Accepting these to-be-removed objects makes the lazy and
++	 BIND_NOW cases more similar.  (With BIND_NOW, the symbol is
++	 resolved early, before the destructor call, so the issue does
++	 not arise.).  Behavior matches the constructor scenario: the
++	 implementation allows binding to symbols of objects whose
++	 constructors have not run.  In fact, not doing this would be
++	 mostly incompatible with symbol interposition.  */
++      if (map->l_removed && !(undef_map != NULL && undef_map->l_removed))
+ 	continue;
+ 
+       /* Print some debugging info if wanted.  */
+diff --git a/elf/tst-dlclose-lazy-mod1.c b/elf/tst-dlclose-lazy-mod1.c
+new file mode 100644
+index 0000000000000000..8439dc1925cc8b41
+--- /dev/null
++++ b/elf/tst-dlclose-lazy-mod1.c
+@@ -0,0 +1,36 @@
++/* Lazy binding during dlclose.  Directly loaded module.
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This function is called from exported_function below.  It is only
++   defined in this module.  The weak attribute mimics how G++
++   implements vague linkage for C++.  */
++void __attribute__ ((weak))
++lazily_bound_exported_function (void)
++{
++}
++
++/* Called from tst-dlclose-lazy-mod2.so.  */
++void
++exported_function (int call_it)
++{
++  if (call_it)
++    /* Previous to the fix this would crash when called during dlclose
++       since symbols from the DSO were no longer available for binding
++       (bug 30425) after the DSO started being closed by dlclose.  */
++    lazily_bound_exported_function ();
++}
+diff --git a/elf/tst-dlclose-lazy-mod2.c b/elf/tst-dlclose-lazy-mod2.c
+new file mode 100644
+index 0000000000000000..767f69ffdb23a685
+--- /dev/null
++++ b/elf/tst-dlclose-lazy-mod2.c
+@@ -0,0 +1,49 @@
++/* Lazy binding during dlclose.  Indirectly loaded module.
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <stdlib.h>
++
++void
++exported_function (int ignored)
++{
++  /* This function is interposed from tst-dlclose-lazy-mod1.so and
++     thus never called.  */
++  abort ();
++}
++
++static void __attribute__ ((constructor))
++init (void)
++{
++  puts ("info: tst-dlclose-lazy-mod2.so constructor called");
++
++  /* Trigger lazy binding to the definition in
++     tst-dlclose-lazy-mod1.so, but not for
++     lazily_bound_exported_function in that module.  */
++  exported_function (0);
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  puts ("info: tst-dlclose-lazy-mod2.so destructor called");
++
++  /* Trigger the lazily_bound_exported_function call in
++     exported_function in tst-dlclose-lazy-mod1.so.  */
++  exported_function (1);
++}
+diff --git a/elf/tst-dlclose-lazy.c b/elf/tst-dlclose-lazy.c
+new file mode 100644
+index 0000000000000000..976a6bb6f64fa981
+--- /dev/null
++++ b/elf/tst-dlclose-lazy.c
+@@ -0,0 +1,47 @@
++/* Test lazy binding during dlclose (bug 30425).
++   Copyright (C) 2023 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This test re-creates a situation that can arise naturally for C++
++   applications due to the use of vague linkage and differences in the
++   set of compiler-emitted functions.  A function in
++   tst-dlclose-lazy-mod1.so (exported_function) interposes a function
++   in tst-dlclose-lazy-mod2.so.  This function is called from the
++   destructor in tst-dlclose-lazy-mod2.so, after the destructor for
++   tst-dlclose-lazy-mod1.so has already completed.  Prior to the fix
++   for bug 30425, this would lead to a lazy binding failure in
++   tst-dlclose-lazy-mod1.so because dlclose had already marked the DSO
++   as unavailable for binding (by setting l_removed).  */
++
++#include <dlfcn.h>
++#include <support/xdlfcn.h>
++#include <support/check.h>
++
++int
++main (void)
++{
++  /* Load tst-dlclose-lazy-mod1.so, indirectly loading
++     tst-dlclose-lazy-mod2.so.  */
++  void *handle = xdlopen ("tst-dlclose-lazy-mod1.so", RTLD_GLOBAL | RTLD_LAZY);
++
++  /* Invoke the destructor of tst-dlclose-lazy-mod2.so, which calls
++     into tst-dlclose-lazy-mod1.so after its destructor has been
++     called.  */
++  xdlclose (handle);
++
++  return 0;
++}

@@ -1,0 +1,1123 @@
+commit ecbbadbf107ea1155ae5b71a8b7bd48f38c76731
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Wed Jun 17 06:34:46 2020 -0700
+
+    x86: Update CPU feature detection [BZ #26149]
+    
+    1. Divide architecture features into the usable features and the preferred
+    features.  The usable features are for correctness and can be exported in
+    a stable ABI.  The preferred features are for performance and only for
+    glibc internal use.
+    2. Change struct cpu_features to
+    
+    struct cpu_features
+    {
+      struct cpu_features_basic basic;
+      unsigned int *usable_p;
+      struct cpuid_registers cpuid[COMMON_CPUID_INDEX_MAX];
+      unsigned int usable[USABLE_FEATURE_INDEX_MAX];
+      unsigned int preferred[PREFERRED_FEATURE_INDEX_MAX];
+      ...
+    };
+    
+    and initialize usable_p to pointer to the usable arary so that
+    
+    struct cpu_features
+    {
+      struct cpu_features_basic basic;
+      unsigned int *usable_p;
+      struct cpuid_registers cpuid[COMMON_CPUID_INDEX_MAX];
+    };
+    
+    can be exported via a stable ABI.  The cpuid and usable arrays can be
+    expanded with backward binary compatibility for both .o and .so files.
+    3. Add COMMON_CPUID_INDEX_7_ECX_1 for AVX512_BF16.
+    4. Detect ENQCMD, PKS, AVX512_VP2INTERSECT, MD_CLEAR, SERIALIZE, HYBRID,
+    TSXLDTRK, L1D_FLUSH, CORE_CAPABILITIES and AVX512_BF16.
+    5. Rename CAPABILITIES to ARCH_CAPABILITIES.
+    6. Check if AVX512_VP2INTERSECT, AVX512_BF16 and PKU are usable.
+    7. Update CPU feature detection test.
+
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h b/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h
+index ac694c032e7baf87..32f93bb3773a318b 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h
++++ b/sysdeps/unix/sysv/linux/x86_64/64/dl-librecon.h
+@@ -33,7 +33,7 @@
+   case 21:								  \
+     if (!__libc_enable_secure						  \
+ 	&& memcmp (envline, "PREFER_MAP_32BIT_EXEC", 21) == 0)		  \
+-      GLRO(dl_x86_cpu_features).feature[index_arch_Prefer_MAP_32BIT_EXEC] \
++      GLRO(dl_x86_cpu_features).preferred[index_arch_Prefer_MAP_32BIT_EXEC] \
+ 	|= bit_arch_Prefer_MAP_32BIT_EXEC;				  \
+     break;
+ 
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 37619c93f8dbcc5d..7b2a5bc3ed27ec39 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -90,11 +90,18 @@ get_common_indices (struct cpu_features *cpu_features,
+     }
+ 
+   if (cpu_features->basic.max_cpuid >= 7)
+-    __cpuid_count (7, 0,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_7].eax,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_7].ebx,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_7].ecx,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_7].edx);
++    {
++      __cpuid_count (7, 0,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].eax,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].ebx,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].ecx,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].edx);
++      __cpuid_count (7, 1,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].eax,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].ebx,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].ecx,
++		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].edx);
++    }
+ 
+   if (cpu_features->basic.max_cpuid >= 0xd)
+     __cpuid_count (0xd, 1,
+@@ -116,39 +123,39 @@ get_common_indices (struct cpu_features *cpu_features,
+ 	  /* Determine if AVX is usable.  */
+ 	  if (CPU_FEATURES_CPU_P (cpu_features, AVX))
+ 	    {
+-	      cpu_features->feature[index_arch_AVX_Usable]
++	      cpu_features->usable[index_arch_AVX_Usable]
+ 		|= bit_arch_AVX_Usable;
+ 	      /* The following features depend on AVX being usable.  */
+ 	      /* Determine if AVX2 is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, AVX2))
+ 	      {
+-		cpu_features->feature[index_arch_AVX2_Usable]
++		cpu_features->usable[index_arch_AVX2_Usable]
+ 		  |= bit_arch_AVX2_Usable;
+ 
+ 	        /* Unaligned load with 256-bit AVX registers are faster on
+ 	           Intel/AMD processors with AVX2.  */
+-	        cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
++	        cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
+ 		  |= bit_arch_AVX_Fast_Unaligned_Load;
+ 	      }
+ 	      /* Determine if FMA is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, FMA))
+-		cpu_features->feature[index_arch_FMA_Usable]
++		cpu_features->usable[index_arch_FMA_Usable]
+ 		  |= bit_arch_FMA_Usable;
+ 	      /* Determine if VAES is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, VAES))
+-		cpu_features->feature[index_arch_VAES_Usable]
++		cpu_features->usable[index_arch_VAES_Usable]
+ 		  |= bit_arch_VAES_Usable;
+ 	      /* Determine if VPCLMULQDQ is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, VPCLMULQDQ))
+-		cpu_features->feature[index_arch_VPCLMULQDQ_Usable]
++		cpu_features->usable[index_arch_VPCLMULQDQ_Usable]
+ 		  |= bit_arch_VPCLMULQDQ_Usable;
+ 	      /* Determine if XOP is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, XOP))
+-		cpu_features->feature[index_arch_XOP_Usable]
++		cpu_features->usable[index_arch_XOP_Usable]
+ 		  |= bit_arch_XOP_Usable;
+ 	      /* Determine if F16C is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, F16C))
+-		cpu_features->feature[index_arch_F16C_Usable]
++		cpu_features->usable[index_arch_F16C_Usable]
+ 		  |= bit_arch_F16C_Usable;
+ 	    }
+ 
+@@ -161,64 +168,73 @@ get_common_indices (struct cpu_features *cpu_features,
+ 	      /* Determine if AVX512F is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, AVX512F))
+ 		{
+-		  cpu_features->feature[index_arch_AVX512F_Usable]
++		  cpu_features->usable[index_arch_AVX512F_Usable]
+ 		    |= bit_arch_AVX512F_Usable;
+ 		  /* Determine if AVX512CD is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512CD))
+-		    cpu_features->feature[index_arch_AVX512CD_Usable]
++		    cpu_features->usable[index_arch_AVX512CD_Usable]
+ 		      |= bit_arch_AVX512CD_Usable;
+ 		  /* Determine if AVX512ER is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512ER))
+-		    cpu_features->feature[index_arch_AVX512ER_Usable]
++		    cpu_features->usable[index_arch_AVX512ER_Usable]
+ 		      |= bit_arch_AVX512ER_Usable;
+ 		  /* Determine if AVX512PF is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512PF))
+-		    cpu_features->feature[index_arch_AVX512PF_Usable]
++		    cpu_features->usable[index_arch_AVX512PF_Usable]
+ 		      |= bit_arch_AVX512PF_Usable;
+ 		  /* Determine if AVX512VL is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512VL))
+-		    cpu_features->feature[index_arch_AVX512VL_Usable]
++		    cpu_features->usable[index_arch_AVX512VL_Usable]
+ 		      |= bit_arch_AVX512VL_Usable;
+ 		  /* Determine if AVX512DQ is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512DQ))
+-		    cpu_features->feature[index_arch_AVX512DQ_Usable]
++		    cpu_features->usable[index_arch_AVX512DQ_Usable]
+ 		      |= bit_arch_AVX512DQ_Usable;
+ 		  /* Determine if AVX512BW is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512BW))
+-		    cpu_features->feature[index_arch_AVX512BW_Usable]
++		    cpu_features->usable[index_arch_AVX512BW_Usable]
+ 		      |= bit_arch_AVX512BW_Usable;
+ 		  /* Determine if AVX512_4FMAPS is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_4FMAPS))
+-		    cpu_features->feature[index_arch_AVX512_4FMAPS_Usable]
++		    cpu_features->usable[index_arch_AVX512_4FMAPS_Usable]
+ 		      |= bit_arch_AVX512_4FMAPS_Usable;
+ 		  /* Determine if AVX512_4VNNIW is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_4VNNIW))
+-		    cpu_features->feature[index_arch_AVX512_4VNNIW_Usable]
++		    cpu_features->usable[index_arch_AVX512_4VNNIW_Usable]
+ 		      |= bit_arch_AVX512_4VNNIW_Usable;
+ 		  /* Determine if AVX512_BITALG is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_BITALG))
+-		    cpu_features->feature[index_arch_AVX512_BITALG_Usable]
++		    cpu_features->usable[index_arch_AVX512_BITALG_Usable]
+ 		      |= bit_arch_AVX512_BITALG_Usable;
+ 		  /* Determine if AVX512_IFMA is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_IFMA))
+-		    cpu_features->feature[index_arch_AVX512_IFMA_Usable]
++		    cpu_features->usable[index_arch_AVX512_IFMA_Usable]
+ 		      |= bit_arch_AVX512_IFMA_Usable;
+ 		  /* Determine if AVX512_VBMI is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VBMI))
+-		    cpu_features->feature[index_arch_AVX512_VBMI_Usable]
++		    cpu_features->usable[index_arch_AVX512_VBMI_Usable]
+ 		      |= bit_arch_AVX512_VBMI_Usable;
+ 		  /* Determine if AVX512_VBMI2 is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VBMI2))
+-		    cpu_features->feature[index_arch_AVX512_VBMI2_Usable]
++		    cpu_features->usable[index_arch_AVX512_VBMI2_Usable]
+ 		      |= bit_arch_AVX512_VBMI2_Usable;
+ 		  /* Determine if is AVX512_VNNI usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VNNI))
+-		    cpu_features->feature[index_arch_AVX512_VNNI_Usable]
++		    cpu_features->usable[index_arch_AVX512_VNNI_Usable]
+ 		      |= bit_arch_AVX512_VNNI_Usable;
+ 		  /* Determine if AVX512_VPOPCNTDQ is usable.  */
+ 		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VPOPCNTDQ))
+-		    cpu_features->feature[index_arch_AVX512_VPOPCNTDQ_Usable]
++		    cpu_features->usable[index_arch_AVX512_VPOPCNTDQ_Usable]
+ 		      |= bit_arch_AVX512_VPOPCNTDQ_Usable;
++		  /* Determine if AVX512_VP2INTERSECT is usable.  */
++		  if (CPU_FEATURES_CPU_P (cpu_features,
++					  AVX512_VP2INTERSECT))
++		    cpu_features->usable[index_arch_AVX512_VP2INTERSECT_Usable]
++		      |= bit_arch_AVX512_VP2INTERSECT_Usable;
++		  /* Determine if AVX512_BF16 is usable.  */
++		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_BF16))
++		    cpu_features->usable[index_arch_AVX512_BF16_Usable]
++		      |= bit_arch_AVX512_BF16_Usable;
+ 		}
+ 	    }
+ 	}
+@@ -284,13 +300,18 @@ get_common_indices (struct cpu_features *cpu_features,
+ 		    {
+ 		      cpu_features->xsave_state_size
+ 			= ALIGN_UP (size + STATE_SAVE_OFFSET, 64);
+-		      cpu_features->feature[index_arch_XSAVEC_Usable]
++		      cpu_features->usable[index_arch_XSAVEC_Usable]
+ 			|= bit_arch_XSAVEC_Usable;
+ 		    }
+ 		}
+ 	    }
+ 	}
+     }
++
++  /* Determine if PKU is usable.  */
++  if (CPU_FEATURES_CPU_P (cpu_features, OSPKE))
++    cpu_features->usable[index_arch_PKU_Usable]
++      |= bit_arch_PKU_Usable;
+ }
+ 
+ _Static_assert (((index_arch_Fast_Unaligned_Load
+@@ -314,6 +335,8 @@ init_cpu_features (struct cpu_features *cpu_features)
+   unsigned int stepping = 0;
+   enum cpu_features_kind kind;
+ 
++  cpu_features->usable_p = cpu_features->usable;
++
+ #if !HAS_CPUID
+   if (__get_cpuid_max (0, 0) == 0)
+     {
+@@ -344,7 +367,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	    case 0x1c:
+ 	    case 0x26:
+ 	      /* BSF is slow on Atom.  */
+-	      cpu_features->feature[index_arch_Slow_BSF]
++	      cpu_features->preferred[index_arch_Slow_BSF]
+ 		|= bit_arch_Slow_BSF;
+ 	      break;
+ 
+@@ -371,7 +394,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	    case 0x5d:
+ 	      /* Unaligned load versions are faster than SSSE3
+ 		 on Silvermont.  */
+-	      cpu_features->feature[index_arch_Fast_Unaligned_Load]
++	      cpu_features->preferred[index_arch_Fast_Unaligned_Load]
+ 		|= (bit_arch_Fast_Unaligned_Load
+ 		    | bit_arch_Fast_Unaligned_Copy
+ 		    | bit_arch_Prefer_PMINUB_for_stringop
+@@ -383,7 +406,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	    case 0x9c:
+ 	      /* Enable rep string instructions, unaligned load, unaligned
+ 	         copy, pminub and avoid SSE 4.2 on Tremont.  */
+-	      cpu_features->feature[index_arch_Fast_Rep_String]
++	      cpu_features->preferred[index_arch_Fast_Rep_String]
+ 		|= (bit_arch_Fast_Rep_String
+ 		    | bit_arch_Fast_Unaligned_Load
+ 		    | bit_arch_Fast_Unaligned_Copy
+@@ -407,7 +430,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	    case 0x2f:
+ 	      /* Rep string instructions, unaligned load, unaligned copy,
+ 		 and pminub are fast on Intel Core i3, i5 and i7.  */
+-	      cpu_features->feature[index_arch_Fast_Rep_String]
++	      cpu_features->preferred[index_arch_Fast_Rep_String]
+ 		|= (bit_arch_Fast_Rep_String
+ 		    | bit_arch_Fast_Unaligned_Load
+ 		    | bit_arch_Fast_Unaligned_Copy
+@@ -442,10 +465,10 @@ init_cpu_features (struct cpu_features *cpu_features)
+          if AVX512ER is available.  Don't use AVX512 to avoid lower CPU
+ 	 frequency if AVX512ER isn't available.  */
+       if (CPU_FEATURES_CPU_P (cpu_features, AVX512ER))
+-	cpu_features->feature[index_arch_Prefer_No_VZEROUPPER]
++	cpu_features->preferred[index_arch_Prefer_No_VZEROUPPER]
+ 	  |= bit_arch_Prefer_No_VZEROUPPER;
+       else
+-	cpu_features->feature[index_arch_Prefer_No_AVX512]
++	cpu_features->preferred[index_arch_Prefer_No_AVX512]
+ 	  |= bit_arch_Prefer_No_AVX512;
+     }
+   /* This spells out "AuthenticAMD".  */
+@@ -467,7 +490,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	  /* Since the FMA4 bit is in COMMON_CPUID_INDEX_80000001 and
+ 	     FMA4 requires AVX, determine if FMA4 is usable here.  */
+ 	  if (CPU_FEATURES_CPU_P (cpu_features, FMA4))
+-	    cpu_features->feature[index_arch_FMA4_Usable]
++	    cpu_features->usable[index_arch_FMA4_Usable]
+ 	      |= bit_arch_FMA4_Usable;
+ 	}
+ 
+@@ -476,13 +499,13 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	  /* "Excavator"   */
+ 	  if (model >= 0x60 && model <= 0x7f)
+ 	  {
+-	    cpu_features->feature[index_arch_Fast_Unaligned_Load]
++	    cpu_features->preferred[index_arch_Fast_Unaligned_Load]
+ 	      |= (bit_arch_Fast_Unaligned_Load
+ 		  | bit_arch_Fast_Copy_Backward);
+ 
+ 	    /* Unaligned AVX loads are slower.*/
+-	    cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
+-		  &= ~bit_arch_AVX_Fast_Unaligned_Load;
++	    cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
++	      &= ~bit_arch_AVX_Fast_Unaligned_Load;
+ 	  }
+ 	}
+     }
+@@ -504,41 +527,38 @@ init_cpu_features (struct cpu_features *cpu_features)
+         {
+           if (model == 0xf || model == 0x19)
+             {
+-              cpu_features->feature[index_arch_AVX_Usable]
+-                &= (~bit_arch_AVX_Usable
+-                & ~bit_arch_AVX2_Usable);
++              cpu_features->usable[index_arch_AVX_Usable]
++                &= ~(bit_arch_AVX_Usable | bit_arch_AVX2_Usable);
+ 
+-              cpu_features->feature[index_arch_Slow_SSE4_2]
+-                |= (bit_arch_Slow_SSE4_2);
++              cpu_features->preferred[index_arch_Slow_SSE4_2]
++                |= bit_arch_Slow_SSE4_2;
+ 
+-              cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
+-                &= ~bit_arch_AVX_Fast_Unaligned_Load;
++	      cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
++		&= ~bit_arch_AVX_Fast_Unaligned_Load;
+             }
+         }
+       else if (family == 0x7)
+         {
+-          if (model == 0x1b)
+-            {
+-              cpu_features->feature[index_arch_AVX_Usable]
+-                &= (~bit_arch_AVX_Usable
+-                & ~bit_arch_AVX2_Usable);
++	  if (model == 0x1b)
++	    {
++	      cpu_features->usable[index_arch_AVX_Usable]
++		&= ~(bit_arch_AVX_Usable | bit_arch_AVX2_Usable);
+ 
+-              cpu_features->feature[index_arch_Slow_SSE4_2]
+-                |= bit_arch_Slow_SSE4_2;
++	      cpu_features->preferred[index_arch_Slow_SSE4_2]
++		|= bit_arch_Slow_SSE4_2;
++
++	      cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
++		&= ~bit_arch_AVX_Fast_Unaligned_Load;
++	    }
++	  else if (model == 0x3b)
++	    {
++	      cpu_features->usable[index_arch_AVX_Usable]
++		&= ~(bit_arch_AVX_Usable | bit_arch_AVX2_Usable);
+ 
+-              cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
+-                &= ~bit_arch_AVX_Fast_Unaligned_Load;
+-           }
+-         else if (model == 0x3b)
+-           {
+-             cpu_features->feature[index_arch_AVX_Usable]
+-               &= (~bit_arch_AVX_Usable
+-               & ~bit_arch_AVX2_Usable);
+-
+-               cpu_features->feature[index_arch_AVX_Fast_Unaligned_Load]
+-               &= ~bit_arch_AVX_Fast_Unaligned_Load;
+-           }
+-       }
++	      cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
++		&= ~bit_arch_AVX_Fast_Unaligned_Load;
++	    }
++	}
+     }
+   else
+     {
+@@ -548,11 +568,11 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+   /* Support i586 if CX8 is available.  */
+   if (CPU_FEATURES_CPU_P (cpu_features, CX8))
+-    cpu_features->feature[index_arch_I586] |= bit_arch_I586;
++    cpu_features->preferred[index_arch_I586] |= bit_arch_I586;
+ 
+   /* Support i686 if CMOV is available.  */
+   if (CPU_FEATURES_CPU_P (cpu_features, CMOV))
+-    cpu_features->feature[index_arch_I686] |= bit_arch_I686;
++    cpu_features->preferred[index_arch_I686] |= bit_arch_I686;
+ 
+ #if !HAS_CPUID
+ no_cpuid:
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index f18f7520fcb7714a..41c3855e94d16b49 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -20,12 +20,20 @@
+ 
+ enum
+ {
+-  /* The integer bit array index for the first set of internal feature
++  /* The integer bit array index for the first set of usable feature
+      bits.  */
+-  FEATURE_INDEX_1 = 0,
+-  FEATURE_INDEX_2,
++  USABLE_FEATURE_INDEX_1 = 0,
+   /* The current maximum size of the feature integer bit array.  */
+-  FEATURE_INDEX_MAX
++  USABLE_FEATURE_INDEX_MAX
++};
++
++enum
++{
++  /* The integer bit array index for the first set of preferred feature
++     bits.  */
++  PREFERRED_FEATURE_INDEX_1 = 0,
++  /* The current maximum size of the feature integer bit array.  */
++  PREFERRED_FEATURE_INDEX_MAX
+ };
+ 
+ enum
+@@ -36,6 +44,7 @@ enum
+   COMMON_CPUID_INDEX_D_ECX_1,
+   COMMON_CPUID_INDEX_80000007,
+   COMMON_CPUID_INDEX_80000008,
++  COMMON_CPUID_INDEX_7_ECX_1,
+   /* Keep the following line at the end.  */
+   COMMON_CPUID_INDEX_MAX
+ };
+@@ -68,9 +77,11 @@ struct cpu_features_basic
+ 
+ struct cpu_features
+ {
+-  struct cpuid_registers cpuid[COMMON_CPUID_INDEX_MAX];
+-  unsigned int feature[FEATURE_INDEX_MAX];
+   struct cpu_features_basic basic;
++  unsigned int *usable_p;
++  struct cpuid_registers cpuid[COMMON_CPUID_INDEX_MAX];
++  unsigned int usable[USABLE_FEATURE_INDEX_MAX];
++  unsigned int preferred[PREFERRED_FEATURE_INDEX_MAX];
+   /* The state size for XSAVEC or XSAVE.  The type must be unsigned long
+      int so that we use
+ 
+@@ -102,7 +113,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ # define CPU_FEATURES_CPU_P(ptr, name) \
+   ((ptr->cpuid[index_cpu_##name].reg_##name & (bit_cpu_##name)) != 0)
+ # define CPU_FEATURES_ARCH_P(ptr, name) \
+-  ((ptr->feature[index_arch_##name] & (bit_arch_##name)) != 0)
++  ((ptr->feature_##name[index_arch_##name] & (bit_arch_##name)) != 0)
+ 
+ /* HAS_CPU_FEATURE evaluates to true if CPU supports the feature.  */
+ #define HAS_CPU_FEATURE(name) \
+@@ -112,13 +123,12 @@ extern const struct cpu_features *__get_cpu_features (void)
+ # define HAS_ARCH_FEATURE(name) \
+   CPU_FEATURES_ARCH_P (__get_cpu_features (), name)
+ /* CPU_FEATURE_USABLE evaluates to true if the feature is usable.  */
+-#define CPU_FEATURE_USABLE(name)				\
+-  ((need_arch_feature_##name && HAS_ARCH_FEATURE (name##_Usable))	\
+-   || (!need_arch_feature_##name && HAS_CPU_FEATURE(name)))
++#define CPU_FEATURE_USABLE(name) \
++  HAS_ARCH_FEATURE (name##_Usable)
+ 
+ /* Architecture features.  */
+ 
+-/* FEATURE_INDEX_1.  */
++/* USABLE_FEATURE_INDEX_1.  */
+ #define bit_arch_AVX_Usable			(1u << 0)
+ #define bit_arch_AVX2_Usable			(1u << 1)
+ #define bit_arch_AVX512F_Usable			(1u << 2)
+@@ -143,237 +153,65 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_arch_XOP_Usable			(1u << 21)
+ #define bit_arch_XSAVEC_Usable			(1u << 22)
+ #define bit_arch_F16C_Usable			(1u << 23)
+-
+-#define index_arch_AVX_Usable			FEATURE_INDEX_1
+-#define index_arch_AVX2_Usable			FEATURE_INDEX_1
+-#define index_arch_AVX512F_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512CD_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512ER_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512PF_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512VL_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512BW_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512DQ_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_4FMAPS_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_4VNNIW_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_BITALG_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_IFMA_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_VBMI_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_VBMI2_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_VNNI_Usable		FEATURE_INDEX_1
+-#define index_arch_AVX512_VPOPCNTDQ_Usable	FEATURE_INDEX_1
+-#define index_arch_FMA_Usable			FEATURE_INDEX_1
+-#define index_arch_FMA4_Usable			FEATURE_INDEX_1
+-#define index_arch_VAES_Usable			FEATURE_INDEX_1
+-#define index_arch_VPCLMULQDQ_Usable		FEATURE_INDEX_1
+-#define index_arch_XOP_Usable			FEATURE_INDEX_1
+-#define index_arch_XSAVEC_Usable		FEATURE_INDEX_1
+-#define index_arch_F16C_Usable			FEATURE_INDEX_1
+-
+-/* Unused.  Compiler will optimize them out.  */
+-#define bit_arch_SSE3_Usable			(1u << 0)
+-#define bit_arch_PCLMULQDQ_Usable		(1u << 0)
+-#define bit_arch_SSSE3_Usable			(1u << 0)
+-#define bit_arch_CMPXCHG16B_Usable		(1u << 0)
+-#define bit_arch_SSE4_1_Usable			(1u << 0)
+-#define bit_arch_SSE4_2_Usable			(1u << 0)
+-#define bit_arch_MOVBE_Usable			(1u << 0)
+-#define bit_arch_POPCNT_Usable			(1u << 0)
+-#define bit_arch_AES_Usable			(1u << 0)
+-#define bit_arch_XSAVE_Usable			(1u << 0)
+-#define bit_arch_OSXSAVE_Usable			(1u << 0)
+-#define bit_arch_RDRAND_Usable			(1u << 0)
+-#define bit_arch_FPU_Usable			(1u << 0)
+-#define bit_arch_TSC_Usable			(1u << 0)
+-#define bit_arch_MSR_Usable			(1u << 0)
+-#define bit_arch_CX8_Usable			(1u << 0)
+-#define bit_arch_SEP_Usable			(1u << 0)
+-#define bit_arch_CMOV_Usable			(1u << 0)
+-#define bit_arch_CLFSH_Usable			(1u << 0)
+-#define bit_arch_MMX_Usable			(1u << 0)
+-#define bit_arch_FXSR_Usable			(1u << 0)
+-#define bit_arch_SSE_Usable			(1u << 0)
+-#define bit_arch_SSE2_Usable			(1u << 0)
+-#define bit_arch_FSGSBASE_Usable		(1u << 0)
+-#define bit_arch_BMI1_Usable			(1u << 0)
+-#define bit_arch_HLE_Usable			(1u << 0)
+-#define bit_arch_BMI2_Usable			(1u << 0)
+-#define bit_arch_ERMS_Usable			(1u << 0)
+-#define bit_arch_RTM_Usable			(1u << 0)
+-#define bit_arch_RDSEED_Usable			(1u << 0)
+-#define bit_arch_ADX_Usable			(1u << 0)
+-#define bit_arch_CLFLUSHOPT_Usable		(1u << 0)
+-#define bit_arch_CLWB_Usable			(1u << 0)
+-#define bit_arch_SHA_Usable			(1u << 0)
+-#define bit_arch_PREFETCHWT1_Usable		(1u << 0)
+-#define bit_arch_GFNI_Usable			(1u << 0)
+-#define bit_arch_RDPID_Usable			(1u << 0)
+-#define bit_arch_CLDEMOTE_Usable		(1u << 0)
+-#define bit_arch_MOVDIRI_Usable			(1u << 0)
+-#define bit_arch_MOVDIR64B_Usable		(1u << 0)
+-#define bit_arch_FSRM_Usable			(1u << 0)
+-#define bit_arch_LAHF64_SAHF64_Usable		(1u << 0)
+-#define bit_arch_SVM_Usable			(1u << 0)
+-#define bit_arch_LZCNT_Usable			(1u << 0)
+-#define bit_arch_SSE4A_Usable			(1u << 0)
+-#define bit_arch_PREFETCHW_Usable		(1u << 0)
+-#define bit_arch_TBM_Usable			(1u << 0)
+-#define bit_arch_SYSCALL_SYSRET_Usable		(1u << 0)
+-#define bit_arch_RDTSCP_Usable			(1u << 0)
+-#define bit_arch_XSAVEOPT_Usable		(1u << 0)
+-#define bit_arch_XGETBV_ECX_1_Usable		(1u << 0)
+-#define bit_arch_XSAVES_Usable			(1u << 0)
+-#define bit_arch_INVARIANT_TSC_Usable		(1u << 0)
+-#define bit_arch_WBNOINVD_Usable		(1u << 0)
+-
+-/* Unused.  Compiler will optimize them out.  */
+-#define index_arch_SSE3_Usable			FEATURE_INDEX_1
+-#define index_arch_PCLMULQDQ_Usable		FEATURE_INDEX_1
+-#define index_arch_SSSE3_Usable			FEATURE_INDEX_1
+-#define index_arch_CMPXCHG16B_Usable		FEATURE_INDEX_1
+-#define index_arch_SSE4_1_Usable		FEATURE_INDEX_1
+-#define index_arch_SSE4_2_Usable		FEATURE_INDEX_1
+-#define index_arch_MOVBE_Usable			FEATURE_INDEX_1
+-#define index_arch_POPCNT_Usable		FEATURE_INDEX_1
+-#define index_arch_AES_Usable			FEATURE_INDEX_1
+-#define index_arch_XSAVE_Usable			FEATURE_INDEX_1
+-#define index_arch_OSXSAVE_Usable		FEATURE_INDEX_1
+-#define index_arch_RDRAND_Usable		FEATURE_INDEX_1
+-#define index_arch_FPU_Usable			FEATURE_INDEX_1
+-#define index_arch_TSC_Usable			FEATURE_INDEX_1
+-#define index_arch_MSR_Usable			FEATURE_INDEX_1
+-#define index_arch_CX8_Usable			FEATURE_INDEX_1
+-#define index_arch_SEP_Usable			FEATURE_INDEX_1
+-#define index_arch_CMOV_Usable			FEATURE_INDEX_1
+-#define index_arch_CLFSH_Usable			FEATURE_INDEX_1
+-#define index_arch_MMX_Usable			FEATURE_INDEX_1
+-#define index_arch_FXSR_Usable			FEATURE_INDEX_1
+-#define index_arch_SSE_Usable			FEATURE_INDEX_1
+-#define index_arch_SSE2_Usable			FEATURE_INDEX_1
+-#define index_arch_FSGSBASE_Usable		FEATURE_INDEX_1
+-#define index_arch_BMI1_Usable			FEATURE_INDEX_1
+-#define index_arch_HLE_Usable			FEATURE_INDEX_1
+-#define index_arch_BMI2_Usable			FEATURE_INDEX_1
+-#define index_arch_ERMS_Usable			FEATURE_INDEX_1
+-#define index_arch_RTM_Usable			FEATURE_INDEX_1
+-#define index_arch_RDSEED_Usable		FEATURE_INDEX_1
+-#define index_arch_ADX_Usable			FEATURE_INDEX_1
+-#define index_arch_CLFLUSHOPT_Usable		FEATURE_INDEX_1
+-#define index_arch_CLWB_Usable			FEATURE_INDEX_1
+-#define index_arch_SHA_Usable			FEATURE_INDEX_1
+-#define index_arch_PREFETCHWT1_Usable		FEATURE_INDEX_1
+-#define index_arch_GFNI_Usable			FEATURE_INDEX_1
+-#define index_arch_RDPID_Usable			FEATURE_INDEX_1
+-#define index_arch_CLDEMOTE_Usable		FEATURE_INDEX_1
+-#define index_arch_MOVDIRI_Usable		FEATURE_INDEX_1
+-#define index_arch_MOVDIR64B_Usable		FEATURE_INDEX_1
+-#define index_arch_FSRM_Usable			FEATURE_INDEX_1
+-#define index_arch_LAHF64_SAHF64_Usable		FEATURE_INDEX_1
+-#define index_arch_LZCNT_Usable			FEATURE_INDEX_1
+-#define index_arch_SSE4A_Usable			FEATURE_INDEX_1
+-#define index_arch_PREFETCHW_Usable		FEATURE_INDEX_1
+-#define index_arch_TBM_Usable			FEATURE_INDEX_1
+-#define index_arch_SYSCALL_SYSRET_Usable	FEATURE_INDEX_1
+-#define index_arch_RDTSCP_Usable		FEATURE_INDEX_1
+-#define index_arch_XSAVEOPT_Usable		FEATURE_INDEX_1
+-#define index_arch_XGETBV_ECX_1_Usable		FEATURE_INDEX_1
+-#define index_arch_XSAVES_Usable		FEATURE_INDEX_1
+-#define index_arch_INVARIANT_TSC_Usable		FEATURE_INDEX_1
+-#define index_arch_WBNOINVD_Usable		FEATURE_INDEX_1
+-
+-/* COMMON_CPUID_INDEX_1.  */
+-
+-/* ECX.  */
+-#define	need_arch_feature_SSE3			0
+-#define	need_arch_feature_PCLMULQDQ		0
+-#define need_arch_feature_SSSE3			0
+-#define need_arch_feature_FMA			1
+-#define need_arch_feature_CMPXCHG16B		0
+-#define need_arch_feature_SSE4_1		0
+-#define need_arch_feature_SSE4_2		0
+-#define need_arch_feature_MOVBE			0
+-#define need_arch_feature_POPCNT		0
+-#define need_arch_feature_AES			0
+-#define need_arch_feature_XSAVE			0
+-#define need_arch_feature_OSXSAVE		0
+-#define need_arch_feature_AVX			1
+-#define need_arch_feature_F16C			1
+-#define need_arch_feature_RDRAND		0
+-
+-/* EDX.  */
+-#define need_arch_feature_FPU			0
+-#define need_arch_feature_TSC			0
+-#define need_arch_feature_MSR			0
+-#define need_arch_feature_CX8			0
+-#define need_arch_feature_SEP			0
+-#define need_arch_feature_CMOV			0
+-#define need_arch_feature_CLFSH			0
+-#define need_arch_feature_MMX			0
+-#define need_arch_feature_FXSR			0
+-#define need_arch_feature_SSE			0
+-#define need_arch_feature_SSE2			0
+-
+-/* COMMON_CPUID_INDEX_7.  */
+-
+-/* EBX.  */
+-#define need_arch_feature_FSGSBASE		0
+-#define need_arch_feature_BMI1			0
+-#define need_arch_feature_HLE			0
+-#define need_arch_feature_AVX2			1
+-#define need_arch_feature_BMI2			0
+-#define need_arch_feature_ERMS			0
+-#define need_arch_feature_RTM			0
+-#define need_arch_feature_AVX512F		1
+-#define need_arch_feature_AVX512DQ		1
+-#define need_arch_feature_RDSEED		0
+-#define need_arch_feature_ADX			0
+-#define need_arch_feature_AVX512_IFMA		1
+-#define need_arch_feature_CLFLUSHOPT		0
+-#define need_arch_feature_CLWB			0
+-#define need_arch_feature_AVX512PF		1
+-#define need_arch_feature_AVX512ER		1
+-#define need_arch_feature_AVX512CD		1
+-#define need_arch_feature_SHA			0
+-#define need_arch_feature_AVX512BW		1
+-#define need_arch_feature_AVX512VL		1
+-
+-/* ECX.  */
+-#define need_arch_feature_PREFETCHWT1		0
+-#define need_arch_feature_AVX512_VBMI		1
+-#define need_arch_feature_AVX512_VBMI2		1
+-#define need_arch_feature_GFNI			0
+-#define need_arch_feature_VAES			1
+-#define need_arch_feature_VPCLMULQDQ		1
+-#define need_arch_feature_AVX512_VNNI		1
+-#define need_arch_feature_AVX512_BITALG		1
+-#define need_arch_feature_AVX512_VPOPCNTDQ	1
+-#define need_arch_feature_RDPID			0
+-#define need_arch_feature_CLDEMOTE		0
+-#define need_arch_feature_MOVDIRI		0
+-#define need_arch_feature_MOVDIR64B		0
+-
+-/* EDX.  */
+-#define need_arch_feature_AVX512_4VNNIW		1
+-#define need_arch_feature_AVX512_4FMAPS		1
+-#define need_arch_feature_FSRM			0
+-
+-/* COMMON_CPUID_INDEX_80000001.  */
+-
+-/* ECX.  */
+-#define need_arch_feature_LAHF64_SAHF64		0
+-#define need_arch_feature_LZCNT			0
+-#define need_arch_feature_SSE4A			0
+-#define need_arch_feature_PREFETCHW		0
+-#define need_arch_feature_XOP			1
+-#define need_arch_feature_FMA4			1
+-#define need_arch_feature_TBM			0
+-#define need_arch_feature_SYSCALL_SYSRET	0
+-#define need_arch_feature_RDTSCP		0
+-#define need_arch_feature_XSAVEOPT		0
+-#define need_arch_feature_XSAVEC		1
+-#define need_arch_feature_XGETBV_ECX_1		0
+-#define need_arch_feature_XSAVES		0
+-#define need_arch_feature_INVARIANT_TSC		0
+-#define need_arch_feature_WBNOINVD		0
++#define bit_arch_AVX512_VP2INTERSECT_Usable	(1u << 24)
++#define bit_arch_AVX512_BF16_Usable		(1u << 25)
++#define bit_arch_PKU_Usable			(1u << 26)
++
++#define index_arch_AVX_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_AVX2_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512F_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512CD_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512ER_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512PF_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512VL_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512BW_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512DQ_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_4FMAPS_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_4VNNIW_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_BITALG_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_IFMA_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_VBMI_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_VBMI2_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_VNNI_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_VPOPCNTDQ_Usable	USABLE_FEATURE_INDEX_1
++#define index_arch_FMA_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_FMA4_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_VAES_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_VPCLMULQDQ_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_XOP_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_XSAVEC_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_F16C_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_VP2INTERSECT_Usable	USABLE_FEATURE_INDEX_1
++#define index_arch_AVX512_BF16_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_PKU_Usable			USABLE_FEATURE_INDEX_1
++
++#define feature_AVX_Usable			usable
++#define feature_AVX2_Usable			usable
++#define feature_AVX512F_Usable			usable
++#define feature_AVX512CD_Usable			usable
++#define feature_AVX512ER_Usable			usable
++#define feature_AVX512PF_Usable			usable
++#define feature_AVX512VL_Usable			usable
++#define feature_AVX512BW_Usable			usable
++#define feature_AVX512DQ_Usable			usable
++#define feature_AVX512_4FMAPS_Usable		usable
++#define feature_AVX512_4VNNIW_Usable		usable
++#define feature_AVX512_BITALG_Usable		usable
++#define feature_AVX512_IFMA_Usable		usable
++#define feature_AVX512_VBMI_Usable		usable
++#define feature_AVX512_VBMI2_Usable		usable
++#define feature_AVX512_VNNI_Usable		usable
++#define feature_AVX512_VPOPCNTDQ_Usable		usable
++#define feature_FMA_Usable			usable
++#define feature_FMA4_Usable			usable
++#define feature_VAES_Usable			usable
++#define feature_VPCLMULQDQ_Usable		usable
++#define feature_XOP_Usable			usable
++#define feature_XSAVEC_Usable			usable
++#define feature_F16C_Usable			usable
++#define feature_AVX512_VP2INTERSECT_Usable	usable
++#define feature_AVX512_BF16_Usable		usable
++#define feature_PKU_Usable			usable
+ 
+ /* CPU features.  */
+ 
+@@ -494,17 +332,26 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_CLDEMOTE	(1u << 25)
+ #define bit_cpu_MOVDIRI		(1u << 27)
+ #define bit_cpu_MOVDIR64B	(1u << 28)
++#define bit_cpu_ENQCMD		(1u << 29)
+ #define bit_cpu_SGX_LC		(1u << 30)
++#define bit_cpu_PKS		(1u << 31)
+ 
+ /* EDX.  */
+ #define bit_cpu_AVX512_4VNNIW	(1u << 2)
+ #define bit_cpu_AVX512_4FMAPS	(1u << 3)
+ #define bit_cpu_FSRM		(1u << 4)
++#define bit_cpu_AVX512_VP2INTERSECT (1u << 8)
++#define bit_cpu_MD_CLEAR	(1u << 10)
++#define bit_cpu_SERIALIZE	(1u << 14)
++#define bit_cpu_HYBRID		(1u << 15)
++#define bit_cpu_TSXLDTRK	(1u << 16)
+ #define bit_cpu_PCONFIG		(1u << 18)
+ #define bit_cpu_IBT		(1u << 20)
+ #define bit_cpu_IBRS_IBPB	(1u << 26)
+ #define bit_cpu_STIBP		(1u << 27)
+-#define bit_cpu_CAPABILITIES	(1u << 29)
++#define bit_cpu_L1D_FLUSH	(1u << 28)
++#define bit_cpu_ARCH_CAPABILITIES (1u << 29)
++#define bit_cpu_CORE_CAPABILITIES (1u << 30)
+ #define bit_cpu_SSBD		(1u << 31)
+ 
+ /* COMMON_CPUID_INDEX_80000001.  */
+@@ -545,6 +392,11 @@ extern const struct cpu_features *__get_cpu_features (void)
+ /* EBX.  */
+ #define bit_cpu_WBNOINVD	(1u << 9)
+ 
++/* COMMON_CPUID_INDEX_7_ECX_1.  */
++
++/* EAX.  */
++#define bit_cpu_AVX512_BF16	(1u << 5)
++
+ /* COMMON_CPUID_INDEX_1.  */
+ 
+ /* ECX.  */
+@@ -662,17 +514,26 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_CLDEMOTE	COMMON_CPUID_INDEX_7
+ #define index_cpu_MOVDIRI	COMMON_CPUID_INDEX_7
+ #define index_cpu_MOVDIR64B	COMMON_CPUID_INDEX_7
++#define index_cpu_ENQCMD	COMMON_CPUID_INDEX_7
+ #define index_cpu_SGX_LC	COMMON_CPUID_INDEX_7
++#define index_cpu_PKS		COMMON_CPUID_INDEX_7
+ 
+ /* EDX.  */
+ #define index_cpu_AVX512_4VNNIW COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_4FMAPS	COMMON_CPUID_INDEX_7
+ #define index_cpu_FSRM		COMMON_CPUID_INDEX_7
++#define index_cpu_AVX512_VP2INTERSECT COMMON_CPUID_INDEX_7
++#define index_cpu_MD_CLEAR	COMMON_CPUID_INDEX_7
++#define index_cpu_SERIALIZE	COMMON_CPUID_INDEX_7
++#define index_cpu_HYBRID	COMMON_CPUID_INDEX_7
++#define index_cpu_TSXLDTRK	COMMON_CPUID_INDEX_7
+ #define index_cpu_PCONFIG	COMMON_CPUID_INDEX_7
+ #define index_cpu_IBT		COMMON_CPUID_INDEX_7
+ #define index_cpu_IBRS_IBPB	COMMON_CPUID_INDEX_7
+ #define index_cpu_STIBP		COMMON_CPUID_INDEX_7
+-#define index_cpu_CAPABILITIES	COMMON_CPUID_INDEX_7
++#define index_cpu_L1D_FLUSH	COMMON_CPUID_INDEX_7
++#define index_cpu_ARCH_CAPABILITIES COMMON_CPUID_INDEX_7
++#define index_cpu_CORE_CAPABILITIES COMMON_CPUID_INDEX_7
+ #define index_cpu_SSBD		COMMON_CPUID_INDEX_7
+ 
+ /* COMMON_CPUID_INDEX_80000001.  */
+@@ -713,6 +574,11 @@ extern const struct cpu_features *__get_cpu_features (void)
+ /* EBX.  */
+ #define index_cpu_WBNOINVD	COMMON_CPUID_INDEX_80000008
+ 
++/* COMMON_CPUID_INDEX_7_ECX_1.  */
++
++/* EAX.  */
++#define index_cpu_AVX512_BF16	COMMON_CPUID_INDEX_7_ECX_1
++
+ /* COMMON_CPUID_INDEX_1.  */
+ 
+ /* ECX.  */
+@@ -830,17 +696,26 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_CLDEMOTE		ecx
+ #define reg_MOVDIRI		ecx
+ #define reg_MOVDIR64B		ecx
++#define reg_ENQCMD		ecx
+ #define reg_SGX_LC		ecx
++#define reg_PKS			ecx
+ 
+ /* EDX.  */
+ #define reg_AVX512_4VNNIW	edx
+ #define reg_AVX512_4FMAPS	edx
+ #define reg_FSRM		edx
++#define reg_AVX512_VP2INTERSECT	edx
++#define reg_MD_CLEAR		edx
++#define reg_SERIALIZE		edx
++#define reg_HYBRID		edx
++#define reg_TSXLDTRK		edx
+ #define reg_PCONFIG		edx
+ #define reg_IBT			edx
+ #define reg_IBRS_IBPB		edx
+ #define reg_STIBP		edx
+-#define reg_CAPABILITIES	edx
++#define reg_L1D_FLUSH		edx
++#define reg_ARCH_CAPABILITIES	edx
++#define reg_CORE_CAPABILITIES	edx
+ #define reg_SSBD		edx
+ 
+ /* COMMON_CPUID_INDEX_80000001.  */
+@@ -881,6 +756,11 @@ extern const struct cpu_features *__get_cpu_features (void)
+ /* EBX.  */
+ #define reg_WBNOINVD		ebx
+ 
++/* COMMON_CPUID_INDEX_7_ECX_1.  */
++
++/* EAX.  */
++#define reg_AVX512_BF16		eax
++
+ /* FEATURE_INDEX_2.  */
+ #define bit_arch_I586				(1u << 0)
+ #define bit_arch_I686				(1u << 1)
+@@ -899,22 +779,39 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_arch_Prefer_No_AVX512		(1u << 14)
+ #define bit_arch_MathVec_Prefer_No_AVX512	(1u << 15)
+ 
+-#define index_arch_Fast_Rep_String		FEATURE_INDEX_2
+-#define index_arch_Fast_Copy_Backward		FEATURE_INDEX_2
+-#define index_arch_Slow_BSF			FEATURE_INDEX_2
+-#define index_arch_Fast_Unaligned_Load		FEATURE_INDEX_2
+-#define index_arch_Prefer_PMINUB_for_stringop 	FEATURE_INDEX_2
+-#define index_arch_Fast_Unaligned_Copy		FEATURE_INDEX_2
+-#define index_arch_I586				FEATURE_INDEX_2
+-#define index_arch_I686				FEATURE_INDEX_2
+-#define index_arch_Slow_SSE4_2			FEATURE_INDEX_2
+-#define index_arch_AVX_Fast_Unaligned_Load	FEATURE_INDEX_2
+-#define index_arch_Prefer_MAP_32BIT_EXEC	FEATURE_INDEX_2
+-#define index_arch_Prefer_No_VZEROUPPER		FEATURE_INDEX_2
+-#define index_arch_Prefer_ERMS			FEATURE_INDEX_2
+-#define index_arch_Prefer_No_AVX512		FEATURE_INDEX_2
+-#define index_arch_MathVec_Prefer_No_AVX512	FEATURE_INDEX_2
+-#define index_arch_Prefer_FSRM			FEATURE_INDEX_2
++#define index_arch_Fast_Rep_String		PREFERRED_FEATURE_INDEX_1
++#define index_arch_Fast_Copy_Backward		PREFERRED_FEATURE_INDEX_1
++#define index_arch_Slow_BSF			PREFERRED_FEATURE_INDEX_1
++#define index_arch_Fast_Unaligned_Load		PREFERRED_FEATURE_INDEX_1
++#define index_arch_Prefer_PMINUB_for_stringop 	PREFERRED_FEATURE_INDEX_1
++#define index_arch_Fast_Unaligned_Copy		PREFERRED_FEATURE_INDEX_1
++#define index_arch_I586				PREFERRED_FEATURE_INDEX_1
++#define index_arch_I686				PREFERRED_FEATURE_INDEX_1
++#define index_arch_Slow_SSE4_2			PREFERRED_FEATURE_INDEX_1
++#define index_arch_AVX_Fast_Unaligned_Load	PREFERRED_FEATURE_INDEX_1
++#define index_arch_Prefer_MAP_32BIT_EXEC	PREFERRED_FEATURE_INDEX_1
++#define index_arch_Prefer_No_VZEROUPPER		PREFERRED_FEATURE_INDEX_1
++#define index_arch_Prefer_ERMS			PREFERRED_FEATURE_INDEX_1
++#define index_arch_Prefer_No_AVX512		PREFERRED_FEATURE_INDEX_1
++#define index_arch_MathVec_Prefer_No_AVX512	PREFERRED_FEATURE_INDEX_1
++#define index_arch_Prefer_FSRM			PREFERRED_FEATURE_INDEX_1
++
++#define feature_Fast_Rep_String			preferred
++#define feature_Fast_Copy_Backward		preferred
++#define feature_Slow_BSF			preferred
++#define feature_Fast_Unaligned_Load		preferred
++#define feature_Prefer_PMINUB_for_stringop 	preferred
++#define feature_Fast_Unaligned_Copy		preferred
++#define feature_I586				preferred
++#define feature_I686				preferred
++#define feature_Slow_SSE4_2			preferred
++#define feature_AVX_Fast_Unaligned_Load		preferred
++#define feature_Prefer_MAP_32BIT_EXEC		preferred
++#define feature_Prefer_No_VZEROUPPER		preferred
++#define feature_Prefer_ERMS			preferred
++#define feature_Prefer_No_AVX512		preferred
++#define feature_MathVec_Prefer_No_AVX512	preferred
++#define feature_Prefer_FSRM			preferred
+ 
+ /* XCR0 Feature flags.  */
+ #define bit_XMM_state		(1u << 1)
+diff --git a/sysdeps/x86/cpu-tunables.c b/sysdeps/x86/cpu-tunables.c
+index 2e5d37753713e975..012ae48933055eaa 100644
+--- a/sysdeps/x86/cpu-tunables.c
++++ b/sysdeps/x86/cpu-tunables.c
+@@ -54,7 +54,7 @@ extern __typeof (memcmp) DEFAULT_MEMCMP;
+   _Static_assert (sizeof (#name) - 1 == len, #name " != " #len);	\
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+-      cpu_features->feature[index_arch_##name]				\
++      cpu_features->feature_##name[index_arch_##name]			\
+ 	&= ~bit_arch_##name;						\
+       break;								\
+     }
+@@ -66,10 +66,10 @@ extern __typeof (memcmp) DEFAULT_MEMCMP;
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+       if (disable)							\
+-	cpu_features->feature[index_arch_##name]			\
++	cpu_features->feature_##name[index_arch_##name]			\
+ 	  &= ~bit_arch_##name;						\
+       else								\
+-	cpu_features->feature[index_arch_##name]			\
++	cpu_features->feature_##name[index_arch_##name]			\
+ 	  |= bit_arch_##name;						\
+       break;								\
+     }
+@@ -82,10 +82,10 @@ extern __typeof (memcmp) DEFAULT_MEMCMP;
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+       if (disable)							\
+-	cpu_features->feature[index_arch_##name]			\
++	cpu_features->feature_##name[index_arch_##name]			\
+ 	  &= ~bit_arch_##name;						\
+       else if (CPU_FEATURES_ARCH_P (cpu_features, need))		\
+-	cpu_features->feature[index_arch_##name]			\
++	cpu_features->feature_##name[index_arch_##name]			\
+ 	  |= bit_arch_##name;						\
+       break;								\
+     }
+@@ -98,10 +98,10 @@ extern __typeof (memcmp) DEFAULT_MEMCMP;
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+       if (disable)							\
+-	cpu_features->feature[index_arch_##name]			\
++	cpu_features->feature_##name[index_arch_##name]			\
+ 	  &= ~bit_arch_##name;						\
+       else if (CPU_FEATURES_CPU_P (cpu_features, need))			\
+-	cpu_features->feature[index_arch_##name]			\
++	cpu_features->feature_##name[index_arch_##name]			\
+ 	  |= bit_arch_##name;						\
+       break;								\
+     }
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 64a7fd6157242bdd..08688ace2a0ae35e 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -172,15 +172,24 @@ do_test (void)
+   CHECK_CPU_FEATURE (CLDEMOTE);
+   CHECK_CPU_FEATURE (MOVDIRI);
+   CHECK_CPU_FEATURE (MOVDIR64B);
++  CHECK_CPU_FEATURE (ENQCMD);
+   CHECK_CPU_FEATURE (SGX_LC);
++  CHECK_CPU_FEATURE (PKS);
+   CHECK_CPU_FEATURE (AVX512_4VNNIW);
+   CHECK_CPU_FEATURE (AVX512_4FMAPS);
+   CHECK_CPU_FEATURE (FSRM);
++  CHECK_CPU_FEATURE (AVX512_VP2INTERSECT);
++  CHECK_CPU_FEATURE (MD_CLEAR);
++  CHECK_CPU_FEATURE (SERIALIZE);
++  CHECK_CPU_FEATURE (HYBRID);
++  CHECK_CPU_FEATURE (TSXLDTRK);
+   CHECK_CPU_FEATURE (PCONFIG);
+   CHECK_CPU_FEATURE (IBT);
+   CHECK_CPU_FEATURE (IBRS_IBPB);
+   CHECK_CPU_FEATURE (STIBP);
+-  CHECK_CPU_FEATURE (CAPABILITIES);
++  CHECK_CPU_FEATURE (L1D_FLUSH);
++  CHECK_CPU_FEATURE (ARCH_CAPABILITIES);
++  CHECK_CPU_FEATURE (CORE_CAPABILITIES);
+   CHECK_CPU_FEATURE (SSBD);
+   CHECK_CPU_FEATURE (LAHF64_SAHF64);
+   CHECK_CPU_FEATURE (SVM);
+@@ -202,84 +211,36 @@ do_test (void)
+   CHECK_CPU_FEATURE (XSAVES);
+   CHECK_CPU_FEATURE (INVARIANT_TSC);
+   CHECK_CPU_FEATURE (WBNOINVD);
++  CHECK_CPU_FEATURE (AVX512_BF16);
+ 
+   printf ("Usable CPU features:\n");
+-  CHECK_CPU_FEATURE_USABLE (SSE3);
+-  CHECK_CPU_FEATURE_USABLE (PCLMULQDQ);
+-  CHECK_CPU_FEATURE_USABLE (SSSE3);
+   CHECK_CPU_FEATURE_USABLE (FMA);
+-  CHECK_CPU_FEATURE_USABLE (CMPXCHG16B);
+-  CHECK_CPU_FEATURE_USABLE (SSE4_1);
+-  CHECK_CPU_FEATURE_USABLE (SSE4_2);
+-  CHECK_CPU_FEATURE_USABLE (MOVBE);
+-  CHECK_CPU_FEATURE_USABLE (POPCNT);
+-  CHECK_CPU_FEATURE_USABLE (AES);
+-  CHECK_CPU_FEATURE_USABLE (XSAVE);
+-  CHECK_CPU_FEATURE_USABLE (OSXSAVE);
+   CHECK_CPU_FEATURE_USABLE (AVX);
+   CHECK_CPU_FEATURE_USABLE (F16C);
+-  CHECK_CPU_FEATURE_USABLE (RDRAND);
+-  CHECK_CPU_FEATURE_USABLE (FPU);
+-  CHECK_CPU_FEATURE_USABLE (TSC);
+-  CHECK_CPU_FEATURE_USABLE (MSR);
+-  CHECK_CPU_FEATURE_USABLE (CX8);
+-  CHECK_CPU_FEATURE_USABLE (SEP);
+-  CHECK_CPU_FEATURE_USABLE (CMOV);
+-  CHECK_CPU_FEATURE_USABLE (CLFSH);
+-  CHECK_CPU_FEATURE_USABLE (MMX);
+-  CHECK_CPU_FEATURE_USABLE (FXSR);
+-  CHECK_CPU_FEATURE_USABLE (SSE);
+-  CHECK_CPU_FEATURE_USABLE (SSE2);
+-  CHECK_CPU_FEATURE_USABLE (FSGSBASE);
+-  CHECK_CPU_FEATURE_USABLE (BMI1);
+-  CHECK_CPU_FEATURE_USABLE (HLE);
+   CHECK_CPU_FEATURE_USABLE (AVX2);
+-  CHECK_CPU_FEATURE_USABLE (BMI2);
+-  CHECK_CPU_FEATURE_USABLE (ERMS);
+   CHECK_CPU_FEATURE_USABLE (AVX512F);
+   CHECK_CPU_FEATURE_USABLE (AVX512DQ);
+-  CHECK_CPU_FEATURE_USABLE (RDSEED);
+-  CHECK_CPU_FEATURE_USABLE (ADX);
+   CHECK_CPU_FEATURE_USABLE (AVX512_IFMA);
+-  CHECK_CPU_FEATURE_USABLE (CLFLUSHOPT);
+-  CHECK_CPU_FEATURE_USABLE (CLWB);
+   CHECK_CPU_FEATURE_USABLE (AVX512PF);
+   CHECK_CPU_FEATURE_USABLE (AVX512ER);
+   CHECK_CPU_FEATURE_USABLE (AVX512CD);
+-  CHECK_CPU_FEATURE_USABLE (SHA);
+   CHECK_CPU_FEATURE_USABLE (AVX512BW);
+   CHECK_CPU_FEATURE_USABLE (AVX512VL);
+-  CHECK_CPU_FEATURE_USABLE (PREFETCHWT1);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VBMI);
++  CHECK_CPU_FEATURE_USABLE (PKU);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VBMI2);
+-  CHECK_CPU_FEATURE_USABLE (GFNI);
+   CHECK_CPU_FEATURE_USABLE (VAES);
+   CHECK_CPU_FEATURE_USABLE (VPCLMULQDQ);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VNNI);
+   CHECK_CPU_FEATURE_USABLE (AVX512_BITALG);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VPOPCNTDQ);
+-  CHECK_CPU_FEATURE_USABLE (RDPID);
+-  CHECK_CPU_FEATURE_USABLE (CLDEMOTE);
+-  CHECK_CPU_FEATURE_USABLE (MOVDIRI);
+-  CHECK_CPU_FEATURE_USABLE (MOVDIR64B);
+   CHECK_CPU_FEATURE_USABLE (AVX512_4VNNIW);
+   CHECK_CPU_FEATURE_USABLE (AVX512_4FMAPS);
+-  CHECK_CPU_FEATURE_USABLE (FSRM);
+-  CHECK_CPU_FEATURE_USABLE (LAHF64_SAHF64);
+-  CHECK_CPU_FEATURE_USABLE (LZCNT);
+-  CHECK_CPU_FEATURE_USABLE (SSE4A);
+-  CHECK_CPU_FEATURE_USABLE (PREFETCHW);
++  CHECK_CPU_FEATURE_USABLE (AVX512_VP2INTERSECT);
+   CHECK_CPU_FEATURE_USABLE (XOP);
+   CHECK_CPU_FEATURE_USABLE (FMA4);
+-  CHECK_CPU_FEATURE_USABLE (TBM);
+-  CHECK_CPU_FEATURE_USABLE (SYSCALL_SYSRET);
+-  CHECK_CPU_FEATURE_USABLE (RDTSCP);
+-  CHECK_CPU_FEATURE_USABLE (XSAVEOPT);
+   CHECK_CPU_FEATURE_USABLE (XSAVEC);
+-  CHECK_CPU_FEATURE_USABLE (XGETBV_ECX_1);
+-  CHECK_CPU_FEATURE_USABLE (XSAVES);
+-  CHECK_CPU_FEATURE_USABLE (INVARIANT_TSC);
+-  CHECK_CPU_FEATURE_USABLE (WBNOINVD);
++  CHECK_CPU_FEATURE_USABLE (AVX512_BF16);
+ 
+   return 0;
+ }

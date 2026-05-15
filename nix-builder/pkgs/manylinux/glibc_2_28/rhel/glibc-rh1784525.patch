@@ -1,0 +1,29 @@
+commit ef21bd2d8c6805c0c186a01f7c5039189f51b8c4
+Author: DJ Delorie <dj@redhat.com>
+Date:   Fri Oct 18 17:15:52 2019 -0400
+
+    loadarchive: guard against locale-archive corruption (Bug #25115)
+    
+    _nl_load_locale_from_archive() checks for a zero size, but
+    divides by both (size) and (size-2).  Extend the check to
+    guard against a size of two or less.
+    
+    Tested by manually corrupting locale-archive and running a program
+    that calls setlocale() with LOCPATH unset (size is typically very
+    large).
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/locale/loadarchive.c b/locale/loadarchive.c
+index 516d30d8d16bd578..b308fd886f44e1fd 100644
+--- a/locale/loadarchive.c
++++ b/locale/loadarchive.c
+@@ -274,7 +274,7 @@ _nl_load_locale_from_archive (int category, const char **namep)
+ 					+ head->namehash_offset);
+ 
+   /* Avoid division by 0 if the file is corrupted.  */
+-  if (__glibc_unlikely (head->namehash_size == 0))
++  if (__glibc_unlikely (head->namehash_size <= 2))
+     goto close_and_out;
+ 
+   idx = hval % head->namehash_size;

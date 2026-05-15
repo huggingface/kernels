@@ -1,0 +1,28 @@
+commit 8b222fa38700422b4da6731806835f0bbf40920d
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Jan 20 18:37:13 2020 +0100
+
+    getaddrinfo: Fix resource leak after strdup failure in gethosts [BZ #25425]
+    
+    Filip Ochnik spotted that one of the error jumps in gethosts fails to
+    call __resolv_context_put to release the resolver context.
+    
+    Fixes commit 352f4ff9a268b81ef5d4b2413f582565806e4790 ("resolv:
+    Introduce struct resolv_context [BZ #21668]") and commit
+    964263bb8d650f1681665c55704fb01a8e725621 ("getaddrinfo: Release
+    resolver context on error in gethosts [BZ #21885]").
+    
+    Reviewed-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+diff --git a/sysdeps/posix/getaddrinfo.c b/sysdeps/posix/getaddrinfo.c
+index 6a5805c9e63a257c..fae3dea81f19dba6 100644
+--- a/sysdeps/posix/getaddrinfo.c
++++ b/sysdeps/posix/getaddrinfo.c
+@@ -292,6 +292,7 @@ convert_hostent_to_gaih_addrtuple (const struct addrinfo *req,
+ 	  canonbuf = __strdup (localcanon);				      \
+ 	  if (canonbuf == NULL)						      \
+ 	    {								      \
++	      __resolv_context_put (res_ctx);				      \
+ 	      result = -EAI_SYSTEM;					      \
+ 	      goto free_and_return;					      \
+ 	    }								      \

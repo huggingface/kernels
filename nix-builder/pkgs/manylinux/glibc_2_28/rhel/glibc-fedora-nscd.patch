@@ -1,0 +1,20 @@
+Short description: NSCD must use nscd user.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Upstream status: not-needed
+
+Fedora-specific configuration adjustment to introduce the nscd user.
+(Upstream does not assume this user exists.)
+
+diff -Nrup a/nscd/nscd.conf b/nscd/nscd.conf
+--- a/nscd/nscd.conf	2012-06-05 07:42:49.000000000 -0600
++++ b/nscd/nscd.conf	2012-06-07 12:15:21.818318670 -0600
+@@ -33,7 +33,7 @@
+ #	logfile			/var/log/nscd.log
+ #	threads			4
+ #	max-threads		32
+-#	server-user		nobody
++	server-user		nscd
+ #	stat-user		somebody
+ 	debug-level		0
+ #	reload-count		5

@@ -1,0 +1,28 @@
+commit 3d9926663cba19f40d26d8a8ab3b2a7cc09ffb13
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed May 25 14:37:28 2022 +0000
+
+    Update syscall-names.list for Linux 5.18
+    
+    Linux 5.18 has no new syscalls.  Update the version number in
+    syscall-names.list to reflect that it is still current for 5.18.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list to Linux 5.18.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index b8c0b0c586..6c7b2f7011 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.17.
+-kernel 5.17
++# The list of system calls is current as of Linux 5.18.
++kernel 5.18
+ 
+ FAST_atomic_update
+ FAST_cmpxchg

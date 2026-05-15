@@ -1,0 +1,21 @@
+commit 0d4ed9d40efa84e8dc88e64cf337c8e95af7b045
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Dec 9 18:56:14 2020 +0100
+
+    elf: Fix incorrect comparison in sort_priorities_by_name
+    
+    Reported-By: Stefan Liebler <stli@linux.ibm.com>
+
+diff --git a/elf/dl-hwcaps.c b/elf/dl-hwcaps.c
+index 098173a84c43c1fd..50d764ae8707f46d 100644
+--- a/elf/dl-hwcaps.c
++++ b/elf/dl-hwcaps.c
+@@ -153,7 +153,7 @@ sort_priorities_by_name (void)
+ 	else
+ 	  to_compare = previous->name_length;
+ 	int cmp = memcmp (current->name, previous->name, to_compare);
+-	if (cmp >= 0
++	if (cmp > 0
+ 	    || (cmp == 0 && current->name_length >= previous->name_length))
+ 	  break;
+ 

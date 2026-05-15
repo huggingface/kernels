@@ -1,0 +1,27 @@
+commit eed1f6fcdb0526498223ebfe95f91ef5dec2172a
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Tue Oct 29 11:58:03 2019 -0400
+
+    Comment out initgroups from example nsswitch.conf (Bug 25146)
+
+    In commit 4b7c74179c8928d971d370e1137d202f891a4cf5 the nsswitch.conf
+    file was harmonized with downstream distributions, but this change
+    included adding "initgroups: files". We should not add initgroups by
+    default, we can have it, but it should be commented out to allow it
+    to inherit the settings for group. The problem is principally that
+    downstream authconfig won't update initgroups and it will get out of
+    sync with the setting for group.
+
+diff -Nrup a/nss/nsswitch.conf b/nss/nsswitch.conf
+--- a/nss/nsswitch.conf	2019-10-29 14:13:15.883199544 -0400
++++ b/nss/nsswitch.conf	2019-10-29 14:15:44.860978858 -0400
+@@ -64,7 +64,8 @@ automount:  files sss
+ aliases:    files
+ ethers:     files
+ gshadow:    files
+-initgroups: files
++# Allow initgroups to default to the setting for group.
++# initgroups: files
+ networks:   files dns
+ protocols:  files
+ publickey:  files

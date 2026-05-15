@@ -1,0 +1,138 @@
+commit 82bc69c012838a381c4167c156a06f4598f34227
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Thu Apr 25 15:35:35 2019 +0100
+
+    aarch64: handle STO_AARCH64_VARIANT_PCS
+    
+    Avoid lazy binding of symbols that may follow a variant PCS with different
+    register usage convention from the base PCS.
+    
+    Currently the lazy binding entry code does not preserve all the registers
+    required for AdvSIMD and SVE vector calls.  Saving and restoring all
+    registers unconditionally may break existing binaries, even if they never
+    use vector calls, because of the larger stack requirement for lazy
+    resolution, which can be significant on an SVE system.
+    
+    The solution is to mark all symbols in the symbol table that may follow
+    a variant PCS so the dynamic linker can handle them specially.  In this
+    patch such symbols are always resolved at load time, not lazily.
+    
+    So currently LD_AUDIT for variant PCS symbols are not supported, for that
+    the _dl_runtime_profile entry needs to be changed e.g. to unconditionally
+    save/restore all registers (but pass down arg and retval registers to
+    pltentry/exit callbacks according to the base PCS).
+    
+    This patch also removes a __builtin_expect from the modified code because
+    the branch prediction hint did not seem useful.
+    
+            * sysdeps/aarch64/dl-dtprocnum.h: New file.
+            * sysdeps/aarch64/dl-machine.h (DT_AARCH64): Define.
+            (elf_machine_runtime_setup): Handle DT_AARCH64_VARIANT_PCS.
+            (elf_machine_lazy_rel): Check STO_AARCH64_VARIANT_PCS and bind such
+            symbols at load time.
+            * sysdeps/aarch64/linkmap.h (struct link_map_machine): Add variant_pcs.
+
+diff --git a/sysdeps/aarch64/dl-dtprocnum.h b/sysdeps/aarch64/dl-dtprocnum.h
+new file mode 100644
+index 0000000000000000..4ac2adf23458e02d
+--- /dev/null
++++ b/sysdeps/aarch64/dl-dtprocnum.h
+@@ -0,0 +1,21 @@
++/* Configuration of lookup functions.  AArch64 version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library.  If not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* Number of extra dynamic section entries for this architecture.  By
++   default there are none.  */
++#define DT_THISPROCNUM	DT_AARCH64_NUM
+diff --git a/sysdeps/aarch64/dl-machine.h b/sysdeps/aarch64/dl-machine.h
+index 4935aa7c543876db..d4494852b32b8783 100644
+--- a/sysdeps/aarch64/dl-machine.h
++++ b/sysdeps/aarch64/dl-machine.h
+@@ -27,6 +27,9 @@
+ #include <dl-irel.h>
+ #include <cpu-features.c>
+ 
++/* Translate a processor specific dynamic tag to the index in l_info array.  */
++#define DT_AARCH64(x) (DT_AARCH64_##x - DT_LOPROC + DT_NUM)
++
+ /* Return nonzero iff ELF header is compatible with the running host.  */
+ static inline int __attribute__ ((unused))
+ elf_machine_matches_host (const ElfW(Ehdr) *ehdr)
+@@ -102,6 +105,10 @@ elf_machine_runtime_setup (struct link_map *l, int lazy, int profile)
+ 	}
+     }
+ 
++  /* Check if STO_AARCH64_VARIANT_PCS needs to be handled.  */
++  if (l->l_info[DT_AARCH64 (VARIANT_PCS)])
++    l->l_mach.variant_pcs = 1;
++
+   return lazy;
+ }
+ 
+@@ -388,10 +395,37 @@ elf_machine_lazy_rel (struct link_map *map,
+   /* Check for unexpected PLT reloc type.  */
+   if (__builtin_expect (r_type == AARCH64_R(JUMP_SLOT), 1))
+     {
+-      if (__builtin_expect (map->l_mach.plt, 0) == 0)
+-	*reloc_addr += l_addr;
+-      else
+-	*reloc_addr = map->l_mach.plt;
++      if (map->l_mach.plt == 0)
++	{
++	  /* Prelinking.  */
++	  *reloc_addr += l_addr;
++	  return;
++	}
++
++      if (__glibc_unlikely (map->l_mach.variant_pcs))
++	{
++	  /* Check the symbol table for variant PCS symbols.  */
++	  const Elf_Symndx symndx = ELFW (R_SYM) (reloc->r_info);
++	  const ElfW (Sym) *symtab =
++	    (const void *)D_PTR (map, l_info[DT_SYMTAB]);
++	  const ElfW (Sym) *sym = &symtab[symndx];
++	  if (__glibc_unlikely (sym->st_other & STO_AARCH64_VARIANT_PCS))
++	    {
++	      /* Avoid lazy resolution of variant PCS symbols.  */
++	      const struct r_found_version *version = NULL;
++	      if (map->l_info[VERSYMIDX (DT_VERSYM)] != NULL)
++		{
++		  const ElfW (Half) *vernum =
++		    (const void *)D_PTR (map, l_info[VERSYMIDX (DT_VERSYM)]);
++		  version = &map->l_versions[vernum[symndx] & 0x7fff];
++		}
++	      elf_machine_rela (map, reloc, sym, version, reloc_addr,
++				skip_ifunc);
++	      return;
++	    }
++	}
++
++      *reloc_addr = map->l_mach.plt;
+     }
+   else if (__builtin_expect (r_type == AARCH64_R(TLSDESC), 1))
+     {
+diff --git a/sysdeps/aarch64/linkmap.h b/sysdeps/aarch64/linkmap.h
+index 6852f343a1efd150..dd8597470c3d2174 100644
+--- a/sysdeps/aarch64/linkmap.h
++++ b/sysdeps/aarch64/linkmap.h
+@@ -20,4 +20,5 @@ struct link_map_machine
+ {
+   ElfW(Addr) plt;	  /* Address of .plt */
+   void *tlsdesc_table;	  /* Address of TLS descriptor hash table.  */
++  int variant_pcs;	  /* If set, PLT calls may follow a variant PCS.  */
+ };

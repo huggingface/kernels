@@ -1,0 +1,168 @@
+commit 561b0bec4448f0302cb4915bf67c919bde4a1c57
+Author: DJ Delorie <dj@redhat.com>
+Date:   Fri Jul 6 01:10:41 2018 -0400
+
+    Add test-in-container infrastructure.
+    
+    * Makefile (testroot.pristine): New rules to initialize the
+    test-in-container "testroot".
+    * Makerules (all-testsuite): Add tests-container.
+    * Rules (tests-expected): Add tests-container.
+    (binaries-all-tests): Likewise.
+    (tests-container): New, run these tests in the testroot container.
+    * support/links-dso-program-c.c: New.
+    * support/links-dso-program.cc: New.
+    * support/test-container.c: New.
+    * support/shell-container.c: New.
+    * support/echo-container.c: New.
+    * support/true-container.c: New.
+    * support/xmkdirp.c: New.
+    * support/xsymlink.c: New.
+    * support/support_paths.c: New.
+    * support/support.h: Add support paths prototypes.
+    * support/xunistd.h: Add xmkdirp () and xsymlink ().
+    
+    * nss/tst-nss-test3.c: Convert to test-in-container.
+    * nss/tst-nss-test3.root/: New.
+
+(note: support/ already present, not needed; sample test not included)
+
+diff --git a/Makefile b/Makefile
+index d3f25a5..3df55e6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -340,6 +340,62 @@ define summarize-tests
+ @! egrep -q -v '^(X?PASS|XFAIL|UNSUPPORTED):' $(objpfx)$1
+ endef
+ 
++# The intention here is to do ONE install of our build into the
++# testroot.pristine/ directory, then rsync (internal to
++# support/test-container) that to testroot.root/ at the start of each
++# test.  That way we can promise each test a "clean" install, without
++# having to do the install for each test.
++#
++# In addition, we have to copy some files (which we build) into this
++# root in addition to what glibc installs.  For example, many tests
++# require additional programs including /bin/sh, /bin/true, and
++# /bin/echo, all of which we build below to limit library dependencies
++# to just those things in glibc and language support libraries which
++# we also copy into the into the rootfs.  To determine what language
++# support libraries we need we build a "test" program in either C or
++# (if available) C++ just so we can copy in any shared objects
++# (which we do not build) that GCC-compiled programs depend on.
++
++
++ifeq (,$(CXX))
++LINKS_DSO_PROGRAM = links-dso-program-c
++else
++LINKS_DSO_PROGRAM = links-dso-program
++endif
++
++$(tests-container) $(addsuffix /tests,$(subdirs)) : \
++		$(objpfx)testroot.pristine/install.stamp
++$(objpfx)testroot.pristine/install.stamp :
++	test -d $(objpfx)testroot.pristine || \
++	  mkdir $(objpfx)testroot.pristine
++	# We need a working /bin/sh for some of the tests.
++	test -d $(objpfx)testroot.pristine/bin || \
++	  mkdir $(objpfx)testroot.pristine/bin
++	cp $(objpfx)support/shell-container $(objpfx)testroot.pristine/bin/sh
++	cp $(objpfx)support/echo-container $(objpfx)testroot.pristine/bin/echo
++	cp $(objpfx)support/true-container $(objpfx)testroot.pristine/bin/true
++	# Copy these DSOs first so we can overwrite them with our own.
++	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
++		$(objpfx)elf/$(rtld-installed-name) \
++		$(objpfx)testroot.pristine/bin/sh \
++	        | grep / | sed 's/^[^/]*//' | sed 's/ .*//'` ;\
++	  do \
++	    test -d `dirname $(objpfx)testroot.pristine$$dso` || \
++	      mkdir -p `dirname $(objpfx)testroot.pristine$$dso` ;\
++	    $(test-wrapper) cp $$dso $(objpfx)testroot.pristine$$dso ;\
++	  done
++	for dso in `$(test-wrapper-env) LD_TRACE_LOADED_OBJECTS=1  \
++		$(objpfx)elf/$(rtld-installed-name) \
++		$(objpfx)support/$(LINKS_DSO_PROGRAM) \
++	        | grep / | sed 's/^[^/]*//' | sed 's/ .*//'` ;\
++	  do \
++	    test -d `dirname $(objpfx)testroot.pristine$$dso` || \
++	      mkdir -p `dirname $(objpfx)testroot.pristine$$dso` ;\
++	    $(test-wrapper) cp $$dso $(objpfx)testroot.pristine$$dso ;\
++	  done
++	$(MAKE) install DESTDIR=$(objpfx)testroot.pristine
++	touch $(objpfx)testroot.pristine/install.stamp
++
+ tests-special-notdir = $(patsubst $(objpfx)%, %, $(tests-special))
+ tests: $(tests-special)
+ 	$(..)scripts/merge-test-results.sh -s $(objpfx) "" \
+diff --git a/Makerules b/Makerules
+index a10a0b4..5d6434c 100644
+--- a/Makerules
++++ b/Makerules
+@@ -1369,7 +1369,8 @@ xcheck: xtests
+ # The only difference between MODULE_NAME=testsuite and MODULE_NAME=nonlib is
+ # that almost all internal declarations from config.h, libc-symbols.h, and
+ # include/*.h are not available to 'testsuite' code, but are to 'nonlib' code.
+-all-testsuite := $(strip $(tests) $(xtests) $(test-srcs) $(test-extras))
++all-testsuite := $(strip $(tests) $(xtests) $(test-srcs) $(test-extras) \
++		 $(tests-container))
+ ifneq (,$(all-testsuite))
+ cpp-srcs-left = $(all-testsuite)
+ lib := testsuite
+diff --git a/Rules b/Rules
+index 706c8a7..5abb727 100644
+--- a/Rules
++++ b/Rules
+@@ -130,12 +130,14 @@ others: $(py-const)
+ 
+ ifeq ($(run-built-tests),no)
+ tests: $(addprefix $(objpfx),$(filter-out $(tests-unsupported), \
+-                                          $(tests) $(tests-internal)) \
++                                          $(tests) $(tests-internal) \
++					  $(tests-container)) \
+ 			     $(test-srcs)) $(tests-special) \
+ 			     $(tests-printers-programs)
+ xtests: tests $(xtests-special)
+ else
+ tests: $(tests:%=$(objpfx)%.out) $(tests-internal:%=$(objpfx)%.out) \
++       $(tests-container:%=$(objpfx)%.out) \
+        $(tests-special) $(tests-printers-out)
+ xtests: tests $(xtests:%=$(objpfx)%.out) $(xtests-special)
+ endif
+@@ -145,7 +147,8 @@ xtests-special-notdir = $(patsubst $(objpfx)%, %, $(xtests-special))
+ ifeq ($(run-built-tests),no)
+ tests-expected =
+ else
+-tests-expected = $(tests) $(tests-internal) $(tests-printers)
++tests-expected = $(tests) $(tests-internal) $(tests-printers) \
++	$(tests-container)
+ endif
+ tests:
+ 	$(..)scripts/merge-test-results.sh -s $(objpfx) $(subdir) \
+@@ -158,7 +161,8 @@ xtests:
+ 
+ ifeq ($(build-programs),yes)
+ binaries-all-notests = $(others) $(sysdep-others)
+-binaries-all-tests = $(tests) $(tests-internal) $(xtests) $(test-srcs)
++binaries-all-tests = $(tests) $(tests-internal) $(xtests) $(test-srcs) \
++		     $(tests-container)
+ binaries-all = $(binaries-all-notests) $(binaries-all-tests)
+ binaries-static-notests = $(others-static)
+ binaries-static-tests = $(tests-static) $(xtests-static)
+@@ -248,6 +252,17 @@ $(objpfx)%.out: /dev/null $(objpfx)%	# Make it 2nd arg for canned sequence.
+ 	$(make-test-out) > $@; \
+ 	$(evaluate-test)
+ 
++
++# Any tests that require an isolated container (filesystem, network
++# and pid namespaces) in which to run, should be added to
++# tests-container.
++$(tests-container:%=$(objpfx)%.out): $(objpfx)%.out : $(if $(wildcard $(objpfx)%.files),$(objpfx)%.files,/dev/null) $(objpfx)%
++	$(test-wrapper-env) $(run-program-env) $(run-via-rtld-prefix) \
++	  $(common-objpfx)support/test-container env $(run-program-env) $($*-ENV) \
++	  $(host-test-program-cmd) $($*-ARGS) > $@; \
++	$(evaluate-test)
++
++
+ # tests-unsupported lists tests that we will not try to build at all in
+ # this configuration.  Note this runs every time because it does not
+ # actually create its target.  The dependency on Makefile is meant to

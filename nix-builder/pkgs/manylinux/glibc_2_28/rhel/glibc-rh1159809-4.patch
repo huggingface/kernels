@@ -1,0 +1,25 @@
+commit d3bf2f5927d51258a51ac7fde04f4805f8ee294a
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Nov 3 09:19:30 2021 -0300
+
+    elf: Do not run DSO sorting if tunables is not enabled
+    
+    Since the argorithm selection requires tunables.
+    
+    Checked on x86_64-linux-gnu with --enable-tunables=no.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index e92f62f279566684..3b5e1f59e6696a2b 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -998,8 +998,10 @@ include $(objpfx)$(1).generated-makefile
+ endef
+ 
+ # Generate from each testcase description file
++ifeq (yes,$(have-tunables))
+ $(eval $(call include_dsosort_tests,dso-sort-tests-1.def))
+ $(eval $(call include_dsosort_tests,dso-sort-tests-2.def))
++endif
+ 
+ check-abi: $(objpfx)check-abi-ld.out
+ tests-special += $(objpfx)check-abi-ld.out

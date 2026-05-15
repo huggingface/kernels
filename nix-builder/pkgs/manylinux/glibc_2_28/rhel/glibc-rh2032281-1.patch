@@ -1,0 +1,64 @@
+commit a7e9dbb7742954814643a8562dcad09abb0b0e5d
+Author: Alexandra Hájková <ahajkova@redhat.com>
+Date:   Sat Dec 26 18:45:13 2020 +0100
+
+    Add xchdir to libsupport.
+
+diff --git a/support/Makefile b/support/Makefile
+index dcf3c4baa2a31070..fb95a69ed9158e78 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -82,6 +82,7 @@ libsupport-routines = \
+   xasprintf \
+   xbind \
+   xcalloc \
++  xchdir \
+   xchroot \
+   xclose \
+   xconnect \
+diff --git a/support/xchdir.c b/support/xchdir.c
+new file mode 100644
+index 0000000000000000..beb4feff72832065
+--- /dev/null
++++ b/support/xchdir.c
+@@ -0,0 +1,28 @@
++/* chdir with error checking.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++#include <support/xunistd.h>
++#include <unistd.h>
++
++void
++xchdir (const char *path)
++{
++  if (chdir (path) != 0)
++    FAIL_EXIT1 ("chdir (\"%s\"): %m", path);
++}
+diff --git a/support/xunistd.h b/support/xunistd.h
+index f99f362cb4763c5b..74fd2771d12c36fe 100644
+--- a/support/xunistd.h
++++ b/support/xunistd.h
+@@ -44,6 +44,7 @@ long xsysconf (int name);
+ long long xlseek (int fd, long long offset, int whence);
+ void xftruncate (int fd, long long length);
+ void xsymlink (const char *target, const char *linkpath);
++void xchdir (const char *path);
+ 
+ /* Equivalent of "mkdir -p".  */
+ void xmkdirp (const char *, mode_t);

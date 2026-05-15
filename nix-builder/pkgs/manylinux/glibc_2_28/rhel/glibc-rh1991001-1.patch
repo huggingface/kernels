@@ -1,0 +1,30 @@
+commit ad78d702757a189b1fa552d607e8aaa22252a45f
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue May 12 19:06:18 2020 +0200
+
+    elf: Remove redundant add_to_global_resize_failure  call from dl_open_args
+    
+    The second call does not do anything because the data structures have
+    already been resized by the call that comes before the demarcation
+    point.  Fixes commit a509eb117fac1d764b15eba64993f4bdb63d7f3c
+    ("Avoid late dlopen failure due to scope, TLS slotinfo updates
+    [BZ #25112]").
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 3d49a84596e99bf6..b052bb0bc2cd17aa 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -769,11 +769,6 @@ dl_open_worker (void *a)
+   DL_STATIC_INIT (new);
+ #endif
+ 
+-  /* Perform the necessary allocations for adding new global objects
+-     to the global scope below, via add_to_global_update.  */
+-  if (mode & RTLD_GLOBAL)
+-    add_to_global_resize (new);
+-
+   /* Run the initializer functions of new objects.  Temporarily
+      disable the exception handler, so that lazy binding failures are
+      fatal.  */

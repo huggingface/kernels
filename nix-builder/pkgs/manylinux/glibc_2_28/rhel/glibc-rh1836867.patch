@@ -1,0 +1,194 @@
+commit 790b8dda4455865cb8c3a47801f4304c1a43baf6
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue May 19 14:09:38 2020 +0200
+
+    nss_compat: internal_end*ent may clobber errno, hiding ERANGE [BZ #25976]
+    
+    During cleanup, before returning from get*_r functions, the end*ent
+    calls must not change errno.  Otherwise, an ERANGE error from the
+    underlying implementation can be hidden, causing unexpected lookup
+    failures.  This commit introduces an internal_end*ent_noerror
+    function which saves and restore errno, and marks the original
+    internal_end*ent function as warn_unused_result, so that it is used
+    only in contexts were errors from it can be handled explicitly.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/nss/nss_compat/compat-grp.c b/nss/nss_compat/compat-grp.c
+index 012929eae7048702..fca9f4860f72e3d2 100644
+--- a/nss/nss_compat/compat-grp.c
++++ b/nss/nss_compat/compat-grp.c
+@@ -142,7 +142,7 @@ _nss_compat_setgrent (int stayopen)
+ }
+ 
+ 
+-static enum nss_status
++static enum nss_status __attribute_warn_unused_result__
+ internal_endgrent (ent_t *ent)
+ {
+   if (ent->stream != NULL)
+@@ -163,6 +163,15 @@ internal_endgrent (ent_t *ent)
+   return NSS_STATUS_SUCCESS;
+ }
+ 
++/* Like internal_endgrent, but preserve errno in all cases.  */
++static void
++internal_endgrent_noerror (ent_t *ent)
++{
++  int saved_errno = errno;
++  enum nss_status unused __attribute__ ((unused)) = internal_endgrent (ent);
++  __set_errno (saved_errno);
++}
++
+ enum nss_status
+ _nss_compat_endgrent (void)
+ {
+@@ -483,7 +492,7 @@ _nss_compat_getgrnam_r (const char *name, struct group *grp,
+   if (result == NSS_STATUS_SUCCESS)
+     result = internal_getgrnam_r (name, grp, &ent, buffer, buflen, errnop);
+ 
+-  internal_endgrent (&ent);
++  internal_endgrent_noerror (&ent);
+ 
+   return result;
+ }
+@@ -612,7 +621,7 @@ _nss_compat_getgrgid_r (gid_t gid, struct group *grp,
+   if (result == NSS_STATUS_SUCCESS)
+     result = internal_getgrgid_r (gid, grp, &ent, buffer, buflen, errnop);
+ 
+-  internal_endgrent (&ent);
++  internal_endgrent_noerror (&ent);
+ 
+   return result;
+ }
+diff --git a/nss/nss_compat/compat-initgroups.c b/nss/nss_compat/compat-initgroups.c
+index 5beaa6b88b7e1764..d7a89ea8e7718ab0 100644
+--- a/nss/nss_compat/compat-initgroups.c
++++ b/nss/nss_compat/compat-initgroups.c
+@@ -133,7 +133,7 @@ internal_setgrent (ent_t *ent)
+ }
+ 
+ 
+-static enum nss_status
++static enum nss_status __attribute_warn_unused_result__
+ internal_endgrent (ent_t *ent)
+ {
+   if (ent->stream != NULL)
+@@ -157,6 +157,15 @@ internal_endgrent (ent_t *ent)
+   return NSS_STATUS_SUCCESS;
+ }
+ 
++/* Like internal_endgrent, but preserve errno in all cases.  */
++static void
++internal_endgrent_noerror (ent_t *ent)
++{
++  int saved_errno = errno;
++  enum nss_status unused __attribute__ ((unused)) = internal_endgrent (ent);
++  __set_errno (saved_errno);
++}
++
+ /* Add new group record.  */
+ static void
+ add_group (long int *start, long int *size, gid_t **groupsp, long int limit,
+@@ -501,7 +510,7 @@ _nss_compat_initgroups_dyn (const char *user, gid_t group, long int *start,
+  done:
+   scratch_buffer_free (&tmpbuf);
+ 
+-  internal_endgrent (&intern);
++  internal_endgrent_noerror (&intern);
+ 
+   return status;
+ }
+diff --git a/nss/nss_compat/compat-pwd.c b/nss/nss_compat/compat-pwd.c
+index a903452cdf96de74..8832fb7518d8bbff 100644
+--- a/nss/nss_compat/compat-pwd.c
++++ b/nss/nss_compat/compat-pwd.c
+@@ -259,7 +259,7 @@ _nss_compat_setpwent (int stayopen)
+ }
+ 
+ 
+-static enum nss_status
++static enum nss_status __attribute_warn_unused_result__
+ internal_endpwent (ent_t *ent)
+ {
+   if (ent->stream != NULL)
+@@ -287,6 +287,15 @@ internal_endpwent (ent_t *ent)
+   return NSS_STATUS_SUCCESS;
+ }
+ 
++/* Like internal_endpwent, but preserve errno in all cases.  */
++static void
++internal_endpwent_noerror (ent_t *ent)
++{
++  int saved_errno = errno;
++  enum nss_status unused __attribute__ ((unused)) = internal_endpwent (ent);
++  __set_errno (saved_errno);
++}
++
+ enum nss_status
+ _nss_compat_endpwent (void)
+ {
+@@ -822,7 +831,7 @@ _nss_compat_getpwnam_r (const char *name, struct passwd *pwd,
+   if (result == NSS_STATUS_SUCCESS)
+     result = internal_getpwnam_r (name, pwd, &ent, buffer, buflen, errnop);
+ 
+-  internal_endpwent (&ent);
++  internal_endpwent_noerror (&ent);
+ 
+   return result;
+ }
+@@ -1061,7 +1070,7 @@ _nss_compat_getpwuid_r (uid_t uid, struct passwd *pwd,
+   if (result == NSS_STATUS_SUCCESS)
+     result = internal_getpwuid_r (uid, pwd, &ent, buffer, buflen, errnop);
+ 
+-  internal_endpwent (&ent);
++  internal_endpwent_noerror (&ent);
+ 
+   return result;
+ }
+diff --git a/nss/nss_compat/compat-spwd.c b/nss/nss_compat/compat-spwd.c
+index eb96ca09172d5743..684a06007ab84ac9 100644
+--- a/nss/nss_compat/compat-spwd.c
++++ b/nss/nss_compat/compat-spwd.c
+@@ -215,7 +215,7 @@ _nss_compat_setspent (int stayopen)
+ }
+ 
+ 
+-static enum nss_status
++static enum nss_status __attribute_warn_unused_result__
+ internal_endspent (ent_t *ent)
+ {
+   if (ent->stream != NULL)
+@@ -244,6 +244,15 @@ internal_endspent (ent_t *ent)
+   return NSS_STATUS_SUCCESS;
+ }
+ 
++/* Like internal_endspent, but preserve errno in all cases.  */
++static void
++internal_endspent_noerror (ent_t *ent)
++{
++  int saved_errno = errno;
++  enum nss_status unused __attribute__ ((unused)) = internal_endspent (ent);
++  __set_errno (saved_errno);
++}
++
+ enum nss_status
+ _nss_compat_endspent (void)
+ {
+@@ -261,7 +270,6 @@ _nss_compat_endspent (void)
+   return result;
+ }
+ 
+-
+ static enum nss_status
+ getspent_next_nss_netgr (const char *name, struct spwd *result, ent_t *ent,
+ 			 char *group, char *buffer, size_t buflen,
+@@ -786,7 +794,7 @@ _nss_compat_getspnam_r (const char *name, struct spwd *pwd,
+   if (result == NSS_STATUS_SUCCESS)
+     result = internal_getspnam_r (name, pwd, &ent, buffer, buflen, errnop);
+ 
+-  internal_endspent (&ent);
++  internal_endspent_noerror (&ent);
+ 
+   return result;
+ }

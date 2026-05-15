@@ -1,0 +1,21 @@
+commit 5fce0e095bc413f908f472074c2235198cd76bf4
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Mar 24 15:36:23 2020 -0300
+
+    support/shell-container.c: Return 127 if execve fails
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/support/shell-container.c b/support/shell-container.c
+index e87ac5cf1baa84e5..e9eea64bca7e949d 100644
+--- a/support/shell-container.c
++++ b/support/shell-container.c
+@@ -238,7 +238,7 @@ run_command_array (char **argv)
+ 
+       fprintf (stderr, "sh: execing %s failed: %s",
+ 	       argv[0], strerror (errno));
+-      exit (1);
++      exit (127);
+     }
+ 
+   waitpid (pid, &status, 0);

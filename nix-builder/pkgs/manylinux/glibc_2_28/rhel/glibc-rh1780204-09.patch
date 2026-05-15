@@ -1,0 +1,182 @@
+From 8353881ede286045dc5bdc00af6407560ca5d05b Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:20 +0100
+Subject: [PATCH 09/28] Use GCC builtins for floor functions if desired.
+
+This patch is using the corresponding GCC builtin for floorf, floor,
+floorl and floorf128 if the USE_FUNCTION_BUILTIN macros are defined to one
+in math-use-builtins.h.
+
+This is the case for s390 if build with at least --march=z196 --mzarch.
+Otherwise the generic implementation is used.  The code of the generic
+implementation is not changed.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 6c1b6a5e8cd91e0e1965509ad91e627e60eb00a3)
+---
+ sysdeps/generic/math-use-builtins.h         |  5 +++++
+ sysdeps/ieee754/dbl-64/s_floor.c            |  6 ++++++
+ sysdeps/ieee754/float128/float128_private.h |  3 +++
+ sysdeps/ieee754/flt-32/s_floorf.c           |  6 ++++++
+ sysdeps/ieee754/ldbl-128/s_floorl.c         |  6 ++++++
+ sysdeps/s390/fpu/math-use-builtins.h        | 11 +++++++++++
+ 6 files changed, 37 insertions(+)
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+index 64b4a4bb5b..e1c5df62e4 100644
+--- a/sysdeps/generic/math-use-builtins.h
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -31,4 +31,9 @@
+ #define USE_RINTL_BUILTIN 0
+ #define USE_RINTF128_BUILTIN 0
+ 
++#define USE_FLOOR_BUILTIN 0
++#define USE_FLOORF_BUILTIN 0
++#define USE_FLOORL_BUILTIN 0
++#define USE_FLOORF128_BUILTIN 0
++
+ #endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_floor.c b/sysdeps/ieee754/dbl-64/s_floor.c
+index b551a1aafa..693938b708 100644
+--- a/sysdeps/ieee754/dbl-64/s_floor.c
++++ b/sysdeps/ieee754/dbl-64/s_floor.c
+@@ -34,6 +34,7 @@
+ #include <math_private.h>
+ #include <stdint.h>
+ #include <libm-alias-double.h>
++#include <math-use-builtins.h>
+ 
+ /*
+  * floor(x)
+@@ -45,6 +46,10 @@
+ double
+ __floor (double x)
+ {
++#if USE_FLOOR_BUILTIN
++  return __builtin_floor (x);
++#else
++  /* Use generic implementation.  */
+   int64_t i0;
+   EXTRACT_WORDS64 (i0, x);
+   int32_t j0 = ((i0 >> 52) & 0x7ff) - 0x3ff;
+@@ -72,6 +77,7 @@ __floor (double x)
+   else if (j0 == 0x400)
+     return x + x;			/* inf or NaN */
+   return x;
++#endif /* ! USE_FLOOR_BUILTIN  */
+ }
+ #ifndef __floor
+ libm_alias_double (__floor, floor)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index b872aefbfd..667030ab06 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -143,6 +143,8 @@
+ #define USE_NEARBYINTL_BUILTIN USE_NEARBYINTF128_BUILTIN
+ #undef USE_RINTL_BUILTIN
+ #define USE_RINTL_BUILTIN USE_RINTF128_BUILTIN
++#undef USE_FLOORL_BUILTIN
++#define USE_FLOORL_BUILTIN USE_FLOORF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -346,6 +348,7 @@
+ #define __builtin_signbitl __builtin_signbit
+ #define __builtin_nearbyintl __builtin_nearbyintf128
+ #define __builtin_rintl __builtin_rintf128
++#define __builtin_floorl __builtin_floorf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_floorf.c b/sysdeps/ieee754/flt-32/s_floorf.c
+index 12aed343a0..6d37ab90a1 100644
+--- a/sysdeps/ieee754/flt-32/s_floorf.c
++++ b/sysdeps/ieee754/flt-32/s_floorf.c
+@@ -23,10 +23,15 @@
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-float.h>
++#include <math-use-builtins.h>
+ 
+ float
+ __floorf(float x)
+ {
++#if USE_FLOORF_BUILTIN
++  return __builtin_floorf (x);
++#else
++  /* Use generic implementation.  */
+ 	int32_t i0,j0;
+ 	uint32_t i;
+ 	GET_FLOAT_WORD(i0,x);
+@@ -49,6 +54,7 @@ __floorf(float x)
+ 	}
+ 	SET_FLOAT_WORD(x,i0);
+ 	return x;
++#endif /* ! USE_FLOORF_BUILTIN  */
+ }
+ #ifndef __floorf
+ libm_alias_float (__floor, floor)
+diff --git a/sysdeps/ieee754/ldbl-128/s_floorl.c b/sysdeps/ieee754/ldbl-128/s_floorl.c
+index f9c5e014f9..6143fe6ec5 100644
+--- a/sysdeps/ieee754/ldbl-128/s_floorl.c
++++ b/sysdeps/ieee754/ldbl-128/s_floorl.c
+@@ -27,9 +27,14 @@ static char rcsid[] = "$NetBSD: $";
+ #include <math.h>
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
++#include <math-use-builtins.h>
+ 
+ _Float128 __floorl(_Float128 x)
+ {
++#if USE_FLOORL_BUILTIN
++  return __builtin_floorl (x);
++#else
++  /* Use generic implementation.  */
+ 	int64_t i0,i1,j0;
+ 	uint64_t i,j;
+ 	GET_LDOUBLE_WORDS64(i0,i1,x);
+@@ -64,5 +69,6 @@ _Float128 __floorl(_Float128 x)
+ 	}
+ 	SET_LDOUBLE_WORDS64(x,i0,i1);
+ 	return x;
++#endif /* ! USE_FLOORL_BUILTIN  */
+ }
+ libm_alias_ldouble (__floor, floor)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+index 8b702a6a90..c213c16c6f 100644
+--- a/sysdeps/s390/fpu/math-use-builtins.h
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -34,12 +34,18 @@
+ # define USE_RINTF_BUILTIN 1
+ # define USE_RINTL_BUILTIN 1
+ 
++# define USE_FLOOR_BUILTIN 1
++# define USE_FLOORF_BUILTIN 1
++# define USE_FLOORL_BUILTIN 1
++
+ # if __GNUC_PREREQ (8, 0)
+ #  define USE_NEARBYINTF128_BUILTIN 1
+ #  define USE_RINTF128_BUILTIN 1
++#  define USE_FLOORF128_BUILTIN 1
+ # else
+ #  define USE_NEARBYINTF128_BUILTIN 0
+ #  define USE_RINTF128_BUILTIN 0
++#  define USE_FLOORF128_BUILTIN 0
+ # endif
+ 
+ #else
+@@ -55,6 +61,11 @@
+ # define USE_RINTL_BUILTIN 0
+ # define USE_RINTF128_BUILTIN 0
+ 
++# define USE_FLOOR_BUILTIN 0
++# define USE_FLOORF_BUILTIN 0
++# define USE_FLOORL_BUILTIN 0
++# define USE_FLOORF128_BUILTIN 0
++
+ #endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
+ 
+ #endif /* math-use-builtins.h */
+-- 
+2.18.2
+

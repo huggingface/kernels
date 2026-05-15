@@ -1,0 +1,187 @@
+From abc72a0694c1c3d08354170da343eead8d9afcc1 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:22 +0100
+Subject: [PATCH 11/28] Use GCC builtins for trunc functions if desired.
+
+This patch is using the corresponding GCC builtin for truncf, trunc,
+truncl and truncf128 if the USE_FUNCTION_BUILTIN macros are defined to one
+in math-use-builtins.h.
+
+This is the case for s390 if build with at least --march=z196 --mzarch.
+Otherwise the generic implementation is used.  The code of the generic
+implementation is not changed.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 1ac9c1cf87216bf9f8ac4f7c9754d025d9f2c4ae)
+---
+ sysdeps/generic/math-use-builtins.h         |  5 +++++
+ sysdeps/ieee754/dbl-64/s_trunc.c            |  6 ++++++
+ sysdeps/ieee754/float128/float128_private.h |  3 +++
+ sysdeps/ieee754/flt-32/s_truncf.c           |  6 ++++++
+ sysdeps/ieee754/ldbl-128/s_truncl.c         |  6 ++++++
+ sysdeps/s390/fpu/math-use-builtins.h        | 11 +++++++++++
+ 6 files changed, 37 insertions(+)
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+index 076ec661b0..ab379f45ba 100644
+--- a/sysdeps/generic/math-use-builtins.h
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -41,4 +41,9 @@
+ #define USE_CEILL_BUILTIN 0
+ #define USE_CEILF128_BUILTIN 0
+ 
++#define USE_TRUNC_BUILTIN 0
++#define USE_TRUNCF_BUILTIN 0
++#define USE_TRUNCL_BUILTIN 0
++#define USE_TRUNCF128_BUILTIN 0
++
+ #endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_trunc.c b/sysdeps/ieee754/dbl-64/s_trunc.c
+index 38bb33d337..708169c727 100644
+--- a/sysdeps/ieee754/dbl-64/s_trunc.c
++++ b/sysdeps/ieee754/dbl-64/s_trunc.c
+@@ -21,11 +21,16 @@
+ 
+ #include <math_private.h>
+ #include <libm-alias-double.h>
++#include <math-use-builtins.h>
+ 
+ 
+ double
+ __trunc (double x)
+ {
++#if USE_TRUNC_BUILTIN
++  return __builtin_trunc (x);
++#else
++  /* Use generic implementation.  */
+   int64_t i0, j0;
+   int64_t sx;
+ 
+@@ -48,6 +53,7 @@ __trunc (double x)
+     }
+ 
+   return x;
++#endif /* ! USE_TRUNC_BUILTIN  */
+ }
+ #ifndef __trunc
+ libm_alias_double (__trunc, trunc)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index 19352ca26c..e248600ec2 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -147,6 +147,8 @@
+ #define USE_FLOORL_BUILTIN USE_FLOORF128_BUILTIN
+ #undef USE_CEILL_BUILTIN
+ #define USE_CEILL_BUILTIN USE_CEILF128_BUILTIN
++#undef USE_TRUNCL_BUILTIN
++#define USE_TRUNCL_BUILTIN USE_TRUNCF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -352,6 +354,7 @@
+ #define __builtin_rintl __builtin_rintf128
+ #define __builtin_floorl __builtin_floorf128
+ #define __builtin_ceill __builtin_ceilf128
++#define __builtin_truncl __builtin_truncf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_truncf.c b/sysdeps/ieee754/flt-32/s_truncf.c
+index 2e1464aeac..71491e5175 100644
+--- a/sysdeps/ieee754/flt-32/s_truncf.c
++++ b/sysdeps/ieee754/flt-32/s_truncf.c
+@@ -21,11 +21,16 @@
+ 
+ #include <math_private.h>
+ #include <libm-alias-float.h>
++#include <math-use-builtins.h>
+ 
+ 
+ float
+ __truncf (float x)
+ {
++#if USE_TRUNCF_BUILTIN
++  return __builtin_truncf (x);
++#else
++  /* Use generic implementation.  */
+   int32_t i0, j0;
+   int sx;
+ 
+@@ -48,6 +53,7 @@ __truncf (float x)
+     }
+ 
+   return x;
++#endif /* ! USE_TRUNCF_BUILTIN  */
+ }
+ #ifndef __truncf
+ libm_alias_float (__trunc, trunc)
+diff --git a/sysdeps/ieee754/ldbl-128/s_truncl.c b/sysdeps/ieee754/ldbl-128/s_truncl.c
+index f858ede3d2..aa49daaf85 100644
+--- a/sysdeps/ieee754/ldbl-128/s_truncl.c
++++ b/sysdeps/ieee754/ldbl-128/s_truncl.c
+@@ -22,11 +22,16 @@
+ 
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
++#include <math-use-builtins.h>
+ 
+ 
+ _Float128
+ __truncl (_Float128 x)
+ {
++#if USE_TRUNCL_BUILTIN
++  return __builtin_truncl (x);
++#else
++  /* Use generic implementation.  */
+   int32_t j0;
+   uint64_t i0, i1, sx;
+ 
+@@ -53,5 +58,6 @@ __truncl (_Float128 x)
+     }
+ 
+   return x;
++#endif /* ! USE_TRUNCL_BUILTIN  */
+ }
+ libm_alias_ldouble (__trunc, trunc)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+index 5435cbb65f..a39715c612 100644
+--- a/sysdeps/s390/fpu/math-use-builtins.h
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -42,16 +42,22 @@
+ # define USE_CEILF_BUILTIN 1
+ # define USE_CEILL_BUILTIN 1
+ 
++# define USE_TRUNC_BUILTIN 1
++# define USE_TRUNCF_BUILTIN 1
++# define USE_TRUNCL_BUILTIN 1
++
+ # if __GNUC_PREREQ (8, 0)
+ #  define USE_NEARBYINTF128_BUILTIN 1
+ #  define USE_RINTF128_BUILTIN 1
+ #  define USE_FLOORF128_BUILTIN 1
+ #  define USE_CEILF128_BUILTIN 1
++#  define USE_TRUNCF128_BUILTIN 1
+ # else
+ #  define USE_NEARBYINTF128_BUILTIN 0
+ #  define USE_RINTF128_BUILTIN 0
+ #  define USE_FLOORF128_BUILTIN 0
+ #  define USE_CEILF128_BUILTIN 0
++#  define USE_TRUNCF128_BUILTIN 0
+ # endif
+ 
+ #else
+@@ -77,6 +83,11 @@
+ # define USE_CEILL_BUILTIN 0
+ # define USE_CEILF128_BUILTIN 0
+ 
++# define USE_TRUNC_BUILTIN 0
++# define USE_TRUNCF_BUILTIN 0
++# define USE_TRUNCL_BUILTIN 0
++# define USE_TRUNCF128_BUILTIN 0
++
+ #endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
+ 
+ #endif /* math-use-builtins.h */
+-- 
+2.18.2
+

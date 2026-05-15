@@ -1,0 +1,298 @@
+commit e485b2b6e006a7efa5d73e6be7e357a395c77fe3
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Apr 23 18:16:26 2019 +0200
+
+    locale: Add LOCPATH diagnostics to the locale program
+    
+    The implementation of quote_string is based on support_quote_blob.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/locale/Makefile b/locale/Makefile
+index fd9972279ba7fe0b..42bb36c7d374eebe 100644
+--- a/locale/Makefile
++++ b/locale/Makefile
+@@ -28,6 +28,7 @@ routines	= setlocale findlocale loadlocale loadarchive \
+ 		  localeconv nl_langinfo nl_langinfo_l mb_cur_max \
+ 		  newlocale duplocale freelocale uselocale
+ tests		= tst-C-locale tst-locname tst-duplocale
++tests-special	= $(objpfx)tst-locale-locpath.out
+ categories	= ctype messages monetary numeric time paper name \
+ 		  address telephone measurement identification collate
+ aux		= $(categories:%=lc-%) $(categories:%=C-%) SYS_libc C_name \
+@@ -104,3 +105,7 @@ cpp-srcs-left := $(localedef-modules) $(localedef-aux) $(locale-modules) \
+ 		 $(lib-modules)
+ lib := locale-programs
+ include $(patsubst %,$(..)libof-iterator.mk,$(cpp-srcs-left))
++
++$(objpfx)tst-locale-locpath.out : tst-locale-locpath.sh $(objpfx)locale
++	$(SHELL) $< '$(common-objpfx)' '$(test-wrapper)' '$(test-wrapper-env)' > $@; \
++	$(evaluate-test)
+diff --git a/locale/programs/locale.c b/locale/programs/locale.c
+index 86941e4ef6e67d78..0e2e3e4e5788246f 100644
+--- a/locale/programs/locale.c
++++ b/locale/programs/locale.c
+@@ -173,6 +173,9 @@ static int write_archive_locales (void **all_datap, char *linebuf);
+ static void write_charmaps (void);
+ static void show_locale_vars (void);
+ static void show_info (const char *name);
++static void try_setlocale (int category, const char *category_name);
++static char *quote_string (const char *input);
++static void setlocale_diagnostics (void);
+ 
+ 
+ int
+@@ -186,10 +189,8 @@ main (int argc, char *argv[])
+ 
+   /* Set locale.  Do not set LC_ALL because the other categories must
+      not be affected (according to POSIX.2).  */
+-  if (setlocale (LC_CTYPE, "") == NULL)
+-    error (0, errno, gettext ("Cannot set LC_CTYPE to default locale"));
+-  if (setlocale (LC_MESSAGES, "") == NULL)
+-    error (0, errno, gettext ("Cannot set LC_MESSAGES to default locale"));
++  try_setlocale (LC_CTYPE, "LC_CTYPE");
++  try_setlocale (LC_MESSAGES, "LC_MESSAGES");
+ 
+   /* Initialize the message catalog.  */
+   textdomain (PACKAGE);
+@@ -200,9 +201,8 @@ main (int argc, char *argv[])
+   /* `-a' requests the names of all available locales.  */
+   if (do_all != 0)
+     {
+-      if (setlocale (LC_COLLATE, "") == NULL)
+-	error (0, errno,
+-	       gettext ("Cannot set LC_COLLATE to default locale"));
++      setlocale_diagnostics ();
++      try_setlocale (LC_COLLATE, "LC_COLLATE");
+       write_locales ();
+       exit (EXIT_SUCCESS);
+     }
+@@ -211,14 +211,15 @@ main (int argc, char *argv[])
+      used for the -f argument to localedef(1).  */
+   if (do_charmaps != 0)
+     {
++      setlocale_diagnostics ();
+       write_charmaps ();
+       exit (EXIT_SUCCESS);
+     }
+ 
+   /* Specific information about the current locale are requested.
+      Change to this locale now.  */
+-  if (setlocale (LC_ALL, "") == NULL)
+-    error (0, errno, gettext ("Cannot set LC_ALL to default locale"));
++  try_setlocale (LC_ALL, "LC_ALL");
++  setlocale_diagnostics ();
+ 
+   /* If no real argument is given we have to print the contents of the
+      current locale definition variables.  These are LANG and the LC_*.  */
+@@ -983,3 +984,121 @@ show_info (const char *name)
+      For testing and perhaps advanced use allow some more symbols.  */
+   locale_special (name, show_category_name, show_keyword_name);
+ }
++
++/* Set to true by try_setlocale if setlocale fails.  Used by
++   setlocale_diagnostics.  */
++static bool setlocale_failed;
++
++/* Call setlocale, with non-fatal error reporting.  */
++static void
++try_setlocale (int category, const char *category_name)
++{
++  if (setlocale (category, "") == NULL)
++    {
++      error (0, errno, gettext ("Cannot set %s to default locale"),
++	     category_name);
++      setlocale_failed = true;
++    }
++}
++
++/* Return a quoted version of the passed string, or NULL on error.  */
++static char *
++quote_string (const char *input)
++{
++  char *buffer;
++  size_t length;
++  FILE *stream = open_memstream (&buffer, &length);
++  if (stream == NULL)
++    return NULL;
++
++  while (true)
++    {
++      unsigned char ch = *input++;
++      if (ch == '\0')
++	break;
++
++      /* Use C backslash escapes for those control characters for
++         which they are defined.  */
++      switch (ch)
++        {
++          case '\a':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('a', stream);
++            break;
++          case '\b':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('b', stream);
++            break;
++          case '\f':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('f', stream);
++            break;
++          case '\n':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('n', stream);
++            break;
++          case '\r':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('r', stream);
++            break;
++          case '\t':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('t', stream);
++            break;
++          case '\v':
++            putc_unlocked ('\\', stream);
++            putc_unlocked ('v', stream);
++            break;
++          case '\\':
++          case '\'':
++          case '\"':
++            putc_unlocked ('\\', stream);
++            putc_unlocked (ch, stream);
++            break;
++        default:
++          if (ch < ' ' || ch > '~')
++            /* Use octal sequences because they are fixed width,
++               unlike hexadecimal sequences.  */
++            fprintf (stream, "\\%03o", ch);
++          else
++            putc_unlocked (ch, stream);
++        }
++    }
++
++  if (ferror (stream))
++    {
++      fclose (stream);
++      free (buffer);
++      return NULL;
++    }
++  if (fclose (stream) != 0)
++    {
++      free (buffer);
++      return NULL;
++    }
++
++  return buffer;
++}
++
++/* Print additional information if there was a setlocale error (during
++   try_setlocale).  */
++static void
++setlocale_diagnostics (void)
++{
++  if (setlocale_failed)
++    {
++      const char *locpath = getenv ("LOCPATH");
++      if (locpath != NULL)
++	{
++	  char *quoted = quote_string (locpath);
++	  if (quoted != NULL)
++	    fprintf (stderr,
++		     gettext ("\
++warning: The LOCPATH variable is set to \"%s\"\n"),
++		     quoted);
++	  else
++	    fputs ("warning: The LOCPATH variable is set\n", stderr);
++	  free (quoted);
++	}
++    }
++}
+diff --git a/locale/tst-locale-locpath.sh b/locale/tst-locale-locpath.sh
+new file mode 100644
+index 0000000000000000..b83de90a39121af6
+--- /dev/null
++++ b/locale/tst-locale-locpath.sh
+@@ -0,0 +1,83 @@
++#!/bin/sh
++# Test that locale prints LOCPATH on failure.
++# Copyright (C) 2019 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <http://www.gnu.org/licenses/>.
++
++set -ex
++
++common_objpfx=$1
++test_wrapper_env=$2
++run_program_env=$3
++
++LIBPATH="$common_objpfx"
++
++testroot="${common_objpfx}locale/tst-locale-locpath-directory"
++cleanup () {
++    rm -rf "$testroot"
++}
++trap cleanup 0
++
++rm -rf "$testroot"
++mkdir -p $testroot
++
++unset LANG
++
++${test_wrapper_env} \
++${run_program_env} LC_ALL=invalid-locale LOCPATH=does-not-exist \
++${common_objpfx}elf/ld.so --library-path "$LIBPATH" \
++  "${common_objpfx}locale/locale" \
++  > "$testroot/stdout" 2> "$testroot/stderr"
++
++echo "* standard error"
++cat "$testroot/stderr"
++echo "* standard output"
++cat "$testroot/stdout"
++
++cat > "$testroot/stderr-expected" <<EOF
++${common_objpfx}locale/locale: Cannot set LC_CTYPE to default locale: No such file or directory
++${common_objpfx}locale/locale: Cannot set LC_MESSAGES to default locale: No such file or directory
++${common_objpfx}locale/locale: Cannot set LC_ALL to default locale: No such file or directory
++warning: The LOCPATH variable is set to "does-not-exist"
++EOF
++
++cat > "$testroot/stdout-expected" <<EOF
++LANG=
++LC_CTYPE="invalid-locale"
++LC_NUMERIC="invalid-locale"
++LC_TIME="invalid-locale"
++LC_COLLATE="invalid-locale"
++LC_MONETARY="invalid-locale"
++LC_MESSAGES="invalid-locale"
++LC_PAPER="invalid-locale"
++LC_NAME="invalid-locale"
++LC_ADDRESS="invalid-locale"
++LC_TELEPHONE="invalid-locale"
++LC_MEASUREMENT="invalid-locale"
++LC_IDENTIFICATION="invalid-locale"
++LC_ALL=invalid-locale
++EOF
++
++errors=0
++if ! cmp -s "$testroot/stderr-expected" "$testroot/stderr" ; then
++    echo "error: standard error not correct"
++    errors=1
++fi
++if ! cmp -s "$testroot/stdout-expected" "$testroot/stdout" ; then
++    echo "error: standard output not correct"
++    errors=1
++fi
++exit $errors

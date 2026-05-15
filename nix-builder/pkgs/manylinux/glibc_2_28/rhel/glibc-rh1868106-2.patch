@@ -1,0 +1,51 @@
+Backport the support/ changes from this commit, to avoid future
+conflicts:
+
+commit 446997ff1433d33452b81dfa9e626b8dccf101a4
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Oct 30 17:26:58 2019 +0100
+
+    resolv: Implement trust-ad option for /etc/resolv.conf [BZ #20358]
+    
+    This introduces a concept of trusted name servers, for which the
+    AD bit is passed through to applications.  For untrusted name
+    servers (the default), the AD bit in responses are cleared, to
+    provide a safe default.
+    
+    This approach is very similar to the one suggested by Pavel Šimerda
+    in <https://bugzilla.redhat.com/show_bug.cgi?id=1164339#c15>.
+    
+    The DNS test framework in support/ is enhanced with support for
+    setting the AD bit in responses.
+    
+    Tested on x86_64-linux-gnu.
+    
+    Change-Id: Ibfe0f7c73ea221c35979842c5c3b6ed486495ccc
+
+diff --git a/support/resolv_test.c b/support/resolv_test.c
+index 3f2a09f36f445878..28af227cb5ed901c 100644
+--- a/support/resolv_test.c
++++ b/support/resolv_test.c
+@@ -182,6 +182,8 @@ resolv_response_init (struct resolv_response_builder *b,
+   if (flags.tc)
+     b->buffer[2] |= 0x02;
+   b->buffer[3] = 0x80 | flags.rcode; /* Always set RA.  */
++  if (flags.ad)
++    b->buffer[3] |= 0x20;
+ 
+   /* Fill in the initial section count values.  */
+   b->buffer[4] = flags.qdcount >> 8;
+diff --git a/support/resolv_test.h b/support/resolv_test.h
+index 4c2e6c1b417f5fcd..be736aead40cd0cc 100644
+--- a/support/resolv_test.h
++++ b/support/resolv_test.h
+@@ -134,6 +134,9 @@ struct resolv_response_flags
+   /* If true, the TC (truncation) flag will be set.  */
+   bool tc;
+ 
++  /* If true, the AD (authenticated data) flag will be set.  */
++  bool ad;
++
+   /* Initial section count values.  Can be used to artificially
+      increase the counts, for malformed packet testing.*/
+   unsigned short qdcount;

@@ -1,0 +1,46 @@
+From 354e4c1adddb1da19c1043e3e5db61ee2148d912 Mon Sep 17 00:00:00 2001
+From: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+Date: Wed, 24 Jul 2019 19:49:00 -0300
+Subject: test-container: Install with $(sorted-subdirs) [BZ #24794]
+
+Commit 35e038c1d2ccb3a75395662f9c4f28d85a61444f started to use an
+incomplete list of subdirs based on $(all-subdirs) causing
+testroot.pristine to miss files from nss.
+
+Tested if the list of files in testroot.pristine remains the same.
+
+	[BZ #24794]
+	* Makeconfig (all-subdirs): Improved source comments.
+	* Makefile (testroot.pristine/install.stamp): Pass
+	subdirs='$(sorted-subdirs)' to make install.
+
+diff --git a/Makeconfig b/Makeconfig
+index 0e386fbc19..fd36c58c04 100644
+--- a/Makeconfig
++++ b/Makeconfig
+@@ -1267,9 +1267,9 @@ else
+ libsupport = $(common-objpfx)support/libsupport.a
+ endif
+ 
+-# These are the subdirectories containing the library source.  The order
+-# is more or less arbitrary.  The sorting step will take care of the
+-# dependencies.
++# This is a partial list of subdirectories containing the library source.
++# The order is more or less arbitrary.  The sorting step will take care of the
++# dependencies and generate sorted-subdirs dynamically.
+ all-subdirs = csu assert ctype locale intl catgets math setjmp signal	    \
+ 	      stdlib stdio-common libio malloc string wcsmbs time dirent    \
+ 	      grp pwd posix io termios resource misc socket sysvipc gmon    \
+diff --git a/Makefile b/Makefile
+index 9fbf705200..ac1125853b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -402,7 +402,7 @@ ifeq ($(run-built-tests),yes)
+ 	  done
+ endif
+ 	$(MAKE) install DESTDIR=$(objpfx)testroot.pristine \
+-	  subdirs='$(all-subdirs)'
++	  subdirs='$(sorted-subdirs)'
+ 	touch $(objpfx)testroot.pristine/install.stamp
+ 
+ tests-special-notdir = $(patsubst $(objpfx)%, %, $(tests-special))

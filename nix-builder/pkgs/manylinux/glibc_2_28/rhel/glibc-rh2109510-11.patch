@@ -1,0 +1,409 @@
+commit 198abcbb94618730dae1b3f4393efaa49e0ec8c7
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Apr 11 11:30:31 2022 +0200
+
+    Default to --with-default-link=no (bug 25812)
+
+    This is necessary to place the libio vtables into the RELRO segment.
+    New tests elf/tst-relro-ldso and elf/tst-relro-libc are added to
+    verify that this is what actually happens.
+
+    The new tests fail on ia64 due to lack of (default) RELRO support
+    inbutils, so they are XFAILed there.
+
+Conflicts:
+	elf/Makefile
+	  (missing valgrind smoke test)
+
+diff --git a/INSTALL b/INSTALL
+index b3a4370f592c5047..b69672b283c0b774 100644
+--- a/INSTALL
++++ b/INSTALL
+@@ -90,6 +90,12 @@ if 'CFLAGS' is specified it must enable optimization.  For example:
+      library will still be usable, but functionality may be lost--for
+      example, you can't build a shared libc with old binutils.
+ 
++'--with-default-link=FLAG'
++     With '--with-default-link=yes', the build system does not use a
++     custom linker script for linking shared objects.  The default for
++     FLAG is the opposite, 'no', because the custom linker script is
++     needed for full RELRO protection.
++
+ '--with-nonshared-cflags=CFLAGS'
+      Use additional compiler flags CFLAGS to build the parts of the
+      library which are always statically linked into applications and
+diff --git a/configure b/configure
+index 8b3681d2e28310c8..c794cea4359b3da3 100755
+--- a/configure
++++ b/configure
+@@ -3339,7 +3339,7 @@ fi
+ if test "${with_default_link+set}" = set; then :
+   withval=$with_default_link; use_default_link=$withval
+ else
+-  use_default_link=default
++  use_default_link=no
+ fi
+ 
+ 
+@@ -5965,69 +5965,6 @@ fi
+ $as_echo "$libc_cv_hashstyle" >&6; }
+ 
+ 
+-# The linker's default -shared behavior is good enough if it
+-# does these things that our custom linker scripts ensure that
+-# all allocated NOTE sections come first.
+-if test "$use_default_link" = default; then
+-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for sufficient default -shared layout" >&5
+-$as_echo_n "checking for sufficient default -shared layout... " >&6; }
+-if ${libc_cv_use_default_link+:} false; then :
+-  $as_echo_n "(cached) " >&6
+-else
+-    libc_cv_use_default_link=no
+-  cat > conftest.s <<\EOF
+-	  .section .note.a,"a",%note
+-	  .balign 4
+-	  .long 4,4,9
+-	  .string "GNU"
+-	  .string "foo"
+-	  .section .note.b,"a",%note
+-	  .balign 4
+-	  .long 4,4,9
+-	  .string "GNU"
+-	  .string "bar"
+-EOF
+-  if { ac_try='  ${CC-cc} $ASFLAGS -shared -o conftest.so conftest.s 1>&5'
+-  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+-  (eval $ac_try) 2>&5
+-  ac_status=$?
+-  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+-  test $ac_status = 0; }; } &&
+-       ac_try=`$READELF -S conftest.so | sed -n \
+-	 '${x;p;}
+-	  s/^ *\[ *[1-9][0-9]*\]  *\([^ ][^ ]*\)  *\([^ ][^ ]*\) .*$/\2 \1/
+-	  t a
+-	  b
+-	  : a
+-	  H'`
+-  then
+-    libc_seen_a=no libc_seen_b=no
+-    set -- $ac_try
+-    while test $# -ge 2 -a "$1" = NOTE; do
+-      case "$2" in
+-      .note.a) libc_seen_a=yes ;;
+-      .note.b) libc_seen_b=yes ;;
+-      esac
+-      shift 2
+-    done
+-    case "$libc_seen_a$libc_seen_b" in
+-    yesyes)
+-      libc_cv_use_default_link=yes
+-      ;;
+-    *)
+-      echo >&5 "\
+-$libc_seen_a$libc_seen_b from:
+-$ac_try"
+-      ;;
+-    esac
+-  fi
+-  rm -f conftest*
+-fi
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_use_default_link" >&5
+-$as_echo "$libc_cv_use_default_link" >&6; }
+-  use_default_link=$libc_cv_use_default_link
+-fi
+-
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking for GLOB_DAT reloc" >&5
+ $as_echo_n "checking for GLOB_DAT reloc... " >&6; }
+ if ${libc_cv_has_glob_dat+:} false; then :
+diff --git a/configure.ac b/configure.ac
+index 82d9ab2fb67145bb..52429d82344954b3 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -152,7 +152,7 @@ AC_ARG_WITH([default-link],
+ 	    AC_HELP_STRING([--with-default-link],
+ 			   [do not use explicit linker scripts]),
+ 	    [use_default_link=$withval],
+-	    [use_default_link=default])
++	    [use_default_link=no])
+ 
+ dnl Additional build flags injection.
+ AC_ARG_WITH([nonshared-cflags],
+@@ -1352,59 +1352,6 @@ fi
+ rm -f conftest*])
+ AC_SUBST(libc_cv_hashstyle)
+ 
+-# The linker's default -shared behavior is good enough if it
+-# does these things that our custom linker scripts ensure that
+-# all allocated NOTE sections come first.
+-if test "$use_default_link" = default; then
+-  AC_CACHE_CHECK([for sufficient default -shared layout],
+-		  libc_cv_use_default_link, [dnl
+-  libc_cv_use_default_link=no
+-  cat > conftest.s <<\EOF
+-	  .section .note.a,"a",%note
+-	  .balign 4
+-	  .long 4,4,9
+-	  .string "GNU"
+-	  .string "foo"
+-	  .section .note.b,"a",%note
+-	  .balign 4
+-	  .long 4,4,9
+-	  .string "GNU"
+-	  .string "bar"
+-EOF
+-  if AC_TRY_COMMAND([dnl
+-  ${CC-cc} $ASFLAGS -shared -o conftest.so conftest.s 1>&AS_MESSAGE_LOG_FD]) &&
+-       ac_try=`$READELF -S conftest.so | sed -n \
+-	 ['${x;p;}
+-	  s/^ *\[ *[1-9][0-9]*\]  *\([^ ][^ ]*\)  *\([^ ][^ ]*\) .*$/\2 \1/
+-	  t a
+-	  b
+-	  : a
+-	  H']`
+-  then
+-    libc_seen_a=no libc_seen_b=no
+-    set -- $ac_try
+-    while test $# -ge 2 -a "$1" = NOTE; do
+-      case "$2" in
+-      .note.a) libc_seen_a=yes ;;
+-      .note.b) libc_seen_b=yes ;;
+-      esac
+-      shift 2
+-    done
+-    case "$libc_seen_a$libc_seen_b" in
+-    yesyes)
+-      libc_cv_use_default_link=yes
+-      ;;
+-    *)
+-      echo >&AS_MESSAGE_LOG_FD "\
+-$libc_seen_a$libc_seen_b from:
+-$ac_try"
+-      ;;
+-    esac
+-  fi
+-  rm -f conftest*])
+-  use_default_link=$libc_cv_use_default_link
+-fi
+-
+ AC_CACHE_CHECK(for GLOB_DAT reloc,
+ 	       libc_cv_has_glob_dat, [dnl
+ cat > conftest.c <<EOF
+diff --git a/elf/Makefile b/elf/Makefile
+index 89ce4f5196e5eb39..1fdf40cbd49e233e 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -477,6 +477,40 @@ tests-execstack-yes = \
+   # tests-execstack-yes
+ endif
+ endif
++
++tests-special += $(objpfx)tst-relro-ldso.out $(objpfx)tst-relro-libc.out
++$(objpfx)tst-relro-ldso.out: tst-relro-symbols.py $(..)/scripts/glibcelf.py \
++  $(objpfx)ld.so
++	$(PYTHON) tst-relro-symbols.py $(objpfx)ld.so \
++	  --required=_rtld_global_ro \
++	  > $@ 2>&1; $(evaluate-test)
++# The optional symbols are present in libc only if the architecture has
++# the GLIBC_2.0 symbol set in libc.
++$(objpfx)tst-relro-libc.out: tst-relro-symbols.py $(..)/scripts/glibcelf.py \
++  $(common-objpfx)libc.so
++	$(PYTHON) tst-relro-symbols.py $(common-objpfx)libc.so \
++	    --required=_IO_cookie_jumps \
++	    --required=_IO_file_jumps \
++	    --required=_IO_file_jumps_maybe_mmap \
++	    --required=_IO_file_jumps_mmap \
++	    --required=_IO_helper_jumps \
++	    --required=_IO_mem_jumps \
++	    --required=_IO_obstack_jumps \
++	    --required=_IO_proc_jumps \
++	    --required=_IO_str_chk_jumps \
++	    --required=_IO_str_jumps \
++	    --required=_IO_strn_jumps \
++	    --required=_IO_wfile_jumps \
++	    --required=_IO_wfile_jumps_maybe_mmap \
++	    --required=_IO_wfile_jumps_mmap \
++	    --required=_IO_wmem_jumps \
++	    --required=_IO_wstr_jumps \
++	    --required=_IO_wstrn_jumps \
++	    --optional=_IO_old_cookie_jumps \
++	    --optional=_IO_old_file_jumps \
++	    --optional=_IO_old_proc_jumps \
++	  > $@ 2>&1; $(evaluate-test)
++
+ tests += $(tests-execstack-$(have-z-execstack))
+ ifeq ($(run-built-tests),yes)
+ tests-special += \
+diff --git a/elf/tst-relro-symbols.py b/elf/tst-relro-symbols.py
+new file mode 100644
+index 0000000000000000..368ea3349f86bd81
+--- /dev/null
++++ b/elf/tst-relro-symbols.py
+@@ -0,0 +1,137 @@
++#!/usr/bin/python3
++# Verify that certain symbols are covered by RELRO.
++# Copyright (C) 2022 Free Software Foundation, Inc.
++# This file is part of the GNU C Library.
++#
++# The GNU C Library is free software; you can redistribute it and/or
++# modify it under the terms of the GNU Lesser General Public
++# License as published by the Free Software Foundation; either
++# version 2.1 of the License, or (at your option) any later version.
++#
++# The GNU C Library is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++# Lesser General Public License for more details.
++#
++# You should have received a copy of the GNU Lesser General Public
++# License along with the GNU C Library; if not, see
++# <https://www.gnu.org/licenses/>.
++
++"""Analyze a (shared) object to verify that certain symbols are
++present and covered by the PT_GNU_RELRO segment.
++
++"""
++
++import argparse
++import os.path
++import sys
++
++# Make available glibc Python modules.
++sys.path.append(os.path.join(
++    os.path.dirname(os.path.realpath(__file__)), os.path.pardir, 'scripts'))
++
++import glibcelf
++
++def find_relro(path: str, img: glibcelf.Image) -> (int, int):
++    """Discover the address range of the PT_GNU_RELRO segment."""
++    for phdr in img.phdrs():
++        if phdr.p_type == glibcelf.Pt.PT_GNU_RELRO:
++            # The computation is not entirely accurate because
++            # _dl_protect_relro in elf/dl-reloc.c rounds both the
++            # start end and downwards using the run-time page size.
++            return phdr.p_vaddr, phdr.p_vaddr + phdr.p_memsz
++    sys.stdout.write('{}: error: no PT_GNU_RELRO segment\n'.format(path))
++    sys.exit(1)
++
++def check_in_relro(kind, relro_begin, relro_end, name, start, size, error):
++    """Check if a section or symbol falls within in the RELRO segment."""
++    end = start + size - 1
++    if not (relro_begin <= start < end < relro_end):
++        error(
++            '{} {!r} of size {} at 0x{:x} is not in RELRO range [0x{:x}, 0x{:x})'.format(
++                kind, name.decode('UTF-8'), start, size,
++                relro_begin, relro_end))
++
++def get_parser():
++    """Return an argument parser for this script."""
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('object', help='path to object file to check')
++    parser.add_argument('--required', metavar='NAME', default=(),
++                        help='required symbol names', nargs='*')
++    parser.add_argument('--optional', metavar='NAME', default=(),
++                        help='required symbol names', nargs='*')
++    return parser
++
++def main(argv):
++    """The main entry point."""
++    parser = get_parser()
++    opts = parser.parse_args(argv)
++    img = glibcelf.Image.readfile(opts.object)
++
++    required_symbols = frozenset([sym.encode('UTF-8')
++                                  for sym in opts.required])
++    optional_symbols = frozenset([sym.encode('UTF-8')
++                                  for sym in opts.optional])
++    check_symbols = required_symbols | optional_symbols
++
++    # Tracks the symbols in check_symbols that have been found.
++    symbols_found = set()
++
++    # Discover the extent of the RELRO segment.
++    relro_begin, relro_end = find_relro(opts.object, img)
++    symbol_table_found = False
++
++    errors = False
++    def error(msg: str) -> None:
++        """Record an error condition and write a message to standard output."""
++        nonlocal errors
++        errors = True
++        sys.stdout.write('{}: error: {}\n'.format(opts.object, msg))
++
++    # Iterate over section headers to find the symbol table.
++    for shdr in img.shdrs():
++        if shdr.sh_type == glibcelf.Sht.SHT_SYMTAB:
++            symbol_table_found = True
++            for sym in img.syms(shdr):
++                if sym.st_name in check_symbols:
++                    symbols_found.add(sym.st_name)
++
++                    # Validate symbol type, section, and size.
++                    if sym.st_info.type != glibcelf.Stt.STT_OBJECT:
++                        error('symbol {!r} has wrong type {}'.format(
++                            sym.st_name.decode('UTF-8'), sym.st_info.type))
++                    if sym.st_shndx in glibcelf.Shn:
++                        error('symbol {!r} has reserved section {}'.format(
++                            sym.st_name.decode('UTF-8'), sym.st_shndx))
++                        continue
++                    if sym.st_size == 0:
++                        error('symbol {!r} has size zero'.format(
++                            sym.st_name.decode('UTF-8')))
++                        continue
++
++                    check_in_relro('symbol', relro_begin, relro_end,
++                                   sym.st_name, sym.st_value, sym.st_size,
++                                   error)
++            continue # SHT_SYMTAB
++        if shdr.sh_name == b'.data.rel.ro' \
++           or shdr.sh_name.startswith(b'.data.rel.ro.'):
++            check_in_relro('section', relro_begin, relro_end,
++                           shdr.sh_name, shdr.sh_addr, shdr.sh_size,
++                           error)
++            continue
++
++    if required_symbols - symbols_found:
++        for sym in sorted(required_symbols - symbols_found):
++            error('symbol {!r} not found'.format(sym.decode('UTF-8')))
++
++    if errors:
++        sys.exit(1)
++
++    if not symbol_table_found:
++        sys.stdout.write(
++            '{}: warning: no symbol table found (stripped object)\n'.format(
++                opts.object))
++        sys.exit(77)
++
++if __name__ == '__main__':
++    main(sys.argv[1:])
+diff --git a/manual/install.texi b/manual/install.texi
+index c262fd56d0cef67b..a2c43bd692de7825 100644
+--- a/manual/install.texi
++++ b/manual/install.texi
+@@ -117,6 +117,12 @@ problem and suppress these constructs, so that the library will still be
+ usable, but functionality may be lost---for example, you can't build a
+ shared libc with old binutils.
+ 
++@item --with-default-link=@var{FLAG}
++With @code{--with-default-link=yes}, the build system does not use a
++custom linker script for linking shared objects.  The default for
++@var{FLAG} is the opposite, @samp{no}, because the custom linker script
++is needed for full RELRO protection.
++
+ @item --with-nonshared-cflags=@var{cflags}
+ Use additional compiler flags @var{cflags} to build the parts of the
+ library which are always statically linked into applications and
+diff --git a/sysdeps/unix/sysv/linux/ia64/Makefile b/sysdeps/unix/sysv/linux/ia64/Makefile
+index 97fc7df0b122d6a0..b1ad1ab7b1efa34c 100644
+--- a/sysdeps/unix/sysv/linux/ia64/Makefile
++++ b/sysdeps/unix/sysv/linux/ia64/Makefile
+@@ -1,3 +1,9 @@
++ifeq ($(subdir),elf)
++# ia64 does not support PT_GNU_RELRO.
++test-xfail-tst-relro-ldso = yes
++test-xfail-tst-relro-libc = yes
++endif
++
+ ifeq ($(subdir),misc)
+ sysdep_headers += sys/rse.h
+ endif

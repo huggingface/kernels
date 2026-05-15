@@ -1,0 +1,159 @@
+commit 28aff047818eb1726394296d27b9c7885340bead
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu May 14 17:44:15 2020 -0300
+
+    string: Implement strerror in terms of strerror_l
+    
+    If the thread is terminated then __libc_thread_freeres will free the
+    storage via __glibc_tls_internal_free.
+    
+    It is only within the calling thread that this matters.  It makes
+    strerror MT-safe.
+    
+    Checked on x86-64-linux-gnu, i686-linux-gnu, powerpc64le-linux-gnu,
+    and s390x-linux-gnu.
+    
+    Tested-by: Carlos O'Donell <carlos@redhat.com>
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	string/strerror_l.c
+	  (Adjust for missing __get_errlist in RHEL-8)
+
+diff --git a/include/string.h b/include/string.h
+index bbc97082661caf42..875c855ea9c277dd 100644
+--- a/include/string.h
++++ b/include/string.h
+@@ -4,6 +4,7 @@
+ /* Some of these are defined as macros in the real string.h, so we must
+    prototype them before including it.  */
+ #include <sys/types.h>
++#include <locale.h>
+ 
+ extern void *__memccpy (void *__dest, const void *__src,
+ 			int __c, size_t __n);
+@@ -50,6 +51,8 @@ extern int __ffs (int __i) __attribute__ ((const));
+ 
+ extern char *__strerror_r (int __errnum, char *__buf, size_t __buflen);
+ 
++extern char *__strerror_l (int __errnum, locale_t __loc);
++
+ /* Called as part of the thread shutdown sequence.  */
+ void __strerror_thread_freeres (void) attribute_hidden;
+ 
+@@ -113,6 +116,7 @@ libc_hidden_proto (memmem)
+ extern __typeof (memmem) __memmem;
+ libc_hidden_proto (__memmem)
+ libc_hidden_proto (__ffs)
++libc_hidden_proto (__strerror_l)
+ 
+ #if IS_IN (libc)
+ /* Avoid hidden reference to IFUNC symbol __explicit_bzero_chk.  */
+diff --git a/string/strerror.c b/string/strerror.c
+index 34f3db727b7eeefe..567be8b0018f76f9 100644
+--- a/string/strerror.c
++++ b/string/strerror.c
+@@ -15,29 +15,11 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <libintl.h>
+-#include <stdio.h>
+ #include <string.h>
+-#include <errno.h>
+-
+-/* Return a string describing the errno code in ERRNUM.
+-   The storage is good only until the next call to strerror.
+-   Writing to the storage causes undefined behavior.  */
+-libc_freeres_ptr (static char *buf);
++#include <locale/localeinfo.h>
+ 
+ char *
+ strerror (int errnum)
+ {
+-  char *ret = __strerror_r (errnum, NULL, 0);
+-  int saved_errno;
+-
+-  if (__glibc_likely (ret != NULL))
+-    return ret;
+-  saved_errno = errno;
+-  if (buf == NULL)
+-    buf = malloc (1024);
+-  __set_errno (saved_errno);
+-  if (buf == NULL)
+-    return _("Unknown error");
+-  return __strerror_r (errnum, buf, 1024);
++  return __strerror_l (errnum, __libc_tsd_get (locale_t, LOCALE));
+ }
+diff --git a/string/strerror_l.c b/string/strerror_l.c
+index 2a62b1f12c343980..61329e8f2d4795d1 100644
+--- a/string/strerror_l.c
++++ b/string/strerror_l.c
+@@ -20,8 +20,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <sys/param.h>
+-#include <libc-symbols.h>
++#include <errno.h>
+ 
+ static __thread char *last_value;
+ 
+@@ -38,23 +37,28 @@ translate (const char *str, locale_t loc)
+ 
+ /* Return a string describing the errno code in ERRNUM.  */
+ char *
+-strerror_l (int errnum, locale_t loc)
++__strerror_l (int errnum, locale_t loc)
+ {
+-
+-
+-  if (__builtin_expect (errnum < 0 || errnum >= _sys_nerr_internal
+-			|| _sys_errlist_internal[errnum] == NULL, 0))
++  int saved_errno = errno;
++  char *err;
++  if (__glibc_unlikely (errnum < 0 || errnum >= _sys_nerr_internal
++			|| _sys_errlist_internal[errnum] == NULL))
+     {
+       free (last_value);
+       if (__asprintf (&last_value, "%s%d",
+ 		      translate ("Unknown error ", loc), errnum) == -1)
+ 	last_value = NULL;
+ 
+-      return last_value;
++      err = last_value;
+     }
++  else
++    err = (char *) translate (_sys_errlist_internal[errnum], loc);
+ 
+-  return (char *) translate (_sys_errlist_internal[errnum], loc);
++  __set_errno (saved_errno);
++  return err;
+ }
++weak_alias (__strerror_l, strerror_l)
++libc_hidden_def (__strerror_l)
+ 
+ void
+ __strerror_thread_freeres (void)
+diff --git a/sysdeps/mach/strerror_l.c b/sysdeps/mach/strerror_l.c
+index 7111124439080d47..8509e6bf4beb713e 100644
+--- a/sysdeps/mach/strerror_l.c
++++ b/sysdeps/mach/strerror_l.c
+@@ -42,7 +42,7 @@ translate (const char *str, locale_t loc)
+ 
+ /* Return a string describing the errno code in ERRNUM.  */
+ char *
+-strerror_l (int errnum, locale_t loc)
++__strerror_l (int errnum, locale_t loc)
+ {
+   int system;
+   int sub;
+@@ -86,6 +86,8 @@ strerror_l (int errnum, locale_t loc)
+ 
+   return (char *) translate (es->subsystem[sub].codes[code], loc);
+ }
++weak_alias (__strerror_l, strerror_l)
++libc_hidden_def (__strerror_l)
+ 
+ /* This is called when a thread is exiting to free the last_value string.  */
+ void

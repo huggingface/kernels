@@ -1,0 +1,31 @@
+commit 87801a8fd06db1d654eea3e4f7626ff476a9bdaa
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Apr 25 15:00:45 2024 +0200
+
+    CVE-2024-33599: nscd: Stack-based buffer overflow in netgroup cache (bug 31677)
+    
+    Using alloca matches what other caches do.  The request length is
+    bounded by MAXKEYLEN.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/nscd/netgroupcache.c b/nscd/netgroupcache.c
+index 5ee4413ef9384ec9..60c8225639a33b6b 100644
+--- a/nscd/netgroupcache.c
++++ b/nscd/netgroupcache.c
+@@ -503,12 +503,13 @@ addinnetgrX (struct database_dyn *db, int fd, request_header *req,
+       = (struct indataset *) mempool_alloc (db,
+ 					    sizeof (*dataset) + req->key_len,
+ 					    1);
+-  struct indataset dataset_mem;
+   bool cacheable = true;
+   if (__glibc_unlikely (dataset == NULL))
+     {
+       cacheable = false;
+-      dataset = &dataset_mem;
++      /* The alloca is safe because nscd_run_worker verfies that
++	 key_len is not larger than MAXKEYLEN.  */
++      dataset = alloca (sizeof (*dataset) + req->key_len);
+     }
+ 
+   datahead_init_pos (&dataset->head, sizeof (*dataset) + req->key_len,

@@ -1,0 +1,298 @@
+commit 254d3d5aef2fd8430c469e1938209ac100ebf132
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Jan 24 10:46:16 2022 -0300
+
+    elf: Fix initial-exec TLS access on audit modules (BZ #28096)
+    
+    For audit modules and dependencies with initial-exec TLS, we can not
+    set the initial TLS image on default loader initialization because it
+    would already be set by the audit setup.  However, subsequent thread
+    creation would need to follow the default behaviour.
+    
+    This patch fixes it by setting l_auditing link_map field not only
+    for the audit modules, but also for all its dependencies.  This is
+    used on _dl_allocate_tls_init to avoid the static TLS initialization
+    at load time.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Tested-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index e4955c9f575f9015..3f5f72257a5fbea4 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -344,6 +344,7 @@ tests += \
+   tst-audit19b \
+   tst-audit2 \
+   tst-audit20 \
++  tst-audit21 \
+   tst-audit22 \
+   tst-audit23 \
+   tst-audit8 \
+@@ -631,6 +632,8 @@ modules-names = \
+   tst-auditmod19a \
+   tst-auditmod19b \
+   tst-auditmod20 \
++  tst-auditmod21a \
++  tst-auditmod21b \
+   tst-auditmod22 \
+   tst-auditmod23 \
+   tst-big-note-lib \
+@@ -2041,6 +2044,11 @@ $(objpfx)tst-audit20.out: $(objpfx)tst-auditmod20.so
+ tst-audit20-ENV = LD_AUDIT=$(objpfx)tst-auditmod20.so
+ $(objpfx)tst-auditmod20.so: $(libdl)
+ 
++$(objpfx)tst-audit21: $(shared-thread-library)
++$(objpfx)tst-audit21.out: $(objpfx)tst-auditmod21a.so
++$(objpfx)tst-auditmod21a.so: $(objpfx)tst-auditmod21b.so
++tst-audit21-ENV = LD_AUDIT=$(objpfx)tst-auditmod21a.so
++
+ $(objpfx)tst-audit22.out: $(objpfx)tst-auditmod22.so
+ tst-audit22-ARGS = -- $(host-test-program-cmd)
+ 
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index 7865fc390c3f3f0a..a918e9a6f585eb72 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -514,8 +514,12 @@ _dl_resize_dtv (dtv_t *dtv, size_t max_modid)
+ }
+ 
+ 
++/* Allocate initial TLS.  RESULT should be a non-NULL pointer to storage
++   for the TLS space.  The DTV may be resized, and so this function may
++   call malloc to allocate that space.  The loader's GL(dl_load_tls_lock)
++   is taken when manipulating global TLS-related data in the loader.  */
+ void *
+-_dl_allocate_tls_init (void *result)
++_dl_allocate_tls_init (void *result, bool init_tls)
+ {
+   if (result == NULL)
+     /* The memory allocation failed.  */
+@@ -588,7 +592,14 @@ _dl_allocate_tls_init (void *result)
+ 	     some platforms use in static programs requires it.  */
+ 	  dtv[map->l_tls_modid].pointer.val = dest;
+ 
+-	  /* Copy the initialization image and clear the BSS part.  */
++	  /* Copy the initialization image and clear the BSS part.  For
++	     audit modules or dependencies with initial-exec TLS, we can not
++	     set the initial TLS image on default loader initialization
++	     because it would already be set by the audit setup.  However,
++	     subsequent thread creation would need to follow the default
++	     behaviour.   */
++	  if (map->l_ns != LM_ID_BASE && !init_tls)
++	    continue;
+ 	  memset (__mempcpy (dest, map->l_tls_initimage,
+ 			     map->l_tls_initimage_size), '\0',
+ 		  map->l_tls_blocksize - map->l_tls_initimage_size);
+@@ -615,7 +626,7 @@ _dl_allocate_tls (void *mem)
+ {
+   return _dl_allocate_tls_init (mem == NULL
+ 				? _dl_allocate_tls_storage ()
+-				: allocate_dtv (mem));
++				: allocate_dtv (mem), true);
+ }
+ rtld_hidden_def (_dl_allocate_tls)
+ 
+diff --git a/elf/rtld.c b/elf/rtld.c
+index efcbeac6c24c4b7b..caa980dbda3d1a72 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2421,7 +2421,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+      into the main thread's TLS area, which we allocated above.
+      Note: thread-local variables must only be accessed after completing
+      the next step.  */
+-  _dl_allocate_tls_init (tcbp);
++  _dl_allocate_tls_init (tcbp, false);
+ 
+   /* And finally install it for the main thread.  */
+   if (! tls_init_tp_called)
+diff --git a/elf/tst-audit21.c b/elf/tst-audit21.c
+new file mode 100644
+index 0000000000000000..3a47ab64d44421ee
+--- /dev/null
++++ b/elf/tst-audit21.c
+@@ -0,0 +1,42 @@
++/* Check LD_AUDIT with static TLS.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <ctype.h>
++#include <support/xthread.h>
++#include <support/check.h>
++
++static volatile __thread int out __attribute__ ((tls_model ("initial-exec")));
++
++static void *
++tf (void *arg)
++{
++  TEST_COMPARE (out, 0);
++  out = isspace (' ');
++  return NULL;
++}
++
++int main (int argc, char *argv[])
++{
++  TEST_COMPARE (out, 0);
++  out = isspace (' ');
++
++  pthread_t t = xpthread_create (NULL, tf, NULL);
++  xpthread_join (t);
++
++  return 0;
++}
+diff --git a/elf/tst-auditmod21a.c b/elf/tst-auditmod21a.c
+new file mode 100644
+index 0000000000000000..f6d51b5c0531c49d
+--- /dev/null
++++ b/elf/tst-auditmod21a.c
+@@ -0,0 +1,80 @@
++/* Check LD_AUDIT with static TLS.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <ctype.h>
++#include <stdlib.h>
++#include <link.h>
++
++#define tls_ie __attribute__ ((tls_model ("initial-exec")))
++
++__thread int tls_var0 tls_ie;
++__thread int tls_var1 tls_ie = 0x10;
++
++/* Defined at tst-auditmod21b.so  */
++extern __thread int tls_var2;
++extern __thread int tls_var3;
++
++static volatile int out;
++
++static void
++call_libc (void)
++{
++  /* isspace accesses the initial-exec glibc TLS variables, which are
++     setup in glibc initialization.  */
++  out = isspace (' ');
++}
++
++unsigned int
++la_version (unsigned int v)
++{
++  tls_var0 = 0x1;
++  if (tls_var1 != 0x10)
++    abort ();
++  tls_var1 = 0x20;
++
++  tls_var2 = 0x2;
++  if (tls_var3 != 0x20)
++    abort ();
++  tls_var3 = 0x40;
++
++  call_libc ();
++
++  return LAV_CURRENT;
++}
++
++unsigned int
++la_objopen (struct link_map* map, Lmid_t lmid, uintptr_t* cookie)
++{
++  call_libc ();
++  *cookie = (uintptr_t) map;
++  return 0;
++}
++
++void
++la_activity (uintptr_t* cookie, unsigned int flag)
++{
++  if (tls_var0 != 0x1 || tls_var1 != 0x20)
++    abort ();
++  call_libc ();
++}
++
++void
++la_preinit (uintptr_t* cookie)
++{
++  call_libc ();
++}
+diff --git a/elf/tst-auditmod21b.c b/elf/tst-auditmod21b.c
+new file mode 100644
+index 0000000000000000..6ba5335b7514c674
+--- /dev/null
++++ b/elf/tst-auditmod21b.c
+@@ -0,0 +1,22 @@
++/* Check LD_AUDIT with static TLS.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#define tls_ie __attribute__ ((tls_model ("initial-exec")))
++
++__thread int tls_var2 tls_ie;
++__thread int tls_var3 tls_ie = 0x20;
+diff --git a/nptl/allocatestack.c b/nptl/allocatestack.c
+index 5fa45b19987717e1..58170d9da2bf0fa6 100644
+--- a/nptl/allocatestack.c
++++ b/nptl/allocatestack.c
+@@ -244,7 +244,7 @@ get_cached_stack (size_t *sizep, void **memp)
+   memset (dtv, '\0', (dtv[-1].counter + 1) * sizeof (dtv_t));
+ 
+   /* Re-initialize the TLS.  */
+-  _dl_allocate_tls_init (TLS_TPADJ (result));
++  _dl_allocate_tls_init (TLS_TPADJ (result), true);
+ 
+   return result;
+ }
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 29b77b35175c1116..73f4863fd43922b9 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1182,7 +1182,7 @@ extern void _dl_allocate_static_tls (struct link_map *map) attribute_hidden;
+ /* These are internal entry points to the two halves of _dl_allocate_tls,
+    only used within rtld.c itself at startup time.  */
+ extern void *_dl_allocate_tls_storage (void) attribute_hidden;
+-extern void *_dl_allocate_tls_init (void *);
++extern void *_dl_allocate_tls_init (void *, bool);
+ rtld_hidden_proto (_dl_allocate_tls_init)
+ 
+ /* Deallocate memory allocated with _dl_allocate_tls.  */

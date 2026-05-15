@@ -1,0 +1,71 @@
+commit 11b451c8868d8a2b0edc5dfd44fc58d9ee538be0
+Author: Mark Wielaard <mark@klomp.org>
+Date:   Wed May 15 17:14:01 2019 +0200
+
+    dlfcn: Guard __dlerror_main_freeres with __libc_once_get (once) [BZ# 24476]
+    
+    dlerror.c (__dlerror_main_freeres) will try to free resources which only
+    have been initialized when init () has been called. That function is
+    called when resources are needed using __libc_once (once, init) where
+    once is a __libc_once_define (static, once) in the dlerror.c file.
+    Trying to free those resources if init () hasn't been called will
+    produce errors under valgrind memcheck. So guard the freeing of those
+    resources using __libc_once_get (once) and make sure we have a valid
+    key. Also add a similar guard to __dlerror ().
+    
+            * dlfcn/dlerror.c (__dlerror_main_freeres): Guard using
+            __libc_once_get (once) and static_bug == NULL.
+            (__dlerror): Check we have a valid key, set result to static_buf
+            otherwise.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/dlfcn/dlerror.c b/dlfcn/dlerror.c
+index 96bf92533335036b..06732460ea1512cd 100644
+--- a/dlfcn/dlerror.c
++++ b/dlfcn/dlerror.c
+@@ -72,9 +72,16 @@ __dlerror (void)
+   __libc_once (once, init);
+ 
+   /* Get error string.  */
+-  result = (struct dl_action_result *) __libc_getspecific (key);
+-  if (result == NULL)
+-    result = &last_result;
++  if (static_buf != NULL)
++    result = static_buf;
++  else
++    {
++      /* init () has been run and we don't use the static buffer.
++	 So we have a valid key.  */
++      result = (struct dl_action_result *) __libc_getspecific (key);
++      if (result == NULL)
++	result = &last_result;
++    }
+ 
+   /* Test whether we already returned the string.  */
+   if (result->returned != 0)
+@@ -230,13 +237,19 @@ free_key_mem (void *mem)
+ void
+ __dlerror_main_freeres (void)
+ {
+-  void *mem;
+   /* Free the global memory if used.  */
+   check_free (&last_result);
+-  /* Free the TSD memory if used.  */
+-  mem = __libc_getspecific (key);
+-  if (mem != NULL)
+-    free_key_mem (mem);
++
++  if (__libc_once_get (once) && static_buf == NULL)
++    {
++      /* init () has been run and we don't use the static buffer.
++	 So we have a valid key.  */
++      void *mem;
++      /* Free the TSD memory if used.  */
++      mem = __libc_getspecific (key);
++      if (mem != NULL)
++	free_key_mem (mem);
++    }
+ }
+ 
+ struct dlfcn_hook *_dlfcn_hook __attribute__((nocommon));

@@ -1,0 +1,33 @@
+commit 825b58f3fb04781e559858510fe83a8c4bf28425
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Feb 1 05:44:55 2020 -0800
+
+    i386-mcount.S: Add _CET_ENDBR to _mcount and __fentry__
+    
+    Since _mcount and __fentry__ don't use ENTRY, we need to add _CET_ENDBR
+    by hand.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+---
+
+diff --git a/sysdeps/i386/i386-mcount.S b/sysdeps/i386/i386-mcount.S
+index 3db2fcd..8c8eeb8 100644
+--- a/sysdeps/i386/i386-mcount.S
++++ b/sysdeps/i386/i386-mcount.S
+@@ -30,6 +30,7 @@
+ 	.type C_SYMBOL_NAME(_mcount), @function
+ 	.align ALIGNARG(4)
+ C_LABEL(_mcount)
++	_CET_ENDBR
+ 	/* Save the caller-clobbered registers.  */
+ 	pushl %eax
+ 	pushl %ecx
+@@ -58,6 +59,7 @@ weak_alias (_mcount, mcount)
+ 	.type C_SYMBOL_NAME(__fentry__), @function
+ 	.align ALIGNARG(4)
+ C_LABEL(__fentry__)
++	_CET_ENDBR
+ 	/* Save the caller-clobbered registers.  */
+ 	pushl %eax
+ 	pushl %ecx
+

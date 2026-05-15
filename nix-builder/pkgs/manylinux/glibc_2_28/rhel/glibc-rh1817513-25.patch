@@ -1,0 +1,113 @@
+commit b2af6fb2ed23930c148bae382ca85fad4d1cf32e
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Apr 30 16:11:57 2019 -0300
+
+    elf: Fix elf/tst-pldd with --enable-hardcoded-path-in-tests (BZ#24506)
+    
+    The elf/tst-pldd (added by 1a4c27355e146 to fix BZ#18035) test does
+    not expect the hardcoded paths that are output by pldd when the test
+    is built with --enable-hardcoded-path-in-tests.  Instead of showing
+    the ABI installed library names for loader and libc (such as
+    ld-linux-x86-64.so.2 and libc.so.6 for x86_64), pldd shows the default
+    built ld.so and libc.so.
+    
+    It makes the tests fail with an invalid expected loader/libc name.
+    
+    This patch fixes the elf-pldd test by adding the canonical ld.so and
+    libc.so names in the expected list of possible outputs when parsing
+    the result output from pldd.  The test now handles both default
+    build and --enable-hardcoded-path-in-tests option.
+    
+    Checked on x86_64-linux-gnu (built with and without
+    --enable-hardcoded-path-in-tests) and i686-linux-gnu.
+    
+            * elf/tst-pldd.c (in_str_list): New function.
+            (do_test): Add default names for ld and libc as one option.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/tst-pldd.c
+	  (Original backport uses spaces instead of tabs.)
+
+diff --git a/elf/tst-pldd.c b/elf/tst-pldd.c
+index 0f51c95935ffb2cf..40abee9efb9e7484 100644
+--- a/elf/tst-pldd.c
++++ b/elf/tst-pldd.c
+@@ -20,7 +20,6 @@
+ #include <string.h>
+ #include <unistd.h>
+ #include <stdint.h>
+-#include <libgen.h>
+ #include <stdbool.h>
+ 
+ #include <array_length.h>
+@@ -39,6 +38,15 @@ target_process (void *arg)
+ /* The test runs in a container because pldd does not support tracing
+    a binary started by the loader iself (as with testrun.sh).  */
+ 
++static bool
++in_str_list (const char *libname, const char *const strlist[])
++{
++  for (const char *const *str = strlist; *str != NULL; str++)
++    if (strcmp (libname, *str) == 0)
++      return true;
++  return false;
++}
++
+ static int
+ do_test (void)
+ {
+@@ -82,26 +90,32 @@ do_test (void)
+       {
+        /* Ignore vDSO.  */
+         if (buffer[0] != '/')
+-         continue;
+-
+-       /* Remove newline so baseline (buffer) can compare against the
+-          LD_SO and LIBC_SO macros unmodified.  */
+-       if (buffer[strlen(buffer)-1] == '\n')
+-         buffer[strlen(buffer)-1] = '\0';
+-
+-       if (strcmp (basename (buffer), LD_SO) == 0)
+-         {
+-           TEST_COMPARE (interpreter_found, false);
+-           interpreter_found = true;
+-           continue;
+-         }
+-
+-       if (strcmp (basename (buffer), LIBC_SO) == 0)
+-         {
+-           TEST_COMPARE (libc_found, false);
+-           libc_found = true;
+-           continue;
+-         }
++	  continue;
++
++	/* Remove newline so baseline (buffer) can compare against the
++	   LD_SO and LIBC_SO macros unmodified.  */
++	if (buffer[strlen(buffer)-1] == '\n')
++	  buffer[strlen(buffer)-1] = '\0';
++
++	const char *libname = basename (buffer);
++
++	/* It checks for default names in case of build configure with
++	   --enable-hardcoded-path-in-tests (BZ #24506).  */
++	if (in_str_list (libname,
++			 (const char *const []) { "ld.so", LD_SO, NULL }))
++	  {
++	    TEST_COMPARE (interpreter_found, false);
++	    interpreter_found = true;
++	    continue;
++	  }
++
++	if (in_str_list (libname,
++			 (const char *const []) { "libc.so", LIBC_SO, NULL }))
++	  {
++	    TEST_COMPARE (libc_found, false);
++	    libc_found = true;
++	    continue;
++	  }
+       }
+     TEST_COMPARE (interpreter_found, true);
+     TEST_COMPARE (libc_found, true);

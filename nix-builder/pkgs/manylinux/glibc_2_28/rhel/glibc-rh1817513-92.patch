@@ -1,0 +1,113 @@
+commit 27316f4a23efdc90bdfe4569a6c4b7e27941606e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 8 10:57:10 2020 +0200
+
+    elf: Record whether paths come from LD_LIBRARY_PATH or --library-path
+    
+    This allows more precise LD_DEBUG diagnostics.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 2b4dd9a0f3e27b70..1403a2e9c04e9a16 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -682,7 +682,7 @@ cache_rpath (struct link_map *l,
+ 
+ 
+ void
+-_dl_init_paths (const char *llp)
++_dl_init_paths (const char *llp, const char *source)
+ {
+   size_t idx;
+   const char *strp;
+@@ -820,7 +820,7 @@ _dl_init_paths (const char *llp)
+ 	}
+ 
+       (void) fillin_rpath (llp_tmp, env_path_list.dirs, ":;",
+-			   "LD_LIBRARY_PATH", NULL, l);
++			   source, NULL, l);
+ 
+       if (env_path_list.dirs[0] == NULL)
+ 	{
+diff --git a/elf/dl-main.h b/elf/dl-main.h
+index b01f433f9c8d9e1a..79c9c40056504f80 100644
+--- a/elf/dl-main.h
++++ b/elf/dl-main.h
+@@ -74,6 +74,9 @@ struct dl_main_state
+   /* The library search path.  */
+   const char *library_path;
+ 
++  /* Where library_path comes from.  LD_LIBRARY_PATH or --library-path.  */
++  const char *library_path_source;
++
+   /* The list preloaded objects from LD_PRELOAD.  */
+   const char *preloadlist;
+ 
+@@ -94,7 +97,7 @@ struct dl_main_state
+ static inline void
+ call_init_paths (const struct dl_main_state *state)
+ {
+-  _dl_init_paths (state->library_path);
++  _dl_init_paths (state->library_path, state->library_path_source);
+ }
+ 
+ /* Print ld.so usage information and exit.  */
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index ef5455b91c17ca30..fb9672367f8d6abd 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -315,7 +315,7 @@ _dl_non_dynamic_init (void)
+ 
+   /* Initialize the data structures for the search paths for shared
+      objects.  */
+-  _dl_init_paths (getenv ("LD_LIBRARY_PATH"));
++  _dl_init_paths (getenv ("LD_LIBRARY_PATH"), "LD_LIBRARY_PATH");
+ 
+   /* Remember the last search directory added at startup.  */
+   _dl_init_all_dirs = GL(dl_all_dirs);
+diff --git a/elf/rtld.c b/elf/rtld.c
+index a12a56b550bbc837..8e91cee41b62b894 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -284,6 +284,7 @@ dl_main_state_init (struct dl_main_state *state)
+ {
+   audit_list_init (&state->audit_list);
+   state->library_path = NULL;
++  state->library_path_source = NULL;
+   state->preloadlist = NULL;
+   state->preloadarg = NULL;
+   state->mode = rtld_mode_normal;
+@@ -1197,6 +1198,7 @@ dl_main (const ElfW(Phdr) *phdr,
+ 		 && _dl_argc > 2)
+ 	  {
+ 	    state.library_path = _dl_argv[2];
++	    state.library_path_source = "--library-path";
+ 
+ 	    _dl_skip_args += 2;
+ 	    _dl_argc -= 2;
+@@ -2640,6 +2642,7 @@ process_envvars (struct dl_main_state *state)
+ 	      && memcmp (envline, "LIBRARY_PATH", 12) == 0)
+ 	    {
+ 	      state->library_path = &envline[13];
++	      state->library_path_source = "LD_LIBRARY_PATH";
+ 	      break;
+ 	    }
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 4aa28b0229e0b339..aa006afafaf46dee 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1044,8 +1044,10 @@ rtld_hidden_proto (_dl_debug_state)
+ extern struct r_debug *_dl_debug_initialize (ElfW(Addr) ldbase, Lmid_t ns)
+      attribute_hidden;
+ 
+-/* Initialize the basic data structure for the search paths.  */
+-extern void _dl_init_paths (const char *library_path) attribute_hidden;
++/* Initialize the basic data structure for the search paths.  SOURCE
++   is either "LD_LIBRARY_PATH" or "--library-path".  */
++extern void _dl_init_paths (const char *library_path, const char *source)
++  attribute_hidden;
+ 
+ /* Gather the information needed to install the profiling tables and start
+    the timers.  */

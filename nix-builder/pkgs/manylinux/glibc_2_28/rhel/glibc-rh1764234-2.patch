@@ -1,0 +1,43 @@
+commit 477e739b324349df854209117047779ac3142130
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Mar 15 18:18:40 2019 +0000
+
+    Update syscall-names.list for Linux 5.0.
+    
+    This patch updates sysdeps/unix/sysv/linux/syscall-names.list for
+    Linux 5.0.  Based on testing with build-many-glibcs.py, the only new
+    entry needed is for old_getpagesize (a newly added __NR_* name for an
+    old syscall on ia64).  (Because 5.0 changes how syscall tables are
+    handled in the kernel, checking diffs wasn't a useful way of looking
+    for new syscalls in 5.0 as most of the syscall tables were moved to
+    the new representation without actually adding any syscalls to them.)
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update kernel
+            version to 5.0.
+            (old_getpagesize): New syscall.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index b650dc07cc..0227e52a5f 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 4.20.
+-kernel 4.20
++# The list of system calls is current as of Linux 5.0.
++kernel 5.0
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -261,6 +261,7 @@ nfsservctl
+ ni_syscall
+ nice
+ old_adjtimex
++old_getpagesize
+ oldfstat
+ oldlstat
+ oldolduname

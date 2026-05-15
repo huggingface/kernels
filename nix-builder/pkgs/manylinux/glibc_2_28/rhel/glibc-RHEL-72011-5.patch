@@ -1,0 +1,39 @@
+commit 12956e0a330e3d90fc196f7d7a047ce613f78920
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Thu Jun 8 06:43:44 2023 -0400
+
+    ctype: Reformat Makefile.
+    
+    Reflow and sort Makefile.
+    
+    Code generation changes present due to link order changes.
+    
+    No regressions on x86_64 and i686.
+
+diff --git a/ctype/Makefile b/ctype/Makefile
+index e3ccf31d38137b9e..8f35209e0dab0baf 100644
+--- a/ctype/Makefile
++++ b/ctype/Makefile
+@@ -24,9 +24,18 @@ include ../Makeconfig
+ 
+ headers	:= ctype.h
+ 
+-routines	:= ctype ctype-c99 ctype-extn ctype-c99_l ctype_l isctype
+-aux		:= ctype-info
+-
+-tests	:= test_ctype
++routines := \
++  ctype \
++  ctype-c99 \
++  ctype-c99_l \
++  ctype-extn \
++  ctype_l \
++  isctype \
++  # routines
++aux := ctype-info
++
++tests := \
++  test_ctype \
++  # tests
+ 
+ include ../Rules

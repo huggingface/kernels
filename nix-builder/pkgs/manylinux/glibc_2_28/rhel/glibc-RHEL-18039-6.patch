@@ -1,0 +1,28 @@
+commit ec119972cb2598c04ec7d4219e20506006836f64
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 1 10:46:10 2024 +0200
+
+    resolv: Fix tst-resolv-short-response for older GCC (bug 32042)
+    
+    Previous GCC versions do not support the C23 change that
+    allows labels on declarations.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+
+diff --git a/resolv/tst-resolv-short-response.c b/resolv/tst-resolv-short-response.c
+index be354ae1c7..9b06b0c176 100644
+--- a/resolv/tst-resolv-short-response.c
++++ b/resolv/tst-resolv-short-response.c
+@@ -33,8 +33,10 @@ response (const struct resolv_response_context *ctx,
+     {
+     case 0:
+       /* First server times out.  */
+-      struct resolv_response_flags flags = {.rcode = rcode};
+-      resolv_response_init (b, flags);
++      {
++        struct resolv_response_flags flags = {.rcode = rcode};
++        resolv_response_init (b, flags);
++      }
+       break;
+     case 1:
+       /* Second server sends reply.  */

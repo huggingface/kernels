@@ -1,0 +1,21 @@
+commit 880433de13fa31e52587720f81b762a6c7797e4e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Dec 10 15:47:26 2020 +0100
+
+    elf: Include <sys/param.h> in cache.c
+    
+    The roundup macro is defined there.  Relying on an indirect
+    definition is brittle.
+
+diff --git a/elf/cache.c b/elf/cache.c
+index dde3d7fefa4105f9..fdfedb0964bcd217 100644
+--- a/elf/cache.c
++++ b/elf/cache.c
+@@ -29,6 +29,7 @@
+ #include <stdint.h>
+ #include <sys/fcntl.h>
+ #include <sys/mman.h>
++#include <sys/param.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ 

@@ -1,0 +1,252 @@
+commit 196655ba54ebdcdcc0468bcb6e136757b013d350
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:16 2018 +0100
+
+    S390: Refactor memccpy ifunc handling.
+    
+    The ifunc handling for memccpy is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove memccpy variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add memccpy variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for memccpy.
+            * sysdeps/s390/multiarch/memccpy-c.c: Move to ...
+            * sysdeps/s390/memccpy-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/memccpy-vx.S: Move to ...
+            * sysdeps/s390/memccpy-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/memccpy.c: Move to ...
+            * sysdeps/s390/memccpy.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-memccpy.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 9b38b461b34176b0..239426dbc1ce9d09 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -54,5 +54,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strpbrk strpbrk-vx strpbrk-c \
+ 		   strcspn strcspn-vx strcspn-c \
+ 		   memchr memchr-vx memchr-z900 \
+-		   rawmemchr rawmemchr-vx rawmemchr-c
++		   rawmemchr rawmemchr-vx rawmemchr-c \
++		   memccpy memccpy-vx memccpy-c
+ endif
+diff --git a/sysdeps/s390/ifunc-memccpy.h b/sysdeps/s390/ifunc-memccpy.h
+new file mode 100644
+index 0000000000000000..8f7a1d0f9fffe106
+--- /dev/null
++++ b/sysdeps/s390/ifunc-memccpy.h
+@@ -0,0 +1,52 @@
++/* memccpy variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_MEMCCPY_IFUNC	1
++#else
++# define HAVE_MEMCCPY_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_MEMCCPY_IFUNC_AND_VX_SUPPORT HAVE_MEMCCPY_IFUNC
++#else
++# define HAVE_MEMCCPY_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define MEMCCPY_DEFAULT	MEMCCPY_Z13
++# define HAVE_MEMCCPY_C		0
++# define HAVE_MEMCCPY_Z13	1
++#else
++# define MEMCCPY_DEFAULT	MEMCCPY_C
++# define HAVE_MEMCCPY_C		1
++# define HAVE_MEMCCPY_Z13	HAVE_MEMCCPY_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_MEMCCPY_C
++# define MEMCCPY_C		__memccpy_c
++#else
++# define MEMCCPY_C		NULL
++#endif
++
++#if HAVE_MEMCCPY_Z13
++# define MEMCCPY_Z13		__memccpy_vx
++#else
++# define MEMCCPY_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/memccpy-c.c b/sysdeps/s390/memccpy-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/memccpy-c.c
+rename to sysdeps/s390/memccpy-c.c
+index 1f4c5481991fcb70..2b2f81eb9cfe9369 100644
+--- a/sysdeps/s390/multiarch/memccpy-c.c
++++ b/sysdeps/s390/memccpy-c.c
+@@ -16,10 +16,14 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define MEMCCPY  __memccpy_c
++#include <ifunc-memccpy.h>
++
++#if HAVE_MEMCCPY_C
++# if HAVE_MEMCCPY_IFUNC
++#  define MEMCCPY MEMCCPY_C
++#  undef weak_alias
++#  define weak_alias(a, b)
++#endif
+ 
+-# include <string.h>
+-extern __typeof (__memccpy) __memccpy_c;
+ # include <string/memccpy.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/memccpy-vx.S b/sysdeps/s390/memccpy-vx.S
+similarity index 95%
+rename from sysdeps/s390/multiarch/memccpy-vx.S
+rename to sysdeps/s390/memccpy-vx.S
+index 150aa0e4a48ca181..44f7bc582410ba22 100644
+--- a/sysdeps/s390/multiarch/memccpy-vx.S
++++ b/sysdeps/s390/memccpy-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-memccpy.h>
++
++#if HAVE_MEMCCPY_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -42,7 +44,7 @@
+    -v19=part #2 of s
+    -v31=save area for r6
+ */
+-ENTRY(__memccpy_vx)
++ENTRY(MEMCCPY_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -152,5 +154,11 @@ ENTRY(__memccpy_vx)
+ 	vlgvg	%r7,%v31,1
+ 	lghi	%r2,0		/* Return null.  */
+ 	br	%r14
+-END(__memccpy_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(MEMCCPY_Z13)
++
++# if ! HAVE_MEMCCPY_IFUNC
++strong_alias (MEMCCPY_Z13, __memccpy)
++weak_alias (__memccpy, memccpy)
++# endif
++
++#endif /* HAVE_MEMCCPY_Z13  */
+diff --git a/sysdeps/s390/multiarch/memccpy.c b/sysdeps/s390/memccpy.c
+similarity index 68%
+rename from sysdeps/s390/multiarch/memccpy.c
+rename to sysdeps/s390/memccpy.c
+index 30aae82321048b7d..bcfeb31e86c56115 100644
+--- a/sysdeps/s390/multiarch/memccpy.c
++++ b/sysdeps/s390/memccpy.c
+@@ -16,13 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-memccpy.h>
++
++#if HAVE_MEMCCPY_IFUNC
+ # include <string.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc (__memccpy)
+-weak_alias (__memccpy, memccpy)
++# if HAVE_MEMCCPY_C
++extern __typeof (__memccpy) MEMCCPY_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/memccpy.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_MEMCCPY_Z13
++extern __typeof (__memccpy) MEMCCPY_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__memccpy, __memccpy,
++		      (HAVE_MEMCCPY_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? MEMCCPY_Z13
++		      : MEMCCPY_DEFAULT
++		      )
++weak_alias (__memccpy, memccpy)
++#endif /* HAVE_MEMCCPY_IFUNC  */
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index ac6cfcf9c7dbbc3a..d5a32fc309ba4b3c 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += memccpy memccpy-vx memccpy-c \
+-		   memrchr memrchr-vx memrchr-c
++sysdep_routines += memrchr memrchr-vx memrchr-c
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index bf3b40e111a6bd31..b8917747f0f23cd9 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -44,6 +44,7 @@
+ #include <ifunc-strcspn.h>
+ #include <ifunc-memchr.h>
+ #include <ifunc-rawmemchr.h>
++#include <ifunc-memccpy.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -398,6 +399,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_RAWMEMCHR_IFUNC  */
+ 
++#if HAVE_MEMCCPY_IFUNC
++    IFUNC_IMPL (i, name, memccpy,
++# if HAVE_MEMCCPY_Z13
++		IFUNC_IMPL_ADD (array, i, memccpy,
++				dl_hwcap & HWCAP_S390_VX, MEMCCPY_Z13)
++# endif
++# if HAVE_MEMCCPY_C
++		IFUNC_IMPL_ADD (array, i, memccpy, 1, MEMCCPY_C)
++# endif
++		)
++#endif /* HAVE_MEMCCPY_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -440,8 +453,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wmemchr);
+ 
+-  IFUNC_VX_IMPL (memccpy);
+-
+   IFUNC_VX_IMPL (wmemset);
+ 
+   IFUNC_VX_IMPL (wmemcmp);

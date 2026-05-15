@@ -1,0 +1,90 @@
+Based on the following commit, adjusted for glibc-2.28 in RHEL-8:
+
+commit 27f74636752d0c4438cf8346cf2a76b6fcf3be16
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Fri Mar 19 06:15:37 2021 -0700
+
+    x86: Properly disable XSAVE related features [BZ #27605]
+    
+    1. Support GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVE.
+    2. Disable all features which depend on XSAVE:
+       a. If OSXSAVE is disabled by glibc tunables.  Or
+       b. If both XSAVE and XSAVEC aren't usable.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 805d00a43309fc23..910425053d9e226f 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -654,6 +654,60 @@ no_cpuid:
+     = TUNABLE_GET (x86_data_cache_size, long int, NULL);
+   cpu_features->shared_cache_size
+     = TUNABLE_GET (x86_shared_cache_size, long int, NULL);
++
++  bool disable_xsave_features = false;
++
++  if (!CPU_FEATURE_USABLE_P (cpu_features, OSXSAVE))
++    {
++      /* These features are usable only if OSXSAVE is usable.  */
++      CPU_FEATURE_UNSET (cpu_features, XSAVE);
++      CPU_FEATURE_UNSET (cpu_features, XSAVEOPT);
++      CPU_FEATURE_UNSET (cpu_features, XSAVEC);
++      CPU_FEATURE_UNSET (cpu_features, XGETBV_ECX_1);
++      CPU_FEATURE_UNSET (cpu_features, XFD);
++
++      disable_xsave_features = true;
++    }
++
++  if (disable_xsave_features
++      || (!CPU_FEATURE_USABLE_P (cpu_features, XSAVE)
++	  && !CPU_FEATURE_USABLE_P (cpu_features, XSAVEC)))
++    {
++      /* Clear xsave_state_size if both XSAVE and XSAVEC aren't usable.  */
++      cpu_features->xsave_state_size = 0;
++
++      CPU_FEATURE_UNSET (cpu_features, AVX);
++      CPU_FEATURE_UNSET (cpu_features, AVX2);
++      CPU_FEATURE_UNSET (cpu_features, AVX_VNNI);
++      CPU_FEATURE_UNSET (cpu_features, FMA);
++      CPU_FEATURE_UNSET (cpu_features, VAES);
++      CPU_FEATURE_UNSET (cpu_features, VPCLMULQDQ);
++      CPU_FEATURE_UNSET (cpu_features, XOP);
++      CPU_FEATURE_UNSET (cpu_features, F16C);
++      CPU_FEATURE_UNSET (cpu_features, AVX512F);
++      CPU_FEATURE_UNSET (cpu_features, AVX512CD);
++      CPU_FEATURE_UNSET (cpu_features, AVX512ER);
++      CPU_FEATURE_UNSET (cpu_features, AVX512PF);
++      CPU_FEATURE_UNSET (cpu_features, AVX512VL);
++      CPU_FEATURE_UNSET (cpu_features, AVX512DQ);
++      CPU_FEATURE_UNSET (cpu_features, AVX512BW);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_4FMAPS);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_4VNNIW);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_BITALG);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_IFMA);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_VBMI);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_VBMI2);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_VNNI);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_VPOPCNTDQ);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_VP2INTERSECT);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_BF16);
++      CPU_FEATURE_UNSET (cpu_features, AVX512_FP16);
++      CPU_FEATURE_UNSET (cpu_features, AMX_BF16);
++      CPU_FEATURE_UNSET (cpu_features, AMX_TILE);
++      CPU_FEATURE_UNSET (cpu_features, AMX_INT8);
++
++      CPU_FEATURE_UNSET (cpu_features, FMA4);
++    }
+ #endif
+ 
+   /* Reuse dl_platform, dl_hwcap and dl_hwcap_mask for x86.  */
+diff --git a/sysdeps/x86/cpu-tunables.c b/sysdeps/x86/cpu-tunables.c
+index 0728023007a0f423..3173b2b959ca88f9 100644
+--- a/sysdeps/x86/cpu-tunables.c
++++ b/sysdeps/x86/cpu-tunables.c
+@@ -168,6 +168,7 @@ TUNABLE_CALLBACK (set_hwcaps) (tunable_val_t *valp)
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, MOVBE, 5);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, SHSTK, 5);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, SSSE3, 5);
++	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, XSAVE, 5);
+ 	    }
+ 	  break;
+ 	case 6:

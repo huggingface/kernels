@@ -1,0 +1,65 @@
+commit 54816ae98d57930b7c945f17485714a5574bfe47
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Jul 29 11:13:57 2021 -0300
+
+    elf: Move LAV_CURRENT to link_lavcurrent.h
+    
+    No functional change.
+
+diff --git a/bits/link_lavcurrent.h b/bits/link_lavcurrent.h
+new file mode 100644
+index 0000000000000000..44fbea1e8060997f
+--- /dev/null
++++ b/bits/link_lavcurrent.h
+@@ -0,0 +1,25 @@
++/* Data structure for communication from the run-time dynamic linker for
++   loaded ELF shared objects.  LAV_CURRENT definition.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _LINK_H
++# error "Never include <bits/link_lavcurrent.h> directly; use <link.h> instead."
++#endif
++
++/* Version numbers for la_version handshake interface.  */
++#define LAV_CURRENT	1
+diff --git a/elf/Makefile b/elf/Makefile
+index 6262a4a65cfd2148..b9751e8bd87c4f71 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -21,7 +21,7 @@ subdir		:= elf
+ 
+ include ../Makeconfig
+ 
+-headers		= elf.h bits/elfclass.h link.h bits/link.h
++headers		= elf.h bits/elfclass.h link.h bits/link.h bits/link_lavcurrent.h
+ routines	= $(all-dl-routines) dl-support dl-iteratephdr \
+ 		  dl-addr dl-addr-obj enbl-secure dl-profstub \
+ 		  dl-origin dl-libc dl-sym dl-sysdep dl-error \
+diff --git a/elf/link.h b/elf/link.h
+index c67a50dd8ee9187e..cbda60b4135997f6 100644
+--- a/elf/link.h
++++ b/elf/link.h
+@@ -96,7 +96,7 @@ struct link_map
+ #ifdef __USE_GNU
+ 
+ /* Version numbers for la_version handshake interface.  */
+-#define LAV_CURRENT	1
++#include <bits/link_lavcurrent.h>
+ 
+ /* Activity types signaled through la_activity.  */
+ enum

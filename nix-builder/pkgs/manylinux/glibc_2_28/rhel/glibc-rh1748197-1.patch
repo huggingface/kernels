@@ -1,0 +1,18 @@
+commit 27cec9aed97447dff887a88f4241604fffd8c525
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Jul 2 16:45:52 2019 +0200
+
+    malloc: Add nptl, htl dependency for the subdirectory [BZ #24757]
+    
+    memusagestat may indirectly link against libpthread.  The built
+    libpthread should be used, but that is only possible if it has been
+    built before the malloc programs.
+
+diff --git a/malloc/Depend b/malloc/Depend
+index 910c6d915211870f..f5e248047c4c46dd 100644
+--- a/malloc/Depend
++++ b/malloc/Depend
+@@ -1 +1,3 @@
+ dlfcn
++nptl
++htl

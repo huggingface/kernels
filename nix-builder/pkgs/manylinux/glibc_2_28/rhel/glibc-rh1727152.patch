@@ -1,0 +1,22 @@
+commit 61595e3d36ded374f97961503e843a314b0203c2
+Author: Andreas Schwab <schwab@suse.de>
+Date:   Tue May 15 14:42:37 2018 +0200
+
+    nscd: avoid assertion failure during persistent db check
+    
+    nscd should not abort when it finds inconsistencies in the persistent db.
+
+diff --git a/nscd/connections.c b/nscd/connections.c
+index 47fbb9923aa2aac7..98182007646a33d5 100644
+--- a/nscd/connections.c
++++ b/nscd/connections.c
+@@ -304,7 +304,8 @@ static int
+ check_use (const char *data, nscd_ssize_t first_free, uint8_t *usemap,
+ 	   enum usekey use, ref_t start, size_t len)
+ {
+-  assert (len >= 2);
++  if (len < 2)
++    return 0;
+ 
+   if (start > first_free || start + len > first_free
+       || (start & BLOCK_ALIGN_M1))

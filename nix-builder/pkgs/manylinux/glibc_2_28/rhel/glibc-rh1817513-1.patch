@@ -1,0 +1,53 @@
+commit 82c80ac2ebf9acc81ec460adfd951d4884836c7c
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Wed Aug 1 04:57:34 2018 -0700
+
+    x86: Rename get_common_indeces to get_common_indices
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    
+            * sysdeps/x86/cpu-features.c (get_common_indeces): Renamed to
+            ...
+            (get_common_indices): This.
+            (init_cpu_features): Updated.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index ac74f408343191b0..41f2d15fa5c8a756 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -56,7 +56,7 @@ get_extended_indices (struct cpu_features *cpu_features)
+ }
+ 
+ static void
+-get_common_indeces (struct cpu_features *cpu_features,
++get_common_indices (struct cpu_features *cpu_features,
+ 		    unsigned int *family, unsigned int *model,
+ 		    unsigned int *extended_model, unsigned int *stepping)
+ {
+@@ -234,7 +234,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+       kind = arch_kind_intel;
+ 
+-      get_common_indeces (cpu_features, &family, &model, &extended_model,
++      get_common_indices (cpu_features, &family, &model, &extended_model,
+ 			  &stepping);
+ 
+       get_extended_indices (cpu_features);
+@@ -356,7 +356,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+       kind = arch_kind_amd;
+ 
+-      get_common_indeces (cpu_features, &family, &model, &extended_model,
++      get_common_indices (cpu_features, &family, &model, &extended_model,
+ 			  &stepping);
+ 
+       get_extended_indices (cpu_features);
+@@ -393,7 +393,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+   else
+     {
+       kind = arch_kind_other;
+-      get_common_indeces (cpu_features, NULL, NULL, NULL, NULL);
++      get_common_indices (cpu_features, NULL, NULL, NULL, NULL);
+     }
+ 
+   /* Support i586 if CX8 is available.  */

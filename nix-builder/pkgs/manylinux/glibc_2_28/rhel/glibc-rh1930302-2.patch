@@ -1,0 +1,28 @@
+commit f9ac84f92f151e07586c55e14ed628d493a5929d
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Apr 3 18:08:28 2020 +0000
+
+    Add IPPROTO_ETHERNET and IPPROTO_MPTCP from Linux 5.6 to netinet/in.h.
+    
+    This patch adds the IPPROTO_ETHERNET and IPPROTO_MPTCP constants from
+    Linux 5.6 to glibc's netinet/in.h.
+    
+    Tested for x86_64.
+
+diff --git a/inet/netinet/in.h b/inet/netinet/in.h
+index c2d12a04aab6c022..5880e909ff3e06fb 100644
+--- a/inet/netinet/in.h
++++ b/inet/netinet/in.h
+@@ -87,8 +87,12 @@ enum
+ #define IPPROTO_UDPLITE		IPPROTO_UDPLITE
+     IPPROTO_MPLS = 137,    /* MPLS in IP.  */
+ #define IPPROTO_MPLS		IPPROTO_MPLS
++    IPPROTO_ETHERNET = 143, /* Ethernet-within-IPv6 Encapsulation.  */
++#define IPPROTO_ETHERNET	IPPROTO_ETHERNET
+     IPPROTO_RAW = 255,	   /* Raw IP packets.  */
+ #define IPPROTO_RAW		IPPROTO_RAW
++    IPPROTO_MPTCP = 262,   /* Multipath TCP connection.  */
++#define IPPROTO_MPTCP		IPPROTO_MPTCP
+     IPPROTO_MAX
+   };
+ 

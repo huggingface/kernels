@@ -1,0 +1,512 @@
+commit 1a7fe2ebe52b3c8bf465d1756e69452d05c1c103
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Aug 5 15:54:10 2019 +0200
+
+    login: Remove utmp backend jump tables [BZ #23518]
+    
+    There is just one file-based implementation, so this dispatch
+    mechanism is unnecessary.  Instead of the vtable pointer
+    __libc_utmp_jump_table, use a non-negative file_fd as the indicator
+    that the backend is initialized.
+
+diff --git a/login/getutent_r.c b/login/getutent_r.c
+index 6a244ba6e0b86da7..44239ecb81bacea4 100644
+--- a/login/getutent_r.c
++++ b/login/getutent_r.c
+@@ -23,115 +23,16 @@
+ 
+ #include "utmp-private.h"
+ 
+-
+-/* Functions defined here.  */
+-static int setutent_unknown (void);
+-static int getutent_r_unknown (struct utmp *buffer, struct utmp **result);
+-static int getutid_r_unknown (const struct utmp *line, struct utmp *buffer,
+-			      struct utmp **result);
+-static int getutline_r_unknown (const struct utmp *id, struct utmp *buffer,
+-				struct utmp **result);
+-static struct utmp *pututline_unknown (const struct utmp *data);
+-static void endutent_unknown (void);
+-
+-/* Initial Jump table.  */
+-const struct utfuncs __libc_utmp_unknown_functions =
+-{
+-  setutent_unknown,
+-  getutent_r_unknown,
+-  getutid_r_unknown,
+-  getutline_r_unknown,
+-  pututline_unknown,
+-  endutent_unknown,
+-  NULL
+-};
+-
+-/* Currently selected backend.  */
+-const struct utfuncs *__libc_utmp_jump_table = &__libc_utmp_unknown_functions;
+-
+ /* We need to protect the opening of the file.  */
+ __libc_lock_define_initialized (, __libc_utmp_lock attribute_hidden)
+ 
+ 
+-static int
+-setutent_unknown (void)
+-{
+-  int result;
+-
+-  result = (*__libc_utmp_file_functions.setutent) ();
+-  if (result)
+-    __libc_utmp_jump_table = &__libc_utmp_file_functions;
+-
+-  return result;
+-}
+-
+-
+-static int
+-getutent_r_unknown (struct utmp *buffer, struct utmp **result)
+-{
+-  /* The backend was not yet initialized.  */
+-  if (setutent_unknown ())
+-    return (*__libc_utmp_jump_table->getutent_r) (buffer, result);
+-
+-  /* Not available.  */
+-  *result = NULL;
+-  return -1;
+-}
+-
+-
+-static int
+-getutid_r_unknown (const struct utmp *id, struct utmp *buffer,
+-		   struct utmp **result)
+-{
+-  /* The backend was not yet initialized.  */
+-  if (setutent_unknown ())
+-    return (*__libc_utmp_jump_table->getutid_r) (id, buffer, result);
+-
+-  /* Not available.  */
+-  *result = NULL;
+-  return -1;
+-}
+-
+-
+-static int
+-getutline_r_unknown (const struct utmp *line, struct utmp *buffer,
+-		     struct utmp **result)
+-{
+-  /* The backend was not yet initialized.  */
+-  if (setutent_unknown ())
+-    return (*__libc_utmp_jump_table->getutline_r) (line, buffer, result);
+-
+-  /* Not available.  */
+-  *result = NULL;
+-  return -1;
+-}
+-
+-
+-static struct utmp *
+-pututline_unknown (const struct utmp *data)
+-{
+-  /* The backend was not yet initialized.  */
+-  if (setutent_unknown ())
+-    return (*__libc_utmp_jump_table->pututline) (data);
+-
+-  /* Not available.  */
+-  return NULL;
+-}
+-
+-
+-static void
+-endutent_unknown (void)
+-{
+-  /* Nothing to do.  */
+-}
+-
+-
+ void
+ __setutent (void)
+ {
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+-  (*__libc_utmp_jump_table->setutent) ();
++  __libc_setutent ();
+ 
+   __libc_lock_unlock (__libc_utmp_lock);
+ }
+@@ -145,7 +46,7 @@ __getutent_r (struct utmp *buffer, struct utmp **result)
+ 
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+-  retval = (*__libc_utmp_jump_table->getutent_r) (buffer, result);
++  retval = __libc_getutent_r (buffer, result);
+ 
+   __libc_lock_unlock (__libc_utmp_lock);
+ 
+@@ -162,7 +63,7 @@ __pututline (const struct utmp *data)
+ 
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+-  buffer = (*__libc_utmp_jump_table->pututline) (data);
++  buffer = __libc_pututline (data);
+ 
+   __libc_lock_unlock (__libc_utmp_lock);
+ 
+@@ -177,8 +78,7 @@ __endutent (void)
+ {
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+-  (*__libc_utmp_jump_table->endutent) ();
+-  __libc_utmp_jump_table = &__libc_utmp_unknown_functions;
++  __libc_endutent ();
+ 
+   __libc_lock_unlock (__libc_utmp_lock);
+ }
+diff --git a/login/getutid_r.c b/login/getutid_r.c
+index b7d3dbac75774b0a..8cb6b16d735e8265 100644
+--- a/login/getutid_r.c
++++ b/login/getutid_r.c
+@@ -49,7 +49,7 @@ __getutid_r (const struct utmp *id, struct utmp *buffer, struct utmp **result)
+ 
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+-  retval = (*__libc_utmp_jump_table->getutid_r) (id, buffer, result);
++  retval = __libc_getutid_r (id, buffer, result);
+ 
+   __libc_lock_unlock (__libc_utmp_lock);
+ 
+diff --git a/login/getutline_r.c b/login/getutline_r.c
+index 6996887f76b28816..5607c19ed2e1ca66 100644
+--- a/login/getutline_r.c
++++ b/login/getutline_r.c
+@@ -36,7 +36,7 @@ __getutline_r (const struct utmp *line, struct utmp *buffer,
+ 
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+-  retval = (*__libc_utmp_jump_table->getutline_r) (line, buffer, result);
++  retval = __libc_getutline_r (line, buffer, result);
+ 
+   __libc_lock_unlock (__libc_utmp_lock);
+ 
+diff --git a/login/updwtmp.c b/login/updwtmp.c
+index 56fb41916a776c0a..7ae96224ca789b6d 100644
+--- a/login/updwtmp.c
++++ b/login/updwtmp.c
+@@ -29,7 +29,7 @@ __updwtmp (const char *wtmp_file, const struct utmp *utmp)
+ {
+   const char *file_name = TRANSFORM_UTMP_FILE_NAME (wtmp_file);
+ 
+-  (*__libc_utmp_file_functions.updwtmp) (file_name, utmp);
++  __libc_updwtmp (file_name, utmp);
+ }
+ libc_hidden_def (__updwtmp)
+ weak_alias (__updwtmp, updwtmp)
+diff --git a/login/utmp-private.h b/login/utmp-private.h
+index bd8773984cfc56de..5c2048ee52dc3cee 100644
+--- a/login/utmp-private.h
++++ b/login/utmp-private.h
+@@ -24,24 +24,17 @@
+ #include <utmp.h>
+ #include <libc-lock.h>
+ 
+-/* The structure describing the functions in a backend.  */
+-struct utfuncs
+-{
+-  int (*setutent) (void);
+-  int (*getutent_r) (struct utmp *, struct utmp **);
+-  int (*getutid_r) (const struct utmp *, struct utmp *, struct utmp **);
+-  int (*getutline_r) (const struct utmp *, struct utmp *, struct utmp **);
+-  struct utmp *(*pututline) (const struct utmp *);
+-  void (*endutent) (void);
+-  int (*updwtmp) (const char *, const struct utmp *);
+-};
+-
+-/* The tables from the services.  */
+-extern const struct utfuncs __libc_utmp_file_functions attribute_hidden;
+-extern const struct utfuncs __libc_utmp_unknown_functions attribute_hidden;
+-
+-/* Currently selected backend.  */
+-extern const struct utfuncs *__libc_utmp_jump_table attribute_hidden;
++/* These functions check for initialization, but not perform any
++   locking.  */
++int __libc_setutent (void) attribute_hidden;
++int __libc_getutent_r (struct utmp *, struct utmp **) attribute_hidden;
++int __libc_getutid_r (const struct utmp *, struct utmp *, struct utmp **)
++  attribute_hidden;
++int __libc_getutline_r (const struct utmp *, struct utmp *, struct utmp **)
++  attribute_hidden;
++struct utmp *__libc_pututline (const struct utmp *) attribute_hidden;
++void __libc_endutent (void) attribute_hidden;
++int __libc_updwtmp (const char *, const struct utmp *) attribute_hidden;
+ 
+ /* Current file name.  */
+ extern const char *__libc_utmp_file_name attribute_hidden;
+diff --git a/login/utmp_file.c b/login/utmp_file.c
+index 040a5057116bb69d..069e6d0452e333ad 100644
+--- a/login/utmp_file.c
++++ b/login/utmp_file.c
+@@ -105,37 +105,12 @@ static void timeout_handler (int signum) {};
+     alarm (old_timeout);						      \
+ } while (0)
+ 
+-
+-/* Functions defined here.  */
+-static int setutent_file (void);
+-static int getutent_r_file (struct utmp *buffer, struct utmp **result);
+-static int getutid_r_file (const struct utmp *key, struct utmp *buffer,
+-			   struct utmp **result);
+-static int getutline_r_file (const struct utmp *key, struct utmp *buffer,
+-			     struct utmp **result);
+-static struct utmp *pututline_file (const struct utmp *data);
+-static void endutent_file (void);
+-static int updwtmp_file (const char *file, const struct utmp *utmp);
+-
+-/* Jump table for file functions.  */
+-const struct utfuncs __libc_utmp_file_functions =
+-{
+-  setutent_file,
+-  getutent_r_file,
+-  getutid_r_file,
+-  getutline_r_file,
+-  pututline_file,
+-  endutent_file,
+-  updwtmp_file
+-};
+-
+-
+ #ifndef TRANSFORM_UTMP_FILE_NAME
+ # define TRANSFORM_UTMP_FILE_NAME(file_name) (file_name)
+ #endif
+ 
+-static int
+-setutent_file (void)
++int
++__libc_setutent (void)
+ {
+   if (file_fd < 0)
+     {
+@@ -166,15 +141,19 @@ setutent_file (void)
+   return 1;
+ }
+ 
++/* Preform initialization if necessary.  */
++static bool
++maybe_setutent (void)
++{
++  return file_fd >= 0 || __libc_setutent ();
++}
+ 
+-static int
+-getutent_r_file (struct utmp *buffer, struct utmp **result)
++int
++__libc_getutent_r (struct utmp *buffer, struct utmp **result)
+ {
+   ssize_t nbytes;
+ 
+-  assert (file_fd >= 0);
+-
+-  if (file_offset == -1l)
++  if (!maybe_setutent () || file_offset == -1l)
+     {
+       /* Not available.  */
+       *result = NULL;
+@@ -279,13 +258,11 @@ unlock_return:
+ 
+ /* For implementing this function we don't use the getutent_r function
+    because we can avoid the reposition on every new entry this way.  */
+-static int
+-getutid_r_file (const struct utmp *id, struct utmp *buffer,
+-		struct utmp **result)
++int
++__libc_getutid_r (const struct utmp *id, struct utmp *buffer,
++		  struct utmp **result)
+ {
+-  assert (file_fd >= 0);
+-
+-  if (file_offset == -1l)
++  if (!maybe_setutent () || file_offset == -1l)
+     {
+       *result = NULL;
+       return -1;
+@@ -309,13 +286,11 @@ getutid_r_file (const struct utmp *id, struct utmp *buffer,
+ 
+ /* For implementing this function we don't use the getutent_r function
+    because we can avoid the reposition on every new entry this way.  */
+-static int
+-getutline_r_file (const struct utmp *line, struct utmp *buffer,
+-		  struct utmp **result)
++int
++__libc_getutline_r (const struct utmp *line, struct utmp *buffer,
++		    struct utmp **result)
+ {
+-  assert (file_fd >= 0);
+-
+-  if (file_offset == -1l)
++  if (!maybe_setutent () || file_offset == -1l)
+     {
+       *result = NULL;
+       return -1;
+@@ -361,15 +336,16 @@ unlock_return:
+ }
+ 
+ 
+-static struct utmp *
+-pututline_file (const struct utmp *data)
++struct utmp *
++__libc_pututline (const struct utmp *data)
+ {
++  if (!maybe_setutent ())
++    return NULL;
++
+   struct utmp buffer;
+   struct utmp *pbuf;
+   int found;
+ 
+-  assert (file_fd >= 0);
+-
+   if (! file_writable)
+     {
+       /* We must make the file descriptor writable before going on.  */
+@@ -467,18 +443,19 @@ pututline_file (const struct utmp *data)
+ }
+ 
+ 
+-static void
+-endutent_file (void)
++void
++__libc_endutent (void)
+ {
+-  assert (file_fd >= 0);
+-
+-  __close_nocancel_nostatus (file_fd);
+-  file_fd = -1;
++  if (file_fd >= 0)
++    {
++      __close_nocancel_nostatus (file_fd);
++      file_fd = -1;
++    }
+ }
+ 
+ 
+-static int
+-updwtmp_file (const char *file, const struct utmp *utmp)
++int
++__libc_updwtmp (const char *file, const struct utmp *utmp)
+ {
+   int result = -1;
+   off64_t offset;
+diff --git a/login/utmpname.c b/login/utmpname.c
+index 21cb890a1a2fdc92..73b19c33ceab4dd7 100644
+--- a/login/utmpname.c
++++ b/login/utmpname.c
+@@ -42,8 +42,7 @@ __utmpname (const char *file)
+   __libc_lock_lock (__libc_utmp_lock);
+ 
+   /* Close the old file.  */
+-  (*__libc_utmp_jump_table->endutent) ();
+-  __libc_utmp_jump_table = &__libc_utmp_unknown_functions;
++  __libc_endutent ();
+ 
+   if (strcmp (file, __libc_utmp_file_name) != 0)
+     {
+diff --git a/manual/users.texi b/manual/users.texi
+index 4ed79ba26fc8e9d0..a006bb58acfd0568 100644
+--- a/manual/users.texi
++++ b/manual/users.texi
+@@ -894,9 +894,9 @@ The @code{getlogin} function is declared in @file{unistd.h}, while
+ @c   ttyname_r dup @ascuheap @acsmem @acsfd
+ @c   strncpy dup ok
+ @c   libc_lock_lock dup @asulock @aculock
+-@c   *libc_utmp_jump_table->setutent dup @mtasurace:utent @acsfd
+-@c   *libc_utmp_jump_table->getutline_r dup @mtasurace:utent @mtascusig:ALRM @mtascutimer
+-@c   *libc_utmp_jump_table->endutent dup @mtasurace:utent @asulock @aculock
++@c   __libc_setutent dup @mtasurace:utent @acsfd
++@c   __libc_getutline_r dup @mtasurace:utent @mtascusig:ALRM @mtascutimer
++@c   __libc_endutent dup @mtasurace:utent @asulock @aculock
+ @c   libc_lock_unlock dup ok
+ @c   strlen dup ok
+ @c   memcpy dup ok
+@@ -1111,7 +1111,7 @@ compatibility only, @file{utmp.h} defines @code{ut_time} as an alias for
+ 
+ @c setutent @mtasurace:utent @asulock @aculock @acsfd
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->setutent @mtasurace:utent @acsfd
++@c  __libc_setutent @mtasurace:utent @acsfd
+ @c   setutent_unknown @mtasurace:utent @acsfd
+ @c    *libc_utmp_file_functions.setutent = setutent_file @mtasurace:utent @acsfd
+ @c      open_not_cancel_2 dup @acsfd
+@@ -1152,7 +1152,7 @@ A null pointer is returned in case no further entry is available.
+ @safety{@prelim{}@mtunsafe{@mtasurace{:utent}}@asunsafe{@asulock{}}@acunsafe{@aculock{} @acsfd{}}}
+ @c endutent @mtasurace:utent @asulock @aculock @acsfd
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->endutent @mtasurace:utent @acsfd
++@c  __libc_endutent @mtasurace:utent @acsfd
+ @c   endutent_unknown ok
+ @c   endutent_file @mtasurace:utent @acsfd
+ @c    close_not_cancel_no_status dup @acsfd
+@@ -1230,7 +1230,7 @@ over again.
+ @safety{@prelim{}@mtunsafe{@mtasurace{:utent} @mtascusig{:ALRM} @mtascutimer{}}@asunsafe{@asulock{}}@acunsafe{@aculock{} @acsfd{}}}
+ @c pututline @mtasurace:utent @mtascusig:ALRM @mtascutimer @asulock @aculock @acsfd
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->pututline @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
++@c  __libc_pututline @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
+ @c   pututline_unknown @mtasurace:utent @acsfd
+ @c    setutent_unknown dup @mtasurace:utent @acsfd
+ @c   pututline_file @mtascusig:ALRM @mtascutimer @acsfd
+@@ -1282,7 +1282,7 @@ user-provided buffer.
+ @safety{@prelim{}@mtunsafe{@mtasurace{:utent} @mtascusig{:ALRM} @mtascutimer{}}@asunsafe{@asulock{}}@acunsafe{@aculock{} @acsfd{}}}
+ @c getutent_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @asulock @aculock @acsfd
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->getutent_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
++@c  __libc_getutent_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
+ @c   getutent_r_unknown @mtasurace:utent @acsfd
+ @c    setutent_unknown dup @mtasurace:utent @acsfd
+ @c   getutent_r_file @mtasurace:utent @mtascusig:ALRM @mtascutimer
+@@ -1319,7 +1319,7 @@ This function is a GNU extension.
+ @safety{@prelim{}@mtunsafe{@mtasurace{:utent} @mtascusig{:ALRM} @mtascutimer{}}@asunsafe{@asulock{}}@acunsafe{@aculock{} @acsfd{}}}
+ @c getutid_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @asulock @aculock @acsfd
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->getutid_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
++@c  __libc_getutid_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
+ @c   getutid_r_unknown @mtasurace:utent @acsfd
+ @c    setutent_unknown dup @mtasurace:utent @acsfd
+ @c   getutid_r_file @mtascusig:ALRM @mtascutimer
+@@ -1349,7 +1349,7 @@ This function is a GNU extension.
+ @safety{@prelim{}@mtunsafe{@mtasurace{:utent} @mtascusig{:ALRM} @mtascutimer{}}@asunsafe{@asulock{}}@acunsafe{@aculock{} @acsfd{}}}
+ @c getutline_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @asulock @aculock @acsfd
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->getutline_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
++@c  __libc_getutline_r @mtasurace:utent @mtascusig:ALRM @mtascutimer @acsfd
+ @c   getutline_r_unknown @mtasurace:utent @acsfd
+ @c    setutent_unknown dup @mtasurace:utent @acsfd
+ @c   getutline_r_file @mtasurace:utent @mtascusig:ALRM @mtascutimer
+@@ -1393,7 +1393,7 @@ be used.
+ @safety{@prelim{}@mtunsafe{@mtasurace{:utent}}@asunsafe{@asulock{} @ascuheap{}}@acunsafe{@aculock{} @acsmem{}}}
+ @c utmpname @mtasurace:utent @asulock @ascuheap @aculock @acsmem
+ @c  libc_lock_lock dup @asulock @aculock
+-@c  *libc_utmp_jump_table->endutent dup @mtasurace:utent
++@c  __libc_endutent dup @mtasurace:utent
+ @c  strcmp dup ok
+ @c  free dup @ascuheap @acsmem
+ @c  strdup dup @ascuheap @acsmem
+diff --git a/sysdeps/unix/getlogin_r.c b/sysdeps/unix/getlogin_r.c
+index 444df7e4d3210cf6..180c0bbca13d0f87 100644
+--- a/sysdeps/unix/getlogin_r.c
++++ b/sysdeps/unix/getlogin_r.c
+@@ -64,8 +64,8 @@ __getlogin_r (char *name, size_t name_len)
+      held so that our search is thread-safe.  */
+ 
+   __libc_lock_lock (__libc_utmp_lock);
+-  (*__libc_utmp_jump_table->setutent) ();
+-  result = (*__libc_utmp_jump_table->getutline_r) (&line, &buffer, &ut);
++  __libc_setutent ();
++  result = __libc_getutline_r (&line, &buffer, &ut);
+   if (result < 0)
+     {
+       if (errno == ESRCH)
+@@ -74,8 +74,7 @@ __getlogin_r (char *name, size_t name_len)
+       else
+ 	result = errno;
+     }
+-  (*__libc_utmp_jump_table->endutent) ();
+-  __libc_utmp_jump_table = &__libc_utmp_unknown_functions;
++  __libc_endutent ();
+   __libc_lock_unlock (__libc_utmp_lock);
+ 
+   if (result == 0)

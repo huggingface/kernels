@@ -1,0 +1,36 @@
+From 0fb8800029d230b3711bf722b2a47db92d0e273f Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Thu, 10 Feb 2022 11:52:50 -0800
+Subject: [PATCH] x86-64: Remove bzero weak alias in SS2 memset
+Content-type: text/plain; charset=UTF-8
+
+commit 3d9f171bfb5325bd5f427e9fc386453358c6e840
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Mon Feb 7 05:55:15 2022 -0800
+
+    x86-64: Optimize bzero
+
+added the optimized bzero.  Remove bzero weak alias in SS2 memset to
+avoid undefined __bzero in memset-sse2-unaligned-erms.
+---
+ sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S b/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
+index 8f579ad6..af51362b 100644
+--- a/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
++++ b/sysdeps/x86_64/multiarch/memset-sse2-unaligned-erms.S
+@@ -31,9 +31,7 @@
+ # endif
+ 
+ # undef weak_alias
+-# define weak_alias(original, alias) \
+-	.weak bzero; bzero = __bzero
+-
++# define weak_alias(original, alias)
+ # undef strong_alias
+ # define strong_alias(ignored1, ignored2)
+ #endif
+-- 
+GitLab
+

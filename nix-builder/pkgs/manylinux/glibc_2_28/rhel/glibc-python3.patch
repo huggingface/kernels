@@ -1,0 +1,40 @@
+Use python3 for installed executable python scripts.
+
+Fedora is a Python3-only distribution:
+https://fedoraproject.org/wiki/FinalizingFedoraSwitchtoPython3
+
+This fixes build failures where builders may strictly enforce only
+python3 during a transitional phase.
+
+Author: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/benchtests/scripts/compare_bench.py b/benchtests/scripts/compare_bench.py
+index ea25f778c09bba9d..b53beb3c6e32c3cf 100755
+--- a/benchtests/scripts/compare_bench.py
++++ b/benchtests/scripts/compare_bench.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ # Copyright (C) 2015-2018 Free Software Foundation, Inc.
+ # This file is part of the GNU C Library.
+ #
+diff --git a/benchtests/scripts/import_bench.py b/benchtests/scripts/import_bench.py
+index 602b3f954d4801a6..76bf1528a5418748 100644
+--- a/benchtests/scripts/import_bench.py
++++ b/benchtests/scripts/import_bench.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ # Copyright (C) 2015-2018 Free Software Foundation, Inc.
+ # This file is part of the GNU C Library.
+ #
+diff --git a/benchtests/scripts/validate_benchout.py b/benchtests/scripts/validate_benchout.py
+index 6147f05bec3a4844..9a5c7947ee4ed7e9 100755
+--- a/benchtests/scripts/validate_benchout.py
++++ b/benchtests/scripts/validate_benchout.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/python
++#!/usr/bin/python3
+ # Copyright (C) 2014-2018 Free Software Foundation, Inc.
+ # This file is part of the GNU C Library.
+ #

@@ -1,0 +1,21 @@
+Short description: Add UCS-2 aliases.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Bug-RHEL: #697421
+Upstream status: https://sourceware.org/ml/libc-alpha/2012-12/msg00103.html
+
+This is a Fedora-specific change to include new aliases for UCS-2
+data for gconv used by a certain class of users. This should be
+revisited at some point to determine if those users are just using
+UTF-8 at this point.
+
+diff -rup a/iconvdata/gconv-modules b/iconvdata/gconv-modules
+--- a/iconvdata/gconv-modules	2010-05-04 05:27:23.000000000 -0600
++++ b/iconvdata/gconv-modules	2012-01-26 10:58:24.181895489 -0700
+@@ -1954,3 +1954,6 @@ alias	HPGREEK8//		HP-GREEK8//
+ alias	OSF10010004//		HP-GREEK8//
+ module	HP-GREEK8//		INTERNAL		HP-GREEK8	1
+ module	INTERNAL		HP-GREEK8//		HP-GREEK8	1
++
++alias	ISO-10646-UCS-2//	UNICODE//
++alias	ISO-10646-UCS-2//	ISO-10646/UTF8/

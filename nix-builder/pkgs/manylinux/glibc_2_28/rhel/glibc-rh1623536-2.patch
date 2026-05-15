@@ -1,0 +1,34 @@
+commit 3a67c72c1512f778304a5644dea2fcf5bdece274
+Author: Andreas Schwab <schwab@suse.de>
+Date:   Thu Sep 27 12:37:06 2018 +0200
+
+    Fix stack overflow in tst-setcontext9 (bug 23717)
+    
+    The function f1a, executed on a stack of size 32k, allocates an object of
+    size 32k on the stack.  Make the stack variables static to reduce
+    excessive stack usage.
+    
+    (cherry picked from commit f841c97e515a1673485a2b12b3c280073d737890)
+
+diff --git a/stdlib/tst-setcontext9.c b/stdlib/tst-setcontext9.c
+index db8355766ca7b906..009928235dd5987e 100644
+--- a/stdlib/tst-setcontext9.c
++++ b/stdlib/tst-setcontext9.c
+@@ -58,7 +58,7 @@ f1b (void)
+ static void
+ f1a (void)
+ {
+-  char st2[32768];
++  static char st2[32768];
+   puts ("start f1a");
+   if (getcontext (&ctx[2]) != 0)
+     {
+@@ -93,7 +93,7 @@ f1a (void)
+ static int
+ do_test (void)
+ {
+-  char st1[32768];
++  static char st1[32768];
+   puts ("making contexts");
+   if (getcontext (&ctx[0]) != 0)
+     {

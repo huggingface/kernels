@@ -1,0 +1,585 @@
+commit ba33937be210da5d07f7f01709323743f66011ce
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Jun 25 10:54:12 2021 -0300
+
+    elf: Fix DTV gap reuse logic (BZ #27135)
+    
+    This is updated version of the 572bd547d57a (reverted by 40ebfd016ad2)
+    that fixes the _dl_next_tls_modid issues.
+    
+    This issue with 572bd547d57a patch is the DTV entry will be only
+    update on dl_open_worker() with the update_tls_slotinfo() call after
+    all dependencies are being processed by _dl_map_object_deps().  However
+    _dl_map_object_deps() itself might call _dl_next_tls_modid(), and since
+    the _dl_tls_dtv_slotinfo_list::map is not yet set the entry will be
+    wrongly reused.
+    
+    This patch fixes by renaming the _dl_next_tls_modid() function to
+    _dl_assign_tls_modid() and by passing the link_map so it can set
+    the slotinfo value so a subsequente _dl_next_tls_modid() call will
+    see the entry as allocated.
+    
+    The intermediary value is cleared up on remove_slotinfo() for the case
+    a library fails to load with RTLD_NOW.
+    
+    This patch fixes BZ #27135.
+    
+    Checked on x86_64-linux-gnu.
+    
+    Reviewed-by: Szabolcs Nagy <szabolcs.nagy@arm.com>
+
+Conflicts:
+	elf/Makefile
+	  (testing differences; libdl removal upstream)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index be40e3761cf91c4a..3e71939d3234c4c3 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -242,6 +242,13 @@ one-hundred = $(foreach x,0 1 2 3 4 5 6 7 8 9, \
+   0$x 1$x 2$x 3$x 4$x 5$x 6$x 7$x 8$x 9$x)
+ tst-tls-many-dynamic-modules := \
+   $(foreach n,$(one-hundred),tst-tls-manydynamic$(n)mod)
++tst-tls-many-dynamic-modules-dep-suffixes = 0 1 2 3 4 5 6 7 8 9 10 11 12 13 \
++					    14 15 16 17 18 19
++tst-tls-many-dynamic-modules-dep = \
++  $(foreach n,$(tst-tls-many-dynamic-modules-dep-suffixes),tst-tls-manydynamic$(n)mod-dep)
++tst-tls-many-dynamic-modules-dep-bad-suffixes = 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14
++tst-tls-many-dynamic-modules-dep-bad = \
++  $(foreach n,$(tst-tls-many-dynamic-modules-dep-bad-suffixes),tst-tls-manydynamic$(n)mod-dep-bad)
+ extra-test-objs += $(tlsmod17a-modules:=.os) $(tlsmod18a-modules:=.os) \
+ 		   tst-tlsalign-vars.o
+ test-extras += tst-tlsmod17a tst-tlsmod18a tst-tlsalign-vars
+@@ -314,6 +321,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-audit11mod1 tst-audit11mod2 tst-auditmod11 \
+ 		tst-audit12mod1 tst-audit12mod2 tst-audit12mod3 tst-auditmod12 \
+ 		tst-latepthreadmod $(tst-tls-many-dynamic-modules) \
++		$(tst-tls-many-dynamic-modules-dep) \
++		$(tst-tls-many-dynamic-modules-dep-bad) \
+ 		tst-nodelete-dlclose-dso tst-nodelete-dlclose-plugin \
+ 		tst-main1mod tst-libc_dlvsym-dso tst-absolute-sym-lib \
+ 		tst-absolute-zero-lib tst-big-note-lib \
+@@ -1832,10 +1841,63 @@ $(objpfx)tst-rtld-help.out: $(objpfx)ld.so
+ 	$(evaluate-test)
+ 
+ # Reuses tst-tls-many-dynamic-modules
++$(patsubst %,$(objpfx)%.os,$(tst-tls-many-dynamic-modules-dep)): \
++  $(objpfx)tst-tls-manydynamic%mod-dep.os : tst-tls-manydynamicmod.c
++	$(compile-command.c) \
++	  -DNAME=tls_global_$* -DSETTER=set_value_$* -DGETTER=get_value_$*
++$(patsubst %,$(objpfx)%.os,$(tst-tls-many-dynamic-modules-dep-bad)): \
++  $(objpfx)tst-tls-manydynamic%mod-dep-bad.os : tst-tls-manydynamicmod.c
++	$(compile-command.c) \
++	  -DNAME=tls_global_$* -DSETTER=set_value_$* -DGETTER=get_value_$*
+ tst-tls20mod-bad.so-no-z-defs = yes
++# Single dependency.
++$(objpfx)tst-tls-manydynamic0mod-dep.so: $(objpfx)tst-tls-manydynamic1mod-dep.so
++# Double dependencies.
++$(objpfx)tst-tls-manydynamic2mod-dep.so: $(objpfx)tst-tls-manydynamic3mod-dep.so \
++					 $(objpfx)tst-tls-manydynamic4mod-dep.so
++# Double dependencies with each dependency depent of another module.
++$(objpfx)tst-tls-manydynamic5mod-dep.so: $(objpfx)tst-tls-manydynamic6mod-dep.so \
++					 $(objpfx)tst-tls-manydynamic7mod-dep.so
++$(objpfx)tst-tls-manydynamic6mod-dep.so: $(objpfx)tst-tls-manydynamic8mod-dep.so
++$(objpfx)tst-tls-manydynamic7mod-dep.so: $(objpfx)tst-tls-manydynamic8mod-dep.so
++# Long chain with one double dependency in the middle
++$(objpfx)tst-tls-manydynamic9mod-dep.so: $(objpfx)tst-tls-manydynamic10mod-dep.so \
++					 $(objpfx)tst-tls-manydynamic11mod-dep.so
++$(objpfx)tst-tls-manydynamic10mod-dep.so: $(objpfx)tst-tls-manydynamic12mod-dep.so
++$(objpfx)tst-tls-manydynamic12mod-dep.so: $(objpfx)tst-tls-manydynamic13mod-dep.so
++# Long chain with two double depedencies in the middle
++$(objpfx)tst-tls-manydynamic14mod-dep.so: $(objpfx)tst-tls-manydynamic15mod-dep.so
++$(objpfx)tst-tls-manydynamic15mod-dep.so: $(objpfx)tst-tls-manydynamic16mod-dep.so \
++					  $(objpfx)tst-tls-manydynamic17mod-dep.so
++$(objpfx)tst-tls-manydynamic16mod-dep.so: $(objpfx)tst-tls-manydynamic18mod-dep.so \
++					  $(objpfx)tst-tls-manydynamic19mod-dep.so
++# Same but with an invalid module.
++# Single dependency.
++$(objpfx)tst-tls-manydynamic0mod-dep-bad.so: $(objpfx)tst-tls20mod-bad.so
++# Double dependencies.
++$(objpfx)tst-tls-manydynamic1mod-dep-bad.so: $(objpfx)tst-tls-manydynamic2mod-dep-bad.so \
++					     $(objpfx)tst-tls20mod-bad.so
++# Double dependencies with each dependency depent of another module.
++$(objpfx)tst-tls-manydynamic3mod-dep-bad.so: $(objpfx)tst-tls-manydynamic4mod-dep-bad.so \
++					     $(objpfx)tst-tls-manydynamic5mod-dep-bad.so
++$(objpfx)tst-tls-manydynamic4mod-dep-bad.so: $(objpfx)tst-tls20mod-bad.so
++$(objpfx)tst-tls-manydynamic5mod-dep-bad.so: $(objpfx)tst-tls20mod-bad.so
++# Long chain with one double dependency in the middle
++$(objpfx)tst-tls-manydynamic6mod-dep-bad.so: $(objpfx)tst-tls-manydynamic7mod-dep-bad.so \
++					     $(objpfx)tst-tls-manydynamic8mod-dep-bad.so
++$(objpfx)tst-tls-manydynamic7mod-dep-bad.so: $(objpfx)tst-tls-manydynamic9mod-dep-bad.so
++$(objpfx)tst-tls-manydynamic9mod-dep-bad.so: $(objpfx)tst-tls20mod-bad.so
++# Long chain with two double depedencies in the middle
++$(objpfx)tst-tls-manydynamic10mod-dep-bad.so: $(objpfx)tst-tls-manydynamic11mod-dep-bad.so
++$(objpfx)tst-tls-manydynamic11mod-dep-bad.so: $(objpfx)tst-tls-manydynamic12mod-dep-bad.so \
++					      $(objpfx)tst-tls-manydynamic13mod-dep-bad.so
++$(objpfx)tst-tls-manydynamic12mod-dep-bad.so: $(objpfx)tst-tls-manydynamic14mod-dep-bad.so \
++					      $(objpfx)tst-tls20mod-bad.so
+ $(objpfx)tst-tls20: $(libdl) $(shared-thread-library)
+ $(objpfx)tst-tls20.out: $(objpfx)tst-tls20mod-bad.so \
+-			$(tst-tls-many-dynamic-modules:%=$(objpfx)%.so)
++			$(tst-tls-many-dynamic-modules:%=$(objpfx)%.so) \
++			$(tst-tls-many-dynamic-modules-dep:%=$(objpfx)%.so) \
++			$(tst-tls-many-dynamic-modules-dep-bad:%=$(objpfx)%.so) \
+ 
+ # Reuses tst-tls-many-dynamic-modules
+ $(objpfx)tst-tls21: $(libdl) $(shared-thread-library)
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 7d2dc2272cd643f5..18227fe992029364 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -77,8 +77,6 @@ remove_slotinfo (size_t idx, struct dtv_slotinfo_list *listp, size_t disp,
+ 	 object that wasn't fully set up.  */
+       if (__glibc_likely (old_map != NULL))
+ 	{
+-	  assert (old_map->l_tls_modid == idx);
+-
+ 	  /* Mark the entry as unused.  These can be read concurrently.  */
+ 	  atomic_store_relaxed (&listp->slotinfo[idx - disp].gen,
+ 				GL(dl_tls_generation) + 1);
+@@ -88,7 +86,11 @@ remove_slotinfo (size_t idx, struct dtv_slotinfo_list *listp, size_t disp,
+       /* If this is not the last currently used entry no need to look
+ 	 further.  */
+       if (idx != GL(dl_tls_max_dtv_idx))
+-	return true;
++	{
++	  /* There is an unused dtv entry in the middle.  */
++	  GL(dl_tls_dtv_gaps) = true;
++	  return true;
++	}
+     }
+ 
+   while (idx - disp > (disp == 0 ? 1 + GL(dl_tls_static_nelem) : 0))
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 80fc38041a936c3c..cdb5d4b5b67f1ca1 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -1419,7 +1419,7 @@ cannot enable executable stack as shared object requires");
+ 	     not set up TLS data structures, so don't use them now.  */
+ 	  || __glibc_likely (GL(dl_tls_dtv_slotinfo_list) != NULL)))
+     /* Assign the next available module ID.  */
+-    l->l_tls_modid = _dl_next_tls_modid ();
++    _dl_assign_tls_modid (l);
+ 
+ #ifdef DL_AFTER_LOAD
+   DL_AFTER_LOAD (l);
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index a67fb3aee40860e1..54727402750f4c0c 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -896,16 +896,6 @@ no more namespaces available for dlmopen()"));
+ 	 state if relocation failed, for example.  */
+       if (args.map)
+ 	{
+-	  /* Maybe some of the modules which were loaded use TLS.
+-	     Since it will be removed in the following _dl_close call
+-	     we have to mark the dtv array as having gaps to fill the
+-	     holes.  This is a pessimistic assumption which won't hurt
+-	     if not true.  There is no need to do this when we are
+-	     loading the auditing DSOs since TLS has not yet been set
+-	     up.  */
+-	  if ((mode & __RTLD_AUDIT) == 0)
+-	    GL(dl_tls_dtv_gaps) = true;
+-
+ 	  _dl_close_worker (args.map, true);
+ 
+ 	  /* All l_nodelete_pending objects should have been deleted
+diff --git a/elf/dl-tls.c b/elf/dl-tls.c
+index 801eafad3961573c..8c0f9e972d7a0eac 100644
+--- a/elf/dl-tls.c
++++ b/elf/dl-tls.c
+@@ -122,8 +122,8 @@ oom (void)
+ }
+ 
+ 
+-size_t
+-_dl_next_tls_modid (void)
++void
++_dl_assign_tls_modid (struct link_map *l)
+ {
+   size_t result;
+ 
+@@ -153,7 +153,11 @@ _dl_next_tls_modid (void)
+ 	      }
+ 
+ 	    if (result - disp < runp->len)
+-	      break;
++	      {
++		/* Mark the entry as used, so any dependency see it.  */
++		atomic_store_relaxed (&runp->slotinfo[result - disp].map, l);
++		break;
++	      }
+ 
+ 	    disp += runp->len;
+ 	  }
+@@ -180,17 +184,14 @@ _dl_next_tls_modid (void)
+       atomic_store_relaxed (&GL(dl_tls_max_dtv_idx), result);
+     }
+ 
+-  return result;
++  l->l_tls_modid = result;
+ }
+ 
+ 
+ size_t
+ _dl_count_modids (void)
+ {
+-  /* It is rare that we have gaps; see elf/dl-open.c (_dl_open) where
+-     we fail to load a module and unload it leaving a gap.  If we don't
+-     have gaps then the number of modids is the current maximum so
+-     return that.  */
++  /* The count is the max unless dlclose or failed dlopen created gaps.  */
+   if (__glibc_likely (!GL(dl_tls_dtv_gaps)))
+     return GL(dl_tls_max_dtv_idx);
+ 
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 992f825ba00762a7..118c454a2329573f 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1693,7 +1693,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+   /* Add the dynamic linker to the TLS list if it also uses TLS.  */
+   if (GL(dl_rtld_map).l_tls_blocksize != 0)
+     /* Assign a module ID.  Do this before loading any audit modules.  */
+-    GL(dl_rtld_map).l_tls_modid = _dl_next_tls_modid ();
++    _dl_assign_tls_modid (&GL(dl_rtld_map));
+ 
+   audit_list_add_dynamic_tag (&state.audit_list, main_map, DT_AUDIT);
+   audit_list_add_dynamic_tag (&state.audit_list, main_map, DT_DEPAUDIT);
+diff --git a/elf/tst-tls20.c b/elf/tst-tls20.c
+index 9977ec803208b9c8..d8d04fe574597f35 100644
+--- a/elf/tst-tls20.c
++++ b/elf/tst-tls20.c
+@@ -16,12 +16,14 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <array_length.h>
+ #include <dlfcn.h>
+ #include <pthread.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <support/check.h>
+ #include <support/support.h>
++#include <support/test-driver.h>
+ #include <support/xdlfcn.h>
+ #include <support/xthread.h>
+ 
+@@ -59,28 +61,75 @@ access (int i)
+   char *buf = xasprintf ("tls_global_%02d", i);
+   dlerror ();
+   int *p = dlsym (mod[i], buf);
+-  printf ("mod[%d]: &tls = %p\n", i, p);
++  if (test_verbose)
++    printf ("mod[%d]: &tls = %p\n", i, p);
+   if (p == NULL)
+     FAIL_EXIT1 ("dlsym failed: %s\n", dlerror ());
++  TEST_COMPARE (*p, 0);
+   ++*p;
+   free (buf);
+ }
+ 
++static void
++access_mod (const char *modname, void *mod, int i)
++{
++  char *modsym = xasprintf ("tls_global_%d", i);
++  dlerror ();
++  int *p = dlsym (mod, modsym);
++  if (test_verbose)
++    printf ("%s: &tls = %p\n", modname, p);
++  if (p == NULL)
++    FAIL_EXIT1 ("dlsym failed: %s\n", dlerror ());
++  TEST_COMPARE (*p, 0);
++  ++*p;
++  free (modsym);
++}
++
++static void
++access_dep (int i)
++{
++  char *modname = xasprintf ("tst-tls-manydynamic%dmod-dep.so", i);
++  void *moddep = xdlopen (modname, RTLD_LAZY);
++  access_mod (modname, moddep, i);
++  free (modname);
++  xdlclose (moddep);
++}
++
++struct start_args
++{
++  const char *modname;
++  void *mod;
++  int modi;
++  int ndeps;
++  const int *deps;
++};
++
+ static void *
+ start (void *a)
+ {
++  struct start_args *args = a;
++
+   for (int i = 0; i < NMOD; i++)
+     if (mod[i] != NULL)
+       access (i);
++
++  if (args != NULL)
++    {
++      access_mod (args->modname, args->mod, args->modi);
++      for (int n = 0; n < args->ndeps; n++)
++	access_dep (args->deps[n]);
++    }
++
+   return 0;
+ }
+ 
+-static int
+-do_test (void)
++/* This test gaps with shared libraries with dynamic TLS that has no
++   dependencies.  The DTV gap is set with by trying to load an invalid
++   module, the entry should be used on the dlopen.  */
++static void
++do_test_no_depedency (void)
+ {
+-  int i;
+-
+-  for (i = 0; i < NMOD; i++)
++  for (int i = 0; i < NMOD; i++)
+     {
+       load_mod (i);
+       /* Bump the generation of mod[0] without using new dtv slot.  */
+@@ -91,8 +140,220 @@ do_test (void)
+       pthread_t t = xpthread_create (0, start, 0);
+       xpthread_join (t);
+     }
+-  for (i = 0; i < NMOD; i++)
++  for (int i = 0; i < NMOD; i++)
+     unload_mod (i);
++}
++
++/* The following test check DTV gaps handling with shared libraries that has
++   dependencies.  It defines 5 different sets:
++
++   1. Single dependency:
++      mod0 -> mod1
++   2. Double dependency:
++      mod2 -> [mod3,mod4]
++   3. Double dependency with each dependency depent of another module:
++      mod5 -> [mod6,mod7] -> mod8
++   4. Long chain with one double dependency in the middle:
++      mod9 -> [mod10, mod11] -> mod12 -> mod13
++   5. Long chain with two double depedencies in the middle:
++      mod14 -> mod15 -> [mod16, mod17]
++      mod15 -> [mod18, mod19]
++
++   This does not cover all the possible gaps and configuration, but it
++   should check if different dynamic shared sets are placed correctly in
++   different gaps configurations.  */
++
++static int
++nmodules (uint32_t v)
++{
++  unsigned int r = 0;
++  while (v >>= 1)
++    r++;
++  return r + 1;
++}
++
++static inline bool
++is_mod_set (uint32_t g, uint32_t n)
++{
++  return (1U << (n - 1)) & g;
++}
++
++static void
++print_gap (uint32_t g)
++{
++  if (!test_verbose)
++    return;
++  printf ("gap: ");
++  int nmods = nmodules (g);
++  for (int n = 1; n <= nmods; n++)
++    printf ("%c", ((1 << (n - 1)) & g) == 0 ? 'G' : 'M');
++  printf ("\n");
++}
++
++static void
++do_test_dependency (void)
++{
++  /* Maps the module and its dependencies, use thread to access the TLS on
++     each loaded module.  */
++  static const int tlsmanydeps0[] = { 1 };
++  static const int tlsmanydeps1[] = { 3, 4 };
++  static const int tlsmanydeps2[] = { 6, 7, 8 };
++  static const int tlsmanydeps3[] = { 10, 11, 12 };
++  static const int tlsmanydeps4[] = { 15, 16, 17, 18, 19 };
++  static const struct tlsmanydeps_t
++  {
++    int modi;
++    int ndeps;
++    const int *deps;
++  } tlsmanydeps[] =
++  {
++    {  0, array_length (tlsmanydeps0), tlsmanydeps0 },
++    {  2, array_length (tlsmanydeps1), tlsmanydeps1 },
++    {  5, array_length (tlsmanydeps2), tlsmanydeps2 },
++    {  9, array_length (tlsmanydeps3), tlsmanydeps3 },
++    { 14, array_length (tlsmanydeps4), tlsmanydeps4 },
++  };
++
++  /* The gap configuration is defined as a bitmap: the bit set represents a
++     loaded module prior the tests execution, while a bit unsed is a module
++     unloaded.  Not all permtation will show gaps, but it is simpler than
++     define each one independently.  */
++  for (uint32_t g = 0; g < 64; g++)
++    {
++      print_gap (g);
++      int nmods = nmodules (g);
++
++      int mods[nmods];
++      /* We use '0' as indication for a gap, to avoid the dlclose on iteration
++	 cleanup.  */
++      for (int n = 1; n <= nmods; n++)
++	{
++	  load_mod (n);
++	   mods[n] = n;
++	}
++      for (int n = 1; n <= nmods; n++)
++	{
++	  if (!is_mod_set (g, n))
++	    {
++	      unload_mod (n);
++	      mods[n] = 0;
++	    }
++	}
++
++      for (int t = 0; t < array_length (tlsmanydeps); t++)
++	{
++	  char *moddepname = xasprintf ("tst-tls-manydynamic%dmod-dep.so",
++					tlsmanydeps[t].modi);
++	  void *moddep = xdlopen (moddepname, RTLD_LAZY);
++
++	  /* Access TLS in all loaded modules.  */
++	  struct start_args args =
++	    {
++	      moddepname,
++	      moddep,
++	      tlsmanydeps[t].modi,
++	      tlsmanydeps[t].ndeps,
++	      tlsmanydeps[t].deps
++	    };
++	  pthread_t t = xpthread_create (0, start, &args);
++	  xpthread_join (t);
++
++	  free (moddepname);
++	  xdlclose (moddep);
++	}
++
++      for (int n = 1; n <= nmods; n++)
++	if (mods[n] != 0)
++	  unload_mod (n);
++    }
++}
++
++/* The following test check DTV gaps handling with shared libraries that has
++   invalid dependencies.  It defines 5 different sets:
++
++   1. Single dependency:
++      mod0 -> invalid
++   2. Double dependency:
++      mod1 -> [mod2,invalid]
++   3. Double dependency with each dependency depent of another module:
++      mod3 -> [mod4,mod5] -> invalid
++   4. Long chain with one double dependency in the middle:
++      mod6 -> [mod7, mod8] -> mod12 -> invalid
++   5. Long chain with two double depedencies in the middle:
++      mod10 -> mod11 -> [mod12, mod13]
++      mod12 -> [mod14, invalid]
++
++   This does not cover all the possible gaps and configuration, but it
++   should check if different dynamic shared sets are placed correctly in
++   different gaps configurations.  */
++
++static void
++do_test_invalid_dependency (bool bind_now)
++{
++  static const int tlsmanydeps[] = { 0, 1, 3, 6, 10 };
++
++  /* The gap configuration is defined as a bitmap: the bit set represents a
++     loaded module prior the tests execution, while a bit unsed is a module
++     unloaded.  Not all permtation will show gaps, but it is simpler than
++     define each one independently.  */
++  for (uint32_t g = 0; g < 64; g++)
++    {
++      print_gap (g);
++      int nmods = nmodules (g);
++
++      int mods[nmods];
++      /* We use '0' as indication for a gap, to avoid the dlclose on iteration
++	 cleanup.  */
++      for (int n = 1; n <= nmods; n++)
++	{
++	  load_mod (n);
++	   mods[n] = n;
++	}
++      for (int n = 1; n <= nmods; n++)
++	{
++	  if (!is_mod_set (g, n))
++	    {
++	      unload_mod (n);
++	      mods[n] = 0;
++	    }
++	}
++
++      for (int t = 0; t < array_length (tlsmanydeps); t++)
++	{
++	  char *moddepname = xasprintf ("tst-tls-manydynamic%dmod-dep-bad.so",
++					tlsmanydeps[t]);
++	  void *moddep;
++	  if (bind_now)
++	    {
++	      moddep = dlopen (moddepname, RTLD_NOW);
++	      TEST_VERIFY (moddep == 0);
++	    }
++	  else
++	    moddep = dlopen (moddepname, RTLD_LAZY);
++
++	  /* Access TLS in all loaded modules.  */
++	  pthread_t t = xpthread_create (0, start, NULL);
++	  xpthread_join (t);
++
++	  free (moddepname);
++	  if (!bind_now)
++	    xdlclose (moddep);
++	}
++
++      for (int n = 1; n <= nmods; n++)
++	if (mods[n] != 0)
++	  unload_mod (n);
++    }
++}
++
++static int
++do_test (void)
++{
++  do_test_no_depedency ();
++  do_test_dependency ();
++  do_test_invalid_dependency (true);
++  do_test_invalid_dependency (false);
++
+   return 0;
+ }
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 6cbbaa808a596f77..0138353ccb41c5f1 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1111,8 +1111,8 @@ extern ElfW(Addr) _dl_sysdep_start (void **start_argptr,
+ extern void _dl_sysdep_start_cleanup (void) attribute_hidden;
+ 
+ 
+-/* Determine next available module ID.  */
+-extern size_t _dl_next_tls_modid (void) attribute_hidden;
++/* Determine next available module ID and set the L l_tls_modid.  */
++extern void _dl_assign_tls_modid (struct link_map *l) attribute_hidden;
+ 
+ /* Count the modules with TLS segments.  */
+ extern size_t _dl_count_modids (void) attribute_hidden;

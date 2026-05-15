@@ -1,0 +1,88 @@
+commit fe06fb313bddf7e4530056897d4a706606e49377
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 1 23:31:23 2024 +0200
+
+    elf: Clarify and invert second argument of _dl_allocate_tls_init
+    
+    Also remove an outdated comment: _dl_allocate_tls_init is
+    called as part of pthread_create.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff -Nrup a/elf/dl-tls.c b/elf/dl-tls.c
+--- a/elf/dl-tls.c	2024-08-09 20:22:18.516110414 -0400
++++ b/elf/dl-tls.c	2024-08-09 20:23:26.182493188 -0400
+@@ -553,9 +553,14 @@ _dl_resize_dtv (dtv_t *dtv, size_t max_m
+ /* Allocate initial TLS.  RESULT should be a non-NULL pointer to storage
+    for the TLS space.  The DTV may be resized, and so this function may
+    call malloc to allocate that space.  The loader's GL(dl_load_tls_lock)
+-   is taken when manipulating global TLS-related data in the loader.  */
++   is taken when manipulating global TLS-related data in the loader.
++
++   If MAIN_THREAD, this is the first call during process
++   initialization.  In this case, TLS initialization for secondary
++   (audit) namespaces is skipped because that has already been handled
++   by dlopen.  */
+ void *
+-_dl_allocate_tls_init (void *result, bool init_tls)
++_dl_allocate_tls_init (void *result, bool main_thread)
+ {
+   if (result == NULL)
+     /* The memory allocation failed.  */
+@@ -634,7 +639,7 @@ _dl_allocate_tls_init (void *result, boo
+ 	     because it would already be set by the audit setup.  However,
+ 	     subsequent thread creation would need to follow the default
+ 	     behaviour.   */
+-	  if (map->l_ns != LM_ID_BASE && !init_tls)
++	  if (map->l_ns != LM_ID_BASE && main_thread)
+ 	    continue;
+ 	  memset (__mempcpy (dest, map->l_tls_initimage,
+ 			     map->l_tls_initimage_size), '\0',
+@@ -662,7 +667,7 @@ _dl_allocate_tls (void *mem)
+ {
+   return _dl_allocate_tls_init (mem == NULL
+ 				? _dl_allocate_tls_storage ()
+-				: allocate_dtv (mem), true);
++				: allocate_dtv (mem), false);
+ }
+ rtld_hidden_def (_dl_allocate_tls)
+ 
+diff -Nrup a/elf/rtld.c b/elf/rtld.c
+--- a/elf/rtld.c	2024-08-09 20:22:18.516110414 -0400
++++ b/elf/rtld.c	2024-08-09 20:24:17.584783701 -0400
+@@ -2478,7 +2478,7 @@ ERROR: '%s': cannot process note segment
+      into the main thread's TLS area, which we allocated above.
+      Note: thread-local variables must only be accessed after completing
+      the next step.  */
+-  _dl_allocate_tls_init (tcbp, false);
++  _dl_allocate_tls_init (tcbp, true);
+ 
+   /* And finally install it for the main thread.  */
+   if (! tls_init_tp_called)
+diff -Nrup a/nptl/allocatestack.c b/nptl/allocatestack.c
+--- a/nptl/allocatestack.c	2024-08-09 20:22:17.808106408 -0400
++++ b/nptl/allocatestack.c	2024-08-09 20:25:49.436302396 -0400
+@@ -244,7 +244,7 @@ get_cached_stack (size_t *sizep, void **
+   memset (dtv, '\0', (dtv[-1].counter + 1) * sizeof (dtv_t));
+ 
+   /* Re-initialize the TLS.  */
+-  _dl_allocate_tls_init (TLS_TPADJ (result), true);
++  _dl_allocate_tls_init (TLS_TPADJ (result), false);
+ 
+   return result;
+ }
+diff -Nrup a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+--- a/sysdeps/generic/ldsodefs.h	2024-08-09 20:22:18.517110419 -0400
++++ b/sysdeps/generic/ldsodefs.h	2024-08-09 20:34:20.093186159 -0400
+@@ -1185,10 +1185,8 @@ extern void _dl_get_tls_static_info (siz
+ 
+ extern void _dl_allocate_static_tls (struct link_map *map) attribute_hidden;
+ 
+-/* These are internal entry points to the two halves of _dl_allocate_tls,
+-   only used within rtld.c itself at startup time.  */
+ extern void *_dl_allocate_tls_storage (void) attribute_hidden;
+-extern void *_dl_allocate_tls_init (void *, bool);
++extern void *_dl_allocate_tls_init (void *result, bool main_thread);
+ rtld_hidden_proto (_dl_allocate_tls_init)
+ 
+ /* Deallocate memory allocated with _dl_allocate_tls.  */

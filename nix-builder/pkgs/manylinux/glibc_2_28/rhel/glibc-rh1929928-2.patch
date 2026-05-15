@@ -1,0 +1,88 @@
+commit 77d175e14e5f4cf24e9579c03eef5d006a286316
+Author: Naohiro Tamura <naohirot@jp.fujitsu.com>
+Date:   Wed May 12 09:26:40 2021 +0000
+
+    config: Added HAVE_AARCH64_SVE_ASM for aarch64
+    
+    This patch checks if assembler supports '-march=armv8.2-a+sve' to
+    generate SVE code or not, and then define HAVE_AARCH64_SVE_ASM macro.
+
+Conflicts:
+	config.h.in
+	  (missing PAC+BTI support downstream, missing other ports)
+
+diff --git a/config.h.in b/config.h.in
+index 8520b0fa8d4668fb..94d5ea367e10f849 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -112,6 +112,11 @@
+ /* AArch64 big endian ABI */
+ #undef HAVE_AARCH64_BE
+ 
++/* Assembler support ARMv8.2-A SVE.
++   This macro becomes obsolete when glibc increased the minimum
++   required version of GNU 'binutils' to 2.28 or later. */
++#define HAVE_AARCH64_SVE_ASM 0
++
+ /* RISC-V integer ABI for ld.so.  */
+ #undef RISCV_ABI_XLEN
+ 
+diff --git a/sysdeps/aarch64/configure b/sysdeps/aarch64/configure
+index f78a79338aba1e34..9fb713155d4ee6d8 100644
+--- a/sysdeps/aarch64/configure
++++ b/sysdeps/aarch64/configure
+@@ -212,3 +212,31 @@ fi
+ $as_echo "$libc_cv_aarch64_variant_pcs" >&6; }
+ config_vars="$config_vars
+ aarch64-variant-pcs = $libc_cv_aarch64_variant_pcs"
++
++# Check if asm support armv8.2-a+sve
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for SVE support in assembler" >&5
++$as_echo_n "checking for SVE support in assembler... " >&6; }
++if ${libc_cv_asm_sve+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat > conftest.s <<\EOF
++        ptrue p0.b
++EOF
++if { ac_try='${CC-cc} -c -march=armv8.2-a+sve conftest.s 1>&5'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; }; then
++  libc_cv_aarch64_sve_asm=yes
++else
++  libc_cv_aarch64_sve_asm=no
++fi
++rm -f conftest*
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_asm_sve" >&5
++$as_echo "$libc_cv_asm_sve" >&6; }
++if test $libc_cv_aarch64_sve_asm = yes; then
++  $as_echo "#define HAVE_AARCH64_SVE_ASM 1" >>confdefs.h
++
++fi
+diff --git a/sysdeps/aarch64/configure.ac b/sysdeps/aarch64/configure.ac
+index 7f13bfb93b60bfd7..0236cfcdf3c8d10d 100644
+--- a/sysdeps/aarch64/configure.ac
++++ b/sysdeps/aarch64/configure.ac
+@@ -42,3 +42,18 @@ EOF
+   fi
+   rm -rf conftest.*])
+ LIBC_CONFIG_VAR([aarch64-variant-pcs], [$libc_cv_aarch64_variant_pcs])
++
++# Check if asm support armv8.2-a+sve
++AC_CACHE_CHECK(for SVE support in assembler, libc_cv_asm_sve, [dnl
++cat > conftest.s <<\EOF
++        ptrue p0.b
++EOF
++if AC_TRY_COMMAND(${CC-cc} -c -march=armv8.2-a+sve conftest.s 1>&AS_MESSAGE_LOG_FD); then
++  libc_cv_aarch64_sve_asm=yes
++else
++  libc_cv_aarch64_sve_asm=no
++fi
++rm -f conftest*])
++if test $libc_cv_aarch64_sve_asm = yes; then
++  AC_DEFINE(HAVE_AARCH64_SVE_ASM)
++fi

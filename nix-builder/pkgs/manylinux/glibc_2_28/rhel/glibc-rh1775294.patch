@@ -1,0 +1,70 @@
+commit bfa864e1645e140da2e1aae3cf0d0ba0674f6eb5
+Author: Emilio Cobos Álvarez <emilio@crisal.io>
+Date:   Tue Nov 12 19:18:32 2019 +0100
+
+    Don't use a custom wrapper macro around __has_include (bug 25189).
+    
+    This causes issues when using clang with -frewrite-includes to e.g.,
+    submit the translation unit to a distributed compiler.
+    
+    In my case, I was building Firefox using sccache.
+    
+    See [1] for a reduced test-case since I initially thought this was a
+    clang bug, and [2] for more context.
+    
+    Apparently doing this is invalid C++ per [cpp.cond], which mentions [3]:
+    
+    > The #ifdef and #ifndef directives, and the defined conditional
+    > inclusion operator, shall treat __has_include and __has_cpp_attribute
+    > as if they were the names of defined macros.  The identifiers
+    > __has_include and __has_cpp_attribute shall not appear in any context
+    > not mentioned in this subclause.
+    
+    [1]: https://bugs.llvm.org/show_bug.cgi?id=43982
+    [2]: https://bugs.llvm.org/show_bug.cgi?id=37990
+    [3]: http://eel.is/c++draft/cpp.cond#7.sentence-2
+    
+    Change-Id: Id4b8ee19176a9e4624b533087ba870c418f27e60
+
+diff --git a/misc/sys/cdefs.h b/misc/sys/cdefs.h
+index 9e840e602f815d86..3f6fe3cc8563b493 100644
+--- a/misc/sys/cdefs.h
++++ b/misc/sys/cdefs.h
+@@ -412,14 +412,6 @@
+ # define __glibc_has_attribute(attr)	0
+ #endif
+ 
+-#ifdef __has_include
+-/* Do not use a function-like macro, so that __has_include can inhibit
+-   macro expansion.  */
+-# define __glibc_has_include __has_include
+-#else
+-# define __glibc_has_include(header)	0
+-#endif
+-
+ #if (!defined _Noreturn \
+      && (defined __STDC_VERSION__ ? __STDC_VERSION__ : 0) < 201112 \
+      &&  !__GNUC_PREREQ (4,7))
+diff --git a/sysdeps/unix/sysv/linux/bits/statx.h b/sysdeps/unix/sysv/linux/bits/statx.h
+index 206878723fd37881..aaccfdc2dc03a1dc 100644
+--- a/sysdeps/unix/sysv/linux/bits/statx.h
++++ b/sysdeps/unix/sysv/linux/bits/statx.h
+@@ -26,11 +26,13 @@
+ 
+ /* Use "" to work around incorrect macro expansion of the
+    __has_include argument (GCC PR 80005).  */
+-#if __glibc_has_include ("linux/stat.h")
+-# include "linux/stat.h"
+-# ifdef STATX_TYPE
+-#  define __statx_timestamp_defined 1
+-#  define __statx_defined 1
++#ifdef __has_include
++# if __has_include ("linux/stat.h")
++#  include "linux/stat.h"
++#  ifdef STATX_TYPE
++#   define __statx_timestamp_defined 1
++#   define __statx_defined 1
++#  endif
+ # endif
+ #endif
+ 

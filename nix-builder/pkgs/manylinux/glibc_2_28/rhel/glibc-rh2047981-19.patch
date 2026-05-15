@@ -1,0 +1,333 @@
+commit cda4f265c65fb6c4ce38ca1cf0a7e527c5e77cd5
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Jul 20 15:58:35 2021 -0300
+
+    elf: Add _dl_audit_symbind_alt and _dl_audit_symbind
+    
+    It consolidates the code required to call la_symbind{32,64} audit
+    callback.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+diff --git a/elf/Versions b/elf/Versions
+index be88c48e6d45a937..c5d4342cf1f5124c 100644
+--- a/elf/Versions
++++ b/elf/Versions
+@@ -59,6 +59,7 @@ ld {
+     _dl_argv; _dl_find_dso_for_object; _dl_get_tls_static_info;
+     _dl_deallocate_tls; _dl_make_stack_executable;
+     _dl_rtld_di_serinfo; _dl_starting_up; _dl_fatal_printf;
++    _dl_audit_symbind_alt;
+     _rtld_global; _rtld_global_ro;
+ 
+     # Only here for gdb while a better method is developed.
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+index cb1c3de93cba447b..a21530f30bc5524b 100644
+--- a/elf/dl-audit.c
++++ b/elf/dl-audit.c
+@@ -16,6 +16,7 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+ 
++#include <assert.h>
+ #include <ldsodefs.h>
+ 
+ void
+@@ -106,3 +107,124 @@ _dl_audit_objclose (struct link_map *l)
+       afct = afct->next;
+     }
+ }
++
++void
++_dl_audit_symbind_alt (struct link_map *l, const ElfW(Sym) *ref, void **value,
++		       lookup_t result)
++{
++  if ((l->l_audit_any_plt | result->l_audit_any_plt) == 0)
++    return;
++
++  const char *strtab = (const char *) D_PTR (result, l_info[DT_STRTAB]);
++  /* Compute index of the symbol entry in the symbol table of the DSO with
++     the definition.  */
++  unsigned int ndx = (ref - (ElfW(Sym) *) D_PTR (result, l_info[DT_SYMTAB]));
++
++  unsigned int altvalue = 0;
++  /* Synthesize a symbol record where the st_value field is the result.  */
++  ElfW(Sym) sym = *ref;
++  sym.st_value = (ElfW(Addr)) *value;
++
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      struct auditstate *match_audit = link_map_audit_state (l, cnt);
++      struct auditstate *result_audit = link_map_audit_state (result, cnt);
++      if (afct->symbind != NULL
++	  && ((match_audit->bindflags & LA_FLG_BINDFROM) != 0
++	      || ((result_audit->bindflags & LA_FLG_BINDTO)
++		  != 0)))
++	{
++	  unsigned int flags = altvalue | LA_SYMB_DLSYM;
++	  uintptr_t new_value = afct->symbind (&sym, ndx,
++					       &match_audit->cookie,
++					       &result_audit->cookie,
++					       &flags, strtab + ref->st_name);
++	  if (new_value != (uintptr_t) sym.st_value)
++	    {
++	      altvalue = LA_SYMB_ALTVALUE;
++	      sym.st_value = new_value;
++	    }
++
++	  afct = afct->next;
++	}
++
++      *value = (void *) sym.st_value;
++    }
++}
++rtld_hidden_def (_dl_audit_symbind_alt)
++
++void
++_dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
++		   const ElfW(Sym) *defsym, DL_FIXUP_VALUE_TYPE *value,
++		   lookup_t result)
++{
++  reloc_result->bound = result;
++  /* Compute index of the symbol entry in the symbol table of the DSO with the
++     definition.  */
++  reloc_result->boundndx = (defsym - (ElfW(Sym) *) D_PTR (result,
++							  l_info[DT_SYMTAB]));
++
++  if ((l->l_audit_any_plt | result->l_audit_any_plt) == 0)
++    {
++      /* Set all bits since this symbol binding is not interesting.  */
++      reloc_result->enterexit = (1u << DL_NNS) - 1;
++      return;
++    }
++
++  /* Synthesize a symbol record where the st_value field is the result.  */
++  ElfW(Sym) sym = *defsym;
++  sym.st_value = DL_FIXUP_VALUE_ADDR (*value);
++
++  /* Keep track whether there is any interest in tracing the call in the lower
++     two bits.  */
++  assert (DL_NNS * 2 <= sizeof (reloc_result->flags) * 8);
++  assert ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT) == 3);
++  reloc_result->enterexit = LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT;
++
++  const char *strtab2 = (const void *) D_PTR (result, l_info[DT_STRTAB]);
++
++  unsigned int flags = 0;
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      /* XXX Check whether both DSOs must request action or only one */
++      struct auditstate *l_state = link_map_audit_state (l, cnt);
++      struct auditstate *result_state = link_map_audit_state (result, cnt);
++      if ((l_state->bindflags & LA_FLG_BINDFROM) != 0
++	  && (result_state->bindflags & LA_FLG_BINDTO) != 0)
++	{
++	  if (afct->symbind != NULL)
++	    {
++	      uintptr_t new_value = afct->symbind (&sym,
++						   reloc_result->boundndx,
++						   &l_state->cookie,
++						   &result_state->cookie,
++						   &flags,
++						   strtab2 + defsym->st_name);
++	      if (new_value != (uintptr_t) sym.st_value)
++		{
++		  flags |= LA_SYMB_ALTVALUE;
++		  sym.st_value = new_value;
++		}
++	    }
++
++	  /* Remember the results for every audit library and store a summary
++	     in the first two bits.  */
++	  reloc_result->enterexit &= flags & (LA_SYMB_NOPLTENTER
++					      | LA_SYMB_NOPLTEXIT);
++	  reloc_result->enterexit |= ((flags & (LA_SYMB_NOPLTENTER
++						| LA_SYMB_NOPLTEXIT))
++				      << ((cnt + 1) * 2));
++	}
++      else
++	/* If the bind flags say this auditor is not interested, set the bits
++	   manually.  */
++	reloc_result->enterexit |= ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT)
++				    << ((cnt + 1) * 2));
++      afct = afct->next;
++    }
++
++  reloc_result->flags = flags;
++  *value = DL_FIXUP_ADDR_VALUE (sym.st_value);
++}
+diff --git a/elf/dl-runtime.c b/elf/dl-runtime.c
+index 4ccd7c30678fafad..d4840a7c17441126 100644
+--- a/elf/dl-runtime.c
++++ b/elf/dl-runtime.c
+@@ -296,84 +296,7 @@ _dl_profile_fixup (
+ 	 auditing libraries the possibility to change the value and
+ 	 tell us whether further auditing is wanted.  */
+       if (defsym != NULL && GLRO(dl_naudit) > 0)
+-	{
+-	  reloc_result->bound = result;
+-	  /* Compute index of the symbol entry in the symbol table of
+-	     the DSO with the definition.  */
+-	  reloc_result->boundndx = (defsym
+-				    - (ElfW(Sym) *) D_PTR (result,
+-							   l_info[DT_SYMTAB]));
+-
+-	  /* Determine whether any of the two participating DSOs is
+-	     interested in auditing.  */
+-	  if ((l->l_audit_any_plt | result->l_audit_any_plt) != 0)
+-	    {
+-	      unsigned int flags = 0;
+-	      struct audit_ifaces *afct = GLRO(dl_audit);
+-	      /* Synthesize a symbol record where the st_value field is
+-		 the result.  */
+-	      ElfW(Sym) sym = *defsym;
+-	      sym.st_value = DL_FIXUP_VALUE_ADDR (value);
+-
+-	      /* Keep track whether there is any interest in tracing
+-		 the call in the lower two bits.  */
+-	      assert (DL_NNS * 2 <= sizeof (reloc_result->flags) * 8);
+-	      assert ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT) == 3);
+-	      reloc_result->enterexit = LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT;
+-
+-	      const char *strtab2 = (const void *) D_PTR (result,
+-							  l_info[DT_STRTAB]);
+-
+-	      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-		{
+-		  /* XXX Check whether both DSOs must request action or
+-		     only one */
+-		  struct auditstate *l_state = link_map_audit_state (l, cnt);
+-		  struct auditstate *result_state
+-		    = link_map_audit_state (result, cnt);
+-		  if ((l_state->bindflags & LA_FLG_BINDFROM) != 0
+-		      && (result_state->bindflags & LA_FLG_BINDTO) != 0)
+-		    {
+-		      if (afct->symbind != NULL)
+-			{
+-			  uintptr_t new_value
+-			    = afct->symbind (&sym, reloc_result->boundndx,
+-					     &l_state->cookie,
+-					     &result_state->cookie,
+-					     &flags,
+-					     strtab2 + defsym->st_name);
+-			  if (new_value != (uintptr_t) sym.st_value)
+-			    {
+-			      flags |= LA_SYMB_ALTVALUE;
+-			      sym.st_value = new_value;
+-			    }
+-			}
+-
+-		      /* Remember the results for every audit library and
+-			 store a summary in the first two bits.  */
+-		      reloc_result->enterexit
+-			&= flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT);
+-		      reloc_result->enterexit
+-			|= ((flags & (LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT))
+-			    << ((cnt + 1) * 2));
+-		    }
+-		  else
+-		    /* If the bind flags say this auditor is not interested,
+-		       set the bits manually.  */
+-		    reloc_result->enterexit
+-		      |= ((LA_SYMB_NOPLTENTER | LA_SYMB_NOPLTEXIT)
+-			  << ((cnt + 1) * 2));
+-
+-		  afct = afct->next;
+-		}
+-
+-	      reloc_result->flags = flags;
+-	      value = DL_FIXUP_ADDR_VALUE (sym.st_value);
+-	    }
+-	  else
+-	    /* Set all bits since this symbol binding is not interesting.  */
+-	    reloc_result->enterexit = (1u << DL_NNS) - 1;
+-	}
++	_dl_audit_symbind (l, reloc_result, defsym, &value, result);
+ #endif
+ 
+       /* Store the result for later runs.  */
+diff --git a/elf/dl-sym-post.h b/elf/dl-sym-post.h
+index 4c4f574633497789..f33934c92047f293 100644
+--- a/elf/dl-sym-post.h
++++ b/elf/dl-sym-post.h
+@@ -52,54 +52,9 @@ _dl_sym_post (lookup_t result, const ElfW(Sym) *ref, void *value,
+      tell us whether further auditing is wanted.  */
+   if (__glibc_unlikely (GLRO(dl_naudit) > 0))
+     {
+-      const char *strtab = (const char *) D_PTR (result,
+-                                                 l_info[DT_STRTAB]);
+-      /* Compute index of the symbol entry in the symbol table of
+-         the DSO with the definition.  */
+-      unsigned int ndx = (ref - (ElfW(Sym) *) D_PTR (result,
+-                                                     l_info[DT_SYMTAB]));
+-
+       if (match == NULL)
+         match = _dl_sym_find_caller_link_map (caller);
+-
+-      if ((match->l_audit_any_plt | result->l_audit_any_plt) != 0)
+-        {
+-          unsigned int altvalue = 0;
+-          struct audit_ifaces *afct = GLRO(dl_audit);
+-          /* Synthesize a symbol record where the st_value field is
+-             the result.  */
+-          ElfW(Sym) sym = *ref;
+-          sym.st_value = (ElfW(Addr)) value;
+-
+-          for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-            {
+-              struct auditstate *match_audit
+-                = link_map_audit_state (match, cnt);
+-              struct auditstate *result_audit
+-                = link_map_audit_state (result, cnt);
+-              if (afct->symbind != NULL
+-                  && ((match_audit->bindflags & LA_FLG_BINDFROM) != 0
+-                      || ((result_audit->bindflags & LA_FLG_BINDTO)
+-                          != 0)))
+-                {
+-                  unsigned int flags = altvalue | LA_SYMB_DLSYM;
+-                  uintptr_t new_value
+-                    = afct->symbind (&sym, ndx,
+-                                     &match_audit->cookie,
+-                                     &result_audit->cookie,
+-                                     &flags, strtab + ref->st_name);
+-                  if (new_value != (uintptr_t) sym.st_value)
+-                    {
+-                      altvalue = LA_SYMB_ALTVALUE;
+-                      sym.st_value = new_value;
+-                    }
+-                }
+-
+-              afct = afct->next;
+-            }
+-
+-          value = (void *) sym.st_value;
+-        }
++      _dl_audit_symbind_alt (match, ref, &value, result);
+     }
+ #endif
+   return value;
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 3db25c5be1acf871..fa55c3bde10de52e 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1294,6 +1294,16 @@ void _dl_audit_objopen (struct link_map *l, Lmid_t nsid)
+ /* Call the la_objclose from the audit modules for the link_map L.  */
+ void _dl_audit_objclose (struct link_map *l)
+   attribute_hidden;
++
++/* Call the la_symbind{32,64} from the audit modules for the link_map L.  */
++void _dl_audit_symbind (struct link_map *l, struct reloc_result *reloc_result,
++			const ElfW(Sym) *defsym, DL_FIXUP_VALUE_TYPE *value,
++			lookup_t result)
++  attribute_hidden;
++/* Same as _dl_audit_symbind, but also sets LA_SYMB_DLSYM flag.  */
++void _dl_audit_symbind_alt (struct link_map *l, const ElfW(Sym) *ref,
++			    void **value, lookup_t result);
++rtld_hidden_proto (_dl_audit_symbind_alt)
+ #endif /* SHARED */
+ 
+ __END_DECLS

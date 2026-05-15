@@ -1,0 +1,39 @@
+Partial revert of commit c36fc50781995e6758cae2b6927839d0157f213c
+to restore the layout of pthread_cond_t and avoid a downstream
+rpminspect and abidiff (libabigail tooling) spurious warning
+about internal ABI changes.  Without this change all RHEL developers
+using pthread_cond_t would have to audit and waive the warning.
+The alternative is to update the supression lists used in abidiff,
+propagate that to the rpminspect service, and wait for that to
+complete before doing the update. The more conservative position
+is the partial revert of the layout change.
+
+This is a downstream-only change and is not required upstream.
+
+diff --git a/sysdeps/nptl/bits/thread-shared-types.h b/sysdeps/nptl/bits/thread-shared-types.h
+index dcb799b130178f3f..798e0de31680065b 100644
+--- a/sysdeps/nptl/bits/thread-shared-types.h
++++ b/sysdeps/nptl/bits/thread-shared-types.h
+@@ -188,7 +188,8 @@ struct __pthread_cond_s
+       unsigned int __high;
+     } __g1_start32;
+   };
+-  unsigned int __g_size[2] __LOCK_ALIGNMENT;
++  unsigned int __glibc_unused___g_refs[2] __LOCK_ALIGNMENT;
++  unsigned int __g_size[2];
+   unsigned int __g1_orig_size;
+   unsigned int __wrefs;
+   unsigned int __g_signals[2];
+diff --git a/sysdeps/nptl/pthread.h b/sysdeps/nptl/pthread.h
+index 4f7adccdab1d6e9e..df049abf74d47522 100644
+--- a/sysdeps/nptl/pthread.h
++++ b/sysdeps/nptl/pthread.h
+@@ -184,7 +184,7 @@ enum
+ 
+ 
+ /* Conditional variable handling.  */
+-#define PTHREAD_COND_INITIALIZER { { {0}, {0}, {0, 0}, 0, 0, {0, 0} } }
++#define PTHREAD_COND_INITIALIZER { { {0}, {0}, {0, 0}, {0, 0}, 0, 0, {0, 0} } }
+ 
+ 
+ /* Cleanup buffers */

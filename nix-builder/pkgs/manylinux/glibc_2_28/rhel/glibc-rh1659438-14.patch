@@ -1,0 +1,263 @@
+commit 8c25dddd2e32bce47dfe01ca51c8aab535dbe23d
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:09 2018 +0100
+
+    S390: Add z13 strstr ifunc variant.
+    
+    The new vector variant of strstr is using the common code
+    implementation, but instead of calling the default
+    str* / mem* functions, the vector variants are called.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/Makefile (sysdep_routines): Add strstr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Add ifunc variants for strstr.
+            * sysdeps/s390/ifunc-strstr.h: New file.
+            * sysdeps/s390/strstr.c: Likewise.
+            * sysdeps/s390/strstr-c.c: Likewise.
+            * sysdeps/s390/strstr-vx.c: Likewise.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 3a7cccdf8f147398..4441e7a5cf6fa167 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -34,5 +34,6 @@ ifeq ($(subdir),string)
+ sysdep_routines += bzero memset memset-z900 \
+ 		   memcmp memcmp-z900 \
+ 		   mempcpy memcpy memcpy-z900 \
+-		   memmove memmove-c
++		   memmove memmove-c \
++		   strstr strstr-vx strstr-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strstr.h b/sysdeps/s390/ifunc-strstr.h
+new file mode 100644
+index 0000000000000000..e6ccfd4e44a1a790
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strstr.h
+@@ -0,0 +1,52 @@
++/* strstr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRSTR_IFUNC	1
++#else
++# define HAVE_STRSTR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRSTR_IFUNC_AND_VX_SUPPORT HAVE_STRSTR_IFUNC
++#else
++# define HAVE_STRSTR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRSTR_DEFAULT		STRSTR_Z13
++# define HAVE_STRSTR_C		0
++# define HAVE_STRSTR_Z13	1
++#else
++# define STRSTR_DEFAULT		STRSTR_C
++# define HAVE_STRSTR_C		1
++# define HAVE_STRSTR_Z13	HAVE_STRSTR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRSTR_C
++# define STRSTR_C		__strstr_c
++#else
++# define STRSTR_C		NULL
++#endif
++
++#if HAVE_STRSTR_Z13
++# define STRSTR_Z13		__strstr_vx
++#else
++# define STRSTR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index c05c63e00608dcd7..14727f8fef5431dd 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -24,6 +24,7 @@
+ #include <ifunc-memset.h>
+ #include <ifunc-memcmp.h>
+ #include <ifunc-memcpy.h>
++#include <ifunc-strstr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -138,6 +139,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_MEMMOVE_IFUNC  */
+ 
++#if HAVE_STRSTR_IFUNC
++    IFUNC_IMPL (i, name, strstr,
++# if HAVE_STRSTR_Z13
++		IFUNC_IMPL_ADD (array, i, strstr,
++				dl_hwcap & HWCAP_S390_VX, STRSTR_Z13)
++# endif
++# if HAVE_STRSTR_C
++		IFUNC_IMPL_ADD (array, i, strstr, 1, STRSTR_C)
++# endif
++		)
++#endif /* HAVE_STRSTR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+diff --git a/sysdeps/s390/strstr-c.c b/sysdeps/s390/strstr-c.c
+new file mode 100644
+index 0000000000000000..53717bfb276fed3d
+--- /dev/null
++++ b/sysdeps/s390/strstr-c.c
+@@ -0,0 +1,32 @@
++/* Default strstr implementation for S/390.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-strstr.h>
++
++#if HAVE_STRSTR_C
++# if HAVE_STRSTR_IFUNC
++#  define STRSTR STRSTR_C
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_builtin_def
++#   define libc_hidden_builtin_def(name)		\
++  __hidden_ver1 (__strstr_c, __GI_strstr, __strstr_c);
++#  endif
++# endif
++
++# include <string/strstr.c>
++#endif
+diff --git a/sysdeps/s390/strstr-vx.c b/sysdeps/s390/strstr-vx.c
+new file mode 100644
+index 0000000000000000..effae9d5eb7d2fb1
+--- /dev/null
++++ b/sysdeps/s390/strstr-vx.c
+@@ -0,0 +1,52 @@
++/* Default strstr implementation with vector string functions for S/390.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-strstr.h>
++
++#if HAVE_STRSTR_Z13
++# if HAVE_STRSTR_IFUNC
++#  define STRSTR STRSTR_Z13
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_builtin_def
++#   if HAVE_STRSTR_C
++#    define libc_hidden_builtin_def(name)
++#   else
++#    define libc_hidden_builtin_def(name)		\
++  __hidden_ver1 (__strstr_vx, __GI_strstr, __strstr_vx);
++#   endif
++#  endif
++# endif
++
++# include <string.h>
++
++# ifdef USE_MULTIARCH
++extern __typeof (strchr) __strchr_vx attribute_hidden;
++#  define strchr __strchr_vx
++
++extern __typeof (strlen) __strlen_vx attribute_hidden;
++#  define strlen __strlen_vx
++
++extern __typeof (__strnlen) __strnlen_vx attribute_hidden;
++#  define __strnlen __strnlen_vx
++
++extern __typeof (memcmp) __memcmp_z196 attribute_hidden;
++#  define memcmp __memcmp_z196
++# endif
++
++# include <string/strstr.c>
++#endif
+diff --git a/sysdeps/s390/strstr.c b/sysdeps/s390/strstr.c
+new file mode 100644
+index 0000000000000000..f8432349a7254cc6
+--- /dev/null
++++ b/sysdeps/s390/strstr.c
+@@ -0,0 +1,40 @@
++/* Multiple versions of strstr.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-strstr.h>
++
++#if HAVE_STRSTR_IFUNC
++# define strstr __redirect_strstr
++# include <string.h>
++# include <ifunc-resolve.h>
++# undef strstr
++
++# if HAVE_STRSTR_C
++extern __typeof (__redirect_strstr) STRSTR_C attribute_hidden;
++# endif
++
++# if HAVE_STRSTR_Z13
++extern __typeof (__redirect_strstr) STRSTR_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect_strstr, strstr,
++		      (HAVE_STRSTR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRSTR_Z13
++		      : STRSTR_DEFAULT
++		      )
++#endif

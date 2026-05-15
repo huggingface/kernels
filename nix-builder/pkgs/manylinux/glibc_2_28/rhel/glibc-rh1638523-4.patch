@@ -1,0 +1,65 @@
+commit f5e7e95921847bd83186bfe621fc2b48c4de5477
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Oct 30 13:11:47 2018 +0100
+
+    stdlib/test-bz22786: Avoid spurious test failures using alias mappings
+    
+    On systems without enough random-access memory, stdlib/test-bz22786
+    will go deeply into swap and time out, even with a substantial
+    TIMEOUTFACTOR.  This commit adds a facility to construct repeating
+    strings with alias mappings, so that the requirement for physical
+    memory, and uses it in stdlib/test-bz22786.
+
+Adjusted here for conflicts due to the previous support/ backport in
+glibc-rh1638523-1.patch.
+
+diff --git a/stdlib/test-bz22786.c b/stdlib/test-bz22786.c
+index 777bf9180f4b5022..bb1e04f2debe9042 100644
+--- a/stdlib/test-bz22786.c
++++ b/stdlib/test-bz22786.c
+@@ -26,6 +26,7 @@
+ #include <unistd.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
++#include <support/blob_repeat.h>
+ #include <support/check.h>
+ #include <support/support.h>
+ #include <support/temp_file.h>
+@@ -39,17 +40,12 @@ do_test (void)
+   const char *lnk = xasprintf ("%s/symlink", dir);
+   const size_t path_len = (size_t) INT_MAX + strlen (lnk) + 1;
+ 
+-  DIAG_PUSH_NEEDS_COMMENT;
+-#if __GNUC_PREREQ (7, 0)
+-  /* GCC 7 warns about too-large allocations; here we need such
+-     allocation to succeed for the test to work.  */
+-  DIAG_IGNORE_NEEDS_COMMENT (7, "-Walloc-size-larger-than=");
+-#endif
+-  char *path = malloc (path_len);
+-  DIAG_POP_NEEDS_COMMENT;
++  struct support_blob_repeat repeat
++    = support_blob_repeat_allocate ("a", 1, path_len);
++  char *path = repeat.start;
+   if (path == NULL)
+     {
+-      printf ("malloc (%zu): %m\n", path_len);
++      printf ("Repeated allocation (%zu bytes): %m\n", path_len);
+       /* On 31-bit s390 the malloc will always fail as we do not have
+ 	 so much memory, and we want to mark the test unsupported.
+ 	 Likewise on systems with little physical memory the test will
+@@ -62,7 +58,6 @@ do_test (void)
+   /* Construct very long path = "/tmp/bz22786.XXXX/symlink/aaaa....."  */
+   char *p = mempcpy (path, lnk, strlen (lnk));
+   *(p++) = '/';
+-  memset (p, 'a', path_len - (p - path) - 2);
+   p[path_len - (p - path) - 1] = '\0';
+ 
+   /* This call crashes before the fix for bz22786 on 32-bit platforms.  */
+@@ -76,6 +71,7 @@ do_test (void)
+ 
+   /* Cleanup.  */
+   unlink (lnk);
++  support_blob_repeat_free (&repeat);
+ 
+   return 0;
+ }

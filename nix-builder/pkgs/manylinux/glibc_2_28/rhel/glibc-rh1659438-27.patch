@@ -1,0 +1,253 @@
+commit a1361e65617c660a3ba7d561e081dcd18762a688
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:14 2018 +0100
+
+    S390: Refactor strchrnul ifunc handling.
+    
+    The ifunc handling for strchrnul is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strchrnul variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strchrnul variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strchrnul.
+            * sysdeps/s390/multiarch/strchrnul-c.c: Move to ...
+            * sysdeps/s390/strchrnul-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strchrnul-vx.S: Move to ...
+            * sysdeps/s390/strchrnul-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strchrnul.c: Move to ...
+            * sysdeps/s390/strchrnul.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strchrnul.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 8bb396f498e0b0b0..c54bb82f4d4f8a67 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -47,5 +47,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strncat strncat-vx strncat-c \
+ 		   strcmp strcmp-vx strcmp-z900 \
+ 		   strncmp strncmp-vx strncmp-c \
+-		   strchr strchr-vx strchr-c
++		   strchr strchr-vx strchr-c \
++		   strchrnul strchrnul-vx strchrnul-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strchrnul.h b/sysdeps/s390/ifunc-strchrnul.h
+new file mode 100644
+index 0000000000000000..cac817e6f0a9406d
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strchrnul.h
+@@ -0,0 +1,52 @@
++/* strchrnul variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRCHRNUL_IFUNC	1
++#else
++# define HAVE_STRCHRNUL_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRCHRNUL_IFUNC_AND_VX_SUPPORT HAVE_STRCHRNUL_IFUNC
++#else
++# define HAVE_STRCHRNUL_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRCHRNUL_DEFAULT	STRCHRNUL_Z13
++# define HAVE_STRCHRNUL_C	0
++# define HAVE_STRCHRNUL_Z13	1
++#else
++# define STRCHRNUL_DEFAULT	STRCHRNUL_C
++# define HAVE_STRCHRNUL_C	1
++# define HAVE_STRCHRNUL_Z13	HAVE_STRCHRNUL_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRCHRNUL_C
++# define STRCHRNUL_C		__strchrnul_c
++#else
++# define STRCHRNUL_C		NULL
++#endif
++
++#if HAVE_STRCHRNUL_Z13
++# define STRCHRNUL_Z13		__strchrnul_vx
++#else
++# define STRCHRNUL_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index a8e9d0acd9ebf986..999a979fee1417b2 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strchrnul strchrnul-vx strchrnul-c \
+-		   strrchr strrchr-vx strrchr-c \
++sysdep_routines += strrchr strrchr-vx strrchr-c \
+ 		   strspn strspn-vx strspn-c \
+ 		   strpbrk strpbrk-vx strpbrk-c \
+ 		   strcspn strcspn-vx strcspn-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index e809ca3bacb18aa9..0a47ffeac3492b3e 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -37,6 +37,7 @@
+ #include <ifunc-strcmp.h>
+ #include <ifunc-strncmp.h>
+ #include <ifunc-strchr.h>
++#include <ifunc-strchrnul.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -307,6 +308,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRCHR_IFUNC  */
+ 
++#if HAVE_STRCHRNUL_IFUNC
++    IFUNC_IMPL (i, name, strchrnul,
++# if HAVE_STRCHRNUL_Z13
++		IFUNC_IMPL_ADD (array, i, strchrnul,
++				dl_hwcap & HWCAP_S390_VX, STRCHRNUL_Z13)
++# endif
++# if HAVE_STRCHRNUL_C
++		IFUNC_IMPL_ADD (array, i, strchrnul, 1, STRCHRNUL_C)
++# endif
++		)
++#endif /* HAVE_STRCHRNUL_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -337,7 +350,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcschr);
+ 
+-  IFUNC_VX_IMPL (strchrnul);
+   IFUNC_VX_IMPL (wcschrnul);
+ 
+   IFUNC_VX_IMPL (strrchr);
+diff --git a/sysdeps/s390/multiarch/strchrnul-c.c b/sysdeps/s390/strchrnul-c.c
+similarity index 81%
+rename from sysdeps/s390/multiarch/strchrnul-c.c
+rename to sysdeps/s390/strchrnul-c.c
+index 020cebcf3e275b07..585273f5de8b82bc 100644
+--- a/sysdeps/s390/multiarch/strchrnul-c.c
++++ b/sysdeps/s390/strchrnul-c.c
+@@ -16,11 +16,15 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STRCHRNUL  __strchrnul_c
+-# define __strchrnul STRCHRNUL
+-# undef weak_alias
+-# define weak_alias(name, alias)
++#include <ifunc-strchrnul.h>
++
++#if HAVE_STRCHRNUL_C
++# if HAVE_STRCHRNUL_IFUNC
++#  define STRCHRNUL STRCHRNUL_C
++#  define __strchrnul STRCHRNUL
++#  undef weak_alias
++#  define weak_alias(name, alias)
++# endif
+ 
+ # include <string/strchrnul.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/strchrnul-vx.S b/sysdeps/s390/strchrnul-vx.S
+similarity index 91%
+rename from sysdeps/s390/multiarch/strchrnul-vx.S
+rename to sysdeps/s390/strchrnul-vx.S
+index d561825e0432458c..0cd587bc32cf811f 100644
+--- a/sysdeps/s390/multiarch/strchrnul-vx.S
++++ b/sysdeps/s390/strchrnul-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strchrnul.h>
++
++#if HAVE_STRCHRNUL_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -35,7 +37,7 @@
+    -v16=part of s
+    -v18=vector with c replicated in every byte
+ */
+-ENTRY(__strchrnul_vx)
++ENTRY(STRCHRNUL_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -89,5 +91,11 @@ ENTRY(__strchrnul_vx)
+ 
+ .Lend:
+ 	br	%r14
+-END(__strchrnul_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STRCHRNUL_Z13)
++
++# if ! HAVE_STRCHRNUL_IFUNC
++strong_alias (STRCHRNUL_Z13, __strchrnul)
++weak_alias (__strchrnul, strchrnul)
++# endif
++
++#endif /* HAVE_STRCHRNUL_Z13  */
+diff --git a/sysdeps/s390/multiarch/strchrnul.c b/sysdeps/s390/strchrnul.c
+similarity index 67%
+rename from sysdeps/s390/multiarch/strchrnul.c
+rename to sysdeps/s390/strchrnul.c
+index 62dfc6bd90638b60..e9fefe1bdc77f038 100644
+--- a/sysdeps/s390/multiarch/strchrnul.c
++++ b/sysdeps/s390/strchrnul.c
+@@ -16,13 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strchrnul.h>
++
++#if HAVE_STRCHRNUL_IFUNC
+ # include <string.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc (__strchrnul)
+-weak_alias (__strchrnul, strchrnul)
++# if HAVE_STRCHRNUL_C
++extern __typeof (__strchrnul) STRCHRNUL_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/strchrnul.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_STRCHRNUL_Z13
++extern __typeof (__strchrnul) STRCHRNUL_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__strchrnul, __strchrnul,
++		      (HAVE_STRCHRNUL_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRCHRNUL_Z13
++		      : STRCHRNUL_DEFAULT
++		      )
++weak_alias (__strchrnul, strchrnul)
++#endif /* HAVE_STRCHRNUL_IFUNC  */

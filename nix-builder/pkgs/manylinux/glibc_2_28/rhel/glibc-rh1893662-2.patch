@@ -1,0 +1,349 @@
+commit e156dabc766d6f6f99ce9402999eae380a3ec1f2
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Mon Oct 26 15:48:01 2020 +0000
+
+    aarch64: Add variant PCS lazy binding test [BZ #26798]
+    
+    This test fails without bug 26798 fixed because some integer registers
+    likely get clobbered by lazy binding and variant PCS only allows x16
+    and x17 to be clobbered at call time.
+    
+    The test requires binutils 2.32.1 or newer for handling variant PCS
+    symbols. SVE registers are not covered by this test, to avoid the
+    complexity of handling multiple compile- and runtime feature support
+    cases.
+
+(Trivial textual conflicts due to lack of PAC and BTI support)
+
+# Conflicts:
+#	sysdeps/aarch64/Makefile
+#	sysdeps/aarch64/configure
+#	sysdeps/aarch64/configure.ac
+
+diff --git a/sysdeps/aarch64/Makefile b/sysdeps/aarch64/Makefile
+index 94baaf52dda4b801..3ec78fefc6dd5797 100644
+--- a/sysdeps/aarch64/Makefile
++++ b/sysdeps/aarch64/Makefile
+@@ -3,6 +3,13 @@ long-double-fcts = yes
+ ifeq ($(subdir),elf)
+ sysdep-dl-routines += tlsdesc dl-tlsdesc
+ gen-as-const-headers += dl-link.sym
++
++ifeq (yes,$(aarch64-variant-pcs))
++tests += tst-vpcs
++modules-names += tst-vpcs-mod
++LDFLAGS-tst-vpcs-mod.so = -Wl,-z,lazy
++$(objpfx)tst-vpcs: $(objpfx)tst-vpcs-mod.so
++endif
+ endif
+ 
+ ifeq ($(subdir),csu)
+diff --git a/sysdeps/aarch64/configure b/sysdeps/aarch64/configure
+index 5bd355a6917df365..f78a79338aba1e34 100644
+--- a/sysdeps/aarch64/configure
++++ b/sysdeps/aarch64/configure
+@@ -172,3 +172,43 @@ else
+   config_vars="$config_vars
+ default-abi = lp64"
+ fi
++
++# Check if binutils supports variant PCS symbols.
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for variant PCS support" >&5
++$as_echo_n "checking for variant PCS support... " >&6; }
++if ${libc_cv_aarch64_variant_pcs+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++    cat > conftest.S <<EOF
++.global foo
++.type foo, %function
++.variant_pcs foo
++foo:
++	ret
++.global bar
++.type bar, %function
++bar:
++	b foo
++EOF
++  libc_cv_aarch64_variant_pcs=no
++  if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS -nostdlib -nostartfiles $no_ssp -shared -fPIC -o conftest.so conftest.S'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; } \
++     && { ac_try='$READELF -dW conftest.so | grep -q AARCH64_VARIANT_PCS'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; }
++  then
++    libc_cv_aarch64_variant_pcs=yes
++  fi
++  rm -rf conftest.*
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_aarch64_variant_pcs" >&5
++$as_echo "$libc_cv_aarch64_variant_pcs" >&6; }
++config_vars="$config_vars
++aarch64-variant-pcs = $libc_cv_aarch64_variant_pcs"
+diff --git a/sysdeps/aarch64/configure.ac b/sysdeps/aarch64/configure.ac
+index 7851dd4dac345b2a..7f13bfb93b60bfd7 100644
+--- a/sysdeps/aarch64/configure.ac
++++ b/sysdeps/aarch64/configure.ac
+@@ -20,3 +20,25 @@ if test $libc_cv_aarch64_be = yes; then
+ else
+   LIBC_CONFIG_VAR([default-abi], [lp64])
+ fi
++
++# Check if binutils supports variant PCS symbols.
++AC_CACHE_CHECK([for variant PCS support], [libc_cv_aarch64_variant_pcs], [dnl
++  cat > conftest.S <<EOF
++.global foo
++.type foo, %function
++.variant_pcs foo
++foo:
++	ret
++.global bar
++.type bar, %function
++bar:
++	b foo
++EOF
++  libc_cv_aarch64_variant_pcs=no
++  if AC_TRY_COMMAND([${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS -nostdlib -nostartfiles $no_ssp -shared -fPIC -o conftest.so conftest.S]) \
++     && AC_TRY_COMMAND([$READELF -dW conftest.so | grep -q AARCH64_VARIANT_PCS])
++  then
++    libc_cv_aarch64_variant_pcs=yes
++  fi
++  rm -rf conftest.*])
++LIBC_CONFIG_VAR([aarch64-variant-pcs], [$libc_cv_aarch64_variant_pcs])
+diff --git a/sysdeps/aarch64/tst-vpcs-mod.S b/sysdeps/aarch64/tst-vpcs-mod.S
+new file mode 100644
+index 0000000000000000..b2642ba030daaca7
+--- /dev/null
++++ b/sysdeps/aarch64/tst-vpcs-mod.S
+@@ -0,0 +1,141 @@
++/* Record the register state before and after a variant PCS call.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public License as
++   published by the Free Software Foundation; either version 2.1 of the
++   License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library.  If not, see
++   <https://www.gnu.org/licenses/>.  */
++
++	.variant_pcs	vpcs_call
++	.global	vpcs_call
++	.type	vpcs_call, %function
++vpcs_call:
++	.cfi_startproc
++	hint	34 /* bti c.  */
++
++	/* Save register state to *x0.  */
++	stp	x0, x1, [x0]
++	stp	x2, x3, [x0, 16]
++	stp	x4, x5, [x0, 32]
++	stp	x6, x7, [x0, 48]
++	stp	x8, x9, [x0, 64]
++	stp	x10, x11, [x0, 80]
++	stp	x12, x13, [x0, 96]
++	stp	x14, x15, [x0, 112]
++	stp	x16, x17, [x0, 128]
++	stp	x18, x19, [x0, 144]
++	stp	x20, x21, [x0, 160]
++	stp	x22, x23, [x0, 176]
++	stp	x24, x25, [x0, 192]
++	stp	x26, x27, [x0, 208]
++	stp	x28, x29, [x0, 224]
++	mov	x1, sp
++	stp	x30, x1, [x0, 240]
++	stp	q0, q1, [x0, 256]
++	stp	q2, q3, [x0, 288]
++	stp	q4, q5, [x0, 320]
++	stp	q6, q7, [x0, 352]
++	stp	q8, q9, [x0, 384]
++	stp	q10, q11, [x0, 416]
++	stp	q12, q13, [x0, 448]
++	stp	q14, q15, [x0, 480]
++	stp	q16, q17, [x0, 512]
++	stp	q18, q19, [x0, 544]
++	stp	q20, q21, [x0, 576]
++	stp	q22, q23, [x0, 608]
++	stp	q24, q25, [x0, 640]
++	stp	q26, q27, [x0, 672]
++	stp	q28, q29, [x0, 704]
++	stp	q30, q31, [x0, 736]
++	ret
++	.cfi_endproc
++	.size	vpcs_call, .-vpcs_call
++
++	.global	vpcs_call_regs
++	.type	vpcs_call_regs, %function
++vpcs_call_regs:
++	.cfi_startproc
++	hint	34 /* bti c.  */
++
++	stp     x29, x30, [sp, -160]!
++	mov     x29, sp
++
++	/* Save callee-saved registers.  */
++	stp	x19, x20, [sp, 16]
++	stp	x21, x22, [sp, 32]
++	stp	x23, x24, [sp, 48]
++	stp	x25, x26, [sp, 64]
++	stp	x27, x28, [sp, 80]
++	stp	d8, d9, [sp, 96]
++	stp	d10, d11, [sp, 112]
++	stp	d12, d13, [sp, 128]
++	stp	d14, d15, [sp, 144]
++
++	/* Initialize most registers from *x1, and save x0, x1, x29, x30,
++	   and sp (== x29), so *x1 contains the register state.  */
++	stp	x0, x1, [x1]
++	str	x29, [x1, 232]
++	ldp	x2, x3, [x1, 16]
++	ldp	x4, x5, [x1, 32]
++	ldp	x6, x7, [x1, 48]
++	ldp	x8, x9, [x1, 64]
++	ldp	x10, x11, [x1, 80]
++	ldp	x12, x13, [x1, 96]
++	ldp	x14, x15, [x1, 112]
++	ldp	x16, x17, [x1, 128]
++	ldp	x18, x19, [x1, 144]
++	ldp	x20, x21, [x1, 160]
++	ldp	x22, x23, [x1, 176]
++	ldp	x24, x25, [x1, 192]
++	ldp	x26, x27, [x1, 208]
++	ldr	x28, [x1, 224]
++	/* Skip x29, x30, sp.  */
++	ldp	q0, q1, [x1, 256]
++	ldp	q2, q3, [x1, 288]
++	ldp	q4, q5, [x1, 320]
++	ldp	q6, q7, [x1, 352]
++	ldp	q8, q9, [x1, 384]
++	ldp	q10, q11, [x1, 416]
++	ldp	q12, q13, [x1, 448]
++	ldp	q14, q15, [x1, 480]
++	ldp	q16, q17, [x1, 512]
++	ldp	q18, q19, [x1, 544]
++	ldp	q20, q21, [x1, 576]
++	ldp	q22, q23, [x1, 608]
++	ldp	q24, q25, [x1, 640]
++	ldp	q26, q27, [x1, 672]
++	ldp	q28, q29, [x1, 704]
++	ldp	q30, q31, [x1, 736]
++
++	/* Emulate a BL using B, but save x30 before the branch.  */
++	adr	x30, .L_return_addr
++	stp	x30, x29, [x1, 240]
++	b	vpcs_call
++.L_return_addr:
++
++	/* Restore callee-saved registers.  */
++	ldp	x19, x20, [sp, 16]
++	ldp	x21, x22, [sp, 32]
++	ldp	x23, x24, [sp, 48]
++	ldp	x25, x26, [sp, 64]
++	ldp	x27, x28, [sp, 80]
++	ldp	d8, d9, [sp, 96]
++	ldp	d10, d11, [sp, 112]
++	ldp	d12, d13, [sp, 128]
++	ldp	d14, d15, [sp, 144]
++
++	ldp     x29, x30, [sp], 160
++	ret
++	.cfi_endproc
++	.size	vpcs_call_regs, .-vpcs_call_regs
+diff --git a/sysdeps/aarch64/tst-vpcs.c b/sysdeps/aarch64/tst-vpcs.c
+new file mode 100644
+index 0000000000000000..92a701eb7cdea8ac
+--- /dev/null
++++ b/sysdeps/aarch64/tst-vpcs.c
+@@ -0,0 +1,78 @@
++/* Test that variant PCS calls don't clobber registers with lazy binding.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdint.h>
++#include <stdio.h>
++#include <support/check.h>
++
++struct regs
++{
++  uint64_t x[32];
++  union {
++    long double q[32];
++    uint64_t u[64];
++  } v;
++};
++
++/* Gives the registers in the caller and callee around a variant PCS call.
++   Most registers are initialized from BEFORE in the caller so they can
++   have values that likely show clobbers.  Register state extensions such
++   as SVE is not covered here, only the base registers.  */
++void vpcs_call_regs (struct regs *after, struct regs *before);
++
++static int
++do_test (void)
++{
++  struct regs before, after;
++  int err = 0;
++
++  unsigned char *p = (unsigned char *)&before;
++  for (int i = 0; i < sizeof before; i++)
++    p[i] = i & 0xff;
++
++  vpcs_call_regs (&after, &before);
++
++  for (int i = 0; i < 32; i++)
++    if (before.x[i] != after.x[i])
++      {
++	if (i == 16 || i == 17)
++	  /* Variant PCS allows clobbering x16 and x17.  */
++	  continue;
++	err++;
++	printf ("x%d: before: 0x%016llx after: 0x%016llx\n",
++	  i,
++	  (unsigned long long)before.x[i],
++	  (unsigned long long)after.x[i]);
++      }
++  for (int i = 0; i < 64; i++)
++    if (before.v.u[i] != after.v.u[i])
++      {
++	err++;
++	printf ("v%d: before: 0x%016llx %016llx after: 0x%016llx %016llx\n",
++	  i/2,
++	  (unsigned long long)before.v.u[2*(i/2)+1],
++	  (unsigned long long)before.v.u[2*(i/2)],
++	  (unsigned long long)after.v.u[2*(i/2)+1],
++	  (unsigned long long)after.v.u[2*(i/2)]);
++      }
++  if (err)
++    FAIL_EXIT1 ("The variant PCS call clobbered %d registers.\n", err);
++  return 0;
++}
++
++#include <support/test-driver.c>

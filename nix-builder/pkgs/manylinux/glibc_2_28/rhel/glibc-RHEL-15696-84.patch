@@ -1,0 +1,27 @@
+From 1283948f236f209b7d3f44b69a42b96806fa6da0 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Sat, 5 Feb 2022 11:06:01 -0800
+Subject: [PATCH] x86: Improve L to support L(XXX_SYMBOL (YYY, ZZZ))
+Content-type: text/plain; charset=UTF-8
+
+---
+ sysdeps/x86/sysdep.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/sysdeps/x86/sysdep.h b/sysdeps/x86/sysdep.h
+index a70bb3a2..49b0efe2 100644
+--- a/sysdeps/x86/sysdep.h
++++ b/sysdeps/x86/sysdep.h
+@@ -111,7 +111,8 @@ enum cf_protection_level
+ /* Local label name for asm code. */
+ #ifndef L
+ /* ELF-like local names start with `.L'.  */
+-# define L(name)	.L##name
++# define LOCAL_LABEL(name) .L##name
++# define L(name)	LOCAL_LABEL(name)
+ #endif
+ 
+ #define atom_text_section .section ".text.atom", "ax"
+-- 
+GitLab
+

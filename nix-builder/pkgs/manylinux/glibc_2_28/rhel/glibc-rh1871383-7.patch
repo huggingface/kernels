@@ -1,0 +1,133 @@
+From fc859c304898a5ec72e0ba5269ed136ed0ea10e1 Mon Sep 17 00:00:00 2001
+From: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date: Wed, 7 Jul 2021 23:02:46 +0530
+Subject: Harden tcache double-free check
+
+The tcache allocator layer uses the tcache pointer as a key to
+identify a block that may be freed twice.  Since this is in the
+application data area, an attacker exploiting a use-after-free could
+potentially get access to the entire tcache structure through this
+key.  A detailed write-up was provided by Awarau here:
+
+https://awaraucom.wordpress.com/2020/07/19/house-of-io-remastered/
+
+Replace this static pointer use for key checking with one that is
+generated at malloc initialization.  The first attempt is through
+getrandom with a fallback to random_bits(), which is a simple
+pseudo-random number generator based on the clock.  The fallback ought
+to be sufficient since the goal of the randomness is only to make the
+key arbitrary enough that it is very unlikely to collide with user
+data.
+
+Co-authored-by: Eyal Itkin <eyalit@checkpoint.com>
+
+[note: context for arena.c chunk #2 changed to accomodate missing
+tagging support code - DJ]
+
+diff -rup a/malloc/arena.c b/malloc/arena.c
+--- a/malloc/arena.c	2022-09-16 01:09:02.003843024 -0400
++++ b/malloc/arena.c	2022-09-16 01:25:51.879994057 -0400
+@@ -286,6 +286,10 @@ extern struct dl_open_hook *_dl_open_hoo
+ libc_hidden_proto (_dl_open_hook);
+ #endif
+ 
++#if USE_TCACHE
++static void tcache_key_initialize (void);
++#endif
++
+ static void
+ ptmalloc_init (void)
+ {
+@@ -294,6 +298,10 @@ ptmalloc_init (void)
+ 
+   __malloc_initialized = 0;
+ 
++#if USE_TCACHE
++  tcache_key_initialize ();
++#endif
++
+ #ifdef SHARED
+   /* In case this libc copy is in a non-default namespace, never use brk.
+      Likewise if dlopened from statically linked program.  */
+diff -rup a/malloc/malloc.c b/malloc/malloc.c
+--- a/malloc/malloc.c	2022-09-16 01:09:05.491977387 -0400
++++ b/malloc/malloc.c	2022-09-16 01:25:51.883994213 -0400
+@@ -247,6 +247,10 @@
+ /* For SINGLE_THREAD_P.  */
+ #include <sysdep-cancel.h>
+ 
++/* For tcache double-free check.  */
++#include <random-bits.h>
++#include <sys/random.h>
++
+ /*
+   Debugging:
+ 
+@@ -2924,7 +2928,7 @@ typedef struct tcache_entry
+ {
+   struct tcache_entry *next;
+   /* This field exists to detect double frees.  */
+-  struct tcache_perthread_struct *key;
++  uintptr_t key;
+ } tcache_entry;
+ 
+ /* There is one of these for each thread, which contains the
+@@ -2941,6 +2945,31 @@ typedef struct tcache_perthread_struct
+ static __thread bool tcache_shutting_down = false;
+ static __thread tcache_perthread_struct *tcache = NULL;
+ 
++/* Process-wide key to try and catch a double-free in the same thread.  */
++static uintptr_t tcache_key;
++
++/* The value of tcache_key does not really have to be a cryptographically
++   secure random number.  It only needs to be arbitrary enough so that it does
++   not collide with values present in applications.  If a collision does happen
++   consistently enough, it could cause a degradation in performance since the
++   entire list is checked to check if the block indeed has been freed the
++   second time.  The odds of this happening are exceedingly low though, about 1
++   in 2^wordsize.  There is probably a higher chance of the performance
++   degradation being due to a double free where the first free happened in a
++   different thread; that's a case this check does not cover.  */
++static void
++tcache_key_initialize (void)
++{
++  if (__getrandom (&tcache_key, sizeof(tcache_key), GRND_NONBLOCK)
++      != sizeof (tcache_key))
++    {
++      tcache_key = random_bits ();
++#if __WORDSIZE == 64
++      tcache_key = (tcache_key << 32) | random_bits ();
++#endif
++    }
++}
++
+ /* Caller must ensure that we know tc_idx is valid and there's room
+    for more chunks.  */
+ static __always_inline void
+@@ -2950,7 +2979,7 @@ tcache_put (mchunkptr chunk, size_t tc_i
+ 
+   /* Mark this chunk as "in the tcache" so the test in _int_free will
+      detect a double free.  */
+-  e->key = tcache;
++  e->key = tcache_key;
+ 
+   e->next = PROTECT_PTR (&e->next, tcache->entries[tc_idx]);
+   tcache->entries[tc_idx] = e;
+@@ -2967,7 +2996,7 @@ tcache_get (size_t tc_idx)
+     malloc_printerr ("malloc(): unaligned tcache chunk detected");
+   tcache->entries[tc_idx] = REVEAL_PTR (e->next);
+   --(tcache->counts[tc_idx]);
+-  e->key = NULL;
++  e->key = 0;
+   return (void *) e;
+ }
+ 
+@@ -4231,7 +4260,7 @@ _int_free (mstate av, mchunkptr p, int h
+ 	   trust it (it also matches random payload data at a 1 in
+ 	   2^<size_t> chance), so verify it's not an unlikely
+ 	   coincidence before aborting.  */
+-	if (__glibc_unlikely (e->key == tcache))
++	if (__glibc_unlikely (e->key == tcache_key))
+ 	  {
+ 	    tcache_entry *tmp;
+ 	    size_t cnt = 0;

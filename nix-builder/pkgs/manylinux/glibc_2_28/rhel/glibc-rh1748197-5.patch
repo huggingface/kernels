@@ -1,0 +1,735 @@
+commit 38cc11daa43b11b12a7774405accee1007de1adf
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jan 16 16:22:29 2019 +0000
+
+    nptl: Remove pthread_clock_gettime pthread_clock_settime
+    
+    This patch removes CLOCK_THREAD_CPUTIME_ID and CLOCK_PROCESS_CPUTIME_ID support
+    from clock_gettime and clock_settime generic implementation.  For Linux, kernel
+    already provides supports through the syscall and Hurd HTL lacks
+    __pthread_clock_gettime and __pthread_clock_settime internal implementation.
+    
+    As described in clock_gettime man-page [1] on 'Historical note for SMP
+    system', implementing CLOCK_{THREAD,PROCESS}_CPUTIME_ID with timer registers
+    is error-prone and susceptible to timing and accurary issues that the libc
+    can not deal without kernel support.
+    
+    This allows removes unused code which, however, still incur in some runtime
+    overhead in thread creation (the struct pthread cpuclock_offset
+    initialization).
+    
+    If hurd eventually wants to support them it should either either implement as
+    a kernel facility (or something related due its architecture) or in system
+    specific implementation.
+    
+    Checked on aarch64-linux-gnu, x86_64-linux-gnu, and i686-linux-gnu. I also
+    checked on a i686-gnu build.
+    
+            * nptl/Makefile (libpthread-routines): Remove pthread_clock_gettime and
+            pthread_clock_settime.
+            * nptl/pthreadP.h (__find_thread_by_id): Remove prototype.
+            * elf/dl-support.c [!HP_TIMING_NOAVAIL] (_dl_cpuclock_offset): Remove.
+            (_dl_non_dynamic_init): Remove _dl_cpuclock_offset setting.
+            * elf/rtld.c (_dl_start_final): Likewise.
+            * nptl/allocatestack.c (__find_thread_by_id): Remove function.
+            * sysdeps/generic/ldsodefs.h [!HP_TIMING_NOAVAIL] (_dl_cpuclock_offset):
+            Remove.
+            * sysdeps/mach/hurd/dl-sysdep.c [!HP_TIMING_NOAVAIL]
+            (_dl_cpuclock_offset): Remove.
+            * nptl/descr.h (struct pthread): Rename cpuclock_offset to
+            cpuclock_offset_ununsed.
+            * nptl/nptl-init.c (__pthread_initialize_minimal_internal): Remove
+            cpuclock_offset set.
+            * nptl/pthread_create.c (START_THREAD_DEFN): Likewise.
+            * sysdeps/nptl/fork.c (__libc_fork): Likewise.
+            * nptl/pthread_clock_gettime.c: Remove file.
+            * nptl/pthread_clock_settime.c: Likewise.
+            * sysdeps/unix/clock_gettime.c (hp_timing_gettime): Remove function.
+            [HP_TIMING_AVAIL] (realtime_gettime): Remove CLOCK_THREAD_CPUTIME_ID
+            and CLOCK_PROCESS_CPUTIME_ID support.
+            * sysdeps/unix/clock_settime.c (hp_timing_gettime): Likewise.
+            [HP_TIMING_AVAIL] (realtime_gettime): Likewise.
+            * sysdeps/posix/clock_getres.c (hp_timing_getres): Likewise.
+            [HP_TIMING_AVAIL] (__clock_getres): Likewise.
+            * sysdeps/unix/clock_nanosleep.c (CPUCLOCK_P, INVALID_CLOCK_P):
+            Likewise.
+            (__clock_nanosleep): Remove CPUCLOCK_P and INVALID_CLOCK_P usage.
+    
+    [1] http://man7.org/linux/man-pages/man2/clock_gettime.2.html
+
+Conflicts:
+	nptl/pthread_clock_gettime.c
+	nptl/pthread_clock_settime.c
+	  (Removal after copyright year update upstream.)
+
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index c8439fcc53d126f3..ef5455b91c17ca30 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -127,11 +127,6 @@ void *_dl_random;
+ #include <dl-procruntime.c>
+ #include <dl-procinfo.c>
+ 
+-/* Initial value of the CPU clock.  */
+-#ifndef HP_TIMING_NONAVAIL
+-hp_timing_t _dl_cpuclock_offset;
+-#endif
+-
+ void (*_dl_init_static_tls) (struct link_map *) = &_dl_nothread_init_static_tls;
+ 
+ size_t _dl_pagesize = EXEC_PAGESIZE;
+@@ -312,9 +307,6 @@ _dl_non_dynamic_init (void)
+   _dl_main_map.l_phdr = GL(dl_phdr);
+   _dl_main_map.l_phnum = GL(dl_phnum);
+ 
+-  if (HP_SMALL_TIMING_AVAIL)
+-    HP_TIMING_NOW (_dl_cpuclock_offset);
+-
+   _dl_verbose = *(getenv ("LD_WARN") ?: "") == '\0' ? 0 : 1;
+ 
+   /* Set up the data structures for the system-supplied DSO early,
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 0aa1a2a19f649e16..e107bd14f9478a90 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -401,8 +401,6 @@ _dl_start_final (void *arg, struct dl_start_final_info *info)
+ # endif
+ #endif
+ 
+-  HP_TIMING_NOW (GL(dl_cpuclock_offset));
+-
+   /* Initialize the stack end variable.  */
+   __libc_stack_end = __builtin_frame_address (0);
+ 
+diff --git a/nptl/Makefile b/nptl/Makefile
+index 447dce0590295c9c..d6b37b6efd3b7d78 100644
+--- a/nptl/Makefile
++++ b/nptl/Makefile
+@@ -109,7 +109,6 @@ libpthread-routines = nptl-init nptlfreeres vars events version pt-interp \
+ 		      pthread_once \
+ 		      old_pthread_atfork \
+ 		      pthread_getcpuclockid \
+-		      pthread_clock_gettime pthread_clock_settime \
+ 		      shm-directory \
+ 		      sem_init sem_destroy \
+ 		      sem_open sem_close sem_unlink \
+diff --git a/nptl/allocatestack.c b/nptl/allocatestack.c
+index d0971a97fdbe098e..5fa45b19987717e1 100644
+--- a/nptl/allocatestack.c
++++ b/nptl/allocatestack.c
+@@ -964,54 +964,6 @@ __reclaim_stacks (void)
+ }
+ 
+ 
+-#if HP_TIMING_AVAIL
+-# undef __find_thread_by_id
+-/* Find a thread given the thread ID.  */
+-attribute_hidden
+-struct pthread *
+-__find_thread_by_id (pid_t tid)
+-{
+-  struct pthread *result = NULL;
+-
+-  lll_lock (stack_cache_lock, LLL_PRIVATE);
+-
+-  /* Iterate over the list with system-allocated threads first.  */
+-  list_t *runp;
+-  list_for_each (runp, &stack_used)
+-    {
+-      struct pthread *curp;
+-
+-      curp = list_entry (runp, struct pthread, list);
+-
+-      if (curp->tid == tid)
+-	{
+-	  result = curp;
+-	  goto out;
+-	}
+-    }
+-
+-  /* Now the list with threads using user-allocated stacks.  */
+-  list_for_each (runp, &__stack_user)
+-    {
+-      struct pthread *curp;
+-
+-      curp = list_entry (runp, struct pthread, list);
+-
+-      if (curp->tid == tid)
+-	{
+-	  result = curp;
+-	  goto out;
+-	}
+-    }
+-
+- out:
+-  lll_unlock (stack_cache_lock, LLL_PRIVATE);
+-
+-  return result;
+-}
+-#endif
+-
+-
+ #ifdef SIGSETXID
+ static void
+ setxid_mark_thread (struct xid_command *cmdp, struct pthread *t)
+diff --git a/nptl/descr.h b/nptl/descr.h
+index 9c01e1b9863b178c..c3b81d8b27839502 100644
+--- a/nptl/descr.h
++++ b/nptl/descr.h
+@@ -343,8 +343,7 @@ struct pthread
+   unsigned int setxid_futex;
+ 
+ #if HP_TIMING_AVAIL
+-  /* Offset of the CPU clock at start thread start time.  */
+-  hp_timing_t cpuclock_offset;
++  hp_timing_t cpuclock_offset_ununsed;
+ #endif
+ 
+   /* If the thread waits to join another one the ID of the latter is
+diff --git a/nptl/nptl-init.c b/nptl/nptl-init.c
+index 907411d5bca2af79..098bc059f4771ef2 100644
+--- a/nptl/nptl-init.c
++++ b/nptl/nptl-init.c
+@@ -275,9 +275,6 @@ __pthread_initialize_minimal_internal (void)
+   THREAD_SETMEM (pd, user_stack, true);
+   if (LLL_LOCK_INITIALIZER != 0)
+     THREAD_SETMEM (pd, lock, LLL_LOCK_INITIALIZER);
+-#if HP_TIMING_AVAIL
+-  THREAD_SETMEM (pd, cpuclock_offset, GL(dl_cpuclock_offset));
+-#endif
+ 
+   /* Initialize the robust mutex data.  */
+   {
+diff --git a/nptl/pthreadP.h b/nptl/pthreadP.h
+index 19efe1e35feed5be..00be8f92793e8710 100644
+--- a/nptl/pthreadP.h
++++ b/nptl/pthreadP.h
+@@ -406,16 +406,6 @@ extern int __pthread_multiple_threads attribute_hidden;
+ extern int *__libc_multiple_threads_ptr attribute_hidden;
+ #endif
+ 
+-/* Find a thread given its TID.  */
+-extern struct pthread *__find_thread_by_id (pid_t tid) attribute_hidden
+-#ifdef SHARED
+-;
+-#else
+-weak_function;
+-#define __find_thread_by_id(tid) \
+-  (__find_thread_by_id ? (__find_thread_by_id) (tid) : (struct pthread *) NULL)
+-#endif
+-
+ extern void __pthread_init_static_tls (struct link_map *) attribute_hidden;
+ 
+ extern size_t __pthread_get_minstack (const pthread_attr_t *attr);
+diff --git a/nptl/pthread_clock_gettime.c b/nptl/pthread_clock_gettime.c
+deleted file mode 100644
+index 6bc75cfe3f1ff856..0000000000000000
+--- a/nptl/pthread_clock_gettime.c
++++ /dev/null
+@@ -1,67 +0,0 @@
+-/* Copyright (C) 2001-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License as
+-   published by the Free Software Foundation; either version 2.1 of the
+-   License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; see the file COPYING.LIB.  If
+-   not, see <http://www.gnu.org/licenses/>.  */
+-
+-#include <errno.h>
+-#include <stdlib.h>
+-#include <time.h>
+-#include "pthreadP.h"
+-
+-
+-#if HP_TIMING_AVAIL
+-int
+-__pthread_clock_gettime (clockid_t clock_id, hp_timing_t freq,
+-			 struct timespec *tp)
+-{
+-  hp_timing_t tsc;
+-
+-  /* Get the current counter.  */
+-  HP_TIMING_NOW (tsc);
+-
+-  /* This is the ID of the thread we are looking for.  */
+-  pid_t tid = ((unsigned int) clock_id) >> CLOCK_IDFIELD_SIZE;
+-
+-  /* Compute the offset since the start time of the process.  */
+-  if (tid == 0 || tid == THREAD_GETMEM (THREAD_SELF, tid))
+-    /* Our own clock.  */
+-    tsc -= THREAD_GETMEM (THREAD_SELF, cpuclock_offset);
+-  else
+-    {
+-      /* This is more complicated.  We have to locate the thread based
+-	 on the ID.  This means walking the list of existing
+-	 threads.  */
+-      struct pthread *thread = __find_thread_by_id (tid);
+-      if (thread == NULL)
+-	{
+-	  __set_errno (EINVAL);
+-	  return -1;
+-	}
+-
+-      /* There is a race here.  The thread might terminate and the stack
+-	 become unusable.  But this is the user's problem.  */
+-      tsc -= thread->cpuclock_offset;
+-    }
+-
+-  /* Compute the seconds.  */
+-  tp->tv_sec = tsc / freq;
+-
+-  /* And the nanoseconds.  This computation should be stable until
+-     we get machines with about 16GHz frequency.  */
+-  tp->tv_nsec = ((tsc % freq) * 1000000000ull) / freq;
+-
+-  return 0;
+-}
+-#endif
+diff --git a/nptl/pthread_clock_settime.c b/nptl/pthread_clock_settime.c
+deleted file mode 100644
+index 29d35c64cfa817a3..0000000000000000
+--- a/nptl/pthread_clock_settime.c
++++ /dev/null
+@@ -1,54 +0,0 @@
+-/* Copyright (C) 2001-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public License as
+-   published by the Free Software Foundation; either version 2.1 of the
+-   License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; see the file COPYING.LIB.  If
+-   not, see <http://www.gnu.org/licenses/>.  */
+-
+-#include <errno.h>
+-#include <stdlib.h>
+-#include <time.h>
+-#include "pthreadP.h"
+-
+-
+-#if HP_TIMING_AVAIL
+-int
+-__pthread_clock_settime (clockid_t clock_id, hp_timing_t offset)
+-{
+-  /* This is the ID of the thread we are looking for.  */
+-  pid_t tid = ((unsigned int) clock_id) >> CLOCK_IDFIELD_SIZE;
+-
+-  /* Compute the offset since the start time of the process.  */
+-  if (tid == 0 || tid == THREAD_GETMEM (THREAD_SELF, tid))
+-    /* Our own clock.  */
+-    THREAD_SETMEM (THREAD_SELF, cpuclock_offset, offset);
+-  else
+-    {
+-      /* This is more complicated.  We have to locate the thread based
+-	 on the ID.  This means walking the list of existing
+-	 threads.  */
+-      struct pthread *thread = __find_thread_by_id (tid);
+-      if (thread == NULL)
+-	{
+-	  __set_errno (EINVAL);
+-	  return -1;
+-	}
+-
+-      /* There is a race here.  The thread might terminate and the stack
+-	 become unusable.  But this is the user's problem.  */
+-      thread->cpuclock_offset = offset;
+-    }
+-
+-  return 0;
+-}
+-#endif
+diff --git a/nptl/pthread_create.c b/nptl/pthread_create.c
+index fe75d04113b8aa3f..f58a15cd1c7bbb6f 100644
+--- a/nptl/pthread_create.c
++++ b/nptl/pthread_create.c
+@@ -379,13 +379,6 @@ START_THREAD_DEFN
+ {
+   struct pthread *pd = START_THREAD_SELF;
+ 
+-#if HP_TIMING_AVAIL
+-  /* Remember the time when the thread was started.  */
+-  hp_timing_t now;
+-  HP_TIMING_NOW (now);
+-  THREAD_SETMEM (pd, cpuclock_offset, now);
+-#endif
+-
+   /* Initialize resolver state pointer.  */
+   __resp = &pd->res;
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index c6b7e61badbfd513..f0185ce0d16c0f69 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -359,11 +359,6 @@ struct rtld_global
+   /* The object to be initialized first.  */
+   EXTERN struct link_map *_dl_initfirst;
+ 
+-#if HP_SMALL_TIMING_AVAIL
+-  /* Start time on CPU clock.  */
+-  EXTERN hp_timing_t _dl_cpuclock_offset;
+-#endif
+-
+   /* Map of shared object to be profiled.  */
+   EXTERN struct link_map *_dl_profile_map;
+ 
+diff --git a/sysdeps/mach/hurd/dl-sysdep.c b/sysdeps/mach/hurd/dl-sysdep.c
+index b72913d3baaed1d9..7bd1d70c96c229e0 100644
+--- a/sysdeps/mach/hurd/dl-sysdep.c
++++ b/sysdeps/mach/hurd/dl-sysdep.c
+@@ -62,10 +62,6 @@ int __libc_multiple_libcs = 0;	/* Defining this here avoids the inclusion
+ void *__libc_stack_end = NULL;
+ rtld_hidden_data_def(__libc_stack_end)
+ 
+-#if HP_TIMING_AVAIL
+-hp_timing_t _dl_cpuclock_offset;
+-#endif
+-
+ /* TODO: Initialize.  */
+ void *_dl_random attribute_relro = NULL;
+ 
+@@ -246,10 +242,6 @@ unfmh();			/* XXX */
+   /* Initialize frequently used global variable.  */
+   GLRO(dl_pagesize) = __getpagesize ();
+ 
+-#if HP_TIMING_AVAIL
+-  HP_TIMING_NOW (_dl_cpuclock_offset);
+-#endif
+-
+ fmh();				/* XXX */
+ 
+   /* See hurd/hurdstartup.c; this deals with getting information
+diff --git a/sysdeps/nptl/fork.c b/sysdeps/nptl/fork.c
+index 1a9429b579cd346e..37db30f3d1e846b6 100644
+--- a/sysdeps/nptl/fork.c
++++ b/sysdeps/nptl/fork.c
+@@ -83,14 +83,6 @@ __libc_fork (void)
+       if (__fork_generation_pointer != NULL)
+ 	*__fork_generation_pointer += __PTHREAD_ONCE_FORK_GEN_INCR;
+ 
+-#if HP_TIMING_AVAIL
+-      /* The CPU clock of the thread and process have to be set to zero.  */
+-      hp_timing_t now;
+-      HP_TIMING_NOW (now);
+-      THREAD_SETMEM (self, cpuclock_offset, now);
+-      GL(dl_cpuclock_offset) = now;
+-#endif
+-
+ #ifdef __NR_set_robust_list
+       /* Initialize the robust mutex list setting in the kernel which has
+ 	 been reset during the fork.  We do not check for errors because if
+diff --git a/sysdeps/posix/clock_getres.c b/sysdeps/posix/clock_getres.c
+index 43228c381e6a73f1..5b0d8eb8a1a0593e 100644
+--- a/sysdeps/posix/clock_getres.c
++++ b/sysdeps/posix/clock_getres.c
+@@ -24,37 +24,6 @@
+ #include <libc-internal.h>
+ 
+ 
+-#if HP_TIMING_AVAIL
+-static long int nsec;		/* Clock frequency of the processor.  */
+-
+-static int
+-hp_timing_getres (struct timespec *res)
+-{
+-  if (__glibc_unlikely (nsec == 0))
+-    {
+-      hp_timing_t freq;
+-
+-      /* This can only happen if we haven't initialized the `nsec'
+-	 variable yet.  Do this now.  We don't have to protect this
+-	 code against multiple execution since all of them should
+-	 lead to the same result.  */
+-      freq = __get_clockfreq ();
+-      if (__glibc_unlikely (freq == 0))
+-	/* Something went wrong.  */
+-	return -1;
+-
+-      nsec = MAX (UINT64_C (1000000000) / freq, 1);
+-    }
+-
+-  /* Fill in the values.
+-     The seconds are always zero (unless we have a 1Hz machine).  */
+-  res->tv_sec = 0;
+-  res->tv_nsec = nsec;
+-
+-  return 0;
+-}
+-#endif
+-
+ static inline int
+ realtime_getres (struct timespec *res)
+ {
+@@ -87,21 +56,8 @@ __clock_getres (clockid_t clock_id, struct timespec *res)
+       break;
+ 
+     default:
+-#if HP_TIMING_AVAIL
+-      if ((clock_id & ((1 << CLOCK_IDFIELD_SIZE) - 1))
+-	  == CLOCK_THREAD_CPUTIME_ID)
+-	retval = hp_timing_getres (res);
+-      else
+-#endif
+-	__set_errno (EINVAL);
+-      break;
+-
+-#if HP_TIMING_AVAIL
+-    case CLOCK_PROCESS_CPUTIME_ID:
+-    case CLOCK_THREAD_CPUTIME_ID:
+-      retval = hp_timing_getres (res);
++      __set_errno (EINVAL);
+       break;
+-#endif
+     }
+ 
+   return retval;
+diff --git a/sysdeps/unix/clock_gettime.c b/sysdeps/unix/clock_gettime.c
+index f19fdf7e5f310973..f3ebbe15ccc2e95e 100644
+--- a/sysdeps/unix/clock_gettime.c
++++ b/sysdeps/unix/clock_gettime.c
+@@ -24,57 +24,6 @@
+ #include <ldsodefs.h>
+ 
+ 
+-#if HP_TIMING_AVAIL
+-/* Clock frequency of the processor.  We make it a 64-bit variable
+-   because some jokers are already playing with processors with more
+-   than 4GHz.  */
+-static hp_timing_t freq;
+-
+-
+-/* This function is defined in the thread library.  */
+-extern int __pthread_clock_gettime (clockid_t clock_id, hp_timing_t freq,
+-				    struct timespec *tp)
+-     __attribute__ ((__weak__));
+-
+-static int
+-hp_timing_gettime (clockid_t clock_id, struct timespec *tp)
+-{
+-  hp_timing_t tsc;
+-
+-  if (__glibc_unlikely (freq == 0))
+-    {
+-      /* This can only happen if we haven't initialized the `freq'
+-	 variable yet.  Do this now. We don't have to protect this
+-	 code against multiple execution since all of them should
+-	 lead to the same result.  */
+-      freq = __get_clockfreq ();
+-      if (__glibc_unlikely (freq == 0))
+-	/* Something went wrong.  */
+-	return -1;
+-    }
+-
+-  if (clock_id != CLOCK_PROCESS_CPUTIME_ID
+-      && __pthread_clock_gettime != NULL)
+-    return __pthread_clock_gettime (clock_id, freq, tp);
+-
+-  /* Get the current counter.  */
+-  HP_TIMING_NOW (tsc);
+-
+-  /* Compute the offset since the start time of the process.  */
+-  tsc -= GL(dl_cpuclock_offset);
+-
+-  /* Compute the seconds.  */
+-  tp->tv_sec = tsc / freq;
+-
+-  /* And the nanoseconds.  This computation should be stable until
+-     we get machines with about 16GHz frequency.  */
+-  tp->tv_nsec = ((tsc % freq) * UINT64_C (1000000000)) / freq;
+-
+-  return 0;
+-}
+-#endif
+-
+-
+ static inline int
+ realtime_gettime (struct timespec *tp)
+ {
+@@ -105,20 +54,8 @@ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+       break;
+ 
+     default:
+-#if HP_TIMING_AVAIL
+-      if ((clock_id & ((1 << CLOCK_IDFIELD_SIZE) - 1))
+-	  == CLOCK_THREAD_CPUTIME_ID)
+-	retval = hp_timing_gettime (clock_id, tp);
+-      else
+-#endif
+-	__set_errno (EINVAL);
+-      break;
+-
+-#if HP_TIMING_AVAIL
+-    case CLOCK_PROCESS_CPUTIME_ID:
+-      retval = hp_timing_gettime (clock_id, tp);
++      __set_errno (EINVAL);
+       break;
+-#endif
+     }
+ 
+   return retval;
+diff --git a/sysdeps/unix/clock_nanosleep.c b/sysdeps/unix/clock_nanosleep.c
+index 97b3d6b6ab9e4581..13dd0f4b905ec631 100644
+--- a/sysdeps/unix/clock_nanosleep.c
++++ b/sysdeps/unix/clock_nanosleep.c
+@@ -19,23 +19,8 @@
+ #include <assert.h>
+ #include <errno.h>
+ #include <time.h>
+-#include <hp-timing.h>
+ #include <sysdep-cancel.h>
+ 
+-#if HP_TIMING_AVAIL
+-# define CPUCLOCK_P(clock) \
+-  ((clock) == CLOCK_PROCESS_CPUTIME_ID					      \
+-   || ((clock) & ((1 << CLOCK_IDFIELD_SIZE) - 1)) == CLOCK_THREAD_CPUTIME_ID)
+-#else
+-# define CPUCLOCK_P(clock) 0
+-#endif
+-
+-#ifndef INVALID_CLOCK_P
+-# define INVALID_CLOCK_P(cl) \
+-  ((cl) < CLOCK_REALTIME || (cl) > CLOCK_THREAD_CPUTIME_ID)
+-#endif
+-
+-
+ /* This implementation assumes that these is only a `nanosleep' system
+    call.  So we have to remap all other activities.  */
+ int
+@@ -51,14 +36,7 @@ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+   if (clock_id == CLOCK_THREAD_CPUTIME_ID)
+     return EINVAL;		/* POSIX specifies EINVAL for this case.  */
+ 
+-#ifdef SYSDEP_NANOSLEEP
+-  SYSDEP_NANOSLEEP;
+-#endif
+-
+-  if (CPUCLOCK_P (clock_id))
+-    return ENOTSUP;
+-
+-  if (INVALID_CLOCK_P (clock_id))
++  if (clock_id < CLOCK_REALTIME || clock_id > CLOCK_THREAD_CPUTIME_ID)
+     return EINVAL;
+ 
+   /* If we got an absolute time, remap it.  */
+@@ -71,7 +49,7 @@ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+       assert (sizeof (sec) >= sizeof (now.tv_sec));
+ 
+       /* Get the current time for this clock.  */
+-      if (__builtin_expect (__clock_gettime (clock_id, &now), 0) != 0)
++      if (__clock_gettime (clock_id, &now) != 0)
+ 	return errno;
+ 
+       /* Compute the difference.  */
+@@ -90,12 +68,12 @@ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+       /* Make sure we are not modifying the struct pointed to by REM.  */
+       rem = NULL;
+     }
+-  else if (__builtin_expect (flags, 0) != 0)
++  else if (flags != 0)
+     return EINVAL;
+   else if (clock_id != CLOCK_REALTIME)
+     /* Not supported.  */
+     return ENOTSUP;
+ 
+-  return __builtin_expect (__nanosleep (req, rem), 0) ? errno : 0;
++  return __nanosleep (req, rem), 0 ? errno : 0;
+ }
+ weak_alias (__clock_nanosleep, clock_nanosleep)
+diff --git a/sysdeps/unix/clock_settime.c b/sysdeps/unix/clock_settime.c
+index 9d5857e61b966b44..4f5640f67047cef6 100644
+--- a/sysdeps/unix/clock_settime.c
++++ b/sysdeps/unix/clock_settime.c
+@@ -21,59 +21,11 @@
+ #include <ldsodefs.h>
+ 
+ 
+-#if HP_TIMING_AVAIL
+-/* Clock frequency of the processor.  We make it a 64-bit variable
+-   because some jokers are already playing with processors with more
+-   than 4GHz.  */
+-static hp_timing_t freq;
+-
+-
+-/* This function is defined in the thread library.  */
+-extern void __pthread_clock_settime (clockid_t clock_id, hp_timing_t offset)
+-     __attribute__ ((__weak__));
+-
+-
+-static int
+-hp_timing_settime (clockid_t clock_id, const struct timespec *tp)
+-{
+-  hp_timing_t tsc;
+-  hp_timing_t usertime;
+-
+-  /* First thing is to get the current time.  */
+-  HP_TIMING_NOW (tsc);
+-
+-  if (__glibc_unlikely (freq == 0))
+-    {
+-      /* This can only happen if we haven't initialized the `freq'
+-	 variable yet.  Do this now. We don't have to protect this
+-	 code against multiple execution since all of them should lead
+-	 to the same result.  */
+-      freq = __get_clockfreq ();
+-      if (__glibc_unlikely (freq == 0))
+-	/* Something went wrong.  */
+-	return -1;
+-    }
+-
+-  /* Convert the user-provided time into CPU ticks.  */
+-  usertime = tp->tv_sec * freq + (tp->tv_nsec * freq) / 1000000000ull;
+-
+-  /* Determine the offset and use it as the new base value.  */
+-  if (clock_id == CLOCK_PROCESS_CPUTIME_ID
+-      || __pthread_clock_settime == NULL)
+-    GL(dl_cpuclock_offset) = tsc - usertime;
+-  else
+-    __pthread_clock_settime (clock_id, tsc - usertime);
+-
+-  return 0;
+-}
+-#endif
+-
+-
+ /* Set CLOCK to value TP.  */
+ int
+ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+ {
+-  int retval;
++  int retval = -1;
+ 
+   /* Make sure the time cvalue is OK.  */
+   if (tp->tv_nsec < 0 || tp->tv_nsec >= 1000000000)
+@@ -93,16 +45,7 @@ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+       break;
+ 
+     default:
+-# if HP_TIMING_AVAIL
+-      if (CPUCLOCK_WHICH (clock_id) == CLOCK_PROCESS_CPUTIME_ID
+-	  || CPUCLOCK_WHICH (clock_id) == CLOCK_THREAD_CPUTIME_ID)
+-	retval = hp_timing_settime (clock_id, tp);
+-      else
+-# endif
+-	{
+-	  __set_errno (EINVAL);
+-	  retval = -1;
+-	}
++      __set_errno (EINVAL);
+       break;
+     }
+ 

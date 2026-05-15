@@ -1,0 +1,74 @@
+Additionally include stdbool.h to fix issues with bool keyword usage.
+
+commit 60854f40ea2d420867ed2f0f052ee7fca661dbff
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Oct 15 15:14:22 2020 -0300
+
+    support: Add create_temp_file_in_dir
+    
+    It allows created a temporary file in a specified directory.
+
+diff --git a/support/support.h b/support/support.h
+index f50f8cc1496d657d..96833bd4e992e6d3 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -23,6 +23,7 @@
+ #ifndef SUPPORT_H
+ #define SUPPORT_H
+ 
++#include <stdbool.h>
+ #include <stddef.h>
+ #include <sys/cdefs.h>
+ /* For mode_t.  */
+diff --git a/support/temp_file.c b/support/temp_file.c
+index 0bbc7f997264f758..5a2728c94a9c32ae 100644
+--- a/support/temp_file.c
++++ b/support/temp_file.c
+@@ -60,14 +60,12 @@ add_temp_file (const char *name)
+ }
+ 
+ int
+-create_temp_file (const char *base, char **filename)
++create_temp_file_in_dir (const char *base, const char *dir, char **filename)
+ {
+   char *fname;
+   int fd;
+ 
+-  fname = (char *) xmalloc (strlen (test_dir) + 1 + strlen (base)
+-			    + sizeof ("XXXXXX"));
+-  strcpy (stpcpy (stpcpy (stpcpy (fname, test_dir), "/"), base), "XXXXXX");
++  fname = xasprintf ("%s/%sXXXXXX", dir, base);
+ 
+   fd = mkstemp (fname);
+   if (fd == -1)
+@@ -86,6 +84,12 @@ create_temp_file (const char *base, char **filename)
+   return fd;
+ }
+ 
++int
++create_temp_file (const char *base, char **filename)
++{
++  return create_temp_file_in_dir (base, test_dir, filename);
++}
++
+ char *
+ support_create_temp_directory (const char *base)
+ {
+diff --git a/support/temp_file.h b/support/temp_file.h
+index c7795cc577ca22a9..d64563f41f1f50cd 100644
+--- a/support/temp_file.h
++++ b/support/temp_file.h
+@@ -32,6 +32,13 @@ void add_temp_file (const char *name);
+    *FILENAME.  */
+ int create_temp_file (const char *base, char **filename);
+ 
++/* Create a temporary file in directory DIR.  Return the opened file
++   descriptor on success, or -1 on failure.  Write the file name to
++   *FILENAME if FILENAME is not NULL.  In this case, the caller is
++   expected to free *FILENAME.  */
++int create_temp_file_in_dir (const char *base, const char *dir,
++			     char **filename);
++
+ /* Create a temporary directory and schedule it for deletion.  BASE is
+    used as a prefix for the unique directory name, which the function
+    returns.  The caller should free this string.  */

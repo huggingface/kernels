@@ -1,0 +1,202 @@
+commit 5ecc98241229d494aaad23a4a3fe106fe11e1f40
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Aug 25 16:34:20 2022 +0200
+
+    s390: Move hwcaps/platform names out of _rtld_global_ro
+    
+    Changes to these arrays are often backported to stable releases,
+    but additions to these arrays shift the offsets of the following
+    _rltd_global_ro members, thus breaking the GLIBC_PRIVATE ABI.
+    
+    Obviously, this change is itself an internal ABI break, but at least
+    it will avoid further ABI breaks going forward.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	sysdeps/s390/Makefile
+	  (missing lazy binding test downstream)
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 5c8e1170b4d799ba..ea453ba87646c95a 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -42,6 +42,10 @@ $(modpfx)gconv-modules-s390.conf: ../sysdeps/s390/gconv-modules-s390.conf \
+ 	cp $< $@
+ endif
+ 
++ifeq ($(subdir),elf)
++sysdep-dl-routines += dl-procinfo-s390
++endif
++
+ ifeq ($(subdir),string)
+ sysdep_routines += bzero memset memset-z900 \
+ 		   memcmp memcmp-z900 \
+diff --git a/sysdeps/s390/dl-procinfo-s390.c b/sysdeps/s390/dl-procinfo-s390.c
+new file mode 100644
+index 0000000000000000..559f3827936cd017
+--- /dev/null
++++ b/sysdeps/s390/dl-procinfo-s390.c
+@@ -0,0 +1,32 @@
++/* Data for s390 version of processor capability information.
++   Copyright (C) 2006-2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-procinfo.h>
++
++const char _dl_s390_cap_flags[_DL_HWCAP_COUNT][9] =
++  {
++    "esan3", "zarch", "stfle", "msa", "ldisp", "eimm", "dfp", "edat", "etf3eh",
++    "highgprs", "te", "vx", "vxd", "vxe", "gs", "vxe2", "vxp", "sort", "dflt",
++    "vxp2", "nnpa", "pcimio", "sie"
++  };
++
++const char _dl_s390_platforms[_DL_PLATFORMS_COUNT][7] =
++  {
++    "g5", "z900", "z990", "z9-109", "z10", "z196", "zEC12", "z13", "z14", "z15",
++    "z16"
++  };
+diff --git a/sysdeps/s390/dl-procinfo.c b/sysdeps/s390/dl-procinfo.c
+index 85108943d0e79f29..f928b485609a3b8a 100644
+--- a/sysdeps/s390/dl-procinfo.c
++++ b/sysdeps/s390/dl-procinfo.c
+@@ -17,66 +17,10 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-/* This information must be kept in sync with the _DL_HWCAP_COUNT and
+-   _DL_PLATFORM_COUNT definitions in procinfo.h.
+-
+-   If anything should be added here check whether the size of each string
+-   is still ok with the given array size.
+-
+-   All the #ifdefs in the definitions are quite irritating but
+-   necessary if we want to avoid duplicating the information.  There
+-   are three different modes:
+-
+-   - PROCINFO_DECL is defined.  This means we are only interested in
+-     declarations.
+-
+-   - PROCINFO_DECL is not defined:
+-
+-     + if SHARED is defined the file is included in an array
+-       initializer.  The .element = { ... } syntax is needed.
+-
+-     + if SHARED is not defined a normal array initialization is
+-       needed.
+-  */
+-
+-#ifndef PROCINFO_CLASS
+-# define PROCINFO_CLASS
+-#endif
+-
+-#if !defined PROCINFO_DECL && defined SHARED
+-  ._dl_s390_cap_flags
+-#else
+-PROCINFO_CLASS const char _dl_s390_cap_flags[23][9]
+-#endif
+-#ifndef PROCINFO_DECL
+-= {
+-     "esan3", "zarch", "stfle", "msa", "ldisp", "eimm", "dfp", "edat", "etf3eh",
+-     "highgprs", "te", "vx", "vxd", "vxe", "gs", "vxe2", "vxp", "sort", "dflt",
+-     "vxp2", "nnpa", "pcimio", "sie"
+-  }
+-#endif
+-#if !defined SHARED || defined PROCINFO_DECL
+-;
+-#else
+-,
+-#endif
+-
+-#if !defined PROCINFO_DECL && defined SHARED
+-  ._dl_s390_platforms
+-#else
+-PROCINFO_CLASS const char _dl_s390_platforms[11][7]
+-#endif
+-#ifndef PROCINFO_DECL
+-= {
+-    "g5", "z900", "z990", "z9-109", "z10", "z196", "zEC12", "z13", "z14", "z15",
+-    "z16"
+-  }
+-#endif
+-#if !defined SHARED || defined PROCINFO_DECL
+-;
+-#else
+-,
+-#endif
++/* The hwcap and platform strings are now in
++   sysdeps/s390/dl-procinfo-s390.c.  */
+ 
++/* Needed by sysdeps/unix/sysv/linux/dl-vdso-setup.c (as included from
++   sysdeps/generic/ldsodefs.h).  */
+ #undef PROCINFO_DECL
+ #undef PROCINFO_CLASS
+diff --git a/sysdeps/s390/dl-procinfo.h b/sysdeps/s390/dl-procinfo.h
+index f2b2c9ac1bb7239b..5eb2c0a39fcff520 100644
+--- a/sysdeps/s390/dl-procinfo.h
++++ b/sysdeps/s390/dl-procinfo.h
+@@ -22,8 +22,10 @@
+ #include <ldsodefs.h>
+ 
+ #define _DL_HWCAP_COUNT 23
++extern const char _dl_s390_cap_flags[_DL_HWCAP_COUNT][9] attribute_hidden;
+ 
+ #define _DL_PLATFORMS_COUNT	11
++extern const char _dl_s390_platforms[_DL_PLATFORMS_COUNT][7] attribute_hidden;
+ 
+ /* The kernel provides up to 32 capability bits with elf_hwcap.  */
+ #define _DL_FIRST_PLATFORM	32
+@@ -79,7 +81,7 @@ static inline const char *
+ __attribute__ ((unused))
+ _dl_hwcap_string (int idx)
+ {
+-  return GLRO(dl_s390_cap_flags)[idx];
++  return _dl_s390_cap_flags[idx];
+ };
+ 
+ static inline int
+@@ -90,7 +92,7 @@ _dl_string_hwcap (const char *str)
+ 
+   for (i = 0; i < _DL_HWCAP_COUNT; i++)
+     {
+-      if (strcmp (str, GLRO(dl_s390_cap_flags)[i]) == 0)
++      if (strcmp (str, _dl_s390_cap_flags[i]) == 0)
+ 	return i;
+     }
+   return -1;
+@@ -105,7 +107,7 @@ _dl_string_platform (const char *str)
+   if (str != NULL)
+     for (i = 0; i < _DL_PLATFORMS_COUNT; ++i)
+       {
+-	if (strcmp (str, GLRO(dl_s390_platforms)[i]) == 0)
++	if (strcmp (str, _dl_s390_platforms[i]) == 0)
+ 	  return _DL_FIRST_PLATFORM + i;
+       }
+   return -1;
+diff --git a/sysdeps/unix/sysv/linux/s390/dl-procinfo.h b/sysdeps/unix/sysv/linux/s390/dl-procinfo.h
+index d1516a05e3042163..4aefd7eef14eaf52 100644
+--- a/sysdeps/unix/sysv/linux/s390/dl-procinfo.h
++++ b/sysdeps/unix/sysv/linux/s390/dl-procinfo.h
+@@ -40,7 +40,7 @@ _dl_procinfo (unsigned int type, unsigned long int word)
+ 
+   for (i = 0; i < _DL_HWCAP_COUNT; ++i)
+     if (word & (1UL << i))
+-      _dl_printf (" %s", GLRO(dl_s390_cap_flags)[i]);
++      _dl_printf (" %s", _dl_s390_cap_flags[i]);
+ 
+   _dl_printf ("\n");
+ 

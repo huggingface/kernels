@@ -1,0 +1,745 @@
+commit 6e8ba7fd574f530afb9681f21604475d5756d773
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Feb 8 16:53:40 2019 +0000
+
+    Remove __get_clockfreq
+    
+    With clock_getres, clock_gettime, and clock_settime refactor to remove the
+    generic CLOCK_PROCESS_CPUTIME_ID and CLOCK_THREAD_CPUTIME_ID support through
+    hp-timing, there is no usage of internal __get_clockfreq.  This patch removes
+    both generic and Linux implementation..
+    
+    Checked with a build against aarch64-linux-gnu, i686-linux-gnu, ia64-linux-gnu,
+    sparc64-linux-gnu, powerpc-linux-gnu-power4.
+    
+            * include/libc-internal.h (__get_clockfreq): Remove prototype.
+            * rt/Makefile (clock-routines): Remove get_clockfreq.
+            * rt/get_clockfreq.c: Remove file.
+            * sysdeps/unix/sysv/linux/i386/get_clockfreq.c: Likewise.
+            * sysdeps/unix/sysv/linux/ia64/get_clockfreq.c: Likewise.
+            * sysdeps/unix/sysv/linux/sparc/sparc64/get_clockfreq.c: Likewise.
+            * sysdeps/unix/sysv/linux/powerpc/get_clockfreq.c: Move code to ...
+            * sysdeps/unix/sysv/linux/powerpc/get_timebase_freq.c: ... here.
+
+Conflicts:
+	rt/get_clockfreq.c
+	sysdeps/unix/sysv/linux/i386/get_clockfreq.c
+	sysdeps/unix/sysv/linux/ia64/get_clockfreq.c
+	sysdeps/unix/sysv/linux/powerpc/get_clockfreq.c
+	  (Removal after copyright year change upstream.)
+	sysdeps/unix/sysv/linux/sparc/sparc64/get_clockfreq.c
+	  (Likewise.  Missing backport of aa0e46636a5b71 ("Break
+	  further lines before not after operators.").)
+
+diff --git a/include/libc-internal.h b/include/libc-internal.h
+index 2167990c52bd708b..2ec07d9355db1808 100644
+--- a/include/libc-internal.h
++++ b/include/libc-internal.h
+@@ -36,9 +36,6 @@ libc_hidden_proto (__profile_frequency)
+ extern void __cyg_profile_func_enter (void *this_fn, void *call_site);
+ extern void __cyg_profile_func_exit (void *this_fn, void *call_site);
+ 
+-/* Get frequency of the system processor.  */
+-extern hp_timing_t __get_clockfreq (void);
+-
+ /* Free all allocated resources.  */
+ extern void __libc_freeres (void);
+ libc_hidden_proto (__libc_freeres)
+diff --git a/rt/Makefile b/rt/Makefile
+index 6d6b896ee9817c5c..14f38ef74d262188 100644
+--- a/rt/Makefile
++++ b/rt/Makefile
+@@ -28,7 +28,7 @@ aio-routines   := aio_cancel aio_error aio_fsync aio_misc aio_read	\
+ 		  aio_read64 aio_return aio_suspend aio_write		\
+ 		  aio_write64 lio_listio lio_listio64 aio_sigqueue	\
+ 		  aio_notify
+-clock-routines := get_clockfreq clock_getcpuclockid			\
++clock-routines := clock_getcpuclockid					\
+ 		  clock_getres clock_gettime clock_settime		\
+ 		  clock_nanosleep
+ timer-routines := timer_create timer_delete timer_getoverr		\
+diff --git a/rt/get_clockfreq.c b/rt/get_clockfreq.c
+deleted file mode 100644
+index e695a6018c0b8322..0000000000000000
+--- a/rt/get_clockfreq.c
++++ /dev/null
+@@ -1,27 +0,0 @@
+-/* Get frequency of the system processor.
+-   Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <libc-internal.h>
+-
+-hp_timing_t
+-__get_clockfreq (void)
+-{
+-  /* There is no generic way to find this out since we have in general
+-     no counter register either.  */
+-  return 0;
+-}
+diff --git a/sysdeps/unix/sysv/linux/i386/get_clockfreq.c b/sysdeps/unix/sysv/linux/i386/get_clockfreq.c
+deleted file mode 100644
+index 633f186be80f10b0..0000000000000000
+--- a/sysdeps/unix/sysv/linux/i386/get_clockfreq.c
++++ /dev/null
+@@ -1,88 +0,0 @@
+-/* Get frequency of the system processor.  i386/Linux version.
+-   Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <ctype.h>
+-#include <fcntl.h>
+-#include <string.h>
+-#include <unistd.h>
+-
+-hp_timing_t
+-__get_clockfreq (void)
+-{
+-  /* We read the information from the /proc filesystem.  It contains at
+-     least one line like
+-	cpu MHz         : 497.840237
+-     or also
+-	cpu MHz         : 497.841
+-     We search for this line and convert the number in an integer.  */
+-  static hp_timing_t result;
+-  int fd;
+-
+-  /* If this function was called before, we know the result.  */
+-  if (result != 0)
+-    return result;
+-
+-  fd = __open ("/proc/cpuinfo", O_RDONLY);
+-  if (__glibc_likely (fd != -1))
+-    {
+-      /* XXX AFAIK the /proc filesystem can generate "files" only up
+-         to a size of 4096 bytes.  */
+-      char buf[4096];
+-      ssize_t n;
+-
+-      n = __read (fd, buf, sizeof buf);
+-      if (__builtin_expect (n, 1) > 0)
+-	{
+-	  char *mhz = memmem (buf, n, "cpu MHz", 7);
+-
+-	  if (__glibc_likely (mhz != NULL))
+-	    {
+-	      char *endp = buf + n;
+-	      int seen_decpoint = 0;
+-	      int ndigits = 0;
+-
+-	      /* Search for the beginning of the string.  */
+-	      while (mhz < endp && (*mhz < '0' || *mhz > '9') && *mhz != '\n')
+-		++mhz;
+-
+-	      while (mhz < endp && *mhz != '\n')
+-		{
+-		  if (*mhz >= '0' && *mhz <= '9')
+-		    {
+-		      result *= 10;
+-		      result += *mhz - '0';
+-		      if (seen_decpoint)
+-			++ndigits;
+-		    }
+-		  else if (*mhz == '.')
+-		    seen_decpoint = 1;
+-
+-		  ++mhz;
+-		}
+-
+-	      /* Compensate for missing digits at the end.  */
+-	      while (ndigits++ < 6)
+-		result *= 10;
+-	    }
+-	}
+-
+-      __close (fd);
+-    }
+-
+-  return result;
+-}
+diff --git a/sysdeps/unix/sysv/linux/ia64/get_clockfreq.c b/sysdeps/unix/sysv/linux/ia64/get_clockfreq.c
+deleted file mode 100644
+index f9d683a90247ac60..0000000000000000
+--- a/sysdeps/unix/sysv/linux/ia64/get_clockfreq.c
++++ /dev/null
+@@ -1,87 +0,0 @@
+-/* Get frequency of the system processor.  IA-64/Linux version.
+-   Copyright (C) 2001-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <ctype.h>
+-#include <fcntl.h>
+-#include <string.h>
+-#include <unistd.h>
+-
+-
+-hp_timing_t
+-__get_clockfreq (void)
+-{
+-  /* We read the information from the /proc filesystem.  It contains at
+-     least one line like
+-	itc MHz    : 733.390988
+-     We search for this line and convert the number in an integer.  */
+-  static hp_timing_t result;
+-  int fd;
+-
+-  /* If this function was called before, we know the result.  */
+-  if (result != 0)
+-    return result;
+-
+-  fd = __open ("/proc/cpuinfo", O_RDONLY);
+-  if (__builtin_expect (fd != -1, 1))
+-    {
+-      /* XXX AFAIK the /proc filesystem can generate "files" only up
+-         to a size of 4096 bytes.  */
+-      char buf[4096];
+-      ssize_t n;
+-
+-      n = __read (fd, buf, sizeof buf);
+-      if (__builtin_expect (n, 1) > 0)
+-	{
+-	  char *mhz = memmem (buf, n, "itc MHz", 7);
+-
+-	  if (__builtin_expect (mhz != NULL, 1))
+-	    {
+-	      char *endp = buf + n;
+-	      int seen_decpoint = 0;
+-	      int ndigits = 0;
+-
+-	      /* Search for the beginning of the string.  */
+-	      while (mhz < endp && (*mhz < '0' || *mhz > '9') && *mhz != '\n')
+-		++mhz;
+-
+-	      while (mhz < endp && *mhz != '\n')
+-		{
+-		  if (*mhz >= '0' && *mhz <= '9')
+-		    {
+-		      result *= 10;
+-		      result += *mhz - '0';
+-		      if (seen_decpoint)
+-			++ndigits;
+-		    }
+-		  else if (*mhz == '.')
+-		    seen_decpoint = 1;
+-
+-		  ++mhz;
+-		}
+-
+-	      /* Compensate for missing digits at the end.  */
+-	      while (ndigits++ < 6)
+-		result *= 10;
+-	    }
+-	}
+-
+-      __close (fd);
+-    }
+-
+-  return result;
+-}
+diff --git a/sysdeps/unix/sysv/linux/powerpc/get_clockfreq.c b/sysdeps/unix/sysv/linux/powerpc/get_clockfreq.c
+deleted file mode 100644
+index 3a2216021bfb5408..0000000000000000
+--- a/sysdeps/unix/sysv/linux/powerpc/get_clockfreq.c
++++ /dev/null
+@@ -1,107 +0,0 @@
+-/* Get frequency of the system processor.  powerpc/Linux version.
+-   Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <ctype.h>
+-#include <fcntl.h>
+-#include <stdint.h>
+-#include <string.h>
+-#include <unistd.h>
+-#include <sysdep.h>
+-#include <libc-vdso.h>
+-#include <not-cancel.h>
+-
+-hp_timing_t
+-__get_clockfreq (void)
+-{
+-  hp_timing_t result = 0L;
+-
+-#ifdef SHARED
+-  /* The vDSO does not return an error (it clear cr0.so on returning).  */
+-  INTERNAL_SYSCALL_DECL (err);
+-  result =
+-    INTERNAL_VSYSCALL_NO_SYSCALL_FALLBACK (get_tbfreq, err, uint64_t, 0);
+-#else
+-  /* We read the information from the /proc filesystem.  /proc/cpuinfo
+-     contains at least one line like:
+-     timebase        : 33333333
+-     We search for this line and convert the number into an integer.  */
+-  int fd = __open_nocancel ("/proc/cpuinfo", O_RDONLY);
+-  if (__glibc_likely (fd != -1))
+-    return result;
+-
+-  /* The timebase will be in the 1st 1024 bytes for systems with up
+-     to 8 processors.  If the first read returns less then 1024
+-     bytes read,  we have the whole cpuinfo and can start the scan.
+-     Otherwise we will have to read more to insure we have the
+-     timebase value in the scan.  */
+-  char buf[1024];
+-  ssize_t n;
+-
+-  n = __read_nocancel (fd, buf, sizeof (buf));
+-  if (n == sizeof (buf))
+-    {
+-      /* We are here because the 1st read returned exactly sizeof
+-         (buf) bytes.  This implies that we are not at EOF and may
+-         not have read the timebase value yet.  So we need to read
+-         more bytes until we know we have EOF.  We copy the lower
+-         half of buf to the upper half and read sizeof (buf)/2
+-         bytes into the lower half of buf and repeat until we
+-         reach EOF.  We can assume that the timebase will be in
+-         the last 512 bytes of cpuinfo, so two 512 byte half_bufs
+-         will be sufficient to contain the timebase and will
+-         handle the case where the timebase spans the half_buf
+-         boundry.  */
+-      const ssize_t half_buf = sizeof (buf) / 2;
+-      while (n >= half_buf)
+-	{
+-	  memcpy (buf, buf + half_buf, half_buf);
+-	  n = __read_nocancel (fd, buf + half_buf, half_buf);
+-	}
+-      if (n >= 0)
+-	n += half_buf;
+-    }
+-  __close_nocancel (fd);
+-
+-  if (__glibc_likely (n > 0))
+-    {
+-      char *mhz = memmem (buf, n, "timebase", 7);
+-
+-      if (__glibc_likely (mhz != NULL))
+-	{
+-	  char *endp = buf + n;
+-
+-	  /* Search for the beginning of the string.  */
+-	  while (mhz < endp && (*mhz < '0' || *mhz > '9') && *mhz != '\n')
+-	    ++mhz;
+-
+-	  while (mhz < endp && *mhz != '\n')
+-	    {
+-	      if (*mhz >= '0' && *mhz <= '9')
+-		{
+-		  result *= 10;
+-		  result += *mhz - '0';
+-		}
+-
+-	      ++mhz;
+-	    }
+-	}
+-    }
+-#endif
+-
+-  return result;
+-}
+diff --git a/sysdeps/unix/sysv/linux/powerpc/get_timebase_freq.c b/sysdeps/unix/sysv/linux/powerpc/get_timebase_freq.c
+index 6435e1f31529c7de..1177ccbc8faeafe7 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/get_timebase_freq.c
++++ b/sysdeps/unix/sysv/linux/powerpc/get_timebase_freq.c
+@@ -17,11 +17,90 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <stdint.h>
++#include <string.h>
++
+ #include <libc-internal.h>
++#include <not-cancel.h>
++#include <libc-vdso.h>
+ 
+ uint64_t
+ __get_timebase_freq (void)
+ {
+-  return (uint64_t) __get_clockfreq ();
++  hp_timing_t result = 0L;
++
++#ifdef SHARED
++  /* The vDSO does not return an error (it clear cr0.so on returning).  */
++  INTERNAL_SYSCALL_DECL (err);
++  result =
++    INTERNAL_VSYSCALL_NO_SYSCALL_FALLBACK (get_tbfreq, err, uint64_t, 0);
++#else
++  /* We read the information from the /proc filesystem.  /proc/cpuinfo
++     contains at least one line like:
++     timebase        : 33333333
++     We search for this line and convert the number into an integer.  */
++  int fd = __open_nocancel ("/proc/cpuinfo", O_RDONLY);
++  if (__glibc_likely (fd != -1))
++    return result;
++
++  /* The timebase will be in the 1st 1024 bytes for systems with up
++     to 8 processors.  If the first read returns less then 1024
++     bytes read,  we have the whole cpuinfo and can start the scan.
++     Otherwise we will have to read more to insure we have the
++     timebase value in the scan.  */
++  char buf[1024];
++  ssize_t n;
++
++  n = __read_nocancel (fd, buf, sizeof (buf));
++  if (n == sizeof (buf))
++    {
++      /* We are here because the 1st read returned exactly sizeof
++         (buf) bytes.  This implies that we are not at EOF and may
++         not have read the timebase value yet.  So we need to read
++         more bytes until we know we have EOF.  We copy the lower
++         half of buf to the upper half and read sizeof (buf)/2
++         bytes into the lower half of buf and repeat until we
++         reach EOF.  We can assume that the timebase will be in
++         the last 512 bytes of cpuinfo, so two 512 byte half_bufs
++         will be sufficient to contain the timebase and will
++         handle the case where the timebase spans the half_buf
++         boundry.  */
++      const ssize_t half_buf = sizeof (buf) / 2;
++      while (n >= half_buf)
++	{
++	  memcpy (buf, buf + half_buf, half_buf);
++	  n = __read_nocancel (fd, buf + half_buf, half_buf);
++	}
++      if (n >= 0)
++	n += half_buf;
++    }
++  __close_nocancel (fd);
++
++  if (__glibc_likely (n > 0))
++    {
++      char *mhz = memmem (buf, n, "timebase", 7);
++
++      if (__glibc_likely (mhz != NULL))
++	{
++	  char *endp = buf + n;
++
++	  /* Search for the beginning of the string.  */
++	  while (mhz < endp && (*mhz < '0' || *mhz > '9') && *mhz != '\n')
++	    ++mhz;
++
++	  while (mhz < endp && *mhz != '\n')
++	    {
++	      if (*mhz >= '0' && *mhz <= '9')
++		{
++		  result *= 10;
++		  result += *mhz - '0';
++		}
++
++	      ++mhz;
++	    }
++	}
++    }
++#endif
++
++  return result;
+ }
+ weak_alias (__get_timebase_freq, __ppc_get_timebase_freq)
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/get_clockfreq.c b/sysdeps/unix/sysv/linux/sparc/sparc64/get_clockfreq.c
+deleted file mode 100644
+index 6838a77a769ddae8..0000000000000000
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/get_clockfreq.c
++++ /dev/null
+@@ -1,250 +0,0 @@
+-/* Get frequency of the system processor.  sparc64 version.
+-   Copyright (C) 2001-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <ctype.h>
+-#include <fcntl.h>
+-#include <string.h>
+-#include <unistd.h>
+-#include <dirent.h>
+-#include <stdlib.h>
+-#include <inttypes.h>
+-#include <sys/ioctl.h>
+-#include <asm/openpromio.h>
+-
+-static hp_timing_t
+-__get_clockfreq_via_cpuinfo (void)
+-{
+-  hp_timing_t result;
+-  int fd;
+-
+-  result = 0;
+-
+-  fd = __open ("/proc/cpuinfo", O_RDONLY);
+-  if (fd != -1)
+-    {
+-      char buf[8192];
+-      ssize_t n;
+-
+-      n = __read (fd, buf, sizeof buf);
+-      if (n > 0)
+-	{
+-	  char *mhz = memmem (buf, n, "Cpu0ClkTck", 7);
+-
+-	  if (mhz != NULL)
+-	    {
+-	      char *endp = buf + n;
+-
+-	      /* Search for the beginning of the string.  */
+-	      while (mhz < endp
+-		     && (*mhz < '0' || *mhz > '9')
+-		     && (*mhz < 'a' || *mhz > 'f')
+-		     && *mhz != '\n')
+-		++mhz;
+-
+-	      while (mhz < endp && *mhz != '\n')
+-		{
+-		  if ((*mhz >= '0' && *mhz <= '9') ||
+-		      (*mhz >= 'a' && *mhz <= 'f'))
+-		    {
+-		      result <<= 4;
+-		      if (*mhz >= '0' && *mhz <= '9')
+-			result += *mhz - '0';
+-		      else
+-			result += (*mhz - 'a') + 10;
+-		    }
+-		  ++mhz;
+-		}
+-	    }
+-	}
+-
+-      __close (fd);
+-    }
+-
+-  return result;
+-}
+-
+-static hp_timing_t
+-__get_clockfreq_via_proc_openprom (void)
+-{
+-  hp_timing_t result;
+-  int obp_fd;
+-
+-  result = 0;
+-
+-  obp_fd = __open ("/proc/openprom", O_RDONLY);
+-  if (obp_fd != -1)
+-    {
+-      unsigned long int buf[4096 / sizeof (unsigned long int)];
+-      struct dirent64 *dirp = (struct dirent64 *) buf;
+-      ssize_t len;
+-
+-      while ((len = __getdents64 (obp_fd, (char *) dirp, sizeof (buf))) > 0)
+-	{
+-	  struct dirent64 *this_dirp = dirp;
+-
+-	  while (len > 0)
+-	    {
+-	      char node[strlen ("/proc/openprom/")
+-			+ _D_ALLOC_NAMLEN (this_dirp)
+-			+ strlen ("/clock-frequency")];
+-	      char *prop;
+-	      int fd;
+-
+-	      /* Note that
+-		   strlen("/clock-frequency") > strlen("/device_type")
+-	      */
+-	      __stpcpy (prop = __stpcpy (__stpcpy (node, "/proc/openprom/"),
+-					 this_dirp->d_name),
+-			"/device_type");
+-	      fd = __open (node, O_RDONLY);
+-	      if (fd != -1)
+-		{
+-		  char type_string[128];
+-		  int ret;
+-
+-		  ret = __read (fd, type_string, sizeof (type_string));
+-		  if (ret > 0 && strncmp (type_string, "'cpu'", 5) == 0)
+-		    {
+-		      int clkfreq_fd;
+-
+-		      __stpcpy (prop, "/clock-frequency");
+-		      clkfreq_fd = __open (node, O_RDONLY);
+-		      if (clkfreq_fd != -1)
+-			{
+-			  if (__read (clkfreq_fd, type_string,
+-				      sizeof (type_string)) > 0)
+-			    result = (hp_timing_t)
+-			      strtoumax (type_string, NULL, 16);
+-			  __close (clkfreq_fd);
+-			}
+-		    }
+-		  __close (fd);
+-		}
+-
+-	      if (result != 0)
+-		break;
+-
+-	      len -= this_dirp->d_reclen;
+-	      this_dirp = (struct dirent64 *)
+-		((char *) this_dirp + this_dirp->d_reclen);
+-	    }
+-	  if (result != 0)
+-	    break;
+-	}
+-      __close (obp_fd);
+-    }
+-
+-  return result;
+-}
+-
+-static void set_obp_int (struct openpromio *op, int val)
+-{
+-  char *cp = op->oprom_array;
+-  int *ip = (int *) cp;
+-
+-  *ip = val;
+-}
+-
+-static int get_obp_int (struct openpromio *op)
+-{
+-  char *cp = op->oprom_array;
+-  int *ip = (int *) cp;
+-
+-  return *ip;
+-}
+-
+-static hp_timing_t
+-__get_clockfreq_via_dev_openprom (void)
+-{
+-  hp_timing_t result;
+-  int obp_dev_fd;
+-
+-  result = 0;
+-
+-  obp_dev_fd = __open ("/dev/openprom", O_RDONLY);
+-  if (obp_dev_fd != -1)
+-    {
+-      char obp_buf[8192];
+-      struct openpromio *obp_cmd = (struct openpromio *)obp_buf;
+-      int ret;
+-
+-      obp_cmd->oprom_size =
+-	sizeof (obp_buf) - sizeof (unsigned int);
+-      set_obp_int (obp_cmd, 0);
+-      ret = __ioctl (obp_dev_fd, OPROMCHILD, (char *) obp_cmd);
+-      if (ret == 0)
+-	{
+-	  int cur_node = get_obp_int (obp_cmd);
+-
+-	  while (cur_node != 0 && cur_node != -1)
+-	    {
+-	      obp_cmd->oprom_size = sizeof (obp_buf) - sizeof (unsigned int);
+-	      strcpy (obp_cmd->oprom_array, "device_type");
+-	      ret = __ioctl (obp_dev_fd, OPROMGETPROP, (char *) obp_cmd);
+-	      if (ret == 0
+-		  && strncmp (obp_cmd->oprom_array, "cpu", 3) == 0)
+-		{
+-		  obp_cmd->oprom_size = (sizeof (obp_buf)
+-					 - sizeof (unsigned int));
+-		  strcpy (obp_cmd->oprom_array, "clock-frequency");
+-		  ret = __ioctl (obp_dev_fd, OPROMGETPROP, (char *) obp_cmd);
+-		  if (ret == 0)
+-		    result = (hp_timing_t) get_obp_int (obp_cmd);
+-		}
+-	      obp_cmd->oprom_size = sizeof (obp_buf) - sizeof (unsigned int);
+-	      set_obp_int (obp_cmd, cur_node);
+-	      ret = __ioctl (obp_dev_fd, OPROMNEXT, (char *) obp_cmd);
+-	      if (ret < 0)
+-		break;
+-	      cur_node = get_obp_int (obp_cmd);
+-	    }
+-	}
+-    }
+-
+-  return result;
+-}
+-
+-hp_timing_t
+-__get_clockfreq (void)
+-{
+-  static hp_timing_t result;
+-
+-  /* If this function was called before, we know the result.  */
+-  if (result != 0)
+-    return result;
+-
+-  /* We first read the information from the /proc/cpuinfo file.
+-     It contains at least one line like
+-	Cpu0ClkTick         : 000000002cb41780
+-     We search for this line and convert the number in an integer.  */
+-  result = __get_clockfreq_via_cpuinfo ();
+-  if (result != 0)
+-    return result;
+-
+-  /* If that did not work, try to find an OpenPROM node
+-     with device_type equal to 'cpu' using /dev/openprom
+-     and fetch the clock-frequency property from there.  */
+-  result = __get_clockfreq_via_dev_openprom ();
+-  if (result != 0)
+-    return result;
+-
+-  /* Finally, try the same lookup as above but using /proc/openprom.  */
+-  result = __get_clockfreq_via_proc_openprom ();
+-
+-  return result;
+-}

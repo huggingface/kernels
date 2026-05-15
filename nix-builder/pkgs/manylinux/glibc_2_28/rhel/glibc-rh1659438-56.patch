@@ -1,0 +1,152 @@
+commit 80190d2b0e3f48d973724218f37d2da5bf1a20ab
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:25 2018 +0100
+
+    S390: Cleanup ifunc-resolve.h.
+    
+    The ifunc macros s390_vx_libc* are no longer used and
+    can be removed as all users are now relying on
+    s390_libc_ifunc_expr.
+    
+    The same applies to s390_libc_ifunc.  The macro
+    s390_libc_ifunc_init is now renamed to
+    s390_libc_ifunc_expr_stfle_init and the users are
+    adjusted accordingly.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/ifunc-resolve.h
+            (s390_vx_libc_ifunc, s390_vx_libc_ifunc_redirected,
+            s390_vx_libc_ifunc2, s390_vx_libc_ifunc_init,
+            s390_vx_libc_ifunc2_redirected, s390_libc_ifunc):
+            Delete macro definition.
+            (s390_libc_ifunc_init): Rename to
+            s390_libc_ifunc_expr_stfle_init.
+            * sysdeps/s390/bzero: Use
+            s390_libc_ifunc_expr_stfle_init instead of
+            s390_libc_ifunc_init.
+            * sysdeps/s390/memcmp.c: Likewise.
+            * sysdeps/s390/memcpy.c: Likewise.
+            * sysdeps/s390/mempcpy.c: Likewise.
+            * sysdeps/s390/memset.c: Likewise.
+
+diff --git a/sysdeps/s390/bzero.c b/sysdeps/s390/bzero.c
+index 9f8d95781bf2fb68..6b5d471c40250543 100644
+--- a/sysdeps/s390/bzero.c
++++ b/sysdeps/s390/bzero.c
+@@ -35,7 +35,7 @@ extern __typeof (__bzero) BZERO_Z196 attribute_hidden;
+ 
+ s390_libc_ifunc_expr (__bzero, __bzero,
+ 		      ({
+-			s390_libc_ifunc_init ();
++			s390_libc_ifunc_expr_stfle_init ();
+ 			(HAVE_MEMSET_Z196 && S390_IS_Z196 (stfle_bits))
+ 			  ? BZERO_Z196
+ 			  : (HAVE_MEMSET_Z10 && S390_IS_Z10 (stfle_bits))
+diff --git a/sysdeps/s390/memcmp.c b/sysdeps/s390/memcmp.c
+index 952ff6af7364fd92..6d9276320abbe332 100644
+--- a/sysdeps/s390/memcmp.c
++++ b/sysdeps/s390/memcmp.c
+@@ -37,7 +37,7 @@ extern __typeof (__redirect_memcmp) MEMCMP_Z196 attribute_hidden;
+ 
+ s390_libc_ifunc_expr (__redirect_memcmp, memcmp,
+ 		      ({
+-			s390_libc_ifunc_init ();
++			s390_libc_ifunc_expr_stfle_init ();
+ 			(HAVE_MEMCMP_Z196 && S390_IS_Z196 (stfle_bits))
+ 			  ? MEMCMP_Z196
+ 			  : (HAVE_MEMCMP_Z10 && S390_IS_Z10 (stfle_bits))
+diff --git a/sysdeps/s390/memcpy.c b/sysdeps/s390/memcpy.c
+index 90a53ac27d4be755..0ff24f18cf3600da 100644
+--- a/sysdeps/s390/memcpy.c
++++ b/sysdeps/s390/memcpy.c
+@@ -38,7 +38,7 @@ extern __typeof (__redirect_memcpy) MEMCPY_Z196 attribute_hidden;
+ 
+ s390_libc_ifunc_expr (__redirect_memcpy, memcpy,
+ 		      ({
+-			s390_libc_ifunc_init ();
++			s390_libc_ifunc_expr_stfle_init ();
+ 			(HAVE_MEMCPY_Z196 && S390_IS_Z196 (stfle_bits))
+ 			  ? MEMCPY_Z196
+ 			  : (HAVE_MEMCPY_Z10 && S390_IS_Z10 (stfle_bits))
+diff --git a/sysdeps/s390/mempcpy.c b/sysdeps/s390/mempcpy.c
+index a6a237312659c2c1..b687b3362034bfb0 100644
+--- a/sysdeps/s390/mempcpy.c
++++ b/sysdeps/s390/mempcpy.c
+@@ -42,7 +42,7 @@ extern __typeof (__redirect___mempcpy) MEMPCPY_Z196 attribute_hidden;
+ 
+ s390_libc_ifunc_expr (__redirect___mempcpy, __mempcpy,
+ 		      ({
+-			s390_libc_ifunc_init ();
++			s390_libc_ifunc_expr_stfle_init ();
+ 			(HAVE_MEMCPY_Z196 && S390_IS_Z196 (stfle_bits))
+ 			  ? MEMPCPY_Z196
+ 			  : (HAVE_MEMCPY_Z10 && S390_IS_Z10 (stfle_bits))
+diff --git a/sysdeps/s390/memset.c b/sysdeps/s390/memset.c
+index 57a35aebc7d3c794..75b011f1a24f39bc 100644
+--- a/sysdeps/s390/memset.c
++++ b/sysdeps/s390/memset.c
+@@ -37,7 +37,7 @@ extern __typeof (__redirect_memset) MEMSET_Z196 attribute_hidden;
+ 
+ s390_libc_ifunc_expr (__redirect_memset, memset,
+ 		      ({
+-			s390_libc_ifunc_init ();
++			s390_libc_ifunc_expr_stfle_init ();
+ 			(HAVE_MEMSET_Z196 && S390_IS_Z196 (stfle_bits))
+ 			  ? MEMSET_Z196
+ 			  : (HAVE_MEMSET_Z10 && S390_IS_Z10 (stfle_bits))
+diff --git a/sysdeps/s390/multiarch/ifunc-resolve.h b/sysdeps/s390/multiarch/ifunc-resolve.h
+index b7e20abc59638251..b2be015401313d4b 100644
+--- a/sysdeps/s390/multiarch/ifunc-resolve.h
++++ b/sysdeps/s390/multiarch/ifunc-resolve.h
+@@ -40,7 +40,7 @@
+ 		       ".machine pop"         "\n"			\
+ 		       : "=QS" (STFLE_BITS), "+d" (reg0)		\
+ 		       : : "cc");
+-#define s390_libc_ifunc_init()						\
++#define s390_libc_ifunc_expr_stfle_init()				\
+   unsigned long long stfle_bits = 0ULL;					\
+   if (__glibc_likely ((hwcap & HWCAP_S390_STFLE)			\
+ 		      && (hwcap & HWCAP_S390_ZARCH)			\
+@@ -49,41 +49,6 @@
+       S390_STORE_STFLE (stfle_bits);					\
+     }
+ 
+-#define s390_libc_ifunc(TYPE_FUNC, RESOLVERFUNC, FUNC)			\
+-  /* Make the declarations of the optimized functions hidden in order
+-     to prevent GOT slots being generated for them. */			\
+-  extern __typeof (TYPE_FUNC) RESOLVERFUNC##_z196 attribute_hidden;	\
+-  extern __typeof (TYPE_FUNC) RESOLVERFUNC##_z10 attribute_hidden;      \
+-  extern __typeof (TYPE_FUNC) RESOLVERFUNC##_default attribute_hidden;  \
+-  __ifunc (TYPE_FUNC, FUNC,						\
+-	   __glibc_likely (S390_IS_Z196 (stfle_bits))			\
+-	   ? RESOLVERFUNC##_z196					\
+-	   : __glibc_likely (S390_IS_Z10 (stfle_bits))			\
+-	     ? RESOLVERFUNC##_z10					\
+-	     : RESOLVERFUNC##_default,					\
+-	   unsigned long int hwcap, s390_libc_ifunc_init);
+-
+-#define s390_vx_libc_ifunc(FUNC)		\
+-  s390_vx_libc_ifunc2_redirected(FUNC, FUNC, FUNC)
+-
+-#define s390_vx_libc_ifunc_redirected(TYPE_FUNC, FUNC)	\
+-  s390_vx_libc_ifunc2_redirected(TYPE_FUNC, FUNC, FUNC)
+-
+-#define s390_vx_libc_ifunc2(RESOLVERFUNC, FUNC)	\
+-  s390_vx_libc_ifunc2_redirected(FUNC, RESOLVERFUNC, FUNC)
+-
+-#define s390_vx_libc_ifunc_init()
+-#define s390_vx_libc_ifunc2_redirected(TYPE_FUNC, RESOLVERFUNC, FUNC)	\
+-  /* Make the declarations of the optimized functions hidden in order
+-     to prevent GOT slots being generated for them.  */			\
+-  extern __typeof (TYPE_FUNC) RESOLVERFUNC##_vx attribute_hidden;	\
+-  extern __typeof (TYPE_FUNC) RESOLVERFUNC##_c attribute_hidden;	\
+-  __ifunc (TYPE_FUNC, FUNC,						\
+-	   (hwcap & HWCAP_S390_VX)					\
+-	   ? RESOLVERFUNC##_vx						\
+-	   : RESOLVERFUNC##_c,						\
+-	   unsigned long int hwcap, s390_vx_libc_ifunc_init);
+-
+ #define s390_libc_ifunc_expr_init()
+ #define s390_libc_ifunc_expr(TYPE_FUNC, FUNC, EXPR)		\
+   __ifunc (TYPE_FUNC, FUNC, EXPR, unsigned long int hwcap,	\

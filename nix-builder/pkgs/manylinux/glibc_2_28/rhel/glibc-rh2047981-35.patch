@@ -1,0 +1,21 @@
+commit 80a08d0faa9b224019f895800c4d97de4e23e1aa
+Author: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date:   Wed Feb 2 14:03:58 2022 +0000
+
+    Fix elf/tst-audit25a with default bind now toolchains
+    
+    This test relies on lazy binding for the executable so request that
+    explicitly in case the toolchain defaults to bind now.
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 78147ed2dbcaf4c0..4d16ed1637db8582 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -2130,6 +2130,7 @@ $(objpfx)tst-audit25a: $(objpfx)tst-audit25mod1.so \
+ 		       $(objpfx)tst-audit25mod2.so \
+ 		       $(objpfx)tst-audit25mod3.so \
+ 		       $(objpfx)tst-audit25mod4.so
++LDFLAGS-tst-audit25a = -Wl,-z,lazy
+ $(objpfx)tst-audit25mod1.so: $(objpfx)tst-audit25mod3.so
+ LDFLAGS-tst-audit25mod1.so = -Wl,-z,now
+ $(objpfx)tst-audit25mod2.so: $(objpfx)tst-audit25mod4.so

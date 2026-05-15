@@ -1,0 +1,83 @@
+commit cea56af185eae45b1f0963351e3d4daa1cbde521
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Apr 2 17:09:36 2020 +0200
+
+    support: Change xgetline to return 0 on EOF
+    
+    The advantage is that the buffer will always contain the number
+    of characters as returned from the function, which allows one to use
+    a sequence like
+    
+      /* No more audit module output.  */
+      line_length = xgetline (&buffer, &buffer_length, fp);
+      TEST_COMPARE_BLOB ("", 0, buffer, line_length);
+    
+    to check for an expected EOF, while also reporting any unexpected
+    extra data encountered.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/support/support_process_state.c b/support/support_process_state.c
+index 76dc798728ece0d9..e303c78fc874b2f9 100644
+--- a/support/support_process_state.c
++++ b/support/support_process_state.c
+@@ -59,7 +59,7 @@ support_process_state_wait (pid_t pid, enum support_process_state state)
+   for (;;)
+     {
+       char cur_state = -1;
+-      while (xgetline (&line, &linesiz, fstatus) != -1)
++      while (xgetline (&line, &linesiz, fstatus) > 0)
+ 	if (strncmp (line, "State:", strlen ("State:")) == 0)
+ 	  {
+ 	    TEST_COMPARE (sscanf (line, "%*s %c", &cur_state), 1);
+diff --git a/support/xgetline.c b/support/xgetline.c
+index 180bc2db95a9c5d4..d91c09ac108b4c75 100644
+--- a/support/xgetline.c
++++ b/support/xgetline.c
+@@ -18,16 +18,22 @@
+ 
+ #include <support/xstdio.h>
+ #include <support/check.h>
+-#include <errno.h>
+ 
+-ssize_t
++size_t
+ xgetline (char **lineptr, size_t *n, FILE *stream)
+ {
+-  int old_errno = errno;
+-  errno = 0;
+-  size_t ret = getline (lineptr, n, stream);
+-  if (!feof (stream) && ferror (stream))
+-    FAIL_EXIT1 ("getline failed: %m");
+-  errno = old_errno;
++  TEST_VERIFY (!ferror (stream));
++  ssize_t ret = getline (lineptr, n, stream);
++  if (ferror (stream))
++    {
++      TEST_VERIFY (ret < 0);
++      FAIL_EXIT1 ("getline: %m");
++    }
++  if (feof (stream))
++    {
++      TEST_VERIFY (ret <= 0);
++      return 0;
++    }
++  TEST_VERIFY (ret > 0);
+   return ret;
+ }
+diff --git a/support/xstdio.h b/support/xstdio.h
+index 9446b1f27b0f881e..36071cf78822ec8d 100644
+--- a/support/xstdio.h
++++ b/support/xstdio.h
+@@ -27,7 +27,10 @@ __BEGIN_DECLS
+ FILE *xfopen (const char *path, const char *mode);
+ void xfclose (FILE *);
+ 
+-ssize_t xgetline (char **lineptr, size_t *n, FILE *stream);
++/* Read a line from FP, using getline.  *BUFFER must be NULL, or a
++   heap-allocated pointer of *LENGTH bytes.  Return the number of
++   bytes in the line if a line was read, or 0 on EOF.  */
++size_t xgetline (char **lineptr, size_t *n, FILE *stream);
+ 
+ __END_DECLS
+ 

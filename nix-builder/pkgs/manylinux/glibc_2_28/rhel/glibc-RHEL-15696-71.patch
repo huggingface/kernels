@@ -1,0 +1,43 @@
+From 6b8dbbd03ac88f169b65b5c7d7278576a11d2e44 Mon Sep 17 00:00:00 2001
+From: Jangwoong Kim <6812skiii@gmail.com>
+Date: Tue, 14 Dec 2021 21:30:51 +0900
+Subject: [PATCH] nptl: Effectively skip CAS in spinlock loop
+Content-type: text/plain; charset=UTF-8
+
+The commit:
+"Add LLL_MUTEX_READ_LOCK [BZ #28537]"
+SHA1: d672a98a1af106bd68deb15576710cd61363f7a6
+
+introduced LLL_MUTEX_READ_LOCK, to skip CAS in spinlock loop
+if atomic load fails. But, "continue" inside of do-while loop
+does not skip the evaluation of escape expression, thus CAS
+is not skipped.
+
+Replace do-while with while and skip LLL_MUTEX_TRYLOCK if
+LLL_MUTEX_READ_LOCK fails.
+
+Reviewed-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ nptl/pthread_mutex_lock.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/nptl/pthread_mutex_lock.c b/nptl/pthread_mutex_lock.c
+index a633d95e..d96a9933 100644
+--- a/nptl/pthread_mutex_lock.c
++++ b/nptl/pthread_mutex_lock.c
+@@ -141,10 +141,9 @@ __pthread_mutex_lock (pthread_mutex_t *mutex)
+ 		  break;
+ 		}
+ 	      atomic_spin_nop ();
+-	      if (LLL_MUTEX_READ_LOCK (mutex) != 0)
+-		continue;
+ 	    }
+-	  while (LLL_MUTEX_TRYLOCK (mutex) != 0);
++	  while (LLL_MUTEX_READ_LOCK (mutex) != 0
++		 || LLL_MUTEX_TRYLOCK (mutex) != 0);
+ 
+ 	  mutex->__data.__spins += (cnt - mutex->__data.__spins) / 8;
+ 	}
+-- 
+GitLab
+

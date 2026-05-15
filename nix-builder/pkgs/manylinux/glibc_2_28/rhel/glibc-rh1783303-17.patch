@@ -1,0 +1,84 @@
+commit d7a568af5546e0313abbc04060c8e9b0d3f750b4
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Sep 19 14:04:45 2019 -0500
+
+    [powerpc] Rename fesetenv_mode to fesetenv_control
+    
+    fesetenv_mode is used variously to write the FPSCR exception enable
+    bits and rounding mode bits.  These are referred to as the control
+    bits in the POWER ISA.  Change the name to be reflective of its
+    current and expected use, and match up well with fegetenv_control.
+
+diff --git a/sysdeps/powerpc/fpu/fedisblxcpt.c b/sysdeps/powerpc/fpu/fedisblxcpt.c
+index 1273987459655585..efa9c422fe54f5d8 100644
+--- a/sysdeps/powerpc/fpu/fedisblxcpt.c
++++ b/sysdeps/powerpc/fpu/fedisblxcpt.c
+@@ -41,7 +41,7 @@ fedisableexcept (int excepts)
+   fe.l &= ~new;
+ 
+   if (fe.l != curr.l)
+-    fesetenv_mode (fe.fenv);
++    fesetenv_control (fe.fenv);
+ 
+   __TEST_AND_ENTER_NON_STOP (-1ULL, fe.l);
+ 
+diff --git a/sysdeps/powerpc/fpu/feenablxcpt.c b/sysdeps/powerpc/fpu/feenablxcpt.c
+index fa233c305aedd5f6..dfcc6fb7bd24b8db 100644
+--- a/sysdeps/powerpc/fpu/feenablxcpt.c
++++ b/sysdeps/powerpc/fpu/feenablxcpt.c
+@@ -41,7 +41,7 @@ feenableexcept (int excepts)
+   fe.l |= new;
+ 
+   if (fe.l != curr.l)
+-    fesetenv_mode (fe.fenv);
++    fesetenv_control (fe.fenv);
+ 
+   __TEST_AND_EXIT_NON_STOP (0ULL, fe.l);
+ 
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index b5c8da1adefe93cb..287fc9f8f70e051c 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -117,7 +117,7 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ /* Set the last 2 nibbles of the FPSCR, which contain the
+    exception enables and the rounding mode.
+    'fegetenv_control' retrieves these bits by reading the FPSCR.  */
+-#define fesetenv_mode(env) __builtin_mtfsf (0b00000011, (env));
++#define fesetenv_control(env) __builtin_mtfsf (0b00000011, (env));
+ 
+ /* This very handy macro:
+    - Sets the rounding mode to 'round to nearest';
+diff --git a/sysdeps/powerpc/fpu/fenv_private.h b/sysdeps/powerpc/fpu/fenv_private.h
+index c88142fe3053580f..666fbfdd9fef7759 100644
+--- a/sysdeps/powerpc/fpu/fenv_private.h
++++ b/sysdeps/powerpc/fpu/fenv_private.h
+@@ -61,7 +61,7 @@ __libc_femergeenv_ppc (const fenv_t *envp, unsigned long long old_mask,
+       == (FPSCR_CONTROL_MASK|FPSCR_EXCEPTIONS_MASK) &&
+       (old.l & FPSCR_EXCEPTIONS_MASK) == (new.l & FPSCR_EXCEPTIONS_MASK))
+   {
+-    fesetenv_mode (new.fenv);
++    fesetenv_control (new.fenv);
+   }
+   else
+     /* Atomically enable and raise (if appropriate) exceptions set in `new'.  */
+@@ -142,7 +142,7 @@ libc_feholdsetround_noex_ppc_ctx (struct rm_ctx *ctx, int r)
+   if (__glibc_unlikely (new.l != old.l))
+     {
+       __TEST_AND_ENTER_NON_STOP (old.l, 0ULL);
+-      fesetenv_mode (new.fenv);
++      fesetenv_control (new.fenv);
+       ctx->updated_status = true;
+     }
+   else
+diff --git a/sysdeps/powerpc/fpu/fesetmode.c b/sysdeps/powerpc/fpu/fesetmode.c
+index e5938af04cb71ca1..fdaecb1a6a25a820 100644
+--- a/sysdeps/powerpc/fpu/fesetmode.c
++++ b/sysdeps/powerpc/fpu/fesetmode.c
+@@ -36,6 +36,6 @@ fesetmode (const femode_t *modep)
+   __TEST_AND_EXIT_NON_STOP (old.l, new.l);
+   __TEST_AND_ENTER_NON_STOP (old.l, new.l);
+ 
+-  fesetenv_mode (new.fenv);
++  fesetenv_control (new.fenv);
+   return 0;
+ }

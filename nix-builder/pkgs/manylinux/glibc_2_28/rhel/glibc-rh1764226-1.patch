@@ -1,0 +1,82 @@
+commit 6c29942cbf059aca47fd4bbd852ea42c9d46b71f
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Mon Feb 18 16:12:01 2019 +0100
+
+    misc/tst-clone3: Fix waiting for exited thread.
+    
+    From time to time the test misc/tst-clone3 fails with a timeout.
+    Then futex_wait is blocking.  Usually ctid should be set to zero
+    due to CLONE_CHILD_CLEARTID and the futex should be waken up.
+    But the fail occures if the thread has already exited before
+    ctid is set to the return value of clone().  Then futex_wait() will
+    block as there will be nobody who wakes the futex up again.
+    
+    This patch initializes ctid to a known value before calling clone
+    and the kernel is the only one who updates the value to zero after clone.
+    If futex_wait is called then it is either waked up due to the exited thread
+    or the futex syscall fails as *ctid_ptr is already zero instead of the
+    specified value 1.
+    
+    ChangeLog:
+    
+            * sysdeps/unix/sysv/linux/tst-clone3.c (do_test):
+            Initialize ctid with a known value and remove update of ctid
+            after clone.
+            (wait_tid): Adjust arguments and call futex_wait with ctid_val
+            as assumed current value of ctid_ptr.
+
+diff --git a/sysdeps/unix/sysv/linux/tst-clone3.c b/sysdeps/unix/sysv/linux/tst-clone3.c
+index 784ce18f5343ec72..9f1ed6355e7acffd 100644
+--- a/sysdeps/unix/sysv/linux/tst-clone3.c
++++ b/sysdeps/unix/sysv/linux/tst-clone3.c
+@@ -27,6 +27,7 @@
+ 
+ #include <stackinfo.h>  /* For _STACK_GROWS_{UP,DOWN}.  */
+ #include <support/check.h>
++#include <stdatomic.h>
+ 
+ /* Test if clone call with CLONE_THREAD does not call exit_group.  The 'f'
+    function returns '1', which will be used by clone thread to call the
+@@ -42,11 +43,14 @@ f (void *a)
+ 
+ /* Futex wait for TID argument, similar to pthread_join internal
+    implementation.  */
+-#define wait_tid(tid) \
+-  do {					\
+-    __typeof (tid) __tid;		\
+-    while ((__tid = (tid)) != 0)	\
+-      futex_wait (&(tid), __tid);	\
++#define wait_tid(ctid_ptr, ctid_val)					\
++  do {									\
++    __typeof (*(ctid_ptr)) __tid;					\
++    /* We need acquire MO here so that we synchronize with the		\
++       kernel's store to 0 when the clone terminates.  */		\
++    while ((__tid = atomic_load_explicit (ctid_ptr,			\
++					  memory_order_acquire)) != 0)	\
++      futex_wait (ctid_ptr, ctid_val);					\
+   } while (0)
+ 
+ static inline int
+@@ -64,7 +68,11 @@ do_test (void)
+   clone_flags |= CLONE_VM | CLONE_SIGHAND;
+   /* We will used ctid to call on futex to wait for thread exit.  */
+   clone_flags |= CLONE_CHILD_CLEARTID;
+-  pid_t ctid, tid;
++  /* Initialize with a known value.  ctid is set to zero by the kernel after the
++     cloned thread has exited.  */
++#define CTID_INIT_VAL 1
++  pid_t ctid = CTID_INIT_VAL;
++  pid_t tid;
+ 
+ #ifdef __ia64__
+   extern int __clone2 (int (*__fn) (void *__arg), void *__child_stack_base,
+@@ -86,8 +94,7 @@ do_test (void)
+   if (tid == -1)
+     FAIL_EXIT1 ("clone failed: %m");
+ 
+-  ctid = tid;
+-  wait_tid (ctid);
++  wait_tid (&ctid, CTID_INIT_VAL);
+ 
+   return 2;
+ }

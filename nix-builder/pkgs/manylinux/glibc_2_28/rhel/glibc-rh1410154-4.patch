@@ -1,0 +1,42 @@
+commit fcb04b9aed26a737159ef7be9c5a6ad0994437dc
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 31 13:28:49 2019 +0100
+
+    Introduce DL_LOOKUP_FOR_RELOCATE flag for _dl_lookup_symbol_x
+    
+    This will allow changes in dependency processing during non-lazy
+    binding, for more precise processing of NODELETE objects: During
+    initial relocation in dlopen, the fate of NODELETE objects is still
+    unclear, so objects which are depended upon by NODELETE objects
+    cannot immediately be marked as NODELETE.
+    
+    Change-Id: Ic7b94a3f7c4719a00ca8e6018088567824da0658
+
+diff --git a/elf/dl-reloc.c b/elf/dl-reloc.c
+index 053916eeae50467c..afeace4d3e49180c 100644
+--- a/elf/dl-reloc.c
++++ b/elf/dl-reloc.c
+@@ -248,7 +248,8 @@ _dl_relocate_object (struct link_map *l, struct r_scope_elem *scope[],
+ 	       v = (version);						      \
+ 	     _lr = _dl_lookup_symbol_x (strtab + (*ref)->st_name, l, (ref),   \
+ 					scope, v, _tc,			      \
+-					DL_LOOKUP_ADD_DEPENDENCY, NULL);      \
++					DL_LOOKUP_ADD_DEPENDENCY	      \
++					| DL_LOOKUP_FOR_RELOCATE, NULL);      \
+ 	     l->l_lookup_cache.ret = (*ref);				      \
+ 	     l->l_lookup_cache.value = _lr; }))				      \
+      : l)
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index cc2484033fe0d902..6c5298a80bff8e96 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -908,6 +908,9 @@ enum
+     DL_LOOKUP_RETURN_NEWEST = 2,
+     /* Set if dl_lookup* called with GSCOPE lock held.  */
+     DL_LOOKUP_GSCOPE_LOCK = 4,
++    /* Set if dl_lookup is called for non-lazy relocation processing
++       from _dl_relocate_object in elf/dl-reloc.c.  */
++    DL_LOOKUP_FOR_RELOCATE = 8,
+   };
+ 
+ /* Lookup versioned symbol.  */

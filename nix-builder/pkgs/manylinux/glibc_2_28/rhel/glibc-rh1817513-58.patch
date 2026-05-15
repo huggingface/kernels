@@ -1,0 +1,59 @@
+commit 76d5b2f002a1243ddba06bd646249553353f4322
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu May 21 13:36:54 2020 -0700
+
+    x86: Update Intel Atom processor family optimization
+    
+    Enable Intel Silvermont optimization for Intel Goldmont Plus.  Detect more
+    Intel Airmont processors.  Optimize Intel Tremont like Intel Silvermont
+    with rep string instructions.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index c432d646ce6806a6..2a801e1856cfe1b3 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -347,18 +347,23 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	    case 0x57:
+ 	      /* Knights Landing.  Enable Silvermont optimizations.  */
+ 
++	    case 0x7a:
++	      /* Unaligned load versions are faster than SSSE3
++		 on Goldmont Plus.  */
++
+ 	    case 0x5c:
+ 	    case 0x5f:
+ 	      /* Unaligned load versions are faster than SSSE3
+ 		 on Goldmont.  */
+ 
+ 	    case 0x4c:
++	    case 0x5a:
++	    case 0x75:
+ 	      /* Airmont is a die shrink of Silvermont.  */
+ 
+ 	    case 0x37:
+ 	    case 0x4a:
+ 	    case 0x4d:
+-	    case 0x5a:
+ 	    case 0x5d:
+ 	      /* Unaligned load versions are faster than SSSE3
+ 		 on Silvermont.  */
+@@ -369,6 +374,19 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 		    | bit_arch_Slow_SSE4_2);
+ 	      break;
+ 
++	    case 0x86:
++	    case 0x96:
++	    case 0x9c:
++	      /* Enable rep string instructions, unaligned load, unaligned
++	         copy, pminub and avoid SSE 4.2 on Tremont.  */
++	      cpu_features->feature[index_arch_Fast_Rep_String]
++		|= (bit_arch_Fast_Rep_String
++		    | bit_arch_Fast_Unaligned_Load
++		    | bit_arch_Fast_Unaligned_Copy
++		    | bit_arch_Prefer_PMINUB_for_stringop
++		    | bit_arch_Slow_SSE4_2);
++	      break;
++
+ 	    default:
+ 	      /* Unknown family 0x06 processors.  Assuming this is one
+ 		 of Core i3/i5/i7 processors if AVX is available.  */

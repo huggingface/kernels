@@ -1,0 +1,36 @@
+commit 08443b19965f48862b02c2fd7b33a39d66daf2ff
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Oct 14 10:54:39 2020 +0200
+
+    support: Provide a way to clear the RA bit in DNS server responses
+
+diff --git a/support/resolv_test.c b/support/resolv_test.c
+index 8cca4e6cf723de28..9323f1d55b0be8f1 100644
+--- a/support/resolv_test.c
++++ b/support/resolv_test.c
+@@ -181,7 +181,9 @@ resolv_response_init (struct resolv_response_builder *b,
+   b->buffer[2] |= b->query_buffer[2] & 0x01; /* Copy the RD bit.  */
+   if (flags.tc)
+     b->buffer[2] |= 0x02;
+-  b->buffer[3] = 0x80 | flags.rcode; /* Always set RA.  */
++  b->buffer[3] = flags.rcode;
++  if (!flags.clear_ra)
++    b->buffer[3] |= 0x80;
+   if (flags.ad)
+     b->buffer[3] |= 0x20;
+ 
+diff --git a/support/resolv_test.h b/support/resolv_test.h
+index ff5571dace92c936..825abb9ff2897a43 100644
+--- a/support/resolv_test.h
++++ b/support/resolv_test.h
+@@ -148,6 +148,10 @@ struct resolv_response_flags
+   /* If true, the AD (authenticated data) flag will be set.  */
+   bool ad;
+ 
++  /* If true, do not set the RA (recursion available) flag in the
++     response.  */
++  bool clear_ra;
++
+   /* Initial section count values.  Can be used to artificially
+      increase the counts, for malformed packet testing.*/
+   unsigned short qdcount;

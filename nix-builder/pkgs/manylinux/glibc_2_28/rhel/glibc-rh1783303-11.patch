@@ -1,0 +1,128 @@
+commit f1c56cdff09f650ad721fae026eb6a3651631f3d
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Sep 19 08:35:16 2019 -0500
+
+    [powerpc] SET_RESTORE_ROUND optimizations and bug fix
+    
+    SET_RESTORE_ROUND brackets a block of code, temporarily setting and
+    restoring the rounding mode and letting everything else, including
+    exceptions generated within the block, pass through.
+    
+    On powerpc, the current code clears the exception enables, which will hide
+    exceptions generated within the block.  This issue was introduced by me
+    in commit e905212627350d54b58426214b5a54ddc852b0c9.
+    
+    Fix this by not clearing exception enable bits in the prologue.
+    
+    Also, since we are no longer changing the enable bits in either the
+    prologue or the epilogue, there is no need to test for entering/exiting
+    non-stop mode.
+    
+    Also, optimize the prologue get/save/set rounding mode operations for
+    POWER9 and later by using 'mffscrn' when possible.
+    
+    Suggested-by: Paul E. Murphy <murphyp@linux.ibm.com>
+    Reviewed-by: Paul E. Murphy <murphyp@linux.ibm.com>
+    Fixes: e905212627350d54b58426214b5a54ddc852b0c9
+    
+    2019-09-19  Paul A. Clarke  <pc@us.ibm.com>
+    
+            * sysdeps/powerpc/fpu/fenv_libc.h (fegetenv_and_set_rn): New.
+            (__fe_mffscrn): New.
+            * sysdeps/powerpc/fpu/fenv_private.h (libc_feholdsetround_ppc_ctx):
+            Do not clear enable bits, remove obsolete code, use
+            fegetenv_and_set_rn.
+            (libc_feresetround_ppc): Remove obsolete code, use
+            fegetenv_and_set_rn.
+
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index e8d40ea256b6c5bc..b10b6a141ded4bfd 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -49,6 +49,38 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+     __fr;								\
+   })
+ 
++#define __fe_mffscrn(rn)						\
++  ({register fenv_union_t __fr;						\
++    if (__builtin_constant_p (rn))					\
++      __asm__ __volatile__ (						\
++        ".machine push; .machine \"power9\"; mffscrni %0,%1; .machine pop" \
++        : "=f" (__fr.fenv) : "i" (rn));					\
++    else								\
++    {									\
++      __fr.l = (rn);							\
++      __asm__ __volatile__ (						\
++        ".machine push; .machine \"power9\"; mffscrn %0,%1; .machine pop" \
++        : "=f" (__fr.fenv) : "f" (__fr.fenv));				\
++    }									\
++    __fr.fenv;								\
++  })
++
++/* Like fegetenv_status, but also sets the rounding mode.  */
++#ifdef _ARCH_PWR9
++#define fegetenv_and_set_rn(rn) __fe_mffscrn (rn)
++#else
++/* 'mffscrn' will decode to 'mffs' on ARCH < 3_00, which is still necessary
++   but not sufficient, because it does not set the rounding mode.
++   Explicitly set the rounding mode when 'mffscrn' actually doesn't.  */
++#define fegetenv_and_set_rn(rn)						\
++  ({register fenv_union_t __fr;						\
++    __fr.fenv = __fe_mffscrn (rn);					\
++    if (__glibc_unlikely (!(GLRO(dl_hwcap2) & PPC_FEATURE2_ARCH_3_00)))	\
++      __fesetround_inline (rn);						\
++    __fr.fenv;								\
++  })
++#endif
++
+ /* Equivalent to fesetenv, but takes a fenv_t instead of a pointer.  */
+ #define fesetenv_register(env) \
+ 	do { \
+diff --git a/sysdeps/powerpc/fpu/fenv_private.h b/sysdeps/powerpc/fpu/fenv_private.h
+index b0149aa243e69f5a..30df92c9a4700dee 100644
+--- a/sysdeps/powerpc/fpu/fenv_private.h
++++ b/sysdeps/powerpc/fpu/fenv_private.h
+@@ -133,16 +133,7 @@ static __always_inline void
+ libc_feresetround_ppc (fenv_t *envp)
+ {
+   fenv_union_t new = { .fenv = *envp };
+-
+-  /* If the old env has no enabled exceptions and the new env has any enabled
+-     exceptions, then unmask SIGFPE in the MSR FE0/FE1 bits.  This will put the
+-     hardware into "precise mode" and may cause the FPU to run slower on some
+-     hardware.  */
+-  if ((new.l & _FPU_ALL_TRAPS) != 0)
+-    (void) __fe_nomask_env_priv ();
+-
+-  /* Atomically enable and raise (if appropriate) exceptions set in `new'.  */
+-  fesetenv_mode (new.fenv);
++  fegetenv_and_set_rn (new.l & FPSCR_RN_MASK);
+ }
+ 
+ static __always_inline int
+@@ -184,22 +175,10 @@ libc_feupdateenv_ppc (fenv_t *e)
+ static __always_inline void
+ libc_feholdsetround_ppc_ctx (struct rm_ctx *ctx, int r)
+ {
+-  fenv_union_t old, new;
++  fenv_union_t old;
+ 
+-  old.fenv = fegetenv_status ();
+-
+-  new.l = (old.l & ~(FPSCR_ENABLES_MASK|FPSCR_RN_MASK)) | r;
+-
+-  ctx->env = old.fenv;
+-  if (__glibc_unlikely (new.l != old.l))
+-    {
+-      if ((old.l & _FPU_ALL_TRAPS) != 0)
+-	(void) __fe_mask_env ();
+-      fesetenv_mode (new.fenv);
+-      ctx->updated_status = true;
+-    }
+-  else
+-    ctx->updated_status = false;
++  ctx->env = old.fenv = fegetenv_and_set_rn (r);
++  ctx->updated_status = (r != (old.l & FPSCR_RN_MASK));
+ }
+ 
+ static __always_inline void

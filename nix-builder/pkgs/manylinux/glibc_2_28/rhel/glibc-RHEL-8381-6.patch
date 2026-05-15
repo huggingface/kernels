@@ -1,0 +1,94 @@
+commit 929a4764ac90382616b6a21f099192b2475da674
+Author: Malte Skarupke <malteskarupke@fastmail.fm>
+Date:   Wed Dec 4 08:03:44 2024 -0500
+
+    nptl: Use a single loop in pthread_cond_wait instaed of a nested loop
+    
+    The loop was a little more complicated than necessary. There was only one
+    break statement out of the inner loop, and the outer loop was nearly empty.
+    So just remove the outer loop, moving its code to the one break statement in
+    the inner loop. This allows us to replace all gotos with break statements.
+    
+    Signed-off-by: Malte Skarupke <malteskarupke@fastmail.fm>
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+# Conflicts:
+#	nptl/pthread_cond_wait.c (Missing EOVERFLOW checks for y2038)
+
+diff --git a/nptl/pthread_cond_wait.c b/nptl/pthread_cond_wait.c
+index b2bf3bd0a7af43e8..8f12fc4ee288cf4a 100644
+--- a/nptl/pthread_cond_wait.c
++++ b/nptl/pthread_cond_wait.c
+@@ -378,17 +378,15 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
+       return err;
+     }
+ 
+-  /* Now wait until a signal is available in our group or it is closed.
+-     Acquire MO so that if we observe (signals == lowseq) after group
+-     switching in __condvar_quiesce_and_switch_g1, we synchronize with that
+-     store and will see the prior update of __g1_start done while switching
+-     groups too.  */
+-  unsigned int signals = atomic_load_acquire (cond->__data.__g_signals + g);
+-
+-  do
+-    {
++
+       while (1)
+ 	{
++	  /* Now wait until a signal is available in our group or it is closed.
++	     Acquire MO so that if we observe (signals == lowseq) after group
++	     switching in __condvar_quiesce_and_switch_g1, we synchronize with that
++	     store and will see the prior update of __g1_start done while switching
++	     groups too.  */
++	  unsigned int signals = atomic_load_acquire (cond->__data.__g_signals + g);
+ 	  uint64_t g1_start = __condvar_load_g1_start_relaxed (cond);
+ 	  unsigned int lowseq = (g1_start & 1) == g ? signals : g1_start & ~1U;
+ 
+@@ -397,7 +395,7 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
+ 	      /* If the group is closed already,
+ 	         then this waiter originally had enough extra signals to
+ 	         consume, up until the time its group was closed.  */
+-	       goto done;
++	       break;
+ 	    }
+ 
+ 	  /* If there is an available signal, don't block.
+@@ -406,7 +404,16 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
+ 	     G2, but in either case we're allowed to consume the available
+ 	     signal and should not block anymore.  */
+ 	  if ((int)(signals - lowseq) >= 2)
+-	    break;
++	    {
++	      /* Try to grab a signal.  See above for MO.  (if we do another loop
++		 iteration we need to see the correct value of g1_start)  */
++		      if (atomic_compare_exchange_weak_acquire (
++		      		cond->__data.__g_signals + g,
++			&signals, signals - 2))
++		      	break;
++		      else
++		      	continue;
++	    }
+ 
+ 	  // Now block.
+ 	  struct _pthread_cleanup_buffer buffer;
+@@ -469,19 +476,9 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
+ 	      /* If we timed out, we effectively cancel waiting.  */
+ 	      __condvar_cancel_waiting (cond, seq, g, private);
+ 	      result = ETIMEDOUT;
+-	      goto done;
++	      break;
+ 	    }
+-
+-	  /* Reload signals.  See above for MO.  */
+-	  signals = atomic_load_acquire (cond->__data.__g_signals + g);
+ 	}
+-    }
+-  /* Try to grab a signal.  See above for MO.  (if we do another loop
+-     iteration we need to see the correct value of g1_start)  */
+-  while (!atomic_compare_exchange_weak_acquire (cond->__data.__g_signals + g,
+-						&signals, signals - 2));
+-
+- done:
+ 
+   /* Confirm that we have been woken.  We do that before acquiring the mutex
+      to allow for execution of pthread_cond_destroy while having acquired the

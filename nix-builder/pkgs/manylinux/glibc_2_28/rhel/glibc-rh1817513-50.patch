@@ -1,0 +1,538 @@
+commit ec935dea6332cb22f9881cd1162bad156173f4b0
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Apr 24 22:31:15 2020 +0200
+
+    elf: Implement __libc_early_init
+    
+    This function is defined in libc.so, and the dynamic loader calls
+    right after relocation has been finished, before any ELF constructors
+    or the preinit function is invoked.  It is also used in the static
+    build for initializing parts of the static libc.
+    
+    To locate __libc_early_init, a direct symbol lookup function is used,
+    _dl_lookup_direct.  It does not search the entire symbol scope and
+    consults merely a single link map.  This function could also be used
+    to implement lookups in the vDSO (as an optimization).
+    
+    A per-namespace variable (libc_map) is added for locating libc.so,
+    to avoid repeated traversals of the search scope.  It is similar to
+    GL(dl_initfirst).  An alternative would have been to thread a context
+    argument from _dl_open down to _dl_map_object_from_fd (where libc.so
+    is identified).  This could have avoided the global variable, but
+    the change would be larger as a result.  It would not have been
+    possible to use this to replace GL(dl_initfirst) because that global
+    variable is used to pass the function pointer past the stack switch
+    from dl_main to the main program.  Replacing that requires adding
+    a new argument to _dl_init, which in turn needs changes to the
+    architecture-specific libc.so startup code written in assembler.
+    
+    __libc_early_init should not be used to replace _dl_var_init (as
+    it exists today on some architectures).  Instead, _dl_lookup_direct
+    should be used to look up a new variable symbol in libc.so, and
+    that should then be initialized from the dynamic loader, immediately
+    after the object has been loaded in _dl_map_object_from_fd (before
+    relocation is run).  This way, more IFUNC resolvers which depend on
+    these variables will work.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/csu/init-first.c b/csu/init-first.c
+index 289373f9d8bd98f4..544229151ef79c67 100644
+--- a/csu/init-first.c
++++ b/csu/init-first.c
+@@ -16,7 +16,6 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#include <ctype.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <fcntl.h>
+@@ -80,9 +79,6 @@ _init (int argc, char **argv, char **envp)
+ 
+   __init_misc (argc, argv, envp);
+ 
+-  /* Initialize ctype data.  */
+-  __ctype_init ();
+-
+ #if defined SHARED && !defined NO_CTORS_DTORS_SECTIONS
+   __libc_global_ctors ();
+ #endif
+diff --git a/csu/libc-start.c b/csu/libc-start.c
+index dfbf195328239a17..d9c3248219d8f84f 100644
+--- a/csu/libc-start.c
++++ b/csu/libc-start.c
+@@ -22,6 +22,7 @@
+ #include <ldsodefs.h>
+ #include <exit-thread.h>
+ #include <libc-internal.h>
++#include <elf/libc-early-init.h>
+ 
+ #include <elf/dl-tunables.h>
+ 
+@@ -238,6 +239,10 @@ LIBC_START_MAIN (int (*main) (int, char **, char ** MAIN_AUXVEC_DECL),
+     __cxa_atexit ((void (*) (void *)) rtld_fini, NULL, NULL);
+ 
+ #ifndef SHARED
++  /* Perform early initialization.  In the shared case, this function
++     is called from the dynamic loader as early as possible.  */
++  __libc_early_init ();
++
+   /* Call the initializer of the libc.  This is only needed here if we
+      are compiling for the static library in which case we haven't
+      run the constructors in `_dl_start_user'.  */
+diff --git a/elf/Makefile b/elf/Makefile
+index a6601ba84c8f4017..cbced7605ebe2443 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -25,7 +25,7 @@ headers		= elf.h bits/elfclass.h link.h bits/link.h
+ routines	= $(all-dl-routines) dl-support dl-iteratephdr \
+ 		  dl-addr dl-addr-obj enbl-secure dl-profstub \
+ 		  dl-origin dl-libc dl-sym dl-sysdep dl-error \
+-		  dl-reloc-static-pie
++		  dl-reloc-static-pie libc_early_init
+ 
+ # The core dynamic linking functions are in libc for the static and
+ # profiled libraries.
+@@ -33,7 +33,8 @@ dl-routines	= $(addprefix dl-,load lookup object reloc deps hwcaps \
+ 				  runtime init fini debug misc \
+ 				  version profile tls origin scope \
+ 				  execstack open close trampoline \
+-				  exception sort-maps)
++				  exception sort-maps lookup-direct \
++				  call-libc-early-init)
+ ifeq (yes,$(use-ldconfig))
+ dl-routines += dl-cache
+ endif
+diff --git a/elf/Versions b/elf/Versions
+index 705489fc51f4ac5f..3be879c4adfa74c7 100644
+--- a/elf/Versions
++++ b/elf/Versions
+@@ -26,6 +26,7 @@ libc {
+     _dl_open_hook; _dl_open_hook2;
+     _dl_sym; _dl_vsym;
+     __libc_dlclose; __libc_dlopen_mode; __libc_dlsym; __libc_dlvsym;
++    __libc_early_init;
+ 
+     # Internal error handling support.  Interposes the functions in ld.so.
+     _dl_signal_exception; _dl_catch_exception;
+diff --git a/elf/dl-call-libc-early-init.c b/elf/dl-call-libc-early-init.c
+new file mode 100644
+index 0000000000000000..41e9ad9aad8b5b46
+--- /dev/null
++++ b/elf/dl-call-libc-early-init.c
+@@ -0,0 +1,41 @@
++/* Invoke the early initialization function in libc.so.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <assert.h>
++#include <ldsodefs.h>
++#include <libc-early-init.h>
++#include <link.h>
++#include <stddef.h>
++
++void
++_dl_call_libc_early_init (struct link_map *libc_map)
++{
++  /* There is nothing to do if we did not actually load libc.so.  */
++  if (libc_map == NULL)
++    return;
++
++  const ElfW(Sym) *sym
++    = _dl_lookup_direct (libc_map, "__libc_early_init",
++                         0x069682ac, /* dl_new_hash output.  */
++                         "GLIBC_PRIVATE",
++                         0x0963cf85); /* _dl_elf_hash output.  */
++  assert (sym != NULL);
++  __typeof (__libc_early_init) *early_init
++    = DL_SYMBOL_ADDRESS (libc_map, sym);
++  early_init ();
++}
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index 8f8869ff524ab9f2..64da5323d0e368c1 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -30,6 +30,7 @@
+ #include <sys/param.h>
+ #include <sys/stat.h>
+ #include <sys/types.h>
++#include <gnu/lib-names.h>
+ 
+ /* Type for the buffer we put the ELF header and hopefully the program
+    header.  This buffer does not really have to be too large.  In most
+@@ -1390,6 +1391,14 @@ cannot enable executable stack as shared object requires");
+     add_name_to_object (l, ((const char *) D_PTR (l, l_info[DT_STRTAB])
+ 			    + l->l_info[DT_SONAME]->d_un.d_val));
+ 
++  /* If we have newly loaded libc.so, update the namespace
++     description.  */
++  if (GL(dl_ns)[nsid].libc_map == NULL
++      && l->l_info[DT_SONAME] != NULL
++      && strcmp (((const char *) D_PTR (l, l_info[DT_STRTAB])
++		  + l->l_info[DT_SONAME]->d_un.d_val), LIBC_SO) == 0)
++    GL(dl_ns)[nsid].libc_map = l;
++
+   /* _dl_close can only eventually undo the module ID assignment (via
+      remove_slotinfo) if this function returns a pointer to a link
+      map.  Therefore, delay this step until all possibilities for
+diff --git a/elf/dl-lookup-direct.c b/elf/dl-lookup-direct.c
+new file mode 100644
+index 0000000000000000..5637ae89de8a9d61
+--- /dev/null
++++ b/elf/dl-lookup-direct.c
+@@ -0,0 +1,116 @@
++/* Look up a symbol in a single specified object.
++   Copyright (C) 1995-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <ldsodefs.h>
++#include <string.h>
++#include <elf_machine_sym_no_match.h>
++#include <dl-hash.h>
++
++/* This function corresponds to do_lookup_x in elf/dl-lookup.c.  The
++   variant here is simplified because it requires symbol
++   versioning.  */
++static const ElfW(Sym) *
++check_match (const struct link_map *const map, const char *const undef_name,
++             const char *version, uint32_t version_hash,
++             const Elf_Symndx symidx)
++{
++  const ElfW(Sym) *symtab = (const void *) D_PTR (map, l_info[DT_SYMTAB]);
++  const ElfW(Sym) *sym = &symtab[symidx];
++
++  unsigned int stt = ELFW(ST_TYPE) (sym->st_info);
++  if (__glibc_unlikely ((sym->st_value == 0 /* No value.  */
++                         && sym->st_shndx != SHN_ABS
++                         && stt != STT_TLS)
++                        || elf_machine_sym_no_match (sym)))
++    return NULL;
++
++  /* Ignore all but STT_NOTYPE, STT_OBJECT, STT_FUNC,
++     STT_COMMON, STT_TLS, and STT_GNU_IFUNC since these are no
++     code/data definitions.  */
++#define ALLOWED_STT \
++  ((1 << STT_NOTYPE) | (1 << STT_OBJECT) | (1 << STT_FUNC) \
++   | (1 << STT_COMMON) | (1 << STT_TLS) | (1 << STT_GNU_IFUNC))
++  if (__glibc_unlikely (((1 << stt) & ALLOWED_STT) == 0))
++    return NULL;
++
++  const char *strtab = (const void *) D_PTR (map, l_info[DT_STRTAB]);
++
++  if (strcmp (strtab + sym->st_name, undef_name) != 0)
++    /* Not the symbol we are looking for.  */
++    return NULL;
++
++  ElfW(Half) ndx = map->l_versyms[symidx] & 0x7fff;
++  if (map->l_versions[ndx].hash != version_hash
++      || strcmp (map->l_versions[ndx].name, version) != 0)
++    /* It's not the version we want.  */
++    return NULL;
++
++  return sym;
++}
++
++
++/* This function corresponds to do_lookup_x in elf/dl-lookup.c.  The
++   variant here is simplified because it does not search object
++   dependencies.  It is optimized for a successful lookup.  */
++const ElfW(Sym) *
++_dl_lookup_direct (struct link_map *map,
++                   const char *undef_name, uint32_t new_hash,
++                   const char *version, uint32_t version_hash)
++{
++  const ElfW(Addr) *bitmask = map->l_gnu_bitmask;
++  if (__glibc_likely (bitmask != NULL))
++    {
++      Elf32_Word bucket = map->l_gnu_buckets[new_hash % map->l_nbuckets];
++      if (bucket != 0)
++        {
++          const Elf32_Word *hasharr = &map->l_gnu_chain_zero[bucket];
++
++          do
++            if (((*hasharr ^ new_hash) >> 1) == 0)
++              {
++                Elf_Symndx symidx = ELF_MACHINE_HASH_SYMIDX (map, hasharr);
++                const ElfW(Sym) *sym = check_match (map, undef_name,
++                                                    version, version_hash,
++                                                    symidx);
++                if (sym != NULL)
++                  return sym;
++              }
++          while ((*hasharr++ & 1u) == 0);
++        }
++    }
++  else
++    {
++      /* Fallback code for lack of GNU_HASH support.  */
++      uint32_t old_hash = _dl_elf_hash (undef_name);
++
++      /* Use the old SysV-style hash table.  Search the appropriate
++         hash bucket in this object's symbol table for a definition
++         for the same symbol name.  */
++      for (Elf_Symndx symidx = map->l_buckets[old_hash % map->l_nbuckets];
++           symidx != STN_UNDEF;
++           symidx = map->l_chain[symidx])
++        {
++          const ElfW(Sym) *sym = check_match (map, undef_name,
++                                              version, version_hash, symidx);
++          if (sym != NULL)
++            return sym;
++        }
++    }
++
++  return NULL;
++}
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 7113c4a04f0fddbc..1a77ec833cad6c55 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -34,6 +34,7 @@
+ #include <atomic.h>
+ #include <libc-internal.h>
+ #include <array_length.h>
++#include <libc-early-init.h>
+ 
+ #include <dl-dst.h>
+ #include <dl-prop.h>
+@@ -57,6 +58,13 @@ struct dl_open_args
+      (non-negative).  */
+   unsigned int original_global_scope_pending_adds;
+ 
++  /* Set to true by dl_open_worker if libc.so was already loaded into
++     the namespace at the time dl_open_worker was called.  This is
++     used to determine whether libc.so early initialization has
++     already been done before, and whether to roll back the cached
++     libc_map value in the namespace in case of a dlopen failure.  */
++  bool libc_already_loaded;
++
+   /* Original parameters to the program and the current environment.  */
+   int argc;
+   char **argv;
+@@ -500,6 +508,11 @@ dl_open_worker (void *a)
+ 	args->nsid = call_map->l_ns;
+     }
+ 
++  /* The namespace ID is now known.  Keep track of whether libc.so was
++     already loaded, to determine whether it is necessary to call the
++     early initialization routine (or clear libc_map on error).  */
++  args->libc_already_loaded = GL(dl_ns)[args->nsid].libc_map != NULL;
++
+   /* Retain the old value, so that it can be restored.  */
+   args->original_global_scope_pending_adds
+     = GL (dl_ns)[args->nsid]._ns_global_scope_pending_adds;
+@@ -734,6 +747,11 @@ dl_open_worker (void *a)
+   if (relocation_in_progress)
+     LIBC_PROBE (reloc_complete, 3, args->nsid, r, new);
+ 
++  /* If libc.so was not there before, attempt to call its early
++     initialization routine.  */
++  if (!args->libc_already_loaded)
++    _dl_call_libc_early_init (GL(dl_ns)[args->nsid].libc_map);
++
+ #ifndef SHARED
+   DL_STATIC_INIT (new);
+ #endif
+@@ -828,6 +846,8 @@ no more namespaces available for dlmopen()"));
+   args.caller_dlopen = caller_dlopen;
+   args.map = NULL;
+   args.nsid = nsid;
++  /* args.libc_already_loaded is always assigned by dl_open_worker
++     (before any explicit/non-local returns).  */
+   args.argc = argc;
+   args.argv = argv;
+   args.env = env;
+@@ -856,6 +876,11 @@ no more namespaces available for dlmopen()"));
+   /* See if an error occurred during loading.  */
+   if (__glibc_unlikely (exception.errstring != NULL))
+     {
++      /* Avoid keeping around a dangling reference to the libc.so link
++	 map in case it has been cached in libc_map.  */
++      if (!args.libc_already_loaded)
++	GL(dl_ns)[nsid].libc_map = NULL;
++
+       /* Remove the object from memory.  It may be in an inconsistent
+ 	 state if relocation failed, for example.  */
+       if (args.map)
+diff --git a/elf/libc-early-init.h b/elf/libc-early-init.h
+new file mode 100644
+index 0000000000000000..5185fa8895c0e11a
+--- /dev/null
++++ b/elf/libc-early-init.h
+@@ -0,0 +1,35 @@
++/* Early initialization of libc.so.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _LIBC_EARLY_INIT_H
++#define _LIBC_EARLY_INIT_H
++
++struct link_map;
++
++/* If LIBC_MAP is not NULL, look up the __libc_early_init symbol in it
++   and call this function.  */
++void _dl_call_libc_early_init (struct link_map *libc_map) attribute_hidden;
++
++/* In the shared case, this function is defined in libc.so and invoked
++   from ld.so (or on the fist static dlopen) after complete relocation
++   of a new loaded libc.so, but before user-defined ELF constructors
++   run.  In the static case, this function is called directly from the
++   startup code.  */
++void __libc_early_init (void);
++
++#endif /* _LIBC_EARLY_INIT_H */
+diff --git a/elf/libc_early_init.c b/elf/libc_early_init.c
+new file mode 100644
+index 0000000000000000..7f4ca332b805a22c
+--- /dev/null
++++ b/elf/libc_early_init.c
+@@ -0,0 +1,27 @@
++/* Early initialization of libc.so, libc.so side.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <ctype.h>
++#include <libc-early-init.h>
++
++void
++__libc_early_init (void)
++{
++  /* Initialize ctype data.  */
++  __ctype_init ();
++}
+diff --git a/elf/rtld.c b/elf/rtld.c
+index d44facf5343b3301..a40d5f17db0dac8b 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -44,6 +44,7 @@
+ #include <stackinfo.h>
+ #include <not-cancel.h>
+ #include <array_length.h>
++#include <libc-early-init.h>
+ 
+ #include <assert.h>
+ 
+@@ -2365,6 +2366,9 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+       rtld_timer_accum (&relocate_time, start);
+     }
+ 
++  /* Relocation is complete.  Perform early libc initialization.  */
++  _dl_call_libc_early_init (GL(dl_ns)[LM_ID_BASE].libc_map);
++
+   /* Do any necessary cleanups for the startup OS interface code.
+      We do these now so that no calls are made after rtld re-relocation
+      which might be resolved to different functions than we expect.
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index a8fb0d211426e4b1..ccec08929e4ad4e7 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -336,6 +336,10 @@ struct rtld_global
+        recursive dlopen calls from ELF constructors.  */
+     unsigned int _ns_global_scope_pending_adds;
+ 
++    /* Once libc.so has been loaded into the namespace, this points to
++       its link map.  */
++    struct link_map *libc_map;
++
+     /* Search table for unique objects.  */
+     struct unique_sym_table
+     {
+@@ -943,6 +947,19 @@ extern lookup_t _dl_lookup_symbol_x (const char *undef,
+      attribute_hidden;
+ 
+ 
++/* Restricted version of _dl_lookup_symbol_x.  Searches MAP (and only
++   MAP) for the symbol UNDEF_NAME, with GNU hash NEW_HASH (computed
++   with dl_new_hash), symbol version VERSION, and symbol version hash
++   VERSION_HASH (computed with _dl_elf_hash).  Returns a pointer to
++   the symbol table entry in MAP on success, or NULL on failure.  MAP
++   must have symbol versioning information, or otherwise the result is
++   undefined.  */
++const ElfW(Sym) *_dl_lookup_direct (struct link_map *map,
++				    const char *undef_name,
++				    uint32_t new_hash,
++				    const char *version,
++				    uint32_t version_hash) attribute_hidden;
++
+ /* Add the new link_map NEW to the end of the namespace list.  */
+ extern void _dl_add_to_namespace_list (struct link_map *new, Lmid_t nsid)
+      attribute_hidden;
+diff --git a/sysdeps/mach/hurd/i386/init-first.c b/sysdeps/mach/hurd/i386/init-first.c
+index f8ad2ceb8e324f92..1636a40ee5d78858 100644
+--- a/sysdeps/mach/hurd/i386/init-first.c
++++ b/sysdeps/mach/hurd/i386/init-first.c
+@@ -17,7 +17,6 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <assert.h>
+-#include <ctype.h>
+ #include <hurd.h>
+ #include <stdio.h>
+ #include <unistd.h>
+@@ -84,9 +83,6 @@ posixland_init (int argc, char **argv, char **envp)
+ #endif
+   __init_misc (argc, argv, envp);
+ 
+-  /* Initialize ctype data.  */
+-  __ctype_init ();
+-
+ #if defined SHARED && !defined NO_CTORS_DTORS_SECTIONS
+   __libc_global_ctors ();
+ #endif

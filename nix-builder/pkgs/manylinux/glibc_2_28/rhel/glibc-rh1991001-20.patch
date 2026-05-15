@@ -1,0 +1,20 @@
+commit 3c7c5117826816021f9d3f352f49e0dd0236cbad
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Nov 30 14:35:54 2021 +0100
+
+    elf: Include <stdint.h> in tst-tls20.c
+    
+    The test uses standard integer types.
+
+diff --git a/elf/tst-tls20.c b/elf/tst-tls20.c
+index 831c3336c914790d..18067e6b0a6093f9 100644
+--- a/elf/tst-tls20.c
++++ b/elf/tst-tls20.c
+@@ -19,6 +19,7 @@
+ #include <array_length.h>
+ #include <dlfcn.h>
+ #include <pthread.h>
++#include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <support/check.h>

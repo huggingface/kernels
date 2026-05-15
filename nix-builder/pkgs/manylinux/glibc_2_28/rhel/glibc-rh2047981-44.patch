@@ -1,0 +1,98 @@
+Downstream-only patch to change rtld_active () to return true during
+early audit operations.  GLRO (_dl_profile_output) is initialized much
+earlier than GLRO (dl_init_all_dirs), before auditors run, so it is a
+good replacement.
+
+This is addressed downstream very differently, in this commit:
+
+commit 8dcb6d0af07fda3607b541857e4f3970a74ed55b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Apr 26 14:23:02 2022 +0200
+
+    dlfcn: Do not use rtld_active () to determine ld.so state (bug 29078)
+
+    When audit modules are loaded, ld.so initialization is not yet
+    complete, and rtld_active () returns false even though ld.so is
+    mostly working.  Instead, the static dlopen hook is used, but that
+    does not work at all because this is not a static dlopen situation.
+
+    Commit 466c1ea15f461edb8e3ffaf5d86d708876343bbf ("dlfcn: Rework
+    static dlopen hooks") moved the hook pointer into _rtld_global_ro,
+    which means that separate protection is not needed anymore and the
+    hook pointer can be checked directly.
+
+    The guard for disabling libio vtable hardening in _IO_vtable_check
+    should stay for now.
+
+    Fixes commit 8e1472d2c1e25e6eabc2059170731365f6d5b3d1 ("ld.so:
+    Examine GLRO to detect inactive loader [BZ #20204]").
+
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 22cceeab40319582..b47e84ca2fb6f03c 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2352,9 +2352,7 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+   GLRO(dl_initial_searchlist) = *GL(dl_ns)[LM_ID_BASE]._ns_main_searchlist;
+ 
+   /* Remember the last search directory added at startup, now that
+-     malloc will no longer be the one from dl-minimal.c.  As a side
+-     effect, this marks ld.so as initialized, so that the rtld_active
+-     function returns true from now on.  */
++     malloc will no longer be the one from dl-minimal.c.  */
+   GLRO(dl_init_all_dirs) = GL(dl_all_dirs);
+ 
+   /* Print scope information.  */
+@@ -2675,7 +2673,9 @@ process_envvars (struct dl_main_state *state)
+   char *envline;
+   char *debug_output = NULL;
+ 
+-  /* This is the default place for profiling data file.  */
++  /* This is the default place for profiling data file.  As a side
++     effect, this marks ld.so as initialized, so that the rtld_active
++     function returns true from now on.  */
+   GLRO(dl_profile_output)
+     = &"/var/tmp\0/var/profile"[__libc_enable_secure ? 9 : 0];
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index d4f70211c34d1c59..9dec9e3d3b6d6aa2 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -600,18 +600,18 @@ struct rtld_global_ro
+ 
+   /* Name of the shared object to be profiled (if any).  */
+   EXTERN const char *_dl_profile;
+-  /* Filename of the output file.  */
++  /* Filename of the output file.  This is assigned a
++     non-NULL pointer by the ld.so startup code (after initialization
++     to NULL), so this can also serve as an indicator whether a copy
++     of ld.so is initialized and active.  See the rtld_active function
++     below.  */
+   EXTERN const char *_dl_profile_output;
+   /* Name of the object we want to trace the prelinking.  */
+   EXTERN const char *_dl_trace_prelink;
+   /* Map of shared object to be prelink traced.  */
+   EXTERN struct link_map *_dl_trace_prelink_map;
+ 
+-  /* All search directories defined at startup.  This is assigned a
+-     non-NULL pointer by the ld.so startup code (after initialization
+-     to NULL), so this can also serve as an indicator whether a copy
+-     of ld.so is initialized and active.  See the rtld_active function
+-     below.  */
++  /* All search directories defined at startup.  */
+   EXTERN struct r_search_path_elem *_dl_init_all_dirs;
+ 
+ #ifdef NEED_DL_SYSINFO
+@@ -1259,9 +1259,9 @@ static inline bool
+ rtld_active (void)
+ {
+   /* The default-initialized variable does not have a non-zero
+-     dl_init_all_dirs member, so this allows us to recognize an
++     dl_profile_output member, so this allows us to recognize an
+      initialized and active ld.so copy.  */
+-  return GLRO(dl_init_all_dirs) != NULL;
++  return GLRO(dl_profile_output) != NULL;
+ }
+ 
+ static inline struct auditstate *

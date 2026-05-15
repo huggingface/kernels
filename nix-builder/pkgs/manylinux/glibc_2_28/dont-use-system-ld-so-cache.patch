@@ -1,8 +1,8 @@
-diff -Naur glibc-2.27-orig/elf/ldconfig.c glibc-2.27/elf/ldconfig.c
---- glibc-2.27-orig/elf/ldconfig.c	2018-02-01 11:17:18.000000000 -0500
-+++ glibc-2.27/elf/ldconfig.c	2018-02-17 22:43:17.232175182 -0500
-@@ -51,7 +51,7 @@
- #endif
+diff -ruN glibc-2.28.orig/elf/ldconfig.c glibc-2.28/elf/ldconfig.c
+--- glibc-2.28.orig/elf/ldconfig.c	2026-05-15 15:37:12.866557289 +0000
++++ glibc-2.28/elf/ldconfig.c	2026-05-15 15:37:47.593056899 +0000
+@@ -57,7 +57,7 @@
+ #define TLS_HWCAP_BIT 63
  
  #ifndef LD_SO_CONF
 -# define LD_SO_CONF SYSCONFDIR "/ld.so.conf"
@@ -10,14 +10,13 @@ diff -Naur glibc-2.27-orig/elf/ldconfig.c glibc-2.27/elf/ldconfig.c
  #endif
  
  /* Get libc version number.  */
-diff -Naur glibc-2.27-orig/elf/Makefile glibc-2.27/elf/Makefile
---- glibc-2.27-orig/elf/Makefile	2018-02-01 11:17:18.000000000 -0500
-+++ glibc-2.27/elf/Makefile	2018-02-17 22:44:50.334006750 -0500
-@@ -559,13 +559,13 @@
- 
+diff -ruN glibc-2.28.orig/elf/Makefile glibc-2.28/elf/Makefile
+--- glibc-2.28.orig/elf/Makefile	2026-05-15 15:37:12.865957961 +0000
++++ glibc-2.28/elf/Makefile	2026-05-15 15:48:15.977144183 +0000
+@@ -1298,13 +1298,14 @@
  $(objpfx)ldconfig: $(ldconfig-modules:%=$(objpfx)%.o)
  
--SYSCONF-FLAGS := -D'SYSCONFDIR="$(sysconfdir)"'
+ SYSCONF-FLAGS := -D'SYSCONFDIR="$(sysconfdir)"'
 -CFLAGS-ldconfig.c += $(SYSCONF-FLAGS) -D'LIBDIR="$(libdir)"' \
 +PREFIX-FLAGS := -D'PREFIX="$(prefix)"'
 +CFLAGS-ldconfig.c += $(PREFIX-FLAGS) -D'LIBDIR="$(libdir)"' \
@@ -26,16 +25,18 @@ diff -Naur glibc-2.27-orig/elf/Makefile glibc-2.27/elf/Makefile
 -CFLAGS-dl-cache.c += $(SYSCONF-FLAGS)
 -CFLAGS-cache.c += $(SYSCONF-FLAGS)
 -CFLAGS-rtld.c += $(SYSCONF-FLAGS)
+-CFLAGS-dl-usage.c += $(SYSCONF-FLAGS) \
 +CFLAGS-dl-cache.c += $(PREFIX-FLAGS)
 +CFLAGS-cache.c += $(PREFIX-FLAGS)
 +CFLAGS-rtld.c += $(PREFIX-FLAGS)
- 
- cpp-srcs-left := $(all-rtld-routines:=.os)
- lib := rtld
-diff -Naur glibc-2.27-orig/sysdeps/generic/dl-cache.h glibc-2.27/sysdeps/generic/dl-cache.h
---- glibc-2.27-orig/sysdeps/generic/dl-cache.h	2018-02-01 11:17:18.000000000 -0500
-+++ glibc-2.27/sysdeps/generic/dl-cache.h	2018-02-17 22:45:20.471598816 -0500
-@@ -28,7 +28,7 @@
++CFLAGS-dl-usage.c += $(PREFIX-FLAGS) \
+   -D'RTLD="$(rtlddir)/$(rtld-installed-name)"'
+ CFLAGS-dl-diagnostics.c += $(SYSCONF-FLAGS) \
+   -D'PREFIX="$(prefix)"' \
+diff -ruN glibc-2.28.orig/sysdeps/generic/dl-cache.h glibc-2.28/sysdeps/generic/dl-cache.h
+--- glibc-2.28.orig/sysdeps/generic/dl-cache.h	2026-05-15 15:37:13.209144916 +0000
++++ glibc-2.28/sysdeps/generic/dl-cache.h	2026-05-15 15:39:15.057531693 +0000
+@@ -35,7 +35,7 @@
  #endif
  
  #ifndef LD_SO_CACHE

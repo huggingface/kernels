@@ -1,0 +1,250 @@
+commit 89bfcbdf9d3d36eff0d544f655991149a7ae680b
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:17 2018 +0100
+
+    S390: Refactor memrchr ifunc handling.
+    
+    The ifunc handling for memrchr is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove memrchr variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add memrchr variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for memrchr.
+            * sysdeps/s390/multiarch/memrchr-c.c: Move to ...
+            * sysdeps/s390/memrchr-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/memrchr-vx.S: Move to ...
+            * sysdeps/s390/memrchr-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/memrchr.c: Move to ...
+            * sysdeps/s390/memrchr.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-memrchr.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 239426dbc1ce9d09..9a16ce1692e51607 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -55,5 +55,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strcspn strcspn-vx strcspn-c \
+ 		   memchr memchr-vx memchr-z900 \
+ 		   rawmemchr rawmemchr-vx rawmemchr-c \
+-		   memccpy memccpy-vx memccpy-c
++		   memccpy memccpy-vx memccpy-c \
++		   memrchr memrchr-vx memrchr-c
+ endif
+diff --git a/sysdeps/s390/ifunc-memrchr.h b/sysdeps/s390/ifunc-memrchr.h
+new file mode 100644
+index 0000000000000000..9d80d5528dc92dab
+--- /dev/null
++++ b/sysdeps/s390/ifunc-memrchr.h
+@@ -0,0 +1,52 @@
++/* memrchr variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_MEMRCHR_IFUNC	1
++#else
++# define HAVE_MEMRCHR_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_MEMRCHR_IFUNC_AND_VX_SUPPORT HAVE_MEMRCHR_IFUNC
++#else
++# define HAVE_MEMRCHR_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define MEMRCHR_DEFAULT	MEMRCHR_Z13
++# define HAVE_MEMRCHR_C		0
++# define HAVE_MEMRCHR_Z13	1
++#else
++# define MEMRCHR_DEFAULT	MEMRCHR_C
++# define HAVE_MEMRCHR_C		1
++# define HAVE_MEMRCHR_Z13	HAVE_MEMRCHR_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_MEMRCHR_C
++# define MEMRCHR_C		__memrchr_c
++#else
++# define MEMRCHR_C		NULL
++#endif
++
++#if HAVE_MEMRCHR_Z13
++# define MEMRCHR_Z13		__memrchr_vx
++#else
++# define MEMRCHR_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/memrchr-c.c b/sysdeps/s390/memrchr-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/memrchr-c.c
+rename to sysdeps/s390/memrchr-c.c
+index 1e3c914a5d61dbc5..333c0fc8d1855323 100644
+--- a/sysdeps/s390/multiarch/memrchr-c.c
++++ b/sysdeps/s390/memrchr-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define MEMRCHR  __memrchr_c
++#include <ifunc-memrchr.h>
++
++#if HAVE_MEMRCHR_C
++# if HAVE_MEMRCHR_IFUNC
++#  define MEMRCHR MEMRCHR_C
++# endif
+ 
+-# include <string.h>
+-extern __typeof (__memrchr) __memrchr_c;
+ # include <string/memrchr.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/memrchr-vx.S b/sysdeps/s390/memrchr-vx.S
+similarity index 94%
+rename from sysdeps/s390/multiarch/memrchr-vx.S
+rename to sysdeps/s390/memrchr-vx.S
+index 8e81f5ed7519c2cc..ba832f1b21ad5a4c 100644
+--- a/sysdeps/s390/multiarch/memrchr-vx.S
++++ b/sysdeps/s390/memrchr-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-memrchr.h>
++
++#if HAVE_MEMRCHR_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -40,7 +42,7 @@
+    -v18=c replicated
+    -v20=permute pattern
+ */
+-ENTRY(__memrchr_vx)
++ENTRY(MEMRCHR_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -156,5 +158,11 @@ ENTRY(__memrchr_vx)
+ 
+ 	clgijhe	%r4,64,.Lloop64	/* If n >= 64 -> loop64.  */
+ 	j	.Llt64
+-END(__memrchr_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(MEMRCHR_Z13)
++
++# if ! HAVE_MEMRCHR_IFUNC
++strong_alias (MEMRCHR_Z13, __memrchr)
++weak_alias (__memrchr, memrchr)
++# endif
++
++#endif /* HAVE_MEMRCHR_Z13  */
+diff --git a/sysdeps/s390/multiarch/memrchr.c b/sysdeps/s390/memrchr.c
+similarity index 68%
+rename from sysdeps/s390/multiarch/memrchr.c
+rename to sysdeps/s390/memrchr.c
+index 43a44abcf6cc3bdc..d995e9961c1cc9eb 100644
+--- a/sysdeps/s390/multiarch/memrchr.c
++++ b/sysdeps/s390/memrchr.c
+@@ -16,13 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-memrchr.h>
++
++#if HAVE_MEMRCHR_IFUNC
+ # include <string.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc (__memrchr)
+-weak_alias (__memrchr, memrchr)
++# if HAVE_MEMRCHR_C
++extern __typeof (__memrchr) MEMRCHR_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/memrchr.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_MEMRCHR_Z13
++extern __typeof (__memrchr) MEMRCHR_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__memrchr, __memrchr,
++		      (HAVE_MEMRCHR_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? MEMRCHR_Z13
++		      : MEMRCHR_DEFAULT
++		      )
++weak_alias (__memrchr, memrchr)
++#endif /* HAVE_MEMRCHR_IFUNC  */
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index d5a32fc309ba4b3c..260b514936b93306 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,7 +1,3 @@
+-ifeq ($(subdir),string)
+-sysdep_routines += memrchr memrchr-vx memrchr-c
+-endif
+-
+ ifeq ($(subdir),wcsmbs)
+ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcsnlen wcsnlen-vx wcsnlen-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index b8917747f0f23cd9..0f01b99691002be0 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -45,6 +45,7 @@
+ #include <ifunc-memchr.h>
+ #include <ifunc-rawmemchr.h>
+ #include <ifunc-memccpy.h>
++#include <ifunc-memrchr.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -411,6 +412,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_MEMCCPY_IFUNC  */
+ 
++#if HAVE_MEMRCHR_IFUNC
++    IFUNC_IMPL (i, name, memrchr,
++# if HAVE_MEMRCHR_Z13
++		IFUNC_IMPL_ADD (array, i, memrchr,
++				dl_hwcap & HWCAP_S390_VX, MEMRCHR_Z13)
++# endif
++# if HAVE_MEMRCHR_C
++		IFUNC_IMPL_ADD (array, i, memrchr, 1, MEMRCHR_C)
++# endif
++		)
++#endif /* HAVE_MEMRCHR_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -457,8 +470,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wmemcmp);
+ 
+-  IFUNC_VX_IMPL (memrchr);
+-
+ #endif /* HAVE_S390_VX_ASM_SUPPORT */
+ 
+   return i;

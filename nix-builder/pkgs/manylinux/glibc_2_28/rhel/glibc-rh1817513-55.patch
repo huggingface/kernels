@@ -1,0 +1,136 @@
+commit 033362cfd7e0e1dccd6c9a2642710d6e3a7e7007
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Thu Jan 23 09:45:00 2020 -0500
+
+    test-container: Support $(complocaledir) and mkdirp.
+    
+    Expand the support infrastructure:
+    - Create $(complocaledir) in the testroot.pristine to support localedef.
+    - Add the variable $complocaledir to script support.
+    - Add the script command 'mkdirp'.
+    
+    All localedef tests which run with default paths need to have the
+    $(complocaledir) created in testroot.pristine. The localedef binary
+    will not by itself create the default path, but it will write into
+    the path. By adding this we can simplify the localedef tests.
+    
+    The variable $complocaledir is the value of the configured
+    $(complocaledir) which is the location of the compiled locales that
+    will be searched by the runtime by default.
+    
+    The command mkdirp will be available in script setup and will
+    be equivalent to running `mkdir -p`.
+    
+    The variable and command can be used to write more complex tests.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/Makefile b/Makefile
+index ae44b9cdd29fb0e3..3748d6f7cfb6223b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -371,6 +371,9 @@ $(objpfx)testroot.pristine/install.stamp :
+ 	# We need a working /bin/sh for some of the tests.
+ 	test -d $(objpfx)testroot.pristine/bin || \
+ 	  mkdir $(objpfx)testroot.pristine/bin
++	# We need the compiled locale dir for localedef tests.
++	test -d $(objpfx)testroot.pristine/$(complocaledir) || \
++	  mkdir -p $(objpfx)testroot.pristine/$(complocaledir)
+ 	cp $(objpfx)support/shell-container $(objpfx)testroot.pristine/bin/sh
+ 	cp $(objpfx)support/echo-container $(objpfx)testroot.pristine/bin/echo
+ 	cp $(objpfx)support/true-container $(objpfx)testroot.pristine/bin/true
+diff --git a/support/test-container.c b/support/test-container.c
+index 9eff8baeef0e9d8a..9fcc91e478038232 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -72,6 +72,10 @@ int verbose = 0;
+ 
+    * mkdir $buildroot/testroot.pristine/
+    * install into it
++     * default glibc install
++     * create /bin for /bin/sh
++     * create $(complocaledir) so localedef tests work with default paths.
++     * install /bin/sh, /bin/echo, and /bin/true.
+    * rsync to $buildroot/testroot.root/
+ 
+    "Per-test" actions:
+@@ -97,9 +101,23 @@ int verbose = 0;
+ 	 rm FILE
+ 	 cwd PATH
+ 	 exec FILE
+-	 FILE must start with $B/, $S/, $I/, $L/, or /
+-	  (expands to build dir, source dir, install dir, library dir
+-	   (in container), or container's root)
++	 mkdirp MODE DIR
++
++       variables:
++	 $B/ build dir, equivalent to $(common-objpfx)
++	 $S/ source dir, equivalent to $(srcdir)
++	 $I/ install dir, equivalent to $(prefix)
++	 $L/ library dir (in container), equivalent to $(libdir)
++	 $complocaledir/ compiled locale dir, equivalent to $(complocaledir)
++	 / container's root
++
++	 If FILE begins with any of these variables then they will be
++	 substituted for the described value.
++
++	 The goal is to expose as many of the runtime's configured paths
++	 via variables so they can be used to setup the container environment
++	 before execution reaches the test.
++
+        details:
+          - '#': A comment.
+          - 'su': Enables running test as root in the container.
+@@ -108,6 +126,8 @@ int verbose = 0;
+          - 'rm': A minimal remove files command.
+ 	 - 'cwd': set test working directory
+ 	 - 'exec': change test binary location (may end in /)
++	 - 'mkdirp': A minimal "mkdir -p FILE" command.
++
+    * mytest.root/postclean.req causes fresh rsync (with delete) after
+      test if present
+ 
+@@ -859,6 +879,7 @@ main (int argc, char **argv)
+ 	    int nt = tokenize (the_line, the_words, 3);
+ 	    int i;
+ 
++	    /* Expand variables.  */
+ 	    for (i = 1; i < nt; ++i)
+ 	      {
+ 		if (memcmp (the_words[i], "$B/", 3) == 0)
+@@ -875,6 +896,10 @@ main (int argc, char **argv)
+ 		  the_words[i] = concat (new_root_path,
+ 					 support_libdir_prefix,
+ 					 the_words[i] + 2, NULL);
++		else if (memcmp (the_words[i], "$complocaledir/", 15) == 0)
++		  the_words[i] = concat (new_root_path,
++					 support_complocaledir_prefix,
++					 the_words[i] + 14, NULL);
+ 		/* "exec" and "cwd" use inside-root paths.  */
+ 		else if (strcmp (the_words[0], "exec") != 0
+ 			 && strcmp (the_words[0], "cwd") != 0
+@@ -892,6 +917,9 @@ main (int argc, char **argv)
+ 		  the_words[2] = concat (the_words[2], the_words[1], NULL);
+ 	      }
+ 
++	    /* Run the following commands in the_words[0] with NT number of
++	       arguments (including the command).  */
++
+ 	    if (nt == 2 && strcmp (the_words[0], "so") == 0)
+ 	      {
+ 		the_words[2] = concat (new_root_path, support_libdir_prefix,
+@@ -961,6 +989,14 @@ main (int argc, char **argv)
+ 	      {
+ 		be_su = 1;
+ 	      }
++	    else if (nt == 3 && strcmp (the_words[0], "mkdirp") == 0)
++	      {
++		long int m;
++		errno = 0;
++		m = strtol (the_words[1], NULL, 0);
++		TEST_COMPARE (errno, 0);
++		xmkdirp (the_words[2], m);
++	      }
+ 	    else if (nt > 0 && the_words[0][0] != '#')
+ 	      {
+ 		fprintf (stderr, "\033[31minvalid [%s]\033[0m\n", the_words[0]);

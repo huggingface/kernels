@@ -1,0 +1,207 @@
+commit 765325951ac5c7d072278c9424930b29657e9758
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Jul 24 12:06:47 2024 +0200
+
+    resolv: Implement strict-error stub resolver option (bug 27929)
+    
+    For now, do not enable this mode by default due to the potential
+    impact on compatibility with existing deployments.
+
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+Conflicts:
+        NEWS
+         (Dropped)
+
+diff -Nrup a/resolv/res_init.c b/resolv/res_init.c
+--- a/resolv/res_init.c	2025-06-06 07:00:12.496548260 -0400
++++ b/resolv/res_init.c	2025-06-06 07:02:49.092632696 -0400
+@@ -695,6 +695,7 @@ res_setoptions (struct resolv_conf_parse
+             { STRnLEN ("no-reload"), RES_NORELOAD },
+             { STRnLEN ("use-vc"),  RES_USEVC },
+             { STRnLEN ("no-aaaa"), RES_NOAAAA },
++            { STRnLEN ("strict-error"), RES_STRICTERR },
+           };
+ #define noptions (sizeof (options) / sizeof (options[0]))
+           bool negate_option = *cp == '-';
+diff -Nrup a/resolv/res_send.c b/resolv/res_send.c
+--- a/resolv/res_send.c	2025-06-06 07:00:12.434548622 -0400
++++ b/resolv/res_send.c	2025-06-06 07:02:49.095632678 -0400
+@@ -1357,21 +1357,38 @@ send_dg(res_state statp,
+ 
+ 		if (thisansp_error) {
+ 		next_ns:
+-			if (recvresp1 || (buf2 != NULL && recvresp2)) {
+-			  *resplen2 = 0;
+-			  return resplen;
+-			}
+-			if (buf2 != NULL && !single_request)
++		        /* Outside of strict-error mode, use the first
++			   response even if the second response is an
++			   error.  This allows parallel resolution to
++			   succeed even if the recursive resolver
++			   always answers with SERVFAIL for AAAA
++			   queries (which still happens in practice
++			   unfortunately).
++
++			   In strict-error mode, always switch to the
++			   next server and try to get a response from
++			   there.  */
++			if ((statp->options & RES_STRICTERR) == 0)
+ 			  {
+-			    /* No data from the first reply.  */
+-			    resplen = 0;
+-			    /* We are waiting for a possible second reply.  */
+-			    if (matching_query == 1)
+-			      recvresp1 = 1;
+-			    else
+-			      recvresp2 = 1;
++			    if (recvresp1 || (buf2 != NULL && recvresp2))
++			      {
++				*resplen2 = 0;
++				return resplen;
++			      }
++
++			    if (buf2 != NULL && !single_request)
++			      {
++				/* No data from the first reply.  */
++				resplen = 0;
++				/* We are waiting for a possible
++				   second reply.  */
++				if (matching_query == 1)
++				  recvresp1 = 1;
++				else
++				  recvresp2 = 1;
+ 
+-			    goto wait;
++				goto wait;
++			      }
+ 			  }
+ 
+ 			/* don't retry if called from dig */
+diff -Nrup a/resolv/resolv.h b/resolv/resolv.h
+--- a/resolv/resolv.h	2025-06-06 06:59:53.530659146 -0400
++++ b/resolv/resolv.h	2025-06-06 07:09:57.754126400 -0400
+@@ -136,6 +136,7 @@ struct res_sym {
+ 					   as a TLD.  */
+ #define RES_NORELOAD    0x02000000 /* No automatic configuration reload.  */
+ #define RES_NOAAAA      0x08000000 /* Suppress AAAA queries.  */
++#define RES_STRICTERR   0x10000000 /* Report more DNS errors as errors.  */
+ 
+ #define RES_DEFAULT	(RES_RECURSE|RES_DEFNAMES|RES_DNSRCH)
+ 
+diff -Nrup a/resolv/tst-resolv-res_init-skeleton.c b/resolv/tst-resolv-res_init-skeleton.c
+--- a/resolv/tst-resolv-res_init-skeleton.c	2025-06-06 07:00:12.499548242 -0400
++++ b/resolv/tst-resolv-res_init-skeleton.c	2025-06-06 07:11:46.131274310 -0400
+@@ -130,6 +130,7 @@ print_resp (FILE *fp, res_state resp)
+         print_option_flag (fp, &options, RES_NOTLDQUERY, "no-tld-query");
+         print_option_flag (fp, &options, RES_NORELOAD, "no-reload");
+         print_option_flag (fp, &options, RES_NOAAAA, "no-aaaa");
++        print_option_flag (fp, &options, RES_STRICTERR, "strict-error");
+         fputc ('\n', fp);
+         if (options != 0)
+           fprintf (fp, "; error: unresolved option bits: 0x%x\n", options);
+@@ -731,6 +732,15 @@ struct test_case test_cases[] =
+      "search example.com\n"
+      "; search[0]: example.com\n"
+      "nameserver 192.0.2.1\n"
++     "; nameserver[0]: [192.0.2.1]:53\n"
++    },
++    {.name = "strict-error flag",
++     .conf = "options strict-error\n"
++     "nameserver 192.0.2.1\n",
++     .expected = "options strict-error\n"
++     "search example.com\n"
++     "; search[0]: example.com\n"
++     "nameserver 192.0.2.1\n"
+      "; nameserver[0]: [192.0.2.1]:53\n"
+     },
+     { NULL }
+diff -Nrup a/resolv/tst-resolv-semi-failure.c b/resolv/tst-resolv-semi-failure.c
+--- a/resolv/tst-resolv-semi-failure.c	2025-06-06 07:00:12.438548599 -0400
++++ b/resolv/tst-resolv-semi-failure.c	2025-06-06 07:02:49.099632654 -0400
+@@ -67,6 +67,9 @@ response (const struct resolv_response_c
+   resolv_response_close_record (b);
+ }
+ 
++/* Set to 1 if strict error checking is enabled.  */
++static int do_strict_error;
++
+ static void
+ check_one (void)
+ {
+@@ -83,7 +86,10 @@ check_one (void)
+       struct addrinfo *ai;
+       int ret = getaddrinfo ("www.example", "80", &hints, &ai);
+       const char *expected;
+-      if (ret == 0 && ai->ai_next != NULL)
++      /* In strict-error mode, a switch to the second name server
++         happens, and both responses are received, so a single
++         response is a bug.  */
++      if (do_strict_error || (ret == 0 && ai->ai_next != NULL))
+         expected = ("address: STREAM/TCP 192.0.2.17 80\n"
+                     "address: STREAM/TCP 2001:db8::1 80\n");
+       else
+@@ -99,33 +105,36 @@ check_one (void)
+ static int
+ do_test (void)
+ {
+-  for (int do_single_lookup = 0; do_single_lookup < 2; ++do_single_lookup)
+-    {
+-      struct resolv_test *aux = resolv_test_start
+-        ((struct resolv_redirect_config)
+-         {
+-           .response_callback = response,
+-         });
+-
+-      if (do_single_lookup)
+-        _res.options |= RES_SNGLKUP;
+-
+-      for (int do_fail_aaaa = 0; do_fail_aaaa < 2; ++do_fail_aaaa)
+-        {
+-          fail_aaaa = do_fail_aaaa;
++  for (do_strict_error = 0; do_strict_error < 2; ++do_strict_error)
++    for (int do_single_lookup = 0; do_single_lookup < 2; ++do_single_lookup)
++      {
++        struct resolv_test *aux = resolv_test_start
++          ((struct resolv_redirect_config)
++           {
++             .response_callback = response,
++           });
++
++        if (do_strict_error)
++          _res.options |= RES_STRICTERR;
++        if (do_single_lookup)
++          _res.options |= RES_SNGLKUP;
++
++        for (int do_fail_aaaa = 0; do_fail_aaaa < 2; ++do_fail_aaaa)
++          {
++            fail_aaaa = do_fail_aaaa;
++
++            rcode = 2; /* SERVFAIL.  */
++            check_one ();
++
++            rcode = 4; /* NOTIMP.  */
++            check_one ();
++
++            rcode = 5; /* REFUSED.  */
++            check_one ();
++          }
+ 
+-          rcode = 2; /* SERVFAIL.  */
+-          check_one ();
+-
+-          rcode = 4; /* NOTIMP.  */
+-          check_one ();
+-
+-          rcode = 5; /* REFUSED.  */
+-          check_one ();
+-        }
+-
+-      resolv_test_end (aux);
+-    }
++        resolv_test_end (aux);
++      }
+ 
+   return 0;
+ }

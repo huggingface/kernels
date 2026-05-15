@@ -1,0 +1,20 @@
+commit 0798b8ecc8da8667362496c1217d18635106c609
+Author: Vineet Gupta <Vineet.Gupta1@synopsys.com>
+Date:   Wed Apr 8 19:56:12 2020 -0700
+
+    ARC: Update syscall-names.list for ARC specific syscalls
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 314a653938..21a62a06f4 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -41,6 +41,9 @@ adjtimex
+ afs_syscall
+ alarm
+ alloc_hugepages
++arc_gettls
++arc_settls
++arc_usr_cmpxchg
+ arch_prctl
+ arm_fadvise64_64
+ arm_sync_file_range

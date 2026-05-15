@@ -1,0 +1,191 @@
+commit 32db86d558193ad4ad5a00926ce3c350c89eb8df
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Tue Feb 12 10:30:34 2019 +0000
+
+    Add fall-through comments.
+    
+    This patch adds fall-through comments in some cases where -Wextra
+    produces implicit-fallthrough warnings.
+    
+    The patch is non-exhaustive.  Apart from architecture-specific code
+    for non-x86_64 architectures, it does not change sunrpc/xdr.c (legacy
+    code, probably should have such changes, but left to be dealt with
+    separately), or places that already had comments about the
+    fall-through but not matching the form expected by
+    -Wimplicit-fallthrough=3 (the default level with -Wextra; my
+    inclination is to adjust those comments to match rather than
+    downgrading to -Wimplicit-fallthrough=1 to allow any comment), or one
+    place where I thought the implicit fallthrough was not correct and so
+    should be handled separately as a bug fix.  I think the key thing to
+    consider in review of this patch is whether the fall-through is indeed
+    intended and correct in each place where such a comment is added.
+    
+    Tested for x86_64.
+    
+            * elf/dl-exception.c (_dl_exception_create_format): Add
+            fall-through comments.
+            * elf/ldconfig.c (parse_conf_include): Likewise.
+            * elf/rtld.c (print_statistics): Likewise.
+            * locale/programs/charmap.c (parse_charmap): Likewise.
+            * misc/mntent_r.c (__getmntent_r): Likewise.
+            * posix/wordexp.c (parse_arith): Likewise.
+            (parse_backtick): Likewise.
+            * resolv/ns_ttl.c (ns_parse_ttl): Likewise.
+            * sysdeps/x86/cpu-features.c (init_cpu_features): Likewise.
+            * sysdeps/x86_64/dl-machine.h (elf_machine_rela): Likewise.
+
+diff --git a/elf/dl-exception.c b/elf/dl-exception.c
+index 3e8e0ba3f1442005..d24bf30a5cf39bc2 100644
+--- a/elf/dl-exception.c
++++ b/elf/dl-exception.c
+@@ -123,6 +123,7 @@ _dl_exception_create_format (struct dl_exception *exception, const char *objname
+ 		  ++p;
+ 		  break;
+ 		}
++	      /* Fall through.  */
+ 	    case 'x':
+ 	      length += INT_WIDTH / 4;
+ 	      break;
+diff --git a/elf/ldconfig.c b/elf/ldconfig.c
+index fbdd814edf59bc77..ed7d9ab0412d93fd 100644
+--- a/elf/ldconfig.c
++++ b/elf/ldconfig.c
+@@ -1228,6 +1228,7 @@ parse_conf_include (const char *config_file, unsigned int lineno,
+ 
+     case GLOB_NOSPACE:
+       errno = ENOMEM;
++      /* Fall through.  */
+     case GLOB_ABORTED:
+       if (opt_verbose)
+ 	error (0, errno, _("%s:%u: cannot read directory %s"),
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 7f030f75a22c532e..8bb5f548a0ff8eb4 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2734,8 +2734,10 @@ print_statistics (hp_timing_t *rtld_total_timep)
+ 	{
+ 	case 3:
+ 	  *wp++ = *cp++;
++	  /* Fall through.  */
+ 	case 2:
+ 	  *wp++ = *cp++;
++	  /* Fall through.  */
+ 	case 1:
+ 	  *wp++ = '.';
+ 	  *wp++ = *cp++;
+@@ -2797,8 +2799,10 @@ print_statistics (hp_timing_t *rtld_total_timep)
+ 	{
+ 	case 3:
+ 	  *wp++ = *cp++;
++	  /* Fall through.  */
+ 	case 2:
+ 	  *wp++ = *cp++;
++	  /* Fall through.  */
+ 	case 1:
+ 	  *wp++ = '.';
+ 	  *wp++ = *cp++;
+diff --git a/locale/programs/charmap.c b/locale/programs/charmap.c
+index 2d54dd3c027d11d2..8041a0e5d292f3f5 100644
+--- a/locale/programs/charmap.c
++++ b/locale/programs/charmap.c
+@@ -713,6 +713,7 @@ only WIDTH definitions are allowed to follow the CHARMAP definition"));
+ 	      state = 95;
+ 	      continue;
+ 	    }
++	  /* Fall through.  */
+ 
+ 	case 96:
+ 	  if (nowtok != tok_number)
+diff --git a/misc/mntent_r.c b/misc/mntent_r.c
+index 7bb224f044150ab4..add39d4537eaccb5 100644
+--- a/misc/mntent_r.c
++++ b/misc/mntent_r.c
+@@ -167,8 +167,10 @@ get_mnt_entry (FILE *stream, struct mntent *mp, char *buffer, int bufsiz)
+     {
+     case 0:
+       mp->mnt_freq = 0;
++      /* Fall through.  */
+     case 1:
+       mp->mnt_passno = 0;
++      /* Fall through.  */
+     case 2:
+       break;
+     }
+diff --git a/posix/wordexp.c b/posix/wordexp.c
+index 7548e0329fdeafaa..048a8068544c81fa 100644
+--- a/posix/wordexp.c
++++ b/posix/wordexp.c
+@@ -799,6 +799,7 @@ parse_arith (char **word, size_t *word_length, size_t *max_length,
+ 
+ 	case '(':
+ 	  ++paren_depth;
++	  /* Fall through.  */
+ 	default:
+ 	  expr = w_addchar (expr, &expr_length, &expr_maxlen, words[*offset]);
+ 	  if (expr == NULL)
+@@ -2127,6 +2128,7 @@ parse_backtick (char **word, size_t *word_length, size_t *max_length,
+ 
+ 	case '\'':
+ 	  squoting = 1 - squoting;
++	  /* Fall through.  */
+ 	default:
+ 	  comm = w_addchar (comm, &comm_length, &comm_maxlen, words[*offset]);
+ 	  if (comm == NULL)
+diff --git a/resolv/ns_ttl.c b/resolv/ns_ttl.c
+index 079948790b94b05e..d29d9dc00cfcab2c 100644
+--- a/resolv/ns_ttl.c
++++ b/resolv/ns_ttl.c
+@@ -113,9 +113,13 @@ ns_parse_ttl(const char *src, u_long *dst) {
+ 			ch = toupper(ch);
+ 		switch (ch) {
+ 		case 'W':  tmp *= 7;
++		  /* Fall through.  */
+ 		case 'D':  tmp *= 24;
++		  /* Fall through.  */
+ 		case 'H':  tmp *= 60;
++		  /* Fall through.  */
+ 		case 'M':  tmp *= 60;
++		  /* Fall through.  */
+ 		case 'S':  break;
+ 		default:   goto einval;
+ 		}
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 3a02a9c7d08f9603..ade37a9bb3de86cc 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -374,6 +374,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 		 of Core i3/i5/i7 processors if AVX is available.  */
+ 	      if (!CPU_FEATURES_CPU_P (cpu_features, AVX))
+ 		break;
++	      /* Fall through.  */
+ 
+ 	    case 0x1a:
+ 	    case 0x1e:
+@@ -401,6 +402,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	      /* Xeon E7 v3 with stepping >= 4 has working TSX.  */
+ 	      if (stepping >= 4)
+ 		break;
++	      /* Fall through.  */
+ 	    case 0x3c:
+ 	    case 0x45:
+ 	    case 0x46:
+diff --git a/sysdeps/x86_64/dl-machine.h b/sysdeps/x86_64/dl-machine.h
+index 1942ed5061d18c68..23afb3c05dbe17d6 100644
+--- a/sysdeps/x86_64/dl-machine.h
++++ b/sysdeps/x86_64/dl-machine.h
+@@ -347,6 +347,7 @@ elf_machine_rela (struct link_map *map, const ElfW(Rela) *reloc,
+ 	  /* Set to symbol size plus addend.  */
+ 	  value = sym->st_size;
+ # endif
++	  /* Fall through.  */
+ 	case R_X86_64_GLOB_DAT:
+ 	case R_X86_64_JUMP_SLOT:
+ 	  *reloc_addr = value + reloc->r_addend;
+@@ -460,6 +461,7 @@ elf_machine_rela (struct link_map *map, const ElfW(Rela) *reloc,
+ 	  /* Set to symbol size plus addend.  */
+ 	  value = sym->st_size;
+ #  endif
++	  /* Fall through.  */
+ 	case R_X86_64_32:
+ 	  value += reloc->r_addend;
+ 	  *(unsigned int *) reloc_addr = value;

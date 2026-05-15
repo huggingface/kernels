@@ -1,0 +1,676 @@
+commit a33b817f13170b5c24263b92e7e09880fe797d7e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Aug 13 12:09:32 2019 +0200
+
+    login: Assume that _HAVE_UT_* constants are true
+    
+    Make the GNU version of bits/utmp.h the generic version because
+    all remaining ports use it (with a sysdeps override for
+    Linux s390/s390x).
+
+Conflicts:
+	bits/utmp.h
+	sysdeps/gnu/bits/utmp.h
+	  (Upstream copyright year change.)
+
+diff --git a/bits/utmp.h b/bits/utmp.h
+index 6e8695fbf072e5f1..3c02dd4f3fe4e99b 100644
+--- a/bits/utmp.h
++++ b/bits/utmp.h
+@@ -1,5 +1,5 @@
+-/* The `struct utmp' type, describing entries in the utmp file.  Generic/BSDish
+-   Copyright (C) 1993-2018 Free Software Foundation, Inc.
++/* The `struct utmp' type, describing entries in the utmp file.
++   Copyright (C) 1993-2019 Free Software Foundation, Inc.
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -21,29 +21,106 @@
+ #endif
+ 
+ #include <paths.h>
+-#include <time.h>
++#include <sys/time.h>
++#include <sys/types.h>
++#include <bits/wordsize.h>
+ 
+ 
+-#define	UT_NAMESIZE	8
+-#define	UT_LINESIZE	8
+-#define	UT_HOSTSIZE	16
++#define UT_LINESIZE	32
++#define UT_NAMESIZE	32
++#define UT_HOSTSIZE	256
+ 
+ 
++/* The structure describing an entry in the database of
++   previous logins.  */
+ struct lastlog
+   {
+-    time_t ll_time;
++#if __WORDSIZE_TIME64_COMPAT32
++    int32_t ll_time;
++#else
++    __time_t ll_time;
++#endif
+     char ll_line[UT_LINESIZE];
+     char ll_host[UT_HOSTSIZE];
+   };
+ 
+-struct utmp
++
++/* The structure describing the status of a terminated process.  This
++   type is used in `struct utmp' below.  */
++struct exit_status
+   {
+-    char ut_line[UT_LINESIZE];
+-    char ut_user[UT_NAMESIZE];
+-#define ut_name ut_user
+-    char ut_host[UT_HOSTSIZE];
+-    long int ut_time;
++    short int e_termination;	/* Process termination status.  */
++    short int e_exit;		/* Process exit status.  */
+   };
+ 
+ 
+-#define _HAVE_UT_HOST 1		/* We have the ut_host field.  */
++/* The structure describing an entry in the user accounting database.  */
++struct utmp
++{
++  short int ut_type;		/* Type of login.  */
++  pid_t ut_pid;			/* Process ID of login process.  */
++  char ut_line[UT_LINESIZE]
++    __attribute_nonstring__;	/* Devicename.  */
++  char ut_id[4];		/* Inittab ID.  */
++  char ut_user[UT_NAMESIZE]
++    __attribute_nonstring__;	/* Username.  */
++  char ut_host[UT_HOSTSIZE]
++    __attribute_nonstring__;	/* Hostname for remote login.  */
++  struct exit_status ut_exit;	/* Exit status of a process marked
++				   as DEAD_PROCESS.  */
++/* The ut_session and ut_tv fields must be the same size when compiled
++   32- and 64-bit.  This allows data files and shared memory to be
++   shared between 32- and 64-bit applications.  */
++#if __WORDSIZE_TIME64_COMPAT32
++  int32_t ut_session;		/* Session ID, used for windowing.  */
++  struct
++  {
++    int32_t tv_sec;		/* Seconds.  */
++    int32_t tv_usec;		/* Microseconds.  */
++  } ut_tv;			/* Time entry was made.  */
++#else
++  long int ut_session;		/* Session ID, used for windowing.  */
++  struct timeval ut_tv;		/* Time entry was made.  */
++#endif
++
++  int32_t ut_addr_v6[4];	/* Internet address of remote host.  */
++  char __glibc_reserved[20];		/* Reserved for future use.  */
++};
++
++/* Backwards compatibility hacks.  */
++#define ut_name		ut_user
++#ifndef _NO_UT_TIME
++/* We have a problem here: `ut_time' is also used otherwise.  Define
++   _NO_UT_TIME if the compiler complains.  */
++# define ut_time	ut_tv.tv_sec
++#endif
++#define ut_xtime	ut_tv.tv_sec
++#define ut_addr		ut_addr_v6[0]
++
++
++/* Values for the `ut_type' field of a `struct utmp'.  */
++#define EMPTY		0	/* No valid user accounting information.  */
++
++#define RUN_LVL		1	/* The system's runlevel.  */
++#define BOOT_TIME	2	/* Time of system boot.  */
++#define NEW_TIME	3	/* Time after system clock changed.  */
++#define OLD_TIME	4	/* Time when system clock changed.  */
++
++#define INIT_PROCESS	5	/* Process spawned by the init process.  */
++#define LOGIN_PROCESS	6	/* Session leader of a logged in user.  */
++#define USER_PROCESS	7	/* Normal process.  */
++#define DEAD_PROCESS	8	/* Terminated process.  */
++
++#define ACCOUNTING	9
++
++/* Old Linux name for the EMPTY type.  */
++#define UT_UNKNOWN	EMPTY
++
++
++/* Tell the user that we have a modern system with UT_HOST, UT_PID,
++   UT_TYPE, UT_ID and UT_TV fields.  */
++#define _HAVE_UT_TYPE	1
++#define _HAVE_UT_PID	1
++#define _HAVE_UT_ID	1
++#define _HAVE_UT_TV	1
++#define _HAVE_UT_HOST	1
+diff --git a/login/getutid_r.c b/login/getutid_r.c
+index 8cb6b16d735e8265..11b288e99be6ee50 100644
+--- a/login/getutid_r.c
++++ b/login/getutid_r.c
+@@ -32,7 +32,6 @@ __libc_lock_define (extern, __libc_utmp_lock attribute_hidden)
+ int
+ __getutid_r (const struct utmp *id, struct utmp *buffer, struct utmp **result)
+ {
+-#if (_HAVE_UT_ID - 0) && (_HAVE_UT_TYPE - 0)
+   int retval;
+ 
+   /* Test whether ID has any of the legal types.  */
+@@ -54,10 +53,6 @@ __getutid_r (const struct utmp *id, struct utmp *buffer, struct utmp **result)
+   __libc_lock_unlock (__libc_utmp_lock);
+ 
+   return retval;
+-#else	/* !_HAVE_UT_ID && !_HAVE_UT_TYPE */
+-  __set_errno (ENOSYS);
+-  return -1;
+-#endif
+ }
+ libc_hidden_def (__getutid_r)
+ weak_alias (__getutid_r, getutid_r)
+diff --git a/login/getutmp.c b/login/getutmp.c
+index 481150d5ef5a0bf0..32468ecae699fbf7 100644
+--- a/login/getutmp.c
++++ b/login/getutmp.c
+@@ -23,23 +23,11 @@
+ void
+ getutmp (const struct utmpx *utmpx, struct utmp *utmp)
+ {
+-#if _HAVE_UT_TYPE - 0
+   utmp->ut_type = utmpx->ut_type;
+-#endif
+-#if _HAVE_UT_PID - 0
+   utmp->ut_pid = utmpx->ut_pid;
+-#endif
+   memcpy (utmp->ut_line, utmpx->ut_line, sizeof (utmp->ut_line));
+   memcpy (utmp->ut_user, utmpx->ut_user, sizeof (utmp->ut_user));
+-#if _HAVE_UT_ID - 0
+   memcpy (utmp->ut_id, utmpx->ut_id, sizeof (utmp->ut_id));
+-#endif
+-#if _HAVE_UT_HOST - 0
+   memcpy (utmp->ut_host, utmpx->ut_host, sizeof (utmp->ut_host));
+-#endif
+-#if _HAVE_UT_TV - 0
+   utmp->ut_tv = utmpx->ut_tv;
+-#else
+-  utmp->ut_time = utmpx->ut_time;
+-#endif
+ }
+diff --git a/login/getutmpx.c b/login/getutmpx.c
+index 34145fe8db71faf0..92a182698e2be438 100644
+--- a/login/getutmpx.c
++++ b/login/getutmpx.c
+@@ -24,24 +24,11 @@ void
+ getutmpx (const struct utmp *utmp, struct utmpx *utmpx)
+ {
+   memset (utmpx, 0, sizeof (struct utmpx));
+-
+-#if _HAVE_UT_TYPE - 0
+   utmpx->ut_type = utmp->ut_type;
+-#endif
+-#if _HAVE_UT_PID - 0
+   utmpx->ut_pid = utmp->ut_pid;
+-#endif
+   memcpy (utmpx->ut_line, utmp->ut_line, sizeof (utmp->ut_line));
+   memcpy (utmpx->ut_user, utmp->ut_user, sizeof (utmp->ut_user));
+-#if _HAVE_UT_ID - 0
+   memcpy (utmpx->ut_id, utmp->ut_id, sizeof (utmp->ut_id));
+-#endif
+-#if _HAVE_UT_HOST - 0
+   memcpy (utmpx->ut_host, utmp->ut_host, sizeof (utmp->ut_host));
+-#endif
+-#if _HAVE_UT_TV - 0
+   utmpx->ut_tv = utmp->ut_tv;
+-#else
+-  utmpx->ut_time = utmp->ut_time;
+-#endif
+ }
+diff --git a/login/login.c b/login/login.c
+index 5d48cd487f237ca0..1729fc070fcc1e4b 100644
+--- a/login/login.c
++++ b/login/login.c
+@@ -91,12 +91,8 @@ login (const struct utmp *ut)
+   struct utmp copy = *ut;
+ 
+   /* Fill in those fields we supply.  */
+-#if _HAVE_UT_TYPE - 0
+   copy.ut_type = USER_PROCESS;
+-#endif
+-#if _HAVE_UT_PID - 0
+   copy.ut_pid = getpid ();
+-#endif
+ 
+   /* Seek tty.  */
+   found_tty = tty_name (STDIN_FILENO, &tty, sizeof (_tty));
+diff --git a/login/logout.c b/login/logout.c
+index d49bc4ecac9a8379..4d76ecf1b40d306a 100644
+--- a/login/logout.c
++++ b/login/logout.c
+@@ -36,9 +36,7 @@ logout (const char *line)
+   setutent ();
+ 
+   /* Fill in search information.  */
+-#if _HAVE_UT_TYPE - 0
+   tmp.ut_type = USER_PROCESS;
+-#endif
+   strncpy (tmp.ut_line, line, sizeof tmp.ut_line);
+ 
+   /* Read the record.  */
+@@ -46,20 +44,12 @@ logout (const char *line)
+     {
+       /* Clear information about who & from where.  */
+       memset (ut->ut_name, '\0', sizeof ut->ut_name);
+-#if _HAVE_UT_HOST - 0
+       memset (ut->ut_host, '\0', sizeof ut->ut_host);
+-#endif
+-#if _HAVE_UT_TV - 0
+       struct timeval tv;
+       __gettimeofday (&tv, NULL);
+       ut->ut_tv.tv_sec = tv.tv_sec;
+       ut->ut_tv.tv_usec = tv.tv_usec;
+-#else
+-      ut->ut_time = time (NULL);
+-#endif
+-#if _HAVE_UT_TYPE - 0
+       ut->ut_type = DEAD_PROCESS;
+-#endif
+ 
+       if (pututline (ut) != NULL)
+ 	result = 1;
+diff --git a/login/logwtmp.c b/login/logwtmp.c
+index a19da4ab5ef7a624..e0b52b23e3603b7c 100644
+--- a/login/logwtmp.c
++++ b/login/logwtmp.c
+@@ -30,26 +30,16 @@ logwtmp (const char *line, const char *name, const char *host)
+ 
+   /* Set information in new entry.  */
+   memset (&ut, 0, sizeof (ut));
+-#if _HAVE_UT_PID - 0
+   ut.ut_pid = getpid ();
+-#endif
+-#if _HAVE_UT_TYPE - 0
+   ut.ut_type = name[0] ? USER_PROCESS : DEAD_PROCESS;
+-#endif
+   strncpy (ut.ut_line, line, sizeof ut.ut_line);
+   strncpy (ut.ut_name, name, sizeof ut.ut_name);
+-#if _HAVE_UT_HOST - 0
+   strncpy (ut.ut_host, host, sizeof ut.ut_host);
+-#endif
+ 
+-#if _HAVE_UT_TV - 0
+   struct timeval tv;
+   __gettimeofday (&tv, NULL);
+   ut.ut_tv.tv_sec = tv.tv_sec;
+   ut.ut_tv.tv_usec = tv.tv_usec;
+-#else
+-  ut.ut_time = time (NULL);
+-#endif
+ 
+   updwtmp (_PATH_WTMP, &ut);
+ }
+diff --git a/login/programs/utmpdump.c b/login/programs/utmpdump.c
+index dccdb669f5fb9c74..1763e55af2f03d8d 100644
+--- a/login/programs/utmpdump.c
++++ b/login/programs/utmpdump.c
+@@ -37,47 +37,11 @@ print_entry (struct utmp *up)
+   temp_tv.tv_sec = up->ut_tv.tv_sec;
+   temp_tv.tv_usec = up->ut_tv.tv_usec;
+ 
+-  (printf) (
+-	    /* The format string.  */
+-#if _HAVE_UT_TYPE
+-	    "[%d] "
+-#endif
+-#if _HAVE_UT_PID
+-	    "[%05d] "
+-#endif
+-#if _HAVE_UT_ID
+-	    "[%-4.4s] "
+-#endif
+-	    "[%-8.8s] [%-12.12s]"
+-#if _HAVE_UT_HOST
+-	    " [%-16.16s]"
+-#endif
+-	    " [%-15.15s]"
+-#if _HAVE_UT_TV
+-	    " [%ld]"
+-#endif
+-	    "\n"
+-	    /* The arguments.  */
+-#if _HAVE_UT_TYPE
+-	    , up->ut_type
+-#endif
+-#if _HAVE_UT_PID
+-	    , up->ut_pid
+-#endif
+-#if _HAVE_UT_ID
+-	    , up->ut_id
+-#endif
+-	    , up->ut_user, up->ut_line
+-#if _HAVE_UT_HOST
+-	    , up->ut_host
+-#endif
+-#if _HAVE_UT_TV
+-	    , 4 + ctime (&temp_tv.tv_sec)
+-	    , (long int) temp_tv.tv_usec
+-#else
+-	    , 4 + ctime (&up->ut_time)
+-#endif
+-	   );
++  printf ("[%d] [%05d] [%-4.4s] [%-8.8s] [%-12.12s] [%-16.16s] [%-15.15s]"
++	  " [%ld]\n",
++	  up->ut_type, up->ut_pid, up->ut_id, up->ut_user, up->ut_line,
++	  up->ut_host, 4 + ctime (&temp_tv.tv_sec),
++	  (long int) temp_tv.tv_usec);
+ }
+ 
+ int
+diff --git a/login/tst-utmp.c b/login/tst-utmp.c
+index 8cc7aafa89c0ea8c..49b0cbda2a719643 100644
+--- a/login/tst-utmp.c
++++ b/login/tst-utmp.c
+@@ -39,8 +39,6 @@
+ #endif
+ 
+ 
+-#if defined UTMPX || _HAVE_UT_TYPE
+-
+ /* Prototype for our test function.  */
+ static int do_test (int argc, char *argv[]);
+ 
+@@ -75,11 +73,7 @@ do_prepare (int argc, char *argv[])
+ 
+ struct utmp entry[] =
+ {
+-#if defined UTMPX || _HAVE_UT_TV
+ #define UT(a)  .ut_tv = { .tv_sec = (a)}
+-#else
+-#define UT(a)  .ut_time = (a)
+-#endif
+ 
+   { .ut_type = BOOT_TIME, .ut_pid = 1, UT(1000) },
+   { .ut_type = RUN_LVL, .ut_pid = 1, UT(2000) },
+@@ -167,11 +161,7 @@ simulate_login (const char *line, const char *user)
+ 	    entry[n].ut_pid = (entry_pid += 27);
+ 	  entry[n].ut_type = USER_PROCESS;
+ 	  strncpy (entry[n].ut_user, user, sizeof (entry[n].ut_user));
+-#if defined UTMPX || _HAVE_UT_TV - 0
+ 	  entry[n].ut_tv.tv_sec = (entry_time += 1000);
+-#else
+-          entry[n].ut_time = (entry_time += 1000);
+-#endif
+ 	  setutent ();
+ 
+ 	  if (pututline (&entry[n]) == NULL)
+@@ -201,11 +191,7 @@ simulate_logout (const char *line)
+ 	{
+ 	  entry[n].ut_type = DEAD_PROCESS;
+ 	  strncpy (entry[n].ut_user, "", sizeof (entry[n].ut_user));
+-#if defined UTMPX || _HAVE_UT_TV - 0
+           entry[n].ut_tv.tv_sec = (entry_time += 1000);
+-#else
+-          entry[n].ut_time = (entry_time += 1000);
+-#endif
+ 	  setutent ();
+ 
+ 	  if (pututline (&entry[n]) == NULL)
+@@ -390,14 +376,3 @@ do_test (int argc, char *argv[])
+ 
+   return result;
+ }
+-
+-#else
+-
+-/* No field 'ut_type' in struct utmp.  */
+-int
+-main (void)
+-{
+-  return 0;
+-}
+-
+-#endif
+diff --git a/login/utmp_file.c b/login/utmp_file.c
+index 069e6d0452e333ad..da1baa6948d0eb39 100644
+--- a/login/utmp_file.c
++++ b/login/utmp_file.c
+@@ -129,14 +129,7 @@ __libc_setutent (void)
+   file_offset = 0;
+ 
+   /* Make sure the entry won't match.  */
+-#if _HAVE_UT_TYPE - 0
+   last_entry.ut_type = -1;
+-#else
+-  last_entry.ut_line[0] = '\177';
+-# if _HAVE_UT_ID - 0
+-  last_entry.ut_id[0] = '\0';
+-# endif
+-#endif
+ 
+   return 1;
+ }
+@@ -201,7 +194,6 @@ internal_getut_r (const struct utmp *id, struct utmp *buffer,
+       LOCKING_FAILED ();
+     }
+ 
+-#if _HAVE_UT_TYPE - 0
+   if (id->ut_type == RUN_LVL || id->ut_type == BOOT_TIME
+       || id->ut_type == OLD_TIME || id->ut_type == NEW_TIME)
+     {
+@@ -225,7 +217,6 @@ internal_getut_r (const struct utmp *id, struct utmp *buffer,
+ 	}
+     }
+   else
+-#endif /* _HAVE_UT_TYPE */
+     {
+       /* Search for the next entry with the specified ID and with type
+ 	 INIT_PROCESS, LOGIN_PROCESS, USER_PROCESS, or DEAD_PROCESS.  */
+@@ -316,13 +307,10 @@ __libc_getutline_r (const struct utmp *line, struct utmp *buffer,
+       file_offset += sizeof (struct utmp);
+ 
+       /* Stop if we found a user or login entry.  */
+-      if (
+-#if _HAVE_UT_TYPE - 0
+-	  (last_entry.ut_type == USER_PROCESS
++      if ((last_entry.ut_type == USER_PROCESS
+ 	   || last_entry.ut_type == LOGIN_PROCESS)
+-	  &&
+-#endif
+-	  !strncmp (line->ut_line, last_entry.ut_line, sizeof line->ut_line))
++	  && (strncmp (line->ut_line, last_entry.ut_line, sizeof line->ut_line)
++	      == 0))
+ 	break;
+     }
+ 
+@@ -368,16 +356,12 @@ __libc_pututline (const struct utmp *data)
+ 
+   /* Find the correct place to insert the data.  */
+   if (file_offset > 0
+-      && (
+-#if _HAVE_UT_TYPE - 0
+-	  (last_entry.ut_type == data->ut_type
++      && ((last_entry.ut_type == data->ut_type
+ 	   && (last_entry.ut_type == RUN_LVL
+ 	       || last_entry.ut_type == BOOT_TIME
+ 	       || last_entry.ut_type == OLD_TIME
+ 	       || last_entry.ut_type == NEW_TIME))
+-	  ||
+-#endif
+-	  __utmp_equal (&last_entry, data)))
++	  || __utmp_equal (&last_entry, data)))
+     found = 1;
+   else
+     {
+diff --git a/sysdeps/generic/utmp-equal.h b/sysdeps/generic/utmp-equal.h
+index 8b5c2e2cd2c4cf95..39993af192ab66ce 100644
+--- a/sysdeps/generic/utmp-equal.h
++++ b/sysdeps/generic/utmp-equal.h
+@@ -27,26 +27,16 @@
+ static int
+ __utmp_equal (const struct utmp *entry, const struct utmp *match)
+ {
+-  return
+-    (
+-#if _HAVE_UT_TYPE - 0
+-     (entry->ut_type == INIT_PROCESS
+-      || entry->ut_type == LOGIN_PROCESS
+-      || entry->ut_type == USER_PROCESS
+-      || entry->ut_type == DEAD_PROCESS)
+-     &&
+-     (match->ut_type == INIT_PROCESS
+-      || match->ut_type == LOGIN_PROCESS
+-      || match->ut_type == USER_PROCESS
+-      || match->ut_type == DEAD_PROCESS)
+-     &&
+-#endif
+-#if _HAVE_UT_ID - 0
+-     (entry->ut_id[0] && match->ut_id[0]
+-      ? strncmp (entry->ut_id, match->ut_id, sizeof match->ut_id) == 0
+-      : strncmp (entry->ut_line, match->ut_line, sizeof match->ut_line) == 0)
+-#else
+-     strncmp (entry->ut_line, match->ut_line, sizeof match->ut_line) == 0
+-#endif
+-     );
++  return (entry->ut_type == INIT_PROCESS
++          || entry->ut_type == LOGIN_PROCESS
++          || entry->ut_type == USER_PROCESS
++          || entry->ut_type == DEAD_PROCESS)
++    && (match->ut_type == INIT_PROCESS
++        || match->ut_type == LOGIN_PROCESS
++        || match->ut_type == USER_PROCESS
++        || match->ut_type == DEAD_PROCESS)
++    && (entry->ut_id[0] && match->ut_id[0]
++        ? strncmp (entry->ut_id, match->ut_id, sizeof match->ut_id) == 0
++        : (strncmp (entry->ut_line, match->ut_line, sizeof match->ut_line)
++           == 0));
+ }
+diff --git a/sysdeps/gnu/bits/utmp.h b/sysdeps/gnu/bits/utmp.h
+deleted file mode 100644
+index 47a6082eacc56b4d..0000000000000000
+--- a/sysdeps/gnu/bits/utmp.h
++++ /dev/null
+@@ -1,126 +0,0 @@
+-/* The `struct utmp' type, describing entries in the utmp file.  GNU version.
+-   Copyright (C) 1993-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#ifndef _UTMP_H
+-# error "Never include <bits/utmp.h> directly; use <utmp.h> instead."
+-#endif
+-
+-#include <paths.h>
+-#include <sys/time.h>
+-#include <sys/types.h>
+-#include <bits/wordsize.h>
+-
+-
+-#define UT_LINESIZE	32
+-#define UT_NAMESIZE	32
+-#define UT_HOSTSIZE	256
+-
+-
+-/* The structure describing an entry in the database of
+-   previous logins.  */
+-struct lastlog
+-  {
+-#if __WORDSIZE_TIME64_COMPAT32
+-    int32_t ll_time;
+-#else
+-    __time_t ll_time;
+-#endif
+-    char ll_line[UT_LINESIZE];
+-    char ll_host[UT_HOSTSIZE];
+-  };
+-
+-
+-/* The structure describing the status of a terminated process.  This
+-   type is used in `struct utmp' below.  */
+-struct exit_status
+-  {
+-    short int e_termination;	/* Process termination status.  */
+-    short int e_exit;		/* Process exit status.  */
+-  };
+-
+-
+-/* The structure describing an entry in the user accounting database.  */
+-struct utmp
+-{
+-  short int ut_type;		/* Type of login.  */
+-  pid_t ut_pid;			/* Process ID of login process.  */
+-  char ut_line[UT_LINESIZE]
+-    __attribute_nonstring__;	/* Devicename.  */
+-  char ut_id[4];		/* Inittab ID.  */
+-  char ut_user[UT_NAMESIZE]
+-    __attribute_nonstring__;	/* Username.  */
+-  char ut_host[UT_HOSTSIZE]
+-    __attribute_nonstring__;	/* Hostname for remote login.  */
+-  struct exit_status ut_exit;	/* Exit status of a process marked
+-				   as DEAD_PROCESS.  */
+-/* The ut_session and ut_tv fields must be the same size when compiled
+-   32- and 64-bit.  This allows data files and shared memory to be
+-   shared between 32- and 64-bit applications.  */
+-#if __WORDSIZE_TIME64_COMPAT32
+-  int32_t ut_session;		/* Session ID, used for windowing.  */
+-  struct
+-  {
+-    int32_t tv_sec;		/* Seconds.  */
+-    int32_t tv_usec;		/* Microseconds.  */
+-  } ut_tv;			/* Time entry was made.  */
+-#else
+-  long int ut_session;		/* Session ID, used for windowing.  */
+-  struct timeval ut_tv;		/* Time entry was made.  */
+-#endif
+-
+-  int32_t ut_addr_v6[4];	/* Internet address of remote host.  */
+-  char __glibc_reserved[20];		/* Reserved for future use.  */
+-};
+-
+-/* Backwards compatibility hacks.  */
+-#define ut_name		ut_user
+-#ifndef _NO_UT_TIME
+-/* We have a problem here: `ut_time' is also used otherwise.  Define
+-   _NO_UT_TIME if the compiler complains.  */
+-# define ut_time	ut_tv.tv_sec
+-#endif
+-#define ut_xtime	ut_tv.tv_sec
+-#define ut_addr		ut_addr_v6[0]
+-
+-
+-/* Values for the `ut_type' field of a `struct utmp'.  */
+-#define EMPTY		0	/* No valid user accounting information.  */
+-
+-#define RUN_LVL		1	/* The system's runlevel.  */
+-#define BOOT_TIME	2	/* Time of system boot.  */
+-#define NEW_TIME	3	/* Time after system clock changed.  */
+-#define OLD_TIME	4	/* Time when system clock changed.  */
+-
+-#define INIT_PROCESS	5	/* Process spawned by the init process.  */
+-#define LOGIN_PROCESS	6	/* Session leader of a logged in user.  */
+-#define USER_PROCESS	7	/* Normal process.  */
+-#define DEAD_PROCESS	8	/* Terminated process.  */
+-
+-#define ACCOUNTING	9
+-
+-/* Old Linux name for the EMPTY type.  */
+-#define UT_UNKNOWN	EMPTY
+-
+-
+-/* Tell the user that we have a modern system with UT_HOST, UT_PID,
+-   UT_TYPE, UT_ID and UT_TV fields.  */
+-#define _HAVE_UT_TYPE	1
+-#define _HAVE_UT_PID	1
+-#define _HAVE_UT_ID	1
+-#define _HAVE_UT_TV	1
+-#define _HAVE_UT_HOST	1

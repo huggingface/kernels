@@ -1,0 +1,45 @@
+From bad852b61b79503fcb3c5fc379c70f768df3e1fb Mon Sep 17 00:00:00 2001
+From: Noah Goldstein <goldstein.w.n@gmail.com>
+Date: Sat, 23 Oct 2021 01:26:47 -0400
+Subject: [PATCH] x86: Replace sse2 instructions with avx in
+ memcmp-evex-movbe.S
+Content-type: text/plain; charset=UTF-8
+
+This commit replaces two usages of SSE2 'movups' with AVX 'vmovdqu'.
+
+it could potentially be dangerous to use SSE2 if this function is ever
+called without using 'vzeroupper' beforehand. While compilers appear
+to use 'vzeroupper' before function calls if AVX2 has been used, using
+SSE2 here is more brittle. Since it is not absolutely necessary it
+should be avoided.
+
+It costs 2-extra bytes but the extra bytes should only eat into
+alignment padding.
+Reviewed-by: H.J. Lu <hjl.tools@gmail.com>
+---
+ sysdeps/x86_64/multiarch/memcmp-evex-movbe.S | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sysdeps/x86_64/multiarch/memcmp-evex-movbe.S b/sysdeps/x86_64/multiarch/memcmp-evex-movbe.S
+index 2761b54f..640f6757 100644
+--- a/sysdeps/x86_64/multiarch/memcmp-evex-movbe.S
++++ b/sysdeps/x86_64/multiarch/memcmp-evex-movbe.S
+@@ -561,13 +561,13 @@ L(between_16_31):
+ 	/* From 16 to 31 bytes.  No branch when size == 16.  */
+ 
+ 	/* Use movups to save code size.  */
+-	movups	(%rsi), %xmm2
++	vmovdqu	(%rsi), %xmm2
+ 	VPCMP	$4, (%rdi), %xmm2, %k1
+ 	kmovd	%k1, %eax
+ 	testl	%eax, %eax
+ 	jnz	L(return_vec_0_lv)
+ 	/* Use overlapping loads to avoid branches.  */
+-	movups	-16(%rsi, %rdx, CHAR_SIZE), %xmm2
++	vmovdqu	-16(%rsi, %rdx, CHAR_SIZE), %xmm2
+ 	VPCMP	$4, -16(%rdi, %rdx, CHAR_SIZE), %xmm2, %k1
+ 	addl	$(CHAR_PER_VEC - (16 / CHAR_SIZE)), %edx
+ 	kmovd	%k1, %eax
+-- 
+GitLab
+

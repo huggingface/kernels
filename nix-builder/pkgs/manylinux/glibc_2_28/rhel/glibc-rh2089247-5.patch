@@ -1,0 +1,17 @@
+Downstream-only patch to use non-time64 identifiers in
+sysdeps/posix/tempname.c.  Upstream has switched to the time64
+symbols.
+
+diff --git a/sysdeps/posix/tempname.c b/sysdeps/posix/tempname.c
+index f199b25a7a227751..fcab9b26364021e4 100644
+--- a/sysdeps/posix/tempname.c
++++ b/sysdeps/posix/tempname.c
+@@ -56,6 +56,8 @@
+ #if _LIBC
+ # define struct_stat64 struct stat64
+ # define __secure_getenv __libc_secure_getenv
++# define __clock_gettime64 __clock_gettime
++# define __timespec64 timespec
+ #else
+ # define struct_stat64 struct stat
+ # define __gen_tempname gen_tempname

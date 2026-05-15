@@ -1,0 +1,420 @@
+commit 674ea88294bfb8d89878a0ebbbcec38a85e118a5
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Tue Apr 28 10:05:25 2020 -0700
+
+    x86: Move CET control to _dl_x86_feature_control [BZ #25887]
+    
+    1. Include <dl-procruntime.c> to get architecture specific initializer in
+    rtld_global.
+    2. Change _dl_x86_feature_1[2] to _dl_x86_feature_1.
+    3. Add _dl_x86_feature_control after _dl_x86_feature_1, which is a
+    struct of 2 bitfields for IBT and SHSTK control
+    
+    This fixes [BZ #25887].
+---
+
+diff --git a/elf/rtld.c b/elf/rtld.c
+index e107bd1..7f030f7 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -230,6 +230,8 @@ rtld_hidden_def (_dl_starting_up)
+    (except those which cannot be added for some reason).  */
+ struct rtld_global _rtld_global =
+   {
++    /* Get architecture specific initializer.  */
++#include <dl-procruntime.c>
+     /* Generally the default presumption without further information is an
+      * executable stack but this is not true for all platforms.  */
+     ._dl_stack_flags = DEFAULT_STACK_PERMS,
+diff --git a/sysdeps/i386/dl-machine.h b/sysdeps/i386/dl-machine.h
+index f6cfb90..8c959e3 100644
+--- a/sysdeps/i386/dl-machine.h
++++ b/sysdeps/i386/dl-machine.h
+@@ -71,7 +71,7 @@ elf_machine_runtime_setup (struct link_map *l, int lazy, int profile)
+   extern void _dl_runtime_profile_shstk (Elf32_Word) attribute_hidden;
+   /* Check if SHSTK is enabled by kernel.  */
+   bool shstk_enabled
+-    = (GL(dl_x86_feature_1)[0] & GNU_PROPERTY_X86_FEATURE_1_SHSTK) != 0;
++    = (GL(dl_x86_feature_1) & GNU_PROPERTY_X86_FEATURE_1_SHSTK) != 0;
+ 
+   if (l->l_info[DT_JMPREL] && lazy)
+     {
+diff --git a/sysdeps/unix/sysv/linux/x86/cpu-features.c b/sysdeps/unix/sysv/linux/x86/cpu-features.c
+index 8566a26..9f40624 100644
+--- a/sysdeps/unix/sysv/linux/x86/cpu-features.c
++++ b/sysdeps/unix/sysv/linux/x86/cpu-features.c
+@@ -36,7 +36,7 @@ static inline void
+ x86_setup_tls (void)
+ {
+   __libc_setup_tls ();
+-  THREAD_SETMEM (THREAD_SELF, header.feature_1, GL(dl_x86_feature_1)[0]);
++  THREAD_SETMEM (THREAD_SELF, header.feature_1, GL(dl_x86_feature_1));
+ }
+ 
+ #  define ARCH_SETUP_TLS() x86_setup_tls ()
+diff --git a/sysdeps/x86/cet-control.h b/sysdeps/x86/cet-control.h
+new file mode 100644
+index 0000000..7b29f95
+--- /dev/null
++++ b/sysdeps/x86/cet-control.h
+@@ -0,0 +1,41 @@
++/* x86 CET tuning.
++   This file is part of the GNU C Library.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifndef _CET_CONTROL_H
++#define _CET_CONTROL_H
++
++/* For each CET feature, IBT and SHSTK, valid control values.  */
++enum dl_x86_cet_control
++{
++  /* Enable CET features based on ELF property note.  */
++  cet_elf_property = 0,
++  /* Always enable CET features.  */
++  cet_always_on,
++  /* Always disable CET features.  */
++  cet_always_off,
++  /* Enable CET features permissively.  */
++  cet_permissive
++};
++
++struct dl_x86_feature_control
++{
++  enum dl_x86_cet_control ibt : 2;
++  enum dl_x86_cet_control shstk : 2;
++};
++
++#endif /* cet-control.h */
+diff --git a/sysdeps/x86/cet-tunables.h b/sysdeps/x86/cet-tunables.h
+deleted file mode 100644
+index ca02305..0000000
+--- a/sysdeps/x86/cet-tunables.h
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/* x86 CET tuning.
+-   This file is part of the GNU C Library.
+-   Copyright (C) 2018 Free Software Foundation, Inc.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-/* Valid control values:
+-   0: Enable CET features based on ELF property note.
+-   1: Always disable CET features.
+-   2: Always enable CET features.
+-   3: Enable CET features permissively.
+- */
+-#define CET_ELF_PROPERTY	0
+-#define CET_ALWAYS_OFF		1
+-#define CET_ALWAYS_ON		2
+-#define CET_PERMISSIVE		3
+-#define CET_MAX			CET_PERMISSIVE
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 4695ac8..ac74f40 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -39,7 +39,6 @@ extern void TUNABLE_CALLBACK (set_x86_shstk) (tunable_val_t *)
+ 
+ #if CET_ENABLED
+ # include <dl-cet.h>
+-# include <cet-tunables.h>
+ #endif
+ 
+ static void
+@@ -490,7 +489,7 @@ no_cpuid:
+ 
+   if (cet_status)
+     {
+-      GL(dl_x86_feature_1)[0] = cet_status;
++      GL(dl_x86_feature_1) = cet_status;
+ 
+ # ifndef SHARED
+       /* Check if IBT and SHSTK are enabled by kernel.  */
+@@ -514,14 +513,13 @@ no_cpuid:
+ 
+ 	      /* Clear the disabled bits in dl_x86_feature_1.  */
+ 	      if (res == 0)
+-		GL(dl_x86_feature_1)[0] &= ~cet_feature;
++		GL(dl_x86_feature_1) &= ~cet_feature;
+ 	    }
+ 
+ 	  /* Lock CET if IBT or SHSTK is enabled in executable.  Don't
+-	     lock CET if SHSTK is enabled permissively.  */
+-	  if (((GL(dl_x86_feature_1)[1] >> CET_MAX)
+-	       & ((1 << CET_MAX) - 1))
+-	       != CET_PERMISSIVE)
++	     lock CET if IBT or SHSTK is enabled permissively.  */
++	  if (GL(dl_x86_feature_control).ibt != cet_permissive
++	      && GL(dl_x86_feature_control).shstk != cet_permissive)
+ 	    dl_cet_lock_cet ();
+ 	}
+ # endif
+diff --git a/sysdeps/x86/cpu-tunables.c b/sysdeps/x86/cpu-tunables.c
+index 69155a8..fad6726 100644
+--- a/sysdeps/x86/cpu-tunables.c
++++ b/sysdeps/x86/cpu-tunables.c
+@@ -336,28 +336,18 @@ TUNABLE_CALLBACK (set_hwcaps) (tunable_val_t *valp)
+ }
+ 
+ # if CET_ENABLED
+-#  include <cet-tunables.h>
+ 
+ attribute_hidden
+ void
+ TUNABLE_CALLBACK (set_x86_ibt) (tunable_val_t *valp)
+ {
+   if (DEFAULT_MEMCMP (valp->strval, "on", sizeof ("on")) == 0)
+-    {
+-      GL(dl_x86_feature_1)[1] &= ~((1 << CET_MAX) - 1);
+-      GL(dl_x86_feature_1)[1] |= CET_ALWAYS_ON;
+-    }
++    GL(dl_x86_feature_control).ibt = cet_always_on;
+   else if (DEFAULT_MEMCMP (valp->strval, "off", sizeof ("off")) == 0)
+-    {
+-      GL(dl_x86_feature_1)[1] &= ~((1 << CET_MAX) - 1);
+-      GL(dl_x86_feature_1)[1] |= CET_ALWAYS_OFF;
+-    }
++    GL(dl_x86_feature_control).ibt = cet_always_off;
+   else if (DEFAULT_MEMCMP (valp->strval, "permissive",
+ 			   sizeof ("permissive")) == 0)
+-    {
+-      GL(dl_x86_feature_1)[1] &= ~((1 << CET_MAX) - 1);
+-      GL(dl_x86_feature_1)[1] |= CET_PERMISSIVE;
+-    }
++    GL(dl_x86_feature_control).ibt = cet_permissive;
+ }
+ 
+ attribute_hidden
+@@ -365,21 +355,12 @@ void
+ TUNABLE_CALLBACK (set_x86_shstk) (tunable_val_t *valp)
+ {
+   if (DEFAULT_MEMCMP (valp->strval, "on", sizeof ("on")) == 0)
+-    {
+-      GL(dl_x86_feature_1)[1] &= ~(((1 << CET_MAX) - 1) << CET_MAX);
+-      GL(dl_x86_feature_1)[1] |= (CET_ALWAYS_ON << CET_MAX);
+-    }
++    GL(dl_x86_feature_control).shstk = cet_always_on;
+   else if (DEFAULT_MEMCMP (valp->strval, "off", sizeof ("off")) == 0)
+-    {
+-      GL(dl_x86_feature_1)[1] &= ~(((1 << CET_MAX) - 1) << CET_MAX);
+-      GL(dl_x86_feature_1)[1] |= (CET_ALWAYS_OFF << CET_MAX);
+-    }
++    GL(dl_x86_feature_control).shstk = cet_always_off;
+   else if (DEFAULT_MEMCMP (valp->strval, "permissive",
+ 			   sizeof ("permissive")) == 0)
+-    {
+-      GL(dl_x86_feature_1)[1] &= ~(((1 << CET_MAX) - 1) << CET_MAX);
+-      GL(dl_x86_feature_1)[1] |= (CET_PERMISSIVE << CET_MAX);
+-    }
++    GL(dl_x86_feature_control).shstk = cet_permissive;
+ }
+ # endif
+ #endif
+diff --git a/sysdeps/x86/dl-cet.c b/sysdeps/x86/dl-cet.c
+index 627d937..ebc0d57 100644
+--- a/sysdeps/x86/dl-cet.c
++++ b/sysdeps/x86/dl-cet.c
+@@ -20,7 +20,6 @@
+ #include <libintl.h>
+ #include <ldsodefs.h>
+ #include <dl-cet.h>
+-#include <cet-tunables.h>
+ 
+ /* GNU_PROPERTY_X86_FEATURE_1_IBT and GNU_PROPERTY_X86_FEATURE_1_SHSTK
+    are defined in <elf.h>, which are only available for C sources.
+@@ -39,23 +38,23 @@ static void
+ dl_cet_check (struct link_map *m, const char *program)
+ {
+   /* Check how IBT should be enabled.  */
+-  unsigned int enable_ibt_type
+-    = GL(dl_x86_feature_1)[1] & ((1 << CET_MAX) - 1);
++  enum dl_x86_cet_control enable_ibt_type
++    = GL(dl_x86_feature_control).ibt;
+   /* Check how SHSTK should be enabled.  */
+-  unsigned int enable_shstk_type
+-    = ((GL(dl_x86_feature_1)[1] >> CET_MAX) & ((1 << CET_MAX) - 1));
++  enum dl_x86_cet_control enable_shstk_type
++    = GL(dl_x86_feature_control).shstk;
+ 
+   /* No legacy object check if both IBT and SHSTK are always on.  */
+-  if (enable_ibt_type == CET_ALWAYS_ON
+-      && enable_shstk_type == CET_ALWAYS_ON)
++  if (enable_ibt_type == cet_always_on
++      && enable_shstk_type == cet_always_on)
+     return;
+ 
+   /* Check if IBT is enabled by kernel.  */
+   bool ibt_enabled
+-    = (GL(dl_x86_feature_1)[0] & GNU_PROPERTY_X86_FEATURE_1_IBT) != 0;
++    = (GL(dl_x86_feature_1) & GNU_PROPERTY_X86_FEATURE_1_IBT) != 0;
+   /* Check if SHSTK is enabled by kernel.  */
+   bool shstk_enabled
+-    = (GL(dl_x86_feature_1)[0] & GNU_PROPERTY_X86_FEATURE_1_SHSTK) != 0;
++    = (GL(dl_x86_feature_1) & GNU_PROPERTY_X86_FEATURE_1_SHSTK) != 0;
+ 
+   if (ibt_enabled || shstk_enabled)
+     {
+@@ -65,9 +64,9 @@ dl_cet_check (struct link_map *m, const char *program)
+ 
+       /* Check if IBT and SHSTK are enabled in object.  */
+       bool enable_ibt = (ibt_enabled
+-			 && enable_ibt_type != CET_ALWAYS_OFF);
++			 && enable_ibt_type != cet_always_off);
+       bool enable_shstk = (shstk_enabled
+-			   && enable_shstk_type != CET_ALWAYS_OFF);
++			   && enable_shstk_type != cet_always_off);
+       if (program)
+ 	{
+ 	  /* Enable IBT and SHSTK only if they are enabled in executable.
+@@ -76,10 +75,10 @@ dl_cet_check (struct link_map *m, const char *program)
+ 	     GLIBC_TUNABLES=glibc.tune.hwcaps=-IBT,-SHSTK
+ 	   */
+ 	  enable_ibt &= (HAS_CPU_FEATURE (IBT)
+-			 && (enable_ibt_type == CET_ALWAYS_ON
++			 && (enable_ibt_type == cet_always_on
+ 			     || (m->l_cet & lc_ibt) != 0));
+ 	  enable_shstk &= (HAS_CPU_FEATURE (SHSTK)
+-			   && (enable_shstk_type == CET_ALWAYS_ON
++			   && (enable_shstk_type == cet_always_on
+ 			       || (m->l_cet & lc_shstk) != 0));
+ 	}
+ 
+@@ -111,7 +110,7 @@ dl_cet_check (struct link_map *m, const char *program)
+ 
+ 	      /* IBT is enabled only if it is enabled in executable as
+ 		 well as all shared objects.  */
+-	      enable_ibt &= (enable_ibt_type == CET_ALWAYS_ON
++	      enable_ibt &= (enable_ibt_type == cet_always_on
+ 			     || (l->l_cet & lc_ibt) != 0);
+ 	      if (!found_ibt_legacy && enable_ibt != ibt_enabled)
+ 		{
+@@ -121,7 +120,7 @@ dl_cet_check (struct link_map *m, const char *program)
+ 
+ 	      /* SHSTK is enabled only if it is enabled in executable as
+ 		 well as all shared objects.  */
+-	      enable_shstk &= (enable_shstk_type == CET_ALWAYS_ON
++	      enable_shstk &= (enable_shstk_type == cet_always_on
+ 			       || (l->l_cet & lc_shstk) != 0);
+ 	      if (enable_shstk != shstk_enabled)
+ 		{
+@@ -137,7 +136,7 @@ dl_cet_check (struct link_map *m, const char *program)
+ 	{
+ 	  if (!program)
+ 	    {
+-	      if (enable_ibt_type != CET_PERMISSIVE)
++	      if (enable_ibt_type != cet_permissive)
+ 		{
+ 		  /* When IBT is enabled, we cannot dlopen a shared
+ 		     object without IBT.  */
+@@ -148,7 +147,7 @@ dl_cet_check (struct link_map *m, const char *program)
+ 				      N_("rebuild shared object with IBT support enabled"));
+ 		}
+ 
+-	      if (enable_shstk_type != CET_PERMISSIVE)
++	      if (enable_shstk_type != cet_permissive)
+ 		{
+ 		  /* When SHSTK is enabled, we cannot dlopen a shared
+ 		     object without SHSTK.  */
+@@ -159,8 +158,8 @@ dl_cet_check (struct link_map *m, const char *program)
+ 				      N_("rebuild shared object with SHSTK support enabled"));
+ 		}
+ 
+-	      if (enable_ibt_type != CET_PERMISSIVE
+-		  && enable_shstk_type != CET_PERMISSIVE)
++	      if (enable_ibt_type != cet_permissive
++		  && enable_shstk_type != cet_permissive)
+ 		return;
+ 	    }
+ 
+@@ -190,7 +189,7 @@ dl_cet_check (struct link_map *m, const char *program)
+ 	    }
+ 
+ 	  /* Clear the disabled bits in dl_x86_feature_1.  */
+-	  GL(dl_x86_feature_1)[0] &= ~cet_feature;
++	  GL(dl_x86_feature_1) &= ~cet_feature;
+ 
+ 	  cet_feature_changed = true;
+ 	}
+@@ -199,9 +198,9 @@ dl_cet_check (struct link_map *m, const char *program)
+       if (program && (ibt_enabled || shstk_enabled))
+ 	{
+ 	  if ((!ibt_enabled
+-	       || enable_ibt_type != CET_PERMISSIVE)
++	       || enable_ibt_type != cet_permissive)
+ 	      && (!shstk_enabled
+-		  || enable_shstk_type != CET_PERMISSIVE))
++		  || enable_shstk_type != cet_permissive))
+ 	    {
+ 	      /* Lock CET if IBT or SHSTK is enabled in executable unless
+ 	         IBT or SHSTK is enabled permissively.  */
+diff --git a/sysdeps/x86/dl-procruntime.c b/sysdeps/x86/dl-procruntime.c
+index 920bfe8..26b2b39 100644
+--- a/sysdeps/x86/dl-procruntime.c
++++ b/sysdeps/x86/dl-procruntime.c
+@@ -47,7 +47,27 @@
+ # if !defined PROCINFO_DECL && defined SHARED
+   ._dl_x86_feature_1
+ # else
+-PROCINFO_CLASS unsigned int _dl_x86_feature_1[2]
++PROCINFO_CLASS unsigned int _dl_x86_feature_1
++# endif
++# ifndef PROCINFO_DECL
++= 0
++# endif
++# if !defined SHARED || defined PROCINFO_DECL
++;
++# else
++,
++# endif
++
++# if !defined PROCINFO_DECL && defined SHARED
++  ._dl_x86_feature_control
++# else
++PROCINFO_CLASS struct dl_x86_feature_control _dl_x86_feature_control
++# endif
++# ifndef PROCINFO_DECL
++= {
++    .ibt = cet_elf_property,
++    .shstk = cet_elf_property
++  }
+ # endif
+ # if !defined SHARED || defined PROCINFO_DECL
+ ;
+diff --git a/sysdeps/x86/ldsodefs.h b/sysdeps/x86/ldsodefs.h
+index 0616215..54f6864 100644
+--- a/sysdeps/x86/ldsodefs.h
++++ b/sysdeps/x86/ldsodefs.h
+@@ -61,6 +61,7 @@ struct La_x32_retval;
+ 				     struct La_x86_64_retval *,		\
+ 				     const char *)
+ 
++#include <cet-control.h>
+ #include_next <ldsodefs.h>
+ 
+ #endif
+

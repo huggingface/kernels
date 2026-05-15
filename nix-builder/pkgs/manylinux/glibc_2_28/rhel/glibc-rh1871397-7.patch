@@ -1,0 +1,85 @@
+From 4f62a21d0ed19ff29bba704167179b862140d011 Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Thu, 16 Jul 2020 17:28:28 +0200
+Subject: [PATCH 07/11] grp: Implement fgetgrent_r using __nss_fgetent_r
+
+Tested-by: Carlos O'Donell <carlos@redhat.com>
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+---
+ grp/fgetgrent_r.c | 54 ++++++------------------------------------------------
+ 1 file changed, 6 insertions(+), 48 deletions(-)
+
+diff --git a/grp/fgetgrent_r.c b/grp/fgetgrent_r.c
+index 03daf4f..b598584 100644
+--- a/grp/fgetgrent_r.c
++++ b/grp/fgetgrent_r.c
+@@ -20,10 +20,6 @@
+ #include <grp.h>
+ #include <stdio.h>
+ 
+-#include <libio/iolibio.h>
+-#define flockfile(s) _IO_flockfile (s)
+-#define funlockfile(s) _IO_funlockfile (s)
+-
+ /* Define a line parsing function using the common code
+    used in the nss_files module.  */
+ 
+@@ -59,49 +55,11 @@ int
+ __fgetgrent_r (FILE *stream, struct group *resbuf, char *buffer, size_t buflen,
+ 	       struct group **result)
+ {
+-  char *p;
+-  int parse_result;
+-
+-  flockfile (stream);
+-  do
+-    {
+-      buffer[buflen - 1] = '\xff';
+-      p = fgets_unlocked (buffer, buflen, stream);
+-      if (__builtin_expect (p == NULL, 0) && feof_unlocked (stream))
+-	{
+-	  funlockfile (stream);
+-	  *result = NULL;
+-	  __set_errno (ENOENT);
+-	  return errno;
+-	}
+-      if (__builtin_expect (p == NULL, 0) || buffer[buflen - 1] != '\xff')
+-	{
+-	  funlockfile (stream);
+-	  *result = NULL;
+-	  __set_errno (ERANGE);
+-	  return errno;
+-	}
+-
+-      /* Skip leading blanks.  */
+-      while (isspace (*p))
+-	++p;
+-    } while (*p == '\0' || *p == '#'	/* Ignore empty and comment lines.  */
+-	     /* Parse the line.  If it is invalid, loop to
+-		get the next line of the file to parse.  */
+-	     || ! (parse_result = parse_line (p, resbuf,
+-					      (void *) buffer, buflen,
+-					      &errno)));
+-
+-  funlockfile (stream);
+-
+-  if (__builtin_expect (parse_result, 0) == -1)
+-    {
+-      /* The parser ran out of space.  */
+-      *result = NULL;
+-      return errno;
+-    }
+-
+-  *result = resbuf;
+-  return 0;
++  int ret = __nss_fgetent_r (stream, resbuf, buffer, buflen, parse_line);
++  if (ret == 0)
++    *result = resbuf;
++  else
++    *result = NULL;
++  return ret;
+ }
+ weak_alias (__fgetgrent_r, fgetgrent_r)
+-- 
+1.8.3.1
+

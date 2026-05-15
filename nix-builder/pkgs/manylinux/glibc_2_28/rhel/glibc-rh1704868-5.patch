@@ -1,0 +1,35 @@
+The patch (glibc-rh1704868-1.patch) for commit 91927b7c7643
+(Rewrite iconv option parsing) contains a test that depends on
+commit 513aaa0d782f (Add Transliterations for Unicode Misc.
+Mathematical Symbols-A/B), which is not applied in RHEL-8. This
+patch edits the test so as not to depend on the unapplied patch
+and its additional transliterations.
+
+diff --git a/iconv/tst-iconv-opt.c b/iconv/tst-iconv-opt.c
+index 669d812a6a9b8749..21e6d887501450a7 100644
+--- a/iconv/tst-iconv-opt.c
++++ b/iconv/tst-iconv-opt.c
+@@ -82,18 +82,18 @@ char u2a_ignore[] = "UTF-8 text with  couple f non-ASCII characters";
+ 
+ /* 3. Invalid UTF-8 input and some corresponding expected outputs.  \xff is
+    invalid UTF-8. It's followed by some valid but non-ASCII UTF-8.  */
+-char iutf8[] = "Invalid UTF-8 \xff\u27E6text\u27E7";
++char iutf8[] = "Invalid UTF-8 \xff\u00B7text\u00B7";
+ char iu2a[] = "Invalid UTF-8 ";
+ char iu2a_ignore[] = "Invalid UTF-8 text";
+-char iu2a_both[] = "Invalid UTF-8 [|text|]";
++char iu2a_both[] = "Invalid UTF-8 .text.";
+ 
+ /* 4. Another invalid UTF-8 input and corresponding expected outputs. This time
+    the valid non-ASCII UTF-8 characters appear before the invalid \xff.  */
+-char jutf8[] = "Invalid \u27E6UTF-8\u27E7 \xfftext";
++char jutf8[] = "Invalid \u00B7UTF-8\u00B7 \xfftext";
+ char ju2a[] = "Invalid ";
+-char ju2a_translit[] = "Invalid [|UTF-8|] ";
++char ju2a_translit[] = "Invalid .UTF-8. ";
+ char ju2a_ignore[] = "Invalid UTF-8 text";
+-char ju2a_both[] = "Invalid [|UTF-8|] text";
++char ju2a_both[] = "Invalid .UTF-8. text";
+ 
+ /* We also test option handling for character set names that have the form
+    "A/B".  In this test, we test conversions "ISO-10646/UTF-8", and either

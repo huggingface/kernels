@@ -1,0 +1,141 @@
+commit edd8d70b91e1ccef549a7c668499596cc4d56ad1
+Author: Mihailo Stojanovic <mihailo.stojanovic@rt-rk.com>
+Date:   Fri Aug 23 16:47:27 2019 +0000
+
+    [MIPS] Raise highest supported EI_ABIVERSION value [BZ #24916]
+    
+    This bumps the highest valid EI_ABIVERSION value to ABSOLUTE ABI.
+    
+    New testcase loads the symbol from the GOT with the "lb" instruction
+    so that the EI_ABIVERSION header field of the shared object is set
+    to ABSOLUTE (it doesn't actually check the value of the symbol), and
+    makes sure that the main executable is executed without "ABI version
+    invalid" error.
+    
+    Tested for all three ABIs (o32, n32, n64) using both static linker which
+    handles undefined weak symbols correctly [1] (and sets the EI_ABIVERSION
+    of the test module) and the one that doesn't (EI_ABIVERSION left as 0).
+    
+    [1] https://sourceware.org/ml/binutils/2018-07/msg00268.html
+    
+            [BZ #24916]
+            * sysdeps/mips/Makefile [$(subdir) = elf] (tests): Add
+            tst-undefined-weak.
+            [$(subdir) = elf] (modules-names): Add tst-undefined-weak-lib.
+            [$(subdir) = elf] ($(objpfx)tst-undefined-weak): Add dependency.
+            * sysdeps/mips/tst-undefined-weak-lib.S: New file.
+            * sysdeps/mips/tst-undefined-weak.c: Likewise.
+            * sysdeps/unix/sysv/linux/mips/ldsodefs.h (VALID_ELF_ABIVERSION):
+            Increment highest valid ABIVERSION value.
+
+diff --git a/sysdeps/mips/Makefile b/sysdeps/mips/Makefile
+index 7ac6fa50311d60b7..6ad69e9ef9e88728 100644
+--- a/sysdeps/mips/Makefile
++++ b/sysdeps/mips/Makefile
+@@ -82,3 +82,10 @@ $(objpfx)tst-mode-switch-2: $(shared-thread-library)
+ endif
+ endif
+ endif
++
++ifeq ($(subdir),elf)
++tests += tst-undefined-weak
++modules-names += tst-undefined-weak-lib
++
++$(objpfx)tst-undefined-weak: $(objpfx)tst-undefined-weak-lib.so
++endif
+diff --git a/sysdeps/mips/tst-undefined-weak-lib.S b/sysdeps/mips/tst-undefined-weak-lib.S
+new file mode 100644
+index 0000000000000000..a175ebf90e01b372
+--- /dev/null
++++ b/sysdeps/mips/tst-undefined-weak-lib.S
+@@ -0,0 +1,43 @@
++/* Undefined weak symbol loading shared module.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <sgidefs.h>
++
++    .text
++    .globl	x
++    .set	nomips16
++    .set	nomicromips
++    .ent	x
++    .type	x, @function
++x:
++    .set noreorder
++#if _MIPS_SIM == _ABIO32
++    .cpload  $25
++    jr  $31
++    lb  $2,%got(a)($28)
++#else
++    .cpsetup  $25,$24,x
++    lb  $2,%got_disp(a)($28)
++    jr  $31
++    .cpreturn
++#endif
++    .set reorder
++    .end	x
++    .size	x, .-x
++    .weak	a
++    .hidden	a
+diff --git a/sysdeps/mips/tst-undefined-weak.c b/sysdeps/mips/tst-undefined-weak.c
+new file mode 100644
+index 0000000000000000..1231da6912508c19
+--- /dev/null
++++ b/sysdeps/mips/tst-undefined-weak.c
+@@ -0,0 +1,28 @@
++/* Undefined weak symbol loading main executable.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++int *x (void);
++
++int
++do_test (void)
++{
++  x ();
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/unix/sysv/linux/mips/ldsodefs.h b/sysdeps/unix/sysv/linux/mips/ldsodefs.h
+index 68a0a99bb1f1ec85..d2912cadabfd6877 100644
+--- a/sysdeps/unix/sysv/linux/mips/ldsodefs.h
++++ b/sysdeps/unix/sysv/linux/mips/ldsodefs.h
+@@ -34,7 +34,7 @@ extern void _dl_static_init (struct link_map *map);
+ #undef VALID_ELF_ABIVERSION
+ #define VALID_ELF_ABIVERSION(osabi,ver)			\
+   (ver == 0						\
+-   || (osabi == ELFOSABI_SYSV && ver < 4)		\
++   || (osabi == ELFOSABI_SYSV && ver < 5)		\
+    || (osabi == ELFOSABI_GNU && ver < LIBC_ABI_MAX))
+ 
+ #endif /* ldsodefs.h */

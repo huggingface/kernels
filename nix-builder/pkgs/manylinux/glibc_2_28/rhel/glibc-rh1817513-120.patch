@@ -1,0 +1,249 @@
+commit f267e1c9dd7fb8852cc32d6eafd96bbcfd5cbb2b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 4 09:13:43 2020 +0100
+
+    x86_64: Add glibc-hwcaps support
+    
+    The subdirectories match those in the x86-64 psABI:
+    
+    https://gitlab.com/x86-psABIs/x86-64-ABI/-/commit/77566eb03bc6a326811cb7e9a6b9396884b67c7c
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index f67b231c0f8e3aff..7f2fc73877f0a4c8 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -1751,7 +1751,7 @@ $(objpfx)argv0test.out: tst-rtld-argv0.sh $(objpfx)ld.so \
+ # glibc-hwcaps mechanism for this architecture).  Used to obtain test
+ # coverage for some glibc-hwcaps tests for the widest possible range
+ # of systems.
+-glibc-hwcaps-first-subdirs-for-tests =
++glibc-hwcaps-first-subdirs-for-tests = x86-64-v2
+ 
+ # The test modules are parameterized by preprocessor macros.
+ LDFLAGS-libmarkermod1-1.so += -Wl,-soname,libmarkermod1.so
+diff --git a/elf/tst-glibc-hwcaps-cache.script b/elf/tst-glibc-hwcaps-cache.script
+index 6356d152089cdd9a..66d6942402b7233b 100644
+--- a/elf/tst-glibc-hwcaps-cache.script
++++ b/elf/tst-glibc-hwcaps-cache.script
+@@ -4,3 +4,13 @@
+ cp $B/elf/libmarkermod2-1.so $L/libmarkermod2.so
+ cp $B/elf/libmarkermod3-1.so $L/libmarkermod3.so
+ cp $B/elf/libmarkermod4-1.so $L/libmarkermod4.so
++
++mkdirp 0770 $L/glibc-hwcaps/x86-64-v2
++cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/x86-64-v2/libmarkermod2.so
++mkdirp 0770 $L/glibc-hwcaps/x86-64-v3
++cp $B/elf/libmarkermod3-2.so $L/glibc-hwcaps/x86-64-v2/libmarkermod3.so
++cp $B/elf/libmarkermod3-3.so $L/glibc-hwcaps/x86-64-v3/libmarkermod3.so
++mkdirp 0770 $L/glibc-hwcaps/x86-64-v4
++cp $B/elf/libmarkermod4-2.so $L/glibc-hwcaps/x86-64-v2/libmarkermod4.so
++cp $B/elf/libmarkermod4-3.so $L/glibc-hwcaps/x86-64-v3/libmarkermod4.so
++cp $B/elf/libmarkermod4-4.so $L/glibc-hwcaps/x86-64-v4/libmarkermod4.so
+diff --git a/sysdeps/x86_64/Makefile b/sysdeps/x86_64/Makefile
+index 42b97c5cc73892cc..d1d7cb9d2eeca9c5 100644
+--- a/sysdeps/x86_64/Makefile
++++ b/sysdeps/x86_64/Makefile
+@@ -144,8 +144,47 @@ CFLAGS-tst-auditmod10b.c += $(AVX512-CFLAGS)
+ CFLAGS-tst-avx512-aux.c += $(AVX512-CFLAGS)
+ CFLAGS-tst-avx512mod.c += $(AVX512-CFLAGS)
+ endif
++
++$(objpfx)tst-glibc-hwcaps: $(objpfx)libmarkermod2-1.so \
++  $(objpfx)libmarkermod3-1.so $(objpfx)libmarkermod4-1.so
++$(objpfx)tst-glibc-hwcaps.out: \
++  $(objpfx)libmarkermod2.so \
++    $(objpfx)glibc-hwcaps/x86-64-v2/libmarkermod2.so \
++  $(objpfx)libmarkermod3.so \
++    $(objpfx)glibc-hwcaps/x86-64-v2/libmarkermod3.so \
++    $(objpfx)glibc-hwcaps/x86-64-v3/libmarkermod3.so \
++  $(objpfx)libmarkermod4.so \
++    $(objpfx)glibc-hwcaps/x86-64-v2/libmarkermod4.so \
++    $(objpfx)glibc-hwcaps/x86-64-v3/libmarkermod4.so \
++    $(objpfx)glibc-hwcaps/x86-64-v4/libmarkermod4.so \
++
++$(objpfx)glibc-hwcaps/x86-64-v2/libmarkermod2.so: $(objpfx)libmarkermod2-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/x86-64-v2/libmarkermod3.so: $(objpfx)libmarkermod3-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/x86-64-v3/libmarkermod3.so: $(objpfx)libmarkermod3-3.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/x86-64-v2/libmarkermod4.so: $(objpfx)libmarkermod4-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/x86-64-v3/libmarkermod4.so: $(objpfx)libmarkermod4-3.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/x86-64-v4/libmarkermod4.so: $(objpfx)libmarkermod4-4.so
++	$(make-target-directory)
++	cp $< $@
++
++ifeq (no,$(build-hardcoded-path-in-tests))
++# This is an ld.so.cache test, and RPATH/RUNPATH in the executable
++# interferes with its test objectives.
++tests-container += tst-glibc-hwcaps-cache
+ endif
+ 
++endif # $(subdir) == elf
++
+ ifeq ($(subdir),csu)
+ gen-as-const-headers += tlsdesc.sym rtld-offsets.sym
+ endif
+diff --git a/sysdeps/x86_64/dl-hwcaps-subdirs.c b/sysdeps/x86_64/dl-hwcaps-subdirs.c
+new file mode 100644
+index 0000000000000000..8810a822efe36962
+--- /dev/null
++++ b/sysdeps/x86_64/dl-hwcaps-subdirs.c
+@@ -0,0 +1,66 @@
++/* Architecture-specific glibc-hwcaps subdirectories.  x86 version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dl-hwcaps.h>
++#include <cpu-features.h>
++
++const char _dl_hwcaps_subdirs[] = "x86-64-v4:x86-64-v3:x86-64-v2";
++enum { subdirs_count = 3 }; /* Number of components in _dl_hwcaps_subdirs.  */
++
++uint32_t
++_dl_hwcaps_subdirs_active (void)
++{
++  int active = 0;
++
++  /* Test in reverse preference order.  */
++
++  /* x86-64-v2.  */
++  if (!(CPU_FEATURE_USABLE (CMPXCHG16B)
++        && CPU_FEATURE_USABLE (LAHF64_SAHF64)
++        && CPU_FEATURE_USABLE (POPCNT)
++        && CPU_FEATURE_USABLE (SSE3)
++        && CPU_FEATURE_USABLE (SSE4_1)
++        && CPU_FEATURE_USABLE (SSE4_2)
++        && CPU_FEATURE_USABLE (SSSE3)))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  /* x86-64-v3.  */
++  if (!(CPU_FEATURE_USABLE (AVX)
++        && CPU_FEATURE_USABLE (AVX2)
++        && CPU_FEATURE_USABLE (BMI1)
++        && CPU_FEATURE_USABLE (BMI2)
++        && CPU_FEATURE_USABLE (F16C)
++        && CPU_FEATURE_USABLE (FMA)
++        && CPU_FEATURE_USABLE (LZCNT)
++        && CPU_FEATURE_USABLE (MOVBE)
++        && CPU_FEATURE_USABLE (OSXSAVE)))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++ /* x86-64-v4.  */
++  if (!(CPU_FEATURE_USABLE (AVX512F)
++        && CPU_FEATURE_USABLE (AVX512BW)
++        && CPU_FEATURE_USABLE (AVX512CD)
++        && CPU_FEATURE_USABLE (AVX512DQ)
++        && CPU_FEATURE_USABLE (AVX512VL)))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
++  return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++}
+diff --git a/sysdeps/x86_64/tst-glibc-hwcaps.c b/sysdeps/x86_64/tst-glibc-hwcaps.c
+new file mode 100644
+index 0000000000000000..3075a8286dc30768
+--- /dev/null
++++ b/sysdeps/x86_64/tst-glibc-hwcaps.c
+@@ -0,0 +1,76 @@
++/* glibc-hwcaps subdirectory test.  x86_64 version.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <support/check.h>
++#include <sys/param.h>
++#include <sys/platform/x86.h>
++
++extern int marker2 (void);
++extern int marker3 (void);
++extern int marker4 (void);
++
++/* Return the x86-64-vN level, 1 for the baseline.  */
++static int
++compute_level (void)
++{
++  const struct cpu_features *cpu_features
++    = __x86_get_cpu_features (COMMON_CPUID_INDEX_MAX);
++
++ if (!(CPU_FEATURE_USABLE_P (cpu_features, CMPXCHG16B)
++       && CPU_FEATURE_USABLE_P (cpu_features, LAHF64_SAHF64)
++       && CPU_FEATURE_USABLE_P (cpu_features, POPCNT)
++       && CPU_FEATURE_USABLE_P (cpu_features, MMX)
++       && CPU_FEATURE_USABLE_P (cpu_features, SSE)
++       && CPU_FEATURE_USABLE_P (cpu_features, SSE2)
++       && CPU_FEATURE_USABLE_P (cpu_features, SSE3)
++       && CPU_FEATURE_USABLE_P (cpu_features, SSSE3)
++       && CPU_FEATURE_USABLE_P (cpu_features, SSE4_1)
++       && CPU_FEATURE_USABLE_P (cpu_features, SSE4_2)))
++   return 1;
++ if (!(CPU_FEATURE_USABLE_P (cpu_features, AVX)
++       && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
++       && CPU_FEATURE_USABLE_P (cpu_features, BMI1)
++       && CPU_FEATURE_USABLE_P (cpu_features, BMI2)
++       && CPU_FEATURE_USABLE_P (cpu_features, F16C)
++       && CPU_FEATURE_USABLE_P (cpu_features, FMA)
++       && CPU_FEATURE_USABLE_P (cpu_features, LZCNT)
++       && CPU_FEATURE_USABLE_P (cpu_features, MOVBE)
++       && CPU_FEATURE_USABLE_P (cpu_features, OSXSAVE)))
++   return 2;
++ if (!(CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
++       && CPU_FEATURE_USABLE_P (cpu_features, AVX512BW)
++       && CPU_FEATURE_USABLE_P (cpu_features, AVX512CD)
++       && CPU_FEATURE_USABLE_P (cpu_features, AVX512DQ)
++       && CPU_FEATURE_USABLE_P (cpu_features, AVX512VL)))
++   return 3;
++ return 4;
++}
++
++static int
++do_test (void)
++{
++  int level = compute_level ();
++  printf ("info: detected x86-64 micro-architecture level: %d\n", level);
++  TEST_COMPARE (marker2 (), MIN (level, 2));
++  TEST_COMPARE (marker3 (), MIN (level, 3));
++  TEST_COMPARE (marker4 (), MIN (level, 4));
++  return 0;
++}
++
++#include <support/test-driver.c>

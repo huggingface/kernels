@@ -1,0 +1,1229 @@
+commit 365624e2d2a342cdb693b4cc35d2312169959e28
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 13 10:18:24 2019 +0100
+
+    dlopen: Fix issues related to NODELETE handling and relocations
+    
+    The assumption behind the assert in activate_nodelete was wrong:
+    
+    Inconsistency detected by ld.so: dl-open.c: 459: activate_nodelete:
+    Assertion `!imap->l_init_called || imap->l_type != lt_loaded' failed! (edit)
+    
+    It can happen that an already-loaded object that is in the local
+    scope is promoted to NODELETE status, via binding to a unique
+    symbol.
+    
+    Similarly, it is possible that such NODELETE promotion occurs to
+    an already-loaded object from the global scope.  This is why the
+    loop in activate_nodelete has to cover all objects in the namespace
+    of the new object.
+    
+    In do_lookup_unique, it could happen that the NODELETE status of
+    an already-loaded object was overwritten with a pending NODELETE
+    status.  As a result, if dlopen fails, this could cause a loss of
+    the NODELETE status of the affected object, eventually resulting
+    in an incorrect unload.
+    
+    Fixes commit f63b73814f74032c0e5d0a83300e3d864ef905e5 ("Remove all
+    loaded objects if dlopen fails, ignoring NODELETE [BZ #20839]").
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 467e810e784bb96d..16a3e8dcda19b4ba 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -185,7 +185,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-audit1 tst-audit2 tst-audit8 tst-audit9 \
+ 	 tst-addr1 tst-thrlock \
+ 	 tst-unique1 tst-unique2 $(if $(CXX),tst-unique3 tst-unique4 \
+-	 tst-nodelete) \
++	 tst-nodelete tst-dlopen-nodelete-reloc) \
+ 	 tst-initorder tst-initorder2 tst-relsort1 tst-null-argv \
+ 	 tst-tlsalign tst-tlsalign-extern tst-nodelete-opened \
+ 	 tst-nodelete2 tst-audit11 tst-audit12 tst-dlsym-error tst-noload \
+@@ -266,7 +266,24 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-auditmod9a tst-auditmod9b \
+ 		$(if $(CXX),tst-unique3lib tst-unique3lib2 tst-unique4lib \
+ 		  tst-nodelete-uniquemod tst-nodelete-rtldmod \
+-		  tst-nodelete-zmod) \
++		  tst-nodelete-zmod \
++                  tst-dlopen-nodelete-reloc-mod1 \
++		  tst-dlopen-nodelete-reloc-mod2 \
++	          tst-dlopen-nodelete-reloc-mod3 \
++		  tst-dlopen-nodelete-reloc-mod4 \
++		  tst-dlopen-nodelete-reloc-mod5 \
++	          tst-dlopen-nodelete-reloc-mod6 \
++	          tst-dlopen-nodelete-reloc-mod7 \
++	          tst-dlopen-nodelete-reloc-mod8 \
++	          tst-dlopen-nodelete-reloc-mod9 \
++	          tst-dlopen-nodelete-reloc-mod10 \
++	          tst-dlopen-nodelete-reloc-mod11 \
++	          tst-dlopen-nodelete-reloc-mod12 \
++	          tst-dlopen-nodelete-reloc-mod13 \
++	          tst-dlopen-nodelete-reloc-mod14 \
++	          tst-dlopen-nodelete-reloc-mod15 \
++	          tst-dlopen-nodelete-reloc-mod16 \
++		  tst-dlopen-nodelete-reloc-mod17) \
+ 		tst-initordera1 tst-initorderb1 \
+ 		tst-initordera2 tst-initorderb2 \
+ 		tst-initordera3 tst-initordera4 \
+@@ -1552,3 +1569,48 @@ $(objpfx)tst-dlopenfailmod1.so: \
+   $(shared-thread-library) $(objpfx)tst-dlopenfaillinkmod.so
+ LDFLAGS-tst-dlopenfaillinkmod.so = -Wl,-soname,tst-dlopenfail-missingmod.so
+ $(objpfx)tst-dlopenfailmod2.so: $(shared-thread-library)
++
++$(objpfx)tst-dlopen-nodelete-reloc: $(libdl)
++$(objpfx)tst-dlopen-nodelete-reloc.out: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod1.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod2.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod3.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod4.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod5.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod6.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod7.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod8.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod9.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod10.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod11.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod12.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod13.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod14.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod15.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod16.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod17.so
++tst-dlopen-nodelete-reloc-mod2.so-no-z-defs = yes
++LDFLAGS-tst-dlopen-nodelete-reloc-mod2.so = -Wl,-z,nodelete
++$(objpfx)tst-dlopen-nodelete-reloc-mod4.so: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod3.so
++LDFLAGS-tst-dlopen-nodelete-reloc-mod4.so = -Wl,--no-as-needed
++$(objpfx)tst-dlopen-nodelete-reloc-mod5.so: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod4.so
++LDFLAGS-tst-dlopen-nodelete-reloc-mod5.so = -Wl,-z,nodelete,--no-as-needed
++tst-dlopen-nodelete-reloc-mod5.so-no-z-defs = yes
++tst-dlopen-nodelete-reloc-mod7.so-no-z-defs = yes
++$(objpfx)tst-dlopen-nodelete-reloc-mod8.so: $(libdl)
++$(objpfx)tst-dlopen-nodelete-reloc-mod10.so: $(libdl)
++tst-dlopen-nodelete-reloc-mod11.so-no-z-defs = yes
++$(objpfx)tst-dlopen-nodelete-reloc-mod13.so: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod12.so
++$(objpfx)tst-dlopen-nodelete-reloc-mod15.so: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod14.so
++tst-dlopen-nodelete-reloc-mod16.so-no-z-defs = yes
++$(objpfx)tst-dlopen-nodelete-reloc-mod16.so: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod15.so
++LDFLAGS-tst-dlopen-nodelete-reloc-mod16.so = -Wl,--no-as-needed
++$(objpfx)tst-dlopen-nodelete-reloc-mod17.so: \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod15.so \
++  $(objpfx)tst-dlopen-nodelete-reloc-mod16.so
++LDFLAGS-tst-dlopen-nodelete-reloc-mod17.so = -Wl,--no-as-needed
+diff --git a/elf/dl-lookup.c b/elf/dl-lookup.c
+index c5e5857fb1fe2808..35a3f96a6296294a 100644
+--- a/elf/dl-lookup.c
++++ b/elf/dl-lookup.c
+@@ -311,12 +311,12 @@ do_lookup_unique (const char *undef_name, uint_fast32_t new_hash,
+       enter_unique_sym (entries, size,
+                         new_hash, strtab + sym->st_name, sym, map);
+ 
+-      if (map->l_type == lt_loaded)
++      if (map->l_type == lt_loaded
++	  && map->l_nodelete == link_map_nodelete_inactive)
+ 	{
+ 	  /* Make sure we don't unload this object by
+ 	     setting the appropriate flag.  */
+-	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS)
+-	      && map->l_nodelete == link_map_nodelete_inactive)
++	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_BINDINGS))
+ 	    _dl_debug_printf ("\
+ marking %s [%lu] as NODELETE due to unique symbol\n",
+ 			      map->l_name, map->l_ns);
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index e13968d4d7c4c83f..c7ed85b7ee99a296 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -433,34 +433,21 @@ TLS generation counter wrapped!  Please report this."));
+    after dlopen failure is not possible, so that _dl_close can clean
+    up objects if necessary.  */
+ static void
+-activate_nodelete (struct link_map *new, int mode)
++activate_nodelete (struct link_map *new)
+ {
+-  if (mode & RTLD_NODELETE || new->l_nodelete == link_map_nodelete_pending)
+-    {
+-      if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES))
+-	_dl_debug_printf ("activating NODELETE for %s [%lu]\n",
+-			  new->l_name, new->l_ns);
+-      new->l_nodelete = link_map_nodelete_active;
+-    }
+-
+-  for (unsigned int i = 0; i < new->l_searchlist.r_nlist; ++i)
+-    {
+-      struct link_map *imap = new->l_searchlist.r_list[i];
+-      if (imap->l_nodelete == link_map_nodelete_pending)
+-	{
+-	  if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES))
+-	    _dl_debug_printf ("activating NODELETE for %s [%lu]\n",
+-			      imap->l_name, imap->l_ns);
+-
+-	  /* Only new objects should have set
+-	     link_map_nodelete_pending.  Existing objects should not
+-	     have gained any new dependencies and therefore cannot
+-	     reach NODELETE status.  */
+-	  assert (!imap->l_init_called || imap->l_type != lt_loaded);
++  /* It is necessary to traverse the entire namespace.  References to
++     objects in the global scope and unique symbol bindings can force
++     NODELETE status for objects outside the local scope.  */
++  for (struct link_map *l = GL (dl_ns)[new->l_ns]._ns_loaded; l != NULL;
++       l = l->l_next)
++    if (l->l_nodelete == link_map_nodelete_pending)
++      {
++	if (__glibc_unlikely (GLRO (dl_debug_mask) & DL_DEBUG_FILES))
++	  _dl_debug_printf ("activating NODELETE for %s [%lu]\n",
++			    l->l_name, l->l_ns);
+ 
+-	  imap->l_nodelete = link_map_nodelete_active;
+-	}
+-     }
++	l->l_nodelete = link_map_nodelete_active;
++      }
+ }
+ 
+ /* struct dl_init_args and call_dl_init are used to call _dl_init with
+@@ -718,7 +705,7 @@ dl_open_worker (void *a)
+      All memory allocations for new objects must have happened
+      before.  */
+ 
+-  activate_nodelete (new, mode);
++  activate_nodelete (new);
+ 
+   /* Second stage after resize_scopes: Actually perform the scope
+      update.  After this, dlsym and lazy binding can bind to new
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod1.c b/elf/tst-dlopen-nodelete-reloc-mod1.c
+new file mode 100644
+index 0000000000000000..397d60a2d5ea62d9
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod1.c
+@@ -0,0 +1,39 @@
++/* Test propagation of NODELETE to an already-loaded object via relocation.
++   Non-NODELETE helper module.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Globally exported.  Set by the main program to true before
++   termination, and used by tst-dlopen-nodelete-reloc-mod2.so to
++   trigger marking this module as NODELETE (and also for its destructor
++   check).  */
++bool may_finalize_mod1 = false;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod1)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod1.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod10.c b/elf/tst-dlopen-nodelete-reloc-mod10.c
+new file mode 100644
+index 0000000000000000..30748b73ec7daed3
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod10.c
+@@ -0,0 +1,41 @@
++/* Helper module to load tst-dlopen-nodelete-reloc-mod11.so.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <unistd.h>
++
++static void *handle;
++
++static void __attribute__ ((constructor))
++init (void)
++{
++  handle = dlopen ("tst-dlopen-nodelete-reloc-mod11.so", RTLD_NOW);
++  if (handle == NULL)
++    {
++      printf ("error: dlopen in module 10: %s\n", dlerror ());
++      _exit (1);
++    }
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  dlclose (handle);
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod11.cc b/elf/tst-dlopen-nodelete-reloc-mod11.cc
+new file mode 100644
+index 0000000000000000..48c910403e782c83
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod11.cc
+@@ -0,0 +1,49 @@
++/* Second module defining a unique symbol (loaded indirectly).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod11 = false;
++
++/* Trigger the creation of a unique symbol reference.  This should
++   cause tst-dlopen-nodelete-reloc-mod9.so to be marked as
++   NODELETE.  */
++
++extern template struct unique_symbol<9>;
++
++int
++global_function_mod11 (void)
++{
++  return unique_symbol<9>::value;
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod11)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod11.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod12.cc b/elf/tst-dlopen-nodelete-reloc-mod12.cc
+new file mode 100644
+index 0000000000000000..5c093fd02d1fd0c7
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod12.cc
+@@ -0,0 +1,42 @@
++/* First module for NODELETE test defining a unique symbol (with DT_NEEDED).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod12 = false;
++
++/* Explicit instantiation.  This produces a unique symbol definition
++   which is not referenced by the library itself, so the library is
++   not marked NODELETE.  */
++template struct unique_symbol<12>;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod12)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod12.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod13.cc b/elf/tst-dlopen-nodelete-reloc-mod13.cc
+new file mode 100644
+index 0000000000000000..caf4fd1cc9e1c1e1
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod13.cc
+@@ -0,0 +1,48 @@
++/* Second module for NODELETE test defining a unique symbol (with DT_NEEDED).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod13 = false;
++
++extern template struct unique_symbol<12>;
++
++/* Trigger the creation of a unique symbol reference.  This should
++   cause tst-dlopen-nodelete-reloc-mod12.so to be marked as
++   NODELETE.  */
++int
++global_function_mod13 (void)
++{
++  return unique_symbol<12>::value;
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod13)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod13.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod13.h b/elf/tst-dlopen-nodelete-reloc-mod13.h
+new file mode 100644
+index 0000000000000000..5d338481a34a5714
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod13.h
+@@ -0,0 +1,24 @@
++/* Inline function which produces a unique symbol.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++inline char *
++third_function_with_local_static (void)
++{
++  static char local;
++  return &local;
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod14.cc b/elf/tst-dlopen-nodelete-reloc-mod14.cc
+new file mode 100644
+index 0000000000000000..e67621a2a2f8509a
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod14.cc
+@@ -0,0 +1,42 @@
++/* This object must retain NODELETE status after a dlopen failure.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod14 = false;
++
++/* Explicit instantiation.  This produces a unique symbol definition
++   which is not referenced by the library itself, so the library is
++   not marked NODELETE.  */
++template struct unique_symbol<14>;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod14)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod14.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod15.cc b/elf/tst-dlopen-nodelete-reloc-mod15.cc
+new file mode 100644
+index 0000000000000000..ead362bfdbb90eef
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod15.cc
+@@ -0,0 +1,42 @@
++/* Helper object to mark tst-dlopen-nodelete-reloc-mod14.so as NODELETE.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++extern template struct unique_symbol<14>;
++
++/* Trigger the creation of a unique symbol reference.  This should
++   cause tst-dlopen-nodelete-reloc-mod14.so to be marked as
++   NODELETE.  */
++int
++global_function_mod15 (void)
++{
++  return unique_symbol<14>::value;
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  /* This object is never loaded completely.  */
++  puts ("error: tst-dlopen-nodelete-reloc-mod15.so destructor invoked");
++  _exit (1);
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod16.c b/elf/tst-dlopen-nodelete-reloc-mod16.c
+new file mode 100644
+index 0000000000000000..fa2ed1461b42c82c
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod16.c
+@@ -0,0 +1,27 @@
++/* Object with an undefined symbol to trigger a relocation failure.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* The reference to undefined_mod16 triggers a relocation failure.  */
++
++extern int undefined_mod16;
++
++int
++global_function_mod16 (void)
++{
++  return undefined_mod16;
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod17.c b/elf/tst-dlopen-nodelete-reloc-mod17.c
+new file mode 100644
+index 0000000000000000..426562edd9a3ffee
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod17.c
+@@ -0,0 +1,19 @@
++/* Top-level object with dependency on an object that fails relocation.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* The dependencies do all the work.  */
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod2.c b/elf/tst-dlopen-nodelete-reloc-mod2.c
+new file mode 100644
+index 0000000000000000..81ea8e5af2d00b93
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod2.c
+@@ -0,0 +1,38 @@
++/* Test propagation of NODELETE to an already-loaded object via relocation.
++   NODELETE helper module.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Defined in tst-dlopen-nodelete-reloc-mod1.so.  This dependency is
++   not expressed via DT_NEEDED, so this reference marks the other
++   object as NODELETE dynamically, during initially relocation.  */
++extern bool may_finalize_mod1;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod1)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod2.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod3.c b/elf/tst-dlopen-nodelete-reloc-mod3.c
+new file mode 100644
+index 0000000000000000..d33f4ec7630c6a1e
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod3.c
+@@ -0,0 +1,38 @@
++/* Test propagation of NODELETE to an already-loaded object via relocation.
++   Non-NODELETE helper module.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Globally exported.  Set by the main program to true before
++   termination, and used by tst-dlopen-nodelete-reloc-mod4.so,
++   tst-dlopen-nodelete-reloc-mod5.so.  */
++bool may_finalize_mod3 = false;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod3)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod3.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod4.c b/elf/tst-dlopen-nodelete-reloc-mod4.c
+new file mode 100644
+index 0000000000000000..7e6633aebb1e2f00
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod4.c
+@@ -0,0 +1,37 @@
++/* Test propagation of NODELETE to an already-loaded object via relocation.
++   Intermediate helper module.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Defined in tst-dlopen-nodelete-reloc-mod3.so.  The dependency is
++   expressed via DT_NEEDED.  */
++extern bool may_finalize_mod3;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod3)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod4.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod5.c b/elf/tst-dlopen-nodelete-reloc-mod5.c
+new file mode 100644
+index 0000000000000000..22aa16f855dc75a8
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod5.c
+@@ -0,0 +1,38 @@
++/* Test propagation of NODELETE to an already-loaded object via relocation.
++   NODELETE helper module.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Defined in tst-dlopen-nodelete-reloc-mod3.so.  The dependency is
++   expressed via DT_NEEDED on the intermediate DSO
++   tst-dlopen-nodelete-reloc-mod3.so.  */
++extern bool may_finalize_mod3;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod3)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod5.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod6.cc b/elf/tst-dlopen-nodelete-reloc-mod6.cc
+new file mode 100644
+index 0000000000000000..180f5b5842f1c2b0
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod6.cc
+@@ -0,0 +1,42 @@
++/* First module for NODELETE test defining a unique symbol.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod6 = false;
++
++/* Explicit instantiation.  This produces a unique symbol definition
++   which is not referenced by the library itself, so the library is
++   not marked NODELETE.  */
++template struct unique_symbol<6>;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod6)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod6.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod7.cc b/elf/tst-dlopen-nodelete-reloc-mod7.cc
+new file mode 100644
+index 0000000000000000..c85e7c991b098bf5
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod7.cc
+@@ -0,0 +1,48 @@
++/* Second module for NODELETE test defining a unique symbol.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod7 = false;
++
++extern template struct unique_symbol<6>;
++
++/* Trigger the creation of a unique symbol reference.  This should
++   cause tst-dlopen-nodelete-reloc-mod6.so to be marked as
++   NODELETE.  */
++int
++global_function_mod7 (void)
++{
++  return unique_symbol<6>::value;
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod7)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod7.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod8.c b/elf/tst-dlopen-nodelete-reloc-mod8.c
+new file mode 100644
+index 0000000000000000..ebb1c35fab57e319
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod8.c
+@@ -0,0 +1,41 @@
++/* Helper module to load tst-dlopen-nodelete-reloc-mod9.so.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <unistd.h>
++
++static void *handle;
++
++static void __attribute__ ((constructor))
++init (void)
++{
++  handle = dlopen ("tst-dlopen-nodelete-reloc-mod9.so", RTLD_NOW);
++  if (handle == NULL)
++    {
++      printf ("error: dlopen in module 8: %s\n", dlerror ());
++      _exit (1);
++    }
++}
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  dlclose (handle);
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc-mod9.cc b/elf/tst-dlopen-nodelete-reloc-mod9.cc
+new file mode 100644
+index 0000000000000000..06fb49cdf753cb41
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc-mod9.cc
+@@ -0,0 +1,42 @@
++/* First module defining a unique symbol (loaded indirectly).
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-dlopen-nodelete-reloc.h"
++
++#include <stdbool.h>
++#include <stdio.h>
++#include <unistd.h>
++
++/* Just a flag here, not used for NODELETE processing.  */
++bool may_finalize_mod9 = false;
++
++/* Explicit instantiation.  This produces a unique symbol definition
++   which is not referenced by the library itself, so the library is
++   not marked NODELETE.  */
++template struct unique_symbol<9>;
++
++static void __attribute__ ((destructor))
++fini (void)
++{
++  if (!may_finalize_mod9)
++    {
++      puts ("error: tst-dlopen-nodelete-reloc-mod9.so destructor"
++            " called too early");
++      _exit (1);
++    }
++}
+diff --git a/elf/tst-dlopen-nodelete-reloc.c b/elf/tst-dlopen-nodelete-reloc.c
+new file mode 100644
+index 0000000000000000..291ac9eb8385a92e
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc.c
+@@ -0,0 +1,179 @@
++/* Test interactions of dlopen, NODELETE, and relocations.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This test exercises NODELETE propagation due to data relocations
++   and unique symbols, and the interaction with already-loaded
++   objects.  Some test objects are written in C++, to produce unique
++   symbol definitions.
++
++   First test: Global scope variant, data relocation as the NODELETE
++   trigger.  mod1 is loaded first with a separate dlopen call.
++
++      mod2 ---(may_finalize_mod1 relocation dependency)---> mod1
++    (NODELETE)                                   (marked as NODELETE)
++
++   Second test: Local scope variant, data relocation.  mod3 is loaded
++   first, then mod5.
++
++      mod5 ---(DT_NEEDED)--->  mod4  ---(DT_NEEDED)---> mod3
++    (NODELETE)           (not NODELETE)                  ^
++        \                                               / (marked as
++         `--(may_finalize_mod3 relocation dependency)--/   NODELETE)
++
++   Third test: Shared local scope with unique symbol.  mod6 is loaded
++   first, then mod7.  No explicit dependencies between the two
++   objects, so first object has to be opened with RTLD_GLOBAL.
++
++      mod7 ---(unique symbol)---> mod6
++                          (marked as NODELETE)
++
++   Forth test: Non-shared scopes with unique symbol.  mod8 and mod10
++   are loaded from the main program.  mod8 loads mod9 from an ELF
++   constructor, mod10 loads mod11.  There are no DT_NEEDED
++   dependencies.  mod9 is promoted to the global scope form the main
++   program.  The unique symbol dependency is:
++
++      mod9 ---(unique symbol)---> mod11
++                          (marked as NODELETE)
++
++   Fifth test: Shared local scope with unique symbol, like test 3, but
++   this time, there is also a DT_NEEDED dependency (so no RTLD_GLOBAL
++   needed):
++
++                 DT_NEEDED
++      mod13 ---(unique symbol)---> mod12
++                          (marked as NODELETE)
++
++   Sixth test: NODELETE status is retained after relocation failure
++   with unique symbol dependency.  The object graph ensures that the
++   unique symbol binding is processed before the dlopen failure.
++
++                                        DT_NEEDED
++     mod17  --(DT_NEEDED)--> mod15 --(unique symbol)--> mod14
++       \                       ^                  (RTLD_NODELETE)
++        \                 (DT_NEEDED)
++         \                     |
++          `---(DT_NEEDED)--> mod16
++                       (fails to relocate)
++
++   mod14 is loaded first, and the loading mod17 is attempted.
++   mod14 must remain NODELETE after opening mod17 failed.  */
++
++#include <stdio.h>
++#include <string.h>
++#include <stdbool.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int
++do_test (void)
++{
++  /* First case: global scope, regular data symbol.  Open the object
++     which is not NODELETE initially.  */
++  void *mod1 = xdlopen ("tst-dlopen-nodelete-reloc-mod1.so",
++                        RTLD_NOW | RTLD_GLOBAL);
++  /* This is used to indicate that the ELF destructor may be
++     called.  */
++  bool *may_finalize_mod1 = xdlsym (mod1, "may_finalize_mod1");
++  /* Open the NODELETE object.  */
++  void *mod2 = xdlopen ("tst-dlopen-nodelete-reloc-mod2.so", RTLD_NOW);
++  /* This has no effect because the DSO is directly marked as
++     NODELETE.  */
++  xdlclose (mod2);
++  /* This has no effect because the DSO has been indirectly marked as
++     NODELETE due to a relocation dependency.  */
++  xdlclose (mod1);
++
++  /* Second case: local scope, regular data symbol.  Open the object
++     which is not NODELETE initially.  */
++  void *mod3 = xdlopen ("tst-dlopen-nodelete-reloc-mod3.so", RTLD_NOW);
++  bool *may_finalize_mod3 = xdlsym (mod3, "may_finalize_mod3");
++  /* Open the NODELETE object.  */
++  void *mod5 = xdlopen ("tst-dlopen-nodelete-reloc-mod5.so", RTLD_NOW);
++  /* Again those have no effect because of NODELETE.  */
++  xdlclose (mod5);
++  xdlclose (mod3);
++
++  /* Third case: Unique symbol.  */
++  void *mod6 = xdlopen ("tst-dlopen-nodelete-reloc-mod6.so",
++                        RTLD_NOW | RTLD_GLOBAL);
++  bool *may_finalize_mod6 = xdlsym (mod6, "may_finalize_mod6");
++  void *mod7 = xdlopen ("tst-dlopen-nodelete-reloc-mod7.so", RTLD_NOW);
++  bool *may_finalize_mod7 = xdlsym (mod7, "may_finalize_mod7");
++  /* This should not have any effect because of the unique symbol and
++     the resulting NODELETE status.  */
++  xdlclose (mod6);
++  /* mod7 is not NODELETE and can be closed.  */
++  *may_finalize_mod7 = true;
++  xdlclose (mod7);
++
++  /* Fourth case: Unique symbol, indirect loading.  */
++  void *mod8 = xdlopen ("tst-dlopen-nodelete-reloc-mod8.so", RTLD_NOW);
++  /* Also promote to global scope.  */
++  void *mod9 = xdlopen ("tst-dlopen-nodelete-reloc-mod9.so",
++                        RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
++  bool *may_finalize_mod9 = xdlsym (mod9, "may_finalize_mod9");
++  xdlclose (mod9);              /* Drop mod9 reference.  */
++  void *mod10 = xdlopen ("tst-dlopen-nodelete-reloc-mod10.so", RTLD_NOW);
++  void *mod11 = xdlopen ("tst-dlopen-nodelete-reloc-mod11.so",
++                        RTLD_NOW | RTLD_NOLOAD);
++  bool *may_finalize_mod11 = xdlsym (mod11, "may_finalize_mod11");
++  xdlclose (mod11);              /* Drop mod11 reference.  */
++  /* mod11 is not NODELETE and can be closed.  */
++  *may_finalize_mod11 = true;
++  /* Trigger closing of mod11, too.  */
++  xdlclose (mod10);
++  /* Does not trigger closing of mod9.  */
++  xdlclose (mod8);
++
++  /* Fifth case: Unique symbol, with DT_NEEDED dependency.  */
++  void *mod12 = xdlopen ("tst-dlopen-nodelete-reloc-mod12.so", RTLD_NOW);
++  bool *may_finalize_mod12 = xdlsym (mod12, "may_finalize_mod12");
++  void *mod13 = xdlopen ("tst-dlopen-nodelete-reloc-mod13.so", RTLD_NOW);
++  bool *may_finalize_mod13 = xdlsym (mod13, "may_finalize_mod13");
++  /* This should not have any effect because of the unique symbol. */
++  xdlclose (mod12);
++  /* mod13 is not NODELETE and can be closed.  */
++  *may_finalize_mod13 = true;
++  xdlclose (mod13);
++
++  /* Sixth case: Unique symbol binding must not cause loss of NODELETE
++     status.  */
++  void *mod14 = xdlopen ("tst-dlopen-nodelete-reloc-mod14.so",
++                         RTLD_NOW | RTLD_NODELETE);
++  bool *may_finalize_mod14 = xdlsym (mod14, "may_finalize_mod14");
++  TEST_VERIFY (dlopen ("tst-dlopen-nodelete-reloc-mod17.so", RTLD_NOW)
++               == NULL);
++  const char *message = dlerror ();
++  printf ("info: test 6 message: %s\n", message);
++  /* This must not close the object, it must still be NODELETE.  */
++  xdlclose (mod14);
++  xdlopen ("tst-dlopen-nodelete-reloc-mod14.so", RTLD_NOW | RTLD_NOLOAD);
++
++  /* Prepare for process exit.  Destructors for NODELETE objects will
++     be invoked.  */
++  *may_finalize_mod1 = true;
++  *may_finalize_mod3 = true;
++  *may_finalize_mod6 = true;
++  *may_finalize_mod9 = true;
++  *may_finalize_mod12 = true;
++  *may_finalize_mod14 = true;
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-dlopen-nodelete-reloc.h b/elf/tst-dlopen-nodelete-reloc.h
+new file mode 100644
+index 0000000000000000..8844de622631f575
+--- /dev/null
++++ b/elf/tst-dlopen-nodelete-reloc.h
+@@ -0,0 +1,35 @@
++/* Template to produce unique symbols.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This template produces a unique symbol definition for an explicit
++   template instantiation (without also incorporating a reference),
++   and an extern template declaration can be used to reference that
++   symbol from another object.  The modid parameter is just a
++   placeholder to create different symbols (because it affects the
++   name mangling of the static value member).  By convention, it
++   should match the number of the module that contains the
++   definition.  */
++
++template <int modid>
++struct unique_symbol
++{
++  static int value;
++};
++
++template <int modid>
++int unique_symbol<modid>::value;

@@ -1,0 +1,141 @@
+commit 03e187a41d91069543cfcf33469a05912e555447
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Apr 29 15:44:03 2020 +0200
+
+    elf: Add initial flag argument to __libc_early_init
+    
+    The rseq initialization should happen only for the libc in the base
+    namespace (in the dynamic case) or the statically linked libc.  The
+    __libc_multiple_libcs flag does not quite cover this case at present,
+    so this commit introduces a flag argument to __libc_early_init,
+    indicating whether the libc being libc is the primary one (of the main
+    program).
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/csu/libc-start.c b/csu/libc-start.c
+index d9c3248219d8f84f..fd0f8640eaeae34c 100644
+--- a/csu/libc-start.c
++++ b/csu/libc-start.c
+@@ -23,6 +23,7 @@
+ #include <exit-thread.h>
+ #include <libc-internal.h>
+ #include <elf/libc-early-init.h>
++#include <stdbool.h>
+ 
+ #include <elf/dl-tunables.h>
+ 
+@@ -241,7 +242,7 @@ LIBC_START_MAIN (int (*main) (int, char **, char ** MAIN_AUXVEC_DECL),
+ #ifndef SHARED
+   /* Perform early initialization.  In the shared case, this function
+      is called from the dynamic loader as early as possible.  */
+-  __libc_early_init ();
++  __libc_early_init (true);
+ 
+   /* Call the initializer of the libc.  This is only needed here if we
+      are compiling for the static library in which case we haven't
+diff --git a/elf/dl-call-libc-early-init.c b/elf/dl-call-libc-early-init.c
+index 41e9ad9aad8b5b46..9a84680a1ceafba2 100644
+--- a/elf/dl-call-libc-early-init.c
++++ b/elf/dl-call-libc-early-init.c
+@@ -23,7 +23,7 @@
+ #include <stddef.h>
+ 
+ void
+-_dl_call_libc_early_init (struct link_map *libc_map)
++_dl_call_libc_early_init (struct link_map *libc_map, _Bool initial)
+ {
+   /* There is nothing to do if we did not actually load libc.so.  */
+   if (libc_map == NULL)
+@@ -37,5 +37,5 @@ _dl_call_libc_early_init (struct link_map *libc_map)
+   assert (sym != NULL);
+   __typeof (__libc_early_init) *early_init
+     = DL_SYMBOL_ADDRESS (libc_map, sym);
+-  early_init ();
++  early_init (initial);
+ }
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 1a77ec833cad6c55..3d49a84596e99bf6 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -748,9 +748,22 @@ dl_open_worker (void *a)
+     LIBC_PROBE (reloc_complete, 3, args->nsid, r, new);
+ 
+   /* If libc.so was not there before, attempt to call its early
+-     initialization routine.  */
++     initialization routine.  Indicate to the initialization routine
++     whether the libc being initialized is the one in the base
++     namespace.  */
+   if (!args->libc_already_loaded)
+-    _dl_call_libc_early_init (GL(dl_ns)[args->nsid].libc_map);
++    {
++      struct link_map *libc_map = GL(dl_ns)[args->nsid].libc_map;
++#ifdef SHARED
++      bool initial = libc_map->l_ns == LM_ID_BASE;
++#else
++      /* In the static case, there is only one namespace, but it
++	 contains a secondary libc (the primary libc is statically
++	 linked).  */
++      bool initial = false;
++#endif
++      _dl_call_libc_early_init (libc_map, initial);
++    }
+ 
+ #ifndef SHARED
+   DL_STATIC_INIT (new);
+diff --git a/elf/libc-early-init.h b/elf/libc-early-init.h
+index 5185fa8895c0e11a..8f7836dceaeecd5a 100644
+--- a/elf/libc-early-init.h
++++ b/elf/libc-early-init.h
+@@ -22,14 +22,17 @@
+ struct link_map;
+ 
+ /* If LIBC_MAP is not NULL, look up the __libc_early_init symbol in it
+-   and call this function.  */
+-void _dl_call_libc_early_init (struct link_map *libc_map) attribute_hidden;
++   and call this function, with INITIAL as the argument.  */
++void _dl_call_libc_early_init (struct link_map *libc_map, _Bool initial)
++  attribute_hidden;
+ 
+ /* In the shared case, this function is defined in libc.so and invoked
+    from ld.so (or on the fist static dlopen) after complete relocation
+    of a new loaded libc.so, but before user-defined ELF constructors
+    run.  In the static case, this function is called directly from the
+-   startup code.  */
+-void __libc_early_init (void);
++   startup code.  If INITIAL is true, the libc being initialized is
++   the libc for the main program.  INITIAL is false for libcs loaded
++   for audit modules, dlmopen, and static dlopen.  */
++void __libc_early_init (_Bool initial);
+ 
+ #endif /* _LIBC_EARLY_INIT_H */
+diff --git a/elf/libc_early_init.c b/elf/libc_early_init.c
+index 7f4ca332b805a22c..e6c64fb526600fae 100644
+--- a/elf/libc_early_init.c
++++ b/elf/libc_early_init.c
+@@ -20,7 +20,7 @@
+ #include <libc-early-init.h>
+ 
+ void
+-__libc_early_init (void)
++__libc_early_init (_Bool initial)
+ {
+   /* Initialize ctype data.  */
+   __ctype_init ();
+diff --git a/elf/rtld.c b/elf/rtld.c
+index a40d5f17db0dac8b..772aff5160359b7b 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -2366,8 +2366,10 @@ ERROR: '%s': cannot process note segment.\n", _dl_argv[0]);
+       rtld_timer_accum (&relocate_time, start);
+     }
+ 
+-  /* Relocation is complete.  Perform early libc initialization.  */
+-  _dl_call_libc_early_init (GL(dl_ns)[LM_ID_BASE].libc_map);
++  /* Relocation is complete.  Perform early libc initialization.  This
++     is the initial libc, even if audit modules have been loaded with
++     other libcs.  */
++  _dl_call_libc_early_init (GL(dl_ns)[LM_ID_BASE].libc_map, true);
+ 
+   /* Do any necessary cleanups for the startup OS interface code.
+      We do these now so that no calls are made after rtld re-relocation

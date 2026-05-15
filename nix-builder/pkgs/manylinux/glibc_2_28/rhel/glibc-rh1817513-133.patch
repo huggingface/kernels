@@ -1,0 +1,18 @@
+commit 8a30bb4e0604aefcf28f20360fc8ba8ef8604b9c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Dec 23 12:07:20 2020 +0100
+
+    elf: Account for glibc-hwcaps/ prefix in _dl_important_hwcaps
+
+diff --git a/elf/dl-hwcaps.c b/elf/dl-hwcaps.c
+index 50d764ae8707f46d..2fc4ae67a0f5d051 100644
+--- a/elf/dl-hwcaps.c
++++ b/elf/dl-hwcaps.c
+@@ -192,6 +192,7 @@ _dl_important_hwcaps (const char *glibc_hwcaps_prepend,
+ 
+   /* Each hwcaps subdirectory has a GLIBC_HWCAPS_PREFIX string prefix
+      and a "/" suffix once stored in the result.  */
++  hwcaps_counts.maximum_length += strlen (GLIBC_HWCAPS_PREFIX) + 1;
+   size_t total = (hwcaps_counts.count * (strlen (GLIBC_HWCAPS_PREFIX) + 1)
+ 		  + hwcaps_counts.total_length);
+ 

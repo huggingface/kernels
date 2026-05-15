@@ -1,0 +1,43 @@
+commit 3387c40a8bbad5faf85b1feb56429cb20feaa640
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Nov 10 15:21:19 2021 +0000
+
+    Update syscall lists for Linux 5.15
+    
+    Linux 5.15 has one new syscall, process_mrelease (and also enables the
+    clone3 syscall for RV32).  It also has a macro __NR_SYSCALL_MASK for
+    Arm, which is not a syscall but matches the pattern used for syscall
+    macro names.
+    
+    Add __NR_SYSCALL_MASK to the names filtered out in the code dealing
+    with syscall lists, update syscall-names.list for the new syscall and
+    regenerate the arch-syscall.h headers with build-many-glibcs.py
+    update-syscalls.
+    
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list to Linux 5.15.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index fd98893b0e..1a74d090b7 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -21,8 +21,8 @@
+ # This file can list all potential system calls.  The names are only
+ # used if the installed kernel headers also provide them.
+ 
+-# The list of system calls is current as of Linux 5.14.
+-kernel 5.14
++# The list of system calls is current as of Linux 5.15.
++kernel 5.15
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -440,6 +440,7 @@ preadv
+ preadv2
+ prlimit64
+ process_madvise
++process_mrelease
+ process_vm_readv
+ process_vm_writev
+ prof

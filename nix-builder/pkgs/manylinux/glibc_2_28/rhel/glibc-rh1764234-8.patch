@@ -1,0 +1,47 @@
+commit 0f02b6cfc44af73d4d4363c46b3cbb18b8ff9171
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Sep 18 22:57:46 2019 +0000
+
+    Update syscall-names.list for Linux 5.3.
+    
+    This patch updates syscall-names.list for Linux 5.3, adding two new
+    syscalls.
+    
+    Tested with build-many-glibcs.py.
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update kernel
+            version to 5.3.
+            (clone3): New syscall.
+            (pidfd_open): Likewise.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index e2382d3414..b55ffbc2a0 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 5.2.
+-kernel 5.2
++# The list of system calls is current as of Linux 5.3.
++kernel 5.3
+ 
+ FAST_atomic_update
+ FAST_cmpxchg
+@@ -75,6 +75,7 @@ clock_settime
+ clock_settime64
+ clone
+ clone2
++clone3
+ close
+ cmpxchg_badaddr
+ connect
+@@ -410,6 +411,7 @@ perf_event_open
+ perfctr
+ perfmonctl
+ personality
++pidfd_open
+ pidfd_send_signal
+ pipe
+ pipe2

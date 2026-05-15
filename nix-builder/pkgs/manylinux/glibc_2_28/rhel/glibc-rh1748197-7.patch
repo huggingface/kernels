@@ -1,0 +1,1335 @@
+commit 7b5af2d8f2a2b858319a792678b15a0db08764c7
+Author: Zack Weinberg <zackw@panix.com>
+Date:   Wed Sep 4 08:18:57 2019 +0200
+
+    Finish move of clock_* functions to libc. [BZ #24959]
+    
+    In glibc 2.17, the functions clock_getcpuclockid, clock_getres,
+    clock_gettime, clock_nanosleep, and clock_settime were moved from
+    librt.so to libc.so, leaving compatibility stubs behind.  Now that the
+    dynamic linker no longer insists on finding versioned symbols in the
+    same library that originally defined them, we do not need the stubs
+    anymore, and this means we don't need GLIBC_PRIVATE __-prefix aliases
+    for most of the functions anymore either.  (clock_gettime still needs
+    one.)  For ports added before 2.17, libc.so needs to provide two
+    symbol versions for each, the default at GLIBC_2.17 plus a compat
+    version matching what librt had.
+    
+    While I'm at it, move the clock_*.c files and their tests from rt/ to
+    time/.
+
+ Conflicts:
+	rt/clock-compat.c
+	  (Removal after copyright year update upstream.)
+	sysdeps/unix/sysv/linux/arm/be/libc.abilist
+	sysdeps/unix/sysv/linux/arm/le/librt.abilist
+	sysdeps/unix/sysv/linux/microblaze/le/librt.abilist
+	sysdeps/unix/sysv/linux/sh/be/libc.abilist
+	sysdeps/unix/sysv/linux/sh/le/librt.abilist
+	  (These ABI lists were split into be/le variants upstream.
+	  The choice of files here reflects the decision of the Git
+	  rename detection for the source of the unsplit ABI list
+	  update.)
+	time/Makefile
+	  (Missing tests downstream.)
+
+diff --git a/include/time.h b/include/time.h
+index 23d2580528b02490..832ee6896e1ca537 100644
+--- a/include/time.h
++++ b/include/time.h
+@@ -16,12 +16,10 @@ libc_hidden_proto (localtime)
+ libc_hidden_proto (strftime)
+ libc_hidden_proto (strptime)
+ 
+-extern __typeof (clock_getres) __clock_getres;
+ extern __typeof (clock_gettime) __clock_gettime;
+ libc_hidden_proto (__clock_gettime)
+ extern __typeof (clock_settime) __clock_settime;
+-extern __typeof (clock_nanosleep) __clock_nanosleep;
+-extern __typeof (clock_getcpuclockid) __clock_getcpuclockid;
++libc_hidden_proto (__clock_settime)
+ 
+ /* Now define the internal interfaces.  */
+ struct tm;
+diff --git a/rt/Makefile b/rt/Makefile
+index 14f38ef74d262188..de53133cedc778f6 100644
+--- a/rt/Makefile
++++ b/rt/Makefile
+@@ -28,9 +28,6 @@ aio-routines   := aio_cancel aio_error aio_fsync aio_misc aio_read	\
+ 		  aio_read64 aio_return aio_suspend aio_write		\
+ 		  aio_write64 lio_listio lio_listio64 aio_sigqueue	\
+ 		  aio_notify
+-clock-routines := clock_getcpuclockid					\
+-		  clock_getres clock_gettime clock_settime		\
+-		  clock_nanosleep
+ timer-routines := timer_create timer_delete timer_getoverr		\
+ 		  timer_gettime timer_settime
+ shm-routines   := shm_open shm_unlink
+@@ -38,22 +35,18 @@ mq-routines    := mq_open mq_close mq_unlink mq_getattr mq_setattr	\
+ 		  mq_notify mq_send mq_receive mq_timedsend		\
+ 		  mq_timedreceive
+ 
+-routines = $(clock-routines)
+-
+ librt-routines = $(aio-routines) \
+ 		 $(timer-routines) \
+-		 $(shm-routines) $(mq-routines) \
+-		 clock-compat
++		 $(shm-routines) $(mq-routines)
+ 
+-tests := tst-shm tst-clock tst-clock_nanosleep tst-timer tst-timer2 \
++tests := tst-shm tst-timer tst-timer2 \
+ 	 tst-aio tst-aio64 tst-aio2 tst-aio3 tst-aio4 tst-aio5 tst-aio6 \
+ 	 tst-aio7 tst-aio8 tst-aio9 tst-aio10 \
+ 	 tst-mqueue1 tst-mqueue2 tst-mqueue3 tst-mqueue4 \
+ 	 tst-mqueue5 tst-mqueue6 tst-mqueue7 tst-mqueue8 tst-mqueue9 \
+ 	 tst-timer3 tst-timer4 tst-timer5 \
+-	 tst-cpuclock1 tst-cpuclock2 \
+-	 tst-cputimer1 tst-cputimer2 tst-cputimer3 \
+-	 tst-clock2 tst-shm-cancel
++	 tst-cpuclock2 tst-cputimer1 tst-cputimer2 tst-cputimer3 \
++	 tst-shm-cancel
+ 
+ extra-libs := librt
+ extra-libs-others := $(extra-libs)
+diff --git a/rt/Versions b/rt/Versions
+index 91e3fd2a204ded9c..84d1345420dc4dc4 100644
+--- a/rt/Versions
++++ b/rt/Versions
+@@ -1,15 +1,3 @@
+-libc {
+-  GLIBC_2.17 {
+-    # c*
+-    clock_getres; clock_gettime; clock_settime; clock_getcpuclockid;
+-    clock_nanosleep;
+-  }
+-  GLIBC_PRIVATE {
+-    __clock_getres; __clock_gettime; __clock_settime; __clock_getcpuclockid;
+-    __clock_nanosleep;
+-  }
+-}
+-
+ librt {
+   GLIBC_2.1 {
+     # AIO functions.
+@@ -18,10 +6,6 @@ librt {
+     aio_suspend64; aio_write; aio_write64; lio_listio; lio_listio64;
+   }
+   GLIBC_2.2 {
+-    # These have moved to libc and are still here only for compatibility.
+-    clock_getres; clock_gettime; clock_settime; clock_getcpuclockid;
+-    clock_nanosleep;
+-
+     # s*
+     shm_open; shm_unlink;
+ 
+diff --git a/rt/clock-compat.c b/rt/clock-compat.c
+deleted file mode 100644
+index 11e71aa89019b173..0000000000000000
+--- a/rt/clock-compat.c
++++ /dev/null
+@@ -1,63 +0,0 @@
+-/* ABI compatibility redirects for clock_* symbols in librt.
+-   Copyright (C) 2012-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <shlib-compat.h>
+-
+-/* The clock_* symbols were originally defined in librt and so
+-   are part of its ABI.  As of 2.17, they have moved to libc.
+-   So we supply definitions for librt that just redirect to
+-   their libc counterparts.  */
+-
+-#if SHLIB_COMPAT (librt, GLIBC_2_2, GLIBC_2_17)
+-
+-#include <time.h>
+-
+-#if HAVE_IFUNC
+-# undef INIT_ARCH
+-# define INIT_ARCH()
+-# define COMPAT_REDIRECT(name, proto, arglist) libc_ifunc (name, &__##name) \
+-    compat_symbol (librt, name, name, GLIBC_2_2);
+-#else
+-# define COMPAT_REDIRECT(name, proto, arglist)				      \
+-  int									      \
+-  name proto								      \
+-  {									      \
+-    return __##name arglist;						      \
+-  }									      \
+-  compat_symbol (librt, name, name, GLIBC_2_2);
+-#endif
+-
+-COMPAT_REDIRECT (clock_getres,
+-		 (clockid_t clock_id, struct timespec *res),
+-		 (clock_id, res))
+-COMPAT_REDIRECT (clock_gettime,
+-		 (clockid_t clock_id, struct timespec *tp),
+-		 (clock_id, tp))
+-COMPAT_REDIRECT (clock_settime,
+-		 (clockid_t clock_id, const struct timespec *tp),
+-		 (clock_id, tp))
+-COMPAT_REDIRECT (clock_getcpuclockid,
+-		 (pid_t pid, clockid_t *clock_id),
+-		 (pid, clock_id))
+-COMPAT_REDIRECT (clock_nanosleep,
+-		 (clockid_t clock_id, int flags,
+-		  const struct timespec *req,
+-		  struct timespec *rem),
+-		 (clock_id, flags, req, rem))
+-
+-#endif
+diff --git a/sysdeps/mach/hurd/i386/libc.abilist b/sysdeps/mach/hurd/i386/libc.abilist
+index e3fc05137b18194b..f89ef9a43251c164 100644
+--- a/sysdeps/mach/hurd/i386/libc.abilist
++++ b/sysdeps/mach/hurd/i386/libc.abilist
+@@ -711,6 +711,11 @@ GLIBC_2.2.6 clntudp_bufcreate F
+ GLIBC_2.2.6 clntudp_create F
+ GLIBC_2.2.6 clntunix_create F
+ GLIBC_2.2.6 clock F
++GLIBC_2.2.6 clock_getcpuclockid F
++GLIBC_2.2.6 clock_getres F
++GLIBC_2.2.6 clock_gettime F
++GLIBC_2.2.6 clock_nanosleep F
++GLIBC_2.2.6 clock_settime F
+ GLIBC_2.2.6 close F
+ GLIBC_2.2.6 closedir F
+ GLIBC_2.2.6 closelog F
+diff --git a/sysdeps/mach/hurd/i386/librt.abilist b/sysdeps/mach/hurd/i386/librt.abilist
+index d5fe32b3a9917254..3726e41f06cc500c 100644
+--- a/sysdeps/mach/hurd/i386/librt.abilist
++++ b/sysdeps/mach/hurd/i386/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.2.6 aio_suspend F
+ GLIBC_2.2.6 aio_suspend64 F
+ GLIBC_2.2.6 aio_write F
+ GLIBC_2.2.6 aio_write64 F
+-GLIBC_2.2.6 clock_getcpuclockid F
+-GLIBC_2.2.6 clock_getres F
+-GLIBC_2.2.6 clock_gettime F
+-GLIBC_2.2.6 clock_nanosleep F
+-GLIBC_2.2.6 clock_settime F
+ GLIBC_2.2.6 lio_listio F
+ GLIBC_2.2.6 lio_listio64 F
+ GLIBC_2.2.6 shm_open F
+diff --git a/sysdeps/posix/clock_getres.c b/sysdeps/posix/clock_getres.c
+index 5b0d8eb8a1a0593e..7408197420b14aad 100644
+--- a/sysdeps/posix/clock_getres.c
++++ b/sysdeps/posix/clock_getres.c
+@@ -22,7 +22,7 @@
+ #include <unistd.h>
+ #include <sys/param.h>
+ #include <libc-internal.h>
+-
++#include <shlib-compat.h>
+ 
+ static inline int
+ realtime_getres (struct timespec *res)
+@@ -62,4 +62,11 @@ __clock_getres (clockid_t clock_id, struct timespec *res)
+ 
+   return retval;
+ }
+-weak_alias (__clock_getres, clock_getres)
++
++versioned_symbol (libc, __clock_getres, clock_getres, GLIBC_2_17);
++/* clock_getres moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_getres, __clock_getres_2);
++compat_symbol (libc, __clock_getres_2, clock_getres, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/clock_gettime.c b/sysdeps/unix/clock_gettime.c
+index f3ebbe15ccc2e95e..3ad8ea87bb7d379b 100644
+--- a/sysdeps/unix/clock_gettime.c
++++ b/sysdeps/unix/clock_gettime.c
+@@ -17,24 +17,9 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <errno.h>
+-#include <stdint.h>
+ #include <time.h>
+ #include <sys/time.h>
+-#include <libc-internal.h>
+-#include <ldsodefs.h>
+-
+-
+-static inline int
+-realtime_gettime (struct timespec *tp)
+-{
+-  struct timeval tv;
+-  int retval = __gettimeofday (&tv, NULL);
+-  if (retval == 0)
+-    /* Convert into `timespec'.  */
+-    TIMEVAL_TO_TIMESPEC (&tv, tp);
+-  return retval;
+-}
+-
++#include <shlib-compat.h>
+ 
+ /* Get current value of CLOCK and store it in TP.  */
+ int
+@@ -60,5 +45,12 @@ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+ 
+   return retval;
+ }
+-weak_alias (__clock_gettime, clock_gettime)
+ libc_hidden_def (__clock_gettime)
++
++versioned_symbol (libc, __clock_gettime, clock_gettime, GLIBC_2_17);
++/* clock_gettime moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_gettime, __clock_gettime_2);
++compat_symbol (libc, __clock_gettime_2, clock_gettime, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/clock_nanosleep.c b/sysdeps/unix/clock_nanosleep.c
+index 13dd0f4b905ec631..6513e2d64614c561 100644
+--- a/sysdeps/unix/clock_nanosleep.c
++++ b/sysdeps/unix/clock_nanosleep.c
+@@ -20,6 +20,7 @@
+ #include <errno.h>
+ #include <time.h>
+ #include <sysdep-cancel.h>
++#include <shlib-compat.h>
+ 
+ /* This implementation assumes that these is only a `nanosleep' system
+    call.  So we have to remap all other activities.  */
+@@ -76,4 +77,11 @@ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+ 
+   return __nanosleep (req, rem), 0 ? errno : 0;
+ }
+-weak_alias (__clock_nanosleep, clock_nanosleep)
++
++versioned_symbol (libc, __clock_nanosleep, clock_nanosleep, GLIBC_2_17);
++/* clock_nanosleep moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_nanosleep, __clock_nanosleep_2);
++compat_symbol (libc, __clock_nanosleep_2, clock_nanosleep, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/clock_settime.c b/sysdeps/unix/clock_settime.c
+index 4f5640f67047cef6..123b6f44ee3831d9 100644
+--- a/sysdeps/unix/clock_settime.c
++++ b/sysdeps/unix/clock_settime.c
+@@ -18,8 +18,7 @@
+ #include <errno.h>
+ #include <time.h>
+ #include <sys/time.h>
+-#include <ldsodefs.h>
+-
++#include <shlib-compat.h>
+ 
+ /* Set CLOCK to value TP.  */
+ int
+@@ -51,4 +50,12 @@ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+ 
+   return retval;
+ }
+-weak_alias (__clock_settime, clock_settime)
++libc_hidden_def (__clock_settime)
++
++versioned_symbol (libc, __clock_settime, clock_settime, GLIBC_2_17);
++/* clock_settime moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_settime, __clock_settime_2);
++compat_symbol (libc, __clock_settime_2, clock_settime, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/sysv/linux/alpha/libc.abilist b/sysdeps/unix/sysv/linux/alpha/libc.abilist
+index e22b91655dd5f7e0..77f0432d0f1f5aab 100644
+--- a/sysdeps/unix/sysv/linux/alpha/libc.abilist
++++ b/sysdeps/unix/sysv/linux/alpha/libc.abilist
+@@ -1863,6 +1863,11 @@ GLIBC_2.2 __xpg_sigpause F
+ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x48
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/alpha/librt.abilist b/sysdeps/unix/sysv/linux/alpha/librt.abilist
+index d7a049cf600e2966..71f86e03ce67fd19 100644
+--- a/sysdeps/unix/sysv/linux/alpha/librt.abilist
++++ b/sysdeps/unix/sysv/linux/alpha/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/arm/libc.abilist b/sysdeps/unix/sysv/linux/arm/libc.abilist
+index a231812eea6dc556..e748ec28912ce773 100644
+--- a/sysdeps/unix/sysv/linux/arm/libc.abilist
++++ b/sysdeps/unix/sysv/linux/arm/libc.abilist
+@@ -759,6 +759,11 @@ GLIBC_2.4 clntudp_bufcreate F
+ GLIBC_2.4 clntudp_create F
+ GLIBC_2.4 clntunix_create F
+ GLIBC_2.4 clock F
++GLIBC_2.4 clock_getcpuclockid F
++GLIBC_2.4 clock_getres F
++GLIBC_2.4 clock_gettime F
++GLIBC_2.4 clock_nanosleep F
++GLIBC_2.4 clock_settime F
+ GLIBC_2.4 clone F
+ GLIBC_2.4 close F
+ GLIBC_2.4 closedir F
+diff --git a/sysdeps/unix/sysv/linux/arm/librt.abilist b/sysdeps/unix/sysv/linux/arm/librt.abilist
+index cfbbd2755765e720..3c0647b2516bb51d 100644
+--- a/sysdeps/unix/sysv/linux/arm/librt.abilist
++++ b/sysdeps/unix/sysv/linux/arm/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.4 aio_suspend F
+ GLIBC_2.4 aio_suspend64 F
+ GLIBC_2.4 aio_write F
+ GLIBC_2.4 aio_write64 F
+-GLIBC_2.4 clock_getcpuclockid F
+-GLIBC_2.4 clock_getres F
+-GLIBC_2.4 clock_gettime F
+-GLIBC_2.4 clock_nanosleep F
+-GLIBC_2.4 clock_settime F
+ GLIBC_2.4 lio_listio F
+ GLIBC_2.4 lio_listio64 F
+ GLIBC_2.4 mq_close F
+diff --git a/sysdeps/unix/sysv/linux/clock_getcpuclockid.c b/sysdeps/unix/sysv/linux/clock_getcpuclockid.c
+index 190a47950eb1d177..877f4f3c7916a534 100644
+--- a/sysdeps/unix/sysv/linux/clock_getcpuclockid.c
++++ b/sysdeps/unix/sysv/linux/clock_getcpuclockid.c
+@@ -20,6 +20,7 @@
+ #include <time.h>
+ #include <unistd.h>
+ #include "kernel-posix-cpu-timers.h"
++#include <shlib-compat.h>
+ 
+ int
+ __clock_getcpuclockid (pid_t pid, clockid_t *clock_id)
+@@ -45,4 +46,11 @@ __clock_getcpuclockid (pid_t pid, clockid_t *clock_id)
+   else
+     return INTERNAL_SYSCALL_ERRNO (r, err);
+ }
+-weak_alias (__clock_getcpuclockid, clock_getcpuclockid)
++
++versioned_symbol (libc, __clock_getcpuclockid, clock_getcpuclockid, GLIBC_2_17);
++/* clock_getcpuclockid moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_getcpuclockid, __clock_getcpuclockid_2);
++compat_symbol (libc, __clock_getcpuclockid_2, clock_getcpuclockid, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/sysv/linux/clock_getres.c b/sysdeps/unix/sysv/linux/clock_getres.c
+index 2517e66910a79d93..1fbb638097ba4a80 100644
+--- a/sysdeps/unix/sysv/linux/clock_getres.c
++++ b/sysdeps/unix/sysv/linux/clock_getres.c
+@@ -26,10 +26,19 @@
+ #endif
+ #include <sysdep-vdso.h>
+ 
++#include <shlib-compat.h>
++
+ /* Get resolution of clock.  */
+ int
+ __clock_getres (clockid_t clock_id, struct timespec *res)
+ {
+   return INLINE_VSYSCALL (clock_getres, 2, clock_id, res);
+ }
+-weak_alias (__clock_getres, clock_getres)
++
++versioned_symbol (libc, __clock_getres, clock_getres, GLIBC_2_17);
++/* clock_getres moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_getres, __clock_getres_2);
++compat_symbol (libc, __clock_getres_2, clock_getres, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/sysv/linux/clock_gettime.c b/sysdeps/unix/sysv/linux/clock_gettime.c
+index dadfc518b74baea0..3f8feb37a1795306 100644
+--- a/sysdeps/unix/sysv/linux/clock_gettime.c
++++ b/sysdeps/unix/sysv/linux/clock_gettime.c
+@@ -26,11 +26,20 @@
+ #endif
+ #include <sysdep-vdso.h>
+ 
++#include <shlib-compat.h>
++
+ /* Get current value of CLOCK and store it in TP.  */
+ int
+ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+ {
+   return INLINE_VSYSCALL (clock_gettime, 2, clock_id, tp);
+ }
+-weak_alias (__clock_gettime, clock_gettime)
+ libc_hidden_def (__clock_gettime)
++
++versioned_symbol (libc, __clock_gettime, clock_gettime, GLIBC_2_17);
++/* clock_gettime moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_gettime, __clock_gettime_2);
++compat_symbol (libc, __clock_gettime_2, clock_gettime, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/sysv/linux/clock_nanosleep.c b/sysdeps/unix/sysv/linux/clock_nanosleep.c
+index 93d5d6ef120ca9ef..a90da63069b7f0f8 100644
+--- a/sysdeps/unix/sysv/linux/clock_nanosleep.c
++++ b/sysdeps/unix/sysv/linux/clock_nanosleep.c
+@@ -21,6 +21,7 @@
+ #include <sysdep-cancel.h>
+ #include "kernel-posix-cpu-timers.h"
+ 
++#include <shlib-compat.h>
+ 
+ /* We can simply use the syscall.  The CPU clocks are not supported
+    with this function.  */
+@@ -51,4 +52,11 @@ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+   return (INTERNAL_SYSCALL_ERROR_P (r, err)
+ 	  ? INTERNAL_SYSCALL_ERRNO (r, err) : 0);
+ }
+-weak_alias (__clock_nanosleep, clock_nanosleep)
++
++versioned_symbol (libc, __clock_nanosleep, clock_nanosleep, GLIBC_2_17);
++/* clock_nanosleep moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_nanosleep, __clock_nanosleep_2);
++compat_symbol (libc, __clock_nanosleep_2, clock_nanosleep, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/sysv/linux/clock_settime.c b/sysdeps/unix/sysv/linux/clock_settime.c
+index c71461a4f6deac5a..21efc6c982c084b4 100644
+--- a/sysdeps/unix/sysv/linux/clock_settime.c
++++ b/sysdeps/unix/sysv/linux/clock_settime.c
+@@ -18,6 +18,7 @@
+ #include <errno.h>
+ #include <sysdep.h>
+ #include <time.h>
++#include <shlib-compat.h>
+ 
+ #include "kernel-posix-cpu-timers.h"
+ 
+@@ -34,4 +35,12 @@ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+ 
+   return INLINE_SYSCALL_CALL (clock_settime, clock_id, tp);
+ }
+-weak_alias (__clock_settime, clock_settime)
++libc_hidden_def (__clock_settime)
++
++versioned_symbol (libc, __clock_settime, clock_settime, GLIBC_2_17);
++/* clock_settime moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_settime, __clock_settime_2);
++compat_symbol (libc, __clock_settime_2, clock_settime, GLIBC_2_2);
++#endif
+diff --git a/sysdeps/unix/sysv/linux/hppa/libc.abilist b/sysdeps/unix/sysv/linux/hppa/libc.abilist
+index 24b11b15c0e71140..d34f040d85cc5bb2 100644
+--- a/sysdeps/unix/sysv/linux/hppa/libc.abilist
++++ b/sysdeps/unix/sysv/linux/hppa/libc.abilist
+@@ -615,6 +615,11 @@ GLIBC_2.2 clntudp_bufcreate F
+ GLIBC_2.2 clntudp_create F
+ GLIBC_2.2 clntunix_create F
+ GLIBC_2.2 clock F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 clone F
+ GLIBC_2.2 close F
+ GLIBC_2.2 closedir F
+diff --git a/sysdeps/unix/sysv/linux/hppa/librt.abilist b/sysdeps/unix/sysv/linux/hppa/librt.abilist
+index 595f1b712a4e8d70..bb03781dcc04d219 100644
+--- a/sysdeps/unix/sysv/linux/hppa/librt.abilist
++++ b/sysdeps/unix/sysv/linux/hppa/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/i386/libc.abilist b/sysdeps/unix/sysv/linux/i386/libc.abilist
+index 9762c81365b0abcd..48e838fc2813df0d 100644
+--- a/sysdeps/unix/sysv/linux/i386/libc.abilist
++++ b/sysdeps/unix/sysv/linux/i386/libc.abilist
+@@ -1869,6 +1869,11 @@ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x30
+ GLIBC_2.2 alphasort64 F
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/i386/librt.abilist b/sysdeps/unix/sysv/linux/i386/librt.abilist
+index 595f1b712a4e8d70..bb03781dcc04d219 100644
+--- a/sysdeps/unix/sysv/linux/i386/librt.abilist
++++ b/sysdeps/unix/sysv/linux/i386/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/ia64/libc.abilist b/sysdeps/unix/sysv/linux/ia64/libc.abilist
+index 50c94adff93b5bb4..e9fe0697b784be64 100644
+--- a/sysdeps/unix/sysv/linux/ia64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/ia64/libc.abilist
+@@ -627,6 +627,11 @@ GLIBC_2.2 clntudp_bufcreate F
+ GLIBC_2.2 clntudp_create F
+ GLIBC_2.2 clntunix_create F
+ GLIBC_2.2 clock F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 close F
+ GLIBC_2.2 closedir F
+ GLIBC_2.2 closelog F
+diff --git a/sysdeps/unix/sysv/linux/ia64/librt.abilist b/sysdeps/unix/sysv/linux/ia64/librt.abilist
+index 804622a14abd8ea9..08384c906518837d 100644
+--- a/sysdeps/unix/sysv/linux/ia64/librt.abilist
++++ b/sysdeps/unix/sysv/linux/ia64/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist b/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist
+index f57be98e494d0701..98f07b79918d1c17 100644
+--- a/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/coldfire/libc.abilist
+@@ -748,6 +748,11 @@ GLIBC_2.4 clntudp_bufcreate F
+ GLIBC_2.4 clntudp_create F
+ GLIBC_2.4 clntunix_create F
+ GLIBC_2.4 clock F
++GLIBC_2.4 clock_getcpuclockid F
++GLIBC_2.4 clock_getres F
++GLIBC_2.4 clock_gettime F
++GLIBC_2.4 clock_nanosleep F
++GLIBC_2.4 clock_settime F
+ GLIBC_2.4 clone F
+ GLIBC_2.4 close F
+ GLIBC_2.4 closedir F
+diff --git a/sysdeps/unix/sysv/linux/m68k/coldfire/librt.abilist b/sysdeps/unix/sysv/linux/m68k/coldfire/librt.abilist
+index cfbbd2755765e720..3c0647b2516bb51d 100644
+--- a/sysdeps/unix/sysv/linux/m68k/coldfire/librt.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/coldfire/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.4 aio_suspend F
+ GLIBC_2.4 aio_suspend64 F
+ GLIBC_2.4 aio_write F
+ GLIBC_2.4 aio_write64 F
+-GLIBC_2.4 clock_getcpuclockid F
+-GLIBC_2.4 clock_getres F
+-GLIBC_2.4 clock_gettime F
+-GLIBC_2.4 clock_nanosleep F
+-GLIBC_2.4 clock_settime F
+ GLIBC_2.4 lio_listio F
+ GLIBC_2.4 lio_listio64 F
+ GLIBC_2.4 mq_close F
+diff --git a/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist b/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist
+index ddc7ebca673a466c..6a60d7876120f2f2 100644
+--- a/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/m680x0/libc.abilist
+@@ -1825,6 +1825,11 @@ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x30
+ GLIBC_2.2 alphasort64 F
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/m68k/m680x0/librt.abilist b/sysdeps/unix/sysv/linux/m68k/m680x0/librt.abilist
+index 595f1b712a4e8d70..bb03781dcc04d219 100644
+--- a/sysdeps/unix/sysv/linux/m68k/m680x0/librt.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/m680x0/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/microblaze/librt.abilist b/sysdeps/unix/sysv/linux/microblaze/librt.abilist
+index fb85d8729e1bc69d..889dfbc0eef5e75a 100644
+--- a/sysdeps/unix/sysv/linux/microblaze/librt.abilist
++++ b/sysdeps/unix/sysv/linux/microblaze/librt.abilist
+@@ -14,11 +14,6 @@ GLIBC_2.18 aio_suspend F
+ GLIBC_2.18 aio_suspend64 F
+ GLIBC_2.18 aio_write F
+ GLIBC_2.18 aio_write64 F
+-GLIBC_2.18 clock_getcpuclockid F
+-GLIBC_2.18 clock_getres F
+-GLIBC_2.18 clock_gettime F
+-GLIBC_2.18 clock_nanosleep F
+-GLIBC_2.18 clock_settime F
+ GLIBC_2.18 lio_listio F
+ GLIBC_2.18 lio_listio64 F
+ GLIBC_2.18 mq_close F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist
+index dda9797e0ea736f6..34a24582ca7a4a08 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/fpu/libc.abilist
+@@ -1612,6 +1612,11 @@ GLIBC_2.2 capget F
+ GLIBC_2.2 capset F
+ GLIBC_2.2 cbc_crypt F
+ GLIBC_2.2 clntunix_create F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 creat64 F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 des_setparity F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/librt.abilist b/sysdeps/unix/sysv/linux/mips/mips32/librt.abilist
+index 84837c8a2ef02e1b..1539c1cef92bccfd 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/librt.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.2 aio_suspend F
+ GLIBC_2.2 aio_suspend64 F
+ GLIBC_2.2 aio_write F
+ GLIBC_2.2 aio_write64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 lio_listio F
+ GLIBC_2.2 lio_listio64 F
+ GLIBC_2.2 shm_open F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist
+index 42e930d56595083e..176a57298a45d492 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/nofpu/libc.abilist
+@@ -1610,6 +1610,11 @@ GLIBC_2.2 capget F
+ GLIBC_2.2 capset F
+ GLIBC_2.2 cbc_crypt F
+ GLIBC_2.2 clntunix_create F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 creat64 F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 des_setparity F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/librt.abilist b/sysdeps/unix/sysv/linux/mips/mips64/librt.abilist
+index 84837c8a2ef02e1b..1539c1cef92bccfd 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/librt.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.2 aio_suspend F
+ GLIBC_2.2 aio_suspend64 F
+ GLIBC_2.2 aio_write F
+ GLIBC_2.2 aio_write64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 lio_listio F
+ GLIBC_2.2 lio_listio64 F
+ GLIBC_2.2 shm_open F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist
+index f89b44f3a14d0f85..5a66ffd67e5cf364 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/n32/libc.abilist
+@@ -1611,6 +1611,11 @@ GLIBC_2.2 capget F
+ GLIBC_2.2 capset F
+ GLIBC_2.2 cbc_crypt F
+ GLIBC_2.2 clntunix_create F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 creat64 F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 des_setparity F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist b/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist
+index 1486af11d755d37e..a817f33695a5230f 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/n64/libc.abilist
+@@ -1607,6 +1607,11 @@ GLIBC_2.2 capget F
+ GLIBC_2.2 capset F
+ GLIBC_2.2 cbc_crypt F
+ GLIBC_2.2 clntunix_create F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 creat64 F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 des_setparity F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist
+index 45839ed25b0fde5f..d5e121b76e583f4c 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/fpu/libc.abilist
+@@ -1830,6 +1830,11 @@ GLIBC_2.2 __xstat64 F
+ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x30
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/librt.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/librt.abilist
+index 595f1b712a4e8d70..bb03781dcc04d219 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/librt.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist
+index 344e5ae87c5d76b2..3dfddbddb3a11180 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/nofpu/libc.abilist
+@@ -1834,6 +1834,11 @@ GLIBC_2.2 __xstat64 F
+ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x30
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/libc.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/libc.abilist
+index 8c1781adf49a7432..06ce341194a37dd4 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/libc.abilist
+@@ -670,6 +670,11 @@ GLIBC_2.3 clntudp_bufcreate F
+ GLIBC_2.3 clntudp_create F
+ GLIBC_2.3 clntunix_create F
+ GLIBC_2.3 clock F
++GLIBC_2.3 clock_getcpuclockid F
++GLIBC_2.3 clock_getres F
++GLIBC_2.3 clock_gettime F
++GLIBC_2.3 clock_nanosleep F
++GLIBC_2.3 clock_settime F
+ GLIBC_2.3 clone F
+ GLIBC_2.3 close F
+ GLIBC_2.3 closedir F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/librt.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/librt.abilist
+index e76b7eb49566718b..6a5bd96963e67109 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/librt.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.3 aio_suspend F
+ GLIBC_2.3 aio_suspend64 F
+ GLIBC_2.3 aio_write F
+ GLIBC_2.3 aio_write64 F
+-GLIBC_2.3 clock_getcpuclockid F
+-GLIBC_2.3 clock_getres F
+-GLIBC_2.3 clock_gettime F
+-GLIBC_2.3 clock_nanosleep F
+-GLIBC_2.3 clock_settime F
+ GLIBC_2.3 lio_listio F
+ GLIBC_2.3 lio_listio64 F
+ GLIBC_2.3 shm_open F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist b/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist
+index 3a5ec2a1e47b5da5..02ff949c33197774 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-32/libc.abilist
+@@ -1829,6 +1829,11 @@ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x30
+ GLIBC_2.2 alphasort64 F
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-32/librt.abilist b/sysdeps/unix/sysv/linux/s390/s390-32/librt.abilist
+index 595f1b712a4e8d70..bb03781dcc04d219 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-32/librt.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-32/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist b/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist
+index 3b5465558b72f166..96693d41df267e1b 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-64/libc.abilist
+@@ -632,6 +632,11 @@ GLIBC_2.2 clntudp_bufcreate F
+ GLIBC_2.2 clntudp_create F
+ GLIBC_2.2 clntunix_create F
+ GLIBC_2.2 clock F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 clone F
+ GLIBC_2.2 close F
+ GLIBC_2.2 closedir F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-64/librt.abilist b/sysdeps/unix/sysv/linux/s390/s390-64/librt.abilist
+index 41be3bb84b6e4df0..5905498a488359d7 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-64/librt.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-64/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.2 aio_suspend F
+ GLIBC_2.2 aio_suspend64 F
+ GLIBC_2.2 aio_write F
+ GLIBC_2.2 aio_write64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 lio_listio F
+ GLIBC_2.2 lio_listio64 F
+ GLIBC_2.2 shm_open F
+diff --git a/sysdeps/unix/sysv/linux/sh/libc.abilist b/sysdeps/unix/sysv/linux/sh/libc.abilist
+index 1f4e648baade9c47..b126bda07a9cc58c 100644
+--- a/sysdeps/unix/sysv/linux/sh/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sh/libc.abilist
+@@ -618,6 +618,11 @@ GLIBC_2.2 clntudp_bufcreate F
+ GLIBC_2.2 clntudp_create F
+ GLIBC_2.2 clntunix_create F
+ GLIBC_2.2 clock F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 clone F
+ GLIBC_2.2 close F
+ GLIBC_2.2 closedir F
+diff --git a/sysdeps/unix/sysv/linux/sh/librt.abilist b/sysdeps/unix/sysv/linux/sh/librt.abilist
+index 595f1b712a4e8d70..bb03781dcc04d219 100644
+--- a/sysdeps/unix/sysv/linux/sh/librt.abilist
++++ b/sysdeps/unix/sysv/linux/sh/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist b/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist
+index d308ac8b0527cb3f..63b78d80b333d4b4 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc32/libc.abilist
+@@ -1826,6 +1826,11 @@ GLIBC_2.2 __xstat64 F
+ GLIBC_2.2 _flushlbf F
+ GLIBC_2.2 _res_hconf D 0x30
+ GLIBC_2.2 bind_textdomain_codeset F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 dcngettext F
+ GLIBC_2.2 dngettext F
+ GLIBC_2.2 fgetpos F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc32/librt.abilist b/sysdeps/unix/sysv/linux/sparc/sparc32/librt.abilist
+index cb874f41477109c3..38f0aad791793010 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc32/librt.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc32/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist b/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist
+index 6731ebfc2877c5c6..a899eb6a92215b47 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc64/libc.abilist
+@@ -660,6 +660,11 @@ GLIBC_2.2 clntudp_bufcreate F
+ GLIBC_2.2 clntudp_create F
+ GLIBC_2.2 clntunix_create F
+ GLIBC_2.2 clock F
++GLIBC_2.2 clock_getcpuclockid F
++GLIBC_2.2 clock_getres F
++GLIBC_2.2 clock_gettime F
++GLIBC_2.2 clock_nanosleep F
++GLIBC_2.2 clock_settime F
+ GLIBC_2.2 clone F
+ GLIBC_2.2 close F
+ GLIBC_2.2 closedir F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/librt.abilist b/sysdeps/unix/sysv/linux/sparc/sparc64/librt.abilist
+index d7a049cf600e2966..71f86e03ce67fd19 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/librt.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc64/librt.abilist
+@@ -15,11 +15,6 @@ GLIBC_2.1 aio_write F
+ GLIBC_2.1 aio_write64 F
+ GLIBC_2.1 lio_listio F
+ GLIBC_2.1 lio_listio64 F
+-GLIBC_2.2 clock_getcpuclockid F
+-GLIBC_2.2 clock_getres F
+-GLIBC_2.2 clock_gettime F
+-GLIBC_2.2 clock_nanosleep F
+-GLIBC_2.2 clock_settime F
+ GLIBC_2.2 shm_open F
+ GLIBC_2.2 shm_unlink F
+ GLIBC_2.2 timer_create F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist b/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist
+index 816e4a742632ad44..0ebb018e2089c70a 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/64/libc.abilist
+@@ -621,6 +621,11 @@ GLIBC_2.2.5 clntudp_bufcreate F
+ GLIBC_2.2.5 clntudp_create F
+ GLIBC_2.2.5 clntunix_create F
+ GLIBC_2.2.5 clock F
++GLIBC_2.2.5 clock_getcpuclockid F
++GLIBC_2.2.5 clock_getres F
++GLIBC_2.2.5 clock_gettime F
++GLIBC_2.2.5 clock_nanosleep F
++GLIBC_2.2.5 clock_settime F
+ GLIBC_2.2.5 clone F
+ GLIBC_2.2.5 close F
+ GLIBC_2.2.5 closedir F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/librt.abilist b/sysdeps/unix/sysv/linux/x86_64/64/librt.abilist
+index e2e8b60bf8e29f55..95e3f22daa06b237 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/librt.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/64/librt.abilist
+@@ -13,11 +13,6 @@ GLIBC_2.2.5 aio_suspend F
+ GLIBC_2.2.5 aio_suspend64 F
+ GLIBC_2.2.5 aio_write F
+ GLIBC_2.2.5 aio_write64 F
+-GLIBC_2.2.5 clock_getcpuclockid F
+-GLIBC_2.2.5 clock_getres F
+-GLIBC_2.2.5 clock_gettime F
+-GLIBC_2.2.5 clock_nanosleep F
+-GLIBC_2.2.5 clock_settime F
+ GLIBC_2.2.5 lio_listio F
+ GLIBC_2.2.5 lio_listio64 F
+ GLIBC_2.2.5 shm_open F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist b/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist
+index 6fee16a850adc7b8..0b6b3fa98183e5af 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/x32/libc.abilist
+@@ -660,6 +660,11 @@ GLIBC_2.16 clntudp_create F
+ GLIBC_2.16 clntunix_create F
+ GLIBC_2.16 clock F
+ GLIBC_2.16 clock_adjtime F
++GLIBC_2.16 clock_getcpuclockid F
++GLIBC_2.16 clock_getres F
++GLIBC_2.16 clock_gettime F
++GLIBC_2.16 clock_nanosleep F
++GLIBC_2.16 clock_settime F
+ GLIBC_2.16 clone F
+ GLIBC_2.16 close F
+ GLIBC_2.16 closedir F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/x32/librt.abilist b/sysdeps/unix/sysv/linux/x86_64/x32/librt.abilist
+index 94e84e4dcfaa85dc..66969fb9ab887756 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/x32/librt.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/x32/librt.abilist
+@@ -14,11 +14,6 @@ GLIBC_2.16 aio_suspend F
+ GLIBC_2.16 aio_suspend64 F
+ GLIBC_2.16 aio_write F
+ GLIBC_2.16 aio_write64 F
+-GLIBC_2.16 clock_getcpuclockid F
+-GLIBC_2.16 clock_getres F
+-GLIBC_2.16 clock_gettime F
+-GLIBC_2.16 clock_nanosleep F
+-GLIBC_2.16 clock_settime F
+ GLIBC_2.16 lio_listio F
+ GLIBC_2.16 lio_listio64 F
+ GLIBC_2.16 mq_close F
+diff --git a/time/Makefile b/time/Makefile
+index ec3e39dcea75ee51..6a68481a5de1b148 100644
+--- a/time/Makefile
++++ b/time/Makefile
+@@ -36,14 +36,18 @@ routines := offtime asctime clock ctime ctime_r difftime \
+ 	    stime dysize timegm ftime			 \
+ 	    getdate strptime strptime_l			 \
+ 	    strftime wcsftime strftime_l wcsftime_l	 \
+-	    timespec_get
++	    timespec_get 	 			 \
++	    clock_getcpuclockid clock_getres 		 \
++	    clock_gettime clock_settime clock_nanosleep
++
+ aux :=	    era alt_digit lc-time-cleanup
+ 
+ tests	:= test_time clocktest tst-posixtz tst-strptime tst_wcsftime \
+ 	   tst-getdate tst-mktime tst-mktime2 tst-ftime_l tst-strftime \
+ 	   tst-mktime3 tst-strptime2 bug-asctime bug-asctime_r bug-mktime1 \
+ 	   tst-strptime3 bug-getdate1 tst-strptime-whitespace tst-ftime \
+-	   tst-tzname tst-y2039
++	   tst-tzname tst-y2039 \
++	   tst-clock tst-clock2 tst-clock_nanosleep tst-cpuclock1
+ 
+ include ../Rules
+ 
+diff --git a/time/Versions b/time/Versions
+index fd838181e4f0969d..8788e192ce358d77 100644
+--- a/time/Versions
++++ b/time/Versions
+@@ -49,6 +49,10 @@ libc {
+   GLIBC_2.2 {
+     # w*
+     wcsftime;
++
++    # c*; actually in librt in version 2.2, moved to libc in 2.17
++    clock_getres; clock_gettime; clock_settime; clock_getcpuclockid;
++    clock_nanosleep;
+   }
+   GLIBC_2.3 {
+     # these internal names are used by libstdc++
+@@ -65,4 +69,13 @@ libc {
+   GLIBC_2.16 {
+     timespec_get;
+   }
++  GLIBC_2.17 {
++    # c*
++    clock_getres; clock_gettime; clock_settime; clock_getcpuclockid;
++    clock_nanosleep;
++  }
++  GLIBC_PRIVATE {
++    # same as clock_gettime; used in other libraries
++    __clock_gettime;
++  }
+ }
+diff --git a/rt/clock_getcpuclockid.c b/time/clock_getcpuclockid.c
+similarity index 75%
+rename from rt/clock_getcpuclockid.c
+rename to time/clock_getcpuclockid.c
+index 6bc42a0863d92d5a..81b86241f7adc6c9 100644
+--- a/rt/clock_getcpuclockid.c
++++ b/time/clock_getcpuclockid.c
+@@ -19,6 +19,7 @@
+ #include <errno.h>
+ #include <time.h>
+ #include <unistd.h>
++#include <shlib-compat.h>
+ 
+ int
+ __clock_getcpuclockid (pid_t pid, clockid_t *clock_id)
+@@ -37,4 +38,10 @@ __clock_getcpuclockid (pid_t pid, clockid_t *clock_id)
+   return ENOENT;
+ #endif
+ }
+-weak_alias (__clock_getcpuclockid, clock_getcpuclockid)
++versioned_symbol (libc, __clock_getcpuclockid, clock_getcpuclockid, GLIBC_2_17);
++/* clock_getcpuclockid moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_getcpuclockid, __clock_getcpuclockid_2);
++compat_symbol (libc, __clock_getcpuclockid_2, clock_getcpuclockid, GLIBC_2_2);
++#endif
+diff --git a/rt/clock_getres.c b/time/clock_getres.c
+similarity index 73%
+rename from rt/clock_getres.c
+rename to time/clock_getres.c
+index 816f7b2a907e27ce..e8315393e560b186 100644
+--- a/rt/clock_getres.c
++++ b/time/clock_getres.c
+@@ -18,6 +18,7 @@
+ 
+ #include <errno.h>
+ #include <time.h>
++#include <shlib-compat.h>
+ 
+ /* Get resolution of clock.  */
+ int
+@@ -26,5 +27,13 @@ __clock_getres (clockid_t clock_id, struct timespec *res)
+   __set_errno (ENOSYS);
+   return -1;
+ }
+-weak_alias (__clock_getres, clock_getres)
++
++versioned_symbol (libc, __clock_getres, clock_getres, GLIBC_2_17);
++/* clock_getres moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_getres, __clock_getres_2);
++compat_symbol (libc, __clock_getres_2, clock_getres, GLIBC_2_2);
++#endif
++
+ stub_warning (clock_getres)
+diff --git a/rt/clock_gettime.c b/time/clock_gettime.c
+similarity index 74%
+rename from rt/clock_gettime.c
+rename to time/clock_gettime.c
+index 30a012473f5bc821..4a5f808845351156 100644
+--- a/rt/clock_gettime.c
++++ b/time/clock_gettime.c
+@@ -18,6 +18,7 @@
+ 
+ #include <errno.h>
+ #include <time.h>
++#include <shlib-compat.h>
+ 
+ /* Get current value of CLOCK and store it in TP.  */
+ int
+@@ -26,6 +27,14 @@ __clock_gettime (clockid_t clock_id, struct timespec *tp)
+   __set_errno (ENOSYS);
+   return -1;
+ }
+-weak_alias (__clock_gettime, clock_gettime)
+ libc_hidden_def (__clock_gettime)
++
++versioned_symbol (libc, __clock_gettime, clock_gettime, GLIBC_2_17);
++/* clock_gettime moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_gettime, __clock_gettime_2);
++compat_symbol (libc, __clock_gettime_2, clock_gettime, GLIBC_2_2);
++#endif
++
+ stub_warning (clock_gettime)
+diff --git a/rt/clock_nanosleep.c b/time/clock_nanosleep.c
+similarity index 76%
+rename from rt/clock_nanosleep.c
+rename to time/clock_nanosleep.c
+index 15aa6f7c4f22e197..a314b169a9455e0d 100644
+--- a/rt/clock_nanosleep.c
++++ b/time/clock_nanosleep.c
+@@ -18,6 +18,7 @@
+ 
+ #include <errno.h>
+ #include <time.h>
++#include <shlib-compat.h>
+ 
+ int
+ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+@@ -33,5 +34,13 @@ __clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *req,
+   /* Not implemented.  */
+   return ENOSYS;
+ }
+-weak_alias (__clock_nanosleep, clock_nanosleep)
++
++versioned_symbol (libc, __clock_nanosleep, clock_nanosleep, GLIBC_2_17);
++/* clock_nanosleep moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_nanosleep, __clock_nanosleep_2);
++compat_symbol (libc, __clock_nanosleep_2, clock_nanosleep, GLIBC_2_2);
++#endif
++
+ stub_warning (clock_nanosleep)
+diff --git a/rt/clock_settime.c b/time/clock_settime.c
+similarity index 71%
+rename from rt/clock_settime.c
+rename to time/clock_settime.c
+index 0b6d4b2a2a0dc46c..2091239448e307f2 100644
+--- a/rt/clock_settime.c
++++ b/time/clock_settime.c
+@@ -18,6 +18,7 @@
+ 
+ #include <errno.h>
+ #include <time.h>
++#include <shlib-compat.h>
+ 
+ /* Set CLOCK to value TP.  */
+ int
+@@ -26,5 +27,14 @@ __clock_settime (clockid_t clock_id, const struct timespec *tp)
+   __set_errno (ENOSYS);
+   return -1;
+ }
+-weak_alias (__clock_settime, clock_settime)
++libc_hidden_def (__clock_settime)
++
++versioned_symbol (libc, __clock_settime, clock_settime, GLIBC_2_17);
++/* clock_settime moved to libc in version 2.17;
++   old binaries may expect the symbol version it had in librt.  */
++#if SHLIB_COMPAT (libc, GLIBC_2_2, GLIBC_2_17)
++strong_alias (__clock_settime, __clock_settime_2);
++compat_symbol (libc, __clock_settime_2, clock_settime, GLIBC_2_2);
++#endif
++
+ stub_warning (clock_settime)
+diff --git a/rt/tst-clock.c b/time/tst-clock.c
+similarity index 100%
+rename from rt/tst-clock.c
+rename to time/tst-clock.c
+diff --git a/rt/tst-clock2.c b/time/tst-clock2.c
+similarity index 100%
+rename from rt/tst-clock2.c
+rename to time/tst-clock2.c
+diff --git a/rt/tst-clock_nanosleep.c b/time/tst-clock_nanosleep.c
+similarity index 100%
+rename from rt/tst-clock_nanosleep.c
+rename to time/tst-clock_nanosleep.c
+diff --git a/rt/tst-cpuclock1.c b/time/tst-cpuclock1.c
+similarity index 100%
+rename from rt/tst-cpuclock1.c
+rename to time/tst-cpuclock1.c

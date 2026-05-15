@@ -1,0 +1,517 @@
+commit eb447b7b4bd6177f876ba9420ad9e048c27bae91
+Author: David Kilroy <David.Kilroy@arm.com>
+Date:   Wed Feb 12 14:28:15 2020 -0300
+
+    elf: Allow dlopen of filter object to work [BZ #16272]
+    
+    There are two fixes that are needed to be able to dlopen filter
+    objects. First _dl_map_object_deps cannot assume that map will be at
+    the beginning of l_searchlist.r_list[], as filtees are inserted before
+    map. Secondly dl_open_worker needs to ensure that filtees get
+    relocated.
+    
+    In _dl_map_object_deps:
+    
+    * avoiding removing relocation dependencies of map by setting
+      l_reserved to 0 and otherwise processing the rest of the search
+      list.
+    
+    * ensure that map remains at the beginning of l_initfini - the list
+      of things that need initialisation (and destruction). Do this by
+      splitting the copy up. This may not be required, but matches the
+      initialization order without dlopen.
+    
+    Modify dl_open_worker to relocate the objects in new->l_inifini.
+    new->l_initfini is constructed in _dl_map_object_deps, and lists the
+    objects that need initialization and destruction. Originally the list
+    of objects in new->l_next are relocated. All of these objects should
+    also be included in new->l_initfini (both lists are populated with
+    dependencies in _dl_map_object_deps). We can't use new->l_prev to pick
+    up filtees, as during a recursive dlopen from an interposed malloc
+    call, l->prev can contain objects that are not ready for relocation.
+    
+    Add tests to verify that symbols resolve to the filtee implementation
+    when auxiliary and filter objects are used, both as a normal link and
+    when dlopen'd.
+    
+    Tested by running the testsuite on x86_64.
+
+# Conflicts:
+#	elf/Makefile
+
+diff --git a/elf/Makefile b/elf/Makefile
+index a52d9b1f6a4364a7..b4b618ce62a9e6df 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -192,7 +192,8 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-latepthread tst-tls-manydynamic tst-nodelete-dlclose \
+ 	 tst-debug1 tst-main1 tst-absolute-sym tst-absolute-zero tst-big-note \
+ 	 tst-sonamemove-link tst-sonamemove-dlopen tst-initfinilazyfail \
+-	 tst-dlopenfail tst-dlopenfail-2
++	 tst-dlopenfail tst-dlopenfail-2 \
++	 tst-filterobj tst-filterobj-dlopen tst-auxobj tst-auxobj-dlopen
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -302,7 +303,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-sonamemove-runmod1 tst-sonamemove-runmod2 \
+ 		tst-initlazyfailmod tst-finilazyfailmod \
+ 		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2 \
+-		tst-dlopenfailmod3
++		tst-dlopenfailmod3 \
++		tst-filterobj-flt tst-filterobj-aux tst-filterobj-filtee
+ 
+ ifeq (yes,$(have-mtls-dialect-gnu2))
+ tests += tst-gnu2-tls1
+@@ -1626,3 +1628,15 @@ $(objpfx)tst-dlopen-nodelete-reloc-mod17.so: \
+   $(objpfx)tst-dlopen-nodelete-reloc-mod15.so \
+   $(objpfx)tst-dlopen-nodelete-reloc-mod16.so
+ LDFLAGS-tst-dlopen-nodelete-reloc-mod17.so = -Wl,--no-as-needed
++
++LDFLAGS-tst-filterobj-flt.so = -Wl,--filter=$(objpfx)tst-filterobj-filtee.so
++$(objpfx)tst-filterobj: $(objpfx)tst-filterobj-flt.so
++$(objpfx)tst-filterobj-dlopen: $(libdl)
++$(objpfx)tst-filterobj.out: $(objpfx)tst-filterobj-filtee.so
++$(objpfx)tst-filterobj-dlopen.out: $(objpfx)tst-filterobj-filtee.so
++
++LDFLAGS-tst-filterobj-aux.so = -Wl,--auxiliary=$(objpfx)tst-filterobj-filtee.so
++$(objpfx)tst-auxobj: $(objpfx)tst-filterobj-aux.so
++$(objpfx)tst-auxobj-dlopen: $(libdl)
++$(objpfx)tst-auxobj.out: $(objpfx)tst-filterobj-filtee.so
++$(objpfx)tst-auxobj-dlopen.out: $(objpfx)tst-filterobj-filtee.so
+diff --git a/elf/dl-deps.c b/elf/dl-deps.c
+index 9d9b1ba7f244348a..50f053a1586efdc3 100644
+--- a/elf/dl-deps.c
++++ b/elf/dl-deps.c
+@@ -485,14 +485,18 @@ _dl_map_object_deps (struct link_map *map,
+ 
+   map->l_searchlist.r_list = &l_initfini[nlist + 1];
+   map->l_searchlist.r_nlist = nlist;
++  unsigned int map_index = UINT_MAX;
+ 
+   for (nlist = 0, runp = known; runp; runp = runp->next)
+     {
+       if (__builtin_expect (trace_mode, 0) && runp->map->l_faked)
+ 	/* This can happen when we trace the loading.  */
+ 	--map->l_searchlist.r_nlist;
+-      else
++      else {
++	if (runp->map == map)
++	  map_index = nlist;
+ 	map->l_searchlist.r_list[nlist++] = runp->map;
++      }
+ 
+       /* Now clear all the mark bits we set in the objects on the search list
+ 	 to avoid duplicates, so the next call starts fresh.  */
+@@ -550,13 +554,14 @@ Filters not supported with LD_TRACE_PRELINKING"));
+     }
+ 
+   /* Maybe we can remove some relocation dependencies now.  */
+-  assert (map->l_searchlist.r_list[0] == map);
+   struct link_map_reldeps *l_reldeps = NULL;
+   if (map->l_reldeps != NULL)
+     {
+-      for (i = 1; i < nlist; ++i)
++      for (i = 0; i < nlist; ++i)
+ 	map->l_searchlist.r_list[i]->l_reserved = 1;
+ 
++      /* Avoid removing relocation dependencies of the main binary.  */
++      map->l_reserved = 0;
+       struct link_map **list = &map->l_reldeps->list[0];
+       for (i = 0; i < map->l_reldeps->act; ++i)
+ 	if (list[i]->l_reserved)
+@@ -581,16 +586,30 @@ Filters not supported with LD_TRACE_PRELINKING"));
+ 	      }
+ 	  }
+ 
+-      for (i = 1; i < nlist; ++i)
++      for (i = 0; i < nlist; ++i)
+ 	map->l_searchlist.r_list[i]->l_reserved = 0;
+     }
+ 
+-  /* Sort the initializer list to take dependencies into account.  The binary
+-     itself will always be initialize last.  */
+-  memcpy (l_initfini, map->l_searchlist.r_list,
+-	  nlist * sizeof (struct link_map *));
+-  /* We can skip looking for the binary itself which is at the front of
+-     the search list.  */
++  /* Sort the initializer list to take dependencies into account.  Always
++     initialize the binary itself last.  */
++  assert (map_index < nlist);
++  if (map_index > 0)
++    {
++      /* Copy the binary into position 0.  */
++      l_initfini[0] = map->l_searchlist.r_list[map_index];
++
++      /* Copy the filtees.  */
++      for (i = 0; i < map_index; ++i)
++	l_initfini[i+1] = map->l_searchlist.r_list[i];
++
++      /* Copy the remainder.  */
++      for (i = map_index + 1; i < nlist; ++i)
++	l_initfini[i] = map->l_searchlist.r_list[i];
++    }
++  else
++    memcpy (l_initfini, map->l_searchlist.r_list,
++	    nlist * sizeof (struct link_map *));
++
+   _dl_sort_maps (&l_initfini[1], nlist - 1, NULL, false);
+ 
+   /* Terminate the list of dependencies.  */
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index d834b89754d2b073..d31356f7e17dfb14 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -618,22 +618,25 @@ dl_open_worker (void *a)
+      allows IFUNC relocations to work and it also means copy
+      relocation of dependencies are if necessary overwritten.  */
+   unsigned int nmaps = 0;
+-  struct link_map *l = new;
++  unsigned int j = 0;
++  struct link_map *l = new->l_initfini[0];
+   do
+     {
+       if (! l->l_real->l_relocated)
+ 	++nmaps;
+-      l = l->l_next;
++      l = new->l_initfini[++j];
+     }
+   while (l != NULL);
++  /* Stack allocation is limited by the number of loaded objects.  */
+   struct link_map *maps[nmaps];
+   nmaps = 0;
+-  l = new;
++  j = 0;
++  l = new->l_initfini[0];
+   do
+     {
+       if (! l->l_real->l_relocated)
+ 	maps[nmaps++] = l;
+-      l = l->l_next;
++      l = new->l_initfini[++j];
+     }
+   while (l != NULL);
+   _dl_sort_maps (maps, nmaps, NULL, false);
+diff --git a/elf/tst-auxobj-dlopen.c b/elf/tst-auxobj-dlopen.c
+new file mode 100644
+index 0000000000000000..cb54aba19470a1fe
+--- /dev/null
++++ b/elf/tst-auxobj-dlopen.c
+@@ -0,0 +1,47 @@
++/* Test for BZ#16272, dlopen'ing an auxiliary filter object.
++   Ensure that symbols from the resolve correctly.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int do_test (void)
++{
++  void *lib = xdlopen ("tst-filterobj-aux.so", RTLD_LAZY);
++  char *(*fn)(void) = xdlsym (lib, "get_text");
++  const char* text = fn ();
++
++  printf ("%s\n", text);
++
++  /* Verify the text matches what we expect from the filtee */
++  TEST_COMPARE_STRING (text, "Hello from filtee (PASS)");
++
++  fn = xdlsym (lib, "get_text2");
++  text = fn ();
++
++  printf ("%s\n", text);
++
++  /* Verify the text matches what we expect from the auxiliary object */
++  TEST_COMPARE_STRING (text, "Hello from auxiliary filter object (PASS)");
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-auxobj.c b/elf/tst-auxobj.c
+new file mode 100644
+index 0000000000000000..bdc7713b04b4a79b
+--- /dev/null
++++ b/elf/tst-auxobj.c
+@@ -0,0 +1,42 @@
++/* Test that symbols from auxiliary filter objects are resolved to the
++   filtee.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <support/check.h>
++#include "tst-filterobj-filtee.h"
++
++static int do_test (void)
++{
++  const char* text = get_text ();
++  printf ("%s\n", text);
++
++  /* Verify the text matches what we expect from the filtee */
++  TEST_COMPARE_STRING (text, "Hello from filtee (PASS)");
++
++  text = get_text2 ();
++  printf ("%s\n", text);
++
++  /* Verify the text matches what we expect from the auxiliary object */
++  TEST_COMPARE_STRING (text, "Hello from auxiliary filter object (PASS)");
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-filterobj-aux.c b/elf/tst-filterobj-aux.c
+new file mode 100644
+index 0000000000000000..0b732f2fb3a69a7f
+--- /dev/null
++++ b/elf/tst-filterobj-aux.c
+@@ -0,0 +1,33 @@
++/* Auxiliary filter object.
++   Contains symbols to be resolved in filtee, and one which doesn't.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-filterobj-filtee.h"
++
++/* We never want to see the output of the auxiliary object.  */
++const char *get_text (void)
++{
++  return "Hello from auxiliary filter object (FAIL)";
++}
++
++/* The filtee doesn't implement this symbol, so this should resolve.  */
++const char *get_text2 (void)
++{
++  return "Hello from auxiliary filter object (PASS)";
++}
+diff --git a/elf/tst-filterobj-dlopen.c b/elf/tst-filterobj-dlopen.c
+new file mode 100644
+index 0000000000000000..c5b5072979802b98
+--- /dev/null
++++ b/elf/tst-filterobj-dlopen.c
+@@ -0,0 +1,39 @@
++/* Test for BZ#16272, dlopen'ing a filter object.
++   Ensure that symbols from the filter object resolve to the filtee.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int do_test (void)
++{
++  void *lib = xdlopen ("tst-filterobj-flt.so", RTLD_LAZY);
++  char *(*fn)(void) = xdlsym (lib, "get_text");
++  const char* text = fn ();
++
++  printf ("%s\n", text);
++
++  /* Verify the text matches what we expect from the filtee */
++  TEST_COMPARE_STRING (text, "Hello from filtee (PASS)");
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-filterobj-filtee.c b/elf/tst-filterobj-filtee.c
+new file mode 100644
+index 0000000000000000..8fa557cbd251f53c
+--- /dev/null
++++ b/elf/tst-filterobj-filtee.c
+@@ -0,0 +1,27 @@
++/* Filtee for BZ#16272 test.
++   Contains desired symbol implementations.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-filterobj-filtee.h"
++
++/* This is the real implementation that wants to be called */
++const char *get_text (void)
++{
++  return "Hello from filtee (PASS)";
++}
+diff --git a/elf/tst-filterobj-filtee.h b/elf/tst-filterobj-filtee.h
+new file mode 100644
+index 0000000000000000..46aee28178b88a77
+--- /dev/null
++++ b/elf/tst-filterobj-filtee.h
+@@ -0,0 +1,24 @@
++/* Filtee header for BZ#16272 test.
++   Contains prototypes for symbols implemented in the filtee.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++const char *get_text (void);
++
++/* For testing auxiliary filter object.  */
++const char *get_text2 (void);
+diff --git a/elf/tst-filterobj-flt.c b/elf/tst-filterobj-flt.c
+new file mode 100644
+index 0000000000000000..5062654be6f14a80
+--- /dev/null
++++ b/elf/tst-filterobj-flt.c
+@@ -0,0 +1,27 @@
++/* Filter object for BZ#16272 test.
++   Contains symbols to be resolved in filtee.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-filterobj-filtee.h"
++
++/* We never want to see the output of the filter object */
++const char *get_text (void)
++{
++  return "Hello from filter object (FAIL)";
++}
+diff --git a/elf/tst-filterobj.c b/elf/tst-filterobj.c
+new file mode 100644
+index 0000000000000000..96bfae019ea670bc
+--- /dev/null
++++ b/elf/tst-filterobj.c
+@@ -0,0 +1,36 @@
++/* Test that symbols from filter objects are resolved to the filtee.
++
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <support/check.h>
++#include "tst-filterobj-filtee.h"
++
++static int do_test (void)
++{
++  const char* text = get_text ();
++
++  printf ("%s\n", text);
++
++  /* Verify the text matches what we expect from the filtee */
++  TEST_COMPARE_STRING (text, "Hello from filtee (PASS)");
++
++  return 0;
++}
++
++#include <support/test-driver.c>

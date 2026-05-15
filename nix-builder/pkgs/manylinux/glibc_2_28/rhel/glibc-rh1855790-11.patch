@@ -1,0 +1,293 @@
+commit c02695d776406faaf63418e4e80c4a7023af0b4f
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Wed Sep 16 16:00:14 2020 -0700
+
+    x86/CET: Update vfork to prevent child return
+    
+    Child of vfork should either call _exit or one of the exec family of
+    functions.  But normally there is nothing to prevent child of vfork from
+    return of the vfork-calling function.  Simpilfy x86 vfork when shadow
+    stack is in use to introduce mismatched shadow stack in child of vfork
+    to trigger SIGSEGV when the child returns from the function in which
+    vfork was called.
+---
+
+diff --git a/sysdeps/unix/sysv/linux/i386/vfork.S b/sysdeps/unix/sysv/linux/i386/vfork.S
+index ceb41db0bd..91277a639f 100644
+--- a/sysdeps/unix/sysv/linux/i386/vfork.S
++++ b/sysdeps/unix/sysv/linux/i386/vfork.S
+@@ -21,39 +21,6 @@
+ #include <bits/errno.h>
+ #include <tcb-offsets.h>
+ 
+-#if SHSTK_ENABLED
+-/* The shadow stack prevents us from pushing the saved return PC onto
+-   the stack and returning normally.  Instead we pop the shadow stack
+-   and return directly.  This is the safest way to return and ensures
+-   any stack manipulations done by the vfork'd child doesn't cause the
+-   parent to terminate when CET is enabled.  */
+-# undef SYSCALL_ERROR_HANDLER
+-# ifdef PIC
+-#  define SYSCALL_ERROR_HANDLER				\
+-0:							\
+-  calll .L1;						\
+-.L1:							\
+-  popl %edx;						\
+-.L2:							\
+-  addl $_GLOBAL_OFFSET_TABLE_ + (.L2 - .L1), %edx;	\
+-  movl __libc_errno@gotntpoff(%edx), %edx;		\
+-  negl %eax;						\
+-  movl %eax, %gs:(%edx);				\
+-  orl $-1, %eax;					\
+-  jmp 1b;
+-# else
+-#  define SYSCALL_ERROR_HANDLER				\
+-0:							\
+-  movl __libc_errno@indntpoff, %edx;			\
+-  negl %eax;						\
+-  movl %eax, %gs:(%edx);				\
+-  orl $-1, %eax;					\
+-  jmp 1b;
+-# endif
+-# undef SYSCALL_ERROR_LABEL
+-# define SYSCALL_ERROR_LABEL 0f
+-#endif
+-
+ /* Clone the calling process, but without copying the whole address space.
+    The calling process is suspended until the new process exits or is
+    replaced by a call to `execve'.  Return -1 for errors, 0 to the new process,
+@@ -70,20 +37,17 @@ ENTRY (__vfork)
+ 	movl	$SYS_ify (vfork), %eax
+ 	int	$0x80
+ 
+-#if !SHSTK_ENABLED
+ 	/* Jump to the return PC.  Don't jump directly since this
+ 	   disturbs the branch target cache.  Instead push the return
+ 	   address back on the stack.  */
+ 	pushl	%ecx
+ 	cfi_adjust_cfa_offset (4)
+-#endif
+ 
+ 	cmpl	$-4095, %eax
+ 	/* Branch forward if it failed.  */
+ 	jae	SYSCALL_ERROR_LABEL
+ 
+ #if SHSTK_ENABLED
+-1:
+ 	/* Check if shadow stack is in use.  */
+ 	xorl	%edx, %edx
+ 	rdsspd	%edx
+@@ -91,18 +55,19 @@ ENTRY (__vfork)
+ 	/* Normal return if shadow stack isn't in use.  */
+ 	je	L(no_shstk)
+ 
+-	/* Pop return address from shadow stack and jump back to caller
+-	   directly.  */
+-	movl	$1, %edx
+-	incsspd	%edx
++	testl	%eax, %eax
++	/* In parent, normal return.  */
++	jnz	L(no_shstk)
++
++	/* NB: In child, jump back to caller via indirect branch without
++	   popping shadow stack which is shared with parent.  Keep shadow
++	   stack mismatched so that child returns in the vfork-calling
++	   function will trigger SIGSEGV.  */
++	popl	%ecx
++	cfi_adjust_cfa_offset (-4)
+ 	jmp	*%ecx
+ 
+ L(no_shstk):
+-	/* Jump to the return PC.  Don't jump directly since this
+-	   disturbs the branch target cache.  Instead push the return
+-	   address back on the stack.  */
+-	pushl	%ecx
+-	cfi_adjust_cfa_offset (4)
+ #endif
+ 
+ 	ret
+diff --git a/sysdeps/unix/sysv/linux/x86/Makefile b/sysdeps/unix/sysv/linux/x86/Makefile
+index 50fd018fa3..6bfd6bec49 100644
+--- a/sysdeps/unix/sysv/linux/x86/Makefile
++++ b/sysdeps/unix/sysv/linux/x86/Makefile
+@@ -40,6 +40,11 @@ $(objpfx)tst-cet-property-2.out: $(objpfx)tst-cet-property-2 \
+ 	  $(evaluate-test)
+ endif
+ 
++ifeq ($(subdir),posix)
++tests += tst-cet-vfork-1
++CFLAGS-tst-cet-vfork-1.c += -mshstk
++endif
++
+ ifeq ($(subdir),stdlib)
+ tests += tst-cet-setcontext-1
+ CFLAGS-tst-cet-setcontext-1.c += -mshstk
+diff --git a/sysdeps/unix/sysv/linux/x86/tst-cet-vfork-1.c b/sysdeps/unix/sysv/linux/x86/tst-cet-vfork-1.c
+new file mode 100644
+index 0000000000..5b9fc8c170
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/x86/tst-cet-vfork-1.c
+@@ -0,0 +1,88 @@
++/* Verify that child of the vfork-calling function can't return when
++   shadow stack is in use.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <errno.h>
++#include <sys/types.h>
++#include <sys/wait.h>
++#include <x86intrin.h>
++#include <support/test-driver.h>
++#include <support/xsignal.h>
++#include <support/xunistd.h>
++
++__attribute__ ((noclone, noinline))
++static void
++do_test_1 (void)
++{
++  pid_t p1;
++  int fd[2];
++
++  if (pipe (fd) == -1)
++    {
++      puts ("pipe failed");
++      _exit (EXIT_FAILURE);
++    }
++
++  if ((p1 = vfork ()) == 0)
++    {
++      pid_t p = getpid ();
++      TEMP_FAILURE_RETRY (write (fd[1], &p, sizeof (p)));
++      /* Child return should trigger SIGSEGV.  */
++      return;
++    }
++  else if (p1 == -1)
++    {
++      puts ("vfork failed");
++      _exit (EXIT_FAILURE);
++    }
++
++  pid_t p2 = 0;
++  if (TEMP_FAILURE_RETRY (read (fd[0], &p2, sizeof (pid_t)))
++      != sizeof (pid_t))
++    puts ("pipd read failed");
++  else
++    {
++      int r;
++      if (TEMP_FAILURE_RETRY (waitpid (p1, &r, 0)) != p1)
++	puts ("waitpid failed");
++      else if (r != 0)
++	puts ("pip write in child failed");
++    }
++
++  /* Parent exits immediately so that parent returns without triggering
++     SIGSEGV when shadow stack isn't in use.  */
++  _exit (EXIT_FAILURE);
++}
++
++static int
++do_test (void)
++{
++  /* NB: This test should trigger SIGSEGV with shadow stack enabled.  */
++  if (_get_ssp () == 0)
++    return EXIT_UNSUPPORTED;
++  do_test_1 ();
++  /* Child exits immediately so that child returns without triggering
++     SIGSEGV when shadow stack isn't in use.  */
++  _exit (EXIT_FAILURE);
++}
++
++#define EXPECTED_SIGNAL (_get_ssp () == 0 ? 0 : SIGSEGV)
++#include <support/test-driver.c>
+diff --git a/sysdeps/unix/sysv/linux/x86_64/vfork.S b/sysdeps/unix/sysv/linux/x86_64/vfork.S
+index 776d2fc610..613ff7e846 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/vfork.S
++++ b/sysdeps/unix/sysv/linux/x86_64/vfork.S
+@@ -20,22 +20,6 @@
+ #include <bits/errno.h>
+ #include <tcb-offsets.h>
+ 
+-#if SHSTK_ENABLED
+-/* The shadow stack prevents us from pushing the saved return PC onto
+-   the stack and returning normally.  Instead we pop the shadow stack
+-   and return directly.  This is the safest way to return and ensures
+-   any stack manipulations done by the vfork'd child doesn't cause the
+-   parent to terminate when CET is enabled.  */
+-# undef SYSCALL_ERROR_HANDLER
+-# define SYSCALL_ERROR_HANDLER			\
+-0:						\
+-  SYSCALL_SET_ERRNO;				\
+-  or $-1, %RAX_LP;				\
+-  jmp 1b;
+-# undef SYSCALL_ERROR_LABEL
+-# define SYSCALL_ERROR_LABEL 0f
+-#endif
+-
+ /* Clone the calling process, but without copying the whole address space.
+    The calling process is suspended until the new process exits or is
+    replaced by a call to `execve'.  Return -1 for errors, 0 to the new process,
+@@ -53,17 +37,14 @@ ENTRY (__vfork)
+ 	movl	$SYS_ify (vfork), %eax
+ 	syscall
+ 
+-#if !SHSTK_ENABLED
+ 	/* Push back the return PC.  */
+ 	pushq	%rdi
+ 	cfi_adjust_cfa_offset(8)
+-#endif
+ 
+ 	cmpl	$-4095, %eax
+ 	jae SYSCALL_ERROR_LABEL		/* Branch forward if it failed.  */
+ 
+ #if SHSTK_ENABLED
+-1:
+ 	/* Check if shadow stack is in use.  */
+ 	xorl	%esi, %esi
+ 	rdsspq	%rsi
+@@ -71,16 +52,19 @@ ENTRY (__vfork)
+ 	/* Normal return if shadow stack isn't in use.  */
+ 	je	L(no_shstk)
+ 
+-	/* Pop return address from shadow stack and jump back to caller
+-	   directly.  */
+-	movl	$1, %esi
+-	incsspq	%rsi
++	testl	%eax, %eax
++	/* In parent, normal return.  */
++	jnz	L(no_shstk)
++
++	/* NB: In child, jump back to caller via indirect branch without
++	   popping shadow stack which is shared with parent.  Keep shadow
++	   stack mismatched so that child returns in the vfork-calling
++	   function will trigger SIGSEGV.  */
++	popq	%rdi
++	cfi_adjust_cfa_offset(-8)
+ 	jmp	*%rdi
+ 
+ L(no_shstk):
+-	/* Push back the return PC.  */
+-	pushq	%rdi
+-	cfi_adjust_cfa_offset(8)
+ #endif
+ 
+ 	/* Normal return.  */
+-- 
+2.26.2
+

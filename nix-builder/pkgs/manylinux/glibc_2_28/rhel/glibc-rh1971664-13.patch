@@ -1,0 +1,34 @@
+commit 7f784fabcb186ffaa082ed0aeed52a56b7d96cee
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Fri Jul 2 16:53:25 2021 +0530
+
+    iconvconfig: Use the public feof_unlocked
+    
+    Build of iconvconfig failed with CFLAGS=-Os since __feof_unlocked is
+    not a public symbol.  Replace with feof_unlocked (defined to
+    __feof_unlocked when IS_IN (libc)) to fix this.
+    
+    Reported-by: Szabolcs Nagy <szabolcs.nagy@arm.com>
+    Reviewed-by: Szabolcs Nagy <szabolcs.nagy@arm.com>
+
+diff --git a/iconv/gconv_parseconfdir.h b/iconv/gconv_parseconfdir.h
+index ba9b3fd36d9e30f9..234b85a586f1d79a 100644
+--- a/iconv/gconv_parseconfdir.h
++++ b/iconv/gconv_parseconfdir.h
+@@ -34,6 +34,7 @@
+ # define mempcpy __mempcpy
+ # undef lstat64
+ # define lstat64 __lstat64
++# define feof_unlocked __feof_unlocked
+ #endif
+ 
+ /* Name of the file containing the module information in the directories
+@@ -65,7 +66,7 @@ read_conf_file (const char *filename, const char *directory, size_t dir_len)
+ 
+   /* Process the known entries of the file.  Comments start with `#' and
+      end with the end of the line.  Empty lines are ignored.  */
+-  while (!__feof_unlocked (fp))
++  while (!feof_unlocked (fp))
+     {
+       char *rp, *endp, *word;
+       ssize_t n = __getdelim (&line, &line_len, '\n', fp);

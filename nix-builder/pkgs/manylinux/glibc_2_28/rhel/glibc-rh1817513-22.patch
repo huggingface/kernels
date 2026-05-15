@@ -1,0 +1,223 @@
+commit 77b6f5534778b5403c87fa5415625aeb4c3cbf44
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jan 16 17:30:07 2019 +0000
+
+    linux: Assume clock_getres CLOCK_{PROCESS,THREAD}_CPUTIME_ID
+    
+    The Linux 3.2 clock_getres kernel code (kernel/posix-cpu-timers.c)
+    issued for clock_getres CLOCK_PROCESS_CPUTIME_ID (process_cpu_clock_getres)
+    and CLOCK_THREAD_CPUTIME_ID (thread_cpu_clock_getres) call
+    posix_cpu_clock_getres. And it fails on check_clock only if an invalid
+    clock is used (not the case) or if we pass an invalid the pid/tid in
+    29 msb of clock_id (not the case either).
+    
+    This patch assumes that clock_getres syscall always support
+    CLOCK_PROCESS_CPUTIME_ID and CLOCK_THREAD_CPUTIME_ID, so there is no need
+    to fallback to hp-timing support for _SC_MONOTONIC_CLOCK neither to issue
+    the syscall to certify the clock_id is supported bt the kernel.  This
+    allows simplify the sysconf support to always use the syscall.
+    
+    it also removes ia64 itc drift check and assume kernel handles it correctly.
+    
+    Checked on aarch64-linux-gnu, x86_64-linux-gnu, and i686-linux-gnu.
+    
+            * sysdeps/unix/sysv/linux/ia64/has_cpuclock.c: Remove file.
+            * sysdeps/unix/sysv/linux/ia64/sysconf.c: Likewise.
+            * sysdeps/unix/sysv/linux/sysconf.c (has_cpuclock): Remove function.
+            (__sysconf): Assume kernel support for _SC_MONOTONIC_CLOCK,
+            _SC_CPUTIME, and _SC_THREAD_CPUTIME.
+
+Conflicts:
+	sysdeps/unix/sysv/linux/ia64/has_cpuclock.c
+	sysdeps/unix/sysv/linux/ia64/sysconf.c
+	  (Removal after copyright year update.)
+
+diff --git a/sysdeps/unix/sysv/linux/ia64/has_cpuclock.c b/sysdeps/unix/sysv/linux/ia64/has_cpuclock.c
+deleted file mode 100644
+index 75f3ef9f4d1366fb..0000000000000000
+--- a/sysdeps/unix/sysv/linux/ia64/has_cpuclock.c
++++ /dev/null
+@@ -1,51 +0,0 @@
+-/* Copyright (C) 2000-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <errno.h>
+-#include <fcntl.h>
+-#include <unistd.h>
+-#include <sys/stat.h>
+-#include <sys/types.h>
+-#include <not-cancel.h>
+-
+-static int itc_usable;
+-
+-static int
+-has_cpuclock (void)
+-{
+-  if (__builtin_expect (itc_usable == 0, 0))
+-    {
+-      int newval = 1;
+-      int fd = __open_nocancel ("/proc/sal/itc_drift", O_RDONLY);
+-      if (__builtin_expect (fd != -1, 1))
+-	{
+-	  char buf[16];
+-	  /* We expect the file to contain a single digit followed by
+-	     a newline.  If the format changes we better not rely on
+-	     the file content.  */
+-	  if (__read_nocancel (fd, buf, sizeof buf) != 2
+-	      || buf[0] != '0' || buf[1] != '\n')
+-	    newval = -1;
+-
+-	  __close_nocancel_nostatus (fd);
+-	}
+-
+-      itc_usable = newval;
+-    }
+-
+-  return itc_usable;
+-}
+diff --git a/sysdeps/unix/sysv/linux/ia64/sysconf.c b/sysdeps/unix/sysv/linux/ia64/sysconf.c
+deleted file mode 100644
+index 6c39db5a4af3e15a..0000000000000000
+--- a/sysdeps/unix/sysv/linux/ia64/sysconf.c
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/* Get file-specific information about a file.  Linux/ia64 version.
+-   Copyright (C) 2003-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <assert.h>
+-#include <stdbool.h>
+-#include <stdlib.h>
+-#include <unistd.h>
+-
+-
+-#include "has_cpuclock.c"
+-#define HAS_CPUCLOCK(name) (has_cpuclock () ? _POSIX_VERSION : -1)
+-
+-
+-/* Now the generic Linux version.  */
+-#include <sysdeps/unix/sysv/linux/sysconf.c>
+diff --git a/sysdeps/unix/sysv/linux/sysconf.c b/sysdeps/unix/sysv/linux/sysconf.c
+index 4e49ebaa7a25748c..6fab1601034e4724 100644
+--- a/sysdeps/unix/sysv/linux/sysconf.c
++++ b/sysdeps/unix/sysv/linux/sysconf.c
+@@ -35,34 +35,6 @@
+ static long int posix_sysconf (int name);
+ 
+ 
+-#ifndef HAS_CPUCLOCK
+-static long int
+-has_cpuclock (int name)
+-{
+-# if defined __NR_clock_getres || HP_TIMING_AVAIL
+-  /* If we have HP_TIMING, we will fall back on that if the system
+-     call does not work, so we support it either way.  */
+-#  if !HP_TIMING_AVAIL
+-  /* Check using the clock_getres system call.  */
+-  struct timespec ts;
+-  INTERNAL_SYSCALL_DECL (err);
+-  int r = INTERNAL_SYSCALL (clock_getres, err, 2,
+-			    (name == _SC_CPUTIME
+-			     ? CLOCK_PROCESS_CPUTIME_ID
+-			     : CLOCK_THREAD_CPUTIME_ID),
+-			    &ts);
+-  if (INTERNAL_SYSCALL_ERROR_P (r, err))
+-    return -1;
+-#  endif
+-  return _POSIX_VERSION;
+-# else
+-  return -1;
+-# endif
+-}
+-# define HAS_CPUCLOCK(name) has_cpuclock (name)
+-#endif
+-
+-
+ /* Get the value of the system variable NAME.  */
+ long int
+ __sysconf (int name)
+@@ -71,29 +43,20 @@ __sysconf (int name)
+ 
+   switch (name)
+     {
+-      struct rlimit rlimit;
+-#ifdef __NR_clock_getres
+     case _SC_MONOTONIC_CLOCK:
+-      /* Check using the clock_getres system call.  */
+-      {
+-	struct timespec ts;
+-	INTERNAL_SYSCALL_DECL (err);
+-	int r;
+-	r = INTERNAL_SYSCALL (clock_getres, err, 2, CLOCK_MONOTONIC, &ts);
+-	return INTERNAL_SYSCALL_ERROR_P (r, err) ? -1 : _POSIX_VERSION;
+-      }
+-#endif
+-
+     case _SC_CPUTIME:
+     case _SC_THREAD_CPUTIME:
+-      return HAS_CPUCLOCK (name);
++      return _POSIX_VERSION;
+ 
+     case _SC_ARG_MAX:
+-      /* Use getrlimit to get the stack limit.  */
+-      if (__getrlimit (RLIMIT_STACK, &rlimit) == 0)
+-	return MAX (legacy_ARG_MAX, rlimit.rlim_cur / 4);
++      {
++        struct rlimit rlimit;
++        /* Use getrlimit to get the stack limit.  */
++        if (__getrlimit (RLIMIT_STACK, &rlimit) == 0)
++	  return MAX (legacy_ARG_MAX, rlimit.rlim_cur / 4);
+ 
+-      return legacy_ARG_MAX;
++        return legacy_ARG_MAX;
++      }
+ 
+     case _SC_NGROUPS_MAX:
+       /* Try to read the information from the /proc/sys/kernel/ngroups_max
+@@ -102,11 +65,14 @@ __sysconf (int name)
+       break;
+ 
+     case _SC_SIGQUEUE_MAX:
+-      if (__getrlimit (RLIMIT_SIGPENDING, &rlimit) == 0)
+-	return rlimit.rlim_cur;
++      {
++        struct rlimit rlimit;
++        if (__getrlimit (RLIMIT_SIGPENDING, &rlimit) == 0)
++	  return rlimit.rlim_cur;
+ 
+-      /* The /proc/sys/kernel/rtsig-max file contains the answer.  */
+-      procfname = "/proc/sys/kernel/rtsig-max";
++        /* The /proc/sys/kernel/rtsig-max file contains the answer.  */
++        procfname = "/proc/sys/kernel/rtsig-max";
++      }
+       break;
+ 
+     default:

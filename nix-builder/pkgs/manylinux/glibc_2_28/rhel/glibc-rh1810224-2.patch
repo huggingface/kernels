@@ -1,0 +1,29 @@
+commit 5828bc4523230685ac29a4a882967913255f5666
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Feb 7 13:54:58 2020 +0000
+
+    Update syscall lists for Linux 5.5.
+
+    Linux 5.5 has no new syscalls to add to syscall-names.list, but it
+    does newly enable the clone3 syscall for AArch64.  This patch updates
+    the kernel version listed in syscall-names.list and regenerates the
+    AArch64 arch-syscall.h.
+
+    Tested with build-many-glibcs.py.
+
+Modified to only update syscall-names.list for RHEL 8.3.0.
+
+diff -Nrup a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+--- a/sysdeps/unix/sysv/linux/syscall-names.list	2020-04-06 12:10:47.683272882 -0400
++++ b/sysdeps/unix/sysv/linux/syscall-names.list	2020-04-06 12:12:41.769598687 -0400
+@@ -22,8 +22,8 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 5.4.
+-kernel 5.4
++# The list of system calls is current as of Linux 5.5.
++kernel 5.5
+ 
+ FAST_atomic_update
+ FAST_cmpxchg

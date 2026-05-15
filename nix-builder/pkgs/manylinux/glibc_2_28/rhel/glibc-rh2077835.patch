@@ -1,0 +1,211 @@
+commit 2376944b9e5c0364b9fb473e4d8dabca31b57167
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Wed Apr 13 14:36:09 2022 +0200
+
+    S390: Add new s390 platform z16.
+
+    The new IBM z16 is added to platform string array.
+    The macro _DL_PLATFORMS_COUNT is incremented.
+
+    _dl_hwcaps_subdir is extended by "z16" if HWCAP_S390_VXRS_PDE2
+    is set. HWCAP_S390_NNPA is not tested in _dl_hwcaps_subdirs_active
+    as those instructions may be replaced or removed in future.
+
+    tst-glibc-hwcaps.c is extended in order to test z16 via new marker5.
+
+    A fatal glibc error is dumped if glibc was build with architecture
+    level set for z16, but run on an older machine. (See dl-hwcap-check.h)
+
+Reworked for RHEL 8.7.0
+
+diff -Nrup a/elf/Makefile b/elf/Makefile
+--- a/elf/Makefile	2022-05-16 21:48:11.267916411 -0400
++++ b/elf/Makefile	2022-05-16 21:48:56.106095151 -0400
+@@ -347,7 +347,8 @@ modules-names = testobj1 testobj2 testob
+ 		libmarkermod2-1 libmarkermod2-2 \
+ 		libmarkermod3-1 libmarkermod3-2 libmarkermod3-3 \
+ 		libmarkermod4-1 libmarkermod4-2 libmarkermod4-3 libmarkermod4-4 \
+-		tst-tls20mod-bad tst-tls21mod \
++		libmarkermod5-1 libmarkermod5-2 libmarkermod5-3 libmarkermod5-4 \
++		libmarkermod5-5 tst-tls20mod-bad tst-tls21mod \
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1782,6 +1783,7 @@ LDFLAGS-libmarkermod1-1.so += -Wl,-sonam
+ LDFLAGS-libmarkermod2-1.so += -Wl,-soname,libmarkermod2.so
+ LDFLAGS-libmarkermod3-1.so += -Wl,-soname,libmarkermod3.so
+ LDFLAGS-libmarkermod4-1.so += -Wl,-soname,libmarkermod4.so
++LDFLAGS-libmarkermod5-1.so += -Wl,-soname,libmarkermod5.so
+ $(objpfx)libmarkermod%.os : markermodMARKER-VALUE.c
+ 	$(compile-command.c) \
+ 	  -DMARKER=marker$(firstword $(subst -, ,$*)) \
+@@ -1794,6 +1796,8 @@ $(objpfx)libmarkermod3.so: $(objpfx)libm
+ 	cp $< $@
+ $(objpfx)libmarkermod4.so: $(objpfx)libmarkermod4-1.so
+ 	cp $< $@
++$(objpfx)libmarkermod5.so: $(objpfx)libmarkermod5-1.so
++	cp $< $@
+ 
+ # tst-glibc-hwcaps-prepend checks that --glibc-hwcaps-prepend is
+ # preferred over auto-detected subdirectories.
+diff -Nrup a/elf/tst-glibc-hwcaps-cache.script b/elf/tst-glibc-hwcaps-cache.script
+--- a/elf/tst-glibc-hwcaps-cache.script	2022-05-16 21:48:11.053915558 -0400
++++ b/elf/tst-glibc-hwcaps-cache.script	2022-05-16 21:48:56.107095155 -0400
+@@ -4,6 +4,7 @@
+ cp $B/elf/libmarkermod2-1.so $L/libmarkermod2.so
+ cp $B/elf/libmarkermod3-1.so $L/libmarkermod3.so
+ cp $B/elf/libmarkermod4-1.so $L/libmarkermod4.so
++cp $B/elf/libmarkermod5-1.so $L/libmarkermod5.so
+ 
+ mkdirp 0770 $L/glibc-hwcaps/power9
+ cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/power9/libmarkermod2.so
+@@ -20,6 +21,11 @@ mkdirp 0770 $L/glibc-hwcaps/z15
+ cp $B/elf/libmarkermod4-2.so $L/glibc-hwcaps/z13/libmarkermod4.so
+ cp $B/elf/libmarkermod4-3.so $L/glibc-hwcaps/z14/libmarkermod4.so
+ cp $B/elf/libmarkermod4-4.so $L/glibc-hwcaps/z15/libmarkermod4.so
++mkdirp 0770 $L/glibc-hwcaps/z16
++cp $B/elf/libmarkermod5-2.so $L/glibc-hwcaps/z13/libmarkermod5.so
++cp $B/elf/libmarkermod5-3.so $L/glibc-hwcaps/z14/libmarkermod5.so
++cp $B/elf/libmarkermod5-4.so $L/glibc-hwcaps/z15/libmarkermod5.so
++cp $B/elf/libmarkermod5-5.so $L/glibc-hwcaps/z16/libmarkermod5.so
+ 
+ mkdirp 0770 $L/glibc-hwcaps/x86-64-v2
+ cp $B/elf/libmarkermod2-2.so $L/glibc-hwcaps/x86-64-v2/libmarkermod2.so
+diff -Nrup a/sysdeps/s390/dl-procinfo.c b/sysdeps/s390/dl-procinfo.c
+--- a/sysdeps/s390/dl-procinfo.c	2022-05-16 21:48:11.250916343 -0400
++++ b/sysdeps/s390/dl-procinfo.c	2022-05-16 21:48:56.107095155 -0400
+@@ -64,11 +64,12 @@ PROCINFO_CLASS const char _dl_s390_cap_f
+ #if !defined PROCINFO_DECL && defined SHARED
+   ._dl_s390_platforms
+ #else
+-PROCINFO_CLASS const char _dl_s390_platforms[10][7]
++PROCINFO_CLASS const char _dl_s390_platforms[11][7]
+ #endif
+ #ifndef PROCINFO_DECL
+ = {
+-    "g5", "z900", "z990", "z9-109", "z10", "z196", "zEC12", "z13", "z14", "z15"
++    "g5", "z900", "z990", "z9-109", "z10", "z196", "zEC12", "z13", "z14", "z15",
++    "z16"
+   }
+ #endif
+ #if !defined SHARED || defined PROCINFO_DECL
+diff -Nrup a/sysdeps/s390/dl-procinfo.h b/sysdeps/s390/dl-procinfo.h
+--- a/sysdeps/s390/dl-procinfo.h	2022-05-16 21:48:11.250916343 -0400
++++ b/sysdeps/s390/dl-procinfo.h	2022-05-16 21:48:56.107095155 -0400
+@@ -23,7 +23,7 @@
+ 
+ #define _DL_HWCAP_COUNT 23
+ 
+-#define _DL_PLATFORMS_COUNT	10
++#define _DL_PLATFORMS_COUNT	11
+ 
+ /* The kernel provides up to 32 capability bits with elf_hwcap.  */
+ #define _DL_FIRST_PLATFORM	32
+diff -Nrup a/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c b/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c
+--- a/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c	2022-05-16 21:48:11.053915558 -0400
++++ b/sysdeps/s390/s390-64/dl-hwcaps-subdirs.c	2022-05-16 21:58:02.840301911 -0400
+@@ -19,8 +19,8 @@
+ #include <dl-hwcaps.h>
+ #include <ldsodefs.h>
+ 
+-const char _dl_hwcaps_subdirs[] = "z15:z14:z13";
+-enum { subdirs_count = 3 }; /* Number of components in _dl_hwcaps_subdirs.  */
++const char _dl_hwcaps_subdirs[] = "z16:z15:z14:z13";
++enum { subdirs_count = 4 }; /* Number of components in _dl_hwcaps_subdirs.  */
+ 
+ uint32_t
+ _dl_hwcaps_subdirs_active (void)
+@@ -50,5 +50,12 @@ _dl_hwcaps_subdirs_active (void)
+     return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
+   ++active;
+ 
++  /* z16.
++   Note: We do not list HWCAP_S390_NNPA here as, according to the Principles of
++   Operation, those instructions may be replaced or removed in future.  */
++  if (!(GLRO (dl_hwcap) & HWCAP_S390_VXRS_PDE2))
++    return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
++  ++active;
++
+   return _dl_hwcaps_subdirs_build_bitmask (subdirs_count, active);
+ }
+diff -Nrup a/sysdeps/s390/s390-64/Makefile b/sysdeps/s390/s390-64/Makefile
+--- a/sysdeps/s390/s390-64/Makefile	2022-05-16 21:48:11.053915558 -0400
++++ b/sysdeps/s390/s390-64/Makefile	2022-05-16 21:54:08.832355745 -0400
+@@ -7,8 +7,11 @@ CFLAGS-rtld.c += -Wno-uninitialized -Wno
+ CFLAGS-dl-load.c += -Wno-unused
+ CFLAGS-dl-reloc.c += -Wno-unused
+ 
+-$(objpfx)tst-glibc-hwcaps: $(objpfx)libmarkermod2-1.so \
+-  $(objpfx)libmarkermod3-1.so $(objpfx)libmarkermod4-1.so
++$(objpfx)tst-glibc-hwcaps: \
++    $(objpfx)libmarkermod2-1.so \
++    $(objpfx)libmarkermod3-1.so \
++    $(objpfx)libmarkermod4-1.so \
++    $(objpfx)libmarkermod5-1.so
+ $(objpfx)tst-glibc-hwcaps.out: \
+   $(objpfx)libmarkermod2.so \
+     $(objpfx)glibc-hwcaps/z13/libmarkermod2.so \
+@@ -19,6 +22,11 @@ $(objpfx)tst-glibc-hwcaps.out: \
+     $(objpfx)glibc-hwcaps/z13/libmarkermod4.so \
+     $(objpfx)glibc-hwcaps/z14/libmarkermod4.so \
+     $(objpfx)glibc-hwcaps/z15/libmarkermod4.so \
++  $(objpfx)libmarkermod5.so \
++    $(objpfx)glibc-hwcaps/z13/libmarkermod5.so \
++    $(objpfx)glibc-hwcaps/z14/libmarkermod5.so \
++    $(objpfx)glibc-hwcaps/z15/libmarkermod5.so \
++    $(objpfx)glibc-hwcaps/z16/libmarkermod5.so
+ 
+ $(objpfx)glibc-hwcaps/z13/libmarkermod2.so: $(objpfx)libmarkermod2-2.so
+ 	$(make-target-directory)
+@@ -38,6 +46,18 @@ $(objpfx)glibc-hwcaps/z14/libmarkermod4.
+ $(objpfx)glibc-hwcaps/z15/libmarkermod4.so: $(objpfx)libmarkermod4-4.so
+ 	$(make-target-directory)
+ 	cp $< $@
++$(objpfx)glibc-hwcaps/z13/libmarkermod5.so: $(objpfx)libmarkermod5-2.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z14/libmarkermod5.so: $(objpfx)libmarkermod5-3.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z15/libmarkermod5.so: $(objpfx)libmarkermod5-4.so
++	$(make-target-directory)
++	cp $< $@
++$(objpfx)glibc-hwcaps/z16/libmarkermod5.so: $(objpfx)libmarkermod5-5.so
++	$(make-target-directory)
++	cp $< $@
+ 
+ ifeq (no,$(build-hardcoded-path-in-tests))
+ # This is an ld.so.cache test, and RPATH/RUNPATH in the executable
+diff -Nrup a/sysdeps/s390/s390-64/tst-glibc-hwcaps.c b/sysdeps/s390/s390-64/tst-glibc-hwcaps.c
+--- a/sysdeps/s390/s390-64/tst-glibc-hwcaps.c	2022-05-16 21:48:11.053915558 -0400
++++ b/sysdeps/s390/s390-64/tst-glibc-hwcaps.c	2022-05-16 21:48:56.107095155 -0400
+@@ -25,6 +25,7 @@
+ extern int marker2 (void);
+ extern int marker3 (void);
+ extern int marker4 (void);
++extern int marker5 (void);
+ 
+ /* Return the arch level, 10 for the baseline libmarkermod*.so's.  */
+ static int
+@@ -63,9 +64,13 @@ compute_level (void)
+     return 12;
+   if (strcmp (platform, "z15") == 0)
+     return 13;
++  if (strcmp (platform, "z16") == 0)
++    return 14;
+   printf ("warning: unrecognized AT_PLATFORM value: %s\n", platform);
+   /* Assume that the new platform supports z15.  */
+   return 13;
++  /* Assume that the new platform supports z16.  */
++  return 14;
+ }
+ 
+ static int
+@@ -76,6 +81,7 @@ do_test (void)
+   TEST_COMPARE (marker2 (), MIN (level - 9, 2));
+   TEST_COMPARE (marker3 (), MIN (level - 9, 3));
+   TEST_COMPARE (marker4 (), MIN (level - 9, 4));
++  TEST_COMPARE (marker5 (), MIN (level - 9, 5));
+   return 0;
+ }
+ 

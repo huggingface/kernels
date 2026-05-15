@@ -1,0 +1,10 @@
+diff -Nrup a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+--- a/sysdeps/unix/sysv/linux/syscall-names.list	2022-07-18 10:44:38.791332453 -0400
++++ b/sysdeps/unix/sysv/linux/syscall-names.list	2022-07-18 11:02:51.054663735 -0400
+@@ -1,5 +1,5 @@
+ # List of all known Linux system calls.
+-# Copyright (C) 2017-2021 Free Software Foundation, Inc.
++# Copyright (C) 2017-2022 Free Software Foundation, Inc.
+ # This file is part of the GNU C Library.
+ #
+ # The GNU C Library is free software; you can redistribute it and/or

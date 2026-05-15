@@ -1,0 +1,688 @@
+commit 92954ffa5a5662fbfde14febd7e5dcc358c85470
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Wed Jan 8 13:24:42 2020 -0500
+
+    localedef: Add verbose messages for failure paths.
+    
+    During testing of localedef running in a minimal container
+    there were several error cases which were hard to diagnose
+    since they appeared as strerror (errno) values printed by the
+    higher level functions.  This change adds three new verbose
+    messages for potential failure paths.  The new messages give
+    the user the opportunity to use -v and display additional
+    information about why localedef might be failing.  I found
+    these messages useful myself while writing a localedef
+    container test for --no-hard-links.
+    
+    Since the changes cleanup the code that handle codeset
+    normalization we add tst-localedef-path-norm which contains
+    many sub-tests to verify the correct expected normalization of
+    codeset strings both when installing to default paths (the
+    only time normalization is enabled) and installing to absolute
+    paths.  During the refactoring I created at least one
+    buffer-overflow which valgrind caught, but these tests did not
+    catch because the exec in the container had a very clean heap
+    with zero-initialized memory. However, between valgrind and
+    the tests the results are clean.
+    
+    The new tst-localedef-path-norm passes without regression on
+    x86_64.
+    
+    Change-Id: I28b9f680711ff00252a2cb15625b774cc58ecb9d
+
+diff --git a/include/programs/xasprintf.h b/include/programs/xasprintf.h
+new file mode 100644
+index 0000000000000000..53193ba3837f7418
+--- /dev/null
++++ b/include/programs/xasprintf.h
+@@ -0,0 +1,24 @@
++/* asprintf with out of memory checking
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published
++   by the Free Software Foundation; version 2 of the License, or
++   (at your option) any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
++
++#ifndef _XASPRINTF_H
++#define _XASPRINTF_H	1
++
++extern char *xasprintf (const char *format, ...)
++    __attribute__ ((__format__ (__printf__, 1, 2), __warn_unused_result__));
++
++#endif /* xasprintf.h */
+diff --git a/locale/Makefile b/locale/Makefile
+index 23a71321b6646c49..4278350cdc7be28d 100644
+--- a/locale/Makefile
++++ b/locale/Makefile
+@@ -28,6 +28,7 @@ routines	= setlocale findlocale loadlocale loadarchive \
+ 		  localeconv nl_langinfo nl_langinfo_l mb_cur_max \
+ 		  newlocale duplocale freelocale uselocale
+ tests		= tst-C-locale tst-locname tst-duplocale
++tests-container	= tst-localedef-path-norm
+ categories	= ctype messages monetary numeric time paper name \
+ 		  address telephone measurement identification collate
+ aux		= $(categories:%=lc-%) $(categories:%=C-%) SYS_libc C_name \
+@@ -54,7 +55,7 @@ localedef-modules	:= localedef $(categories:%=ld-%) \
+ localedef-aux		:= md5
+ locale-modules		:= locale locale-spec
+ lib-modules		:= charmap-dir simple-hash xmalloc xstrdup \
+-			   record-status
++			   record-status xasprintf
+ 
+ 
+ GPERF = gperf
+diff --git a/locale/programs/localedef.c b/locale/programs/localedef.c
+index d718d2e9f47382bc..9a57d2cb435b25ed 100644
+--- a/locale/programs/localedef.c
++++ b/locale/programs/localedef.c
+@@ -174,14 +174,14 @@ static struct argp argp =
+ 
+ /* Prototypes for local functions.  */
+ static void error_print (void);
+-static const char *construct_output_path (char *path);
+-static const char *normalize_codeset (const char *codeset, size_t name_len);
++static char *construct_output_path (char *path);
++static char *normalize_codeset (const char *codeset, size_t name_len);
+ 
+ 
+ int
+ main (int argc, char *argv[])
+ {
+-  const char *output_path;
++  char *output_path;
+   int cannot_write_why;
+   struct charmap_t *charmap;
+   struct localedef_t global;
+@@ -226,7 +226,8 @@ main (int argc, char *argv[])
+     }
+ 
+   /* The parameter describes the output path of the constructed files.
+-     If the described files cannot be written return a NULL pointer.  */
++     If the described files cannot be written return a NULL pointer.
++     We don't free output_path because we will exit.  */
+   output_path  = construct_output_path (argv[remaining]);
+   if (output_path == NULL && ! no_archive)
+     error (4, errno, _("cannot create directory for output files"));
+@@ -424,20 +425,16 @@ more_help (int key, const char *text, void *input)
+     {
+     case ARGP_KEY_HELP_EXTRA:
+       /* We print some extra information.  */
+-      if (asprintf (&tp, gettext ("\
++      tp = xasprintf (gettext ("\
+ For bug reporting instructions, please see:\n\
+-%s.\n"), REPORT_BUGS_TO) < 0)
+-	return NULL;
+-      if (asprintf (&cp, gettext ("\
++%s.\n"), REPORT_BUGS_TO);
++      cp = xasprintf (gettext ("\
+ System's directory for character maps : %s\n\
+ 		       repertoire maps: %s\n\
+ 		       locale path    : %s\n\
+ %s"),
+-		    CHARMAP_PATH, REPERTOIREMAP_PATH, LOCALE_PATH, tp) < 0)
+-	{
+-	  free (tp);
+-	  return NULL;
+-	}
++		    CHARMAP_PATH, REPERTOIREMAP_PATH, LOCALE_PATH, tp);
++      free (tp);
+       return cp;
+     default:
+       break;
+@@ -467,15 +464,13 @@ error_print (void)
+ }
+ 
+ 
+-/* The parameter to localedef describes the output path.  If it does
+-   contain a '/' character it is a relative path.  Otherwise it names the
+-   locale this definition is for.  */
+-static const char *
++/* The parameter to localedef describes the output path.  If it does contain a
++   '/' character it is a relative path.  Otherwise it names the locale this
++   definition is for.   The returned path must be freed by the caller. */
++static char *
+ construct_output_path (char *path)
+ {
+-  const char *normal = NULL;
+   char *result;
+-  char *endp;
+ 
+   if (strchr (path, '/') == NULL)
+     {
+@@ -483,50 +478,44 @@ construct_output_path (char *path)
+ 	 contains a reference to the codeset.  This should be
+ 	 normalized.  */
+       char *startp;
++      char *endp = NULL;
++      char *normal = NULL;
+ 
+       startp = path;
+-      /* We must be prepared for finding a CEN name or a location of
+-	 the introducing `.' where it is not possible anymore.  */
++      /* Either we have a '@' which starts a CEN name or '.' which starts the
++	 codeset specification.  The CEN name starts with '@' and may also have
++	 a codeset specification, but we do not normalize the string after '@'.
++	 If we only find the codeset specification then we normalize only the codeset
++	 specification (but not anything after a subsequent '@').  */
+       while (*startp != '\0' && *startp != '@' && *startp != '.')
+ 	++startp;
+       if (*startp == '.')
+ 	{
+ 	  /* We found a codeset specification.  Now find the end.  */
+ 	  endp = ++startp;
++
++	  /* Stop at the first '@', and don't normalize anything past that.  */
+ 	  while (*endp != '\0' && *endp != '@')
+ 	    ++endp;
+ 
+ 	  if (endp > startp)
+ 	    normal = normalize_codeset (startp, endp - startp);
+ 	}
+-      else
+-	/* This is to keep gcc quiet.  */
+-	endp = NULL;
+ 
+-      /* We put an additional '\0' at the end of the string because at
+-	 the end of the function we need another byte for the trailing
+-	 '/'.  */
+-      ssize_t n;
+       if (normal == NULL)
+-	n = asprintf (&result, "%s%s/%s%c", output_prefix ?: "",
+-		      COMPLOCALEDIR, path, '\0');
++	result = xasprintf ("%s%s/%s/", output_prefix ?: "",
++			    COMPLOCALEDIR, path);
+       else
+-	n = asprintf (&result, "%s%s/%.*s%s%s%c",
+-		      output_prefix ?: "", COMPLOCALEDIR,
+-		      (int) (startp - path), path, normal, endp, '\0');
+-
+-      if (n < 0)
+-	return NULL;
+-
+-      endp = result + n - 1;
++	result = xasprintf ("%s%s/%.*s%s%s/",
++			    output_prefix ?: "", COMPLOCALEDIR,
++			    (int) (startp - path), path, normal, endp ?: "");
++      /* Free the allocated normalized codeset name.  */
++      free (normal);
+     }
+   else
+     {
+-      /* This is a user path.  Please note the additional byte in the
+-	 memory allocation.  */
+-      size_t len = strlen (path) + 1;
+-      result = xmalloc (len + 1);
+-      endp = mempcpy (result, path, len) - 1;
++      /* This is a user path.  */
++      result = xasprintf ("%s/", path);
+ 
+       /* If the user specified an output path we cannot add the output
+ 	 to the archive.  */
+@@ -536,25 +525,41 @@ construct_output_path (char *path)
+   errno = 0;
+ 
+   if (no_archive && euidaccess (result, W_OK) == -1)
+-    /* Perhaps the directory does not exist now.  Try to create it.  */
+-    if (errno == ENOENT)
+-      {
+-	errno = 0;
+-	if (mkdir (result, 0777) < 0)
+-	  return NULL;
+-      }
+-
+-  *endp++ = '/';
+-  *endp = '\0';
++    {
++      /* Perhaps the directory does not exist now.  Try to create it.  */
++      if (errno == ENOENT)
++	{
++	  errno = 0;
++	  if (mkdir (result, 0777) < 0)
++	    {
++	      record_verbose (stderr,
++			      _("cannot create output path \'%s\': %s"),
++			      result, strerror (errno));
++	      free (result);
++	      return NULL;
++	    }
++	}
++      else
++	record_verbose (stderr,
++			_("no write permission to output path \'%s\': %s"),
++			result, strerror (errno));
++    }
+ 
+   return result;
+ }
+ 
+ 
+-/* Normalize codeset name.  There is no standard for the codeset
+-   names.  Normalization allows the user to use any of the common
+-   names.  */
+-static const char *
++/* Normalize codeset name.  There is no standard for the codeset names.
++   Normalization allows the user to use any of the common names e.g. UTF-8,
++   utf-8, utf8, UTF8 etc.
++
++   We normalize using the following rules:
++   - Remove all non-alpha-numeric characters
++   - Lowercase all characters.
++   - If there are only digits assume it's an ISO standard and prefix with 'iso'
++
++   We return the normalized string which needs to be freed by free.  */
++static char *
+ normalize_codeset (const char *codeset, size_t name_len)
+ {
+   int len = 0;
+@@ -563,6 +568,7 @@ normalize_codeset (const char *codeset, size_t name_len)
+   char *wp;
+   size_t cnt;
+ 
++  /* Compute the length of only the alpha-numeric characters.  */
+   for (cnt = 0; cnt < name_len; ++cnt)
+     if (isalnum (codeset[cnt]))
+       {
+@@ -572,25 +578,24 @@ normalize_codeset (const char *codeset, size_t name_len)
+ 	  only_digit = 0;
+       }
+ 
+-  retval = (char *) malloc ((only_digit ? 3 : 0) + len + 1);
++  /* If there were only digits we assume it's an ISO standard and we will
++     prefix with 'iso' so include space for that.  We fill in the required
++     space from codeset up to the converted length.  */
++  wp = retval = xasprintf ("%s%.*s", only_digit ? "iso" : "", len, codeset);
+ 
+-  if (retval != NULL)
+-    {
+-      if (only_digit)
+-	wp = stpcpy (retval, "iso");
+-      else
+-	wp = retval;
+-
+-      for (cnt = 0; cnt < name_len; ++cnt)
+-	if (isalpha (codeset[cnt]))
+-	  *wp++ = tolower (codeset[cnt]);
+-	else if (isdigit (codeset[cnt]))
+-	  *wp++ = codeset[cnt];
++  /* Skip "iso".  */
++  if (only_digit)
++    wp += 3;
+ 
+-      *wp = '\0';
+-    }
++  /* Lowercase all characters. */
++  for (cnt = 0; cnt < name_len; ++cnt)
++    if (isalpha (codeset[cnt]))
++      *wp++ = tolower (codeset[cnt]);
++    else if (isdigit (codeset[cnt]))
++      *wp++ = codeset[cnt];
+ 
+-  return (const char *) retval;
++  /* Return allocated and converted name for caller to free.  */
++  return retval;
+ }
+ 
+ 
+diff --git a/locale/programs/localedef.h b/locale/programs/localedef.h
+index 0083faceabbf3dd9..c528dbb97854dbd1 100644
+--- a/locale/programs/localedef.h
++++ b/locale/programs/localedef.h
+@@ -122,6 +122,7 @@ extern const char *alias_file;
+ 
+ /* Prototypes for a few program-wide used functions.  */
+ #include <programs/xmalloc.h>
++#include <programs/xasprintf.h>
+ 
+ 
+ /* Mark given locale as to be read.  */
+diff --git a/locale/programs/xasprintf.c b/locale/programs/xasprintf.c
+new file mode 100644
+index 0000000000000000..efc91a9c34074736
+--- /dev/null
++++ b/locale/programs/xasprintf.c
+@@ -0,0 +1,34 @@
++/* asprintf with out of memory checking
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published
++   by the Free Software Foundation; version 2 of the License, or
++   (at your option) any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
++
++#include <stdlib.h>
++#include <stdio.h>
++#include <stdarg.h>
++#include <libintl.h>
++#include <error.h>
++
++char *
++xasprintf (const char *format, ...)
++{
++  va_list ap;
++  va_start (ap, format);
++  char *result;
++  if (vasprintf (&result, format, ap) < 0)
++    error (EXIT_FAILURE, 0, _("memory exhausted"));
++  va_end (ap);
++  return result;
++}
+diff --git a/locale/tst-localedef-path-norm.c b/locale/tst-localedef-path-norm.c
+new file mode 100644
+index 0000000000000000..2ef1d26f07084c68
+--- /dev/null
++++ b/locale/tst-localedef-path-norm.c
+@@ -0,0 +1,242 @@
++/* Test for localedef path name handling and normalization.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* The test runs localedef with various named paths to test for expected
++   behaviours dealing with codeset name normalization.  That is to say that use
++   of UTF-8, and it's variations, are normalized to utf8.  Likewise that values
++   after the @ are not normalized and left as-is.  The test needs to run
++   localedef with known input values and then check that the generated path
++   matches the expected value after normalization.  */
++
++/* Note: In some cases adding -v (verbose) to localedef changes the exit
++   status to a non-zero value because some warnings are only enabled in verbose
++   mode.  This should probably be changed so warnings are either present or not
++   present, regardless of verbosity.  POSIX requires that any warnings cause the
++   exit status to be non-zero.  */
++
++#include <sys/types.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/support.h>
++#include <support/xunistd.h>
++
++/* Full path to localedef.  */
++char *prog;
++
++/* Execute localedef in a subprocess.  */
++static void
++execv_wrapper (void *args)
++{
++  char **argv = args;
++
++  execv (prog, argv);
++  FAIL_EXIT1 ("execv: %m");
++}
++
++struct test_closure
++{
++  /* Arguments for running localedef.  */
++  const char *const argv[16];
++  /* Expected directory name for compiled locale.  */
++  const char *exp;
++  /* Expected path to compiled locale.  */
++  const char *complocaledir;
++};
++
++/* Run localedef with DATA.ARGV arguments (NULL terminated), and expect path to
++   the compiled locale is "DATA.COMPLOCALEDIR/DATA.EXP".  */
++static void
++run_test (struct test_closure data)
++{
++  const char * const *args = data.argv;
++  const char *exp = data.exp;
++  const char *complocaledir = data.complocaledir;
++  struct stat64 fs;
++
++  /* Expected output path.  */
++  const char *path = xasprintf ("%s/%s", complocaledir, exp);
++
++  /* Run test.  */
++  struct support_capture_subprocess result;
++  result = support_capture_subprocess (execv_wrapper, (void *)args);
++  support_capture_subprocess_check (&result, "execv", 0, sc_allow_none);
++  support_capture_subprocess_free (&result);
++
++  /* Verify path is present and is a directory.  */
++  xstat (path, &fs);
++  TEST_VERIFY_EXIT (S_ISDIR (fs.st_mode));
++  printf ("info: Directory '%s' exists.\n", path);
++}
++
++static int
++do_test (void)
++{
++  /* We are running as root inside the container.  */
++  prog = xasprintf ("%s/localedef", support_bindir_prefix);
++
++  /* Create the needed directories:
++     - We need the default compiled locale dir for default output.
++     - We need an arbitrary absolute path for localedef output.
++
++     Note: Writing to a non-default absolute path disables any kind
++     of path normalization since we expect the user wants the path
++     exactly as they specified it.  */
++  xmkdirp (support_complocaledir_prefix, 0777);
++  xmkdirp ("/output", 0777);
++
++  /* It takes ~10 seconds to serially execute 9 localedef test.  We
++     could run the compilations in parallel if we want to reduce test
++     time.  We don't want to split this out into distinct tests because
++     it would require multiple chroots.  Batching the same localedef
++     tests saves disk space during testing.  */
++
++  /* Test 1: Expected normalization.
++     Run localedef and expect output in /usr/lib/locale/en_US1.utf8,
++     with normalization changing UTF-8 to utf8.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"en_US1.UTF-8", NULL },
++	      .exp = "en_US1.utf8",
++	      .complocaledir = support_complocaledir_prefix
++	    });
++
++  /* Test 2: No normalization past '@'.
++     Run localedef and expect output in /usr/lib/locale/en_US2.utf8@tEsT,
++     with normalization changing UTF-8@tEsT to utf8@tEsT (everything after
++     @ is untouched).  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"en_US2.UTF-8@tEsT", NULL },
++	      .exp = "en_US2.utf8@tEsT",
++	      .complocaledir = support_complocaledir_prefix
++	    });
++
++  /* Test 3: No normalization past '@' despite period.
++     Run localedef and expect output in /usr/lib/locale/en_US3@tEsT.UTF-8,
++     with normalization changing nothing (everything after @ is untouched)
++     despite there being a period near the end.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"en_US3@tEsT.UTF-8", NULL },
++	      .exp = "en_US3@tEsT.UTF-8",
++	      .complocaledir = support_complocaledir_prefix
++	    });
++
++  /* Test 4: Normalize numeric codeset by adding 'iso' prefix.
++     Run localedef and expect output in /usr/lib/locale/en_US4.88591,
++     with normalization changing 88591 to iso88591.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"en_US4.88591", NULL },
++	      .exp = "en_US4.iso88591",
++	      .complocaledir = support_complocaledir_prefix
++	    });
++
++  /* Test 5: Don't add 'iso' prefix if first char is alpha.
++     Run localedef and expect output in /usr/lib/locale/en_US5.a88591,
++     with normalization changing nothing.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"en_US5.a88591", NULL },
++	      .exp = "en_US5.a88591",
++	      .complocaledir = support_complocaledir_prefix
++	    });
++
++  /* Test 6: Don't add 'iso' prefix if last char is alpha.
++     Run localedef and expect output in /usr/lib/locale/en_US6.88591a,
++     with normalization changing nothing.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"en_US6.88591a", NULL },
++	      .exp = "en_US6.88591a",
++	      .complocaledir = support_complocaledir_prefix
++	    });
++
++  /* Test 7: Don't normalize anything with an absolute path.
++     Run localedef and expect output in /output/en_US7.UTF-8,
++     with normalization changing nothing.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"/output/en_US7.UTF-8", NULL },
++	      .exp = "en_US7.UTF-8",
++	      .complocaledir = "/output"
++	    });
++
++  /* Test 8: Don't normalize anything with an absolute path.
++     Run localedef and expect output in /output/en_US8.UTF-8@tEsT,
++     with normalization changing nothing.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"/output/en_US8.UTF-8@tEsT", NULL },
++	      .exp = "en_US8.UTF-8@tEsT",
++	      .complocaledir = "/output"
++	    });
++
++  /* Test 9: Don't normalize anything with an absolute path.
++     Run localedef and expect output in /output/en_US9@tEsT.UTF-8,
++     with normalization changing nothing.  */
++  run_test ((struct test_closure)
++	    {
++	      .argv = { prog,
++			"--no-archive",
++			"-i", "en_US",
++			"-f", "UTF-8",
++			"/output/en_US9@tEsT.UTF-8", NULL },
++	      .exp = "en_US9@tEsT.UTF-8",
++	      .complocaledir = "/output"
++	    });
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/locale/tst-localedef-path-norm.root/postclean.req b/locale/tst-localedef-path-norm.root/postclean.req
+new file mode 100644
+index 0000000000000000..e69de29bb2d1d643
+diff --git a/locale/tst-localedef-path-norm.root/tst-localedef-path-norm.script b/locale/tst-localedef-path-norm.root/tst-localedef-path-norm.script
+new file mode 100644
+index 0000000000000000..b0f016256a47f762
+--- /dev/null
++++ b/locale/tst-localedef-path-norm.root/tst-localedef-path-norm.script
+@@ -0,0 +1,2 @@
++# Must run localedef as root to write into default paths.
++su
+diff --git a/support/Makefile b/support/Makefile
+index 117cfdd4f22fc405..5808a42dce87151f 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -182,7 +182,8 @@ CFLAGS-support_paths.c = \
+ 		-DLIBDIR_PATH=\"$(libdir)\" \
+ 		-DBINDIR_PATH=\"$(bindir)\" \
+ 		-DSBINDIR_PATH=\"$(sbindir)\" \
+-		-DROOTSBINDIR_PATH=\"$(rootsbindir)\"
++		-DROOTSBINDIR_PATH=\"$(rootsbindir)\" \
++		-DCOMPLOCALEDIR_PATH=\"$(complocaledir)\"
+ 
+ ifeq (,$(CXX))
+ LINKS_DSO_PROGRAM = links-dso-program-c
+diff --git a/support/support.h b/support/support.h
+index 121cc9e9b7c98ca6..3af87f85fe1b762d 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -112,6 +112,8 @@ extern const char support_bindir_prefix[];
+ extern const char support_sbindir_prefix[];
+ /* Corresponds to the install's sbin/ directory (without prefix).  */
+ extern const char support_install_rootsbindir[];
++/* Corresponds to the install's compiled locale directory.  */
++extern const char support_complocaledir_prefix[];
+ 
+ extern ssize_t support_copy_file_range (int, off64_t *, int, off64_t *,
+ 					size_t, unsigned int);
+diff --git a/support/support_paths.c b/support/support_paths.c
+index eb2390227433aa70..6b15fae0f0173b1e 100644
+--- a/support/support_paths.c
++++ b/support/support_paths.c
+@@ -78,3 +78,10 @@ const char support_install_rootsbindir[] = ROOTSBINDIR_PATH;
+ #else
+ # error please -DROOTSBINDIR_PATH=something in the Makefile
+ #endif
++
++#ifdef COMPLOCALEDIR_PATH
++/* Corresponds to the install's compiled locale directory.  */
++const char support_complocaledir_prefix[] = COMPLOCALEDIR_PATH;
++#else
++# error please -DCOMPLOCALEDIR_PATH=something in the Makefile
++#endif

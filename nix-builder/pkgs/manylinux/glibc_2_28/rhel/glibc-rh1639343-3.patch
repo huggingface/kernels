@@ -1,0 +1,43 @@
+commit b5ffdc48c20ae865b197b67e5a9068a528fbc198
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Apr 25 10:41:52 2019 +0200
+
+    benchtests: Enable BIND_NOW if configured with --enable-bind-now
+    
+    Benchmarks should reflect distribution build policies, so it makes
+    sense to honor the BIND_NOW configuration for them.
+    
+    This commit keeps using $(+link-tests), so that the benchmarks are
+    linked according to the --enable-hardcoded-path-in-tests configure
+    option.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/benchtests/Makefile b/benchtests/Makefile
+index bcd6a9c26d9a0005..28d6b0c43f5bd390 100644
+--- a/benchtests/Makefile
++++ b/benchtests/Makefile
+@@ -235,13 +235,21 @@ bench-func: $(binaries-bench)
+ 	  scripts/benchout.schema.json; \
+ 	fi
+ 
+-$(timing-type) $(binaries-bench) $(binaries-benchset) \
+-	$(binaries-bench-malloc): %: %.o $(objpfx)json-lib.o \
++ifeq ($(bind-now),yes)
++link-bench-bind-now = -Wl,-z,now
++endif
++
++bench-link-targets = $(timing-type) $(binaries-bench) $(binaries-benchset) \
++	$(binaries-bench-malloc)
++
++$(bench-link-targets): %: %.o $(objpfx)json-lib.o \
+ 	$(link-extra-libs-tests) \
+   $(sort $(filter $(common-objpfx)lib%,$(link-libc))) \
+   $(addprefix $(csu-objpfx),start.o) $(+preinit) $(+postinit)
+ 	$(+link-tests)
+ 
++$(bench-link-targets): LDFLAGS += $(link-bench-bind-now)
++
+ $(objpfx)bench-%.c: %-inputs $(bench-deps)
+ 	{ if [ -n "$($*-INCLUDE)" ]; then \
+ 	  cat $($*-INCLUDE); \

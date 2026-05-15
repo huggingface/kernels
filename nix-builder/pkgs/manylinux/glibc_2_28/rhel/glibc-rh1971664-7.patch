@@ -1,0 +1,107 @@
+commit e3217c7fd9e67aa2d53700bb1da9a966e73b9684
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Thu Jun 10 00:41:35 2021 +0530
+
+    iconv: Remove alloca use in gconv-modules configuration parsing
+    
+    The alloca sizes ought to be constrained to PATH_MAX, but replace them
+    with dynamic allocation to be safe.  A static PATH_MAX array would
+    have worked too but Hurd does not have PATH_MAX and the code path is
+    not hot enough to micro-optimise this allocation.  Revisit if any of
+    those realities change.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/iconv/gconv_conf.c b/iconv/gconv_conf.c
+index 8eb981fca7cee36a..3099bf192adce711 100644
+--- a/iconv/gconv_conf.c
++++ b/iconv/gconv_conf.c
+@@ -557,15 +557,15 @@ __gconv_read_conf (void)
+ 
+   for (cnt = 0; __gconv_path_elem[cnt].name != NULL; ++cnt)
+     {
+-#define BUF_LEN elem_len + sizeof (gconv_conf_dirname)
+-
+       const char *elem = __gconv_path_elem[cnt].name;
+       size_t elem_len = __gconv_path_elem[cnt].len;
+-      char *buf;
+ 
+       /* No slash needs to be inserted between elem and gconv_conf_filename;
+ 	 elem already ends in a slash.  */
+-      buf = alloca (BUF_LEN);
++      char *buf = malloc (elem_len + sizeof (gconv_conf_dirname));
++      if (buf == NULL)
++	continue;
++
+       char *cp = __mempcpy (__mempcpy (buf, elem, elem_len),
+ 			    gconv_conf_filename, sizeof (gconv_conf_filename));
+ 
+@@ -594,15 +594,16 @@ __gconv_read_conf (void)
+ 	      if (len > strlen (suffix)
+ 		  && strcmp (ent->d_name + len - strlen (suffix), suffix) == 0)
+ 		{
+-		  /* LEN <= PATH_MAX so this alloca is not unbounded.  */
+-		  char *conf = alloca (BUF_LEN + len + 1);
+-		  cp = stpcpy (conf, buf);
+-		  sprintf (cp, "/%s", ent->d_name);
++		  char *conf;
++		  if (__asprintf (&conf, "%s/%s", buf, ent->d_name) < 0)
++		    continue;
+ 		  read_conf_file (conf, elem, elem_len, &modules, &nmodules);
++		  free (conf);
+ 		}
+ 	    }
+ 	  __closedir (confdir);
+ 	}
++      free (buf);
+     }
+ #endif
+ 
+diff --git a/iconv/iconvconfig.c b/iconv/iconvconfig.c
+index fafc686ae25fb5c1..2f9d5f45ad3a8159 100644
+--- a/iconv/iconvconfig.c
++++ b/iconv/iconvconfig.c
+@@ -712,7 +712,6 @@ handle_file (const char *dir, const char *infile)
+ static int
+ handle_dir (const char *dir)
+ {
+-#define BUF_LEN prefix_len + dirlen + sizeof "gconv-modules.d"
+   char *cp;
+   size_t dirlen = strlen (dir);
+   bool found = false;
+@@ -726,7 +725,10 @@ handle_dir (const char *dir)
+     }
+ 
+   /* First, look for a gconv-modules file.  */
+-  char buf[BUF_LEN];
++  char *buf = malloc (prefix_len + dirlen + sizeof "gconv-modules.d");
++  if (buf == NULL)
++    goto out;
++
+   cp = buf;
+   if (dir[0] == '/')
+     cp = mempcpy (cp, prefix, prefix_len);
+@@ -756,16 +758,19 @@ handle_dir (const char *dir)
+ 	  if (len > strlen (suffix)
+ 	      && strcmp (ent->d_name + len - strlen (suffix), suffix) == 0)
+ 	    {
+-	      /* LEN <= PATH_MAX so this alloca is not unbounded.  */
+-	      char *conf = alloca (BUF_LEN + len + 1);
+-	      cp = stpcpy (conf, buf);
+-	      sprintf (cp, "/%s", ent->d_name);
++	      char *conf;
++	      if (asprintf (&conf, "%s/%s", buf, ent->d_name) < 0)
++		continue;
+ 	      found |= handle_file (dir, conf);
++	      free (conf);
+ 	    }
+ 	}
+       closedir (confdir);
+     }
+ 
++  free (buf);
++
++out:
+   if (!found)
+     {
+       error (0, errno, "failed to open gconv configuration files in `%s'",

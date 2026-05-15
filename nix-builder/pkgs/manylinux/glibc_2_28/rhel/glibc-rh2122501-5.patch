@@ -1,0 +1,81 @@
+commit 8b915921fbf4d32bf68fc3d637413cf96236b3fd
+Author: Andreas Schwab <schwab@suse.de>
+Date:   Mon Aug 29 15:05:40 2022 +0200
+
+    Add test for bug 29530
+    
+    This tests for a bug that was introduced in commit edc1686af0 ("vfprintf:
+    Reuse work_buffer in group_number") and fixed as a side effect of commit
+    6caddd34bd ("Remove most vfprintf width/precision-dependent allocations
+    (bug 14231, bug 26211).").
+    
+    (cherry picked from commit ca6466e8be32369a658035d69542d47603e58a99)
+
+diff --git a/stdio-common/Makefile b/stdio-common/Makefile
+index d76b47bd5f932f69..ac61093660ef9063 100644
+--- a/stdio-common/Makefile
++++ b/stdio-common/Makefile
+@@ -64,7 +64,9 @@ tests := tstscanf test_rdwr test-popen tstgetln test-fseek \
+ 	 tst-scanf-round \
+ 	 tst-renameat2 \
+ 	 tst-printf-bz25691 \
+-	 tst-vfprintf-width-prec-alloc
++	 tst-vfprintf-width-prec-alloc \
++	 tst-grouping2 \
++  # tests
+ 
+ test-srcs = tst-unbputc tst-printf tst-printfsz-islongdouble
+ 
+@@ -91,6 +93,7 @@ $(objpfx)bug14.out: $(gen-locales)
+ $(objpfx)scanf13.out: $(gen-locales)
+ $(objpfx)test-vfprintf.out: $(gen-locales)
+ $(objpfx)tst-grouping.out: $(gen-locales)
++$(objpfx)tst-grouping2.out: $(gen-locales)
+ $(objpfx)tst-sprintf.out: $(gen-locales)
+ $(objpfx)tst-sscanf.out: $(gen-locales)
+ $(objpfx)tst-swprintf.out: $(gen-locales)
+diff --git a/stdio-common/tst-grouping2.c b/stdio-common/tst-grouping2.c
+new file mode 100644
+index 0000000000000000..3024c942a60e51bf
+--- /dev/null
++++ b/stdio-common/tst-grouping2.c
+@@ -0,0 +1,39 @@
++/* Test printf with grouping and large width (bug 29530)
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <locale.h>
++#include <stdio.h>
++#include <support/check.h>
++#include <support/support.h>
++
++static int
++do_test (void)
++{
++  const int field_width = 1000;
++  char buf[field_width + 1];
++
++  xsetlocale (LC_NUMERIC, "de_DE.UTF-8");
++
++  /* This used to crash in group_number.  */
++  TEST_COMPARE (sprintf (buf, "%'*d", field_width, 1000), field_width);
++  TEST_COMPARE_STRING (buf + field_width - 6, " 1.000");
++
++  return 0;
++}
++
++#include <support/test-driver.c>

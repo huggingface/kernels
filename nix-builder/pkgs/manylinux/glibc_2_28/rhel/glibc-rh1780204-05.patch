@@ -1,0 +1,157 @@
+From e8f1c08a49d313b210ed4104c20646c105bab6a4 Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:17 +0100
+Subject: [PATCH 05/28] Always use wordsize-64 version of s_trunc.c.
+
+This patch replaces s_trunc.c in sysdeps/dbl-64 with the one in
+sysdeps/dbl-64/wordsize-64 and removes the latter one.
+The code is not changed except changes in code style.
+
+Also adjusted the include path in x86_64 and sparc64 files.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 1c94bf0f0a50ce66c808e2ea9b7e417785798b73)
+---
+ sysdeps/ieee754/dbl-64/s_trunc.c              | 25 ++++-----
+ sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c  | 54 -------------------
+ .../sparc64/fpu/multiarch/s_trunc-generic.c   |  2 +-
+ .../sparc64/fpu/multiarch/s_trunc-vis3.c      |  2 +-
+ sysdeps/x86_64/fpu/multiarch/s_trunc-c.c      |  2 +-
+ 5 files changed, 13 insertions(+), 72 deletions(-)
+ delete mode 100644 sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c
+
+diff --git a/sysdeps/ieee754/dbl-64/s_trunc.c b/sysdeps/ieee754/dbl-64/s_trunc.c
+index 6ffabb410a..38bb33d337 100644
+--- a/sysdeps/ieee754/dbl-64/s_trunc.c
++++ b/sysdeps/ieee754/dbl-64/s_trunc.c
+@@ -26,31 +26,26 @@
+ double
+ __trunc (double x)
+ {
+-  int32_t i0, j0;
+-  uint32_t i1;
+-  int sx;
+-
+-  EXTRACT_WORDS (i0, i1, x);
+-  sx = i0 & 0x80000000;
+-  j0 = ((i0 >> 20) & 0x7ff) - 0x3ff;
+-  if (j0 < 20)
++  int64_t i0, j0;
++  int64_t sx;
++
++  EXTRACT_WORDS64 (i0, x);
++  sx = i0 & UINT64_C (0x8000000000000000);
++  j0 = ((i0 >> 52) & 0x7ff) - 0x3ff;
++  if (j0 < 52)
+     {
+       if (j0 < 0)
+ 	/* The magnitude of the number is < 1 so the result is +-0.  */
+-	INSERT_WORDS (x, sx, 0);
++	INSERT_WORDS64 (x, sx);
+       else
+-	INSERT_WORDS (x, sx | (i0 & ~(0x000fffff >> j0)), 0);
++	INSERT_WORDS64 (x, sx | (i0 & ~(UINT64_C (0x000fffffffffffff) >> j0)));
+     }
+-  else if (j0 > 51)
++  else
+     {
+       if (j0 == 0x400)
+ 	/* x is inf or NaN.  */
+ 	return x + x;
+     }
+-  else
+-    {
+-      INSERT_WORDS (x, i0, i1 & ~(0xffffffffu >> (j0 - 20)));
+-    }
+ 
+   return x;
+ }
+diff --git a/sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c b/sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c
+deleted file mode 100644
+index 19a09b894e..0000000000
+--- a/sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c
++++ /dev/null
+@@ -1,54 +0,0 @@
+-/* Truncate argument to nearest integral value not larger than the argument.
+-   Copyright (C) 1997-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-   Contributed by Ulrich Drepper <drepper@cygnus.com>, 1997.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <math.h>
+-
+-#include <math_private.h>
+-#include <libm-alias-double.h>
+-
+-
+-double
+-__trunc (double x)
+-{
+-  int64_t i0, j0;
+-  int64_t sx;
+-
+-  EXTRACT_WORDS64 (i0, x);
+-  sx = i0 & UINT64_C(0x8000000000000000);
+-  j0 = ((i0 >> 52) & 0x7ff) - 0x3ff;
+-  if (j0 < 52)
+-    {
+-      if (j0 < 0)
+-	/* The magnitude of the number is < 1 so the result is +-0.  */
+-	INSERT_WORDS64 (x, sx);
+-      else
+-	INSERT_WORDS64 (x, sx | (i0 & ~(UINT64_C(0x000fffffffffffff) >> j0)));
+-    }
+-  else
+-    {
+-      if (j0 == 0x400)
+-	/* x is inf or NaN.  */
+-	return x + x;
+-    }
+-
+-  return x;
+-}
+-#ifndef __trunc
+-libm_alias_double (__trunc, trunc)
+-#endif
+diff --git a/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-generic.c b/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-generic.c
+index 00abd2a643..c198ebb3d5 100644
+--- a/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-generic.c
++++ b/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-generic.c
+@@ -1,2 +1,2 @@
+ #define __trunc __trunc_generic
+-#include <sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c>
++#include <sysdeps/ieee754/dbl-64/s_trunc.c>
+diff --git a/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-vis3.c b/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-vis3.c
+index a89916ba89..766bb22629 100644
+--- a/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-vis3.c
++++ b/sysdeps/sparc/sparc64/fpu/multiarch/s_trunc-vis3.c
+@@ -20,4 +20,4 @@
+ 
+ #define __trunc __trunc_vis3
+ 
+-#include <sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c>
++#include <sysdeps/ieee754/dbl-64/s_trunc.c>
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_trunc-c.c b/sysdeps/x86_64/fpu/multiarch/s_trunc-c.c
+index 6204ae3c77..8aa499fbb8 100644
+--- a/sysdeps/x86_64/fpu/multiarch/s_trunc-c.c
++++ b/sysdeps/x86_64/fpu/multiarch/s_trunc-c.c
+@@ -1,2 +1,2 @@
+ #define __trunc __trunc_c
+-#include <sysdeps/ieee754/dbl-64/wordsize-64/s_trunc.c>
++#include <sysdeps/ieee754/dbl-64/s_trunc.c>
+-- 
+2.18.2
+

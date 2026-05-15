@@ -1,0 +1,41 @@
+commit c3d8dc45c9df199b8334599a6cbd98c9950dba62
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Thu Oct 11 15:18:40 2018 -0300
+
+    x86: Fix Haswell strong flags (BZ#23709)
+    
+    Th commit 'Disable TSX on some Haswell processors.' (2702856bf4) changed the
+    default flags for Haswell models.  Previously, new models were handled by the
+    default switch path, which assumed a Core i3/i5/i7 if AVX is available. After
+    the patch, Haswell models (0x3f, 0x3c, 0x45, 0x46) do not set the flags
+    Fast_Rep_String, Fast_Unaligned_Load, Fast_Unaligned_Copy, and
+    Prefer_PMINUB_for_stringop (only the TSX one).
+    
+    This patch fixes it by disentangle the TSX flag handling from the memory
+    optimization ones.  The strstr case cited on patch now selects the
+    __strstr_sse2_unaligned as expected for the Haswell cpu.
+    
+    Checked on x86_64-linux-gnu.
+    
+            [BZ #23709]
+            * sysdeps/x86/cpu-features.c (init_cpu_features): Set TSX bits
+            independently of other flags.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index ea0b64fdb962a934..4695ac80d4148327 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -316,7 +316,13 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 		    | bit_arch_Fast_Unaligned_Copy
+ 		    | bit_arch_Prefer_PMINUB_for_stringop);
+ 	      break;
++	    }
+ 
++	 /* Disable TSX on some Haswell processors to avoid TSX on kernels that
++	    weren't updated with the latest microcode package (which disables
++	    broken feature by default).  */
++	 switch (model)
++	    {
+ 	    case 0x3f:
+ 	      /* Xeon E7 v3 with stepping >= 4 has working TSX.  */
+ 	      if (stepping >= 4)

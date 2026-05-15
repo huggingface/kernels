@@ -1,0 +1,176 @@
+commit a803367bab167f5ec4fde1f0d0ec447707c29520
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Feb 14 20:55:39 2020 +0100
+
+    powerpc64: Add memory protection key support [BZ #23202]
+    
+    The 32-bit protection key behavior is somewhat unclear on 32-bit powerpc,
+    so this change is restricted to the 64-bit variants.
+    
+    Flag translation is needed because of hardware differences between the
+    POWER implementation (read and write flags) and the Intel implementation
+    (write and read+write flags).
+
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h b/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h
+new file mode 100644
+index 0000000000000000..623b073d5a585d51
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/arch-pkey.h
+@@ -0,0 +1,55 @@
++/* Helper functions for manipulating memory protection keys, for powerpc64.
++   Copyright (C) 2017-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifndef _ARCH_PKEY_H
++#define _ARCH_PKEY_H
++
++/* Read and write access bits in the AMR register.  Needs to be
++   translated from and to PKEY_DISABLE_* flags.  */
++#define PKEY_AMR_READ 1UL
++#define PKEY_AMR_WRITE 2UL
++
++/* Return the value of the AMR register.  */
++static inline unsigned long int
++pkey_read (void)
++{
++  unsigned long int result;
++  __asm__ volatile ("mfspr %0, 13" : "=r" (result));
++  return result;
++}
++
++/* Overwrite the AMR register with VALUE.  */
++static inline void
++pkey_write (unsigned long int value)
++{
++  __asm__ volatile ("mtspr 13, %0" : : "r" (value));
++}
++
++/* Number of the largest supported key.  This depends on the width of
++   the AMR register.  */
++#define PKEY_MAX (sizeof (unsigned long int) * 8 / 2 - 1)
++_Static_assert (PKEY_MAX == 15 || PKEY_MAX == 31, "PKEY_MAX value");
++
++/* Translate key number into AMR index position.  */
++static inline int
++pkey_index (int key)
++{
++  return 2 * (PKEY_MAX - key);
++}
++
++#endif /* _ARCH_PKEY_H */
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/pkey_get.c b/sysdeps/unix/sysv/linux/powerpc/powerpc64/pkey_get.c
+new file mode 100644
+index 0000000000000000..856ba061b90eabd2
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/pkey_get.c
+@@ -0,0 +1,42 @@
++/* Reading the per-thread memory protection key, powerpc64 version.
++   Copyright (C) 2017-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <arch-pkey.h>
++#include <errno.h>
++#include <sys/mman.h>
++
++int
++pkey_get (int key)
++{
++  if (key < 0 || key > PKEY_MAX)
++    {
++      __set_errno (EINVAL);
++      return -1;
++    }
++  unsigned int index = pkey_index (key);
++  unsigned long int amr = pkey_read ();
++  unsigned int bits = (amr >> index) & 3;
++
++  /* Translate from AMR values.  PKEY_AMR_READ standing alone is not
++     currently representable.  */
++  if (bits & PKEY_AMR_READ)
++    return PKEY_DISABLE_ACCESS;
++  else if (bits == PKEY_AMR_WRITE)
++    return PKEY_DISABLE_WRITE;
++  return 0;
++}
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/pkey_set.c b/sysdeps/unix/sysv/linux/powerpc/powerpc64/pkey_set.c
+new file mode 100644
+index 0000000000000000..20b372ee2983abd5
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/pkey_set.c
+@@ -0,0 +1,48 @@
++/* Changing the per-thread memory protection key, powerpc64 version.
++   Copyright (C) 2017-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <arch-pkey.h>
++#include <errno.h>
++#include <sys/mman.h>
++
++int
++pkey_set (int key, unsigned int rights)
++{
++  if (key < 0 || key > PKEY_MAX || rights > 3)
++    {
++      __set_errno (EINVAL);
++      return -1;
++    }
++
++  /* Translate to AMR bit values.  */
++  unsigned long int bits;
++  if (rights & PKEY_DISABLE_ACCESS)
++    /* The PKEY_DISABLE_WRITE bit does not matter.  */
++    bits = PKEY_AMR_READ | PKEY_AMR_WRITE;
++  else if (rights == PKEY_DISABLE_WRITE)
++    bits = PKEY_AMR_WRITE;
++  else
++    bits = 0;
++
++  unsigned int index = pkey_index (key);
++  unsigned long int mask = 3UL << index;
++  unsigned long int amr = pkey_read ();
++  amr = (amr & ~mask) | (bits << index);
++  pkey_write (amr);
++  return 0;
++}

@@ -1,0 +1,126 @@
+commit 3908fa933a4354309225af616d9242f595e11ccf
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Wed Jun 30 00:21:18 2021 -0300
+
+    elf: Fix audit regression
+    
+    Commit 03e187a41d9 added a regression when an audit module does not have
+    libc as DT_NEEDED (although unusual it is possible).
+    
+    Checked on x86_64-linux-gnu.
+
+Conflicts:
+	elf/Makefile
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 30417c3ce15abcb4..6262a4a65cfd2148 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -218,6 +218,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-rtld-run-static \
+ 	 tst-dlmopen-dlerror \
+ 	 tst-dlmopen-gethostbyname \
++	 tst-audit17 \
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -1527,6 +1528,16 @@ $(objpfx)tst-auditlogmod-3.so: $(libsupport)
+ $(objpfx)tst-audit16.out: \
+   $(objpfx)tst-auditlogmod-1.so $(objpfx)tst-auditlogmod-2.so \
+   $(objpfx)tst-auditlogmod-3.so
++$(objpfx)tst-audit17.out: $(objpfx)tst-auditmod17.so
++# The test check if a audit library without libc.so on DT_NEEDED works as
++# intended, so it uses an explicit link rule.
++$(objpfx)tst-auditmod17.so: $(objpfx)tst-auditmod17.os
++	$(CC) -nostdlib -nostartfiles -shared -o $@.new \
++	$(filter-out $(map-file),$^)
++	$(call after-link,$@.new)
++	mv -f $@.new $@
++CFLAGS-.os += $(call elide-stack-protector,.os,tst-auditmod17)
++tst-audit17-ENV = LD_AUDIT=$(objpfx)tst-auditmod17.so
+ 
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 736df62ce6e46d34..661a2172d1789b26 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -759,16 +759,9 @@ dl_open_worker_begin (void *a)
+      namespace.  */
+   if (!args->libc_already_loaded)
+     {
++      /* dlopen cannot be used to load an initial libc by design.  */
+       struct link_map *libc_map = GL(dl_ns)[args->nsid].libc_map;
+-#ifdef SHARED
+-      bool initial = libc_map->l_ns == LM_ID_BASE;
+-#else
+-      /* In the static case, there is only one namespace, but it
+-	 contains a secondary libc (the primary libc is statically
+-	 linked).  */
+-      bool initial = false;
+-#endif
+-      _dl_call_libc_early_init (libc_map, initial);
++      _dl_call_libc_early_init (libc_map, false);
+     }
+ 
+ #ifndef SHARED
+diff --git a/elf/tst-audit17.c b/elf/tst-audit17.c
+new file mode 100644
+index 0000000000000000..92986699d497845f
+--- /dev/null
++++ b/elf/tst-audit17.c
+@@ -0,0 +1,25 @@
++/* Check DT_AUDIT with audit not linked against libc.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++static int
++do_test (void)
++{
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/elf/tst-auditmod17.c b/elf/tst-auditmod17.c
+new file mode 100644
+index 0000000000000000..7a4467f597b56cf4
+--- /dev/null
++++ b/elf/tst-auditmod17.c
+@@ -0,0 +1,23 @@
++/* Check DT_AUDIT with audit not linked against libc.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++unsigned int
++la_version (unsigned int version)
++{
++  return version;
++}

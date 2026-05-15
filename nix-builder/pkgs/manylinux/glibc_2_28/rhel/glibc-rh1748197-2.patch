@@ -1,0 +1,996 @@
+commit 41d6f74e6cb6a92ab428c11ee1e408b2a16aa1b0
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Jul 2 15:12:20 2019 +0200
+
+    nptl: Remove vfork IFUNC-based forwarder from libpthread [BZ #20188]
+    
+    With commit f0b2132b35248c1f4a80f62a2c38cddcc802aa8c ("ld.so:
+    Support moving versioned symbols between sonames [BZ #24741]"), the
+    dynamic linker will find the definition of vfork in libc and binds
+    a vfork reference to that symbol, even if the soname in the version
+    reference says that the symbol should be located in libpthread.
+    
+    As a result, the forwarder (whether it's IFUNC-based or a duplicate
+    of the libc implementation) is no longer necessary.
+    
+    On older architectures, a placeholder symbol is required, to make sure
+    that the GLIBC_2.1.2 symbol version does not go away, or is turned in
+    to a weak symbol definition by the link editor.  (The symbol version
+    needs to preserved so that the symbol coverage check in
+    elf/dl-version.c does not fail for old binaries.)
+    
+    mips32 is an outlier: It defined __vfork@@GLIBC_2.2, but the
+    baseline is GLIBC_2.0.  Since there are other @@GLIBC_2.2 symbols,
+    the placeholder symbol is not needed there.
+
+Conflicts:
+	nptl/Makefile
+	  (Missing lll_timedwait_tid removal, missing pthread_mutex_conf.)
+	nptl/pt-vfork.c
+	sysdeps/unix/sysv/linux/aarch64/pt-vfork.c
+	sysdeps/unix/sysv/linux/alpha/pt-vfork.S
+	sysdeps/unix/sysv/linux/hppa/pt-vfork.S
+	sysdeps/unix/sysv/linux/ia64/pt-vfork.S
+	sysdeps/unix/sysv/linux/microblaze/pt-vfork.S
+	  (Removal after copyright year change upstream.)
+
+diff --git a/nptl/Makefile b/nptl/Makefile
+index 071c53866d14d2fe..447dce0590295c9c 100644
+--- a/nptl/Makefile
++++ b/nptl/Makefile
+@@ -121,7 +121,7 @@ libpthread-routines = nptl-init nptlfreeres vars events version pt-interp \
+ 		      cancellation \
+ 		      lowlevellock \
+ 		      lll_timedlock_wait lll_timedwait_tid \
+-		      pt-fork pt-vfork pt-fcntl \
++		      pt-fork pt-fcntl \
+ 		      $(pthread-compat-wrappers) \
+ 		      pt-raise pt-system \
+ 		      flockfile ftrylockfile funlockfile \
+@@ -145,7 +145,8 @@ libpthread-routines = nptl-init nptlfreeres vars events version pt-interp \
+ 		      mtx_destroy mtx_init mtx_lock mtx_timedlock \
+ 		      mtx_trylock mtx_unlock call_once cnd_broadcast \
+ 		      cnd_destroy cnd_init cnd_signal cnd_timedwait cnd_wait \
+-		      tss_create tss_delete tss_get tss_set
++		      tss_create tss_delete tss_get tss_set \
++		      libpthread-compat
+ #		      pthread_setuid pthread_seteuid pthread_setreuid \
+ #		      pthread_setresuid \
+ #		      pthread_setgid pthread_setegid pthread_setregid \
+diff --git a/nptl/Versions b/nptl/Versions
+index e7f691da7a15e9c3..6007fd03e7ed117c 100644
+--- a/nptl/Versions
++++ b/nptl/Versions
+@@ -36,7 +36,6 @@ libc {
+     __libc_alloca_cutoff;
+     # Internal libc interface to libpthread
+     __libc_dl_error_tsd;
+-    __libc_vfork;
+     __libc_pthread_init;
+     __libc_current_sigrtmin_private; __libc_current_sigrtmax_private;
+     __libc_allocate_rtsig_private;
+@@ -98,7 +97,7 @@ libpthread {
+     sem_destroy; sem_getvalue; sem_init; sem_post; sem_trywait; sem_wait;
+ 
+     # Special fork handling.
+-    fork; __fork; vfork;
++    fork; __fork;
+ 
+     # Cancellation points.
+     close; __close; fcntl; __fcntl; read; __read; write; __write; accept;
+@@ -152,7 +151,7 @@ libpthread {
+   }
+ 
+   GLIBC_2.1.2 {
+-    __vfork;
++    __libpthread_version_placeholder;
+   }
+ 
+   GLIBC_2.2 {
+diff --git a/nptl/libpthread-compat.c b/nptl/libpthread-compat.c
+new file mode 100644
+index 0000000000000000..ea29e9f47b698a25
+--- /dev/null
++++ b/nptl/libpthread-compat.c
+@@ -0,0 +1,37 @@
++/* Placeholder definitions to pull in removed symbol versions.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <shlib-compat.h>
++
++/* This is an unused compatibility symbol definition, to prevent ld
++   from creating a weak version definition for GLIBC_2.1.2.  (__vfork
++   used to be defined at that version, but it is now provided by libc,
++   and there are no versions left in libpthread for that symbol
++   version.)  If the ABI baseline for glibc is the GLIBC_2.2 symbol
++   version or later, the placeholder symbol is not needed because
++   there are plenty of other symbols which populate those later
++   versions.  */
++#if (SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_2))
++void
++attribute_compat_text_section
++__libpthread_version_placeholder (void)
++{
++}
++compat_symbol (libpthread, __libpthread_version_placeholder,
++               __libpthread_version_placeholder, GLIBC_2_1_2);
++#endif
+diff --git a/nptl/pt-vfork.c b/nptl/pt-vfork.c
+deleted file mode 100644
+index 2f890d3f3070d0e2..0000000000000000
+--- a/nptl/pt-vfork.c
++++ /dev/null
+@@ -1,65 +0,0 @@
+-/* vfork ABI-compatibility entry points for libpthread.
+-   Copyright (C) 2014-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <unistd.h>
+-#include <shlib-compat.h>
+-
+-/* libpthread used to have its own vfork implementation that differed
+-   from libc's only in having a pointless micro-optimization.  There
+-   is no longer any use to having a separate copy in libpthread, but
+-   the historical ABI requires it.  For static linking, there is no
+-   need to provide anything here--the libc version will be linked in.
+-   For shared library ABI compatibility, there must be __vfork and
+-   vfork symbols in libpthread.so; so we define them using IFUNC to
+-   redirect to the libc function.  */
+-
+-/* Note! If the architecture doesn't support IFUNC, then we need an
+-   alternate target-specific mechanism to implement this.  So we just
+-   assume IFUNC here and require that the target override this file
+-   if necessary.
+-
+-   If the architecture can assume all supported versions of gcc will
+-   produce a tail-call to __libc_vfork, consider including the version
+-   in sysdeps/unix/sysv/linux/aarch64/pt-vfork.c.  */
+-
+-#if !HAVE_IFUNC
+-# error "must write pt-vfork for this machine or get IFUNC support"
+-#endif
+-
+-#if (SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20) \
+-     || SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20))
+-
+-extern __typeof (vfork) __libc_vfork;   /* Defined in libc.  */
+-
+-# undef INIT_ARCH
+-# define INIT_ARCH()
+-# define DEFINE_VFORK(name) libc_ifunc (name, &__libc_vfork)
+-
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20)
+-extern __typeof(vfork) vfork_ifunc;
+-DEFINE_VFORK (vfork_ifunc)
+-compat_symbol (libpthread, vfork_ifunc, vfork, GLIBC_2_0);
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20)
+-extern __typeof(vfork) __vfork_ifunc;
+-DEFINE_VFORK (__vfork_ifunc)
+-compat_symbol (libpthread, __vfork_ifunc, __vfork, GLIBC_2_1_2);
+-#endif
+diff --git a/sysdeps/unix/sysv/linux/aarch64/libpthread.abilist b/sysdeps/unix/sysv/linux/aarch64/libpthread.abilist
+index 9a9e4cee85b18a35..6945b7cbe4c2bde8 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/aarch64/libpthread.abilist
+@@ -45,7 +45,6 @@ GLIBC_2.17 __read F
+ GLIBC_2.17 __res_state F
+ GLIBC_2.17 __send F
+ GLIBC_2.17 __sigaction F
+-GLIBC_2.17 __vfork F
+ GLIBC_2.17 __wait F
+ GLIBC_2.17 __write F
+ GLIBC_2.17 _pthread_cleanup_pop F
+@@ -216,7 +215,6 @@ GLIBC_2.17 siglongjmp F
+ GLIBC_2.17 sigwait F
+ GLIBC_2.17 system F
+ GLIBC_2.17 tcdrain F
+-GLIBC_2.17 vfork F
+ GLIBC_2.17 wait F
+ GLIBC_2.17 waitpid F
+ GLIBC_2.17 write F
+diff --git a/sysdeps/unix/sysv/linux/aarch64/pt-vfork.c b/sysdeps/unix/sysv/linux/aarch64/pt-vfork.c
+deleted file mode 100644
+index 2b277f25ec200be2..0000000000000000
+--- a/sysdeps/unix/sysv/linux/aarch64/pt-vfork.c
++++ /dev/null
+@@ -1,54 +0,0 @@
+-/* vfork ABI-compatibility entry points for libpthread.
+-   Copyright (C) 2014-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <shlib-compat.h>
+-
+-/* libpthread used to have its own vfork implementation that differed
+-   from libc's only in having a pointless micro-optimization.  There
+-   is no longer any use to having a separate copy in libpthread, but
+-   the historical ABI requires it.  For static linking, there is no
+-   need to provide anything here--the libc version will be linked in.
+-   For shared library ABI compatibility, there must be __vfork and
+-   vfork symbols in libpthread.so.  */
+-
+-#if HAVE_IFUNC
+-# include <nptl/pt-vfork.c>
+-#elif (SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20) \
+-       || SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20))
+-
+-/* Thankfully, on AArch64 we can rely on the compiler generating
+-   a tail call here.  */
+-
+-extern void __libc_vfork (void);
+-
+-void
+-vfork_compat (void)
+-{
+-  __libc_vfork ();
+-}
+-
+-# if SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20)
+-compat_symbol (libpthread, vfork_compat, vfork, GLIBC_2_0);
+-# endif
+-
+-# if SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20)
+-strong_alias (vfork_compat, vfork_compat2)
+-compat_symbol (libpthread, vfork_compat2, __vfork, GLIBC_2_1_2);
+-# endif
+-
+-#endif
+diff --git a/sysdeps/unix/sysv/linux/alpha/libpthread.abilist b/sysdeps/unix/sysv/linux/alpha/libpthread.abilist
+index b413007ccbd2b7b3..2d9b958efa99feb8 100644
+--- a/sysdeps/unix/sysv/linux/alpha/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/alpha/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -155,7 +154,7 @@ GLIBC_2.1 sem_wait F
+ GLIBC_2.1.1 sem_close F
+ GLIBC_2.1.1 sem_open F
+ GLIBC_2.1.1 sem_unlink F
+-GLIBC_2.1.2 __vfork F
++GLIBC_2.1.2 __libpthread_version_placeholder F
+ GLIBC_2.11 pthread_sigqueue F
+ GLIBC_2.12 pthread_getname_np F
+ GLIBC_2.12 pthread_mutex_consistent F
+diff --git a/sysdeps/unix/sysv/linux/alpha/pt-vfork.S b/sysdeps/unix/sysv/linux/alpha/pt-vfork.S
+deleted file mode 100644
+index 7ecaa78dd0eda2fe..0000000000000000
+--- a/sysdeps/unix/sysv/linux/alpha/pt-vfork.S
++++ /dev/null
+@@ -1,43 +0,0 @@
+-/* vfork ABI-compatibility entry points for libpthread.
+-   Copyright (C) 2014-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <shlib-compat.h>
+-
+-/* libpthread used to have its own vfork implementation that differed
+-   from libc's only in having a pointless micro-optimization.  There
+-   is no longer any use to having a separate copy in libpthread, but
+-   the historical ABI requires it.  For static linking, there is no
+-   need to provide anything here--the libc version will be linked in.
+-   For shared library ABI compatibility, there must be __vfork and
+-   vfork symbols in libpthread.so.  */
+-
+-#if (SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20) \
+-     || SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20))
+-
+-#include <vfork.S>
+-
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20)
+-compat_symbol (libpthread, __libc_vfork, vfork, GLIBC_2_0);
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20)
+-strong_alias (__libc_vfork, __vfork_compat)
+-compat_symbol (libpthread, __vfork_compat, __vfork, GLIBC_2_1_2);
+-#endif
+diff --git a/sysdeps/unix/sysv/linux/arm/libpthread.abilist b/sysdeps/unix/sysv/linux/arm/libpthread.abilist
+index af82a4c632988185..ee3d0290d01f184e 100644
+--- a/sysdeps/unix/sysv/linux/arm/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/arm/libpthread.abilist
+@@ -74,7 +74,6 @@ GLIBC_2.4 __read F
+ GLIBC_2.4 __res_state F
+ GLIBC_2.4 __send F
+ GLIBC_2.4 __sigaction F
+-GLIBC_2.4 __vfork F
+ GLIBC_2.4 __wait F
+ GLIBC_2.4 __write F
+ GLIBC_2.4 _pthread_cleanup_pop F
+@@ -239,7 +238,6 @@ GLIBC_2.4 siglongjmp F
+ GLIBC_2.4 sigwait F
+ GLIBC_2.4 system F
+ GLIBC_2.4 tcdrain F
+-GLIBC_2.4 vfork F
+ GLIBC_2.4 wait F
+ GLIBC_2.4 waitpid F
+ GLIBC_2.4 write F
+diff --git a/sysdeps/unix/sysv/linux/hppa/libpthread.abilist b/sysdeps/unix/sysv/linux/hppa/libpthread.abilist
+index bcba07f57558174f..e9b3be6ac8e8f367 100644
+--- a/sysdeps/unix/sysv/linux/hppa/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/hppa/libpthread.abilist
+@@ -46,7 +46,6 @@ GLIBC_2.2 __read F
+ GLIBC_2.2 __res_state F
+ GLIBC_2.2 __send F
+ GLIBC_2.2 __sigaction F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 __wait F
+ GLIBC_2.2 __write F
+ GLIBC_2.2 _pthread_cleanup_pop F
+@@ -192,7 +191,6 @@ GLIBC_2.2 siglongjmp F
+ GLIBC_2.2 sigwait F
+ GLIBC_2.2 system F
+ GLIBC_2.2 tcdrain F
+-GLIBC_2.2 vfork F
+ GLIBC_2.2 wait F
+ GLIBC_2.2 waitpid F
+ GLIBC_2.2 write F
+diff --git a/sysdeps/unix/sysv/linux/hppa/localplt.data b/sysdeps/unix/sysv/linux/hppa/localplt.data
+index 5f3475de191778f6..867413f0c54d3d71 100644
+--- a/sysdeps/unix/sysv/linux/hppa/localplt.data
++++ b/sysdeps/unix/sysv/linux/hppa/localplt.data
+@@ -10,7 +10,6 @@ libc.so: __sigsetjmp
+ libc.so: _IO_funlockfile
+ libc.so: __errno_location
+ libm.so: matherr
+-libpthread.so: __errno_location
+ # The main malloc is interposed into the dynamic linker, for
+ # allocations after the initial link (when dlopen is used).
+ ld.so: malloc
+diff --git a/sysdeps/unix/sysv/linux/hppa/pt-vfork.S b/sysdeps/unix/sysv/linux/hppa/pt-vfork.S
+deleted file mode 100644
+index 45f7620d90cb5b8f..0000000000000000
+--- a/sysdeps/unix/sysv/linux/hppa/pt-vfork.S
++++ /dev/null
+@@ -1,82 +0,0 @@
+-/* Copyright (C) 2005-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library.  If not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#define _ERRNO_H        1
+-#include <bits/errno.h>
+-#include <tcb-offsets.h>
+-
+-/* Clone the calling process, but without copying the whole address space.
+-   The calling process is suspended until the new process exits or is
+-   replaced by a call to `execve'.  Return -1 for errors, 0 to the new process,
+-   and the process ID of the new process to the old process.  */
+-
+-.Lthread_start:						ASM_LINE_SEP
+-
+-	/* r26, r25, r24, r23 are free since vfork has no arguments */
+-ENTRY(__vfork)
+-	/* We must not create a frame. When the child unwinds to call
+-	   exec it will clobber the same frame that the parent
+-	   needs to unwind.  */
+-
+-	/* Save the PIC register. */
+-#ifdef PIC
+-	copy	%r19, %r25	/* parent */
+-#endif
+-
+-	/* Syscall saves and restores all register states */
+-	ble	0x100(%sr2,%r0)
+-	ldi	__NR_vfork,%r20
+-
+-	/* Check for error */
+-	ldi	-4096,%r1
+-	comclr,>>= %r1,%ret0,%r0        /* Note: unsigned compare. */
+-	b,n	.Lerror
+-
+-	/* Return, and DO NOT restore rp. The child may have called
+-	   functions that updated the frame's rp. This works because
+-	   the kernel ensures rp is preserved across the vfork
+-	   syscall.  */
+-	bv,n	%r0(%rp)
+-
+-.Lerror:
+-	/* Now we need a stack to call a function. We are assured
+-	   that there is no child now, so it's safe to create
+-	   a frame.  */
+-	stw	%rp, -20(%sp)
+-	.cfi_offset 2, -20
+-	stwm	%r3, 64(%sp)
+-	.cfi_def_cfa_offset -64
+-	.cfi_offset 3, 0
+-	stw	%sp, -4(%sp)
+-
+-	sub	%r0,%ret0,%r3
+-	SYSCALL_ERROR_HANDLER
+-	/* Restore the PIC register (in delay slot) on error */
+-#ifdef PIC
+-	copy	%r25, %r19    /* parent */
+-#else
+-	nop
+-#endif
+-	/* Write syscall return into errno location */
+-	stw	%r3, 0(%ret0)
+-	ldw	-84(%sp), %rp
+-	bv	%r0(%rp)
+-	ldwm	-64(%sp), %r3
+-PSEUDO_END (__vfork)
+-libc_hidden_def (__vfork)
+-weak_alias (__vfork, vfork)
+diff --git a/sysdeps/unix/sysv/linux/i386/libpthread.abilist b/sysdeps/unix/sysv/linux/i386/libpthread.abilist
+index bece86d24624ea26..7199aae573649f49 100644
+--- a/sysdeps/unix/sysv/linux/i386/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/i386/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -155,7 +154,7 @@ GLIBC_2.1 sem_wait F
+ GLIBC_2.1.1 sem_close F
+ GLIBC_2.1.1 sem_open F
+ GLIBC_2.1.1 sem_unlink F
+-GLIBC_2.1.2 __vfork F
++GLIBC_2.1.2 __libpthread_version_placeholder F
+ GLIBC_2.11 pthread_sigqueue F
+ GLIBC_2.12 pthread_getname_np F
+ GLIBC_2.12 pthread_mutex_consistent F
+diff --git a/sysdeps/unix/sysv/linux/ia64/libpthread.abilist b/sysdeps/unix/sysv/linux/ia64/libpthread.abilist
+index ccc94498268a5c74..e8a65642caec7ff1 100644
+--- a/sysdeps/unix/sysv/linux/ia64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/ia64/libpthread.abilist
+@@ -46,7 +46,6 @@ GLIBC_2.2 __read F
+ GLIBC_2.2 __res_state F
+ GLIBC_2.2 __send F
+ GLIBC_2.2 __sigaction F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 __wait F
+ GLIBC_2.2 __write F
+ GLIBC_2.2 _pthread_cleanup_pop F
+@@ -192,7 +191,6 @@ GLIBC_2.2 siglongjmp F
+ GLIBC_2.2 sigwait F
+ GLIBC_2.2 system F
+ GLIBC_2.2 tcdrain F
+-GLIBC_2.2 vfork F
+ GLIBC_2.2 wait F
+ GLIBC_2.2 waitpid F
+ GLIBC_2.2 write F
+diff --git a/sysdeps/unix/sysv/linux/ia64/pt-vfork.S b/sysdeps/unix/sysv/linux/ia64/pt-vfork.S
+deleted file mode 100644
+index 61f3e387b455d731..0000000000000000
+--- a/sysdeps/unix/sysv/linux/ia64/pt-vfork.S
++++ /dev/null
+@@ -1,48 +0,0 @@
+-/* vfork ABI-compatibility entry points for libpthread.  IA64 version.
+-   Copyright (C) 2014-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <shlib-compat.h>
+-
+-/* libpthread used to have its own vfork implementation that differed
+-   from libc's only in having a pointless micro-optimization.  There
+-   is no longer any use to having a separate copy in libpthread, but
+-   the historical ABI requires it.  For static linking, there is no
+-   need to provide anything here--the libc version will be linked in.
+-   For shared library ABI compatibility, there must be __vfork and
+-   vfork symbols in libpthread.so.  */
+-
+-#if (SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20) \
+-     || SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20))
+-
+-LOCAL_LEAF (vfork_compat)
+-	br __libc_vfork
+-	;;
+-END (vfork_compat)
+-
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20)
+-weak_alias (vfork_compat, vfork)
+-compat_symbol (libpthread, vfork_compat, vfork, GLIBC_2_0);
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20)
+-strong_alias (vfork_compat, __vfork_compat)
+-compat_symbol (libpthread, __vfork_compat, __vfork, GLIBC_2_1_2);
+-#endif
+diff --git a/sysdeps/unix/sysv/linux/m68k/coldfire/libpthread.abilist b/sysdeps/unix/sysv/linux/m68k/coldfire/libpthread.abilist
+index af82a4c632988185..ee3d0290d01f184e 100644
+--- a/sysdeps/unix/sysv/linux/m68k/coldfire/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/coldfire/libpthread.abilist
+@@ -74,7 +74,6 @@ GLIBC_2.4 __read F
+ GLIBC_2.4 __res_state F
+ GLIBC_2.4 __send F
+ GLIBC_2.4 __sigaction F
+-GLIBC_2.4 __vfork F
+ GLIBC_2.4 __wait F
+ GLIBC_2.4 __write F
+ GLIBC_2.4 _pthread_cleanup_pop F
+@@ -239,7 +238,6 @@ GLIBC_2.4 siglongjmp F
+ GLIBC_2.4 sigwait F
+ GLIBC_2.4 system F
+ GLIBC_2.4 tcdrain F
+-GLIBC_2.4 vfork F
+ GLIBC_2.4 wait F
+ GLIBC_2.4 waitpid F
+ GLIBC_2.4 write F
+diff --git a/sysdeps/unix/sysv/linux/m68k/m680x0/libpthread.abilist b/sysdeps/unix/sysv/linux/m68k/m680x0/libpthread.abilist
+index bece86d24624ea26..7199aae573649f49 100644
+--- a/sysdeps/unix/sysv/linux/m68k/m680x0/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/m68k/m680x0/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -155,7 +154,7 @@ GLIBC_2.1 sem_wait F
+ GLIBC_2.1.1 sem_close F
+ GLIBC_2.1.1 sem_open F
+ GLIBC_2.1.1 sem_unlink F
+-GLIBC_2.1.2 __vfork F
++GLIBC_2.1.2 __libpthread_version_placeholder F
+ GLIBC_2.11 pthread_sigqueue F
+ GLIBC_2.12 pthread_getname_np F
+ GLIBC_2.12 pthread_mutex_consistent F
+diff --git a/sysdeps/unix/sysv/linux/m68k/pt-vfork.c b/sysdeps/unix/sysv/linux/m68k/pt-vfork.c
+deleted file mode 100644
+index 5fbc6526aa2af493..0000000000000000
+--- a/sysdeps/unix/sysv/linux/m68k/pt-vfork.c
++++ /dev/null
+@@ -1 +0,0 @@
+-#include <sysdeps/unix/sysv/linux/aarch64/pt-vfork.c>
+diff --git a/sysdeps/unix/sysv/linux/microblaze/libpthread.abilist b/sysdeps/unix/sysv/linux/microblaze/libpthread.abilist
+index 5067375d237a0c9f..e0fbe6848f7945bd 100644
+--- a/sysdeps/unix/sysv/linux/microblaze/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/microblaze/libpthread.abilist
+@@ -45,7 +45,6 @@ GLIBC_2.18 __read F
+ GLIBC_2.18 __res_state F
+ GLIBC_2.18 __send F
+ GLIBC_2.18 __sigaction F
+-GLIBC_2.18 __vfork F
+ GLIBC_2.18 __wait F
+ GLIBC_2.18 __write F
+ GLIBC_2.18 _pthread_cleanup_pop F
+@@ -218,7 +217,6 @@ GLIBC_2.18 siglongjmp F
+ GLIBC_2.18 sigwait F
+ GLIBC_2.18 system F
+ GLIBC_2.18 tcdrain F
+-GLIBC_2.18 vfork F
+ GLIBC_2.18 wait F
+ GLIBC_2.18 waitpid F
+ GLIBC_2.18 write F
+diff --git a/sysdeps/unix/sysv/linux/microblaze/pt-vfork.S b/sysdeps/unix/sysv/linux/microblaze/pt-vfork.S
+deleted file mode 100644
+index 74bc1cdf7455f597..0000000000000000
+--- a/sysdeps/unix/sysv/linux/microblaze/pt-vfork.S
++++ /dev/null
+@@ -1,49 +0,0 @@
+-/* vfork ABI-compatibility entry points for libpthread.
+-   Copyright (C) 2014-2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <sysdep.h>
+-#include <shlib-compat.h>
+-
+-/* libpthread used to have its own vfork implementation that differed
+-   from libc's only in having a pointless micro-optimization.  There
+-   is no longer any use to having a separate copy in libpthread, but
+-   the historical ABI requires it.  For static linking, there is no
+-   need to provide anything here--the libc version will be linked in.
+-   For shared library ABI compatibility, there must be __vfork and
+-   vfork symbols in libpthread.so.
+-
+-   As of GCC 7, microblaze can *not* rely on the compiler to generate
+-   a tail call from this vfork to __libc_vfork.  */
+-
+-#if (SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20) \
+-       || SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20))
+-
+-ENTRY (vfork_compat)
+-	bri	__libc_vfork@PLT
+-END (vfork_compat)
+-
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_0, GLIBC_2_20)
+-compat_symbol (libpthread, vfork_compat, vfork, GLIBC_2_0)
+-#endif
+-
+-#if SHLIB_COMPAT (libpthread, GLIBC_2_1_2, GLIBC_2_20)
+-strong_alias (vfork_compat, vfork_compat2)
+-compat_symbol (libpthread, vfork_compat2, __vfork, GLIBC_2_1_2)
+-#endif
+diff --git a/sysdeps/unix/sysv/linux/mips/mips32/libpthread.abilist b/sysdeps/unix/sysv/linux/mips/mips32/libpthread.abilist
+index 02144967c638cdbe..f60b22efb5b5f683 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips32/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips32/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -140,7 +139,6 @@ GLIBC_2.2 __pthread_rwlock_unlock F
+ GLIBC_2.2 __pthread_rwlock_wrlock F
+ GLIBC_2.2 __pwrite64 F
+ GLIBC_2.2 __res_state F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 lseek64 F
+ GLIBC_2.2 open64 F
+ GLIBC_2.2 pread F
+diff --git a/sysdeps/unix/sysv/linux/mips/mips64/libpthread.abilist b/sysdeps/unix/sysv/linux/mips/mips64/libpthread.abilist
+index 02144967c638cdbe..f60b22efb5b5f683 100644
+--- a/sysdeps/unix/sysv/linux/mips/mips64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/mips/mips64/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -140,7 +139,6 @@ GLIBC_2.2 __pthread_rwlock_unlock F
+ GLIBC_2.2 __pthread_rwlock_wrlock F
+ GLIBC_2.2 __pwrite64 F
+ GLIBC_2.2 __res_state F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 lseek64 F
+ GLIBC_2.2 open64 F
+ GLIBC_2.2 pread F
+diff --git a/sysdeps/unix/sysv/linux/mips/pt-vfork.S b/sysdeps/unix/sysv/linux/mips/pt-vfork.S
+deleted file mode 100644
+index 65cc3823ac872b35..0000000000000000
+--- a/sysdeps/unix/sysv/linux/mips/pt-vfork.S
++++ /dev/null
+@@ -1 +0,0 @@
+-#include <sysdeps/unix/sysv/linux/alpha/pt-vfork.S>
+diff --git a/sysdeps/unix/sysv/linux/nios2/pt-vfork.S b/sysdeps/unix/sysv/linux/nios2/pt-vfork.S
+deleted file mode 100644
+index 147427a42d2d74a7..0000000000000000
+--- a/sysdeps/unix/sysv/linux/nios2/pt-vfork.S
++++ /dev/null
+@@ -1 +0,0 @@
+-# Nios2 does not require a stub for vfork in libpthread.
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc32/libpthread.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc32/libpthread.abilist
+index 09e8447b06f828be..c7d9b7898640730d 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc32/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc32/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -155,7 +154,7 @@ GLIBC_2.1 sem_wait F
+ GLIBC_2.1.1 sem_close F
+ GLIBC_2.1.1 sem_open F
+ GLIBC_2.1.1 sem_unlink F
+-GLIBC_2.1.2 __vfork F
++GLIBC_2.1.2 __libpthread_version_placeholder F
+ GLIBC_2.11 pthread_sigqueue F
+ GLIBC_2.12 pthread_getname_np F
+ GLIBC_2.12 pthread_mutex_consistent F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread-le.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread-le.abilist
+index 9a9e4cee85b18a35..6945b7cbe4c2bde8 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread-le.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread-le.abilist
+@@ -45,7 +45,6 @@ GLIBC_2.17 __read F
+ GLIBC_2.17 __res_state F
+ GLIBC_2.17 __send F
+ GLIBC_2.17 __sigaction F
+-GLIBC_2.17 __vfork F
+ GLIBC_2.17 __wait F
+ GLIBC_2.17 __write F
+ GLIBC_2.17 _pthread_cleanup_pop F
+@@ -216,7 +215,6 @@ GLIBC_2.17 siglongjmp F
+ GLIBC_2.17 sigwait F
+ GLIBC_2.17 system F
+ GLIBC_2.17 tcdrain F
+-GLIBC_2.17 vfork F
+ GLIBC_2.17 wait F
+ GLIBC_2.17 waitpid F
+ GLIBC_2.17 write F
+diff --git a/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread.abilist b/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread.abilist
+index 8300958d4721d6a6..3500cce6c1124996 100644
+--- a/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/powerpc/powerpc64/libpthread.abilist
+@@ -68,7 +68,6 @@ GLIBC_2.3 __read F
+ GLIBC_2.3 __res_state F
+ GLIBC_2.3 __send F
+ GLIBC_2.3 __sigaction F
+-GLIBC_2.3 __vfork F
+ GLIBC_2.3 __wait F
+ GLIBC_2.3 __write F
+ GLIBC_2.3 _pthread_cleanup_pop F
+@@ -214,7 +213,6 @@ GLIBC_2.3 siglongjmp F
+ GLIBC_2.3 sigwait F
+ GLIBC_2.3 system F
+ GLIBC_2.3 tcdrain F
+-GLIBC_2.3 vfork F
+ GLIBC_2.3 wait F
+ GLIBC_2.3 waitpid F
+ GLIBC_2.3 write F
+diff --git a/sysdeps/unix/sysv/linux/riscv/pt-vfork.S b/sysdeps/unix/sysv/linux/riscv/pt-vfork.S
+deleted file mode 100644
+index 1cc8931700702e65..0000000000000000
+--- a/sysdeps/unix/sysv/linux/riscv/pt-vfork.S
++++ /dev/null
+@@ -1 +0,0 @@
+-/* Not needed.  */
+diff --git a/sysdeps/unix/sysv/linux/s390/pt-vfork.S b/sysdeps/unix/sysv/linux/s390/pt-vfork.S
+deleted file mode 100644
+index 65cc3823ac872b35..0000000000000000
+--- a/sysdeps/unix/sysv/linux/s390/pt-vfork.S
++++ /dev/null
+@@ -1 +0,0 @@
+-#include <sysdeps/unix/sysv/linux/alpha/pt-vfork.S>
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-32/libpthread.abilist b/sysdeps/unix/sysv/linux/s390/s390-32/libpthread.abilist
+index d05468f3b2732e92..f093634d7edce2f2 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-32/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-32/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -155,7 +154,7 @@ GLIBC_2.1 sem_wait F
+ GLIBC_2.1.1 sem_close F
+ GLIBC_2.1.1 sem_open F
+ GLIBC_2.1.1 sem_unlink F
+-GLIBC_2.1.2 __vfork F
++GLIBC_2.1.2 __libpthread_version_placeholder F
+ GLIBC_2.11 pthread_sigqueue F
+ GLIBC_2.12 pthread_getname_np F
+ GLIBC_2.12 pthread_mutex_consistent F
+diff --git a/sysdeps/unix/sysv/linux/s390/s390-64/libpthread.abilist b/sysdeps/unix/sysv/linux/s390/s390-64/libpthread.abilist
+index e8161aa747402b72..47204f166c29a773 100644
+--- a/sysdeps/unix/sysv/linux/s390/s390-64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/s390/s390-64/libpthread.abilist
+@@ -48,7 +48,6 @@ GLIBC_2.2 __read F
+ GLIBC_2.2 __res_state F
+ GLIBC_2.2 __send F
+ GLIBC_2.2 __sigaction F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 __wait F
+ GLIBC_2.2 __write F
+ GLIBC_2.2 _pthread_cleanup_pop F
+@@ -194,7 +193,6 @@ GLIBC_2.2 siglongjmp F
+ GLIBC_2.2 sigwait F
+ GLIBC_2.2 system F
+ GLIBC_2.2 tcdrain F
+-GLIBC_2.2 vfork F
+ GLIBC_2.2 wait F
+ GLIBC_2.2 waitpid F
+ GLIBC_2.2 write F
+diff --git a/sysdeps/unix/sysv/linux/sh/libpthread.abilist b/sysdeps/unix/sysv/linux/sh/libpthread.abilist
+index bcba07f57558174f..e9b3be6ac8e8f367 100644
+--- a/sysdeps/unix/sysv/linux/sh/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/sh/libpthread.abilist
+@@ -46,7 +46,6 @@ GLIBC_2.2 __read F
+ GLIBC_2.2 __res_state F
+ GLIBC_2.2 __send F
+ GLIBC_2.2 __sigaction F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 __wait F
+ GLIBC_2.2 __write F
+ GLIBC_2.2 _pthread_cleanup_pop F
+@@ -192,7 +191,6 @@ GLIBC_2.2 siglongjmp F
+ GLIBC_2.2 sigwait F
+ GLIBC_2.2 system F
+ GLIBC_2.2 tcdrain F
+-GLIBC_2.2 vfork F
+ GLIBC_2.2 wait F
+ GLIBC_2.2 waitpid F
+ GLIBC_2.2 write F
+diff --git a/sysdeps/unix/sysv/linux/sh/pt-vfork.S b/sysdeps/unix/sysv/linux/sh/pt-vfork.S
+deleted file mode 100644
+index 65cc3823ac872b35..0000000000000000
+--- a/sysdeps/unix/sysv/linux/sh/pt-vfork.S
++++ /dev/null
+@@ -1 +0,0 @@
+-#include <sysdeps/unix/sysv/linux/alpha/pt-vfork.S>
+diff --git a/sysdeps/unix/sysv/linux/sparc/pt-vfork.S b/sysdeps/unix/sysv/linux/sparc/pt-vfork.S
+deleted file mode 100644
+index 65cc3823ac872b35..0000000000000000
+--- a/sysdeps/unix/sysv/linux/sparc/pt-vfork.S
++++ /dev/null
+@@ -1 +0,0 @@
+-#include <sysdeps/unix/sysv/linux/alpha/pt-vfork.S>
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc32/libpthread.abilist b/sysdeps/unix/sysv/linux/sparc/sparc32/libpthread.abilist
+index b413007ccbd2b7b3..2d9b958efa99feb8 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc32/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc32/libpthread.abilist
+@@ -114,7 +114,6 @@ GLIBC_2.0 siglongjmp F
+ GLIBC_2.0 sigwait F
+ GLIBC_2.0 system F
+ GLIBC_2.0 tcdrain F
+-GLIBC_2.0 vfork F
+ GLIBC_2.0 wait F
+ GLIBC_2.0 waitpid F
+ GLIBC_2.0 write F
+@@ -155,7 +154,7 @@ GLIBC_2.1 sem_wait F
+ GLIBC_2.1.1 sem_close F
+ GLIBC_2.1.1 sem_open F
+ GLIBC_2.1.1 sem_unlink F
+-GLIBC_2.1.2 __vfork F
++GLIBC_2.1.2 __libpthread_version_placeholder F
+ GLIBC_2.11 pthread_sigqueue F
+ GLIBC_2.12 pthread_getname_np F
+ GLIBC_2.12 pthread_mutex_consistent F
+diff --git a/sysdeps/unix/sysv/linux/sparc/sparc64/libpthread.abilist b/sysdeps/unix/sysv/linux/sparc/sparc64/libpthread.abilist
+index ccc94498268a5c74..e8a65642caec7ff1 100644
+--- a/sysdeps/unix/sysv/linux/sparc/sparc64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/sparc/sparc64/libpthread.abilist
+@@ -46,7 +46,6 @@ GLIBC_2.2 __read F
+ GLIBC_2.2 __res_state F
+ GLIBC_2.2 __send F
+ GLIBC_2.2 __sigaction F
+-GLIBC_2.2 __vfork F
+ GLIBC_2.2 __wait F
+ GLIBC_2.2 __write F
+ GLIBC_2.2 _pthread_cleanup_pop F
+@@ -192,7 +191,6 @@ GLIBC_2.2 siglongjmp F
+ GLIBC_2.2 sigwait F
+ GLIBC_2.2 system F
+ GLIBC_2.2 tcdrain F
+-GLIBC_2.2 vfork F
+ GLIBC_2.2 wait F
+ GLIBC_2.2 waitpid F
+ GLIBC_2.2 write F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/64/libpthread.abilist b/sysdeps/unix/sysv/linux/x86_64/64/libpthread.abilist
+index 931c8277a859999e..4fbb72ffb37ba689 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/64/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/64/libpthread.abilist
+@@ -46,7 +46,6 @@ GLIBC_2.2.5 __read F
+ GLIBC_2.2.5 __res_state F
+ GLIBC_2.2.5 __send F
+ GLIBC_2.2.5 __sigaction F
+-GLIBC_2.2.5 __vfork F
+ GLIBC_2.2.5 __wait F
+ GLIBC_2.2.5 __write F
+ GLIBC_2.2.5 _pthread_cleanup_pop F
+@@ -193,7 +192,6 @@ GLIBC_2.2.5 siglongjmp F
+ GLIBC_2.2.5 sigwait F
+ GLIBC_2.2.5 system F
+ GLIBC_2.2.5 tcdrain F
+-GLIBC_2.2.5 vfork F
+ GLIBC_2.2.5 wait F
+ GLIBC_2.2.5 waitpid F
+ GLIBC_2.2.5 write F
+diff --git a/sysdeps/unix/sysv/linux/x86_64/x32/libpthread.abilist b/sysdeps/unix/sysv/linux/x86_64/x32/libpthread.abilist
+index c09c9b015a66f8f9..eec4b99b8bb69d74 100644
+--- a/sysdeps/unix/sysv/linux/x86_64/x32/libpthread.abilist
++++ b/sysdeps/unix/sysv/linux/x86_64/x32/libpthread.abilist
+@@ -45,7 +45,6 @@ GLIBC_2.16 __read F
+ GLIBC_2.16 __res_state F
+ GLIBC_2.16 __send F
+ GLIBC_2.16 __sigaction F
+-GLIBC_2.16 __vfork F
+ GLIBC_2.16 __wait F
+ GLIBC_2.16 __write F
+ GLIBC_2.16 _pthread_cleanup_pop F
+@@ -216,7 +215,6 @@ GLIBC_2.16 siglongjmp F
+ GLIBC_2.16 sigwait F
+ GLIBC_2.16 system F
+ GLIBC_2.16 tcdrain F
+-GLIBC_2.16 vfork F
+ GLIBC_2.16 wait F
+ GLIBC_2.16 waitpid F
+ GLIBC_2.16 write F

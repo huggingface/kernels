@@ -1,0 +1,269 @@
+commit 3459e23dd4ae4aa8999df7111d833a0bb9add7cd
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:21 2018 +0100
+
+    S390: Refactor wcscmp ifunc handling.
+    
+    The ifunc handling for wcscmp is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcscmp variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcscmp variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcscmp.
+            * sysdeps/s390/multiarch/wcscmp-c.c: Move to ...
+            * sysdeps/s390/wcscmp-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcscmp-vx.S: Move to ...
+            * sysdeps/s390/wcscmp-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcscmp.c: Move to ...
+            * sysdeps/s390/wcscmp.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcscmp.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index cafabe62165f0213..fb104af231c48d3a 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -67,5 +67,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcsncpy wcsncpy-vx wcsncpy-c \
+ 		   wcpncpy wcpncpy-vx wcpncpy-c \
+ 		   wcscat wcscat-vx wcscat-c \
+-		   wcsncat wcsncat-vx wcsncat-c
++		   wcsncat wcsncat-vx wcsncat-c \
++		   wcscmp wcscmp-vx wcscmp-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcscmp.h b/sysdeps/s390/ifunc-wcscmp.h
+new file mode 100644
+index 0000000000000000..99fe0213021458ae
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcscmp.h
+@@ -0,0 +1,52 @@
++/* wcscmp variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCSCMP_IFUNC	1
++#else
++# define HAVE_WCSCMP_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCSCMP_IFUNC_AND_VX_SUPPORT HAVE_WCSCMP_IFUNC
++#else
++# define HAVE_WCSCMP_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCSCMP_DEFAULT		WCSCMP_Z13
++# define HAVE_WCSCMP_C		0
++# define HAVE_WCSCMP_Z13	1
++#else
++# define WCSCMP_DEFAULT		WCSCMP_C
++# define HAVE_WCSCMP_C		1
++# define HAVE_WCSCMP_Z13	HAVE_WCSCMP_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCSCMP_C
++# define WCSCMP_C		__wcscmp_c
++#else
++# define WCSCMP_C		NULL
++#endif
++
++#if HAVE_WCSCMP_Z13
++# define WCSCMP_Z13		__wcscmp_vx
++#else
++# define WCSCMP_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 6cb75950c2c453f6..70162d0eaa6a0dee 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcscmp wcscmp-vx wcscmp-c \
+-		   wcsncmp wcsncmp-vx wcsncmp-c \
++sysdep_routines += wcsncmp wcsncmp-vx wcsncmp-c \
+ 		   wcschr wcschr-vx wcschr-c \
+ 		   wcschrnul wcschrnul-vx wcschrnul-c \
+ 		   wcsrchr wcsrchr-vx wcsrchr-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 7b7b1e7497ec1a4f..f461063c80b364fb 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -54,6 +54,7 @@
+ #include <ifunc-wcpncpy.h>
+ #include <ifunc-wcscat.h>
+ #include <ifunc-wcsncat.h>
++#include <ifunc-wcscmp.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -528,6 +529,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSNCAT_IFUNC  */
+ 
++#if HAVE_WCSCMP_IFUNC
++    IFUNC_IMPL (i, name, wcscmp,
++# if HAVE_WCSCMP_Z13
++		IFUNC_IMPL_ADD (array, i, wcscmp,
++				dl_hwcap & HWCAP_S390_VX, WCSCMP_Z13)
++# endif
++# if HAVE_WCSCMP_C
++		IFUNC_IMPL_ADD (array, i, wcscmp, 1, WCSCMP_C)
++# endif
++		)
++#endif /* HAVE_WCSCMP_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -536,8 +549,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcscmp);
+-
+   IFUNC_VX_IMPL (wcsncmp);
+ 
+   IFUNC_VX_IMPL (wcschr);
+diff --git a/sysdeps/s390/multiarch/wcscmp-c.c b/sysdeps/s390/wcscmp-c.c
+similarity index 72%
+rename from sysdeps/s390/multiarch/wcscmp-c.c
+rename to sysdeps/s390/wcscmp-c.c
+index ce0817ae97deab77..643ba7a682469e73 100644
+--- a/sysdeps/s390/multiarch/wcscmp-c.c
++++ b/sysdeps/s390/wcscmp-c.c
+@@ -16,17 +16,19 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCSCMP  __wcscmp_c
++#include <ifunc-wcscmp.h>
+ 
+-# include <wchar.h>
+-extern __typeof (wcscmp) __wcscmp_c;
+-# undef weak_alias
+-# define weak_alias(name, alias)
+-# ifdef SHARED
+-#  undef libc_hidden_def
+-#  define libc_hidden_def(name)				\
++#if HAVE_WCSCMP_C
++# if HAVE_WCSCMP_IFUNC
++#  define WCSCMP WCSCMP_C
++#  undef weak_alias
++#  define weak_alias(name, alias)
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_def
++#   define libc_hidden_def(name)				\
+   __hidden_ver1 (__wcscmp_c, __GI___wcscmp, __wcscmp_c);
+-# endif /* SHARED */
++#  endif
++# endif
++
+ # include <wcsmbs/wcscmp.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/wcscmp-vx.S b/sysdeps/s390/wcscmp-vx.S
+similarity index 92%
+rename from sysdeps/s390/multiarch/wcscmp-vx.S
+rename to sysdeps/s390/wcscmp-vx.S
+index 14267dbfc7d9b936..a2789d8a693802cc 100644
+--- a/sysdeps/s390/multiarch/wcscmp-vx.S
++++ b/sysdeps/s390/wcscmp-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcscmp.h>
++#if HAVE_WCSCMP_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -36,7 +37,7 @@
+    -v17=part of s2
+    -v18=index of unequal
+ */
+-ENTRY(__wcscmp_vx)
++ENTRY(WCSCMP_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -127,5 +128,14 @@ ENTRY(__wcscmp_vx)
+ .Lend_equal:
+ 	lghi	%r2,0
+ 	br	%r14
+-END(__wcscmp_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(WCSCMP_Z13)
++
++# if ! HAVE_WCSCMP_IFUNC
++strong_alias (WCSCMP_Z13, __wcscmp)
++weak_alias (__wcscmp, wcscmp)
++# endif
++
++# if ! HAVE_WCSCMP_C && defined SHARED && IS_IN (libc)
++strong_alias (WCSCMP_Z13, __GI___wcscmp)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcscmp.c b/sysdeps/s390/wcscmp.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/wcscmp.c
+rename to sysdeps/s390/wcscmp.c
+index 5ee0fd4d881db9cb..769c73506e40c3a0 100644
+--- a/sysdeps/s390/multiarch/wcscmp.c
++++ b/sysdeps/s390/wcscmp.c
+@@ -16,15 +16,26 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcscmp.h>
++
++#if HAVE_WCSCMP_IFUNC
+ # define __wcscmp __redirect___wcscmp
+ # include <wchar.h>
+ # undef __wcscmp
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc_redirected (__redirect___wcscmp, __wcscmp)
+-weak_alias (__wcscmp, wcscmp)
++# if HAVE_WCSCMP_C
++extern __typeof (__redirect___wcscmp) WCSCMP_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcscmp.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_WCSCMP_Z13
++extern __typeof (__redirect___wcscmp) WCSCMP_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect___wcscmp, __wcscmp,
++		      (HAVE_WCSCMP_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCSCMP_Z13
++		      : WCSCMP_DEFAULT
++		      )
++weak_alias (__wcscmp, wcscmp)
++#endif

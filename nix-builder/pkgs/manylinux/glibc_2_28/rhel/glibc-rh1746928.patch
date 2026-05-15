@@ -1,0 +1,117 @@
+commit 669ff911e2571f74a2668493e326ac9a505776bd
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Feb 8 12:46:19 2019 +0100
+
+    nptl: Avoid fork handler lock for async-signal-safe fork [BZ #24161]
+    
+    Commit 27761a1042daf01987e7d79636d0c41511c6df3c ("Refactor atfork
+    handlers") introduced a lock, atfork_lock, around fork handler list
+    accesses.  It turns out that this lock occasionally results in
+    self-deadlocks in malloc/tst-mallocfork2:
+    
+    (gdb) bt
+    #0  __lll_lock_wait_private ()
+        at ../sysdeps/unix/sysv/linux/x86_64/lowlevellock.S:63
+    #1  0x00007f160c6f927a in __run_fork_handlers (who=(unknown: 209394016),
+        who@entry=atfork_run_prepare) at register-atfork.c:116
+    #2  0x00007f160c6b7897 in __libc_fork () at ../sysdeps/nptl/fork.c:58
+    #3  0x00000000004027d6 in sigusr1_handler (signo=<optimized out>)
+        at tst-mallocfork2.c:80
+    #4  sigusr1_handler (signo=<optimized out>) at tst-mallocfork2.c:64
+    #5  <signal handler called>
+    #6  0x00007f160c6f92e4 in __run_fork_handlers (who=who@entry=atfork_run_parent)
+        at register-atfork.c:136
+    #7  0x00007f160c6b79a2 in __libc_fork () at ../sysdeps/nptl/fork.c:152
+    #8  0x0000000000402567 in do_test () at tst-mallocfork2.c:156
+    #9  0x0000000000402dd2 in support_test_main (argc=1, argv=0x7ffc81ef1ab0,
+        config=config@entry=0x7ffc81ef1970) at support_test_main.c:350
+    #10 0x0000000000402362 in main (argc=<optimized out>, argv=<optimized out>)
+        at ../support/test-driver.c:168
+    
+    If no locking happens in the single-threaded case (where fork is
+    expected to be async-signal-safe), this deadlock is avoided.
+    (pthread_atfork is not required to be async-signal-safe, so a fork
+    call from a signal handler interrupting pthread_atfork is not
+    a problem.)
+
+diff --git a/nptl/register-atfork.c b/nptl/register-atfork.c
+index bc797b7..80a1bec 100644
+--- a/nptl/register-atfork.c
++++ b/nptl/register-atfork.c
+@@ -107,13 +107,14 @@ __unregister_atfork (void *dso_handle)
+ }
+ 
+ void
+-__run_fork_handlers (enum __run_fork_handler_type who)
++__run_fork_handlers (enum __run_fork_handler_type who, _Bool do_locking)
+ {
+   struct fork_handler *runp;
+ 
+   if (who == atfork_run_prepare)
+     {
+-      lll_lock (atfork_lock, LLL_PRIVATE);
++      if (do_locking)
++	lll_lock (atfork_lock, LLL_PRIVATE);
+       size_t sl = fork_handler_list_size (&fork_handlers);
+       for (size_t i = sl; i > 0; i--)
+ 	{
+@@ -133,7 +134,8 @@ __run_fork_handlers (enum __run_fork_handler_type who)
+ 	  else if (who == atfork_run_parent && runp->parent_handler)
+ 	    runp->parent_handler ();
+ 	}
+-      lll_unlock (atfork_lock, LLL_PRIVATE);
++      if (do_locking)
++	lll_unlock (atfork_lock, LLL_PRIVATE);
+     }
+ }
+ 
+diff --git a/sysdeps/nptl/fork.c b/sysdeps/nptl/fork.c
+index bd68f18..14b69a6 100644
+--- a/sysdeps/nptl/fork.c
++++ b/sysdeps/nptl/fork.c
+@@ -55,7 +55,7 @@ __libc_fork (void)
+      but our current fork implementation is not.  */
+   bool multiple_threads = THREAD_GETMEM (THREAD_SELF, header.multiple_threads);
+ 
+-  __run_fork_handlers (atfork_run_prepare);
++  __run_fork_handlers (atfork_run_prepare, multiple_threads);
+ 
+   /* If we are not running multiple threads, we do not have to
+      preserve lock state.  If fork runs from a signal handler, only
+@@ -134,7 +134,7 @@ __libc_fork (void)
+       __rtld_lock_initialize (GL(dl_load_lock));
+ 
+       /* Run the handlers registered for the child.  */
+-      __run_fork_handlers (atfork_run_child);
++      __run_fork_handlers (atfork_run_child, multiple_threads);
+     }
+   else
+     {
+@@ -149,7 +149,7 @@ __libc_fork (void)
+ 	}
+ 
+       /* Run the handlers registered for the parent.  */
+-      __run_fork_handlers (atfork_run_parent);
++      __run_fork_handlers (atfork_run_parent, multiple_threads);
+     }
+ 
+   return pid;
+diff --git a/sysdeps/nptl/fork.h b/sysdeps/nptl/fork.h
+index a1c3b26..99ed760 100644
+--- a/sysdeps/nptl/fork.h
++++ b/sysdeps/nptl/fork.h
+@@ -52,9 +52,11 @@ enum __run_fork_handler_type
+    - atfork_run_child: run all the CHILD_HANDLER and unlocks the internal
+ 		       lock.
+    - atfork_run_parent: run all the PARENT_HANDLER and unlocks the internal
+-			lock.  */
+-extern void __run_fork_handlers (enum __run_fork_handler_type who)
+-  attribute_hidden;
++			lock.
++
++   Perform locking only if DO_LOCKING.  */
++extern void __run_fork_handlers (enum __run_fork_handler_type who,
++				 _Bool do_locking) attribute_hidden;
+ 
+ /* C library side function to register new fork handlers.  */
+ extern int __register_atfork (void (*__prepare) (void),

@@ -1,0 +1,53 @@
+commit 8d42bf859a289944749d9f978c076cd318119867
+Author: Lucas A. M. Magalhaes <lamm@linux.ibm.com>
+Date:   Mon Feb 17 09:09:52 2020 -0300
+
+    Fix tst-pkey expectations on pkey_get [BZ #23202]
+    
+    From the GNU C Library manual, the pkey_set can receive a combination of
+    PKEY_DISABLE_WRITE and PKEY_DISABLE_ACCESS.  However PKEY_DISABLE_ACCESS
+    is more restrictive than PKEY_DISABLE_WRITE and includes its behavior.
+    
+    The test expects that after setting
+    (PKEY_DISABLE_WRITE|PKEY_DISABLE_ACCESS) pkey_get should return the
+    same.  This may not be true as PKEY_DISABLE_ACCESS will succeed in
+    describing the state of the key in this case.
+    
+    The pkey behavior during signal handling is different between x86 and
+    POWER.  This change make the test compatible with both architectures.
+    
+    Reviewed-by: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+
+diff --git a/sysdeps/unix/sysv/linux/tst-pkey.c b/sysdeps/unix/sysv/linux/tst-pkey.c
+index 5f721d4444490945..600b6f0098def773 100644
+--- a/sysdeps/unix/sysv/linux/tst-pkey.c
++++ b/sysdeps/unix/sysv/linux/tst-pkey.c
+@@ -37,7 +37,7 @@ static pthread_barrier_t barrier;
+ 
+ /* The keys used for testing.  These have been allocated with access
+    rights set based on their array index.  */
+-enum { key_count = 4 };
++enum { key_count = 3 };
+ static int keys[key_count];
+ static volatile int *pages[key_count];
+ 
+@@ -111,14 +111,16 @@ check_page_access (int page, bool write)
+ }
+ 
+ static volatile sig_atomic_t sigusr1_handler_ran;
+-
+-/* Used to check that access is revoked in signal handlers.  */
++/* Used to check the behavior in signal handlers.  In x86 all access are
++   revoked during signal handling.  In PowerPC the key permissions are
++   inherited by the interrupted thread. This test accept both approaches.  */
+ static void
+ sigusr1_handler (int signum)
+ {
+   TEST_COMPARE (signum, SIGUSR1);
+   for (int i = 0; i < key_count; ++i)
+-    TEST_COMPARE (pkey_get (keys[i]), PKEY_DISABLE_ACCESS);
++    TEST_VERIFY (pkey_get (keys[i]) == PKEY_DISABLE_ACCESS
++                 || pkey_get (keys[i]) == i);
+   sigusr1_handler_ran = 1;
+ }
+ 

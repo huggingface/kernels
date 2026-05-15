@@ -1,0 +1,38 @@
+Short description: Add syslog.target dependency.
+Author(s): Fedora glibc team <glibc@lists.fedoraproject.org>
+Origin: PATCH
+Bug-Fedora: #1070416
+Upstream status: not-needed
+
+Fedora-specific changes to the nscd.service file.
+See also: glibc-nscd-sysconfig.patch.
+
+--- a/nscd/nscd.service
++++ b/nscd/nscd.service
+@@ -2,6 +2,7 @@
+ 
+ [Unit]
+ Description=Name Service Cache Daemon
++After=syslog.target
+ 
+ [Service]
+ Type=forking
+@@ -17,3 +18,4 @@
+ 
+ [Install]
+ WantedBy=multi-user.target
++Also=nscd.socket
+diff --git a/nscd/nscd.socket b/nscd/nscd.socket
+new file mode 100644
+index 0000000..7e512d5
+--- /dev/null
++++ b/nscd/nscd.socket
+@@ -0,0 +1,8 @@
++[Unit]
++Description=Name Service Cache Daemon Socket
++
++[Socket]
++ListenDatagram=/var/run/nscd/socket
++
++[Install]
++WantedBy=sockets.target

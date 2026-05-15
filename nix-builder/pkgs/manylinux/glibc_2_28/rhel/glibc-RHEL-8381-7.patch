@@ -1,0 +1,218 @@
+commit ee6c14ed59d480720721aaacc5fb03213dc153da
+Author: Malte Skarupke <malteskarupke@fastmail.fm>
+Date:   Wed Dec 4 08:04:10 2024 -0500
+
+    nptl: Fix indentation
+    
+    In my previous change I turned a nested loop into a simple loop. I'm doing
+    the resulting indentation changes in a separate commit to make the diff on
+    the previous commit easier to review.
+    
+    Signed-off-by: Malte Skarupke <malteskarupke@fastmail.fm>
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+# Conflicts:
+#	nptl/pthread_cond_wait.c (Missing futex_wait_cancelable cleanup)
+
+diff --git a/nptl/pthread_cond_wait.c b/nptl/pthread_cond_wait.c
+index 8f12fc4ee288cf4a..964591449dc57758 100644
+--- a/nptl/pthread_cond_wait.c
++++ b/nptl/pthread_cond_wait.c
+@@ -379,107 +379,108 @@ __pthread_cond_wait_common (pthread_cond_t *cond, pthread_mutex_t *mutex,
+     }
+ 
+ 
+-      while (1)
+-	{
+-	  /* Now wait until a signal is available in our group or it is closed.
+-	     Acquire MO so that if we observe (signals == lowseq) after group
+-	     switching in __condvar_quiesce_and_switch_g1, we synchronize with that
+-	     store and will see the prior update of __g1_start done while switching
+-	     groups too.  */
+-	  unsigned int signals = atomic_load_acquire (cond->__data.__g_signals + g);
+-	  uint64_t g1_start = __condvar_load_g1_start_relaxed (cond);
+-	  unsigned int lowseq = (g1_start & 1) == g ? signals : g1_start & ~1U;
+-
+-	  if (seq < (g1_start >> 1))
+-	    {
+-	      /* If the group is closed already,
+-	         then this waiter originally had enough extra signals to
+-	         consume, up until the time its group was closed.  */
+-	       break;
+-	    }
+-
+-	  /* If there is an available signal, don't block.
+-	     If __g1_start has advanced at all, then we must be in G1
+-	     by now, perhaps in the process of switching back to an older
+-	     G2, but in either case we're allowed to consume the available
+-	     signal and should not block anymore.  */
+-	  if ((int)(signals - lowseq) >= 2)
+-	    {
+-	      /* Try to grab a signal.  See above for MO.  (if we do another loop
+-		 iteration we need to see the correct value of g1_start)  */
+-		      if (atomic_compare_exchange_weak_acquire (
+-		      		cond->__data.__g_signals + g,
++  while (1)
++    {
++      /* Now wait until a signal is available in our group or it is closed.
++         Acquire MO so that if we observe (signals == lowseq) after group
++         switching in __condvar_quiesce_and_switch_g1, we synchronize with that
++         store and will see the prior update of __g1_start done while switching
++         groups too.  */
++      unsigned int signals = atomic_load_acquire (cond->__data.__g_signals + g);
++      uint64_t g1_start = __condvar_load_g1_start_relaxed (cond);
++      unsigned int lowseq = (g1_start & 1) == g ? signals : g1_start & ~1U;
++
++      if (seq < (g1_start >> 1))
++        {
++          /* If the group is closed already,
++             then this waiter originally had enough extra signals to
++             consume, up until the time its group was closed.  */
++           break;
++        }
++
++      /* If there is an available signal, don't block.
++         If __g1_start has advanced at all, then we must be in G1
++         by now, perhaps in the process of switching back to an older
++         G2, but in either case we're allowed to consume the available
++         signal and should not block anymore.  */
++      if ((int)(signals - lowseq) >= 2)
++        {
++	  /* Try to grab a signal.  See above for MO.  (if we do another loop
++	     iteration we need to see the correct value of g1_start)  */
++	    if (atomic_compare_exchange_weak_acquire (
++			cond->__data.__g_signals + g,
+ 			&signals, signals - 2))
+-		      	break;
+-		      else
+-		      	continue;
+-	    }
++	      break;
++	    else
++	      continue;
++	}
+ 
+-	  // Now block.
+-	  struct _pthread_cleanup_buffer buffer;
+-	  struct _condvar_cleanup_buffer cbuffer;
+-	  cbuffer.wseq = wseq;
+-	  cbuffer.cond = cond;
+-	  cbuffer.mutex = mutex;
+-	  cbuffer.private = private;
+-	  __pthread_cleanup_push (&buffer, __condvar_cleanup_waiting, &cbuffer);
++      // Now block.
++      struct _pthread_cleanup_buffer buffer;
++      struct _condvar_cleanup_buffer cbuffer;
++      cbuffer.wseq = wseq;
++      cbuffer.cond = cond;
++      cbuffer.mutex = mutex;
++      cbuffer.private = private;
++      __pthread_cleanup_push (&buffer, __condvar_cleanup_waiting, &cbuffer);
+ 
+-	  if (abstime == NULL)
+-	    {
+-	      /* Block without a timeout.  */
+-	      err = futex_wait_cancelable (
+-		  cond->__data.__g_signals + g, signals, private);
+-	    }
+-	  else
++      if (abstime == NULL)
++	{
++	  /* Block without a timeout.  */
++	  err = futex_wait_cancelable
++		(cond->__data.__g_signals + g, signals, private);
++	}
++      else
++	{
++	  /* Block, but with a timeout.
++	     Work around the fact that the kernel rejects negative timeout
++	     values despite them being valid.  */
++	  if (__glibc_unlikely (abstime->tv_sec < 0))
++	    err = ETIMEDOUT;
++	  else if ((flags & __PTHREAD_COND_CLOCK_MONOTONIC_MASK) != 0)
+ 	    {
+-	      /* Block, but with a timeout.
+-		 Work around the fact that the kernel rejects negative timeout
+-		 values despite them being valid.  */
+-	      if (__glibc_unlikely (abstime->tv_sec < 0))
+-	        err = ETIMEDOUT;
+-
+-	      else if ((flags & __PTHREAD_COND_CLOCK_MONOTONIC_MASK) != 0)
++	      /* CLOCK_MONOTONIC is requested.  */
++	      struct timespec rt;
++	      if (__clock_gettime (CLOCK_MONOTONIC, &rt) != 0)
++		__libc_fatal ("clock_gettime does not support "
++			      "CLOCK_MONOTONIC\n");
++	      /* Convert the absolute timeout value to a relative
++		 timeout.  */
++	      rt.tv_sec = abstime->tv_sec - rt.tv_sec;
++	      rt.tv_nsec = abstime->tv_nsec - rt.tv_nsec;
++	      if (rt.tv_nsec < 0)
+ 		{
+-		  /* CLOCK_MONOTONIC is requested.  */
+-		  struct timespec rt;
+-		  if (__clock_gettime (CLOCK_MONOTONIC, &rt) != 0)
+-		    __libc_fatal ("clock_gettime does not support "
+-				  "CLOCK_MONOTONIC\n");
+-		  /* Convert the absolute timeout value to a relative
+-		     timeout.  */
+-		  rt.tv_sec = abstime->tv_sec - rt.tv_sec;
+-		  rt.tv_nsec = abstime->tv_nsec - rt.tv_nsec;
+-		  if (rt.tv_nsec < 0)
+-		    {
+-		      rt.tv_nsec += 1000000000;
+-		      --rt.tv_sec;
+-		    }
+-		  /* Did we already time out?  */
+-		  if (__glibc_unlikely (rt.tv_sec < 0))
+-		    err = ETIMEDOUT;
+-		  else
+-		    err = futex_reltimed_wait_cancelable
+-			(cond->__data.__g_signals + g, signals, &rt, private);
++		  rt.tv_nsec += 1000000000;
++		  --rt.tv_sec;
+ 		}
++	      /* Did we already time out?  */
++	      if (__glibc_unlikely (rt.tv_sec < 0))
++		err = ETIMEDOUT;
+ 	      else
+-		{
+-		  /* Use CLOCK_REALTIME.  */
+-		  err = futex_abstimed_wait_cancelable
+-		      (cond->__data.__g_signals + g, signals, abstime, private);
+-		}
++		err = futex_reltimed_wait_cancelable
++			(cond->__data.__g_signals + g, signals,
++			 &rt, private);
+ 	    }
+-
+-	  __pthread_cleanup_pop (&buffer, 0);
+-
+-	  if (__glibc_unlikely (err == ETIMEDOUT))
++	  else
+ 	    {
+-	      /* If we timed out, we effectively cancel waiting.  */
+-	      __condvar_cancel_waiting (cond, seq, g, private);
+-	      result = ETIMEDOUT;
+-	      break;
++	      /* Use CLOCK_REALTIME.  */
++	      err = futex_abstimed_wait_cancelable
++			(cond->__data.__g_signals + g, signals,
++			 abstime, private);
+ 	    }
+ 	}
+ 
++      __pthread_cleanup_pop (&buffer, 0);
++
++      if (__glibc_unlikely (err == ETIMEDOUT))
++	{
++	  /* If we timed out, we effectively cancel waiting.  */
++	  __condvar_cancel_waiting (cond, seq, g, private);
++	  result = ETIMEDOUT;
++	  break;
++	}
++    }
++
+   /* Confirm that we have been woken.  We do that before acquiring the mutex
+      to allow for execution of pthread_cond_destroy while having acquired the
+      mutex.  */

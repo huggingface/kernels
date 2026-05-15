@@ -1,0 +1,37 @@
+commit 48c3c1238925410b4e777dc94e2fde4cc9132d44
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Jun 14 16:28:41 2019 +0200
+
+    Linux: Fix __glibc_has_include use for <sys/stat.h> and statx
+    
+    The identifier linux is used as a predefined macro, so the actually
+    used path is 1/stat.h or 1/stat64.h.  Using the quote-based version
+    triggers a file lookup for /usr/include/bits/linux/stat.h (or whatever
+    directory is used to store bits/statx.h), but since bits/ is pretty
+    much reserved by glibc, this appears to be acceptable.
+    
+    This is related to GCC PR 80005: incorrect macro expansion of the
+    argument of __has_include.
+    
+    Suggested by Zack Weinberg.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/sysdeps/unix/sysv/linux/bits/statx.h b/sysdeps/unix/sysv/linux/bits/statx.h
+index d36f44efc60a0bed..206878723fd37881 100644
+--- a/sysdeps/unix/sysv/linux/bits/statx.h
++++ b/sysdeps/unix/sysv/linux/bits/statx.h
+@@ -23,8 +23,11 @@
+ #endif
+ 
+ /* Use the Linux kernel header if available.  */
+-#if __glibc_has_include (<linux/stat.h>)
+-# include <linux/stat.h>
++
++/* Use "" to work around incorrect macro expansion of the
++   __has_include argument (GCC PR 80005).  */
++#if __glibc_has_include ("linux/stat.h")
++# include "linux/stat.h"
+ # ifdef STATX_TYPE
+ #  define __statx_timestamp_defined 1
+ #  define __statx_defined 1

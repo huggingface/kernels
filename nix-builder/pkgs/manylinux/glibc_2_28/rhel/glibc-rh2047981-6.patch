@@ -1,0 +1,822 @@
+commit fada9018199c21c469ff0e731ef75c6020074ac9
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Apr 21 19:49:51 2021 +0200
+
+    dlfcn: dlerror needs to call free from the base namespace [BZ #24773]
+    
+    Calling free directly may end up freeing a pointer allocated by the
+    dynamic loader using malloc from libc.so in the base namespace using
+    the allocator from libc.so in a secondary namespace, which results in
+    crashes.
+    
+    This commit redirects the free call through GLRO and the dynamic
+    linker, to reach the correct namespace.  It also cleans up the dlerror
+    handling along the way, so that pthread_setspecific is no longer
+    needed (which avoids triggering bug 24774).
+
+Conflicts:
+	dlfcn/dlfreeres.c - Remove.
+	malloc/set-freeres.c
+		Manual merge against disinct set of resources.
+	malloc/thread-freeres.c
+		Manual merge against disinct set of resources.
+
+diff --git a/dlfcn/Makefile b/dlfcn/Makefile
+index 34f9923334f42edf..0b213b7d9fefcdc9 100644
+--- a/dlfcn/Makefile
++++ b/dlfcn/Makefile
+@@ -22,9 +22,10 @@ include ../Makeconfig
+ headers		:= bits/dlfcn.h dlfcn.h
+ extra-libs	:= libdl
+ libdl-routines	:= dlopen dlclose dlsym dlvsym dlerror dladdr dladdr1 dlinfo \
+-		   dlmopen dlfcn dlfreeres
++		   dlmopen dlfcn
+ routines	:= $(patsubst %,s%,$(filter-out dlfcn,$(libdl-routines)))
+ elide-routines.os := $(routines)
++routines += libc_dlerror_result
+ 
+ extra-libs-others := libdl
+ 
+diff --git a/dlfcn/Versions b/dlfcn/Versions
+index 1df6925a92ff8b36..f07cb929aa13eaf2 100644
+--- a/dlfcn/Versions
++++ b/dlfcn/Versions
+@@ -1,3 +1,8 @@
++libc {
++  GLIBC_PRIVATE {
++    __libc_dlerror_result;
++  }
++}
+ libdl {
+   GLIBC_2.0 {
+     dladdr; dlclose; dlerror; dlopen; dlsym;
+@@ -13,6 +18,5 @@ libdl {
+   }
+   GLIBC_PRIVATE {
+     _dlfcn_hook;
+-    __libdl_freeres;
+   }
+ }
+diff --git a/dlfcn/dlerror.c b/dlfcn/dlerror.c
+index e08ac3afef302817..070eadbf7c1c0b1c 100644
+--- a/dlfcn/dlerror.c
++++ b/dlfcn/dlerror.c
+@@ -25,6 +25,8 @@
+ #include <libc-lock.h>
+ #include <ldsodefs.h>
+ #include <libc-symbols.h>
++#include <assert.h>
++#include <dlerror.h>
+ 
+ #if !defined SHARED && IS_IN (libdl)
+ 
+@@ -36,92 +38,75 @@ dlerror (void)
+ 
+ #else
+ 
+-/* Type for storing results of dynamic loading actions.  */
+-struct dl_action_result
+-  {
+-    int errcode;
+-    int returned;
+-    bool malloced;
+-    const char *objname;
+-    const char *errstring;
+-  };
+-static struct dl_action_result last_result;
+-static struct dl_action_result *static_buf;
+-
+-/* This is the key for the thread specific memory.  */
+-static __libc_key_t key;
+-__libc_once_define (static, once);
+-
+-/* Destructor for the thread-specific data.  */
+-static void init (void);
+-static void free_key_mem (void *mem);
+-
+-
+ char *
+ __dlerror (void)
+ {
+-  char *buf = NULL;
+-  struct dl_action_result *result;
+-
+ # ifdef SHARED
+   if (!rtld_active ())
+     return _dlfcn_hook->dlerror ();
+ # endif
+ 
+-  /* If we have not yet initialized the buffer do it now.  */
+-  __libc_once (once, init);
++  struct dl_action_result *result = __libc_dlerror_result;
+ 
+-  /* Get error string.  */
+-  if (static_buf != NULL)
+-    result = static_buf;
+-  else
++  /* No libdl function has been called.  No error is possible.  */
++  if (result == NULL)
++    return NULL;
++
++  /* For an early malloc failure, clear the error flag and return the
++     error message.  This marks the error as delivered.  */
++  if (result == dl_action_result_malloc_failed)
+     {
+-      /* init () has been run and we don't use the static buffer.
+-	 So we have a valid key.  */
+-      result = (struct dl_action_result *) __libc_getspecific (key);
+-      if (result == NULL)
+-	result = &last_result;
++      __libc_dlerror_result = NULL;
++      return (char *) "out of memory";
+     }
+ 
+-  /* Test whether we already returned the string.  */
+-  if (result->returned != 0)
++  /* Placeholder object.  This can be observed in a recursive call,
++     e.g. from an ELF constructor.  */
++  if (result->errstring == NULL)
++    return NULL;
++
++  /* If we have already reported the error, we can free the result and
++     return NULL.  See __libc_dlerror_result_free.  */
++  if (result->returned)
+     {
+-      /* We can now free the string.  */
+-      if (result->errstring != NULL)
+-	{
+-	  if (strcmp (result->errstring, "out of memory") != 0)
+-	    free ((char *) result->errstring);
+-	  result->errstring = NULL;
+-	}
++      __libc_dlerror_result = NULL;
++      dl_action_result_errstring_free (result);
++      free (result);
++      return NULL;
+     }
+-  else if (result->errstring != NULL)
+-    {
+-      buf = (char *) result->errstring;
+-      int n;
+-      if (result->errcode == 0)
+-	n = __asprintf (&buf, "%s%s%s",
+-			result->objname,
+-			result->objname[0] == '\0' ? "" : ": ",
+-			_(result->errstring));
+-      else
+-	n = __asprintf (&buf, "%s%s%s: %s",
+-			result->objname,
+-			result->objname[0] == '\0' ? "" : ": ",
+-			_(result->errstring),
+-			strerror (result->errcode));
+-      if (n != -1)
+-	{
+-	  /* We don't need the error string anymore.  */
+-	  if (strcmp (result->errstring, "out of memory") != 0)
+-	    free ((char *) result->errstring);
+-	  result->errstring = buf;
+-	}
+ 
+-      /* Mark the error as returned.  */
+-      result->returned = 1;
+-    }
++  assert (result->errstring != NULL);
++
++  /* Create the combined error message.  */
++  char *buf;
++  int n;
++  if (result->errcode == 0)
++    n = __asprintf (&buf, "%s%s%s",
++		    result->objname,
++		    result->objname[0] == '\0' ? "" : ": ",
++		    _(result->errstring));
++  else
++    n = __asprintf (&buf, "%s%s%s: %s",
++		    result->objname,
++		    result->objname[0] == '\0' ? "" : ": ",
++		    _(result->errstring),
++		    strerror (result->errcode));
+ 
+-  return buf;
++  /* Mark the error as delivered.  */
++  result->returned = true;
++
++  if (n >= 0)
++    {
++      /* Replace the error string with the newly allocated one.  */
++      dl_action_result_errstring_free (result);
++      result->errstring = buf;
++      result->errstring_source = dl_action_result_errstring_local;
++      return buf;
++    }
++  else
++    /* We could not create the combined error message, so use the
++       existing string as a fallback.  */
++    return result->errstring;
+ }
+ # ifdef SHARED
+ strong_alias (__dlerror, dlerror)
+@@ -130,130 +115,94 @@ strong_alias (__dlerror, dlerror)
+ int
+ _dlerror_run (void (*operate) (void *), void *args)
+ {
+-  struct dl_action_result *result;
+-
+-  /* If we have not yet initialized the buffer do it now.  */
+-  __libc_once (once, init);
+-
+-  /* Get error string and number.  */
+-  if (static_buf != NULL)
+-    result = static_buf;
+-  else
++  struct dl_action_result *result = __libc_dlerror_result;
++  if (result != NULL)
+     {
+-      /* We don't use the static buffer and so we have a key.  Use it
+-	 to get the thread-specific buffer.  */
+-      result = __libc_getspecific (key);
+-      if (result == NULL)
++      if (result == dl_action_result_malloc_failed)
+ 	{
+-	  result = (struct dl_action_result *) calloc (1, sizeof (*result));
+-	  if (result == NULL)
+-	    /* We are out of memory.  Since this is no really critical
+-	       situation we carry on by using the global variable.
+-	       This might lead to conflicts between the threads but
+-	       they soon all will have memory problems.  */
+-	    result = &last_result;
+-	  else
+-	    /* Set the tsd.  */
+-	    __libc_setspecific (key, result);
++	  /* Clear the previous error.  */
++	  __libc_dlerror_result = NULL;
++	  result = NULL;
++	}
++      else
++	{
++	  /* There is an existing object.  Free its error string, but
++	     keep the object.  */
++	  dl_action_result_errstring_free (result);
++	  /* Mark the object as not containing an error.  This ensures
++	     that call to dlerror from, for example, an ELF
++	     constructor will not notice this result object.  */
++	  result->errstring = NULL;
+ 	}
+     }
+ 
+-  if (result->errstring != NULL)
+-    {
+-      /* Free the error string from the last failed command.  This can
+-	 happen if `dlerror' was not run after an error was found.  */
+-      if (result->malloced)
+-	free ((char *) result->errstring);
+-      result->errstring = NULL;
+-    }
+-
+-  result->errcode = GLRO (dl_catch_error) (&result->objname,
+-					   &result->errstring,
+-					   &result->malloced,
+-					   operate, args);
+-
+-  /* If no error we mark that no error string is available.  */
+-  result->returned = result->errstring == NULL;
++  const char *objname;
++  const char *errstring;
++  bool malloced;
++  int errcode = GLRO (dl_catch_error) (&objname, &errstring, &malloced,
++				       operate, args);
+ 
+-  return result->errstring != NULL;
+-}
++  /* ELF constructors or destructors may have indirectly altered the
++     value of __libc_dlerror_result, therefore reload it.  */
++  result = __libc_dlerror_result;
+ 
+-
+-/* Initialize buffers for results.  */
+-static void
+-init (void)
+-{
+-  if (__libc_key_create (&key, free_key_mem))
+-    /* Creating the key failed.  This means something really went
+-       wrong.  In any case use a static buffer which is better than
+-       nothing.  */
+-    static_buf = &last_result;
+-}
+-
+-
+-static void
+-check_free (struct dl_action_result *rec)
+-{
+-  if (rec->errstring != NULL
+-      && strcmp (rec->errstring, "out of memory") != 0)
++  if (errstring == NULL)
+     {
+-      /* We can free the string only if the allocation happened in the
+-	 C library used by the dynamic linker.  This means, it is
+-	 always the C library in the base namespace.  When we're statically
+-         linked, the dynamic linker is part of the program and so always
+-	 uses the same C library we use here.  */
+-#ifdef SHARED
+-      struct link_map *map = NULL;
+-      Dl_info info;
+-      if (_dl_addr (check_free, &info, &map, NULL) != 0 && map->l_ns == 0)
+-#endif
++      /* There is no error.  We no longer need the result object if it
++	 does not contain an error.  However, a recursive call may
++	 have added an error even if this call did not cause it.  Keep
++	 the other error.  */
++      if (result != NULL && result->errstring == NULL)
+ 	{
+-	  free ((char *) rec->errstring);
+-	  rec->errstring = NULL;
++	  __libc_dlerror_result = NULL;
++	  free (result);
+ 	}
++      return 0;
+     }
+-}
+-
+-
+-static void
+-__attribute__ ((destructor))
+-fini (void)
+-{
+-  check_free (&last_result);
+-}
+-
+-
+-/* Free the thread specific data, this is done if a thread terminates.  */
+-static void
+-free_key_mem (void *mem)
+-{
+-  check_free ((struct dl_action_result *) mem);
++  else
++    {
++      /* A new error occurred.  Check if a result object has to be
++	 allocated.  */
++      if (result == NULL || result == dl_action_result_malloc_failed)
++	{
++	  /* Allocating storage for the error message after the fact
++	     is not ideal.  But this avoids an infinite recursion in
++	     case malloc itself calls libdl functions (without
++	     triggering errors).  */
++	  result = malloc (sizeof (*result));
++	  if (result == NULL)
++	    {
++	      /* Assume that the dlfcn failure was due to a malloc
++		 failure, too.  */
++	      if (malloced)
++		dl_error_free ((char *) errstring);
++	      __libc_dlerror_result = dl_action_result_malloc_failed;
++	      return 1;
++	    }
++	  __libc_dlerror_result = result;
++	}
++      else
++	/* Deallocate the existing error message from a recursive
++	   call, but reuse the result object.  */
++	dl_action_result_errstring_free (result);
++
++      result->errcode = errcode;
++      result->objname = objname;
++      result->errstring = (char *) errstring;
++      result->returned = false;
++      /* In case of an error, the malloced flag indicates whether the
++	 error string is constant or not.  */
++      if (malloced)
++	result->errstring_source = dl_action_result_errstring_rtld;
++      else
++	result->errstring_source = dl_action_result_errstring_constant;
+ 
+-  free (mem);
+-  __libc_setspecific (key, NULL);
++      return 1;
++    }
+ }
+ 
+ # ifdef SHARED
+ 
+-/* Free the dlerror-related resources.  */
+-void
+-__dlerror_main_freeres (void)
+-{
+-  /* Free the global memory if used.  */
+-  check_free (&last_result);
+-
+-  if (__libc_once_get (once) && static_buf == NULL)
+-    {
+-      /* init () has been run and we don't use the static buffer.
+-	 So we have a valid key.  */
+-      void *mem;
+-      /* Free the TSD memory if used.  */
+-      mem = __libc_getspecific (key);
+-      if (mem != NULL)
+-	free_key_mem (mem);
+-    }
+-}
+-
+ struct dlfcn_hook *_dlfcn_hook __attribute__((nocommon));
+ libdl_hidden_data_def (_dlfcn_hook)
+ 
+diff --git a/dlfcn/dlerror.h b/dlfcn/dlerror.h
+new file mode 100644
+index 0000000000000000..cb9a9cea4c009452
+--- /dev/null
++++ b/dlfcn/dlerror.h
+@@ -0,0 +1,92 @@
++/* Memory management for dlerror messages.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _DLERROR_H
++#define _DLERROR_H
++
++#include <dlfcn.h>
++#include <ldsodefs.h>
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdlib.h>
++
++/* Source of the errstring member in struct dl_action_result, for
++   finding the right deallocation routine.  */
++enum dl_action_result_errstring_source
++  {
++   dl_action_result_errstring_constant, /* String literal, no deallocation.  */
++   dl_action_result_errstring_rtld, /* libc in the primary namespace.  */
++   dl_action_result_errstring_local, /* libc in the current namespace.  */
++  };
++
++struct dl_action_result
++{
++  int errcode;
++  char errstring_source;
++  bool returned;
++  const char *objname;
++  char *errstring;
++};
++
++/* Used to free the errstring member of struct dl_action_result in the
++   dl_action_result_errstring_rtld case.  */
++static inline void
++dl_error_free (void *ptr)
++{
++#ifdef SHARED
++  /* In the shared case, ld.so may use a different malloc than this
++     namespace.  */
++  GLRO (dl_error_free (ptr));
++#else
++  /* Call the implementation directly.  It still has to check for
++     pointers which cannot be freed, so do not call free directly
++     here.  */
++  _dl_error_free (ptr);
++#endif
++}
++
++/* Deallocate RESULT->errstring, leaving *RESULT itself allocated.  */
++static inline void
++dl_action_result_errstring_free (struct dl_action_result *result)
++{
++  switch (result->errstring_source)
++    {
++    case dl_action_result_errstring_constant:
++      break;
++    case dl_action_result_errstring_rtld:
++      dl_error_free (result->errstring);
++      break;
++    case dl_action_result_errstring_local:
++      free (result->errstring);
++      break;
++    }
++}
++
++/* Stand-in for an error result object whose allocation failed.  No
++   precise message can be reported for this, but an error must still
++   be signaled.  */
++static struct dl_action_result *const dl_action_result_malloc_failed
++  __attribute__ ((unused)) = (struct dl_action_result *) (intptr_t) -1;
++
++/* Thread-local variable for storing dlfcn failures for subsequent
++   reporting via dlerror.  */
++extern __thread struct dl_action_result *__libc_dlerror_result
++  attribute_tls_model_ie;
++void __libc_dlerror_result_free (void) attribute_hidden;
++
++#endif /* _DLERROR_H */
+diff --git a/dlfcn/dlfreeres.c b/dlfcn/dlfreeres.c
+deleted file mode 100644
+index 4004db0edbe0c028..0000000000000000
+--- a/dlfcn/dlfreeres.c
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/* Clean up allocated libdl memory on demand.
+-   Copyright (C) 2018 Free Software Foundation, Inc.
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-#include <set-hooks.h>
+-#include <libc-symbols.h>
+-#include <dlfcn.h>
+-
+-/* Free libdl.so resources.
+-   Note: Caller ensures we are called only once.  */
+-void
+-__libdl_freeres (void)
+-{
+-  call_function_static_weak (__dlerror_main_freeres);
+-}
+diff --git a/dlfcn/libc_dlerror_result.c b/dlfcn/libc_dlerror_result.c
+new file mode 100644
+index 0000000000000000..99747186b9218680
+--- /dev/null
++++ b/dlfcn/libc_dlerror_result.c
+@@ -0,0 +1,39 @@
++/* Thread-local variable holding the dlerror result.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <dlerror.h>
++
++/* This pointer is either NULL, dl_action_result_malloc_failed (), or
++   has been allocated using malloc by the namespace that also contains
++   this instance of the thread-local variable.  */
++__thread struct dl_action_result *__libc_dlerror_result attribute_tls_model_ie;
++
++/* Called during thread shutdown to free resources.  */
++void
++__libc_dlerror_result_free (void)
++{
++  if (__libc_dlerror_result != NULL)
++    {
++      if (__libc_dlerror_result != dl_action_result_malloc_failed)
++        {
++          dl_action_result_errstring_free (__libc_dlerror_result);
++          free (__libc_dlerror_result);
++        }
++      __libc_dlerror_result = NULL;
++    }
++}
+diff --git a/elf/dl-exception.c b/elf/dl-exception.c
+index d24bf30a5cf39bc2..f474daf97ae76308 100644
+--- a/elf/dl-exception.c
++++ b/elf/dl-exception.c
+@@ -30,6 +30,17 @@
+    a pointer comparison.  See below and in dlfcn/dlerror.c.  */
+ static const char _dl_out_of_memory[] = "out of memory";
+ 
++/* Call free in the main libc.so.  This allows other namespaces to
++   free pointers on the main libc heap, via GLRO (dl_error_free).  It
++   also avoids calling free on the special, pre-allocated
++   out-of-memory error message.  */
++void
++_dl_error_free (void *ptr)
++{
++  if (ptr != _dl_out_of_memory)
++    free (ptr);
++}
++
+ /* Dummy allocation object used if allocating the message buffer
+    fails.  */
+ static void
+diff --git a/elf/rtld.c b/elf/rtld.c
+index c445b5ca25dea193..e107af4014d43777 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -366,6 +366,7 @@ struct rtld_global_ro _rtld_global_ro attribute_relro =
+     ._dl_open = _dl_open,
+     ._dl_close = _dl_close,
+     ._dl_catch_error = _rtld_catch_error,
++    ._dl_error_free = _dl_error_free,
+     ._dl_tls_get_addr_soft = _dl_tls_get_addr_soft,
+ #ifdef HAVE_DL_DISCOVER_OSVERSION
+     ._dl_discover_osversion = _dl_discover_osversion
+diff --git a/elf/tst-dlmopen-dlerror-mod.c b/elf/tst-dlmopen-dlerror-mod.c
+index 7e95dcdeacf005be..051025d3fa7a4d6a 100644
+--- a/elf/tst-dlmopen-dlerror-mod.c
++++ b/elf/tst-dlmopen-dlerror-mod.c
+@@ -18,6 +18,8 @@
+ 
+ #include <dlfcn.h>
+ #include <stddef.h>
++#include <stdio.h>
++#include <string.h>
+ #include <support/check.h>
+ 
+ /* Note: This object is not linked into the main program, so we cannot
+@@ -25,17 +27,32 @@
+    to use FAIL_EXIT1 (or something else that calls exit).  */
+ 
+ void
+-call_dlsym (void)
++call_dlsym (const char *name)
+ {
+-  void *ptr = dlsym (NULL, "does not exist");
++  void *ptr = dlsym (NULL, name);
+   if (ptr != NULL)
+-    FAIL_EXIT1 ("dlsym did not fail as expected");
++    FAIL_EXIT1 ("dlsym did not fail as expected for: %s", name);
++  const char *message = dlerror ();
++  if (strstr (message, ": undefined symbol: does not exist X") == NULL)
++    FAIL_EXIT1 ("invalid dlsym error message for [[%s]]: %s", name, message);
++  message = dlerror ();
++  if (message != NULL)
++    FAIL_EXIT1 ("second dlsym for [[%s]]: %s", name, message);
+ }
+ 
+ void
+-call_dlopen (void)
++call_dlopen (const char *name)
+ {
+-  void *handle = dlopen ("tst-dlmopen-dlerror does not exist", RTLD_NOW);
++  void *handle = dlopen (name, RTLD_NOW);
+   if (handle != NULL)
+-    FAIL_EXIT1 ("dlopen did not fail as expected");
++    FAIL_EXIT1 ("dlopen did not fail as expected for: %s", name);
++  const char *message = dlerror ();
++  if (strstr (message, "X: cannot open shared object file:"
++              " No such file or directory") == NULL
++      && strstr (message, "X: cannot open shared object file:"
++                 " File name too long") == NULL)
++    FAIL_EXIT1 ("invalid dlopen error message for [[%s]]: %s", name, message);
++  message = dlerror ();
++  if (message != NULL)
++    FAIL_EXIT1 ("second dlopen for [[%s]]: %s", name, message);
+ }
+diff --git a/elf/tst-dlmopen-dlerror.c b/elf/tst-dlmopen-dlerror.c
+index e864d2fe4c3484ab..aa3d6598df119ce0 100644
+--- a/elf/tst-dlmopen-dlerror.c
++++ b/elf/tst-dlmopen-dlerror.c
+@@ -17,6 +17,7 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #include <stddef.h>
++#include <string.h>
+ #include <support/check.h>
+ #include <support/xdlfcn.h>
+ 
+@@ -25,11 +26,22 @@ do_test (void)
+ {
+   void *handle = xdlmopen (LM_ID_NEWLM, "tst-dlmopen-dlerror-mod.so",
+                            RTLD_NOW);
+-  void (*call_dlsym) (void) = xdlsym (handle, "call_dlsym");
+-  void (*call_dlopen) (void) = xdlsym (handle, "call_dlopen");
+-
+-  call_dlsym ();
+-  call_dlopen ();
++  void (*call_dlsym) (const char *name) = xdlsym (handle, "call_dlsym");
++  void (*call_dlopen) (const char *name) = xdlsym (handle, "call_dlopen");
++
++  /* Iterate over various name lengths.  This changes the size of
++     error messages allocated by ld.so and has been shown to trigger
++     detectable heap corruption if malloc/free calls in different
++     namespaces are mixed.  */
++  char buffer[2048];
++  char *buffer_end = &buffer[sizeof (buffer) - 2];
++  for (char *p = stpcpy (buffer, "does not exist "); p < buffer_end; ++p)
++    {
++      p[0] = 'X';
++      p[1] = '\0';
++      call_dlsym (buffer);
++      call_dlopen (buffer);
++    }
+ 
+   return 0;
+ }
+diff --git a/include/dlfcn.h b/include/dlfcn.h
+index 0dc57dbe2217cfe7..109586a1d968b630 100644
+--- a/include/dlfcn.h
++++ b/include/dlfcn.h
+@@ -156,7 +156,5 @@ extern void __libc_register_dlfcn_hook (struct link_map *map)
+      attribute_hidden;
+ #endif
+ 
+-extern void __dlerror_main_freeres (void) attribute_hidden;
+-
+ #endif
+ #endif
+diff --git a/malloc/set-freeres.c b/malloc/set-freeres.c
+index cda368479f910149..43b6a2cd9da49aa9 100644
+--- a/malloc/set-freeres.c
++++ b/malloc/set-freeres.c
+@@ -19,6 +19,7 @@
+ #include <stdlib.h>
+ #include <set-hooks.h>
+ #include <libc-internal.h>
++#include <dlfcn/dlerror.h>
+ 
+ #include "../libio/libioP.h"
+ 
+@@ -26,8 +27,6 @@ DEFINE_HOOK (__libc_subfreeres, (void));
+ 
+ symbol_set_define (__libc_freeres_ptrs);
+ 
+-extern __attribute__ ((weak)) void __libdl_freeres (void);
+-
+ extern __attribute__ ((weak)) void __libpthread_freeres (void);
+ 
+ void __libc_freeres_fn_section
+@@ -46,16 +45,13 @@ __libc_freeres (void)
+       /* We run the resource freeing after IO cleanup.  */
+       RUN_HOOK (__libc_subfreeres, ());
+ 
+-      /* Call the libdl list of cleanup functions
+-	 (weak-ref-and-check).  */
+-      if (&__libdl_freeres != NULL)
+-	__libdl_freeres ();
+-
+       /* Call the libpthread list of cleanup functions
+ 	 (weak-ref-and-check).  */
+       if (&__libpthread_freeres != NULL)
+ 	__libpthread_freeres ();
+ 
++      call_function_static_weak (__libc_dlerror_result_free);
++
+       for (p = symbol_set_first_element (__libc_freeres_ptrs);
+            !symbol_set_end_p (__libc_freeres_ptrs, p); ++p)
+         free (*p);
+diff --git a/malloc/thread-freeres.c b/malloc/thread-freeres.c
+index a63b6c93f3114284..1e37a72c1f4a9c43 100644
+--- a/malloc/thread-freeres.c
++++ b/malloc/thread-freeres.c
+@@ -16,6 +16,7 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <dlfcn/dlerror.h>
+ #include <libc-internal.h>
+ #include <malloc-internal.h>
+ #include <resolv/resolv-internal.h>
+@@ -32,6 +33,7 @@ __libc_thread_freeres (void)
+   call_function_static_weak (__rpc_thread_destroy);
+   call_function_static_weak (__res_thread_freeres);
+   call_function_static_weak (__strerror_thread_freeres);
++  call_function_static_weak (__libc_dlerror_result_free);
+ 
+   /* This should come last because it shuts down malloc for this
+      thread and the other shutdown functions might well call free.  */
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index d6d02aa3ccffba33..2dd6f0c3c4aaaef5 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -653,6 +653,9 @@ struct rtld_global_ro
+   int (*_dl_catch_error) (const char **objname, const char **errstring,
+ 			  bool *mallocedp, void (*operate) (void *),
+ 			  void *args);
++  /* libdl in a secondary namespace must use free from the base
++     namespace.  */
++  void (*_dl_error_free) (void *);
+   void *(*_dl_tls_get_addr_soft) (struct link_map *);
+ #ifdef HAVE_DL_DISCOVER_OSVERSION
+   int (*_dl_discover_osversion) (void);
+@@ -812,6 +815,10 @@ void _dl_exception_create (struct dl_exception *, const char *object,
+   __attribute__ ((nonnull (1, 3)));
+ rtld_hidden_proto (_dl_exception_create)
+ 
++/* Used internally to implement dlerror message freeing.  See
++   include/dlfcn.h and dlfcn/dlerror.c.  */
++void _dl_error_free (void *ptr) attribute_hidden;
++
+ /* Like _dl_exception_create, but create errstring from a format
+    string FMT.  Currently, only "%s" and "%%" are supported as format
+    directives.  */

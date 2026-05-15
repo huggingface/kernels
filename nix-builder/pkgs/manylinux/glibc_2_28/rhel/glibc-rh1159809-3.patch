@@ -1,0 +1,589 @@
+commit 15a0c5730d1d5aeb95f50c9ec7470640084feae8
+Author: Chung-Lin Tang <cltang@codesourcery.com>
+Date:   Thu Oct 21 21:41:22 2021 +0800
+
+    elf: Fix slow DSO sorting behavior in dynamic loader (BZ #17645)
+    
+    This second patch contains the actual implementation of a new sorting algorithm
+    for shared objects in the dynamic loader, which solves the slow behavior that
+    the current "old" algorithm falls into when the DSO set contains circular
+    dependencies.
+    
+    The new algorithm implemented here is simply depth-first search (DFS) to obtain
+    the Reverse-Post Order (RPO) sequence, a topological sort. A new l_visited:1
+    bitfield is added to struct link_map to more elegantly facilitate such a search.
+    
+    The DFS algorithm is applied to the input maps[nmap-1] backwards towards
+    maps[0]. This has the effect of a more "shallow" recursion depth in general
+    since the input is in BFS. Also, when combined with the natural order of
+    processing l_initfini[] at each node, this creates a resulting output sorting
+    closer to the intuitive "left-to-right" order in most cases.
+    
+    Another notable implementation adjustment related to this _dl_sort_maps change
+    is the removing of two char arrays 'used' and 'done' in _dl_close_worker to
+    represent two per-map attributes. This has been changed to simply use two new
+    bit-fields l_map_used:1, l_map_done:1 added to struct link_map. This also allows
+    discarding the clunky 'used' array sorting that _dl_sort_maps had to sometimes
+    do along the way.
+    
+    Tunable support for switching between different sorting algorithms at runtime is
+    also added. A new tunable 'glibc.rtld.dynamic_sort' with current valid values 1
+    (old algorithm) and 2 (new DFS algorithm) has been added. At time of commit
+    of this patch, the default setting is 1 (old algorithm).
+    
+    Signed-off-by: Chung-Lin Tang  <cltang@codesourcery.com>
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+Conflicts:
+	elf/dl-tunables.list
+	  (No mem.tagging tunable downstream.)
+
+diff --git a/elf/dl-close.c b/elf/dl-close.c
+index 74ca9a85dd309780..22225efb3226c3e1 100644
+--- a/elf/dl-close.c
++++ b/elf/dl-close.c
+@@ -167,8 +167,6 @@ _dl_close_worker (struct link_map *map, bool force)
+ 
+   bool any_tls = false;
+   const unsigned int nloaded = ns->_ns_nloaded;
+-  char used[nloaded];
+-  char done[nloaded];
+   struct link_map *maps[nloaded];
+ 
+   /* Run over the list and assign indexes to the link maps and enter
+@@ -176,24 +174,21 @@ _dl_close_worker (struct link_map *map, bool force)
+   int idx = 0;
+   for (struct link_map *l = ns->_ns_loaded; l != NULL; l = l->l_next)
+     {
++      l->l_map_used = 0;
++      l->l_map_done = 0;
+       l->l_idx = idx;
+       maps[idx] = l;
+       ++idx;
+-
+     }
+   assert (idx == nloaded);
+ 
+-  /* Prepare the bitmaps.  */
+-  memset (used, '\0', sizeof (used));
+-  memset (done, '\0', sizeof (done));
+-
+   /* Keep track of the lowest index link map we have covered already.  */
+   int done_index = -1;
+   while (++done_index < nloaded)
+     {
+       struct link_map *l = maps[done_index];
+ 
+-      if (done[done_index])
++      if (l->l_map_done)
+ 	/* Already handled.  */
+ 	continue;
+ 
+@@ -204,12 +199,12 @@ _dl_close_worker (struct link_map *map, bool force)
+ 	  /* See CONCURRENCY NOTES in cxa_thread_atexit_impl.c to know why
+ 	     acquire is sufficient and correct.  */
+ 	  && atomic_load_acquire (&l->l_tls_dtor_count) == 0
+-	  && !used[done_index])
++	  && !l->l_map_used)
+ 	continue;
+ 
+       /* We need this object and we handle it now.  */
+-      done[done_index] = 1;
+-      used[done_index] = 1;
++      l->l_map_used = 1;
++      l->l_map_done = 1;
+       /* Signal the object is still needed.  */
+       l->l_idx = IDX_STILL_USED;
+ 
+@@ -225,9 +220,9 @@ _dl_close_worker (struct link_map *map, bool force)
+ 		{
+ 		  assert ((*lp)->l_idx >= 0 && (*lp)->l_idx < nloaded);
+ 
+-		  if (!used[(*lp)->l_idx])
++		  if (!(*lp)->l_map_used)
+ 		    {
+-		      used[(*lp)->l_idx] = 1;
++		      (*lp)->l_map_used = 1;
+ 		      /* If we marked a new object as used, and we've
+ 			 already processed it, then we need to go back
+ 			 and process again from that point forward to
+@@ -250,9 +245,9 @@ _dl_close_worker (struct link_map *map, bool force)
+ 	      {
+ 		assert (jmap->l_idx >= 0 && jmap->l_idx < nloaded);
+ 
+-		if (!used[jmap->l_idx])
++		if (!jmap->l_map_used)
+ 		  {
+-		    used[jmap->l_idx] = 1;
++		    jmap->l_map_used = 1;
+ 		    if (jmap->l_idx - 1 < done_index)
+ 		      done_index = jmap->l_idx - 1;
+ 		  }
+@@ -262,8 +257,7 @@ _dl_close_worker (struct link_map *map, bool force)
+ 
+   /* Sort the entries.  We can skip looking for the binary itself which is
+      at the front of the search list for the main namespace.  */
+-  _dl_sort_maps (maps + (nsid == LM_ID_BASE), nloaded - (nsid == LM_ID_BASE),
+-		 used + (nsid == LM_ID_BASE), true);
++  _dl_sort_maps (maps, nloaded, (nsid == LM_ID_BASE), true);
+ 
+   /* Call all termination functions at once.  */
+   bool unload_any = false;
+@@ -277,7 +271,7 @@ _dl_close_worker (struct link_map *map, bool force)
+       /* All elements must be in the same namespace.  */
+       assert (imap->l_ns == nsid);
+ 
+-      if (!used[i])
++      if (!imap->l_map_used)
+ 	{
+ 	  assert (imap->l_type == lt_loaded && !imap->l_nodelete_active);
+ 
+@@ -315,7 +309,7 @@ _dl_close_worker (struct link_map *map, bool force)
+ 	  if (i < first_loaded)
+ 	    first_loaded = i;
+ 	}
+-      /* Else used[i].  */
++      /* Else imap->l_map_used.  */
+       else if (imap->l_type == lt_loaded)
+ 	{
+ 	  struct r_scope_elem *new_list = NULL;
+@@ -524,7 +518,7 @@ _dl_close_worker (struct link_map *map, bool force)
+   for (unsigned int i = first_loaded; i < nloaded; ++i)
+     {
+       struct link_map *imap = maps[i];
+-      if (!used[i])
++      if (!imap->l_map_used)
+ 	{
+ 	  assert (imap->l_type == lt_loaded);
+ 
+diff --git a/elf/dl-deps.c b/elf/dl-deps.c
+index 007069f670eced95..9365d54c8e03e5f4 100644
+--- a/elf/dl-deps.c
++++ b/elf/dl-deps.c
+@@ -612,10 +612,9 @@ Filters not supported with LD_TRACE_PRELINKING"));
+ 
+   /* If libc.so.6 is the main map, it participates in the sort, so
+      that the relocation order is correct regarding libc.so.6.  */
+-  if (l_initfini[0] == GL (dl_ns)[l_initfini[0]->l_ns].libc_map)
+-    _dl_sort_maps (l_initfini, nlist, NULL, false);
+-  else
+-    _dl_sort_maps (&l_initfini[1], nlist - 1, NULL, false);
++  _dl_sort_maps (l_initfini, nlist,
++		 (l_initfini[0] != GL (dl_ns)[l_initfini[0]->l_ns].libc_map),
++		 false);
+ 
+   /* Terminate the list of dependencies.  */
+   l_initfini[nlist] = NULL;
+diff --git a/elf/dl-fini.c b/elf/dl-fini.c
+index eea9d8aad736a99e..e14259a3c8806e0d 100644
+--- a/elf/dl-fini.c
++++ b/elf/dl-fini.c
+@@ -95,8 +95,7 @@ _dl_fini (void)
+ 	  /* Now we have to do the sorting.  We can skip looking for the
+ 	     binary itself which is at the front of the search list for
+ 	     the main namespace.  */
+-	  _dl_sort_maps (maps + (ns == LM_ID_BASE), nmaps - (ns == LM_ID_BASE),
+-			 NULL, true);
++	  _dl_sort_maps (maps, nmaps, (ns == LM_ID_BASE), true);
+ 
+ 	  /* We do not rely on the linked list of loaded object anymore
+ 	     from this point on.  We have our own list here (maps).  The
+diff --git a/elf/dl-sort-maps.c b/elf/dl-sort-maps.c
+index b2a01ede627be1e9..398a08f28c4d9ff1 100644
+--- a/elf/dl-sort-maps.c
++++ b/elf/dl-sort-maps.c
+@@ -16,16 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
++#include <assert.h>
+ #include <ldsodefs.h>
++#include <elf/dl-tunables.h>
+ 
++/* Note: this is the older, "original" sorting algorithm, being used as
++   default up to 2.35.
+ 
+-/* Sort array MAPS according to dependencies of the contained objects.
+-   Array USED, if non-NULL, is permutated along MAPS.  If FOR_FINI this is
+-   called for finishing an object.  */
+-void
+-_dl_sort_maps (struct link_map **maps, unsigned int nmaps, char *used,
+-	       bool for_fini)
++   Sort array MAPS according to dependencies of the contained objects.
++   If FOR_FINI is true, this is called for finishing an object.  */
++static void
++_dl_sort_maps_original (struct link_map **maps, unsigned int nmaps,
++			unsigned int skip, bool for_fini)
+ {
++  /* Allows caller to do the common optimization of skipping the first map,
++     usually the main binary.  */
++  maps += skip;
++  nmaps -= skip;
++
+   /* A list of one element need not be sorted.  */
+   if (nmaps <= 1)
+     return;
+@@ -66,14 +74,6 @@ _dl_sort_maps (struct link_map **maps, unsigned int nmaps, char *used,
+ 			   (k - i) * sizeof (maps[0]));
+ 		  maps[k] = thisp;
+ 
+-		  if (used != NULL)
+-		    {
+-		      char here_used = used[i];
+-		      memmove (&used[i], &used[i + 1],
+-			       (k - i) * sizeof (used[0]));
+-		      used[k] = here_used;
+-		    }
+-
+ 		  if (seen[i + 1] > nmaps - i)
+ 		    {
+ 		      ++i;
+@@ -120,3 +120,183 @@ _dl_sort_maps (struct link_map **maps, unsigned int nmaps, char *used,
+     next:;
+     }
+ }
++
++#if !HAVE_TUNABLES
++/* In this case, just default to the original algorithm.  */
++strong_alias (_dl_sort_maps_original, _dl_sort_maps);
++#else
++
++/* We use a recursive function due to its better clarity and ease of
++   implementation, as well as faster execution speed. We already use
++   alloca() for list allocation during the breadth-first search of
++   dependencies in _dl_map_object_deps(), and this should be on the
++   same order of worst-case stack usage.
++
++   Note: the '*rpo' parameter is supposed to point to one past the
++   last element of the array where we save the sort results, and is
++   decremented before storing the current map at each level.  */
++
++static void
++dfs_traversal (struct link_map ***rpo, struct link_map *map,
++	       bool *do_reldeps)
++{
++  if (map->l_visited)
++    return;
++
++  map->l_visited = 1;
++
++  if (map->l_initfini)
++    {
++      for (int i = 0; map->l_initfini[i] != NULL; i++)
++	{
++	  struct link_map *dep = map->l_initfini[i];
++	  if (dep->l_visited == 0
++	      && dep->l_main_map == 0)
++	    dfs_traversal (rpo, dep, do_reldeps);
++	}
++    }
++
++  if (__glibc_unlikely (do_reldeps != NULL && map->l_reldeps != NULL))
++    {
++      /* Indicate that we encountered relocation dependencies during
++	 traversal.  */
++      *do_reldeps = true;
++
++      for (int m = map->l_reldeps->act - 1; m >= 0; m--)
++	{
++	  struct link_map *dep = map->l_reldeps->list[m];
++	  if (dep->l_visited == 0
++	      && dep->l_main_map == 0)
++	    dfs_traversal (rpo, dep, do_reldeps);
++	}
++    }
++
++  *rpo -= 1;
++  **rpo = map;
++}
++
++/* Topologically sort array MAPS according to dependencies of the contained
++   objects.  */
++
++static void
++_dl_sort_maps_dfs (struct link_map **maps, unsigned int nmaps,
++		   unsigned int skip __attribute__ ((unused)), bool for_fini)
++{
++  for (int i = nmaps - 1; i >= 0; i--)
++    maps[i]->l_visited = 0;
++
++  /* We apply DFS traversal for each of maps[i] until the whole total order
++     is found and we're at the start of the Reverse-Postorder (RPO) sequence,
++     which is a topological sort.
++
++     We go from maps[nmaps - 1] backwards towards maps[0] at this level.
++     Due to the breadth-first search (BFS) ordering we receive, going
++     backwards usually gives a more shallow depth-first recursion depth,
++     adding more stack usage safety. Also, combined with the natural
++     processing order of l_initfini[] at each node during DFS, this maintains
++     an ordering closer to the original link ordering in the sorting results
++     under most simpler cases.
++
++     Another reason we order the top level backwards, it that maps[0] is
++     usually exactly the main object of which we're in the midst of
++     _dl_map_object_deps() processing, and maps[0]->l_initfini[] is still
++     blank. If we start the traversal from maps[0], since having no
++     dependencies yet filled in, maps[0] will always be immediately
++     incorrectly placed at the last place in the order (first in reverse).
++     Adjusting the order so that maps[0] is last traversed naturally avoids
++     this problem.
++
++     Further, the old "optimization" of skipping the main object at maps[0]
++     from the call-site (i.e. _dl_sort_maps(maps+1,nmaps-1)) is in general
++     no longer valid, since traversing along object dependency-links
++     may "find" the main object even when it is not included in the initial
++     order (e.g. a dlopen()'ed shared object can have circular dependencies
++     linked back to itself). In such a case, traversing N-1 objects will
++     create a N-object result, and raise problems.
++
++     To summarize, just passing in the full list, and iterating from back
++     to front makes things much more straightforward.  */
++
++  /* Array to hold RPO sorting results, before we copy back to maps[].  */
++  struct link_map *rpo[nmaps];
++
++  /* The 'head' position during each DFS iteration. Note that we start at
++     one past the last element due to first-decrement-then-store (see the
++     bottom of above dfs_traversal() routine).  */
++  struct link_map **rpo_head = &rpo[nmaps];
++
++  bool do_reldeps = false;
++  bool *do_reldeps_ref = (for_fini ? &do_reldeps : NULL);
++
++  for (int i = nmaps - 1; i >= 0; i--)
++    {
++      dfs_traversal (&rpo_head, maps[i], do_reldeps_ref);
++
++      /* We can break early if all objects are already placed.  */
++      if (rpo_head == rpo)
++	goto end;
++    }
++  assert (rpo_head == rpo);
++
++ end:
++  /* Here we may do a second pass of sorting, using only l_initfini[]
++     static dependency links. This is avoided if !FOR_FINI or if we didn't
++     find any reldeps in the first DFS traversal.
++
++     The reason we do this is: while it is unspecified how circular
++     dependencies should be handled, the presumed reasonable behavior is to
++     have destructors to respect static dependency links as much as possible,
++     overriding reldeps if needed. And the first sorting pass, which takes
++     l_initfini/l_reldeps links equally, may not preserve this priority.
++
++     Hence we do a 2nd sorting pass, taking only DT_NEEDED links into account
++     (see how the do_reldeps argument to dfs_traversal() is NULL below).  */
++  if (do_reldeps)
++    {
++      for (int i = nmaps - 1; i >= 0; i--)
++	rpo[i]->l_visited = 0;
++
++      struct link_map **maps_head = &maps[nmaps];
++      for (int i = nmaps - 1; i >= 0; i--)
++	{
++	  dfs_traversal (&maps_head, rpo[i], NULL);
++
++	  /* We can break early if all objects are already placed.
++	     The below memcpy is not needed in the do_reldeps case here,
++	     since we wrote back to maps[] during DFS traversal.  */
++	  if (maps_head == maps)
++	    return;
++	}
++      assert (maps_head == maps);
++      return;
++    }
++
++  memcpy (maps, rpo, sizeof (struct link_map *) * nmaps);
++}
++
++void
++_dl_sort_maps_init (void)
++{
++  int32_t algorithm = TUNABLE_GET (glibc, rtld, dynamic_sort, int32_t, NULL);
++  GLRO(dl_dso_sort_algo) = algorithm == 1 ? dso_sort_algorithm_original
++					  : dso_sort_algorithm_dfs;
++}
++
++void
++_dl_sort_maps (struct link_map **maps, unsigned int nmaps,
++	       unsigned int skip, bool for_fini)
++{
++  /* It can be tempting to use a static function pointer to store and call
++     the current selected sorting algorithm routine, but experimentation
++     shows that current processors still do not handle indirect branches
++     that efficiently, plus a static function pointer will involve
++     PTR_MANGLE/DEMANGLE, further impairing performance of small, common
++     input cases. A simple if-case with direct function calls appears to
++     be the fastest.  */
++  if (__glibc_likely (GLRO(dl_dso_sort_algo) == dso_sort_algorithm_original))
++    _dl_sort_maps_original (maps, nmaps, skip, for_fini);
++  else
++    _dl_sort_maps_dfs (maps, nmaps, skip, for_fini);
++}
++
++#endif /* HAVE_TUNABLES.  */
+diff --git a/elf/dl-support.c b/elf/dl-support.c
+index e9943e889ef447ad..ae03aec9764e29d3 100644
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -155,6 +155,8 @@ size_t _dl_phnum;
+ uint64_t _dl_hwcap __attribute__ ((nocommon));
+ uint64_t _dl_hwcap2 __attribute__ ((nocommon));
+ 
++enum dso_sort_algorithm _dl_dso_sort_algo;
++
+ /* The value of the FPU control word the kernel will preset in hardware.  */
+ fpu_control_t _dl_fpu_control = _FPU_DEFAULT;
+ 
+diff --git a/elf/dl-sysdep.c b/elf/dl-sysdep.c
+index 998c5d52bcab8193..4e8a986541fc4c09 100644
+--- a/elf/dl-sysdep.c
++++ b/elf/dl-sysdep.c
+@@ -223,6 +223,9 @@ _dl_sysdep_start (void **start_argptr,
+ 
+   __tunables_init (_environ);
+ 
++  /* Initialize DSO sorting algorithm after tunables.  */
++  _dl_sort_maps_init ();
++
+ #ifdef DL_SYSDEP_INIT
+   DL_SYSDEP_INIT;
+ #endif
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index 6408a8e5ae92d2c6..54ef2a921310b229 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -140,4 +140,13 @@ glibc {
+       default: 512
+     }
+   }
++
++  rtld {
++    dynamic_sort {
++      type: INT_32
++      minval: 1
++      maxval: 2
++      default: 1
++    }
++  }
+ }
+diff --git a/elf/dso-sort-tests-1.def b/elf/dso-sort-tests-1.def
+index 873ddf55d91155c6..5f7f18ef270bc12d 100644
+--- a/elf/dso-sort-tests-1.def
++++ b/elf/dso-sort-tests-1.def
+@@ -62,5 +62,5 @@ output: b>a>{}<a<b
+ # The below expected outputs are what the two algorithms currently produce
+ # respectively, for regression testing purposes.
+ tst-bz15311: {+a;+e;+f;+g;+d;%d;-d;-g;-f;-e;-a};a->b->c->d;d=>[ba];c=>a;b=>e=>a;c=>f=>b;d=>g=>c
+-xfail_output(glibc.rtld.dynamic_sort=1): {+a[d>c>b>a>];+e[e>];+f[f>];+g[g>];+d[];%d(b(e(a()))a()g(c(a()f(b(e(a()))))));-d[];-g[];-f[];-e[];-a[<a<c<d<g<f<b<e];}
++output(glibc.rtld.dynamic_sort=1): {+a[d>c>b>a>];+e[e>];+f[f>];+g[g>];+d[];%d(b(e(a()))a()g(c(a()f(b(e(a()))))));-d[];-g[];-f[];-e[];-a[<a<c<d<g<f<b<e];}
+ output(glibc.rtld.dynamic_sort=2): {+a[d>c>b>a>];+e[e>];+f[f>];+g[g>];+d[];%d(b(e(a()))a()g(c(a()f(b(e(a()))))));-d[];-g[];-f[];-e[];-a[<g<f<a<b<c<d<e];}
+diff --git a/elf/rtld.c b/elf/rtld.c
+index b47e84ca2fb6f03c..cd2cc4024a3581c2 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1453,6 +1453,9 @@ dl_main (const ElfW(Phdr) *phdr,
+       main_map->l_name = (char *) "";
+       *user_entry = main_map->l_entry;
+ 
++      /* Set bit indicating this is the main program map.  */
++      main_map->l_main_map = 1;
++
+ #ifdef HAVE_AUX_VECTOR
+       /* Adjust the on-stack auxiliary vector so that it looks like the
+ 	 binary was executed directly.  */
+diff --git a/elf/tst-rtld-list-tunables.exp b/elf/tst-rtld-list-tunables.exp
+index 4f3f7ee4e30a2b42..118afc271057afd4 100644
+--- a/elf/tst-rtld-list-tunables.exp
++++ b/elf/tst-rtld-list-tunables.exp
+@@ -10,5 +10,6 @@ glibc.malloc.tcache_max: 0x0 (min: 0x0, max: 0x[f]+)
+ glibc.malloc.tcache_unsorted_limit: 0x0 (min: 0x0, max: 0x[f]+)
+ glibc.malloc.top_pad: 0x0 (min: 0x0, max: 0x[f]+)
+ glibc.malloc.trim_threshold: 0x0 (min: 0x0, max: 0x[f]+)
++glibc.rtld.dynamic_sort: 1 (min: 1, max: 2)
+ glibc.rtld.nns: 0x4 (min: 0x1, max: 0x10)
+ glibc.rtld.optional_static_tls: 0x200 (min: 0x0, max: 0x[f]+)
+diff --git a/include/link.h b/include/link.h
+index dd491989beb41353..041ff5f753a9ee11 100644
+--- a/include/link.h
++++ b/include/link.h
+@@ -181,6 +181,11 @@ struct link_map
+     unsigned int l_init_called:1; /* Nonzero if DT_INIT function called.  */
+     unsigned int l_global:1;	/* Nonzero if object in _dl_global_scope.  */
+     unsigned int l_reserved:2;	/* Reserved for internal use.  */
++    unsigned int l_main_map:1;  /* Nonzero for the map of the main program.  */
++    unsigned int l_visited:1;   /* Used internally for map dependency
++				   graph traversal.  */
++    unsigned int l_map_used:1;  /* These two bits are used during traversal */
++    unsigned int l_map_done:1;  /* of maps in _dl_close_worker. */
+     unsigned int l_phdr_allocated:1; /* Nonzero if the data structure pointed
+ 					to by `l_phdr' is allocated.  */
+     unsigned int l_soname_added:1; /* Nonzero if the SONAME is for sure in
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index 43272cf885d1e3e6..c3f96cdc85208926 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -303,6 +303,17 @@ changed once allocated at process startup.  The default allocation of
+ optional static TLS is 512 bytes and is allocated in every thread.
+ @end deftp
+ 
++@deftp Tunable glibc.rtld.dynamic_sort
++Sets the algorithm to use for DSO sorting, valid values are @samp{1} and
++@samp{2}.  For value of @samp{1}, an older O(n^3) algorithm is used, which is
++long time tested, but may have performance issues when dependencies between
++shared objects contain cycles due to circular dependencies.  When set to the
++value of @samp{2}, a different algorithm is used, which implements a
++topological sort through depth-first search, and does not exhibit the
++performance issues of @samp{1}.
++
++The default value of this tunable is @samp{1}.
++@end deftp
+ 
+ @node Elision Tunables
+ @section Elision Tunables
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 5e56550a4d556fa7..9f09a4a280396659 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -240,6 +240,13 @@ enum allowmask
+   };
+ 
+ 
++/* DSO sort algorithm to use (check dl-sort-maps.c).  */
++enum dso_sort_algorithm
++  {
++    dso_sort_algorithm_original,
++    dso_sort_algorithm_dfs
++  };
++
+ struct audit_ifaces
+ {
+   void (*activity) (uintptr_t *, unsigned int);
+@@ -633,6 +640,8 @@ struct rtld_global_ro
+      platforms.  */
+   EXTERN uint64_t _dl_hwcap2;
+ 
++  EXTERN enum dso_sort_algorithm _dl_dso_sort_algo;
++
+ #ifdef SHARED
+   /* We add a function table to _rtld_global which is then used to
+      call the function instead of going through the PLT.  The result
+@@ -1049,7 +1058,7 @@ extern void _dl_fini (void) attribute_hidden;
+ 
+ /* Sort array MAPS according to dependencies of the contained objects.  */
+ extern void _dl_sort_maps (struct link_map **maps, unsigned int nmaps,
+-			   char *used, bool for_fini) attribute_hidden;
++			   unsigned int skip, bool for_fini) attribute_hidden;
+ 
+ /* The dynamic linker calls this function before and having changing
+    any shared object mappings.  The `r_state' member of `struct r_debug'
+@@ -1167,6 +1176,9 @@ extern struct link_map * _dl_get_dl_main_map (void)
+ # endif
+ #endif
+ 
++/* Initialize the DSO sort algorithm to use.  */
++extern void _dl_sort_maps_init (void) attribute_hidden;
++
+ /* Initialization of libpthread for statically linked applications.
+    If libpthread is not linked in, this is an empty function.  */
+ void __pthread_initialize_minimal (void) weak_function;

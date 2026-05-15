@@ -1,0 +1,79 @@
+commit 7cc65773f04e0f4252428c40dcbb784a39b58cd1
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Wed Oct 24 02:19:15 2018 -0700
+
+    x86: Support RDTSCP for benchtests
+    
+    RDTSCP waits until all previous instructions have executed and all
+    previous loads are globally visible before reading the counter.  RDTSC
+    doesn't wait until all previous instructions have been executed before
+    reading the counter.  All x86 processors since 2010 support RDTSCP
+    instruction.  This patch adds RDTSCP support to benchtests.
+    
+            * benchtests/Makefile (CPPFLAGS-nonlib): Add -DUSE_RDTSCP if
+            USE_RDTSCP is defined.
+            * sysdeps/x86/hp-timing.h (HP_TIMING_NOW): Use RDTSCP if
+            USE_RDTSCP is defined.
+
+diff --git a/benchtests/Makefile b/benchtests/Makefile
+index 28d6b0c43f5bd390..bde0caf140e8cf17 100644
+--- a/benchtests/Makefile
++++ b/benchtests/Makefile
+@@ -131,6 +131,12 @@ CPPFLAGS-nonlib += -DDURATION=$(BENCH_DURATION) -D_ISOMAC
+ # HP_TIMING if it is available.
+ ifdef USE_CLOCK_GETTIME
+ CPPFLAGS-nonlib += -DUSE_CLOCK_GETTIME
++else
++# On x86 processors, use RDTSCP, instead of RDTSC, to measure performance
++# of functions.  All x86 processors since 2010 support RDTSCP instruction.
++ifdef USE_RDTSCP
++CPPFLAGS-nonlib += -DUSE_RDTSCP
++endif
+ endif
+ 
+ DETAILED_OPT :=
+diff --git a/benchtests/README b/benchtests/README
+index 4ddff794d136f65f..aaf0b659e2b25627 100644
+--- a/benchtests/README
++++ b/benchtests/README
+@@ -34,6 +34,15 @@ the benchmark to use clock_gettime by invoking make as follows:
+ 
+ Again, one must run `make bench-clean' before changing the measurement method.
+ 
++On x86 processors, RDTSCP instruction provides more precise timing data
++than RDTSC instruction.  All x86 processors since 2010 support RDTSCP
++instruction.  One can force the benchmark to use RDTSCP by invoking make
++as follows:
++
++  $ make USE_RDTSCP=1 bench
++
++One must run `make bench-clean' before changing the measurement method.
++
+ Running benchmarks on another target:
+ ====================================
+ 
+diff --git a/sysdeps/x86/hp-timing.h b/sysdeps/x86/hp-timing.h
+index 77a1360748ca4535..0aa6f5e3f83e0d34 100644
+--- a/sysdeps/x86/hp-timing.h
++++ b/sysdeps/x86/hp-timing.h
+@@ -40,7 +40,19 @@ typedef unsigned long long int hp_timing_t;
+ 
+    NB: Use __builtin_ia32_rdtsc directly since including <x86intrin.h>
+    makes building glibc very slow.  */
+-# define HP_TIMING_NOW(Var)	((Var) = __builtin_ia32_rdtsc ())
++# ifdef USE_RDTSCP
++/* RDTSCP waits until all previous instructions have executed and all
++   previous loads are globally visible before reading the counter.
++   RDTSC doesn't wait until all previous instructions have been executed
++   before reading the counter.  */
++#  define HP_TIMING_NOW(Var) \
++  (__extension__ ({				\
++    unsigned int __aux;				\
++    (Var) = __builtin_ia32_rdtscp (&__aux);	\
++  }))
++# else
++#  define HP_TIMING_NOW(Var) ((Var) = __builtin_ia32_rdtsc ())
++# endif
+ 
+ # include <hp-timing-common.h>
+ #else

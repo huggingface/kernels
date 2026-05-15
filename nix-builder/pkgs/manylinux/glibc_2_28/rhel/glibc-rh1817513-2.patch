@@ -1,0 +1,401 @@
+commit dce452dc5278f2985d21315721a6ba802537b862
+Author: Siddhesh Poyarekar <siddhesh@sourceware.org>
+Date:   Thu Aug 2 23:49:19 2018 +0530
+
+    Rename the glibc.tune namespace to glibc.cpu
+    
+    The glibc.tune namespace is vaguely named since it is a 'tunable', so
+    give it a more specific name that describes what it refers to.  Rename
+    the tunable namespace to 'cpu' to more accurately reflect what it
+    encompasses.  Also rename glibc.tune.cpu to glibc.cpu.name since
+    glibc.cpu.cpu is weird.
+    
+            * NEWS: Mention the change.
+            * elf/dl-tunables.list: Rename tune namespace to cpu.
+            * sysdeps/powerpc/dl-tunables.list: Likewise.
+            * sysdeps/x86/dl-tunables.list: Likewise.
+            * sysdeps/aarch64/dl-tunables.list: Rename tune.cpu to
+            cpu.name.
+            * elf/dl-hwcaps.c (_dl_important_hwcaps): Adjust.
+            * elf/dl-hwcaps.h (GET_HWCAP_MASK): Likewise.
+            * manual/README.tunables: Likewise.
+            * manual/tunables.texi: Likewise.
+            * sysdeps/powerpc/cpu-features.c: Likewise.
+            * sysdeps/unix/sysv/linux/aarch64/cpu-features.c
+            (init_cpu_features): Likewise.
+            * sysdeps/x86/cpu-features.c: Likewise.
+            * sysdeps/x86/cpu-features.h: Likewise.
+            * sysdeps/x86/cpu-tunables.c: Likewise.
+            * sysdeps/x86_64/Makefile: Likewise.
+            * sysdeps/x86/dl-cet.c: Likewise.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	manual/tunables.texi
+	  (Earlier backport of non-temporal memcpy threshold.)
+	sysdeps/x86/Makefile
+	  (Earlier CET backports.)
+
+diff --git a/elf/dl-hwcaps.c b/elf/dl-hwcaps.c
+index 23482a88a1c9bca9..ecf00b457760e517 100644
+--- a/elf/dl-hwcaps.c
++++ b/elf/dl-hwcaps.c
+@@ -140,7 +140,7 @@ _dl_important_hwcaps (const char *platform, size_t platform_len, size_t *sz,
+ 	 string and bit like you can ignore an OS-supplied HWCAP bit.  */
+       hwcap_mask |= (uint64_t) mask << _DL_FIRST_EXTRA;
+ #if HAVE_TUNABLES
+-      TUNABLE_SET (glibc, tune, hwcap_mask, uint64_t, hwcap_mask);
++      TUNABLE_SET (glibc, cpu, hwcap_mask, uint64_t, hwcap_mask);
+ #else
+       GLRO(dl_hwcap_mask) = hwcap_mask;
+ #endif
+diff --git a/elf/dl-hwcaps.h b/elf/dl-hwcaps.h
+index 17f0da4c73772425..d69ee11dc27bb5e5 100644
+--- a/elf/dl-hwcaps.h
++++ b/elf/dl-hwcaps.h
+@@ -19,7 +19,7 @@
+ #include <elf/dl-tunables.h>
+ 
+ #if HAVE_TUNABLES
+-# define GET_HWCAP_MASK() TUNABLE_GET (glibc, tune, hwcap_mask, uint64_t, NULL)
++# define GET_HWCAP_MASK() TUNABLE_GET (glibc, cpu, hwcap_mask, uint64_t, NULL)
+ #else
+ # ifdef SHARED
+ #   define GET_HWCAP_MASK() GLRO(dl_hwcap_mask)
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index 1ff6fcb6f24f93a8..b7cc79f8bfe0a7c6 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -91,7 +91,7 @@ glibc {
+       security_level: SXID_IGNORE
+     }
+   }
+-  tune {
++  cpu {
+     hwcap_mask {
+       type: UINT_64
+       env_alias: LD_HWCAP_MASK
+diff --git a/manual/README.tunables b/manual/README.tunables
+index 3967679f432a6378..f87a31a65e0a3455 100644
+--- a/manual/README.tunables
++++ b/manual/README.tunables
+@@ -105,11 +105,11 @@ where 'check' is the tunable name, 'int32_t' is the C type of the tunable and
+ To get and set tunables in a different namespace from that module, use the full
+ form of the macros as follows:
+ 
+-  val = TUNABLE_GET_FULL (glibc, tune, hwcap_mask, uint64_t, NULL)
++  val = TUNABLE_GET_FULL (glibc, cpu, hwcap_mask, uint64_t, NULL)
+ 
+-  TUNABLE_SET_FULL (glibc, tune, hwcap_mask, uint64_t, val)
++  TUNABLE_SET_FULL (glibc, cpu, hwcap_mask, uint64_t, val)
+ 
+-where 'glibc' is the top namespace, 'tune' is the tunable namespace and the
++where 'glibc' is the top namespace, 'cpu' is the tunable namespace and the
+ remaining arguments are the same as the short form macros.
+ 
+ When TUNABLE_NAMESPACE is not defined in a module, TUNABLE_GET is equivalent to
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index 3e1e519dff153b09..ef10d2872cfc244e 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -307,23 +307,23 @@ The default value of this tunable is @samp{3}.
+ @cindex non_temporal_threshold tunables
+ @cindex tunables, non_temporal_threshold
+ 
+-@deftp {Tunable namespace} glibc.tune
++@deftp {Tunable namespace} glibc.cpu
+ Behavior of @theglibc{} can be tuned to assume specific hardware capabilities
+-by setting the following tunables in the @code{tune} namespace:
++by setting the following tunables in the @code{cpu} namespace:
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.hwcap_mask
++@deftp Tunable glibc.cpu.hwcap_mask
+ This tunable supersedes the @env{LD_HWCAP_MASK} environment variable and is
+ identical in features.
+ 
+ The @code{AT_HWCAP} key in the Auxiliary Vector specifies instruction set
+ extensions available in the processor at runtime for some architectures.  The
+-@code{glibc.tune.hwcap_mask} tunable allows the user to mask out those
++@code{glibc.cpu.hwcap_mask} tunable allows the user to mask out those
+ capabilities at runtime, thus disabling use of those extensions.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.hwcaps
+-The @code{glibc.tune.hwcaps=-xxx,yyy,-zzz...} tunable allows the user to
++@deftp Tunable glibc.cpu.hwcaps
++The @code{glibc.cpu.hwcaps=-xxx,yyy,-zzz...} tunable allows the user to
+ enable CPU/ARCH feature @code{yyy}, disable CPU/ARCH feature @code{xxx}
+ and @code{zzz} where the feature name is case-sensitive and has to match
+ the ones in @code{sysdeps/x86/cpu-features.h}.
+@@ -331,8 +331,8 @@ the ones in @code{sysdeps/x86/cpu-features.h}.
+ This tunable is specific to i386 and x86-64.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.cached_memopt
+-The @code{glibc.tune.cached_memopt=[0|1]} tunable allows the user to
++@deftp Tunable glibc.cpu.cached_memopt
++The @code{glibc.cpu.cached_memopt=[0|1]} tunable allows the user to
+ enable optimizations recommended for cacheable memory.  If set to
+ @code{1}, @theglibc{} assumes that the process memory image consists
+ of cacheable (non-device) memory only.  The default, @code{0},
+@@ -341,8 +341,8 @@ indicates that the process may use device memory.
+ This tunable is specific to powerpc, powerpc64 and powerpc64le.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.cpu
+-The @code{glibc.tune.cpu=xxx} tunable allows the user to tell @theglibc{} to
++@deftp Tunable glibc.cpu.name
++The @code{glibc.cpu.name=xxx} tunable allows the user to tell @theglibc{} to
+ assume that the CPU is @code{xxx} where xxx may have one of these values:
+ @code{generic}, @code{falkor}, @code{thunderxt88}, @code{thunderx2t99},
+ @code{thunderx2t99p1}.
+@@ -350,20 +350,20 @@ assume that the CPU is @code{xxx} where xxx may have one of these values:
+ This tunable is specific to aarch64.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.x86_data_cache_size
+-The @code{glibc.tune.x86_data_cache_size} tunable allows the user to set
++@deftp Tunable glibc.cpu.x86_data_cache_size
++The @code{glibc.cpu.x86_data_cache_size} tunable allows the user to set
+ data cache size in bytes for use in memory and string routines.
+ 
+ This tunable is specific to i386 and x86-64.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.x86_shared_cache_size
+-The @code{glibc.tune.x86_shared_cache_size} tunable allows the user to
++@deftp Tunable glibc.cpu.x86_shared_cache_size
++The @code{glibc.cpu.x86_shared_cache_size} tunable allows the user to
+ set shared cache size in bytes for use in memory and string routines.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.x86_non_temporal_threshold
+-The @code{glibc.tune.x86_non_temporal_threshold} tunable allows the user
++@deftp Tunable glibc.cpu.x86_non_temporal_threshold
++The @code{glibc.cpu.x86_non_temporal_threshold} tunable allows the user
+ to set threshold in bytes for non temporal store. Non temporal stores
+ give a hint to the hardware to move data directly to memory without
+ displacing other data from the cache. This tunable is used by some
+@@ -373,8 +373,8 @@ like memmove and memcpy.
+ This tunable is specific to i386 and x86-64.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.x86_ibt
+-The @code{glibc.tune.x86_ibt} tunable allows the user to control how
++@deftp Tunable glibc.cpu.x86_ibt
++The @code{glibc.cpu.x86_ibt} tunable allows the user to control how
+ indirect branch tracking (IBT) should be enabled.  Accepted values are
+ @code{on}, @code{off}, and @code{permissive}.  @code{on} always turns
+ on IBT regardless of whether IBT is enabled in the executable and its
+@@ -386,8 +386,8 @@ IBT on non-CET executables and shared libraries.
+ This tunable is specific to i386 and x86-64.
+ @end deftp
+ 
+-@deftp Tunable glibc.tune.x86_shstk
+-The @code{glibc.tune.x86_shstk} tunable allows the user to control how
++@deftp Tunable glibc.cpu.x86_shstk
++The @code{glibc.cpu.x86_shstk} tunable allows the user to control how
+ the shadow stack (SHSTK) should be enabled.  Accepted values are
+ @code{on}, @code{off}, and @code{permissive}.  @code{on} always turns on
+ SHSTK regardless of whether SHSTK is enabled in the executable and its
+diff --git a/sysdeps/aarch64/dl-tunables.list b/sysdeps/aarch64/dl-tunables.list
+index f6a88168cc5ec7e6..cfcf940ebd15a9aa 100644
+--- a/sysdeps/aarch64/dl-tunables.list
++++ b/sysdeps/aarch64/dl-tunables.list
+@@ -17,8 +17,8 @@
+ # <http://www.gnu.org/licenses/>.
+ 
+ glibc {
+-  tune {
+-    cpu {
++  cpu {
++    name {
+       type: STRING
+     }
+   }
+diff --git a/sysdeps/powerpc/cpu-features.c b/sysdeps/powerpc/cpu-features.c
+index 955d4778a69db607..ad809b9815eb68f0 100644
+--- a/sysdeps/powerpc/cpu-features.c
++++ b/sysdeps/powerpc/cpu-features.c
+@@ -30,7 +30,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+      tunables is enable, since for this case user can explicit disable
+      unaligned optimizations.  */
+ #if HAVE_TUNABLES
+-  int32_t cached_memfunc = TUNABLE_GET (glibc, tune, cached_memopt, int32_t,
++  int32_t cached_memfunc = TUNABLE_GET (glibc, cpu, cached_memopt, int32_t,
+ 					NULL);
+   cpu_features->use_cached_memopt = (cached_memfunc > 0);
+ #else
+diff --git a/sysdeps/powerpc/dl-tunables.list b/sysdeps/powerpc/dl-tunables.list
+index d26636a16bfcd6d9..b3372555f75f8e38 100644
+--- a/sysdeps/powerpc/dl-tunables.list
++++ b/sysdeps/powerpc/dl-tunables.list
+@@ -17,7 +17,7 @@
+ # <http://www.gnu.org/licenses/>.
+ 
+ glibc {
+-  tune {
++  cpu {
+     cached_memopt {
+       type: INT_32
+       minval: 0
+diff --git a/sysdeps/unix/sysv/linux/aarch64/cpu-features.c b/sysdeps/unix/sysv/linux/aarch64/cpu-features.c
+index 39eba0186f55b5de..b4f348509eb1c6b3 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/cpu-features.c
++++ b/sysdeps/unix/sysv/linux/aarch64/cpu-features.c
+@@ -57,7 +57,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+ #if HAVE_TUNABLES
+   /* Get the tunable override.  */
+-  const char *mcpu = TUNABLE_GET (glibc, tune, cpu, const char *, NULL);
++  const char *mcpu = TUNABLE_GET (glibc, cpu, name, const char *, NULL);
+   if (mcpu != NULL)
+     midr = get_midr_from_mcpu (mcpu);
+ #endif
+diff --git a/sysdeps/x86/Makefile b/sysdeps/x86/Makefile
+index d5f821e0831997ac..a936134a577e42a5 100644
+--- a/sysdeps/x86/Makefile
++++ b/sysdeps/x86/Makefile
+@@ -84,21 +84,21 @@ LDFLAGS-tst-cet-legacy-mod-6c.so = -Wl,--enable-new-dtags,-z,nodelete
+ ifneq (no,$(have-tunables))
+ $(objpfx)tst-cet-legacy-4a: $(libdl)
+ $(objpfx)tst-cet-legacy-4a.out: $(objpfx)tst-cet-legacy-mod-4.so
+-tst-cet-legacy-4a-ENV = GLIBC_TUNABLES=glibc.tune.x86_shstk=permissive
++tst-cet-legacy-4a-ENV = GLIBC_TUNABLES=glibc.cpu.x86_shstk=permissive
+ $(objpfx)tst-cet-legacy-4b: $(libdl)
+ $(objpfx)tst-cet-legacy-4b.out: $(objpfx)tst-cet-legacy-mod-4.so
+-tst-cet-legacy-4b-ENV = GLIBC_TUNABLES=glibc.tune.x86_shstk=on
++tst-cet-legacy-4b-ENV = GLIBC_TUNABLES=glibc.cpu.x86_shstk=on
+ $(objpfx)tst-cet-legacy-4c: $(libdl)
+ $(objpfx)tst-cet-legacy-4c.out: $(objpfx)tst-cet-legacy-mod-4.so
+-tst-cet-legacy-4c-ENV = GLIBC_TUNABLES=glibc.tune.x86_shstk=off
++tst-cet-legacy-4c-ENV = GLIBC_TUNABLES=glibc.cpu.x86_shstk=off
+ $(objpfx)tst-cet-legacy-5b: $(libdl)
+ $(objpfx)tst-cet-legacy-5b.out: $(objpfx)tst-cet-legacy-mod-5a.so \
+ 				$(objpfx)tst-cet-legacy-mod-5b.so
+-tst-cet-legacy-5b-ENV = GLIBC_TUNABLES=glibc.tune.x86_ibt=off:glibc.tune.x86_shstk=off
++tst-cet-legacy-5b-ENV = GLIBC_TUNABLES=glibc.cpu.x86_ibt=off:glibc.cpu.x86_shstk=off
+ $(objpfx)tst-cet-legacy-6b: $(libdl)
+ $(objpfx)tst-cet-legacy-6b.out: $(objpfx)tst-cet-legacy-mod-6a.so \
+ 				$(objpfx)tst-cet-legacy-mod-6b.so
+-tst-cet-legacy-6b-ENV = GLIBC_TUNABLES=glibc.tune.x86_ibt=off:glibc.tune.x86_shstk=off
++tst-cet-legacy-6b-ENV = GLIBC_TUNABLES=glibc.cpu.x86_ibt=off:glibc.cpu.x86_shstk=off
+ endif
+ endif
+ 
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 41f2d15fa5c8a756..3b268efbce627e6c 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -22,7 +22,7 @@
+ #include <libc-pointer-arith.h>
+ 
+ #if HAVE_TUNABLES
+-# define TUNABLE_NAMESPACE tune
++# define TUNABLE_NAMESPACE cpu
+ # include <unistd.h>		/* Get STDOUT_FILENO for _dl_printf.  */
+ # include <elf/dl-tunables.h>
+ 
+@@ -424,7 +424,7 @@ no_cpuid:
+ 
+   /* Reuse dl_platform, dl_hwcap and dl_hwcap_mask for x86.  */
+ #if !HAVE_TUNABLES && defined SHARED
+-  /* The glibc.tune.hwcap_mask tunable is initialized already, so no need to do
++  /* The glibc.cpu.hwcap_mask tunable is initialized already, so no need to do
+      this.  */
+   GLRO(dl_hwcap_mask) = HWCAP_IMPORTANT;
+ #endif
+@@ -499,7 +499,7 @@ no_cpuid:
+ 	  /* Disable IBT and/or SHSTK if they are enabled by kernel, but
+ 	     disabled by environment variable:
+ 
+-	     GLIBC_TUNABLES=glibc.tune.hwcaps=-IBT,-SHSTK
++	     GLIBC_TUNABLES=glibc.cpu.hwcaps=-IBT,-SHSTK
+ 	   */
+ 	  unsigned int cet_feature = 0;
+ 	  if (!HAS_CPU_FEATURE (IBT))
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index 347a4b118d007fd8..4c6d08c709eea204 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -141,7 +141,7 @@ struct cpu_features
+   unsigned long int xsave_state_size;
+   /* The full state size for XSAVE when XSAVEC is disabled by
+ 
+-     GLIBC_TUNABLES=glibc.tune.hwcaps=-XSAVEC_Usable
++     GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC_Usable
+    */
+   unsigned int xsave_state_full_size;
+   unsigned int feature[FEATURE_INDEX_MAX];
+diff --git a/sysdeps/x86/cpu-tunables.c b/sysdeps/x86/cpu-tunables.c
+index fad6726882fa7e2d..2e5d37753713e975 100644
+--- a/sysdeps/x86/cpu-tunables.c
++++ b/sysdeps/x86/cpu-tunables.c
+@@ -17,7 +17,7 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #if HAVE_TUNABLES
+-# define TUNABLE_NAMESPACE tune
++# define TUNABLE_NAMESPACE cpu
+ # include <stdbool.h>
+ # include <stdint.h>
+ # include <unistd.h>		/* Get STDOUT_FILENO for _dl_printf.  */
+@@ -116,7 +116,7 @@ TUNABLE_CALLBACK (set_hwcaps) (tunable_val_t *valp)
+      the hardware which wasn't available when the selection was made.
+      The environment variable:
+ 
+-     GLIBC_TUNABLES=glibc.tune.hwcaps=-xxx,yyy,-zzz,....
++     GLIBC_TUNABLES=glibc.cpu.hwcaps=-xxx,yyy,-zzz,....
+ 
+      can be used to enable CPU/ARCH feature yyy, disable CPU/ARCH feature
+      yyy and zzz, where the feature name is case-sensitive and has to
+diff --git a/sysdeps/x86/dl-cet.c b/sysdeps/x86/dl-cet.c
+index ebc0d577e414c807..d481bddc27e5d7cc 100644
+--- a/sysdeps/x86/dl-cet.c
++++ b/sysdeps/x86/dl-cet.c
+@@ -72,7 +72,7 @@ dl_cet_check (struct link_map *m, const char *program)
+ 	  /* Enable IBT and SHSTK only if they are enabled in executable.
+ 	     NB: IBT and SHSTK may be disabled by environment variable:
+ 
+-	     GLIBC_TUNABLES=glibc.tune.hwcaps=-IBT,-SHSTK
++	     GLIBC_TUNABLES=glibc.cpu.hwcaps=-IBT,-SHSTK
+ 	   */
+ 	  enable_ibt &= (HAS_CPU_FEATURE (IBT)
+ 			 && (enable_ibt_type == cet_always_on
+diff --git a/sysdeps/x86/dl-tunables.list b/sysdeps/x86/dl-tunables.list
+index 73886b1352316854..2a457d0eec9c3122 100644
+--- a/sysdeps/x86/dl-tunables.list
++++ b/sysdeps/x86/dl-tunables.list
+@@ -17,7 +17,7 @@
+ # <http://www.gnu.org/licenses/>.
+ 
+ glibc {
+-  tune {
++  cpu {
+     hwcaps {
+       type: STRING
+     }
+diff --git a/sysdeps/x86_64/Makefile b/sysdeps/x86_64/Makefile
+index 9f1562f1b25a2df5..d51cf03ac92ebcc2 100644
+--- a/sysdeps/x86_64/Makefile
++++ b/sysdeps/x86_64/Makefile
+@@ -57,7 +57,7 @@ modules-names += x86_64/tst-x86_64mod-1
+ LDFLAGS-tst-x86_64mod-1.so = -Wl,-soname,tst-x86_64mod-1.so
+ ifneq (no,$(have-tunables))
+ # Test the state size for XSAVE when XSAVEC is disabled.
+-tst-x86_64-1-ENV = GLIBC_TUNABLES=glibc.tune.hwcaps=-XSAVEC_Usable
++tst-x86_64-1-ENV = GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC_Usable
+ endif
+ 
+ $(objpfx)tst-x86_64-1: $(objpfx)x86_64/tst-x86_64mod-1.so
+@@ -74,7 +74,7 @@ $(objpfx)tst-platform-1.out: $(objpfx)x86_64/tst-platformmod-2.so
+ # Turn off AVX512F_Usable and AVX2_Usable so that GLRO(dl_platform) is
+ # always set to x86_64.
+ tst-platform-1-ENV = LD_PRELOAD=$(objpfx)\$$PLATFORM/tst-platformmod-2.so \
+-	GLIBC_TUNABLES=glibc.tune.hwcaps=-AVX512F_Usable,-AVX2_Usable
++	GLIBC_TUNABLES=glibc.cpu.hwcaps=-AVX512F_Usable,-AVX2_Usable
+ endif
+ 
+ tests += tst-audit3 tst-audit4 tst-audit5 tst-audit6 tst-audit7 \

@@ -1,0 +1,134 @@
+commit f7649d5780aa4682393b9daedd653e4d9c12784c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 13 10:23:10 2019 +0100
+
+    dlopen: Do not block signals
+    
+    Blocking signals causes issues with certain anti-malware solutions
+    which rely on an unblocked SIGSYS signal for system calls they
+    intercept.
+    
+    This reverts commit a2e8aa0d9ea648068d8be52dd7b15f1b6a008e23
+    ("Block signals during the initial part of dlopen") and adds
+    comments related to async signal safety to active_nodelete and
+    its caller.
+    
+    Note that this does not make lazy binding async-signal-safe with regards
+    to dlopen.  It merely avoids introducing new async-signal-safety hazards
+    as part of the NODELETE changes.
+    
+    Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index a382bfae8aa3a2f8..d834b89754d2b073 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -34,7 +34,6 @@
+ #include <atomic.h>
+ #include <libc-internal.h>
+ #include <array_length.h>
+-#include <internal-signals.h>
+ 
+ #include <dl-dst.h>
+ #include <dl-prop.h>
+@@ -53,10 +52,6 @@ struct dl_open_args
+   /* Namespace ID.  */
+   Lmid_t nsid;
+ 
+-  /* Original signal mask.  Used for unblocking signal handlers before
+-     running ELF constructors.  */
+-  sigset_t original_signal_mask;
+-
+   /* Original value of _ns_global_scope_pending_adds.  Set by
+      dl_open_worker.  Only valid if nsid is a real namespace
+      (non-negative).  */
+@@ -446,6 +441,9 @@ activate_nodelete (struct link_map *new)
+ 	  _dl_debug_printf ("activating NODELETE for %s [%lu]\n",
+ 			    l->l_name, l->l_ns);
+ 
++	/* The flag can already be true at this point, e.g. a signal
++	   handler may have triggered lazy binding and set NODELETE
++	   status immediately.  */
+ 	l->l_nodelete_active = true;
+ 
+ 	/* This is just a debugging aid, to indicate that
+@@ -520,16 +518,12 @@ dl_open_worker (void *a)
+   if (new == NULL)
+     {
+       assert (mode & RTLD_NOLOAD);
+-      __libc_signal_restore_set (&args->original_signal_mask);
+       return;
+     }
+ 
+   if (__glibc_unlikely (mode & __RTLD_SPROF))
+-    {
+-      /* This happens only if we load a DSO for 'sprof'.  */
+-      __libc_signal_restore_set (&args->original_signal_mask);
+-      return;
+-    }
++    /* This happens only if we load a DSO for 'sprof'.  */
++    return;
+ 
+   /* This object is directly loaded.  */
+   ++new->l_direct_opencount;
+@@ -565,7 +559,6 @@ dl_open_worker (void *a)
+ 
+       assert (_dl_debug_initialize (0, args->nsid)->r_state == RT_CONSISTENT);
+ 
+-      __libc_signal_restore_set (&args->original_signal_mask);
+       return;
+     }
+ 
+@@ -709,6 +702,12 @@ dl_open_worker (void *a)
+      All memory allocations for new objects must have happened
+      before.  */
+ 
++  /* Finalize the NODELETE status first.  This comes before
++     update_scopes, so that lazy binding will not see pending NODELETE
++     state for newly loaded objects.  There is a compiler barrier in
++     update_scopes which ensures that the changes from
++     activate_nodelete are visible before new objects show up in the
++     local scope.  */
+   activate_nodelete (new);
+ 
+   /* Second stage after resize_scopes: Actually perform the scope
+@@ -742,10 +741,6 @@ dl_open_worker (void *a)
+   if (mode & RTLD_GLOBAL)
+     add_to_global_resize (new);
+ 
+-  /* Unblock signals.  Data structures are now consistent, and
+-     application code may run.  */
+-  __libc_signal_restore_set (&args->original_signal_mask);
+-
+   /* Run the initializer functions of new objects.  Temporarily
+      disable the exception handler, so that lazy binding failures are
+      fatal.  */
+@@ -835,10 +830,6 @@ no more namespaces available for dlmopen()"));
+   args.argv = argv;
+   args.env = env;
+ 
+-  /* Recursive lazy binding during manipulation of the dynamic loader
+-     structures may result in incorrect behavior.  */
+-  __libc_signal_block_all (&args.original_signal_mask);
+-
+   struct dl_exception exception;
+   int errcode = _dl_catch_exception (&exception, dl_open_worker, &args);
+ 
+@@ -879,16 +870,10 @@ no more namespaces available for dlmopen()"));
+ 
+ 	  _dl_close_worker (args.map, true);
+ 
+-	  /* Restore the signal mask.  In the success case, this
+-	     happens inside dl_open_worker.  */
+-	  __libc_signal_restore_set (&args.original_signal_mask);
+-
+ 	  /* All l_nodelete_pending objects should have been deleted
+ 	     at this point, which is why it is not necessary to reset
+ 	     the flag here.  */
+ 	}
+-      else
+-	__libc_signal_restore_set (&args.original_signal_mask);
+ 
+       assert (_dl_debug_initialize (0, args.nsid)->r_state == RT_CONSISTENT);
+ 

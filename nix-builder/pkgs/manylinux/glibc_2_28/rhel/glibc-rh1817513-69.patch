@@ -1,0 +1,144 @@
+commit 4fdd4d41a17dda26c854ed935658154a17d4b906
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Thu Jun 25 15:12:57 2020 -0700
+
+    x86: Detect Intel Advanced Matrix Extensions
+    
+    Intel Advanced Matrix Extensions (Intel AMX) is a new programming
+    paradigm consisting of two components: a set of 2-dimensional registers
+    (tiles) representing sub-arrays from a larger 2-dimensional memory image,
+    and accelerators able to operate on tiles.  Intel AMX is an extensible
+    architecture.  New accelerators can be added and the existing accelerator
+    may be enhanced to provide higher performance.  The initial features are
+    AMX-BF16, AMX-TILE and AMX-INT8, which are usable only if the operating
+    system supports both XTILECFG state and XTILEDATA state.
+    
+    Add AMX-BF16, AMX-TILE and AMX-INT8 support to HAS_CPU_FEATURE and
+    CPU_FEATURE_USABLE.
+
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index 7b2a5bc3ed27ec39..21565474839efffc 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -239,6 +239,24 @@ get_common_indices (struct cpu_features *cpu_features,
+ 	    }
+ 	}
+ 
++      /* Are XTILECFG and XTILEDATA states usable?  */
++      if ((xcrlow & (bit_XTILECFG_state | bit_XTILEDATA_state))
++	  == (bit_XTILECFG_state | bit_XTILEDATA_state))
++	{
++	  /* Determine if AMX_BF16 is usable.  */
++	  if (CPU_FEATURES_CPU_P (cpu_features, AMX_BF16))
++	    cpu_features->usable[index_arch_AMX_BF16_Usable]
++	      |= bit_arch_AMX_BF16_Usable;
++	  /* Determine if AMX_TILE is usable.  */
++	  if (CPU_FEATURES_CPU_P (cpu_features, AMX_TILE))
++	    cpu_features->usable[index_arch_AMX_TILE_Usable]
++	      |= bit_arch_AMX_TILE_Usable;
++	  /* Determine if AMX_INT8 is usable.  */
++	  if (CPU_FEATURES_CPU_P (cpu_features, AMX_INT8))
++	    cpu_features->usable[index_arch_AMX_INT8_Usable]
++	      |= bit_arch_AMX_INT8_Usable;
++	}
++
+       /* For _dl_runtime_resolve, set xsave_state_size to xsave area
+ 	 size + integer register save size and align it to 64 bytes.  */
+       if (cpu_features->basic.max_cpuid >= 0xd)
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index 41c3855e94d16b49..7c46242aad69d427 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -156,6 +156,9 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_arch_AVX512_VP2INTERSECT_Usable	(1u << 24)
+ #define bit_arch_AVX512_BF16_Usable		(1u << 25)
+ #define bit_arch_PKU_Usable			(1u << 26)
++#define bit_arch_AMX_BF16_Usable		(1u << 27)
++#define bit_arch_AMX_TILE_Usable		(1u << 28)
++#define bit_arch_AMX_INT8_Usable		(1u << 29)
+ 
+ #define index_arch_AVX_Usable			USABLE_FEATURE_INDEX_1
+ #define index_arch_AVX2_Usable			USABLE_FEATURE_INDEX_1
+@@ -184,6 +187,9 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_arch_AVX512_VP2INTERSECT_Usable	USABLE_FEATURE_INDEX_1
+ #define index_arch_AVX512_BF16_Usable		USABLE_FEATURE_INDEX_1
+ #define index_arch_PKU_Usable			USABLE_FEATURE_INDEX_1
++#define index_arch_AMX_BF16_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AMX_TILE_Usable		USABLE_FEATURE_INDEX_1
++#define index_arch_AMX_INT8_Usable		USABLE_FEATURE_INDEX_1
+ 
+ #define feature_AVX_Usable			usable
+ #define feature_AVX2_Usable			usable
+@@ -212,6 +218,9 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define feature_AVX512_VP2INTERSECT_Usable	usable
+ #define feature_AVX512_BF16_Usable		usable
+ #define feature_PKU_Usable			usable
++#define feature_AMX_BF16_Usable			usable
++#define feature_AMX_TILE_Usable			usable
++#define feature_AMX_INT8_Usable			usable
+ 
+ /* CPU features.  */
+ 
+@@ -347,6 +356,9 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_TSXLDTRK	(1u << 16)
+ #define bit_cpu_PCONFIG		(1u << 18)
+ #define bit_cpu_IBT		(1u << 20)
++#define bit_cpu_AMX_BF16	(1u << 22)
++#define bit_cpu_AMX_TILE	(1u << 24)
++#define bit_cpu_AMX_INT8	(1u << 25)
+ #define bit_cpu_IBRS_IBPB	(1u << 26)
+ #define bit_cpu_STIBP		(1u << 27)
+ #define bit_cpu_L1D_FLUSH	(1u << 28)
+@@ -529,6 +541,9 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_TSXLDTRK	COMMON_CPUID_INDEX_7
+ #define index_cpu_PCONFIG	COMMON_CPUID_INDEX_7
+ #define index_cpu_IBT		COMMON_CPUID_INDEX_7
++#define index_cpu_AMX_BF16	COMMON_CPUID_INDEX_7
++#define index_cpu_AMX_TILE	COMMON_CPUID_INDEX_7
++#define index_cpu_AMX_INT8	COMMON_CPUID_INDEX_7
+ #define index_cpu_IBRS_IBPB	COMMON_CPUID_INDEX_7
+ #define index_cpu_STIBP		COMMON_CPUID_INDEX_7
+ #define index_cpu_L1D_FLUSH	COMMON_CPUID_INDEX_7
+@@ -711,6 +726,9 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_TSXLDTRK		edx
+ #define reg_PCONFIG		edx
+ #define reg_IBT			edx
++#define reg_AMX_BF16		edx
++#define reg_AMX_TILE		edx
++#define reg_AMX_INT8		edx
+ #define reg_IBRS_IBPB		edx
+ #define reg_STIBP		edx
+ #define reg_L1D_FLUSH		edx
+@@ -819,6 +837,8 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_Opmask_state	(1u << 5)
+ #define bit_ZMM0_15_state	(1u << 6)
+ #define bit_ZMM16_31_state	(1u << 7)
++#define bit_XTILECFG_state	(1u << 17)
++#define bit_XTILEDATA_state	(1u << 18)
+ 
+ # if defined (_LIBC) && !IS_IN (nonlib)
+ /* Unused for x86.  */
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index 08688ace2a0ae35e..c4d91be3a48de886 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -185,6 +185,9 @@ do_test (void)
+   CHECK_CPU_FEATURE (TSXLDTRK);
+   CHECK_CPU_FEATURE (PCONFIG);
+   CHECK_CPU_FEATURE (IBT);
++  CHECK_CPU_FEATURE (AMX_BF16);
++  CHECK_CPU_FEATURE (AMX_TILE);
++  CHECK_CPU_FEATURE (AMX_INT8);
+   CHECK_CPU_FEATURE (IBRS_IBPB);
+   CHECK_CPU_FEATURE (STIBP);
+   CHECK_CPU_FEATURE (L1D_FLUSH);
+@@ -237,6 +240,9 @@ do_test (void)
+   CHECK_CPU_FEATURE_USABLE (AVX512_4VNNIW);
+   CHECK_CPU_FEATURE_USABLE (AVX512_4FMAPS);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VP2INTERSECT);
++  CHECK_CPU_FEATURE_USABLE (AMX_BF16);
++  CHECK_CPU_FEATURE_USABLE (AMX_TILE);
++  CHECK_CPU_FEATURE_USABLE (AMX_INT8);
+   CHECK_CPU_FEATURE_USABLE (XOP);
+   CHECK_CPU_FEATURE_USABLE (FMA4);
+   CHECK_CPU_FEATURE_USABLE (XSAVEC);

@@ -1,0 +1,160 @@
+commit aee6e90f93e285016b6cd9c8bd00402c19ba271b
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Jul 19 15:47:51 2021 -0300
+
+    elf: Add _dl_audit_objopen
+    
+    It consolidates the code required to call la_objopen audit callback.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Florian Weimer <fweimer@redhat.com>
+
+Conflicts:
+	elf/Makefile
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 2312184692433313..08a32a712a34f2cc 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -64,7 +64,8 @@ elide-routines.os = $(all-dl-routines) dl-support enbl-secure dl-origin \
+ # interpreter and operating independent of libc.
+ rtld-routines	= rtld $(all-dl-routines) dl-sysdep dl-environ dl-minimal \
+   dl-error-minimal dl-conflict dl-hwcaps dl-hwcaps_split dl-hwcaps-subdirs \
+-  dl-usage dl-diagnostics dl-diagnostics-kernel dl-diagnostics-cpu
++  dl-usage dl-diagnostics dl-diagnostics-kernel dl-diagnostics-cpu \
++  dl-audit
+ all-rtld-routines = $(rtld-routines) $(sysdep-rtld-routines)
+ 
+ CFLAGS-dl-runtime.c += -fexceptions -fasynchronous-unwind-tables
+diff --git a/elf/dl-audit.c b/elf/dl-audit.c
+new file mode 100644
+index 0000000000000000..4066dfe85146b9d4
+--- /dev/null
++++ b/elf/dl-audit.c
+@@ -0,0 +1,39 @@
++/* Audit common functions.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <ldsodefs.h>
++
++void
++_dl_audit_objopen (struct link_map *l, Lmid_t nsid)
++{
++  if (__glibc_likely (GLRO(dl_naudit) == 0))
++    return;
++
++  struct audit_ifaces *afct = GLRO(dl_audit);
++  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
++    {
++      if (afct->objopen != NULL)
++	{
++	  struct auditstate *state = link_map_audit_state (l, cnt);
++	  state->bindflags = afct->objopen (l, nsid, &state->cookie);
++	  l->l_audit_any_plt |= state->bindflags != 0;
++	}
++
++      afct = afct->next;
++   }
++}
+diff --git a/elf/dl-load.c b/elf/dl-load.c
+index de5aef5777045da5..c11b1d1781e9b40b 100644
+--- a/elf/dl-load.c
++++ b/elf/dl-load.c
+@@ -1436,22 +1436,8 @@ cannot enable executable stack as shared object requires");
+ 
+ #ifdef SHARED
+   /* Auditing checkpoint: we have a new object.  */
+-  if (__glibc_unlikely (GLRO(dl_naudit) > 0)
+-      && !GL(dl_ns)[l->l_ns]._ns_loaded->l_auditing)
+-    {
+-      struct audit_ifaces *afct = GLRO(dl_audit);
+-      for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-	{
+-	  if (afct->objopen != NULL)
+-	    {
+-	      struct auditstate *state = link_map_audit_state (l, cnt);
+-	      state->bindflags = afct->objopen (l, nsid, &state->cookie);
+-	      l->l_audit_any_plt |= state->bindflags != 0;
+-	    }
+-
+-	  afct = afct->next;
+-	}
+-    }
++  if (!GL(dl_ns)[l->l_ns]._ns_loaded->l_auditing)
++    _dl_audit_objopen (l, nsid);
+ #endif
+ 
+   return l;
+diff --git a/elf/rtld.c b/elf/rtld.c
+index f3836b8a78faaf27..1982e42390760e0a 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1075,25 +1075,6 @@ ERROR: audit interface '%s' requires version %d (maximum supported version %d);
+   dlmargs.map->l_auditing = 1;
+ }
+ 
+-/* Notify the the audit modules that the object MAP has already been
+-   loaded.  */
+-static void
+-notify_audit_modules_of_loaded_object (struct link_map *map)
+-{
+-  struct audit_ifaces *afct = GLRO(dl_audit);
+-  for (unsigned int cnt = 0; cnt < GLRO(dl_naudit); ++cnt)
+-    {
+-      if (afct->objopen != NULL)
+-	{
+-	  struct auditstate *state = link_map_audit_state (map, cnt);
+-	  state->bindflags = afct->objopen (map, LM_ID_BASE, &state->cookie);
+-	  map->l_audit_any_plt |= state->bindflags != 0;
+-	}
+-
+-      afct = afct->next;
+-    }
+-}
+-
+ /* Load all audit modules.  */
+ static void
+ load_audit_modules (struct link_map *main_map, struct audit_list *audit_list)
+@@ -1112,8 +1093,8 @@ load_audit_modules (struct link_map *main_map, struct audit_list *audit_list)
+      program and the dynamic linker itself).  */
+   if (GLRO(dl_naudit) > 0)
+     {
+-      notify_audit_modules_of_loaded_object (main_map);
+-      notify_audit_modules_of_loaded_object (&GL(dl_rtld_map));
++      _dl_audit_objopen (main_map, LM_ID_BASE);
++      _dl_audit_objopen (&GL(dl_rtld_map), LM_ID_BASE);
+     }
+ }
+ 
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 2dd6f0c3c4aaaef5..410f070e28b74bdf 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -1268,6 +1268,11 @@ link_map_audit_state (struct link_map *l, size_t index)
+ {
+   return &l->l_audit[index];
+ }
++
++/* Call the la_objopen from the audit modules for the link_map L on the
++   namespace identification NSID.  */
++void _dl_audit_objopen (struct link_map *l, Lmid_t nsid)
++  attribute_hidden;
+ #endif /* SHARED */
+ 
+ __END_DECLS

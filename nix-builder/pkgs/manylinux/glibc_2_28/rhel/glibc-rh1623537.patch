@@ -1,0 +1,61 @@
+commit b297581acb66f80b513996c1580158b0fb12d469
+Author: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+Date:   Mon Jan 14 17:54:44 2019 -0200
+
+    Add XFAIL_ROUNDING_IBM128_LIBGCC to more fma() tests
+    
+    Ignore 16 errors in math/test-ldouble-fma and 4 errors in
+    math/test-ildouble-fma when IBM 128-bit long double used.
+    These errors are caused by spurious overflows from libgcc.
+    
+            * math/libm-test-fma.inc (fma_test_data): Set
+            XFAIL_ROUNDING_IBM128_LIBGCC to more tests.
+    
+    Signed-off-by: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+    (cherry picked from commit ecdacd34a2ac3b6d5a529ff218b29261d9d98a7a)
+
+diff --git a/math/libm-test-fma.inc b/math/libm-test-fma.inc
+index 5b29fb820194e055..a7ee40992420c1ab 100644
+--- a/math/libm-test-fma.inc
++++ b/math/libm-test-fma.inc
+@@ -119,32 +119,32 @@ static const struct test_fff_f_data fma_test_data[] =
+     TEST_fff_f (fma, plus_infty, plus_infty, -min_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, plus_infty, min_subnorm_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, plus_infty, -min_subnorm_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, plus_infty, plus_infty, max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, plus_infty, plus_infty, -max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
++    TEST_fff_f (fma, plus_infty, plus_infty, max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
++    TEST_fff_f (fma, plus_infty, plus_infty, -max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
+     TEST_fff_f (fma, plus_infty, minus_infty, plus_zero, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, minus_infty, minus_zero, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, minus_infty, min_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, minus_infty, -min_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, minus_infty, min_subnorm_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, plus_infty, minus_infty, -min_subnorm_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, plus_infty, minus_infty, max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, plus_infty, minus_infty, -max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
++    TEST_fff_f (fma, plus_infty, minus_infty, max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
++    TEST_fff_f (fma, plus_infty, minus_infty, -max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
+     TEST_fff_f (fma, minus_infty, plus_infty, plus_zero, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, plus_infty, minus_zero, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, plus_infty, min_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, plus_infty, -min_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, plus_infty, min_subnorm_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, plus_infty, -min_subnorm_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, minus_infty, plus_infty, max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, minus_infty, plus_infty, -max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
++    TEST_fff_f (fma, minus_infty, plus_infty, max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
++    TEST_fff_f (fma, minus_infty, plus_infty, -max_value, minus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
+     TEST_fff_f (fma, minus_infty, minus_infty, plus_zero, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, minus_infty, minus_zero, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, minus_infty, min_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, minus_infty, -min_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, minus_infty, min_subnorm_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+     TEST_fff_f (fma, minus_infty, minus_infty, -min_subnorm_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, minus_infty, minus_infty, max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+-    TEST_fff_f (fma, minus_infty, minus_infty, -max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
++    TEST_fff_f (fma, minus_infty, minus_infty, max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
++    TEST_fff_f (fma, minus_infty, minus_infty, -max_value, plus_infty, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED|XFAIL_ROUNDING_IBM128_LIBGCC),
+ 
+     AUTO_TESTS_fff_f (fma),
+   };

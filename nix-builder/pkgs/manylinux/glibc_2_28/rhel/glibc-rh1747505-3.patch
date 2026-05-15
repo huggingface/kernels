@@ -1,0 +1,40 @@
+diff -Nrup a/nss/nsswitch.conf b/nss/nsswitch.conf
+--- a/nss/nsswitch.conf	2019-10-25 12:14:09.255834866 -0400
++++ b/nss/nsswitch.conf	2019-10-25 12:50:08.425769248 -0400
+@@ -1,7 +1,7 @@
+ #
+ # /etc/nsswitch.conf
+ #
+-# An example Name Service Switch config file. This file should be
++# Name Service Switch config file. This file should be
+ # sorted with the most-used services at the beginning.
+ #
+ # Valid databases are: aliases, ethers, group, gshadow, hosts,
+@@ -52,18 +52,20 @@
+ # shadow:    db files
+ # group:     db files
+ 
+-# In alphabetical order. Re-order as required to optimize peformance.
++# In order of likelihood of use to accelerate lookup.
++passwd:     sss files
++shadow:     files sss
++group:      sss files
++hosts:      files dns myhostname
++services:   files sss
++netgroup:   sss
++automount:  files sss
++
+ aliases:    files
+ ethers:     files
+-group:      files
+ gshadow:    files
+-hosts:      files dns
+ initgroups: files
+-netgroup:   files
+ networks:   files dns
+-passwd:     files
+ protocols:  files
+ publickey:  files
+ rpc:        files
+-shadow:     files
+-services:   files

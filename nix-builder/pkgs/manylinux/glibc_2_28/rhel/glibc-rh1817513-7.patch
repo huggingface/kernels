@@ -1,0 +1,54 @@
+commit 221e4babca17b363df2c56e839572e9f7ab7d127
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Sep 12 20:31:24 2018 +0000
+
+    Include most of elf/ modules-names in modules-names-tests.
+    
+    I'm testing a patch to let the compiler expand calls to floor in libm
+    as built-in function calls as much as possible, instead of calling
+    __floor, so that no architecture-specific __floor inlines are needed,
+    and then to arrange for non-inlined calls to end up calling __floor,
+    as done with sqrt and __ieee754_sqrt.
+    
+    This shows up elf/tst-relsort1mod2.c calling floor, which must not be
+    converted to a call to __floor.  Now, while an IS_IN (libm)
+    conditional could be added to the existing conditionals on such
+    redirections in include/math.h, the _ISOMAC conditional ought to
+    suffice (code in other glibc libraries shouldn't be calling floor or
+    sqrt anyway, as they aren't provided in libc and the other libraries
+    don't link with libm).  But while tests are mostly now built with
+    _ISOMAC defined, test modules in modules-names aren't unless also
+    listed in modules-names-tests.
+    
+    As far as I can see, all the modules in modules-names in elf/ are in
+    fact parts of tests and so listing them in modules-names-tests is
+    appropriate, so they get built with something closer to the headers
+    used for user code, except in a few cases that actually rely on
+    something from internal headers.  This patch duly sets
+    modules-names-tests there accordingly (filtering out those tests that
+    fail to build without internal headers).
+    
+    Tested for x86_64, and with build-many-glibcs.py.
+    
+            * elf/Makefile (modules-names-tests): New variable.
+
+Conflicts:
+	elf/Makefile
+	  (Different backport order for tests.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index b4b618ce62a9e6df..89dff92adfc417f5 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -306,6 +306,11 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-dlopenfailmod3 \
+ 		tst-filterobj-flt tst-filterobj-aux tst-filterobj-filtee
+ 
++# Most modules build with _ISOMAC defined, but those filtered out
++# depend on internal headers.
++modules-names-tests = $(filter-out ifuncmod% tst-libc_dlvsym-dso tst-tlsmod%,\
++				   $(modules-names))
++
+ ifeq (yes,$(have-mtls-dialect-gnu2))
+ tests += tst-gnu2-tls1
+ modules-names += tst-gnu2-tls1mod

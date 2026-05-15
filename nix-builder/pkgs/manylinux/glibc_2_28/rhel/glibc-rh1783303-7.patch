@@ -1,0 +1,174 @@
+commit 3c1766ea10043f2e9625f3cba3bda37c84b32cf0
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Jul 18 19:37:13 2019 -0500
+
+    [powerpc] fe{en,dis}ableexcept, fesetmode: optimize FPSCR accesses
+    
+    Since fe{en,dis}ableexcept() and fesetmode() read-modify-write just the
+    "mode" (exception enable and rounding mode) bits of the Floating Point Status
+    Control Register (FPSCR), the lighter weight 'mffsl' instruction can be used
+    to read the FPSCR (enables and rounding mode), and 'mtfsf 0b00000011' can be
+    used to write just those bits back to the FPSCR.  The net is better performance.
+    
+    In addition, fe{en,dis}ableexcept() read the FPSCR again after writing it, or
+    they determine that it doesn't need to be written because it is not changing.
+    In either case, the local variable holds the current values of the enable
+    bits in the FPSCR.  This local variable can be used instead of again reading
+    the FPSCR.
+    
+    Also, that value of the FPSCR which is read the second time is validated
+    against the requested enables.  Since the write can't fail, this validation
+    step is unnecessary, and can be removed.  Instead, the exceptions to be
+    enabled (or disabled) are transformed into available bits in the FPSCR,
+    then validated after being transformed back, to ensure that all requested
+    bits are actually being set.  For example, FE_INVALID_SQRT can be
+    requested, but cannot actually be set.  This bit is not mapped during the
+    transformations, so a test for that bit being set before and after
+    transformations will show the bit would not be set, and the function will
+    return -1 for failure.
+    
+    Finally, convert the local macros in fesetmode.c to more generally useful
+    macros in fenv_libc.h.
+
+diff --git a/sysdeps/powerpc/fpu/fedisblxcpt.c b/sysdeps/powerpc/fpu/fedisblxcpt.c
+index 90bc3d12c6d8558c..2a776c72fb5a2b70 100644
+--- a/sysdeps/powerpc/fpu/fedisblxcpt.c
++++ b/sysdeps/powerpc/fpu/fedisblxcpt.c
+@@ -26,23 +26,25 @@ fedisableexcept (int excepts)
+   int result, new;
+ 
+   /* Get current exception mask to return.  */
+-  fe.fenv = curr.fenv = fegetenv_register ();
++  fe.fenv = curr.fenv = fegetenv_status ();
+   result = fenv_reg_to_exceptions (fe.l);
+ 
+   if ((excepts & FE_ALL_INVALID) == FE_ALL_INVALID)
+     excepts = (excepts | FE_INVALID) & ~ FE_ALL_INVALID;
+ 
++  new = fenv_exceptions_to_reg (excepts);
++
++  if (fenv_reg_to_exceptions (new) != excepts)
++    return -1;
++
+   /* Sets the new exception mask.  */
+-  fe.l &= ~ fenv_exceptions_to_reg (excepts);
++  fe.l &= ~new;
+ 
+   if (fe.l != curr.l)
+-    fesetenv_register (fe.fenv);
++    fesetenv_mode (fe.fenv);
+ 
+-  new = __fegetexcept ();
+   if (new == 0 && result != 0)
+     (void)__fe_mask_env ();
+ 
+-  if ((new & excepts) != 0)
+-    result = -1;
+   return result;
+ }
+diff --git a/sysdeps/powerpc/fpu/feenablxcpt.c b/sysdeps/powerpc/fpu/feenablxcpt.c
+index e029971b9a460c28..6f5a828e80965bfa 100644
+--- a/sysdeps/powerpc/fpu/feenablxcpt.c
++++ b/sysdeps/powerpc/fpu/feenablxcpt.c
+@@ -26,24 +26,25 @@ feenableexcept (int excepts)
+   int result, new;
+ 
+   /* Get current exception mask to return.  */
+-  fe.fenv = curr.fenv = fegetenv_register ();
++  fe.fenv = curr.fenv = fegetenv_status ();
+   result = fenv_reg_to_exceptions (fe.l);
+ 
+   if ((excepts & FE_ALL_INVALID) == FE_ALL_INVALID)
+     excepts = (excepts | FE_INVALID) & ~ FE_ALL_INVALID;
+ 
++  new = fenv_exceptions_to_reg (excepts);
++
++  if (fenv_reg_to_exceptions (new) != excepts)
++    return -1;
++
+   /* Sets the new exception mask.  */
+-  fe.l |= fenv_exceptions_to_reg (excepts);
++  fe.l |= new;
+ 
+   if (fe.l != curr.l)
+-    fesetenv_register (fe.fenv);
++    fesetenv_mode (fe.fenv);
+ 
+-  new = __fegetexcept ();
+   if (new != 0 && result == 0)
+     (void) __fe_nomask_env_priv ();
+ 
+-  if ((new & excepts) != excepts)
+-    result = -1;
+-
+   return result;
+ }
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index f9634a64d186c076..b244770d115ea7bb 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -71,6 +71,11 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ 	    asm volatile ("mtfsf 0xff,%0" : : "f" (d)); \
+ 	} while(0)
+ 
++/* Set the last 2 nibbles of the FPSCR, which contain the
++   exception enables and the rounding mode.
++   'fegetenv_status' retrieves these bits by reading the FPSCR.  */
++#define fesetenv_mode(env) __builtin_mtfsf (0b00000011, (env));
++
+ /* This very handy macro:
+    - Sets the rounding mode to 'round to nearest';
+    - Sets the processor into IEEE mode; and
+@@ -209,8 +214,11 @@ enum {
+   (FPSCR_VE_MASK|FPSCR_OE_MASK|FPSCR_UE_MASK|FPSCR_ZE_MASK|FPSCR_XE_MASK)
+ #define FPSCR_BASIC_EXCEPTIONS_MASK \
+   (FPSCR_VX_MASK|FPSCR_OX_MASK|FPSCR_UX_MASK|FPSCR_ZX_MASK|FPSCR_XX_MASK)
+-
++#define FPSCR_FPRF_MASK \
++  (FPSCR_FPRF_C_MASK|FPSCR_FPRF_FL_MASK|FPSCR_FPRF_FG_MASK| \
++   FPSCR_FPRF_FE_MASK|FPSCR_FPRF_FU_MASK)
+ #define FPSCR_CONTROL_MASK (FPSCR_ENABLES_MASK|FPSCR_NI_MASK|FPSCR_RN_MASK)
++#define FPSCR_STATUS_MASK (FPSCR_FR_MASK|FPSCR_FI_MASK|FPSCR_FPRF_MASK)
+ 
+ /* The bits in the FENV(1) ABI for exceptions correspond one-to-one with bits
+    in the FPSCR, albeit shifted to different but corresponding locations.
+diff --git a/sysdeps/powerpc/fpu/fesetmode.c b/sysdeps/powerpc/fpu/fesetmode.c
+index 32203a24ff434a32..29e088d5ab1c0d93 100644
+--- a/sysdeps/powerpc/fpu/fesetmode.c
++++ b/sysdeps/powerpc/fpu/fesetmode.c
+@@ -19,11 +19,6 @@
+ #include <fenv_libc.h>
+ #include <fpu_control.h>
+ 
+-#define _FPU_MASK_ALL (_FPU_MASK_ZM | _FPU_MASK_OM | _FPU_MASK_UM	\
+-		       | _FPU_MASK_XM | _FPU_MASK_IM)
+-
+-#define FPU_STATUS 0xbffff700ULL
+-
+ int
+ fesetmode (const femode_t *modep)
+ {
+@@ -32,18 +27,18 @@ fesetmode (const femode_t *modep)
+   /* Logic regarding enabled exceptions as in fesetenv.  */
+ 
+   new.fenv = *modep;
+-  old.fenv = fegetenv_register ();
+-  new.l = (new.l & ~FPU_STATUS) | (old.l & FPU_STATUS);
++  old.fenv = fegetenv_status ();
++  new.l = (new.l & ~FPSCR_STATUS_MASK) | (old.l & FPSCR_STATUS_MASK);
+ 
+   if (old.l == new.l)
+     return 0;
+ 
+-  if ((old.l & _FPU_MASK_ALL) == 0 && (new.l & _FPU_MASK_ALL) != 0)
++  if ((old.l & FPSCR_ENABLES_MASK) == 0 && (new.l & FPSCR_ENABLES_MASK) != 0)
+     (void) __fe_nomask_env_priv ();
+ 
+-  if ((old.l & _FPU_MASK_ALL) != 0 && (new.l & _FPU_MASK_ALL) == 0)
++  if ((old.l & FPSCR_ENABLES_MASK) != 0 && (new.l & FPSCR_ENABLES_MASK) == 0)
+     (void) __fe_mask_env ();
+ 
+-  fesetenv_register (new.fenv);
++  fesetenv_mode (new.fenv);
+   return 0;
+ }

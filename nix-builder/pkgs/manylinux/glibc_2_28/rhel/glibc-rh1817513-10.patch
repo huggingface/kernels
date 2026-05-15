@@ -1,0 +1,41 @@
+commit 2dd8e58cc533ee840d37725b11bc0dc0308a5dc0
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sun Oct 21 00:37:11 2018 -0700
+
+    x86: Don't include <x86intrin.h>
+    
+    Use __builtin_ia32_rdtsc directly since including <x86intrin.h> makes
+    building glibc very slow.  On Intel Core i5-6260U, this patch reduces
+    x86-64 build time from 8 minutes 33 seconds to 3 minutes 48 seconds
+    with "make -j4" and GCC 8.2.1.
+    
+            * sysdeps/x86/hp-timing.h: Don't include <x86intrin.h>.
+            (HP_TIMING_NOW): Replace _rdtsc with __builtin_ia32_rdtsc.
+
+diff --git a/sysdeps/x86/hp-timing.h b/sysdeps/x86/hp-timing.h
+index 1c20e9d8289cc15b..77a1360748ca4535 100644
+--- a/sysdeps/x86/hp-timing.h
++++ b/sysdeps/x86/hp-timing.h
+@@ -22,8 +22,6 @@
+ #include <isa.h>
+ 
+ #if MINIMUM_ISA == 686 || MINIMUM_ISA == 8664
+-# include <x86intrin.h>
+-
+ /* We always assume having the timestamp register.  */
+ # define HP_TIMING_AVAIL	(1)
+ # define HP_SMALL_TIMING_AVAIL	(1)
+@@ -38,8 +36,11 @@ typedef unsigned long long int hp_timing_t;
+    might not be 100% accurate since there might be some more instructions
+    running in this moment.  This could be changed by using a barrier like
+    'cpuid' right before the `rdtsc' instruciton.  But we are not interested
+-   in accurate clock cycles here so we don't do this.  */
+-# define HP_TIMING_NOW(Var)	((Var) = _rdtsc ())
++   in accurate clock cycles here so we don't do this.
++
++   NB: Use __builtin_ia32_rdtsc directly since including <x86intrin.h>
++   makes building glibc very slow.  */
++# define HP_TIMING_NOW(Var)	((Var) = __builtin_ia32_rdtsc ())
+ 
+ # include <hp-timing-common.h>
+ #else

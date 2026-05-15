@@ -1,0 +1,142 @@
+commit c74a91deaa5de416237c02bbb3e41bda76ca4c7b
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue Nov 27 21:35:56 2018 +0100
+
+    support: Implement support_quote_string
+    
+    Reviewed-by: Jonathan Nieder <jrnieder@gmail.com>
+
+diff --git a/support/Makefile b/support/Makefile
+index 2b663fbbfa334ea2..a2536980d1d5a89b 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -58,6 +58,7 @@ libsupport-routines = \
+   support_openpty \
+   support_paths \
+   support_quote_blob \
++  support_quote_string \
+   support_record_failure \
+   support_run_diff \
+   support_shared_allocate \
+@@ -196,6 +197,7 @@ tests = \
+   tst-support_capture_subprocess \
+   tst-support_format_dns_packet \
+   tst-support_quote_blob \
++  tst-support_quote_string \
+   tst-support_record_failure \
+   tst-test_compare \
+   tst-test_compare_blob \
+diff --git a/support/support.h b/support/support.h
+index 9418cd11ef6e684d..835e7173eb566355 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -69,6 +69,11 @@ void support_write_file_string (const char *path, const char *contents);
+    the result).  */
+ char *support_quote_blob (const void *blob, size_t length);
+ 
++/* Quote the contents of the at STR, in such a way that the result
++   string can be included in a C literal (in single/double quotes,
++   without putting the quotes into the result).  */
++char *support_quote_string (const char *str);
++
+ /* Returns non-zero if the file descriptor is a regular file on a file
+    system which supports holes (that is, seeking and writing does not
+    allocate storage for the range of zeros).  FD must refer to a
+diff --git a/support/support_quote_string.c b/support/support_quote_string.c
+new file mode 100644
+index 0000000000000000..d324371b133a4d66
+--- /dev/null
++++ b/support/support_quote_string.c
+@@ -0,0 +1,26 @@
++/* Quote a string so that it can be used in C literals.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <string.h>
++#include <support/support.h>
++
++char *
++support_quote_string (const char *str)
++{
++  return support_quote_blob (str, strlen (str));
++}
+diff --git a/support/tst-support_quote_string.c b/support/tst-support_quote_string.c
+new file mode 100644
+index 0000000000000000..3c004759b76e21d7
+--- /dev/null
++++ b/support/tst-support_quote_string.c
+@@ -0,0 +1,60 @@
++/* Test the support_quote_string function.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <support/check.h>
++#include <support/support.h>
++#include <string.h>
++#include <stdlib.h>
++
++static int
++do_test (void)
++{
++  char *p = support_quote_string ("");
++  TEST_COMPARE (strlen (p), 0);
++  free (p);
++  p = support_quote_string ("X");
++  TEST_COMPARE (strlen (p), 1);
++  TEST_COMPARE (p[0], 'X');
++  free (p);
++
++  /* Check escaping of backslash-escaped characters, and lack of
++     escaping for other shell meta-characters.  */
++  p = support_quote_string ("$()*?`@[]{}~\'\"X");
++  TEST_COMPARE (strcmp (p, "$()*?`@[]{}~\\'\\\"X"), 0);
++  free (p);
++
++  /* Check lack of escaping for letters and digits.  */
++#define LETTERS_AND_DIGTS                       \
++  "abcdefghijklmnopqrstuvwxyz"                  \
++  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"                  \
++  "0123456789"
++  p = support_quote_string (LETTERS_AND_DIGTS "@");
++  TEST_COMPARE (strcmp (p, LETTERS_AND_DIGTS "@"), 0);
++  free (p);
++
++  /* Check escaping of control characters and other non-printable
++     characters.  */
++  p = support_quote_string ("\r\n\t\a\b\f\v\1\177\200\377@");
++  TEST_COMPARE (strcmp (p, "\\r\\n\\t\\a\\b\\f\\v\\001"
++                        "\\177\\200\\377@"), 0);
++  free (p);
++
++  return 0;
++}
++
++#include <support/test-driver.c>

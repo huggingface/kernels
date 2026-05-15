@@ -1,0 +1,165 @@
+commit f17164bd51db31f47fbbdae826c63b6d78184c45
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue May 18 07:21:33 2021 +0200
+
+    localedata: Use U+00AF MACRON in more EBCDIC charsets [BZ #27882]
+    
+    This updates IBM256, IBM277, IBM278, IBM280, IBM284, IBM297, IBM424
+    in the same way that IBM273 was updated for bug 23290.
+    
+    IBM256 and IBM424 still have holes after this change, so HAS_HOLES
+    is not updated.
+    
+    Reviewed-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+diff --git a/iconvdata/ibm277.c b/iconvdata/ibm277.c
+index f93ca2acb8718dd5..0e337dbbdc06a02f 100644
+--- a/iconvdata/ibm277.c
++++ b/iconvdata/ibm277.c
+@@ -23,6 +23,6 @@
+ #define TABLES <ibm277.h>
+ 
+ #define CHARSET_NAME	"IBM277//"
+-#define HAS_HOLES	1	/* Not all 256 character are defined.  */
++#define HAS_HOLES	0
+ 
+ #include <8bit-gap.c>
+diff --git a/iconvdata/ibm278.c b/iconvdata/ibm278.c
+index 4263000760472913..7450fb8e5b846101 100644
+--- a/iconvdata/ibm278.c
++++ b/iconvdata/ibm278.c
+@@ -23,6 +23,6 @@
+ #define TABLES <ibm278.h>
+ 
+ #define CHARSET_NAME	"IBM278//"
+-#define HAS_HOLES	1	/* Not all 256 character are defined.  */
++#define HAS_HOLES	0
+ 
+ #include <8bit-gap.c>
+diff --git a/iconvdata/ibm280.c b/iconvdata/ibm280.c
+index 3efddd7dec2728d9..2ea5478e4e0d7007 100644
+--- a/iconvdata/ibm280.c
++++ b/iconvdata/ibm280.c
+@@ -23,6 +23,6 @@
+ #define TABLES <ibm280.h>
+ 
+ #define CHARSET_NAME	"IBM280//"
+-#define HAS_HOLES	1	/* Not all 256 character are defined.  */
++#define HAS_HOLES	0
+ 
+ #include <8bit-gap.c>
+diff --git a/iconvdata/ibm284.c b/iconvdata/ibm284.c
+index 57dab27d0cec4a33..8dbbc6344d18528f 100644
+--- a/iconvdata/ibm284.c
++++ b/iconvdata/ibm284.c
+@@ -23,6 +23,6 @@
+ #define TABLES <ibm284.h>
+ 
+ #define CHARSET_NAME	"IBM284//"
+-#define HAS_HOLES	1	/* Not all 256 character are defined.  */
++#define HAS_HOLES	0
+ 
+ #include <8bit-gap.c>
+diff --git a/iconvdata/ibm297.c b/iconvdata/ibm297.c
+index f355659afd4b4502..81e63ba1f28f1548 100644
+--- a/iconvdata/ibm297.c
++++ b/iconvdata/ibm297.c
+@@ -23,6 +23,6 @@
+ #define TABLES <ibm297.h>
+ 
+ #define CHARSET_NAME	"IBM297//"
+-#define HAS_HOLES	1	/* Not all 256 character are defined.  */
++#define HAS_HOLES	0
+ 
+ #include <8bit-gap.c>
+diff --git a/localedata/charmaps/IBM256 b/localedata/charmaps/IBM256
+index 5cfd2db5f436cd07..bdc1abf0ade3bfc4 100644
+--- a/localedata/charmaps/IBM256
++++ b/localedata/charmaps/IBM256
+@@ -194,7 +194,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U00AC>     /xba         NOT SIGN
+ <U007C>     /xbb         VERTICAL LINE
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U00A8>     /xbd         DIAERESIS
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U2017>     /xbf         DOUBLE LOW LINE
+diff --git a/localedata/charmaps/IBM277 b/localedata/charmaps/IBM277
+index 1c0b5cb9fb659364..2f6e3992109a2b33 100644
+--- a/localedata/charmaps/IBM277
++++ b/localedata/charmaps/IBM277
+@@ -195,7 +195,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U00AC>     /xba         NOT SIGN
+ <U007C>     /xbb         VERTICAL LINE
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U00A8>     /xbd         DIAERESIS
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U00D7>     /xbf         MULTIPLICATION SIGN
+diff --git a/localedata/charmaps/IBM278 b/localedata/charmaps/IBM278
+index 646961501c74c4df..bdfae7621028f003 100644
+--- a/localedata/charmaps/IBM278
++++ b/localedata/charmaps/IBM278
+@@ -196,7 +196,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U00AC>     /xba         NOT SIGN
+ <U007C>     /xbb         VERTICAL LINE
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U00A8>     /xbd         DIAERESIS
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U00D7>     /xbf         MULTIPLICATION SIGN
+diff --git a/localedata/charmaps/IBM280 b/localedata/charmaps/IBM280
+index 5de3b3e7b96796c0..4c31242806b0ac19 100644
+--- a/localedata/charmaps/IBM280
++++ b/localedata/charmaps/IBM280
+@@ -195,7 +195,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U00AC>     /xba         NOT SIGN
+ <U007C>     /xbb         VERTICAL LINE
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U00A8>     /xbd         DIAERESIS
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U00D7>     /xbf         MULTIPLICATION SIGN
+diff --git a/localedata/charmaps/IBM284 b/localedata/charmaps/IBM284
+index c64b2a65ab748540..46a8737a715e4e56 100644
+--- a/localedata/charmaps/IBM284
++++ b/localedata/charmaps/IBM284
+@@ -195,7 +195,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U005E>     /xba         CIRCUMFLEX ACCENT
+ <U0021>     /xbb         EXCLAMATION MARK
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U007E>     /xbd         TILDE
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U00D7>     /xbf         MULTIPLICATION SIGN
+diff --git a/localedata/charmaps/IBM297 b/localedata/charmaps/IBM297
+index 33b74eee437241aa..14361ad418cf1bc7 100644
+--- a/localedata/charmaps/IBM297
++++ b/localedata/charmaps/IBM297
+@@ -195,7 +195,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U00AC>     /xba         NOT SIGN
+ <U007C>     /xbb         VERTICAL LINE
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U007E>     /xbd         TILDE
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U00D7>     /xbf         MULTIPLICATION SIGN
+diff --git a/localedata/charmaps/IBM424 b/localedata/charmaps/IBM424
+index 883e43b8ae04ee4c..deca11e1b18ec0a6 100644
+--- a/localedata/charmaps/IBM424
++++ b/localedata/charmaps/IBM424
+@@ -175,7 +175,7 @@ CHARMAP
+ <U00BE>     /xb9         VULGAR FRACTION THREE QUARTERS
+ <U005B>     /xba         LEFT SQUARE BRACKET
+ <U005D>     /xbb         RIGHT SQUARE BRACKET
+-<U203E>     /xbc         OVERLINE
++<U00AF>     /xbc         MACRON
+ <U00A8>     /xbd         DIAERESIS
+ <U00B4>     /xbe         ACUTE ACCENT
+ <U00D7>     /xbf         MULTIPLICATION SIGN

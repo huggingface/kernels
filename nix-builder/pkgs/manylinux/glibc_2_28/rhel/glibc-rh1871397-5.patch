@@ -1,0 +1,28 @@
+From d4b4586315974d2471486d41891aa9463a5838ad Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Thu, 16 Jul 2020 17:00:46 +0200
+Subject: [PATCH 05/11] libio: Add fseterr_unlocked for internal use
+
+Tested-by: Carlos O'Donell <carlos@redhat.com>
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+---
+ include/stdio.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff -rup a/include/stdio.h b/include/stdio.h
+--- a/include/stdio.h	2020-09-14 17:39:06.191727167 -0400
++++ b/include/stdio.h	2020-09-14 17:43:44.780222972 -0400
+@@ -9,6 +9,13 @@
+ 
+ /* Now define the internal interfaces.  */
+ 
++/* Set the error indicator on FP.  */
++static inline void
++fseterr_unlocked (FILE *fp)
++{
++  fp->_flags |= _IO_ERR_SEEN;
++}
++
+ extern int __fcloseall (void) attribute_hidden;
+ extern int __snprintf (char *__restrict __s, size_t __maxlen,
+ 		       const char *__restrict __format, ...)

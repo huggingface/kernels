@@ -1,0 +1,192 @@
+commit cb89ba9c72f66327f5d66034681eb1d46eedf96f
+Author: DJ Delorie <dj@redhat.com>
+Date:   Thu Aug 8 19:09:43 2019 -0400
+
+    Add glibc.malloc.mxfast tunable
+    
+    * elf/dl-tunables.list: Add glibc.malloc.mxfast.
+    * manual/tunables.texi: Document it.
+    * malloc/malloc.c (do_set_mxfast): New.
+    (__libc_mallopt): Call it.
+    * malloc/arena.c: Add mxfast tunable.
+    * malloc/tst-mxfast.c: New.
+    * malloc/Makefile: Add it.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    (cherry picked from commit c48d92b430c480de06762f80c104922239416826)
+
+diff --git a/elf/dl-tunables.list b/elf/dl-tunables.list
+index 1f8ecb8437a0460f..1ff6fcb6f24f93a8 100644
+--- a/elf/dl-tunables.list
++++ b/elf/dl-tunables.list
+@@ -85,6 +85,11 @@ glibc {
+     tcache_unsorted_limit {
+       type: SIZE_T
+     }
++    mxfast {
++      type: SIZE_T
++      minval: 0
++      security_level: SXID_IGNORE
++    }
+   }
+   tune {
+     hwcap_mask {
+diff --git a/malloc/Makefile b/malloc/Makefile
+index 228a1279a5960d8c..bf9a53cb7c5ebacb 100644
+--- a/malloc/Makefile
++++ b/malloc/Makefile
+@@ -39,6 +39,7 @@ tests := mallocbug tst-malloc tst-valloc tst-calloc tst-obstack \
+ 	 tst-malloc-too-large \
+ 	 tst-malloc-stats-cancellation \
+ 	 tst-tcfree1 tst-tcfree2 tst-tcfree3 \
++	 tst-mxfast \
+ 
+ tests-static := \
+ 	 tst-interpose-static-nothread \
+@@ -196,6 +197,8 @@ tst-malloc-usable-static-ENV = $(tst-malloc-usable-ENV)
+ tst-malloc-usable-tunables-ENV = GLIBC_TUNABLES=glibc.malloc.check=3
+ tst-malloc-usable-static-tunables-ENV = $(tst-malloc-usable-tunables-ENV)
+ 
++tst-mxfast-ENV = GLIBC_TUNABLES=glibc.malloc.tcache_count=0:glibc.malloc.mxfast=0
++
+ ifeq ($(experimental-malloc),yes)
+ CPPFLAGS-malloc.c += -DUSE_TCACHE=1
+ else
+diff --git a/malloc/arena.c b/malloc/arena.c
+index ff8fd5d2a7e51ac8..f5c7ad4570ad6186 100644
+--- a/malloc/arena.c
++++ b/malloc/arena.c
+@@ -237,6 +237,7 @@ TUNABLE_CALLBACK_FNDECL (set_tcache_max, size_t)
+ TUNABLE_CALLBACK_FNDECL (set_tcache_count, size_t)
+ TUNABLE_CALLBACK_FNDECL (set_tcache_unsorted_limit, size_t)
+ #endif
++TUNABLE_CALLBACK_FNDECL (set_mxfast, size_t)
+ #else
+ /* Initialization routine. */
+ #include <string.h>
+@@ -324,6 +325,7 @@ ptmalloc_init (void)
+   TUNABLE_GET (tcache_unsorted_limit, size_t,
+ 	       TUNABLE_CALLBACK (set_tcache_unsorted_limit));
+ # endif
++  TUNABLE_GET (mxfast, size_t, TUNABLE_CALLBACK (set_mxfast));
+ #else
+   const char *s = NULL;
+   if (__glibc_likely (_environ != NULL))
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index fcf480acdaea1b86..9756ed0a0d28c5f6 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -5142,6 +5142,19 @@ do_set_tcache_unsorted_limit (size_t value)
+ }
+ #endif
+ 
++static inline int
++__always_inline
++do_set_mxfast (size_t value)
++{
++  if (value >= 0 && value <= MAX_FAST_SIZE)
++    {
++      LIBC_PROBE (memory_mallopt_mxfast, 2, value, get_max_fast ());
++      set_max_fast (value);
++      return 1;
++    }
++  return 0;
++}
++
+ int
+ __libc_mallopt (int param_number, int value)
+ {
+@@ -5161,13 +5174,7 @@ __libc_mallopt (int param_number, int value)
+   switch (param_number)
+     {
+     case M_MXFAST:
+-      if (value >= 0 && value <= MAX_FAST_SIZE)
+-        {
+-          LIBC_PROBE (memory_mallopt_mxfast, 2, value, get_max_fast ());
+-          set_max_fast (value);
+-        }
+-      else
+-        res = 0;
++      do_set_mxfast (value);
+       break;
+ 
+     case M_TRIM_THRESHOLD:
+diff --git a/malloc/tst-mxfast.c b/malloc/tst-mxfast.c
+new file mode 100644
+index 0000000000000000..7a371d2f9d2f0005
+--- /dev/null
++++ b/malloc/tst-mxfast.c
+@@ -0,0 +1,50 @@
++/* Test that glibc.malloc.mxfast tunable works.
++   Copyright (C) 2018, 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++/* This test verifies that setting the glibc.malloc.mxfast tunable to
++   zero results in free'd blocks being returned to the small bins, not
++   the fast bins.  */
++
++#include <malloc.h>
++#include <assert.h>
++
++int
++do_test(void)
++{
++  struct mallinfo m;
++  char * volatile p1;
++  char * volatile p2;
++
++  /* Arbitrary value; must be in default fastbin range.  */
++  p1 = malloc (3);
++  /* Something large so that p1 isn't a "top block" */
++  p2 = malloc (512);
++  free (p1);
++
++  m = mallinfo();
++
++  /* This will fail if there are any blocks in the fastbins.  */
++  assert (m.smblks == 0);
++
++  /* To keep gcc happy.  */
++  free (p2);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index f6c49250e3889ddd..3dc6f9a44592c030 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -213,6 +213,18 @@ pre-fill the per-thread cache with.  The default, or when set to zero,
+ is no limit.
+ @end deftp
+ 
++@deftp Tunable glibc.malloc.mxfast
++One of the optimizations malloc uses is to maintain a series of ``fast
++bins'' that hold chunks up to a specific size.  The default and
++maximum size which may be held this way is 80 bytes on 32-bit systems
++or 160 bytes on 64-bit systems.  Applications which value size over
++speed may choose to reduce the size of requests which are serviced
++from fast bins with this tunable.  Note that the value specified
++includes malloc's internal overhead, which is normally the size of one
++pointer, so add 4 on 32-bit systems or 8 on 64-bit systems to the size
++passed to @code{malloc} for the largest bin size to enable.
++@end deftp
++
+ @node Elision Tunables
+ @section Elision Tunables
+ @cindex elision tunables

@@ -1,0 +1,35 @@
+commit f9b645b4b0a10c43753296ce3fa40053fa44606a
+Author: Mike Frysinger <vapier@gentoo.org>
+Date:   Wed Apr 24 13:32:22 2019 +0200
+
+    memusagestat: use local glibc when linking [BZ #18465]
+    
+    The memusagestat is the only binary that has its own link line which
+    causes it to be linked against the existing installed C library.  It
+    has been this way since it was originally committed in 1999, but I
+    don't see any reason as to why.  Since we want all the programs we
+    build locally to be against the new copy of glibc, change the build
+    to be like all other programs.
+
+diff --git a/malloc/Makefile b/malloc/Makefile
+index 388cf7e9ee3a2569..228a1279a5960d8c 100644
+--- a/malloc/Makefile
++++ b/malloc/Makefile
+@@ -131,6 +131,7 @@ ifneq ($(cross-compiling),yes)
+ # If the gd library is available we build the `memusagestat' program.
+ ifneq ($(LIBGD),no)
+ others: $(objpfx)memusage
++others += memusagestat
+ install-bin = memusagestat
+ install-bin-script += memusage
+ generated += memusagestat memusage
+@@ -154,8 +155,7 @@ cpp-srcs-left := $(memusagestat-modules)
+ lib := memusagestat
+ include $(patsubst %,$(..)libof-iterator.mk,$(cpp-srcs-left))
+ 
+-$(objpfx)memusagestat: $(memusagestat-modules:%=$(objpfx)%.o)
+-	$(LINK.o) -o $@ $^ $(libgd-LDFLAGS) -lgd -lpng -lz -lm
++LDLIBS-memusagestat = $(libgd-LDFLAGS) -lgd -lpng -lz -lm
+ 
+ ifeq ($(run-built-tests),yes)
+ ifeq (yes,$(build-shared))

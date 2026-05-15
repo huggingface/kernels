@@ -1,0 +1,255 @@
+From 735a36828f349419379f15e942bfdf0c532d58eb Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:18 +0100
+Subject: [PATCH 07/28] Use GCC builtins for nearbyint functions if desired.
+
+This patch is using the corresponding GCC builtin for nearbyintf, nearbyint,
+nearbintl and nearbyintf128 if the USE_FUNCTION_BUILTIN macros are defined to one
+in math-use-builtins.h.
+
+This is the case for s390 if build with at least --march=z196 --mzarch.
+Otherwise the generic implementation is used.  The code of the generic
+implementation is not changed.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit ae3577f607b50bf3ce9b0877e43ad2508c9da61b)
+Note: The TWO52 constants are now located in # ! USE_NEARBYINT_BUILTIN
+---
+ sysdeps/generic/math-use-builtins.h         | 29 ++++++++++++
+ sysdeps/ieee754/dbl-64/s_nearbyint.c        | 17 ++++---
+ sysdeps/ieee754/float128/float128_private.h |  4 ++
+ sysdeps/ieee754/flt-32/s_nearbyintf.c       | 17 ++++---
+ sysdeps/ieee754/ldbl-128/s_nearbyintl.c     | 17 ++++---
+ sysdeps/s390/fpu/math-use-builtins.h        | 49 +++++++++++++++++++++
+ 6 files changed, 115 insertions(+), 18 deletions(-)
+ create mode 100644 sysdeps/generic/math-use-builtins.h
+ create mode 100644 sysdeps/s390/fpu/math-use-builtins.h
+
+diff --git a/sysdeps/generic/math-use-builtins.h b/sysdeps/generic/math-use-builtins.h
+new file mode 100644
+index 0000000000..e12490ed41
+--- /dev/null
++++ b/sysdeps/generic/math-use-builtins.h
+@@ -0,0 +1,29 @@
++/* Using math gcc builtins instead of generic implementation.  Generic version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef MATH_USE_BUILTINS_H
++#define MATH_USE_BUILTINS_H	1
++
++/* Define these macros to 1 to use __builtin_xyz instead of the
++   generic implementation.  */
++#define USE_NEARBYINT_BUILTIN 0
++#define USE_NEARBYINTF_BUILTIN 0
++#define USE_NEARBYINTL_BUILTIN 0
++#define USE_NEARBYINTF128_BUILTIN 0
++
++#endif /* math-use-builtins.h */
+diff --git a/sysdeps/ieee754/dbl-64/s_nearbyint.c b/sysdeps/ieee754/dbl-64/s_nearbyint.c
+index 903121d456..6b9f44dc8d 100644
+--- a/sysdeps/ieee754/dbl-64/s_nearbyint.c
++++ b/sysdeps/ieee754/dbl-64/s_nearbyint.c
+@@ -29,16 +29,20 @@ static char rcsid[] = "$NetBSD: s_rint.c,v 1.8 1995/05/10 20:48:04 jtc Exp $";
+ #include <math-barriers.h>
+ #include <math_private.h>
+ #include <libm-alias-double.h>
+-
+-static const double
+-  TWO52[2] = {
+-  4.50359962737049600000e+15, /* 0x43300000, 0x00000000 */
+- -4.50359962737049600000e+15, /* 0xC3300000, 0x00000000 */
+-};
++#include <math-use-builtins.h>
+ 
+ double
+ __nearbyint (double x)
+ {
++#if USE_NEARBYINT_BUILTIN
++  return __builtin_nearbyint (x);
++#else
++  /* Use generic implementation.  */
++  static const double
++    TWO52[2] = {
++		4.50359962737049600000e+15, /* 0x43300000, 0x00000000 */
++		-4.50359962737049600000e+15, /* 0xC3300000, 0x00000000 */
++  };
+   fenv_t env;
+   int32_t i0, j0, sx;
+   double w, t;
+@@ -72,5 +76,6 @@ __nearbyint (double x)
+   math_force_eval (t);
+   libc_fesetenv (&env);
+   return t;
++#endif /* ! USE_NEARBYINT_BUILTIN  */
+ }
+ libm_alias_double (__nearbyint, nearbyint)
+diff --git a/sysdeps/ieee754/float128/float128_private.h b/sysdeps/ieee754/float128/float128_private.h
+index 9dd15601e6..0bf6e8dee2 100644
+--- a/sysdeps/ieee754/float128/float128_private.h
++++ b/sysdeps/ieee754/float128/float128_private.h
+@@ -138,6 +138,9 @@
+ #undef libm_alias_double_ldouble
+ #define libm_alias_double_ldouble(func) libm_alias_float64_float128 (func)
+ 
++#include <math-use-builtins.h>
++#undef USE_NEARBYINTL_BUILTIN
++#define USE_NEARBYINTL_BUILTIN USE_NEARBYINTF128_BUILTIN
+ 
+ /* IEEE function renames.  */
+ #define __ieee754_acoshl __ieee754_acoshf128
+@@ -339,6 +342,7 @@
+ /* Builtin renames.  */
+ #define __builtin_copysignl __builtin_copysignf128
+ #define __builtin_signbitl __builtin_signbit
++#define __builtin_nearbyintl __builtin_nearbyintf128
+ 
+ /* Get the constant suffix from bits/floatn-compat.h.  */
+ #define L(x) __f128 (x)
+diff --git a/sysdeps/ieee754/flt-32/s_nearbyintf.c b/sysdeps/ieee754/flt-32/s_nearbyintf.c
+index 4dfe491f27..438dcae8cc 100644
+--- a/sysdeps/ieee754/flt-32/s_nearbyintf.c
++++ b/sysdeps/ieee754/flt-32/s_nearbyintf.c
+@@ -20,16 +20,20 @@
+ #include <math-barriers.h>
+ #include <math_private.h>
+ #include <libm-alias-float.h>
+-
+-static const float
+-TWO23[2]={
+-  8.3886080000e+06, /* 0x4b000000 */
+- -8.3886080000e+06, /* 0xcb000000 */
+-};
++#include <math-use-builtins.h>
+ 
+ float
+ __nearbyintf(float x)
+ {
++#if USE_NEARBYINTF_BUILTIN
++  return __builtin_nearbyintf (x);
++#else
++  /* Use generic implementation.  */
++  static const float
++    TWO23[2] = {
++		8.3886080000e+06, /* 0x4b000000 */
++		-8.3886080000e+06, /* 0xcb000000 */
++  };
+ 	fenv_t env;
+ 	int32_t i0,j0,sx;
+ 	float w,t;
+@@ -57,5 +61,6 @@ __nearbyintf(float x)
+ 	math_force_eval (t);
+ 	libc_fesetenvf (&env);
+ 	return t;
++#endif /* ! USE_NEARBYINT_BUILTIN  */
+ }
+ libm_alias_float (__nearbyint, nearbyint)
+diff --git a/sysdeps/ieee754/ldbl-128/s_nearbyintl.c b/sysdeps/ieee754/ldbl-128/s_nearbyintl.c
+index f044cb4334..a4ad8e82e5 100644
+--- a/sysdeps/ieee754/ldbl-128/s_nearbyintl.c
++++ b/sysdeps/ieee754/ldbl-128/s_nearbyintl.c
+@@ -28,15 +28,19 @@
+ #include <math-barriers.h>
+ #include <math_private.h>
+ #include <libm-alias-ldouble.h>
+-
+-static const _Float128
+-TWO112[2]={
+-  L(5.19229685853482762853049632922009600E+33), /* 0x406F000000000000, 0 */
+- L(-5.19229685853482762853049632922009600E+33)  /* 0xC06F000000000000, 0 */
+-};
++#include <math-use-builtins.h>
+ 
+ _Float128 __nearbyintl(_Float128 x)
+ {
++#if USE_NEARBYINTL_BUILTIN
++  return __builtin_nearbyintl (x);
++#else
++  /* Use generic implementation.  */
++  static const _Float128
++    TWO112[2] = {
++		 L(5.19229685853482762853049632922009600E+33), /* 0x406F000000000000, 0 */
++		 L(-5.19229685853482762853049632922009600E+33)  /* 0xC06F000000000000, 0 */
++  };
+ 	fenv_t env;
+ 	int64_t i0,j0,sx;
+ 	uint64_t i1 __attribute__ ((unused));
+@@ -65,5 +69,6 @@ _Float128 __nearbyintl(_Float128 x)
+ 	math_force_eval (t);
+ 	fesetenv (&env);
+ 	return t;
++#endif /* ! USE_NEARBYINTL_BUILTIN  */
+ }
+ libm_alias_ldouble (__nearbyint, nearbyint)
+diff --git a/sysdeps/s390/fpu/math-use-builtins.h b/sysdeps/s390/fpu/math-use-builtins.h
+new file mode 100644
+index 0000000000..7abbfb3b50
+--- /dev/null
++++ b/sysdeps/s390/fpu/math-use-builtins.h
+@@ -0,0 +1,49 @@
++/* Using math gcc builtins instead of generic implementation.  s390/s390x version.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef MATH_USE_BUILTINS_S390_H
++#define MATH_USE_BUILTINS_S390_H	1
++
++#ifdef HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++
++# include <features.h> /* For __GNUC_PREREQ.  */
++
++/* GCC emits the z196 zarch "load fp integer" instructions for these
++   builtins if build with at least --march=z196 -mzarch.  Otherwise a
++   function call to libc is emitted.  */
++# define USE_NEARBYINT_BUILTIN 1
++# define USE_NEARBYINTF_BUILTIN 1
++# define USE_NEARBYINTL_BUILTIN 1
++
++# if __GNUC_PREREQ (8, 0)
++#  define USE_NEARBYINTF128_BUILTIN 1
++# else
++#  define USE_NEARBYINTF128_BUILTIN 0
++# endif
++
++#else
++
++/* Disable the builtins if we do not have the z196 zarch instructions.  */
++# define USE_NEARBYINT_BUILTIN 0
++# define USE_NEARBYINTF_BUILTIN 0
++# define USE_NEARBYINTL_BUILTIN 0
++# define USE_NEARBYINTF128_BUILTIN 0
++
++#endif /* ! HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT  */
++
++#endif /* math-use-builtins.h */
+-- 
+2.18.2
+

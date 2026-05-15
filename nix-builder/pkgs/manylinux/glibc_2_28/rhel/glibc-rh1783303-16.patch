@@ -1,0 +1,29 @@
+commit 36c17c7079a5243a890ba43affff326a041775a9
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Thu Sep 19 11:31:31 2019 -0500
+
+    [powerpc] libc_feholdsetround_noex_ppc_ctx: optimize FPSCR write
+    
+    libc_feholdsetround_noex_ppc_ctx currently performs:
+    1. Read FPSCR, save to context.
+    2. Create new FPSCR value: clear enables and set new rounding mode.
+    3. Write new value to FPSCR.
+    
+    Since other bits just pass through, there is no need to write them.
+    
+    Instead, write just the changed values (enables and rounding mode),
+    which can be a bit more efficient.
+
+diff --git a/sysdeps/powerpc/fpu/fenv_private.h b/sysdeps/powerpc/fpu/fenv_private.h
+index 86a3611b3ef41759..c88142fe3053580f 100644
+--- a/sysdeps/powerpc/fpu/fenv_private.h
++++ b/sysdeps/powerpc/fpu/fenv_private.h
+@@ -142,7 +142,7 @@ libc_feholdsetround_noex_ppc_ctx (struct rm_ctx *ctx, int r)
+   if (__glibc_unlikely (new.l != old.l))
+     {
+       __TEST_AND_ENTER_NON_STOP (old.l, 0ULL);
+-      fesetenv_register (new.fenv);
++      fesetenv_mode (new.fenv);
+       ctx->updated_status = true;
+     }
+   else

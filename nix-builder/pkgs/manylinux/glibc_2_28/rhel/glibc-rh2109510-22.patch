@@ -1,0 +1,34 @@
+commit d33705c0b020632274318323931695a99753b5be
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Nov 3 12:24:17 2022 +0100
+
+    scripts/glibcelf.py: Properly report <elf.h> parsing failures
+    
+    Without this change, parse failures result in an exception:
+    
+    Traceback (most recent call last):
+      File "tst-glibcelf.py", line 23, in <module>
+        import glibcelf
+      File "/path/to/git/scripts/glibcelf.py", line 226, in <module>
+        _elf_h = _parse_elf_h()
+      File "/path/to/git/scripts/glibcelf.py", line 221, in _parse_elf_h
+        result = glibcpp.macro_eval(glibcpp.macro_definitions(tokens), reporter)
+      File "/path/to/git/scripts/glibcpp.py", line 379, in macro_eval
+        reporter.error(md.line, 'macro {} redefined'.format(md.name))
+      File "/path/to/git/scripts/glibcelf.py", line 214, in error
+        errors += 1
+    UnboundLocalError: local variable 'errors' referenced before assignment
+
+diff --git a/scripts/glibcelf.py b/scripts/glibcelf.py
+index 420cb21943b28bba..59aab56ecf9deb3e 100644
+--- a/scripts/glibcelf.py
++++ b/scripts/glibcelf.py
+@@ -211,7 +211,7 @@ def _parse_elf_h():
+             self.errors = 0
+ 
+         def error(self, line, message):
+-            errors += 1
++            self.errors += 1
+             print('{}:{}: error: {}'.format(path, line, message))
+ 
+         def note(self, line, message):

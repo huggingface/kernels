@@ -1,0 +1,21 @@
+commit 4f4bd9e47ba98ccfeeaa8c600c0b0c8bbabcebb3
+Author: Matheus Castanho <msc@linux.ibm.com>
+Date:   Fri Dec 4 09:48:56 2020 -0300
+
+    elf: Add missing <stddef.h> header to elf/dl-hwcaps.h
+    
+    The lack of this header makes size_t unavailable on builds configured
+    with --disable-tunables, causing compilation errors.
+
+diff --git a/elf/dl-hwcaps.h b/elf/dl-hwcaps.h
+index 769ecab3f886c6c4..9a34088c17e97d7f 100644
+--- a/elf/dl-hwcaps.h
++++ b/elf/dl-hwcaps.h
+@@ -20,6 +20,7 @@
+ #define _DL_HWCAPS_H
+ 
+ #include <stdint.h>
++#include <stddef.h>
+ 
+ #include <elf/dl-tunables.h>
+ 

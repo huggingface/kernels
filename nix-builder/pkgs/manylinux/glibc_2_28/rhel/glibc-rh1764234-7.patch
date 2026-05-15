@@ -1,0 +1,24 @@
+commit 9c37bde5a2067e5b4dc878bac0291d6b207b8add
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Fri Aug 2 15:08:02 2019 +0000
+
+    Update kernel version in comment in syscall-names.list.
+    
+    This patch updates the Linux kernel version in a comment in
+    syscall-names.list to agree with the following "kernel" line.
+    
+            * sysdeps/unix/sysv/linux/syscall-names.list: Update comment.
+
+diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
+index 21bf37c627..9dcdd293d3 100644
+--- a/sysdeps/unix/sysv/linux/syscall-names.list
++++ b/sysdeps/unix/sysv/linux/syscall-names.list
+@@ -22,7 +22,7 @@
+ # names are only used if the installed kernel headers also provide
+ # them.
+ 
+-# The list of system calls is current as of Linux 5.1.
++# The list of system calls is current as of Linux 5.2.
+ kernel 5.2
+ 
+ FAST_atomic_update

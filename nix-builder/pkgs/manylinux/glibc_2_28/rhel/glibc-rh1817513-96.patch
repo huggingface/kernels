@@ -1,0 +1,39 @@
+commit db03874df9843ab98c4faeb658f04d17e6db83a6
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 8 15:33:00 2020 +0200
+
+    elf: Print the full name of the dynamic loader in the ld.so help message
+    
+    This requires defining a macro for the full path, matching the
+    -Wl,--dynamic-link= arguments used for linking glibc programs,
+    and ldd script.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index e5666e5bf7817c3c..bc96b8fd65e376cc 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -641,7 +641,8 @@ libof-ldconfig = ldconfig
+ CFLAGS-dl-cache.c += $(SYSCONF-FLAGS)
+ CFLAGS-cache.c += $(SYSCONF-FLAGS)
+ CFLAGS-rtld.c += $(SYSCONF-FLAGS)
+-CFLAGS-dl-usage.c += $(SYSCONF-FLAGS)
++CFLAGS-dl-usage.c += $(SYSCONF-FLAGS) \
++  -D'RTLD="$(rtlddir)/$(rtld-installed-name)"'
+ 
+ cpp-srcs-left := $(all-rtld-routines:=.os)
+ lib := rtld
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+index 8c24c13770500df9..1003a435bfc2b39e 100644
+--- a/elf/dl-usage.c
++++ b/elf/dl-usage.c
+@@ -76,6 +76,8 @@ setting environment variables (which would be inherited by subprocesses).\n\
+   --argv0 STRING        set argv[0] to STRING before running\n\
+   --help                display this help and exit\n\
+   --version             output version information and exit\n\
++\n\
++This program interpreter self-identifies as: " RTLD "\n\
+ ",
+               argv0);
+   _exit (EXIT_SUCCESS);

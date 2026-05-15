@@ -1,0 +1,27 @@
+From d03094649d39949a30513bf3ffb03a28fecbccd8 Mon Sep 17 00:00:00 2001
+From: Adam Yi <ayi@janestreet.com>
+Date: Wed, 8 Mar 2023 03:11:47 -0500
+Subject: hurd: fix build of tst-system.c
+
+We made tst-system.c depend on pthread, but that requires linking with
+$(shared-thread-library). It does not fail under Linux because the
+variable expands to nothing under Linux, but it fails for Hurd.
+
+I tested verified via cross-compiling that "make check" now works
+for Hurd.
+
+Signed-off-by: Adam Yi <ayi@janestreet.com>
+Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+[DJ: Edited for RHEL 8]
+diff -rup a/stdlib/Makefile b/stdlib/Makefile
+--- a/stdlib/Makefile	2023-07-07 00:44:55.810981644 -0400
++++ b/stdlib/Makefile	2023-07-07 00:46:47.541411091 -0400
+@@ -102,6 +102,7 @@ LDLIBS-test-atexit-race = $(shared-threa
+ LDLIBS-test-at_quick_exit-race = $(shared-thread-library)
+ LDLIBS-test-cxa_atexit-race = $(shared-thread-library)
+ LDLIBS-test-on_exit-race = $(shared-thread-library)
++LDLIBS-tst-system = $(shared-thread-library)
+ 
+ LDLIBS-test-dlclose-exit-race = $(shared-thread-library) $(libdl)
+ LDFLAGS-test-dlclose-exit-race = $(LDFLAGS-rdynamic)

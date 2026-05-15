@@ -1,0 +1,128 @@
+Rewrite of the following commit to support returning EINVAL for unknown
+commands and therefore match upstream behaviour.
+
+commit 9ebaabeaac1a96b0d91f52902ce1dbf4f5a562dd
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Tue Sep 29 14:55:02 2020 -0300
+
+    sysvipc: Return EINVAL for invalid shmctl commands
+    
+    It avoids regressions on possible future commands that might require
+    additional libc support.  The downside is new commands added by newer
+    kernels will need further glibc support.
+    
+    Checked on x86_64-linux-gnu and i686-linux-gnu (Linux v4.15 and v5.4).
+
+diff --git a/sysdeps/unix/sysv/linux/shmctl.c b/sysdeps/unix/sysv/linux/shmctl.c
+index 25c5152944a6fcf3..00768bc47614f9aa 100644
+--- a/sysdeps/unix/sysv/linux/shmctl.c
++++ b/sysdeps/unix/sysv/linux/shmctl.c
+@@ -33,6 +33,22 @@
+ int
+ __new_shmctl (int shmid, int cmd, struct shmid_ds *buf)
+ {
++  switch (cmd)
++    {
++    case IPC_RMID:
++    case SHM_LOCK:
++    case SHM_UNLOCK:
++    case IPC_SET:
++    case IPC_STAT:
++    case SHM_STAT:
++    case SHM_STAT_ANY:
++    case IPC_INFO:
++    case SHM_INFO:
++      break;
++    default:
++      __set_errno (EINVAL);
++      break;
++    }
+ #ifdef __ASSUME_DIRECT_SYSVIPC_SYSCALLS
+   return INLINE_SYSCALL_CALL (shmctl, shmid, cmd | __IPC_64, buf);
+ #else
+diff --git a/sysvipc/test-sysvipc.h b/sysvipc/test-sysvipc.h
+index 21ef6c656581519e..d1c8349b45b5ce49 100644
+--- a/sysvipc/test-sysvipc.h
++++ b/sysvipc/test-sysvipc.h
+@@ -25,7 +25,7 @@
+ #include <sys/shm.h>
+ #include <include/array_length.h>
+ 
+-/* Return the first invalid command SysV IPC command from common shared
++/* Return the first invalid SysV IPC command from common shared
+    between message queue, shared memory, and semaphore.  */
+ static inline int
+ first_common_invalid_cmd (void)
+@@ -50,7 +50,7 @@ first_common_invalid_cmd (void)
+   return invalid;
+ }
+ 
+-/* Return the first invalid command SysV IPC command for semaphore.  */
++/* Return the first invalid SysV IPC command for semaphore.  */
+ static inline int
+ first_sem_invalid_cmd (void)
+ {
+@@ -82,7 +82,7 @@ first_sem_invalid_cmd (void)
+   return invalid;
+ }
+ 
+-/* Return the first invalid command SysV IPC command for message queue.  */
++/* Return the first invalid SysV IPC command for message queue.  */
+ static inline int
+ first_msg_invalid_cmd (void)
+ {
+@@ -107,4 +107,31 @@ first_msg_invalid_cmd (void)
+   return invalid;
+ }
+ 
++/* Return the first invalid SysV IPC command for shared memory.  */
++static inline int
++first_shm_invalid_cmd (void)
++{
++  const int shm_cmds[] = {
++    SHM_STAT,
++    SHM_INFO,
++#ifdef SHM_STAT_ANY
++    SHM_STAT_ANY,
++#endif
++    SHM_LOCK,
++    SHM_UNLOCK
++  };
++
++  int invalid = first_common_invalid_cmd ();
++  for (int i = 0; i < array_length (shm_cmds); i++)
++    {
++      if (invalid == shm_cmds[i])
++	{
++	  invalid++;
++	  i = 0;
++	}
++    }
++
++  return invalid;
++}
++
+ #endif /* _TEST_SYSV_H  */
+diff --git a/sysvipc/test-sysvshm.c b/sysvipc/test-sysvshm.c
+index a7c2e0bd4065dbcd..0fdfddf8550413e4 100644
+--- a/sysvipc/test-sysvshm.c
++++ b/sysvipc/test-sysvshm.c
+@@ -25,6 +25,8 @@
+ #include <sys/ipc.h>
+ #include <sys/shm.h>
+ 
++#include <test-sysvipc.h>
++
+ #include <support/support.h>
+ #include <support/check.h>
+ #include <support/temp_file.h>
+@@ -81,6 +83,9 @@ do_test (void)
+       FAIL_EXIT1 ("shmget failed (errno=%d)", errno);
+     }
+ 
++  TEST_COMPARE (shmctl (shmid, first_shm_invalid_cmd (), NULL), -1);
++  TEST_COMPARE (errno, EINVAL);
++
+   /* Get shared memory kernel information and do some sanity checks.  */
+   struct shmid_ds shminfo;
+   if (shmctl (shmid, IPC_STAT, &shminfo) == -1)

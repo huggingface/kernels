@@ -1,0 +1,62 @@
+commit 5cc338565479a620244c2f8ff35956629c4dbf81
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 10 05:14:24 2021 +0100
+
+    nptl: Add one more barrier to nptl/tst-create1
+    
+    Without the bar_ctor_finish barrier, it was possible that thread2
+    re-locked user_lock before ctor had a chance to lock it.  ctor then
+    blocked in its locking operation, xdlopen from the main thread
+    did not return, and thread2 was stuck waiting in bar_dtor:
+    
+    thread 1: started.
+    thread 2: started.
+    thread 2: locked user_lock.
+    constructor started: 0.
+    thread 1: in ctor: started.
+    thread 3: started.
+    thread 3: done.
+    thread 2: unlocked user_lock.
+    thread 2: locked user_lock.
+    
+    Fixes the test in commit 83b5323261bb72313bffcf37476c1b8f0847c736
+    ("elf: Avoid deadlock between pthread_create and ctors [BZ #28357]").
+    
+    Reviewed-by: Szabolcs Nagy <szabolcs.nagy@arm.com>
+
+diff --git a/sysdeps/pthread/tst-create1.c b/sysdeps/pthread/tst-create1.c
+index 932586c30990d1d4..763ded8d7956f943 100644
+--- a/sysdeps/pthread/tst-create1.c
++++ b/sysdeps/pthread/tst-create1.c
+@@ -33,6 +33,7 @@ thread 2: lock(user_lock) -> pthread_create
+ */
+ 
+ static pthread_barrier_t bar_ctor;
++static pthread_barrier_t bar_ctor_finish;
+ static pthread_barrier_t bar_dtor;
+ static pthread_mutex_t user_lock = PTHREAD_MUTEX_INITIALIZER;
+ 
+@@ -46,6 +47,7 @@ ctor (void)
+   xpthread_mutex_unlock (&user_lock);
+   dprintf (1, "thread 1: in ctor: unlocked user_lock.\n");
+   dprintf (1, "thread 1: in ctor: done.\n");
++  xpthread_barrier_wait (&bar_ctor_finish);
+ }
+ 
+ void
+@@ -81,6 +83,7 @@ thread2 (void *a)
+   xpthread_mutex_unlock (&user_lock);
+   dprintf (1, "thread 2: unlocked user_lock.\n");
+   xpthread_join (t3);
++  xpthread_barrier_wait (&bar_ctor_finish);
+ 
+   xpthread_mutex_lock (&user_lock);
+   dprintf (1, "thread 2: locked user_lock.\n");
+@@ -99,6 +102,7 @@ thread1 (void)
+ {
+   dprintf (1, "thread 1: started.\n");
+   xpthread_barrier_init (&bar_ctor, NULL, 2);
++  xpthread_barrier_init (&bar_ctor_finish, NULL, 2);
+   xpthread_barrier_init (&bar_dtor, NULL, 2);
+   pthread_t t2 = xpthread_create (0, thread2, 0);
+   void *p = xdlopen ("tst-create1mod.so", RTLD_NOW | RTLD_GLOBAL);

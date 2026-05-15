@@ -1,0 +1,41 @@
+commit d0b8aa6de4529231fadfe604ac2c434e559c2d9e
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Mon Dec 23 13:57:55 2024 +0100
+
+    support: Add support_record_failure_barrier
+    
+    This can be used to stop execution after a TEST_COMPARE_BLOB
+    failure, for example.
+
+diff --git a/support/check.h b/support/check.h
+index 7ea9a86a9c7ed055..d435479963945bb9 100644
+--- a/support/check.h
++++ b/support/check.h
+@@ -187,6 +187,9 @@ void support_record_failure_reset (void);
+    failures or not.  */
+ int support_record_failure_is_failed (void);
+ 
++/* Terminate the process if any failures have been encountered so far.  */
++void support_record_failure_barrier (void);
++
+ __END_DECLS
+ 
+ #endif /* SUPPORT_CHECK_H */
+diff --git a/support/support_record_failure.c b/support/support_record_failure.c
+index 17ab1d80ef2bbdea..8d0f3852dcf60a70 100644
+--- a/support/support_record_failure.c
++++ b/support/support_record_failure.c
+@@ -112,3 +112,13 @@ support_record_failure_is_failed (void)
+      synchronization for reliable test error reporting anyway.  */
+   return __atomic_load_n (&state->failed, __ATOMIC_RELAXED);
+ }
++
++void
++support_record_failure_barrier (void)
++{
++  if (__atomic_load_n (&state->failed, __ATOMIC_RELAXED))
++    {
++      puts ("error: exiting due to previous errors");
++      exit (1);
++    }
++}

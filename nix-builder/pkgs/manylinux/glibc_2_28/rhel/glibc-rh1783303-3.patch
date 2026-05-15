@@ -1,0 +1,65 @@
+commit 49bc41b64239c4726f31fa35a1af4f22fb41d51f
+Author: Paul A. Clarke <pc@us.ibm.com>
+Date:   Tue Jun 11 14:37:37 2019 -0500
+
+    [powerpc] add 'volatile' to asm
+    
+    Add 'volatile' keyword to a few asm statements, to force the compiler
+    to generate the instructions therein.
+    
+    Some instances were implicitly volatile, but adding keyword for consistency.
+    
+    2019-06-19  Paul A. Clarke  <pc@us.ibm.com>
+    
+            * sysdeps/powerpc/fpu/fenv_libc.h (relax_fenv_state): Add 'volatile'.
+            * sysdeps/powerpc/fpu/fpu_control.h (__FPU_MFFS): Likewise.
+            (__FPU_MFFSL): Likewise.
+            (_FPU_SETCW): Likewise.
+
+diff --git a/sysdeps/powerpc/fpu/fenv_libc.h b/sysdeps/powerpc/fpu/fenv_libc.h
+index a0128c66444a3e46..d6945903b525748e 100644
+--- a/sysdeps/powerpc/fpu/fenv_libc.h
++++ b/sysdeps/powerpc/fpu/fenv_libc.h
+@@ -57,9 +57,9 @@ extern const fenv_t *__fe_mask_env (void) attribute_hidden;
+ #define relax_fenv_state() \
+ 	do { \
+ 	   if (GLRO(dl_hwcap) & PPC_FEATURE_HAS_DFP) \
+-	     asm (".machine push; .machine \"power6\"; " \
++	     asm volatile (".machine push; .machine \"power6\"; " \
+ 		  "mtfsfi 7,0,1; .machine pop"); \
+-	   asm ("mtfsfi 7,0"); \
++	   asm volatile ("mtfsfi 7,0"); \
+ 	} while(0)
+ 
+ /* Set/clear a particular FPSCR bit (for instance,
+diff --git a/sysdeps/powerpc/fpu_control.h b/sysdeps/powerpc/fpu_control.h
+index 62c478d72ae660cb..90063d77bbbf794f 100644
+--- a/sysdeps/powerpc/fpu_control.h
++++ b/sysdeps/powerpc/fpu_control.h
+@@ -98,7 +98,7 @@ typedef unsigned int fpu_control_t;
+ /* Macros for accessing the hardware control word.  */
+ # define __FPU_MFFS()						\
+   ({register double __fr;					\
+-    __asm__ ("mffs %0" : "=f" (__fr));				\
++    __asm__ __volatile__("mffs %0" : "=f" (__fr));		\
+     __fr;							\
+   })
+ 
+@@ -112,7 +112,7 @@ typedef unsigned int fpu_control_t;
+ #ifdef _ARCH_PWR9
+ # define __FPU_MFFSL()						\
+   ({register double __fr;					\
+-    __asm__ ("mffsl %0" : "=f" (__fr));				\
++    __asm__ __volatile__("mffsl %0" : "=f" (__fr));		\
+     __fr;							\
+   })
+ #else
+@@ -132,7 +132,7 @@ typedef unsigned int fpu_control_t;
+     __u.__ll = 0xfff80000LL << 32; /* This is a QNaN.  */	\
+     __u.__ll |= (cw) & 0xffffffffLL;				\
+     __fr = __u.__d;						\
+-    __asm__ ("mtfsf 255,%0" : : "f" (__fr));			\
++    __asm__ __volatile__("mtfsf 255,%0" : : "f" (__fr));	\
+   }
+ 
+ /* Default control word set at startup.  */

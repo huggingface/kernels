@@ -1,0 +1,31 @@
+commit 35e038c1d2ccb3a75395662f9c4f28d85a61444f
+Author: Tulio Magno Quites Machado Filho <tuliom@linux.ibm.com>
+Date:   Mon Jul 22 17:34:13 2019 -0300
+
+    test-container: Install with $(all-subdirs) [BZ #24794]
+    
+    Whenever a sub-make is created, it inherits the variable subdirs from its
+    parent.  This is also true when make check is called with a restricted
+    list of subdirs.  In this scenario, make install is executed "partially"
+    and testroot.pristine ends up with an incomplete installation.
+    
+    	[BZ #24794]
+    	* Makefile (testroot.pristine/install.stamp): Pass
+    	subdirs='$(all-subdirs)' to make install.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/Makefile b/Makefile
+index a4ed747..9fbf705 100644
+--- a/Makefile
++++ b/Makefile
+@@ -401,7 +401,8 @@ ifeq ($(run-built-tests),yes)
+ 	    $(test-wrapper) cp $$dso $(objpfx)testroot.pristine$$dso ;\
+ 	  done
+ endif
+-	$(MAKE) install DESTDIR=$(objpfx)testroot.pristine
++	$(MAKE) install DESTDIR=$(objpfx)testroot.pristine \
++	  subdirs='$(all-subdirs)'
+ 	touch $(objpfx)testroot.pristine/install.stamp
+ 
+ tests-special-notdir = $(patsubst $(objpfx)%, %, $(tests-special))

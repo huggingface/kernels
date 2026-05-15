@@ -1,0 +1,98 @@
+From 2c42257314536b94cc8d52edede86e94e98c1436 Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Fri, 14 Oct 2022 11:02:25 +0200
+Subject: [PATCH] elf: Do not completely clear reused namespace in dlmopen (bug
+ 29600)
+Content-type: text/plain; charset=UTF-8
+
+The data in the _ns_debug member must be preserved, otherwise
+_dl_debug_initialize enters an infinite loop.  To be conservative,
+only clear the libc_map member for now, to fix bug 29528.
+
+Fixes commit d0e357ff45a75553dee3b17ed7d303bfa544f6fe
+("elf: Call __libc_early_init for reused namespaces (bug 29528)"),
+by reverting most of it.
+
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+Tested-by: Carlos O'Donell <carlos@redhat.com>
+---
+ elf/dl-open.c           | 14 ++++++--------
+ elf/tst-dlmopen-twice.c | 28 ++++++++++++++++++++++++----
+ 2 files changed, 30 insertions(+), 12 deletions(-)
+
+diff --git a/elf/dl-open.c b/elf/dl-open.c
+index 46e8066fd8..e7db5e9642 100644
+--- a/elf/dl-open.c
++++ b/elf/dl-open.c
+@@ -836,15 +836,13 @@ _dl_open (const char *file, int mode, co
+ 	  _dl_signal_error (EINVAL, file, NULL, N_("\
+ no more namespaces available for dlmopen()"));
+ 	}
++      else if (nsid == GL(dl_nns))
++	{
++	  __rtld_lock_initialize (GL(dl_ns)[nsid]._ns_unique_sym_table.lock);
++	  ++GL(dl_nns);
++	}
+ 
+-      if (nsid == GL(dl_nns))
+-	++GL(dl_nns);
+-
+-      /* Initialize the new namespace.  Most members are
+-	 zero-initialized, only the lock needs special treatment.  */
+-      memset (&GL(dl_ns)[nsid], 0, sizeof (GL(dl_ns)[nsid]));
+-      __rtld_lock_initialize (GL(dl_ns)[nsid]._ns_unique_sym_table.lock);
+-
++      GL(dl_ns)[nsid].libc_map = NULL;
+       _dl_debug_initialize (0, nsid)->r_state = RT_CONSISTENT;
+     }
+   /* Never allow loading a DSO in a namespace which is empty.  Such
+diff --git a/elf/tst-dlmopen-twice.c b/elf/tst-dlmopen-twice.c
+index 449f3c8fa9..70c71fe19c 100644
+--- a/elf/tst-dlmopen-twice.c
++++ b/elf/tst-dlmopen-twice.c
+@@ -16,18 +16,38 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+ 
+-#include <support/xdlfcn.h>
++#include <stdio.h>
+ #include <support/check.h>
++#include <support/xdlfcn.h>
+ 
+-static int
+-do_test (void)
++/* Run the test multiple times, to check finding a new namespace while
++   another namespace is already in use.  This used to trigger bug 29600.  */
++static void
++recurse (int depth)
+ {
+-  void *handle = xdlmopen (LM_ID_NEWLM, "tst-dlmopen-twice-mod1.so", RTLD_NOW);
++  if (depth == 0)
++    return;
++
++  printf ("info: running at depth %d\n", depth);
++  void *handle = xdlmopen (LM_ID_NEWLM, "tst-dlmopen-twice-mod1.so",
++                           RTLD_NOW);
+   xdlclose (handle);
+   handle = xdlmopen (LM_ID_NEWLM, "tst-dlmopen-twice-mod2.so", RTLD_NOW);
+   int (*run_check) (void) = xdlsym (handle, "run_check");
+   TEST_COMPARE (run_check (), 0);
++  recurse (depth - 1);
+   xdlclose (handle);
++}
++
++static int
++do_test (void)
++{
++  /* First run the test without nesting.  */
++  recurse (1);
++
++  /* Then with nesting.  The constant needs to be less than the
++     internal DL_NNS namespace constant.  */
++  recurse (10);
+   return 0;
+ }
+ 
+-- 
+2.31.1
+

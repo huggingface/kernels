@@ -1,0 +1,659 @@
+commit 600d9e0c87940da9b0fdeff492bf888df852d40c
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Fri Dec 4 09:13:43 2020 +0100
+
+    elf: Add glibc-hwcaps subdirectory support to ld.so cache processing
+    
+    This recognizes the DL_CACHE_HWCAP_EXTENSION flag in cache entries,
+    and picks the supported cache entry with the highest priority.
+    
+    The elf/tst-glibc-hwcaps-prepend-cache test documents a non-desired
+    aspect of the current cache implementation: If the cache selects a DSO
+    that does not exist on disk, _dl_map_object falls back to open_path,
+    which may or may not find an alternative implementation.  This is an
+    existing limitation that also applies to the legacy hwcaps processing
+    for ld.so.cache.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/Makefile b/elf/Makefile
+index a3e802a9a99b759c..f67b231c0f8e3aff 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -162,6 +162,12 @@ tst-tls1-static-non-pie-no-pie = yes
+ tests-container = \
+ 			  tst-ldconfig-bad-aux-cache
+ 
++ifeq (no,$(build-hardcoded-path-in-tests))
++# This is an ld.so.cache test, and RPATH/RUNPATH in the executable
++# interferes with its test objectives.
++tests-container += tst-glibc-hwcaps-prepend-cache
++endif
++
+ tests := tst-tls9 tst-leaks1 \
+ 	tst-array1 tst-array2 tst-array3 tst-array4 tst-array5 \
+ 	tst-auxv tst-stringtable
+@@ -1784,6 +1790,14 @@ $(objpfx)tst-glibc-hwcaps-prepend.out: \
+ 	  $< > $@; \
+ 	$(evaluate-test)
+ 
++# Like tst-glibc-hwcaps-prepend, but uses a container and loads the
++# library via ld.so.cache.  Test setup is contained in the test
++# itself.
++$(objpfx)tst-glibc-hwcaps-prepend-cache: $(libdl)
++$(objpfx)tst-glibc-hwcaps-prepend-cache.out: \
++  $(objpfx)tst-glibc-hwcaps-prepend-cache $(objpfx)libmarkermod1-1.so \
++  $(objpfx)libmarkermod1-2.so $(objpfx)libmarkermod1-3.so
++
+ # tst-glibc-hwcaps-mask checks that --glibc-hwcaps-mask can be used to
+ # suppress all auto-detected subdirectories.
+ $(objpfx)tst-glibc-hwcaps-mask: $(objpfx)libmarkermod1-1.so
+@@ -1795,3 +1809,7 @@ $(objpfx)tst-glibc-hwcaps-mask.out: \
+ 	  --glibc-hwcaps-mask does-not-exist \
+ 	  $< > $@; \
+ 	$(evaluate-test)
++
++# Generic dependency for sysdeps implementation of
++# tst-glibc-hwcaps-cache.
++$(objpfx)tst-glibc-hwcaps-cache.out: $(objpfx)tst-glibc-hwcaps
+diff --git a/elf/dl-cache.c b/elf/dl-cache.c
+index de063faa8b2c88ae..e75afdaee23226e6 100644
+--- a/elf/dl-cache.c
++++ b/elf/dl-cache.c
+@@ -35,6 +35,144 @@ static struct cache_file *cache;
+ static struct cache_file_new *cache_new;
+ static size_t cachesize;
+ 
++#ifdef SHARED
++/* This is used to cache the priorities of glibc-hwcaps
++   subdirectories.  The elements of _dl_cache_priorities correspond to
++   the strings in the cache_extension_tag_glibc_hwcaps section.  */
++static uint32_t *glibc_hwcaps_priorities;
++static uint32_t glibc_hwcaps_priorities_length;
++static uint32_t glibc_hwcaps_priorities_allocated;
++
++/* True if the full malloc was used to allocated the array.  */
++static bool glibc_hwcaps_priorities_malloced;
++
++/* Deallocate the glibc_hwcaps_priorities array.  */
++static void
++glibc_hwcaps_priorities_free (void)
++{
++  /* When the minimal malloc is in use, free does not do anything,
++     so it does not make sense to call it.  */
++  if (glibc_hwcaps_priorities_malloced)
++    free (glibc_hwcaps_priorities);
++  glibc_hwcaps_priorities = NULL;
++  glibc_hwcaps_priorities_allocated = 0;
++}
++
++/* Ordered comparison of a hwcaps string from the cache on the left
++   (identified by its string table index) and a _dl_hwcaps_priorities
++   element on the right.  */
++static int
++glibc_hwcaps_compare (uint32_t left_index, struct dl_hwcaps_priority *right)
++{
++  const char *left_name = (const char *) cache + left_index;
++  uint32_t left_name_length = strlen (left_name);
++  uint32_t to_compare;
++  if (left_name_length < right->name_length)
++    to_compare = left_name_length;
++  else
++    to_compare = right->name_length;
++  int cmp = memcmp (left_name, right->name, to_compare);
++  if (cmp != 0)
++    return cmp;
++  if (left_name_length < right->name_length)
++    return -1;
++  else if (left_name_length > right->name_length)
++    return 1;
++  else
++    return 0;
++}
++
++/* Initialize the glibc_hwcaps_priorities array and its length,
++   glibc_hwcaps_priorities_length.  */
++static void
++glibc_hwcaps_priorities_init (void)
++{
++  struct cache_extension_all_loaded ext;
++  if (!cache_extension_load (cache_new, cache, cachesize, &ext))
++    return;
++
++  uint32_t length = (ext.sections[cache_extension_tag_glibc_hwcaps].size
++		     / sizeof (uint32_t));
++  if (length > glibc_hwcaps_priorities_allocated)
++    {
++      glibc_hwcaps_priorities_free ();
++
++      uint32_t *new_allocation = malloc (length * sizeof (uint32_t));
++      if (new_allocation == NULL)
++	/* This effectively disables hwcaps on memory allocation
++	   errors.  */
++	return;
++
++      glibc_hwcaps_priorities = new_allocation;
++      glibc_hwcaps_priorities_allocated = length;
++      glibc_hwcaps_priorities_malloced = __rtld_malloc_is_complete ();
++    }
++
++  /* Compute the priorities for the subdirectories by merging the
++     array in the cache with the dl_hwcaps_priorities array.  */
++  const uint32_t *left = ext.sections[cache_extension_tag_glibc_hwcaps].base;
++  const uint32_t *left_end = left + length;
++  struct dl_hwcaps_priority *right = _dl_hwcaps_priorities;
++  struct dl_hwcaps_priority *right_end = right + _dl_hwcaps_priorities_length;
++  uint32_t *result = glibc_hwcaps_priorities;
++
++  while (left < left_end && right < right_end)
++    {
++      if (*left < cachesize)
++	{
++	  int cmp = glibc_hwcaps_compare (*left, right);
++	  if (cmp == 0)
++	    {
++	      *result = right->priority;
++	      ++result;
++	      ++left;
++	      ++right;
++	    }
++	  else if (cmp < 0)
++	    {
++	      *result = 0;
++	      ++result;
++	      ++left;
++	    }
++	  else
++	    ++right;
++	}
++      else
++	{
++	  *result = 0;
++	  ++result;
++	}
++    }
++  while (left < left_end)
++    {
++      *result = 0;
++      ++result;
++      ++left;
++    }
++
++  glibc_hwcaps_priorities_length = length;
++}
++
++/* Return the priority of the cache_extension_tag_glibc_hwcaps section
++   entry at INDEX.  Zero means do not use.  Otherwise, lower values
++   indicate greater preference.  */
++static uint32_t
++glibc_hwcaps_priority (uint32_t index)
++{
++  /* This does not need to repeated initialization attempts because
++     this function is only called if there is glibc-hwcaps data in the
++     cache, so the first call initializes the glibc_hwcaps_priorities
++     array.  */
++  if (glibc_hwcaps_priorities_length == 0)
++    glibc_hwcaps_priorities_init ();
++
++  if (index < glibc_hwcaps_priorities_length)
++    return glibc_hwcaps_priorities[index];
++  else
++    return 0;
++}
++#endif /* SHARED */
++
+ /* True if PTR is a valid string table index.  */
+ static inline bool
+ _dl_cache_verify_ptr (uint32_t ptr, size_t string_table_size)
+@@ -74,6 +212,9 @@ search_cache (const char *string_table, uint32_t string_table_size,
+   int left = 0;
+   int right = nlibs - 1;
+   const char *best = NULL;
++#ifdef SHARED
++  uint32_t best_priority = 0;
++#endif
+ 
+   while (left <= right)
+     {
+@@ -129,6 +270,11 @@ search_cache (const char *string_table, uint32_t string_table_size,
+ 		{
+ 		  if (best == NULL || flags == GLRO (dl_correct_cache_id))
+ 		    {
++		      /* Named/extension hwcaps get slightly different
++			 treatment: We keep searching for a better
++			 match.  */
++		      bool named_hwcap = false;
++
+ 		      if (entry_size >= sizeof (struct file_entry_new))
+ 			{
+ 			  /* The entry is large enough to include
+@@ -136,7 +282,18 @@ search_cache (const char *string_table, uint32_t string_table_size,
+ 			  struct file_entry_new *libnew
+ 			    = (struct file_entry_new *) lib;
+ 
+-			  if (libnew->hwcap & hwcap_exclude)
++#ifdef SHARED
++			  named_hwcap = dl_cache_hwcap_extension (libnew);
++#endif
++
++			  /* The entries with named/extension hwcaps
++			     have been exhausted.  Return the best
++			     match encountered so far if there is
++			     one.  */
++			  if (!named_hwcap && best != NULL)
++			    break;
++
++			  if ((libnew->hwcap & hwcap_exclude) && !named_hwcap)
+ 			    continue;
+ 			  if (GLRO (dl_osversion)
+ 			      && libnew->osversion > GLRO (dl_osversion))
+@@ -146,14 +303,41 @@ search_cache (const char *string_table, uint32_t string_table_size,
+ 			      && ((libnew->hwcap & _DL_HWCAP_PLATFORM)
+ 				  != platform))
+ 			    continue;
++
++#ifdef SHARED
++			  /* For named hwcaps, determine the priority
++			     and see if beats what has been found so
++			     far.  */
++			  if (named_hwcap)
++			    {
++			      uint32_t entry_priority
++				= glibc_hwcaps_priority (libnew->hwcap);
++			      if (entry_priority == 0)
++				/* Not usable at all.  Skip.  */
++				continue;
++			      else if (best == NULL
++				       || entry_priority < best_priority)
++				/* This entry is of higher priority
++				   than the previous one, or it is the
++				   first entry.  */
++				best_priority = entry_priority;
++			      else
++				/* An entry has already been found,
++				   but it is a better match.  */
++				continue;
++			    }
++#endif /* SHARED */
+ 			}
+ 
+ 		      best = string_table + lib->value;
+ 
+-		      if (flags == GLRO (dl_correct_cache_id))
++		      if (flags == GLRO (dl_correct_cache_id)
++			  && !named_hwcap)
+ 			/* We've found an exact match for the shared
+ 			   object and no general `ELF' release.  Stop
+-			   searching.  */
++			   searching, but not if a named (extension)
++			   hwcap is used.  In this case, an entry with
++			   a higher priority may come up later.  */
+ 			break;
+ 		    }
+ 		}
+@@ -346,5 +530,9 @@ _dl_unload_cache (void)
+       __munmap (cache, cachesize);
+       cache = NULL;
+     }
++#ifdef SHARED
++  /* This marks the glibc_hwcaps_priorities array as out-of-date.  */
++  glibc_hwcaps_priorities_length = 0;
++#endif
+ }
+ #endif
+diff --git a/elf/dl-hwcaps.c b/elf/dl-hwcaps.c
+index e57d0d2d41741021..098173a84c43c1fd 100644
+--- a/elf/dl-hwcaps.c
++++ b/elf/dl-hwcaps.c
+@@ -89,6 +89,81 @@ copy_hwcaps (struct copy_hwcaps *target, const char *hwcaps,
+     }
+ }
+ 
++struct dl_hwcaps_priority *_dl_hwcaps_priorities;
++uint32_t _dl_hwcaps_priorities_length;
++
++/* Allocate _dl_hwcaps_priorities and fill it with data.  */
++static void
++compute_priorities (size_t total_count, const char *prepend,
++		    uint32_t bitmask, const char *mask)
++{
++  _dl_hwcaps_priorities = malloc (total_count
++				  * sizeof (*_dl_hwcaps_priorities));
++  if (_dl_hwcaps_priorities == NULL)
++    _dl_signal_error (ENOMEM, NULL, NULL,
++		      N_("cannot create HWCAP priorities"));
++  _dl_hwcaps_priorities_length = total_count;
++
++  /* First the prepended subdirectories.  */
++  size_t i = 0;
++  {
++    struct dl_hwcaps_split sp;
++    _dl_hwcaps_split_init (&sp, prepend);
++    while (_dl_hwcaps_split (&sp))
++      {
++	_dl_hwcaps_priorities[i].name = sp.segment;
++	_dl_hwcaps_priorities[i].name_length = sp.length;
++	_dl_hwcaps_priorities[i].priority = i + 1;
++	++i;
++      }
++  }
++
++  /* Then the built-in subdirectories that are actually active.  */
++  {
++    struct dl_hwcaps_split_masked sp;
++    _dl_hwcaps_split_masked_init (&sp, _dl_hwcaps_subdirs, bitmask, mask);
++    while (_dl_hwcaps_split_masked (&sp))
++      {
++	_dl_hwcaps_priorities[i].name = sp.split.segment;
++	_dl_hwcaps_priorities[i].name_length = sp.split.length;
++	_dl_hwcaps_priorities[i].priority = i + 1;
++	++i;
++      }
++  }
++  assert (i == total_count);
++}
++
++/* Sort the _dl_hwcaps_priorities array by name.  */
++static void
++sort_priorities_by_name (void)
++{
++  /* Insertion sort.  There is no need to link qsort into the dynamic
++     loader for such a short array.  */
++  for (size_t i = 1; i < _dl_hwcaps_priorities_length; ++i)
++    for (size_t j = i; j > 0; --j)
++      {
++	struct dl_hwcaps_priority *previous = _dl_hwcaps_priorities + j - 1;
++	struct dl_hwcaps_priority *current = _dl_hwcaps_priorities + j;
++
++	/* Bail out if current is greater or equal to the previous
++	   value.  */
++	uint32_t to_compare;
++	if (current->name_length < previous->name_length)
++	  to_compare = current->name_length;
++	else
++	  to_compare = previous->name_length;
++	int cmp = memcmp (current->name, previous->name, to_compare);
++	if (cmp >= 0
++	    || (cmp == 0 && current->name_length >= previous->name_length))
++	  break;
++
++	/* Swap *previous and *current.  */
++	struct dl_hwcaps_priority tmp = *previous;
++	*previous = *current;
++	*current = tmp;
++      }
++}
++
+ /* Return an array of useful/necessary hardware capability names.  */
+ const struct r_strlenpair *
+ _dl_important_hwcaps (const char *glibc_hwcaps_prepend,
+@@ -111,6 +186,9 @@ _dl_important_hwcaps (const char *glibc_hwcaps_prepend,
+   update_hwcaps_counts (&hwcaps_counts, glibc_hwcaps_prepend, -1, NULL);
+   update_hwcaps_counts (&hwcaps_counts, _dl_hwcaps_subdirs,
+ 			hwcaps_subdirs_active, glibc_hwcaps_mask);
++  compute_priorities (hwcaps_counts.count, glibc_hwcaps_prepend,
++		      hwcaps_subdirs_active, glibc_hwcaps_mask);
++  sort_priorities_by_name ();
+ 
+   /* Each hwcaps subdirectory has a GLIBC_HWCAPS_PREFIX string prefix
+      and a "/" suffix once stored in the result.  */
+diff --git a/elf/dl-hwcaps.h b/elf/dl-hwcaps.h
+index 3fcfbceb1a8fc1c8..769ecab3f886c6c4 100644
+--- a/elf/dl-hwcaps.h
++++ b/elf/dl-hwcaps.h
+@@ -132,4 +132,23 @@ _dl_hwcaps_subdirs_build_bitmask (int subdirs, int active)
+   return mask ^ ((1U << inactive) - 1);
+ }
+ 
++/* Pre-computed glibc-hwcaps subdirectory priorities.  Used in
++   dl-cache.c to quickly find the proprieties for the stored HWCAP
++   names.  */
++struct dl_hwcaps_priority
++{
++  /* The name consists of name_length bytes at name (not necessarily
++     null-terminated).  */
++  const char *name;
++  uint32_t name_length;
++
++  /* Priority of this name.  A positive number.  */
++  uint32_t priority;
++};
++
++/* Pre-computed hwcaps priorities.  Set up by
++   _dl_important_hwcaps.  */
++extern struct dl_hwcaps_priority *_dl_hwcaps_priorities attribute_hidden;
++extern uint32_t _dl_hwcaps_priorities_length attribute_hidden;
++
+ #endif /* _DL_HWCAPS_H */
+diff --git a/elf/tst-glibc-hwcaps-cache.c b/elf/tst-glibc-hwcaps-cache.c
+new file mode 100644
+index 0000000000000000..4bad56afc03451fc
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps-cache.c
+@@ -0,0 +1,45 @@
++/* Wrapper to invoke tst-glibc-hwcaps in a container, to test ld.so.cache.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++/* This program is just a wrapper that runs ldconfig followed by
++   tst-glibc-hwcaps.  The actual test is provided via an
++   implementation in a sysdeps subdirectory.  */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <support/support.h>
++#include <unistd.h>
++
++int
++main (int argc, char **argv)
++{
++  /* Run ldconfig to populate the cache.  */
++  {
++    char *command = xasprintf ("%s/ldconfig", support_install_rootsbindir);
++    if (system (command) != 0)
++      return 1;
++    free (command);
++  }
++
++  /* Reuse tst-glibc-hwcaps.  Since this code is running in a
++     container, we can launch it directly.  */
++  char *path = xasprintf ("%s/elf/tst-glibc-hwcaps", support_objdir_root);
++  execv (path, argv);
++  printf ("error: execv of %s failed: %m\n", path);
++  return 1;
++}
+diff --git a/elf/tst-glibc-hwcaps-cache.root/etc/ld.so.conf b/elf/tst-glibc-hwcaps-cache.root/etc/ld.so.conf
+new file mode 100644
+index 0000000000000000..e1e74dbda2bf3dfa
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps-cache.root/etc/ld.so.conf
+@@ -0,0 +1,2 @@
++# This file was created to suppress a warning from ldconfig:
++# /sbin/ldconfig: Warning: ignoring configuration file that cannot be opened: /etc/ld.so.conf: No such file or directory
+diff --git a/elf/tst-glibc-hwcaps-cache.root/postclean.req b/elf/tst-glibc-hwcaps-cache.root/postclean.req
+new file mode 100644
+index 0000000000000000..e69de29bb2d1d643
+diff --git a/elf/tst-glibc-hwcaps-cache.script b/elf/tst-glibc-hwcaps-cache.script
+new file mode 100644
+index 0000000000000000..6356d152089cdd9a
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps-cache.script
+@@ -0,0 +1,6 @@
++# test-container does not support scripts in sysdeps directories, so
++# collect everything in one file.
++
++cp $B/elf/libmarkermod2-1.so $L/libmarkermod2.so
++cp $B/elf/libmarkermod3-1.so $L/libmarkermod3.so
++cp $B/elf/libmarkermod4-1.so $L/libmarkermod4.so
+diff --git a/elf/tst-glibc-hwcaps-prepend-cache.c b/elf/tst-glibc-hwcaps-prepend-cache.c
+new file mode 100644
+index 0000000000000000..40509cebe2b5ba27
+--- /dev/null
++++ b/elf/tst-glibc-hwcaps-prepend-cache.c
+@@ -0,0 +1,149 @@
++/* Test that --glibc-hwcaps-prepend works, using dlopen and /etc/ld.so.cache.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/support.h>
++#include <support/xdlfcn.h>
++#include <support/xunistd.h>
++
++/* Invoke /sbin/ldconfig with some error checking.  */
++static void
++run_ldconfig (void)
++{
++  char *command = xasprintf ("%s/ldconfig", support_install_rootsbindir);
++  TEST_COMPARE (system (command), 0);
++  free (command);
++}
++
++/* The library under test.  */
++#define SONAME "libmarkermod1.so"
++
++static int
++do_test (void)
++{
++  if (dlopen (SONAME, RTLD_NOW) != NULL)
++    FAIL_EXIT1 (SONAME " is already on the search path");
++
++  /* Install the default implementation of libmarkermod1.so.  */
++  xmkdirp ("/etc", 0777);
++  support_write_file_string ("/etc/ld.so.conf", "/glibc-test/lib\n");
++  xmkdirp ("/glibc-test/lib/glibc-hwcaps/prepend2", 0777);
++  xmkdirp ("/glibc-test/lib/glibc-hwcaps/prepend3", 0777);
++  {
++    char *src = xasprintf ("%s/elf/libmarkermod1-1.so", support_objdir_root);
++    support_copy_file (src, "/glibc-test/lib/" SONAME);
++    free (src);
++  }
++  run_ldconfig ();
++  {
++    /* The default implementation can now be loaded.  */
++    void *handle = xdlopen (SONAME, RTLD_NOW);
++    int (*marker1) (void) = xdlsym (handle, "marker1");
++    TEST_COMPARE (marker1 (), 1);
++    xdlclose (handle);
++  }
++
++  /* Add the first override to the directory that is searched last.  */
++  {
++    char *src = xasprintf ("%s/elf/libmarkermod1-2.so", support_objdir_root);
++    support_copy_file (src, "/glibc-test/lib/glibc-hwcaps/prepend2/"
++                       SONAME);
++    free (src);
++  }
++  {
++    /* This is still the first implementation.  The cache has not been
++       updated.  */
++    void *handle = xdlopen (SONAME, RTLD_NOW);
++    int (*marker1) (void) = xdlsym (handle, "marker1");
++    TEST_COMPARE (marker1 (), 1);
++    xdlclose (handle);
++  }
++  run_ldconfig ();
++  {
++    /* After running ldconfig, it is the second implementation.  */
++    void *handle = xdlopen (SONAME, RTLD_NOW);
++    int (*marker1) (void) = xdlsym (handle, "marker1");
++    TEST_COMPARE (marker1 (), 2);
++    xdlclose (handle);
++  }
++
++  /* Add the second override to the directory that is searched first.  */
++  {
++    char *src = xasprintf ("%s/elf/libmarkermod1-3.so", support_objdir_root);
++    support_copy_file (src, "/glibc-test/lib/glibc-hwcaps/prepend3/"
++                       SONAME);
++    free (src);
++  }
++  {
++    /* This is still the second implementation.  */
++    void *handle = xdlopen (SONAME, RTLD_NOW);
++    int (*marker1) (void) = xdlsym (handle, "marker1");
++    TEST_COMPARE (marker1 (), 2);
++    xdlclose (handle);
++  }
++  run_ldconfig ();
++  {
++    /* After running ldconfig, it is the third implementation.  */
++    void *handle = xdlopen (SONAME, RTLD_NOW);
++    int (*marker1) (void) = xdlsym (handle, "marker1");
++    TEST_COMPARE (marker1 (), 3);
++    xdlclose (handle);
++  }
++
++  /* Remove the second override again, without running ldconfig.
++     Ideally, this would revert to implementation 2.  However, in the
++     current implementation, the cache returns exactly one file name
++     which does not exist after unlinking, so the dlopen fails.  */
++  xunlink ("/glibc-test/lib/glibc-hwcaps/prepend3/" SONAME);
++  TEST_VERIFY (dlopen (SONAME, RTLD_NOW) == NULL);
++  run_ldconfig ();
++  {
++    /* After running ldconfig, the second implementation is available
++       once more.  */
++    void *handle = xdlopen (SONAME, RTLD_NOW);
++    int (*marker1) (void) = xdlsym (handle, "marker1");
++    TEST_COMPARE (marker1 (), 2);
++    xdlclose (handle);
++  }
++
++  return 0;
++}
++
++static void
++prepare (int argc, char **argv)
++{
++  const char *no_restart = "no-restart";
++  if (argc == 2 && strcmp (argv[1], no_restart) == 0)
++    return;
++  /* Re-execute the test with an explicit loader invocation.  */
++  execl (support_objdir_elf_ldso,
++         support_objdir_elf_ldso,
++         "--glibc-hwcaps-prepend", "prepend3:prepend2",
++         argv[0], no_restart,
++         NULL);
++  printf ("error: execv of %s failed: %m\n", argv[0]);
++  _exit (1);
++}
++
++#define PREPARE prepare
++#include <support/test-driver.c>
+diff --git a/elf/tst-glibc-hwcaps-prepend-cache.root/postclean.req b/elf/tst-glibc-hwcaps-prepend-cache.root/postclean.req
+new file mode 100644
+index 0000000000000000..e69de29bb2d1d643

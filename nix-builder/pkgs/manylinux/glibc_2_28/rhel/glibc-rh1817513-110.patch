@@ -1,0 +1,22 @@
+commit df5f473ed5ee95e3179fcb239e33e971619626cd
+Author: Shuo Wang <wangshuo47@huawei.com>
+Date:   Tue Nov 24 16:42:18 2020 -0300
+
+    elf: Fix uninitialized variable for _dl_write
+    
+    Variable ret in elf/dl-write.c is uninitialized, which should get
+    return value from __writev.
+
+diff --git a/elf/dl-write.c b/elf/dl-write.c
+index 7350aff0035d4fbc..9b741c8a8fe12f6c 100644
+--- a/elf/dl-write.c
++++ b/elf/dl-write.c
+@@ -41,7 +41,7 @@ _dl_write (int fd, const void *buffer, size_t length)
+   else
+     {
+       __rtld_lock_lock_recursive (GL(dl_load_lock));
+-      __writev (fd, &iov, 1);
++      ret = __writev (fd, &iov, 1);
+       if (ret < 0)
+         ret = -errno;
+       __rtld_lock_unlock_recursive (GL(dl_load_lock));

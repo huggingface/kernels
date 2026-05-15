@@ -1,0 +1,26 @@
+commit 6cf6a91d05d626698f158078961b3bffcb39ff8c
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Wed Feb 12 13:37:16 2020 +0000
+
+    Rename RWF_WRITE_LIFE_NOT_SET to RWH_WRITE_LIFE_NOT_SET following Linux 5.5.
+    
+    Linux 5.5 renames RWF_WRITE_LIFE_NOT_SET to RWH_WRITE_LIFE_NOT_SET,
+    with the old name kept as an alias.  This patch makes the
+    corresponding change in glibc.
+    
+    Tested for x86_64.
+
+diff --git a/sysdeps/unix/sysv/linux/bits/fcntl-linux.h b/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
+index 07a889d683..b06488a847 100644
+--- a/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
++++ b/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
+@@ -290,7 +290,8 @@ struct f_owner_ex
+ 
+ #ifdef __USE_GNU
+ /* Hint values for F_{GET,SET}_RW_HINT.  */
+-# define RWF_WRITE_LIFE_NOT_SET	0
++# define RWH_WRITE_LIFE_NOT_SET	0
++# define RWF_WRITE_LIFE_NOT_SET	RWH_WRITE_LIFE_NOT_SET
+ # define RWH_WRITE_LIFE_NONE	1
+ # define RWH_WRITE_LIFE_SHORT	2
+ # define RWH_WRITE_LIFE_MEDIUM	3

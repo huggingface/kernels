@@ -1,0 +1,28 @@
+Apply a fix similar to upstream commit 5d1ccdda7b0c625751661d50977f3dfbc73f8eae
+to the installed header file.  Upstream, the header file has been removed
+in its uncorrected state, so there is no upstream fix to backport.
+
+Suggested by Jakub Jelinek.
+
+diff --git a/sysdeps/x86/fpu/bits/fenv.h b/sysdeps/x86/fpu/bits/fenv.h
+index 4103982d8c8ae014..4ae2d2a04c6754bd 100644
+--- a/sysdeps/x86/fpu/bits/fenv.h
++++ b/sysdeps/x86/fpu/bits/fenv.h
+@@ -132,7 +132,7 @@ __NTH (__feraiseexcept_invalid_divbyzero (int __excepts))
+       float __f = 0.0;
+ 
+ # ifdef __SSE_MATH__
+-      __asm__ __volatile__ ("divss %0, %0 " : : "x" (__f));
++      __asm__ __volatile__ ("divss %0, %0 " : "+x" (__f));
+ # else
+       __asm__ __volatile__ ("fdiv %%st, %%st(0); fwait"
+ 			    : "=t" (__f) : "0" (__f));
+@@ -145,7 +145,7 @@ __NTH (__feraiseexcept_invalid_divbyzero (int __excepts))
+       float __g = 0.0;
+ 
+ # ifdef __SSE_MATH__
+-      __asm__ __volatile__ ("divss %1, %0" : : "x" (__f), "x" (__g));
++      __asm__ __volatile__ ("divss %1, %0" : "+x" (__f) : "x" (__g));
+ # else
+       __asm__ __volatile__ ("fdivp %%st, %%st(1); fwait"
+ 			    : "=t" (__f) : "0" (__f), "u" (__g) : "st(1)");

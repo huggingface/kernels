@@ -1,0 +1,29 @@
+commit 439bf53496d6ed5fcef1d2e71793b46369f8205f
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Apr 24 07:31:29 2019 +0200
+
+    locale/tst-locale-locpath: Run test only for $(run-built-tests) == yes
+
+diff --git a/locale/Makefile b/locale/Makefile
+index 42bb36c7d374eebe..23a71321b6646c49 100644
+--- a/locale/Makefile
++++ b/locale/Makefile
+@@ -28,7 +28,6 @@ routines	= setlocale findlocale loadlocale loadarchive \
+ 		  localeconv nl_langinfo nl_langinfo_l mb_cur_max \
+ 		  newlocale duplocale freelocale uselocale
+ tests		= tst-C-locale tst-locname tst-duplocale
+-tests-special	= $(objpfx)tst-locale-locpath.out
+ categories	= ctype messages monetary numeric time paper name \
+ 		  address telephone measurement identification collate
+ aux		= $(categories:%=lc-%) $(categories:%=C-%) SYS_libc C_name \
+@@ -61,6 +60,10 @@ lib-modules		:= charmap-dir simple-hash xmalloc xstrdup \
+ GPERF = gperf
+ GPERFFLAGS = -acCgopt -k1,2,5,9,$$ -L ANSI-C
+ 
++ifeq ($(run-built-tests),yes)
++tests-special += $(objpfx)tst-locale-locpath.out
++endif
++
+ include ../Rules
+ 
+ CFLAGS-md5.c += -I../crypt

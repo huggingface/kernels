@@ -1,0 +1,42 @@
+commit 881b68e45c3a518319dcf5a3c4a2b3ec59e1c1e5
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Fri Jul 16 08:32:05 2021 -0300
+
+    elf: Fix a wrong array access on tst-tls20
+    
+    Check on x86_64-linux-gnu with --enable-stack-protector=all.
+
+diff --git a/elf/tst-tls20.c b/elf/tst-tls20.c
+index d8d04fe574597f35..831c3336c914790d 100644
+--- a/elf/tst-tls20.c
++++ b/elf/tst-tls20.c
+@@ -226,12 +226,12 @@ do_test_dependency (void)
+       int mods[nmods];
+       /* We use '0' as indication for a gap, to avoid the dlclose on iteration
+ 	 cleanup.  */
+-      for (int n = 1; n <= nmods; n++)
++      for (int n = 1; n < nmods; n++)
+ 	{
+ 	  load_mod (n);
+ 	   mods[n] = n;
+ 	}
+-      for (int n = 1; n <= nmods; n++)
++      for (int n = 1; n < nmods; n++)
+ 	{
+ 	  if (!is_mod_set (g, n))
+ 	    {
+@@ -304,12 +304,12 @@ do_test_invalid_dependency (bool bind_now)
+       int mods[nmods];
+       /* We use '0' as indication for a gap, to avoid the dlclose on iteration
+ 	 cleanup.  */
+-      for (int n = 1; n <= nmods; n++)
++      for (int n = 1; n < nmods; n++)
+ 	{
+ 	  load_mod (n);
+ 	   mods[n] = n;
+ 	}
+-      for (int n = 1; n <= nmods; n++)
++      for (int n = 1; n < nmods; n++)
+ 	{
+ 	  if (!is_mod_set (g, n))
+ 	    {

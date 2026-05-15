@@ -1,0 +1,42 @@
+commit f4f70c2895e3d325188a42c10eb7bb4335be6773
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Tue Jan 4 06:58:34 2022 -0800
+
+    elf: Add a comment after trailing backslashes
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 4ec4e9a049156755..53faca4585220048 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -308,6 +308,7 @@ tests-cxx = \
+   tst-nodelete \
+   tst-unique3 \
+   tst-unique4 \
++# tests-cxx
+ 
+ tests += $(if $(CXX),$(tests-cxx))
+ tests-internal += loadtest unload unload2 circleload1 \
+@@ -580,6 +581,7 @@ modules-names = \
+   vismod1 \
+   vismod2 \
+   vismod3 \
++# modules-names
+ 
+ modules-names-cxx = \
+   tst-dlopen-nodelete-reloc-mod1 \
+@@ -605,6 +607,7 @@ modules-names-cxx = \
+   tst-unique3lib \
+   tst-unique3lib2 \
+   tst-unique4lib \
++# modules-names-cxx
+ 
+ modules-names += \
+   $(if $(CXX),$(modules-names-cxx)) \
+@@ -614,6 +617,7 @@ modules-names += \
+   $(tst-tls-many-dynamic-modules-dep-bad) \
+   $(tlsmod17a-modules) \
+   $(tlsmod18a-modules) \
++# modules-names
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.

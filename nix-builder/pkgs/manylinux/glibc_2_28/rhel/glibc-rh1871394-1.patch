@@ -1,0 +1,47 @@
+commit 75870237ff3bb363447b03f4b0af100227570910
+Author: Sunil K Pandey <skpgkp1@gmail.com>
+Date:   Fri Jun 12 08:57:16 2020 -0700
+
+    Fix avx2 strncmp offset compare condition check [BZ #25933]
+    
+    strcmp-avx2.S: In avx2 strncmp function, strings are compared in
+    chunks of 4 vector size(i.e. 32x4=128 byte for avx2). After first 4
+    vector size comparison, code must check whether it already passed
+    the given offset. This patch implement avx2 offset check condition
+    for strncmp function, if both string compare same for first 4 vector
+    size.
+
+diff --git a/sysdeps/x86_64/multiarch/strcmp-avx2.S b/sysdeps/x86_64/multiarch/strcmp-avx2.S
+index 5f88a68262..d42b04b54f 100644
+--- a/sysdeps/x86_64/multiarch/strcmp-avx2.S
++++ b/sysdeps/x86_64/multiarch/strcmp-avx2.S
+@@ -591,7 +591,14 @@ L(loop_cross_page_2_vec):
+ 	movl	$(PAGE_SIZE / (VEC_SIZE * 4) - 1), %esi
+ 
+ 	testq	%rdi, %rdi
++# ifdef USE_AS_STRNCMP
++	/* At this point, if %rdi value is 0, it already tested
++	   VEC_SIZE*4+%r10 byte starting from %rax. This label
++	   checks whether strncmp maximum offset reached or not.  */
++	je	L(string_nbyte_offset_check)
++# else
+ 	je	L(back_to_loop)
++# endif
+ 	tzcntq	%rdi, %rcx
+ 	addq	%r10, %rcx
+ 	/* Adjust for number of bytes skipped.  */
+@@ -627,6 +634,14 @@ L(loop_cross_page_2_vec):
+ 	VZEROUPPER
+ 	ret
+ 
++# ifdef USE_AS_STRNCMP
++L(string_nbyte_offset_check):
++	leaq	(VEC_SIZE * 4)(%r10), %r10
++	cmpq	%r10, %r11
++	jbe	L(zero)
++	jmp	L(back_to_loop)
++# endif
++
+ 	.p2align 4
+ L(cross_page_loop):
+ 	/* Check one byte/dword at a time.  */

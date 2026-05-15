@@ -1,0 +1,143 @@
+commit a332bd1518af518c984fad73eba6f46dc5b2b2d4
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Jan 16 16:53:58 2020 +0100
+
+    elf: Add elf/tst-dlopenfail-2 [BZ #25396]
+    
+    Without CET, a jump into a newly loaded object through an overwritten
+    link map often does not crash, it just executes some random code.
+    CET detects this in some cases because the function pointer does not
+    point to the start of a function in the replacement shared object,
+    so there is no ENDBR instruction.
+    
+    The new test uses a small shared object and the existing dangling
+    link map to trigger the bug.
+    
+    Reviewed-by: Siddhesh Poyarekar <siddhesh@sourceware.org>
+
+Conflicts:
+	elf/Makefile
+	  (Test backport differences.)
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 16a3e8dcda19b4ba..f1a16fe8ca594c57 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -192,7 +192,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-latepthread tst-tls-manydynamic tst-nodelete-dlclose \
+ 	 tst-debug1 tst-main1 tst-absolute-sym tst-absolute-zero tst-big-note \
+ 	 tst-sonamemove-link tst-sonamemove-dlopen tst-initfinilazyfail \
+-	 tst-dlopenfail
++	 tst-dlopenfail tst-dlopenfail-2
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -301,7 +301,8 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		tst-sonamemove-linkmod1 \
+ 		tst-sonamemove-runmod1 tst-sonamemove-runmod2 \
+ 		tst-initlazyfailmod tst-finilazyfailmod \
+-		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2
++		tst-dlopenfailmod1 tst-dlopenfaillinkmod tst-dlopenfailmod2 \
++		tst-dlopenfailmod3
+ 
+ ifeq (yes,$(have-mtls-dialect-gnu2))
+ tests += tst-gnu2-tls1
+@@ -1569,6 +1570,10 @@ $(objpfx)tst-dlopenfailmod1.so: \
+   $(shared-thread-library) $(objpfx)tst-dlopenfaillinkmod.so
+ LDFLAGS-tst-dlopenfaillinkmod.so = -Wl,-soname,tst-dlopenfail-missingmod.so
+ $(objpfx)tst-dlopenfailmod2.so: $(shared-thread-library)
++$(objpfx)tst-dlopenfail-2: $(libdl)
++$(objpfx)tst-dlopenfail.out: \
++  $(objpfx)tst-dlopenfailmod1.so $(objpfx)tst-dlopenfailmod2.so \
++  $(objpfx)tst-dlopenfailmod3.so
+ 
+ $(objpfx)tst-dlopen-nodelete-reloc: $(libdl)
+ $(objpfx)tst-dlopen-nodelete-reloc.out: \
+diff --git a/elf/tst-dlopenfail-2.c b/elf/tst-dlopenfail-2.c
+new file mode 100644
+index 0000000000000000..35bbde64abbb6603
+--- /dev/null
++++ b/elf/tst-dlopenfail-2.c
+@@ -0,0 +1,59 @@
++/* Test unrelated dlopen after dlopen failure involving NODELETE.
++   Copyright (C) 2019-2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <errno.h>
++#include <gnu/lib-names.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int
++do_test (void)
++{
++  /* This test uses libpthread as the canonical NODELETE module.  If
++     libpthread is no longer NODELETE because it has been merged into
++     libc, the test needs to be updated.  */
++  TEST_VERIFY (dlsym (NULL, "pthread_create") == NULL);
++
++  /* This is expected to fail because of the missing dependency.  */
++  puts ("info: attempting to load tst-dlopenfailmod1.so");
++  TEST_VERIFY (dlopen ("tst-dlopenfailmod1.so", RTLD_LAZY) == NULL);
++  const char *message = dlerror ();
++  TEST_COMPARE_STRING (message,
++                       "tst-dlopenfail-missingmod.so:"
++                       " cannot open shared object file:"
++                       " No such file or directory");
++
++  /* Open a small shared object.  With a dangling GL (dl_initfirst)
++     pointer, this is likely to crash because there is no longer any
++     mapped text segment there (bug 25396).  */
++
++  puts ("info: attempting to load tst-dlopenfailmod3.so");
++  xdlclose (xdlopen ("tst-dlopenfailmod3.so", RTLD_NOW));
++
++  return 0;
++}
++
++/* Do not perturb the dangling link map.  With M_PERTURB, the link map
++   appears to have l_init_called set, so there are no constructor
++   calls and no crashes.  */
++#define TEST_NO_MALLOPT
++#include <support/test-driver.c>
+diff --git a/elf/tst-dlopenfailmod3.c b/elf/tst-dlopenfailmod3.c
+new file mode 100644
+index 0000000000000000..636e971264292110
+--- /dev/null
++++ b/elf/tst-dlopenfailmod3.c
+@@ -0,0 +1,17 @@
++/* Empty module for the tst-dlopenfail-2 test.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */

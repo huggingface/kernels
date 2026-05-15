@@ -1,0 +1,332 @@
+commit 6f47401bd5fc71209219779a0426170a9a7395b0
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Fri Mar 22 11:14:08 2019 +0100
+
+    S390: Add arch13 strstr ifunc variant.
+    
+    This patch introduces the new arch13 ifunc variant for strstr.
+    For needles longer than 9 charachters it is relying on the common-code
+    implementation.  For shorter needles it is using the new vstrs instruction
+    which is able to search a substring within a vector register.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/Makefile (sysdep_routines): Add strstr-arch13.
+            * sysdeps/s390/ifunc-strstr.h (HAVE_STRSTR_ARCH13, STRSTR_ARCH13,
+            STRSTR_Z13_ONLY_USED_AS_FALLBACK, HAVE_STRSTR_IFUNC_AND_ARCH13_SUPPORT):
+            New defines.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Add ifunc variant for arch13 strstr.
+            * sysdeps/s390/strstr-arch13.S: New file.
+            * sysdeps/s390/strstr-vx.c: Omit GI symbol for z13 strstr ifunc variant
+            if it is only used as fallback.
+            * sysdeps/s390/strstr.c (strstr): Add arch13 variant in ifunc selector.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 3f7de6613c343819..7287b1833da9500f 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -35,7 +35,7 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   memcmp memcmp-z900 \
+ 		   mempcpy memcpy memcpy-z900 \
+ 		   memmove memmove-c \
+-		   strstr strstr-vx strstr-c \
++		   strstr strstr-arch13 strstr-vx strstr-c \
+ 		   memmem memmem-vx memmem-c \
+ 		   strlen strlen-vx strlen-c \
+ 		   strnlen strnlen-vx strnlen-c \
+diff --git a/sysdeps/s390/ifunc-strstr.h b/sysdeps/s390/ifunc-strstr.h
+index e6ccfd4e44a1a790..809184d425ad06b0 100644
+--- a/sysdeps/s390/ifunc-strstr.h
++++ b/sysdeps/s390/ifunc-strstr.h
+@@ -17,7 +17,7 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ #if defined USE_MULTIARCH && IS_IN (libc)		\
+-  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++  && ! defined HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
+ # define HAVE_STRSTR_IFUNC	1
+ #else
+ # define HAVE_STRSTR_IFUNC	0
+@@ -29,14 +29,32 @@
+ # define HAVE_STRSTR_IFUNC_AND_VX_SUPPORT 0
+ #endif
+ 
+-#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++#ifdef HAVE_S390_ARCH13_ASM_SUPPORT
++# define HAVE_STRSTR_IFUNC_AND_ARCH13_SUPPORT HAVE_STRSTR_IFUNC
++#else
++# define HAVE_STRSTR_IFUNC_AND_ARCH13_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
++# define STRSTR_DEFAULT		STRSTR_ARCH13
++# define HAVE_STRSTR_C		0
++# define HAVE_STRSTR_Z13	1
++# define STRSTR_Z13_ONLY_USED_AS_FALLBACK 1
++# define HAVE_STRSTR_ARCH13	1
++#elif defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
+ # define STRSTR_DEFAULT		STRSTR_Z13
+ # define HAVE_STRSTR_C		0
+ # define HAVE_STRSTR_Z13	1
++# define HAVE_STRSTR_ARCH13	HAVE_STRSTR_IFUNC_AND_ARCH13_SUPPORT
+ #else
+ # define STRSTR_DEFAULT		STRSTR_C
+ # define HAVE_STRSTR_C		1
+ # define HAVE_STRSTR_Z13	HAVE_STRSTR_IFUNC_AND_VX_SUPPORT
++# define HAVE_STRSTR_ARCH13	HAVE_STRSTR_IFUNC_AND_ARCH13_SUPPORT
++#endif
++
++#ifndef STRSTR_Z13_ONLY_USED_AS_FALLBACK
++# define STRSTR_Z13_ONLY_USED_AS_FALLBACK 0
+ #endif
+ 
+ #if HAVE_STRSTR_C
+@@ -50,3 +68,9 @@
+ #else
+ # define STRSTR_Z13		NULL
+ #endif
++
++#if HAVE_STRSTR_ARCH13
++# define STRSTR_ARCH13		__strstr_arch13
++#else
++# define STRSTR_ARCH13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index c24bfc95f2d7a22d..67a6a9c94afccd48 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -186,6 +186,10 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+ #if HAVE_STRSTR_IFUNC
+     IFUNC_IMPL (i, name, strstr,
++# if HAVE_STRSTR_ARCH13
++		IFUNC_IMPL_ADD (array, i, strstr,
++				dl_hwcap & HWCAP_S390_VXRS_EXT2, STRSTR_ARCH13)
++# endif
+ # if HAVE_STRSTR_Z13
+ 		IFUNC_IMPL_ADD (array, i, strstr,
+ 				dl_hwcap & HWCAP_S390_VX, STRSTR_Z13)
+diff --git a/sysdeps/s390/strstr-arch13.S b/sysdeps/s390/strstr-arch13.S
+new file mode 100644
+index 0000000000000000..929b026adfeba740
+--- /dev/null
++++ b/sysdeps/s390/strstr-arch13.S
+@@ -0,0 +1,179 @@
++/* Vector optimized 32/64 bit S/390 version of strstr.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <ifunc-strstr.h>
++#if HAVE_STRSTR_ARCH13
++# include "sysdep.h"
++# include "asm-syntax.h"
++	.text
++
++/* char *strstr (const char *haystack=r2, const char *needle=r3)
++   Locate a substring.  */
++ENTRY(STRSTR_ARCH13)
++	.machine "arch13"
++	.machinemode "zarch_nohighgprs"
++	lcbb	%r1,0(%r3),6
++	jo	.Lneedle_on_bb	/* Needle on block-boundary?  */
++	vl	%v18,0(%r3),6	/* Load needle.  */
++	vfenezb %v19,%v18,%v18	/* v19[7] contains the length of needle.  */
++.Lneedle_loaded:
++	vlgvb	%r4,%v19,7	/* Get index of zero or 16 if not found.  */
++	lghi	%r5,17		/* See below: min-skip-partial-match-index.  */
++	cgibe	%r4,0,0(%r14)	/* Test if needle is zero and return.  */
++
++	/* The vstrs instruction is able to handle needles up to a length of 16,
++	   but then we may have to load the next part of haystack with a
++	   small offset.  This will be slow - see examples:
++	   haystack =mmmmmmmmmmmmmmmm mmmmmmmmmmmmmmmmmm...mmmmmmmmmmmmmmmmmmma
++	   needle   =  mmmmmmmmmmmmmma0
++	   => needle_len=15; vstrs reports a partial match; haystack+=2
++	   haystack =mmmmmmmmmmmmmmmm mmmmmmmmmmmmmmmmmm...mmmmmmmmmmmmmmmmmmma
++	   needle   =        mmmmmmmma0000000
++	   => needle_len=9; vstrs reports a partial match; haystack+=8  */
++# if ! HAVE_STRSTR_Z13
++#  error The arch13 variant of strstr needs the z13 variant of strstr!
++# endif
++	clgfi	%r4,9
++	jh	STRSTR_Z13
++
++	/* In case of a partial match, the vstrs instruction returns the index
++	   of the partial match in a vector-register.  Then we have to
++	   reload the string at the "current-position plus this index" and run
++	   vstrs again in order to determine if it was a full match or no match.
++	   Transferring this index from vr to gr, compute the haystack-address
++	   and loading with vl is quite slow as all instructions have data
++	   dependencies.  Thus we assume, that a partial match is always at the
++	   first possible index and just load the next part of haystack from
++	   there instead of waiting until the correct index is computed:
++	   min-skip-partial-match-index = (16 - n_len) + 1  */
++	sgr	%r5,%r4
++
++.Lloop:
++	lcbb	%r1,0(%r2),6
++	jo	.Lloop_haystack_on_bb	/* Haystack on block-boundary?  */
++	vl	%v16,0(%r2)		/* Load next part of haystack.  */
++.Lloop_haystack_loaded:
++	/* Vector string search with zero search (cc=0 => no match).  */
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	jne	.Lloop_vstrs_nonzero_cc
++	lcbb	%r1,16(%r2),6		/* Next part of haystack.  */
++	jo	.Lloop_haystack_on_bb16
++	vl	%v16,16(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	jne	.Lloop_vstrs_nonzero_cc16
++	lcbb	%r1,32(%r2),6		/* Next part of haystack.  */
++	jo	.Lloop_haystack_on_bb32
++	vl	%v16,32(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	jne	.Lloop_vstrs_nonzero_cc32
++	lcbb	%r1,48(%r2),6		/* Next part of haystack.  */
++	jo	.Lloop_haystack_on_bb48
++	vl	%v16,48(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	jne	.Lloop_vstrs_nonzero_cc48
++	la	%r2,64(%r2)
++	j	.Lloop
++
++.Lloop_vstrs_nonzero_cc48:
++	la	%r2,16(%r2)
++.Lloop_vstrs_nonzero_cc32:
++	la	%r2,16(%r2)
++.Lloop_vstrs_nonzero_cc16:
++	la	%r2,16(%r2)
++.Lloop_vstrs_nonzero_cc:
++	jh	.Lend_match_found /* cc == 2 (full match)  */
++	jl	.Lend_no_match	/* cc == 1 (no match, end of string)  */
++	/* cc == 3 (partial match) See above: min-skip-partial-match-index!  */
++	lcbb	%r1,0(%r5,%r2),6
++	la	%r2,0(%r5,%r2)
++	jo	.Lloop_haystack_on_bb
++	vl	%v16,0(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++.Lloop_vstrs_nonzero_cc_loop:
++	jh	.Lend_match_found
++	jl	.Lend_no_match
++	la	%r2,0(%r5,%r2)
++	je	.Lloop
++	lcbb	%r1,0(%r2),6		/* Next part of haystack.  */
++	jo	.Lloop_haystack_on_bb
++	vl	%v16,0(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	jh	.Lend_match_found
++	jl	.Lend_no_match
++	la	%r2,0(%r5,%r2)
++	je	.Lloop
++	lcbb	%r1,0(%r2),6		/* Next part of haystack.  */
++	jo	.Lloop_haystack_on_bb
++	vl	%v16,0(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	jh	.Lend_match_found
++	jl	.Lend_no_match
++	la	%r2,0(%r5,%r2)
++	je	.Lloop
++	lcbb	%r1,0(%r2),6		/* Next part of haystack.  */
++	jo	.Lloop_haystack_on_bb
++	vl	%v16,0(%r2)
++	vstrs	%v20,%v16,%v18,%v19,0,2
++	j	.Lloop_vstrs_nonzero_cc_loop
++
++.Lend_no_match:
++	lghi	%r2,0
++	br	%r14
++.Lend_match_found:
++	vlgvb	%r4,%v20,7
++	la	%r2,0(%r4,%r2)
++	br	%r14
++
++.Lloop_haystack_on_bb48:
++	la	%r2,16(%r2)
++.Lloop_haystack_on_bb32:
++	la	%r2,16(%r2)
++.Lloop_haystack_on_bb16:
++	la	%r2,16(%r2)
++.Lloop_haystack_on_bb:
++	/* Haystack located on page-boundary.  */
++	ahi	%r1,-1		/* vll needs highest index instead of count.  */
++	vll	%v16,%r1,0(%r2)
++	vlvgb	%v21,%r1,7
++	vfenezb	%v17,%v16,%v16	/* Search zero in loaded haystack bytes.  */
++	veclb	%v17,%v21		/* Zero index <= loaded byte index?  */
++	jle	.Lloop_haystack_loaded	/* -> v16 contains full haystack.  */
++	vl	%v16,0(%r2)	/* Load haystack beyond page boundary.  */
++	j	.Lloop_haystack_loaded
++
++.Lneedle_on_bb:
++	/* Needle located on page-boundary.  */
++	ahi	%r1,-1		/* vll needs highest index instead of count.  */
++	vll	%v18,%r1,0(%r3)
++	vlvgb	%v21,%r1,7
++	vfenezb	%v19,%v18,%v18	/* Search zero in loaded needle bytes.  */
++	veclb	%v19,%v21	/* Zero index <= max loaded byte index?  */
++	jle	.Lneedle_loaded	/* -> v18 contains full needle.  */
++	vl	%v16,0(%r3)	/* Load needle beyond page boundary.  */
++	vfenezb	%v19,%v18,%v18
++	j	.Lneedle_loaded
++END(STRSTR_ARCH13)
++
++# if ! HAVE_STRSTR_IFUNC
++strong_alias (STRSTR_ARCH13, strstr)
++# endif
++
++# if STRSTR_Z13_ONLY_USED_AS_FALLBACK && defined SHARED && IS_IN (libc)
++strong_alias (STRSTR_ARCH13, __GI_strstr)
++# endif
++#endif
+diff --git a/sysdeps/s390/strstr-vx.c b/sysdeps/s390/strstr-vx.c
+index effae9d5eb7d2fb1..f69159ffc198b10b 100644
+--- a/sysdeps/s390/strstr-vx.c
++++ b/sysdeps/s390/strstr-vx.c
+@@ -19,11 +19,11 @@
+ #include <ifunc-strstr.h>
+ 
+ #if HAVE_STRSTR_Z13
+-# if HAVE_STRSTR_IFUNC
++# if HAVE_STRSTR_IFUNC || STRSTR_Z13_ONLY_USED_AS_FALLBACK
+ #  define STRSTR STRSTR_Z13
+ #  if defined SHARED && IS_IN (libc)
+ #   undef libc_hidden_builtin_def
+-#   if HAVE_STRSTR_C
++#   if HAVE_STRSTR_C || STRSTR_Z13_ONLY_USED_AS_FALLBACK
+ #    define libc_hidden_builtin_def(name)
+ #   else
+ #    define libc_hidden_builtin_def(name)		\
+diff --git a/sysdeps/s390/strstr.c b/sysdeps/s390/strstr.c
+index f8432349a7254cc6..d2969fd0a68fadbf 100644
+--- a/sysdeps/s390/strstr.c
++++ b/sysdeps/s390/strstr.c
+@@ -32,8 +32,14 @@ extern __typeof (__redirect_strstr) STRSTR_C attribute_hidden;
+ extern __typeof (__redirect_strstr) STRSTR_Z13 attribute_hidden;
+ # endif
+ 
++# if HAVE_STRSTR_ARCH13
++extern __typeof (__redirect_strstr) STRSTR_ARCH13 attribute_hidden;
++# endif
++
+ s390_libc_ifunc_expr (__redirect_strstr, strstr,
+-		      (HAVE_STRSTR_Z13 && (hwcap & HWCAP_S390_VX))
++		      (HAVE_STRSTR_ARCH13 && (hwcap & HWCAP_S390_VXRS_EXT2))
++		      ? STRSTR_ARCH13
++		      : (HAVE_STRSTR_Z13 && (hwcap & HWCAP_S390_VX))
+ 		      ? STRSTR_Z13
+ 		      : STRSTR_DEFAULT
+ 		      )

@@ -1,0 +1,86 @@
+commit 211a30a92b72a18ea4caa35ed503b70bc644923e
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Mon Nov 8 19:11:51 2021 +0000
+
+    Fix memmove call in vfprintf-internal.c:group_number
+    
+    A recent GCC mainline change introduces errors of the form:
+    
+    vfprintf-internal.c: In function 'group_number':
+    vfprintf-internal.c:2093:15: error: 'memmove' specified bound between 9223372036854775808 and 18446744073709551615 exceeds maximum object size 9223372036854775807 [-Werror=stringop-overflow=]
+     2093 |               memmove (w, s, (front_ptr -s) * sizeof (CHAR_T));
+          |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    This is a genuine bug in the glibc code: s > front_ptr is always true
+    at this point in the code, and the intent is clearly for the
+    subtraction to be the other way round.  The other arguments to the
+    memmove call here also appear to be wrong; w and s point just *after*
+    the destination and source for copying the rest of the number, so the
+    size needs to be subtracted to get appropriate pointers for the
+    copying.  Adjust the memmove call to conform to the apparent intent of
+    the code, so fixing the -Wstringop-overflow error.
+    
+    Now, if the original code were ever executed, a buffer overrun would
+    result.  However, I believe this code (introduced in commit
+    edc1686af0c0fc2eb535f1d38cdf63c1a5a03675, "vfprintf: Reuse work_buffer
+    in group_number", so in glibc 2.26) is unreachable in prior glibc
+    releases (so there is no need for a bug in Bugzilla, no need to
+    consider any backports unless someone wants to build older glibc
+    releases with GCC 12 and no possibility of this buffer overrun
+    resulting in a security issue).
+    
+    work_buffer is 1000 bytes / 250 wide characters.  This case is only
+    reachable if an initial part of the number, plus a grouped copy of the
+    rest of the number, fail to fit in that space; that is, if the grouped
+    number fails to fit in the space.  In the wide character case,
+    grouping is always one wide character, so even with a locale (of which
+    there aren't any in glibc) grouping every digit, a number would need
+    to occupy at least 125 wide characters to overflow, and a 64-bit
+    integer occupies at most 23 characters in octal including a leading 0.
+    In the narrow character case, the multibyte encoding of the grouping
+    separator would need to be at least 42 bytes to overflow, again
+    supposing grouping every digit, but MB_LEN_MAX is 16.  So even if we
+    admit the case of artificially constructed locales not shipped with
+    glibc, given that such a locale would need to use one of the character
+    sets supported by glibc, this code cannot be reached at present.  (And
+    POSIX only actually specifies the ' flag for grouping for decimal
+    output, though glibc acts on it for other bases as well.)
+    
+    With binary output (if you consider use of grouping there to be
+    valid), you'd need a 15-byte multibyte character for overflow; I don't
+    know if any supported character set has such a character (if, again,
+    we admit constructed locales using grouping every digit and a grouping
+    separator chosen to have a multibyte encoding as long as possible, as
+    well as accepting use of grouping with binary), but given that we have
+    this code at all (clearly it's not *correct*, or in accordance with
+    the principle of avoiding arbitrary limits, to skip grouping on
+    running out of internal space like that), I don't think it should need
+    any further changes for binary printf support to go in.
+    
+    On the other hand, support for large sizes of _BitInt in printf (see
+    the N2858 proposal) *would* require something to be done about such
+    arbitrary limits (presumably using dynamic allocation in printf again,
+    for sufficiently large _BitInt arguments only - currently only
+    floating-point uses dynamic allocation, and, as previously discussed,
+    that could actually be replaced by bounded allocation given smarter
+    code).
+    
+    Tested with build-many-glibcs.py for aarch64-linux-gnu (GCC mainline).
+    Also tested natively for x86_64.
+    
+    (cherry picked from commit db6c4935fae6005d46af413b32aa92f4f6059dce)
+
+diff --git a/stdio-common/vfprintf.c b/stdio-common/vfprintf.c
+index 6b83ba91a12cdcd5..2d434ba45a67911e 100644
+--- a/stdio-common/vfprintf.c
++++ b/stdio-common/vfprintf.c
+@@ -2101,7 +2101,8 @@ group_number (CHAR_T *front_ptr, CHAR_T *w, CHAR_T *rear_ptr,
+ 	    copy_rest:
+ 	      /* No further grouping to be done.  Copy the rest of the
+ 		 number.  */
+-	      memmove (w, s, (front_ptr -s) * sizeof (CHAR_T));
++	      w -= s - front_ptr;
++	      memmove (w, front_ptr, (s - front_ptr) * sizeof (CHAR_T));
+ 	      break;
+ 	    }
+ 	  else if (*grouping != '\0')

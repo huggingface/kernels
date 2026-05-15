@@ -1,0 +1,233 @@
+From 299210c1fa67e2dfb564475986fce11cd33db9ad Mon Sep 17 00:00:00 2001
+From: Florian Weimer <fweimer@redhat.com>
+Date: Thu, 16 Jul 2020 16:12:46 +0200
+Subject: [PATCH 01/11] nss_files: Consolidate file opening in
+ __nss_files_fopen
+
+Tested-by: Carlos O'Donell <carlos@redhat.com>
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+---
+ include/nss_files.h              | 28 ++++++++++++++++++++++++
+ nss/Makefile                     |  2 +-
+ nss/Versions                     |  1 +
+ nss/nss_files/files-XXX.c        |  3 ++-
+ nss/nss_files/files-alias.c      |  5 +++--
+ nss/nss_files/files-initgroups.c |  6 ++---
+ nss/nss_files/files-netgrp.c     |  5 ++---
+ nss/nss_files_fopen.c            | 47 ++++++++++++++++++++++++++++++++++++++++
+ 8 files changed, 86 insertions(+), 11 deletions(-)
+ create mode 100644 include/nss_files.h
+ create mode 100644 nss/nss_files_fopen.c
+
+diff -rupN a/include/nss_files.h b/include/nss_files.h
+--- a/include/nss_files.h	1969-12-31 19:00:00.000000000 -0500
++++ b/include/nss_files.h	2020-09-11 21:28:42.027034988 -0400
+@@ -0,0 +1,28 @@
++/* Internal routines for nss_files.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#ifndef _NSS_FILES_H
++#define _NSS_FILES_H
++
++#include <stdio.h>
++
++/* Open PATH for reading, as a data source for nss_files.  */
++FILE *__nss_files_fopen (const char *path);
++libc_hidden_proto (__nss_files_fopen)
++
++#endif /* _NSS_FILES_H */
+diff -rupN a/nss/Makefile b/nss/Makefile
+--- a/nss/Makefile	2020-09-11 21:24:05.569544894 -0400
++++ b/nss/Makefile	2020-09-11 21:28:42.035035292 -0400
+@@ -28,7 +28,7 @@ headers			:= nss.h
+ routines		= nsswitch getnssent getnssent_r digits_dots \
+ 			  valid_field valid_list_field rewrite_field \
+ 			  $(addsuffix -lookup,$(databases)) \
+-			  compat-lookup nss_hash
++			  compat-lookup nss_hash nss_files_fopen
+ 
+ # These are the databases that go through nss dispatch.
+ # Caution: if you add a database here, you must add its real name
+diff -rupN a/nss/Versions b/nss/Versions
+--- a/nss/Versions	2020-09-11 21:24:04.852517683 -0400
++++ b/nss/Versions	2020-09-11 21:28:42.041035519 -0400
+@@ -21,6 +21,7 @@ libc {
+     __nss_passwd_lookup2; __nss_group_lookup2; __nss_hosts_lookup2;
+     __nss_services_lookup2; __nss_next2; __nss_lookup;
+     __nss_hash; __nss_database_lookup2;
++    __nss_files_fopen;
+   }
+ }
+ 
+diff -rupN a/nss/nss_files/files-XXX.c b/nss/nss_files/files-XXX.c
+--- a/nss/nss_files/files-XXX.c	2018-08-01 01:10:47.000000000 -0400
++++ b/nss/nss_files/files-XXX.c	2020-09-11 21:28:42.049035823 -0400
+@@ -22,6 +22,7 @@
+ #include <fcntl.h>
+ #include <libc-lock.h>
+ #include "nsswitch.h"
++#include <nss_files.h>
+ 
+ #include <kernel-features.h>
+ 
+@@ -74,7 +75,7 @@ internal_setent (FILE **stream)
+ 
+   if (*stream == NULL)
+     {
+-      *stream = fopen (DATAFILE, "rce");
++      *stream = __nss_files_fopen (DATAFILE);
+ 
+       if (*stream == NULL)
+ 	status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+diff -rupN a/nss/nss_files/files-alias.c b/nss/nss_files/files-alias.c
+--- a/nss/nss_files/files-alias.c	2020-09-11 21:24:02.004409596 -0400
++++ b/nss/nss_files/files-alias.c	2020-09-11 21:28:42.055036051 -0400
+@@ -29,6 +29,7 @@
+ #include <kernel-features.h>
+ 
+ #include "nsswitch.h"
++#include <nss_files.h>
+ 
+ /* Locks the static variables in this file.  */
+ __libc_lock_define_initialized (static, lock)
+@@ -47,7 +48,7 @@ internal_setent (FILE **stream)
+ 
+   if (*stream == NULL)
+     {
+-      *stream = fopen ("/etc/aliases", "rce");
++      *stream = __nss_files_fopen ("/etc/aliases");
+ 
+       if (*stream == NULL)
+ 	status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+@@ -213,7 +214,7 @@ get_next_alias (FILE *stream, const char
+ 
+ 		      first_unused = cp;
+ 
+-		      listfile = fopen (&cp[9], "rce");
++		      listfile = __nss_files_fopen (&cp[9]);
+ 		      /* If the file does not exist we simply ignore
+ 			 the statement.  */
+ 		      if (listfile != NULL
+diff -rupN a/nss/nss_files/files-initgroups.c b/nss/nss_files/files-initgroups.c
+--- a/nss/nss_files/files-initgroups.c	2018-08-01 01:10:47.000000000 -0400
++++ b/nss/nss_files/files-initgroups.c	2020-09-11 22:08:25.130740010 -0400
+@@ -25,22 +25,20 @@
+ #include <stdbool.h>
+ #include <stdlib.h>
+ #include <scratch_buffer.h>
++#include <nss_files.h>
+ 
+ enum nss_status
+ _nss_files_initgroups_dyn (const char *user, gid_t group, long int *start,
+ 			   long int *size, gid_t **groupsp, long int limit,
+ 			   int *errnop)
+ {
+-  FILE *stream = fopen ("/etc/group", "rce");
++  FILE *stream = __nss_files_fopen ("/etc/group");
+   if (stream == NULL)
+     {
+       *errnop = errno;
+       return *errnop == ENOMEM ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+     }
+ 
+-  /* No other thread using this stream.  */
+-  __fsetlocking (stream, FSETLOCKING_BYCALLER);
+-
+   char *line = NULL;
+   size_t linelen = 0;
+   enum nss_status status = NSS_STATUS_SUCCESS;
+diff -rupN a/nss/nss_files/files-netgrp.c b/nss/nss_files/files-netgrp.c
+--- a/nss/nss_files/files-netgrp.c	2018-08-01 01:10:47.000000000 -0400
++++ b/nss/nss_files/files-netgrp.c	2020-09-11 21:28:42.068036544 -0400
+@@ -26,6 +26,7 @@
+ #include <string.h>
+ #include "nsswitch.h"
+ #include "netgroup.h"
++#include <nss_files.h>
+ 
+ #define DATAFILE	"/etc/netgroup"
+ 
+@@ -62,7 +63,7 @@ _nss_files_setnetgrent (const char *grou
+     return NSS_STATUS_UNAVAIL;
+ 
+   /* Find the netgroups file and open it.  */
+-  fp = fopen (DATAFILE, "rce");
++  fp = __nss_files_fopen (DATAFILE);
+   if (fp == NULL)
+     status = errno == EAGAIN ? NSS_STATUS_TRYAGAIN : NSS_STATUS_UNAVAIL;
+   else
+@@ -76,8 +77,6 @@ _nss_files_setnetgrent (const char *grou
+       status = NSS_STATUS_NOTFOUND;
+       result->cursor = result->data;
+ 
+-      __fsetlocking (fp, FSETLOCKING_BYCALLER);
+-
+       while (!feof_unlocked (fp))
+ 	{
+ 	  ssize_t curlen = getline (&line, &line_len, fp);
+diff -rupN a/nss/nss_files_fopen.c b/nss/nss_files_fopen.c
+--- a/nss/nss_files_fopen.c	1969-12-31 19:00:00.000000000 -0500
++++ b/nss/nss_files_fopen.c	2020-09-11 21:28:42.074036771 -0400
+@@ -0,0 +1,47 @@
++/* Open an nss_files database file.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <nss_files.h>
++
++#include <errno.h>
++#include <stdio_ext.h>
++
++FILE *
++__nss_files_fopen (const char *path)
++{
++  FILE *fp = fopen (path, "rce");
++  if (fp == NULL)
++    return NULL;
++
++  /* The stream is not shared across threads.  */
++  __fsetlocking (fp, FSETLOCKING_BYCALLER);
++
++  /* This tells libio that the file is seekable, and that fp->_offset
++     is correct, ensuring that __ftello64 is efficient (bug 26257).  */
++  if (__fseeko64 (fp, 0, SEEK_SET) < 0)
++    {
++      /* nss_files requires seekable files, to deal with repeated
++         reads of the same line after reporting ERANGE.  */
++      fclose (fp);
++      __set_errno (ESPIPE);
++      return NULL;
++    }
++
++  return fp;
++}
++libc_hidden_def (__nss_files_fopen)

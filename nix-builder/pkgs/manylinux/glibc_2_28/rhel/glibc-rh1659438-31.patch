@@ -1,0 +1,264 @@
+commit 5d2ec20a997b87c1667e0e71b3ff1e9df96eac15
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:15 2018 +0100
+
+    S390: Refactor strcspn ifunc handling.
+    
+    The ifunc handling for strcspn is adjusted in order to omit ifunc
+    variants if those will never be used as the minimum architecture level
+    already supports newer CPUs by default.
+    Glibc internal calls will then also use the "newer" ifunc variant.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove strcspn variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add strcspn variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for strcspn.
+            * sysdeps/s390/multiarch/strcspn-c.c: Move to ...
+            * sysdeps/s390/strcspn-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strcspn-vx.S: Move to ...
+            * sysdeps/s390/strcspn-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/strcspn.c: Move to ...
+            * sysdeps/s390/strcspn.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-strcspn.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index a21fa7507b1d64a1..092d55826fbd15a5 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -51,5 +51,6 @@ sysdep_routines += bzero memset memset-z900 \
+ 		   strchrnul strchrnul-vx strchrnul-c \
+ 		   strrchr strrchr-vx strrchr-c \
+ 		   strspn strspn-vx strspn-c \
+-		   strpbrk strpbrk-vx strpbrk-c
++		   strpbrk strpbrk-vx strpbrk-c \
++		   strcspn strcspn-vx strcspn-c
+ endif
+diff --git a/sysdeps/s390/ifunc-strcspn.h b/sysdeps/s390/ifunc-strcspn.h
+new file mode 100644
+index 0000000000000000..9b7032509a2fb9a8
+--- /dev/null
++++ b/sysdeps/s390/ifunc-strcspn.h
+@@ -0,0 +1,52 @@
++/* strcspn variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_STRCSPN_IFUNC	1
++#else
++# define HAVE_STRCSPN_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_STRCSPN_IFUNC_AND_VX_SUPPORT HAVE_STRCSPN_IFUNC
++#else
++# define HAVE_STRCSPN_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define STRCSPN_DEFAULT	STRCSPN_Z13
++# define HAVE_STRCSPN_C		0
++# define HAVE_STRCSPN_Z13	1
++#else
++# define STRCSPN_DEFAULT	STRCSPN_C
++# define HAVE_STRCSPN_C		1
++# define HAVE_STRCSPN_Z13	HAVE_STRCSPN_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_STRCSPN_C
++# define STRCSPN_C		__strcspn_c
++#else
++# define STRCSPN_C		NULL
++#endif
++
++#if HAVE_STRCSPN_Z13
++# define STRCSPN_Z13		__strcspn_vx
++#else
++# define STRCSPN_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 1a3fed9fc88012d1..1578f21af4a1bd06 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),string)
+-sysdep_routines += strcspn strcspn-vx strcspn-c \
+-		   memchr memchr-vx \
++sysdep_routines += memchr memchr-vx \
+ 		   rawmemchr rawmemchr-vx rawmemchr-c \
+ 		   memccpy memccpy-vx memccpy-c \
+ 		   memrchr memrchr-vx memrchr-c
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 8e23416730f8a8d5..2d48c99c8d5663fe 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -41,6 +41,7 @@
+ #include <ifunc-strrchr.h>
+ #include <ifunc-strspn.h>
+ #include <ifunc-strpbrk.h>
++#include <ifunc-strcspn.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -359,6 +360,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_STRPBRK_IFUNC  */
+ 
++#if HAVE_STRCSPN_IFUNC
++    IFUNC_IMPL (i, name, strcspn,
++# if HAVE_STRCSPN_Z13
++		IFUNC_IMPL_ADD (array, i, strcspn,
++				dl_hwcap & HWCAP_S390_VX, STRCSPN_Z13)
++# endif
++# if HAVE_STRCSPN_C
++		IFUNC_IMPL_ADD (array, i, strcspn, 1, STRCSPN_C)
++# endif
++		)
++#endif /* HAVE_STRCSPN_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -397,7 +410,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   IFUNC_VX_IMPL (wcspbrk);
+ 
+-  IFUNC_VX_IMPL (strcspn);
+   IFUNC_VX_IMPL (wcscspn);
+ 
+   IFUNC_VX_IMPL (memchr);
+diff --git a/sysdeps/s390/multiarch/strcspn-c.c b/sysdeps/s390/strcspn-c.c
+similarity index 73%
+rename from sysdeps/s390/multiarch/strcspn-c.c
+rename to sysdeps/s390/strcspn-c.c
+index 7b454f5b56077abc..9f51f92bdbd49a67 100644
+--- a/sysdeps/s390/multiarch/strcspn-c.c
++++ b/sysdeps/s390/strcspn-c.c
+@@ -16,13 +16,17 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define STRCSPN  __strcspn_c
+-# ifdef SHARED
+-#  undef libc_hidden_builtin_def
+-#  define libc_hidden_builtin_def(name)				\
+-     __hidden_ver1 (__strcspn_c, __GI_strcspn, __strcspn_c);
+-# endif /* SHARED */
++#include <ifunc-strcspn.h>
++
++#if HAVE_STRCSPN_C
++# if HAVE_STRCSPN_IFUNC
++#  define STRCSPN STRCSPN_C
++#  if defined SHARED && IS_IN (libc)
++#   undef libc_hidden_builtin_def
++#   define libc_hidden_builtin_def(name)			\
++  __hidden_ver1 (__strcspn_c, __GI_strcspn, __strcspn_c);
++#  endif
++# endif
+ 
+ # include <string/strcspn.c>
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++#endif
+diff --git a/sysdeps/s390/multiarch/strcspn-vx.S b/sysdeps/s390/strcspn-vx.S
+similarity index 97%
+rename from sysdeps/s390/multiarch/strcspn-vx.S
+rename to sysdeps/s390/strcspn-vx.S
+index ea1668742bd1c7ff..ff5b1be549e6e210 100644
+--- a/sysdeps/s390/multiarch/strcspn-vx.S
++++ b/sysdeps/s390/strcspn-vx.S
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strcspn.h>
++
++#if HAVE_STRCSPN_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -58,7 +60,7 @@
+ 			otherwise =0;
+    r9:  loaded byte count of vlbb reject-string
+ */
+-ENTRY(__strcspn_vx)
++ENTRY(STRCSPN_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -277,5 +279,14 @@ ENTRY(__strcspn_vx)
+ 	vlgvg	%r8,%v31,0
+ 	vlgvg	%r9,%v31,1
+ 	br	%r14
+-END(__strcspn_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++END(STRCSPN_Z13)
++
++# if ! HAVE_STRCSPN_IFUNC
++strong_alias (STRCSPN_Z13, strcspn)
++# endif
++
++# if ! HAVE_STRCSPN_C && defined SHARED && IS_IN (libc)
++strong_alias (STRCSPN_Z13, __GI_strcspn)
++# endif
++
++#endif /* HAVE_STRCSPN_Z13  */
+diff --git a/sysdeps/s390/multiarch/strcspn.c b/sysdeps/s390/strcspn.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/strcspn.c
+rename to sysdeps/s390/strcspn.c
+index 418ffcdded76fe50..a3f35d39c50dd5e5 100644
+--- a/sysdeps/s390/multiarch/strcspn.c
++++ b/sysdeps/s390/strcspn.c
+@@ -16,7 +16,9 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-strcspn.h>
++
++#if HAVE_STRCSPN_IFUNC
+ # define strcspn __redirect_strcspn
+ /* Omit the strcspn inline definitions because it would redefine strcspn.  */
+ # define __NO_STRING_INLINES
+@@ -24,8 +26,17 @@
+ # undef strcspn
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc2_redirected (__redirect_strcspn, __strcspn, strcspn)
++# if HAVE_STRCSPN_C
++extern __typeof (__redirect_strcspn) STRCSPN_C attribute_hidden;
++# endif
++
++# if HAVE_STRCSPN_Z13
++extern __typeof (__redirect_strcspn) STRCSPN_Z13 attribute_hidden;
++# endif
+ 
+-#else
+-# include <string/strcspn.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++s390_libc_ifunc_expr (__redirect_strcspn, strcspn,
++		      (HAVE_STRCSPN_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? STRCSPN_Z13
++		      : STRCSPN_DEFAULT
++		      )
++#endif /* HAVE_STRCSPN_IFUNC  */

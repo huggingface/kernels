@@ -1,0 +1,213 @@
+commit 765de945efc5d5602999b2999fe8abdf04881370
+Author: Anton Blanchard <anton@ozlabs.org>
+Date:   Thu May 14 21:49:16 2020 +1000
+
+    powerpc: Optimized rawmemchr for POWER9
+    
+    This version uses vector instructions and is up to 60% faster on medium
+    matches and up to 90% faster on long matches, compared to the POWER7
+    version. A few examples:
+    
+                                __rawmemchr_power9  __rawmemchr_power7
+    Length   32, alignment  0:   2.27566             3.77765
+    Length   64, alignment  2:   2.46231             3.51064
+    Length 1024, alignment  0:  17.3059             32.6678
+
+diff --git a/sysdeps/powerpc/powerpc64/le/power9/rawmemchr.S b/sysdeps/powerpc/powerpc64/le/power9/rawmemchr.S
+new file mode 100644
+index 0000000000000000..9d0276c9315af5c8
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/le/power9/rawmemchr.S
+@@ -0,0 +1,107 @@
++/* Optimized rawmemchr implementation for PowerPC64/POWER9.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <sysdep.h>
++
++#ifndef RAWMEMCHR
++# define RAWMEMCHR __rawmemchr
++#endif
++
++/* Implements the function
++
++   int [r3] rawmemchr (void *s [r3], int c [r4])
++
++   The implementation can load bytes past a matching byte, but only
++   up to the next 16B boundary, so it never crosses a page.  */
++
++.machine power9
++ENTRY_TOCLESS (RAWMEMCHR, 4)
++	CALL_MCOUNT 2
++
++	xori	r5,r4,0xff
++
++	mtvsrd	v18+32,r4	/* matching char in v18  */
++	mtvsrd	v19+32,r5	/* non matching char in v19  */
++
++	vspltb	v18,v18,7	/* replicate  */
++	vspltb	v19,v19,7	/* replicate  */
++
++	neg	r5,r3
++	rldicl	r9,r5,0,60	/* How many bytes to get source 16B aligned?  */
++
++	/* Align data and fill bytes not loaded with non matching char  */
++	lvx	v0,0,r3
++	lvsr	v1,0,r3
++	vperm	v0,v19,v0,v1
++
++	vcmpequb. v6,v0,v18	/* 0xff if byte matches, 0x00 otherwise  */
++	beq	cr6,L(aligned)
++
++	vctzlsbb r0,v6
++	add	r3,r3,r0
++	blr
++
++L(aligned):
++	add	r3,r3,r9
++
++L(loop):
++	lxv	v0+32,0(r3)
++	vcmpequb. v6,v0,v18	/* 0xff if byte matches, 0x00 otherwise  */
++	bne	cr6,L(tail1)
++
++	lxv	v0+32,16(r3)
++	vcmpequb. v6,v0,v18	/* 0xff if byte matches, 0x00 otherwise  */
++	bne	cr6,L(tail2)
++
++	lxv	v0+32,32(r3)
++	vcmpequb. v6,v0,v18	/* 0xff if byte matches, 0x00 otherwise  */
++	bne	cr6,L(tail3)
++
++	lxv	v0+32,48(r3)
++	vcmpequb. v6,v0,v18	/* 0xff if byte matches, 0x00 otherwise  */
++	bne	cr6,L(tail4)
++
++	addi	r3,r3,64
++	b	L(loop)
++
++L(tail1):
++	vctzlsbb r0,v6
++	add	r3,r3,r0
++	blr
++
++L(tail2):
++	vctzlsbb r0,v6
++	add	r3,r3,r0
++	addi	r3,r3,16
++	blr
++
++L(tail3):
++	vctzlsbb r0,v6
++	add	r3,r3,r0
++	addi	r3,r3,32
++	blr
++
++L(tail4):
++	vctzlsbb r0,v6
++	add	r3,r3,r0
++	addi	r3,r3,48
++	blr
++
++END (RAWMEMCHR)
++weak_alias (__rawmemchr,rawmemchr)
++libc_hidden_builtin_def (__rawmemchr)
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/Makefile b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+index cada6b19bf3c8fab..1a8ef5fb73c3b0db 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/Makefile
++++ b/sysdeps/powerpc/powerpc64/multiarch/Makefile
+@@ -32,7 +32,8 @@ sysdep_routines += memcpy-power8-cached memcpy-power7 memcpy-a2 memcpy-power6 \
+ 		   strncase-power8
+ 
+ ifneq (,$(filter %le,$(config-machine)))
+-sysdep_routines += strcmp-power9 strncmp-power9 strcpy-power9 stpcpy-power9
++sysdep_routines += strcmp-power9 strncmp-power9 strcpy-power9 stpcpy-power9 \
++		   rawmemchr-power9
+ endif
+ CFLAGS-strncase-power7.c += -mcpu=power7 -funroll-loops
+ CFLAGS-strncase_l-power7.c += -mcpu=power7 -funroll-loops
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+index b0abc6b61dc15f19..297935863e44c0e1 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/ifunc-impl-list.c
+@@ -216,6 +216,11 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/powerpc/powerpc64/multiarch/rawmemchr.c.  */
+   IFUNC_IMPL (i, name, rawmemchr,
++#ifdef __LITTLE_ENDIAN__
++	      IFUNC_IMPL_ADD (array, i, rawmemchr,
++			      hwcap2 & PPC_FEATURE2_ARCH_3_00,
++			      __rawmemchr_power9)
++#endif
+ 	      IFUNC_IMPL_ADD (array, i, rawmemchr,
+ 			      hwcap & PPC_FEATURE_HAS_VSX,
+ 			      __rawmemchr_power7)
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/rawmemchr-power9.S b/sysdeps/powerpc/powerpc64/multiarch/rawmemchr-power9.S
+new file mode 100644
+index 0000000000000000..bac0a9090e7a07f8
+--- /dev/null
++++ b/sysdeps/powerpc/powerpc64/multiarch/rawmemchr-power9.S
+@@ -0,0 +1,21 @@
++/* Optimized rawmemchr implementation for PowerPC64/POWER9.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#define RAWMEMCHR __rawmemchr_power9
++
++#include <sysdeps/powerpc/powerpc64/le/power9/rawmemchr.S>
+diff --git a/sysdeps/powerpc/powerpc64/multiarch/rawmemchr.c b/sysdeps/powerpc/powerpc64/multiarch/rawmemchr.c
+index 02bac49b53d52411..2a7ae5a1ed02e556 100644
+--- a/sysdeps/powerpc/powerpc64/multiarch/rawmemchr.c
++++ b/sysdeps/powerpc/powerpc64/multiarch/rawmemchr.c
+@@ -24,13 +24,21 @@
+ 
+ extern __typeof (__rawmemchr) __rawmemchr_ppc attribute_hidden;
+ extern __typeof (__rawmemchr) __rawmemchr_power7 attribute_hidden;
++# ifdef __LITTLE_ENDIAN__
++extern __typeof (__rawmemchr) __rawmemchr_power9 attribute_hidden;
++# endif
++
+ # undef __rawmemchr
+ 
+ /* Avoid DWARF definition DIE on ifunc symbol so that GDB can handle
+    ifunc symbol properly.  */
+ libc_ifunc_redirected (__redirect___rawmemchr, __rawmemchr,
+-		       (hwcap & PPC_FEATURE_HAS_VSX)
+-		       ? __rawmemchr_power7
++# ifdef __LITTLE_ENDIAN__
++		       (hwcap2 & PPC_FEATURE2_ARCH_3_00)
++		       ? __rawmemchr_power9 :
++# endif
++		         (hwcap & PPC_FEATURE_HAS_VSX)
++		         ? __rawmemchr_power7
+ 		       : __rawmemchr_ppc);
+ 
+ weak_alias (__rawmemchr, rawmemchr)

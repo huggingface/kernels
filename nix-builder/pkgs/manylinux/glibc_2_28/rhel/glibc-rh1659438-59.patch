@@ -1,0 +1,195 @@
+commit a899a5512f618d5c4093a2d65e8dee07c791b0ab
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Fri Mar 22 11:14:08 2019 +0100
+
+    S390: Add configure check to detect support for arch13.
+    
+    Add two configure checks which detect if arch13 is supported
+    by the assembler at all - by explicitely setting the machine -
+    and if it is supported with default settings.
+    
+    ChangeLog:
+    
+            * config.h.in (HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT,
+            HAVE_S390_ARCH13_ASM_SUPPORT): New undefine.
+            * sysdeps/s390/configure.ac: Add checks for arch13 support.
+            * sysdeps/s390/configure: Regenerated.
+
+diff --git a/config.h.in b/config.h.in
+index 422a6036ab16e3b6..f63f6c8442914aa1 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -71,6 +71,9 @@
+ /* Define if assembler supports z13 zarch instructions as default on S390.  */
+ #undef  HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
+ 
++/* Define if assembler supports arch13 zarch instruction as default on S390.  */
++#undef  HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT
++
+ /* Define if assembler supports vector instructions on S390.  */
+ #undef  HAVE_S390_VX_ASM_SUPPORT
+ 
+@@ -78,6 +81,9 @@
+    on S390.  */
+ #undef  HAVE_S390_VX_GCC_SUPPORT
+ 
++/* Define if assembler supports arch13 instructions on S390.  */
++#undef  HAVE_S390_ARCH13_ASM_SUPPORT
++
+ /* Define if assembler supports Intel MPX.  */
+ #undef  HAVE_MPX_SUPPORT
+ 
+diff --git a/sysdeps/s390/configure b/sysdeps/s390/configure
+index 4a44775e3083d8c3..fa46e9e351e37e55 100644
+--- a/sysdeps/s390/configure
++++ b/sysdeps/s390/configure
+@@ -112,6 +112,43 @@ then
+ 
+ fi
+ 
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for S390 arch13 zarch instruction support" >&5
++$as_echo_n "checking for S390 arch13 zarch instruction support... " >&6; }
++if ${libc_cv_asm_s390_arch13+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat > conftest.c <<\EOF
++void testinsn (char *buf)
++{
++    __asm__ (".machine \"arch13\" \n\t"
++	     ".machinemode \"zarch_nohighgprs\" \n\t"
++	     "lghi %%r0,16 \n\t"
++	     "mvcrl 0(%0),32(%0)" : : "a" (buf) : "memory", "r0");
++}
++EOF
++if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS --shared conftest.c
++			-o conftest.o &> /dev/null'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; } ;
++then
++  libc_cv_asm_s390_arch13=yes
++else
++  libc_cv_asm_s390_arch13=no
++fi
++rm -f conftest*
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_asm_s390_arch13" >&5
++$as_echo "$libc_cv_asm_s390_arch13" >&6; }
++if test "$libc_cv_asm_s390_arch13" = yes ;
++then
++  $as_echo "#define HAVE_S390_ARCH13_ASM_SUPPORT 1" >>confdefs.h
++
++fi
++
++
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking for S390 z10 zarch instruction support as default" >&5
+ $as_echo_n "checking for S390 z10 zarch instruction support as default... " >&6; }
+ if ${libc_cv_asm_s390_min_z10_zarch+:} false; then :
+@@ -225,5 +262,39 @@ then
+ 
+ fi
+ 
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for S390 arch13 zarch instruction support as default" >&5
++$as_echo_n "checking for S390 arch13 zarch instruction support as default... " >&6; }
++if ${libc_cv_asm_s390_min_arch13_zarch+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat > conftest.c <<\EOF
++void testinsn (char *buf)
++{
++    __asm__ ("lghi %%r0,16 \n\t"
++	     "mvcrl 0(%0),32(%0)" : : "a" (buf) : "memory", "r0");
++}
++EOF
++if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS --shared conftest.c
++			-o conftest.o &> /dev/null'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; } ;
++then
++  libc_cv_asm_s390_min_arch13_zarch=yes
++else
++  libc_cv_asm_s390_min_arch13_zarch=no
++fi
++rm -f conftest*
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_asm_s390_min_arch13_zarch" >&5
++$as_echo "$libc_cv_asm_s390_min_arch13_zarch" >&6; }
++if test "$libc_cv_asm_s390_min_arch13_zarch" = yes ;
++then
++  $as_echo "#define HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT 1" >>confdefs.h
++
++fi
++
+ test -n "$critic_missing" && as_fn_error $? "
+ *** $critic_missing" "$LINENO" 5
+diff --git a/sysdeps/s390/configure.ac b/sysdeps/s390/configure.ac
+index 4dfb5574b49d5949..3ed5a8ef87f9694b 100644
+--- a/sysdeps/s390/configure.ac
++++ b/sysdeps/s390/configure.ac
+@@ -80,6 +80,32 @@ then
+   AC_DEFINE(HAVE_S390_VX_GCC_SUPPORT)
+ fi
+ 
++AC_CACHE_CHECK(for S390 arch13 zarch instruction support,
++	       libc_cv_asm_s390_arch13, [dnl
++cat > conftest.c <<\EOF
++void testinsn (char *buf)
++{
++    __asm__ (".machine \"arch13\" \n\t"
++	     ".machinemode \"zarch_nohighgprs\" \n\t"
++	     "lghi %%r0,16 \n\t"
++	     "mvcrl 0(%0),32(%0)" : : "a" (buf) : "memory", "r0");
++}
++EOF
++dnl test, if assembler supports S390 arch13 instructions
++if AC_TRY_COMMAND([${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS --shared conftest.c
++			-o conftest.o &> /dev/null]) ;
++then
++  libc_cv_asm_s390_arch13=yes
++else
++  libc_cv_asm_s390_arch13=no
++fi
++rm -f conftest* ])
++if test "$libc_cv_asm_s390_arch13" = yes ;
++then
++  AC_DEFINE(HAVE_S390_ARCH13_ASM_SUPPORT)
++fi
++
++
+ AC_CACHE_CHECK(for S390 z10 zarch instruction support as default,
+ 	       libc_cv_asm_s390_min_z10_zarch, [dnl
+ cat > conftest.c <<\EOF
+@@ -163,5 +189,28 @@ then
+   AC_DEFINE(HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT)
+ fi
+ 
++AC_CACHE_CHECK(for S390 arch13 zarch instruction support as default,
++	       libc_cv_asm_s390_min_arch13_zarch, [dnl
++cat > conftest.c <<\EOF
++void testinsn (char *buf)
++{
++    __asm__ ("lghi %%r0,16 \n\t"
++	     "mvcrl 0(%0),32(%0)" : : "a" (buf) : "memory", "r0");
++}
++EOF
++dnl test, if assembler supports S390 arch13 zarch instructions as default
++if AC_TRY_COMMAND([${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS --shared conftest.c
++			-o conftest.o &> /dev/null]) ;
++then
++  libc_cv_asm_s390_min_arch13_zarch=yes
++else
++  libc_cv_asm_s390_min_arch13_zarch=no
++fi
++rm -f conftest* ])
++if test "$libc_cv_asm_s390_min_arch13_zarch" = yes ;
++then
++  AC_DEFINE(HAVE_S390_MIN_ARCH13_ZARCH_ASM_SUPPORT)
++fi
++
+ test -n "$critic_missing" && AC_MSG_ERROR([
+ *** $critic_missing])

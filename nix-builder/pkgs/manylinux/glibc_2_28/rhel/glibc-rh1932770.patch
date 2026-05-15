@@ -1,0 +1,177 @@
+This is a custom downstream RHEL 8 patch which rebuilds three
+GLIBC_PRIVATE interfaces locally for use by libnss_files.so.2
+and libnss_compat.so.2.
+
+The shared objects needs the following 3 functions:
+__nss_readline
+__nss_parse_line_result
+__nss_files_fopen (only requirement for libnss_compat.so.2)
+
+They are implemented in:
+nss/nss_parse_line_result.c
+nss/nss_readline.c
+nss/nss_files_fopen.c
+
+We create wrappers for those functions, recompile, and link directly
+into the shared objects:
+nss/nss_parse_line_result_int.c
+nss/nss_readline_int.c
+nss/nss_files_fopen_int.c
+
+After building the new shared objects there are no longer any undefined
+global function references to __nss_readline@GLIBC_PRIVATE,
+__nss_parse_line_result@GLIBC_PRIVATE or
+__nss_files_fopen@GLIBC_PRIVATE.
+
+Instead we see local function definitions in the shared object e.g.
+Symbol table '.symtab' contains 628 entries:
+...
+   486: 0000000000008ce0    92 FUNC    LOCAL  DEFAULT   15 __nss_parse_line_result
+...
+   494: 0000000000008b70    72 FUNC    LOCAL  DEFAULT   15 __nss_readline_seek
+...
+   497: 0000000000008bc0   279 FUNC    LOCAL  DEFAULT   15 __nss_readline
+...
+   510: 0000000000008ce0    82 FUNC    LOCAL  DEFAULT   15 __nss_files_fopen
+
+The remaining GLIBC_PRIVATE references in the shared objects are all
+pre-existing and do not impact upgrade scenarios.
+
+For reference the existing and present GLIBC_PRIVATE interfaces are:
+__libc_alloc_buffer_alloc_array@@GLIBC_PRIVATE
+__libc_alloc_buffer_copy_string@@GLIBC_PRIVATE
+__libc_alloc_buffer_create_failure@@GLIBC_PRIVATE
+__libc_dynarray_emplace_enlarge@@GLIBC_PRIVATE
+__libc_scratch_buffer_grow@@GLIBC_PRIVATE
+__resp@@GLIBC_PRIVATE
+_nss_files_parse_grent@@GLIBC_PRIVATE
+_nss_files_parse_pwent@@GLIBC_PRIVATE
+_nss_files_parse_sgent@@GLIBC_PRIVATE
+_nss_files_parse_spent@@GLIBC_PRIVATE
+errno@@GLIBC_PRIVATE
+__nss_database_lookup2@GLIBC_PRIVATE
+__nss_lookup_function@GLIBC_PRIVATE
+
+Each was checked for existence in libc.so.6.
+
+A small reproducer was used in testing this patch, included here:
+cat >> tst-rhbz1927040.c <<EOF
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <pwd.h>
+#include <string.h>
+
+int
+main (void)
+{
+  struct passwd *res;
+
+  /* Only lookup via files.  */
+  printf ("INFO: Upgrade glibc, then press ENTER to see if libnss_files.so.2 loads.");
+  getchar ();
+
+  /* Try to get one entry.  */
+  printf ("INFO: Looking up first password entry.\n");
+  setpwent ();
+  errno = 0;
+  res = getpwent ();
+  if (res == NULL && errno != 0)
+    {
+      printf ("FAIL: Could not get entry (%s).\n", strerror(errno));
+      exit (1);
+    }
+  printf ("INFO: First entry passwd.pw_name = \"%s\"\n", res->pw_name);
+  printf ("PASS: Call to getpwent succeeded.\n");
+  endpwent ();
+  exit (0);
+}
+EOF
+
+Testing RHEL upgrade
+from: glibc-2.28-127.el8_3.2
+to: glibc-2.28-148.el8
+
+./tst-rhbz1927040
+INFO: Upgrade glibc, then press ENTER to see if libnss_files.so.2 loads.
+INFO: Looking up first password entry.
+INFO: Result was NULL.
+PASS: Call to getpwent succeeded.
+
+With LD_DEBUG=all you can observe:
+     22697:     /lib64/libnss_files.so.2: error: symbol lookup error: undefined symbol: __nss_files_fopen, version GLIBC_PRIVATE (fatal)
+
+Which is the indication that the upgrade caused the transient IdM lookup failure.
+
+Running again succeeds:
+INFO: Upgrade glibc, then press ENTER to see if libnss_files.so.2 loads.
+INFO: Looking up first password entry.
+INFO: First entry passwd.pw_name = "root"
+PASS: Call to getpwent succeeded.
+
+diff --git a/nss/Makefile b/nss/Makefile
+index 7359da38feb65618..d5c28a6b5ed3661c 100644
+--- a/nss/Makefile
++++ b/nss/Makefile
+@@ -92,9 +92,19 @@ extra-libs-others	= $(extra-libs)
+ subdir-dirs = $(services:%=nss_%)
+ vpath %.c $(subdir-dirs) ../locale/programs ../intl
+ 
+-
++# In RHEL we add nss_readline, nss_parse_line_result, and
++# nss_files_fopen to the libnss_files-routines in order to avoid the
++# case where a long running process (having never used NSS) attemps to
++# load an NSS module for the first time and that NSS module needs a
++# newer GLIBC_PRIVATE interface.  In effect we must make the NSS modules
++# self-sufficient and not rely on a GLIBC_PRIVATE interface.
++# See: https://bugzilla.redhat.com/show_bug.cgi?id=1927040
++# Note: We must recompile the objects to get the correct global symbol
++#       references, which is why we have the *_int.c wrappers.
+ libnss_files-routines	:= $(addprefix files-,$(databases)) \
+-			   files-initgroups files-init
++			   files-initgroups files-init \
++			   nss_readline_int nss_parse_line_result_int \
++			   nss_files_fopen_int
+ 
+ libnss_db-dbs		:= $(addprefix db-,\
+ 				       $(filter-out hosts network key alias,\
+@@ -104,8 +114,10 @@ libnss_db-routines	:= $(libnss_db-dbs) db-open db-init hash-string
+ generated		+= $(filter-out db-alias.c db-netgrp.c, \
+ 					$(addsuffix .c,$(libnss_db-dbs)))
+ 
++# See note above regarding nss_files_fopen.
+ libnss_compat-routines	:= $(addprefix compat-,grp pwd spwd initgroups) \
+-			   nisdomain
++			   nisdomain \
++			   nss_files_fopen_int
+ 
+ install-others		+= $(inst_vardbdir)/Makefile
+ 
+diff --git a/nss/nss_files_fopen_int.c b/nss/nss_files_fopen_int.c
+new file mode 100644
+index 0000000000000000..fa518084fd609b52
+--- /dev/null
++++ b/nss/nss_files_fopen_int.c
+@@ -0,0 +1,3 @@
++/* Include a local internal copy of __nss_files_fopen to make the NSS
++   module self-contained.  */
++#include <nss_files_fopen.c>
+diff --git a/nss/nss_parse_line_result_int.c b/nss/nss_parse_line_result_int.c
+new file mode 100644
+index 0000000000000000..bc0ee7a251743c9a
+--- /dev/null
++++ b/nss/nss_parse_line_result_int.c
+@@ -0,0 +1,3 @@
++/* Include a local internal copy of __nss_parse_line_result to make the
++   NSS module self-contained.  */
++#include <nss_parse_line_result.c>
+diff --git a/nss/nss_readline_int.c b/nss/nss_readline_int.c
+new file mode 100644
+index 0000000000000000..0e7bd259733673c9
+--- /dev/null
++++ b/nss/nss_readline_int.c
+@@ -0,0 +1,3 @@
++/* Include a local internal copy of __nss_readline and
++   __nss_readline_seek to make the NSS module self-contained.  */
++#include <nss_readline.c>

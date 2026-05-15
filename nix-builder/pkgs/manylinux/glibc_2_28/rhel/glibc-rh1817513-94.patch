@@ -1,0 +1,79 @@
+commit 542923d949e8b2480e48bd85fea13cf5d00d30b7
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Thu Oct 8 15:33:00 2020 +0200
+
+    elf: Implement ld.so --version
+    
+    This prints out version information for the dynamic loader and
+    exits immediately, without further command line processing
+    (which seems to match what some GNU tools do).
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+diff --git a/elf/dl-main.h b/elf/dl-main.h
+index ac7249a580214860..b51256d3b48230b0 100644
+--- a/elf/dl-main.h
++++ b/elf/dl-main.h
+@@ -105,6 +105,9 @@ call_init_paths (const struct dl_main_state *state)
+ _Noreturn void _dl_usage (const char *argv0, const char *wrong_option)
+   attribute_hidden;
+ 
++/* Print ld.so version information and exit.  */
++_Noreturn void _dl_version (void) attribute_hidden;
++
+ /* Print ld.so --help output and exit.  */
+ _Noreturn void _dl_help (const char *argv0, struct dl_main_state *state)
+   attribute_hidden;
+diff --git a/elf/dl-usage.c b/elf/dl-usage.c
+index c1820dca2fa117ee..f3c5ac76d37f9c03 100644
+--- a/elf/dl-usage.c
++++ b/elf/dl-usage.c
+@@ -20,6 +20,7 @@
+ #include <dl-main.h>
+ #include <ldsodefs.h>
+ #include <unistd.h>
++#include "version.h"
+ 
+ void
+ _dl_usage (const char *argv0, const char *wrong_option)
+@@ -32,6 +33,19 @@ _dl_usage (const char *argv0, const char *wrong_option)
+   _exit (EXIT_FAILURE);
+ }
+ 
++void
++_dl_version (void)
++{
++  _dl_printf ("\
++ld.so " PKGVERSION RELEASE " release version " VERSION ".\n\
++Copyright (C) 2020 Free Software Foundation, Inc.\n\
++This is free software; see the source for copying conditions.\n\
++There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A\n\
++PARTICULAR PURPOSE.\n\
++");
++  _exit (EXIT_SUCCESS);
++}
++
+ void
+ _dl_help (const char *argv0, struct dl_main_state *state)
+ {
+@@ -61,6 +75,7 @@ of this helper program; chances are you did not intend to run this program.\n\
+   --preload LIST        preload objects named in LIST\n\
+   --argv0 STRING        set argv[0] to STRING before running\n\
+   --help                display this help and exit\n\
++  --version             output version information and exit\n\
+ ",
+               argv0);
+   _exit (EXIT_SUCCESS);
+diff --git a/elf/rtld.c b/elf/rtld.c
+index b92641cb1c2d99a6..da1eef108508b95f 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -1248,6 +1248,8 @@ dl_main (const ElfW(Phdr) *phdr,
+ 	    --_dl_argc;
+ 	    ++_dl_argv;
+ 	  }
++	else if (strcmp (_dl_argv[1], "--version") == 0)
++	  _dl_version ();
+ 	else if (_dl_argv[1][0] == '-' && _dl_argv[1][1] == '-')
+ 	  {
+ 	   if (_dl_argv[1][1] == '\0')

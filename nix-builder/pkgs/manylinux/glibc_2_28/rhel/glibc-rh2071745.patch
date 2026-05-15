@@ -1,0 +1,23 @@
+commit 62db87ab24f9ca483f97f5e52ea92445f6a63c6f
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Jan 10 10:17:18 2022 -0300
+
+    timezone: Fix tst-bz28707 Makefile rule
+    
+    The $(testdata)/XT5 rule is ambiguous and it may not be correct
+    evaluated.
+
+diff --git a/timezone/Makefile b/timezone/Makefile
+index ac7f483c130b5b4a..c4a63daadb8d5dc5 100644
+--- a/timezone/Makefile
++++ b/timezone/Makefile
+@@ -123,7 +123,8 @@ $(testdata)/XT%: testdata/XT%
+ 	$(make-target-directory)
+ 	cp $< $@
+ 
+-$(testdata)/XT%: testdata/gen-XT%.sh
++$(testdata)/XT5: testdata/gen-XT5.sh
++	$(make-target-directory)
+ 	$(SHELL) $< > $@.tmp
+ 	mv $@.tmp $@
+ 

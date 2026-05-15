@@ -1,0 +1,356 @@
+commit e1c0c00cc2bdd147bfcf362ada1443bee90465ec
+Author: Joseph Myers <joseph@codesourcery.com>
+Date:   Tue Jul 7 14:54:12 2020 +0000
+
+    Remove most vfprintf width/precision-dependent allocations (bug 14231, bug 26211).
+    
+    The vfprintf implementation (used for all printf-family functions)
+    contains complicated logic to allocate internal buffers of a size
+    depending on the width and precision used for a format, using either
+    malloc or alloca depending on that size, and with consequent checks
+    for size overflow and allocation failure.
+    
+    As noted in bug 26211, the version of that logic used when '$' plus
+    argument number formats are in use is missing the overflow checks,
+    which can result in segfaults (quite possibly exploitable, I didn't
+    try to work that out) when the width or precision is in the range
+    0x7fffffe0 through 0x7fffffff (maybe smaller values as well in the
+    wprintf case on 32-bit systems, when the multiplication by sizeof
+    (CHAR_T) can overflow).
+    
+    All that complicated logic in fact appears to be useless.  As far as I
+    can tell, there has been no need (outside the floating-point printf
+    code, which does its own allocations) for allocations depending on
+    width or precision since commit
+    3e95f6602b226e0de06aaff686dc47b282d7cc16 ("Remove limitation on size
+    of precision for integers", Sun Sep 12 21:23:32 1999 +0000).  Thus,
+    this patch removes that logic completely, thereby fixing both problems
+    with excessive allocations for large width and precision for
+    non-floating-point formats, and the problem with missing overflow
+    checks with such allocations.  Note that this does have the
+    consequence that width and precision up to INT_MAX are now allowed
+    where previously INT_MAX / sizeof (CHAR_T) - EXTSIZ or more would have
+    been rejected, so could potentially expose any other overflows where
+    the value would previously have been rejected by those removed checks.
+    
+    I believe this completely fixes bugs 14231 and 26211.
+    
+    Excessive allocations are still possible in the floating-point case
+    (bug 21127), as are other integer or buffer overflows (see bug 26201).
+    This does not address the cases where a precision larger than INT_MAX
+    (embedded in the format string) would be meaningful without printf's
+    return value overflowing (when it's used with a string format, or %g
+    without the '#' flag, so the actual output will be much smaller), as
+    mentioned in bug 17829 comment 8; using size_t internally for
+    precision to handle that case would be complicated by struct
+    printf_info being a public ABI.  Nor does it address the matter of an
+    INT_MIN width being negated (bug 17829 comment 7; the same logic
+    appears a second time in the file as well, in the form of multiplying
+    by -1).  There may be other sources of memory allocations with malloc
+    in printf functions as well (bug 24988, bug 16060).  From inspection,
+    I think there are also integer overflows in two copies of "if ((width
+    -= len) < 0)" logic (where width is int, len is size_t and a very long
+    string could result in spurious padding being output on a 32-bit
+    system before printf overflows the count of output characters).
+    
+    Tested for x86-64 and x86.
+    
+    (cherry picked from commit 6caddd34bd7ffb5ac4f36c8e036eee100c2cc535)
+
+diff --git a/stdio-common/Makefile b/stdio-common/Makefile
+index 51062a7dbf698931..d76b47bd5f932f69 100644
+--- a/stdio-common/Makefile
++++ b/stdio-common/Makefile
+@@ -64,6 +64,7 @@ tests := tstscanf test_rdwr test-popen tstgetln test-fseek \
+ 	 tst-scanf-round \
+ 	 tst-renameat2 \
+ 	 tst-printf-bz25691 \
++	 tst-vfprintf-width-prec-alloc
+ 
+ test-srcs = tst-unbputc tst-printf tst-printfsz-islongdouble
+ 
+diff --git a/stdio-common/bug22.c b/stdio-common/bug22.c
+index b26399acb7dfc775..e12b01731e1b4ac8 100644
+--- a/stdio-common/bug22.c
++++ b/stdio-common/bug22.c
+@@ -42,7 +42,7 @@ do_test (void)
+ 
+   ret = fprintf (fp, "%." SN3 "d", 1);
+   printf ("ret = %d\n", ret);
+-  if (ret != -1 || errno != EOVERFLOW)
++  if (ret != N3)
+ 	  return 1;
+ 
+   ret = fprintf (fp, "%" SN2 "d%" SN2 "d", 1, 1);
+diff --git a/stdio-common/tst-vfprintf-width-prec-alloc.c b/stdio-common/tst-vfprintf-width-prec-alloc.c
+new file mode 100644
+index 0000000000000000..0a74b53a3389d699
+--- /dev/null
++++ b/stdio-common/tst-vfprintf-width-prec-alloc.c
+@@ -0,0 +1,41 @@
++/* Test large width or precision does not involve large allocation.
++   Copyright (C) 2020 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <stdio.h>
++#include <sys/resource.h>
++#include <support/check.h>
++
++char test_string[] = "test";
++
++static int
++do_test (void)
++{
++  struct rlimit limit;
++  TEST_VERIFY_EXIT (getrlimit (RLIMIT_AS, &limit) == 0);
++  limit.rlim_cur = 200 * 1024 * 1024;
++  TEST_VERIFY_EXIT (setrlimit (RLIMIT_AS, &limit) == 0);
++  FILE *fp = fopen ("/dev/null", "w");
++  TEST_VERIFY_EXIT (fp != NULL);
++  TEST_COMPARE (fprintf (fp, "%1000000000d", 1), 1000000000);
++  TEST_COMPARE (fprintf (fp, "%.1000000000s", test_string), 4);
++  TEST_COMPARE (fprintf (fp, "%1000000000d %1000000000d", 1, 2), 2000000001);
++  TEST_COMPARE (fprintf (fp, "%2$.*1$s", 0x7fffffff, test_string), 4);
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/stdio-common/vfprintf.c b/stdio-common/vfprintf.c
+index dab56b6ba2c7bdbe..6b83ba91a12cdcd5 100644
+--- a/stdio-common/vfprintf.c
++++ b/stdio-common/vfprintf.c
+@@ -42,10 +42,6 @@
+ 
+ #include <libioP.h>
+ 
+-/* In some cases we need extra space for all the output which is not
+-   counted in the width of the string. We assume 32 characters is
+-   enough.  */
+-#define EXTSIZ		32
+ #define ARGCHECK(S, Format) \
+   do									      \
+     {									      \
+@@ -1295,7 +1291,6 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+ 
+   /* Buffer intermediate results.  */
+   CHAR_T work_buffer[WORK_BUFFER_SIZE];
+-  CHAR_T *workstart = NULL;
+   CHAR_T *workend;
+ 
+   /* We have to save the original argument pointer.  */
+@@ -1404,7 +1399,6 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+       UCHAR_T pad = L_(' ');/* Padding character.  */
+       CHAR_T spec;
+ 
+-      workstart = NULL;
+       workend = work_buffer + WORK_BUFFER_SIZE;
+ 
+       /* Get current character in format string.  */
+@@ -1496,31 +1490,6 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+ 	    pad = L_(' ');
+ 	    left = 1;
+ 	  }
+-
+-	if (__glibc_unlikely (width >= INT_MAX / sizeof (CHAR_T) - EXTSIZ))
+-	  {
+-	    __set_errno (EOVERFLOW);
+-	    done = -1;
+-	    goto all_done;
+-	  }
+-
+-	if (width >= WORK_BUFFER_SIZE - EXTSIZ)
+-	  {
+-	    /* We have to use a special buffer.  */
+-	    size_t needed = ((size_t) width + EXTSIZ) * sizeof (CHAR_T);
+-	    if (__libc_use_alloca (needed))
+-	      workend = (CHAR_T *) alloca (needed) + width + EXTSIZ;
+-	    else
+-	      {
+-		workstart = (CHAR_T *) malloc (needed);
+-		if (workstart == NULL)
+-		  {
+-		    done = -1;
+-		    goto all_done;
+-		  }
+-		workend = workstart + width + EXTSIZ;
+-	      }
+-	  }
+       }
+       JUMP (*f, step1_jumps);
+ 
+@@ -1528,31 +1497,13 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+     LABEL (width):
+       width = read_int (&f);
+ 
+-      if (__glibc_unlikely (width == -1
+-			    || width >= INT_MAX / sizeof (CHAR_T) - EXTSIZ))
++      if (__glibc_unlikely (width == -1))
+ 	{
+ 	  __set_errno (EOVERFLOW);
+ 	  done = -1;
+ 	  goto all_done;
+ 	}
+ 
+-      if (width >= WORK_BUFFER_SIZE - EXTSIZ)
+-	{
+-	  /* We have to use a special buffer.  */
+-	  size_t needed = ((size_t) width + EXTSIZ) * sizeof (CHAR_T);
+-	  if (__libc_use_alloca (needed))
+-	    workend = (CHAR_T *) alloca (needed) + width + EXTSIZ;
+-	  else
+-	    {
+-	      workstart = (CHAR_T *) malloc (needed);
+-	      if (workstart == NULL)
+-		{
+-		  done = -1;
+-		  goto all_done;
+-		}
+-	      workend = workstart + width + EXTSIZ;
+-	    }
+-	}
+       if (*f == L_('$'))
+ 	/* Oh, oh.  The argument comes from a positional parameter.  */
+ 	goto do_positional;
+@@ -1601,34 +1552,6 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+ 	}
+       else
+ 	prec = 0;
+-      if (prec > width && prec > WORK_BUFFER_SIZE - EXTSIZ)
+-	{
+-	  /* Deallocate any previously allocated buffer because it is
+-	     too small.  */
+-	  if (__glibc_unlikely (workstart != NULL))
+-	    free (workstart);
+-	  workstart = NULL;
+-	  if (__glibc_unlikely (prec >= INT_MAX / sizeof (CHAR_T) - EXTSIZ))
+-	    {
+-	      __set_errno (EOVERFLOW);
+-	      done = -1;
+-	      goto all_done;
+-	    }
+-	  size_t needed = ((size_t) prec + EXTSIZ) * sizeof (CHAR_T);
+-
+-	  if (__libc_use_alloca (needed))
+-	    workend = (CHAR_T *) alloca (needed) + prec + EXTSIZ;
+-	  else
+-	    {
+-	      workstart = (CHAR_T *) malloc (needed);
+-	      if (workstart == NULL)
+-		{
+-		  done = -1;
+-		  goto all_done;
+-		}
+-	      workend = workstart + prec + EXTSIZ;
+-	    }
+-	}
+       JUMP (*f, step2_jumps);
+ 
+       /* Process 'h' modifier.  There might another 'h' following.  */
+@@ -1692,10 +1615,6 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+       /* The format is correctly handled.  */
+       ++nspecs_done;
+ 
+-      if (__glibc_unlikely (workstart != NULL))
+-	free (workstart);
+-      workstart = NULL;
+-
+       /* Look for next format specifier.  */
+ #ifdef COMPILE_WPRINTF
+       f = __find_specwc ((end_of_spec = ++f));
+@@ -1713,18 +1632,11 @@ vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+ 
+   /* Hand off processing for positional parameters.  */
+ do_positional:
+-  if (__glibc_unlikely (workstart != NULL))
+-    {
+-      free (workstart);
+-      workstart = NULL;
+-    }
+   done = printf_positional (s, format, readonly_format, ap, &ap_save,
+ 			    done, nspecs_done, lead_str_end, work_buffer,
+ 			    save_errno, grouping, thousands_sep);
+ 
+  all_done:
+-  if (__glibc_unlikely (workstart != NULL))
+-    free (workstart);
+   /* Unlock the stream.  */
+   _IO_funlockfile (s);
+   _IO_cleanup_region_end (0);
+@@ -1767,8 +1679,6 @@ printf_positional (FILE *s, const CHAR_T *format, int readonly_format,
+   /* Just a counter.  */
+   size_t cnt;
+ 
+-  CHAR_T *workstart = NULL;
+-
+   if (grouping == (const char *) -1)
+     {
+ #ifdef COMPILE_WPRINTF
+@@ -1957,7 +1867,6 @@ printf_positional (FILE *s, const CHAR_T *format, int readonly_format,
+       char pad = specs[nspecs_done].info.pad;
+       CHAR_T spec = specs[nspecs_done].info.spec;
+ 
+-      workstart = NULL;
+       CHAR_T *workend = work_buffer + WORK_BUFFER_SIZE;
+ 
+       /* Fill in last information.  */
+@@ -1991,27 +1900,6 @@ printf_positional (FILE *s, const CHAR_T *format, int readonly_format,
+ 	  prec = specs[nspecs_done].info.prec;
+ 	}
+ 
+-      /* Maybe the buffer is too small.  */
+-      if (MAX (prec, width) + EXTSIZ > WORK_BUFFER_SIZE)
+-	{
+-	  if (__libc_use_alloca ((MAX (prec, width) + EXTSIZ)
+-				 * sizeof (CHAR_T)))
+-	    workend = ((CHAR_T *) alloca ((MAX (prec, width) + EXTSIZ)
+-					  * sizeof (CHAR_T))
+-		       + (MAX (prec, width) + EXTSIZ));
+-	  else
+-	    {
+-	      workstart = (CHAR_T *) malloc ((MAX (prec, width) + EXTSIZ)
+-					     * sizeof (CHAR_T));
+-	      if (workstart == NULL)
+-		{
+-		  done = -1;
+-		  goto all_done;
+-		}
+-	      workend = workstart + (MAX (prec, width) + EXTSIZ);
+-	    }
+-	}
+-
+       /* Process format specifiers.  */
+       while (1)
+ 	{
+@@ -2085,18 +1973,12 @@ printf_positional (FILE *s, const CHAR_T *format, int readonly_format,
+ 	  break;
+ 	}
+ 
+-      if (__glibc_unlikely (workstart != NULL))
+-	free (workstart);
+-      workstart = NULL;
+-
+       /* Write the following constant string.  */
+       outstring (specs[nspecs_done].end_of_fmt,
+ 		 specs[nspecs_done].next_fmt
+ 		 - specs[nspecs_done].end_of_fmt);
+     }
+  all_done:
+-  if (__glibc_unlikely (workstart != NULL))
+-    free (workstart);
+   scratch_buffer_free (&argsbuf);
+   scratch_buffer_free (&specsbuf);
+   return done;

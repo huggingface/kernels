@@ -1,0 +1,41 @@
+commit 58559f14437d2aa71753a29fed435efa06aa4576
+Author: Paul Eggert <eggert@cs.ucla.edu>
+Date:   Tue Aug 28 21:54:28 2018 +0200
+
+    regex: fix uninitialized memory access
+    
+    I introduced this bug into gnulib in commit
+    8335a4d6c7b4448cd0bcb6d0bebf1d456bcfdb17 dated 2006-04-10;
+    eventually it was merged into glibc.  The bug was found by
+    project-repo <bugs@feusi.co> and reported here:
+    https://lists.gnu.org/r/sed-devel/2018-08/msg00017.html
+    Diagnosis and draft fix reported by Assaf Gordon here:
+    https://lists.gnu.org/r/bug-gnulib/2018-08/msg00071.html
+    https://lists.gnu.org/r/bug-gnulib/2018-08/msg00142.html
+    * posix/regex_internal.c (build_wcs_upper_buffer):
+    Fix bug when mbrtowc returns 0.
+    
+    (cherry picked from commit bc680b336971305cb39896b30d72dc7101b62242)
+
+diff --git a/posix/regex_internal.c b/posix/regex_internal.c
+index 7f0083b918de6530..b10588f1ccbb1992 100644
+--- a/posix/regex_internal.c
++++ b/posix/regex_internal.c
+@@ -317,7 +317,7 @@ build_wcs_upper_buffer (re_string_t *pstr)
+ 	  mbclen = __mbrtowc (&wc,
+ 			      ((const char *) pstr->raw_mbs + pstr->raw_mbs_idx
+ 			       + byte_idx), remain_len, &pstr->cur_state);
+-	  if (BE (mbclen < (size_t) -2, 1))
++	  if (BE (0 < mbclen && mbclen < (size_t) -2, 1))
+ 	    {
+ 	      wchar_t wcu = __towupper (wc);
+ 	      if (wcu != wc)
+@@ -386,7 +386,7 @@ build_wcs_upper_buffer (re_string_t *pstr)
+ 	else
+ 	  p = (const char *) pstr->raw_mbs + pstr->raw_mbs_idx + src_idx;
+ 	mbclen = __mbrtowc (&wc, p, remain_len, &pstr->cur_state);
+-	if (BE (mbclen < (size_t) -2, 1))
++	if (BE (0 < mbclen && mbclen < (size_t) -2, 1))
+ 	  {
+ 	    wchar_t wcu = __towupper (wc);
+ 	    if (wcu != wc)

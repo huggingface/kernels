@@ -1,0 +1,27 @@
+Downstream-only patch to adjust for libdl being shipped separately in
+RHEL-8.  Upstream, libdl has been moved into libc and we do not need to
+link against it separately.
+
+diff --git a/ctype/Makefile b/ctype/Makefile
+index 571d2391b74daa3f..a8204d1787751151 100644
+--- a/ctype/Makefile
++++ b/ctype/Makefile
+@@ -50,9 +50,16 @@ modules-names := \
+ 
+ include ../Rules
+ 
+-$(objpfx)tst-ctype-tls-dlmopen: $(shared-thread-library)
++$(objpfx)tst-ctype-tls-dlmopen: $(shared-thread-library) $(libdl)
+ $(objpfx)tst-ctype-tls-dlmopen.out: $(objpfx)tst-ctype-tls-mod.so
+-$(objpfx)tst-ctype-tls-dlopen-static: $(static-thread-library)
++
++$(objpfx)tst-ctype-tls-dlopen-static: \
++  $(static-thread-library) \
++  $(common-objpfx)dlfcn/libdl.a
++
++# Suppress linker warning when linking statically linked test against libdl
++LDFLAGS-tst-ctype-tls-dlopen-static = -Wl,--no-fatal-warnings
++
+ $(objpfx)tst-ctype-tls-dlopen-static.out: $(objpfx)tst-ctype-tls-mod.so
+ tst-ctype-tls-dlopen-static-ENV = \
+   LD_LIBRARY_PATH=$(ld-library-path):$(common-objpfx):$(common-objpfx)elf

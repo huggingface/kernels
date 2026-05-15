@@ -1,0 +1,92 @@
+commit 28c30a6232aa9a54783c146590498a061fc0112a
+Author: Samuel Thibault <samuel.thibault@ens-lyon.org>
+Date:   Sun Feb 9 19:50:21 2020 +0000
+
+    pthread: Move most once tests from nptl to sysdeps/pthread
+    
+    So they can be checked with htl too.
+
+# Conflicts:
+#	sysdeps/pthread/Makefile
+#	(Moved only the tests in this commit which subsequently
+#	 needed for the pthread_once fix)
+
+diff --git a/nptl/Makefile b/nptl/Makefile
+index b14de3ffb330c10b..dcf3868869767015 100644
+--- a/nptl/Makefile
++++ b/nptl/Makefile
+@@ -260,7 +260,7 @@ tests = tst-attr1 tst-attr2 tst-attr3 tst-default-attr \
+ 	tst-rwlock4 tst-rwlock5 tst-rwlock6 tst-rwlock7 tst-rwlock8 \
+ 	tst-rwlock9 tst-rwlock10 tst-rwlock11 tst-rwlock12 tst-rwlock13 \
+ 	tst-rwlock14 tst-rwlock15 tst-rwlock16 tst-rwlock17 tst-rwlock18 \
+-	tst-once1 tst-once2 tst-once3 tst-once4 tst-once5 \
++	tst-once5 \
+ 	tst-key1 tst-key2 tst-key3 tst-key4 \
+ 	tst-sem1 tst-sem2 tst-sem3 tst-sem4 tst-sem5 tst-sem6 tst-sem7 \
+ 	tst-sem8 tst-sem9 tst-sem10 tst-sem14 \
+@@ -384,8 +384,7 @@ tests += tst-cancelx2 tst-cancelx3 tst-cancelx4 tst-cancelx5 \
+ 	 tst-cancelx6 tst-cancelx7 tst-cancelx8 tst-cancelx9 tst-cancelx10 \
+ 	 tst-cancelx11 tst-cancelx12 tst-cancelx13 tst-cancelx14 tst-cancelx15 \
+ 	 tst-cancelx16 tst-cancelx17 tst-cancelx18 tst-cancelx20 tst-cancelx21 \
+-	 tst-cleanupx0 tst-cleanupx1 tst-cleanupx2 tst-cleanupx3 tst-cleanupx4 \
+-	 tst-oncex3 tst-oncex4
++	 tst-cleanupx0 tst-cleanupx1 tst-cleanupx2 tst-cleanupx3 tst-cleanupx4
+ ifeq ($(build-shared),yes)
+ tests += tst-atfork2 tst-tls4 tst-_res1 tst-fini1 tst-compat-forwarder \
+ 	 tst-audit-threads
+@@ -525,8 +524,6 @@ CFLAGS-tst-cleanupx2.c += -fexceptions
+ CFLAGS-tst-cleanupx3.c += -fexceptions
+ CFLAGS-tst-cleanupx4.c += -fexceptions
+ CFLAGS-tst-cleanupx4aux.c += -fexceptions
+-CFLAGS-tst-oncex3.c += -fexceptions
+-CFLAGS-tst-oncex4.c += -fexceptions
+ CFLAGS-tst-align.c += $(stack-align-test-flags)
+ CFLAGS-tst-align3.c += $(stack-align-test-flags)
+ CFLAGS-tst-initializers1.c += -W -Wall -Werror
+diff --git a/sysdeps/pthread/Makefile b/sysdeps/pthread/Makefile
+index 98a92f8d6bb119ba..14ef04247cb84ad3 100644
+--- a/sysdeps/pthread/Makefile
++++ b/sysdeps/pthread/Makefile
+@@ -33,11 +33,18 @@ endif
+ 
+ tst-create1mod.so-no-z-defs = yes
+ 
++tests += tst-once1 tst-once2 tst-once3 tst-once4
++
++tests += tst-oncex3 tst-oncex4
++
+ ifeq ($(build-shared),yes)
+ # Build all the modules even when not actually running test programs.
+ tests: $(test-modules)
+ endif
+ 
++CFLAGS-tst-oncex3.c += -fexceptions
++CFLAGS-tst-oncex4.c += -fexceptions
++
+ modules-names += tst-create1mod
+ test-modules = $(addprefix $(objpfx),$(addsuffix .so,$(modules-names)))
+ 
+diff --git a/nptl/tst-once1.c b/sysdeps/pthread/tst-once1.c
+similarity index 100%
+rename from nptl/tst-once1.c
+rename to sysdeps/pthread/tst-once1.c
+diff --git a/nptl/tst-once2.c b/sysdeps/pthread/tst-once2.c
+similarity index 100%
+rename from nptl/tst-once2.c
+rename to sysdeps/pthread/tst-once2.c
+diff --git a/nptl/tst-once3.c b/sysdeps/pthread/tst-once3.c
+similarity index 100%
+rename from nptl/tst-once3.c
+rename to sysdeps/pthread/tst-once3.c
+diff --git a/nptl/tst-once4.c b/sysdeps/pthread/tst-once4.c
+similarity index 100%
+rename from nptl/tst-once4.c
+rename to sysdeps/pthread/tst-once4.c
+diff --git a/nptl/tst-oncex3.c b/sysdeps/pthread/tst-oncex3.c
+similarity index 100%
+rename from nptl/tst-oncex3.c
+rename to sysdeps/pthread/tst-oncex3.c
+diff --git a/nptl/tst-oncex4.c b/sysdeps/pthread/tst-oncex4.c
+similarity index 100%
+rename from nptl/tst-oncex4.c
+rename to sysdeps/pthread/tst-oncex4.c

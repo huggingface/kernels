@@ -1,0 +1,45 @@
+commit 183083c35972611e7786c7ee0c96d7da571631ed
+Author: Carlos O'Donell <carlos@redhat.com>
+Date:   Wed Apr 29 16:31:29 2020 -0400
+
+    support: Set errno before testing it.
+    
+    In test-conainer we should set errno to 0 before calling strtol,
+    and check after with TEST_COMPARE.
+    
+    In tst-support_capture_subprocess we should set errno to 0 before
+    checking it after the call to strtol.
+    
+    Tested on x86_64.
+    
+    Reviewed-by: DJ Delorie <dj@redhat.com>
+
+diff --git a/support/test-container.c b/support/test-container.c
+index 9fcc91e478038232..d7ed073812305f71 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -940,7 +940,9 @@ main (int argc, char **argv)
+ 	    else if (nt == 3 && strcmp (the_words[0], "chmod") == 0)
+ 	      {
+ 		long int m;
++		errno = 0;
+ 		m = strtol (the_words[1], NULL, 0);
++		TEST_COMPARE (errno, 0);
+ 		if (chmod (the_words[2], m) < 0)
+ 		    FAIL_EXIT1 ("chmod %s: %s\n",
+ 				the_words[2], strerror (errno));
+diff --git a/support/tst-support_capture_subprocess.c b/support/tst-support_capture_subprocess.c
+index 99570879eedd65b1..fe6649dda6032de2 100644
+--- a/support/tst-support_capture_subprocess.c
++++ b/support/tst-support_capture_subprocess.c
+@@ -133,7 +133,9 @@ static int
+ parse_int (const char *str)
+ {
+   char *endptr;
+-  long int ret = strtol (str, &endptr, 10);
++  long int ret;
++  errno = 0;
++  ret = strtol (str, &endptr, 10);
+   TEST_COMPARE (errno, 0);
+   TEST_VERIFY (ret >= 0 && ret <= INT_MAX);
+   return ret;

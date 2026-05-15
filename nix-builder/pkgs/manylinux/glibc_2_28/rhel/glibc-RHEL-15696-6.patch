@@ -1,0 +1,300 @@
+From ee915088a0231cd421054dbd8abab7aadf331153 Mon Sep 17 00:00:00 2001
+From: "H.J. Lu" <hjl.tools@gmail.com>
+Date: Mon, 21 Jan 2019 11:33:52 -0800
+Subject: [PATCH] x86-64 strncmp family: Properly handle the length parameter
+ [BZ# 24097]
+Content-type: text/plain; charset=UTF-8
+
+On x32, the size_t parameter may be passed in the lower 32 bits of a
+64-bit register with the non-zero upper 32 bits.  The string/memory
+functions written in assembly can only use the lower 32 bits of a
+64-bit register as length or must clear the upper 32 bits before using
+the full 64-bit register for length.
+
+This pach fixes the strncmp family for x32.  Tested on x86-64 and x32.
+On x86-64, libc.so is the same with and withou the fix.
+
+	[BZ# 24097]
+	CVE-2019-6488
+	* sysdeps/x86_64/multiarch/strcmp-avx2.S: Use RDX_LP for length.
+	* sysdeps/x86_64/multiarch/strcmp-sse42.S: Likewise.
+	* sysdeps/x86_64/strcmp.S: Likewise.
+	* sysdeps/x86_64/x32/Makefile (tests): Add tst-size_t-strncasecmp,
+	tst-size_t-strncmp and tst-size_t-wcsncmp.
+	* sysdeps/x86_64/x32/tst-size_t-strncasecmp.c: New file.
+	* sysdeps/x86_64/x32/tst-size_t-strncmp.c: Likewise.
+	* sysdeps/x86_64/x32/tst-size_t-wcsncmp.c: Likewise.
+---
+ sysdeps/x86_64/multiarch/strcmp-avx2.S      |  6 +-
+ sysdeps/x86_64/multiarch/strcmp-sse42.S     |  6 +-
+ sysdeps/x86_64/strcmp.S                     |  6 +-
+ sysdeps/x86_64/x32/Makefile                 |  6 +-
+ sysdeps/x86_64/x32/tst-size_t-strncasecmp.c | 59 ++++++++++++++++
+ sysdeps/x86_64/x32/tst-size_t-strncmp.c     | 78 +++++++++++++++++++++
+ sysdeps/x86_64/x32/tst-size_t-wcsncmp.c     | 20 ++++++
+ 7 files changed, 170 insertions(+), 11 deletions(-)
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-strncasecmp.c
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-strncmp.c
+ create mode 100644 sysdeps/x86_64/x32/tst-size_t-wcsncmp.c
+
+Conflicts:
+	ChangeLog
+	(removed)
+
+diff --git a/sysdeps/x86_64/multiarch/strcmp-avx2.S b/sysdeps/x86_64/multiarch/strcmp-avx2.S
+index 327e3d87..156c1949 100644
+--- a/sysdeps/x86_64/multiarch/strcmp-avx2.S
++++ b/sysdeps/x86_64/multiarch/strcmp-avx2.S
+@@ -79,15 +79,15 @@
+ ENTRY (STRCMP)
+ # ifdef USE_AS_STRNCMP
+ 	/* Check for simple cases (0 or 1) in offset.  */
+-	cmp	$1, %rdx
++	cmp	$1, %RDX_LP
+ 	je	L(char0)
+ 	jb	L(zero)
+ #  ifdef USE_AS_WCSCMP
+ 	/* Convert units: from wide to byte char.  */
+-	shl	$2, %rdx
++	shl	$2, %RDX_LP
+ #  endif
+ 	/* Register %r11 tracks the maximum offset.  */
+-	movq	%rdx, %r11
++	mov	%RDX_LP, %R11_LP
+ # endif
+ 	movl	%edi, %eax
+ 	xorl	%edx, %edx
+diff --git a/sysdeps/x86_64/multiarch/strcmp-sse42.S b/sysdeps/x86_64/multiarch/strcmp-sse42.S
+index d3c07bd2..a1ebea46 100644
+--- a/sysdeps/x86_64/multiarch/strcmp-sse42.S
++++ b/sysdeps/x86_64/multiarch/strcmp-sse42.S
+@@ -156,11 +156,11 @@ STRCMP_SSE42:
+ #endif
+ 
+ #if defined USE_AS_STRNCMP || defined USE_AS_STRNCASECMP_L
+-	test	%rdx, %rdx
++	test	%RDX_LP, %RDX_LP
+ 	je	LABEL(strcmp_exitz)
+-	cmp	$1, %rdx
++	cmp	$1, %RDX_LP
+ 	je	LABEL(Byte0)
+-	mov	%rdx, %r11
++	mov	%RDX_LP, %R11_LP
+ #endif
+ 	mov	%esi, %ecx
+ 	mov	%edi, %eax
+diff --git a/sysdeps/x86_64/strcmp.S b/sysdeps/x86_64/strcmp.S
+index e16945b9..f47c8ad4 100644
+--- a/sysdeps/x86_64/strcmp.S
++++ b/sysdeps/x86_64/strcmp.S
+@@ -135,11 +135,11 @@ ENTRY (STRCMP)
+  * This implementation uses SSE to compare up to 16 bytes at a time.
+  */
+ #if defined USE_AS_STRNCMP || defined USE_AS_STRNCASECMP_L
+-	test	%rdx, %rdx
++	test	%RDX_LP, %RDX_LP
+ 	je	LABEL(strcmp_exitz)
+-	cmp	$1, %rdx
++	cmp	$1, %RDX_LP
+ 	je	LABEL(Byte0)
+-	mov	%rdx, %r11
++	mov	%RDX_LP, %R11_LP
+ #endif
+ 	mov	%esi, %ecx
+ 	mov	%edi, %eax
+diff --git a/sysdeps/x86_64/x32/Makefile b/sysdeps/x86_64/x32/Makefile
+index 98bd9ae9..db302839 100644
+--- a/sysdeps/x86_64/x32/Makefile
++++ b/sysdeps/x86_64/x32/Makefile
+@@ -7,9 +7,11 @@ endif
+ 
+ ifeq ($(subdir),string)
+ tests += tst-size_t-memchr tst-size_t-memcmp tst-size_t-memcpy \
+-	 tst-size_t-memrchr tst-size_t-memset
++	 tst-size_t-memrchr tst-size_t-memset tst-size_t-strncasecmp \
++	 tst-size_t-strncmp
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+-tests += tst-size_t-wmemchr tst-size_t-wmemcmp tst-size_t-wmemset
++tests += tst-size_t-wmemchr tst-size_t-wmemcmp tst-size_t-wmemset \
++	 tst-size_t-wcsncmp
+ endif
+diff --git a/sysdeps/x86_64/x32/tst-size_t-strncasecmp.c b/sysdeps/x86_64/x32/tst-size_t-strncasecmp.c
+new file mode 100644
+index 00000000..86233593
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-strncasecmp.c
+@@ -0,0 +1,59 @@
++/* Test strncaecmp with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define TEST_NAME "strncasecmp"
++#include "test-size_t.h"
++
++IMPL (strncasecmp, 1)
++
++typedef int (*proto_t) (const char *, const char *, size_t);
++
++static int
++__attribute__ ((noinline, noclone))
++do_strncasecmp (parameter_t a, parameter_t b)
++{
++  return CALL (&b, a.p, b.p, a.len);
++}
++
++static int
++test_main (void)
++{
++  test_init ();
++
++  parameter_t dest = { { page_size }, buf1 };
++  parameter_t src = { { 0 }, buf2 };
++
++  strncpy ((char *) buf1, (const char *) buf2, page_size);
++
++  int ret = 0;
++  FOR_EACH_IMPL (impl, 0)
++    {
++      src.fn = impl->fn;
++      int res = do_strncasecmp (dest, src);
++      if (res)
++	{
++	  error (0, 0, "Wrong result in function %s: %i != 0",
++		 impl->name, res);
++	  ret = 1;
++	}
++    }
++
++  return ret ? EXIT_FAILURE : EXIT_SUCCESS;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/x86_64/x32/tst-size_t-strncmp.c b/sysdeps/x86_64/x32/tst-size_t-strncmp.c
+new file mode 100644
+index 00000000..54e6bd83
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-strncmp.c
+@@ -0,0 +1,78 @@
++/* Test strncmp with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#ifdef WIDE
++# define TEST_NAME "wcsncmp"
++#else
++# define TEST_NAME "strncmp"
++#endif
++
++#include "test-size_t.h"
++
++#ifdef WIDE
++# include <wchar.h>
++
++# define STRNCMP wcsncmp
++# define STRNCPY wcsncpy
++# define CHAR wchar_t
++#else
++# define STRNCMP strncmp
++# define STRNCPY strncpy
++# define CHAR char
++#endif
++
++IMPL (STRNCMP, 1)
++
++typedef int (*proto_t) (const CHAR *, const CHAR *, size_t);
++
++
++static int
++__attribute__ ((noinline, noclone))
++do_strncmp (parameter_t a, parameter_t b)
++{
++  return CALL (&b, a.p, b.p, a.len);
++}
++
++static int
++test_main (void)
++{
++  test_init ();
++
++  size_t size = page_size / sizeof (CHAR);
++  parameter_t dest = { { size }, buf1 };
++  parameter_t src = { { 0 }, buf2 };
++
++  STRNCPY ((CHAR *) buf1, (const CHAR *) buf2, size);
++
++  int ret = 0;
++  FOR_EACH_IMPL (impl, 0)
++    {
++      src.fn = impl->fn;
++      int res = do_strncmp (dest, src);
++      if (res)
++	{
++	  error (0, 0, "Wrong result in function %s: %i != 0",
++		 impl->name, res);
++	  ret = 1;
++	}
++    }
++
++  return ret ? EXIT_FAILURE : EXIT_SUCCESS;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/x86_64/x32/tst-size_t-wcsncmp.c b/sysdeps/x86_64/x32/tst-size_t-wcsncmp.c
+new file mode 100644
+index 00000000..4829647c
+--- /dev/null
++++ b/sysdeps/x86_64/x32/tst-size_t-wcsncmp.c
+@@ -0,0 +1,20 @@
++/* Test wcsncmp with size_t in the lower 32 bits of 64-bit register.
++   Copyright (C) 2019 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#define WIDE 1
++#include "tst-size_t-strncmp.c"
+-- 
+GitLab
+

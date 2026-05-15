@@ -1,0 +1,25 @@
+commit 16536e98e36e08bc1ce1edbd8dd50c7c3bb7a936
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Tue May 12 11:30:30 2020 +0200
+
+    aarch64: Accept PLT calls to __getauxval within libc.so
+    
+    When using outline atomics (-moutline-atomics, the default for ARMv8-A
+    starting with GCC 10), libgcc contains an ELF constructor which calls
+    __getauxval.  This code is built outside of glibc, so none of its
+    internal PLT avoidance schemes can be applied to it.  This change
+    suppresses the elf/check-localplt failure.
+
+diff -rup a/sysdeps/unix/sysv/linux/aarch64/localplt.data b/sysdeps/unix/sysv/linux/aarch64/localplt.data
+--- a/sysdeps/unix/sysv/linux/aarch64/localplt.data	2018-08-01 01:10:47.000000000 -0400
++++ b/sysdeps/unix/sysv/linux/aarch64/localplt.data	2020-10-27 15:55:53.457002541 -0400
+@@ -7,6 +7,9 @@ libc.so: malloc
+ libc.so: memalign
+ libc.so: realloc
+ libm.so: matherr
++# If outline atomics are used, libgcc (built outside of glibc) may
++# call __getauxval using the PLT.
++libc.so: __getauxval ?
+ # The dynamic loader needs __tls_get_addr for TLS.
+ ld.so: __tls_get_addr
+ # The main malloc is interposed into the dynamic linker, for

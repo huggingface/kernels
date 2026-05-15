@@ -1,0 +1,354 @@
+commit 2fe64148a81f0d78050c302f34a6853d21f7cae4
+Author: DJ Delorie <dj@redhat.com>
+Date:   Mon Mar 28 23:53:33 2022 -0400
+
+    Allow for unpriviledged nested containers
+    
+    If the build itself is run in a container, we may not be able to
+    fully set up a nested container for test-container testing.
+    Notably is the mounting of /proc, since it's critical that it
+    be mounted from within the same PID namespace as its users, and
+    thus cannot be bind mounted from outside the container like other
+    mounts.
+    
+    This patch defaults to using the parent's PID namespace instead of
+    creating a new one, as this is more likely to be allowed.
+    
+    If the test needs an isolated PID namespace, it should add the "pidns"
+    command to its init script.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	nss/tst-reload2.c
+          (not in RHEL-8)
+	support/Makefile
+          (RHEL-8 missing some routines in libsupport-routines)
+
+diff --git a/elf/tst-pldd.c b/elf/tst-pldd.c
+index f381cb0fa7e6b93d..45ac033a0f897088 100644
+--- a/elf/tst-pldd.c
++++ b/elf/tst-pldd.c
+@@ -85,6 +85,8 @@ in_str_list (const char *libname, const char *const strlist[])
+ static int
+ do_test (void)
+ {
++  support_need_proc ("needs /proc/sys/kernel/yama/ptrace_scope and /proc/$child");
++
+   /* Check if our subprocess can be debugged with ptrace.  */
+   {
+     int ptrace_scope = support_ptrace_scope ();
+diff --git a/nptl/tst-pthread-getattr.c b/nptl/tst-pthread-getattr.c
+index 273b6073abe9cb60..f1c0b39f3a27724c 100644
+--- a/nptl/tst-pthread-getattr.c
++++ b/nptl/tst-pthread-getattr.c
+@@ -28,6 +28,8 @@
+ #include <unistd.h>
+ #include <inttypes.h>
+ 
++#include <support/support.h>
++
+ /* There is an obscure bug in the kernel due to which RLIMIT_STACK is sometimes
+    returned as unlimited when it is not, which may cause this test to fail.
+    There is also the other case where RLIMIT_STACK is intentionally set as
+@@ -152,6 +154,8 @@ check_stack_top (void)
+ static int
+ do_test (void)
+ {
++  support_need_proc ("Reads /proc/self/maps to get stack size.");
++
+   pagesize = sysconf (_SC_PAGESIZE);
+   return check_stack_top ();
+ }
+diff --git a/support/Makefile b/support/Makefile
+index 636d69c4f8e7e139..e184fccbe7d2310c 100644
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -59,6 +59,7 @@ libsupport-routines = \
+   support_format_hostent \
+   support_format_netent \
+   support_isolate_in_subprocess \
++  support_need_proc \
+   support_process_state \
+   support_ptrace \
+   support_openpty \
+diff --git a/support/support.h b/support/support.h
+index 96833bd4e992e6d3..1466eb29f840fa59 100644
+--- a/support/support.h
++++ b/support/support.h
+@@ -81,6 +81,11 @@ char *support_quote_string (const char *);
+    regular file open for writing, and initially empty.  */
+ int support_descriptor_supports_holes (int fd);
+ 
++/* Predicates that a test requires a working /proc filesystem.  This
++   call will exit with UNSUPPORTED if /proc is not available, printing
++   WHY_MSG as part of the diagnostic.  */
++void support_need_proc (const char *why_msg);
++
+ /* Error-checking wrapper functions which terminate the process on
+    error.  */
+ 
+diff --git a/support/support_need_proc.c b/support/support_need_proc.c
+new file mode 100644
+index 0000000000000000..9b4eab7539b2d6c3
+--- /dev/null
++++ b/support/support_need_proc.c
+@@ -0,0 +1,35 @@
++/* Indicate that a test requires a working /proc.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <unistd.h>
++#include <support/check.h>
++#include <support/support.h>
++
++/* We test for /proc/self/maps since that's one of the files that one
++   of our tests actually uses, but the general idea is if Linux's
++   /proc/ (procfs) filesystem is mounted.  If not, the process exits
++   with an UNSUPPORTED result code.  */
++
++void
++support_need_proc (const char *why_msg)
++{
++#ifdef __linux__
++  if (access ("/proc/self/maps", R_OK))
++    FAIL_UNSUPPORTED ("/proc is not available, %s", why_msg);
++#endif
++}
+diff --git a/support/test-container.c b/support/test-container.c
+index 9975c8cb7bc9a955..2bce4db841ff7668 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -95,6 +95,7 @@ int verbose = 0;
+    * mytest.root/mytest.script has a list of "commands" to run:
+        syntax:
+          # comment
++	 pidns <comment>
+          su
+          mv FILE FILE
+ 	 cp FILE FILE
+@@ -120,6 +121,8 @@ int verbose = 0;
+ 
+        details:
+          - '#': A comment.
++	 - 'pidns': Require a separate PID namespace, prints comment if it can't
++	    (default is a shared pid namespace)
+          - 'su': Enables running test as root in the container.
+          - 'mv': A minimal move files command.
+          - 'cp': A minimal copy files command.
+@@ -143,7 +146,7 @@ int verbose = 0;
+    * Simple, easy to review code (i.e. prefer simple naive code over
+      complex efficient code)
+ 
+-   * The current implementation ist parallel-make-safe, but only in
++   * The current implementation is parallel-make-safe, but only in
+      that it uses a lock to prevent parallel access to the testroot.  */
+ 
+ 
+@@ -222,11 +225,37 @@ concat (const char *str, ...)
+   return bufs[n];
+ }
+ 
++/* Like the above, but put spaces between words.  Caller frees.  */
++static char *
++concat_words (char **words, int num_words)
++{
++  int len = 0;
++  int i;
++  char *rv, *p;
++
++  for (i = 0; i < num_words; i ++)
++    {
++      len += strlen (words[i]);
++      len ++;
++    }
++
++  p = rv = (char *) xmalloc (len);
++
++  for (i = 0; i < num_words; i ++)
++    {
++      if (i > 0)
++	p = stpcpy (p, " ");
++      p = stpcpy (p, words[i]);
++    }
++
++  return rv;
++}
++
+ /* Try to mount SRC onto DEST.  */
+ static void
+ trymount (const char *src, const char *dest)
+ {
+-  if (mount (src, dest, "", MS_BIND, NULL) < 0)
++  if (mount (src, dest, "", MS_BIND | MS_REC, NULL) < 0)
+     FAIL_EXIT1 ("can't mount %s onto %s\n", src, dest);
+ }
+ 
+@@ -709,6 +738,9 @@ main (int argc, char **argv)
+   gid_t original_gid;
+   /* If set, the test runs as root instead of the user running the testsuite.  */
+   int be_su = 0;
++  int require_pidns = 0;
++  const char *pidns_comment = NULL;
++  int do_proc_mounts = 0;
+   int UMAP;
+   int GMAP;
+   /* Used for "%lld %lld 1" so need not be large.  */
+@@ -991,6 +1023,12 @@ main (int argc, char **argv)
+ 	      {
+ 		be_su = 1;
+ 	      }
++	    else if (nt >= 1 && strcmp (the_words[0], "pidns") == 0)
++	      {
++		require_pidns = 1;
++		if (nt > 1)
++		  pidns_comment = concat_words (the_words + 1, nt - 1);
++	      }
+ 	    else if (nt == 3 && strcmp (the_words[0], "mkdirp") == 0)
+ 	      {
+ 		long int m;
+@@ -1048,7 +1086,8 @@ main (int argc, char **argv)
+ 
+ #ifdef CLONE_NEWNS
+   /* The unshare here gives us our own spaces and capabilities.  */
+-  if (unshare (CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNS) < 0)
++  if (unshare (CLONE_NEWUSER | CLONE_NEWNS
++	       | (require_pidns ? CLONE_NEWPID : 0)) < 0)
+     {
+       /* Older kernels may not support all the options, or security
+ 	 policy may block this call.  */
+@@ -1059,6 +1098,11 @@ main (int argc, char **argv)
+ 	    check_for_unshare_hints ();
+ 	  FAIL_UNSUPPORTED ("unable to unshare user/fs: %s", strerror (saved_errno));
+ 	}
++      /* We're about to exit anyway, it's "safe" to call unshare again
++	 just to see if the CLONE_NEWPID caused the error.  */
++      else if (require_pidns && unshare (CLONE_NEWUSER | CLONE_NEWNS) >= 0)
++	FAIL_EXIT1 ("unable to unshare pid ns: %s : %s", strerror (errno),
++		    pidns_comment ? pidns_comment : "required by test");
+       else
+ 	FAIL_EXIT1 ("unable to unshare user/fs: %s", strerror (errno));
+     }
+@@ -1074,6 +1118,15 @@ main (int argc, char **argv)
+   trymount (support_srcdir_root, new_srcdir_path);
+   trymount (support_objdir_root, new_objdir_path);
+ 
++  /* It may not be possible to mount /proc directly.  */
++  if (! require_pidns)
++  {
++    char *new_proc = concat (new_root_path, "/proc", NULL);
++    xmkdirp (new_proc, 0755);
++    trymount ("/proc", new_proc);
++    do_proc_mounts = 1;
++  }
++
+   xmkdirp (concat (new_root_path, "/dev", NULL), 0755);
+   devmount (new_root_path, "null");
+   devmount (new_root_path, "zero");
+@@ -1136,42 +1189,60 @@ main (int argc, char **argv)
+ 
+   maybe_xmkdir ("/tmp", 0755);
+ 
+-  /* Now that we're pid 1 (effectively "root") we can mount /proc  */
+-  maybe_xmkdir ("/proc", 0777);
+-  if (mount ("proc", "/proc", "proc", 0, NULL) < 0)
+-    FAIL_EXIT1 ("Unable to mount /proc: ");
+-
+-  /* We map our original UID to the same UID in the container so we
+-     can own our own files normally.  */
+-  UMAP = open ("/proc/self/uid_map", O_WRONLY);
+-  if (UMAP < 0)
+-    FAIL_EXIT1 ("can't write to /proc/self/uid_map\n");
+-
+-  sprintf (tmp, "%lld %lld 1\n",
+-	   (long long) (be_su ? 0 : original_uid), (long long) original_uid);
+-  write (UMAP, tmp, strlen (tmp));
+-  xclose (UMAP);
+-
+-  /* We must disable setgroups () before we can map our groups, else we
+-     get EPERM.  */
+-  GMAP = open ("/proc/self/setgroups", O_WRONLY);
+-  if (GMAP >= 0)
++  if (require_pidns)
+     {
+-      /* We support kernels old enough to not have this.  */
+-      write (GMAP, "deny\n", 5);
+-      xclose (GMAP);
++      /* Now that we're pid 1 (effectively "root") we can mount /proc  */
++      maybe_xmkdir ("/proc", 0777);
++      if (mount ("proc", "/proc", "proc", 0, NULL) != 0)
++	{
++	  /* This happens if we're trying to create a nested container,
++	     like if the build is running under podman, and we lack
++	     priviledges.
++
++	     Ideally we would WARN here, but that would just add noise to
++	     *every* test-container test, and the ones that care should
++	     have their own relevent diagnostics.
++
++	     FAIL_EXIT1 ("Unable to mount /proc: ");  */
++	}
++      else
++	do_proc_mounts = 1;
+     }
+ 
+-  /* We map our original GID to the same GID in the container so we
+-     can own our own files normally.  */
+-  GMAP = open ("/proc/self/gid_map", O_WRONLY);
+-  if (GMAP < 0)
+-    FAIL_EXIT1 ("can't write to /proc/self/gid_map\n");
++  if (do_proc_mounts)
++    {
++      /* We map our original UID to the same UID in the container so we
++	 can own our own files normally.  */
++      UMAP = open ("/proc/self/uid_map", O_WRONLY);
++      if (UMAP < 0)
++	FAIL_EXIT1 ("can't write to /proc/self/uid_map\n");
++
++      sprintf (tmp, "%lld %lld 1\n",
++	       (long long) (be_su ? 0 : original_uid), (long long) original_uid);
++      write (UMAP, tmp, strlen (tmp));
++      xclose (UMAP);
++
++      /* We must disable setgroups () before we can map our groups, else we
++	 get EPERM.  */
++      GMAP = open ("/proc/self/setgroups", O_WRONLY);
++      if (GMAP >= 0)
++	{
++	  /* We support kernels old enough to not have this.  */
++	  write (GMAP, "deny\n", 5);
++	  xclose (GMAP);
++	}
+ 
+-  sprintf (tmp, "%lld %lld 1\n",
+-	   (long long) (be_su ? 0 : original_gid), (long long) original_gid);
+-  write (GMAP, tmp, strlen (tmp));
+-  xclose (GMAP);
++      /* We map our original GID to the same GID in the container so we
++	 can own our own files normally.  */
++      GMAP = open ("/proc/self/gid_map", O_WRONLY);
++      if (GMAP < 0)
++	FAIL_EXIT1 ("can't write to /proc/self/gid_map\n");
++
++      sprintf (tmp, "%lld %lld 1\n",
++	       (long long) (be_su ? 0 : original_gid), (long long) original_gid);
++      write (GMAP, tmp, strlen (tmp));
++      xclose (GMAP);
++    }
+ 
+   if (change_cwd)
+     {

@@ -1,0 +1,34 @@
+commit 43530ba1dc4fccd438fefa26f50977ff6bf284c7
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Sat Jul 11 10:03:05 2020 -0700
+
+    x86: Remove __ASSEMBLER__ check in init-arch.h
+    
+    Since
+    
+    commit 430388d5dc0e1861b869096f4f5d946d7d74232a
+    Author: H.J. Lu <hjl.tools@gmail.com>
+    Date:   Fri Aug 3 08:04:49 2018 -0700
+    
+        x86: Don't include <init-arch.h> in assembly codes
+    
+    removed all usages of <init-arch.h> from assembly codes, we can remove
+    __ASSEMBLER__ check in init-arch.h.
+
+diff --git a/sysdeps/x86/init-arch.h b/sysdeps/x86/init-arch.h
+index bc860fcd69a605b3..63a7f8562010e5e2 100644
+--- a/sysdeps/x86/init-arch.h
++++ b/sysdeps/x86/init-arch.h
+@@ -15,11 +15,7 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#ifdef  __ASSEMBLER__
+-# include <cpu-features.h>
+-#else
+-# include <ldsodefs.h>
+-#endif
++#include <ldsodefs.h>
+ #include <ifunc-init.h>
+ #include <isa.h>
+ 

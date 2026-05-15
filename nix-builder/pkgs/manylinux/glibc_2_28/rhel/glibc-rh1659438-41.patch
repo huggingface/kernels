@@ -1,0 +1,252 @@
+commit c3081bcbd91a619115f047c2ceea90a9090d5216
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:19 2018 +0100
+
+    S390: Refactor wcpncpy ifunc handling.
+    
+    The ifunc handling for wcpncpy is adjusted in order to omit ifunc
+    if the minimum architecture level already supports newer CPUs by default.
+    Unfortunately the c ifunc variant can't be omitted at all as it is used
+    by the z13 ifunc variant as fallback if the pointers are not 4-byte aligned.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/multiarch/Makefile
+            (sysdep_routines): Remove wcpncpy variants.
+            * sysdeps/s390/Makefile (sysdep_routines): Add wcpncpy variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Refactor ifunc handling for wcpncpy.
+            * sysdeps/s390/multiarch/wcpncpy-c.c: Move to ...
+            * sysdeps/s390/wcpncpy-c.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcpncpy-vx.S: Move to ...
+            * sysdeps/s390/wcpncpy-vx.S: ... here and adjust ifunc handling.
+            * sysdeps/s390/multiarch/wcpncpy.c: Move to ...
+            * sysdeps/s390/wcpncpy.c: ... here and adjust ifunc handling.
+            * sysdeps/s390/ifunc-wcpncpy.h: New file.
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index cc8357361e1f2574..640177370382235f 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -64,5 +64,6 @@ sysdep_routines += wcslen wcslen-vx wcslen-c \
+ 		   wcsnlen wcsnlen-vx wcsnlen-c \
+ 		   wcscpy wcscpy-vx wcscpy-c \
+ 		   wcpcpy wcpcpy-vx wcpcpy-c \
+-		   wcsncpy wcsncpy-vx wcsncpy-c
++		   wcsncpy wcsncpy-vx wcsncpy-c \
++		   wcpncpy wcpncpy-vx wcpncpy-c
+ endif
+diff --git a/sysdeps/s390/ifunc-wcpncpy.h b/sysdeps/s390/ifunc-wcpncpy.h
+new file mode 100644
+index 0000000000000000..0dd5633aa9cd780b
+--- /dev/null
++++ b/sysdeps/s390/ifunc-wcpncpy.h
+@@ -0,0 +1,53 @@
++/* wcpncpy variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)		\
++  && ! defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define HAVE_WCPNCPY_IFUNC	1
++#else
++# define HAVE_WCPNCPY_IFUNC	0
++#endif
++
++#ifdef HAVE_S390_VX_ASM_SUPPORT
++# define HAVE_WCPNCPY_IFUNC_AND_VX_SUPPORT HAVE_WCPNCPY_IFUNC
++#else
++# define HAVE_WCPNCPY_IFUNC_AND_VX_SUPPORT 0
++#endif
++
++#if defined HAVE_S390_MIN_Z13_ZARCH_ASM_SUPPORT
++# define WCPNCPY_DEFAULT	WCPNCPY_Z13
++/* The z13 ifunc variant is using the common code variant as fallback!  */
++# define HAVE_WCPNCPY_C		1
++# define HAVE_WCPNCPY_Z13	1
++#else
++# define WCPNCPY_DEFAULT	WCPNCPY_C
++# define HAVE_WCPNCPY_C		1
++# define HAVE_WCPNCPY_Z13	HAVE_WCPNCPY_IFUNC_AND_VX_SUPPORT
++#endif
++
++#if HAVE_WCPNCPY_C
++# define WCPNCPY_C		__wcpncpy_c
++#else
++# define WCPNCPY_C		NULL
++#endif
++
++#if HAVE_WCPNCPY_Z13
++# define WCPNCPY_Z13		__wcpncpy_vx
++#else
++# define WCPNCPY_Z13		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 6631fd14d32fde72..158fb495523438b4 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -1,6 +1,5 @@
+ ifeq ($(subdir),wcsmbs)
+-sysdep_routines += wcpncpy wcpncpy-vx wcpncpy-c \
+-		   wcscat wcscat-vx wcscat-c \
++sysdep_routines += wcscat wcscat-vx wcscat-c \
+ 		   wcsncat wcsncat-vx wcsncat-c \
+ 		   wcscmp wcscmp-vx wcscmp-c \
+ 		   wcsncmp wcsncmp-vx wcsncmp-c \
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index 9ebaf4de6f2eb841..e60238fcde4dcd4f 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -51,6 +51,7 @@
+ #include <ifunc-wcscpy.h>
+ #include <ifunc-wcpcpy.h>
+ #include <ifunc-wcsncpy.h>
++#include <ifunc-wcpncpy.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -489,6 +490,18 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 		)
+ #endif /* HAVE_WCSNCPY_IFUNC  */
+ 
++#if HAVE_WCPNCPY_IFUNC
++    IFUNC_IMPL (i, name, wcpncpy,
++# if HAVE_WCPNCPY_Z13
++		IFUNC_IMPL_ADD (array, i, wcpncpy,
++				dl_hwcap & HWCAP_S390_VX, WCPNCPY_Z13)
++# endif
++# if HAVE_WCPNCPY_C
++		IFUNC_IMPL_ADD (array, i, wcpncpy, 1, WCPNCPY_C)
++# endif
++		)
++#endif /* HAVE_WCPNCPY_IFUNC  */
++
+ #ifdef HAVE_S390_VX_ASM_SUPPORT
+ 
+ # define IFUNC_VX_IMPL(FUNC)						\
+@@ -497,8 +510,6 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __##FUNC##_vx)				\
+ 	      IFUNC_IMPL_ADD (array, i, FUNC, 1, __##FUNC##_c))
+ 
+-  IFUNC_VX_IMPL (wcpncpy);
+-
+   IFUNC_VX_IMPL (wcscat);
+ 
+   IFUNC_VX_IMPL (wcsncat);
+diff --git a/sysdeps/s390/multiarch/wcpncpy-c.c b/sysdeps/s390/wcpncpy-c.c
+similarity index 85%
+rename from sysdeps/s390/multiarch/wcpncpy-c.c
+rename to sysdeps/s390/wcpncpy-c.c
+index 1f44bacea9b65d44..d03359217e98a1f3 100644
+--- a/sysdeps/s390/multiarch/wcpncpy-c.c
++++ b/sysdeps/s390/wcpncpy-c.c
+@@ -16,10 +16,12 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
+-# define WCPNCPY  __wcpncpy_c
++#include <ifunc-wcpncpy.h>
++
++#if HAVE_WCPNCPY_C
++# if HAVE_WCPNCPY_IFUNC || HAVE_WCPNCPY_Z13
++#  define WCPNCPY WCPNCPY_C
++# endif
+ 
+-# include <wchar.h>
+-extern __typeof (__wcpncpy) __wcpncpy_c;
+ # include <wcsmbs/wcpncpy.c>
+ #endif
+diff --git a/sysdeps/s390/multiarch/wcpncpy-vx.S b/sysdeps/s390/wcpncpy-vx.S
+similarity index 97%
+rename from sysdeps/s390/multiarch/wcpncpy-vx.S
+rename to sysdeps/s390/wcpncpy-vx.S
+index 004f512e1f1a7982..7b5e4ad32d42d44b 100644
+--- a/sysdeps/s390/multiarch/wcpncpy-vx.S
++++ b/sysdeps/s390/wcpncpy-vx.S
+@@ -16,7 +16,8 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcpncpy.h>
++#if HAVE_WCPNCPY_Z13
+ 
+ # include "sysdep.h"
+ # include "asm-syntax.h"
+@@ -38,7 +39,7 @@
+    -%r6 = loaded bytes
+    -%r7 = border, tmp
+ */
+-ENTRY(__wcpncpy_vx)
++ENTRY(WCPNCPY_Z13)
+ 	.machine "z13"
+ 	.machinemode "zarch_nohighgprs"
+ 
+@@ -217,6 +218,11 @@ ENTRY(__wcpncpy_vx)
+ 	j	.Llt64
+ 
+ .Lfallback:
+-	jg	__wcpncpy_c
+-END(__wcpncpy_vx)
+-#endif /* HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc) */
++	jg	WCPNCPY_C
++END(WCPNCPY_Z13)
++
++# if ! HAVE_WCPNCPY_IFUNC
++strong_alias (WCPNCPY_Z13, __wcpncpy)
++weak_alias (__wcpncpy, wcpncpy)
++# endif
++#endif
+diff --git a/sysdeps/s390/multiarch/wcpncpy.c b/sysdeps/s390/wcpncpy.c
+similarity index 70%
+rename from sysdeps/s390/multiarch/wcpncpy.c
+rename to sysdeps/s390/wcpncpy.c
+index b72265fbe9df65d0..08d097dd2cb6dfd7 100644
+--- a/sysdeps/s390/multiarch/wcpncpy.c
++++ b/sysdeps/s390/wcpncpy.c
+@@ -16,13 +16,24 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)
++#include <ifunc-wcpncpy.h>
++
++#if HAVE_WCPNCPY_IFUNC
+ # include <wchar.h>
+ # include <ifunc-resolve.h>
+ 
+-s390_vx_libc_ifunc (__wcpncpy)
+-weak_alias (__wcpncpy, wcpncpy)
++# if HAVE_WCPNCPY_C
++extern __typeof (__wcpncpy) WCPNCPY_C attribute_hidden;
++# endif
+ 
+-#else
+-# include <wcsmbs/wcpncpy.c>
+-#endif /* !(defined HAVE_S390_VX_ASM_SUPPORT && IS_IN (libc)) */
++# if HAVE_WCPNCPY_Z13
++extern __typeof (__wcpncpy) WCPNCPY_Z13 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__wcpncpy, __wcpncpy,
++		      (HAVE_WCPNCPY_Z13 && (hwcap & HWCAP_S390_VX))
++		      ? WCPNCPY_Z13
++		      : WCPNCPY_DEFAULT
++		      )
++weak_alias (__wcpncpy, wcpncpy)
++#endif

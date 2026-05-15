@@ -1,0 +1,440 @@
+Added $(objpfx)tst-audit23: $(libdl) to elf/Makefile since
+we still need $(libdl) in RHEL8.
+
+commit 5fa11a2bc94c912c3b25860065086902674537ba
+Author: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+Date:   Mon Jan 24 10:46:15 2022 -0300
+
+    elf: Add la_activity during application exit
+    
+    la_activity is not called during application exit, even though
+    la_objclose is.
+    
+    Checked on x86_64-linux-gnu, i686-linux-gnu, and aarch64-linux-gnu.
+    
+    Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+    Tested-by: Carlos O'Donell <carlos@redhat.com>
+
+Conflicts:
+	elf/Makefile
+
+diff --git a/elf/Makefile b/elf/Makefile
+index 954cd08c199f5037..e4955c9f575f9015 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -345,6 +345,7 @@ tests += \
+   tst-audit2 \
+   tst-audit20 \
+   tst-audit22 \
++  tst-audit23 \
+   tst-audit8 \
+   tst-audit9 \
+   tst-auditmany \
+@@ -608,6 +609,7 @@ modules-names = \
+   tst-audit13mod1 \
+   tst-audit18mod \
+   tst-audit19bmod \
++  tst-audit23mod \
+   tst-auditlogmod-1 \
+   tst-auditlogmod-2 \
+   tst-auditlogmod-3 \
+@@ -630,6 +632,7 @@ modules-names = \
+   tst-auditmod19b \
+   tst-auditmod20 \
+   tst-auditmod22 \
++  tst-auditmod23 \
+   tst-big-note-lib \
+   tst-deep1mod1 \
+   tst-deep1mod2 \
+@@ -2041,6 +2044,11 @@ $(objpfx)tst-auditmod20.so: $(libdl)
+ $(objpfx)tst-audit22.out: $(objpfx)tst-auditmod22.so
+ tst-audit22-ARGS = -- $(host-test-program-cmd)
+ 
++$(objpfx)tst-audit23: $(libdl)
++$(objpfx)tst-audit23.out: $(objpfx)tst-auditmod23.so \
++			  $(objpfx)tst-audit23mod.so
++tst-audit23-ARGS = -- $(host-test-program-cmd)
++
+ # tst-sonamemove links against an older implementation of the library.
+ LDFLAGS-tst-sonamemove-linkmod1.so = \
+   -Wl,--version-script=tst-sonamemove-linkmod1.map \
+diff --git a/elf/dl-fini.c b/elf/dl-fini.c
+index e102d93647cb8c47..eea9d8aad736a99e 100644
+--- a/elf/dl-fini.c
++++ b/elf/dl-fini.c
+@@ -63,6 +63,10 @@ _dl_fini (void)
+ 	__rtld_lock_unlock_recursive (GL(dl_load_lock));
+       else
+ 	{
++#ifdef SHARED
++	  _dl_audit_activity_nsid (ns, LA_ACT_DELETE);
++#endif
++
+ 	  /* Now we can allocate an array to hold all the pointers and
+ 	     copy the pointers in.  */
+ 	  struct link_map *maps[nloaded];
+@@ -153,6 +157,10 @@ _dl_fini (void)
+ 	      /* Correct the previous increment.  */
+ 	      --l->l_direct_opencount;
+ 	    }
++
++#ifdef SHARED
++	  _dl_audit_activity_nsid (ns, LA_ACT_CONSISTENT);
++#endif
+ 	}
+     }
+ 
+diff --git a/elf/tst-audit23.c b/elf/tst-audit23.c
+new file mode 100644
+index 0000000000000000..4904cf1340a97ee1
+--- /dev/null
++++ b/elf/tst-audit23.c
+@@ -0,0 +1,239 @@
++/* Check for expected la_objopen and la_objeclose for all objects.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <errno.h>
++#include <getopt.h>
++#include <link.h>
++#include <limits.h>
++#include <inttypes.h>
++#include <gnu/lib-names.h>
++#include <string.h>
++#include <stdlib.h>
++#include <support/capture_subprocess.h>
++#include <support/check.h>
++#include <support/xstdio.h>
++#include <support/xdlfcn.h>
++#include <support/support.h>
++
++static int restart;
++#define CMDLINE_OPTIONS \
++  { "restart", no_argument, &restart, 1 },
++
++static int
++handle_restart (void)
++{
++  xdlopen ("tst-audit23mod.so", RTLD_NOW);
++  xdlmopen (LM_ID_NEWLM, LIBC_SO, RTLD_NOW);
++
++  return 0;
++}
++
++static inline bool
++startswith (const char *str, const char *pre)
++{
++  size_t lenpre = strlen (pre);
++  size_t lenstr = strlen (str);
++  return lenstr >= lenpre && memcmp (pre, str, lenpre) == 0;
++}
++
++static inline bool
++is_vdso (const char *str)
++{
++  return startswith (str, "linux-gate")
++	 || startswith (str, "linux-vdso");
++}
++
++static int
++do_test (int argc, char *argv[])
++{
++  /* We must have either:
++     - One or four parameters left if called initially:
++       + path to ld.so         optional
++       + "--library-path"      optional
++       + the library path      optional
++       + the application name  */
++  if (restart)
++    return handle_restart ();
++
++  char *spargv[9];
++  TEST_VERIFY_EXIT (((argc - 1) + 3) < array_length (spargv));
++  int i = 0;
++  for (; i < argc - 1; i++)
++    spargv[i] = argv[i + 1];
++  spargv[i++] = (char *) "--direct";
++  spargv[i++] = (char *) "--restart";
++  spargv[i] = NULL;
++
++  setenv ("LD_AUDIT", "tst-auditmod23.so", 0);
++  struct support_capture_subprocess result
++    = support_capture_subprogram (spargv[0], spargv);
++  support_capture_subprocess_check (&result, "tst-audit22", 0, sc_allow_stderr);
++
++  /* The expected la_objopen/la_objclose:
++     1. executable
++     2. loader
++     3. libc.so
++     4. tst-audit23mod.so
++     5. libc.so (LM_ID_NEWLM).
++     6. vdso (optional and ignored).  */
++  enum { max_objs = 6 };
++  struct la_obj_t
++  {
++    char *lname;
++    uintptr_t laddr;
++    Lmid_t lmid;
++    bool closed;
++  } objs[max_objs] = { [0 ... max_objs-1] = { .closed = false } };
++  size_t nobjs = 0;
++
++  /* The expected namespaces are one for the audit module, one for the
++     application, and another for the dlmopen on handle_restart.  */
++  enum { max_ns = 3 };
++  uintptr_t acts[max_ns] = { 0 };
++  size_t nacts = 0;
++  int last_act = -1;
++  uintptr_t last_act_cookie = -1;
++  bool seen_first_objclose = false;
++
++  FILE *out = fmemopen (result.err.buffer, result.err.length, "r");
++  TEST_VERIFY (out != NULL);
++  char *buffer = NULL;
++  size_t buffer_length = 0;
++  while (xgetline (&buffer, &buffer_length, out))
++    {
++      if (startswith (buffer, "la_activity: "))
++	{
++	  uintptr_t cookie;
++	  int this_act;
++	  int r = sscanf (buffer, "la_activity: %d %"SCNxPTR"", &this_act,
++			  &cookie);
++	  TEST_COMPARE (r, 2);
++
++	  /* The cookie identifies the object at the head of the link map,
++	     so we only add a new namespace if it changes from the previous
++	     one.  This works since dlmopen is the last in the test body.  */
++	  if (cookie != last_act_cookie && last_act_cookie != -1)
++	    TEST_COMPARE (last_act, LA_ACT_CONSISTENT);
++
++	  if (this_act == LA_ACT_ADD && acts[nacts] != cookie)
++	    {
++	      acts[nacts++] = cookie;
++	      last_act_cookie = cookie;
++	    }
++	  /* The LA_ACT_DELETE is called in the reverse order of LA_ACT_ADD
++	     at program termination (if the tests adds a dlclose or a library
++	     with extra dependencies this will need to be adapted).  */
++	  else if (this_act == LA_ACT_DELETE)
++	    {
++	      last_act_cookie = acts[--nacts];
++	      TEST_COMPARE (acts[nacts], cookie);
++	      acts[nacts] = 0;
++	    }
++	  else if (this_act == LA_ACT_CONSISTENT)
++	    {
++	      TEST_COMPARE (cookie, last_act_cookie);
++
++	      /* LA_ACT_DELETE must always be followed by an la_objclose.  */
++	      if (last_act == LA_ACT_DELETE)
++		TEST_COMPARE (seen_first_objclose, true);
++	      else
++		TEST_COMPARE (last_act, LA_ACT_ADD);
++	    }
++
++	  last_act = this_act;
++	  seen_first_objclose = false;
++	}
++      else if (startswith (buffer, "la_objopen: "))
++	{
++	  char *lname;
++	  uintptr_t laddr;
++	  Lmid_t lmid;
++	  uintptr_t cookie;
++	  int r = sscanf (buffer, "la_objopen: %"SCNxPTR"  %ms %"SCNxPTR" %ld",
++			  &cookie, &lname, &laddr, &lmid);
++	  TEST_COMPARE (r, 4);
++
++	  /* la_objclose is not triggered by vDSO because glibc does not
++	     unload it.  */
++	  if (is_vdso (lname))
++	    continue;
++	  if (nobjs == max_objs)
++	    FAIL_EXIT1 ("non expected la_objopen: %s %"PRIxPTR" %ld",
++			lname, laddr, lmid);
++	  objs[nobjs].lname = lname;
++	  objs[nobjs].laddr = laddr;
++	  objs[nobjs].lmid = lmid;
++	  objs[nobjs].closed = false;
++	  nobjs++;
++
++	  /* This indirectly checks that la_objopen always comes before
++	     la_objclose btween la_activity calls.  */
++	  seen_first_objclose = false;
++	}
++      else if (startswith (buffer, "la_objclose: "))
++	{
++	  char *lname;
++	  uintptr_t laddr;
++	  Lmid_t lmid;
++	  uintptr_t cookie;
++	  int r = sscanf (buffer, "la_objclose: %"SCNxPTR" %ms %"SCNxPTR" %ld",
++			  &cookie, &lname, &laddr, &lmid);
++	  TEST_COMPARE (r, 4);
++
++	  for (size_t i = 0; i < nobjs; i++)
++	    {
++	      if (strcmp (lname, objs[i].lname) == 0 && lmid == objs[i].lmid)
++		{
++		  TEST_COMPARE (objs[i].closed, false);
++		  objs[i].closed = true;
++		  break;
++		}
++	    }
++
++	  /* la_objclose should be called after la_activity(LA_ACT_DELETE) for
++	     the closed object's namespace.  */
++	  TEST_COMPARE (last_act, LA_ACT_DELETE);
++	  if (!seen_first_objclose)
++	    {
++	      TEST_COMPARE (last_act_cookie, cookie);
++	      seen_first_objclose = true;
++	    }
++	}
++    }
++
++  for (size_t i = 0; i < nobjs; i++)
++    {
++      TEST_COMPARE (objs[i].closed, true);
++      free (objs[i].lname);
++    }
++
++  /* la_activity(LA_ACT_CONSISTENT) should be the last callback received.
++     Since only one link map may be not-CONSISTENT at a time, this also
++     ensures la_activity(LA_ACT_CONSISTENT) is the last callback received
++     for every namespace.  */
++  TEST_COMPARE (last_act, LA_ACT_CONSISTENT);
++
++  free (buffer);
++  xfclose (out);
++
++  return 0;
++}
++
++#define TEST_FUNCTION_ARGV do_test
++#include <support/test-driver.c>
+diff --git a/elf/tst-audit23mod.c b/elf/tst-audit23mod.c
+new file mode 100644
+index 0000000000000000..30315687037d25e8
+--- /dev/null
++++ b/elf/tst-audit23mod.c
+@@ -0,0 +1,23 @@
++/* Extra module for tst-audit23
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++int
++foo (void)
++{
++  return 0;
++}
+diff --git a/elf/tst-auditmod23.c b/elf/tst-auditmod23.c
+new file mode 100644
+index 0000000000000000..d7c60d7a5cbc4f8a
+--- /dev/null
++++ b/elf/tst-auditmod23.c
+@@ -0,0 +1,74 @@
++/* Audit module loaded by tst-audit23.
++   Copyright (C) 2022 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <link.h>
++#include <inttypes.h>
++#include <stdlib.h>
++#include <stdio.h>
++#include <string.h>
++#include <sys/auxv.h>
++
++unsigned int
++la_version (unsigned int version)
++{
++  return LAV_CURRENT;
++}
++
++struct map_desc_t
++{
++  char *lname;
++  uintptr_t laddr;
++  Lmid_t lmid;
++};
++
++void
++la_activity (uintptr_t *cookie, unsigned int flag)
++{
++  fprintf (stderr, "%s: %d %"PRIxPTR"\n", __func__, flag, (uintptr_t) cookie);
++}
++
++unsigned int
++la_objopen (struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
++{
++  const char *l_name = map->l_name[0] == '\0' ? "mainapp" : map->l_name;
++  fprintf (stderr, "%s: %"PRIxPTR" %s %"PRIxPTR" %ld\n", __func__,
++	   (uintptr_t) cookie, l_name, map->l_addr, lmid);
++
++  struct map_desc_t *map_desc = malloc (sizeof (struct map_desc_t));
++  if (map_desc == NULL)
++    abort ();
++
++  map_desc->lname = strdup (l_name);
++  map_desc->laddr = map->l_addr;
++  map_desc->lmid = lmid;
++
++  *cookie = (uintptr_t) map_desc;
++
++  return 0;
++}
++
++unsigned int
++la_objclose (uintptr_t *cookie)
++{
++  struct map_desc_t *map_desc = (struct map_desc_t *) *cookie;
++  fprintf (stderr, "%s: %"PRIxPTR" %s %"PRIxPTR" %ld\n", __func__,
++	   (uintptr_t) cookie, map_desc->lname, map_desc->laddr,
++	   map_desc->lmid);
++
++  return 0;
++}

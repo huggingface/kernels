@@ -1,0 +1,521 @@
+commit 712a254a97ade7f48fb7a434339faa05c048ce1f
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:04 2018 +0100
+
+    S390: Refactor memset ifunc handling.
+    
+    This patch moves all ifunc variants for memset
+    to sysdeps/s390/memset-z900.S. The configure-check/preprocessor logic
+    in sysdeps/s390/ifunc-memset.h decides if ifunc is needed at all
+    and which ifunc variants should be available.
+    E.g. if the compiler/assembler already supports z196 by default,
+    the older ifunc variants are not included.
+    If we only need the newest ifunc variant,
+    then we can skip ifunc at all.
+    
+    Therefore the ifunc-resolvers and __libc_ifunc_impl_list are adjusted
+    in order to handle only the available ifunc variants.
+    
+    ChangeLog:
+    
+            * sysdeps/s390/ifunc-memset.h: New File.
+            * sysdeps/s390/memset.S: Move to ...
+            * sysdeps/s390/memset-z900.S ... here.
+            Move implementations from memset-s390x.s to here.
+            * sysdeps/s390/multiarch/memset-s390x.S: Delete File.
+            * sysdeps/s390/multiarch/Makefile (sysdep_routines):
+            Remove memset variants.
+            * sysdeps/s390/Makefile (sysdep_routines):
+            Add memset variants.
+            * sysdeps/s390/multiarch/ifunc-impl-list.c
+            (__libc_ifunc_impl_list): Adjust ifunc variants for
+            memset.
+            * sysdeps/s390/multiarch/memset.c: Move ifunc resolver
+            to ...
+            * sysdeps/s390/memset.c: ... here.
+            Adjust ifunc variants for memset.
+
+Conflicts:
+	sysdeps/s390/Makefile
+	  Missing backport of commit 69e2444ab1444ab8210598abbcb4822701d368b9
+          ("S390: Test that lazy binding does not clobber R0").
+
+diff --git a/sysdeps/s390/Makefile b/sysdeps/s390/Makefile
+index 8a54f88cd7ac880e..360838e172f4ca37 100644
+--- a/sysdeps/s390/Makefile
++++ b/sysdeps/s390/Makefile
+@@ -29,3 +29,7 @@ $(inst_gconvdir)/%.so: $(objpfx)%.so $(+force)
+ 
+ sysdeps-gconv-modules = ../sysdeps/s390/gconv-modules
+ endif
++
++ifeq ($(subdir),string)
++sysdep_routines += memset memset-z900
++endif
+diff --git a/sysdeps/s390/ifunc-memset.h b/sysdeps/s390/ifunc-memset.h
+new file mode 100644
+index 0000000000000000..9a13b1001fed9979
+--- /dev/null
++++ b/sysdeps/s390/ifunc-memset.h
+@@ -0,0 +1,65 @@
++/* memset variant information on S/390 version.
++   Copyright (C) 2018 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#if defined USE_MULTIARCH && IS_IN (libc)	\
++  && ! defined HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# define HAVE_MEMSET_IFUNC	1
++#else
++# define HAVE_MEMSET_IFUNC	0
++#endif
++
++#if defined HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
++# define MEMSET_DEFAULT		MEMSET_Z196
++# define HAVE_MEMSET_Z900_G5	0
++# define HAVE_MEMSET_Z10	0
++# define HAVE_MEMSET_Z196	1
++#elif defined HAVE_S390_MIN_Z10_ZARCH_ASM_SUPPORT
++# define MEMSET_DEFAULT		MEMSET_Z10
++# define HAVE_MEMSET_Z900_G5	0
++# define HAVE_MEMSET_Z10	1
++# define HAVE_MEMSET_Z196	HAVE_MEMSET_IFUNC
++#else
++# define MEMSET_DEFAULT		MEMSET_Z900_G5
++# define HAVE_MEMSET_Z900_G5	1
++# define HAVE_MEMSET_Z10	HAVE_MEMSET_IFUNC
++# define HAVE_MEMSET_Z196	HAVE_MEMSET_IFUNC
++#endif
++
++#if HAVE_MEMSET_Z10 || HAVE_MEMSET_Z196
++# define HAVE_MEMSET_MVCLE	1
++#else
++# define HAVE_MEMSET_MVCLE	0
++#endif
++
++#if HAVE_MEMSET_Z900_G5
++# define MEMSET_Z900_G5		__memset_default
++#else
++# define MEMSET_Z900_G5		NULL
++#endif
++
++#if HAVE_MEMSET_Z10
++# define MEMSET_Z10		__memset_z10
++#else
++# define MEMSET_Z10		NULL
++#endif
++
++#if HAVE_MEMSET_Z196
++# define MEMSET_Z196		__memset_z196
++#else
++# define MEMSET_Z196		NULL
++#endif
+diff --git a/sysdeps/s390/multiarch/memset-s390x.S b/sysdeps/s390/memset-z900.S
+similarity index 57%
+rename from sysdeps/s390/multiarch/memset-s390x.S
+rename to sysdeps/s390/memset-z900.S
+index aca3ac3fda1dd228..eaf13402bd3e251d 100644
+--- a/sysdeps/s390/multiarch/memset-s390x.S
++++ b/sysdeps/s390/memset-z900.S
+@@ -1,5 +1,6 @@
+ /* Set a block of memory to some byte value.  31/64 bit S/390 version.
+-   Copyright (C) 2012-2018 Free Software Foundation, Inc.
++   Copyright (C) 2001-2018 Free Software Foundation, Inc.
++   Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+    This file is part of the GNU C Library.
+ 
+    The GNU C Library is free software; you can redistribute it and/or
+@@ -17,8 +18,9 @@
+    <http://www.gnu.org/licenses/>.  */
+ 
+ 
+-#include "sysdep.h"
++#include <sysdep.h>
+ #include "asm-syntax.h"
++#include <ifunc-memset.h>
+ 
+ /* INPUT PARAMETERS
+      %r2 = address of memory area
+@@ -27,43 +29,68 @@
+ 
+        .text
+ 
+-#if IS_IN (libc)
++#if HAVE_MEMSET_Z900_G5
++# if defined __s390x__
++#  define LTGR	ltgr
++#  define CGHI	cghi
++#  define LGR	lgr
++#  define AGHI	aghi
++#  define BRCTG	brctg
++# else
++#  define LTGR	ltr
++#  define CGHI	chi
++#  define LGR	lr
++#  define AGHI	ahi
++#  define BRCTG	brct
++# endif /* ! defined __s390x__  */
+ 
+-ENTRY(__memset_z196)
+-	.machine "z196"
+-	.machinemode "zarch_nohighgprs"
+-# if !defined __s390x__
+-	llgfr	%r4,%r4
+-# endif /* !defined __s390x__  */
+-	ltgr    %r4,%r4
+-	je      .L_Z196_4
++ENTRY(MEMSET_Z900_G5)
++#if defined __s390x__
++	.machine "z900"
++#else
++	.machine "g5"
++#endif /* ! defined __s390x__  */
++	LTGR    %r4,%r4
++	je      .L_Z900_G5_4
+ 	stc     %r3,0(%r2)
+-	lgr     %r1,%r2
+-	cghi    %r4,1
+-	je      .L_Z196_4
+-	aghi    %r4,-2
+-	srlg    %r5,%r4,8
+-	ltgr    %r5,%r5
+-	jne     .L_Z196_1
+-.L_Z196_3:
+-	exrl    %r4,.L_Z196_17
+-.L_Z196_4:
++	CGHI    %r4,1
++	LGR     %r1,%r2
++	je      .L_Z900_G5_4
++	AGHI    %r4,-2
++#if defined __s390x__
++	larl    %r5,.L_Z900_G5_18
++	srlg    %r3,%r4,8
++# define Z900_G5_EX_D 0
++#else
++	basr    %r5,0
++.L_Z900_G5_19:
++# define Z900_G5_EX_D .L_Z900_G5_18-.L_Z900_G5_19
++	lr      %r3,%r4
++	srl     %r3,8
++#endif /* ! defined __s390x__  */
++	LTGR    %r3,%r3
++	jne     .L_Z900_G5_14
++.L_Z900_G5_3:
++	ex      %r4,Z900_G5_EX_D(%r5)
++.L_Z900_G5_4:
+ 	br      %r14
+-.L_Z196_1:
+-	cgfi	%r5,1048576
+-	jh	__memset_mvcle	   # Switch to mvcle for >256MB
+-.L_Z196_2:
+-	pfd     2,1024(%r1)
++.L_Z900_G5_14:
+ 	mvc     1(256,%r1),0(%r1)
+-	aghi    %r5,-1
+ 	la      %r1,256(%r1)
+-	jne     .L_Z196_2
+-	j       .L_Z196_3
+-.L_Z196_17:
++	BRCTG   %r3,.L_Z900_G5_14
++	j       .L_Z900_G5_3
++.L_Z900_G5_18:
+ 	mvc     1(1,%r1),0(%r1)
+-END(__memset_z196)
++END(MEMSET_Z900_G5)
++# undef LTGR
++# undef CGHI
++# undef LGR
++# undef AGHI
++# undef BRCTG
++#endif /*  HAVE_MEMSET_Z900_G5  */
+ 
+-ENTRY(__memset_z10)
++#if HAVE_MEMSET_Z10
++ENTRY(MEMSET_Z10)
+ 	.machine "z10"
+ 	.machinemode "zarch_nohighgprs"
+ # if !defined __s390x__
+@@ -91,8 +118,46 @@ ENTRY(__memset_z10)
+ 	j       .L_Z10_3
+ .L_Z10_18:
+ 	mvc     1(1,%r1),0(%r1)
+-END(__memset_z10)
++END(MEMSET_Z10)
++#endif /* HAVE_MEMSET_Z10  */
++
++#if HAVE_MEMSET_Z196
++ENTRY(MEMSET_Z196)
++	.machine "z196"
++	.machinemode "zarch_nohighgprs"
++# if !defined __s390x__
++	llgfr	%r4,%r4
++# endif /* !defined __s390x__  */
++	ltgr    %r4,%r4
++	je      .L_Z196_4
++	stc     %r3,0(%r2)
++	lgr     %r1,%r2
++	cghi    %r4,1
++	je      .L_Z196_4
++	aghi    %r4,-2
++	srlg    %r5,%r4,8
++	ltgr    %r5,%r5
++	jne     .L_Z196_1
++.L_Z196_3:
++	exrl    %r4,.L_Z196_17
++.L_Z196_4:
++	br      %r14
++.L_Z196_1:
++	cgfi	%r5,1048576
++	jh	__memset_mvcle	   # Switch to mvcle for >256MB
++.L_Z196_2:
++	pfd     2,1024(%r1)
++	mvc     1(256,%r1),0(%r1)
++	aghi    %r5,-1
++	la      %r1,256(%r1)
++	jne     .L_Z196_2
++	j       .L_Z196_3
++.L_Z196_17:
++	mvc     1(1,%r1),0(%r1)
++END(MEMSET_Z196)
++#endif /* HAVE_MEMSET_Z196  */
+ 
++#if HAVE_MEMSET_MVCLE
+ ENTRY(__memset_mvcle)
+ 	aghi	%r4,2               # take back the change done by the caller
+ 	lgr	%r0,%r2		    # save source address
+@@ -106,15 +171,16 @@ ENTRY(__memset_mvcle)
+ .L1:
+ 	br	%r14
+ END(__memset_mvcle)
++#endif /* HAVE_MEMSET_MVCLE  */
+ 
+-#endif /* IS_IN (libc) */
+-
+-#include "../memset.S"
++#if ! HAVE_MEMSET_IFUNC
++/* If we don't use ifunc, define an alias for memset here.
++   Otherwise see sysdeps/s390/memset.c.  */
++strong_alias (MEMSET_DEFAULT, memset)
++#endif
+ 
+-#if !IS_IN (libc)
+-.globl   memset
+-.set     memset,__memset_default
+-#elif defined SHARED && IS_IN (libc)
+-.globl   __GI_memset
+-.set     __GI_memset,__memset_default
++#if defined SHARED && IS_IN (libc)
++/* Defines the internal symbol.
++   Compare to libc_hidden_builtin_def (memset) in string/memset.c.  */
++strong_alias (MEMSET_DEFAULT, __GI_memset)
+ #endif
+diff --git a/sysdeps/s390/memset.S b/sysdeps/s390/memset.S
+deleted file mode 100644
+index 72e7c5a42efbaf6c..0000000000000000
+--- a/sysdeps/s390/memset.S
++++ /dev/null
+@@ -1,97 +0,0 @@
+-/* Set a block of memory to some byte value.  31/64 bit S/390 version.
+-   Copyright (C) 2001-2018 Free Software Foundation, Inc.
+-   Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
+-   This file is part of the GNU C Library.
+-
+-   The GNU C Library is free software; you can redistribute it and/or
+-   modify it under the terms of the GNU Lesser General Public
+-   License as published by the Free Software Foundation; either
+-   version 2.1 of the License, or (at your option) any later version.
+-
+-   The GNU C Library is distributed in the hope that it will be useful,
+-   but WITHOUT ANY WARRANTY; without even the implied warranty of
+-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+-   Lesser General Public License for more details.
+-
+-   You should have received a copy of the GNU Lesser General Public
+-   License along with the GNU C Library; if not, see
+-   <http://www.gnu.org/licenses/>.  */
+-
+-
+-#include <sysdep.h>
+-#include "asm-syntax.h"
+-
+-/* INPUT PARAMETERS
+-     %r2 = address of memory area
+-     %r3 = byte to fill memory with
+-     %r4 = number of bytes to fill.  */
+-
+-       .text
+-
+-#if defined __s390x__
+-# define LTGR	ltgr
+-# define CGHI	cghi
+-# define LGR	lgr
+-# define AGHI	aghi
+-# define BRCTG	brctg
+-#else
+-# define LTGR	ltr
+-# define CGHI	chi
+-# define LGR	lr
+-# define AGHI	ahi
+-# define BRCTG	brct
+-#endif /* ! defined __s390x__  */
+-
+-#ifdef USE_MULTIARCH
+-ENTRY(__memset_default)
+-#else
+-ENTRY(memset)
+-#endif
+-#if defined __s390x__
+-	.machine "z900"
+-#else
+-	.machine "g5"
+-#endif /* ! defined __s390x__  */
+-	LTGR    %r4,%r4
+-	je      .L_Z900_G5_4
+-	stc     %r3,0(%r2)
+-	CGHI    %r4,1
+-	LGR     %r1,%r2
+-	je      .L_Z900_G5_4
+-	AGHI    %r4,-2
+-#if defined __s390x__
+-	larl    %r5,.L_Z900_G5_18
+-	srlg    %r3,%r4,8
+-# define Z900_G5_EX_D 0
+-#else
+-	basr    %r5,0
+-.L_Z900_G5_19:
+-# define Z900_G5_EX_D .L_Z900_G5_18-.L_Z900_G5_19
+-	lr      %r3,%r4
+-	srl     %r3,8
+-#endif /* ! defined __s390x__  */
+-	LTGR    %r3,%r3
+-	jne     .L_Z900_G5_14
+-.L_Z900_G5_3:
+-	ex      %r4,Z900_G5_EX_D(%r5)
+-.L_Z900_G5_4:
+-	br      %r14
+-.L_Z900_G5_14:
+-	mvc     1(256,%r1),0(%r1)
+-	la      %r1,256(%r1)
+-	BRCTG   %r3,.L_Z900_G5_14
+-	j       .L_Z900_G5_3
+-.L_Z900_G5_18:
+-	mvc     1(1,%r1),0(%r1)
+-#ifdef USE_MULTIARCH
+-END(__memset_default)
+-#else
+-END(memset)
+-libc_hidden_builtin_def (memset)
+-#endif
+-
+-#undef LTGR
+-#undef CGHI
+-#undef LGR
+-#undef AGHI
+-#undef BRCTG
+diff --git a/sysdeps/s390/multiarch/memset.c b/sysdeps/s390/memset.c
+similarity index 60%
+rename from sysdeps/s390/multiarch/memset.c
+rename to sysdeps/s390/memset.c
+index 760b3e9df201b8b4..57a35aebc7d3c794 100644
+--- a/sysdeps/s390/multiarch/memset.c
++++ b/sysdeps/s390/memset.c
+@@ -16,11 +16,33 @@
+    License along with the GNU C Library; if not, see
+    <http://www.gnu.org/licenses/>.  */
+ 
+-#if IS_IN (libc)
++#include <ifunc-memset.h>
++#if HAVE_MEMSET_IFUNC
+ # define memset __redirect_memset
+ # include <string.h>
+ # undef memset
+ # include <ifunc-resolve.h>
+ 
+-s390_libc_ifunc (__redirect_memset, __memset, memset)
++# if HAVE_MEMSET_Z900_G5
++extern __typeof (__redirect_memset) MEMSET_Z900_G5 attribute_hidden;
++# endif
++
++# if HAVE_MEMSET_Z10
++extern __typeof (__redirect_memset) MEMSET_Z10 attribute_hidden;
++# endif
++
++# if HAVE_MEMSET_Z196
++extern __typeof (__redirect_memset) MEMSET_Z196 attribute_hidden;
++# endif
++
++s390_libc_ifunc_expr (__redirect_memset, memset,
++		      ({
++			s390_libc_ifunc_init ();
++			(HAVE_MEMSET_Z196 && S390_IS_Z196 (stfle_bits))
++			  ? MEMSET_Z196
++			  : (HAVE_MEMSET_Z10 && S390_IS_Z10 (stfle_bits))
++			  ? MEMSET_Z10
++			  : MEMSET_DEFAULT;
++		      })
++		      )
+ #endif
+diff --git a/sysdeps/s390/multiarch/Makefile b/sysdeps/s390/multiarch/Makefile
+index 93ad21bfa2686ee5..c893ebc5659fd4ae 100644
+--- a/sysdeps/s390/multiarch/Makefile
++++ b/sysdeps/s390/multiarch/Makefile
+@@ -19,8 +19,7 @@ sysdep_routines += strlen strlen-vx strlen-c \
+ 		   rawmemchr rawmemchr-vx rawmemchr-c \
+ 		   memccpy memccpy-vx memccpy-c \
+ 		   memrchr memrchr-vx memrchr-c \
+-		   mempcpy \
+-		   memset memset-s390x
++		   mempcpy
+ endif
+ 
+ ifeq ($(subdir),wcsmbs)
+diff --git a/sysdeps/s390/multiarch/ifunc-impl-list.c b/sysdeps/s390/multiarch/ifunc-impl-list.c
+index ec3373ae2653d66e..2f671eac1f4f1ffd 100644
+--- a/sysdeps/s390/multiarch/ifunc-impl-list.c
++++ b/sysdeps/s390/multiarch/ifunc-impl-list.c
+@@ -21,6 +21,7 @@
+ #include <wchar.h>
+ #include <ifunc-impl-list.h>
+ #include <ifunc-resolve.h>
++#include <ifunc-memset.h>
+ 
+ /* Maximum number of IFUNC implementations.  */
+ #define MAX_IFUNC	3
+@@ -46,12 +47,21 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+       S390_STORE_STFLE (stfle_bits);
+     }
+ 
++#if HAVE_MEMSET_IFUNC
+   IFUNC_IMPL (i, name, memset,
++# if HAVE_MEMSET_Z196
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      S390_IS_Z196 (stfle_bits), __memset_z196)
++			      S390_IS_Z196 (stfle_bits), MEMSET_Z196)
++# endif
++# if HAVE_MEMSET_Z10
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      S390_IS_Z10 (stfle_bits), __memset_z10)
+-	      IFUNC_IMPL_ADD (array, i, memset, 1, __memset_default))
++			      S390_IS_Z10 (stfle_bits), MEMSET_Z10)
++# endif
++# if HAVE_MEMSET_Z900_G5
++	      IFUNC_IMPL_ADD (array, i, memset, 1, MEMSET_Z900_G5)
++# endif
++	      )
++#endif /* HAVE_MEMSET_IFUNC */
+ 
+   IFUNC_IMPL (i, name, memcmp,
+ 	      IFUNC_IMPL_ADD (array, i, memcmp,

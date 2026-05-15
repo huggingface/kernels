@@ -1,0 +1,56 @@
+commit ae514971341dcc08ec7f8622493a65e7eb1ef9d2
+Author: marxin <mliska@suse.cz>
+Date:   Thu Mar 7 09:39:55 2019 +0100
+
+    Fix location where math-vector-fortran.h is installed.
+    
+    2019-03-07  Martin Liska  <mliska@suse.cz>
+    
+            * math/Makefile: Change location where math-vector-fortran.h is
+            installed.
+            * math/finclude/math-vector-fortran.h: Move from bits/math-vector-fortran.h.
+            * sysdeps/x86/fpu/finclude/math-vector-fortran.h: Move
+            from sysdeps/x86/fpu/bits/math-vector-fortran.h.
+            * scripts/check-installed-headers.sh: Skip Fortran header files.
+            * scripts/check-wrapper-headers.py: Likewise.
+
+Conflicts:
+	scripts/check-wrapper-headers.py
+	  (Script does not exist downstream, change dropped.)
+
+diff --git a/math/Makefile b/math/Makefile
+index 16e68754fc863ea2..df73d70840b61cd7 100644
+--- a/math/Makefile
++++ b/math/Makefile
+@@ -26,7 +26,7 @@ headers		:= math.h bits/mathcalls.h bits/mathinline.h \
+ 		   fpu_control.h complex.h bits/cmathcalls.h fenv.h \
+ 		   bits/fenv.h bits/fenvinline.h bits/mathdef.h tgmath.h \
+ 		   bits/math-finite.h bits/math-vector.h \
+-		   bits/math-vector-fortran.h \
++		   finclude/math-vector-fortran.h \
+ 		   bits/libm-simd-decl-stubs.h bits/iscanonical.h \
+ 		   bits/flt-eval-method.h bits/fp-fast.h bits/fp-logb.h \
+ 		   bits/long-double.h bits/mathcalls-helper-functions.h \
+diff --git a/bits/math-vector-fortran.h b/math/finclude/math-vector-fortran.h
+similarity index 100%
+rename from bits/math-vector-fortran.h
+rename to math/finclude/math-vector-fortran.h
+diff --git a/scripts/check-installed-headers.sh b/scripts/check-installed-headers.sh
+index 4a062e9cdaa57978..7a1969b43a144ebb 100644
+--- a/scripts/check-installed-headers.sh
++++ b/scripts/check-installed-headers.sh
+@@ -84,6 +84,10 @@ for header in "$@"; do
+         (sys/elf.h)
+             continue;;
+ 
++        # Skip Fortran headers.
++        (finclude/*)
++            continue;;
++
+ 	# sys/sysctl.h is unsupported for x32.
+ 	(sys/sysctl.h)
+             case "$is_x32" in
+diff --git a/sysdeps/x86/fpu/bits/math-vector-fortran.h b/sysdeps/x86/fpu/finclude/math-vector-fortran.h
+similarity index 100%
+rename from sysdeps/x86/fpu/bits/math-vector-fortran.h
+rename to sysdeps/x86/fpu/finclude/math-vector-fortran.h

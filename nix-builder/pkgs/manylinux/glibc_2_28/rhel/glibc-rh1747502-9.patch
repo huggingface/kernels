@@ -1,0 +1,86 @@
+From 304c61a24f909168c16793ccf7c686237e53d003 Mon Sep 17 00:00:00 2001
+From: DJ Delorie <dj@redhat.com>
+Date: Wed, 5 Dec 2018 12:39:47 -0500
+Subject: test-container: move postclean outside of namespace changes
+
+During postclean.req testing it was found that the fork in the
+parent process (after the unshare syscall) would fail with ENOMEM
+(see recursive_remove() in test-container.c).  While failing with
+ENOMEM is certainly unexpected, it is simply easier to refactor
+the design and have the parent remain outside of the namespace.
+This change moves the postclean.req processing to a distinct
+process (the parent) that then forks the test process (which will
+have to fork once more to complete uid/gid transitions). When the
+test process exists the cleanup process will ensure all files are
+deleted when a post clean is requested.
+
+Signed-off-by: DJ Delorie <dj@redhat.com>
+Reviewed-by: Carlos O'Donell <carlos@redhat.com>
+
+[BZ #23948]
+* support/test-container.c: Move postclean step to before we
+change namespaces.
+
+diff --git a/support/test-container.c b/support/test-container.c
+index df450adfdb..1d1aebeaf3 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -921,6 +921,43 @@ main (int argc, char **argv)
+       }
+   }
+ 
++  if (do_postclean)
++    {
++      pid_t pc_pid = fork ();
++
++      if (pc_pid < 0)
++	{
++	  FAIL_EXIT1 ("Can't fork for post-clean");
++	}
++      else if (pc_pid > 0)
++	{
++	  /* Parent.  */
++	  int status;
++	  waitpid (pc_pid, &status, 0);
++
++	  /* Child has exited, we can post-clean the test root.  */
++	  printf("running post-clean rsync\n");
++	  rsync (pristine_root_path, new_root_path, 1);
++
++	  if (WIFEXITED (status))
++	    exit (WEXITSTATUS (status));
++
++	  if (WIFSIGNALED (status))
++	    {
++	      printf ("%%SIGNALLED%%\n");
++	      exit (77);
++	    }
++
++	  printf ("%%EXITERROR%%\n");
++	  exit (78);
++	}
++
++      /* Child continues.  */
++    }
++
++  /* This is the last point in the program where we're still in the
++     "normal" namespace.  */
++
+ #ifdef CLONE_NEWNS
+   /* The unshare here gives us our own spaces and capabilities.  */
+   if (unshare (CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNS) < 0)
+@@ -974,14 +1011,6 @@ main (int argc, char **argv)
+       int status;
+       waitpid (child, &status, 0);
+ 
+-      /* There's a bit of magic here, since the buildroot is mounted
+-	 in our space, the paths are still valid, and since the mounts
+-	 aren't recursive, it sees *only* the built root, not anything
+-	 we would normally se if we rsync'd to "/" like mounted /dev
+-	 files.  */
+-      if (do_postclean)
+-	  rsync (pristine_root_path, new_root_path, 1);
+-
+       if (WIFEXITED (status))
+ 	exit (WEXITSTATUS (status));
+ 

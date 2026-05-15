@@ -1,0 +1,3679 @@
+commit 107e6a3c2212ba7a3a4ec7cae8d82d73f7c95d0b
+Author: H.J. Lu <hjl.tools@gmail.com>
+Date:   Mon Jun 29 16:36:08 2020 -0700
+
+    x86: Support usable check for all CPU features
+    
+    Support usable check for all CPU features with the following changes:
+    
+    1. Change struct cpu_features to
+    
+    struct cpuid_features
+    {
+      struct cpuid_registers cpuid;
+      struct cpuid_registers usable;
+    };
+    
+    struct cpu_features
+    {
+      struct cpu_features_basic basic;
+      struct cpuid_features features[COMMON_CPUID_INDEX_MAX];
+      unsigned int preferred[PREFERRED_FEATURE_INDEX_MAX];
+    ...
+    };
+    
+    so that there is a usable bit for each cpuid bit.
+    2. After the cpuid bits have been initialized, copy the known bits to the
+    usable bits.  EAX/EBX from INDEX_1 and EAX from INDEX_7 aren't used for
+    CPU feature detection.
+    3. Clear the usable bits which require OS support.
+    4. If the feature is supported by OS, copy its cpuid bit to its usable
+    bit.
+    5. Replace HAS_CPU_FEATURE and CPU_FEATURES_CPU_P with CPU_FEATURE_USABLE
+    and CPU_FEATURE_USABLE_P to check if a feature is usable.
+    6. Add DEPR_FPU_CS_DS for INDEX_7_EBX_13.
+    7. Unset MPX feature since it has been deprecated.
+    
+    The results are
+    
+    1. If the feature is known and doesn't requre OS support, its usable bit
+    is copied from the cpuid bit.
+    2. Otherwise, its usable bit is copied from the cpuid bit only if the
+    feature is known to supported by OS.
+    3. CPU_FEATURE_USABLE/CPU_FEATURE_USABLE_P are used to check if the
+    feature can be used.
+    4. HAS_CPU_FEATURE/CPU_FEATURE_CPU_P are used to check if CPU supports
+    the feature.
+
+diff --git a/sysdeps/i386/fpu/fclrexcpt.c b/sysdeps/i386/fpu/fclrexcpt.c
+index 8463b102e7b79f07..9eff917e88235c64 100644
+--- a/sysdeps/i386/fpu/fclrexcpt.c
++++ b/sysdeps/i386/fpu/fclrexcpt.c
+@@ -41,7 +41,7 @@ __feclearexcept (int excepts)
+   __asm__ ("fldenv %0" : : "m" (*&temp));
+ 
+   /* If the CPU supports SSE, we clear the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xnew_exc;
+ 
+diff --git a/sysdeps/i386/fpu/fedisblxcpt.c b/sysdeps/i386/fpu/fedisblxcpt.c
+index e2738e6d6c8304fe..3b5436018d08a269 100644
+--- a/sysdeps/i386/fpu/fedisblxcpt.c
++++ b/sysdeps/i386/fpu/fedisblxcpt.c
+@@ -38,7 +38,7 @@ fedisableexcept (int excepts)
+   __asm__ ("fldcw %0" : : "m" (*&new_exc));
+ 
+   /* If the CPU supports SSE we set the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xnew_exc;
+ 
+diff --git a/sysdeps/i386/fpu/feenablxcpt.c b/sysdeps/i386/fpu/feenablxcpt.c
+index a4d986266636835b..88f46f6078e12e2c 100644
+--- a/sysdeps/i386/fpu/feenablxcpt.c
++++ b/sysdeps/i386/fpu/feenablxcpt.c
+@@ -38,7 +38,7 @@ feenableexcept (int excepts)
+   __asm__ ("fldcw %0" : : "m" (*&new_exc));
+ 
+   /* If the CPU supports SSE we set the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xnew_exc;
+ 
+diff --git a/sysdeps/i386/fpu/fegetenv.c b/sysdeps/i386/fpu/fegetenv.c
+index 2a1a8507bac9bfa5..2a800fb6d6e856f3 100644
+--- a/sysdeps/i386/fpu/fegetenv.c
++++ b/sysdeps/i386/fpu/fegetenv.c
+@@ -31,7 +31,7 @@ __fegetenv (fenv_t *envp)
+      would block all exceptions.  */
+   __asm__ ("fldenv %0" : : "m" (*envp));
+ 
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     __asm__ ("stmxcsr %0" : "=m" (envp->__eip));
+ 
+   /* Success.  */
+diff --git a/sysdeps/i386/fpu/fegetmode.c b/sysdeps/i386/fpu/fegetmode.c
+index 86de9f5548f4b0b4..b01ca64fc9187b10 100644
+--- a/sysdeps/i386/fpu/fegetmode.c
++++ b/sysdeps/i386/fpu/fegetmode.c
+@@ -26,7 +26,7 @@ int
+ fegetmode (femode_t *modep)
+ {
+   _FPU_GETCW (modep->__control_word);
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     __asm__ ("stmxcsr %0" : "=m" (modep->__mxcsr));
+   return 0;
+ }
+diff --git a/sysdeps/i386/fpu/feholdexcpt.c b/sysdeps/i386/fpu/feholdexcpt.c
+index 270554df31928cda..e2f3f97b9494f900 100644
+--- a/sysdeps/i386/fpu/feholdexcpt.c
++++ b/sysdeps/i386/fpu/feholdexcpt.c
+@@ -30,7 +30,7 @@ __feholdexcept (fenv_t *envp)
+   __asm__ volatile ("fnstenv %0; fnclex" : "=m" (*envp));
+ 
+   /* If the CPU supports SSE we set the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xwork;
+ 
+diff --git a/sysdeps/i386/fpu/fesetenv.c b/sysdeps/i386/fpu/fesetenv.c
+index 6df6849da4007a45..5c8bf1f71a474aa9 100644
+--- a/sysdeps/i386/fpu/fesetenv.c
++++ b/sysdeps/i386/fpu/fesetenv.c
+@@ -79,7 +79,7 @@ __fesetenv (const fenv_t *envp)
+ 
+   __asm__ ("fldenv %0" : : "m" (temp));
+ 
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int mxcsr;
+       __asm__ ("stmxcsr %0" : "=m" (mxcsr));
+diff --git a/sysdeps/i386/fpu/fesetmode.c b/sysdeps/i386/fpu/fesetmode.c
+index 9aad6ea99f810786..35881b6adf5b0aed 100644
+--- a/sysdeps/i386/fpu/fesetmode.c
++++ b/sysdeps/i386/fpu/fesetmode.c
+@@ -35,7 +35,7 @@ fesetmode (const femode_t *modep)
+   else
+     cw = modep->__control_word;
+   _FPU_SETCW (cw);
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int mxcsr;
+       __asm__ ("stmxcsr %0" : "=m" (mxcsr));
+diff --git a/sysdeps/i386/fpu/fesetround.c b/sysdeps/i386/fpu/fesetround.c
+index d260046c65d0aba0..5d38b6b8624bdaef 100644
+--- a/sysdeps/i386/fpu/fesetround.c
++++ b/sysdeps/i386/fpu/fesetround.c
+@@ -37,7 +37,7 @@ __fesetround (int round)
+   __asm__ ("fldcw %0" : : "m" (*&cw));
+ 
+   /* If the CPU supports SSE we set the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xcw;
+ 
+diff --git a/sysdeps/i386/fpu/feupdateenv.c b/sysdeps/i386/fpu/feupdateenv.c
+index db3ff96dfa8336ec..1246b21e30740922 100644
+--- a/sysdeps/i386/fpu/feupdateenv.c
++++ b/sysdeps/i386/fpu/feupdateenv.c
+@@ -32,7 +32,7 @@ __feupdateenv (const fenv_t *envp)
+   __asm__ ("fnstsw %0" : "=m" (*&temp));
+ 
+   /* If the CPU supports SSE we test the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     __asm__ ("stmxcsr %0" : "=m" (*&xtemp));
+ 
+   temp = (temp | xtemp) & FE_ALL_EXCEPT;
+diff --git a/sysdeps/i386/fpu/fgetexcptflg.c b/sysdeps/i386/fpu/fgetexcptflg.c
+index 39d1f7df3aa24b25..acb2ae15ea681c13 100644
+--- a/sysdeps/i386/fpu/fgetexcptflg.c
++++ b/sysdeps/i386/fpu/fgetexcptflg.c
+@@ -34,7 +34,7 @@ __fegetexceptflag (fexcept_t *flagp, int excepts)
+   *flagp = temp & excepts & FE_ALL_EXCEPT;
+ 
+   /* If the CPU supports SSE, we clear the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int sse_exc;
+ 
+diff --git a/sysdeps/i386/fpu/fsetexcptflg.c b/sysdeps/i386/fpu/fsetexcptflg.c
+index 21e70251cfbf8a73..caa15c0cf105a9bc 100644
+--- a/sysdeps/i386/fpu/fsetexcptflg.c
++++ b/sysdeps/i386/fpu/fsetexcptflg.c
+@@ -41,7 +41,7 @@ __fesetexceptflag (const fexcept_t *flagp, int excepts)
+   __asm__ ("fldenv %0" : : "m" (*&temp));
+ 
+   /* If the CPU supports SSE, we set the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xnew_exc;
+ 
+diff --git a/sysdeps/i386/fpu/ftestexcept.c b/sysdeps/i386/fpu/ftestexcept.c
+index c1b5e90356bae9da..06d6134e0d85eeef 100644
+--- a/sysdeps/i386/fpu/ftestexcept.c
++++ b/sysdeps/i386/fpu/ftestexcept.c
+@@ -32,7 +32,7 @@ fetestexcept (int excepts)
+   __asm__ ("fnstsw %0" : "=a" (temp));
+ 
+   /* If the CPU supports SSE we test the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     __asm__ ("stmxcsr %0" : "=m" (*&xtemp));
+ 
+   return (temp | xtemp) & excepts & FE_ALL_EXCEPT;
+diff --git a/sysdeps/i386/i686/fpu/multiarch/s_cosf.c b/sysdeps/i386/i686/fpu/multiarch/s_cosf.c
+index a4556a478d16974a..c31592f238d67916 100644
+--- a/sysdeps/i386/i686/fpu/multiarch/s_cosf.c
++++ b/sysdeps/i386/i686/fpu/multiarch/s_cosf.c
+@@ -23,7 +23,7 @@ extern float __cosf_sse2 (float);
+ extern float __cosf_ia32 (float);
+ float __cosf (float);
+ 
+-libm_ifunc (__cosf, HAS_CPU_FEATURE (SSE2) ? __cosf_sse2 : __cosf_ia32);
++libm_ifunc (__cosf, CPU_FEATURE_USABLE (SSE2) ? __cosf_sse2 : __cosf_ia32);
+ libm_alias_float (__cos, cos);
+ 
+ #define COSF __cosf_ia32
+diff --git a/sysdeps/i386/i686/fpu/multiarch/s_sincosf.c b/sysdeps/i386/i686/fpu/multiarch/s_sincosf.c
+index 5f21f5c0eda20fd1..116c541dba54dd16 100644
+--- a/sysdeps/i386/i686/fpu/multiarch/s_sincosf.c
++++ b/sysdeps/i386/i686/fpu/multiarch/s_sincosf.c
+@@ -24,7 +24,7 @@ extern void __sincosf_ia32 (float, float *, float *);
+ void __sincosf (float, float *, float *);
+ 
+ libm_ifunc (__sincosf,
+-	    HAS_CPU_FEATURE (SSE2) ? __sincosf_sse2 : __sincosf_ia32);
++	    CPU_FEATURE_USABLE (SSE2) ? __sincosf_sse2 : __sincosf_ia32);
+ libm_alias_float (__sincos, sincos);
+ 
+ #define SINCOSF __sincosf_ia32
+diff --git a/sysdeps/i386/i686/fpu/multiarch/s_sinf.c b/sysdeps/i386/i686/fpu/multiarch/s_sinf.c
+index 80a7ffaa1e36b492..63abd34c21a1c83f 100644
+--- a/sysdeps/i386/i686/fpu/multiarch/s_sinf.c
++++ b/sysdeps/i386/i686/fpu/multiarch/s_sinf.c
+@@ -23,7 +23,7 @@ extern float __sinf_sse2 (float);
+ extern float __sinf_ia32 (float);
+ float __sinf (float);
+ 
+-libm_ifunc (__sinf, HAS_CPU_FEATURE (SSE2) ? __sinf_sse2 : __sinf_ia32);
++libm_ifunc (__sinf, CPU_FEATURE_USABLE (SSE2) ? __sinf_sse2 : __sinf_ia32);
+ libm_alias_float (__sin, sin);
+ #define SINF __sinf_ia32
+ #include <sysdeps/ieee754/flt-32/s_sinf.c>
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-impl-list.c b/sysdeps/i386/i686/multiarch/ifunc-impl-list.c
+index a926b04acdfbb889..06e7231d94e21c02 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-impl-list.c
++++ b/sysdeps/i386/i686/multiarch/ifunc-impl-list.c
+@@ -38,35 +38,35 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/i386/i686/multiarch/bcopy.S.  */
+   IFUNC_IMPL (i, name, bcopy,
+-	      IFUNC_IMPL_ADD (array, i, bcopy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, bcopy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __bcopy_ssse3_rep)
+-	      IFUNC_IMPL_ADD (array, i, bcopy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, bcopy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __bcopy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, bcopy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, bcopy, CPU_FEATURE_USABLE (SSE2),
+ 			      __bcopy_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, bcopy, 1, __bcopy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/bzero.S.  */
+   IFUNC_IMPL (i, name, bzero,
+-	      IFUNC_IMPL_ADD (array, i, bzero, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, bzero, CPU_FEATURE_USABLE (SSE2),
+ 			      __bzero_sse2_rep)
+-	      IFUNC_IMPL_ADD (array, i, bzero, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, bzero, CPU_FEATURE_USABLE (SSE2),
+ 			      __bzero_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, bzero, 1, __bzero_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/memchr.S.  */
+   IFUNC_IMPL (i, name, memchr,
+-	      IFUNC_IMPL_ADD (array, i, memchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __memchr_sse2_bsf)
+-	      IFUNC_IMPL_ADD (array, i, memchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __memchr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, memchr, 1, __memchr_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/memcmp.S.  */
+   IFUNC_IMPL (i, name, memcmp,
+-	      IFUNC_IMPL_ADD (array, i, memcmp, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, memcmp, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __memcmp_sse4_2)
+-	      IFUNC_IMPL_ADD (array, i, memcmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, memcmp, 1, __memcmp_ia32))
+ 
+@@ -74,13 +74,13 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/i386/i686/multiarch/memmove_chk.S.  */
+   IFUNC_IMPL (i, name, __memmove_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_chk_ssse3_rep)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_chk_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_CPU_FEATURE (SSE2),
++			      CPU_FEATURE_USABLE (SSE2),
+ 			      __memmove_chk_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk, 1,
+ 			      __memmove_chk_ia32))
+@@ -88,19 +88,19 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/i386/i686/multiarch/memmove.S.  */
+   IFUNC_IMPL (i, name, memmove,
+-	      IFUNC_IMPL_ADD (array, i, memmove, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memmove, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_ssse3_rep)
+-	      IFUNC_IMPL_ADD (array, i, memmove, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memmove, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, memmove, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memmove, CPU_FEATURE_USABLE (SSE2),
+ 			      __memmove_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memmove, 1, __memmove_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/memrchr.S.  */
+   IFUNC_IMPL (i, name, memrchr,
+-	      IFUNC_IMPL_ADD (array, i, memrchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memrchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __memrchr_sse2_bsf)
+-	      IFUNC_IMPL_ADD (array, i, memrchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memrchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __memrchr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, memrchr, 1, __memrchr_ia32))
+ 
+@@ -108,10 +108,10 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/i386/i686/multiarch/memset_chk.S.  */
+   IFUNC_IMPL (i, name, __memset_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_CPU_FEATURE (SSE2),
++			      CPU_FEATURE_USABLE (SSE2),
+ 			      __memset_chk_sse2_rep)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_CPU_FEATURE (SSE2),
++			      CPU_FEATURE_USABLE (SSE2),
+ 			      __memset_chk_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk, 1,
+ 			      __memset_chk_ia32))
+@@ -119,102 +119,102 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/i386/i686/multiarch/memset.S.  */
+   IFUNC_IMPL (i, name, memset,
+-	      IFUNC_IMPL_ADD (array, i, memset, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memset, CPU_FEATURE_USABLE (SSE2),
+ 			      __memset_sse2_rep)
+-	      IFUNC_IMPL_ADD (array, i, memset, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memset, CPU_FEATURE_USABLE (SSE2),
+ 			      __memset_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, memset, 1, __memset_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/rawmemchr.S.  */
+   IFUNC_IMPL (i, name, rawmemchr,
+-	      IFUNC_IMPL_ADD (array, i, rawmemchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, rawmemchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __rawmemchr_sse2_bsf)
+-	      IFUNC_IMPL_ADD (array, i, rawmemchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, rawmemchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __rawmemchr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, rawmemchr, 1, __rawmemchr_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/stpncpy.S.  */
+   IFUNC_IMPL (i, name, stpncpy,
+-	      IFUNC_IMPL_ADD (array, i, stpncpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, stpncpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __stpncpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, stpncpy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, stpncpy, CPU_FEATURE_USABLE (SSE2),
+ 			      __stpncpy_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, stpncpy, 1, __stpncpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/stpcpy.S.  */
+   IFUNC_IMPL (i, name, stpcpy,
+-	      IFUNC_IMPL_ADD (array, i, stpcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, stpcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __stpcpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, stpcpy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, stpcpy, CPU_FEATURE_USABLE (SSE2),
+ 			      __stpcpy_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, stpcpy, 1, __stpcpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strcasecmp.S.  */
+   IFUNC_IMPL (i, name, strcasecmp,
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcasecmp_sse4_2)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcasecmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp, 1, __strcasecmp_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strcasecmp_l.S.  */
+   IFUNC_IMPL (i, name, strcasecmp_l,
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcasecmp_l_sse4_2)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcasecmp_l_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l, 1,
+ 			      __strcasecmp_l_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strcat.S.  */
+   IFUNC_IMPL (i, name, strcat,
+-	      IFUNC_IMPL_ADD (array, i, strcat, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strcat, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcat_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, strcat, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strcat, CPU_FEATURE_USABLE (SSE2),
+ 			      __strcat_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strcat, 1, __strcat_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strchr.S.  */
+   IFUNC_IMPL (i, name, strchr,
+-	      IFUNC_IMPL_ADD (array, i, strchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __strchr_sse2_bsf)
+-	      IFUNC_IMPL_ADD (array, i, strchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __strchr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strchr, 1, __strchr_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strcmp.S.  */
+   IFUNC_IMPL (i, name, strcmp,
+-	      IFUNC_IMPL_ADD (array, i, strcmp, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strcmp, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcmp_sse4_2)
+-	      IFUNC_IMPL_ADD (array, i, strcmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcmp, 1, __strcmp_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strcpy.S.  */
+   IFUNC_IMPL (i, name, strcpy,
+-	      IFUNC_IMPL_ADD (array, i, strcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, strcpy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strcpy, CPU_FEATURE_USABLE (SSE2),
+ 			      __strcpy_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strcpy, 1, __strcpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strcspn.S.  */
+   IFUNC_IMPL (i, name, strcspn,
+-	      IFUNC_IMPL_ADD (array, i, strcspn, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strcspn, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcspn_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strcspn, 1, __strcspn_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strncase.S.  */
+   IFUNC_IMPL (i, name, strncasecmp,
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strncasecmp_sse4_2)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncasecmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp, 1,
+ 			      __strncasecmp_ia32))
+@@ -222,91 +222,91 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/i386/i686/multiarch/strncase_l.S.  */
+   IFUNC_IMPL (i, name, strncasecmp_l,
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strncasecmp_l_sse4_2)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncasecmp_l_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l, 1,
+ 			      __strncasecmp_l_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strncat.S.  */
+   IFUNC_IMPL (i, name, strncat,
+-	      IFUNC_IMPL_ADD (array, i, strncat, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strncat, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncat_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, strncat, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strncat, CPU_FEATURE_USABLE (SSE2),
+ 			      __strncat_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strncat, 1, __strncat_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strncpy.S.  */
+   IFUNC_IMPL (i, name, strncpy,
+-	      IFUNC_IMPL_ADD (array, i, strncpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strncpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, strncpy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strncpy, CPU_FEATURE_USABLE (SSE2),
+ 			      __strncpy_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strncpy, 1, __strncpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strnlen.S.  */
+   IFUNC_IMPL (i, name, strnlen,
+-	      IFUNC_IMPL_ADD (array, i, strnlen, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strnlen, CPU_FEATURE_USABLE (SSE2),
+ 			      __strnlen_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strnlen, 1, __strnlen_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strpbrk.S.  */
+   IFUNC_IMPL (i, name, strpbrk,
+-	      IFUNC_IMPL_ADD (array, i, strpbrk, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strpbrk, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strpbrk_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strpbrk, 1, __strpbrk_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strrchr.S.  */
+   IFUNC_IMPL (i, name, strrchr,
+-	      IFUNC_IMPL_ADD (array, i, strrchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strrchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __strrchr_sse2_bsf)
+-	      IFUNC_IMPL_ADD (array, i, strrchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strrchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __strrchr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strrchr, 1, __strrchr_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strspn.S.  */
+   IFUNC_IMPL (i, name, strspn,
+-	      IFUNC_IMPL_ADD (array, i, strspn, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strspn, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strspn_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strspn, 1, __strspn_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/wcschr.S.  */
+   IFUNC_IMPL (i, name, wcschr,
+-	      IFUNC_IMPL_ADD (array, i, wcschr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, wcschr, CPU_FEATURE_USABLE (SSE2),
+ 			      __wcschr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, wcschr, 1, __wcschr_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/wcscmp.S.  */
+   IFUNC_IMPL (i, name, wcscmp,
+-	      IFUNC_IMPL_ADD (array, i, wcscmp, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, wcscmp, CPU_FEATURE_USABLE (SSE2),
+ 			      __wcscmp_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, wcscmp, 1, __wcscmp_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/wcscpy.S.  */
+   IFUNC_IMPL (i, name, wcscpy,
+-	      IFUNC_IMPL_ADD (array, i, wcscpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, wcscpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __wcscpy_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, wcscpy, 1, __wcscpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/wcslen.S.  */
+   IFUNC_IMPL (i, name, wcslen,
+-	      IFUNC_IMPL_ADD (array, i, wcslen, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, wcslen, CPU_FEATURE_USABLE (SSE2),
+ 			      __wcslen_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, wcslen, 1, __wcslen_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/wcsrchr.S.  */
+   IFUNC_IMPL (i, name, wcsrchr,
+-	      IFUNC_IMPL_ADD (array, i, wcsrchr, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, wcsrchr, CPU_FEATURE_USABLE (SSE2),
+ 			      __wcsrchr_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, wcsrchr, 1, __wcsrchr_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/wmemcmp.S.  */
+   IFUNC_IMPL (i, name, wmemcmp,
+-	      IFUNC_IMPL_ADD (array, i, wmemcmp, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, wmemcmp, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __wmemcmp_sse4_2)
+-	      IFUNC_IMPL_ADD (array, i, wmemcmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, wmemcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __wmemcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, wmemcmp, 1, __wmemcmp_ia32))
+ 
+@@ -314,64 +314,64 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/i386/i686/multiarch/memcpy_chk.S.  */
+   IFUNC_IMPL (i, name, __memcpy_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_chk_ssse3_rep)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_chk_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_CPU_FEATURE (SSE2),
++			      CPU_FEATURE_USABLE (SSE2),
+ 			      __memcpy_chk_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk, 1,
+ 			      __memcpy_chk_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/memcpy.S.  */
+   IFUNC_IMPL (i, name, memcpy,
+-	      IFUNC_IMPL_ADD (array, i, memcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_ssse3_rep)
+-	      IFUNC_IMPL_ADD (array, i, memcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, memcpy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, memcpy, CPU_FEATURE_USABLE (SSE2),
+ 			      __memcpy_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy, 1, __memcpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/mempcpy_chk.S.  */
+   IFUNC_IMPL (i, name, __mempcpy_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_chk_ssse3_rep)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_chk_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_CPU_FEATURE (SSE2),
++			      CPU_FEATURE_USABLE (SSE2),
+ 			      __mempcpy_chk_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk, 1,
+ 			      __mempcpy_chk_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/mempcpy.S.  */
+   IFUNC_IMPL (i, name, mempcpy,
+-	      IFUNC_IMPL_ADD (array, i, mempcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, mempcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_ssse3_rep)
+-	      IFUNC_IMPL_ADD (array, i, mempcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, mempcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, mempcpy, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, mempcpy, CPU_FEATURE_USABLE (SSE2),
+ 			      __mempcpy_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy, 1, __mempcpy_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strlen.S.  */
+   IFUNC_IMPL (i, name, strlen,
+-	      IFUNC_IMPL_ADD (array, i, strlen, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strlen, CPU_FEATURE_USABLE (SSE2),
+ 			      __strlen_sse2_bsf)
+-	      IFUNC_IMPL_ADD (array, i, strlen, HAS_CPU_FEATURE (SSE2),
++	      IFUNC_IMPL_ADD (array, i, strlen, CPU_FEATURE_USABLE (SSE2),
+ 			      __strlen_sse2)
+ 	      IFUNC_IMPL_ADD (array, i, strlen, 1, __strlen_ia32))
+ 
+   /* Support sysdeps/i386/i686/multiarch/strncmp.S.  */
+   IFUNC_IMPL (i, name, strncmp,
+-	      IFUNC_IMPL_ADD (array, i, strncmp, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strncmp, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strncmp_sse4_2)
+-	      IFUNC_IMPL_ADD (array, i, strncmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strncmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncmp, 1, __strncmp_ia32))
+ #endif
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-memmove.h b/sysdeps/i386/i686/multiarch/ifunc-memmove.h
+index f0e97561784a82d5..cd4333f84b114552 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-memmove.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-memmove.h
+@@ -33,7 +33,7 @@ IFUNC_SELECTOR (void)
+   if (CPU_FEATURES_ARCH_P (cpu_features, Fast_Unaligned_Load))
+     return OPTIMIZE (sse2_unaligned);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     {
+       if (CPU_FEATURES_ARCH_P (cpu_features, Fast_Rep_String))
+ 	return OPTIMIZE (ssse3_rep);
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-memset.h b/sysdeps/i386/i686/multiarch/ifunc-memset.h
+index e96609439aef30d1..6cf96ebcd480dba4 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-memset.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-memset.h
+@@ -28,7 +28,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE2))
+     {
+       if (CPU_FEATURES_ARCH_P (cpu_features, Fast_Rep_String))
+ 	return OPTIMIZE (sse2_rep);
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-sse2-bsf.h b/sysdeps/i386/i686/multiarch/ifunc-sse2-bsf.h
+index f5e7f1b846c28454..de30f004db53f227 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-sse2-bsf.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-sse2-bsf.h
+@@ -28,7 +28,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE2))
+     {
+       if (CPU_FEATURES_ARCH_P (cpu_features, Slow_BSF))
+ 	return OPTIMIZE (sse2);
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-sse2-ssse3.h b/sysdeps/i386/i686/multiarch/ifunc-sse2-ssse3.h
+index a33fe44f504bd178..299d73e3144698d7 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-sse2-ssse3.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-sse2-ssse3.h
+@@ -29,11 +29,11 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE2)
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE2)
+       && CPU_FEATURES_ARCH_P (cpu_features, Fast_Rep_String))
+     return OPTIMIZE (sse2);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (ia32);
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-sse2.h b/sysdeps/i386/i686/multiarch/ifunc-sse2.h
+index 706c0329c9a76573..e1ba025299037bfb 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-sse2.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-sse2.h
+@@ -27,7 +27,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE2))
+     return OPTIMIZE (sse2);
+ 
+   return OPTIMIZE (ia32);
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-sse4_2.h b/sysdeps/i386/i686/multiarch/ifunc-sse4_2.h
+index de7fa2f185ad9a59..641cec2ced510524 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-sse4_2.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-sse4_2.h
+@@ -27,7 +27,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_2))
+     return OPTIMIZE (sse42);
+ 
+   return OPTIMIZE (ia32);
+diff --git a/sysdeps/i386/i686/multiarch/ifunc-ssse3-sse4_2.h b/sysdeps/i386/i686/multiarch/ifunc-ssse3-sse4_2.h
+index bd772a9298ab7d6b..6b2b461e47e94b66 100644
+--- a/sysdeps/i386/i686/multiarch/ifunc-ssse3-sse4_2.h
++++ b/sysdeps/i386/i686/multiarch/ifunc-ssse3-sse4_2.h
+@@ -29,10 +29,10 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_2))
+     return OPTIMIZE (sse4_2);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (ia32);
+diff --git a/sysdeps/i386/i686/multiarch/s_fma.c b/sysdeps/i386/i686/multiarch/s_fma.c
+index 7f39f5fdc972fcc7..0cf6e41b03043911 100644
+--- a/sysdeps/i386/i686/multiarch/s_fma.c
++++ b/sysdeps/i386/i686/multiarch/s_fma.c
+@@ -27,7 +27,7 @@ extern double __fma_ia32 (double x, double y, double z) attribute_hidden;
+ extern double __fma_fma (double x, double y, double z) attribute_hidden;
+ 
+ libm_ifunc (__fma,
+-	    HAS_ARCH_FEATURE (FMA_Usable) ? __fma_fma : __fma_ia32);
++	    CPU_FEATURE_USABLE (FMA) ? __fma_fma : __fma_ia32);
+ libm_alias_double (__fma, fma)
+ 
+ #define __fma __fma_ia32
+diff --git a/sysdeps/i386/i686/multiarch/s_fmaf.c b/sysdeps/i386/i686/multiarch/s_fmaf.c
+index 1ebb6e975ee86f54..638cd5b10ba57592 100644
+--- a/sysdeps/i386/i686/multiarch/s_fmaf.c
++++ b/sysdeps/i386/i686/multiarch/s_fmaf.c
+@@ -27,7 +27,7 @@ extern float __fmaf_ia32 (float x, float y, float z) attribute_hidden;
+ extern float __fmaf_fma (float x, float y, float z) attribute_hidden;
+ 
+ libm_ifunc (__fmaf,
+-	    HAS_ARCH_FEATURE (FMA_Usable) ? __fmaf_fma : __fmaf_ia32);
++	    CPU_FEATURE_USABLE (FMA) ? __fmaf_fma : __fmaf_ia32);
+ libm_alias_float (__fma, fma)
+ 
+ #define __fmaf __fmaf_ia32
+diff --git a/sysdeps/i386/i686/multiarch/wcscpy.c b/sysdeps/i386/i686/multiarch/wcscpy.c
+index be89ab81b066d463..ea149b0d3af357f2 100644
+--- a/sysdeps/i386/i686/multiarch/wcscpy.c
++++ b/sysdeps/i386/i686/multiarch/wcscpy.c
+@@ -34,7 +34,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (ia32);
+diff --git a/sysdeps/i386/setfpucw.c b/sysdeps/i386/setfpucw.c
+index 931302bcd03d221b..3fa2651d46a70ab6 100644
+--- a/sysdeps/i386/setfpucw.c
++++ b/sysdeps/i386/setfpucw.c
+@@ -39,7 +39,7 @@ __setfpucw (fpu_control_t set)
+   __asm__ ("fldcw %0" : : "m" (*&cw));
+ 
+   /* If the CPU supports SSE, we set the MXCSR as well.  */
+-  if (HAS_CPU_FEATURE (SSE))
++  if (CPU_FEATURE_USABLE (SSE))
+     {
+       unsigned int xnew_exc;
+ 
+diff --git a/sysdeps/unix/sysv/linux/x86/elision-conf.c b/sysdeps/unix/sysv/linux/x86/elision-conf.c
+index 22af294426596add..bdfc514a238f92a8 100644
+--- a/sysdeps/unix/sysv/linux/x86/elision-conf.c
++++ b/sysdeps/unix/sysv/linux/x86/elision-conf.c
+@@ -64,7 +64,7 @@ do_set_elision_enable (int32_t elision_enable)
+      if __libc_enable_secure isn't enabled since elision_enable will be set
+      according to the default, which is disabled.  */
+   if (elision_enable == 1)
+-    __pthread_force_elision = HAS_CPU_FEATURE (RTM) ? 1 : 0;
++    __pthread_force_elision = CPU_FEATURE_USABLE (RTM) ? 1 : 0;
+ }
+ 
+ /* The pthread->elision_enable tunable is 0 or 1 indicating that elision
+diff --git a/sysdeps/x86/cacheinfo.c b/sysdeps/x86/cacheinfo.c
+index f4edbc0103beb435..fdfe2684759d968c 100644
+--- a/sysdeps/x86/cacheinfo.c
++++ b/sysdeps/x86/cacheinfo.c
+@@ -583,7 +583,7 @@ get_common_cache_info (long int *shared_ptr, unsigned int *threads_ptr,
+ 
+   /* A value of 0 for the HTT bit indicates there is only a single
+      logical processor.  */
+-  if (HAS_CPU_FEATURE (HTT))
++  if (CPU_FEATURE_USABLE (HTT))
+     {
+       /* Figure out the number of logical threads that share the
+          highest cache level.  */
+@@ -732,7 +732,7 @@ intel_bug_no_cache_info:
+           /* Assume that all logical threads share the highest cache
+              level.  */
+           threads
+-            = ((cpu_features->cpuid[COMMON_CPUID_INDEX_1].ebx
++            = ((cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.ebx
+                 >> 16) & 0xff);
+         }
+ 
+@@ -887,14 +887,14 @@ init_cacheinfo (void)
+   unsigned int minimum_rep_movsb_threshold;
+   /* NB: The default REP MOVSB threshold is 2048 * (VEC_SIZE / 16).  */
+   unsigned int rep_movsb_threshold;
+-  if (CPU_FEATURES_ARCH_P (cpu_features, AVX512F_Usable)
+-      && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
++      && !CPU_FEATURE_PREFERRED_P (cpu_features, Prefer_No_AVX512))
+     {
+       rep_movsb_threshold = 2048 * (64 / 16);
+       minimum_rep_movsb_threshold = 64 * 8;
+     }
+-  else if (CPU_FEATURES_ARCH_P (cpu_features,
+-				AVX_Fast_Unaligned_Load))
++  else if (CPU_FEATURE_PREFERRED_P (cpu_features,
++				    AVX_Fast_Unaligned_Load))
+     {
+       rep_movsb_threshold = 2048 * (32 / 16);
+       minimum_rep_movsb_threshold = 32 * 8;
+diff --git a/sysdeps/x86/cpu-features.c b/sysdeps/x86/cpu-features.c
+index ad470f79ef7769fc..f13a1df4555c7000 100644
+--- a/sysdeps/x86/cpu-features.c
++++ b/sysdeps/x86/cpu-features.c
+@@ -42,73 +42,109 @@ extern void TUNABLE_CALLBACK (set_x86_shstk) (tunable_val_t *)
+ #endif
+ 
+ static void
+-get_extended_indices (struct cpu_features *cpu_features)
++update_usable (struct cpu_features *cpu_features)
+ {
+-  unsigned int eax, ebx, ecx, edx;
+-  __cpuid (0x80000000, eax, ebx, ecx, edx);
+-  if (eax >= 0x80000001)
+-    __cpuid (0x80000001,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000001].eax,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000001].ebx,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000001].ecx,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000001].edx);
+-  if (eax >= 0x80000007)
+-    __cpuid (0x80000007,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000007].eax,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000007].ebx,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000007].ecx,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000007].edx);
+-  if (eax >= 0x80000008)
+-    __cpuid (0x80000008,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000008].eax,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000008].ebx,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000008].ecx,
+-	     cpu_features->cpuid[COMMON_CPUID_INDEX_80000008].edx);
+-}
+-
+-static void
+-get_common_indices (struct cpu_features *cpu_features,
+-		    unsigned int *family, unsigned int *model,
+-		    unsigned int *extended_model, unsigned int *stepping)
+-{
+-  if (family)
+-    {
+-      unsigned int eax;
+-      __cpuid (1, eax, cpu_features->cpuid[COMMON_CPUID_INDEX_1].ebx,
+-	       cpu_features->cpuid[COMMON_CPUID_INDEX_1].ecx,
+-	       cpu_features->cpuid[COMMON_CPUID_INDEX_1].edx);
+-      cpu_features->cpuid[COMMON_CPUID_INDEX_1].eax = eax;
+-      *family = (eax >> 8) & 0x0f;
+-      *model = (eax >> 4) & 0x0f;
+-      *extended_model = (eax >> 12) & 0xf0;
+-      *stepping = eax & 0x0f;
+-      if (*family == 0x0f)
+-	{
+-	  *family += (eax >> 20) & 0xff;
+-	  *model += *extended_model;
+-	}
+-    }
+-
+-  if (cpu_features->basic.max_cpuid >= 7)
+-    {
+-      __cpuid_count (7, 0,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].eax,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].ebx,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].ecx,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7].edx);
+-      __cpuid_count (7, 1,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].eax,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].ebx,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].ecx,
+-		     cpu_features->cpuid[COMMON_CPUID_INDEX_7_ECX_1].edx);
+-    }
+-
+-  if (cpu_features->basic.max_cpuid >= 0xd)
+-    __cpuid_count (0xd, 1,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_D_ECX_1].eax,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_D_ECX_1].ebx,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_D_ECX_1].ecx,
+-		   cpu_features->cpuid[COMMON_CPUID_INDEX_D_ECX_1].edx);
++  /* Before COMMON_CPUID_INDEX_80000001, copy the cpuid array elements to
++     the usable array.  */
++  unsigned int i;
++  for (i = 0; i < COMMON_CPUID_INDEX_80000001; i++)
++    cpu_features->features[i].usable = cpu_features->features[i].cpuid;
++
++  /* Before COMMON_CPUID_INDEX_80000001, clear the unknown usable bits
++     and the always zero bits.  */
++  CPU_FEATURE_UNSET (cpu_features, INDEX_1_ECX_16);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_1_ECX_31);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_1_EDX_10);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_1_EDX_20);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_1_EDX_30);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EBX_6);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EBX_22);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_ECX_13);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_ECX_15);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_ECX_16);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_ECX_23);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_ECX_24);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_ECX_26);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_0);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_1);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_5);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_6);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_7);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_9);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_11);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_12);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_13);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_17);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_19);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_21);
++  CPU_FEATURE_UNSET (cpu_features, INDEX_7_EDX_23);
++
++  /* EAX/EBX from COMMON_CPUID_INDEX_1 and EAX from COMMON_CPUID_INDEX_7
++     aren't used for CPU feature detection.  */
++  cpu_features->features[COMMON_CPUID_INDEX_1].usable.eax = 0;
++  cpu_features->features[COMMON_CPUID_INDEX_1].usable.ebx = 0;
++  cpu_features->features[COMMON_CPUID_INDEX_7].usable.eax = 0;
++
++  /* Starting from COMMON_CPUID_INDEX_80000001, copy the cpuid bits to
++     usable bits.  */
++  CPU_FEATURE_SET_USABLE (cpu_features, LAHF64_SAHF64);
++  CPU_FEATURE_SET_USABLE (cpu_features, SVM);
++  CPU_FEATURE_SET_USABLE (cpu_features, LZCNT);
++  CPU_FEATURE_SET_USABLE (cpu_features, SSE4A);
++  CPU_FEATURE_SET_USABLE (cpu_features, PREFETCHW);
++  CPU_FEATURE_SET_USABLE (cpu_features, XOP);
++  CPU_FEATURE_SET_USABLE (cpu_features, LWP);
++  CPU_FEATURE_SET_USABLE (cpu_features, FMA4);
++  CPU_FEATURE_SET_USABLE (cpu_features, TBM);
++  CPU_FEATURE_SET_USABLE (cpu_features, SYSCALL_SYSRET);
++  CPU_FEATURE_SET_USABLE (cpu_features, NX);
++  CPU_FEATURE_SET_USABLE (cpu_features, PAGE1GB);
++  CPU_FEATURE_SET_USABLE (cpu_features, RDTSCP);
++  CPU_FEATURE_SET_USABLE (cpu_features, LM);
++  CPU_FEATURE_SET_USABLE (cpu_features, XSAVEOPT);
++  CPU_FEATURE_SET_USABLE (cpu_features, XSAVEC);
++  CPU_FEATURE_SET_USABLE (cpu_features, XGETBV_ECX_1);
++  CPU_FEATURE_SET_USABLE (cpu_features, XSAVES);
++  CPU_FEATURE_SET_USABLE (cpu_features, XFD);
++  CPU_FEATURE_SET_USABLE (cpu_features, INVARIANT_TSC);
++  CPU_FEATURE_SET_USABLE (cpu_features, WBNOINVD);
++  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_BF16);
++
++  /* MPX has been deprecated.  */
++  CPU_FEATURE_UNSET (cpu_features, MPX);
++
++  /* Clear the usable bits which require OS support.  */
++  CPU_FEATURE_UNSET (cpu_features, FMA);
++  CPU_FEATURE_UNSET (cpu_features, AVX);
++  CPU_FEATURE_UNSET (cpu_features, F16C);
++  CPU_FEATURE_UNSET (cpu_features, AVX2);
++  CPU_FEATURE_UNSET (cpu_features, AVX512F);
++  CPU_FEATURE_UNSET (cpu_features, AVX512DQ);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_IFMA);
++  CPU_FEATURE_UNSET (cpu_features, AVX512PF);
++  CPU_FEATURE_UNSET (cpu_features, AVX512ER);
++  CPU_FEATURE_UNSET (cpu_features, AVX512CD);
++  CPU_FEATURE_UNSET (cpu_features, AVX512BW);
++  CPU_FEATURE_UNSET (cpu_features, AVX512VL);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_VBMI);
++  CPU_FEATURE_UNSET (cpu_features, PKU);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_VBMI2);
++  CPU_FEATURE_UNSET (cpu_features, VAES);
++  CPU_FEATURE_UNSET (cpu_features, VPCLMULQDQ);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_VNNI);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_BITALG);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_VPOPCNTDQ);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_4VNNIW);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_4FMAPS);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_VP2INTERSECT);
++  CPU_FEATURE_UNSET (cpu_features, AMX_BF16);
++  CPU_FEATURE_UNSET (cpu_features, AMX_TILE);
++  CPU_FEATURE_UNSET (cpu_features, AMX_INT8);
++  CPU_FEATURE_UNSET (cpu_features, XOP);
++  CPU_FEATURE_UNSET (cpu_features, FMA4);
++  CPU_FEATURE_UNSET (cpu_features, XSAVEC);
++  CPU_FEATURE_UNSET (cpu_features, XFD);
++  CPU_FEATURE_UNSET (cpu_features, AVX512_BF16);
+ 
+   /* Can we call xgetbv?  */
+   if (CPU_FEATURES_CPU_P (cpu_features, OSXSAVE))
+@@ -123,40 +159,28 @@ get_common_indices (struct cpu_features *cpu_features,
+ 	  /* Determine if AVX is usable.  */
+ 	  if (CPU_FEATURES_CPU_P (cpu_features, AVX))
+ 	    {
+-	      cpu_features->usable[index_arch_AVX_Usable]
+-		|= bit_arch_AVX_Usable;
++	      CPU_FEATURE_SET (cpu_features, AVX);
+ 	      /* The following features depend on AVX being usable.  */
+ 	      /* Determine if AVX2 is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, AVX2))
+-	      {
+-		cpu_features->usable[index_arch_AVX2_Usable]
+-		  |= bit_arch_AVX2_Usable;
+-
+-	        /* Unaligned load with 256-bit AVX registers are faster on
+-	           Intel/AMD processors with AVX2.  */
+-	        cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
+-		  |= bit_arch_AVX_Fast_Unaligned_Load;
+-	      }
++		{
++		  CPU_FEATURE_SET (cpu_features, AVX2);
++
++		  /* Unaligned load with 256-bit AVX registers are faster
++		     on Intel/AMD processors with AVX2.  */
++		  cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
++		    |= bit_arch_AVX_Fast_Unaligned_Load;
++		}
+ 	      /* Determine if FMA is usable.  */
+-	      if (CPU_FEATURES_CPU_P (cpu_features, FMA))
+-		cpu_features->usable[index_arch_FMA_Usable]
+-		  |= bit_arch_FMA_Usable;
++	      CPU_FEATURE_SET_USABLE (cpu_features, FMA);
+ 	      /* Determine if VAES is usable.  */
+-	      if (CPU_FEATURES_CPU_P (cpu_features, VAES))
+-		cpu_features->usable[index_arch_VAES_Usable]
+-		  |= bit_arch_VAES_Usable;
++	      CPU_FEATURE_SET_USABLE (cpu_features, VAES);
+ 	      /* Determine if VPCLMULQDQ is usable.  */
+-	      if (CPU_FEATURES_CPU_P (cpu_features, VPCLMULQDQ))
+-		cpu_features->usable[index_arch_VPCLMULQDQ_Usable]
+-		  |= bit_arch_VPCLMULQDQ_Usable;
++	      CPU_FEATURE_SET_USABLE (cpu_features, VPCLMULQDQ);
+ 	      /* Determine if XOP is usable.  */
+-	      if (CPU_FEATURES_CPU_P (cpu_features, XOP))
+-		cpu_features->usable[index_arch_XOP_Usable]
+-		  |= bit_arch_XOP_Usable;
++	      CPU_FEATURE_SET_USABLE (cpu_features, XOP);
+ 	      /* Determine if F16C is usable.  */
+-	      if (CPU_FEATURES_CPU_P (cpu_features, F16C))
+-		cpu_features->usable[index_arch_F16C_Usable]
+-		  |= bit_arch_F16C_Usable;
++	      CPU_FEATURE_SET_USABLE (cpu_features, F16C);
+ 	    }
+ 
+ 	  /* Check if OPMASK state, upper 256-bit of ZMM0-ZMM15 and
+@@ -168,73 +192,41 @@ get_common_indices (struct cpu_features *cpu_features,
+ 	      /* Determine if AVX512F is usable.  */
+ 	      if (CPU_FEATURES_CPU_P (cpu_features, AVX512F))
+ 		{
+-		  cpu_features->usable[index_arch_AVX512F_Usable]
+-		    |= bit_arch_AVX512F_Usable;
++		  CPU_FEATURE_SET (cpu_features, AVX512F);
+ 		  /* Determine if AVX512CD is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512CD))
+-		    cpu_features->usable[index_arch_AVX512CD_Usable]
+-		      |= bit_arch_AVX512CD_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512CD);
+ 		  /* Determine if AVX512ER is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512ER))
+-		    cpu_features->usable[index_arch_AVX512ER_Usable]
+-		      |= bit_arch_AVX512ER_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512ER);
+ 		  /* Determine if AVX512PF is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512PF))
+-		    cpu_features->usable[index_arch_AVX512PF_Usable]
+-		      |= bit_arch_AVX512PF_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512PF);
+ 		  /* Determine if AVX512VL is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512VL))
+-		    cpu_features->usable[index_arch_AVX512VL_Usable]
+-		      |= bit_arch_AVX512VL_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512VL);
+ 		  /* Determine if AVX512DQ is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512DQ))
+-		    cpu_features->usable[index_arch_AVX512DQ_Usable]
+-		      |= bit_arch_AVX512DQ_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512DQ);
+ 		  /* Determine if AVX512BW is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512BW))
+-		    cpu_features->usable[index_arch_AVX512BW_Usable]
+-		      |= bit_arch_AVX512BW_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512BW);
+ 		  /* Determine if AVX512_4FMAPS is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_4FMAPS))
+-		    cpu_features->usable[index_arch_AVX512_4FMAPS_Usable]
+-		      |= bit_arch_AVX512_4FMAPS_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_4FMAPS);
+ 		  /* Determine if AVX512_4VNNIW is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_4VNNIW))
+-		    cpu_features->usable[index_arch_AVX512_4VNNIW_Usable]
+-		      |= bit_arch_AVX512_4VNNIW_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_4VNNIW);
+ 		  /* Determine if AVX512_BITALG is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_BITALG))
+-		    cpu_features->usable[index_arch_AVX512_BITALG_Usable]
+-		      |= bit_arch_AVX512_BITALG_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_BITALG);
+ 		  /* Determine if AVX512_IFMA is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_IFMA))
+-		    cpu_features->usable[index_arch_AVX512_IFMA_Usable]
+-		      |= bit_arch_AVX512_IFMA_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_IFMA);
+ 		  /* Determine if AVX512_VBMI is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VBMI))
+-		    cpu_features->usable[index_arch_AVX512_VBMI_Usable]
+-		      |= bit_arch_AVX512_VBMI_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_VBMI);
+ 		  /* Determine if AVX512_VBMI2 is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VBMI2))
+-		    cpu_features->usable[index_arch_AVX512_VBMI2_Usable]
+-		      |= bit_arch_AVX512_VBMI2_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_VBMI2);
+ 		  /* Determine if is AVX512_VNNI usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VNNI))
+-		    cpu_features->usable[index_arch_AVX512_VNNI_Usable]
+-		      |= bit_arch_AVX512_VNNI_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_VNNI);
+ 		  /* Determine if AVX512_VPOPCNTDQ is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_VPOPCNTDQ))
+-		    cpu_features->usable[index_arch_AVX512_VPOPCNTDQ_Usable]
+-		      |= bit_arch_AVX512_VPOPCNTDQ_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features,
++					  AVX512_VPOPCNTDQ);
+ 		  /* Determine if AVX512_VP2INTERSECT is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features,
+-					  AVX512_VP2INTERSECT))
+-		    cpu_features->usable[index_arch_AVX512_VP2INTERSECT_Usable]
+-		      |= bit_arch_AVX512_VP2INTERSECT_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features,
++					  AVX512_VP2INTERSECT);
+ 		  /* Determine if AVX512_BF16 is usable.  */
+-		  if (CPU_FEATURES_CPU_P (cpu_features, AVX512_BF16))
+-		    cpu_features->usable[index_arch_AVX512_BF16_Usable]
+-		      |= bit_arch_AVX512_BF16_Usable;
++		  CPU_FEATURE_SET_USABLE (cpu_features, AVX512_BF16);
+ 		}
+ 	    }
+ 	}
+@@ -244,19 +236,17 @@ get_common_indices (struct cpu_features *cpu_features,
+ 	  == (bit_XTILECFG_state | bit_XTILEDATA_state))
+ 	{
+ 	  /* Determine if AMX_BF16 is usable.  */
+-	  if (CPU_FEATURES_CPU_P (cpu_features, AMX_BF16))
+-	    cpu_features->usable[index_arch_AMX_BF16_Usable]
+-	      |= bit_arch_AMX_BF16_Usable;
++	  CPU_FEATURE_SET_USABLE (cpu_features, AMX_BF16);
+ 	  /* Determine if AMX_TILE is usable.  */
+-	  if (CPU_FEATURES_CPU_P (cpu_features, AMX_TILE))
+-	    cpu_features->usable[index_arch_AMX_TILE_Usable]
+-	      |= bit_arch_AMX_TILE_Usable;
++	  CPU_FEATURE_SET_USABLE (cpu_features, AMX_TILE);
+ 	  /* Determine if AMX_INT8 is usable.  */
+-	  if (CPU_FEATURES_CPU_P (cpu_features, AMX_INT8))
+-	    cpu_features->usable[index_arch_AMX_INT8_Usable]
+-	      |= bit_arch_AMX_INT8_Usable;
++	  CPU_FEATURE_SET_USABLE (cpu_features, AMX_INT8);
+ 	}
+ 
++
++      /* XFD is usable only when OSXSAVE is enabled.  */
++      CPU_FEATURE_SET_USABLE (cpu_features, XFD);
++
+       /* For _dl_runtime_resolve, set xsave_state_size to xsave area
+ 	 size + integer register save size and align it to 64 bytes.  */
+       if (cpu_features->basic.max_cpuid >= 0xd)
+@@ -318,8 +308,7 @@ get_common_indices (struct cpu_features *cpu_features,
+ 		    {
+ 		      cpu_features->xsave_state_size
+ 			= ALIGN_UP (size + STATE_SAVE_OFFSET, 64);
+-		      cpu_features->usable[index_arch_XSAVEC_Usable]
+-			|= bit_arch_XSAVEC_Usable;
++		      CPU_FEATURE_SET (cpu_features, XSAVEC);
+ 		    }
+ 		}
+ 	    }
+@@ -328,8 +317,79 @@ get_common_indices (struct cpu_features *cpu_features,
+ 
+   /* Determine if PKU is usable.  */
+   if (CPU_FEATURES_CPU_P (cpu_features, OSPKE))
+-    cpu_features->usable[index_arch_PKU_Usable]
+-      |= bit_arch_PKU_Usable;
++    CPU_FEATURE_SET (cpu_features, PKU);
++}
++
++static void
++get_extended_indices (struct cpu_features *cpu_features)
++{
++  unsigned int eax, ebx, ecx, edx;
++  __cpuid (0x80000000, eax, ebx, ecx, edx);
++  if (eax >= 0x80000001)
++    __cpuid (0x80000001,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000001].cpuid.eax,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000001].cpuid.ebx,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000001].cpuid.ecx,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000001].cpuid.edx);
++  if (eax >= 0x80000007)
++    __cpuid (0x80000007,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000007].cpuid.eax,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000007].cpuid.ebx,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000007].cpuid.ecx,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000007].cpuid.edx);
++  if (eax >= 0x80000008)
++    __cpuid (0x80000008,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000008].cpuid.eax,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000008].cpuid.ebx,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000008].cpuid.ecx,
++	     cpu_features->features[COMMON_CPUID_INDEX_80000008].cpuid.edx);
++}
++
++static void
++get_common_indices (struct cpu_features *cpu_features,
++		    unsigned int *family, unsigned int *model,
++		    unsigned int *extended_model, unsigned int *stepping)
++{
++  if (family)
++    {
++      unsigned int eax;
++      __cpuid (1, eax,
++	       cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.ebx,
++	       cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.ecx,
++	       cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.edx);
++      cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.eax = eax;
++      *family = (eax >> 8) & 0x0f;
++      *model = (eax >> 4) & 0x0f;
++      *extended_model = (eax >> 12) & 0xf0;
++      *stepping = eax & 0x0f;
++      if (*family == 0x0f)
++	{
++	  *family += (eax >> 20) & 0xff;
++	  *model += *extended_model;
++	}
++    }
++
++  if (cpu_features->basic.max_cpuid >= 7)
++    {
++      __cpuid_count (7, 0,
++		     cpu_features->features[COMMON_CPUID_INDEX_7].cpuid.eax,
++		     cpu_features->features[COMMON_CPUID_INDEX_7].cpuid.ebx,
++		     cpu_features->features[COMMON_CPUID_INDEX_7].cpuid.ecx,
++		     cpu_features->features[COMMON_CPUID_INDEX_7].cpuid.edx);
++      __cpuid_count (7, 1,
++		     cpu_features->features[COMMON_CPUID_INDEX_7_ECX_1].cpuid.eax,
++		     cpu_features->features[COMMON_CPUID_INDEX_7_ECX_1].cpuid.ebx,
++		     cpu_features->features[COMMON_CPUID_INDEX_7_ECX_1].cpuid.ecx,
++		     cpu_features->features[COMMON_CPUID_INDEX_7_ECX_1].cpuid.edx);
++    }
++
++  if (cpu_features->basic.max_cpuid >= 0xd)
++    __cpuid_count (0xd, 1,
++		   cpu_features->features[COMMON_CPUID_INDEX_D_ECX_1].cpuid.eax,
++		   cpu_features->features[COMMON_CPUID_INDEX_D_ECX_1].cpuid.ebx,
++		   cpu_features->features[COMMON_CPUID_INDEX_D_ECX_1].cpuid.ecx,
++		   cpu_features->features[COMMON_CPUID_INDEX_D_ECX_1].cpuid.edx);
++
+ }
+ 
+ _Static_assert (((index_arch_Fast_Unaligned_Load
+@@ -353,8 +413,6 @@ init_cpu_features (struct cpu_features *cpu_features)
+   unsigned int stepping = 0;
+   enum cpu_features_kind kind;
+ 
+-  cpu_features->usable_p = cpu_features->usable;
+-
+ #if !HAS_CPUID
+   if (__get_cpuid_max (0, 0) == 0)
+     {
+@@ -377,6 +435,8 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+       get_extended_indices (cpu_features);
+ 
++      update_usable (cpu_features);
++
+       if (family == 0x06)
+ 	{
+ 	  model += extended_model;
+@@ -473,7 +533,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 		 with stepping >= 4) to avoid TSX on kernels that weren't
+ 		 updated with the latest microcode package (which disables
+ 		 broken feature by default).  */
+-	      cpu_features->cpuid[index_cpu_RTM].reg_RTM &= ~bit_cpu_RTM;
++	      CPU_FEATURE_UNSET (cpu_features, RTM);
+ 	      break;
+ 	    }
+ 	}
+@@ -501,15 +561,15 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+       get_extended_indices (cpu_features);
+ 
+-      ecx = cpu_features->cpuid[COMMON_CPUID_INDEX_1].ecx;
++      update_usable (cpu_features);
+ 
+-      if (HAS_ARCH_FEATURE (AVX_Usable))
++      ecx = cpu_features->features[COMMON_CPUID_INDEX_1].cpuid.ecx;
++
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX))
+ 	{
+ 	  /* Since the FMA4 bit is in COMMON_CPUID_INDEX_80000001 and
+ 	     FMA4 requires AVX, determine if FMA4 is usable here.  */
+-	  if (CPU_FEATURES_CPU_P (cpu_features, FMA4))
+-	    cpu_features->usable[index_arch_FMA4_Usable]
+-	      |= bit_arch_FMA4_Usable;
++	  CPU_FEATURE_SET_USABLE (cpu_features, FMA4);
+ 	}
+ 
+       if (family == 0x15)
+@@ -540,13 +600,15 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 
+       get_extended_indices (cpu_features);
+ 
++      update_usable (cpu_features);
++
+       model += extended_model;
+       if (family == 0x6)
+         {
+           if (model == 0xf || model == 0x19)
+             {
+-              cpu_features->usable[index_arch_AVX_Usable]
+-                &= ~(bit_arch_AVX_Usable | bit_arch_AVX2_Usable);
++	      CPU_FEATURE_UNSET (cpu_features, AVX);
++	      CPU_FEATURE_UNSET (cpu_features, AVX2);
+ 
+               cpu_features->preferred[index_arch_Slow_SSE4_2]
+                 |= bit_arch_Slow_SSE4_2;
+@@ -559,8 +621,8 @@ init_cpu_features (struct cpu_features *cpu_features)
+         {
+ 	  if (model == 0x1b)
+ 	    {
+-	      cpu_features->usable[index_arch_AVX_Usable]
+-		&= ~(bit_arch_AVX_Usable | bit_arch_AVX2_Usable);
++	      CPU_FEATURE_UNSET (cpu_features, AVX);
++	      CPU_FEATURE_UNSET (cpu_features, AVX2);
+ 
+ 	      cpu_features->preferred[index_arch_Slow_SSE4_2]
+ 		|= bit_arch_Slow_SSE4_2;
+@@ -570,8 +632,8 @@ init_cpu_features (struct cpu_features *cpu_features)
+ 	    }
+ 	  else if (model == 0x3b)
+ 	    {
+-	      cpu_features->usable[index_arch_AVX_Usable]
+-		&= ~(bit_arch_AVX_Usable | bit_arch_AVX2_Usable);
++	      CPU_FEATURE_UNSET (cpu_features, AVX);
++	      CPU_FEATURE_UNSET (cpu_features, AVX2);
+ 
+ 	      cpu_features->preferred[index_arch_AVX_Fast_Unaligned_Load]
+ 		&= ~bit_arch_AVX_Fast_Unaligned_Load;
+@@ -582,6 +644,7 @@ init_cpu_features (struct cpu_features *cpu_features)
+     {
+       kind = arch_kind_other;
+       get_common_indices (cpu_features, NULL, NULL, NULL, NULL);
++      update_usable (cpu_features);
+     }
+ 
+   /* Support i586 if CX8 is available.  */
+@@ -628,31 +691,30 @@ no_cpuid:
+     {
+       const char *platform = NULL;
+ 
+-      if (CPU_FEATURES_ARCH_P (cpu_features, AVX512F_Usable)
+-	  && CPU_FEATURES_CPU_P (cpu_features, AVX512CD))
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512CD))
+ 	{
+-	  if (CPU_FEATURES_CPU_P (cpu_features, AVX512ER))
++	  if (CPU_FEATURE_USABLE_P (cpu_features, AVX512ER))
+ 	    {
+-	      if (CPU_FEATURES_CPU_P (cpu_features, AVX512PF))
++	      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512PF))
+ 		platform = "xeon_phi";
+ 	    }
+ 	  else
+ 	    {
+-	      if (CPU_FEATURES_CPU_P (cpu_features, AVX512BW)
+-		  && CPU_FEATURES_CPU_P (cpu_features, AVX512DQ)
+-		  && CPU_FEATURES_CPU_P (cpu_features, AVX512VL))
++	      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512BW)
++		  && CPU_FEATURE_USABLE_P (cpu_features, AVX512DQ)
++		  && CPU_FEATURE_USABLE_P (cpu_features, AVX512VL))
+ 		GLRO(dl_hwcap) |= HWCAP_X86_AVX512_1;
+ 	    }
+ 	}
+ 
+       if (platform == NULL
+-	  && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
+-	  && CPU_FEATURES_ARCH_P (cpu_features, FMA_Usable)
+-	  && CPU_FEATURES_CPU_P (cpu_features, BMI1)
+-	  && CPU_FEATURES_CPU_P (cpu_features, BMI2)
+-	  && CPU_FEATURES_CPU_P (cpu_features, LZCNT)
+-	  && CPU_FEATURES_CPU_P (cpu_features, MOVBE)
+-	  && CPU_FEATURES_CPU_P (cpu_features, POPCNT))
++	  && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
++	  && CPU_FEATURE_USABLE_P (cpu_features, FMA)
++	  && CPU_FEATURE_USABLE_P (cpu_features, BMI1)
++	  && CPU_FEATURE_USABLE_P (cpu_features, BMI2)
++	  && CPU_FEATURE_USABLE_P (cpu_features, LZCNT)
++	  && CPU_FEATURE_USABLE_P (cpu_features, MOVBE)
++	  && CPU_FEATURE_USABLE_P (cpu_features, POPCNT))
+ 	platform = "haswell";
+ 
+       if (platform != NULL)
+@@ -660,7 +722,7 @@ no_cpuid:
+     }
+ #else
+   GLRO(dl_hwcap) = 0;
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE2))
+     GLRO(dl_hwcap) |= HWCAP_X86_SSE2;
+ 
+   if (CPU_FEATURES_ARCH_P (cpu_features, I686))
+@@ -695,9 +757,9 @@ no_cpuid:
+ 	     GLIBC_TUNABLES=glibc.cpu.hwcaps=-IBT,-SHSTK
+ 	   */
+ 	  unsigned int cet_feature = 0;
+-	  if (!HAS_CPU_FEATURE (IBT))
++	  if (!CPU_FEATURE_USABLE (IBT))
+ 	    cet_feature |= GNU_PROPERTY_X86_FEATURE_1_IBT;
+-	  if (!HAS_CPU_FEATURE (SHSTK))
++	  if (!CPU_FEATURE_USABLE (SHSTK))
+ 	    cet_feature |= GNU_PROPERTY_X86_FEATURE_1_SHSTK;
+ 
+ 	  if (cet_feature)
+diff --git a/sysdeps/x86/cpu-features.h b/sysdeps/x86/cpu-features.h
+index 0f19c64352c4d7f1..21708c028a12dbb2 100644
+--- a/sysdeps/x86/cpu-features.h
++++ b/sysdeps/x86/cpu-features.h
+@@ -18,15 +18,6 @@
+ #ifndef cpu_features_h
+ #define cpu_features_h
+ 
+-enum
+-{
+-  /* The integer bit array index for the first set of usable feature
+-     bits.  */
+-  USABLE_FEATURE_INDEX_1 = 0,
+-  /* The current maximum size of the feature integer bit array.  */
+-  USABLE_FEATURE_INDEX_MAX
+-};
+-
+ enum
+ {
+   /* The integer bit array index for the first set of preferred feature
+@@ -57,6 +48,12 @@ struct cpuid_registers
+   unsigned int edx;
+ };
+ 
++struct cpuid_features
++{
++  struct cpuid_registers cpuid;
++  struct cpuid_registers usable;
++};
++
+ enum cpu_features_kind
+ {
+   arch_kind_unknown = 0,
+@@ -78,9 +75,7 @@ struct cpu_features_basic
+ struct cpu_features
+ {
+   struct cpu_features_basic basic;
+-  unsigned int *usable_p;
+-  struct cpuid_registers cpuid[COMMON_CPUID_INDEX_MAX];
+-  unsigned int usable[USABLE_FEATURE_INDEX_MAX];
++  struct cpuid_features features[COMMON_CPUID_INDEX_MAX];
+   unsigned int preferred[PREFERRED_FEATURE_INDEX_MAX];
+   /* The state size for XSAVEC or XSAVE.  The type must be unsigned long
+      int so that we use
+@@ -91,7 +86,7 @@ struct cpu_features
+   unsigned long int xsave_state_size;
+   /* The full state size for XSAVE when XSAVEC is disabled by
+ 
+-     GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC_Usable
++     GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC
+    */
+   unsigned int xsave_state_full_size;
+   /* Data cache size for use in memory and string routines, typically
+@@ -114,117 +109,40 @@ extern const struct cpu_features *__get_cpu_features (void)
+      __attribute__ ((const));
+ 
+ /* Only used directly in cpu-features.c.  */
+-# define CPU_FEATURES_CPU_P(ptr, name) \
+-  ((ptr->cpuid[index_cpu_##name].reg_##name & (bit_cpu_##name)) != 0)
+-# define CPU_FEATURES_ARCH_P(ptr, name) \
+-  ((ptr->feature_##name[index_arch_##name] & (bit_arch_##name)) != 0)
++#define CPU_FEATURE_CHECK_P(ptr, name, check) \
++  ((ptr->features[index_cpu_##name].check.reg_##name \
++    & bit_cpu_##name) != 0)
++#define CPU_FEATURE_SET(ptr, name) \
++  ptr->features[index_cpu_##name].usable.reg_##name |= bit_cpu_##name;
++#define CPU_FEATURE_UNSET(ptr, name) \
++  ptr->features[index_cpu_##name].usable.reg_##name &= ~bit_cpu_##name;
++#define CPU_FEATURE_SET_USABLE(ptr, name) \
++  ptr->features[index_cpu_##name].usable.reg_##name \
++     |= ptr->features[index_cpu_##name].cpuid.reg_##name & bit_cpu_##name;
++#define CPU_FEATURE_PREFERRED_P(ptr, name) \
++  ((ptr->preferred[index_arch_##name] & bit_arch_##name) != 0)
++#define CPU_FEATURE_CPU_P(ptr, name) \
++  CPU_FEATURE_CHECK_P (ptr, name, cpuid)
++#define CPU_FEATURE_USABLE_P(ptr, name) \
++  CPU_FEATURE_CHECK_P (ptr, name, usable)
+ 
+ /* HAS_CPU_FEATURE evaluates to true if CPU supports the feature.  */
+ #define HAS_CPU_FEATURE(name) \
+-  CPU_FEATURES_CPU_P (__get_cpu_features (), name)
+-/* HAS_ARCH_FEATURE evaluates to true if we may use the feature at
+-   runtime.  */
+-# define HAS_ARCH_FEATURE(name) \
+-  CPU_FEATURES_ARCH_P (__get_cpu_features (), name)
++  CPU_FEATURE_CPU_P (__get_cpu_features (), name)
+ /* CPU_FEATURE_USABLE evaluates to true if the feature is usable.  */
+ #define CPU_FEATURE_USABLE(name) \
+-  HAS_ARCH_FEATURE (name##_Usable)
+-
+-/* Architecture features.  */
+-
+-/* USABLE_FEATURE_INDEX_1.  */
+-#define bit_arch_AVX_Usable			(1u << 0)
+-#define bit_arch_AVX2_Usable			(1u << 1)
+-#define bit_arch_AVX512F_Usable			(1u << 2)
+-#define bit_arch_AVX512CD_Usable		(1u << 3)
+-#define bit_arch_AVX512ER_Usable		(1u << 4)
+-#define bit_arch_AVX512PF_Usable		(1u << 5)
+-#define bit_arch_AVX512VL_Usable		(1u << 6)
+-#define bit_arch_AVX512DQ_Usable		(1u << 7)
+-#define bit_arch_AVX512BW_Usable		(1u << 8)
+-#define bit_arch_AVX512_4FMAPS_Usable		(1u << 9)
+-#define bit_arch_AVX512_4VNNIW_Usable		(1u << 10)
+-#define bit_arch_AVX512_BITALG_Usable		(1u << 11)
+-#define bit_arch_AVX512_IFMA_Usable		(1u << 12)
+-#define bit_arch_AVX512_VBMI_Usable		(1u << 13)
+-#define bit_arch_AVX512_VBMI2_Usable		(1u << 14)
+-#define bit_arch_AVX512_VNNI_Usable		(1u << 15)
+-#define bit_arch_AVX512_VPOPCNTDQ_Usable	(1u << 16)
+-#define bit_arch_FMA_Usable			(1u << 17)
+-#define bit_arch_FMA4_Usable			(1u << 18)
+-#define bit_arch_VAES_Usable			(1u << 19)
+-#define bit_arch_VPCLMULQDQ_Usable		(1u << 20)
+-#define bit_arch_XOP_Usable			(1u << 21)
+-#define bit_arch_XSAVEC_Usable			(1u << 22)
+-#define bit_arch_F16C_Usable			(1u << 23)
+-#define bit_arch_AVX512_VP2INTERSECT_Usable	(1u << 24)
+-#define bit_arch_AVX512_BF16_Usable		(1u << 25)
+-#define bit_arch_PKU_Usable			(1u << 26)
+-#define bit_arch_AMX_BF16_Usable		(1u << 27)
+-#define bit_arch_AMX_TILE_Usable		(1u << 28)
+-#define bit_arch_AMX_INT8_Usable		(1u << 29)
+-
+-#define index_arch_AVX_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX2_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512F_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512CD_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512ER_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512PF_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512VL_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512BW_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512DQ_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_4FMAPS_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_4VNNIW_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_BITALG_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_IFMA_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_VBMI_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_VBMI2_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_VNNI_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_VPOPCNTDQ_Usable	USABLE_FEATURE_INDEX_1
+-#define index_arch_FMA_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_FMA4_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_VAES_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_VPCLMULQDQ_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_XOP_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_XSAVEC_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_F16C_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_VP2INTERSECT_Usable	USABLE_FEATURE_INDEX_1
+-#define index_arch_AVX512_BF16_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_PKU_Usable			USABLE_FEATURE_INDEX_1
+-#define index_arch_AMX_BF16_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AMX_TILE_Usable		USABLE_FEATURE_INDEX_1
+-#define index_arch_AMX_INT8_Usable		USABLE_FEATURE_INDEX_1
+-
+-#define feature_AVX_Usable			usable
+-#define feature_AVX2_Usable			usable
+-#define feature_AVX512F_Usable			usable
+-#define feature_AVX512CD_Usable			usable
+-#define feature_AVX512ER_Usable			usable
+-#define feature_AVX512PF_Usable			usable
+-#define feature_AVX512VL_Usable			usable
+-#define feature_AVX512BW_Usable			usable
+-#define feature_AVX512DQ_Usable			usable
+-#define feature_AVX512_4FMAPS_Usable		usable
+-#define feature_AVX512_4VNNIW_Usable		usable
+-#define feature_AVX512_BITALG_Usable		usable
+-#define feature_AVX512_IFMA_Usable		usable
+-#define feature_AVX512_VBMI_Usable		usable
+-#define feature_AVX512_VBMI2_Usable		usable
+-#define feature_AVX512_VNNI_Usable		usable
+-#define feature_AVX512_VPOPCNTDQ_Usable		usable
+-#define feature_FMA_Usable			usable
+-#define feature_FMA4_Usable			usable
+-#define feature_VAES_Usable			usable
+-#define feature_VPCLMULQDQ_Usable		usable
+-#define feature_XOP_Usable			usable
+-#define feature_XSAVEC_Usable			usable
+-#define feature_F16C_Usable			usable
+-#define feature_AVX512_VP2INTERSECT_Usable	usable
+-#define feature_AVX512_BF16_Usable		usable
+-#define feature_PKU_Usable			usable
+-#define feature_AMX_BF16_Usable			usable
+-#define feature_AMX_TILE_Usable			usable
+-#define feature_AMX_INT8_Usable			usable
++  CPU_FEATURE_USABLE_P (__get_cpu_features (), name)
++/* CPU_FEATURE_PREFER evaluates to true if we prefer the feature at
++   runtime.  */
++#define CPU_FEATURE_PREFERRED(name) \
++  CPU_FEATURE_PREFERRED_P(__get_cpu_features (), name)
++
++#define CPU_FEATURES_CPU_P(ptr, name) \
++  CPU_FEATURE_CPU_P (ptr, name)
++#define CPU_FEATURES_ARCH_P(ptr, name) \
++  CPU_FEATURE_PREFERRED_P (ptr, name)
++#define HAS_ARCH_FEATURE(name) \
++  CPU_FEATURE_PREFERRED (name)
+ 
+ /* CPU features.  */
+ 
+@@ -247,6 +165,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_CMPXCHG16B	(1u << 13)
+ #define bit_cpu_XTPRUPDCTRL	(1u << 14)
+ #define bit_cpu_PDCM		(1u << 15)
++#define bit_cpu_INDEX_1_ECX_16	(1u << 16)
+ #define bit_cpu_PCID		(1u << 17)
+ #define bit_cpu_DCA		(1u << 18)
+ #define bit_cpu_SSE4_1		(1u << 19)
+@@ -261,6 +180,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_AVX		(1u << 28)
+ #define bit_cpu_F16C		(1u << 29)
+ #define bit_cpu_RDRAND		(1u << 30)
++#define bit_cpu_INDEX_1_ECX_31	(1u << 31)
+ 
+ /* EDX.  */
+ #define bit_cpu_FPU		(1u << 0)
+@@ -273,6 +193,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_MCE		(1u << 7)
+ #define bit_cpu_CX8		(1u << 8)
+ #define bit_cpu_APIC		(1u << 9)
++#define bit_cpu_INDEX_1_EDX_10	(1u << 10)
+ #define bit_cpu_SEP		(1u << 11)
+ #define bit_cpu_MTRR		(1u << 12)
+ #define bit_cpu_PGE		(1u << 13)
+@@ -282,6 +203,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_PSE_36		(1u << 17)
+ #define bit_cpu_PSN		(1u << 18)
+ #define bit_cpu_CLFSH		(1u << 19)
++#define bit_cpu_INDEX_1_EDX_20	(1u << 20)
+ #define bit_cpu_DS		(1u << 21)
+ #define bit_cpu_ACPI		(1u << 22)
+ #define bit_cpu_MMX		(1u << 23)
+@@ -291,6 +213,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_SS		(1u << 27)
+ #define bit_cpu_HTT		(1u << 28)
+ #define bit_cpu_TM		(1u << 29)
++#define bit_cpu_INDEX_1_EDX_30	(1u << 30)
+ #define bit_cpu_PBE		(1u << 31)
+ 
+ /* COMMON_CPUID_INDEX_7.  */
+@@ -302,12 +225,14 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_BMI1		(1u << 3)
+ #define bit_cpu_HLE		(1u << 4)
+ #define bit_cpu_AVX2		(1u << 5)
++#define bit_cpu_INDEX_7_EBX_6	(1u << 6)
+ #define bit_cpu_SMEP		(1u << 7)
+ #define bit_cpu_BMI2		(1u << 8)
+ #define bit_cpu_ERMS		(1u << 9)
+ #define bit_cpu_INVPCID		(1u << 10)
+ #define bit_cpu_RTM		(1u << 11)
+ #define bit_cpu_PQM		(1u << 12)
++#define bit_cpu_DEPR_FPU_CS_DS	(1u << 13)
+ #define bit_cpu_MPX		(1u << 14)
+ #define bit_cpu_PQE		(1u << 15)
+ #define bit_cpu_AVX512F		(1u << 16)
+@@ -316,6 +241,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_ADX		(1u << 19)
+ #define bit_cpu_SMAP		(1u << 20)
+ #define bit_cpu_AVX512_IFMA	(1u << 21)
++#define bit_cpu_INDEX_7_EBX_22	(1u << 22)
+ #define bit_cpu_CLFLUSHOPT	(1u << 23)
+ #define bit_cpu_CLWB		(1u << 24)
+ #define bit_cpu_TRACE		(1u << 25)
+@@ -340,9 +266,17 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_VPCLMULQDQ	(1u << 10)
+ #define bit_cpu_AVX512_VNNI	(1u << 11)
+ #define bit_cpu_AVX512_BITALG	(1u << 12)
++#define bit_cpu_INDEX_7_ECX_13	(1u << 13)
+ #define bit_cpu_AVX512_VPOPCNTDQ (1u << 14)
++#define bit_cpu_INDEX_7_ECX_15	(1u << 15)
++#define bit_cpu_INDEX_7_ECX_16	(1u << 16)
++/* Note: Bits 17-21: The value of MAWAU used by the BNDLDX and BNDSTX
++   instructions in 64-bit mode.  */
+ #define bit_cpu_RDPID		(1u << 22)
++#define bit_cpu_INDEX_7_ECX_23	(1u << 23)
++#define bit_cpu_INDEX_7_ECX_24	(1u << 24)
+ #define bit_cpu_CLDEMOTE	(1u << 25)
++#define bit_cpu_INDEX_7_ECX_26	(1u << 26)
+ #define bit_cpu_MOVDIRI		(1u << 27)
+ #define bit_cpu_MOVDIR64B	(1u << 28)
+ #define bit_cpu_ENQCMD		(1u << 29)
+@@ -350,17 +284,30 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define bit_cpu_PKS		(1u << 31)
+ 
+ /* EDX.  */
++#define bit_cpu_INDEX_7_EDX_0	(1u << 0)
++#define bit_cpu_INDEX_7_EDX_1	(1u << 1)
+ #define bit_cpu_AVX512_4VNNIW	(1u << 2)
+ #define bit_cpu_AVX512_4FMAPS	(1u << 3)
+ #define bit_cpu_FSRM		(1u << 4)
++#define bit_cpu_INDEX_7_EDX_5	(1u << 5)
++#define bit_cpu_INDEX_7_EDX_6	(1u << 6)
++#define bit_cpu_INDEX_7_EDX_7	(1u << 7)
+ #define bit_cpu_AVX512_VP2INTERSECT (1u << 8)
++#define bit_cpu_INDEX_7_EDX_9	(1u << 9)
+ #define bit_cpu_MD_CLEAR	(1u << 10)
++#define bit_cpu_INDEX_7_EDX_11	(1u << 11)
++#define bit_cpu_INDEX_7_EDX_12	(1u << 12)
++#define bit_cpu_INDEX_7_EDX_13	(1u << 13)
+ #define bit_cpu_SERIALIZE	(1u << 14)
+ #define bit_cpu_HYBRID		(1u << 15)
+ #define bit_cpu_TSXLDTRK	(1u << 16)
++#define bit_cpu_INDEX_7_EDX_17	(1u << 17)
+ #define bit_cpu_PCONFIG		(1u << 18)
++#define bit_cpu_INDEX_7_EDX_19	(1u << 19)
+ #define bit_cpu_IBT		(1u << 20)
++#define bit_cpu_INDEX_7_EDX_21	(1u << 21)
+ #define bit_cpu_AMX_BF16	(1u << 22)
++#define bit_cpu_INDEX_7_EDX_23	(1u << 23)
+ #define bit_cpu_AMX_TILE	(1u << 24)
+ #define bit_cpu_AMX_INT8	(1u << 25)
+ #define bit_cpu_IBRS_IBPB	(1u << 26)
+@@ -433,6 +380,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_CMPXCHG16B	COMMON_CPUID_INDEX_1
+ #define index_cpu_XTPRUPDCTRL	COMMON_CPUID_INDEX_1
+ #define index_cpu_PDCM		COMMON_CPUID_INDEX_1
++#define index_cpu_INDEX_1_ECX_16 COMMON_CPUID_INDEX_1
+ #define index_cpu_PCID		COMMON_CPUID_INDEX_1
+ #define index_cpu_DCA		COMMON_CPUID_INDEX_1
+ #define index_cpu_SSE4_1	COMMON_CPUID_INDEX_1
+@@ -447,6 +395,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_AVX		COMMON_CPUID_INDEX_1
+ #define index_cpu_F16C		COMMON_CPUID_INDEX_1
+ #define index_cpu_RDRAND	COMMON_CPUID_INDEX_1
++#define index_cpu_INDEX_1_ECX_31 COMMON_CPUID_INDEX_1
+ 
+ /* ECX.  */
+ #define index_cpu_FPU		COMMON_CPUID_INDEX_1
+@@ -459,6 +408,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_MCE		COMMON_CPUID_INDEX_1
+ #define index_cpu_CX8		COMMON_CPUID_INDEX_1
+ #define index_cpu_APIC		COMMON_CPUID_INDEX_1
++#define index_cpu_INDEX_1_EDX_10 COMMON_CPUID_INDEX_1
+ #define index_cpu_SEP		COMMON_CPUID_INDEX_1
+ #define index_cpu_MTRR		COMMON_CPUID_INDEX_1
+ #define index_cpu_PGE		COMMON_CPUID_INDEX_1
+@@ -468,6 +418,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_PSE_36	COMMON_CPUID_INDEX_1
+ #define index_cpu_PSN		COMMON_CPUID_INDEX_1
+ #define index_cpu_CLFSH		COMMON_CPUID_INDEX_1
++#define index_cpu_INDEX_1_EDX_20 COMMON_CPUID_INDEX_1
+ #define index_cpu_DS		COMMON_CPUID_INDEX_1
+ #define index_cpu_ACPI		COMMON_CPUID_INDEX_1
+ #define index_cpu_MMX		COMMON_CPUID_INDEX_1
+@@ -477,6 +428,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_SS		COMMON_CPUID_INDEX_1
+ #define index_cpu_HTT		COMMON_CPUID_INDEX_1
+ #define index_cpu_TM		COMMON_CPUID_INDEX_1
++#define index_cpu_INDEX_1_EDX_30 COMMON_CPUID_INDEX_1
+ #define index_cpu_PBE		COMMON_CPUID_INDEX_1
+ 
+ /* COMMON_CPUID_INDEX_7.  */
+@@ -488,12 +440,14 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_BMI1		COMMON_CPUID_INDEX_7
+ #define index_cpu_HLE		COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX2		COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EBX_6	COMMON_CPUID_INDEX_7
+ #define index_cpu_SMEP		COMMON_CPUID_INDEX_7
+ #define index_cpu_BMI2		COMMON_CPUID_INDEX_7
+ #define index_cpu_ERMS		COMMON_CPUID_INDEX_7
+ #define index_cpu_INVPCID	COMMON_CPUID_INDEX_7
+ #define index_cpu_RTM		COMMON_CPUID_INDEX_7
+ #define index_cpu_PQM		COMMON_CPUID_INDEX_7
++#define index_cpu_DEPR_FPU_CS_DS COMMON_CPUID_INDEX_7
+ #define index_cpu_MPX		COMMON_CPUID_INDEX_7
+ #define index_cpu_PQE		COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512F	COMMON_CPUID_INDEX_7
+@@ -502,6 +456,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_ADX		COMMON_CPUID_INDEX_7
+ #define index_cpu_SMAP		COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_IFMA	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EBX_22 COMMON_CPUID_INDEX_7
+ #define index_cpu_CLFLUSHOPT	COMMON_CPUID_INDEX_7
+ #define index_cpu_CLWB		COMMON_CPUID_INDEX_7
+ #define index_cpu_TRACE		COMMON_CPUID_INDEX_7
+@@ -526,9 +481,15 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_VPCLMULQDQ	COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_VNNI	COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_BITALG COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_ECX_13 COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_VPOPCNTDQ COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_ECX_15 COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_ECX_16 COMMON_CPUID_INDEX_7
+ #define index_cpu_RDPID		COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_ECX_23 COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_ECX_24 COMMON_CPUID_INDEX_7
+ #define index_cpu_CLDEMOTE	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_ECX_26 COMMON_CPUID_INDEX_7
+ #define index_cpu_MOVDIRI	COMMON_CPUID_INDEX_7
+ #define index_cpu_MOVDIR64B	COMMON_CPUID_INDEX_7
+ #define index_cpu_ENQCMD	COMMON_CPUID_INDEX_7
+@@ -536,17 +497,30 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_cpu_PKS		COMMON_CPUID_INDEX_7
+ 
+ /* EDX.  */
++#define index_cpu_INDEX_7_EDX_0	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_1	COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_4VNNIW COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_4FMAPS	COMMON_CPUID_INDEX_7
+ #define index_cpu_FSRM		COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_5	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_6	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_7	COMMON_CPUID_INDEX_7
+ #define index_cpu_AVX512_VP2INTERSECT COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_9	COMMON_CPUID_INDEX_7
+ #define index_cpu_MD_CLEAR	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_11 COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_12 COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_13 COMMON_CPUID_INDEX_7
+ #define index_cpu_SERIALIZE	COMMON_CPUID_INDEX_7
+ #define index_cpu_HYBRID	COMMON_CPUID_INDEX_7
+ #define index_cpu_TSXLDTRK	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_17 COMMON_CPUID_INDEX_7
+ #define index_cpu_PCONFIG	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_19 COMMON_CPUID_INDEX_7
+ #define index_cpu_IBT		COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_21 COMMON_CPUID_INDEX_7
+ #define index_cpu_AMX_BF16	COMMON_CPUID_INDEX_7
++#define index_cpu_INDEX_7_EDX_23 COMMON_CPUID_INDEX_7
+ #define index_cpu_AMX_TILE	COMMON_CPUID_INDEX_7
+ #define index_cpu_AMX_INT8	COMMON_CPUID_INDEX_7
+ #define index_cpu_IBRS_IBPB	COMMON_CPUID_INDEX_7
+@@ -619,6 +593,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_CMPXCHG16B		ecx
+ #define reg_XTPRUPDCTRL		ecx
+ #define reg_PDCM		ecx
++#define reg_INDEX_1_ECX_16	ecx
+ #define reg_PCID		ecx
+ #define reg_DCA			ecx
+ #define reg_SSE4_1		ecx
+@@ -633,6 +608,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_AVX			ecx
+ #define reg_F16C		ecx
+ #define reg_RDRAND		ecx
++#define reg_INDEX_1_ECX_31	ecx
+ 
+ /* EDX.  */
+ #define reg_FPU			edx
+@@ -645,6 +621,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_MCE			edx
+ #define reg_CX8			edx
+ #define reg_APIC		edx
++#define reg_INDEX_1_EDX_10	edx
+ #define reg_SEP			edx
+ #define reg_MTRR		edx
+ #define reg_PGE			edx
+@@ -654,6 +631,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_PSE_36		edx
+ #define reg_PSN			edx
+ #define reg_CLFSH		edx
++#define reg_INDEX_1_EDX_20	edx
+ #define reg_DS			edx
+ #define reg_ACPI		edx
+ #define reg_MMX			edx
+@@ -663,6 +641,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_SS			edx
+ #define reg_HTT			edx
+ #define reg_TM			edx
++#define reg_INDEX_1_EDX_30	edx
+ #define reg_PBE			edx
+ 
+ /* COMMON_CPUID_INDEX_7.  */
+@@ -675,11 +654,13 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_HLE			ebx
+ #define reg_BMI2		ebx
+ #define reg_AVX2		ebx
++#define reg_INDEX_7_EBX_6	ebx
+ #define reg_SMEP		ebx
+ #define reg_ERMS		ebx
+ #define reg_INVPCID		ebx
+ #define reg_RTM			ebx
+ #define reg_PQM			ebx
++#define reg_DEPR_FPU_CS_DS	ebx
+ #define reg_MPX			ebx
+ #define reg_PQE			ebx
+ #define reg_AVX512F		ebx
+@@ -688,6 +669,7 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_ADX			ebx
+ #define reg_SMAP		ebx
+ #define reg_AVX512_IFMA		ebx
++#define reg_INDEX_7_EBX_22	ebx
+ #define reg_CLFLUSHOPT		ebx
+ #define reg_CLWB		ebx
+ #define reg_TRACE		ebx
+@@ -712,9 +694,15 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_VPCLMULQDQ		ecx
+ #define reg_AVX512_VNNI		ecx
+ #define reg_AVX512_BITALG	ecx
++#define reg_INDEX_7_ECX_13	ecx
+ #define reg_AVX512_VPOPCNTDQ	ecx
++#define reg_INDEX_7_ECX_15	ecx
++#define reg_INDEX_7_ECX_16	ecx
+ #define reg_RDPID		ecx
++#define reg_INDEX_7_ECX_23	ecx
++#define reg_INDEX_7_ECX_24	ecx
+ #define reg_CLDEMOTE		ecx
++#define reg_INDEX_7_ECX_26	ecx
+ #define reg_MOVDIRI		ecx
+ #define reg_MOVDIR64B		ecx
+ #define reg_ENQCMD		ecx
+@@ -722,17 +710,30 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define reg_PKS			ecx
+ 
+ /* EDX.  */
++#define reg_INDEX_7_EDX_0	edx
++#define reg_INDEX_7_EDX_1	edx
+ #define reg_AVX512_4VNNIW	edx
+ #define reg_AVX512_4FMAPS	edx
+ #define reg_FSRM		edx
++#define reg_INDEX_7_EDX_5	edx
++#define reg_INDEX_7_EDX_6	edx
++#define reg_INDEX_7_EDX_7	edx
+ #define reg_AVX512_VP2INTERSECT	edx
++#define reg_INDEX_7_EDX_9	edx
+ #define reg_MD_CLEAR		edx
++#define reg_INDEX_7_EDX_11	edx
++#define reg_INDEX_7_EDX_12	edx
++#define reg_INDEX_7_EDX_13	edx
+ #define reg_SERIALIZE		edx
+ #define reg_HYBRID		edx
+ #define reg_TSXLDTRK		edx
++#define reg_INDEX_7_EDX_17	edx
+ #define reg_PCONFIG		edx
++#define reg_INDEX_7_EDX_19	edx
+ #define reg_IBT			edx
++#define reg_INDEX_7_EDX_21	edx
+ #define reg_AMX_BF16		edx
++#define reg_INDEX_7_EDX_23	edx
+ #define reg_AMX_TILE		edx
+ #define reg_AMX_INT8		edx
+ #define reg_IBRS_IBPB		edx
+@@ -821,23 +822,6 @@ extern const struct cpu_features *__get_cpu_features (void)
+ #define index_arch_MathVec_Prefer_No_AVX512	PREFERRED_FEATURE_INDEX_1
+ #define index_arch_Prefer_FSRM			PREFERRED_FEATURE_INDEX_1
+ 
+-#define feature_Fast_Rep_String			preferred
+-#define feature_Fast_Copy_Backward		preferred
+-#define feature_Slow_BSF			preferred
+-#define feature_Fast_Unaligned_Load		preferred
+-#define feature_Prefer_PMINUB_for_stringop 	preferred
+-#define feature_Fast_Unaligned_Copy		preferred
+-#define feature_I586				preferred
+-#define feature_I686				preferred
+-#define feature_Slow_SSE4_2			preferred
+-#define feature_AVX_Fast_Unaligned_Load		preferred
+-#define feature_Prefer_MAP_32BIT_EXEC		preferred
+-#define feature_Prefer_No_VZEROUPPER		preferred
+-#define feature_Prefer_ERMS			preferred
+-#define feature_Prefer_No_AVX512		preferred
+-#define feature_MathVec_Prefer_No_AVX512	preferred
+-#define feature_Prefer_FSRM			preferred
+-
+ /* XCR0 Feature flags.  */
+ #define bit_XMM_state		(1u << 1)
+ #define bit_YMM_state		(1u << 2)
+@@ -851,8 +835,6 @@ extern const struct cpu_features *__get_cpu_features (void)
+ /* Unused for x86.  */
+ #  define INIT_ARCH()
+ #  define __get_cpu_features()	(&GLRO(dl_x86_cpu_features))
+-#  define x86_get_cpuid_registers(i) \
+-       (&(GLRO(dl_x86_cpu_features).cpuid[i]))
+ # endif
+ 
+ #ifdef __x86_64__
+diff --git a/sysdeps/x86/cpu-tunables.c b/sysdeps/x86/cpu-tunables.c
+index 012ae48933055eaa..0728023007a0f423 100644
+--- a/sysdeps/x86/cpu-tunables.c
++++ b/sysdeps/x86/cpu-tunables.c
+@@ -43,66 +43,45 @@ extern __typeof (memcmp) DEFAULT_MEMCMP;
+   _Static_assert (sizeof (#name) - 1 == len, #name " != " #len);	\
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+-      cpu_features->cpuid[index_cpu_##name].reg_##name			\
+-	&= ~bit_cpu_##name;						\
++      CPU_FEATURE_UNSET (cpu_features, name)				\
+       break;								\
+     }
+ 
+-/* Disable an ARCH feature NAME.  We don't enable an ARCH feature which
+-   isn't available.  */
+-# define CHECK_GLIBC_IFUNC_ARCH_OFF(f, cpu_features, name, len)		\
++/* Disable a preferred feature NAME.  We don't enable a preferred feature
++   which isn't available.  */
++# define CHECK_GLIBC_IFUNC_PREFERRED_OFF(f, cpu_features, name, len)	\
+   _Static_assert (sizeof (#name) - 1 == len, #name " != " #len);	\
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+-      cpu_features->feature_##name[index_arch_##name]			\
++      cpu_features->preferred[index_arch_##name]			\
+ 	&= ~bit_arch_##name;						\
+       break;								\
+     }
+ 
+-/* Enable/disable an ARCH feature NAME.  */
+-# define CHECK_GLIBC_IFUNC_ARCH_BOTH(f, cpu_features, name, disable,	\
+-				    len)				\
++/* Enable/disable a preferred feature NAME.  */
++# define CHECK_GLIBC_IFUNC_PREFERRED_BOTH(f, cpu_features, name,	\
++					  disable, len)			\
+   _Static_assert (sizeof (#name) - 1 == len, #name " != " #len);	\
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+       if (disable)							\
+-	cpu_features->feature_##name[index_arch_##name]			\
+-	  &= ~bit_arch_##name;						\
++	cpu_features->preferred[index_arch_##name] &= ~bit_arch_##name;	\
+       else								\
+-	cpu_features->feature_##name[index_arch_##name]			\
+-	  |= bit_arch_##name;						\
++	cpu_features->preferred[index_arch_##name] |= bit_arch_##name;	\
+       break;								\
+     }
+ 
+-/* Enable/disable an ARCH feature NAME.  Enable an ARCH feature only
+-   if the ARCH feature NEED is also enabled.  */
+-# define CHECK_GLIBC_IFUNC_ARCH_NEED_ARCH_BOTH(f, cpu_features, name,	\
++/* Enable/disable a preferred feature NAME.  Enable a preferred feature
++   only if the feature NEED is usable.  */
++# define CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH(f, cpu_features, name,	\
+ 					       need, disable, len)	\
+   _Static_assert (sizeof (#name) - 1 == len, #name " != " #len);	\
+   if (!DEFAULT_MEMCMP (f, #name, len))					\
+     {									\
+       if (disable)							\
+-	cpu_features->feature_##name[index_arch_##name]			\
+-	  &= ~bit_arch_##name;						\
+-      else if (CPU_FEATURES_ARCH_P (cpu_features, need))		\
+-	cpu_features->feature_##name[index_arch_##name]			\
+-	  |= bit_arch_##name;						\
+-      break;								\
+-    }
+-
+-/* Enable/disable an ARCH feature NAME.  Enable an ARCH feature only
+-   if the CPU feature NEED is also enabled.  */
+-# define CHECK_GLIBC_IFUNC_ARCH_NEED_CPU_BOTH(f, cpu_features, name,	\
+-					      need, disable, len)	\
+-  _Static_assert (sizeof (#name) - 1 == len, #name " != " #len);	\
+-  if (!DEFAULT_MEMCMP (f, #name, len))					\
+-    {									\
+-      if (disable)							\
+-	cpu_features->feature_##name[index_arch_##name]			\
+-	  &= ~bit_arch_##name;						\
+-      else if (CPU_FEATURES_CPU_P (cpu_features, need))			\
+-	cpu_features->feature_##name[index_arch_##name]			\
+-	  |= bit_arch_##name;						\
++	cpu_features->preferred[index_arch_##name] &= ~bit_arch_##name;	\
++      else if (CPU_FEATURE_USABLE_P (cpu_features, need))		\
++	cpu_features->preferred[index_arch_##name] |= bit_arch_##name;	\
+       break;								\
+     }
+ 
+@@ -178,8 +157,8 @@ TUNABLE_CALLBACK (set_hwcaps) (tunable_val_t *valp)
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, ERMS, 4);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, FMA4, 4);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, SSE2, 4);
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features, I586, 4);
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features, I686, 4);
++	      CHECK_GLIBC_IFUNC_PREFERRED_OFF (n, cpu_features, I586, 4);
++	      CHECK_GLIBC_IFUNC_PREFERRED_OFF (n, cpu_features, I686, 4);
+ 	    }
+ 	  break;
+ 	case 5:
+@@ -197,6 +176,13 @@ TUNABLE_CALLBACK (set_hwcaps) (tunable_val_t *valp)
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, POPCNT, 6);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, SSE4_1, 6);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, SSE4_2, 6);
++	      if (!DEFAULT_MEMCMP (n, "XSAVEC", 6))
++		{
++		  /* Update xsave_state_size to XSAVE state size.  */
++		  cpu_features->xsave_state_size
++		    = cpu_features->xsave_state_full_size;
++		  CPU_FEATURE_UNSET (cpu_features, XSAVEC);
++		}
+ 	    }
+ 	  break;
+ 	case 7:
+@@ -216,115 +202,85 @@ TUNABLE_CALLBACK (set_hwcaps) (tunable_val_t *valp)
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, AVX512PF, 8);
+ 	      CHECK_GLIBC_IFUNC_CPU_OFF (n, cpu_features, AVX512VL, 8);
+ 	    }
+-	  CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features, Slow_BSF,
+-				       disable, 8);
+-	  break;
+-	case 10:
+-	  if (disable)
+-	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features, AVX_Usable,
+-					  10);
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features, FMA_Usable,
+-					  10);
+-	    }
++	  CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features, Slow_BSF,
++					    disable, 8);
+ 	  break;
+ 	case 11:
+-	  if (disable)
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features, AVX2_Usable,
+-					  11);
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features, FMA4_Usable,
+-					  11);
+-	    }
+-	  CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features, Prefer_ERMS,
+-				       disable, 11);
+-	  CHECK_GLIBC_IFUNC_ARCH_NEED_CPU_BOTH (n, cpu_features,
+-						Slow_SSE4_2, SSE4_2,
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Prefer_ERMS,
+ 						disable, 11);
+-	  CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features, Prefer_FSRM,
+-				       disable, 11);
+-	  break;
+-	case 13:
+-	  if (disable)
+-	    {
+-	      /* Update xsave_state_size to XSAVE state size.  */
+-	      cpu_features->xsave_state_size
+-		= cpu_features->xsave_state_full_size;
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features,
+-					  XSAVEC_Usable, 13);
+-	    }
+-	  break;
+-	case 14:
+-	  if (disable)
+-	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features,
+-					  AVX512F_Usable, 14);
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Prefer_FSRM,
++						disable, 11);
++	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH (n, cpu_features,
++						     Slow_SSE4_2,
++						     SSE4_2,
++						     disable, 11);
+ 	    }
+ 	  break;
+ 	case 15:
+-	  if (disable)
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_OFF (n, cpu_features,
+-					  AVX512DQ_Usable, 15);
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Fast_Rep_String,
++						disable, 15);
+ 	    }
+-	  CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features, Fast_Rep_String,
+-				       disable, 15);
+ 	  break;
+ 	case 16:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_NEED_ARCH_BOTH
+-		(n, cpu_features, Prefer_No_AVX512, AVX512F_Usable,
++	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH
++		(n, cpu_features, Prefer_No_AVX512, AVX512F,
+ 		 disable, 16);
+ 	    }
+ 	  break;
+ 	case 18:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features,
+-					   Fast_Copy_Backward, disable,
+-					   18);
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Fast_Copy_Backward,
++						disable, 18);
+ 	    }
+ 	  break;
+ 	case 19:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features,
+-					   Fast_Unaligned_Load, disable,
+-					   19);
+-	      CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features,
+-					   Fast_Unaligned_Copy, disable,
+-					   19);
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Fast_Unaligned_Load,
++						disable, 19);
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Fast_Unaligned_Copy,
++						disable, 19);
+ 	    }
+ 	  break;
+ 	case 20:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_NEED_ARCH_BOTH
+-		(n, cpu_features, Prefer_No_VZEROUPPER, AVX_Usable,
+-		 disable, 20);
++	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH
++		(n, cpu_features, Prefer_No_VZEROUPPER, AVX, disable,
++		 20);
+ 	    }
+ 	  break;
+ 	case 21:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_BOTH (n, cpu_features,
+-					   Prefer_MAP_32BIT_EXEC, disable,
+-					   21);
++	      CHECK_GLIBC_IFUNC_PREFERRED_BOTH (n, cpu_features,
++						Prefer_MAP_32BIT_EXEC,
++						disable, 21);
+ 	    }
+ 	  break;
+ 	case 23:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_NEED_ARCH_BOTH
+-		(n, cpu_features, AVX_Fast_Unaligned_Load, AVX_Usable,
++	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH
++		(n, cpu_features, AVX_Fast_Unaligned_Load, AVX,
+ 		 disable, 23);
+ 	    }
+ 	  break;
+ 	case 24:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_NEED_ARCH_BOTH
+-		(n, cpu_features, MathVec_Prefer_No_AVX512,
+-		 AVX512F_Usable, disable, 24);
++	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH
++		(n, cpu_features, MathVec_Prefer_No_AVX512, AVX512F,
++		 disable, 24);
+ 	    }
+ 	  break;
+ 	case 26:
+ 	    {
+-	      CHECK_GLIBC_IFUNC_ARCH_NEED_CPU_BOTH
++	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH
+ 		(n, cpu_features, Prefer_PMINUB_for_stringop, SSE2,
+ 		 disable, 26);
+ 	    }
+diff --git a/sysdeps/x86/dl-cet.c b/sysdeps/x86/dl-cet.c
+index d481bddc27e5d7cc..11ff0618fae7230f 100644
+--- a/sysdeps/x86/dl-cet.c
++++ b/sysdeps/x86/dl-cet.c
+@@ -74,10 +74,10 @@ dl_cet_check (struct link_map *m, const char *program)
+ 
+ 	     GLIBC_TUNABLES=glibc.cpu.hwcaps=-IBT,-SHSTK
+ 	   */
+-	  enable_ibt &= (HAS_CPU_FEATURE (IBT)
++	  enable_ibt &= (CPU_FEATURE_USABLE (IBT)
+ 			 && (enable_ibt_type == cet_always_on
+ 			     || (m->l_cet & lc_ibt) != 0));
+-	  enable_shstk &= (HAS_CPU_FEATURE (SHSTK)
++	  enable_shstk &= (CPU_FEATURE_USABLE (SHSTK)
+ 			   && (enable_shstk_type == cet_always_on
+ 			       || (m->l_cet & lc_shstk) != 0));
+ 	}
+diff --git a/sysdeps/x86/tst-get-cpu-features.c b/sysdeps/x86/tst-get-cpu-features.c
+index c56f309ba0736c0d..85ec9d5a091e2c88 100644
+--- a/sysdeps/x86/tst-get-cpu-features.c
++++ b/sysdeps/x86/tst-get-cpu-features.c
+@@ -137,6 +137,7 @@ do_test (void)
+   CHECK_CPU_FEATURE (INVPCID);
+   CHECK_CPU_FEATURE (RTM);
+   CHECK_CPU_FEATURE (PQM);
++  CHECK_CPU_FEATURE (DEPR_FPU_CS_DS);
+   CHECK_CPU_FEATURE (MPX);
+   CHECK_CPU_FEATURE (PQE);
+   CHECK_CPU_FEATURE (AVX512F);
+@@ -218,35 +219,156 @@ do_test (void)
+   CHECK_CPU_FEATURE (AVX512_BF16);
+ 
+   printf ("Usable CPU features:\n");
++  CHECK_CPU_FEATURE_USABLE (SSE3);
++  CHECK_CPU_FEATURE_USABLE (PCLMULQDQ);
++  CHECK_CPU_FEATURE_USABLE (DTES64);
++  CHECK_CPU_FEATURE_USABLE (MONITOR);
++  CHECK_CPU_FEATURE_USABLE (DS_CPL);
++  CHECK_CPU_FEATURE_USABLE (VMX);
++  CHECK_CPU_FEATURE_USABLE (SMX);
++  CHECK_CPU_FEATURE_USABLE (EST);
++  CHECK_CPU_FEATURE_USABLE (TM2);
++  CHECK_CPU_FEATURE_USABLE (SSSE3);
++  CHECK_CPU_FEATURE_USABLE (CNXT_ID);
++  CHECK_CPU_FEATURE_USABLE (SDBG);
+   CHECK_CPU_FEATURE_USABLE (FMA);
++  CHECK_CPU_FEATURE_USABLE (CMPXCHG16B);
++  CHECK_CPU_FEATURE_USABLE (XTPRUPDCTRL);
++  CHECK_CPU_FEATURE_USABLE (PDCM);
++  CHECK_CPU_FEATURE_USABLE (PCID);
++  CHECK_CPU_FEATURE_USABLE (DCA);
++  CHECK_CPU_FEATURE_USABLE (SSE4_1);
++  CHECK_CPU_FEATURE_USABLE (SSE4_2);
++  CHECK_CPU_FEATURE_USABLE (X2APIC);
++  CHECK_CPU_FEATURE_USABLE (MOVBE);
++  CHECK_CPU_FEATURE_USABLE (POPCNT);
++  CHECK_CPU_FEATURE_USABLE (TSC_DEADLINE);
++  CHECK_CPU_FEATURE_USABLE (AES);
++  CHECK_CPU_FEATURE_USABLE (XSAVE);
++  CHECK_CPU_FEATURE_USABLE (OSXSAVE);
+   CHECK_CPU_FEATURE_USABLE (AVX);
+   CHECK_CPU_FEATURE_USABLE (F16C);
++  CHECK_CPU_FEATURE_USABLE (RDRAND);
++  CHECK_CPU_FEATURE_USABLE (FPU);
++  CHECK_CPU_FEATURE_USABLE (VME);
++  CHECK_CPU_FEATURE_USABLE (DE);
++  CHECK_CPU_FEATURE_USABLE (PSE);
++  CHECK_CPU_FEATURE_USABLE (TSC);
++  CHECK_CPU_FEATURE_USABLE (MSR);
++  CHECK_CPU_FEATURE_USABLE (PAE);
++  CHECK_CPU_FEATURE_USABLE (MCE);
++  CHECK_CPU_FEATURE_USABLE (CX8);
++  CHECK_CPU_FEATURE_USABLE (APIC);
++  CHECK_CPU_FEATURE_USABLE (SEP);
++  CHECK_CPU_FEATURE_USABLE (MTRR);
++  CHECK_CPU_FEATURE_USABLE (PGE);
++  CHECK_CPU_FEATURE_USABLE (MCA);
++  CHECK_CPU_FEATURE_USABLE (CMOV);
++  CHECK_CPU_FEATURE_USABLE (PAT);
++  CHECK_CPU_FEATURE_USABLE (PSE_36);
++  CHECK_CPU_FEATURE_USABLE (PSN);
++  CHECK_CPU_FEATURE_USABLE (CLFSH);
++  CHECK_CPU_FEATURE_USABLE (DS);
++  CHECK_CPU_FEATURE_USABLE (ACPI);
++  CHECK_CPU_FEATURE_USABLE (MMX);
++  CHECK_CPU_FEATURE_USABLE (FXSR);
++  CHECK_CPU_FEATURE_USABLE (SSE);
++  CHECK_CPU_FEATURE_USABLE (SSE2);
++  CHECK_CPU_FEATURE_USABLE (SS);
++  CHECK_CPU_FEATURE_USABLE (HTT);
++  CHECK_CPU_FEATURE_USABLE (TM);
++  CHECK_CPU_FEATURE_USABLE (PBE);
++  CHECK_CPU_FEATURE_USABLE (FSGSBASE);
++  CHECK_CPU_FEATURE_USABLE (TSC_ADJUST);
++  CHECK_CPU_FEATURE_USABLE (SGX);
++  CHECK_CPU_FEATURE_USABLE (BMI1);
++  CHECK_CPU_FEATURE_USABLE (HLE);
+   CHECK_CPU_FEATURE_USABLE (AVX2);
++  CHECK_CPU_FEATURE_USABLE (SMEP);
++  CHECK_CPU_FEATURE_USABLE (BMI2);
++  CHECK_CPU_FEATURE_USABLE (ERMS);
++  CHECK_CPU_FEATURE_USABLE (INVPCID);
++  CHECK_CPU_FEATURE_USABLE (RTM);
++  CHECK_CPU_FEATURE_USABLE (PQM);
++  CHECK_CPU_FEATURE_USABLE (DEPR_FPU_CS_DS);
++  CHECK_CPU_FEATURE_USABLE (MPX);
++  CHECK_CPU_FEATURE_USABLE (PQE);
+   CHECK_CPU_FEATURE_USABLE (AVX512F);
+   CHECK_CPU_FEATURE_USABLE (AVX512DQ);
++  CHECK_CPU_FEATURE_USABLE (RDSEED);
++  CHECK_CPU_FEATURE_USABLE (ADX);
++  CHECK_CPU_FEATURE_USABLE (SMAP);
+   CHECK_CPU_FEATURE_USABLE (AVX512_IFMA);
++  CHECK_CPU_FEATURE_USABLE (CLFLUSHOPT);
++  CHECK_CPU_FEATURE_USABLE (CLWB);
++  CHECK_CPU_FEATURE_USABLE (TRACE);
+   CHECK_CPU_FEATURE_USABLE (AVX512PF);
+   CHECK_CPU_FEATURE_USABLE (AVX512ER);
+   CHECK_CPU_FEATURE_USABLE (AVX512CD);
++  CHECK_CPU_FEATURE_USABLE (SHA);
+   CHECK_CPU_FEATURE_USABLE (AVX512BW);
+   CHECK_CPU_FEATURE_USABLE (AVX512VL);
++  CHECK_CPU_FEATURE_USABLE (PREFETCHWT1);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VBMI);
++  CHECK_CPU_FEATURE_USABLE (UMIP);
+   CHECK_CPU_FEATURE_USABLE (PKU);
++  CHECK_CPU_FEATURE_USABLE (OSPKE);
++  CHECK_CPU_FEATURE_USABLE (WAITPKG);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VBMI2);
++  CHECK_CPU_FEATURE_USABLE (SHSTK);
++  CHECK_CPU_FEATURE_USABLE (GFNI);
+   CHECK_CPU_FEATURE_USABLE (VAES);
+   CHECK_CPU_FEATURE_USABLE (VPCLMULQDQ);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VNNI);
+   CHECK_CPU_FEATURE_USABLE (AVX512_BITALG);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VPOPCNTDQ);
++  CHECK_CPU_FEATURE_USABLE (RDPID);
++  CHECK_CPU_FEATURE_USABLE (CLDEMOTE);
++  CHECK_CPU_FEATURE_USABLE (MOVDIRI);
++  CHECK_CPU_FEATURE_USABLE (MOVDIR64B);
++  CHECK_CPU_FEATURE_USABLE (ENQCMD);
++  CHECK_CPU_FEATURE_USABLE (SGX_LC);
++  CHECK_CPU_FEATURE_USABLE (PKS);
+   CHECK_CPU_FEATURE_USABLE (AVX512_4VNNIW);
+   CHECK_CPU_FEATURE_USABLE (AVX512_4FMAPS);
++  CHECK_CPU_FEATURE_USABLE (FSRM);
+   CHECK_CPU_FEATURE_USABLE (AVX512_VP2INTERSECT);
++  CHECK_CPU_FEATURE_USABLE (MD_CLEAR);
++  CHECK_CPU_FEATURE_USABLE (SERIALIZE);
++  CHECK_CPU_FEATURE_USABLE (HYBRID);
++  CHECK_CPU_FEATURE_USABLE (TSXLDTRK);
++  CHECK_CPU_FEATURE_USABLE (PCONFIG);
++  CHECK_CPU_FEATURE_USABLE (IBT);
+   CHECK_CPU_FEATURE_USABLE (AMX_BF16);
+   CHECK_CPU_FEATURE_USABLE (AMX_TILE);
+   CHECK_CPU_FEATURE_USABLE (AMX_INT8);
++  CHECK_CPU_FEATURE_USABLE (IBRS_IBPB);
++  CHECK_CPU_FEATURE_USABLE (STIBP);
++  CHECK_CPU_FEATURE_USABLE (L1D_FLUSH);
++  CHECK_CPU_FEATURE_USABLE (ARCH_CAPABILITIES);
++  CHECK_CPU_FEATURE_USABLE (CORE_CAPABILITIES);
++  CHECK_CPU_FEATURE_USABLE (SSBD);
++  CHECK_CPU_FEATURE_USABLE (LAHF64_SAHF64);
++  CHECK_CPU_FEATURE_USABLE (SVM);
++  CHECK_CPU_FEATURE_USABLE (LZCNT);
++  CHECK_CPU_FEATURE_USABLE (SSE4A);
++  CHECK_CPU_FEATURE_USABLE (PREFETCHW);
+   CHECK_CPU_FEATURE_USABLE (XOP);
++  CHECK_CPU_FEATURE_USABLE (LWP);
+   CHECK_CPU_FEATURE_USABLE (FMA4);
++  CHECK_CPU_FEATURE_USABLE (TBM);
++  CHECK_CPU_FEATURE_USABLE (SYSCALL_SYSRET);
++  CHECK_CPU_FEATURE_USABLE (NX);
++  CHECK_CPU_FEATURE_USABLE (PAGE1GB);
++  CHECK_CPU_FEATURE_USABLE (RDTSCP);
++  CHECK_CPU_FEATURE_USABLE (LM);
++  CHECK_CPU_FEATURE_USABLE (XSAVEOPT);
+   CHECK_CPU_FEATURE_USABLE (XSAVEC);
++  CHECK_CPU_FEATURE_USABLE (XGETBV_ECX_1);
++  CHECK_CPU_FEATURE_USABLE (XSAVES);
++  CHECK_CPU_FEATURE_USABLE (XFD);
++  CHECK_CPU_FEATURE_USABLE (INVARIANT_TSC);
++  CHECK_CPU_FEATURE_USABLE (WBNOINVD);
+   CHECK_CPU_FEATURE_USABLE (AVX512_BF16);
+ 
+   return 0;
+diff --git a/sysdeps/x86_64/Makefile b/sysdeps/x86_64/Makefile
+index e3bb45d78811d70f..42b97c5cc73892cc 100644
+--- a/sysdeps/x86_64/Makefile
++++ b/sysdeps/x86_64/Makefile
+@@ -57,7 +57,7 @@ modules-names += x86_64/tst-x86_64mod-1
+ LDFLAGS-tst-x86_64mod-1.so = -Wl,-soname,tst-x86_64mod-1.so
+ ifneq (no,$(have-tunables))
+ # Test the state size for XSAVE when XSAVEC is disabled.
+-tst-x86_64-1-ENV = GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC_Usable
++tst-x86_64-1-ENV = GLIBC_TUNABLES=glibc.cpu.hwcaps=-XSAVEC
+ endif
+ 
+ $(objpfx)tst-x86_64-1: $(objpfx)x86_64/tst-x86_64mod-1.so
+@@ -71,10 +71,10 @@ CFLAGS-tst-platformmod-2.c = -mno-avx
+ LDFLAGS-tst-platformmod-2.so = -Wl,-soname,tst-platformmod-2.so
+ $(objpfx)tst-platform-1: $(objpfx)tst-platformmod-1.so
+ $(objpfx)tst-platform-1.out: $(objpfx)x86_64/tst-platformmod-2.so
+-# Turn off AVX512F_Usable and AVX2_Usable so that GLRO(dl_platform) is
++# Turn off AVX512F and AVX2 so that GLRO(dl_platform) is
+ # always set to x86_64.
+ tst-platform-1-ENV = LD_PRELOAD=$(objpfx)\$$PLATFORM/tst-platformmod-2.so \
+-	GLIBC_TUNABLES=glibc.cpu.hwcaps=-AVX512F_Usable,-AVX2_Usable
++	GLIBC_TUNABLES=glibc.cpu.hwcaps=-AVX512F,-AVX2
+ endif
+ 
+ tests += tst-audit3 tst-audit4 tst-audit5 tst-audit6 tst-audit7 \
+diff --git a/sysdeps/x86_64/dl-machine.h b/sysdeps/x86_64/dl-machine.h
+index 23afb3c05dbe17d6..d58298d787ef352c 100644
+--- a/sysdeps/x86_64/dl-machine.h
++++ b/sysdeps/x86_64/dl-machine.h
+@@ -99,9 +99,9 @@ elf_machine_runtime_setup (struct link_map *l, int lazy, int profile)
+ 	 end in this function.  */
+       if (__glibc_unlikely (profile))
+ 	{
+-	  if (HAS_ARCH_FEATURE (AVX512F_Usable))
++	  if (CPU_FEATURE_USABLE (AVX512F))
+ 	    *(ElfW(Addr) *) (got + 2) = (ElfW(Addr)) &_dl_runtime_profile_avx512;
+-	  else if (HAS_ARCH_FEATURE (AVX_Usable))
++	  else if (CPU_FEATURE_USABLE (AVX))
+ 	    *(ElfW(Addr) *) (got + 2) = (ElfW(Addr)) &_dl_runtime_profile_avx;
+ 	  else
+ 	    *(ElfW(Addr) *) (got + 2) = (ElfW(Addr)) &_dl_runtime_profile_sse;
+@@ -119,7 +119,7 @@ elf_machine_runtime_setup (struct link_map *l, int lazy, int profile)
+ 	     the resolved address.  */
+ 	  if (GLRO(dl_x86_cpu_features).xsave_state_size != 0)
+ 	    *(ElfW(Addr) *) (got + 2)
+-	      = (HAS_ARCH_FEATURE (XSAVEC_Usable)
++	      = (CPU_FEATURE_USABLE (XSAVEC)
+ 		 ? (ElfW(Addr)) &_dl_runtime_resolve_xsavec
+ 		 : (ElfW(Addr)) &_dl_runtime_resolve_xsave);
+ 	  else
+diff --git a/sysdeps/x86_64/fpu/math-tests-arch.h b/sysdeps/x86_64/fpu/math-tests-arch.h
+index a5df133292ce39b0..61955d70863321fd 100644
+--- a/sysdeps/x86_64/fpu/math-tests-arch.h
++++ b/sysdeps/x86_64/fpu/math-tests-arch.h
+@@ -24,7 +24,7 @@
+ # define CHECK_ARCH_EXT                                        \
+   do                                                           \
+     {                                                          \
+-      if (!HAS_ARCH_FEATURE (AVX_Usable)) return;              \
++      if (!CPU_FEATURE_USABLE (AVX)) return;                   \
+     }                                                          \
+   while (0)
+ 
+@@ -34,7 +34,7 @@
+ # define CHECK_ARCH_EXT                                        \
+   do                                                           \
+     {                                                          \
+-      if (!HAS_ARCH_FEATURE (AVX2_Usable)) return;             \
++      if (!CPU_FEATURE_USABLE (AVX2)) return;                  \
+     }                                                          \
+   while (0)
+ 
+@@ -44,7 +44,7 @@
+ # define CHECK_ARCH_EXT                                        \
+   do                                                           \
+     {                                                          \
+-      if (!HAS_ARCH_FEATURE (AVX512F_Usable)) return;          \
++      if (!CPU_FEATURE_USABLE (AVX512F)) return;               \
+     }                                                          \
+   while (0)
+ 
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-avx-fma4.h b/sysdeps/x86_64/fpu/multiarch/ifunc-avx-fma4.h
+index a5f9375afc683663..399ed90362f476b7 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-avx-fma4.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-avx-fma4.h
+@@ -29,14 +29,14 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, FMA_Usable)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, FMA)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+     return OPTIMIZE (fma);
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, FMA4_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, FMA4))
+     return OPTIMIZE (fma4);
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, AVX_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX))
+     return OPTIMIZE (avx);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-fma.h b/sysdeps/x86_64/fpu/multiarch/ifunc-fma.h
+index 63a8cd221fb34e28..c6717d65dfd160e7 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-fma.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-fma.h
+@@ -26,8 +26,8 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, FMA_Usable)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, FMA)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+     return OPTIMIZE (fma);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-fma4.h b/sysdeps/x86_64/fpu/multiarch/ifunc-fma4.h
+index a2526a2ee0e55e18..76c677198dac5cb0 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-fma4.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-fma4.h
+@@ -28,11 +28,11 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, FMA_Usable)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, FMA)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+     return OPTIMIZE (fma);
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, FMA4_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, FMA))
+     return OPTIMIZE (fma4);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx2.h b/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx2.h
+index bd2d32e4186c11e3..d84d82a3a22f0e86 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx2.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx2.h
+@@ -31,8 +31,8 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, FMA_Usable)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, FMA)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+     return OPTIMIZE (avx2);
+ 
+   return OPTIMIZE (sse_wrapper);
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx512.h b/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx512.h
+index 174e462cfbcfa0a5..a2d9972e5a02b87c 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx512.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-avx512.h
+@@ -34,10 +34,10 @@ IFUNC_SELECTOR (void)
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, MathVec_Prefer_No_AVX512))
+     {
+-      if (CPU_FEATURES_ARCH_P (cpu_features, AVX512DQ_Usable))
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512DQ))
+ 	return OPTIMIZE (skx);
+ 
+-      if (CPU_FEATURES_ARCH_P (cpu_features, AVX512F_Usable))
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F))
+ 	return OPTIMIZE (knl);
+     }
+ 
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-sse4_1.h b/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-sse4_1.h
+index c1e70ebfc1b424e6..64d03f6cb1caa9b7 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-sse4_1.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-mathvec-sse4_1.h
+@@ -31,7 +31,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_1))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_1))
+     return OPTIMIZE (sse4);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/fpu/multiarch/ifunc-sse4_1.h b/sysdeps/x86_64/fpu/multiarch/ifunc-sse4_1.h
+index a8710ba80226f13f..81bca1c9ecde9fb7 100644
+--- a/sysdeps/x86_64/fpu/multiarch/ifunc-sse4_1.h
++++ b/sysdeps/x86_64/fpu/multiarch/ifunc-sse4_1.h
+@@ -26,7 +26,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_1))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_1))
+     return OPTIMIZE (sse41);
+ 
+   return OPTIMIZE (c);
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_fma.c b/sysdeps/x86_64/fpu/multiarch/s_fma.c
+index 875c76d3727e6d3c..9ea8d368d08220a9 100644
+--- a/sysdeps/x86_64/fpu/multiarch/s_fma.c
++++ b/sysdeps/x86_64/fpu/multiarch/s_fma.c
+@@ -41,8 +41,8 @@ __fma_fma4 (double x, double y, double z)
+ }
+ 
+ 
+-libm_ifunc (__fma, HAS_ARCH_FEATURE (FMA_Usable)
+-	    ? __fma_fma3 : (HAS_ARCH_FEATURE (FMA4_Usable)
++libm_ifunc (__fma, CPU_FEATURE_USABLE (FMA)
++	    ? __fma_fma3 : (CPU_FEATURE_USABLE (FMA4)
+ 			    ? __fma_fma4 : __fma_sse2));
+ libm_alias_double (__fma, fma)
+ 
+diff --git a/sysdeps/x86_64/fpu/multiarch/s_fmaf.c b/sysdeps/x86_64/fpu/multiarch/s_fmaf.c
+index 5f4c2ec0be15c2dc..33e64ef8d1a03269 100644
+--- a/sysdeps/x86_64/fpu/multiarch/s_fmaf.c
++++ b/sysdeps/x86_64/fpu/multiarch/s_fmaf.c
+@@ -40,8 +40,8 @@ __fmaf_fma4 (float x, float y, float z)
+ }
+ 
+ 
+-libm_ifunc (__fmaf, HAS_ARCH_FEATURE (FMA_Usable)
+-	    ? __fmaf_fma3 : (HAS_ARCH_FEATURE (FMA4_Usable)
++libm_ifunc (__fmaf, CPU_FEATURE_USABLE (FMA)
++	    ? __fmaf_fma3 : (CPU_FEATURE_USABLE (FMA4)
+ 			     ? __fmaf_fma4 : __fmaf_sse2));
+ libm_alias_float (__fma, fma)
+ 
+diff --git a/sysdeps/x86_64/multiarch/ifunc-avx2.h b/sysdeps/x86_64/multiarch/ifunc-avx2.h
+index 9cab837642b7af21..5c88640a2d901ec6 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-avx2.h
++++ b/sysdeps/x86_64/multiarch/ifunc-avx2.h
+@@ -28,7 +28,7 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2);
+ 
+diff --git a/sysdeps/x86_64/multiarch/ifunc-impl-list.c b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+index 8b55bb6954000cc2..fe13505ca1ac7ef0 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-impl-list.c
++++ b/sysdeps/x86_64/multiarch/ifunc-impl-list.c
+@@ -41,19 +41,19 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/memchr.c.  */
+   IFUNC_IMPL (i, name, memchr,
+ 	      IFUNC_IMPL_ADD (array, i, memchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __memchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, memchr, 1, __memchr_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/memcmp.c.  */
+   IFUNC_IMPL (i, name, memcmp,
+ 	      IFUNC_IMPL_ADD (array, i, memcmp,
+-			      (HAS_ARCH_FEATURE (AVX2_Usable)
+-			       && HAS_CPU_FEATURE (MOVBE)),
++			      (CPU_FEATURE_USABLE (AVX2)
++			       && CPU_FEATURE_USABLE (MOVBE)),
+ 			      __memcmp_avx2_movbe)
+-	      IFUNC_IMPL_ADD (array, i, memcmp, HAS_CPU_FEATURE (SSE4_1),
++	      IFUNC_IMPL_ADD (array, i, memcmp, CPU_FEATURE_USABLE (SSE4_1),
+ 			      __memcmp_sse4_1)
+-	      IFUNC_IMPL_ADD (array, i, memcmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, memcmp, 1, __memcmp_sse2))
+ 
+@@ -61,25 +61,25 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/memmove_chk.c.  */
+   IFUNC_IMPL (i, name, __memmove_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memmove_chk_avx512_no_vzeroupper)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memmove_chk_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memmove_chk_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memmove_chk_avx_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memmove_chk_avx_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_chk_ssse3_back)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_chk_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, __memmove_chk, 1,
+ 			      __memmove_chk_sse2_unaligned)
+@@ -92,23 +92,23 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/memmove.c.  */
+   IFUNC_IMPL (i, name, memmove,
+ 	      IFUNC_IMPL_ADD (array, i, memmove,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memmove_avx_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memmove,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memmove_avx_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memmove,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memmove_avx512_no_vzeroupper)
+ 	      IFUNC_IMPL_ADD (array, i, memmove,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memmove_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memmove,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memmove_avx512_unaligned_erms)
+-	      IFUNC_IMPL_ADD (array, i, memmove, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memmove, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_ssse3_back)
+-	      IFUNC_IMPL_ADD (array, i, memmove, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memmove, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memmove_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, memmove, 1, __memmove_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memmove, 1,
+@@ -119,7 +119,7 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/memrchr.c.  */
+   IFUNC_IMPL (i, name, memrchr,
+ 	      IFUNC_IMPL_ADD (array, i, memrchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __memrchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, memrchr, 1, __memrchr_sse2))
+ 
+@@ -133,19 +133,19 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk, 1,
+ 			      __memset_chk_sse2_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __memset_chk_avx2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __memset_chk_avx2_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memset_chk_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memset_chk_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memset_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memset_chk_avx512_no_vzeroupper)
+ 	      )
+ #endif
+@@ -158,48 +158,48 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 			      __memset_sse2_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset, 1, __memset_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __memset_avx2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __memset_avx2_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memset_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memset_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memset,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memset_avx512_no_vzeroupper)
+ 	     )
+ 
+   /* Support sysdeps/x86_64/multiarch/rawmemchr.c.  */
+   IFUNC_IMPL (i, name, rawmemchr,
+ 	      IFUNC_IMPL_ADD (array, i, rawmemchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __rawmemchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, rawmemchr, 1, __rawmemchr_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strlen.c.  */
+   IFUNC_IMPL (i, name, strlen,
+ 	      IFUNC_IMPL_ADD (array, i, strlen,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strlen_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, strlen, 1, __strlen_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strnlen.c.  */
+   IFUNC_IMPL (i, name, strnlen,
+ 	      IFUNC_IMPL_ADD (array, i, strnlen,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strnlen_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, strnlen, 1, __strnlen_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/stpncpy.c.  */
+   IFUNC_IMPL (i, name, stpncpy,
+-	      IFUNC_IMPL_ADD (array, i, stpncpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, stpncpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __stpncpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, stpncpy, HAS_ARCH_FEATURE (AVX2_Usable),
++	      IFUNC_IMPL_ADD (array, i, stpncpy, CPU_FEATURE_USABLE (AVX2),
+ 			      __stpncpy_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, stpncpy, 1,
+ 			      __stpncpy_sse2_unaligned)
+@@ -207,9 +207,9 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/x86_64/multiarch/stpcpy.c.  */
+   IFUNC_IMPL (i, name, stpcpy,
+-	      IFUNC_IMPL_ADD (array, i, stpcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, stpcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __stpcpy_ssse3)
+-	      IFUNC_IMPL_ADD (array, i, stpcpy, HAS_ARCH_FEATURE (AVX2_Usable),
++	      IFUNC_IMPL_ADD (array, i, stpcpy, CPU_FEATURE_USABLE (AVX2),
+ 			      __stpcpy_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, stpcpy, 1, __stpcpy_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, stpcpy, 1, __stpcpy_sse2))
+@@ -217,35 +217,35 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/strcasecmp_l.c.  */
+   IFUNC_IMPL (i, name, strcasecmp,
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __strcasecmp_avx)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcasecmp_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcasecmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp, 1, __strcasecmp_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strcasecmp_l.c.  */
+   IFUNC_IMPL (i, name, strcasecmp_l,
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __strcasecmp_l_avx)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcasecmp_l_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcasecmp_l_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcasecmp_l, 1,
+ 			      __strcasecmp_l_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strcat.c.  */
+   IFUNC_IMPL (i, name, strcat,
+-	      IFUNC_IMPL_ADD (array, i, strcat, HAS_ARCH_FEATURE (AVX2_Usable),
++	      IFUNC_IMPL_ADD (array, i, strcat, CPU_FEATURE_USABLE (AVX2),
+ 			      __strcat_avx2)
+-	      IFUNC_IMPL_ADD (array, i, strcat, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strcat, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcat_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcat, 1, __strcat_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, strcat, 1, __strcat_sse2))
+@@ -253,7 +253,7 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/strchr.c.  */
+   IFUNC_IMPL (i, name, strchr,
+ 	      IFUNC_IMPL_ADD (array, i, strchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, strchr, 1, __strchr_sse2_no_bsf)
+ 	      IFUNC_IMPL_ADD (array, i, strchr, 1, __strchr_sse2))
+@@ -261,54 +261,54 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/strchrnul.c.  */
+   IFUNC_IMPL (i, name, strchrnul,
+ 	      IFUNC_IMPL_ADD (array, i, strchrnul,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strchrnul_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, strchrnul, 1, __strchrnul_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strrchr.c.  */
+   IFUNC_IMPL (i, name, strrchr,
+ 	      IFUNC_IMPL_ADD (array, i, strrchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strrchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, strrchr, 1, __strrchr_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strcmp.c.  */
+   IFUNC_IMPL (i, name, strcmp,
+ 	      IFUNC_IMPL_ADD (array, i, strcmp,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strcmp_avx2)
+-	      IFUNC_IMPL_ADD (array, i, strcmp, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strcmp, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcmp_sse42)
+-	      IFUNC_IMPL_ADD (array, i, strcmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcmp, 1, __strcmp_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, strcmp, 1, __strcmp_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strcpy.c.  */
+   IFUNC_IMPL (i, name, strcpy,
+-	      IFUNC_IMPL_ADD (array, i, strcpy, HAS_ARCH_FEATURE (AVX2_Usable),
++	      IFUNC_IMPL_ADD (array, i, strcpy, CPU_FEATURE_USABLE (AVX2),
+ 			      __strcpy_avx2)
+-	      IFUNC_IMPL_ADD (array, i, strcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strcpy_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strcpy, 1, __strcpy_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, strcpy, 1, __strcpy_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strcspn.c.  */
+   IFUNC_IMPL (i, name, strcspn,
+-	      IFUNC_IMPL_ADD (array, i, strcspn, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strcspn, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strcspn_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strcspn, 1, __strcspn_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strncase_l.c.  */
+   IFUNC_IMPL (i, name, strncasecmp,
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __strncasecmp_avx)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strncasecmp_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncasecmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp, 1,
+ 			      __strncasecmp_sse2))
+@@ -316,22 +316,22 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/strncase_l.c.  */
+   IFUNC_IMPL (i, name, strncasecmp_l,
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __strncasecmp_l_avx)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l,
+-			      HAS_CPU_FEATURE (SSE4_2),
++			      CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strncasecmp_l_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncasecmp_l_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncasecmp_l, 1,
+ 			      __strncasecmp_l_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/strncat.c.  */
+   IFUNC_IMPL (i, name, strncat,
+-	      IFUNC_IMPL_ADD (array, i, strncat, HAS_ARCH_FEATURE (AVX2_Usable),
++	      IFUNC_IMPL_ADD (array, i, strncat, CPU_FEATURE_USABLE (AVX2),
+ 			      __strncat_avx2)
+-	      IFUNC_IMPL_ADD (array, i, strncat, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strncat, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncat_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncat, 1,
+ 			      __strncat_sse2_unaligned)
+@@ -339,9 +339,9 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/x86_64/multiarch/strncpy.c.  */
+   IFUNC_IMPL (i, name, strncpy,
+-	      IFUNC_IMPL_ADD (array, i, strncpy, HAS_ARCH_FEATURE (AVX2_Usable),
++	      IFUNC_IMPL_ADD (array, i, strncpy, CPU_FEATURE_USABLE (AVX2),
+ 			      __strncpy_avx2)
+-	      IFUNC_IMPL_ADD (array, i, strncpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strncpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncpy_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncpy, 1,
+ 			      __strncpy_sse2_unaligned)
+@@ -349,14 +349,14 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 
+   /* Support sysdeps/x86_64/multiarch/strpbrk.c.  */
+   IFUNC_IMPL (i, name, strpbrk,
+-	      IFUNC_IMPL_ADD (array, i, strpbrk, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strpbrk, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strpbrk_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strpbrk, 1, __strpbrk_sse2))
+ 
+ 
+   /* Support sysdeps/x86_64/multiarch/strspn.c.  */
+   IFUNC_IMPL (i, name, strspn,
+-	      IFUNC_IMPL_ADD (array, i, strspn, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strspn, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strspn_sse42)
+ 	      IFUNC_IMPL_ADD (array, i, strspn, 1, __strspn_sse2))
+ 
+@@ -368,70 +368,70 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/wcschr.c.  */
+   IFUNC_IMPL (i, name, wcschr,
+ 	      IFUNC_IMPL_ADD (array, i, wcschr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wcschr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wcschr, 1, __wcschr_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wcsrchr.c.  */
+   IFUNC_IMPL (i, name, wcsrchr,
+ 	      IFUNC_IMPL_ADD (array, i, wcsrchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wcsrchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wcsrchr, 1, __wcsrchr_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wcscmp.c.  */
+   IFUNC_IMPL (i, name, wcscmp,
+ 	      IFUNC_IMPL_ADD (array, i, wcscmp,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wcscmp_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wcscmp, 1, __wcscmp_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wcsncmp.c.  */
+   IFUNC_IMPL (i, name, wcsncmp,
+ 	      IFUNC_IMPL_ADD (array, i, wcsncmp,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wcsncmp_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wcsncmp, 1, __wcsncmp_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wcscpy.c.  */
+   IFUNC_IMPL (i, name, wcscpy,
+-	      IFUNC_IMPL_ADD (array, i, wcscpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, wcscpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __wcscpy_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, wcscpy, 1, __wcscpy_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wcslen.c.  */
+   IFUNC_IMPL (i, name, wcslen,
+ 	      IFUNC_IMPL_ADD (array, i, wcslen,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wcslen_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wcslen, 1, __wcslen_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wcsnlen.c.  */
+   IFUNC_IMPL (i, name, wcsnlen,
+ 	      IFUNC_IMPL_ADD (array, i, wcsnlen,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wcsnlen_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wcsnlen,
+-			      HAS_CPU_FEATURE (SSE4_1),
++			      CPU_FEATURE_USABLE (SSE4_1),
+ 			      __wcsnlen_sse4_1)
+ 	      IFUNC_IMPL_ADD (array, i, wcsnlen, 1, __wcsnlen_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wmemchr.c.  */
+   IFUNC_IMPL (i, name, wmemchr,
+ 	      IFUNC_IMPL_ADD (array, i, wmemchr,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wmemchr_avx2)
+ 	      IFUNC_IMPL_ADD (array, i, wmemchr, 1, __wmemchr_sse2))
+ 
+   /* Support sysdeps/x86_64/multiarch/wmemcmp.c.  */
+   IFUNC_IMPL (i, name, wmemcmp,
+ 	      IFUNC_IMPL_ADD (array, i, wmemcmp,
+-			      (HAS_ARCH_FEATURE (AVX2_Usable)
+-			       && HAS_CPU_FEATURE (MOVBE)),
++			      (CPU_FEATURE_USABLE (AVX2)
++			       && CPU_FEATURE_USABLE (MOVBE)),
+ 			      __wmemcmp_avx2_movbe)
+-	      IFUNC_IMPL_ADD (array, i, wmemcmp, HAS_CPU_FEATURE (SSE4_1),
++	      IFUNC_IMPL_ADD (array, i, wmemcmp, CPU_FEATURE_USABLE (SSE4_1),
+ 			      __wmemcmp_sse4_1)
+-	      IFUNC_IMPL_ADD (array, i, wmemcmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, wmemcmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __wmemcmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, wmemcmp, 1, __wmemcmp_sse2))
+ 
+@@ -440,35 +440,35 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 	      IFUNC_IMPL_ADD (array, i, wmemset, 1,
+ 			      __wmemset_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, wmemset,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wmemset_avx2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, wmemset,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __wmemset_avx512_unaligned))
+ 
+ #ifdef SHARED
+   /* Support sysdeps/x86_64/multiarch/memcpy_chk.c.  */
+   IFUNC_IMPL (i, name, __memcpy_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memcpy_chk_avx512_no_vzeroupper)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memcpy_chk_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memcpy_chk_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memcpy_chk_avx_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memcpy_chk_avx_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_chk_ssse3_back)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_chk_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, __memcpy_chk, 1,
+ 			      __memcpy_chk_sse2_unaligned)
+@@ -481,23 +481,23 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/memcpy.c.  */
+   IFUNC_IMPL (i, name, memcpy,
+ 	      IFUNC_IMPL_ADD (array, i, memcpy,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memcpy_avx_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __memcpy_avx_unaligned_erms)
+-	      IFUNC_IMPL_ADD (array, i, memcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_ssse3_back)
+-	      IFUNC_IMPL_ADD (array, i, memcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, memcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __memcpy_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memcpy_avx512_no_vzeroupper)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memcpy_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __memcpy_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy, 1, __memcpy_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, memcpy, 1,
+@@ -508,25 +508,25 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/mempcpy_chk.c.  */
+   IFUNC_IMPL (i, name, __mempcpy_chk,
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __mempcpy_chk_avx512_no_vzeroupper)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __mempcpy_chk_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __mempcpy_chk_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __mempcpy_chk_avx_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __mempcpy_chk_avx_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_chk_ssse3_back)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk,
+-			      HAS_CPU_FEATURE (SSSE3),
++			      CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_chk_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, __mempcpy_chk, 1,
+ 			      __mempcpy_chk_sse2_unaligned)
+@@ -539,23 +539,23 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/mempcpy.c.  */
+   IFUNC_IMPL (i, name, mempcpy,
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __mempcpy_avx512_no_vzeroupper)
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __mempcpy_avx512_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __mempcpy_avx512_unaligned_erms)
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __mempcpy_avx_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy,
+-			      HAS_ARCH_FEATURE (AVX_Usable),
++			      CPU_FEATURE_USABLE (AVX),
+ 			      __mempcpy_avx_unaligned_erms)
+-	      IFUNC_IMPL_ADD (array, i, mempcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, mempcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_ssse3_back)
+-	      IFUNC_IMPL_ADD (array, i, mempcpy, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, mempcpy, CPU_FEATURE_USABLE (SSSE3),
+ 			      __mempcpy_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, mempcpy, 1,
+ 			      __mempcpy_sse2_unaligned)
+@@ -566,11 +566,11 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+   /* Support sysdeps/x86_64/multiarch/strncmp.c.  */
+   IFUNC_IMPL (i, name, strncmp,
+ 	      IFUNC_IMPL_ADD (array, i, strncmp,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __strncmp_avx2)
+-	      IFUNC_IMPL_ADD (array, i, strncmp, HAS_CPU_FEATURE (SSE4_2),
++	      IFUNC_IMPL_ADD (array, i, strncmp, CPU_FEATURE_USABLE (SSE4_2),
+ 			      __strncmp_sse42)
+-	      IFUNC_IMPL_ADD (array, i, strncmp, HAS_CPU_FEATURE (SSSE3),
++	      IFUNC_IMPL_ADD (array, i, strncmp, CPU_FEATURE_USABLE (SSSE3),
+ 			      __strncmp_ssse3)
+ 	      IFUNC_IMPL_ADD (array, i, strncmp, 1, __strncmp_sse2))
+ 
+@@ -580,10 +580,10 @@ __libc_ifunc_impl_list (const char *name, struct libc_ifunc_impl *array,
+ 	      IFUNC_IMPL_ADD (array, i, __wmemset_chk, 1,
+ 			      __wmemset_chk_sse2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __wmemset_chk,
+-			      HAS_ARCH_FEATURE (AVX2_Usable),
++			      CPU_FEATURE_USABLE (AVX2),
+ 			      __wmemset_chk_avx2_unaligned)
+ 	      IFUNC_IMPL_ADD (array, i, __wmemset_chk,
+-			      HAS_ARCH_FEATURE (AVX512F_Usable),
++			      CPU_FEATURE_USABLE (AVX512F),
+ 			      __wmemset_chk_avx512_unaligned))
+ #endif
+ 
+diff --git a/sysdeps/x86_64/multiarch/ifunc-memcmp.h b/sysdeps/x86_64/multiarch/ifunc-memcmp.h
+index bf5ab8eb7ffd0002..6c1f3153579d19c4 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-memcmp.h
++++ b/sysdeps/x86_64/multiarch/ifunc-memcmp.h
+@@ -30,15 +30,15 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
+-      && CPU_FEATURES_CPU_P (cpu_features, MOVBE)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
++      && CPU_FEATURE_USABLE_P (cpu_features, MOVBE)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2_movbe);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_1))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_1))
+     return OPTIMIZE (sse4_1);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/ifunc-memmove.h b/sysdeps/x86_64/multiarch/ifunc-memmove.h
+index 5b1eb1c92c2f199b..5e5f02994531ec14 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-memmove.h
++++ b/sysdeps/x86_64/multiarch/ifunc-memmove.h
+@@ -45,13 +45,13 @@ IFUNC_SELECTOR (void)
+       || CPU_FEATURES_ARCH_P (cpu_features, Prefer_FSRM))
+     return OPTIMIZE (erms);
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, AVX512F_Usable)
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
+       && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
+     {
+       if (CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER))
+ 	return OPTIMIZE (avx512_no_vzeroupper);
+ 
+-      if (CPU_FEATURES_CPU_P (cpu_features, ERMS))
++      if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	return OPTIMIZE (avx512_unaligned_erms);
+ 
+       return OPTIMIZE (avx512_unaligned);
+@@ -59,16 +59,16 @@ IFUNC_SELECTOR (void)
+ 
+   if (CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     {
+-      if (CPU_FEATURES_CPU_P (cpu_features, ERMS))
++      if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	return OPTIMIZE (avx_unaligned_erms);
+ 
+       return OPTIMIZE (avx_unaligned);
+     }
+ 
+-  if (!CPU_FEATURES_CPU_P (cpu_features, SSSE3)
++  if (!CPU_FEATURE_USABLE_P (cpu_features, SSSE3)
+       || CPU_FEATURES_ARCH_P (cpu_features, Fast_Unaligned_Copy))
+     {
+-      if (CPU_FEATURES_CPU_P (cpu_features, ERMS))
++      if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	return OPTIMIZE (sse2_unaligned_erms);
+ 
+       return OPTIMIZE (sse2_unaligned);
+diff --git a/sysdeps/x86_64/multiarch/ifunc-memset.h b/sysdeps/x86_64/multiarch/ifunc-memset.h
+index 19b5ae676c2d5d53..708bd72e2c3d3963 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-memset.h
++++ b/sysdeps/x86_64/multiarch/ifunc-memset.h
+@@ -42,27 +42,27 @@ IFUNC_SELECTOR (void)
+   if (CPU_FEATURES_ARCH_P (cpu_features, Prefer_ERMS))
+     return OPTIMIZE (erms);
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, AVX512F_Usable)
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
+       && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
+     {
+       if (CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER))
+ 	return OPTIMIZE (avx512_no_vzeroupper);
+ 
+-      if (CPU_FEATURES_CPU_P (cpu_features, ERMS))
++      if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	return OPTIMIZE (avx512_unaligned_erms);
+ 
+       return OPTIMIZE (avx512_unaligned);
+     }
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX2))
+     {
+-      if (CPU_FEATURES_CPU_P (cpu_features, ERMS))
++      if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+ 	return OPTIMIZE (avx2_unaligned_erms);
+       else
+ 	return OPTIMIZE (avx2_unaligned);
+     }
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, ERMS))
++  if (CPU_FEATURE_USABLE_P (cpu_features, ERMS))
+     return OPTIMIZE (sse2_unaligned_erms);
+ 
+   return OPTIMIZE (sse2_unaligned);
+diff --git a/sysdeps/x86_64/multiarch/ifunc-sse4_2.h b/sysdeps/x86_64/multiarch/ifunc-sse4_2.h
+index f2b791cccf12c425..73383f4b583b29c8 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-sse4_2.h
++++ b/sysdeps/x86_64/multiarch/ifunc-sse4_2.h
+@@ -27,7 +27,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_2))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_2))
+     return OPTIMIZE (sse42);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/ifunc-strcasecmp.h b/sysdeps/x86_64/multiarch/ifunc-strcasecmp.h
+index 1ca170b663a4e65c..6a4bb07849a11f51 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-strcasecmp.h
++++ b/sysdeps/x86_64/multiarch/ifunc-strcasecmp.h
+@@ -29,14 +29,14 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_ARCH_P (cpu_features, AVX_Usable))
++  if (CPU_FEATURE_USABLE_P (cpu_features, AVX))
+     return OPTIMIZE (avx);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_2)
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_2)
+       && !CPU_FEATURES_ARCH_P (cpu_features, Slow_SSE4_2))
+     return OPTIMIZE (sse42);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/ifunc-strcpy.h b/sysdeps/x86_64/multiarch/ifunc-strcpy.h
+index 4f2286fefccda069..100dca5cde0ecac5 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-strcpy.h
++++ b/sysdeps/x86_64/multiarch/ifunc-strcpy.h
+@@ -32,14 +32,14 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2);
+ 
+   if (CPU_FEATURES_ARCH_P (cpu_features, Fast_Unaligned_Load))
+     return OPTIMIZE (sse2_unaligned);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/ifunc-wmemset.h b/sysdeps/x86_64/multiarch/ifunc-wmemset.h
+index 2f1085f5fc483c70..eb2422104751b235 100644
+--- a/sysdeps/x86_64/multiarch/ifunc-wmemset.h
++++ b/sysdeps/x86_64/multiarch/ifunc-wmemset.h
+@@ -28,10 +28,10 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     {
+-      if (CPU_FEATURES_ARCH_P (cpu_features, AVX512F_Usable)
++      if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
+ 	  && !CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_AVX512))
+ 	return OPTIMIZE (avx512_unaligned);
+       else
+diff --git a/sysdeps/x86_64/multiarch/sched_cpucount.c b/sysdeps/x86_64/multiarch/sched_cpucount.c
+index 7949119dcdb5a94b..b38ff37c6511ca1b 100644
+--- a/sysdeps/x86_64/multiarch/sched_cpucount.c
++++ b/sysdeps/x86_64/multiarch/sched_cpucount.c
+@@ -33,4 +33,4 @@
+ #undef __sched_cpucount
+ 
+ libc_ifunc (__sched_cpucount,
+-	    HAS_CPU_FEATURE (POPCNT) ? popcount_cpucount : generic_cpucount);
++	    CPU_FEATURE_USABLE (POPCNT) ? popcount_cpucount : generic_cpucount);
+diff --git a/sysdeps/x86_64/multiarch/strchr.c b/sysdeps/x86_64/multiarch/strchr.c
+index 76d64fb378e9bbac..329547132c3a301b 100644
+--- a/sysdeps/x86_64/multiarch/strchr.c
++++ b/sysdeps/x86_64/multiarch/strchr.c
+@@ -36,7 +36,7 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2);
+ 
+diff --git a/sysdeps/x86_64/multiarch/strcmp.c b/sysdeps/x86_64/multiarch/strcmp.c
+index b903e418df151ec1..3f433fbccf9e7121 100644
+--- a/sysdeps/x86_64/multiarch/strcmp.c
++++ b/sysdeps/x86_64/multiarch/strcmp.c
+@@ -37,14 +37,14 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2);
+ 
+   if (CPU_FEATURES_ARCH_P (cpu_features, Fast_Unaligned_Load))
+     return OPTIMIZE (sse2_unaligned);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/strncmp.c b/sysdeps/x86_64/multiarch/strncmp.c
+index 02b6d0b6f5717e2a..686d654f3da84379 100644
+--- a/sysdeps/x86_64/multiarch/strncmp.c
++++ b/sysdeps/x86_64/multiarch/strncmp.c
+@@ -37,15 +37,15 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_2)
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_2)
+       && !CPU_FEATURES_ARCH_P (cpu_features, Slow_SSE4_2))
+     return OPTIMIZE (sse42);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/test-multiarch.c b/sysdeps/x86_64/multiarch/test-multiarch.c
+index 417147c3d5f325a5..cc2ea56a6753402d 100644
+--- a/sysdeps/x86_64/multiarch/test-multiarch.c
++++ b/sysdeps/x86_64/multiarch/test-multiarch.c
+@@ -75,18 +75,18 @@ do_test (int argc, char **argv)
+   int fails;
+ 
+   get_cpuinfo ();
+-  fails = check_proc ("avx", HAS_ARCH_FEATURE (AVX_Usable),
+-		      "HAS_ARCH_FEATURE (AVX_Usable)");
+-  fails += check_proc ("fma4", HAS_ARCH_FEATURE (FMA4_Usable),
+-		       "HAS_ARCH_FEATURE (FMA4_Usable)");
+-  fails += check_proc ("sse4_2", HAS_CPU_FEATURE (SSE4_2),
+-		       "HAS_CPU_FEATURE (SSE4_2)");
+-  fails += check_proc ("sse4_1", HAS_CPU_FEATURE (SSE4_1)
+-		       , "HAS_CPU_FEATURE (SSE4_1)");
+-  fails += check_proc ("ssse3", HAS_CPU_FEATURE (SSSE3),
+-		       "HAS_CPU_FEATURE (SSSE3)");
+-  fails += check_proc ("popcnt", HAS_CPU_FEATURE (POPCNT),
+-		       "HAS_CPU_FEATURE (POPCNT)");
++  fails = check_proc ("avx", CPU_FEATURE_USABLE (AVX),
++		      "CPU_FEATURE_USABLE (AVX)");
++  fails += check_proc ("fma4", CPU_FEATURE_USABLE (FMA4),
++		       "CPU_FEATURE_USABLE (FMA4)");
++  fails += check_proc ("sse4_2", CPU_FEATURE_USABLE (SSE4_2),
++		       "CPU_FEATURE_USABLE (SSE4_2)");
++  fails += check_proc ("sse4_1", CPU_FEATURE_USABLE (SSE4_1)
++		       , "CPU_FEATURE_USABLE (SSE4_1)");
++  fails += check_proc ("ssse3", CPU_FEATURE_USABLE (SSSE3),
++		       "CPU_FEATURE_USABLE (SSSE3)");
++  fails += check_proc ("popcnt", CPU_FEATURE_USABLE (POPCNT),
++		       "CPU_FEATURE_USABLE (POPCNT)");
+ 
+   printf ("%d differences between /proc/cpuinfo and glibc code.\n", fails);
+ 
+diff --git a/sysdeps/x86_64/multiarch/wcscpy.c b/sysdeps/x86_64/multiarch/wcscpy.c
+index f23b1fd853a4dcb4..8fffb5c3163ab3e4 100644
+--- a/sysdeps/x86_64/multiarch/wcscpy.c
++++ b/sysdeps/x86_64/multiarch/wcscpy.c
+@@ -34,7 +34,7 @@ IFUNC_SELECTOR (void)
+ {
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSSE3))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSSE3))
+     return OPTIMIZE (ssse3);
+ 
+   return OPTIMIZE (sse2);
+diff --git a/sysdeps/x86_64/multiarch/wcsnlen.c b/sysdeps/x86_64/multiarch/wcsnlen.c
+index bd376057e3e26ed6..b3144c938df70b1e 100644
+--- a/sysdeps/x86_64/multiarch/wcsnlen.c
++++ b/sysdeps/x86_64/multiarch/wcsnlen.c
+@@ -36,11 +36,11 @@ IFUNC_SELECTOR (void)
+   const struct cpu_features* cpu_features = __get_cpu_features ();
+ 
+   if (!CPU_FEATURES_ARCH_P (cpu_features, Prefer_No_VZEROUPPER)
+-      && CPU_FEATURES_ARCH_P (cpu_features, AVX2_Usable)
++      && CPU_FEATURE_USABLE_P (cpu_features, AVX2)
+       && CPU_FEATURES_ARCH_P (cpu_features, AVX_Fast_Unaligned_Load))
+     return OPTIMIZE (avx2);
+ 
+-  if (CPU_FEATURES_CPU_P (cpu_features, SSE4_1))
++  if (CPU_FEATURE_USABLE_P (cpu_features, SSE4_1))
+     return OPTIMIZE (sse4_1);
+ 
+   return OPTIMIZE (sse2);

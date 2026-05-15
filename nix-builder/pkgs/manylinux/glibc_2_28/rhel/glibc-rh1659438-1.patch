@@ -1,0 +1,118 @@
+commit b8686c0d7098168481a246f8199ab2d865f52d3d
+Author: Stefan Liebler <stli@linux.ibm.com>
+Date:   Tue Dec 18 13:57:03 2018 +0100
+
+    S390: Add configure check to detect z10 as mininum architecture level set.
+    
+    Add a configure check for z10 in the same way as done for z196.
+    
+    ChangeLog:
+    
+            * config.h.in (HAVE_S390_MIN_Z10_ZARCH_ASM_SUPPORT): New undefine.
+            * sysdeps/s390/configure.ac: Add check for z10 support.
+            * sysdeps/s390/configure: Regenerated.
+
+diff --git a/config.h.in b/config.h.in
+index 141db213a9046eb4..beecc39d5b8c3f4a 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -62,6 +62,9 @@
+ /* Define if assembler supports AVX512DQ.  */
+ #undef  HAVE_AVX512DQ_ASM_SUPPORT
+ 
++/* Define if assembler supports z10 zarch instructions as default on S390.  */
++#undef  HAVE_S390_MIN_Z10_ZARCH_ASM_SUPPORT
++
+ /* Define if assembler supports z196 zarch instructions as default on S390.  */
+ #undef  HAVE_S390_MIN_Z196_ZARCH_ASM_SUPPORT
+ 
+diff --git a/sysdeps/s390/configure b/sysdeps/s390/configure
+index 74b415f2ab0fa982..f30f8644361f474a 100644
+--- a/sysdeps/s390/configure
++++ b/sysdeps/s390/configure
+@@ -112,6 +112,45 @@ then
+ 
+ fi
+ 
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for S390 z10 zarch instruction support as default" >&5
++$as_echo_n "checking for S390 z10 zarch instruction support as default... " >&6; }
++if ${libc_cv_asm_s390_min_z10_zarch+:} false; then :
++  $as_echo_n "(cached) " >&6
++else
++  cat > conftest.c <<\EOF
++void testinsn (void *a, void *b, int n)
++{
++    __asm__ ("exrl %2,1f \n\t"
++	     "j 2f \n\t"
++	     "1: mvc 0(1,%0),0(%1) \n\t"
++	     "2:"
++	     : : "a" (a), "a" (b), "d" (n)
++	     : "memory", "cc");
++}
++EOF
++if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS --shared conftest.c
++			-o conftest.o &> /dev/null'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; } ;
++then
++  libc_cv_asm_s390_min_z10_zarch=yes
++else
++  libc_cv_asm_s390_min_z10_zarch=no
++fi
++rm -f conftest*
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_asm_s390_min_z10_zarch" >&5
++$as_echo "$libc_cv_asm_s390_min_z10_zarch" >&6; }
++
++if test "$libc_cv_asm_s390_min_z10_zarch" = yes ;
++then
++  $as_echo "#define HAVE_S390_MIN_Z10_ZARCH_ASM_SUPPORT 1" >>confdefs.h
++
++fi
++
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking for S390 z196 zarch instruction support as default" >&5
+ $as_echo_n "checking for S390 z196 zarch instruction support as default... " >&6; }
+ if ${libc_cv_asm_s390_min_z196_zarch+:} false; then :
+diff --git a/sysdeps/s390/configure.ac b/sysdeps/s390/configure.ac
+index 1cdb0212825a3f18..981f7a79dd7066fc 100644
+--- a/sysdeps/s390/configure.ac
++++ b/sysdeps/s390/configure.ac
+@@ -80,6 +80,35 @@ then
+   AC_DEFINE(HAVE_S390_VX_GCC_SUPPORT)
+ fi
+ 
++AC_CACHE_CHECK(for S390 z10 zarch instruction support as default,
++	       libc_cv_asm_s390_min_z10_zarch, [dnl
++cat > conftest.c <<\EOF
++void testinsn (void *a, void *b, int n)
++{
++    __asm__ ("exrl %2,1f \n\t"
++	     "j 2f \n\t"
++	     "1: mvc 0(1,%0),0(%1) \n\t"
++	     "2:"
++	     : : "a" (a), "a" (b), "d" (n)
++	     : "memory", "cc");
++}
++EOF
++dnl
++dnl test, if assembler supports S390 z10 zarch instructions as default
++if AC_TRY_COMMAND([${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS --shared conftest.c
++			-o conftest.o &> /dev/null]) ;
++then
++  libc_cv_asm_s390_min_z10_zarch=yes
++else
++  libc_cv_asm_s390_min_z10_zarch=no
++fi
++rm -f conftest* ])
++
++if test "$libc_cv_asm_s390_min_z10_zarch" = yes ;
++then
++  AC_DEFINE(HAVE_S390_MIN_Z10_ZARCH_ASM_SUPPORT)
++fi
++
+ AC_CACHE_CHECK(for S390 z196 zarch instruction support as default,
+ 	       libc_cv_asm_s390_min_z196_zarch, [dnl
+ cat > conftest.c <<\EOF

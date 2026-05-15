@@ -1,0 +1,224 @@
+commit b2964eb1d9a6b8ab1250e8a881cf406182da5875
+Author: Florian Weimer <fweimer@redhat.com>
+Date:   Wed Apr 21 19:49:51 2021 +0200
+
+    dlfcn: Failures after dlmopen should not terminate process [BZ #24772]
+    
+    Commit 9e78f6f6e7134a5f299cc8de77370218f8019237 ("Implement
+    _dl_catch_error, _dl_signal_error in libc.so [BZ #16628]") has the
+    side effect that distinct namespaces, as created by dlmopen, now have
+    separate implementations of the rtld exception mechanism.  This means
+    that the call to _dl_catch_error from libdl in a secondary namespace
+    does not actually install an exception handler because the
+    thread-local variable catch_hook in the libc.so copy in the secondary
+    namespace is distinct from that of the base namepace.  As a result, a
+    dlsym/dlopen/... failure in a secondary namespace terminates the process
+    with a dynamic linker error because it looks to the exception handler
+    mechanism as if no handler has been installed.
+    
+    This commit restores GLRO (dl_catch_error) and uses it to set the
+    handler in the base namespace.
+    
+    Reviewed-by: Adhemerval Zanella  <adhemerval.zanella@linaro.org>
+
+Conflicts:
+	elf/Makefile
+
+diff --git a/dlfcn/dlerror.c b/dlfcn/dlerror.c
+index 06732460ea1512cd..e08ac3afef302817 100644
+--- a/dlfcn/dlerror.c
++++ b/dlfcn/dlerror.c
+@@ -167,8 +167,10 @@ _dlerror_run (void (*operate) (void *), void *args)
+       result->errstring = NULL;
+     }
+ 
+-  result->errcode = _dl_catch_error (&result->objname, &result->errstring,
+-				     &result->malloced, operate, args);
++  result->errcode = GLRO (dl_catch_error) (&result->objname,
++					   &result->errstring,
++					   &result->malloced,
++					   operate, args);
+ 
+   /* If no error we mark that no error string is available.  */
+   result->returned = result->errstring == NULL;
+diff --git a/elf/Makefile b/elf/Makefile
+index a811919ba4568d64..e0919486a14cab1a 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -216,6 +216,7 @@ tests += restest1 preloadtest loadfail multiload origtest resolvfail \
+ 	 tst-glibc-hwcaps tst-glibc-hwcaps-prepend tst-glibc-hwcaps-mask \
+ 	 tst-tls20 tst-tls21 \
+ 	 tst-rtld-run-static \
++	 tst-dlmopen-dlerror \
+ #	 reldep9
+ tests-internal += loadtest unload unload2 circleload1 \
+ 	 neededtest neededtest2 neededtest3 neededtest4 \
+@@ -349,6 +350,7 @@ modules-names = testobj1 testobj2 testobj3 testobj4 testobj5 testobj6 \
+ 		libmarkermod4-1 libmarkermod4-2 libmarkermod4-3 libmarkermod4-4 \
+ 		libmarkermod5-1 libmarkermod5-2 libmarkermod5-3 libmarkermod5-4 \
+ 		libmarkermod5-5 tst-tls20mod-bad tst-tls21mod \
++		tst-dlmopen-dlerror-mod \
+ 
+ # Most modules build with _ISOMAC defined, but those filtered out
+ # depend on internal headers.
+@@ -1546,6 +1548,10 @@ $(objpfx)tst-sonamemove-dlopen.out: \
+   $(objpfx)tst-sonamemove-runmod1.so \
+   $(objpfx)tst-sonamemove-runmod2.so
+ 
++$(objpfx)tst-dlmopen-dlerror: $(libdl)
++$(objpfx)tst-dlmopen-dlerror-mod.so: $(libdl) $(libsupport)
++$(objpfx)tst-dlmopen-dlerror.out: $(objpfx)tst-dlmopen-dlerror-mod.so
++
+ # Override -z defs, so that we can reference an undefined symbol.
+ # Force lazy binding for the same reason.
+ LDFLAGS-tst-latepthreadmod.so = \
+diff --git a/elf/dl-error-skeleton.c b/elf/dl-error-skeleton.c
+index 9cb002ccfed2c7b4..7801aa433b12275f 100644
+--- a/elf/dl-error-skeleton.c
++++ b/elf/dl-error-skeleton.c
+@@ -248,4 +248,16 @@ _dl_receive_error (receiver_fct fct, void (*operate) (void *), void *args)
+   catch_hook = old_catch;
+   receiver = old_receiver;
+ }
++
++/* Forwarder used for initializing GLRO (_dl_catch_error).  */
++int
++_rtld_catch_error (const char **objname, const char **errstring,
++		   bool *mallocedp, void (*operate) (void *),
++		   void *args)
++{
++  /* The reference to _dl_catch_error will eventually be relocated to
++     point to the implementation in libc.so.  */
++  return _dl_catch_error (objname, errstring, mallocedp, operate, args);
++}
++
+ #endif /* DL_ERROR_BOOTSTRAP */
+diff --git a/elf/rtld.c b/elf/rtld.c
+index 461d8c114a875a9b..c445b5ca25dea193 100644
+--- a/elf/rtld.c
++++ b/elf/rtld.c
+@@ -365,6 +365,7 @@ struct rtld_global_ro _rtld_global_ro attribute_relro =
+     ._dl_lookup_symbol_x = _dl_lookup_symbol_x,
+     ._dl_open = _dl_open,
+     ._dl_close = _dl_close,
++    ._dl_catch_error = _rtld_catch_error,
+     ._dl_tls_get_addr_soft = _dl_tls_get_addr_soft,
+ #ifdef HAVE_DL_DISCOVER_OSVERSION
+     ._dl_discover_osversion = _dl_discover_osversion
+diff --git a/elf/tst-dlmopen-dlerror-mod.c b/elf/tst-dlmopen-dlerror-mod.c
+new file mode 100644
+index 0000000000000000..7e95dcdeacf005be
+--- /dev/null
++++ b/elf/tst-dlmopen-dlerror-mod.c
+@@ -0,0 +1,41 @@
++/* Check that dlfcn errors are reported properly after dlmopen.  Test module.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <dlfcn.h>
++#include <stddef.h>
++#include <support/check.h>
++
++/* Note: This object is not linked into the main program, so we cannot
++   use delayed test failure reporting via TEST_VERIFY etc., and have
++   to use FAIL_EXIT1 (or something else that calls exit).  */
++
++void
++call_dlsym (void)
++{
++  void *ptr = dlsym (NULL, "does not exist");
++  if (ptr != NULL)
++    FAIL_EXIT1 ("dlsym did not fail as expected");
++}
++
++void
++call_dlopen (void)
++{
++  void *handle = dlopen ("tst-dlmopen-dlerror does not exist", RTLD_NOW);
++  if (handle != NULL)
++    FAIL_EXIT1 ("dlopen did not fail as expected");
++}
+diff --git a/elf/tst-dlmopen-dlerror.c b/elf/tst-dlmopen-dlerror.c
+new file mode 100644
+index 0000000000000000..e864d2fe4c3484ab
+--- /dev/null
++++ b/elf/tst-dlmopen-dlerror.c
+@@ -0,0 +1,37 @@
++/* Check that dlfcn errors are reported properly after dlmopen.
++   Copyright (C) 2021 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <http://www.gnu.org/licenses/>.  */
++
++#include <stddef.h>
++#include <support/check.h>
++#include <support/xdlfcn.h>
++
++static int
++do_test (void)
++{
++  void *handle = xdlmopen (LM_ID_NEWLM, "tst-dlmopen-dlerror-mod.so",
++                           RTLD_NOW);
++  void (*call_dlsym) (void) = xdlsym (handle, "call_dlsym");
++  void (*call_dlopen) (void) = xdlsym (handle, "call_dlopen");
++
++  call_dlsym ();
++  call_dlopen ();
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/generic/ldsodefs.h b/sysdeps/generic/ldsodefs.h
+index 7b0a667629ddc06a..d6d02aa3ccffba33 100644
+--- a/sysdeps/generic/ldsodefs.h
++++ b/sysdeps/generic/ldsodefs.h
+@@ -647,6 +647,12 @@ struct rtld_global_ro
+   void *(*_dl_open) (const char *file, int mode, const void *caller_dlopen,
+ 		     Lmid_t nsid, int argc, char *argv[], char *env[]);
+   void (*_dl_close) (void *map);
++  /* libdl in a secondary namespace (after dlopen) must use
++     _dl_catch_error from the main namespace, so it has to be
++     exported in some way.  */
++  int (*_dl_catch_error) (const char **objname, const char **errstring,
++			  bool *mallocedp, void (*operate) (void *),
++			  void *args);
+   void *(*_dl_tls_get_addr_soft) (struct link_map *);
+ #ifdef HAVE_DL_DISCOVER_OSVERSION
+   int (*_dl_discover_osversion) (void);
+@@ -889,6 +895,9 @@ extern int _dl_catch_error (const char **objname, const char **errstring,
+ 			    void *args);
+ libc_hidden_proto (_dl_catch_error)
+ 
++/* Used for initializing GLRO (_dl_catch_error).  */
++extern __typeof__ (_dl_catch_error) _rtld_catch_error attribute_hidden;
++
+ /* Call OPERATE (ARGS).  If no error occurs, set *EXCEPTION to zero.
+    Otherwise, store a copy of the raised exception in *EXCEPTION,
+    which has to be freed by _dl_exception_free.  As a special case, if

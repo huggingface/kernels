@@ -1,0 +1,180 @@
+From bd7c710d3b234a8d3bd77aae358bd7f7a6ce576d Mon Sep 17 00:00:00 2001
+From: Stefan Liebler <stli@linux.ibm.com>
+Date: Wed, 11 Dec 2019 15:09:25 +0100
+Subject: [PATCH 14/28] Adjust s_nearbyintf.c and s_nearbyintl.c regarding code
+ style.
+
+This patch just adjusts the generic implementation regarding code style.
+No functional change.
+
+Reviewed-by: Adhemerval Zanella <adhemerval.zanella@linaro.org>
+(cherry picked from commit 6a3866dae98cccc8cd7a0a4c1fb409dba9192a83)
+---
+ sysdeps/ieee754/flt-32/s_nearbyintf.c   | 60 ++++++++++++-----------
+ sysdeps/ieee754/ldbl-128/s_nearbyintl.c | 63 ++++++++++++++-----------
+ 2 files changed, 68 insertions(+), 55 deletions(-)
+
+diff --git a/sysdeps/ieee754/flt-32/s_nearbyintf.c b/sysdeps/ieee754/flt-32/s_nearbyintf.c
+index 438dcae8cc..5969e3e5b8 100644
+--- a/sysdeps/ieee754/flt-32/s_nearbyintf.c
++++ b/sysdeps/ieee754/flt-32/s_nearbyintf.c
+@@ -23,7 +23,7 @@
+ #include <math-use-builtins.h>
+ 
+ float
+-__nearbyintf(float x)
++__nearbyintf (float x)
+ {
+ #if USE_NEARBYINTF_BUILTIN
+   return __builtin_nearbyintf (x);
+@@ -34,33 +34,39 @@ __nearbyintf(float x)
+ 		8.3886080000e+06, /* 0x4b000000 */
+ 		-8.3886080000e+06, /* 0xcb000000 */
+   };
+-	fenv_t env;
+-	int32_t i0,j0,sx;
+-	float w,t;
+-	GET_FLOAT_WORD(i0,x);
+-	sx = (i0>>31)&1;
+-	j0 = ((i0>>23)&0xff)-0x7f;
+-	if(j0<23) {
+-	    if(j0<0) {
+-		libc_feholdexceptf (&env);
+-		w = TWO23[sx] + math_opt_barrier (x);
+-		t =  w-TWO23[sx];
+-		math_force_eval (t);
+-		libc_fesetenvf (&env);
+-		GET_FLOAT_WORD(i0,t);
+-		SET_FLOAT_WORD(t,(i0&0x7fffffff)|(sx<<31));
+-		return t;
+-	    }
+-	} else {
+-	    if(__builtin_expect(j0==0x80, 0)) return x+x;	/* inf or NaN */
+-	    else return x;		/* x is integral */
++  fenv_t env;
++  int32_t i0, j0, sx;
++  float w, t;
++  GET_FLOAT_WORD (i0, x);
++  sx = (i0 >> 31) & 1;
++  j0 = ((i0 >> 23) & 0xff) - 0x7f;
++  if (j0 < 23)
++    {
++      if (j0 < 0)
++	{
++	  libc_feholdexceptf (&env);
++	  w = TWO23[sx] + math_opt_barrier (x);
++	  t =  w - TWO23[sx];
++	  math_force_eval (t);
++	  libc_fesetenvf (&env);
++	  GET_FLOAT_WORD (i0, t);
++	  SET_FLOAT_WORD (t, (i0 & 0x7fffffff) | (sx << 31));
++	  return t;
+ 	}
+-	libc_feholdexceptf (&env);
+-	w = TWO23[sx] + math_opt_barrier (x);
+-	t = w-TWO23[sx];
+-	math_force_eval (t);
+-	libc_fesetenvf (&env);
+-	return t;
++    }
++  else
++    {
++      if (__glibc_unlikely (j0 == 0x80))
++	return x + x;		/* inf or NaN  */
++      else
++	return x;		/* x is integral  */
++  }
++  libc_feholdexceptf (&env);
++  w = TWO23[sx] + math_opt_barrier (x);
++  t = w - TWO23[sx];
++  math_force_eval (t);
++  libc_fesetenvf (&env);
++  return t;
+ #endif /* ! USE_NEARBYINT_BUILTIN  */
+ }
+ libm_alias_float (__nearbyint, nearbyint)
+diff --git a/sysdeps/ieee754/ldbl-128/s_nearbyintl.c b/sysdeps/ieee754/ldbl-128/s_nearbyintl.c
+index a4ad8e82e5..8d26786f78 100644
+--- a/sysdeps/ieee754/ldbl-128/s_nearbyintl.c
++++ b/sysdeps/ieee754/ldbl-128/s_nearbyintl.c
+@@ -30,7 +30,8 @@
+ #include <libm-alias-ldouble.h>
+ #include <math-use-builtins.h>
+ 
+-_Float128 __nearbyintl(_Float128 x)
++_Float128
++__nearbyintl (_Float128 x)
+ {
+ #if USE_NEARBYINTL_BUILTIN
+   return __builtin_nearbyintl (x);
+@@ -41,34 +42,40 @@ _Float128 __nearbyintl(_Float128 x)
+ 		 L(5.19229685853482762853049632922009600E+33), /* 0x406F000000000000, 0 */
+ 		 L(-5.19229685853482762853049632922009600E+33)  /* 0xC06F000000000000, 0 */
+   };
+-	fenv_t env;
+-	int64_t i0,j0,sx;
+-	uint64_t i1 __attribute__ ((unused));
+-	_Float128 w,t;
+-	GET_LDOUBLE_WORDS64(i0,i1,x);
+-	sx = (((uint64_t)i0)>>63);
+-	j0 = ((i0>>48)&0x7fff)-0x3fff;
+-	if(j0<112) {
+-	    if(j0<0) {
+-		feholdexcept (&env);
+-	        w = TWO112[sx] + math_opt_barrier (x);
+-	        t = w-TWO112[sx];
+-		math_force_eval (t);
+-	        fesetenv (&env);
+-		GET_LDOUBLE_MSW64(i0,t);
+-		SET_LDOUBLE_MSW64(t,(i0&0x7fffffffffffffffLL)|(sx<<63));
+-	        return t;
+-	    }
+-	} else {
+-	    if(j0==0x4000) return x+x;	/* inf or NaN */
+-	    else return x;		/* x is integral */
++  fenv_t env;
++  int64_t i0, j0, sx;
++  uint64_t i1 __attribute__ ((unused));
++  _Float128 w, t;
++  GET_LDOUBLE_WORDS64 (i0, i1, x);
++  sx = (((uint64_t) i0) >> 63);
++  j0 = ((i0 >> 48) & 0x7fff) - 0x3fff;
++  if (j0 < 112)
++    {
++      if (j0 < 0)
++	{
++	  feholdexcept (&env);
++	  w = TWO112[sx] + math_opt_barrier (x);
++	  t = w - TWO112[sx];
++	  math_force_eval (t);
++	  fesetenv (&env);
++	  GET_LDOUBLE_MSW64 (i0, t);
++	  SET_LDOUBLE_MSW64 (t, (i0 & 0x7fffffffffffffffLL) | (sx << 63));
++	  return t;
+ 	}
+-	feholdexcept (&env);
+-	w = TWO112[sx] + math_opt_barrier (x);
+-	t = w-TWO112[sx];
+-	math_force_eval (t);
+-	fesetenv (&env);
+-	return t;
++    }
++  else
++    {
++      if (j0 == 0x4000)
++	return x + x;		/* inf or NaN  */
++      else
++	return x;		/* x is integral  */
++    }
++  feholdexcept (&env);
++  w = TWO112[sx] + math_opt_barrier (x);
++  t = w - TWO112[sx];
++  math_force_eval (t);
++  fesetenv (&env);
++  return t;
+ #endif /* ! USE_NEARBYINTL_BUILTIN  */
+ }
+ libm_alias_ldouble (__nearbyint, nearbyint)
+-- 
+2.18.2
+

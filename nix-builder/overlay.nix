@@ -242,7 +242,7 @@ in
     map (version: {
       name = "manylinux_${flattenVersion (prev.lib.versions.majorMinor version)}";
       value = newManyLinuxPackages {
-        packageMetadata = readPackageMetadata ./pkgs/manylinux/manylinux-${version}-metadata.json;
+        packageMetadata = readPackageMetadata ./pkgs/manylinux/manylinux-${version}-${prev.stdenv.hostPlatform.uname.processor}-metadata.json;
       };
     }) versions
   )

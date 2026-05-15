@@ -119,14 +119,33 @@ applyOverrides {
     prevAttrs: {
       postInstall =
         let
-          ldArch = builtins.replaceStrings [ "_" ] [ "-" ] stdenv.hostPlatform.uname.processor;
+          ldLinuxPath =
+            if stdenv.hostPlatform.isx86_64 then
+              {
+                alma = "/lib64/ld-linux-x86-64.so.2";
+                nix = "$out/lib/ld-linux-x86-64.so.2";
+              }
+            else if stdenv.hostPlatform.isAarch64 then
+              {
+                alma = "/lib/ld-linux-aarch64.so.1";
+                nix = "$out/lib/ld-linux-aarch64.so.1";
+              }
+            else
+              throw "Unsupported processor: ${stdenv.hostPlatform.uname.processor}";
         in
         ''
           # Update linker script with Nix paths.
           substituteInPlace $out/lib64/libc.so \
             --replace-fail "/lib64/libc.so.6" "$out/lib/libc.so.6" \
             --replace-fail "/usr/lib64/libc_nonshared.a" "$out/lib/libc_nonshared.a" \
-            --replace-fail "/lib64/ld-linux-${ldArch}.so.2" "$out/lib/ld-linux-${ldArch}.so.2"
+            --replace-fail "${ldLinuxPath.alma}" "${ldLinuxPath.nix}"
+        ''
+        + lib.optionalString stdenv.hostPlatform.isAarch64 ''
+          # move-lib64 fixup hook only moves top-level lib64 files, but aarch64 has some
+          # directories as well.
+          mv $out/lib64/* $out/lib
+        ''
+        + lib.optionalString stdenv.hostPlatform.isx86_64 ''
           substituteInPlace $out/lib64/libm.so \
             --replace-fail "/lib64/libm.so.6" "$out/lib/libm.so.6" \
             --replace-fail "/lib64/libmvec.so.1" "$out/lib/libmvec.so.1" \

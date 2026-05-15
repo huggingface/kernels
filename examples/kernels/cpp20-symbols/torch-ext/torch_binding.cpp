@@ -4,9 +4,9 @@
 #include "torch_binding.h"
 
 TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
-    ops.def("invalid_cpp_symbol(Tensor input) -> Tensor");
+    ops.def("float_to_chars(Tensor input) -> Tensor");
 #if defined(CPU_KERNEL)
-    ops.impl("invalid_cpp_symbol", torch::kCPU, &invalid_cpp_symbol);
+    ops.impl("float_to_chars", torch::kCPU, &float_to_chars);
 #endif
 }
 

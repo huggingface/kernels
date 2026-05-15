@@ -58,6 +58,12 @@ NOARCH_VARIANT_STRINGS = [
     "torch-xpu",
     "torch-npu",
     "torch-universal",
+    "tvm-ffi-cpu",
+    "tvm-ffi-cuda",
+    "tvm-ffi-metal",
+    "tvm-ffi-rocm",
+    "tvm-ffi-xpu",
+    "tvm-ffi-universal",
 ]
 
 SUPERSET_VARIANT_STRINGS = [
@@ -257,6 +263,73 @@ def test_resolve_noarch_fallback():
     )
     assert result != []
     assert result[0].variant_str == "torch-cuda"
+
+
+RESOLVE_VARIANTS_TVM_FFI = [
+    parse_variant(s)
+    for s in [
+        "tvm-ffi01-metal-aarch64-darwin",
+        "tvm-ffi01-cu128-x86_64-linux",
+        "tvm-ffi-metal",
+        "tvm-ffi-cuda",
+    ]
+]
+
+
+def test_resolve_tvm_ffi_metal_darwin():
+    # tvm-ffi arch metal build should be picked on Darwin/aarch64 when
+    # tvm-ffi 0.1 is installed.
+    from kernels.backends import Metal
+
+    result = _resolve_variant_for_system(
+        variants=RESOLVE_VARIANTS_TVM_FFI,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=None,
+        torch_cxx11_abi=None,
+        tvm_ffi_version=Version("0.1"),
+    )
+    assert result != []
+    assert result[0].variant_str == "tvm-ffi01-metal-aarch64-darwin"
+
+
+def test_resolve_tvm_ffi_metal_noarch_fallback():
+    # With no matching arch variant for the system, should fall back to
+    # the tvm-ffi metal noarch variant.
+    from kernels.backends import Metal
+
+    variants = [parse_variant(s) for s in ["tvm-ffi01-cu128-x86_64-linux", "tvm-ffi-metal"]]
+    result = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=None,
+        torch_cxx11_abi=None,
+        tvm_ffi_version=Version("0.1"),
+    )
+    assert result != []
+    assert result[0].variant_str == "tvm-ffi-metal"
+
+
+def test_resolve_torch_noarch_preferred_over_tvm_ffi_noarch():
+    # When both are available, Torch noarch is preferred over tvm-ffi noarch
+    # (mirrors the arch precedence: Torch > tvm-ffi).
+    variants = [parse_variant(s) for s in ["tvm-ffi-metal", "torch-metal"]]
+    from kernels.backends import Metal
+
+    result = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=None,
+        tvm_ffi_version=Version("0.1"),
+    )
+    assert result != []
+    assert result[0].variant_str == "torch-metal"
 
 
 def test_resolve_no_match():

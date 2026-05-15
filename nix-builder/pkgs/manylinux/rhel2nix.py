@@ -10,9 +10,9 @@ from typing import Dict, List, Set
 from urllib.parse import urljoin
 from urllib.request import urlopen
 
-REPO_URLS = [
-    "http://mirror.transip.net/almalinux/8/AppStream/x86_64/os/",
-    "http://mirror.transip.net/almalinux/8/BaseOS/x86_64/os/",
+REPO_URL_TEMPLATES = [
+    "http://mirror.transip.net/almalinux/{version}/AppStream/{arch}/os/",
+    "http://mirror.transip.net/almalinux/{version}/BaseOS/{arch}/os/",
 ]
 
 # XML namespaces used in RPM repo metadata
@@ -39,8 +39,10 @@ def _rpm_sort_key(s: str) -> str:
 
 
 parser = argparse.ArgumentParser(description="Parse AlmaLinux repository")
-parser.add_argument("version", help="AlmaLinux version")
-parser.add_argument("arch", help="Target architecture (e.g. x86_64, aarch64)")
+parser.add_argument("--version", default="8", help="AlmaLinux version (default: 8)")
+parser.add_argument(
+    "--arch", default="x86_64", help="Target architecture (default: x86_64)"
+)
 
 TARGET_PACKAGE_NAMES = [
     "gcc-toolset-13",
@@ -183,11 +185,14 @@ def fetch_and_parse_repodata(repo_url: str):
         sys.exit(1)
 
 
-def get_all_packages(arch: str) -> Dict[str, Package]:
+def get_all_packages(arch: str, version: str) -> Dict[str, Package]:
     """Get all packages from the repository"""
     all_packages = {}
 
-    for repo_url in REPO_URLS:
+    repo_urls = [
+        template.format(version=version, arch=arch) for template in REPO_URL_TEMPLATES
+    ]
+    for repo_url in repo_urls:
         metadata = fetch_and_parse_repodata(repo_url)
 
         for package_elem in metadata.findall(
@@ -296,7 +301,7 @@ def main():
     print("Fetching all packages from AlmaLinux repository...", file=sys.stderr)
 
     # Step 1: Get all packages from repository
-    all_packages, provides_map = get_all_packages(args.arch)
+    all_packages, provides_map = get_all_packages(args.arch, args.version)
     print(f"Found {len(all_packages)} total packages in repository", file=sys.stderr)
 
     # Step 2: Find all target packages

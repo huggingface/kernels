@@ -24,13 +24,7 @@ let
     (import ./overrides.nix)
     # Packages that are joins of other packages.
     (final: prev: {
-      oneapi-torch-dev = final.callPackage ./oneapi-torch-dev.nix {
-        # Wrap the compiler with manylinux 2.28 libraries.
-        # TODO: in the future, move dependency resolving to the extension
-        #       construction, so that we can pass through the effective
-        #       stdenv there.
-        inherit (pkgs.manylinux_2_28) stdenv;
-      };
+      oneapi-torch-dev = final.callPackage ./oneapi-torch-dev.nix { };
     })
 
     (final: prev: {

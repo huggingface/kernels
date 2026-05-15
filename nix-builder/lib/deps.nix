@@ -1,6 +1,7 @@
 {
   lib,
   pkgs,
+  stdenv,
   torch,
 }:
 
@@ -27,9 +28,11 @@ let
     "torch" = [
       torch
     ];
-    "sycl_tla" = [ torch.xpuPackages.sycl-tla ];
+    "sycl_tla" = [
+      (torch.xpuPackages.sycl-tla.override { inherit stdenv; })
+    ];
     "metal-cpp" = [
-      pkgs.metal-cpp.dev
+      (pkgs.metal-cpp.dev.override { inherit stdenv; })
     ];
   };
 

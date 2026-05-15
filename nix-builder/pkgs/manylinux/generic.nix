@@ -19,8 +19,6 @@
   components,
 }:
 
-# TODO: make generic (multiple almalinux versions), add aarch64
-
 let
   srcs = map (component: fetchurl { inherit (component) url sha256; }) components;
 in

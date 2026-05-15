@@ -46,6 +46,7 @@ let
     inherit oneapi-torch-dev;
     stdenv = effectiveStdenv;
   };
+
 in
 {
   extraBuildDeps =
@@ -89,6 +90,14 @@ in
   };
 
   mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
+
+  inherit
+    (import ../deps.nix {
+      inherit lib pkgs torch;
+      stdenv = effectiveStdenv;
+    })
+    resolveCppDeps
+    ;
 
   stdenv = effectiveStdenv;
 }

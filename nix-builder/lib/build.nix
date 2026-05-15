@@ -73,10 +73,9 @@ rec {
       );
       extraDeps =
         let
-          inherit (import ./deps.nix { inherit lib pkgs torch; }) resolveCppDeps;
           kernelDeps = lib.unique (lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends) kernels));
         in
-        resolveCppDeps kernelDeps;
+        extension.resolveCppDeps kernelDeps;
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;

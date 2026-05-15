@@ -92,4 +92,13 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   '';
 
   dontStrip = true;
+
+  meta = with lib; {
+    description = "AlmaLinux package for manylinux: ${pname}";
+    homepage = "https://almalinux.org";
+    platforms = platforms.linux;
+    sourceProvenance = with sourceTypes; [
+      binaryNativeCode
+    ];
+  };
 })

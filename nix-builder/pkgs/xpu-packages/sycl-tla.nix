@@ -1,6 +1,6 @@
 {
   lib,
-  stdenv,
+  manylinux_2_28,
   fetchFromGitHub,
   cmake,
   ninja,
@@ -23,7 +23,7 @@ let
     or (throw "Unsupported DPC++ version: ${dpcppVersion}");
 in
 
-stdenv.mkDerivation rec {
+manylinux_2_28.stdenv.mkDerivation rec {
   pname = "sycl-tla";
   inherit (syclTlaVersion) version;
 

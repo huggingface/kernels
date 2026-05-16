@@ -3,7 +3,7 @@ ARG PYTHON_VERSION=3.10
 # Test with the oldest CUDA version supported by the latest PyTorch.
 ARG CUDA_VERSION=12.6.0
 ARG UBI_VERSION=8
-ARG TORCH_VERSION=2.10.0
+ARG TORCH_VERSION=2.11.0
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubi${UBI_VERSION} as base
 

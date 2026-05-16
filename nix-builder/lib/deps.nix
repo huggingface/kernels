@@ -32,7 +32,7 @@ let
       (torch.xpuPackages.sycl-tla.override { inherit stdenv; })
     ];
     "metal-cpp" = [
-      (pkgs.metal-cpp.dev.override { inherit stdenv; })
+      (pkgs.metal-cpp.override { inherit stdenv; }).dev
     ];
   };
 

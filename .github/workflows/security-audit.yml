@@ -121,7 +121,7 @@ jobs:
           === DIFF ===
           PROMPT
             cat /tmp/changes.diff
-          } | claude -p --model claude-opus-4-6 > /tmp/audit_result.txt
+          } | claude -p --model claude-opus-4-7 > /tmp/audit_result.txt
 
           if grep -q "NO_FINDINGS" /tmp/audit_result.txt; then
             echo "has_findings=false" >> "$GITHUB_OUTPUT"

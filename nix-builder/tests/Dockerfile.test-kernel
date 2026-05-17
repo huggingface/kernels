@@ -3,7 +3,7 @@ ARG PYTHON_VERSION=3.10
 # Test with the oldest CUDA version supported by the latest PyTorch.
 ARG CUDA_VERSION=12.6.0
 ARG UBI_VERSION=8
-ARG TORCH_VERSION=2.10.0
+ARG TORCH_VERSION=2.11.0
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubi${UBI_VERSION} as base
 
@@ -68,11 +68,13 @@ COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
 COPY extra-data ./extra-data
+COPY cpp20-symbols-kernel ./cpp20-symbols-kernel
 COPY examples/kernels/extra-data/tests ./extra_data_tests
 COPY examples/kernels/relu/tests ./relu_tests
 COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 COPY examples/kernels/cutlass-gemm-tvm-ffi/tests ./cutlass_gemm_tvm_ffi_tests
+COPY examples/kernels/cpp20-symbols/tests ./cpp20_symbols_tests
 
 # Run tests
 ADD nix-builder/tests/run-tests.sh ./run-tests.sh

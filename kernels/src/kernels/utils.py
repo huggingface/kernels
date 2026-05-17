@@ -248,11 +248,11 @@ def install_kernel(
         repo_id, revision = resolve_status(api, repo_id, revision)
 
     variants = get_variants(api, repo_id=repo_id, revision=revision)
-    variant = resolve_variant(variants, backend)
-
-    if variant is None:
+    try:
+        variant = resolve_variant(variants, backend)
+    except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant: {e.filename} for this system in {repo_id} (revision: {revision}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
@@ -513,9 +513,11 @@ def load_kernel(
     variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
     variant = resolve_variant(variants, backend)
 
-    if variant is None:
+    try:
+        variant = resolve_variant(variants, backend)
+    except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant: {e.filename} for this system in {repo_id} (revision: {locked_sha}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]

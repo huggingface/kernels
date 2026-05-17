@@ -66,3 +66,7 @@
     - local: builder-cli
       title: Builder CLI Reference
   title: CLI Reference
+- sections:
+    - local: builder/design-nix-builder
+      title: Nix Builder
+  title: Design

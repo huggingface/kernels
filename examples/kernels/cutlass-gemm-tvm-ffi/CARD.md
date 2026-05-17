@@ -42,7 +42,7 @@ Function list not available.
 ## Benchmarks
 {% if has_benchmark %}
 
-Benchmarking script is available for this kernel. Run `kernels benchmark {{ repo_id }}`.
+Benchmarking script is available for this kernel. Install as `pip install -U "kernels[benchmark]"` and run `kernels benchmark {{ repo_id }}`.
 {% else %}
 
 No benchmark available yet.

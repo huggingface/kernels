@@ -230,6 +230,14 @@ stdenv.mkDerivation (
 
       preBuild = lib.optionalString withGd "unset NIX_DONT_SET_RPATH";
 
+      # To avoid a dependency on the build system 'bash'. As can be seen
+      # below, this is normally only done when hostPlatform != buildPlatform,
+      # but since we only use glibc in stdenv we do not care about these
+      # utilities and it removes a dependency.
+      preFixup = ''
+        rm -f $bin/bin/{ldd,tzselect,catchsegv,xtrace,sotruss}
+      '';
+
       doCheck = false; # fails
 
       meta = {
@@ -258,7 +266,7 @@ stdenv.mkDerivation (
 
     # To avoid a dependency on the build system 'bash'.
     preFixup = ''
-      rm -f $bin/bin/{ldd,tzselect,catchsegv,xtrace}
+      rm -f $bin/bin/{ldd,tzselect,catchsegv,xtrace,sotruss}
     '';
   }
 )

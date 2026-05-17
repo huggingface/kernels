@@ -14,6 +14,7 @@ pub enum SkillId {
     #[default]
     CudaKernels,
     RocmKernels,
+    XpuKernels,
 }
 
 impl SkillId {
@@ -21,6 +22,7 @@ impl SkillId {
         match self {
             SkillId::CudaKernels => "cuda-kernels",
             SkillId::RocmKernels => "rocm-kernels",
+            SkillId::XpuKernels => "xpu-kernels",
         }
     }
 }

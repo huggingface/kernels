@@ -25,7 +25,7 @@ let
     # Unwrapped gcc (gcc13-unwrapped, gcc14-unwrapped, etc.)
     (import ./gcc-unwrapped.nix)
 
-    # stdenvs (gcc13Stdenv, gcc14Stdeng, etc.)
+    # stdenvs (gcc13Stdenv, gcc14Stdenv, etc.)
     (import ./stdenv.nix { inherit pkgs; })
 
     # Use the gcc14 stdenv by default.

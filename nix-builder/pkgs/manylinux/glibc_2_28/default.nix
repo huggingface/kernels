@@ -1,3 +1,9 @@
+# Note: this glibc derivation is vendored from nixpkgs. Changes:
+#
+# - Bump version to 2.28.
+# - Unconditionally enable preFixup phase to remove stray dependency
+#   on another glibc for bash.
+
 {
   lib,
   stdenv,

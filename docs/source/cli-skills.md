@@ -4,6 +4,7 @@ Use `kernel-builder skills add` to install the skills for AI coding assistants l
 Supported skills include:
 - `cuda-kernels` (default)
 - `rocm-kernels`
+- `xpu-kernels`
 
 Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/kernel-builder/skills).
 

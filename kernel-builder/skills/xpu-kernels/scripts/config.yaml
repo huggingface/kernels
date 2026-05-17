@@ -1,0 +1,4 @@
+# Project configuration — edit these values to control optimization sessions.
+max_trials: 10             # Maximum number of optimization trials (3-20)
+vtune_enabled: true        # Set to false to skip VTune profiling entirely
+vtune_bin: "/bin64/vtune"  # Path to VTune binary

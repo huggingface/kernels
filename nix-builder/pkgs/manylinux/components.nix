@@ -1,3 +1,5 @@
+{ packageMetadata }:
+
 final: prev:
 
 prev.lib.mapAttrs (
@@ -7,4 +9,4 @@ prev.lib.mapAttrs (
     inherit (metadata) components deps version;
     manylinuxPackages = final;
   }
-) prev.packageMetadata
+) packageMetadata

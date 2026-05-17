@@ -13,11 +13,11 @@ let
   inherit (lib.fixedPoints) extends composeManyExtensions;
 
   fixedPoint = final: {
-    inherit lib packageMetadata;
+    inherit lib;
   };
   composed = lib.composeManyExtensions [
     # Base package set.
-    (import ./components.nix)
+    (import ./components.nix { inherit packageMetadata; })
 
     # Package-specific overrides.
     (import ./overrides.nix)

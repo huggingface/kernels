@@ -1,12 +1,13 @@
 {
+  cudaSupport ? torch.cudaSupport,
   rocmSupport ? torch.rocmSupport,
   xpuSupport ? torch.xpuSupport,
 
   pkgs,
   lib,
   callPackage,
+  manylinux_2_28,
   stdenv,
-  stdenvGlibc_2_27,
   cudaPackages,
   rocmPackages,
   writeScriptBin,
@@ -16,7 +17,13 @@
 }:
 
 let
-  effectiveStdenv = if stdenv.hostPlatform.isLinux then stdenvGlibc_2_27 else stdenv;
+  effectiveStdenv =
+    if stdenv.hostPlatform.isLinux && cudaSupport then
+      manylinux_2_28.cudaBackendStdenv
+    else if stdenv.hostPlatform.isLinux then
+      manylinux_2_28.stdenv
+    else
+      stdenv;
 
   # CLR that uses the provided stdenv, which can be different from the default
   # to support old glibc/libstdc++ versions.
@@ -31,17 +38,7 @@ let
   );
 
   cuda_nvcc = cudaPackages.cuda_nvcc.override {
-    backendStdenv = import ../../pkgs/cuda/backendStdenv {
-      inherit (pkgs)
-        _cuda
-        config
-        lib
-        pkgs
-        stdenvAdapters
-        ;
-      inherit (cudaPackages) cudaMajorMinorVersion;
-      stdenv = effectiveStdenv;
-    };
+    backendStdenv = manylinux_2_28.cudaBackendStdenv;
   };
 
   oneapi-torch-dev = xpuPackages.oneapi-torch-dev.override { stdenv = effectiveStdenv; };
@@ -49,6 +46,7 @@ let
     inherit oneapi-torch-dev;
     stdenv = effectiveStdenv;
   };
+
 in
 {
   extraBuildDeps =
@@ -92,6 +90,14 @@ in
   };
 
   mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
+
+  inherit
+    (import ../deps.nix {
+      inherit lib pkgs torch;
+      stdenv = effectiveStdenv;
+    })
+    resolveCppDeps
+    ;
 
   stdenv = effectiveStdenv;
 }

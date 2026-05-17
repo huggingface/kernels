@@ -43,23 +43,6 @@ in
     }
   );
 
-  stdenvGlibc_2_27 = import ./pkgs/stdenv-glibc-2_27 {
-    # Do not use callPackage, because we want overrides to apply to
-    # the stdenv itself and not this file.
-    inherit (final)
-      config
-      fetchFromGitHub
-      overrideCC
-      wrapBintoolsWith
-      wrapCCWith
-      gcc13Stdenv
-      stdenv
-      bintools-unwrapped
-      cudaPackages
-      libgcc
-      ;
-  };
-
   ucx = prev.ucx.overrideAttrs (
     _: prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [ final.cudaPackages.cuda_nvcc ];
@@ -229,6 +212,24 @@ in
   xpuPackages = final.xpuPackages_2025_3_1;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
+// (
+  let
+    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
+    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
+    versions = [
+      "2.28"
+    ];
+    newManyLinuxPackages = final.callPackage ./pkgs/manylinux { };
+  in
+  builtins.listToAttrs (
+    map (version: {
+      name = "manylinux_${flattenVersion (prev.lib.versions.majorMinor version)}";
+      value = newManyLinuxPackages {
+        packageMetadata = readPackageMetadata ./pkgs/manylinux/manylinux-${version}-${prev.stdenv.hostPlatform.uname.processor}-metadata.json;
+      };
+    }) versions
+  )
+)
 // (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];

@@ -48,7 +48,15 @@ assert (buildConfig ? xpuVersion) -> xpuSupport;
 assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
-  inherit (import ../../deps.nix { inherit lib pkgs torch; })
+  inherit
+    (import ../../deps.nix {
+      inherit
+        lib
+        pkgs
+        stdenv
+        torch
+        ;
+    })
     resolvePythonDeps
     resolveBackendPythonDeps
     ;

@@ -16,6 +16,10 @@
       buildSetOutputs =
         buildSet:
         with buildSet.pkgs;
+        let
+          isLinux = stdenv.hostPlatform.isLinux;
+          cudaSupport = config.cudaSupport;
+        in
         (
           allOutputs buildSet.torch
           ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
@@ -27,7 +31,8 @@
           ++ allOutputs python3.pkgs.kernels
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ allOutputs ruff
-          ++ lib.optionals stdenv.hostPlatform.isLinux (allOutputs stdenvGlibc_2_27)
+          ++ lib.optionals (isLinux && cudaSupport) (allOutputs manylinux_2_28.cudaBackendStdenv)
+          ++ lib.optionals (isLinux && !config.cudaSupport) (allOutputs manylinux_2_28.stdenv)
           # Only works on recent CUDAs.
           ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (
             allOutputs python3.pkgs.nvidia-cutlass-dsl

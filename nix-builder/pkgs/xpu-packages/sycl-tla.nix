@@ -11,7 +11,8 @@
 }:
 
 let
-  dpcppVersion = oneapi-torch-dev.version;
+  effective-oneapi-torch-dev = oneapi-torch-dev.override { inherit stdenv; };
+  dpcppVersion = effective-oneapi-torch-dev.version;
   syclTlaVersions = {
     "2025.3" = {
       version = "0.8";
@@ -43,9 +44,9 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     cmake
+    effective-oneapi-torch-dev
     ninja
     setupXpuHook
-    oneapi-torch-dev
     python3
     ocloc
   ];

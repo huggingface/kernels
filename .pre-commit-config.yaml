@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: f23336e5dc4bf11588d7db19f675418cf570971b
+    hooks:
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: b831c3dc5d27d9da294ae4e915773b99aa24a7c5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/NixOS/nixfmt
+    rev: ccb94535e519e94b77d6bda76ac1de06e9f11284
+    hooks:
+      - id: nixfmt-nix

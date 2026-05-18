@@ -26,6 +26,7 @@ build-backend = "setuptools.build_meta"
 dev = [
   "mktestdocs>=0.2.5",
   "mypy>=1.15.0",
+  "pre-commit",
   "pytest>=8",
   # Whatever version is compatible with pytest.
   "pytest-benchmark",

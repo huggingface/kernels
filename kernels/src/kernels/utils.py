@@ -27,6 +27,7 @@ from kernels.variants import (
     get_variants,
     get_variants_local,
     resolve_variant,
+    variants_trace_str,
 )
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
@@ -248,11 +249,11 @@ def install_kernel(
         repo_id, revision = resolve_status(api, repo_id, revision)
 
     variants = get_variants(api, repo_id=repo_id, revision=revision)
-    variant = resolve_variant(variants, backend)
+    variant, trace = resolve_variant(variants, backend)
 
     if variant is None:
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(trace)}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
@@ -421,7 +422,7 @@ def get_local_kernel(
     """
     for base_path in [repo_path, repo_path / "build"]:
         variants = get_variants_local(base_path)
-        variant = resolve_variant(variants, backend)
+        variant, _ = resolve_variant(variants, backend)
 
         if variant is not None:
             return _import_from_path(base_path / variant.variant_str)
@@ -462,7 +463,7 @@ def has_kernel(
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)
-    variant = resolve_variant(variants, backend)
+    variant, _ = resolve_variant(variants, backend)
 
     if variant is None:
         return False
@@ -511,11 +512,11 @@ def load_kernel(
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
-    variant = resolve_variant(variants, backend)
+    variant, status = resolve_variant(variants, backend)
 
     if variant is None:
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}):\n\n{variants_trace_str(status)}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]

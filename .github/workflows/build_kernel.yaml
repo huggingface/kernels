@@ -50,6 +50,7 @@ jobs:
           name: built-kernels-${{ matrix.arch }}
           path: |
             activation-kernel
+            cpp20-symbols-kernel
             cutlass-gemm-kernel
             cutlass-gemm-tvm-ffi-kernel
             extra-data

@@ -4,6 +4,7 @@ from packaging.version import Version
 
 from kernels.backends import CPU, CUDA, ROCm
 from kernels.variants import (
+    VariantAccepted,
     _resolve_variant_for_system,
     get_variants,
     parse_variant,
@@ -139,6 +140,8 @@ def test_resolve_cuda_exact():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_cuda_best_older_minor():
@@ -154,6 +157,8 @@ def test_resolve_cuda_best_older_minor():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_cuda_no_newer_minor():
@@ -169,6 +174,8 @@ def test_resolve_cuda_no_newer_minor():
     )
     assert result != []
     assert result[0].variant_str == "torch-cuda"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_cuda_no_different_major():
@@ -184,6 +191,8 @@ def test_resolve_cuda_no_different_major():
     )
     assert result != []
     assert result[0].variant_str == "torch-cuda"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_rocm():
@@ -198,6 +207,8 @@ def test_resolve_rocm():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cxx11-rocm70-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_cpu_linux():
@@ -212,6 +223,8 @@ def test_resolve_cpu_linux():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cxx11-cpu-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_cpu_darwin():
@@ -226,6 +239,8 @@ def test_resolve_cpu_darwin():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cpu-aarch64-darwin"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_metal_darwin():
@@ -240,6 +255,8 @@ def test_resolve_metal_darwin():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cpu-aarch64-darwin"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_noarch_fallback():
@@ -255,6 +272,8 @@ def test_resolve_noarch_fallback():
     )
     assert result != []
     assert result[0].variant_str == "torch-cuda"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 def test_resolve_no_match():
@@ -268,6 +287,8 @@ def test_resolve_no_match():
         tvm_ffi_version=None,
     )
     assert result == []
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
 
 
 RESOLVE_VARIANTS_UNIVERSAL = [
@@ -292,6 +313,8 @@ def test_resolve_universal_matches_any_backend():
     )
     assert result != []
     assert result[0].variant_str == "torch-universal"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_UNIVERSAL)
 
 
 def test_resolve_universal_is_last_resort():
@@ -307,6 +330,8 @@ def test_resolve_universal_is_last_resort():
     )
     assert result != []
     assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_UNIVERSAL)
 
 
 def test_resolve_specific_noarch_preferred_over_universal():
@@ -323,6 +348,8 @@ def test_resolve_specific_noarch_preferred_over_universal():
     )
     assert result != []
     assert result[0].variant_str == "torch-cuda"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(variants)
 
 
 RESOLVE_VARIANTS_NO_NOARCH = [
@@ -347,6 +374,8 @@ def test_resolve_cuda_no_newer_minor_no_noarch():
         tvm_ffi_version=None,
     )
     assert result == []
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_NO_NOARCH)
 
 
 def test_resolve_cuda_no_different_major_no_noarch():
@@ -361,3 +390,5 @@ def test_resolve_cuda_no_different_major_no_noarch():
         tvm_ffi_version=None,
     )
     assert result == []
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_NO_NOARCH)

@@ -112,7 +112,8 @@ def test_version():
     kernel = get_kernel("kernels-test/versions", version=2)
     assert kernel.version() == 2
 
-    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
+    # Numerical ordering, so 2 should come before 10.
+    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2, 10.*"):
         kernel = get_kernel("kernels-test/versions", version=0)
 
 
@@ -120,12 +121,12 @@ def test_version_outdated_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=1)
     assert kernel.version() == 1
-    assert "You are using version 1 of 'kernels-test/versions', but version 2 is available." in caplog.text
+    assert "You are using version 1 of 'kernels-test/versions', but version 10 is available." in caplog.text
 
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
-        kernel = get_kernel("kernels-test/versions", version=2)
-    assert kernel.version() == 2
+        kernel = get_kernel("kernels-test/versions", version=10)
+    assert kernel.version() == 10
     assert "but version" not in caplog.text
 
 

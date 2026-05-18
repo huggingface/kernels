@@ -26,9 +26,9 @@ import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from skills.config import load_config as _load_config
+from config import load_config as _load_config
 
 _CFG = _load_config()
 VTUNE_BIN = _CFG["vtune_bin"]

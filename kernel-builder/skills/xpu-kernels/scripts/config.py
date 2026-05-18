@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_CONFIG_DIR = Path(__file__).resolve().parent
 _DEFAULTS = {
     "max_trials": 10,
     "vtune_enabled": True,
@@ -14,7 +14,7 @@ _DEFAULTS = {
 
 def load_config() -> dict:
     """Load config.yaml, falling back to defaults for missing keys."""
-    config_path = _PROJECT_ROOT / "config.yaml"
+    config_path = _CONFIG_DIR / "config.yaml"
     cfg = {}
     if config_path.exists():
         with open(config_path) as f:

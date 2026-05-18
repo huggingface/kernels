@@ -20,8 +20,8 @@ import os
 import shutil
 import sys
 
-TRIALS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "trials")
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output")
+TRIALS_DIR = os.path.join(os.getcwd(), "trials")
+OUTPUT_DIR = os.path.join(os.getcwd(), "output")
 
 
 def _state_path(kernel_name):

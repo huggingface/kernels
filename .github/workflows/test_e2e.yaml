@@ -89,6 +89,13 @@ jobs:
           cd /tmp/kernels-upload-test
           sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
 
+      - name: Make flake a Git repo
+        run: |
+          cd /tmp/kernels-upload-test
+          git config --global user.email "bottie@mcbotface.hf.co"
+          git config --global user.name "Botty McBotface"
+          git init && git add . && git commit -m "e2e test"
+
       - name: Determine latest variant
         id: variant
         run: |

@@ -267,7 +267,7 @@ def test_resolve_no_match():
         torch_cxx11_abi=True,
         tvm_ffi_version=None,
     )
-    assert result, trace == []
+    assert result == []
 
 
 RESOLVE_VARIANTS_UNIVERSAL = [

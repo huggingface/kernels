@@ -1,11 +1,14 @@
 {
+  self,
   lib,
   runCommand,
   testers,
   python3,
+  stdenv,
 
   build,
   buildSets,
+  genKernelFlakeOutputs,
 }:
 
 let
@@ -15,11 +18,11 @@ let
   };
 
   badRegistrationCheck = testers.testBuildFailure' {
-    drv = runCommand "check-bad-registration" { buildInputs = [ python3 ]; } ''
-      python3 ${../pkgs/torch-ops-check/torch-ops-check-hook.py} \
-        ${../../examples/kernels/silu-and-mul-bad-registration}
-      touch $out
-    '';
+    drv =
+      (genKernelFlakeOutputs {
+        inherit self;
+        path = ../../examples/kernels/silu-and-mul-bad-registration;
+      }).packages.${stdenv.hostPlatform.system}.redistributable.torch-cuda;
     expectedBuilderExitCode = 1;
     expectedBuilderLogEntries = [
       "Found Torch library registrations that do not use `add_op_namespace_prefix`:"

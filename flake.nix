@@ -201,7 +201,8 @@
       in
       rec {
         checks.default = pkgs.callPackage ./nix-builder/lib/checks.nix {
-          inherit buildSets;
+          inherit buildSets self;
+          inherit (self.lib) genKernelFlakeOutputs;
           build = buildPerSystem.${system};
         };
 

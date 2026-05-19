@@ -26,6 +26,8 @@ in
 
   remove-bytecode-hook = final.callPackage ./pkgs/remove-bytecode-hook { };
 
+  torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
+
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
       version = "0.15.10";

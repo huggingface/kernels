@@ -1,0 +1,18 @@
+[general]
+name = "silu-and-mul-bad-registration"
+version = 1
+license = "apache-2.0"
+backends = [
+    "cpu",
+    "cuda",
+    "metal",
+    "rocm",
+    "xpu",
+]
+
+[general.hub]
+repo-id = "kernels-test/silu-and-mul-bad-registration"
+
+[torch-noarch]
+
+[kernel]

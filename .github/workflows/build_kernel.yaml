@@ -50,6 +50,7 @@ jobs:
           name: built-kernels-${{ matrix.arch }}
           path: |
             activation-kernel
+            cpp20-symbols-kernel
             cutlass-gemm-kernel
             cutlass-gemm-tvm-ffi-kernel
             extra-data
@@ -60,8 +61,11 @@ jobs:
             silu-and-mul-kernel
 
   test:
-    name: Test kernels
+    name: Test kernels (UBI ${{ matrix.ubi_version }})
     needs: build
+    strategy:
+      matrix:
+        ubi_version: [8, 9]
     runs-on:
       group: aws-g6-12xlarge-plus
     steps:
@@ -76,9 +80,10 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t kernel-builder:latest \
+            -t kernel-builder:ubi${{ matrix.ubi_version }} \
+            --build-arg UBI_VERSION=${{ matrix.ubi_version }} \
             -f nix-builder/tests/Dockerfile.test-kernel .
 
       - name: Run Tests
         run: |
-          docker run --gpus all kernel-builder:latest
+          docker run --gpus all kernel-builder:ubi${{ matrix.ubi_version }}

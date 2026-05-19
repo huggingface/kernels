@@ -1,21 +1,11 @@
 {
   callPackage,
-  fetchFromGitHub,
-  fetchpatch,
   fetchurl,
   stdenvNoCC,
 }:
 
 let
   generic = callPackage ./generic.nix { };
-  postFetch = ''
-    cd $out                                                                                                                                                                                                                        
-    git reset --hard HEAD                                                                                                                                                                                                          
-    for submodule in $(git config --file .gitmodules --get-regexp path | awk '{print $2}' | grep '^third_party/' | grep -v '^third_party/triton$'); do                                                                             
-      git submodule update --init --recursive "$submodule"                                                                                                                                                                         
-    done                                                                                                                                                                                                                           
-    find "$out" -name .git -print0 | xargs -0 rm -rf                                                                                                                                                                               
-  '';
   mkImages =
     version: srcs:
     stdenvNoCC.mkDerivation {
@@ -35,30 +25,11 @@ in
   aotriton_0_11_1 = generic rec {
     version = "0.11.1b";
 
-    src = fetchFromGitHub {
-      owner = "ROCm";
-      repo = "aotriton";
-      tag = version;
-      hash = "sha256-F7JjyS+6gMdCpOFLldTsNJdVzzVwd6lwW7+V8ZOZfig=";
-      leaveDotGit = true;
-      inherit postFetch;
+    hashes = {
+      "7.0" = "sha256-3rgEbp75dsJzn9BWO1AjnhLcAC19T5fBxKGHSstlq8Q=";
+      "7.1" = "sha256-wWE+2enuzHNZ8EoWJLtSjlT15jaeaC3URuqpNtlFI1g=";
+      "7.2" = "sha256-VsoxJUwWVfpNUWji2zFZeBwkQtX2sBiCFV6ThZuFzxY=";
     };
-
-    patches = [
-      # Fails with: ld.lld: error: unable to insert .comment after .comment
-      ./v0.11.1b-no-ld-script.diff
-    ];
-
-    gpuTargets = [
-      # aotriton GPU support list:
-      # https://github.com/ROCm/aotriton/blob/main/v2python/gpu_targets.py
-      "gfx90a"
-      "gfx942"
-      "gfx950"
-      "gfx1100"
-      "gfx1151"
-      "gfx1201"
-    ];
 
     images = mkImages version [
       (fetchurl {
@@ -82,37 +53,16 @@ in
         hash = "sha256-Ck/zJL/9rAwv3oeop/cFY9PISoCtTo8xNF8rQKE4TpU=";
       })
     ];
-
-    extraPythonDepends = ps: [ ps.pandas ];
   };
 
   aotriton_0_11_2 = generic rec {
     version = "0.11.2b";
 
-    src = fetchFromGitHub {
-      owner = "ROCm";
-      repo = "aotriton";
-      tag = version;
-      hash = "sha256-VIwwQR1fl40NLNOwO8KhQK/xOK6wb2l8qBugJ1cRjm4=";
-      leaveDotGit = true;
-      inherit postFetch;
+    hashes = {
+      "7.0" = "sha256-VQGgo7MAiQABtmJfKjU5p7rWDzhvCgYevn1O1coPr7k=";
+      "7.1" = "sha256-/uNr6z6khM4YFVu6/gJsV3/WcF5EaeWUBbJgvXS4zBA=";
+      "7.2" = "sha256-zYq/J7u2POxFyUE16bKHRZZgdCY6awVV5YeK4ctqI0k=";
     };
-
-    patches = [
-      # Fails with: ld.lld: error: unable to insert .comment after .comment
-      ./v0.11.1b-no-ld-script.diff
-    ];
-
-    gpuTargets = [
-      # aotriton GPU support list:
-      # https://github.com/ROCm/aotriton/blob/main/v2python/gpu_targets.py
-      "gfx90a"
-      "gfx942"
-      "gfx950"
-      "gfx1100"
-      "gfx1151"
-      "gfx1201"
-    ];
 
     images = mkImages version [
       (fetchurl {
@@ -136,8 +86,6 @@ in
         hash = "sha256-Ck/zJL/9rAwv3oeop/cFY9PISoCtTo8xNF8rQKE4TpU=";
       })
     ];
-
-    extraPythonDepends = ps: [ ps.pandas ];
   };
 
 }

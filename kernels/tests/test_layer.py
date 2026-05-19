@@ -46,10 +46,12 @@ kernel_layer_mapping = {
         "cuda": LayerRepository(
             repo_id="kernels-test/op-without-fake-test",
             layer_name="SiluAndMul",
+            revision="main",
         ),
         "rocm": LayerRepository(
             repo_id="kernels-test/op-without-fake-test",
             layer_name="SiluAndMul",
+            revision="main",
         ),
     },
     "SiluAndMulStringDevice": {
@@ -63,6 +65,7 @@ kernel_layer_mapping = {
         "xpu": LayerRepository(
             repo_id="kernels-community/liger_kernels",
             layer_name="LigerRMSNorm",  # Triton
+            revision="main",
         )
     },
 }
@@ -197,6 +200,7 @@ def test_hub_func(cls):
                 "cuda": FuncRepository(
                     "kernels-test/flattened-build",
                     func_name="silu_and_mul",
+                    revision="main",
                 )
             }
         }
@@ -301,6 +305,7 @@ def test_rocm_kernel_mapping(device):
             "rocm": LayerRepository(
                 repo_id="kernels-test/silu-and-mul",
                 layer_name="SiluAndMul",
+                revision="main",
             )
         }
     }
@@ -332,6 +337,7 @@ def test_capability():
                 ): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearBackward",
+                    revision="main",
                 )
             }
         }
@@ -352,6 +358,7 @@ def test_capability():
                 ): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearBackward",
+                    revision="main",
                 )
             }
         }
@@ -541,6 +548,11 @@ def test_mapping_contexts():
     }
 
 
+def test_layer_repository_requires_version_or_revision():
+    with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
+        LayerRepository(repo_id="kernels-test/silu-and-mul", layer_name="SiluAndMul")
+
+
 def test_validate_kernel_layer():
     class BadLayer(nn.Module):
         def __init__(self, *args, **kwargs):
@@ -548,7 +560,7 @@ def test_validate_kernel_layer():
             self.foo = 42
 
     def stub_repo(layer):
-        return LayerRepository(repo_id="kernels-test/nonexisting", layer_name=layer.__name__)
+        return LayerRepository(repo_id="kernels-test/nonexisting", layer_name=layer.__name__, revision="main")
 
     with pytest.raises(
         TypeError,
@@ -595,6 +607,7 @@ def test_invalid_mode_for_mapping_rejected():
                     Mode.TRAINING: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearNoBackward",
+                        revision="main",
                     )
                 }
             }
@@ -616,6 +629,7 @@ def test_kernel_modes():
                 "cuda": LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearBackward",
+                    revision="main",
                 )
             }
         }
@@ -642,6 +656,7 @@ def test_kernel_modes():
                     Mode.TRAINING: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     )
                 }
             }
@@ -670,10 +685,12 @@ def test_kernel_modes():
                     Mode.FALLBACK: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.TRAINING: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                 }
             }
@@ -703,6 +720,7 @@ def test_kernel_modes():
                     Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     )
                 }
             }
@@ -737,6 +755,7 @@ def test_fallback_used_when_training():
                 Device(type="cuda"): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearBackward",
+                    revision="main",
                 )
             }
         }
@@ -759,6 +778,7 @@ def test_fallback_used_when_training():
                 Device(type="cuda"): LayerRepository(
                     repo_id="kernels-test/backward-marker-test",
                     layer_name="LinearImplicitBackward",
+                    revision="main",
                 )
             }
         }
@@ -801,6 +821,7 @@ def test_kernel_modes_inference():
                     Mode.INFERENCE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     )
                 }
             }
@@ -829,6 +850,7 @@ def test_kernel_modes_inference():
                     Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     )
                 }
             }
@@ -857,10 +879,12 @@ def test_kernel_modes_inference():
                     Mode.INFERENCE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                 }
             }
@@ -896,10 +920,12 @@ def test_kernel_modes_mixed():
                     Mode.INFERENCE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.TRAINING: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                 }
             }
@@ -932,18 +958,22 @@ def test_kernel_modes_mixed():
                     Mode.INFERENCE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.TRAINING: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                 }
             }
@@ -984,6 +1014,7 @@ def test_kernel_modes_cross_fallback():
                     Mode.TRAINING: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     )
                 }
             }
@@ -1008,6 +1039,7 @@ def test_kernel_modes_cross_fallback():
                     Mode.TRAINING | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     )
                 }
             }
@@ -1042,10 +1074,12 @@ def test_kernel_modes_cross_fallback():
                     Mode.INFERENCE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                     Mode.INFERENCE | Mode.TORCH_COMPILE: LayerRepository(
                         repo_id="kernels-test/backward-marker-test",
                         layer_name="LinearBackward",
+                        revision="main",
                     ),
                 }
             }
@@ -1077,6 +1111,7 @@ def test_layer_versions(device):
                 Device(type=device): LayerRepository(
                     repo_id="kernels-test/versions",
                     layer_name="Version",
+                    revision="main",
                 )
             }
         }
@@ -1151,6 +1186,7 @@ def test_local_overrides_layer(monkeypatch, local_kernel_path):
             Device(type="cuda"): LayerRepository(
                 repo_id="kernels-test/silu-and-mul",
                 layer_name="SiluAndMul",
+                revision="main",
             ),
         },
     }

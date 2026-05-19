@@ -27,7 +27,7 @@ def local_kernel(local_kernel_path):
 
 @pytest.fixture
 def metal_kernel():
-    return get_kernel("kernels-test/relu-metal")
+    return get_kernel("kernels-test/relu-metal", version=1)
 
 
 @pytest.fixture
@@ -112,7 +112,8 @@ def test_version():
     kernel = get_kernel("kernels-test/versions", version=2)
     assert kernel.version() == 2
 
-    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2.*"):
+    # Numerical ordering, so 2 should come before 10.
+    with pytest.raises(ValueError, match="Version 0 not found, available versions: 1, 2, 10.*"):
         kernel = get_kernel("kernels-test/versions", version=0)
 
 
@@ -120,27 +121,20 @@ def test_version_outdated_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
         kernel = get_kernel("kernels-test/versions", version=1)
     assert kernel.version() == 1
-    assert "You are using version 1 of 'kernels-test/versions', but version 2 is available." in caplog.text
+    assert "You are using version 1 of 'kernels-test/versions', but version 10 is available." in caplog.text
 
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger="kernels._versions"):
-        kernel = get_kernel("kernels-test/versions", version=2)
-    assert kernel.version() == 2
+        kernel = get_kernel("kernels-test/versions", version=10)
+    assert kernel.version() == 10
     assert "but version" not in caplog.text
 
 
-def test_no_version_or_revision_warning():
-    from packaging.version import Version
-
-    from kernels import __version__
-
-    assert Version(__version__) < Version("0.15"), (
-        "The deprecation cycle for requiring `version` or `revision` is complete. "
-        "Remove the fallback to 'main' in `select_revision_or_version` and make "
-        "`version` or `revision` a required argument."
-    )
-    with pytest.warns(FutureWarning, match="will require specifying a kernel version or revision"):
+def test_no_version_or_revision_error():
+    with pytest.raises(ValueError, match="A kernel version or revision must be specified"):
         get_kernel("kernels-test/versions")
+    with pytest.raises(ValueError, match="A kernel version or revision must be specified"):
+        has_kernel("kernels-test/versions")
 
 
 def test_noarch_kernel(device):
@@ -198,14 +192,14 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "LOCAL_KERNELS",
             f"kernels-test/activation={str(kernel_path)}:kernels-test/non-existing2=/non/existing",
         )
-        get_kernel("kernels-test/activation")
+        get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         m.setenv(
             "LOCAL_KERNELS",
             f"kernels-test/non-existing2=/non/existing:kernels-test/activation={str(kernel_path)}",
         )
-        get_kernel("kernels-test/activation")
+        get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         # Using a non-existing path should error.
@@ -214,7 +208,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "kernels-test/non-existing2=/non/existing:kernels-test/activation=/non/existing",
         )
         with pytest.raises(FileNotFoundError, match=r"Could not find kernel in /non/existing"):
-            get_kernel("kernels-test/activation")
+            get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
         # Malformed entries must be rejected.
@@ -223,7 +217,7 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "kernels-test/non-existing2=/non/existing:kernels-test/activation",
         )
         with pytest.raises(ValueError, match=r"Invalid LOCAL_KERNELS entry"):
-            get_kernel("kernels-test/activation")
+            get_kernel("kernels-test/activation", revision="main")
 
 
 @pytest.mark.neuron_only

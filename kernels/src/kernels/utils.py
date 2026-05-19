@@ -27,19 +27,19 @@ from kernels.variants import (
     get_variants,
     get_variants_local,
     resolve_variant,
+    variants_trace_str,
 )
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
-
-_ALWAYS_TRUSTED_ORGS = {"kernels-community", "kernels-staging", "kernels-test", "sgl-project"}
 
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
 
     When ``trust_remote_code`` is ``False`` (the default), only repositories
-    whose publisher is marked as trusted on the Hub are allowed.  Repositories
-    from untrusted publishers will raise a ``ValueError``.
+    whose publisher organization has ``trustedKernelPublisher`` enabled on the
+    Hub are allowed. Repositories from untrusted publishers will raise a
+    ``ValueError``.
 
     When ``trust_remote_code`` is ``True``, all repositories are allowed.
 
@@ -62,32 +62,23 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             stacklevel=3,
         )
 
-    org = repo_id.split("/", 1)[0]
-    if org in _ALWAYS_TRUSTED_ORGS:
+    publisher = repo_id.split("/", 1)[0]
+
+    try:
+        info = _get_hf_api().get_organization_overview(publisher)
+    except Exception:
+        raise ValueError(
+            f"Kernel repository '{repo_id}' could not verify publisher trust status. "
+            "Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        )
+
+    if getattr(info, "trustedKernelPublisher", False):
         return
 
     raise ValueError(
         f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-        f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        "Set trust_remote_code=True to allow loading kernels from untrusted sources."
     )
-
-    # TODO: revisit and update logic when we can check trusted publishers at the
-    # user/organization level
-    #
-    # api = _get_hf_api()
-    # try:
-    #     info = api.repo_info(repo_id, repo_type="kernel")
-    # except Exception as e:
-    #     raise ValueError(
-    #         f"Could not verify publisher trust status for kernel repository '{repo_id}'. "
-    #         "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-    #     ) from e
-
-    # if not getattr(info, "trustedPublisher", False):
-    #     raise ValueError(
-    #         f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-    #         f"Set trust_remote_code=True to allow loading kernels from untrusted sources."
-    #     )
 
 
 @dataclass(frozen=True)
@@ -258,11 +249,11 @@ def install_kernel(
         repo_id, revision = resolve_status(api, repo_id, revision)
 
     variants = get_variants(api, repo_id=repo_id, revision=revision)
-    variant = resolve_variant(variants, backend)
+    variant, trace = resolve_variant(variants, backend)
 
     if variant is None:
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(trace)}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
@@ -362,10 +353,11 @@ def get_kernel(
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        revision (`str`, *optional*, defaults to `"main"`):
+        revision (`str`, *optional*):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -431,7 +423,7 @@ def get_local_kernel(
     """
     for base_path in [repo_path, repo_path / "build"]:
         variants = get_variants_local(base_path)
-        variant = resolve_variant(variants, backend)
+        variant, _ = resolve_variant(variants, backend)
 
         if variant is not None:
             return _import_from_path(base_path / variant.variant_str)
@@ -457,10 +449,11 @@ def has_kernel(
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        revision (`str`, *optional*, defaults to `"main"`):
+        revision (`str`, *optional*):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
@@ -472,7 +465,7 @@ def has_kernel(
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)
-    variant = resolve_variant(variants, backend)
+    variant, _ = resolve_variant(variants, backend)
 
     if variant is None:
         return False
@@ -521,11 +514,11 @@ def load_kernel(
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
-    variant = resolve_variant(variants, backend)
+    variant, status = resolve_variant(variants, backend)
 
     if variant is None:
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}). Available variants: {', '.join([variant.variant_str for variant in variants])}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}):\n\n{variants_trace_str(status)}"
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]

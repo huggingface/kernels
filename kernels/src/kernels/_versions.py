@@ -1,5 +1,4 @@
 import logging
-import warnings
 
 from huggingface_hub.hf_api import GitRefInfo
 
@@ -33,7 +32,7 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int) -> GitRefInfo:
     ref = versions.get(version_spec, None)
     if ref is None:
         raise ValueError(
-            f"Version {version_spec} not found, available versions: {', '.join(sorted(str(v) for v in versions.keys()))}"
+            f"Version {version_spec} not found, available versions: {', '.join(str(v) for v in sorted(versions.keys()))}"
         )
 
     latest_version = max(versions.keys())
@@ -56,17 +55,13 @@ def select_revision_or_version(
 ) -> str:
     if revision is not None and version is not None:
         raise ValueError("Only one of `revision` or `version` must be specified.")
-
-    if revision is not None:
+    elif revision is not None:
         return revision
     elif version is not None:
         return resolve_version_spec_as_ref(repo_id, version).target_commit
-
-    warnings.warn(
-        "Future versions of `kernels` (>=0.15) will require specifying a kernel version or revision. "
-        "See: https://huggingface.co/docs/kernels/migration",
-        FutureWarning,
-        stacklevel=2,
-    )
-
-    return "main"
+    else:
+        raise ValueError(
+            "A kernel version or revision must be specified. "
+            "Use `version=<major>` for a stable kernel API version or `revision=<branch/tag/commit>` "
+            "for an explicit Hub revision. See: https://huggingface.co/docs/kernels/migration"
+        )

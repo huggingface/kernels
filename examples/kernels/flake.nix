@@ -15,7 +15,7 @@
       inherit (kernel-builder.inputs.nixpkgs) lib;
 
       cudaVersion = "cu126";
-      torchVersion = "210";
+      torchVersion = "211";
       tvmFfiVersion = "01";
 
       # All example kernels to build in CI.
@@ -31,6 +31,11 @@
           path = ./relu;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+        }
+        {
+          name = "cpp20-symbols-kernel";
+          path = ./cpp20-symbols;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";

@@ -25,12 +25,12 @@ let
   '';
   flakeRev =
     if self != null then
-      self.shortRev or self.dirtyShortRev or (builtins.warn ''
+      self.shortRev or self.dirtyShortRev or (builtins.throw ''
         Kernel is not in a git repository, this will create a non-reproducible build.
         This will not be supported in the future.
       '' self.lastModifiedDate)
     else if rev != null then
-      builtins.warn "`rev` argument of `genKernelFlakeOutputs` is deprecated, pass `self` as follows:\n\n${supportedFormat}" rev
+      builtins.throw "`rev` argument of `genKernelFlakeOutputs` is deprecated, pass `self` as follows:\n\n${supportedFormat}" rev
     else
       throw "Flake's `self` must be passed to `genKernelFlakeOutputs` as follows:\n\n${supportedFormat}";
 

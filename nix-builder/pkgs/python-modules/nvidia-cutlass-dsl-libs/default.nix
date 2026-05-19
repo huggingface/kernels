@@ -20,10 +20,10 @@ let
   format = "wheel";
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
   hashes = {
-    cp313-x86_64-linux-cu12 = "sha256-zGPwHxC2rAoObugGYSDe4M+kXadvduEM5GYPDf8iwHo=";
-    cp313-aarch64-linux-cu12 = "sha256-3u+H+XkgH43Q2lF6Es2LJwMdROqplgUdEjtzh+ka68Q=";
-    cp313-x86_64-linux-cu13 = "sha256-BUxPb/9Rsioz8M8cZeSO0gFcWNQrKhfSdJpLrTubdEw=";
-    cp313-aarch64-linux-cu13 = "sha256-fDYFFiQIyqYFk3BGFJ1zYQ0zVSg7H6OpVZVAssOT2zk=";
+    cp313-x86_64-linux-cu12 = "sha256-jliwFtpbsJvR2AnQwCVDPts2snmt+80QfpY2GyFL2Lw=";
+    cp313-aarch64-linux-cu12 = "sha256-kKTYAqA5Y/o26yh/vJtAoTdFkPx+jMG5Zz3uiHL3VxM=";
+    cp313-x86_64-linux-cu13 = "sha256-VUt3UGnQk/MIlJpliAv5yb/Uix9LL9Dg2Xqi9gjm7qE=";
+    cp313-aarch64-linux-cu13 = "sha256-8rghZxrdLmmhN35/2H5iYZldsoGy+OUW3a4v1remwdA=";
   };
   hash =
     hashes."${pyShortVersion}-${stdenv.system}-cu${cudaPackages.cudaMajorVersion}"
@@ -32,7 +32,7 @@ let
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl-libs";
-  version = "4.4.1";
+  version = "4.5.0";
   inherit format;
 
   src = fetchPypi {

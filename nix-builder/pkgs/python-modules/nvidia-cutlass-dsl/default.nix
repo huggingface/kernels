@@ -16,7 +16,7 @@ let
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl";
-  version = "4.4.1";
+  version = "4.5.0";
   inherit format;
 
   src = fetchPypi {
@@ -24,7 +24,7 @@ buildPythonPackage rec {
     pname = "nvidia_cutlass_dsl";
     dist = "py3";
     python = "py3";
-    hash = "sha256-e4/6ARe+Ne9smoj0Ri7ip5Tv0PfZ9lCQ4QqVPkNPv84=";
+    hash = "sha256-OwUf4CymlCKrhA5k2YZWZ6uiiKOYSnykzNA4qCrvE0Q=";
   };
 
   nativeBuildInputs = [

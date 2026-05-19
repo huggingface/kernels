@@ -39,6 +39,11 @@ def test_decorator():
     assert isinstance(identity, nn.Module)
 
 
+def test_kernel_func_requires_version_or_revision():
+    with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
+        FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul")
+
+
 def test_kernel_func(device):
     model = SurpriseMe()
 
@@ -51,6 +56,7 @@ def test_kernel_func(device):
                 device: FuncRepository(
                     "kernels-test/flattened-build",
                     func_name="silu_and_mul",
+                    revision="main",
                 )
             }
         }

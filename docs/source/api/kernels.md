@@ -26,7 +26,6 @@
 
 ### get_locked_kernel
 
-<<<<<<< kernels-use-kernels-data
 [[autodoc]] kernels.get_locked_kernel
 
 ## Classes
@@ -38,6 +37,3 @@
 ### RepoInfo
 
 [[autodoc]] kernels.RepoInfo
-=======
-[[autodoc]] kernels.get_locked_kernel
->>>>>>> main

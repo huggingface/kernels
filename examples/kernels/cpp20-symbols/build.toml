@@ -1,0 +1,16 @@
+[general]
+name = "cpp20-symbols"
+version = 1
+license = "Apache-2.0"
+backends = ["cpu"]
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.cpp20_symbols_cpu]
+backend = "cpu"
+depends = ["torch"]
+src = ["cpu/cpu.cpp"]

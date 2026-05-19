@@ -73,7 +73,7 @@
                 torchVersions';
           in
           builtins.toJSON buildVariants;
-        genFlakeOutputs = builtins.warn ''
+        genFlakeOutputs = builtins.throw ''
           `genFlakeOutputs` was renamed to `genKernelFlakeOutputs` and will be removed
           in kernel-builder 0.14.
         '' genKernelFlakeOutputs;
@@ -159,6 +159,7 @@
               cudaPackages.cuda_cudart
               isort
               mypy
+              pre-commit
               pyright
               ruff
             ]
@@ -192,6 +193,7 @@
             postVenvCreation = ''
               unset SOURCE_DATE_EPOCH
               ( python -m pip install --no-build-isolation --no-dependencies -e kernels )
+              pre-commit install
             '';
 
           }

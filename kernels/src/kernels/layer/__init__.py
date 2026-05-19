@@ -1,4 +1,4 @@
-from .device import CUDAProperties, Device
+from .device import CUDAProperties, Device, ROCMProperties
 from .func import (
     FuncRepository,
     LocalFuncRepository,
@@ -22,6 +22,7 @@ from .mode import Mode
 __all__ = [
     "CUDAProperties",
     "Device",
+    "ROCMProperties",
     "FuncRepository",
     "LayerRepository",
     "LocalFuncRepository",

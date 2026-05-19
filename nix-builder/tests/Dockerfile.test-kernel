@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Install uv.
-RUN dnf install -y curl && \
+RUN dnf install -y --allowerasing curl && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     dnf clean all
 

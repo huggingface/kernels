@@ -10,6 +10,7 @@ const GITHUB_RAW_BASE_TEMPLATE: &str =
     "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills";
 
 #[derive(Clone, Debug, Default, ValueEnum)]
+#[allow(clippy::enum_variant_names)]
 pub enum SkillId {
     #[default]
     CudaKernels,

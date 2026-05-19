@@ -33,10 +33,11 @@ class FuncRepository:
             The Hub repository containing the layer.
         func_name (`str`):
             The name of the function within the kernel repository.
-        revision (`str`, *optional*, defaults to `"main"`):
+        revision (`str`, *optional*):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
         version (`int`, *optional*):
             The kernel version to download. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
 
     Example:
         ```python
@@ -46,6 +47,7 @@ class FuncRepository:
         layer_repo = FuncRepository(
             repo_id="kernels-community/activation",
             func_name="silu_and_mul",
+            revision="main",
         )
 
         # Reference a layer by version
@@ -68,6 +70,8 @@ class FuncRepository:
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
+        if revision is None and version is None:
+            raise ValueError("Either a revision or a version must be specified.")
 
         self._repo_id = repo_id
         self.func_name = func_name

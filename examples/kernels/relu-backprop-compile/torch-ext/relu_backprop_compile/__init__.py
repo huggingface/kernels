@@ -1,7 +1,7 @@
 import torch
 from torch.library import register_autograd
 
-from ._ops import ops, add_op_namespace_prefix
+from ._ops import add_op_namespace_prefix, ops
 
 
 @torch.library.register_fake(add_op_namespace_prefix("relu_fwd"))
@@ -28,6 +28,7 @@ def _backward(ctx, grad_outputs: torch.Tensor):
     return ops.relu_bwd(grad_outputs_contiguous, input)
 
 
-register_autograd(
-    add_op_namespace_prefix("relu_fwd"), _backward, setup_context=_setup_context
-)
+register_autograd(add_op_namespace_prefix("relu_fwd"), _backward, setup_context=_setup_context)
+
+
+__all__ = ["relu"]

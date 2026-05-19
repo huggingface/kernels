@@ -6,8 +6,8 @@
 
 Before `kernels` 0.12, kernels could be pulled from a repository
 without specifying a version. This is deprecated in kernels 0.12
-and will become an error in kernels 0.14. Instead, use of a kernel
-should always specify a version (except for local kernels).
+and is an error in kernels 0.15. Instead, use of a kernel should
+always specify a version or revision (except for local kernels).
 
 Kernels only use a major version. The kernel maintainer is responsible
 for never breaking a kernel within a major version and should bump up

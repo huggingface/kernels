@@ -28,8 +28,7 @@ get the latest kernel build from the `v1` branch.
 Kernels within a version branch must never break the API or remove builds
 for older PyTorch versions. This ensures that your code will continue to work.
 
-Some kernels have not yet been updated to use versioning yet. In these cases,
-you can use `get_kernel` without the `version` argument.
+Hub kernels must be loaded with either a `version` or an explicit `revision`.
 
 ## Checking Kernel Availability
 

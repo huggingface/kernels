@@ -10,3 +10,6 @@ def relu(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor:
         out = torch.empty_like(x)
     ops.relu(out, x)
     return out
+
+
+__all__ = ["relu"]

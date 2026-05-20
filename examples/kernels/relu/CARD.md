@@ -49,8 +49,13 @@ No benchmark available yet.
 {% endif %}
 {% if upstream %}
 
-## Source code
+## Upstream
 
-Source code of this kernel originally comes from {{ upstream }} and it was repurposed for compatibility with `kernels`.
+The original source code for this kernel comes from {{ upstream }}.
 {% endif %}
+{% if source %}
 
+## Source
+
+The kernel-builder formatted source for this kernel is available at {{ source }}.
+{% endif %}

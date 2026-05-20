@@ -25,6 +25,8 @@ pub struct Metadata {
     pub license: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream: Option<url::Url>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<url::Url>,
     pub python_depends: Vec<String>,
     pub backend: BackendInfo,
     #[serde(skip_serializing_if = "Option::is_none")]

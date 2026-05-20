@@ -136,6 +136,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
             layers => layers,
             has_benchmark => has_benchmark,
             upstream => build.general.upstream.as_ref().map(|u| u.to_string()),
+            source => build.general.source.as_ref().map(|u| u.to_string()),
             license => build.general.license.to_lowercase(),
         })
         .wrap_err("Cannot render card template")

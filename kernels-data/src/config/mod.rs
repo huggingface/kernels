@@ -76,6 +76,9 @@ pub struct General {
     /// Source repository or reference for the kernel code.
     pub upstream: Option<url::Url>,
 
+    /// Kernel-builder formatted source repository (must contain build.toml and flake.nix).
+    pub source: Option<url::Url>,
+
     pub backends: Vec<Backend>,
     pub hub: Option<Hub>,
     pub python_depends: Option<Vec<String>>,

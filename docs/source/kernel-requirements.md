@@ -71,6 +71,10 @@ metadata. Currently the following top-level keys are supported:
 - `version` (`int`, required): the kernel version number.
 - `license` (`str`, required): the kernel license in. Refer to the
   list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
+- `upstream` (`str`, optional): URL of the original upstream repository
+  where the kernel source code comes from.
+- `source` (`str`, optional): URL of the kernel-builder formatted source
+  repository (must contain `build.toml` and `flake.nix`).
 - `backend` (`dict`, required): information about the compute backend that
   this build variant supports.
 - `digest` (`Digest`, required): hash digest of the kernel files.

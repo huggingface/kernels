@@ -44,6 +44,7 @@ pub fn write_metadata(
             version: general.version,
             license: general.license.clone(),
             upstream: general.upstream.clone(),
+            source: general.source.clone(),
             python_depends,
             backend: BackendInfo {
                 archs: None,

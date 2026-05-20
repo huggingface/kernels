@@ -195,6 +195,7 @@ struct PyMetadata {
     version: usize,
     license: String,
     upstream: Option<String>,
+    source: Option<String>,
     python_depends: Vec<String>,
     backend: PyBackendInfo,
 }
@@ -207,6 +208,7 @@ impl From<Metadata> for PyMetadata {
             version: m.version,
             license: m.license,
             upstream: m.upstream.map(|u| u.to_string()),
+            source: m.source.map(|u| u.to_string()),
             python_depends: m.python_depends,
             backend: m.backend.into(),
         }
@@ -258,6 +260,11 @@ impl PyMetadata {
     }
 
     #[getter]
+    fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+
+    #[getter]
     fn python_depends(&self) -> &[String] {
         &self.python_depends
     }
@@ -269,12 +276,13 @@ impl PyMetadata {
 
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, python_depends={:?}, backend={})",
+            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={})",
             self.id,
             self.name,
             self.version,
             self.license,
             self.upstream,
+            self.source,
             self.python_depends,
             self.backend.__repr__()
         )

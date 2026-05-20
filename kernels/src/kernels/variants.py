@@ -1,6 +1,9 @@
 import logging
 import platform
 import re
+import sys
+import sysconfig
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -316,6 +319,12 @@ def _resolve_variant_for_system(
     return applicable, trace
 
 
+def _is_unsupported_free_threaded_build() -> bool:
+    """Check if the Python interpreter is a free-threaded build that does not
+    support ABI3."""
+    return sys.version_info < (3, 15) and bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+
 def _check_variants(
     variants: list[Variant],
     selected_backend: Backend,
@@ -326,9 +335,31 @@ def _check_variants(
     tvm_ffi_version: Version | None,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
+    is_unsupported_free_threaded = _is_unsupported_free_threaded_build()
+    # Prefilter all arch kernels on free-threaded Python pre-3.15, since
+    # they do not support the stable ABI.
+    if is_unsupported_free_threaded:
+        warnings.warn(
+            "Arch kernels use the stable ABI, which is not supported on free-threaded "
+            "Python before version 3.15. Arch kernels will not be used. Consider using "
+            "a non-free-threaded interpreter, or upgrade to Python 3.15+.",
+            UserWarning,
+            stacklevel=2,
+        )
+        variants = [v for v in variants if not isinstance(v, ArchVariant)]
+
     result: list[Decision] = []
     for v in variants:
         if isinstance(v, ArchVariant):
+            if is_unsupported_free_threaded:
+                result.append(
+                    VariantRejected(
+                        variant=v,
+                        reason="arch kernel not supported on free-threaded Python <3.15",
+                    )
+                )
+                continue
+
             # Skip non-matching CPU or OS.
             if v.arch.platform != cpu:
                 result.append(

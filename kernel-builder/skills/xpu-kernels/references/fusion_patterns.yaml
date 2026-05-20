@@ -1,0 +1,363 @@
+# Kernel Fusion Patterns for Intel XPU
+# Fusion can reduce memory traffic by eliminating intermediate writes/reads,
+# but it can also hurt due to GRF/register pressure, reduced occupancy, and
+# losing access to vendor-tuned primitives (e.g., GEMM).
+#
+# Guidance:
+# - Fuse bandwidth-bound elementwise chains aggressively (usually a win).
+# - Be cautious fusing into GEMM unless you already need a custom GEMM.
+# - Do NOT fuse if the intermediate is not materialized, is dead/redundant,
+#   or if fusion would replace a faster vendor primitive for a tiny epilogue.
+
+constraints:
+  - id: fuse_only_if_intermediate_is_materialized
+    name: "Fuse only if it removes a materialized intermediate that is otherwise written/read"
+    severity: critical
+    description: |
+      Fusion is beneficial only if the unfused baseline materializes an intermediate tensor
+      (stores it to memory) and then reloads it in a separate kernel.
+
+      If the intermediate is already:
+      - handled by a fused library epilogue, OR
+      - kept in registers within a single kernel, OR
+      - dead / provably redundant for the workload,
+      then fusion provides little/no benefit and may harm performance.
+
+  - id: do_not_replace_vendor_gemm_for_tiny_epilogue
+    name: "Do not replace vendor GEMM solely to fuse a tiny epilogue"
+    severity: critical
+    description: |
+      If a vendor GEMM path exists and is faster, do not implement a custom Triton GEMM
+      only to fuse a small epilogue (e.g., ReLU / min-sub / clamp).
+
+      Prefer:
+      - vendor GEMM + separate epilogue kernel, OR
+      - vendor GEMM with native epilogue (if supported),
+      unless the epilogue is substantial OR you must use a custom GEMM due to layout/math.
+
+  - id: fusion_register_pressure_guard
+    name: "Avoid fusion that causes GRF/register pressure collapse"
+    severity: critical
+    description: |
+      Fusion increases live values and temporary tensors. If register pressure causes:
+      - occupancy collapse, OR
+      - GRF spills, OR
+      - much lower parallelism,
+      fusion can be slower than unfused.
+
+      Red flags:
+      - long activation chains with exp/log/tanh + multiple clamps
+      - large tiles (e.g., 256x256) + high num_warps + many fused ops
+      - reductions + heavy elementwise in same kernel on large blocks
+
+      If unsure, fuse only a light epilogue (bias + simple activation) and keep the rest separate.
+
+  - id: fuse_when_bandwidth_bound
+    name: "Prefer fusion when the baseline is bandwidth-bound"
+    severity: critical
+    description: |
+      Fusion helps most when the unfused path is bandwidth-bound:
+      - elementwise chains (add/mul/clip/relu/etc.)
+      - normalization epilogues (affine, bias, scale, clamp)
+      - pointwise ops following reductions where intermediates are large
+
+      Fusion helps least when:
+      - compute-bound kernel dominates (large GEMM),
+      - the intermediate is small,
+      - or the baseline already uses a fused primitive.
+
+  - id: skip_fusion_when_noop_or_redundant
+    name: "Skip fusion when the operation is provably no-op or redundant"
+    severity: critical
+    description: |
+      Do not fuse operations that are provably redundant for the workload:
+      - multiply by 1, add 0
+      - clamp/min/max where thresholds never trigger for the data range
+      - dead outputs not consumed
+      Extra fused instructions without reducing memory traffic can slow kernels down.
+
+patterns:
+  - id: elementwise_chain_fusion
+    name: "Elementwise Chain Fusion (safe default)"
+    stage: fusion
+    description: "Fuse multiple elementwise ops into one kernel to reduce memory traffic"
+    rationale: |
+      Elementwise chains are typically bandwidth-bound. Each unfused step reads+writes the full
+      tensor again. Fusion usually wins unless the chain is very large or involves heavy
+      transcendentals that blow up register pressure.
+    pattern_before: |
+      y = a + b
+      y = y * scale
+      y = clamp(y, lo, hi)
+      y = relu(y)
+    pattern_after: |
+      @triton.jit
+      def fused_elementwise(a_ptr, b_ptr, out_ptr, ..., lo, hi, scale):
+          x = tl.load(a_ptr + offsets, mask=mask, other=0.0)
+          y = tl.load(b_ptr + offsets, mask=mask, other=0.0)
+          x = x + y
+          x = x * scale
+          x = tl.maximum(x, lo)
+          x = tl.minimum(x, hi)
+          x = tl.maximum(x, 0.0)
+          tl.store(out_ptr + offsets, x, mask=mask)
+    expected_speedup: "1.2-3x (bandwidth dependent)"
+    applies_to:
+      - all_elementwise
+      - normalization_epilogues
+
+  - id: gemm_activation_fusion
+    name: "GEMM + Activation Fusion (conditional)"
+    stage: fusion
+    description: "Fuse activation into GEMM ONLY when you already need a custom GEMM"
+    rationale: |
+      Fusion removes an intermediate write+read of the GEMM output. This can be beneficial
+      when you already use a custom GEMM kernel (special layout, custom math, no vendor path).
+      However, replacing a vendor GEMM with a custom fused GEMM for a tiny activation can be slower.
+    applies_when:
+      - uses_custom_gemm: true
+      - intermediate_materialized: true
+      - replaces_vendor_gemm: false
+    rejects_when:
+      - replaces_vendor_gemm: true
+      - epilogue_is_tiny: true
+      - num_pid_m_le_1: true
+    pattern_before: |
+      # Kernel 1: GEMM (custom)
+      @triton.jit
+      def gemm_kernel(a_ptr, b_ptr, c_ptr, ...):
+          acc = tl.dot(a, b)
+          tl.store(c_ptr + offsets, acc, mask=mask)
+
+      # Kernel 2: Activation (separate launch)
+      @triton.jit
+      def activation_kernel(c_ptr, out_ptr, ...):
+          c = tl.load(c_ptr + offsets, mask=mask, other=0.0)
+          out = tl.maximum(c, 0.0)  # ReLU
+          tl.store(out_ptr + offsets, out, mask=mask)
+    pattern_after: |
+      # Single fused kernel (custom GEMM + activation epilogue)
+      @triton.jit
+      def fused_gemm_relu(a_ptr, b_ptr, out_ptr, ...):
+          acc = tl.dot(a, b)
+          acc = tl.maximum(acc, 0.0)  # ReLU
+          tl.store(out_ptr + offsets, acc, mask=mask)
+    expected_speedup: "workload-dependent (positive if avoiding a large materialized intermediate; negative if replacing vendor GEMM)"
+    applies_to:
+      - custom_gemm_only
+      - mlp
+      - transformer
+
+  - id: gemm_bias_activation_fusion
+    name: "GEMM + Bias + Activation Chain (partial fusion recommended)"
+    stage: fusion
+    description: "Fuse bias + light activation into GEMM epilogue; split heavy chains if needed"
+    rationale: |
+      Bias add + simple activations are often good epilogues. Very heavy activation chains
+      (multiple exp/tanh/clamp) can increase register pressure and reduce occupancy.
+      Prefer partial fusion when needed:
+      - fuse bias + simple activation
+      - keep heavy post-processing in a separate kernel
+    applies_when:
+      - uses_custom_gemm: true
+      - intermediate_materialized: true
+      - replaces_vendor_gemm: false
+    rejects_when:
+      - replaces_vendor_gemm: true
+      - activation_chain_is_heavy: true
+    pattern_before: |
+      c = gemm(a, b)
+      c = c + bias
+      c = swish(c)
+      c = clamp(c, -1, 1)
+      c = tanh(c)
+    pattern_after: |
+      @triton.jit
+      def fused_gemm_bias_activation(..., bias_ptr, out_ptr, ...):
+          acc = tl.dot(a, b)
+          bias = tl.load(bias_ptr + offs_n, mask=mask_n, other=0.0)
+          acc = acc + bias[None, :]
+
+          # Light activation epilogue (example: ReLU or SiLU)
+          # ReLU:
+          acc = tl.maximum(acc, 0.0)
+
+          tl.store(out_ptr + offsets, acc, mask=mask)
+      # If you truly need heavy chains (swish+clamp+tanh), consider splitting:
+      # - fused GEMM+bias+swish
+      # - separate clamp+tanh kernel
+    expected_speedup: "workload-dependent"
+    applies_to:
+      - mlp
+      - gelu
+      - silu
+
+  - id: reduction_elementwise_fusion
+    name: "Reduction + Elementwise Fusion (usually good; watch pressure)"
+    stage: fusion
+    description: "Fuse reductions with subsequent broadcast elementwise ops"
+    rationale: |
+      Reductions followed by broadcast (softmax / layernorm / rmsnorm) often benefit from
+      fusion because it avoids writing the reduction results (max/sum/mean/var) to memory.
+      However, very large reductions or overly large blocks can increase register/shared
+      usage. If performance regresses, consider a 2-stage approach.
+    pattern_before: |
+      # Compute max for numerical stability
+      max_val = tl.max(x, axis=1)
+      x_stable = x - max_val[:, None]
+      # Compute exp
+      exp_x = tl.exp(x_stable)
+      # Sum for softmax denominator
+      sum_exp = tl.sum(exp_x, axis=1)
+      # Normalize
+      softmax = exp_x / sum_exp[:, None]
+    pattern_after: |
+      max_val = tl.max(x, axis=1, keep_dims=True)
+      x_stable = x - max_val
+      exp_x = tl.exp(x_stable)
+      sum_exp = tl.sum(exp_x, axis=1, keep_dims=True)
+      softmax = exp_x / sum_exp
+    expected_speedup: "1.2-3x (shape dependent)"
+    applies_to:
+      - softmax
+      - layernorm
+      - attention
+
+  - id: fusion_skip_when_dead_or_constant
+    name: "Skip fusion if the fused op is dead / constant / no-op"
+    stage: fusion
+    description: "Do not fuse operations that are provably redundant for the given workload"
+    rationale: |
+      If an op is effectively a no-op for the given constants/data distribution,
+      fusion adds extra instructions without reducing memory traffic meaningfully.
+
+      Examples:
+      - clamp range is so wide it never triggers
+      - min/max with a constant that is outside observed values
+      - multiply by 1, add 0
+    expected_speedup: "prevents regressions"
+    applies_to:
+      - all
+
+  - id: gemm_matrix_add_epilogue
+    name: "GEMM + matrix add (residual/bias matrix) epilogue fusion"
+    stage: fusion
+    description: "Load a full matrix D after the GEMM K-loop and add to accumulator before storing"
+    rationale: |
+      A common pattern is C = A @ B + D where D is a full [M, N] matrix (residual
+      connection, bias broadcast, etc.). Fusing the matrix add into the GEMM epilogue
+      avoids a separate kernel launch and an extra read+write of the [M, N] output.
+
+      The epilogue is lightweight (one descriptor load + one add), so register pressure
+      impact is minimal and this fusion is almost always a win when you already have a
+      custom GEMM kernel.
+
+      Tensor descriptors preferred on XPU; block pointers also supported.
+    pattern_before: |
+      # Separate: GEMM then add
+      c = matmul(a, b)           # writes [M, N] to memory
+      c = c + d                  # reads [M, N] + [M, N], writes [M, N]
+    pattern_after: |
+      # Fused: add D inside GEMM epilogue (tensor descriptor variant)
+      accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+      off_k = 0
+      for _ in range(0, K, BLOCK_SIZE_K):
+          a = a_desc.load([pid_m * BLOCK_SIZE_M, off_k])
+          b = b_desc.load([off_k, pid_n * BLOCK_SIZE_N])
+          accumulator += tl.dot(a, b)
+          off_k += BLOCK_SIZE_K
+
+      # Epilogue: load D tile and add
+      d_desc = tl.make_tensor_descriptor(base=d_ptr, shape=(M, N),
+                                         strides=(stride_dm, stride_dn),
+                                         block_shape=(BLOCK_SIZE_M, BLOCK_SIZE_N))
+      d = d_desc.load([pid_m * BLOCK_SIZE_M, pid_n * BLOCK_SIZE_N])
+      c = accumulator + d
+
+      c_desc = tl.make_tensor_descriptor(base=c_ptr, shape=(M, N),
+                                         strides=(stride_cm, stride_cn),
+                                         block_shape=(BLOCK_SIZE_M, BLOCK_SIZE_N))
+      c_desc.store([pid_m * BLOCK_SIZE_M, pid_n * BLOCK_SIZE_N], c)
+    expected_speedup: "eliminates one full [M, N] read+write pass"
+    applies_to:
+      - gemm
+      - residual_add
+      - bias_matrix
+      - transformer
+    notes: |
+      - D can be the same dtype as the accumulator or a different dtype (Triton auto-casts)
+      - For batched variants, create d_desc with base=d_ptr + batch_offset
+      - This pattern extends to any lightweight elementwise epilogue (add, mul, clamp, relu)
+        applied after the K-loop and before the store
+
+  - id: algebraic_weight_folding
+    name: "Algebraic Weight Folding (BN/scale/affine into GEMM weights)"
+    stage: fusion
+    description: |
+      Fold per-channel linear transforms into GEMM weights at pack time,
+      eliminating the epilogue entirely. This is the most impactful fusion
+      for kernels with BatchNorm inference, per-channel scaling, or affine transforms.
+    rationale: |
+      BatchNorm inference is a per-channel linear operation:
+        BN(y) = gamma * (y - mean) / sqrt(var + eps) + beta
+
+      When GEMM output feeds through scaling then BN:
+        y = (x @ W^T + bias) * scale
+        output = BN(y) = gamma * (y - mean) * inv_std + beta
+
+      This entire chain is linear in W and bias. We can pre-compute:
+        alpha = gamma * scale * inv_std                           [N]
+        W_fused[n, :] = alpha[n] * W[n, :]                       [N, K]
+        b_fused[n] = alpha[n] * bias[n] - gamma[n] * inv_std[n] * mean[n] + beta[n]  [N]
+
+      The kernel becomes a pure GEMM + bias — zero epilogue overhead, zero extra
+      vector loads, maximum compute efficiency.
+    applies_when:
+      - BatchNorm or LayerNorm in inference mode (fixed running stats)
+      - Per-channel scaling (multiply by [N] vector)
+      - Any per-channel affine transform: y = a*x + b
+    rejects_when:
+      - Training mode (statistics computed per-batch, not fixed)
+      - Non-linear epilogues (sigmoid, ReLU) — cannot be folded
+      - Operations depending on the M dimension (row-wise reductions)
+    pattern_before: |
+      # _pack_weights: just transpose
+      self.weight_t = w.to(device).t().contiguous()
+      self.bias_xpu = b.to(device)
+      self.scale_xpu = s.to(device)
+      self.gamma_xpu = gamma.to(device)
+      # ... 6 more buffers
+
+      # kernel epilogue: 6 vector loads + arithmetic
+      bias = tl.load(bias_ptr + offs_n, mask=mask_n, other=0.0)
+      acc = acc + bias[None, :]
+      scale = tl.load(scale_ptr + offs_n, mask=mask_n, other=1.0)
+      acc = acc * scale[None, :]
+      mean = tl.load(mean_ptr + offs_n, mask=mask_n, other=0.0)
+      var = tl.load(var_ptr + offs_n, mask=mask_n, other=1.0)
+      gamma = tl.load(gamma_ptr + offs_n, mask=mask_n, other=1.0)
+      beta = tl.load(beta_ptr + offs_n, mask=mask_n, other=0.0)
+      inv_std = 1.0 / tl.sqrt(var + eps)
+      acc = (acc - mean[None, :]) * inv_std[None, :]
+      acc = acc * gamma[None, :] + beta[None, :]
+    pattern_after: |
+      # _pack_weights: fold BN + scale into weights (one-time cost)
+      inv_std = 1.0 / torch.sqrt(rv + self.eps)
+      alpha = gamma * s * inv_std
+      w_fused = alpha.unsqueeze(1) * w
+      b_fused = alpha * b - gamma * inv_std * rm + beta
+      self.weight_t = w_fused.to(device).t().contiguous().to(torch.bfloat16)
+      self.bias_fused = b_fused.to(device)
+
+      # kernel epilogue: just bias add (everything else is folded)
+      bias = tl.load(bias_ptr + offs_n, mask=mask_n, other=0.0)
+      acc = acc + bias[None, :]
+    expected_speedup: "1.5-2x on top of Level 1 optimizations (eliminates epilogue entirely)"
+    applies_to:
+      - gemm
+      - batchnorm
+      - inference
+      - mlp
+    examples:
+      - file: test_kernels/39_Gemm_Scale_BatchNorm_triton.py
+        description: "Folds Linear + Scale + BatchNorm into pure GEMM. Level 1: 2.69x → Level 3: 5.28x"

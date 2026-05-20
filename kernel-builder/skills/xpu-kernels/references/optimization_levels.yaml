@@ -1,0 +1,161 @@
+# Optimization Levels for Iterative Kernel Development
+#
+# Use this framework when optimizing a kernel. Don't stop at Level 1 —
+# check the "try harder" decision tree to decide whether deeper optimization
+# is warranted. Most production kernels should reach at least Level 2.
+#
+# Case study: kernel #39 (Gemm_Scale_BatchNorm)
+#   Level 1 alone: 2.69x speedup (tensor descriptors, tile swizzling, fused epilogue)
+#   Level 2 + 3:   5.28x speedup (bf16 pre-pack, BN folded into weights)
+#   See: test_kernels/39_Gemm_Scale_BatchNorm_triton.py
+
+levels:
+  - id: level_1_baseline_xpu
+    name: "Level 1: Baseline XPU Optimizations"
+    description: |
+      Get the kernel working with standard XPU patterns. This is the minimum
+      viable optimization — necessary but rarely sufficient for production.
+    checklist:
+      - Tensor descriptors (preferred on XPU) or block pointers (not manual pointer arithmetic)
+      - bf16/fp16 dot inputs, fp32 accumulator
+      - 1D grid with tile swizzling (GROUP_SIZE_M) for GEMM kernels
+      - "@triton.autotune with XPU-optimized configs"
+      - Pre-packed weight transpose cached in _pack_weights()
+      - Fused light epilogues (bias, simple activations)
+      - Correct boundary_check=(0, 1) for block pointers (tensor descriptors handle boundaries internally); no default block params
+    typical_speedup: "1.5-3x vs PyTorch"
+    when_done: "Move to Level 2 — there is almost always more to gain."
+
+  - id: level_2_bandwidth_reduction
+    name: "Level 2: Bandwidth Reduction"
+    description: |
+      Reduce memory bandwidth consumption — the most common bottleneck after
+      Level 1. Loading fp32 data and converting in-kernel wastes 2x bandwidth.
+    checklist:
+      - "Pre-pack weights to bf16 at pack time (not in-kernel conversion)"
+      - "Pre-convert inputs to bf16 before kernel launch: x.to(device, torch.bfloat16)"
+      - "Use grf_mode='256' for large register file (XPU-specific)"
+      - "Use tl.dot(a, b, acc=acc) fused accumulate pattern"
+      - "Keep bias in fp32 (small, precision-sensitive)"
+    code_example: |
+      # BEFORE (Level 1 — wastes 2x bandwidth):
+      self.weight_t = w.to(device).t().contiguous()           # fp32 on device
+      # kernel: a = tl.load(ptr).to(tl.bfloat16)              # loads 4B, uses 2B
+
+      # AFTER (Level 2 — halves K-loop memory traffic):
+      self.weight_t = w.to(device).t().contiguous().to(torch.bfloat16)  # bf16
+      # kernel: a = tl.load(ptr)                               # loads 2B directly
+    typical_speedup: "2-4x vs PyTorch"
+    when_done: |
+      Check Level 3 — if the epilogue contains linear transforms (BN, scale,
+      affine), they can often be eliminated entirely.
+
+  - id: level_3_algebraic_fusion
+    name: "Level 3: Algebraic Fusion"
+    description: |
+      Eliminate epilogue work by algebraically folding linear transforms into
+      GEMM weights at pack time. This is the highest-impact optimization for
+      kernels with BatchNorm, per-channel scaling, or affine transforms.
+
+      Key insight: BatchNorm inference is a per-channel linear operation:
+        BN(y) = gamma * (y - mean) / sqrt(var + eps) + beta
+
+      When the GEMM output feeds into BN (possibly through scaling), the entire
+      chain can be reduced to a single GEMM + bias:
+        alpha_n = gamma_n * scale_n / sqrt(var_n + eps)
+        W_fused[n,:] = alpha_n * W[n,:]
+        b_fused[n]   = alpha_n * bias_n - gamma_n * mean_n / sqrt(var_n + eps) + beta_n
+    checklist:
+      - Identify linear per-channel transforms in the epilogue
+        (BatchNorm inference, scaling, affine, LayerNorm with fixed stats)
+      - Derive fused weight and bias formulas algebraically (on paper first)
+      - Implement folding in _pack_weights() (one-time cost, not in hot path)
+      - Verify numerical equivalence (bf16 folding introduces small diffs)
+      - The kernel becomes a pure GEMM + bias — maximum compute efficiency
+    applies_when:
+      - "BatchNorm in inference mode (running_mean/var are fixed)"
+      - "Per-channel scaling (multiply by [N] vector)"
+      - "Any per-channel affine transform (y = a*x + b where a,b are [N] vectors)"
+    does_not_apply_when:
+      - "BatchNorm in training mode (statistics are computed per-batch)"
+      - "Non-linear epilogues (sigmoid, ReLU, etc.) — these cannot be folded"
+      - "Operations that depend on the M dimension (row-wise reductions)"
+    typical_speedup: "3-6x vs PyTorch"
+    when_done: |
+      For most kernels, this is sufficient. Move to Level 4 only for
+      critical-path kernels where profiling shows remaining bottlenecks.
+    example:
+      file: test_kernels/39_Gemm_Scale_BatchNorm_triton.py
+      description: |
+        Kernel #39 folds Linear + Scale + BatchNorm into a pure GEMM.
+        Before (Level 1): 6 vector loads + arithmetic in epilogue → 2.69x
+        After  (Level 3): zero epilogue, pure GEMM + bias → 5.28x
+
+  - id: level_4_expert
+    name: "Level 4: Expert Techniques"
+    description: |
+      Advanced patterns for squeezing the last 10-30% of performance.
+      Only pursue these for critical-path kernels after profiling confirms
+      the bottleneck. These techniques increase code complexity significantly.
+    checklist:
+      - Stream K decomposition (for non-square or non-tile-divisible GEMMs)
+      - Persistent kernels (fixed program count, iterate over tiles)
+      - Hardware capability queries (gpu_subslice_count for program count)
+      - Warp size sweeping (16 vs 32 on XPU)
+      - Shape-specific specialization (skip boundary checks when M % BLOCK_M == 0)
+      - Atomic partial tile accumulation
+      - Adaptive grid layouts (small vs large workloads)
+    typical_speedup: "5-10x+ vs PyTorch (shape-dependent)"
+    when_done: "Benchmark shows no further improvement — try a fundamentally different approach."
+    reference_files:
+      - kb/persistent_kernel_patterns.yaml
+      - kb/examples/stream_k_gemm_descriptors.py
+
+
+# ============================================================================
+# "Try Harder" Decision Tree
+# ============================================================================
+# Use this after completing Level 1 to decide whether to keep optimizing.
+
+try_harder:
+  description: |
+    After each optimization level, measure speedup and consult this tree.
+    The biggest gains typically come from Level 2 (bandwidth) and Level 3
+    (algebraic fusion). Level 4 has diminishing returns for most workloads.
+
+  decisions:
+    - condition: "Speedup < 2x after Level 1"
+      diagnosis: "Likely bandwidth-bound — loading fp32 and converting wastes 2x BW"
+      action: "Apply Level 2: pre-pack to bf16, add grf_mode='large'. Run 'python skills/xpu_profiler.py' to confirm bandwidth bottleneck (look for high XVE Stalled %)."
+      priority: high
+
+    - condition: "Speedup 2-3x after Level 2"
+      diagnosis: "Epilogue may be adding unnecessary work"
+      action: |
+        Check: does the epilogue contain only linear per-channel transforms?
+        If yes → Apply Level 3: fold into weights algebraically.
+        If no (non-linear ops like sigmoid, tanh) → the epilogue is already minimal.
+        Consider Level 4 techniques or accept current speedup.
+      priority: high
+
+    - condition: "Speedup 3-5x after Level 3"
+      diagnosis: "Good performance — likely near hardware limits for this shape"
+      action: |
+        Run 'python skills/xpu_profiler.py' to identify remaining bottleneck.
+        If compute-bound (XVE Active > Stalled) → try larger tiles or Stream K.
+        If memory-bound (XVE Stalled > Active) → check for unnecessary copies or layout transforms.
+        Keep going — try a different approach if current strategy has plateaued.
+      priority: medium
+
+    - condition: "Speedup > 5x"
+      diagnosis: "Excellent — diminishing returns ahead"
+      action: "Stop unless this kernel is on the critical path. Focus effort elsewhere."
+      priority: low
+
+    - condition: "Speedup < 1x (slower than PyTorch)"
+      diagnosis: "Something is fundamentally wrong"
+      action: |
+        Check for: fp64 usage, N-loop serialization, missing tile swizzling,
+        very small tiles, or replacing a fast vendor GEMM with a slow custom one.
+        Re-read kb/correctness.yaml and kb/fusion_patterns.yaml constraints.
+      priority: critical

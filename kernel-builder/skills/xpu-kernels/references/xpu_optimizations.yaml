@@ -1,0 +1,1140 @@
+constraints:
+  - id: autotune_no_duplicate_params
+    name: "Do NOT re-define autotune parameters as kernel constexpr"
+    severity: critical
+    description: |
+      When using @triton.autotune, parameters defined in the Config dict
+      (like BLOCK_M, BLOCK_N, GROUP_SIZE_M, etc.) are automatically passed
+      to the kernel. Do NOT also define them with default values in the kernel signature.
+
+      WRONG (conflicting meta-parameters):
+      ```python
+      @triton.autotune(
+        configs=[triton.Config({'BLOCK_M': 256, 'GROUP_SIZE_M': 4}, ...)],
+        key=['M','N','K'],
+      )
+      @triton.jit
+      def kernel(...,
+                 BLOCK_M: tl.constexpr = 256,
+                 GROUP_SIZE_M: tl.constexpr = 4):
+        ...
+      ```
+
+      CORRECT (declare only; autotune provides values):
+      ```python
+      @triton.autotune(
+        configs=[triton.Config({'BLOCK_M': 256, 'GROUP_SIZE_M': 4}, ...)],
+        key=['M','N','K'],
+      )
+      @triton.jit
+      def kernel(...,
+                 BLOCK_M: tl.constexpr,
+                 GROUP_SIZE_M: tl.constexpr):
+        ...
+      ```
+
+  - id: grid_must_match_swizzling
+    name: "Grid must be 1D when using tile swizzling"
+    severity: critical
+    description: |
+      If you use GROUP_SIZE_M swizzling (flattened pid), the launch grid must be 1D.
+
+      WRONG:
+      ```python
+      grid = (triton.cdiv(M, BLOCK_M), triton.cdiv(N, BLOCK_N))
+      ```
+
+      CORRECT:
+      ```python
+      grid = lambda META: (triton.cdiv(M, META['BLOCK_M']) * triton.cdiv(N, META['BLOCK_N']),)
+      ```
+  - id: xpu_packed_weight_requires_stride_pass_through
+    name: "When using packed W^T, pass its strides (do not reuse original W strides)"
+    severity: critical
+    description: |
+      If you pass a packed transpose [K, N] into the kernel, you MUST use
+      weight_t.stride() (stride_wtk, stride_wtn) when creating block pointers.
+      Do NOT reuse the original [N, K] tensor strides.
+
+  - id: boundary_check_tuple
+    name: "boundary_check must be tuple of ints, not bools"
+    severity: critical
+    description: |
+      tl.load(block_ptr) uses boundary_check=(dim0, dim1) where values are dimension indices (0,1),
+      not booleans.
+
+      WRONG:
+      ```python
+      tl.load(ptr, boundary_check=(True, True))
+      ```
+
+      CORRECT:
+      ```python
+      tl.load(ptr, boundary_check=(0, 1))
+      ```
+
+  - id: block_ptr_vs_tma
+    name: "Tensor descriptors vs block pointers - DIFFERENT APIs (descriptors preferred)"
+    severity: critical
+    description: |
+      Tensor descriptors and block pointers are different APIs. Do NOT mix
+      them for the same load/store operation. **Prefer tensor descriptors
+      on XPU** — they produce better address generation and memory access
+      codegen (confirmed by Intel compiler team).
+
+      OPTION 1: TENSOR DESCRIPTORS (preferred on XPU)
+      ```python
+      desc = tl.make_tensor_descriptor(...)
+      x = desc.load([row_offset, col_offset])  # NO boundary_check arg — handled internally
+      ```
+
+      OPTION 2: BLOCK POINTERS (fallback)
+      ```python
+      ptr = tl.make_block_ptr(...)
+      x = tl.load(ptr, boundary_check=(0, 1))
+      ptr = tl.advance(ptr, (0, BLOCK_K))
+      ```
+
+      CRITICAL ERROR TO AVOID:
+      ```python
+      # WRONG - mixing descriptor with block pointer syntax
+      desc = tl.make_tensor_descriptor(...)
+      data = desc.load(..., boundary_check=(0, 1))  # ERROR! descriptors don't have boundary_check
+      ```
+
+      EXCEPTION — atomic operations: It IS valid to use descriptors for
+      loads/stores AND manual pointer arithmetic for atomic operations in
+      the SAME kernel, because descriptors do not support atomics. This is
+      a different-capability path, not API mixing.
+
+      ```python
+      # Full tile → descriptor store (fast path)
+      if is_full_tile:
+          c_desc.store([pid_m * BM, pid_n * BN], acc)
+      # Partial tile → manual pointers + atomic_add (required fallback)
+      else:
+          rm = pid_m * BM + tl.arange(0, BM)
+          rn = pid_n * BN + tl.arange(0, BN)
+          c_ptr_ = c_ptr + rm[:, None] * stride_cm + rn[None, :] * stride_cn
+          tl.atomic_add(c_ptr_, acc, mask=mask, sem='relaxed')
+      ```
+
+  - id: descriptor_no_atomic_support
+    name: "Tensor descriptors do NOT support atomic operations"
+    severity: critical
+    description: |
+      When you need tl.atomic_add (or other atomics), you MUST fall back to
+      manual pointer arithmetic. Descriptors only support .load() and .store().
+
+      This is a legitimate reason to have both descriptor loads AND manual
+      pointer stores in the same kernel — it is not a violation of the
+      "don't mix APIs" rule (see block_ptr_vs_tma exception).
+
+  - id: no_device_to_host_scalar_sync
+    name: "Do NOT force device->host scalar sync in hot path"
+    severity: critical
+    description: |
+      Avoid .item(), float(tensor), int(tensor), printing device tensors, or any device->host scalar
+      extraction in forward()/kernel wrapper hot paths. This forces synchronization and kills perf.
+
+      WRONG:
+      ```python
+      c = float(constant_tensor.item())  # syncs XPU -> host
+      ```
+
+      CORRECT:
+      - Keep constants as Python floats / CPU tensors
+      - Pass scalar to kernel as an argument
+      ```python
+      c = float(constant)  # already host
+      kernel[...,](..., c)
+      ```
+
+  - id: dtype_names_are_bfloat16_float16
+    name: "Use correct Triton dtype names"
+    severity: critical
+    description: |
+      Triton uses tl.bfloat16 and tl.float16 (not 'bf16').
+      tl.dot supports float16 / bfloat16 / float32 inputs.
+
+  - id: xpu_no_repack_transpose_in_forward
+    name: "Do NOT transpose+contiguous weights inside forward() hot path"
+    severity: critical
+    description: |
+      Creating packed transposes like W.t().contiguous() inside forward()/kernel_function
+      can dominate runtime and hide kernel improvements, especially for large matrices.
+      Pack once (on XPU) and reuse across iterations.
+
+      WRONG (repack every call):
+      ```python
+      def kernel_function(x, W1, W2, ...):
+          W1_t = W1.t().contiguous()   # expensive copy each call
+          W2_t = W2.t().contiguous()
+          kernel1(..., W1_t, ...)
+          kernel2(..., W2_t, ...)
+      ```
+
+      CORRECT (cache once, rebuild only if weights change):
+      ```python
+      class Model(nn.Module):
+          def _move_params_once(self):
+              self.W1_xpu = self.weight1.to("xpu", torch.float16).contiguous()
+              self.W2_xpu = self.weight2.to("xpu", torch.float16).contiguous()
+              self.W1_t   = self.W1_xpu.t().contiguous()   # [K, H] packed
+              self.W2_t   = self.W2_xpu.t().contiguous()   # [H, O] packed
+
+          def forward(self, x):
+              x = x.to("xpu", torch.float16).contiguous()
+              inter = gemm_sigmoid(..., self.W1_t, ...)
+              out   = gemm2(..., inter, self.W2_t, ...)
+              return out
+      ```
+
+  - id: xpu_gemm2_must_not_serialize_over_n_tiles
+    name: "Do NOT implement GEMM2 by looping all N tiles inside one program"
+    severity: critical
+    description: |
+      A fused GEMM2+reduction kernel that uses a 1D grid over M and then loops
+      over all N tiles inside each program collapses parallelism and often
+      underutilizes Intel XPU.
+
+      WRONG (serializes N tiles inside each pid_m):
+      ```python
+      pid_m = tl.program_id(0)
+      for n_start in range(0, N, BLOCK_N):
+          acc = tl.zeros((BLOCK_M, BLOCK_N), tl.float32)
+          # K loop...
+          # update row-wise reduction...
+      ```
+
+      CORRECT (parallelize GEMM2 over (M, N) tiles):
+      ```python
+      pid_m = tl.program_id(0)
+      pid_n = tl.program_id(1)
+      # compute [BLOCK_M, BLOCK_N] tile of C2 in parallel
+      # then do reduction in a separate kernel (or a properly parallel reduction)
+      ```
+
+patterns:
+  - id: xpu_block_pointers
+    name: "Block Pointers (fallback — prefer tensor descriptors)"
+    stage: block_pointers
+    description: "Replace manual pointer arithmetic with block pointers (use tensor descriptors when possible)"
+    rationale: |
+      Block pointers improve codegen over manual pointer arithmetic, but tensor
+      descriptors produce even better address generation on XPU. Use block pointers
+      only when tensor descriptors are not suitable (e.g., legacy code or when
+      tl.advance sequential patterns are strongly preferred).
+    pattern_before: |
+      offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+      offs_k = tl.arange(0, BLOCK_K)
+      a_ptrs = a_ptr + offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak
+      a = tl.load(a_ptrs, mask=(offs_m[:,None] < M) & (offs_k[None,:] < K), other=0.0)
+    pattern_after: |
+      a_bp = tl.make_block_ptr(
+        base=a_ptr,
+        shape=(M, K),
+        strides=(stride_am, stride_ak),
+        offsets=(pid_m * BLOCK_M, 0),
+        block_shape=(BLOCK_M, BLOCK_K),
+        order=(1, 0),
+      )
+      a = tl.load(a_bp, boundary_check=(0, 1))
+    expected_speedup: "workload-dependent (often good for indexing-heavy kernels)"
+    applies_to: [gemm, conv, all_memory_bound]
+    examples:
+      - before: |
+          a_ptrs += BLOCK_K * stride_ak
+        after: |
+          a_bp = tl.advance(a_bp, (0, BLOCK_K))
+
+  - id: xpu_grf_mode
+    name: "GRF Mode (tune; do not assume always wins)"
+    stage: xpu_specific
+    description: "Include grf_mode in autotune sweep"
+    rationale: |
+      Intel XPU supports multiple GRF modes. The best mode depends on register pressure and occupancy.
+      Tune grf_mode along with block sizes/warps/stages.
+    pattern_after: |
+      @triton.autotune(
+        configs=[
+          triton.Config({'BLOCK_M': 64,  'BLOCK_N': 128, 'BLOCK_K': 64, 'grf_mode': '128'}, num_warps=4, num_stages=4),
+          triton.Config({'BLOCK_M': 64,  'BLOCK_N': 128, 'BLOCK_K': 64, 'grf_mode': '256'}, num_warps=4, num_stages=4),
+          triton.Config({'BLOCK_M': 32,  'BLOCK_N': 128, 'BLOCK_K': 64, 'grf_mode': '256'}, num_warps=4, num_stages=5),
+          triton.Config({'BLOCK_M': 64,  'BLOCK_N': 128, 'BLOCK_K': 64, 'grf_mode': '256'}, num_warps=8, num_stages=4),
+        ],
+        key=['M','N','K'],
+      )
+      @triton.jit
+      def kernel(...,
+                 BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr):
+        ...
+    expected_speedup: "workload-dependent"
+    applies_to: [gemm, compute_bound]
+
+  - id: xpu_warp_count
+    name: "Warp count (tune; avoid hard-coded '32 warps')"
+    stage: xpu_specific
+    description: "Sweep num_warps; choose based on shape and register pressure"
+    rationale: |
+      Higher num_warps can help, but can also increase GRF usage and reduce occupancy.
+      On skinny-M GEMMs, 4–8 warps often wins; 16+ can lose badly.
+      Treat 32 as 'only if measured best'.
+    pattern_before: |
+      triton.Config({...}, num_stages=2, num_warps=8)
+    pattern_after: |
+      configs = [
+        triton.Config({...}, num_stages=4, num_warps=4),
+        triton.Config({...}, num_stages=4, num_warps=8),
+        triton.Config({...}, num_stages=3, num_warps=16),
+        # num_warps=32 only if autotune proves it faster
+      ]
+    expected_speedup: "workload-dependent"
+    applies_to: [all]
+
+  - id: xpu_tile_swizzling
+    name: "Tile swizzling (only when num_pid_m > 1)"
+    stage: xpu_specific
+    description: "Use GROUP_SIZE_M swizzling only if it can actually reorder M-tiles"
+    rationale: |
+      Swizzling helps when there are multiple M-tiles and data reuse across nearby tiles.
+      If tl.cdiv(M, BLOCK_M) == 1, swizzling adds overhead with no benefit.
+    pattern_before: |
+      pid_m = tl.program_id(0)
+      pid_n = tl.program_id(1)
+    pattern_after: |
+      # Enable ONLY if num_pid_m > 1
+      pid = tl.program_id(0)
+      num_pid_m = tl.cdiv(M, BLOCK_M)
+      num_pid_n = tl.cdiv(N, BLOCK_N)
+      num_pid_in_group = GROUP_SIZE_M * num_pid_n
+      group_id = pid // num_pid_in_group
+      first_pid_m = group_id * GROUP_SIZE_M
+      group_size_m = tl.minimum(num_pid_m - first_pid_m, GROUP_SIZE_M)
+      pid_m = first_pid_m + ((pid % num_pid_in_group) % group_size_m)
+      pid_n = (pid % num_pid_in_group) // group_size_m
+    expected_speedup: "shape-dependent"
+    applies_to: [gemm, large_matrices]
+    notes: |
+      Requires 1D grid: grid = (cdiv(M,BLOCK_M) * cdiv(N,BLOCK_N),)
+
+      Swizzle logic can be factored into a reusable @triton.jit helper:
+      ```python
+      @triton.jit
+      def swizzle_tile(tile_id, M, N, K, BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M):
+          grid_m = tl.cdiv(M, BLOCK_SIZE_M)
+          grid_n = tl.cdiv(N, BLOCK_SIZE_N)
+          width = GROUP_SIZE_M * grid_n
+          group_id = tile_id // width
+          group_size = tl.minimum(GROUP_SIZE_M, grid_m - group_id * GROUP_SIZE_M)
+          pid_m = group_id * GROUP_SIZE_M + (tile_id % group_size)
+          pid_n = (tile_id % width) // group_size
+          return pid_m, pid_n
+      ```
+
+      Use GROUP_SIZE_M > 0 as a toggle: when 0, fall back to linear tile mapping.
+
+  - id: xpu_tile_shape_heuristics
+    name: "Tile shape heuristics (avoid always-256x256)"
+    stage: xpu_specific
+    description: "Choose tiles based on aspect ratio"
+    rationale: |
+      256x256 can be good for large, square-ish GEMM, but for skinny M it reduces M-parallelism
+      and increases register pressure. Prefer smaller BLOCK_M when M is small.
+    pattern_after: |
+      # Heuristic guidance:
+      # - If M <= 256:  BLOCK_M in {16, 32, 64}
+      # - If N is huge: BLOCK_N in {64, 128}
+      # - BLOCK_K in {32, 64}
+      # - For square problems: consider {128,256} tiles if it fits GRF/occupancy
+    expected_speedup: "prevents regressions; enables better autotune search"
+    applies_to: [gemm]
+
+  - id: xpu_mixed_precision_dot
+    name: "Mixed precision dot (bfloat16/float16 inputs, fp32 accumulate)"
+    stage: xpu_specific
+    description: "Cast blocks to tl.bfloat16 or tl.float16 for tl.dot; accumulate fp32"
+    rationale: |
+      tl.dot supports bfloat16/float16 inputs; accumulating in fp32 often improves speed while
+      keeping reasonable numerics (if acceptable for the workload).
+    pattern_before: |
+      x = tl.load(x_bp).to(tl.float32)
+      w = tl.load(w_bp).to(tl.float32)
+      acc += tl.dot(x, w)
+    pattern_after: |
+      x = tl.load(x_bp).to(tl.bfloat16)   # or tl.float16
+      w = tl.load(w_bp).to(tl.bfloat16)   # or tl.float16
+      acc += tl.dot(x, w)                 # acc is tl.float32
+    expected_speedup: "often large if fp32 path is slow"
+    applies_to: [gemm, attention, compute_bound]
+    notes: |
+      Use tl.bfloat16 / tl.float16 (not 'bf16').
+
+  - id: xpu_tensor_descriptor_note
+    name: "Tensor descriptors are preferred on XPU"
+    stage: memory_access
+    description: "Use tensor descriptors as the default memory access API on XPU"
+    rationale: |
+      Tensor descriptors (`tl.make_tensor_descriptor`) produce better address
+      generation and memory access codegen than block pointers on Intel XPU,
+      as confirmed by the Intel compiler team.
+
+      Use tensor descriptors as the default for all new kernels:
+      - Standard GEMM K-loops: create descriptors once, increment offset variable
+      - Variable-offset access (Stream K, dynamic coordinates): same API, clean code
+      - Batched variants: bake batch offset into descriptor base pointer
+
+      Fall back to block pointers only when:
+      - Atomic operations are needed (descriptors don't support atomics)
+      - Maintaining existing block-pointer code that already works well
+    expected_speedup: "better codegen vs block pointers for address generation"
+    applies_to: [gemm, stream_k, large_matrices, all_memory_bound]
+
+  - id: xpu_descriptor_gemm_pattern
+    name: "Tensor descriptor GEMM pattern (preferred on XPU)"
+    stage: memory_access
+    description: "Use tensor descriptors as the default GEMM memory access pattern on XPU"
+    rationale: |
+      Tensor descriptors are the recommended memory access API on Intel XPU.
+      They produce better address generation codegen than block pointers.
+      Create descriptors once, load by coordinate — no tl.advance needed,
+      just update the offset variable.
+    pattern_after: |
+      # Create descriptors once (outside K-loop)
+      a_desc = tl.make_tensor_descriptor(
+          base=a_ptr, shape=(M, K), strides=(stride_am, stride_ak),
+          block_shape=(BLOCK_SIZE_M, BLOCK_SIZE_K))
+      b_desc = tl.make_tensor_descriptor(
+          base=b_ptr, shape=(K, N), strides=(stride_bk, stride_bn),
+          block_shape=(BLOCK_SIZE_K, BLOCK_SIZE_N))
+
+      acc = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+      off_k = 0  # or remain_iters * BLOCK_SIZE_K for Stream K
+
+      for _ in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
+          a = a_desc.load([pid_m * BLOCK_SIZE_M, off_k])
+          b = b_desc.load([off_k, pid_n * BLOCK_SIZE_N])
+          acc += tl.dot(a, b)
+          off_k += BLOCK_SIZE_K
+    expected_speedup: "preferred on XPU; better codegen than block pointers"
+    applies_to: [gemm, stream_k, variable_offset_access, all_memory_bound]
+    notes: |
+      For batched variants, add the batch offset to the descriptor's base pointer
+      rather than to each load coordinate:
+
+      ```python
+      offset_a = bid.to(tl.int64) * stride_az
+      a_desc = tl.make_tensor_descriptor(
+          base=a_ptr + offset_a, shape=(M, K),   # batch offset baked into base
+          strides=(stride_am, stride_ak),
+          block_shape=(BLOCK_SIZE_M, BLOCK_SIZE_K))
+      # Loads use same coordinates as non-batched:
+      a = a_desc.load([pid_m * BLOCK_SIZE_M, off_k])
+      ```
+
+      This is cleaner than adjusting every load coordinate and works for any
+      number of descriptors (A, B, C, D, ...) in the same kernel.
+
+  - id: xpu_persistent_kernel
+    name: "Persistent kernel (advanced; measure carefully)"
+    stage: persistent_kernel
+    description: "Use persistent scheduling to reduce launch overhead / improve utilization"
+    rationale: |
+      Persistent matmul can help for some shapes by keeping a fixed number of programs that iterate tiles.
+      However, the best NUM_SMS / scheduling is hardware- and workload-dependent.
+    pattern_before: |
+      grid = (cdiv(M, BLOCK_M), cdiv(N, BLOCK_N))
+      kernel[grid](...)
+    pattern_after: |
+      # Persistent pattern:
+      # grid = (NUM_WORKERS,)
+      # each program iterates tile_idx += NUM_WORKERS
+      # NOTE: NUM_WORKERS must be selected/tuned (not hard-coded).
+    expected_speedup: "workload-dependent; can be large for some cases"
+    applies_to: [gemm, large_workloads]
+
+  - id: xpu_pack_weight_transpose_once
+    name: "Pack W^T once (contiguous [K, N]) for tl.dot fast path"
+    stage: xpu_specific
+    description: "Cache a packed transpose of weights on XPU and pass [K, N] contiguous into the kernel"
+    rationale: |
+      PyTorch/XPU GEMM paths frequently use packed/blocked layouts internally.
+      A Triton kernel that reads W with swapped strides (pretending W is (K,N))
+      may still get suboptimal memory access and may miss the fastest matmul path.
+      Packing W^T once makes the physical memory layout match the kernel's
+      access order for tl.dot, improving locality and throughput.
+    pattern_before: |
+      # Weight stored as [N, K], passed directly
+      w = weight.to(device="xpu", dtype=torch.float16).contiguous()
+
+      # Kernel "views" W as (K, N) by swapping strides:
+      w_bp = tl.make_block_ptr(
+        base=w_ptr,
+        shape=(K, N),
+        strides=(stride_wk, stride_wm),   # swapped
+        offsets=(0, n_base),
+        block_shape=(BLOCK_K, BLOCK_N),
+        order=(1, 0),
+      )
+      w_tile = tl.load(w_bp, boundary_check=(0, 1))
+    pattern_after: |
+      # Pack once on XPU (inference-friendly; rebuild if weights change)
+      # Store packed transpose as [K, N] fp16 contiguous.
+      w16 = weight.to(device="xpu", dtype=torch.float16)
+      weight_t = w16.t().contiguous()      # [K, N] contiguous
+
+      # Kernel reads packed W^T directly with natural contiguous strides:
+      wt_bp = tl.make_block_ptr(
+        base=wt_ptr,
+        shape=(K, N),
+        strides=(stride_wtk, stride_wtn),  # from weight_t.stride()
+        offsets=(0, n_base),
+        block_shape=(BLOCK_K, BLOCK_N),
+        order=(1, 0),
+      )
+      wt_tile = tl.load(wt_bp, boundary_check=(0, 1))
+    expected_speedup: "often significant for GEMM-heavy kernels; workload-dependent"
+    applies_to: [gemm, fused_gemm_epilogue, attention_linear]
+    notes: |
+      - This is "layout-for-speed" (XPU optimization), not memory optimization.
+      - Overhead: extra device memory for packed transpose (~K*N*2 bytes for fp16).
+      - Best for inference / fixed weights. If training, refresh weight_t when weight updates.
+      - Consider returning XPU tensor to avoid CPU transfer overhead in benchmarks.
+
+  - id: xpu_cache_packed_transposes
+    name: "Cache packed weight transposes on XPU (W^T contiguous)"
+    stage: xpu_specific
+    description: "Build W1^T and W2^T once on XPU, store contiguous [K,N] tensors, reuse per forward"
+    rationale: |
+      Packing W^T makes the physical layout match tl.dot access order and avoids
+      expensive transpose+contiguous copies every iteration. This is especially
+      important in KernelBench-style loops where forward() runs many times.
+    pattern_before: |
+      # inside kernel_function / forward
+      W1 = weight1.to("xpu", torch.float16).contiguous()
+      W2 = weight2.to("xpu", torch.float16).contiguous()
+      W1_t = W1.t().contiguous()
+      W2_t = W2.t().contiguous()
+    pattern_after: |
+      # inside Model._move_params_once() (or a cache refresh path)
+      W1_xpu = weight1.to("xpu", torch.float16).contiguous()   # [H, K]
+      W2_xpu = weight2.to("xpu", torch.float16).contiguous()   # [O, H]
+      W1_t   = W1_xpu.t().contiguous()                         # [K, H]
+      W2_t   = W2_xpu.t().contiguous()                         # [H, O]
+      # forward reuses W1_t/W2_t without repacking
+    expected_speedup: "often large if repacking was on the timed path"
+    applies_to: [gemm, mlp, fused_linear, attention_linear]
+    notes: |
+      - This is layout-for-speed, not memory saving (extra memory for packed transposes).
+      - If weights change (training), rebuild the packed transpose after updates.
+      - In inference benchmarks, caching is usually always correct.
+
+  - id: xpu_split_gemm2_and_lse_for_parallelism
+    name: "Split GEMM2 and LogSumExp to preserve parallelism"
+    stage: fusion
+    description: "Use a 2D GEMM kernel for GEMM2, then a separate row-wise LSE reduction kernel"
+    rationale: |
+      Fusing GEMM2 with row-wise LogSumExp by sweeping N tiles inside a single pid_m
+      reduces parallel work to ~cdiv(M,BLOCK_M) programs, which can severely underutilize XPU.
+      A 2D GEMM produces C2 tiles with high parallelism; a follow-up reduction kernel
+      computes LSE efficiently over rows.
+    pattern_before: |
+      # GEMM2+LSE fused with 1D grid over M:
+      pid_m = tl.program_id(0)
+      for n_start in range(0, N, BLOCK_N):
+          # compute tile [BM, BN] and update m_row/s_row
+          ...
+      y[m] = log(s_row) + m_row
+    pattern_after: |
+      # Step 1: GEMM2 (2D grid over M,N) -> C2 [M, N] (fp16 or fp32)
+      grid = (cdiv(M, BLOCK_M), cdiv(N, BLOCK_N))
+      gemm2_kernel[grid](inter, W2_t, bias2, C2, ...)
+
+      # Step 2: Row-wise LogSumExp (1D grid over M) -> Y [M]
+      grid = (cdiv(M, BLOCK_M),)
+      row_lse_kernel[grid](C2, Y, ...)
+    expected_speedup: "often dramatic vs serialized GEMM2+LSE on XPU"
+    applies_to: [mlp, attention_scores, logits_lse]
+    notes: |
+      - Materializing C2 costs memory (~M*N), but restores occupancy and throughput.
+      - If memory is tight, consider tiling/reduction strategies that still parallelize over N
+        (e.g., partial reductions + second-stage reduction), but avoid full serialization.
+
+  - id: xpu_gemm2_2d_grid_required
+    name: "GEMM2 should use a 2D grid when producing a matrix output"
+    stage: xpu_specific
+    description: "Use pid_m/pid_n mapping for GEMM tiles; avoid 1D pid_m-only mapping"
+    rationale: |
+      GEMM kernels need parallelism across both output dimensions to saturate the device.
+      Restricting to pid_m-only often leaves too few programs in flight.
+    pattern_after: |
+      pid_m = tl.program_id(0)
+      pid_n = tl.program_id(1)
+      # compute tile [BLOCK_M, BLOCK_N] of C
+    expected_speedup: "prevents severe underutilization"
+    applies_to: [gemm, linear, matmul]
+
+  - id: xpu_packed_transpose_kernel_signature
+    name: "Kernel signatures should accept packed transpose as [K, N] with its own strides"
+    stage: block_pointers
+    description: "Pass packed transpose pointer and its strides into tl.make_block_ptr"
+    rationale: |
+      Using packed transposes only helps if the kernel loads them with the correct
+      stride metadata (from the packed tensor), not reused from the original.
+    pattern_after: |
+      wt_bp = tl.make_block_ptr(
+        base=WT_ptr,
+        shape=(K, N),
+        strides=(stride_wtk, stride_wtn),  # from WT.stride()
+        offsets=(k_start, n_base),
+        block_shape=(BLOCK_K, BLOCK_N),
+        order=(1, 0),
+      )
+    expected_speedup: "enables fast-path memory access for RHS"
+    applies_to: [gemm, fused_gemm_epilogue]
+
+  - id: xpu_sigmoid_use_exp2_not_exp_fp32
+    name: "Sigmoid: avoid fp32 tl.exp; prefer tl.math.exp2-based sigmoid (XPU fast-path)"
+    severity: high
+    description: |
+      On Intel XPU, using fp32 `tl.exp()` in the sigmoid epilogue can be a throughput bottleneck.
+      Prefer an exp2-based formulation:
+        exp(x) = exp2(x / ln(2))
+      so:
+        sigmoid(x) = 1 / (1 + exp(-x))
+                   = 1 / (1 + exp2((-x) / ln(2)))
+
+      WRONG (often slower on XPU):
+      ```python
+      # acc is fp32
+      sig = 1.0 / (1.0 + tl.exp(-acc))
+      out = acc + 2.0 * sig
+      ```
+
+      CORRECT (typically faster / broader backend support):
+      ```python
+      @triton.jit
+      def sigmoid_exp2_fp32(x: tl.tensor):
+          inv_ln2 = 1.4426950408889634  # 1 / ln(2)
+          e = tl.math.exp2((-x) * inv_ln2)
+          return 1.0 / (1.0 + e)
+
+      sig = sigmoid_exp2_fp32(acc)
+      out = acc + 2.0 * sig
+      ```
+
+      Notes:
+      - Keep `acc` in fp32 if you need accuracy; this rule is about the exp implementation.
+      - If your workload tolerates lower precision, consider computing sigmoid in fp16/bf16,
+        but only if correctness thresholds allow it.
+
+  - id: xpu_warp_sweep_no_fixed_32
+    name: "Warp count: do NOT force 32 warps; sweep 4/8/16 (32 only if autotune proves it)"
+    severity: high
+    description: |
+      On Intel XPU, hard-coding `num_warps=32` frequently hurts performance due to
+      higher GRF usage and reduced occupancy—especially when the kernel has a heavy
+      epilogue (sigmoid/bn/lse) or large tiles.
+
+      WRONG (common regression pattern):
+      ```python
+      @triton.autotune(
+        configs=[triton.Config({'BLOCK_M': 256, 'BLOCK_N': 256, 'BLOCK_K': 64, 'grf_mode': '256'},
+                               num_warps=32, num_stages=4)],
+        key=['M','N','K'],
+      )
+      ```
+      or:
+      ```python
+      # "XPU guidance says 32 warps" applied unconditionally
+      num_warps = 32
+      ```
+
+      CORRECT (treat warps as a tuned parameter):
+      ```python
+      cfgs = [
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 256, 'BLOCK_K': 64, 'grf_mode': '256'}, num_warps=8,  num_stages=4),
+        triton.Config({'BLOCK_M': 128, 'BLOCK_N': 256, 'BLOCK_K': 64, 'grf_mode': '256'}, num_warps=16, num_stages=3),
+        # 32 only if it actually wins in autotune:
+        triton.Config({'BLOCK_M': 256, 'BLOCK_N': 256, 'BLOCK_K': 64, 'grf_mode': '256'}, num_warps=32, num_stages=3),
+      ]
+      @triton.autotune(configs=cfgs, key=['M','N','K'])
+      @triton.jit
+      def kernel(..., BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr):
+          ...
+      ```
+
+      Practical guidance:
+      - If epilogue is heavy (sigmoid/bn/lse): start with 8 or 16 warps.
+      - If the kernel is pure GEMM and tiles are large: 16 may win; 32 is "maybe", not default.
+      - Always sweep GRF mode together with warps if you see register pressure.
+
+      Exception for large pure GEMMs:
+      For large, square GEMMs (e.g., 3072x4096x3072) with 256x256 tiles,
+      32 warps + grf_mode='256' is a proven strong default — Intel's own XPU
+      benchmark kernels ship with this as a single config. The "don't blindly
+      use 32" guidance is most critical for skinny/non-square shapes and
+      kernels with heavy epilogues.
+
+  - id: xpu_hardware_subslice_query
+    name: "Query XPU subslice count for hardware-aware program counts"
+    stage: xpu_specific
+    description: "Use gpu_subslice_count for Stream K or persistent kernel program counts"
+    rationale: |
+      Stream K and persistent kernels need to know the hardware parallelism.
+      On Intel XPU, the relevant unit is the subslice (Xe core) count.
+      Do NOT hard-code this — it varies across GPU models.
+    pattern_after: |
+      num_xe_core = torch.xpu.get_device_capability(0)['gpu_subslice_count']
+      streamk_programs = num_xe_core
+    expected_speedup: "enables optimal utilization"
+    applies_to: [stream_k, persistent_kernel, xpu_specific]
+    notes: |
+      - This is the XPU equivalent of CUDA's SM count
+      - For persistent kernels, consider autotuning NUM_PROGS around this value
+
+  - id: xpu_batched_gemm_pattern
+    name: "Batched GEMM: use batch dimension on grid axis=1 with int64 offsets"
+    stage: xpu_specific
+    description: "Add batch dimension via tl.program_id(axis=1) and per-batch pointer offsets"
+    rationale: |
+      Batched GEMM (B x M x K) @ (B x K x N) → (B x M x N) extends the standard
+      tiled GEMM by adding a batch grid dimension. The (M, N) tile swizzling stays
+      on axis=0; the batch index goes on axis=1. Each batch computes an independent
+      GEMM by offsetting all pointers by bid * stride_z.
+
+      Key details:
+      - Cast bid to int64 before multiplying by batch stride to avoid int32 overflow
+        on large tensors (see correctness.yaml: int64_cast_for_large_batch_offsets)
+      - Tile swizzling (GROUP_SIZE_M) works identically within each batch
+      - The K-loop, boundary masking, and accumulation are unchanged per batch
+    pattern_after: |
+      # Grid: axis=0 = flattened (M, N) tiles with swizzle, axis=1 = batch
+      grid = lambda META: (
+          triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']),
+          B,
+      )
+
+      @triton.jit
+      def matmul_kernel_batched(
+              a_ptr, b_ptr, c_ptr,
+              B: tl.constexpr, M: tl.constexpr, N: tl.constexpr, K: tl.constexpr,
+              stride_az: tl.constexpr, stride_am: tl.constexpr, stride_ak: tl.constexpr,
+              stride_bz: tl.constexpr, stride_bk: tl.constexpr, stride_bn: tl.constexpr,
+              stride_cz: tl.constexpr, stride_cm: tl.constexpr, stride_cn: tl.constexpr,
+              BLOCK_SIZE_M: tl.constexpr, BLOCK_SIZE_N: tl.constexpr,
+              BLOCK_SIZE_K: tl.constexpr, GROUP_SIZE_M: tl.constexpr):
+          bid = tl.program_id(axis=1)
+          pid = tl.program_id(axis=0)
+
+          # Standard tile swizzle on axis=0 (same as non-batched)
+          # ... pid_m, pid_n from GROUP_SIZE_M swizzle ...
+
+          # Batch offsets — int64 to prevent overflow
+          offset_a = bid.to(tl.int64) * stride_az
+          offset_b = bid.to(tl.int64) * stride_bz
+          a_ptrs = a_ptr + offset_a + (offs_am[:, None] * stride_am + offs_k[None, :] * stride_ak)
+          b_ptrs = b_ptr + offset_b + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
+
+          # K-loop, accumulate, store (identical to non-batched)
+          # ...
+          offset_c = bid.to(tl.int64) * stride_cz
+          c_ptrs = c_ptr + offset_c + stride_cm * offs_cm[:, None] + stride_cn * offs_cn[None, :]
+    expected_speedup: "enables batched workloads; parallelism scales with B"
+    applies_to: [gemm, batched_gemm, attention, multi_head]
+    notes: |
+      - Grid axis=0 stays 1D (swizzled M*N tiles), axis=1 = batch
+      - All swizzle/autotune patterns apply unchanged within each batch
+      - Block pointer / descriptor variants work identically — just add batch offset to base pointer
+      - For attention: heads dimension often maps to the same batch axis
+
+  - id: xpu_warp_size_autotune
+    name: "Sweep warp_size (sub-group size) alongside num_warps on XPU"
+    stage: xpu_specific
+    description: "Include warp_size={16, 32} in autotune configs for Intel XPU kernels"
+    rationale: |
+      Intel XPU supports sub-group (warp) sizes of 16 and 32. The optimal
+      choice depends on the kernel's register pressure, reduction width, and
+      memory access pattern. This is a SEPARATE axis from num_warps — both
+      should be swept.
+
+      For row-wise kernels (softmax, layernorm) with narrow rows, warp_size=16
+      with more warps can outperform warp_size=32 because each sub-group
+      covers fewer columns, allowing more rows to run concurrently.
+
+      KB already covers num_warps and grf_mode sweeping; warp_size is a third
+      independent axis that can significantly affect performance.
+    pattern_after: |
+      @triton.autotune(
+        configs=[
+          # warp_size=32 variants
+          triton.Config({"warp_size": 32}, num_warps=32),
+          triton.Config({"warp_size": 32}, num_warps=16),
+          triton.Config({"warp_size": 32}, num_warps=8),
+          triton.Config({"warp_size": 32}, num_warps=4),
+          # warp_size=16 variants (more warps possible)
+          triton.Config({"warp_size": 16}, num_warps=64),
+          triton.Config({"warp_size": 16}, num_warps=32),
+          triton.Config({"warp_size": 16}, num_warps=16),
+          triton.Config({"warp_size": 16}, num_warps=8),
+          triton.Config({"warp_size": 16}, num_warps=4),
+        ],
+        key=[...],
+      )
+    expected_speedup: "workload-dependent; can be significant for row-wise kernels"
+    applies_to: [softmax, layernorm, reduction, attention, row_wise]
+    notes: |
+      - warp_size=16 allows up to 64 warps (more parallelism per program)
+      - warp_size=32 is standard for GEMM; warp_size=16 often better for reductions
+      - Combine with num_warps and grf_mode for full autotune coverage
+
+  - id: xpu_work_group_size_query
+    name: "Query max_work_group_size for multi-row tiling in row-wise kernels"
+    stage: xpu_specific
+    description: "Use device max_work_group_size to compute how many rows fit per program"
+    rationale: |
+      Row-wise kernels (softmax, layernorm, RMS norm) that fit one row per block
+      can underutilize the hardware when rows are narrow. Packing multiple rows
+      per program (BLOCK_SIZE_Y > 1) increases work per program and utilization.
+
+      The maximum rows per program is bounded by the hardware work group size
+      divided by the column block size. Query this at runtime — do not hard-code.
+    pattern_after: |
+      from triton.runtime import driver
+
+      device = torch.xpu.current_device()
+      properties = driver.active.utils.get_device_properties(device)
+      MAX_WORK_GROUP_SIZE = properties["max_work_group_size"]
+
+      BLOCK_SIZE_X = triton.next_power_of_2(n_cols)
+      BLOCK_SIZE_Y = MAX_WORK_GROUP_SIZE // BLOCK_SIZE_X
+      BLOCK_SIZE_Y = BLOCK_SIZE_Y if BLOCK_SIZE_Y > 0 else 1
+
+      grid = (n_rows // BLOCK_SIZE_Y,)
+      softmax_kernel[grid](..., BLOCK_SIZE_X=BLOCK_SIZE_X, BLOCK_SIZE_Y=BLOCK_SIZE_Y)
+    expected_speedup: "significant for narrow rows where single-row programs underutilize"
+    applies_to: [softmax, layernorm, rms_norm, row_wise, reduction]
+    notes: |
+      - BLOCK_SIZE_X must be power-of-2 and >= n_cols (use triton.next_power_of_2)
+      - BLOCK_SIZE_Y = 1 is the fallback when rows are wide enough to fill the work group
+      - Grid shrinks by BLOCK_SIZE_Y (fewer programs, more rows each)
+      - This is complementary to xpu_hardware_subslice_query (which queries Xe core count)
+
+  - id: xpu_power_of_2_row_block
+    name: "Use next_power_of_2 for row-wise kernels that process entire rows per block"
+    stage: xpu_specific
+    description: "Set BLOCK_SIZE to triton.next_power_of_2(n_cols) for single-block row processing"
+    rationale: |
+      Softmax, layernorm, and similar row-wise kernels often process an entire row
+      in a single block (no K-loop). Triton requires power-of-2 block sizes, so
+      the column block must be rounded up. This is computed at launch time, not
+      inside the kernel.
+    pattern_after: |
+      BLOCK_SIZE_X = triton.next_power_of_2(n_cols)
+      # Mask out-of-bounds columns in the kernel:
+      col_offsets = tl.arange(0, BLOCK_SIZE_X)
+      mask = col_offsets < n_cols
+      row = tl.load(row_ptr + col_offsets, mask=mask, other=-float("inf"))
+    expected_speedup: "N/A (required for correctness; enables single-block row processing)"
+    applies_to: [softmax, layernorm, rms_norm, row_wise]
+
+  - id: xpu_module_level_constexpr
+    name: "Use tl.constexpr() for module-level compile-time constants"
+    stage: xpu_specific
+    description: "Define mathematical constants at module scope with tl.constexpr()"
+    rationale: |
+      Constants used across multiple kernels or JIT helpers (e.g., sqrt(2/pi) for
+      GeLU, 1/ln(2) for exp2-based sigmoid) can be defined once at module level
+      using tl.constexpr(). This ensures they are compile-time constants, avoids
+      recomputation, and makes them reusable across all @triton.jit functions in
+      the module.
+    pattern_after: |
+      import math
+      import triton.language as tl
+
+      # Module-level compile-time constants
+      kAlpha = tl.constexpr(math.sqrt(2.0 / math.pi))   # GeLU constant
+      kInvLn2 = tl.constexpr(1.4426950408889634)         # 1/ln(2) for exp2
+
+      @triton.jit
+      def gelu(x):
+          return 0.5 * x * (1 + tanh(kAlpha * (x + 0.044715 * x * x * x)))
+    expected_speedup: "N/A (code clarity and reuse pattern)"
+    applies_to: [all, activation, epilogue]
+
+  - id: xpu_reusable_jit_activation_helpers
+    name: "Factor activation functions into reusable @triton.jit helpers"
+    stage: xpu_specific
+    description: "Define common activations (tanh, gelu, silu, etc.) as standalone JIT functions"
+    rationale: |
+      Complex activations like GeLU involve multiple operations (tanh, multiply,
+      add, cube). Defining them as standalone @triton.jit functions makes them:
+      - Reusable across multiple kernel epilogues
+      - Testable independently
+      - Easy to swap (e.g., replace GeLU with SiLU in an epilogue)
+
+      These helpers compose: gelu() calls tanh(), which calls tl.sigmoid().
+      Triton inlines @triton.jit calls, so there is no function call overhead.
+    pattern_after: |
+      @triton.jit
+      def tanh(x):
+          # sigmoid-based tanh: avoids separate tl.exp/tl.math.tanh
+          return 2 * tl.sigmoid(2 * x) - 1
+
+      @triton.jit
+      def gelu(x):
+          # Tanh-approximation GeLU (matches PyTorch nn.functional.gelu)
+          return 0.5 * x * (1 + tanh(kAlpha * (x + 0.044715 * x * x * x)))
+
+      @triton.jit
+      def silu(x):
+          return x * tl.sigmoid(x)
+
+      # Use in any GEMM epilogue:
+      @triton.jit
+      def gemm_gelu_kernel(...):
+          # ... K-loop ...
+          c = gelu(accumulator)
+          c_desc.store([...], c)
+    expected_speedup: "N/A (code organization pattern; no perf impact vs inline)"
+    applies_to: [gemm, mlp, activation, epilogue]
+    notes: |
+      - @triton.jit helpers are inlined at compile time — no call overhead
+      - Same pattern used for swizzle_tile helper (see xpu_tile_swizzling)
+      - Can define sigmoid_exp2, silu, gelu, tanh, etc. in a shared module
+
+  - id: xpu_sigmoid_based_tanh
+    name: "Implement tanh via sigmoid: tanh(x) = 2*sigmoid(2x) - 1"
+    stage: xpu_specific
+    description: "Use tl.sigmoid to compute tanh, avoiding tl.exp or tl.math.tanh"
+    rationale: |
+      The identity tanh(x) = 2*sigmoid(2x) - 1 lets you implement tanh using
+      tl.sigmoid, which may have a fast hardware path. This avoids needing a
+      separate tl.math.tanh or tl.exp call. Used in Intel XPU benchmark kernels
+      for GeLU activation.
+
+      Combine with exp2-based sigmoid (see xpu_sigmoid_use_exp2_not_exp_fp32)
+      for maximum throughput if tl.sigmoid's built-in path is slow:
+        sigmoid(x) = 1 / (1 + exp2(-x * 1/ln2))
+        tanh(x) = 2 * sigmoid(2x) - 1
+    pattern_after: |
+      @triton.jit
+      def tanh(x):
+          return 2 * tl.sigmoid(2 * x) - 1
+    expected_speedup: "workload-dependent; avoids separate tanh intrinsic"
+    applies_to: [activation, gelu, tanh, epilogue]
+
+  - id: xpu_exp2_attention_scaling
+    name: "Use exp2/log2 with RCP_LN2 scaling for attention softmax"
+    stage: xpu_specific
+    description: "Scale QK scores by 1/ln(2) and use tl.math.exp2 instead of tl.exp throughout attention"
+    rationale: |
+      Flash Attention computes softmax(QK^T * scale). The standard approach uses
+      tl.exp, but on Intel XPU, tl.math.exp2 is faster (it maps to native hardware).
+
+      The trick: multiply the QK scale factor by 1/ln(2) = 1.44269504, then use
+      exp2 everywhere (both in the forward online softmax and backward). This is
+      algebraically equivalent because exp(x) = exp2(x / ln(2)).
+
+      This extends the exp2 pattern from sigmoid (xpu_sigmoid_use_exp2_not_exp_fp32)
+      to the full attention computation.
+    pattern_after: |
+      # Forward: scale by 1/ln(2) once, then use exp2 throughout
+      qk_scale = sm_scale
+      qk_scale *= 1.44269504  # 1/log(2) — converts to base-2
+
+      # In the attention inner loop:
+      m_ij = tl.maximum(m_i, tl.max(qk, 1) * qk_scale)
+      qk = qk * qk_scale - m_ij[:, None]
+      p = tl.math.exp2(qk)           # NOT tl.exp!
+      alpha = tl.math.exp2(m_i - m_ij)  # correction factor also uses exp2
+
+      # Epilogue:
+      m_i += tl.math.log2(l_i)       # log2, not log!
+
+      # Backward: pre-scale K by sm_scale * RCP_LN2
+      RCP_LN2 = 1.4426950408889634
+      arg_k = k * (sm_scale * RCP_LN2)
+      # Then exp2 in backward loops too:
+      pT = tl.math.exp2(qkT - m[None, :])
+    expected_speedup: "significant on XPU (exp2 maps to native hardware)"
+    applies_to: [attention, flash_attention, softmax, online_softmax]
+    notes: |
+      - Both forward and backward must use consistent base-2 arithmetic
+      - The LN2 constant (0.6931471824645996) is used in backward for dQ scaling
+      - Pre-scaling K in backward avoids repeated multiplication inside the loop
+
+  - id: xpu_tl_multiple_of_hint
+    name: "Use tl.multiple_of() to hint alignment to the compiler"
+    stage: xpu_specific
+    description: "Tell Triton a value is a multiple of a block size for better codegen"
+    rationale: |
+      tl.multiple_of(value, N) tells the Triton compiler that `value` is guaranteed
+      to be a multiple of N. This enables:
+      - Better vectorized memory access patterns
+      - Elimination of boundary checks
+      - More aggressive loop optimizations
+
+      Use it when a loop variable or offset is known to be block-aligned but the
+      compiler cannot prove it statically.
+    pattern_after: |
+      # In Flash Attention causal masking:
+      if STAGE == 2:
+          lo, hi = start_m * BLOCK_M, (start_m + 1) * BLOCK_M
+          lo = tl.multiple_of(lo, BLOCK_M)  # compiler knows lo is aligned
+
+      # In a K-loop where start_n is always block-aligned:
+      for start_n in tl.range(lo, hi, BLOCK_N):
+          start_n = tl.multiple_of(start_n, BLOCK_N)
+          # ... loads using start_n are now optimized
+    expected_speedup: "modest (enables compiler optimizations)"
+    applies_to: [attention, gemm, any_blocked_loop]
+
+  - id: xpu_1d_tensor_descriptor
+    name: "Use 1D tensor descriptors for per-row metadata (logsumexp, max, sum)"
+    stage: memory_access
+    description: "Create 1D descriptors for storing/loading vector data like attention stats"
+    rationale: |
+      Tensor descriptors are not limited to 2D tiles. 1D descriptors work for
+      per-row metadata vectors (logsumexp M, delta D, row sums, etc.) that are
+      common in attention and normalization kernels.
+
+      1D descriptors handle boundary checking automatically, just like 2D ones.
+    pattern_after: |
+      # Store per-row logsumexp values
+      desc_m = tl.make_tensor_descriptor(
+          base=M + off_hz * N_CTX,     # offset to correct batch/head
+          shape=[N_CTX],                # 1D shape
+          strides=[1],                  # contiguous
+          block_shape=[BLOCK_M],        # 1D block
+      )
+      desc_m.store([start_m * BLOCK_M], m_i)
+
+      # Load per-row values in backward
+      # (or use tl.load for simple 1D access when descriptors aren't needed)
+    expected_speedup: "N/A (API pattern; same perf as manual pointer + mask)"
+    applies_to: [attention, normalization, reduction, metadata]
+
+  - id: xpu_descriptor_load_transpose
+    name: "Transpose after descriptor load: desc.load([...]).T"
+    stage: memory_access
+    description: "Load a tile via descriptor then transpose in-register with .T"
+    rationale: |
+      Some operations need data in transposed layout (e.g., attention loads K as
+      [BLOCK_N, HEAD_DIM] but needs [HEAD_DIM, BLOCK_N] for QK^T = Q @ K^T).
+
+      Rather than creating a descriptor with swapped strides (which may not match
+      the physical layout), load in natural layout then transpose in-register:
+        k = desc_k.load([offset, 0]).T
+
+      For backward passes, tl.trans(tensor) provides the same in-register transpose:
+        dpT = tl.dot(v, tl.trans(do))
+    pattern_after: |
+      # Forward: load K as [BLOCK_N, HEAD_DIM], transpose for Q @ K^T
+      desc_k = tl.make_tensor_descriptor(
+          K, shape=[y_dim, HEAD_DIM], strides=[HEAD_DIM, 1],
+          block_shape=[BLOCK_N, HEAD_DIM])
+      k = desc_k.load([offsetk_y, 0]).T    # now [HEAD_DIM, BLOCK_N]
+      qk = tl.dot(q, k)                     # [BLOCK_M, HEAD_DIM] @ [HEAD_DIM, BLOCK_N]
+
+      # Backward: transpose with tl.trans()
+      dpT = tl.dot(v, tl.trans(do)).to(tl.float32)
+      dk += tl.dot(dsT, tl.trans(qT))
+    expected_speedup: "N/A (required for correct matrix orientation)"
+    applies_to: [attention, gemm, any_transpose]
+    notes: |
+      - .T on a load result is an in-register operation (no extra memory access)
+      - tl.trans() is equivalent to .T but can be applied to any tensor variable
+      - Both are used extensively in Flash Attention backward passes
+
+  - id: xpu_adaptive_grid_layout
+    name: "Adapt grid layout based on problem size for occupancy"
+    stage: xpu_specific
+    description: "Use different grid dimension mappings for small vs large problems"
+    rationale: |
+      For attention or similar kernels, the grid needs batch (Z), head (H), and
+      tile dimensions. How these map to grid axes affects occupancy:
+
+      - Large N_CTX (> 512): grid = (Z, H, num_blocks_m)
+        Each batch and head gets its own grid dimension for maximum parallelism.
+
+      - Small N_CTX (<= 512): grid = (num_blocks_m, 1, Z*H)
+        Flatten batch×head into axis=2, put tiles on axis=0. This ensures enough
+        total programs even when num_blocks_m is small.
+
+      The kernel must decode the program IDs differently based on the layout.
+    pattern_after: |
+      # Launch-side:
+      if n_ctx <= 512:
+          grid = lambda args: (triton.cdiv(n_ctx, args['BLOCK_M']), 1, Z * H)
+      else:
+          grid = lambda args: (Z, H, triton.cdiv(n_ctx, args['BLOCK_M']))
+
+      # Kernel-side:
+      if N_CTX <= 512:
+          start_m = tl.program_id(0)
+          off_hz = tl.program_id(2)
+          off_z = off_hz // H
+          off_h = off_hz % H
+      else:
+          off_z = tl.program_id(0)
+          off_h = tl.program_id(1)
+          start_m = tl.program_id(2)
+    expected_speedup: "significant for small sequence lengths (avoids underutilization)"
+    applies_to: [attention, flash_attention, variable_sequence_length]
+
+  - id: xpu_blk_slice_factor_causal
+    name: "Use smaller blocks for causal-masked (diagonal) tiles"
+    stage: xpu_specific
+    description: "BLK_SLICE_FACTOR reduces block size for masked regions to avoid wasted compute"
+    rationale: |
+      In causal attention, diagonal tiles (where the causal mask is active) have
+      many masked-out elements. Using full-size blocks wastes compute on zeros.
+
+      BLK_SLICE_FACTOR divides the block size for masked regions:
+        MASK_BLOCK_M1 = BLOCK_M1 // BLK_SLICE_FACTOR
+
+      The kernel runs the masked loop with smaller blocks, then switches to full
+      blocks for the unmasked (fully below-diagonal) region.
+    pattern_after: |
+      BLOCK_M1, BLOCK_N1 = 32, 128
+      BLK_SLICE_FACTOR = 2
+      MASK_BLOCK_M1 = BLOCK_M1 // BLK_SLICE_FACTOR  # = 16 for masked tiles
+
+      # Masked (diagonal) pass with smaller blocks:
+      num_steps = BLOCK_N1 // MASK_BLOCK_M1
+      dk, dv = _attn_bwd_dkdv(..., MASK_BLOCK_M1, BLOCK_N1, ..., MASK=True)
+
+      # Unmasked (full) pass with normal blocks:
+      num_steps = (N_CTX - start_m) // BLOCK_M1
+      dk, dv = _attn_bwd_dkdv(..., BLOCK_M1, BLOCK_N1, ..., MASK=False)
+    expected_speedup: "reduces wasted compute in causal backward pass"
+    applies_to: [attention, flash_attention, causal, backward]
+
+  - id: xpu_flattened_4d_to_2d_descriptors
+    name: "Flatten 4D tensors to 2D for tensor descriptors with manual batch/head offset"
+    stage: memory_access
+    description: "Reshape [Z, H, N_CTX, D] as [Z*H*N_CTX, D] for descriptors, compute offsets manually"
+    rationale: |
+      Tensor descriptors support 2D shapes. For 4D attention tensors [Z, H, N_CTX, D],
+      flatten the first three dims into one and use a manual offset to select the
+      correct batch/head slice. This works because Q/K/V/O are contiguous with
+      stride pattern [H*N_CTX*D, N_CTX*D, D, 1].
+    pattern_after: |
+      y_dim = Z * H * N_CTX
+      desc_q = tl.make_tensor_descriptor(
+          Q, shape=[y_dim, HEAD_DIM], strides=[HEAD_DIM, 1],
+          block_shape=[BLOCK_M, HEAD_DIM])
+
+      # Compute offset into the flattened dimension:
+      offset_y = off_z * (N_CTX * H) + off_h * N_CTX
+      qo_offset_y = offset_y + start_m * BLOCK_M
+
+      # Load from the correct batch/head/position:
+      q = desc_q.load([qo_offset_y, 0])
+    expected_speedup: "N/A (enables descriptor use for multi-dim tensors)"
+    applies_to: [attention, flash_attention, multi_head]
+    notes: |
+      - Requires that Q/K/V are contiguous (assert in wrapper)
+      - The [HEAD_DIM, 1] strides mean the last dim is always contiguous
+      - K/V descriptors use the same flattened shape but may load with .T

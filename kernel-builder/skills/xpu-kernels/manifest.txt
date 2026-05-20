@@ -1,0 +1,26 @@
+# Files for xpu-kernels skill
+SKILL.md
+README.md
+references/correctness.yaml
+references/dtype_optimizations.yaml
+references/fusion_patterns.yaml
+references/huggingface-kernels-integration.md
+references/implementation_reference.md
+references/kernelbench-classification.md
+references/memory_patterns.yaml
+references/optimization_levels.yaml
+references/optimization_strategies.md
+references/persistent_kernel_patterns.yaml
+references/workflow_details.md
+references/xpu_optimizations.yaml
+scripts/analyze_kernel.py
+scripts/benchmark.py
+scripts/benchmark_kernels.py
+scripts/config.py
+scripts/config.yaml
+scripts/huggingface_kernels_example.py
+scripts/requirements.txt
+scripts/transformers_injection_example.py
+scripts/trial_manager.py
+scripts/validate_triton.py
+scripts/xpu_profiler.py

@@ -10,10 +10,12 @@ const GITHUB_RAW_BASE_TEMPLATE: &str =
     "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills";
 
 #[derive(Clone, Debug, Default, ValueEnum)]
+#[allow(clippy::enum_variant_names)]
 pub enum SkillId {
     #[default]
     CudaKernels,
     RocmKernels,
+    XpuKernels,
 }
 
 impl SkillId {
@@ -21,6 +23,7 @@ impl SkillId {
         match self {
             SkillId::CudaKernels => "cuda-kernels",
             SkillId::RocmKernels => "rocm-kernels",
+            SkillId::XpuKernels => "xpu-kernels",
         }
     }
 }

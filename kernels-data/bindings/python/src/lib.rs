@@ -207,8 +207,8 @@ impl From<Metadata> for PyMetadata {
             name: PyKernelName { inner: m.name },
             version: m.version,
             license: m.license,
-            upstream: m.upstream.map(|u| u.to_string()),
-            source: m.source.map(|u| u.to_string()),
+            upstream: m.upstream.map(|u| u.as_url().to_string()),
+            source: m.source.map(|u| u.as_url().to_string()),
             python_depends: m.python_depends,
             backend: m.backend.into(),
         }

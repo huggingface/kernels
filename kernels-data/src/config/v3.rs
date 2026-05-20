@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, KernelName};
+use super::{Dependency, GitUrl, KernelName};
 use crate::{config::ConfigError, version::Version};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -38,7 +38,7 @@ pub struct General {
 
     pub license: Option<String>,
 
-    pub upstream: Option<url::Url>,
+    pub upstream: Option<GitUrl>,
 
     pub backends: Vec<Backend>,
 

@@ -3,7 +3,7 @@ use std::str::FromStr;
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Backend, KernelName};
+use crate::config::{Backend, GitUrl, KernelName};
 use crate::digest::Digest;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -24,9 +24,9 @@ pub struct Metadata {
     pub version: usize,
     pub license: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub upstream: Option<url::Url>,
+    pub upstream: Option<GitUrl>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<url::Url>,
+    pub source: Option<GitUrl>,
     pub python_depends: Vec<String>,
     pub backend: BackendInfo,
     #[serde(skip_serializing_if = "Option::is_none")]

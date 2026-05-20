@@ -41,8 +41,8 @@ impl GitUrl {
         }
 
         // SCP-like syntax: git@github.com:org/repo.git
-        if let Some((host, path)) = s.split_once(':') {
-            if !host.is_empty() && !path.is_empty() && !path.starts_with('/') {
+        if let Some((host, path)) = s.split_once(':')
+            && !host.is_empty() && !path.is_empty() && !path.starts_with('/') {
                 let normalized = format!("ssh://{host}/{path}");
                 if let Ok(url) = Url::parse(&normalized) {
                     return Ok(Self {
@@ -51,7 +51,6 @@ impl GitUrl {
                     });
                 }
             }
-        }
 
         Err(format!("invalid git URL `{s}`"))
     }

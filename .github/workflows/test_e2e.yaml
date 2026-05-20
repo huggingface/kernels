@@ -16,12 +16,9 @@ on:
 env:
   HF_ENDPOINT: https://hub-ci.huggingface.co
   HF_TOKEN: ${{ secrets.HF_HUB_CI_TOKEN }}
-  E2E_REPO_ID: __DUMMY_KERNELS_USER__/kernels-upload-test
-  E2E_BRANCH: e2e-${{ github.event.pull_request.number || github.run_id }}-${{ github.run_attempt }}
-
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+  E2E_REPO_ID: __DUMMY_KERNELS_USER__/kernels-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+  E2E_REPO_NAME: kernels-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+  E2E_PKG_NAME: kernels_e2e_${{ github.run_id }}_${{ github.run_attempt }}
 
 jobs:
   init-build-upload:
@@ -45,23 +42,6 @@ jobs:
         env:
           USER: runner
 
-      # Remove the existing test repo if it exists so we test repo creation in the upload step
-      - name: Delete existing test repo
-        run: |
-          cat > /tmp/delete_repos.py << 'PYEOF'
-          from huggingface_hub import HfApi
-          import os
-
-          api = HfApi(
-              endpoint=os.environ["HF_ENDPOINT"]
-          )
-          repo_id = os.environ["E2E_REPO_ID"]
-          for repo_type in ["kernel", "model"]:
-              api.delete_repo(repo_id, repo_type=repo_type, missing_ok=True)
-              print(f"Deleted {repo_type} repo (or it did not exist)")
-          PYEOF
-          nix-shell -p python3Packages.huggingface-hub --run "python /tmp/delete_repos.py"
-
       - name: Init kernel project
         run: |
           cd /tmp
@@ -71,27 +51,27 @@ jobs:
 
       - name: Validate scaffold
         run: |
-          cd /tmp/kernels-upload-test
+          cd /tmp/${{ env.E2E_REPO_NAME }}
           test -f build.toml
           test -f flake.nix
-          test -f torch-ext/kernels_upload_test/__init__.py
+          test -f torch-ext/${{ env.E2E_PKG_NAME }}/__init__.py
           test -f torch-ext/torch_binding.cpp
           test -f torch-ext/torch_binding.h
-          test -f kernels_upload_test_cuda/kernels_upload_test.cu
-          test -f tests/test_kernels_upload_test.py
+          test -f ${{ env.E2E_PKG_NAME }}_cuda/${{ env.E2E_PKG_NAME }}.cu
+          test -f tests/test_${{ env.E2E_PKG_NAME }}.py
           test -f example.py
-          grep -q 'name = "kernels-upload-test"' build.toml
-          grep -q 'repo-id = "__DUMMY_KERNELS_USER__/kernels-upload-test"' build.toml
+          grep -q 'name = "${{ env.E2E_REPO_NAME }}"' build.toml
+          grep -q 'repo-id = "${{ env.E2E_REPO_ID }}"' build.toml
           grep -q 'backend = "cuda"' build.toml
 
       - name: Patch flake.nix to use local nix-builder
         run: |
-          cd /tmp/kernels-upload-test
+          cd /tmp/${{ env.E2E_REPO_NAME }}
           sed -i 's|github:huggingface/kernels|path:'"$GITHUB_WORKSPACE"'|' flake.nix
 
       - name: Make flake a Git repo
         run: |
-          cd /tmp/kernels-upload-test
+          cd /tmp/${{ env.E2E_REPO_NAME }}
           git config --global user.email "bottie@mcbotface.hf.co"
           git config --global user.name "Botty McBotface"
           git init && git add . && git commit -m "e2e test"
@@ -99,19 +79,19 @@ jobs:
       - name: Determine latest variant
         id: variant
         run: |
-          cd /tmp/kernels-upload-test
+          cd /tmp/${{ env.E2E_REPO_NAME }}
           VARIANT=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants . | tail -1)
           echo "name=$VARIANT" >> $GITHUB_OUTPUT
           echo "Building variant: $VARIANT"
 
       - name: Build kernel
         run: |
-          cd /tmp/kernels-upload-test
+          cd /tmp/${{ env.E2E_REPO_NAME }}
           nix run $GITHUB_WORKSPACE#kernel-builder -- build --variant ${{ steps.variant.outputs.name }} . -L
 
       - name: Verify build artifacts
         run: |
-          cd /tmp/kernels-upload-test
+          cd /tmp/${{ env.E2E_REPO_NAME }}
           VARIANT_DIR=$(ls -d result/torch* | head -1)
           echo "Built variant: $VARIANT_DIR"
           test -f "$VARIANT_DIR/__init__.py"
@@ -120,8 +100,8 @@ jobs:
 
       - name: Upload kernel to Hub
         run: |
-          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }}
-          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/kernels-upload-test --branch ${{ env.E2E_BRANCH }} --repo-type model
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/${{ env.E2E_REPO_NAME }}
+          nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/${{ env.E2E_REPO_NAME }} --repo-type model
 
   download-and-test:
     name: Download and test kernel via get_kernel
@@ -157,11 +137,33 @@ jobs:
           import torch
           from kernels import get_kernel
 
-          kernel = get_kernel('${{ env.E2E_REPO_ID }}', revision='${{ env.E2E_BRANCH }}', trust_remote_code=True)
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', trust_remote_code=True)
 
           x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
-          result = kernel.kernels_upload_test(x)
+          result = kernel.${{ env.E2E_PKG_NAME }}(x)
           expected = x + 1.0
           torch.testing.assert_close(result, expected)
           print('E2E test passed: get_kernel + correctness check')
+          "
+
+  cleanup:
+    name: Clean up test repos
+    needs: [init-build-upload, download-and-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.12"
+      - name: Delete test repos
+        run: |
+          uv run --with huggingface-hub python -c "
+          from huggingface_hub import HfApi
+          import os
+
+          api = HfApi(endpoint=os.environ['HF_ENDPOINT'])
+          repo_id = os.environ['E2E_REPO_ID']
+          for repo_type in ['kernel', 'model']:
+              api.delete_repo(repo_id, repo_type=repo_type, missing_ok=True)
+              print(f'Deleted {repo_type} repo (or it did not exist)')
           "

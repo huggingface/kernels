@@ -29,7 +29,7 @@ let
     ];
   };
 in
-assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.10.0") kernelBuildSets)
+assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.11.0") kernelBuildSets)
   ''
     Torch minver/maxver filtering does not work.
   '';

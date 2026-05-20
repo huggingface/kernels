@@ -7,27 +7,21 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU aarch64-darwin
 
-- `torch210-cpu-aarch64-darwin`
 - `torch211-cpu-aarch64-darwin`
 - `torch212-cpu-aarch64-darwin`
 
 ## Metal aarch64-darwin
 
-- `torch210-metal-aarch64-darwin`
 - `torch211-metal-aarch64-darwin`
 - `torch212-metal-aarch64-darwin`
 
 ## CPU aarch64-linux
 
-- `torch210-cxx11-cpu-aarch64-linux`
 - `torch211-cxx11-cpu-aarch64-linux`
 - `torch212-cxx11-cpu-aarch64-linux`
 
 ## CUDA aarch64-linux
 
-- `torch210-cxx11-cu126-aarch64-linux`
-- `torch210-cxx11-cu128-aarch64-linux`
-- `torch210-cxx11-cu130-aarch64-linux`
 - `torch211-cxx11-cu126-aarch64-linux`
 - `torch211-cxx11-cu128-aarch64-linux`
 - `torch211-cxx11-cu130-aarch64-linux`
@@ -37,15 +31,11 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU x86_64-linux
 
-- `torch210-cxx11-cpu-x86_64-linux`
 - `torch211-cxx11-cpu-x86_64-linux`
 - `torch212-cxx11-cpu-x86_64-linux`
 
 ## CUDA x86_64-linux
 
-- `torch210-cxx11-cu126-x86_64-linux`
-- `torch210-cxx11-cu128-x86_64-linux`
-- `torch210-cxx11-cu130-x86_64-linux`
 - `torch211-cxx11-cu126-x86_64-linux`
 - `torch211-cxx11-cu128-x86_64-linux`
 - `torch211-cxx11-cu130-x86_64-linux`
@@ -55,8 +45,6 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## ROCm x86_64-linux
 
-- `torch210-cxx11-rocm70-x86_64-linux`
-- `torch210-cxx11-rocm71-x86_64-linux`
 - `torch211-cxx11-rocm71-x86_64-linux`
 - `torch211-cxx11-rocm72-x86_64-linux`
 - `torch212-cxx11-rocm71-x86_64-linux`
@@ -64,7 +52,6 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## XPU x86_64-linux
 
-- `torch210-cxx11-xpu20253-x86_64-linux`
 - `torch211-cxx11-xpu20253-x86_64-linux`
 - `torch212-cxx11-xpu20253-x86_64-linux`
 

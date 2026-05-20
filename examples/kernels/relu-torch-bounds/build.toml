@@ -11,8 +11,8 @@ backends = [
 repo-id = "kernels-test/relu-torch-bounds"
 
 [torch]
-minver = "2.10"
-maxver = "2.10"
+minver = "2.11"
+maxver = "2.11"
 src = [
     "torch-ext/torch_binding.cpp",
     "torch-ext/torch_binding.h",

@@ -16,6 +16,7 @@
   get-kernel-check,
   kernel-abi-check,
   kernel-layout-check,
+  torch-ops-check,
   ninja,
   python3,
   remove-bytecode-hook,
@@ -163,6 +164,7 @@ stdenv.mkDerivation (prevAttrs: {
     kernel-abi-check
     kernel-layout-check
     remove-bytecode-hook
+    torch-ops-check
   ]
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })

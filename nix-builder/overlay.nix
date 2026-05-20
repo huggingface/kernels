@@ -26,6 +26,8 @@ in
 
   remove-bytecode-hook = final.callPackage ./pkgs/remove-bytecode-hook { };
 
+  torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
+
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
       version = "0.15.10";
@@ -166,13 +168,6 @@ in
           triton-xpu = null;
           # Not supported anymore.
           xpuPackages = null;
-        };
-
-        torch-bin_2_10 = mkTorch {
-          version = "2.10";
-          triton-cuda = triton_3_6_0;
-          triton-xpu = triton-xpu_3_6_0;
-          xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         torch-bin_2_11 = mkTorch {

@@ -84,7 +84,7 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.10";
+              torchVersion = "2.11";
               cudaVersion = "12.8";
               systems = [
                 "x86_64-linux"

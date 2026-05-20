@@ -20,6 +20,7 @@
   python3,
   remove-bytecode-hook,
   rewrite-nix-paths-macho,
+  torch-ops-check,
   writeScriptBin,
 
   # Framework packages
@@ -163,6 +164,7 @@ stdenv.mkDerivation (prevAttrs: {
     kernel-abi-check
     kernel-layout-check
     remove-bytecode-hook
+    torch-ops-check
   ]
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })

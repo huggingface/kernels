@@ -12,6 +12,7 @@
   kernel-layout-check,
   python3,
   remove-bytecode-hook,
+  torch-ops-check,
   writeText,
 
   torch,
@@ -90,6 +91,7 @@ stdenv.mkDerivation (prevAttrs: {
     kernel-builder
     kernel-layout-check
     remove-bytecode-hook
+    torch-ops-check
   ]
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override {

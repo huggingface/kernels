@@ -145,6 +145,19 @@ Add `.vscode/settings.json` (do not commit):
 }
 ```
 
+Depending on the extension being used, the configuration above behaves
+differently:
+
+- With `clangd`, the `clangd.arguments` line is optional. clangd already
+  looks in the parent directories of each source file for
+  `compile_commands.json` and will find the workspace-root symlink on its
+  own ([clangd docs](https://clangd.llvm.org/installation#project-setup)).
+  Setting it explicitly does no harm.
+- With the Microsoft C/C++ extension, the `C_Cpp.default.compileCommands`
+  line is required. The extension does not pick up
+  `compile_commands.json` from the workspace root on its own, unless
+  another extension (such as CMake Tools) tells it where to look.
+
 To verify, open `torch-ext/torch_binding.cpp` and hover an
 `#include <torch/torch.h>` directive. The resolved path should point
 into `/nix/store/...`, not a system path.

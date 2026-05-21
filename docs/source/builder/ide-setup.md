@@ -69,12 +69,21 @@ $ direnv allow
 ```
 
 `direnv` now activates the default devshell whenever you `cd` into the
-project. Confirm it picked up the toolchain:
+project. The devshell's `shellHook` creates and activates a `.venv` on
+first entry. Confirm it picked up the toolchain and venv:
 
 ```bash
 $ which nvcc
 /nix/store/.../bin/nvcc
+$ ls -ld .venv
+drwxr-xr-x ... .venv
+$ which python
+/path/to/kernel/.venv/bin/python
 ```
+
+If `.venv` is missing, re-run `direnv reload` and check the output for
+the `Creating new venv environment in path: './.venv'` line from the
+`shellHook`.
 
 To pin a non-default build variant, name it explicitly:
 
@@ -84,30 +93,6 @@ $ direnv allow
 ```
 
 See [Build Variants](./build-variants.md) for the variant list.
-
-## Bootstrapping the project venv
-
-`use flake` exposes the devshell's environment variables but does not
-run its `shellHook`, so the `.venv` used by the devshell is not created
-on direnv activation. Run `kernel-builder devshell` once to create it:
-
-```bash
-$ kernel-builder devshell
-$ exit
-```
-
-Then have direnv source it on every activation by appending to `.envrc`:
-
-```bash
-use flake
-source .venv/bin/activate
-```
-
-Reload:
-
-```bash
-$ direnv allow
-```
 
 ## Generating IDE-facing project files
 
@@ -190,13 +175,10 @@ use flake .#devShells.torch211-cxx11-xpu20253-x86_64-linux
 ```
 
 Remove `.venv/` first if it was created against a different variant,
-then re-run `kernel-builder devshell` to recreate it, and reload
-direnv:
+then reload direnv to recreate it via the new devshell's `shellHook`:
 
 ```bash
 $ rm -rf .venv
-$ kernel-builder devshell
-$ exit
 $ direnv reload
 ```
 

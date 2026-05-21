@@ -115,15 +115,19 @@ generated files.
 
 ## Configuring VS Code
 
-Open the project from a direnv-activated shell:
+Install the [`mkhl.direnv`](https://github.com/direnv/direnv-vscode)
+extension. It activates the project's `.envrc` when VS Code opens
+the workspace, so language servers and the integrated terminal see
+the devshell environment without launching `code` from a shell.
+
+Alternatively, skip the extension and open the project from a
+direnv-activated shell — VS Code inherits the environment that way
+too:
 
 ```bash
 $ cd path/to/kernel
 $ code .
 ```
-
-VS Code inherits the devshell environment through the shell. No
-direnv extension is needed.
 
 Install one of the following first-party extensions for C++/CUDA
 completion:

@@ -51,7 +51,9 @@ $ echo 'source $HOME/.nix-profile/share/nix-direnv/direnvrc' \
     >> ~/.config/direnv/direnvrc
 ```
 
-On NixOS or with home-manager, enable `programs.direnv` with
+On [NixOS](https://github.com/nix-community/nix-direnv#via-system-configuration-on-nixos)
+or with [home-manager](https://github.com/nix-community/nix-direnv#via-home-manager),
+enable `programs.direnv` with
 `nix-direnv` instead. See
 [`terraform/nixos-configuration.nix`](https://github.com/huggingface/kernels/tree/main/terraform/nixos-configuration.nix)
 for a working example.

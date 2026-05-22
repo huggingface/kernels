@@ -24,6 +24,10 @@ message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
 set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201")
 
+# Make Torch CMake machinery happy. Whatever we use does not matter, since
+# we set the arches per-file later anyway.
+set(ENV{PYTORCH_ROCM_ARCH} "${HIP_SUPPORTED_ARCHS}")
+
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/get_gpu_lang.cmake)
@@ -136,8 +140,7 @@ elseif(GPU_LANG STREQUAL "HIP")
   # .hip extension automatically, HIP must be enabled explicitly.
   enable_language(HIP)
 
-  override_gpu_arches(GPU_ARCHES HIP ${HIP_SUPPORTED_ARCHS})
-  set(ROCM_ARCHS ${GPU_ARCHES})
+  set(ROCM_ARCHS ${HIP_SUPPORTED_ARCHS})
   message(STATUS "ROCM supported target architectures: ${ROCM_ARCHS}")
 
   # TODO: deprecate one of these settings.

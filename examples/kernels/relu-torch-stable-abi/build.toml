@@ -1,0 +1,65 @@
+[general]
+name = "relu-torch-stable-abi"
+version = 1
+license = "Apache-2.0"
+backends = [
+    "cpu",
+    "cuda",
+    "metal",
+    "rocm",
+    "xpu",
+]
+
+[general.hub]
+repo-id = "kernels-test/relu-torch-stable-abi"
+
+[torch]
+stable-abi = "2.11"
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.relu_xpu]
+backend = "xpu"
+depends = ["torch"]
+src = ["relu_xpu/relu.cpp"]
+
+
+# Converting metal to the Torch stable ABI requires additional APIs to get
+# the command buffer and dispatch queue.
+#
+# [kernel.relu_metal]
+# backend = "metal"
+# depends = ["torch"]
+# src = [
+#    "relu_metal/relu.mm",
+#    "relu_metal/relu.metal",
+#    "relu_metal/common.h",
+#]
+
+[kernel.relu_rocm]
+backend = "rocm"
+depends = ["torch"]
+rocm-archs = [
+    "gfx906",
+    "gfx908",
+    "gfx90a",
+    "gfx940",
+    "gfx941",
+    "gfx942",
+    "gfx1030",
+    "gfx1100",
+    "gfx1101",
+]
+src = ["relu_cuda/relu.cu"]
+
+[kernel.relu_cpu]
+backend = "cpu"
+depends = ["torch"]
+src = ["relu_cpu/relu_cpu.cpp"]
+
+[kernel.relu]
+backend = "cuda"
+depends = ["torch"]
+src = ["relu_cuda/relu.cu"]

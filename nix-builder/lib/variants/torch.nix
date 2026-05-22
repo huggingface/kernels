@@ -17,13 +17,27 @@ let
       "xpu${flattenVersion (lib.versions.majorMinor buildConfig.xpuVersion)}"
     else
       "cpu";
+  torchString =
+    stableAbi:
+    if stableAbi == null then
+      "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}"
+    else
+      "torch-stable-abi${flattenVersion (lib.versions.majorMinor stableAbi)}";
 in
 {
-  arch =
-    if buildConfig.system == "aarch64-darwin" then
+  arch = "${torchString null}-${computeString}-${buildConfig.system}";
+  noarch = "torch-${buildConfig.backend}";
+
+  kernelVariant =
+    kernelConfig:
+    let
+      archVariant = kernelConfig.kernelBackends.${buildConfig.backend};
+    in
+    if archVariant && kernelConfig.isTorchStableAbi then
+      "torch-stable-abi${flattenVersion (lib.versions.majorMinor kernelConfig.torchStableAbiVersion)}-${computeString}-${buildConfig.system}"
+    else if archVariant then
       "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}-${computeString}-${buildConfig.system}"
     else
-      "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}-cxx11-${computeString}-${buildConfig.system}";
+      "torch-${buildConfig.backend}";
 
-  noarch = "torch-${buildConfig.backend}";
 }

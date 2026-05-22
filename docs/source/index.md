@@ -30,3 +30,6 @@ users load compatible compute kernels from the Hub. Refer to the [quickstart](..
 
 If you're looking for a more involved "Why kernels?" answer, refer to
 [this page](./why_kernels.md).
+
+The [talks page](./talks.md) page has links to talks on the
+Kernels project.

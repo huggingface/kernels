@@ -5,16 +5,11 @@ use std::path::{Path, PathBuf};
 
 use eyre::{bail, ensure, Context, Result};
 
-use kernels_data::config::{Build, BuildCompat};
+use kernels_data::config::{Build, BuildCompat, CurrentConfig};
 
 pub(crate) fn parse_build(kernel_dir: impl AsRef<Path>) -> Result<Build> {
     let build_compat = parse_and_validate(kernel_dir)?;
-
-    let build: Build = build_compat
-        .try_into()
-        .context("Cannot update build configuration")?;
-
-    Ok(build)
+    Ok(build_compat.into())
 }
 
 pub(crate) fn check_or_infer_kernel_dir(kernel_dir: Option<PathBuf>) -> Result<PathBuf> {
@@ -49,7 +44,7 @@ pub(crate) fn check_or_infer_target_dir(
     }
 }
 
-pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {
+pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<CurrentConfig> {
     let build_toml = kernel_dir.as_ref().join("build.toml");
     let mut toml_data = String::new();
     File::open(&build_toml)
@@ -57,10 +52,24 @@ pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<BuildCo
         .read_to_string(&mut toml_data)
         .wrap_err_with(|| format!("Cannot read from {}", build_toml.to_string_lossy()))?;
 
-    let build_compat: BuildCompat = toml::from_str(&toml_data)
+    let build: CurrentConfig = toml::from_str(&toml_data)
         .wrap_err_with(|| format!("Cannot parse TOML in {}", build_toml.to_string_lossy()))?;
 
-    Ok(build_compat)
+    Ok(build)
+}
+
+pub(crate) fn parse_and_validate_compat(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {
+    let build_toml = kernel_dir.as_ref().join("build.toml");
+    let mut toml_data = String::new();
+    File::open(&build_toml)
+        .wrap_err_with(|| format!("Cannot open {} for reading", build_toml.to_string_lossy()))?
+        .read_to_string(&mut toml_data)
+        .wrap_err_with(|| format!("Cannot read from {}", build_toml.to_string_lossy()))?;
+
+    let config: BuildCompat = toml::from_str(&toml_data)
+        .wrap_err_with(|| format!("Cannot parse TOML in {}", build_toml.to_string_lossy()))?;
+
+    Ok(config)
 }
 
 /// Discover build variant directories (contain `metadata.json`).

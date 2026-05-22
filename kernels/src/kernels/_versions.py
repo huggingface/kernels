@@ -1,5 +1,9 @@
 import logging
+import os
+from pathlib import Path
 
+from huggingface_hub import constants
+from huggingface_hub.file_download import repo_folder_name
 from huggingface_hub.hf_api import GitRefInfo
 
 logger = logging.getLogger(__name__)
@@ -8,6 +12,9 @@ logger = logging.getLogger(__name__)
 def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
     """Get kernel versions that are available in the repository."""
     from kernels.utils import _get_hf_api
+
+    if constants.HF_HUB_OFFLINE:
+        return _get_available_versions_from_cache(repo_id)
 
     refs = _get_hf_api().list_repo_refs(repo_id=repo_id, repo_type="kernel")
 
@@ -23,6 +30,36 @@ def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
     return versions
 
 
+def _get_available_versions_from_cache(repo_id: str) -> dict[int, GitRefInfo]:
+    """Get kernel versions from the local Hugging Face cache."""
+    cache_dir = os.environ.get("KERNELS_CACHE") or constants.HF_HUB_CACHE
+
+    versions: dict[int, GitRefInfo] = {}
+    # Tolerate both layouts: the "kernel" repo type used by newer
+    # huggingface_hub, and the legacy "model" prefix that older caches use.
+    for repo_type in ("kernel", "model"):
+        refs_dir = Path(cache_dir) / repo_folder_name(repo_id=repo_id, repo_type=repo_type) / "refs"
+        if not refs_dir.is_dir():
+            continue
+        for ref_path in refs_dir.iterdir():
+            if not ref_path.is_file():
+                continue
+            ref_name = ref_path.name
+            if not ref_name.startswith("v"):
+                continue
+            try:
+                version = int(ref_name[1:])
+            except ValueError:
+                continue
+            try:
+                commit = ref_path.read_text().strip()
+            except OSError:
+                continue
+            versions[version] = GitRefInfo(name=ref_name, ref=ref_name, target_commit=commit)
+
+    return versions
+
+
 def resolve_version_spec_as_ref(repo_id: str, version_spec: int) -> GitRefInfo:
     """
     Get the ref for a kernel with the given version.
@@ -31,6 +68,12 @@ def resolve_version_spec_as_ref(repo_id: str, version_spec: int) -> GitRefInfo:
 
     ref = versions.get(version_spec, None)
     if ref is None:
+        if constants.HF_HUB_OFFLINE and not versions:
+            raise ValueError(
+                f"Version {version_spec} of '{repo_id}' is not available in the local cache "
+                "and Hugging Face Hub is in offline mode. Download the kernel "
+                "while online first, or pass an explicit `revision=<commit>`."
+            )
         raise ValueError(
             f"Version {version_spec} not found, available versions: {', '.join(str(v) for v in sorted(versions.keys()))}"
         )

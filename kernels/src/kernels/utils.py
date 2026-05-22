@@ -7,12 +7,14 @@ import json
 import os
 import platform
 import sys
+import warnings
 from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
 from huggingface_hub import HfApi, constants
+from huggingface_hub.errors import LocalEntryNotFoundError
 from kernels_data import Metadata
 
 from kernels._system import glibc_version
@@ -52,8 +54,6 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
         return
 
     if isinstance(trust_remote_code, list):
-        import warnings
-
         warnings.warn(
             "Signing identity verification is not yet implemented. "
             "The provided signing identities will be ignored and the "
@@ -61,6 +61,18 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             "to bypass trust checks.",
             stacklevel=3,
         )
+
+    if constants.HF_HUB_OFFLINE:
+        # Publisher trust cannot be verified offline. The user opted into
+        # offline mode and the kernel must already be in the local cache,
+        # so trust was established when it was originally downloaded.
+        warnings.warn(
+            f"Skipping publisher trust check for '{repo_id}' because Hugging Face "
+            "Hub is in offline mode. Pass trust_remote_code=True to suppress this "
+            "warning.",
+            stacklevel=3,
+        )
+        return
 
     publisher = repo_id.split("/", 1)[0]
 
@@ -244,11 +256,34 @@ def install_kernel(
         `Path`: The path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
+    offline = local_files_only or constants.HF_HUB_OFFLINE
 
-    if not local_files_only:
+    if not offline:
         repo_id, revision = resolve_status(api, repo_id, revision)
+        variants = get_variants(api, repo_id=repo_id, revision=revision)
+    else:
+        # The Hub cannot be reached, so the local snapshot must exist. Locate
+        # it and enumerate variants from disk rather than calling list_repo_tree.
+        try:
+            local_repo_path = Path(
+                str(
+                    api.snapshot_download(
+                        repo_id,
+                        repo_type="kernel",
+                        cache_dir=CACHE_DIR,
+                        revision=revision,
+                        local_files_only=True,
+                    )
+                )
+            )
+        except LocalEntryNotFoundError as e:
+            raise FileNotFoundError(
+                f"Cannot find a local snapshot for {repo_id} (revision: {revision}). "
+                "When Hugging Face Hub is in offline mode the kernel must already "
+                "be present in the local cache."
+            ) from e
+        variants = get_variants_local(local_repo_path / "build")
 
-    variants = get_variants(api, repo_id=repo_id, revision=revision)
     variant, trace = resolve_variant(variants, backend)
 
     if variant is None:
@@ -266,7 +301,7 @@ def install_kernel(
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
-                local_files_only=local_files_only,
+                local_files_only=offline,
             )
         )
     )
@@ -513,7 +548,29 @@ def load_kernel(
         )
 
     api = _get_hf_api()
-    variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
+
+    if constants.HF_HUB_OFFLINE:
+        # Enumerate variants from the local snapshot rather than the Hub.
+        try:
+            local_repo_path = Path(
+                str(
+                    api.snapshot_download(
+                        repo_id,
+                        repo_type="kernel",
+                        cache_dir=CACHE_DIR,
+                        revision=locked_sha,
+                        local_files_only=True,
+                    )
+                )
+            )
+        except LocalEntryNotFoundError as e:
+            raise FileNotFoundError(
+                f"Locked kernel `{repo_id}` was not downloaded. Make sure it's downloaded locally."
+            ) from e
+        variants = get_variants_local(local_repo_path / "build")
+    else:
+        variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
+
     variant, status = resolve_variant(variants, backend)
 
     if variant is None:

@@ -225,9 +225,6 @@ stdenv.mkDerivation (prevAttrs: {
     lib.optionalAttrs cudaSupport {
       CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
     }
-    // lib.optionalAttrs rocmSupport {
-      #PYTORCH_ROCM_ARCH = lib.concatStringsSep ";" torch.rocmArchs;
-    }
     // lib.optionalAttrs xpuSupport {
       MKLROOT = oneapi-torch-dev;
       SYCL_ROOT = oneapi-torch-dev;

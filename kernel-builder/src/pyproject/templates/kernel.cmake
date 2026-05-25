@@ -6,9 +6,8 @@ function(accumulate_gpu_archs OUT_ACC ACC EXTRA_ARCHS)
 endfunction()
 
 function(cuda_kernel_component SRC_VAR)
-    set(options SUPPORTS_HIPIFY)
-    set(oneValueArgs CUDA_MINVER)
-    set(multiValueArgs SOURCES INCLUDES CUDA_CAPABILITIES CUDA_FLAGS CXX_FLAGS HIP_FLAGS ROCM_ARCHS)
+    set(oneValueArgs CUDA_MINVER NAME)
+    set(multiValueArgs SOURCES INCLUDES CUDA_CAPABILITIES CUDA_FLAGS CXX_FLAGS)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     if(NOT KERNEL_SOURCES)
@@ -32,96 +31,115 @@ function(cuda_kernel_component SRC_VAR)
       PROPERTIES INCLUDE_DIRECTORIES "${KERNEL_INCLUDES}")
     endif()
 
-    if(GPU_LANG STREQUAL "CUDA")
-        # Determine CUDA architectures
-        if(KERNEL_CUDA_CAPABILITIES)
-            cuda_archs_loose_intersection(_KERNEL_ARCHS "${KERNEL_CUDA_CAPABILITIES}" "${CUDA_ARCHS}")
-        else()
-            set(_KERNEL_ARCHS "${CUDA_KERNEL_ARCHS}")
+    # Determine CUDA architectures
+    if(KERNEL_CUDA_CAPABILITIES)
+        cuda_archs_loose_intersection(_KERNEL_ARCHS "${KERNEL_CUDA_CAPABILITIES}" "${CUDA_ARCHS}")
+    else()
+        set(_KERNEL_ARCHS "${CUDA_KERNEL_ARCHS}")
+    endif()
+    message(STATUS "CUDA kernel: ${KERNEL_NAME}, capabilities: ${_KERNEL_ARCHS}")
+    set_gencode_flags_for_srcs(SRCS "${_KERNEL_SRC}" CUDA_ARCHS "${_KERNEL_ARCHS}")
+
+    accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
+    set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
+
+    # Apply CUDA-specific compile flags
+    if(KERNEL_CUDA_FLAGS)
+        set(_CUDA_FLAGS "${KERNEL_CUDA_FLAGS}")
+        # -static-global-template-stub is not supported on CUDA < 12.8. Remove this
+        # once we don't support CUDA 12.6 anymore.
+        if(CUDA_VERSION VERSION_LESS 12.8)
+            string(REGEX REPLACE "-static-global-template-stub=(true|false)" "" _CUDA_FLAGS "${_CUDA_FLAGS}")
         endif()
-        message(STATUS "CUDA kernel capabilities: ${_KERNEL_ARCHS}")
-        set_gencode_flags_for_srcs(SRCS "${_KERNEL_SRC}" CUDA_ARCHS "${_KERNEL_ARCHS}")
-
-        accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
-        set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
-
-        # Apply CUDA-specific compile flags
-        if(KERNEL_CUDA_FLAGS)
-            set(_CUDA_FLAGS "${KERNEL_CUDA_FLAGS}")
-            # -static-global-template-stub is not supported on CUDA < 12.8. Remove this
-            # once we don't support CUDA 12.6 anymore.
-            if(CUDA_VERSION VERSION_LESS 12.8)
-                string(REGEX REPLACE "-static-global-template-stub=(true|false)" "" _CUDA_FLAGS "${_CUDA_FLAGS}")
-            endif()
-
-            foreach(_SRC ${_KERNEL_SRC})
-                if(_SRC MATCHES ".*\\.cu$")
-                    set_property(
-            SOURCE ${_SRC}
-            APPEND PROPERTY
-            COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CUDA>:${_CUDA_FLAGS}>"
-          )
-                endif()
-            endforeach()
-        endif()
-
-        # Apply CXX-specific compile flags
-        if(KERNEL_CXX_FLAGS)
-            foreach(_SRC ${_KERNEL_SRC})
-                set_property(
-          SOURCE ${_SRC}
-          APPEND PROPERTY
-          COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:${KERNEL_CXX_FLAGS}>"
-        )
-            endforeach()
-        endif()
-
-        set(_TMP_SRC ${${SRC_VAR}})
-        list(APPEND _TMP_SRC ${_KERNEL_SRC})
-        set(${SRC_VAR} ${_TMP_SRC} PARENT_SCOPE)
-
-    elseif(GPU_LANG STREQUAL "HIP")
-        # Apply HIP-specific compile flags
-        if(KERNEL_HIP_FLAGS)
-            foreach(_SRC ${_KERNEL_SRC})
-                if(_SRC MATCHES ".*\\.(cu|hip)$")
-                    set_property(
-            SOURCE ${_SRC}
-            APPEND PROPERTY
-            COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:HIP>:${KERNEL_HIP_FLAGS}>"
-          )
-                endif()
-            endforeach()
-        endif()
-
-        # Determine ROCm architectures
-        if(KERNEL_ROCM_ARCHS)
-            hip_archs_loose_intersection(_KERNEL_ARCHS "${KERNEL_ROCM_ARCHS}" "${ROCM_ARCHS}")
-        else()
-            set(_KERNEL_ARCHS "${ROCM_ARCHS}")
-        endif()
-        message(STATUS "HIP kernel archs: ${_KERNEL_ARCHS}")
-
-        accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
-        set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
 
         foreach(_SRC ${_KERNEL_SRC})
-            if(_SRC MATCHES ".*\\.(cu|hip)$")
-                foreach(_ARCH ${_KERNEL_ARCHS})
-                    set_property(
-            SOURCE ${_SRC}
-            APPEND PROPERTY
-            COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:HIP>:--offload-arch=${_ARCH}>"
-          )
-                endforeach()
+            if(_SRC MATCHES ".*\\.cu$")
+                set_property(
+        SOURCE ${_SRC}
+        APPEND PROPERTY
+        COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CUDA>:${_CUDA_FLAGS}>"
+      )
             endif()
         endforeach()
-
-        set(_TMP_SRC ${${SRC_VAR}})
-        list(APPEND _TMP_SRC ${_KERNEL_SRC})
-        set(${SRC_VAR} ${_TMP_SRC} PARENT_SCOPE)
     endif()
+
+    # Apply CXX-specific compile flags
+    if(KERNEL_CXX_FLAGS)
+        foreach(_SRC ${_KERNEL_SRC})
+            set_property(
+      SOURCE ${_SRC}
+      APPEND PROPERTY
+      COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:${KERNEL_CXX_FLAGS}>"
+    )
+        endforeach()
+    endif()
+
+    set(_TMP_SRC ${${SRC_VAR}})
+    list(APPEND _TMP_SRC ${_KERNEL_SRC})
+    set(${SRC_VAR} ${_TMP_SRC} PARENT_SCOPE)
 endfunction()
+
+function(hip_kernel_component SRC_VAR)
+    set(options SUPPORTS_HIPIFY)
+    set(oneValueArgs CUDA_MINVER NAME)
+    set(multiValueArgs SOURCES INCLUDES CXX_FLAGS HIP_FLAGS ROCM_ARCHS)
+    cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT KERNEL_SOURCES)
+        message(FATAL_ERROR "hip_kernel_component: SOURCES argument is required")
+    endif()
+
+    set(_KERNEL_SRC ${KERNEL_SOURCES})
+
+    if(KERNEL_INCLUDES)
+        # TODO: check if CLion support this:
+        # https://youtrack.jetbrains.com/issue/CPP-16510/CLion-does-not-handle-per-file-include-directories
+        set_source_files_properties(
+      ${_KERNEL_SRC}
+      PROPERTIES INCLUDE_DIRECTORIES "${KERNEL_INCLUDES}")
+    endif()
+
+    # Apply HIP-specific compile flags
+    if(KERNEL_HIP_FLAGS)
+        foreach(_SRC ${_KERNEL_SRC})
+            if(_SRC MATCHES ".*\\.(cu|hip)$")
+                set_property(
+        SOURCE ${_SRC}
+        APPEND PROPERTY
+        COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:HIP>:${KERNEL_HIP_FLAGS}>"
+      )
+            endif()
+        endforeach()
+    endif()
+
+    # Determine ROCm architectures
+    if(KERNEL_ROCM_ARCHS)
+        hip_archs_loose_intersection(_KERNEL_ARCHS "${KERNEL_ROCM_ARCHS}" "${ROCM_ARCHS}")
+    else()
+        set(_KERNEL_ARCHS "${ROCM_ARCHS}")
+    endif()
+    message(STATUS "ROCm kernel: ${KERNEL_NAME}, archs: ${_KERNEL_ARCHS}")
+
+    accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
+    set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
+
+    foreach(_SRC ${_KERNEL_SRC})
+        if(_SRC MATCHES ".*\\.(cu|hip)$")
+            foreach(_ARCH ${_KERNEL_ARCHS})
+                set_property(
+        SOURCE ${_SRC}
+        APPEND PROPERTY
+        COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:HIP>:--offload-arch=${_ARCH}>"
+      )
+            endforeach()
+        endif()
+    endforeach()
+
+    set(_TMP_SRC ${${SRC_VAR}})
+    list(APPEND _TMP_SRC ${_KERNEL_SRC})
+    set(${SRC_VAR} ${_TMP_SRC} PARENT_SCOPE)
+endfunction()
+
 
 function(xpu_kernel_component SRC_VAR)
     set(options)

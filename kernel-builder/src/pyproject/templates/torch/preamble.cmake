@@ -68,7 +68,7 @@ endif()
 {% if stable_abi %}
 if (TORCH_VERSION VERSION_LESS {{ stable_abi }})
   message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
-    "version {{ stable_abi }}. Cannot build with stable ABI targeting a newer Torch.")
+    "version {{ stable_abi }}. Cannot build with stable ABI targeting a newer version of Torch.")
 endif()
 
 # From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))

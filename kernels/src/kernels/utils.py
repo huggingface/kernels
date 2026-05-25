@@ -573,7 +573,6 @@ def load_kernel(
         revision (`str`, *optional*):
             The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
 
-
     Returns:
         `ModuleType`: The imported kernel module.
     """

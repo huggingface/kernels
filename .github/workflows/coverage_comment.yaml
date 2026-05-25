@@ -1,0 +1,62 @@
+name: Post coverage comment
+
+on:
+  workflow_run:
+    workflows: ["Test kernels"]
+    types: [completed]
+
+concurrency:
+  group: coverage-comment-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  post:
+    name: Post coverage comment
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: coverage-report
+          path: coverage-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Post or update sticky comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # PR number from artifact (not workflow_run.pull_requests, which is
+          # empty for fork PRs).
+          PR_NUMBER=$(cat coverage-artifact/pr_number.txt)
+
+          # Validate: must be a positive integer. Defends against a malicious
+          # PR replacing pr_number.txt with arbitrary content that we'd then
+          # interpolate into a URL.
+          if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::pr_number.txt does not contain a valid PR number: ${PR_NUMBER}"
+            exit 1
+          fi
+
+          EXISTING=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq 'first(.[] | select(.body | startswith("<!-- coverage-report -->")) | .id) // empty')
+
+          # Body comes from the untrusted upstream run; pass via --rawfile +
+          # --input - so it's never shell-interpolated.
+          if [ -n "$EXISTING" ]; then
+            jq -n --rawfile body coverage-artifact/body.md '{body: $body}' \
+              | gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING}" --input -
+          else
+            jq -n --rawfile body coverage-artifact/body.md '{body: $body}' \
+              | gh api --method POST "repos/${REPO}/issues/${PR_NUMBER}/comments" --input -
+          fi

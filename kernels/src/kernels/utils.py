@@ -67,8 +67,7 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
         # offline mode and the kernel must already be in the local cache,
         # so trust was established when it was originally downloaded.
         warnings.warn(
-            f"Skipping publisher trust check for '{repo_id}' because Hugging Face "
-            "Hub is in offline mode.",
+            f"Skipping publisher trust check for '{repo_id}' because Hugging Face Hub is in offline mode.",
             stacklevel=3,
         )
         return
@@ -257,32 +256,20 @@ def install_kernel(
     api = _get_hf_api(user_agent=user_agent)
     offline = local_files_only or constants.HF_HUB_OFFLINE
 
-    if not offline:
-        repo_id, revision = resolve_status(api, repo_id, revision)
-        variants = get_variants(api, repo_id=repo_id, revision=revision)
-    else:
-        # The Hub cannot be reached, so the local snapshot must exist. Locate
-        # it and enumerate variants from disk rather than calling list_repo_tree.
-        try:
-            local_repo_path = Path(
-                str(
-                    api.snapshot_download(
-                        repo_id,
-                        repo_type="kernel",
-                        cache_dir=CACHE_DIR,
-                        revision=revision,
-                        local_files_only=True,
-                    )
-                )
-            )
-        except LocalEntryNotFoundError as e:
-            raise FileNotFoundError(
-                f"Cannot find a local snapshot for {repo_id} (revision: {revision}). "
-                "When Hugging Face Hub is in offline mode the kernel must already "
-                "be present in the local cache."
-            ) from e
-        variants = get_variants_local(local_repo_path / "build")
+    if offline:
+        # Same local-cache resolution path used by `load_kernel`, which is
+        # always offline. Sharing the helper avoids the network dependency
+        # that `get_variants` would otherwise introduce.
+        return _resolve_local_variant_path(
+            api,
+            repo_id,
+            revision=revision,
+            backend=backend,
+            variant_locks=variant_locks,
+        )
 
+    repo_id, revision = resolve_status(api, repo_id, revision)
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
     variant, trace = resolve_variant(variants, backend)
 
     if variant is None:
@@ -300,7 +287,7 @@ def install_kernel(
                 allow_patterns=allow_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
-                local_files_only=offline,
+                local_files_only=False,
             )
         )
     )
@@ -313,6 +300,61 @@ def install_kernel(
         )
     except FileNotFoundError:
         raise FileNotFoundError(f"Cannot install kernel from repo {repo_id} (revision: {revision})")
+
+
+def _resolve_local_variant_path(
+    api: HfApi,
+    repo_id: str,
+    *,
+    revision: str,
+    backend: str | None = None,
+    variant_locks: dict[str, VariantLock] | None = None,
+) -> Path:
+    """Resolve a kernel variant path from the local Hugging Face cache only.
+
+    Used by `load_kernel` (which always operates on a pre-downloaded, locked
+    kernel) and by the offline branch of `install_kernel`.
+    """
+    try:
+        local_repo_path = Path(
+            str(
+                api.snapshot_download(
+                    repo_id,
+                    repo_type="kernel",
+                    cache_dir=CACHE_DIR,
+                    revision=revision,
+                    local_files_only=True,
+                )
+            )
+        )
+    except LocalEntryNotFoundError as e:
+        raise FileNotFoundError(
+            f"Cannot find a local snapshot for {repo_id} (revision: {revision}). "
+            "When Hugging Face Hub is in offline mode the kernel must already "
+            "be present in the local cache."
+        ) from e
+
+    variants = get_variants_local(local_repo_path / "build")
+    variant, status = resolve_variant(variants, backend)
+    if variant is None:
+        raise FileNotFoundError(
+            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(status)}"
+        )
+
+    allow_patterns = [f"build/{variant.variant_str}/*"]
+    repo_path = Path(
+        str(
+            api.snapshot_download(
+                repo_id,
+                repo_type="kernel",
+                allow_patterns=allow_patterns,
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=True,
+            )
+        )
+    )
+    return _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
 
 
 def _find_kernel_in_repo_path(
@@ -513,10 +555,7 @@ def has_kernel(
 
 
 def load_kernel(
-    repo_id: str,
-    *,
-    lockfile: Path | None,
-    backend: str | None = None,
+    repo_id: str, *, lockfile: Path | None, backend: str | None = None, revision: str | None = None
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -531,13 +570,21 @@ def load_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
+        revision (`str`, *optional*):
+            The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
+
 
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    if lockfile is None:
+    if lockfile and revision:
+        raise ValueError("`lockfile` and `revision` both cannot be specified at the same time.")
+
+    if lockfile is None and revision is None:
         locked_sha = _get_caller_locked_kernel(repo_id)
-    else:
+    elif revision is not None:
+        locked_sha = revision
+    elif lockfile is not None:
         with open(lockfile, "r") as f:
             locked_sha = _get_locked_kernel(repo_id, f.read())
 
@@ -548,60 +595,20 @@ def load_kernel(
 
     api = _get_hf_api()
 
-    if constants.HF_HUB_OFFLINE:
-        # Enumerate variants from the local snapshot rather than the Hub.
-        try:
-            local_repo_path = Path(
-                str(
-                    api.snapshot_download(
-                        repo_id,
-                        repo_type="kernel",
-                        cache_dir=CACHE_DIR,
-                        revision=locked_sha,
-                        local_files_only=True,
-                    )
-                )
-            )
-        except LocalEntryNotFoundError as e:
-            raise FileNotFoundError(
-                f"Locked kernel `{repo_id}` was not downloaded. Make sure it's downloaded locally."
-            ) from e
-        variants = get_variants_local(local_repo_path / "build")
-    else:
-        variants = get_variants(api, repo_id=repo_id, revision=locked_sha)
-
-    variant, status = resolve_variant(variants, backend)
-
-    if variant is None:
-        raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {locked_sha}):\n\n{variants_trace_str(status)}"
-        )
-
-    allow_patterns = [f"build/{variant.variant_str}/*"]
-    repo_path = Path(
-        str(
-            api.snapshot_download(
-                repo_id,
-                repo_type="kernel",
-                allow_patterns=allow_patterns,
-                cache_dir=CACHE_DIR,
-                revision=locked_sha,
-                local_files_only=True,
-            )
-        )
-    )
-
     try:
-        variant_path = _find_kernel_in_repo_path(
-            repo_path,
-            variant=variant,
-            variant_locks=None,
+        variant_path = _resolve_local_variant_path(
+            api,
+            repo_id,
+            revision=locked_sha,
+            backend=backend,
         )
-        return _import_from_path(variant_path)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"Locked kernel `{repo_id}` does not have applicable variant or was not downloaded with `kernels download <project>`"
-        )
+            f"Locked kernel `{repo_id}` was not downloaded or does not have an "
+            "applicable variant. Make sure it's downloaded locally via "
+            "`kernels download <project>`."
+        ) from e
+    return _import_from_path(variant_path)
 
 
 def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:

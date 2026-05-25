@@ -68,8 +68,7 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
         # so trust was established when it was originally downloaded.
         warnings.warn(
             f"Skipping publisher trust check for '{repo_id}' because Hugging Face "
-            "Hub is in offline mode. Pass trust_remote_code=True to suppress this "
-            "warning.",
+            "Hub is in offline mode.",
             stacklevel=3,
         )
         return

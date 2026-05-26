@@ -138,8 +138,8 @@ jobs:
             echo "<!-- coverage-report -->"
             echo "## Coverage report — \`kernels/\`"
             echo
-            echo "> Measured on the canonical matrix cell: **Python ${PY_VERSION} / Torch ${TORCH_VERSION}**."
-            echo "> Other matrix cells are not included in this number."
+            echo "> Measured on: **Python ${PY_VERSION} / Torch ${TORCH_VERSION}**."
+            echo "> Other CI configurations are not included in this number."
             echo "> Hardware-gated code paths (ROCm/XPU/NPU/Darwin/Windows) are excluded or unreachable on the Linux+CUDA runner."
             echo
             echo "**Total coverage: \`${PCT_DISPLAY}%\`** — threshold: 80% — ${EMOJI}"

@@ -48,6 +48,26 @@ VARIANT_STRINGS = (
     ]
 )
 
+STABLE_ABI_VARIANT_STRINGS = [
+    f"torch-stable-abi{abi_ver}-{backend}-{system}"
+    for abi_ver in ["211", "29"]
+    for backend in [
+        "cpu",
+        "cu126",
+        "cu128",
+        "cu130",
+        "rocm63",
+        "rocm64",
+        "xpu20252",
+    ]
+    for system in ["aarch64-linux", "x86_64-linux"]
+] + [
+    f"torch-stable-abi{abi_ver}-{backend}-{system}"
+    for abi_ver in ["211", "29"]
+    for backend in ["cpu", "metal"]
+    for system in ["aarch64-darwin"]
+]
+
 NOARCH_VARIANT_STRINGS = [
     "torch-cpu",
     "torch-cuda",
@@ -93,6 +113,12 @@ SUPERSET_VARIANT_STRINGS = [
 
 @pytest.mark.parametrize("variant_str", VARIANT_STRINGS)
 def test_arch_variants(variant_str: str):
+    # Roundtrip parse and generate variant string.
+    assert parse_variant(variant_str).variant_str == variant_str
+
+
+@pytest.mark.parametrize("variant_str", STABLE_ABI_VARIANT_STRINGS)
+def test_stable_abi_variants(variant_str: str):
     # Roundtrip parse and generate variant string.
     assert parse_variant(variant_str).variant_str == variant_str
 
@@ -392,3 +418,112 @@ def test_resolve_cuda_no_different_major_no_noarch():
     assert result == []
     assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
     assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_NO_NOARCH)
+
+
+RESOLVE_VARIANTS_STABLE_ABI = [
+    parse_variant(s)
+    for s in [
+        "torch-stable-abi211-cu128-x86_64-linux",
+        "torch210-cxx11-cu128-x86_64-linux",
+        "torch-cuda",
+    ]
+]
+
+
+def test_resolve_stable_abi_accepted():
+    # Stable ABI 2.11 is accepted when torch_version == stable ABI version.
+    result, trace = _resolve_variant_for_system(
+        variants=RESOLVE_VARIANTS_STABLE_ABI,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.11"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch-stable-abi211-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_STABLE_ABI)
+
+
+def test_resolve_stable_abi_accepted_newer_torch():
+    # Stable ABI 2.11 is also accepted when torch_version > stable ABI version.
+    result, trace = _resolve_variant_for_system(
+        variants=RESOLVE_VARIANTS_STABLE_ABI,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.12"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch-stable-abi211-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_STABLE_ABI)
+
+
+def test_resolve_stable_abi_rejected_newer_abi():
+    # Stable ABI 2.11 is rejected when torch_version < stable ABI version.
+    result, trace = _resolve_variant_for_system(
+        variants=RESOLVE_VARIANTS_STABLE_ABI,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch210-cxx11-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_STABLE_ABI)
+
+
+def test_resolve_stable_abi_newest_version_preferred():
+    # When multiple stable ABI versions are accepted, the newest is preferred.
+    variants = [
+        parse_variant(s)
+        for s in [
+            "torch-stable-abi29-cu128-x86_64-linux",
+            "torch-stable-abi211-cu128-x86_64-linux",
+        ]
+    ]
+    result, trace = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.12"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch-stable-abi211-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(variants)
+
+
+def test_resolve_stable_abi_preferred_over_torch():
+    # TorchStableAbi variant is preferred over a regular Torch variant of the same version.
+    variants = [
+        parse_variant(s)
+        for s in [
+            "torch-stable-abi211-cu128-x86_64-linux",
+            "torch211-cxx11-cu128-x86_64-linux",
+        ]
+    ]
+    result, trace = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.11"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch-stable-abi211-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(variants)

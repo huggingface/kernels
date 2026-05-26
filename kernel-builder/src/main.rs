@@ -43,6 +43,8 @@ use util::{check_or_infer_kernel_dir, parse_and_validate};
 mod validate_builds;
 use validate_builds::check_builds;
 
+use crate::util::parse_and_validate_compat;
+
 #[derive(Args, Debug)]
 struct NixArgs {
     /// Maximum number of parallel Nix build jobs.
@@ -417,7 +419,7 @@ fn check_config(kernel_dir: Option<PathBuf>) -> Result<()> {
 
 fn update_build(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let build_compat: BuildCompat = parse_and_validate(&kernel_dir)?;
+    let build_compat: BuildCompat = parse_and_validate_compat(&kernel_dir)?;
 
     if matches!(build_compat, BuildCompat::V4(_)) {
         return Ok(());

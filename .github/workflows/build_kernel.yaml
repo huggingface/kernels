@@ -55,6 +55,7 @@ jobs:
             cutlass-gemm-tvm-ffi-kernel
             extra-data
             relu-kernel
+            relu-torch-stable-abi-kernel
             relu-tvm-ffi-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel

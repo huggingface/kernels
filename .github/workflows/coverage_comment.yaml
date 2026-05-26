@@ -48,8 +48,16 @@ jobs:
             exit 1
           fi
 
+          # Only match comments authored by the GITHUB_TOKEN bot, so a human
+          # comment that happens to start with the marker doesn't get
+          # silently overwritten.
           EXISTING=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq 'first(.[] | select(.body | startswith("<!-- coverage-report -->")) | .id) // empty')
+            --jq 'first(
+                    .[]
+                    | select(.user.login == "github-actions[bot]"
+                             and (.body | startswith("<!-- coverage-report -->")))
+                    | .id
+                  ) // empty')
 
           # Body comes from the untrusted upstream run; pass via --rawfile +
           # --input - so it's never shell-interpolated.

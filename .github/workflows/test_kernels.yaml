@@ -31,7 +31,7 @@ jobs:
 
     env:
       UV_PYTHON_PREFERENCE: only-managed
-      COVERAGE_CELL: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.12.0' }}
+      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.12.0' }}
 
     steps:
       - name: Checkout code
@@ -67,7 +67,7 @@ jobs:
         env:
           HF_HUB_DOWNLOAD_TIMEOUT: 60
         run: |
-          if [ "${COVERAGE_CELL}" = "true" ]; then
+          if [ "${CHECK_COVERAGE}" = "true" ]; then
             uv run pytest tests \
               --cov=kernels \
               --cov-report=term-missing \
@@ -110,7 +110,7 @@ jobs:
       # This is done to securely run the coverage test and to post comments even
       # on fork PRs.
       - name: Render coverage report for PR comment
-        if: env.COVERAGE_CELL == 'true' && github.event_name == 'pull_request'
+        if: env.CHECK_COVERAGE == 'true' && github.event_name == 'pull_request'
         working-directory: ./kernels
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -159,7 +159,7 @@ jobs:
           echo "${PR_NUMBER}" > coverage-artifact/pr_number.txt
 
       - name: Upload coverage artifact
-        if: env.COVERAGE_CELL == 'true' && github.event_name == 'pull_request'
+        if: env.CHECK_COVERAGE == 'true' && github.event_name == 'pull_request'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: coverage-report

@@ -1,37 +1,29 @@
 [package]
-name = "hf-kernel-builder"
+name = "kernels-templates"
 version = "0.15.0-dev0"
 edition = "2021"
-description = "Build Hugging Face Hub kernels"
+description = "Create Hugging Face Hub kernel build files"
 homepage = "https://github.com/huggingface/kernels"
 license = "Apache-2.0"
-documentation = "https://docs.rs/hf-kernel-builder"
+documentation = "https://docs.rs/kernels-templates"
 repository = "https://github.com/huggingface/kernels"
 
 [dependencies]
+base32 = "0.5"
 kernels-data = { path = "../kernels-data", version = "0.15.0-dev0" }
 clap = { version = "4", features = ["derive"] }
-clap-markdown = "0.1.5"
-clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
-hf-hub = { version = "1.0.0-rc.0", features = ["blocking"] }
-indicatif = "0.17"
 itertools = "0.13"
-rustpython-parser = "0.4"
+minijinja = "2.5"
+minijinja-embed = "2.5"
+rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde-value = "0.7"
 toml = "0.8"
-dirs = "6"
-reqwest = { version = "0.13", features = ["blocking"] }
-walkdir = "2"
 
 [build-dependencies]
+minijinja-embed = "2.5"
 
 [dev-dependencies]
 tempfile = "3"
-
-[[bin]]
-name = "kernel-builder"
-path = "src/main.rs"

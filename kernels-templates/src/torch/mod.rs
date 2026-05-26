@@ -6,16 +6,16 @@ use itertools::Itertools;
 use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::context;
 
-use crate::pyproject::common::{
+use crate::common::{
     prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
     write_metadata,
 };
-use crate::pyproject::ops_identifier::KernelIdentifier;
-use crate::pyproject::FileSet;
+use crate::ops_identifier::KernelIdentifier;
+use crate::FileSet;
 
-use crate::pyproject::deps::render_deps;
+use crate::deps::render_deps;
 
-use crate::pyproject::kernel::render_kernel_components;
+use crate::kernel::render_kernel_components;
 
 mod noarch;
 pub use noarch::write_torch_ext_noarch;

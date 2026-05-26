@@ -5,14 +5,14 @@ use itertools::Itertools;
 use kernels_data::config::{Backend, Build, General, TvmFfi};
 use minijinja::{context, Environment};
 
-use crate::pyproject::common::{
+use crate::common::{
     prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
     write_metadata,
 };
-use crate::pyproject::deps::render_deps;
-use crate::pyproject::kernel::render_kernel_components;
-use crate::pyproject::ops_identifier::KernelIdentifier;
-use crate::pyproject::FileSet;
+use crate::deps::render_deps;
+use crate::kernel::render_kernel_components;
+use crate::ops_identifier::KernelIdentifier;
+use crate::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");

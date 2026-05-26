@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use clap::ValueEnum;
 use eyre::{Context, Result};
 
-use crate::pyproject::FileSet;
+use crate::FileSet;
 
 const GITHUB_RAW_BASE_TEMPLATE: &str =
     "https://raw.githubusercontent.com/huggingface/kernels/main/kernel-builder/skills";

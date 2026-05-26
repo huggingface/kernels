@@ -1172,7 +1172,6 @@ dependencies = [
 name = "hf-kernel-builder"
 version = "0.15.0-dev0"
 dependencies = [
- "base32",
  "clap",
  "clap-markdown",
  "clap_complete",
@@ -1183,19 +1182,13 @@ dependencies = [
  "indicatif",
  "itertools 0.13.0",
  "kernels-data",
- "minijinja",
- "minijinja-embed",
- "rand 0.8.6",
- "regex",
  "reqwest",
  "rustpython-parser",
  "serde",
  "serde-value",
  "serde_json",
  "tempfile",
- "thiserror 1.0.69",
  "toml",
- "url",
  "walkdir",
 ]
 
@@ -1700,6 +1693,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernels-templates"
+version = "0.15.0-dev0"
+dependencies = [
+ "base32",
+ "clap",
+ "eyre",
+ "git2",
+ "itertools 0.13.0",
+ "kernels-data",
+ "minijinja",
+ "minijinja-embed",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "konst"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1934,9 +1946,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "805bfd7352166bae857ee569628b52bcd85a1cecf7810861ebceb1686b72b75d"
+checksum = "2929e494b2280e1e18959bb2e121da03347ae896896fdfaceaab43c88a02803f"
 dependencies = [
  "memo-map",
  "serde",
@@ -1944,9 +1956,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja-embed"
-version = "2.19.0"
+version = "2.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09f152c19abce59079d2d76c7e68a6ae9480d0a6baf37f2fc0b40f91a52bf96c"
+checksum = "f27ac2cb52d01d86318a54be05dc49784d06d3a561b62f7c0cba06700520edac"
 
 [[package]]
 name = "miniz_oxide"

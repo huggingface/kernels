@@ -6,8 +6,8 @@ use itertools::Itertools;
 use kernels_data::config::{Backend, General};
 use kernels_data::metadata::{BackendInfo, Metadata};
 
-use crate::pyproject::ops_identifier::KernelIdentifier;
-use crate::pyproject::FileSet;
+use crate::ops_identifier::KernelIdentifier;
+use crate::FileSet;
 
 static COMPAT_PY: &str = include_str!("templates/compat.py");
 static ADD_BUILD_METADATA_PY: &str = include_str!("templates/torch/add_build_metadata.py");

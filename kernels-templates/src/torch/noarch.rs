@@ -5,10 +5,10 @@ use itertools::Itertools;
 use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::{context, Environment};
 
-use crate::pyproject::common::write_compat_py;
-use crate::pyproject::common::write_metadata;
-use crate::pyproject::fileset::FileSet;
-use crate::pyproject::ops_identifier::KernelIdentifier;
+use crate::common::write_compat_py;
+use crate::common::write_metadata;
+use crate::fileset::FileSet;
+use crate::ops_identifier::KernelIdentifier;
 
 static SETUP_PY: &str = include_str!("../templates/torch/noarch/setup.py");
 

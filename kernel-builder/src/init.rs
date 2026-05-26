@@ -11,7 +11,7 @@ use git2::{IndexAddOption, Repository};
 use minijinja::{context, Environment};
 
 use crate::hf;
-use crate::pyproject::FileSet;
+use crate::FileSet;
 use kernels_data::config::Backend;
 
 fn to_camel_case(s: &str) -> String {

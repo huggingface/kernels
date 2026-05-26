@@ -5,7 +5,7 @@ use itertools::Itertools;
 use kernels_data::config::{Build, Kernel};
 use minijinja::{context, Environment};
 
-use crate::pyproject::common::prefix_and_join_includes;
+use crate::common::prefix_and_join_includes;
 
 pub fn render_kernel_components(
     env: &Environment,

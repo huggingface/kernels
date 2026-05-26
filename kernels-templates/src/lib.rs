@@ -9,7 +9,7 @@ use kernels_data::config::{Build, Framework};
 use minijinja::Environment;
 
 use crate::{
-    pyproject::ops_identifier::KernelIdentifier,
+    ops_identifier::KernelIdentifier,
     util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build},
 };
 

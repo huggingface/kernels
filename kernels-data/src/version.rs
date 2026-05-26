@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::{fmt::Display, str::FromStr};
 
 use eyre::{Context, ensure};
@@ -33,6 +34,15 @@ impl Display for Version {
             "{}",
             itertools::join(self.0.iter().map(|v| v.to_string()), ".")
         )
+    }
+}
+
+impl Deref for Version {
+    type Target = [usize];
+
+    #[inline]
+    fn deref(&self) -> &[usize] {
+        &self.0
     }
 }
 

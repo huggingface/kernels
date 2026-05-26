@@ -20,6 +20,8 @@ use itertools::Itertools;
 
 use crate::version::Version;
 
+pub type CurrentConfig = v4::Build;
+
 pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
@@ -159,6 +161,7 @@ pub struct Torch {
     pub maxver: Option<Version>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
+    pub stable_abi: Option<Version>,
 }
 
 fn data_extensions(py_ext: Option<&[String]>) -> Option<Vec<String>> {

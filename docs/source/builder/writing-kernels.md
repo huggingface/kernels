@@ -227,6 +227,12 @@ options:
   non-compliant kernels if the version range does not correspond to the [required variants](build-variants.md).
 - `minver` (optional): only build for this Torch version and later. Use cautiously, since this option produces
   non-compliant kernels if the version range does not correspond to the [required variants](build-variants.md).
+- `stable-abi` (**experimental**): when set to a Torch version (e.g.
+  `"2.11"`), the kernel is built using the Torch stable ABI. This
+  requires that the kernel itself only use
+  [stable ABI headers](https://docs.pytorch.org/docs/2.12/notes/libtorch_stable_abi.html).
+  For an example, see the [`relu-torch-stable-abi`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-torch-stable-abi)
+  example kernel.
 
 ### `kernel.<name>`
 
@@ -276,7 +282,6 @@ are available:
 
 - `cxx-flags`: a list of additional flags to be passed to the C++
   compiler.
-
 
 ## Torch bindings
 

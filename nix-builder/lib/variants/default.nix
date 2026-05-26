@@ -10,11 +10,9 @@ rec {
   kernelVariant =
     kernelConfig:
     if kernelConfig.isTvmFfi then
-      tvm-ffi.arch
-    else if kernelConfig.kernelBackends.${buildConfig.backend} then
-      torch.arch
+      tvm-ffi.kernelVariant kernelConfig
     else
-      torch.noarch;
+      torch.kernelVariant kernelConfig;
 
   kernelArchVariant = kernelConfig: if kernelConfig.isTvmFfi then tvm-ffi.arch else torch.arch;
 }

@@ -254,9 +254,7 @@ def install_kernel(
         `Path`: The path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
-    offline = local_files_only or constants.HF_HUB_OFFLINE
-
-    if offline:
+    if local_files_only or constants.HF_HUB_OFFLINE:
         # Same local-cache resolution path used by `load_kernel`, which is
         # always offline. Sharing the helper avoids the network dependency
         # that `get_variants` would otherwise introduce.
@@ -576,7 +574,7 @@ def load_kernel(
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    if lockfile and revision:
+    if lockfile is not None and revision is not None:
         raise ValueError("`lockfile` and `revision` both cannot be specified at the same time.")
 
     if lockfile is None and revision is None:

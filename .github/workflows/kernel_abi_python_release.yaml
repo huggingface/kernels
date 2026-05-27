@@ -21,7 +21,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Hardcoded prefix because this workflow shares `name: CI` with
+  # kernels_data_python_release.yaml; ${{ github.workflow }} would
+  # otherwise collide and cancel the sibling workflow's run.
+  group: kernel-abi-python-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

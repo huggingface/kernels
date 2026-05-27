@@ -35,6 +35,11 @@ as the running example. After reading this page, you may also want to have
 a look at the more realistic [ReLU kernel with backprop and `torch.compile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-backprop-compile)
 support.
 
+> [!TIP]
+> We maintain a set of conforming kernels in the
+> [kernels-community repository](https://github.com/huggingface/kernels-community).
+> We try to keep these kernels synced with upstream as much as possible.
+
 ## Setting up environment
 
 ### Quick install

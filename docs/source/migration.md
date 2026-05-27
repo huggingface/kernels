@@ -89,5 +89,5 @@ To migrate an existing `model`-type kernel repository:
    repository. Either keep the same `repo-id` in `build.toml` if the
    repository has been migrated to the new type, or point it at a newly
    created `kernel`-type repository.
-3. Update consumers' `get_kernel(...)` and `LayerRepository(...)` calls
+3. Update consumers' [`~kernels.get_kernel`] and [`~kernels.LayerRepository`] calls
    to reference the new repository if the `repo-id` changed.

@@ -17,12 +17,12 @@
       title: Locking Kernel Versions
     - local: env
       title: Environment Variables
-    - local: faq
-      title: FAQ
     - local: migration
       title: Migrating from older versions
     - local: integrating-kernels
       title: Integrating kernels into a project
+    - local: faq
+      title: FAQ
   title: Using kernels
 - sections:
     - local: builder/writing-kernels

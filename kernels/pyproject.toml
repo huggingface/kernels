@@ -30,6 +30,7 @@ dev = [
   "pytest>=8",
   # Whatever version is compatible with pytest.
   "pytest-benchmark",
+  "pytest-cov>=5",
   "torch>=2.5",
   "apache-tvm-ffi>=0.1.9,<0.2.0",
   "types-pyyaml",
@@ -89,3 +90,18 @@ lint.ignore = ["E501"]
 lint.select = ["E", "F", "I", "W"]
 
 [tool.ruff.format]
+
+[tool.coverage.run]
+source = ["kernels"]
+branch = false
+relative_files = true
+omit = [
+  "*/benchmarks/*",
+  "*/benchmark.py",
+  "*/cli/*",
+  "*/_windows.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

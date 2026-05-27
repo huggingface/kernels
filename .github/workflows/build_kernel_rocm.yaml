@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Build kernel
+    name: Build kernels (ROCm)
     runs-on:
       group: aws-highmemory-32-plus-nix
     steps:
@@ -33,8 +33,5 @@ jobs:
         run: nix-shell -p nix-info --run "nix-info -m"
       # For now we only test that there are no regressions in building ROCm
       # kernels. Also run tests once we have a ROCm runner.
-      - name: Build relu kernel
-        run: ( cd examples/kernels/relu && nix build .\#redistributable.torch211-rocm71-x86_64-linux -L )
-
-      - name: Build relu kernel (compiler flags)
-        run: ( cd examples/kernels/relu-compiler-flags && nix build .\#redistributable.torch211-rocm71-x86_64-linux )
+      - name: Build all ROCm example kernels
+        run: nix build -L ./examples/kernels#ci-build-rocm

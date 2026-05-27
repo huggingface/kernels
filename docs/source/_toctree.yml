@@ -31,6 +31,8 @@
       title: Building kernels
     - local: builder/local-dev
       title: Local Development
+    - local: builder/ide-setup
+      title: IDE Setup
     - local: kernel-requirements
       title: Kernel Requirements
     - local: builder/security

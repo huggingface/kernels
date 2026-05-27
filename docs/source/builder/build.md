@@ -99,6 +99,9 @@ $ rm -rf .venv  # Remove existing venv if any.
 $ kernel-builder devshell --variant torch211-cxx11-rocm71-x86_64-linux
 ```
 
+For an editor-driven workflow with `direnv` activating the devshell on
+`cd`, see [IDE Setup](./ide-setup.md).
+
 You can list the variants that the kernel supports with the `list-variants`
 subcommand:
 

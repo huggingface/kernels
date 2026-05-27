@@ -6,9 +6,10 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "kernel-abi-check/**"
+      - "kernels-data/**"
+      - ".github/workflows/test_python.yaml"
   workflow_dispatch:
 
 concurrency:

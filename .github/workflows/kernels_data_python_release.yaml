@@ -7,7 +7,9 @@
 #  - manifest paths made relative
 #  - publish step switched from `uv publish` + API token to
 #    `PyO3/maturin-action` + PyPI trusted publishing (see plan.md §3a, §3b)
-#  - pull_request trigger gained `paths-ignore` for docs-only PRs
+#  - pull_request trigger scoped to kernels-data/** and Cargo.{toml,lock}
+#    so unrelated PRs don't trigger the full wheel matrix
+#  - added concurrency cancellation for in-progress PR builds
 name: CI
 
 on:
@@ -18,10 +20,16 @@ on:
     tags:
       - "*"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "kernels-data/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/kernels_data_python_release.yaml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

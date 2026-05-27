@@ -5,10 +5,17 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "nix-builder/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "docs/source/builder/build-variants.md"
+      - ".github/workflows/check_variants.yaml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

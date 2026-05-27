@@ -5,10 +5,19 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "nix-builder/**"
+      - "kernel-builder/**"
+      - "examples/kernels/**"
+      - "flake.nix"
+      - "flake.lock"
+      - "default.nix"
+      - ".github/workflows/build_kernel_rocm.yaml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

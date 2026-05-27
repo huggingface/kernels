@@ -6,9 +6,11 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened] # trigger on PRs
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "kernels/**"
+      - "kernels-data/bindings/python/**"
+      - "kernel-abi-check/bindings/python/**"
+      - ".github/workflows/test_kernels.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -16,8 +18,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Run kernels tests
+  gpu-tests:
+    name: GPU tests
     runs-on:
       group: aws-g6-24xlarge
     permissions:
@@ -57,10 +59,6 @@ jobs:
         working-directory: ./kernels
         run: uv pip install setuptools
 
-      - name: Check typing
-        working-directory: ./kernels
-        run: uv run mypy src/kernels
-
       - name: Run tests
         working-directory: ./kernels
         env:
@@ -75,6 +73,34 @@ jobs:
         run: |
           uv pip install einops nvidia-cutlass-dsl
           uv run pytest tests/test_deps.py
+
+  cpu-checks:
+    name: CPU checks (mypy, no-torch import, CLI)
+    runs-on: ubuntu-latest
+
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Override kernels-data source to local bindings
+        working-directory: ./kernels
+        run: uv add ../kernels-data/bindings/python --no-sync
+
+      - name: Install the project
+        working-directory: ./kernels
+        run: uv sync --all-extras --dev
+
+      - name: Check typing
+        working-directory: ./kernels
+        run: uv run mypy src/kernels
 
       - name: Check kernel check
         working-directory: ./kernels

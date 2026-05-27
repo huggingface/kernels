@@ -13,10 +13,16 @@ on:
     tags:
       - "*"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "kernel-abi-check/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/kernel_abi_python_release.yaml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

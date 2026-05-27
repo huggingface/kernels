@@ -1,10 +1,16 @@
 name: Lints
 on:
   push:
+    branches: [main]
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
+    paths:
+      - "kernels/**"
+      - "kernels-data/src/python_dependencies.json"
+      - ".github/workflows/lint.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   RUFF_VERSION: "0.15.10"

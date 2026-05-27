@@ -9,7 +9,7 @@ repos:
     rev: b831c3dc5d27d9da294ae4e915773b99aa24a7c5
     hooks:
       - id: ruff-check
-        args: [--fix]
+        args: [--fix, --unsafe-fixes]
       - id: ruff-format
   - repo: https://github.com/NixOS/nixfmt
     rev: ccb94535e519e94b77d6bda76ac1de06e9f11284

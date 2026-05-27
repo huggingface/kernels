@@ -78,7 +78,7 @@ pub struct Hub {
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Torch {
     pub include: Option<Vec<String>>,
     pub minver: Option<Version>,
@@ -87,6 +87,8 @@ pub struct Torch {
 
     #[serde(default)]
     pub src: Vec<PathBuf>,
+
+    pub stable_abi: Option<Version>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -247,6 +249,7 @@ impl From<Torch> for super::Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+            stable_abi: torch.stable_abi,
         }
     }
 }
@@ -441,6 +444,7 @@ impl From<super::Torch> for Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
+            stable_abi: torch.stable_abi,
         }
     }
 }

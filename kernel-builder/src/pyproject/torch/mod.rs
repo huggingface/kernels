@@ -206,6 +206,7 @@ fn render_preamble(
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
                 torch_minver => torch.minver.as_ref().map(|v| v.to_string()),
                 torch_maxver => torch.maxver.as_ref().map(|v| v.to_string()),
+                stable_abi => torch.stable_abi.as_ref().map(|v| v.to_string()),
             },
             &mut *write,
         )

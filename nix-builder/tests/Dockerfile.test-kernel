@@ -62,6 +62,7 @@ RUN uv add "apache-tvm-ffi~=0.1.9" numpy pytest
 
 # Copy kernels and tests
 COPY relu-kernel ./relu-kernel
+COPY relu-torch-stable-abi-kernel ./relu-torch-stable-abi-kernel
 COPY relu-tvm-ffi-kernel ./relu-tvm-ffi-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel

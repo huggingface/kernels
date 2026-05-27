@@ -9,8 +9,8 @@ on:
       - "nix-builder/**"
       - "kernel-builder/**"
       - "examples/kernels/**"
-      - "flake.nix"
-      - "flake.lock"
+      - "**/*.nix"
+      - "**/flake.lock"
       - ".github/workflows/test_extra_commands.yaml"
   workflow_dispatch:
 

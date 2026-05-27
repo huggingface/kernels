@@ -7,8 +7,8 @@ on:
     types: [opened, synchronize, reopened] # trigger on PRs
     paths:
       - "nix-builder/**"
-      - "flake.nix"
-      - "flake.lock"
+      - "**/*.nix"
+      - "**/flake.lock"
       - "docs/source/builder/build-variants.md"
       - ".github/workflows/check_variants.yaml"
   workflow_dispatch:

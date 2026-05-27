@@ -9,9 +9,8 @@ on:
       - "nix-builder/**"
       - "kernel-builder/**"
       - "examples/kernels/**"
-      - "flake.nix"
-      - "flake.lock"
-      - "default.nix"
+      - "**/*.nix"
+      - "**/flake.lock"
       - ".github/workflows/build_kernel_xpu.yaml"
   workflow_dispatch:
 

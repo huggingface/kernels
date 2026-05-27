@@ -99,26 +99,23 @@ jobs:
           profile: minimal
           override: true
 
-      # Caches kernel-builder/target plus ~/.cargo/{registry,git}. Keys on
+      # Caches the workspace target/ plus ~/.cargo/{registry,git}. Keys on
       # Cargo.lock so a clean dep-graph change invalidates the artifact cache
       # but unrelated edits reuse it incrementally. Cuts the kernel-builder
       # build from ~8 min cold to ~30s warm.
+      #
+      # workspaces must point at the actual workspace root (root Cargo.toml
+      # has `[workspace] members = [..., "kernel-builder", ...]`). Cargo
+      # always writes target/ at the workspace root, so caching
+      # ./kernel-builder/target would restore to a path cargo never reads.
       - name: Cache cargo + kernel-builder target
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          workspaces: kernel-builder
+          workspaces: .
           shared-key: kernel-builder-${{ matrix.os }}
 
       - name: Build kernel-builder
-        # TEMP DIAGNOSTIC: -v + CARGO_LOG=fingerprint=info makes cargo print
-        # the exact reason each crate is being rebuilt ("stale: missing",
-        # "stale: mtime newer than ...", etc.). Used once to find out why
-        # rust-cache restores target/ successfully but cargo still rebuilds
-        # everything. Revert this step before merging.
-        shell: pwsh
-        env:
-          CARGO_LOG: cargo::core::compiler::fingerprint=info
-        run: ( cd kernel-builder && cargo build --release -v )
+        run: ( cd kernel-builder && cargo build --release )
 
       # Python environment setup
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0

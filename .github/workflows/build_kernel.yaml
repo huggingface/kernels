@@ -40,7 +40,7 @@ jobs:
         run: nix-shell -p nix-info --run "nix-info -m"
 
       - name: Build all example kernels
-        run: nix build -L ./examples/kernels#ci-build
+        run: nix build -L ./examples/kernels#ci-build-cuda
       - name: Copy kernel artifacts
         run: cp -rL result/* .
 

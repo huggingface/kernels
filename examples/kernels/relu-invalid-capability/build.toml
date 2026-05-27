@@ -1,0 +1,32 @@
+[general]
+name = "relu-invalid-capability"
+version = 1
+license = "Apache-2.0"
+backends = [
+    "cpu",
+    "cuda",
+    "metal",
+    "rocm",
+    "xpu",
+]
+
+[general.hub]
+repo-id = "kernels-test/relu-invalid-capability"
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[kernel.relu_rocm]
+backend = "rocm"
+depends = ["torch"]
+rocm-archs = [ "gfx99999" ]
+src = ["relu_cuda/relu.cu"]
+
+[kernel.relu]
+backend = "cuda"
+depends = ["torch"]
+cuda-capabilities = [ "99999.0" ]
+src = ["relu_cuda/relu.cu"]

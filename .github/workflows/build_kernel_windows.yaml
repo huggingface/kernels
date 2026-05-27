@@ -56,6 +56,13 @@ jobs:
         # and prepends <CUDA_PATH>\bin to PATH. When we skip the action above,
         # those env mutations don't happen — replicate them here so nvcc and
         # the downstream builds find the toolkit.
+        #
+        # Also re-install the MSBuild integration: the CUDA installer normally
+        # copies CUDA <ver>.{props,targets,xml} from the toolkit's
+        # extras\visual_studio_integration\MSBuildExtensions\ into the VS
+        # BuildCustomizations dir. Without that, CMake's CUDA language detection
+        # fails with "No CUDA toolset found". Cache only restores the toolkit
+        # tree, so we copy the props in by hand on cache hits.
         if: steps.cuda-cache.outputs.cache-hit == 'true'
         shell: pwsh
         run: |
@@ -66,6 +73,21 @@ jobs:
           "CUDA_PATH=$cudaPath"                              | Out-File $env:GITHUB_ENV  -Append -Encoding utf8
           "CUDA_PATH_V${major}_${minor}=$cudaPath"           | Out-File $env:GITHUB_ENV  -Append -Encoding utf8
           "$cudaPath\bin"                                    | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+
+          $msBuildExt = Join-Path $cudaPath 'extras\visual_studio_integration\MSBuildExtensions'
+          if (-not (Test-Path $msBuildExt)) {
+            throw "MSBuild integration not found in cached toolkit at $msBuildExt — cache may be incomplete."
+          }
+          # GitHub-hosted windows-2022 ships VS 2022 Enterprise; glob anyway so
+          # we don't silently break if the image switches edition.
+          $vsRoots = Get-ChildItem 'C:\Program Files\Microsoft Visual Studio\2022' -Directory -ErrorAction SilentlyContinue
+          if (-not $vsRoots) { throw "Visual Studio 2022 not found on runner." }
+          foreach ($vs in $vsRoots) {
+            $dest = Join-Path $vs.FullName 'MSBuild\Microsoft\VC\v170\BuildCustomizations'
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            Copy-Item -Path (Join-Path $msBuildExt '*') -Destination $dest -Force -Recurse
+            Write-Host "Installed CUDA MSBuild integration into $dest"
+          }
 
       - name: "NVCC checks"
         run: nvcc -V

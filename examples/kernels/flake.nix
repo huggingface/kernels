@@ -15,6 +15,7 @@
       inherit (kernel-builder.inputs.nixpkgs) lib;
 
       cudaVersion = "cu126";
+      rocmVersion = "rocm71";
       torchVersion = "211";
       tvmFfiVersion = "01";
 
@@ -136,6 +137,27 @@
         }
       ];
 
+      # ROCm kernels to build in CI.
+      ciRocmKernels = [
+        {
+          name = "relu-invalid-capability";
+          path = ./relu-invalid-capability;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          assertFail = true;
+          assertFailLogs = [ "empty set of architectures" ];
+        }
+        {
+          name = "relu-kernel";
+          path = ./relu;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+        }
+        {
+          name = "relu-compiler-flags";
+          path = ./relu-compiler-flags;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+        }
+      ];
+
       mkKernelOutputs =
         {
           path,
@@ -148,16 +170,21 @@
           // lib.optionalAttrs (torchVersions != null) { inherit torchVersions; }
         );
 
-      ciKernelOutputs = map (
-        kernel:
-        kernel
-        // {
-          outputs = mkKernelOutputs {
-            inherit (kernel) path;
-            torchVersions = kernel.torchVersions or null;
-          };
-        }
-      ) ciKernels;
+      mkKernelOutputs' =
+        kernels:
+        map (
+          kernel:
+          kernel
+          // {
+            outputs = mkKernelOutputs {
+              inherit (kernel) path;
+              torchVersions = kernel.torchVersions or null;
+            };
+          }
+        ) kernels;
+
+      ciKernelOutputs = mkKernelOutputs' ciKernels;
+      ciRocmKernelOutputs = mkKernelOutputs' ciRocmKernels;
     in
     flake-utils.lib.eachSystem
       [
@@ -169,32 +196,39 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
 
-          resolvedKernels = map (kernel: {
-            inherit (kernel) name;
-            drv =
-              let
-                baseDrv = kernel.drv system kernel.outputs;
-              in
-              if kernel.assertFail or false then
-                pkgs.testers.testBuildFailure' {
-                  drv = baseDrv;
-                  expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
-                }
-              else
-                baseDrv;
-          }) ciKernelOutputs;
-
-          ci-build = pkgs.linkFarm "ci-kernels" (
+          resolveKernels =
+            kernelOutputsList:
             map (kernel: {
               inherit (kernel) name;
-              path = kernel.drv;
-            }) resolvedKernels
-          );
+              drv =
+                let
+                  baseDrv = kernel.drv system kernel.outputs;
+                in
+                if kernel.assertFail or false then
+                  pkgs.testers.testBuildFailure' {
+                    drv = baseDrv;
+                    expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
+                  }
+                else
+                  baseDrv;
+            }) kernelOutputsList;
+
+          mkCiBuild =
+            name: kernelOutputsList:
+            pkgs.linkFarm name (
+              map (kernel: {
+                inherit (kernel) name;
+                path = kernel.drv;
+              }) (resolveKernels kernelOutputsList)
+            );
+
+          ci-build-cuda = mkCiBuild "ci-kernels-cuda" ciKernelOutputs;
+          ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
         in
         {
           packages = {
-            inherit ci-build;
-            default = ci-build;
+            inherit ci-build-cuda ci-build-rocm;
+            default = ci-build-cuda;
           };
         }
       );

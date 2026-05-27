@@ -31,6 +31,7 @@ jobs:
 
     env:
       UV_PYTHON_PREFERENCE: only-managed
+      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.12.0' }}
 
     steps:
       - name: Checkout code
@@ -66,7 +67,14 @@ jobs:
         env:
           HF_HUB_DOWNLOAD_TIMEOUT: 60
         run: |
-          uv run pytest tests
+          if [ "${CHECK_COVERAGE}" = "true" ]; then
+            uv run pytest tests \
+              --cov=kernels \
+              --cov-report=term-missing \
+              --cov-report=json:coverage.json
+          else
+            uv run pytest tests
+          fi
 
       - name: Re-run dependency test with dependencies installed
         working-directory: ./kernels
@@ -98,3 +106,63 @@ jobs:
         run: |
           uv run kernels check kernels-community/activation
           uv run kernels versions kernels-community/activation
+
+      # This is done to securely run the coverage test and to post comments even
+      # on fork PRs.
+      - name: Render coverage report for PR comment
+        if: env.CHECK_COVERAGE == 'true' && github.event_name == 'pull_request'
+        working-directory: ./kernels
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PY_VERSION: ${{ matrix.python-version }}
+          TORCH_VERSION: ${{ matrix.torch-version }}
+        run: |
+          set -euo pipefail
+          mkdir -p coverage-artifact
+
+          PCT=$(jq -r '.totals.percent_covered' coverage.json)
+          PCT_INT=$(printf '%.0f' "$PCT")
+          PCT_DISPLAY=$(printf '%.1f' "$PCT")
+          if [ "$PCT_INT" -ge 80 ]; then
+            EMOJI=":white_check_mark:"
+          elif [ "$PCT_INT" -ge 70 ]; then
+            EMOJI=":warning:"
+          else
+            EMOJI=":red_circle:"
+          fi
+
+          uv run coverage report --format=markdown > coverage-artifact/cov-table.md
+
+          {
+            echo "<!-- coverage-report -->"
+            echo "## Coverage report — \`kernels/\`"
+            echo
+            echo "> Measured on: **Python ${PY_VERSION} / Torch ${TORCH_VERSION}**."
+            echo "> Other CI configurations are not included in this number."
+            echo "> Hardware-gated code paths (ROCm/XPU/NPU/Darwin/Windows) are excluded or unreachable on the Linux+CUDA runner."
+            echo
+            echo "**Total coverage: \`${PCT_DISPLAY}%\`** — threshold: 80% — ${EMOJI}"
+            echo
+            echo "<details>"
+            echo "<summary>Per-file breakdown</summary>"
+            echo
+            cat coverage-artifact/cov-table.md
+            echo
+            echo "</details>"
+            echo
+            echo "_Updated by the \`Test kernels\` workflow on commit \`${HEAD_SHA}\`._"
+          } > coverage-artifact/body.md
+
+          # `workflow_run.pull_requests` is empty for fork PRs, so the
+          # downstream comment workflow reads the PR number from here.
+          echo "${PR_NUMBER}" > coverage-artifact/pr_number.txt
+
+      - name: Upload coverage artifact
+        if: env.CHECK_COVERAGE == 'true' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: coverage-report
+          path: kernels/coverage-artifact/
+          retention-days: 1
+          if-no-files-found: error

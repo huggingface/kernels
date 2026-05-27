@@ -110,7 +110,15 @@ jobs:
           shared-key: kernel-builder-${{ matrix.os }}
 
       - name: Build kernel-builder
-        run: ( cd kernel-builder && cargo build --release )
+        # TEMP DIAGNOSTIC: -v + CARGO_LOG=fingerprint=info makes cargo print
+        # the exact reason each crate is being rebuilt ("stale: missing",
+        # "stale: mtime newer than ...", etc.). Used once to find out why
+        # rust-cache restores target/ successfully but cargo still rebuilds
+        # everything. Revert this step before merging.
+        shell: pwsh
+        env:
+          CARGO_LOG: cargo::core::compiler::fingerprint=info
+        run: ( cd kernel-builder ; cargo build --release -v )
 
       # Python environment setup
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0

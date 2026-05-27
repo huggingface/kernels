@@ -103,6 +103,13 @@
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-invalid-capability";
+          path = ./relu-invalid-capability;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          assertFail = true;
+          assertFailLogs = [ "empty set of capabilities" ];
+        }
+        {
           # Check that we can build an arch dev shell.
           name = "relu-dev-shell";
           path = ./relu;
@@ -164,7 +171,17 @@
 
           resolvedKernels = map (kernel: {
             inherit (kernel) name;
-            drv = kernel.drv system kernel.outputs;
+            drv =
+              let
+                baseDrv = kernel.drv system kernel.outputs;
+              in
+              if kernel.assertFail or false then
+                pkgs.testers.testBuildFailure' {
+                  drv = baseDrv;
+                  expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
+                }
+              else
+                baseDrv;
           }) ciKernelOutputs;
 
           ci-build = pkgs.linkFarm "ci-kernels" (

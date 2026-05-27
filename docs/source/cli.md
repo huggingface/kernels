@@ -6,13 +6,10 @@ The `kernels` CLI provides commands for managing compute kernels.
 
 | Command                                                 | Description                                              |
 | ------------------------------------------------------- | -------------------------------------------------------- |
-| [upload](cli-upload.md)                                 | Upload kernels to the Hub                                |
 | [benchmark](cli-benchmark.md)                           | Run benchmark results for a kernel                       |
 | [check](cli-check.md)                                   | Check a kernel for compliance                            |
 | [versions](cli-versions.md)                             | Show kernel versions                                     |
 | [lock](cli-lock.md)                                     | Lock kernel revisions                                    |
-| [download](cli-download.md)                             | Download locked kernels                                  |
-| [skills](cli-skills-add.md)                             | Add skills for AI coding assistants                      |
 
 ## Quick Start
 

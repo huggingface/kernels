@@ -45,8 +45,8 @@ print(f"Kernel available: {is_available}")
 
 ## Inspecting Loaded Kernels
 
-`get_loaded_kernels()` returns a snapshot of every kernel that has been loaded
-into the current process. Each entry is a `LoadedKernel` namedtuple with the
+[`~kernels.get_loaded_kernels`] returns a snapshot of every kernel that has been loaded
+into the current process. Each entry is a [`~kernels.LoadedKernel`] namedtuple with the
 imported `module`, the `package_name`, and `repo_infos` (repo id, resolved
 revision, and the backend argument that was passed).
 
@@ -59,10 +59,10 @@ for loaded in get_loaded_kernels():
     print(loaded.package_name, loaded.repo_infos)
 ```
 
-`repo_infos` is populated only for kernels loaded with `get_kernel`. Kernels
-loaded from a local path (`get_local_kernel`) or via a lockfile
-(`get_locked_kernel`, `load_kernel`) have `repo_infos=None`.
+`repo_infos` is populated only for kernels loaded with [`~kernels.get_kernel`]. Kernels
+loaded from a local path ([`~kernels.get_local_kernel`]) or via a lockfile
+([`~kernels.get_locked_kernel`], [`~kernels.load_kernel`]) have `repo_infos=None`.
 
 Browse through different kernels compatible with `kernels` from [here](https://huggingface.co/kernels).
 
-A kernel can provide layers in addition to kernel functions. Refer to [Layers](../source/layers.md) to know more.
+A kernel can provide layers in addition to kernel functions. Refer to [Layers](./layers.md) to know more.

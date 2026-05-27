@@ -24,9 +24,13 @@ Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kern
 
 The Kernels project is divided into two parts:
 
-* Builder: [`kernel-builder`](../source/builder-cli.md) provides utilities to build, package, and distribute compute kernels in a way that is compatible with the Hugging Face Hub and `kernels`.
-* `kernels`: The [`kernels`](../source/basic-usage.md) is a Python package that lets
-users load compatible compute kernels from the Hub. Refer to the [quickstart](../source/basic-usage.md) to know more.
+- Builder: [`kernel-builder`](builder-cli.md) provides utilities to build, package, and distribute compute kernels in a way that is compatible with the Hugging Face Hub and `kernels`.
+- `kernels`: The [`kernels`](basic-usage.md) is a Python package that lets
+  users load compatible compute kernels from the Hub. Refer to the [quickstart](basic-usage.md) to know more.
 
 If you're looking for a more involved "Why kernels?" answer, refer to
 [this page](./why_kernels.md).
+
+The [talks page](./talks.md) page has links to talks on the
+Kernels project.
+

@@ -5,6 +5,8 @@
       title: Why kernels?
     - local: installation
       title: Installation
+    - local: talks
+      title: Talks
   title: Getting started
 - sections:
     - local: basic-usage

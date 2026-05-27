@@ -27,15 +27,21 @@
       # - torchVersions: optional override for the torchVersions argument
       ciKernels = [
         {
-          name = "relu-kernel";
-          path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
-        }
-        {
           name = "cpp20-symbols-kernel";
           path = ./cpp20-symbols;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
+        }
+        {
+          name = "relu-kernel";
+          path = ./relu;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+        }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv =
+            sys: out:
+            out.packages.${sys}.redistributable.${"torch-stable-abi${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";
@@ -46,19 +52,17 @@
         {
           name = "extra-data";
           path = ./extra-data;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-kernel-cpu";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-tvm-ffi-kernel";
@@ -69,8 +73,7 @@
         {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "silu-and-mul-kernel";
@@ -84,7 +87,7 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.10";
+              torchVersion = "2.11";
               cudaVersion = "12.8";
               systems = [
                 "x86_64-linux"
@@ -97,8 +100,7 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           # Check that we can build an arch dev shell.

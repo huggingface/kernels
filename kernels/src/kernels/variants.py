@@ -1,6 +1,9 @@
 import logging
 import platform
 import re
+import sys
+import sysconfig
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -20,8 +23,6 @@ from kernels.backends import (
     parse_backend,
 )
 from kernels.compat import has_torch, has_tvm_ffi
-
-BUILD_VARIANT_REGEX = re.compile(r"^(torch\d+\d+|torch-(cpu|cuda|metal|neuron|rocm|xpu)|tvm-ffi\d+\d+)")
 
 
 @dataclass(unsafe_hash=True)
@@ -60,6 +61,32 @@ class Torch:
         else:
             cxx11_abi = abi_str != "cxx98"
         return Torch(version=version, cxx11_abi=cxx11_abi)
+
+
+@dataclass(unsafe_hash=True)
+class TorchStableAbi:
+    """Stable ABI-versioned Torch framework (arch variants)."""
+
+    # Match the following Torch version encoding:
+    #
+    # The first part is `torch-stable-abixy` where x is the major ABI version
+    # and y the minor ABI version. x can only consist of one digit, y of one
+    # or more digits.
+    _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"torch-stable-abi(\d)(\d+)")
+
+    version: Version
+
+    @property
+    def variant_str(self) -> str:
+        return f"torch-stable-abi{self.version.major}{self.version.minor}"
+
+    @staticmethod
+    def parse(s: str) -> "TorchStableAbi":
+        m = TorchStableAbi._VARIANT_REGEX.fullmatch(s)
+        if not m:
+            raise ValueError(f"Invalid Torch stable ABI variant string: {s!r}")
+        version = Version(f"{m.group(1)}.{m.group(2)}")
+        return TorchStableAbi(version=version)
 
 
 @dataclass(unsafe_hash=True)
@@ -138,7 +165,7 @@ class Noarch:
 class ArchVariant:
     """Arch kernel build variant."""
 
-    framework: Torch | TvmFfi
+    framework: Torch | TorchStableAbi | TvmFfi
     arch: Arch
 
     @property
@@ -184,6 +211,11 @@ def parse_variant(variant_str: str) -> Variant:
     """Parse a variant string into an ArchVariant or NoarchVariant."""
     parts = variant_str.split("-")
 
+    if variant_str.startswith("torch-stable-abi"):
+        return ArchVariant(
+            framework=TorchStableAbi.parse("-".join(parts[0:3])),
+            arch=Arch.parse(parts[3:]),
+        )
     if parts[0] == "torch":
         # noarch: e.g. "torch-cpu"
         return NoarchVariant(framework=TorchNoarch(), arch=Noarch.parse("-".join(parts[1:])))
@@ -316,6 +348,12 @@ def _resolve_variant_for_system(
     return applicable, trace
 
 
+def _is_unsupported_free_threaded_build() -> bool:
+    """Check if the Python interpreter is a free-threaded build that does not
+    support ABI3."""
+    return sys.version_info < (3, 15) and bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+
+
 def _check_variants(
     variants: list[Variant],
     selected_backend: Backend,
@@ -326,9 +364,31 @@ def _check_variants(
     tvm_ffi_version: Version | None,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
+    is_unsupported_free_threaded = _is_unsupported_free_threaded_build()
+    # Prefilter all arch kernels on free-threaded Python pre-3.15, since
+    # they do not support the stable ABI.
+    if is_unsupported_free_threaded:
+        warnings.warn(
+            "Arch kernels use the stable ABI, which is not supported on free-threaded "
+            "Python before version 3.15. Arch kernels will not be used. Consider using "
+            "a non-free-threaded interpreter, or upgrade to Python 3.15+.",
+            UserWarning,
+            stacklevel=2,
+        )
+        variants = [v for v in variants if not isinstance(v, ArchVariant)]
+
     result: list[Decision] = []
     for v in variants:
         if isinstance(v, ArchVariant):
+            if is_unsupported_free_threaded:
+                result.append(
+                    VariantRejected(
+                        variant=v,
+                        reason="arch kernel not supported on free-threaded Python <3.15",
+                    )
+                )
+                continue
+
             # Skip non-matching CPU or OS.
             if v.arch.platform != cpu:
                 result.append(
@@ -362,6 +422,15 @@ def _check_variants(
                         VariantRejected(
                             variant=v,
                             reason=f"Torch CXX11 ABI ({v.framework.cxx11_abi}) does not match environment Torch CXX11 ABI ({torch_cxx11_abi})",
+                        )
+                    )
+                    continue
+            elif isinstance(v.framework, TorchStableAbi):
+                if torch_version is None or v.framework.version > torch_version:
+                    result.append(
+                        VariantRejected(
+                            variant=v,
+                            reason=f"Torch stable ABI version ({v.framework.version}) is too new for environment Torch version ({torch_version})",
                         )
                     )
                     continue
@@ -419,6 +488,8 @@ def _sort_variants(
     """Sort the decision trace in preference order:
 
     1. AcceptedVariant before RejectedVariant.
+    2. Torch stable ABI arch kernels, with highest compatible version first,
+       then highest compatible CUDA version.
     2. Torch arch kernels with with the highest compatible CUDA version.
     3. tvm-ffi arch kernels with with the highest compatible CUDA version.
     4. Torch noarch kernels.
@@ -430,17 +501,29 @@ def _sort_variants(
         decision_order = 0 if isinstance(vs, VariantAccepted) else 1
         v = vs.variant
         if isinstance(v, ArchVariant):
-            framework_order = 0 if isinstance(v.framework, Torch) else 1
+            if isinstance(v.framework, TorchStableAbi):
+                framework_order = 0
+                # Prefer newer stable ABI versions.
+                abi_version_order = (
+                    -v.framework.version.major,
+                    -v.framework.version.minor,
+                )
+            elif isinstance(v.framework, Torch):
+                framework_order = 1
+                abi_version_order = (0, 0)
+            else:
+                framework_order = 2
+                abi_version_order = (0, 0)
             if isinstance(v.arch.backend, (CUDA, ROCm, XPU, CANN)):
                 # Order by backend version in reverse (higher is better).
                 backend_order = -v.arch.backend.version.minor
             else:
                 backend_order = 0
-            return (decision_order, framework_order, backend_order)
+            return (decision_order, framework_order, *abi_version_order, backend_order)
         else:
             assert isinstance(v, NoarchVariant)
             universal_order = 1 if v.arch.backend_name == "universal" else 0
-            return (decision_order, 2, universal_order)
+            return (decision_order, 2, 0, 0, universal_order)
 
     return sorted(variants, key=sort_key)
 

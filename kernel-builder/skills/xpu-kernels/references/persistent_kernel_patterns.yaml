@@ -1,0 +1,204 @@
+# Intel XPU Persistent Kernel & Stream K Patterns
+# Stage: persistent_kernel, stream_k
+#
+# Persistent kernels are ADVANCED and should NOT be auto-applied by default.
+# They help mainly when:
+# - there are many tiles (launch/tail overhead),
+# - the workload is bandwidth/reduction bound,
+# - cache reuse across tiles is valuable,
+# and they do NOT replace a faster vendor primitive (e.g., vendor GEMM).
+#
+# Stream K is a related advanced scheduling strategy that splits tiles'
+# K-loop iterations evenly across programs to fix quantization inefficiency.
+
+patterns:
+  - id: persistent_kernel_basic_tile_loop
+    name: "Persistent kernel: fixed program count loops over tiles"
+    stage: persistent_kernel
+    description: "Launch a fixed number of programs and iterate over all tiles with stride = NUM_PROGS"
+    rationale: |
+      Persistent kernels reduce kernel launch overhead and can improve cache reuse by having
+      fewer programs loop over many tiles. This can help Intel XPU when the baseline launches
+      huge grids (many tiles) and suffers from tail effects or overhead.
+
+      WARNING:
+      - Persistent kernels can increase GRF/register pressure and reduce occupancy.
+      - Do NOT use by default. Use only when gated conditions indicate it.
+    pattern_before: |
+      # Standard per-tile launch
+      grid = (tl.cdiv(M, BLOCK_M), tl.cdiv(N, BLOCK_N))
+
+      @triton.jit
+      def kernel(...):
+          pid_m = tl.program_id(0)
+          pid_n = tl.program_id(1)
+          # Process one tile
+          ...
+    pattern_after: |
+      # Persistent kernel launch (1D grid)
+      # NUM_PROGS is a tuned constant (do NOT assume it equals SM/EU count)
+      grid = (NUM_PROGS,)
+
+      @triton.jit
+      def kernel(..., NUM_PROGS: tl.constexpr):
+          pid = tl.program_id(0)
+          tiles_m = tl.cdiv(M, BLOCK_M)
+          tiles_n = tl.cdiv(N, BLOCK_N)
+          num_tiles = tiles_m * tiles_n
+
+          tile = pid
+          while tile < num_tiles:
+              pid_m = tile // tiles_n
+              pid_n = tile % tiles_n
+
+              row_start = pid_m * BLOCK_M
+              col_start = pid_n * BLOCK_N
+
+              # Process tile (GEMM / reduction / etc.)
+              ...
+
+              tile += NUM_PROGS
+    expected_speedup: "0.8-2.0x (highly shape/workload dependent; can regress)"
+    applies_to:
+      - gemm
+      - attention
+      - softmax
+      - layernorm
+      - large_workloads
+
+  - id: persistent_kernel_autotuned_num_progs
+    name: "Persistent kernel: autotune NUM_PROGS (required)"
+    stage: persistent_kernel
+    description: "Treat NUM_PROGS as a tunable meta-parameter instead of guessing hardware counts"
+    rationale: |
+      Intel XPU does not map cleanly to CUDA's SM model. Do not set NUM_PROGS = 'num_sm'.
+      Instead, autotune NUM_PROGS across a small set (e.g., 32/64/128/256) to find the best.
+    pattern_before: |
+      NUM_PROGS = gpu_sm_count  # WRONG: not portable / not reliable on XPU
+      grid = (NUM_PROGS,)
+    pattern_after: |
+      @triton.autotune(
+          configs=[
+              triton.Config({"NUM_PROGS": 32,  "grf_mode": "256"}, num_warps=4, num_stages=2),
+              triton.Config({"NUM_PROGS": 64,  "grf_mode": "256"}, num_warps=4, num_stages=2),
+              triton.Config({"NUM_PROGS": 128, "grf_mode": "256"}, num_warps=4, num_stages=2),
+              triton.Config({"NUM_PROGS": 256, "grf_mode": "256"}, num_warps=4, num_stages=2),
+          ],
+          key=["M", "N", "K"],
+      )
+      @triton.jit
+      def kernel(..., NUM_PROGS: tl.constexpr):
+          ...
+      # Launch with 1D grid:
+      grid = lambda META: (META["NUM_PROGS"],)
+    expected_speedup: "prevents regressions; enables win when persistent is appropriate"
+    applies_to:
+      - gemm
+      - attention
+      - large_workloads
+
+  - id: streamk_two_wave_decomposition
+    name: "Stream K: two-wave SK + data-parallel decomposition"
+    stage: stream_k
+    description: "Split tiles into stream-K (wave 1) and standard blocking (wave 2)"
+    rationale: |
+      Pure stream-K distributes ALL tiles via iteration splitting, maximizing
+      atomic contention. A hybrid two-wave approach is more efficient:
+
+      Wave 1 (first_wave): Only "remainder" tiles that cause quantization
+        inefficiency. Programs share K-loop iterations, using atomic_add
+        for partial results. Program count = num_xe_core (subslice count).
+
+      Wave 2 (full_tiles): Remaining tiles are 1:1 (standard GEMM tiling),
+        no atomics needed. Grid size = blocking_tiles.
+
+      This minimizes atomic traffic while fixing utilization gaps.
+    pattern_after: |
+      num_xe_core = torch.xpu.get_device_capability(0)['gpu_subslice_count']
+      streamk_programs = num_xe_core
+
+      total_tiles = num_block_m * num_block_n
+      iters_per_tile = triton.cdiv(K, BLOCK_SIZE_K)
+
+      # Two-tile SK + DP heuristic
+      streamk_tiles = total_tiles % streamk_programs
+      if total_tiles - streamk_tiles > streamk_programs:
+          streamk_tiles += streamk_programs
+
+      blocking_tiles = total_tiles - streamk_tiles
+      streamk_iters = streamk_tiles * iters_per_tile
+
+      streamk_full_tiles = streamk_iters // streamk_programs
+      streamk_partial_tiles = streamk_iters % streamk_programs
+
+      # Wave 1: stream-K (fixed program count, iteration-split)
+      first_wave[(streamk_programs,)](a, b, c, ...,
+          streamk_full_tiles, streamk_partial_tiles, iters_per_tile)
+
+      # Wave 2: standard 1:1 tiling (offset by streamk_tiles)
+      full_tiles[(blocking_tiles,)](a, b, c, ..., streamk_tiles)
+    expected_speedup: "significant for non-divisible tile counts; minimal for well-fitting shapes"
+    applies_to: [gemm, large_workloads, variable_shapes]
+    notes: |
+      - Requires output to be pre-zeroed (torch.zeros) — see correctness.yaml
+      - Wave 1 uses atomic_add for partial tiles only; full tiles use direct store
+      - Wave 2 tile_ids offset by streamk_tiles to avoid overlap with wave 1
+
+  - id: streamk_mac_loop_partial_tile
+    name: "Stream K: MAC loop with arbitrary iteration range"
+    stage: stream_k
+    description: "Inner multiply-accumulate loop that handles [start_iter, end_iter) within a tile"
+    rationale: |
+      In stream-K, a program may own only a subset of a tile's K iterations.
+      The MAC loop must:
+      1. Derive tile_id from start_iter (tile_id = start_iter // iters_per_tile)
+      2. Compute K offset (remain_iters * BLOCK_SIZE_K)
+      3. Accumulate over the assigned range
+      4. Store via descriptor (full tile) or atomic_add (partial tile)
+    pattern_after: |
+      tile_id = start_iter // iters_per_tile
+      remain_iters = start_iter % iters_per_tile
+      pid_m, pid_n = swizzle_tile(tile_id, ...)
+
+      acc = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+      off_k = remain_iters * BLOCK_SIZE_K
+
+      for _ in range(start_iter, end_iter):
+          a = a_desc.load([pid_m * BLOCK_SIZE_M, off_k])
+          b = b_desc.load([off_k, pid_n * BLOCK_SIZE_N])
+          acc += tl.dot(a, b)
+          off_k += BLOCK_SIZE_K
+
+      # Full tile → direct store; partial tile → atomic add
+      if remain_iters == 0 and end_iter % iters_per_tile == 0:
+          c_desc.store([pid_m * BLOCK_SIZE_M, pid_n * BLOCK_SIZE_N], acc)
+      else:
+          rm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+          rn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+          c_ptr_ = c_ptr + rm[:, None] * stride_cm + rn[None, :] * stride_cn
+          mask = (rm < M)[:, None] & (rn < N)[None, :]
+          tl.atomic_add(c_ptr_, acc, mask=mask, sem='relaxed')
+    applies_to: [gemm, stream_k]
+
+  - id: streamk_iteration_distribution
+    name: "Stream K: even iteration distribution (floor + remainder)"
+    stage: stream_k
+    description: "Distribute total stream-K iterations across programs with even split"
+    rationale: |
+      Each program gets floor(total_iters / num_programs) iterations, plus
+      one extra if pid < remainder. Programs iterate through their range,
+      snapping to tile boundaries so each mac_loop stays within one tile.
+    pattern_after: |
+      pid = tl.program_id(axis=0)
+      start_iter = pid * full_tiles + tl.minimum(pid, partial_tiles)
+      last_iter = (pid + 1) * full_tiles + tl.minimum(pid + 1, partial_tiles)
+
+      while start_iter < last_iter:
+          end_iter = start_iter + (iters_per_tile - start_iter % iters_per_tile)
+          end_iter = tl.minimum(end_iter, last_iter)
+          mac_loop(..., start_iter, end_iter, ...)
+          start_iter = end_iter
+    applies_to: [stream_k]
+    notes: |
+      - The while loop handles programs that span multiple tiles
+      - end_iter snaps to tile boundaries within the assigned range

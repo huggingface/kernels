@@ -17,7 +17,9 @@ let
       "xpu${flattenVersion (lib.versions.majorMinor buildConfig.xpuVersion)}"
     else
       "cpu";
+  arch = "tvm-ffi${flattenVersion (lib.versions.majorMinor buildConfig.tvmFfiVersion)}-${computeString}-${buildConfig.system}";
 in
 {
-  arch = "tvm-ffi${flattenVersion (lib.versions.majorMinor buildConfig.tvmFfiVersion)}-${computeString}-${buildConfig.system}";
+  inherit arch;
+  kernelVariant = _: arch;
 }

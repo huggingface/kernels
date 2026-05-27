@@ -170,13 +170,6 @@ in
           xpuPackages = null;
         };
 
-        torch-bin_2_10 = mkTorch {
-          version = "2.10";
-          triton-cuda = triton_3_6_0;
-          triton-xpu = triton-xpu_3_6_0;
-          xpuPackages = final.xpuPackages_2025_3_1;
-        };
-
         torch-bin_2_11 = mkTorch {
           version = "2.11";
           triton-cuda = triton_3_6_0;

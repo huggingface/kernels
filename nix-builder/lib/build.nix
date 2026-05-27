@@ -22,29 +22,77 @@ rec {
   mkSourceSet = import ./source-set.nix { inherit lib; };
 
   # Filter buildsets that are applicable to a given kernel build config.
+  #
+  # Filtering consists of two steps:
+  #
+  # 1. Filter out sets that do not correspond to the given constraints
+  #    (e.g. CUDA version, Pytorch version).
+  # 2. If the kernel config uses the Torch stable ABI, we only need a
+  #    build set for the latest Torch for a given backend + backend version
+  #    combination.
   filterApplicableBuildSets =
     kernelConfig: buildSets:
     let
-      minCuda = kernelConfig.toml.general.cuda.minver or "11.8";
-      maxCuda = kernelConfig.toml.general.cuda.maxver or "99.9";
-      minTorch = kernelConfig.toml.torch.minver or "2.0";
-      maxTorch = kernelConfig.toml.torch.maxver or "99.9";
-      versionBetween =
-        minver: maxver: ver:
-        builtins.compareVersions ver minver >= 0 && builtins.compareVersions ver maxver <= 0;
-      supportedBuildSet =
-        buildSet:
+      # Step 1: build sets within the given bounds.
+      buildSetsWithinBounds =
         let
-          backendSupported = kernelConfig.backends.${buildSet.buildConfig.backend};
-          frameworkSupported = !kernelConfig.isTvmFfi || (buildSet.buildConfig ? tvmFfiVersion);
-          cudaVersionSupported =
-            buildSet.buildConfig.backend != "cuda"
-            || versionBetween minCuda maxCuda buildSet.buildConfig.cudaVersion;
-          torchVersionSupported = versionBetween minTorch maxTorch buildSet.buildConfig.torchVersion;
+          minCuda = kernelConfig.toml.general.cuda.minver or "11.8";
+          maxCuda = kernelConfig.toml.general.cuda.maxver or "99.9";
+          minTorch = kernelConfig.toml.torch.minver or "2.0";
+          maxTorch = kernelConfig.toml.torch.maxver or "99.9";
+          versionBetween =
+            minver: maxver: ver:
+            builtins.compareVersions ver minver >= 0 && builtins.compareVersions ver maxver <= 0;
+          supportedBuildSet =
+            buildSet:
+            let
+              backendSupported = kernelConfig.backends.${buildSet.buildConfig.backend};
+              frameworkSupported = !kernelConfig.isTvmFfi || (buildSet.buildConfig ? tvmFfiVersion);
+              cudaVersionSupported =
+                buildSet.buildConfig.backend != "cuda"
+                || versionBetween minCuda maxCuda buildSet.buildConfig.cudaVersion;
+              torchVersionSupported = versionBetween minTorch maxTorch buildSet.buildConfig.torchVersion;
+            in
+            backendSupported && cudaVersionSupported && frameworkSupported && torchVersionSupported;
         in
-        backendSupported && cudaVersionSupported && frameworkSupported && torchVersionSupported;
+        builtins.filter supportedBuildSet;
+
+      # Step 2: deduplicate build sets by backend + backend version.
+      deduplicateForStableAbi =
+        buildSets:
+        let
+          backendKey =
+            buildSet:
+            let
+              inherit (buildSet) buildConfig;
+              computeVersion =
+                if buildConfig ? cudaVersion then
+                  buildConfig.cudaVersion
+                else if buildConfig ? rocmVersion then
+                  buildConfig.rocmVersion
+                else if buildConfig ? xpuVersion then
+                  buildConfig.xpuVersion
+                else
+                  "";
+            in
+            "${buildConfig.backend}-${computeVersion}";
+          grouped = lib.groupBy backendKey buildSets;
+          newestPerGroup = lib.mapAttrs (
+            _: group:
+            lib.head (
+              lib.sort (
+                a: b: builtins.compareVersions a.buildConfig.torchVersion b.buildConfig.torchVersion > 0
+              ) group
+            )
+          ) grouped;
+        in
+        builtins.attrValues newestPerGroup;
+
     in
-    builtins.filter supportedBuildSet buildSets;
+    if kernelConfig.isTorchStableAbi then
+      deduplicateForStableAbi (buildSetsWithinBounds buildSets)
+    else
+      buildSetsWithinBounds buildSets;
 
   applicableBuildSets =
     { path, buildSets }: filterApplicableBuildSets (readKernelConfig path) buildSets;

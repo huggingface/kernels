@@ -58,20 +58,7 @@ let
     else
       triton;
 
-  archs = (import ../archs.nix).${lib.versions.majorMinor version};
-
-  supportedTorchCudaCapabilities =
-    let
-      inherit (archs) capsPerCudaVersion;
-      real = capsPerCudaVersion."${lib.versions.majorMinor cudaPackages.cudaMajorMinorVersion}";
-      ptx = lib.map (x: "${x}+PTX") real;
-    in
-    real ++ ptx;
-  supportedCudaCapabilities = lib.intersectLists cudaPackages.flags.cudaCapabilities supportedTorchCudaCapabilities;
-  inherit (archs) supportedTorchRocmArchs;
-
   aotritonVersions = with rocmPackages; {
-    "2.10" = aotriton_0_11_1;
     "2.11" = aotriton_0_11_2;
     "2.12" = aotriton_0_11_2;
   };
@@ -375,9 +362,6 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
       ;
 
     inherit (python) pkgs;
-
-    cudaCapabilities = if cudaSupport then supportedCudaCapabilities else [ ];
-    rocmArchs = if rocmSupport then supportedTorchRocmArchs else [ ];
   };
 
   meta = with lib; {

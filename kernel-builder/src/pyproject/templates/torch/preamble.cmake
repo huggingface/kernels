@@ -24,6 +24,10 @@ message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
 set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201")
 
+# Make Torch CMake machinery happy. Whatever we use does not matter, since
+# we set the arches per-file later anyway.
+set(ENV{PYTORCH_ROCM_ARCH} "${HIP_SUPPORTED_ARCHS}")
+
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/get_gpu_lang.cmake)
@@ -65,11 +69,26 @@ if (TORCH_VERSION VERSION_GREATER {{ torch_maxver }})
 endif()
 {% endif %}
 
+{% if stable_abi %}
+if (TORCH_VERSION VERSION_LESS {{ stable_abi }})
+  message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
+    "version {{ stable_abi }}. Cannot build with stable ABI targeting a newer version of Torch.")
+endif()
+
+# From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
+string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "{{ stable_abi }}")
+list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
+list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
+math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
+
+add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
+{% endif %}
+
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 
 if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
- set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0+PTX")
+ set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0;12.1+PTX")
 elseif(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
  set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;12.0+PTX")
@@ -136,8 +155,7 @@ elseif(GPU_LANG STREQUAL "HIP")
   # .hip extension automatically, HIP must be enabled explicitly.
   enable_language(HIP)
 
-  override_gpu_arches(GPU_ARCHES HIP ${HIP_SUPPORTED_ARCHS})
-  set(ROCM_ARCHS ${GPU_ARCHES})
+  set(ROCM_ARCHS ${HIP_SUPPORTED_ARCHS})
   message(STATUS "ROCM supported target architectures: ${ROCM_ARCHS}")
 
   # TODO: deprecate one of these settings.
@@ -195,17 +213,20 @@ set(SRC "")
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/build-variants.cmake)
 
 # Generate build variant name.
+{% if stable_abi %}
+set(_STABLE_ABI_ARG TORCH_STABLE_ABI "{{ stable_abi }}")
+{% endif %}
 if(GPU_LANG STREQUAL "CUDA")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}" ${_STABLE_ABI_ARG})
 elseif(GPU_LANG STREQUAL "HIP")
   run_python(ROCM_VERSION "import torch.version; print(torch.version.hip.split('.')[0] + '.' + torch.version.hip.split('.')[1])" "Failed to get ROCm version")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "rocm" "${ROCM_VERSION}")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "rocm" "${ROCM_VERSION}" ${_STABLE_ABI_ARG})
 elseif(GPU_LANG STREQUAL "SYCL")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "xpu" "${DPCPP_VERSION}")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "xpu" "${DPCPP_VERSION}" ${_STABLE_ABI_ARG})
 elseif(GPU_LANG STREQUAL "METAL")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "metal" "")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "metal" "" ${_STABLE_ABI_ARG})
 elseif(GPU_LANG STREQUAL "CPU")
-  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cpu" "")
+  generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cpu" "" ${_STABLE_ABI_ARG})
 else()
   message(FATAL_ERROR "Cannot generate build name for unknown GPU_LANG: ${GPU_LANG}")
 endif()

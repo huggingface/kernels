@@ -25,6 +25,12 @@ in
   # Is the kernel a tvm-ffi kernel.
   isTvmFfi = toml ? tvm-ffi;
 
+  # Does the kernel use the torch stable ABI.
+  isTorchStableAbi = lib.attrByPath [ "torch" "stable-abi" ] null toml != null;
+
+  # Torch stable ABI version.
+  torchStableAbiVersion = lib.attrByPath [ "torch" "stable-abi" ] null toml;
+
   # Kernel backends.
   backends =
     let

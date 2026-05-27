@@ -26,8 +26,8 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        python-version: ["3.10", "3.12"]
-        torch-version: ["2.10.0", "2.11.0"]
+        python-version: ["3.10", "3.14"]
+        torch-version: ["2.11.0", "2.12.0"]
 
     env:
       UV_PYTHON_PREFERENCE: only-managed

@@ -185,6 +185,8 @@ rec {
           backendPythonDeps
           ;
 
+        inherit (kernelConfig) torchStableAbiVersion;
+
         kernelName = kernelConfig.name;
         doAbiCheck = true;
       };

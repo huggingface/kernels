@@ -6,8 +6,8 @@ use eyre::{Context, Result};
 use object::{File, Object};
 
 use kernel_abi_check::{
-    check_macos, check_manylinux, check_python_abi, MacOSViolation, ManylinuxViolation,
-    PythonAbiViolation, Version,
+    check_macos, check_manylinux, check_python_abi, check_torch_stable_abi, MacOSViolation,
+    ManylinuxViolation, PythonAbiViolation, TorchStableAbiViolation, Version,
 };
 
 /// CLI tool to check library versions
@@ -28,6 +28,10 @@ struct Cli {
     /// Python ABI version.
     #[arg(short, long, value_name = "VERSION", default_value = "3.9")]
     python_abi: Version,
+
+    /// Torch stable ABI version.
+    #[arg(long, value_name = "VERSION")]
+    torch_stable_abi: Option<Version>,
 }
 
 fn main() -> Result<()> {
@@ -84,7 +88,39 @@ fn main() -> Result<()> {
         eprintln!("✅ No compatibility issues found");
     }
 
+    if let Some(torch_stable_abi) = args.torch_stable_abi {
+        eprintln!("🔥 Checking for compatibility with Torch stable ABI version {torch_stable_abi}");
+        let torch_stable_abi_violations =
+            check_torch_stable_abi(&torch_stable_abi, file.format(), file.symbols())?;
+        print_torch_stable_abi_violations(&torch_stable_abi_violations, &torch_stable_abi);
+
+        if !torch_stable_abi_violations.is_empty() {
+            return Err(eyre::eyre!("Torch stable ABI compatibility issues found"));
+        } else {
+            eprintln!("✅ No Torch stable ABI compatibility issues found");
+        }
+    }
+
     Ok(())
+}
+
+fn print_torch_stable_abi_violations(
+    violations: &BTreeSet<TorchStableAbiViolation>,
+    torch_abi: &Version,
+) {
+    if !violations.is_empty() {
+        eprintln!("\n⛔ Non-stable Torch ABI symbols found (incompatible with Torch stable ABI {torch_abi}):\n");
+        for violation in violations {
+            match violation {
+                TorchStableAbiViolation::IncompatibleStableAbiSymbol { name, added } => {
+                    eprintln!("{name}: {added}");
+                }
+                TorchStableAbiViolation::NonStableAbiSymbol { name } => {
+                    eprintln!("{name}");
+                }
+            }
+        }
+    }
 }
 
 fn print_manylinux_violations(

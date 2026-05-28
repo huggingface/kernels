@@ -116,8 +116,8 @@ fn check_shared_library_abi(path: impl AsRef<Path>, args: &CheckAbiArgs) -> Resu
     if let Some(torch_stable_abi) = &args.torch_stable_abi {
         eprintln!("🔥 Checking for compatibility with Torch stable ABI version {torch_stable_abi}");
         torch_stable_abi_violations =
-            check_torch_stable_abi(&torch_stable_abi, file.format(), file.symbols())?;
-        print_torch_stable_abi_violations(&torch_stable_abi_violations, &torch_stable_abi);
+            check_torch_stable_abi(torch_stable_abi, file.format(), file.symbols())?;
+        print_torch_stable_abi_violations(&torch_stable_abi_violations, torch_stable_abi);
     }
 
     if !(manylinux_violations.is_empty()

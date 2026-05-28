@@ -537,6 +537,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpp_demangle"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0667304c32ea56cb4cd6d2d7c0cfe9a2f8041229db8c033af7f8d69492429def"
+dependencies = [
+ "cfg-if 1.0.4",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1659,6 +1668,7 @@ version = "0.15.0-dev0"
 dependencies = [
  "clap",
  "color-eyre",
+ "cpp_demangle",
  "eyre",
  "itertools 0.14.0",
  "object 0.36.7",

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::{collections::BTreeSet, fs};
 
-use clap::Parser;
+use clap::Args;
 use eyre::{Context, Result};
 use object::{File, Object};
 
@@ -10,10 +10,8 @@ use kernel_abi_check::{
     ManylinuxViolation, PythonAbiViolation, TorchStableAbiViolation, Version,
 };
 
-/// CLI tool to check library versions
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Cli {
+#[derive(Args, Debug)]
+pub struct CheckAbiArgs {
     /// Python extension library.
     object: PathBuf,
 
@@ -34,13 +32,7 @@ struct Cli {
     torch_stable_abi: Option<Version>,
 }
 
-fn main() -> Result<()> {
-    // Initialize color_eyre error handling
-    color_eyre::install()?;
-
-    // Parse command-line arguments
-    let args = Cli::parse();
-
+pub fn run_check_abi(args: CheckAbiArgs) -> Result<()> {
     let binary_data = fs::read(args.object).context("Cannot open object file")?;
     let file = object::File::parse(&*binary_data).context("Cannot parse object")?;
 
@@ -49,7 +41,6 @@ fn main() -> Result<()> {
 
     match file {
         File::Elf32(_) | File::Elf64(_) => {
-            // Assume for now that ELF is Linux.
             eprintln!(
                 "🐍 Checking for compatibility with {} and Python ABI version {}",
                 args.manylinux, args.python_abi
@@ -128,7 +119,7 @@ fn print_manylinux_violations(
     manylinux_version: &str,
 ) -> Result<()> {
     if !violations.is_empty() {
-        eprintln!("\n⛔ Symbols incompatible with `{manylinux_version}` found:\n",);
+        eprintln!("\n⛔ Symbols incompatible with `{manylinux_version}` found:\n");
         for violation in violations {
             match violation {
                 ManylinuxViolation::Symbol { name, dep, version } => {
@@ -169,7 +160,7 @@ fn print_python_abi_violations(violations: &BTreeSet<PythonAbiViolation>, python
             .collect::<BTreeSet<_>>();
 
         if !newer_abi3_symbols.is_empty() {
-            eprintln!("\n⛔ Symbols >= Python ABI {python_abi} found:\n",);
+            eprintln!("\n⛔ Symbols >= Python ABI {python_abi} found:\n");
             for violation in newer_abi3_symbols {
                 if let PythonAbiViolation::IncompatibleAbi3Symbol { name, added } = violation {
                     eprintln!("{name}: {added}");

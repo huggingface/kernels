@@ -148,19 +148,22 @@
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of architectures" ];
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
         }
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
         }
       ];
 

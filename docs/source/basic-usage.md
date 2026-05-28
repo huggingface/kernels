@@ -43,6 +43,23 @@ is_available = has_kernel("kernels-community/activation", version=1)
 print(f"Kernel available: {is_available}")
 ```
 
+When no compatible kernel is found, [`~kernels.has_kernel`] does not say *why*.
+[`~kernels.get_kernel_variants`] returns the full resolution trace instead: one
+decision per build variant in the repository, with compatible variants listed
+first. Each decision is a `VariantAccepted` or a `VariantRejected`, and rejected
+variants carry a human-readable `reason`:
+
+```python
+from kernels import get_kernel_variants, VariantAccepted
+
+for decision in get_kernel_variants("kernels-community/activation", version=1):
+    name = decision.variant.variant_str
+    if isinstance(decision, VariantAccepted):
+        print(f"{name}: compatible")
+    else:
+        print(f"{name}: rejected ({decision.reason})")
+```
+
 ## Inspecting Loaded Kernels
 
 [`~kernels.get_loaded_kernels`] returns a snapshot of every kernel that has been loaded

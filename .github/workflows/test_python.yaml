@@ -16,31 +16,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  kernel-abi-check:
-    name: kernel-abi-check bindings
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
-
-    env:
-      UV_PYTHON_PREFERENCE: only-managed
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install the project
-        run: ( cd kernel-abi-check/bindings/python && uv sync --all-extras --dev)
-
-      - name: Run tests
-        run: ( cd kernel-abi-check/bindings/python && uv run pytest tests )
-
   kernels-data:
     name: kernels-data bindings
     runs-on: ubuntu-latest

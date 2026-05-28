@@ -1622,15 +1622,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kernel-abi-check-python"
-version = "0.15.0-dev0"
-dependencies = [
- "kernel-abi-check",
- "object",
- "pyo3",
-]
-
-[[package]]
 name = "kernels-data"
 version = "0.15.0-dev0"
 dependencies = [

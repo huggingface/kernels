@@ -1,7 +1,6 @@
 [workspace]
 members = [
-    "kernel-abi-check/kernel-abi-check",
-    "kernel-abi-check/bindings/python",
+    "kernel-abi-check",
     "kernel-builder",
     "kernels-data",
     "kernels-data/bindings/python",

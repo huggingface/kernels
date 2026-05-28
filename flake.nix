@@ -146,7 +146,6 @@
           mkShell {
             nativeBuildInputs = [
               kernel-builder
-              kernel-abi-check
               nodejs # For hf-doc-builder.
               pinact
               pkg-config
@@ -168,7 +167,6 @@
               huggingface-hub
               jax
               jax-tvm-ffi
-              kernel-abi-check
               kernels-data
               matplotlib
               mktestdocs
@@ -213,7 +211,7 @@
         formatter = pkgs.nixfmt-tree;
 
         packages = rec {
-          inherit (buildSet.pkgs) kernel-builder kernel-abi-check;
+          inherit (buildSet.pkgs) kernel-builder;
           inherit (buildSet.pkgs.python3.pkgs) kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''

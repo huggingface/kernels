@@ -14,8 +14,6 @@ in
 
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
-  kernel-abi-check = final.callPackage ./pkgs/kernel-abi-check { };
-
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
   nvtx = final.callPackage ./pkgs/nvtx { };

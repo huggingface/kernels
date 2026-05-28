@@ -28,12 +28,17 @@ from kernels.utils import (
     LoadedKernel,
     RepoInfo,
     get_kernel,
+    get_kernel_variants,
     get_loaded_kernels,
     get_local_kernel,
     get_locked_kernel,
     has_kernel,
     install_kernel,
     load_kernel,
+)
+from kernels.variants import (
+    VariantAccepted,
+    VariantRejected,
 )
 
 _add_additional_dll_paths()
@@ -54,7 +59,10 @@ __all__ = [
     "Metadata",
     "Mode",
     "RepoInfo",
+    "VariantAccepted",
+    "VariantRejected",
     "get_kernel",
+    "get_kernel_variants",
     "get_loaded_kernels",
     "get_local_kernel",
     "get_locked_kernel",

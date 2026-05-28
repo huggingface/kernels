@@ -25,10 +25,12 @@ from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
 from kernels.status import resolve_status
 from kernels.variants import (
+    Decision,
     Variant,
     get_variants,
     get_variants_local,
     resolve_variant,
+    resolve_variants,
     variants_trace_str,
 )
 
@@ -550,6 +552,42 @@ def has_kernel(
         revision=revision,
         filename=f"build/{variant.variant_str}/metadata.json",
     )
+
+
+def get_kernel_variants(
+    repo_id: str,
+    revision: str | None = None,
+    version: int | None = None,
+    backend: str | None = None,
+) -> list[Decision]:
+    """
+    Resolve all build variants of a kernel against the current environment.
+
+    The decisions are sorted with compatible variants first, the most preferred
+    variant leading.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        revision (`str`, *optional*):
+            The specific revision (branch, tag, or commit) to inspect. Cannot be used together with `version`.
+        version (`int`, *optional*):
+            The kernel version to inspect. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
+        backend (`str`, *optional*):
+            The backend to resolve variants for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
+
+    Returns:
+        `list[Decision]`: One `VariantAccepted` or `VariantRejected` per build variant
+            in the repository, compatible variants first.
+    """
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
+
+    api = _get_hf_api()
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    _, trace = resolve_variants(variants, backend)
+    return trace
 
 
 def load_kernel(

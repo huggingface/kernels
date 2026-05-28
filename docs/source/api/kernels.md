@@ -14,6 +14,10 @@
 
 [[autodoc]] kernels.has_kernel
 
+### get_kernel_variants
+
+[[autodoc]] kernels.get_kernel_variants
+
 ### get_loaded_kernels
 
 [[autodoc]] kernels.get_loaded_kernels

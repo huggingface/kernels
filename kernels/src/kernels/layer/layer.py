@@ -94,7 +94,9 @@ class LayerRepository:
 
     def load(self) -> Type["nn.Module"]:
         kernel = get_kernel(
-            self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code
+            self._repo_id,
+            revision=self._resolve_revision(),
+            trust_remote_code=self._trust_remote_code,
         )
         return _get_kernel_layer(self, kernel)
 
@@ -109,7 +111,15 @@ class LayerRepository:
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id, self._revision, self._version, self._trust_remote_code))
+        return hash(
+            (
+                self.layer_name,
+                self._repo_id,
+                self._revision,
+                self._version,
+                self._trust_remote_code,
+            )
+        )
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._resolve_revision()}), layer `{self.layer_name}`"
@@ -163,7 +173,7 @@ class LocalLayerRepository:
         return hash((self.layer_name, self._repo_path))
 
     def __str__(self) -> str:
-        return f"`{self._repo_path}` (layer `{self.layer_name}`"
+        return f"`{self._repo_path}` (layer `{self.layer_name}`)"
 
 
 class LockedLayerRepository:
@@ -207,7 +217,11 @@ class LockedLayerRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision, trust_remote_code=self._trust_remote_code)
+        kernel = get_kernel(
+            repo_id=self._repo_id,
+            revision=self._revision,
+            trust_remote_code=self._trust_remote_code,
+        )
         return _get_kernel_layer(self, kernel)
 
     def __eq__(self, other):

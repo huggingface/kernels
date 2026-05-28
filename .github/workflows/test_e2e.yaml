@@ -137,7 +137,7 @@ jobs:
           import torch
           from kernels import get_kernel
 
-          kernel = get_kernel('${{ env.E2E_REPO_ID }}', trust_remote_code=True)
+          kernel = get_kernel('${{ env.E2E_REPO_ID }}', trust_remote_code=True, version=1)
 
           x = torch.randn(1024, 1024, dtype=torch.float32, device='cuda')
           result = kernel.${{ env.E2E_PKG_NAME }}(x)

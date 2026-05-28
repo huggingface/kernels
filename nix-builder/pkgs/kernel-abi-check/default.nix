@@ -24,6 +24,7 @@ rustPlatform.buildRustPackage {
         || file.name == "Cargo.lock"
         || file.name == "manylinux-policy.json"
         || file.hasExt "rs"
+        || file.name == "shim_function_versions.txt"
         || file.name == "stable_abi.toml";
     in
     import ../crate-dirs.nix {

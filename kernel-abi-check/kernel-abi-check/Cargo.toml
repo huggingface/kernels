@@ -12,6 +12,7 @@ repository = "https://github.com/huggingface/kernel-builder"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 color-eyre = "0.6"
+cpp_demangle = "0.5"
 eyre = "0.6"
 itertools = "0.14.0"
 object = "0.36.7"

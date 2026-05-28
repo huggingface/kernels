@@ -65,6 +65,9 @@
   # Wheter to strip rpath for non-nix use.
   stripRPath ? false,
 
+  # The Torch stable ABI version to check for.
+  torchStableAbiVersion ? null,
+
   # Revision to bake into the ops name.
   rev,
 
@@ -273,6 +276,8 @@ stdenv.mkDerivation (prevAttrs: {
   '';
 
   doInstallCheck = true;
+
+  inherit torchStableAbiVersion;
 
   # We need access to the host system on Darwin for the Metal compiler.
   __noChroot = metalSupport;

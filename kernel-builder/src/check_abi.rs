@@ -44,7 +44,7 @@ fn shared_library_iter(dir: &Path) -> impl Iterator<Item = PathBuf> {
         .filter(|e| {
             e.path()
                 .extension()
-                .is_some_and(|ext| ext == "so" || ext == "dylib" || ext == "dll")
+                .is_some_and(|ext| ext == "so" || ext == "pyd")
         })
         .map(|e| e.into_path())
 }

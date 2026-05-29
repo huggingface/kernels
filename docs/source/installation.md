@@ -1,5 +1,20 @@
 # Installation
 
+> [!WARNING]
+> `kernels` has not reached `1.0` yet. Until then, minor releases may contain
+> breaking changes. If you depend on `kernels` in a library or application, we
+> **strongly recommend pinning a version range** rather than an unbounded
+> dependency. For example, in `pyproject.toml`:
+>
+> ```toml
+> dependencies = [
+>     "kernels>=0.15,<0.16",
+> ]
+> ```
+>
+> or equivalently `kernels~=0.15` (compatible release). This protects your
+> project from unexpected breakage when a new `kernels` version is released.
+
 Install the `kernels` package with `pip` (requires `torch>=2.5` and CUDA):
 
 ```bash

@@ -490,7 +490,7 @@ def _sort_variants(
     1. AcceptedVariant before RejectedVariant.
     2. Torch stable ABI arch kernels, with highest compatible version first,
        then highest compatible CUDA version.
-    2. Torch arch kernels with with the highest compatible CUDA version.
+    2. Torch arch kernels (tagless before C++ ABI-tagged) with the highest compatible CUDA version.
     3. tvm-ffi arch kernels with with the highest compatible CUDA version.
     4. Torch noarch kernels.
     5. Old Torch universal kernels.
@@ -510,7 +510,8 @@ def _sort_variants(
                 )
             elif isinstance(v.framework, Torch):
                 framework_order = 1
-                abi_version_order = (0, 0)
+                # Prefer tagless (cxx11_abi is None) over ABI-tagged.
+                abi_version_order = (0, 1 if v.framework.cxx11_abi is not None else 0)
             else:
                 framework_order = 2
                 abi_version_order = (0, 0)

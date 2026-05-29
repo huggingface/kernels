@@ -505,6 +505,31 @@ def test_resolve_stable_abi_newest_version_preferred():
     assert {vs.variant for vs in trace} == set(variants)
 
 
+def test_resolve_tagless_preferred_over_abi_tagged():
+    # Tagless variant (e.g. torch210-cu128) should be preferred over ABI-tagged
+    # (e.g. torch210-cxx11-cu128) when both are accepted.
+    variants = [
+        parse_variant(s)
+        for s in [
+            "torch210-cxx11-cu128-x86_64-linux",
+            "torch210-cu128-x86_64-linux",
+        ]
+    ]
+    result, trace = _resolve_variant_for_system(
+        variants=variants,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch210-cu128-x86_64-linux"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(variants)
+
+
 def test_resolve_stable_abi_preferred_over_torch():
     # TorchStableAbi variant is preferred over a regular Torch variant of the same version.
     variants = [

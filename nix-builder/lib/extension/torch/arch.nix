@@ -14,7 +14,6 @@
   cmakeNvccThreadsHook,
   cuda_nvcc,
   get-kernel-check,
-  kernel-abi-check,
   kernel-layout-check,
   torch-ops-check,
   ninja,
@@ -164,7 +163,6 @@ stdenv.mkDerivation (prevAttrs: {
     cmake
     ninja
     kernel-builder
-    kernel-abi-check
     kernel-layout-check
     remove-bytecode-hook
     torch-ops-check

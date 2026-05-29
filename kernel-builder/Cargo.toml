@@ -10,7 +10,9 @@ repository = "https://github.com/huggingface/kernels"
 
 [dependencies]
 base32 = "0.5"
+kernel-abi-check = { path = "../kernel-abi-check", version = "0.15.0-dev0" }
 kernels-data = { path = "../kernels-data", version = "0.15.0-dev0" }
+object = "0.36.7"
 clap = { version = "4", features = ["derive"] }
 clap-markdown = "0.1.5"
 clap_complete = "4"

@@ -16,6 +16,7 @@
 
       cudaVersion = "cu126";
       rocmVersion = "rocm71";
+      xpuVersion = "xpu20253";
       torchVersion = "211";
       tvmFfiVersion = "01";
 
@@ -30,12 +31,13 @@
         {
           name = "cpp20-symbols-kernel";
           path = ./cpp20-symbols;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-torch-stable-abi-kernel";
@@ -53,17 +55,19 @@
         {
           name = "extra-data";
           path = ./extra-data;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-kernel-cpu";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-tvm-ffi-kernel";
@@ -74,7 +78,8 @@
         {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "silu-and-mul-kernel";
@@ -101,12 +106,14 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of capabilities" ];
         }
@@ -142,19 +149,22 @@
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of architectures" ];
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
         }
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
         }
       ];
 
@@ -185,11 +195,57 @@
 
       ciKernelOutputs = mkKernelOutputs' ciKernels;
       ciRocmKernelOutputs = mkKernelOutputs' ciRocmKernels;
+
+      # XPU kernels to build in CI.
+      ciXpuKernels = [
+        {
+          name = "relu-kernel";
+          path = ./relu;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+        }
+        {
+          name = "relu-tvm-ffi-kernel";
+          path = ./relu-tvm-ffi;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${xpuVersion}-${sys}"};
+        }
+        {
+          name = "relu-compiler-flags";
+          path = ./relu-compiler-flags;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+        }
+        {
+          name = "cutlass-gemm-kernel";
+          path = ./cutlass-gemm;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+        }
+      ];
+
+      # Metal kernels to build in CI.
+      ciMetalKernels = [
+        {
+          name = "relu-kernel";
+          path = ./relu;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-metal-${sys}"};
+        }
+        {
+          name = "relu-metal-cpp-kernel";
+          path = ./relu-metal-cpp;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-metal-${sys}"};
+        }
+      ];
+
+      ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
+      ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
     in
     flake-utils.lib.eachSystem
       [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ]
       (
         system:
@@ -224,10 +280,17 @@
 
           ci-build-cuda = mkCiBuild "ci-kernels-cuda" ciKernelOutputs;
           ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
+          ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
+          ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
         in
         {
           packages = {
-            inherit ci-build-cuda ci-build-rocm;
+            inherit
+              ci-build-cuda
+              ci-build-rocm
+              ci-build-xpu
+              ci-build-metal
+              ;
             default = ci-build-cuda;
           };
         }

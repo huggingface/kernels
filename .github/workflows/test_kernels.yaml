@@ -86,12 +86,6 @@ jobs:
           uv pip install einops nvidia-cutlass-dsl
           uv run pytest tests/test_deps.py
 
-      - name: Check kernel check
-        working-directory: ./kernels
-        run: |
-          uv pip install ../kernel-abi-check/bindings/python
-          uv run kernels check kernels-community/activation
-
       - name: Import check without torch
         working-directory: ./kernels
         run: |
@@ -106,7 +100,6 @@ jobs:
       - name: Run command-line tools without Torch
         working-directory: ./kernels
         run: |
-          uv run kernels check kernels-community/activation
           uv run kernels versions kernels-community/activation
 
       # This is done to securely run the coverage test and to post comments even

@@ -435,7 +435,6 @@ rec {
               with pkgs;
               [
                 kernel-builder
-                kernel-abi-check
               ]
               ++ (pythonNativeCheckInputs python3.pkgs);
             buildInputs = [ python ];

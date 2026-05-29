@@ -26,9 +26,12 @@ rustPlatform.buildRustPackage {
         file.name == "Cargo.toml"
         || file.name == "Cargo.lock"
         || file.name == "flake.nix"
+        || file.name == "manylinux-policy.json"
         || file.name == "pyproject.toml"
         || file.name == "pyproject_universal.toml"
         || file.name == "python_dependencies.json"
+        || file.name == "shim_function_versions.txt"
+        || file.name == "stable_abi.toml"
         || file.name == ".gitattributes"
         || file.name == ".gitignore"
         || (builtins.any file.hasExt [
@@ -76,7 +79,10 @@ rustPlatform.buildRustPackage {
     installShellCompletion kernel-builder.{bash,fish,zsh}
   '';
 
-  setupHook = ./check-kernel-build-hook.sh;
+  setupHooks = [
+    ./check-kernel-abi-hook.sh
+    ./check-kernel-build-hook.sh
+  ];
 
   meta = {
     description = "Create cmake build infrastructure from build.toml files";

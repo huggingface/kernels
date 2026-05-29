@@ -17,17 +17,12 @@ let
       "xpu${flattenVersion (lib.versions.majorMinor buildConfig.xpuVersion)}"
     else
       "cpu";
-  torchString =
-    stableAbi:
-    if stableAbi == null then
-      "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}"
-    else
-      "torch-stable-abi${flattenVersion (lib.versions.majorMinor stableAbi)}";
+  torchString = "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}";
   archString =
     if buildConfig.system == "aarch64-darwin" then
-      "${torchString null}-${computeString}-${buildConfig.system}"
+      "${torchString}-${computeString}-${buildConfig.system}"
     else
-      "${torchString null}-cxx11-${computeString}-${buildConfig.system}";
+      "${torchString}-cxx11-${computeString}-${buildConfig.system}";
 in
 {
   arch = archString;

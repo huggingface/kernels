@@ -30,12 +30,13 @@
         {
           name = "cpp20-symbols-kernel";
           path = ./cpp20-symbols;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-torch-stable-abi-kernel";
@@ -53,17 +54,19 @@
         {
           name = "extra-data";
           path = ./extra-data;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-kernel-cpu";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-tvm-ffi-kernel";
@@ -74,7 +77,8 @@
         {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "silu-and-mul-kernel";
@@ -101,12 +105,14 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of capabilities" ];
         }
@@ -142,19 +148,22 @@
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of architectures" ];
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
         }
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
         }
       ];
 

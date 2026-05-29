@@ -23,9 +23,14 @@ let
       "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}"
     else
       "torch-stable-abi${flattenVersion (lib.versions.majorMinor stableAbi)}";
+  archString =
+    if buildConfig.system == "aarch64-darwin" then
+      "${torchString null}-${computeString}-${buildConfig.system}"
+    else
+      "${torchString null}-cxx11-${computeString}-${buildConfig.system}";
 in
 {
-  arch = "${torchString null}-${computeString}-${buildConfig.system}";
+  arch = archString;
   noarch = "torch-${buildConfig.backend}";
 
   kernelVariant =
@@ -36,7 +41,7 @@ in
     if archVariant && kernelConfig.isTorchStableAbi then
       "torch-stable-abi${flattenVersion (lib.versions.majorMinor kernelConfig.torchStableAbiVersion)}-${computeString}-${buildConfig.system}"
     else if archVariant then
-      "torch${flattenVersion (lib.versions.majorMinor buildConfig.torchVersion)}-${computeString}-${buildConfig.system}"
+      archString
     else
       "torch-${buildConfig.backend}";
 

@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-05-22T07:49:56.903488286Z"
+exclude-newer = "2026-05-22T07:53:46.132039005Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -760,44 +760,8 @@ wheels = [
 ]
 
 [[package]]
-name = "kernel-abi-check"
-version = "0.6.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/db/81/a5695c58a0fe4c3c6e7d362504123ae67f2712acfc46b8ba06390ecceaef/kernel_abi_check-0.6.2.tar.gz", hash = "sha256:828582ed22bbf4554d12f929ddb2120706cea9d4ab9a86c036dad622f7bdfd8b", size = 36213, upload-time = "2025-09-24T15:19:55.059Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/97/a72196ab55cb6917ebaf4ae13f8a4d53e8a4d94e571d1214a99ef2b2ebce/kernel_abi_check-0.6.2-cp313-cp313t-macosx_10_12_x86_64.whl", hash = "sha256:da49cb0a71280167ebbd10724460254c26d2c93ca6b492052b1639d5889bed0c", size = 554679, upload-time = "2025-09-24T15:19:42.845Z" },
-    { url = "https://files.pythonhosted.org/packages/85/d2/0a3a94b9b664ada6b2d9f22252260c770b7923e721c4fa5beee9b70694cd/kernel_abi_check-0.6.2-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:a448298aad6504c1f9e5823228807036ddf8a50ef15488d20c6f27c2095da435", size = 529083, upload-time = "2025-09-24T15:19:40.415Z" },
-    { url = "https://files.pythonhosted.org/packages/66/7e/c86512eef51de394c5b330a7f06086d09d65f5e8597a7f5a8f182b7a4416/kernel_abi_check-0.6.2-cp313-cp313t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fc1a153c592df465f1978d574fe7f583db79cba83dce17caac71a1507a4d4701", size = 585611, upload-time = "2025-09-24T15:19:25.541Z" },
-    { url = "https://files.pythonhosted.org/packages/2d/8e/7eb1659c6abca509e6112d8543f5a49cb20e78bdf95a52eca149ef15b678/kernel_abi_check-0.6.2-cp313-cp313t-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:2c05c6a96d1e9989e2a1830fb18f95e0d2f4427b3cfa23b4707d201ade59ac1c", size = 592140, upload-time = "2025-09-24T15:19:28.286Z" },
-    { url = "https://files.pythonhosted.org/packages/c2/82/149009bb5fd4675fa695fdbec573efdce4a9fd47d866d32ab76a290740e5/kernel_abi_check-0.6.2-cp313-cp313t-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:6682d49b057d8dd1689c2eb3a6d5513c26f6c2bbb3328c624fcffc0650998186", size = 765905, upload-time = "2025-09-24T15:19:30.97Z" },
-    { url = "https://files.pythonhosted.org/packages/7a/ac/61e06650f8161e21f4c17122e72b8464b7b02bea891482d62b2979e28bb9/kernel_abi_check-0.6.2-cp313-cp313t-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:cdad6e9593655bf17d3683ed76cb4d2313e53b4c3d404cc95b22df4df11ce917", size = 642166, upload-time = "2025-09-24T15:19:33.104Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/75/d046af16becf6ddc2e6fbad9553e4706051eec793478644055d1df374386/kernel_abi_check-0.6.2-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:388887f583224733199f51ed7e6ec52076c4eb05f7656b0340c54bc6b881b7ad", size = 604449, upload-time = "2025-09-24T15:19:38.014Z" },
-    { url = "https://files.pythonhosted.org/packages/57/b2/fe76824ac44d9a2c9ec998824c79c3dbebd8d6992397195b23e71a08438f/kernel_abi_check-0.6.2-cp313-cp313t-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:9c49c4619fab984f665dea723754fd4497aa4c6e3c5d8dac06d6e2de2c55215d", size = 643896, upload-time = "2025-09-24T15:19:35.768Z" },
-    { url = "https://files.pythonhosted.org/packages/bb/b0/671a5e17da37a74e51d56d0465ca48f2dab65c66e56c43270052a7bdfcb3/kernel_abi_check-0.6.2-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:b1fce51762afa98cf64b8f86f909d0e10cd3bef1b46ee4f0fbfa75142a1e82fa", size = 765994, upload-time = "2025-09-24T15:19:45.48Z" },
-    { url = "https://files.pythonhosted.org/packages/11/b6/25822d2264096bcd85920daff1cff9db40d11dadb933804b79536b24b76d/kernel_abi_check-0.6.2-cp313-cp313t-musllinux_1_2_armv7l.whl", hash = "sha256:5316f888e9b208ba1d9f0fa5de7a5012b6451bc4f093d88bc19de6dfdaffca28", size = 855055, upload-time = "2025-09-24T15:19:47.914Z" },
-    { url = "https://files.pythonhosted.org/packages/8a/c9/39993f1e7f70c0f7af3a78c55aeeba96bc7865758ca20419be1840eef6e0/kernel_abi_check-0.6.2-cp313-cp313t-musllinux_1_2_i686.whl", hash = "sha256:356d6e0e4724d2f74cf8c650d5497399b632ee0147cf5567354440519d8214ab", size = 803477, upload-time = "2025-09-24T15:19:50.237Z" },
-    { url = "https://files.pythonhosted.org/packages/db/63/f44f0fed0e6771b805e93d51871467c4a0496157bb4b81feae4dda1be799/kernel_abi_check-0.6.2-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:2892627319bc850ccae788bb55c193b26c772c9f17adefc6246bf057a04f58cb", size = 765830, upload-time = "2025-09-24T15:19:52.457Z" },
-    { url = "https://files.pythonhosted.org/packages/c2/7c/32d7c2fc9125566e7efb9555f440880447c9b32278756c1f673968574b2d/kernel_abi_check-0.6.2-cp313-cp313t-win32.whl", hash = "sha256:e11f478f3d85a573f9fac55ea94ffbe9b6cb4743a56071b678ddc4c26fb54146", size = 390899, upload-time = "2025-09-24T15:19:58.185Z" },
-    { url = "https://files.pythonhosted.org/packages/9b/93/5551e41d16c3b17924251eb7d273a8bb51d9c9c1556f67837a0a3d4ea703/kernel_abi_check-0.6.2-cp313-cp313t-win_amd64.whl", hash = "sha256:fe17bb5b7119c6a0c6518368204b0e1ce5297053995ca422124c49dfc20bbc8d", size = 409136, upload-time = "2025-09-24T15:19:55.735Z" },
-    { url = "https://files.pythonhosted.org/packages/66/57/aa747aae147a74e195f1796adad82afb56e834ded15f12fa55d542d875d5/kernel_abi_check-0.6.2-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:63697d7fa995f4f9fc2797a01064c257e54fde60bcc13aa2619b3006117858e4", size = 564241, upload-time = "2025-09-24T15:19:44Z" },
-    { url = "https://files.pythonhosted.org/packages/d6/6e/9cd47986960c7bcef701539675f07c02f06519f1fd6c33e3ff2f62f9d2a6/kernel_abi_check-0.6.2-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:9d0a4ca90528a29ace2c4bdb65726c2eb703b3ca666e1e8e63afe9d4a2e0a8f9", size = 540335, upload-time = "2025-09-24T15:19:41.473Z" },
-    { url = "https://files.pythonhosted.org/packages/f9/7b/7636f9e3612e88dcd0f0931a9f30a7cd3196bbb98cd91b2a8e97ccc2619c/kernel_abi_check-0.6.2-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8a4eb04e1af045979bcab73c3820f904a14dbe06b603ebac910138a0489830e1", size = 589080, upload-time = "2025-09-24T15:19:26.924Z" },
-    { url = "https://files.pythonhosted.org/packages/7b/56/794da5a0c925b019360a7999165a44ca5339147347b39a50f920c3077d70/kernel_abi_check-0.6.2-cp38-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:0b7913942e9c67038a657bb75fd04008dc5e7122088db40c840cea0fd5f25706", size = 595715, upload-time = "2025-09-24T15:19:29.677Z" },
-    { url = "https://files.pythonhosted.org/packages/22/d1/e85c1217ca69868d6f45a72bb0fa612e356737c193e37a217d592959ee6b/kernel_abi_check-0.6.2-cp38-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:259b215a674f7aa1afea928a0c617e3dc538333dba2bb14dba2b63b7cb11dbaa", size = 771441, upload-time = "2025-09-24T15:19:32.08Z" },
-    { url = "https://files.pythonhosted.org/packages/20/8d/00b49aee7ed5d2d745bba61844d60fa466aa298c81c5234f3612db261bd2/kernel_abi_check-0.6.2-cp38-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:3c6e0fe7bd453324b874b2af76bcf0d1cdbaa237061400b2ea68443f584af89d", size = 645798, upload-time = "2025-09-24T15:19:34.242Z" },
-    { url = "https://files.pythonhosted.org/packages/f5/ac/bc3459c13c038ea25d5ca18f981c5cc4ca04f820e6a5b74da2287e14fcee/kernel_abi_check-0.6.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2d6a18bf3677fc6d2a5a5fa02808ac90c0e976e0cd40c81460c353db00bba8cd", size = 608350, upload-time = "2025-09-24T15:19:39.035Z" },
-    { url = "https://files.pythonhosted.org/packages/0b/03/f87ef18a1c857e7507419c98d119fe7e1b7d8ccc7ab50aab391d6e1d55c4/kernel_abi_check-0.6.2-cp38-abi3-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:257fd1aead70b57d6c61f4f1c3c811ca1cda5a65a59d2c38e3c6b7b50a033071", size = 648447, upload-time = "2025-09-24T15:19:36.997Z" },
-    { url = "https://files.pythonhosted.org/packages/a6/26/2706e9d5faed509195b6f36dd220f5cad69a925bd25f0e341f2a41354edb/kernel_abi_check-0.6.2-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:416e4249b705562111bd71b8e2fb80b3a462a6bfb55ebeb9495e793c16ca5392", size = 769445, upload-time = "2025-09-24T15:19:46.747Z" },
-    { url = "https://files.pythonhosted.org/packages/d8/18/d3fa796e4cf693bb56a5a47490be798f10372d51c8b3d7b0fbad86fa1c32/kernel_abi_check-0.6.2-cp38-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:7d07fcb331f06558933a428eeac71b0ce35cc87a336678158533fa92bfec8c79", size = 858871, upload-time = "2025-09-24T15:19:49.052Z" },
-    { url = "https://files.pythonhosted.org/packages/46/64/17e1fa88f96cb2eddded2c294d7434c154f139a4e30f0e0f898b7b768cff/kernel_abi_check-0.6.2-cp38-abi3-musllinux_1_2_i686.whl", hash = "sha256:f1437e9e45c956414635a62e120d18209f5a526d8ce9708074e9d10c7bd73208", size = 807347, upload-time = "2025-09-24T15:19:51.283Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/63/869eaac4fd1dadb3ba4e0b7eac6261cb2340f0718809baee901e9692a871/kernel_abi_check-0.6.2-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:c501e7110d49a9260becebd19b0fb277f121733f6982dc9153703fc76542b700", size = 770206, upload-time = "2025-09-24T15:19:53.771Z" },
-    { url = "https://files.pythonhosted.org/packages/37/f9/7091826bcbd31497c0ed7469dcdfefb601c9a50d25d988048b2d1eec57f0/kernel_abi_check-0.6.2-cp38-abi3-win32.whl", hash = "sha256:59d183d5936435913ff0c83da2499e407454031cfa53e32db7a11bef1bc8a5c0", size = 392625, upload-time = "2025-09-24T15:19:59.454Z" },
-    { url = "https://files.pythonhosted.org/packages/87/00/d91b831dac7bc7958d50485a4d48248ed8d83fb9bebdc1b891f6cbba8c44/kernel_abi_check-0.6.2-cp38-abi3-win_amd64.whl", hash = "sha256:42054fcfeee9169445e4a958e4b5c936611ba10bf14e7cf2974ebefdbf872f2f", size = 412412, upload-time = "2025-09-24T15:19:56.741Z" },
-]
-
-[[package]]
 name = "kernels"
-version = "0.15.0"
+version = "0.15.1"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },
@@ -809,9 +773,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-abi-check = [
-    { name = "kernel-abi-check" },
-]
 benchmark = [
     { name = "matplotlib" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -844,7 +805,6 @@ dev = [
 requires-dist = [
     { name = "hf-doc-builder", marker = "extra == 'docs'" },
     { name = "huggingface-hub", specifier = ">=1.10.0" },
-    { name = "kernel-abi-check", marker = "extra == 'abi-check'", specifier = ">=0.6.2,<0.7.0" },
     { name = "kernels-data", specifier = ">=0.14.0.dev1" },
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.7.0" },
     { name = "numpy", marker = "extra == 'benchmark'", specifier = ">=2.0.2" },
@@ -856,7 +816,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'benchmark'" },
     { name = "torch", marker = "extra == 'torch'" },
 ]
-provides-extras = ["abi-check", "benchmark", "torch", "docs"]
+provides-extras = ["benchmark", "torch", "docs"]
 
 [package.metadata.requires-dev]
 dev = [

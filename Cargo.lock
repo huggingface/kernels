@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "hf-kernel-builder"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "base32",
  "clap",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "kernel-abi-check"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "cpp_demangle",
  "eyre",
@@ -1623,7 +1623,7 @@ dependencies = [
 
 [[package]]
 name = "kernels-data"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "eyre",
  "itertools 0.13.0",
@@ -1637,7 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "kernels-data-python"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "kernels-data",
  "pyo3",

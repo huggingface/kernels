@@ -9,6 +9,8 @@ on:
     paths-ignore:
       - "docs/**"
       - "*.md"
+      - "kernel-builder/**"
+      - "nix-builder/**"
   workflow_dispatch:
 
 concurrency:

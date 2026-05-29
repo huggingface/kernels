@@ -57,8 +57,6 @@
 - sections:
     - local: cli-benchmark
       title: kernels benchmark
-    - local: cli-check
-      title: kernels check
     - local: cli-versions
       title: kernels versions
     - local: cli-lock

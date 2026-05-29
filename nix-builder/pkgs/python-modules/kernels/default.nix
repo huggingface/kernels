@@ -4,7 +4,6 @@
   setuptools,
 
   huggingface-hub,
-  kernel-abi-check,
   kernels-data,
   pyyaml,
   tomlkit,
@@ -34,7 +33,6 @@ buildPythonPackage {
 
   dependencies = [
     huggingface-hub
-    kernel-abi-check
     kernels-data
     pyyaml
     tomlkit

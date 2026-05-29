@@ -12,6 +12,7 @@ This document contains the help content for the `kernel-builder` command-line pr
 * [`kernel-builder build-and-upload`↴](#kernel-builder-build-and-upload)
 * [`kernel-builder upload`↴](#kernel-builder-upload)
 * [`kernel-builder check-config`↴](#kernel-builder-check-config)
+* [`kernel-builder check-abi`↴](#kernel-builder-check-abi)
 * [`kernel-builder check-builds`↴](#kernel-builder-check-builds)
 * [`kernel-builder create-pyproject`↴](#kernel-builder-create-pyproject)
 * [`kernel-builder devshell`↴](#kernel-builder-devshell)
@@ -37,6 +38,7 @@ Build Hugging Face Hub kernels
 * `build-and-upload` — Build the kernel and upload to Hugging Face Hub
 * `upload` — Upload kernel build artifacts to the Hugging Face Hub
 * `check-config` — Validate the build.toml file
+* `check-abi` — Check the ABI compatibility of a kernel extension
 * `check-builds` — Validate kernel builds
 * `create-pyproject` — Generate CMake files for a kernel extension build
 * `devshell` — Spawn a kernel development shell
@@ -185,6 +187,31 @@ Validate the build.toml file
 ###### **Arguments:**
 
 * `<KERNEL_DIR>`
+
+
+
+## `kernel-builder check-abi`
+
+Check the ABI compatibility of a kernel extension
+
+**Usage:** `kernel-builder check-abi [OPTIONS] [KERNEL_DIR]`
+
+###### **Arguments:**
+
+* `<KERNEL_DIR>` — Directory with kernels
+
+###### **Options:**
+
+* `-m`, `--manylinux <VERSION>` — Manylinux version
+
+  Default value: `manylinux_2_28`
+* `--macos <VERSION>` — macOS version
+
+  Default value: `15.0`
+* `-p`, `--python-abi <VERSION>` — Python ABI version
+
+  Default value: `3.9`
+* `--torch-stable-abi <VERSION>` — Torch stable ABI version
 
 
 

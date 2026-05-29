@@ -269,7 +269,6 @@ in
       kernels =
         pkgs.python3.withPackages (
           ps: with ps; [
-            kernel-abi-check
             kernels
           ]
         )

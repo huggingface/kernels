@@ -57,7 +57,7 @@ packages. For instance, suppose that we built a ROCm library as a shared
 library and ROCm provides the same library as a static library, then compiled
 kernels could use symbols that cannot be resolved when installing the official
 ROCm packages. Similarly, using the official packages allows us to test
-against the official upstram packages.
+against the official upstream packages.
 
 These package sets all follow the same pattern:
 

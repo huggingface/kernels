@@ -192,13 +192,17 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
 CACHE_DIR: str | None = _get_cache_dir()
 
 
+def _validate_variant_dependencies(variant_path: Path) -> None:
+    metadata = Metadata.read_from_file(variant_path / "metadata.json")
+    validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
+
+
 def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
     module_name = metadata.name.python_name
-    validate_dependencies(module_name, metadata.python_depends, _backend())
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():
@@ -277,6 +281,17 @@ def install_kernel(
             f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(trace)}"
         )
 
+    # Validate Python dependencies before downloading the variant.
+    metadata_path = api.hf_hub_download(
+        repo_id,
+        repo_type="kernel",
+        filename=f"build/{variant.variant_str}/metadata.json",
+        cache_dir=CACHE_DIR,
+        revision=revision,
+        local_files_only=False,
+    )
+    _validate_variant_dependencies(Path(metadata_path).parent)
+
     allow_patterns = [f"build/{variant.variant_str}/*"]
 
     repo_path = Path(
@@ -354,7 +369,9 @@ def _resolve_local_variant_path(
             )
         )
     )
-    return _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
+    variant_path = _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
+    _validate_variant_dependencies(variant_path)
+    return variant_path
 
 
 def _find_kernel_in_repo_path(
@@ -502,12 +519,15 @@ def get_local_kernel(
         variant, _ = resolve_variant(variants, backend)
 
         if variant is not None:
-            return _import_from_path(base_path / variant.variant_str)
+            variant_path = base_path / variant.variant_str
+            _validate_variant_dependencies(variant_path)
+            return _import_from_path(variant_path)
 
     # If we didn't find the package in the repo we may have a explicit
     # package path.
     variant_path = repo_path
     if variant_path.exists():
+        _validate_variant_dependencies(variant_path)
         return _import_from_path(variant_path)
 
     raise FileNotFoundError(f"Could not find kernel in {repo_path}")

@@ -6,10 +6,10 @@ The `kernels` CLI provides commands for managing compute kernels.
 
 | Command                                                 | Description                                              |
 | ------------------------------------------------------- | -------------------------------------------------------- |
-| [benchmark](cli-benchmark.md)                           | Run benchmark results for a kernel                       |
-| [check](cli-check.md)                                   | Check a kernel for compliance                            |
+| [benchmark](cli-benchmark.md)                           | Run benchmark results for a kernel                       |                           |
 | [versions](cli-versions.md)                             | Show kernel versions                                     |
 | [lock](cli-lock.md)                                     | Lock kernel revisions                                    |
+| [download](cli-download.md)                                     | Download a kernel                                    |
 
 ## Quick Start
 

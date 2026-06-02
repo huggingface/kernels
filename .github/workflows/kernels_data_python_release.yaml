@@ -8,6 +8,7 @@
 #  - publish step switched from `uv publish` + API token to
 #    `PyO3/maturin-action` + PyPI trusted publishing (see plan.md §3a, §3b)
 #  - pull_request trigger gained `paths-ignore` for docs-only PRs
+#  - concurrency block added (cancel-in-progress only for PRs, never on tag/main)
 name: CI
 
 on:
@@ -22,6 +23,10 @@ on:
       - "docs/**"
       - "*.md"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

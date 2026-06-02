@@ -200,6 +200,7 @@ impl TryFrom<General> for super::General {
             hub: general.hub.map(Into::into),
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            rocm: None,
             xpu: general.xpu.map(Into::into),
         })
     }
@@ -208,6 +209,7 @@ impl TryFrom<General> for super::General {
 impl From<CudaGeneral> for super::CudaGeneral {
     fn from(cuda: CudaGeneral) -> Self {
         Self {
+            capabilities: None,
             minver: cuda.minver,
             maxver: cuda.maxver,
             python_depends: cuda.python_depends,

@@ -82,6 +82,7 @@ pub struct General {
 
     pub cuda: Option<CudaGeneral>,
     pub neuron: Option<NeuronGeneral>,
+    pub rocm: Option<RocmGeneral>,
     pub xpu: Option<XpuGeneral>,
 }
 
@@ -134,9 +135,21 @@ impl General {
             }
         }))
     }
+
+    pub fn backend_archs(&self, backend: Backend) -> Option<&[String]> {
+        match backend {
+            Backend::Cuda => self
+                .cuda
+                .as_ref()
+                .and_then(|cuda| cuda.capabilities.as_deref()),
+            Backend::Rocm => self.rocm.as_ref().and_then(|rocm| rocm.archs.as_deref()),
+            _ => None,
+        }
+    }
 }
 
 pub struct CudaGeneral {
+    pub capabilities: Option<Vec<String>>,
     pub minver: Option<Version>,
     pub maxver: Option<Version>,
     pub python_depends: Option<Vec<String>>,
@@ -148,6 +161,10 @@ pub struct XpuGeneral {
 
 pub struct NeuronGeneral {
     pub python_depends: Option<Vec<String>>,
+}
+
+pub struct RocmGeneral {
+    pub archs: Option<Vec<String>>,
 }
 
 pub struct Hub {

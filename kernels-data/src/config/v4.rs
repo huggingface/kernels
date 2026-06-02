@@ -47,12 +47,15 @@ pub struct General {
 
     pub python_depends: Option<Vec<String>>,
 
+    pub rocm: Option<RocmGeneral>,
+
     pub xpu: Option<XpuGeneral>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct CudaGeneral {
+    pub capabilities: Option<Vec<String>>,
     pub minver: Option<Version>,
     pub maxver: Option<Version>,
     pub python_depends: Option<Vec<String>>,
@@ -62,6 +65,12 @@ pub struct CudaGeneral {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NeuronGeneral {
     pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct RocmGeneral {
+    pub archs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -189,6 +198,7 @@ impl From<General> for super::General {
             hub: general.hub.map(Into::into),
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            rocm: general.rocm.map(Into::into),
             xpu: general.xpu.map(Into::into),
         }
     }
@@ -209,6 +219,7 @@ impl From<Framework> for super::Framework {
 impl From<CudaGeneral> for super::CudaGeneral {
     fn from(cuda: CudaGeneral) -> Self {
         Self {
+            capabilities: cuda.capabilities,
             minver: cuda.minver,
             maxver: cuda.maxver,
             python_depends: cuda.python_depends,
@@ -221,6 +232,12 @@ impl From<NeuronGeneral> for super::NeuronGeneral {
         Self {
             python_depends: neuron.python_depends,
         }
+    }
+}
+
+impl From<RocmGeneral> for super::RocmGeneral {
+    fn from(rocm: RocmGeneral) -> Self {
+        Self { archs: rocm.archs }
     }
 }
 
@@ -384,6 +401,7 @@ impl From<super::General> for General {
             hub: general.hub.map(Into::into),
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            rocm: general.rocm.map(Into::into),
             xpu: general.xpu.map(Into::into),
         }
     }
@@ -404,6 +422,7 @@ impl From<super::Framework> for Framework {
 impl From<super::CudaGeneral> for CudaGeneral {
     fn from(cuda: super::CudaGeneral) -> Self {
         Self {
+            capabilities: cuda.capabilities,
             minver: cuda.minver,
             maxver: cuda.maxver,
             python_depends: cuda.python_depends,
@@ -416,6 +435,12 @@ impl From<super::NeuronGeneral> for NeuronGeneral {
         Self {
             python_depends: neuron.python_depends,
         }
+    }
+}
+
+impl From<super::RocmGeneral> for RocmGeneral {
+    fn from(rocm: super::RocmGeneral) -> Self {
+        Self { archs: rocm.archs }
     }
 }
 

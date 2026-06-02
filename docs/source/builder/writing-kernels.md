@@ -206,6 +206,7 @@ The following sections enumerate all supported options for `build.toml`.
 
 ### `general.cuda`
 
+- `capabilities` (optional): a list of CUDA compute capabilities.
 - `maxver`: the maximum CUDA toolkit version (inclusive). This option
   _must not_ be set under normal circumstances, since it can exclude Torch
   build variants that are [required for compliant kernels](../kernel-requirements.md).
@@ -216,6 +217,11 @@ The following sections enumerate all supported options for `build.toml`.
   build variants that are [required for compliant kernels](../kernel-requirements.md).
   This option is provided for kernels that require functionality only
   provided by newer CUDA toolkits.
+
+### `general.rocm`
+
+- `archs` (optional): a list of ROCm architectures that the kernel supports
+  (e.g. `["gfx942"]`).
 
 ### `torch`
 

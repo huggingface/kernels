@@ -235,6 +235,7 @@ def install_kernel(
     backend: str | None = None,
     variant_locks: dict[str, VariantLock] | None = None,
     user_agent: str | dict | None = None,
+    validate_dependencies: bool = False,
 ) -> Path:
     """
     Download a kernel for the current environment to the cache.
@@ -255,6 +256,9 @@ def install_kernel(
             Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        validate_dependencies (`bool`, defaults to False):
+            When set to True, performs dependency validation. Useful for kernels that have
+            extra Python dependencies.
 
     Returns:
         `Path`: The path to the variant directory.
@@ -264,13 +268,17 @@ def install_kernel(
         # Same local-cache resolution path used by `load_kernel`, which is
         # always offline. Sharing the helper avoids the network dependency
         # that `get_variants` would otherwise introduce.
-        return _resolve_local_variant_path(
+        variant_path = _resolve_local_variant_path(
             api,
             repo_id,
             revision=revision,
             backend=backend,
             variant_locks=variant_locks,
         )
+        # For locally downloaded kernels, we run the validation after resolving the path
+        if validate_dependencies:
+            _validate_variant_dependencies(variant_path)
+        return variant_path
 
     repo_id, revision = resolve_status(api, repo_id, revision)
     variants = get_variants(api, repo_id=repo_id, revision=revision)
@@ -282,15 +290,16 @@ def install_kernel(
         )
 
     # Validate Python dependencies before downloading the variant.
-    metadata_path = api.hf_hub_download(
-        repo_id,
-        repo_type="kernel",
-        filename=f"build/{variant.variant_str}/metadata.json",
-        cache_dir=CACHE_DIR,
-        revision=revision,
-        local_files_only=False,
-    )
-    _validate_variant_dependencies(Path(metadata_path).parent)
+    if validate_dependencies:
+        metadata_path = api.hf_hub_download(
+            repo_id,
+            repo_type="kernel",
+            filename=f"build/{variant.variant_str}/metadata.json",
+            cache_dir=CACHE_DIR,
+            revision=revision,
+            local_files_only=False,
+        )
+        _validate_variant_dependencies(Path(metadata_path).parent)
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
 
@@ -369,9 +378,7 @@ def _resolve_local_variant_path(
             )
         )
     )
-    variant_path = _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
-    _validate_variant_dependencies(variant_path)
-    return variant_path
+    return _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
 
 
 def _find_kernel_in_repo_path(
@@ -489,10 +496,7 @@ def get_kernel(
         revision=revision,
     )
     variant_path = install_kernel(
-        repo_id,
-        backend=backend,
-        revision=revision,
-        user_agent=user_agent,
+        repo_id, backend=backend, revision=revision, user_agent=user_agent, validate_dependencies=True
     )
     return _import_from_path(variant_path, repo_info=repo_info)
 
@@ -684,7 +688,9 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
-    variant_path = install_kernel(repo_id, revision=locked_sha, local_files_only=local_files_only)
+    variant_path = install_kernel(
+        repo_id, revision=locked_sha, local_files_only=local_files_only, validate_dependencies=True
+    )
 
     return _import_from_path(variant_path)
 

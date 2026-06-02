@@ -27,12 +27,13 @@ def test_illegal_dep():
 
 
 def test_deps_validated_before_download(monkeypatch):
-    """Dependencies are validated *before* the build variant is downloaded.
+    """With `validate_dependencies=True`, deps are checked *before* the build
+    variant is downloaded.
 
     `snapshot_download` (the full-variant download) is patched to fail, so the
     dependency error can only surface if validation runs first — guarding the
-    early-bail optimization against regressions that move validation back after
-    the download.
+    early-bail ordering against regressions that move validation back after the
+    download.
     """
 
     class _Downloaded(RuntimeError):
@@ -44,7 +45,14 @@ def test_deps_validated_before_download(monkeypatch):
     monkeypatch.setattr(HfApi, "snapshot_download", _fail)
 
     with pytest.raises(ValueError, match=r"Kernel module `python_invalid_dep` uses.*kepler-22b"):
-        install_kernel("kernels-test/python-invalid-dep", revision="main")
+        install_kernel("kernels-test/python-invalid-dep", revision="main", validate_dependencies=True)
+
+
+def test_install_kernel_skips_validation_by_default():
+    """Validation is opt-in: with the default `validate_dependencies=False`,
+    `install_kernel` downloads an invalid-dep kernel without raising."""
+    variant_path = install_kernel("kernels-test/python-invalid-dep", revision="main")
+    assert (variant_path / "metadata.json").exists()
 
 
 def test_local_kernel_validates_deps(tmp_path):

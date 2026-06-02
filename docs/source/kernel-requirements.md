@@ -230,14 +230,19 @@ The ABI3 requirement can be checked with the ABI checker (see below).
 ### ABI checker
 
 The manylinux_2_28 and Python ABI 3.9 version requirements can be checked with
-[`kernel-abi-check`](https://crates.io/crates/kernel-abi-check):
+`kernel-builder check-abi`:
 
 ```bash
-
-$ cargo install kernel-abi-check
-$ kernel-abi-check result/relu/_relu_e87e0ca_dirty.abi3.so
-🐍 Checking for compatibility with manylinux_2_28 and Python ABI version 3.9
+$ kernel-builder check-abi examples/kernels/relu
+🐍 Checking for compatibility with manylinux_2_28 and Python ABI version 3.9: /home/daniel/git/kernels/examples/kernels/relu/result/torch211-cpu-x86_64-linux/_relu_cpu_30dc0ae_dirty.abi3.so
 ✅ No compatibility issues found
+🐍 Checking for compatibility with manylinux_2_28 and Python ABI version 3.9: /home/daniel/git/kernels/examples/kernels/relu/result/torch211-cu126-x86_64-linux/_relu_cuda_30dc0ae_dirty.abi3.so
+✅ No compatibility issues found
+🐍 Checking for compatibility with manylinux_2_28 and Python ABI version 3.9: /home/daniel/git/kernels/examples/kernels/relu/result/torch211-cu128-x86_64-linux/_relu_cuda_30dc0ae_dirty.abi3.so
+✅ No compatibility issues found
+🐍 Checking for compatibility with manylinux_2_28 and Python ABI version 3.9: /home/daniel/git/kernels/examples/kernels/relu/result/torch211-cu130-x86_64-linux/_relu_cuda_30dc0ae_dirty.abi3.so
+✅ No compatibility issues found
+[...]
 ```
 
 ## Torch extension

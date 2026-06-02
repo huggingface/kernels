@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.15.0.dev0"
+version = "0.16.0.dev0"
 description = "Download compute kernels"
 authors = [
   { name = "Daniel de Kok", email = "daniel@huggingface.co" },
@@ -38,7 +38,6 @@ dev = [
 ]
 
 [project.optional-dependencies]
-abi-check = ["kernel-abi-check>=0.6.2,<0.7.0"]
 benchmark = [
   "matplotlib>=3.7.0",
   "numpy>=2.0.2",

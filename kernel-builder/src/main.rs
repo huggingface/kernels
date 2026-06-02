@@ -3,6 +3,8 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 mod card;
+mod check_abi;
+use check_abi::{run_check_abi, CheckAbiArgs};
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
@@ -141,6 +143,9 @@ enum Commands {
         #[arg(name = "KERNEL_DIR")]
         kernel_dir: Option<PathBuf>,
     },
+
+    /// Check the ABI compatibility of a kernel extension.
+    CheckAbi(CheckAbiArgs),
 
     /// Validate kernel builds.
     CheckBuilds {
@@ -380,6 +385,7 @@ fn main() -> Result<()> {
             check_config(kernel_dir)?;
             Ok(())
         }
+        Commands::CheckAbi(args) => run_check_abi(args),
         Commands::CheckBuilds { kernel_dir } => {
             check_builds(kernel_dir)?;
             Ok(())

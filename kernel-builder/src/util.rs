@@ -12,15 +12,16 @@ pub(crate) fn parse_build(kernel_dir: impl AsRef<Path>) -> Result<Build> {
     Ok(build_compat.into())
 }
 
-pub(crate) fn check_or_infer_kernel_dir(kernel_dir: Option<PathBuf>) -> Result<PathBuf> {
+pub(crate) fn check_or_infer_kernel_dir(kernel_dir: Option<impl AsRef<Path>>) -> Result<PathBuf> {
     match kernel_dir {
         Some(kernel_dir) => {
+            let kernel_dir = kernel_dir.as_ref();
             ensure!(
                 kernel_dir.is_dir(),
                 "`{}` is not a directory",
                 kernel_dir.to_string_lossy()
             );
-            Ok(kernel_dir)
+            Ok(kernel_dir.to_owned())
         }
         None => Ok(current_dir()?),
     }

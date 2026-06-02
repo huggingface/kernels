@@ -57,8 +57,6 @@
 - sections:
     - local: cli-benchmark
       title: kernels benchmark
-    - local: cli-check
-      title: kernels check
     - local: cli-versions
       title: kernels versions
     - local: cli-lock
@@ -71,6 +69,8 @@
       title: Builder CLI Reference
   title: CLI Reference
 - sections:
+    - local: builder/design-overview
+      title: Overview
     - local: builder/design-nix-builder
       title: Nix Builder
   title: Design

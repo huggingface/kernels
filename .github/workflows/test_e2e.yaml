@@ -13,6 +13,10 @@ on:
       - ".github/workflows/test_e2e.yaml"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   HF_ENDPOINT: https://hub-ci.huggingface.co
   HF_TOKEN: ${{ secrets.HF_HUB_CI_TOKEN }}

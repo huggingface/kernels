@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Backend, Build, General, Torch};
+use kernels_data::config::TorchNoarch;
+use kernels_data::config::{Backend, Build, General};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::write_compat_py;
@@ -26,7 +27,12 @@ pub fn write_torch_ext_noarch(
         kernel_id,
         &mut file_set,
     )?;
-    write_pyproject_toml(env, build.framework.torch(), &build.general, &mut file_set)?;
+    write_pyproject_toml(
+        env,
+        build.framework.torch_noarch(),
+        &build.general,
+        &mut file_set,
+    )?;
     write_setup_py(&mut file_set)?;
     write_metadata(&build.general, kernel_id, &mut file_set)?;
 
@@ -61,14 +67,14 @@ fn write_ops_py(
 
 fn write_pyproject_toml(
     env: &Environment,
-    torch: Option<&Torch>,
+    torch_noarch: Option<&TorchNoarch>,
     general: &General,
     file_set: &mut FileSet,
 ) -> Result<()> {
     let writer = file_set.entry("pyproject.toml");
 
     let name = &general.name;
-    let data_globs = torch.and_then(|torch| {
+    let data_globs = torch_noarch.and_then(|torch| {
         torch
             .data_extensions()
             .map(|exts| exts.iter().map(|ext| format!("\"**/*.{ext}\"")).join(", "))
@@ -101,6 +107,7 @@ fn write_pyproject_toml(
                 python_dependencies => python_dependencies,
                 backend_dependencies => backend_dependencies,
                 name => name,
+                python_name => general.name.python_name(),
             },
             writer,
         )

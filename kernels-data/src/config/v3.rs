@@ -171,7 +171,7 @@ impl TryFrom<Build> for super::Build {
         let framework = match build.framework {
             Some(Framework::Torch(torch)) => super::Framework::Torch(torch.into()),
             Some(Framework::TvmFfi(tvm_ffi)) => super::Framework::TvmFfi(tvm_ffi.into()),
-            None => super::Framework::TorchNoarch(super::TorchNoarch {}),
+            None => super::Framework::TorchNoarch(super::TorchNoarch { pyext: None }),
         };
 
         Ok(Self {

@@ -7,7 +7,8 @@ let
   kernelConfig = (import ./kernel-config.nix { inherit lib; }) path;
   nameToPath = path: name: path + "/${name}";
   kernels = kernelConfig.toml.kernel or { };
-  extConfig = kernelConfig.toml.torch or kernelConfig.toml.tvm-ffi or { };
+  extConfig =
+    kernelConfig.toml.torch or kernelConfig.toml.torch-noarch or kernelConfig.toml.tvm-ffi or { };
   pyExt =
     extConfig.pyext or [
       "py"

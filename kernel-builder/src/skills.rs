@@ -14,6 +14,7 @@ const GITHUB_RAW_BASE_TEMPLATE: &str =
 pub enum SkillId {
     #[default]
     CudaKernels,
+    CpuKernels,
     RocmKernels,
     XpuKernels,
 }
@@ -22,6 +23,7 @@ impl SkillId {
     fn as_str(&self) -> &'static str {
         match self {
             SkillId::CudaKernels => "cuda-kernels",
+            SkillId::CpuKernels => "cpu-kernels",
             SkillId::RocmKernels => "rocm-kernels",
             SkillId::XpuKernels => "xpu-kernels",
         }

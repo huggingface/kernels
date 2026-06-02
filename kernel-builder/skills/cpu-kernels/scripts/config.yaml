@@ -1,0 +1,15 @@
+# CPU kernel optimization session configuration.
+# Edit these values to control optimization sessions.
+
+# Phase 2 optimization
+max_trials: 8              # Maximum number of Phase 2 optimization trials (4-16)
+early_stop_speedup: 3.0    # Speedup vs PyTorch baseline to allow early stop
+
+# Profiling
+perf_stat_enabled: true    # Use perf stat for hardware counters (default)
+vtune_enabled: false       # Set to true to enable VTune microarchitecture analysis
+vtune_bin: "/opt/intel/oneapi/vtune/latest/bin64/vtune"
+
+# Build
+build_command: "kernel-builder build --release"
+install_command: "pip install dist/*.whl --force-reinstall --no-deps"

@@ -1,0 +1,171 @@
+# brgemm and AMX Patterns
+#
+# AMX is NOT used directly in HF kernels. Instead, kernels call
+# at::native::cpublas::brgemm() which wraps oneDNN brgemm, and
+# oneDNN internally dispatches to AMX tile instructions when available.
+#
+# Source: kernels-community flash-attn2, megablocks, quantization-bitsandbytes
+
+overview:
+  name: "brgemm — AMX-accelerated GEMM via PyTorch/oneDNN"
+  description: |
+    AMX (Advanced Matrix Extensions) provides hardware tile multiply on SPR+,
+    but it's too complex to call directly (tile configuration, register allocation,
+    data layout constraints). Instead, CPU kernels use the brgemm API:
+
+      Kernel code → at::native::cpublas::brgemm() → oneDNN brgemm → AMX tiles
+
+    The kernel developer's responsibilities:
+    1. Pack weight data in VNNI format (2-element interleave for bf16)
+    2. Tile the GEMM loop to match AMX-friendly sizes (TILE_M=16, TILE_N=16, TILE_K=32)
+    3. Call brgemm() for each tile
+    4. Clean up via brgemm_release()
+
+    For small M (≤ 4 for bf16), brgemm overhead is too high — fall back to
+    tinygemm_kernel using AVX512 _mm512_dpbf16_ps intrinsics.
+
+  compiler_flags: |
+    # No AMX flags needed in build.toml — brgemm/oneDNN dispatches to AMX internally.
+    # The kernel only needs AVX512 flags:
+    cxx-flags = ["-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi", "-mfma", "-mf16c", "-fopenmp"]
+
+brgemm_api:
+  name: "at::native::cpublas::brgemm API"
+  signature: |
+    void at::native::cpublas::brgemm(
+        int64_t M,       // rows of output tile
+        int64_t N,       // cols of output tile
+        int64_t K,       // reduction dimension
+        int64_t lda,     // leading dim of A (typically K)
+        int64_t ldb,     // leading dim of B (typically N)
+        int64_t ldc,     // leading dim of C (typically BLOCK_N)
+        bool add_C,      // if true, accumulate onto existing C; if false, overwrite
+        const void* A,   // input activation (bf16)
+        const void* B,   // weight, VNNI-packed (bf16)
+        float* C         // output accumulator (fp32)
+    );
+
+    void at::native::cpublas::brgemm_release();  // cleanup, call after all GEMMs done
+  example: |
+    #include <ATen/native/CPUBlas.h>
+
+    // GEMM: C[M×N] = A[M×K] × B[K×N], A is bf16, B is VNNI-packed bf16, C is fp32
+    at::native::cpublas::brgemm(
+        m_size,          // M
+        n_size,          // N
+        K,               // K
+        K,               // lda
+        n_size,          // ldb
+        BLOCK_N,         // ldc
+        false,           // overwrite C
+        A_ptr,           // bf16*
+        B_vnni_ptr,      // bf16*, VNNI-packed
+        C_ptr);          // float*
+
+    // Always clean up after all brgemm calls are done
+    at::native::cpublas::brgemm_release();
+
+vnni_packing:
+  name: "VNNI Data Layout"
+  description: |
+    AMX/VNNI requires weight matrix B to be packed in VNNI format:
+    - BF16: 2 consecutive K elements interleaved per N position
+    - INT8: 4 consecutive K elements interleaved per N position
+
+    Standard layout B[K][N]:     VNNI layout B[K/2][N][2] (bf16):
+    [b00 b01 b02 b03]           [(b00,b40) (b01,b41) (b02,b42) (b03,b43)]
+    [b10 b11 b12 b13]           [(b10,b50) (b11,b51) (b12,b52) (b13,b53)]
+    [b20 b21 b22 b23]           ...
+    [b30 b31 b32 b33]
+    [b40 b41 b42 b43]
+    ...
+  pack_function: |
+    // Pack B from [K][N] to VNNI [K/vnni_block][N][vnni_block]
+    template<typename T>
+    void pack_vnni(T* dst, const T* src, int K, int N) {
+        constexpr int VNNI_BLK = std::is_same_v<T, at::BFloat16> ? 2 : 4;
+        for (int k = 0; k < K; k += VNNI_BLK) {
+            for (int n = 0; n < N; n++) {
+                for (int v = 0; v < VNNI_BLK; v++) {
+                    dst[(k / VNNI_BLK) * N * VNNI_BLK + n * VNNI_BLK + v] =
+                        src[(k + v) * N + n];
+                }
+            }
+        }
+    }
+
+tinygemm_vs_brgemm:
+  name: "Algorithm Selection: tinygemm vs brgemm"
+  description: |
+    Two GEMM paths exist for different M sizes:
+
+    1. **tinygemm** (M ≤ 4 for bf16): Hand-written AVX512 kernel
+       - Uses _mm512_dpbf16_ps (VNNI dot-product, NOT AMX tiles)
+       - Lower overhead, better for small batch / single token
+       - Kernel author writes this directly with SIMD intrinsics
+
+    2. **brgemm** (M > 4 for bf16): oneDNN-backed, AMX-accelerated
+       - Higher overhead but much higher throughput for larger M
+       - Kernel author just calls the API, oneDNN handles AMX internally
+  selection_pattern: |
+    template<typename scalar_t>
+    bool can_use_brgemm(int M) {
+        if constexpr (std::is_same_v<scalar_t, at::BFloat16>) {
+            return M > 4;  // bf16: brgemm needs M > 4
+        }
+        return M > 8;      // other types: higher threshold
+    }
+
+    // In the kernel:
+    if (can_use_brgemm<scalar_t>(M)) {
+        // Tile loop calling brgemm()
+        for (int m = 0; m < M; m += TILE_M) {
+            for (int n = 0; n < N; n += TILE_N) {
+                at::native::cpublas::brgemm(
+                    std::min(TILE_M, M - m), std::min(TILE_N, N - n), K,
+                    K, N, BLOCK_N, false,
+                    A + m * K, B_vnni + n * K_vnni, C + m * BLOCK_N + n);
+            }
+        }
+        at::native::cpublas::brgemm_release();
+    } else {
+        // Small M: use hand-written tinygemm with _mm512_dpbf16_ps
+        tinygemm_kernel(M, N, K, A, B_vnni, C);
+    }
+
+tile_sizes:
+  name: "AMX-Friendly Tile Dimensions"
+  description: |
+    When tiling for brgemm, use sizes that match AMX hardware tiles:
+  values:
+    TILE_M: 16   # AMX processes 16 rows at a time
+    TILE_N: 16   # AMX output is 16 cols (fp32)
+    TILE_K: 32   # AMX-BF16 processes 32 bf16 elements per step
+  note: |
+    These are the hardware tile dimensions. The outer blocking
+    (BLOCK_M, BLOCK_N) can be multiples of these for better
+    cache utilization, e.g. BLOCK_M=64 means 4 AMX tiles in M.
+
+when_to_use_brgemm:
+  applies:
+    - "Flash Attention: QK^T and S×V matmuls (M = seq_len, can be large)"
+    - "Quantized GEMM: after dequantizing to bf16, M > 4"
+    - "MoE expert GEMM: avg tokens per expert > 4"
+  does_not_apply:
+    - "Element-wise ops (RMSNorm, activation) — use AVX512 intrinsics directly"
+    - "Small reductions (single-vector operations)"
+    - "Single-token decode (M=1) — use tinygemm with _mm512_dpbf16_ps"
+  runtime_detection: |
+    // Check AMX availability for brgemm
+    // cpu_features.hpp already provides:
+    static bool hasAMX() {
+        unsigned int eax, ebx, ecx, edx;
+        __cpuid_count(7, 0, eax, ebx, ecx, edx);
+        bool amx_bf16 = (edx & (1 << 22)) != 0;
+        bool amx_tile = (edx & (1 << 24)) != 0;
+        return amx_bf16 && amx_tile;
+    }
+    // Note: brgemm() will still work without AMX — oneDNN falls back
+    // to AVX512 internally. But performance won't be as good.
+    // XCR0 check for XTILEDATA/XTILECFG (bits 17,18) is not implemented
+    // in existing kernels — they rely on brgemm to handle this internally.

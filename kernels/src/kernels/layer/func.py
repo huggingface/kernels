@@ -296,6 +296,10 @@ def _create_func_module(func: Callable) -> Type["nn.Module"]:
     from torch import nn
 
     class Func(nn.Module):
+        # Same flags as possible with normal `nn.Module` objects that are exchanged
+        can_torch_compile = getattr(func, "can_torch_compile", False)
+        has_backward = getattr(func, "has_backward", True)
+
         def forward(self, *args, **kwargs):
             return func(*args, **kwargs)
 

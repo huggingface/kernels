@@ -33,6 +33,24 @@ or if you want the latest version from the `main` branch:
 pip install "kernels[benchmark] @ git+https://github.com/huggingface/kernels#subdirectory=kernels"
 ```
 
+## Curated installations
+
+Some kernels rely on additional packages at runtime (for example,
+[CUTLASS DSL](https://docs.nvidia.com/cutlass/), [einops](https://einops.rocks/),
+and [Apache TVM FFI](https://github.com/apache/tvm-ffi)). The `curated` extra
+installs these commonly-needed dependencies in one go:
+
+```bash
+pip install "kernels[curated]"
+```
+
+On XPU (Intel GPU) platforms, use the `curated-xpu` extra instead, which omits
+the CUDA-only dependencies:
+
+```bash
+pip install "kernels[curated-xpu]"
+```
+
 > [!IMPORTANT]
 > On Windows, we recommend using the Linux version of Torch through
 > [WSL 2](https://learn.microsoft.com/en-us/windows/wsl/install), since

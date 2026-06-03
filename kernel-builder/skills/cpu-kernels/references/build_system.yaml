@@ -94,7 +94,7 @@ src = [
 
 [kernel.gptq_cpu_avx512]
 backend = "cpu"
-cxx-flags = ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi"]
+cxx-flags = ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi", "-mamx-tile", "-mamx-bf16", "-mamx-int8"]
 depends = ["torch"]
 include = ["gptq_cpu"]
 src = [
@@ -103,7 +103,7 @@ src = [
 ]
 ```
 
-> **Note**: No AMX flags needed — brgemm dispatches to AMX internally via oneDNN. The `-mamx-*` flags are only needed if you call AMX tile intrinsics directly (no existing kernel does this).
+> **Note**: For GEMM kernels, always include the `-mamx-tile`, `-mamx-bf16`, and `-mamx-int8` flags. Even if `brgemm` dispatches to AMX internally via oneDNN, these flags are required if the kernel (like flash-attn2 or megablocks) uses custom AMX definitions or `cpuid` based checks that compile conditionally.
 
 ## Section Fields
 
@@ -129,10 +129,10 @@ cxx-flags = ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16", "-mavx5
 
 ### AVX512 (GEMM kernels — need vbmi/dq/bw for nibble manipulation)
 ```toml
-cxx-flags = ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi"]
+cxx-flags = ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi", "-mamx-tile", "-mamx-bf16", "-mamx-int8"]
 ```
 
-> **Note**: AMX flags (`-mamx-tile -mamx-bf16 -mamx-int8`) are NOT needed in build.toml. brgemm dispatches to AMX internally via oneDNN at runtime.
+> **Note**: For GEMM kernels, always include the `-mamx-tile`, `-mamx-bf16`, and `-mamx-int8` flags. Even if `brgemm` dispatches to AMX internally via oneDNN, these flags are required if the kernel (like flash-attn2 or megablocks) uses custom AMX definitions or `cpuid` based checks that compile conditionally.
 
 ## File Naming Conventions
 

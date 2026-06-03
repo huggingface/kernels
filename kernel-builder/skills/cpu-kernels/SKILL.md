@@ -275,6 +275,7 @@ src = [
 
 [kernel.my_kernel_cpu_avx512]
 backend = "cpu"
+# Note: For GEMM kernels (e.g., flash-attn2, megablocks), you must also include "-mamx-tile", "-mamx-bf16", "-mamx-int8"
 cxx-flags = ["-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi", "-mfma", "-mf16c", "-fopenmp"]
 depends = ["torch"]
 include = ["my_kernel_cpu"]

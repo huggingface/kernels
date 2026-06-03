@@ -62,6 +62,9 @@ cpu_features_hpp:
       bits: [22, 24]
       os_check: "XCR0 bits 17,18 must be set (XTILEDATA + XTILECFG)"
       description: "AMX-BF16 (bit 22), AMX-TILE (bit 24)"
+      note: |
+        Explicit AMX detection is ONLY used by specific kernels (like flash-attn2 and megablocks) that strictly gate their execution on full hardware support (`hasAllRequiredFeatures()`). 
+        For standard quantized GEMMs (GPTQ, AWQ, BnB), `hasAMX` is omitted — you just check `hasAVX512BF16()` and let `brgemm` silently fall back to AVX512 if AMX is absent.
 
   template: |
     #pragma once

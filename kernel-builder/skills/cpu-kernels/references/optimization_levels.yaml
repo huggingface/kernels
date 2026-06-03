@@ -19,11 +19,11 @@ levels:
     when_done: "Move to Level 2. This tier is just for correctness."
 
   - id: level_2_avx2
-    name: "Level 2: AVX2 SIMD"
+    name: "Level 2: AVX2 SIMD (Optional/Disabled by default)"
     phase: 1
     description: |
       Add 256-bit SIMD vectorization. Most x86 CPUs since 2013 support AVX2.
-      Focus on correctness, not peak performance.
+      Note: This tier is disabled/skipped by default in most kernels as they transition directly to AVX512.
     checklist:
       - Use _mm256_* intrinsics with FMA
       - Handle tail elements (hidden_size % 8 != 0)
@@ -31,7 +31,7 @@ levels:
       - Runtime dispatch via cpu_features.hpp
       - Verify correctness against Level 1 output
     typical_speedup: "1.5-2x vs ATen"
-    when_done: "Move to Level 3. AVX2 is a stepping stone."
+    when_done: "Move to Level 3. AVX2 is an optional stepping stone, often skipped in favor of AVX512 directly."
 
   - id: level_3_avx512_basic
     name: "Level 3: AVX512 Basic"

@@ -28,11 +28,14 @@ fp16_on_cpu:
     FP16 has better precision than BF16 (10-bit mantissa vs 7-bit)
     but narrower dynamic range (5-bit exponent vs 8-bit).
   support:
-    avx2: "F16C extension: _mm256_cvtph_ps / _mm256_cvtps_ph (convert only, no compute)"
+    avx2: "F16C extension: _mm256_cvtph_ps / _mm256_cvtps_ph"
     avx512: "_mm512_cvtph_ps / _mm512_cvtps_ph"
+    avx512_fp16: "AVX512-FP16: Native FP16 vector compute (_mm512_add_ph, _mm512_fmadd_ph)"
+    amx_fp16: "AMX-FP16 (Intel Xeon 6+): Native FP16 tile compute (_tile_dpfp16ps)"
   note: |
-    CPU has no native fp16 compute — always convert to fp32 for computation.
-    BF16 is preferred because _mm512_dpbf16_ps does fused multiply-add in bf16.
+    Some older Intel architectures lack native FP16 compute and require converting to fp32 for calculation.
+    Newer architectures support AVX512-FP16 for vector operations, and Intel Xeon 6 (Granite Rapids) and newer support AMX-FP16 for matrix multiplication.
+    BF16 remains highly prevalent in the ecosystem because AMX-BF16 support was adopted earlier.
 
 int8_quantization:
   name: "INT8 on CPU"

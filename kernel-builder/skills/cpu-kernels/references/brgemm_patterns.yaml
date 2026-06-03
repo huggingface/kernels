@@ -25,9 +25,10 @@ overview:
     tinygemm_kernel using AVX512 _mm512_dpbf16_ps intrinsics.
 
   compiler_flags: |
-    # No AMX flags needed in build.toml — brgemm/oneDNN dispatches to AMX internally.
-    # The kernel only needs AVX512 flags:
-    cxx-flags = ["-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi", "-mfma", "-mf16c", "-fopenmp"]
+    # While brgemm/oneDNN dispatches to AMX internally, it is highly recommended
+    # to include AMX flags for GEMM kernels (as done in megablocks and flash-attn2)
+    # to ensure any explicit AMX packing instructions compile successfully:
+    cxx-flags = ["-mavx512f", "-mavx512bf16", "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi", "-mamx-tile", "-mamx-bf16", "-mamx-int8", "-mfma", "-mf16c", "-fopenmp"]
 
 brgemm_api:
   name: "at::native::cpublas::brgemm API"

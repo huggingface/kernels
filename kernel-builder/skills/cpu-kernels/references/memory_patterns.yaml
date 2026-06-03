@@ -36,13 +36,14 @@ prefetch:
 alignment:
   name: "Memory Alignment"
   description: |
-    Aligned access is faster than unaligned on most CPUs.
-    AVX512 requires 64-byte alignment for aligned loads.
-    PyTorch tensors are typically 64-byte aligned (via torch allocator).
+    PyTorch's memory allocator guarantees 64-byte alignment for the BASE pointer of a tensor.
+    However, tensor views and slicing (e.g., `tensor[1:]`, or indexing specific attention heads) add offsets that frequently break 64-byte alignment.
+    Using aligned instructions (`_mm512_load_ps`) on unaligned addresses causes an immediate hardware SEGFAULT.
+    Furthermore, on modern Intel CPUs (Skylake/AVX-512 and newer), unaligned instructions (`_mm512_loadu_ps`) have ZERO performance penalty when the address happens to be aligned.
   rules:
-    - "Contiguous tensors from PyTorch are usually aligned — use loadu to be safe"
-    - "For stack buffers, use alignas(64) or __attribute__((aligned(64)))"
-    - "For heap buffers, use aligned_alloc(64, size) or posix_memalign"
+    - "ALWAYS use unaligned loads/stores (_mm512_loadu_*, _mm512_storeu_*). Kernels-community exclusively uses `loadu`; zero `load` instructions exist in the repo."
+    - "For local stack buffers, use `alignas(64)` so the CPU hardware can take the optimal fast-path when your `loadu` instructions read from them."
+    - "For heap buffers, use `aligned_alloc(64, size)` or `posix_memalign`."
 
 numa:
   name: "NUMA Awareness"

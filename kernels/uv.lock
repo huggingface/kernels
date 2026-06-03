@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-05-27T07:58:52.052623062Z"
+exclude-newer = "2026-05-27T08:00:13.899790881Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -761,7 +761,7 @@ wheels = [
 
 [[package]]
 name = "kernels"
-version = "0.15.2"
+version = "0.15.3.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },

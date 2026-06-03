@@ -2,12 +2,6 @@ name: "Updating Nix binary cache"
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened] # trigger on PRs
-    paths-ignore:
-      - "docs/**"
-      - "*.md"
   workflow_dispatch:
 
 concurrency:

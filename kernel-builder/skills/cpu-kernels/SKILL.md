@@ -177,8 +177,8 @@ python scripts/cpu_profiler.py --kernel-package <pkg> --op <func>
 | BLOCK_M/N (flash-attn2) | 256 / 768 | Much larger — attention-specific |
 | K-loop unroll | 4 (`#pragma GCC unroll 4`) | All GEMM kernels use 4 |
 | Prefetch distance | 0 (disabled), 64 elements ahead | L1 prefetch via `_MM_HINT_T0` |
-| Algorithm path | tinygemm (M ≤ 4) vs brgemm (M > 4) | M threshold varies by dtype |
-| brgemm dequant threshold | M > 100 → pre-dequantize B | GPTQ/BnB only |
+| Algorithm path | `use_brgemm` threshold (e.g. M > 4) | Switch from tinygemm to brgemm |
+| brgemm dequant policy | `use_brgemm_dequant_out` (e.g. M > 100)| True=pre-dequant all B upfront; False=dequant per K-block |
 | L2 cache budget | 1 MB (50% of 2 MB L2) | Controls N-blocking in `loop_2d` |
 | Thread decomposition | 2D factorization: nth_m × nth_n | Based on M/N aspect ratio |
 
@@ -341,8 +341,15 @@ The parameterized components:
 - **LUT**: GPTQ (linear INT4), BnB (NF4/FP4), MegaBlocks (FP8/MXFP4)
 - **Zero-point**: per-group (GPTQ), none/encoded in LUT (BnB), per-block (FP8)
 - **Algorithm**: tinygemm (small M, fused) vs brgemm (large M, unpack+BLAS)
+- **Weight conversion**: The C++ kernel expects a specific block-interleaved format, NOT raw checkpoint format. Each framework converts in its own repo:
+  - **GPTQ**: `transform_cpu()` unpacks int32→uint8, reorders by g_idx, transposes to [N,K]; then `convert_weight_packed_zp()` repacks to [N,K/2] block-interleaved (BLOCK_N=32). Zeros unpacked to [groups,N] uint8. Scales to bf16. Done at first forward in GPTQModel repo.
+  - **BnB**: `_convert_weight_packed_for_cpu()` unpacks uint8 nibbles→[N,K], repacks to [N,K/2] block-interleaved (same algo as GPTQ). Denests nested absmax. Transposes scales to [K/blocksize,N] bf16. Done at first forward in bitsandbytes repo.
+  - **Megablocks MoE**: `ops.convert_weight_packed()` does transpose+VNNI pack. `ops.convert_scale_packed()` reorders scales. Cached via `packed_weight=True`.
+- **VNNI Conversion (K/V Activations)**:
+  - **Flash Attention**: `pack_vnni()` per tile per forward (K/V change every call, so caching is not possible).
+- **Element-wise (RMSNorm)**: No conversion needed.
 
-> Full pattern: [quantized_gemm_patterns.yaml](references/quantized_gemm_patterns.yaml)
+> Full pattern: [quantized_gemm_patterns.yaml](references/quantized_gemm_patterns.yaml), weight conversion: [brgemm_patterns.yaml](references/brgemm_patterns.yaml)
 
 ## Critical CPU Constraints
 

@@ -211,11 +211,14 @@ tinygemm_template:
     Unroll<ROWS * COLS>{}(storec);
 
 algorithm_selection:
-  name: "tinygemm vs brgemm Selection"
+  name: "tinygemm vs brgemm Selection & Dequant Policy"
   description: |
     For small M (M ≤ 4 for bf16, typical decode), use tinygemm (fused dequant+GEMM).
-    For large M (M > 4, typical prefill), use brgemm via parallel_2d.
-    Additionally, M > 100 triggers pre-dequantization of all B upfront.
+    For large M (M > 4), use brgemm via parallel_2d.
+    
+    Within the brgemm path, we further differentiate the dequantization policy based on M:
+    - use_brgemm_dequant_out = true (M > 100, Prefill): Pre-dequantize all N×K weights into VNNI format upfront in parallel, then run GEMM.
+    - use_brgemm_dequant_out = false (4 < M ≤ 100, Decode/Medium): Dequantize per K-block (chunk) within the inner loop on-the-fly.
 
     Both paths are wrapped in `tinygemm_kernel` which uses `parallel_2d`
     for 2D thread decomposition over (M/BLOCK_M, N/BLOCK_N) tiles.
@@ -238,6 +241,134 @@ algorithm_selection:
             torch::matmul_out(out, input, unpacked.t());
         }
     }
+
+weight_format:
+  name: "Weight Format and Conversion (CRITICAL)"
+  description: |
+    The CPU kernel expects weight in a specific block-interleaved format:
+      qweight: [N, K/2] uint8, BLOCK_N=32 interleaved
+    This is NOT the standard GPTQ/BnB checkpoint format. Each framework does
+    its own conversion BEFORE calling the kernel for the first time.
+
+  kernel_api:
+    gptq: |
+      gemm_int4_forward(input, weight, zeros, absmax, blocksize)
+        input:  [M, K] bf16
+        weight: [N, K/2] uint8 — block-interleaved (BLOCK_N=32)
+        zeros:  [num_groups, N] uint8 — per-group zero-points
+        absmax: [num_groups, N] bf16 — per-group scales (called "absmax" in API, actually scales)
+        output: [M, N] bf16
+    bitsandbytes: |
+      gemm_4bit_forward(input, weight, absmax, blocksize, quant_type)
+        input:     [M, K] bf16
+        weight:    [N, K/2] uint8 — block-interleaved (BLOCK_N=32)
+        absmax:    [K/blocksize, N] bf16 — per-block scales (TRANSPOSED vs GPTQ!)
+        blocksize: int (typically 64)
+        quant_type: 0=NF4, 1=FP4
+        output:    [M, N] bf16
+        NOTE: No zeros param — NF4/FP4 LUT encodes zero mapping
+
+  block_interleaved_format: |
+    ## Block-Interleaved Packing (BLOCK_N=32)
+
+    Both GPTQ and BnB use the SAME packing algorithm to convert
+    [N, K] uint8 (individual 4-bit values) → [N, K/2] uint8 (packed):
+
+    1. Reshape to [N/32, 32, K/2, 2]         — split N into blocks of 32
+    2. Transpose to [N/32, K/2, 32, 2]       — put K/2 before BLOCK_N
+    3. Flatten to [-1, 64], split high 32 / low 32
+    4. Pack: ((high << 4) | low).to(uint8)   — two nibbles per byte
+    5. Reshape back to [N, K/2]
+
+    This interleaving groups 32 N-elements together in memory, which maps
+    directly to AVX512 register width (32 × 16-bit = 512 bits after dequant).
+    The C++ kernel's unpack_B() reverses this with _mm512_permutexvar_epi8.
+
+  gptq_conversion:
+    name: "GPTQ Weight Conversion (in GPTQModel repo)"
+    description: |
+      Performed by HFKernelLinear.transform() at first inference forward.
+      Two steps: transform_cpu() then convert_weight_packed_zp().
+    where: "GPTQModel/gptqmodel/nn_modules/qlinear/gemm_hf_kernel.py"
+    triggered_by: "HFKernelLinear.forward() → self.transform(x.device.type)"
+    step1_transform_cpu: |
+      def transform_cpu(self):
+          # 1. Convert scales to bf16
+          self.scales = self.scales.to(torch.bfloat16).contiguous()
+
+          # 2. Unpack qweight from int32 packed → uint8 individual values
+          #    Original: [N/pack_factor, K] int32 (each int32 holds 8 int4 values)
+          weight = bitwise_and(bitwise_right_shift(qweight.unsqueeze(1).expand(...), wf), maxq)
+
+          # 3. Reorder by g_idx for desc_act support
+          ret_idx = self._build_ret_idx()  # inverse permutation of g_idx
+          weight = weight.reshape(...).index_select(0, ret_idx)
+
+          # 4. Transpose: [K, N] → [N, K] uint8
+          weight = weight.t()
+          self.qweight = weight.contiguous()  # [N, K] uint8 (0-15)
+
+          # 5. Unpack qzeros similarly → [num_groups, N] uint8
+          zeros = bitwise_and(bitwise_right_shift(qzeros.unsqueeze(2).expand(...), wf), maxq)
+          self.qzeros = zeros.reshape(num_groups, N).contiguous()
+    step2_convert_weight_packed_zp: |
+      def convert_weight_packed_zp(self, block_n=32):
+          # Takes [N, K] uint8 → [N, K/2] uint8 block-interleaved
+          # (see block_interleaved_format above for algorithm)
+
+  bnb_conversion:
+    name: "BitsAndBytes Weight Conversion (in bitsandbytes repo)"
+    description: |
+      Performed by _convert_weight_packed_for_cpu() called from
+      Linear4bit.forward() when device is CPU.
+    where: "bitsandbytes/bitsandbytes/functional.py"
+    triggered_by: "Linear4bit.forward() → _convert_weight_packed_for_cpu(qweight, quant_state)"
+    steps: |
+      def _convert_weight_packed_for_cpu(qweight, quant_state, block_n=32):
+          # 1. View as uint8 if stored as different dtype
+          qweight = qweight.view(torch.uint8)
+
+          # 2. Unpack BnB nibble format → [N, K] uint8
+          #    BnB stores: high nibble = even position, low nibble = odd position
+          unpacked_w = empty(qweight.shape[0] * 2)
+          unpacked_w[1::2] = qweight & 0xF       # low nibble → odd
+          unpacked_w[::2]  = qweight >> 4          # high nibble → even
+          qweight_final = unpacked_w.reshape(N, K).to(uint8)
+
+          # 3. Block-interleaved packing: [N, K] → [N, K/2]
+          #    (same algorithm as GPTQ's convert_weight_packed_zp)
+
+          # 4. Denest absmax (if nested/double quantization)
+          if quant_state.nested:
+              absmax = dequantize_blockwise(quant_state.absmax, quant_state.state2)
+              absmax += quant_state.offset
+
+          # 5. Reshape + TRANSPOSE absmax → [K/blocksize, N] bf16
+          #    NOTE: GPTQ keeps scales as [num_groups, N],
+          #          BnB TRANSPOSES to [K/blocksize, N]
+          quant_state.absmax = (
+              quant_state.absmax
+              .reshape(N, K // blocksize)  # [N, num_groups]
+              .T                            # [num_groups, N]
+              .to(torch.bfloat16)
+              .contiguous()
+          )
+
+  key_differences:
+    name: "GPTQ vs BnB Format Differences"
+    table: |
+      | Aspect              | GPTQ                                  | BitsAndBytes                           |
+      |---------------------|----------------------------------------|----------------------------------------|
+      | Original format     | int32 packed (8×int4 per int32)        | uint8 packed (2×nibble per byte)       |
+      | Unpacking           | bitwise_right_shift + mask             | qw >> 4 (even), qw & 0xF (odd)        |
+      | g_idx reorder       | Yes (desc_act support via ret_idx)     | No                                     |
+      | Final qweight       | [N, K/2] uint8 block-interleaved       | [N, K/2] uint8 block-interleaved       |
+      | Zero-points         | [num_groups, N] uint8                  | None (encoded in NF4/FP4 LUT)         |
+      | Scales shape        | [num_groups, N] bf16                   | [K/blocksize, N] bf16 (TRANSPOSED)    |
+      | Scales name in API  | absmax                                 | absmax                                 |
+      | Conversion location | GPTQModel repo (gemm_hf_kernel.py)     | bitsandbytes repo (functional.py)      |
+      | Triggered by        | first forward (self.linear_mode=None)  | first forward on CPU device            |
+      | Reversible          | No (one-way transform)                 | Yes (_convert_weight_packed_for_cpu_inverse) |
 
 adding_new_format:
   name: "How to Add a New Quantization Format"

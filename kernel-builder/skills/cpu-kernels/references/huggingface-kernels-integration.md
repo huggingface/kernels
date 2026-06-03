@@ -43,10 +43,11 @@ if has_kernel("kernels-community/rmsnorm"):
 ### get_local_kernel (Development)
 
 ```python
+from pathlib import Path
 from kernels import get_local_kernel
 
-# Load from local build
-kernel = get_local_kernel("/path/to/my-kernel")
+# Load from local build (requires Path object and package name)
+kernel = get_local_kernel(Path("/path/to/my-kernel"), "my_kernel")
 ```
 
 ## CPU Kernel Usage
@@ -111,7 +112,7 @@ kernel-builder build --release
 
 ```bash
 pip install dist/*.whl --force-reinstall
-python -c "from kernels import get_local_kernel; k = get_local_kernel('.'); print(dir(k))"
+python -c "from pathlib import Path; from kernels import get_local_kernel; k = get_local_kernel(Path('.'), 'my_kernel'); print(dir(k))"
 ```
 
 ### 3. Create Hub repository

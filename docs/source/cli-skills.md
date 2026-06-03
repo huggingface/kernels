@@ -5,6 +5,7 @@ Supported skills include:
 - `cuda-kernels` (default)
 - `rocm-kernels`
 - `xpu-kernels`
+- `cpu-kernels`
 
 Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/kernel-builder/skills).
 

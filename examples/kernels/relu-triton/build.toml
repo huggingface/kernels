@@ -1,0 +1,14 @@
+[general]
+name = "relu-triton"
+version = 1
+license = "Apache-2.0"
+backends = [
+    "cuda",
+    "rocm",
+    "xpu",
+]
+
+[general.hub]
+repo-id = "kernels-test/relu-triton"
+
+[torch-noarch]

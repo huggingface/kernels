@@ -87,20 +87,35 @@ pub fn write_cmake_file(file_set: &mut FileSet, filename: &str, content: &[u8]) 
 
 #[cfg(test)]
 mod tests {
-    use kernels_data::config::{Build, CurrentConfig};
+    use kernels_data::config::{Backend, CudaGeneral, General, KernelName, RocmGeneral};
     use kernels_data::metadata::Metadata;
 
     use super::write_metadata;
     use crate::pyproject::fileset::FileSet;
     use crate::pyproject::ops_identifier::KernelIdentifier;
 
-    fn metadata_for(toml: &str, backend: &str) -> Metadata {
-        let build: Build = toml::from_str::<CurrentConfig>(toml).unwrap().into();
+    fn general_with_archs(cuda: Option<CudaGeneral>, rocm: Option<RocmGeneral>) -> General {
+        General {
+            name: KernelName::new("my-kernel").unwrap(),
+            version: 1,
+            license: "Apache-2.0".to_string(),
+            upstream: None,
+            backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
+            hub: None,
+            python_depends: None,
+            cuda,
+            neuron: None,
+            rocm,
+            xpu: None,
+        }
+    }
+
+    fn metadata_for(general: &General, backend: &str) -> Metadata {
         let kernel_id =
-            KernelIdentifier::new(".", build.general.name.to_string(), Some("abc1234".into()));
+            KernelIdentifier::new(".", general.name.to_string(), Some("abc1234".into()));
 
         let mut file_set = FileSet::default();
-        write_metadata(&build.general, &kernel_id, &mut file_set).unwrap();
+        write_metadata(general, &kernel_id, &mut file_set).unwrap();
 
         let dir = tempfile::tempdir().unwrap();
         file_set.write(dir.path(), false).unwrap();
@@ -112,47 +127,35 @@ mod tests {
 
     #[test]
     fn noarch_capabilities_are_exported_to_metadata() {
-        let toml = r#"
-[general]
-name = "my-kernel"
-version = 1
-license = "Apache-2.0"
-backends = ["cuda", "rocm", "cpu"]
-
-[general.cuda]
-capabilities = ["9.0", "10.0"]
-
-[general.rocm]
-archs = ["gfx942"]
-
-[torch-noarch]
-"#;
+        let general = general_with_archs(
+            Some(CudaGeneral {
+                capabilities: Some(vec!["9.0".to_string(), "10.0".to_string()]),
+                minver: None,
+                maxver: None,
+                python_depends: None,
+            }),
+            Some(RocmGeneral {
+                archs: Some(vec!["gfx942".to_string()]),
+            }),
+        );
 
         assert_eq!(
-            metadata_for(toml, "cuda").backend.archs.as_deref(),
+            metadata_for(&general, "cuda").backend.archs.as_deref(),
             Some(["9.0".to_string(), "10.0".to_string()].as_slice()),
         );
         assert_eq!(
-            metadata_for(toml, "rocm").backend.archs.as_deref(),
+            metadata_for(&general, "rocm").backend.archs.as_deref(),
             Some(["gfx942".to_string()].as_slice()),
         );
         // Backends without declared archs (and CPU, which has no arch concept)
         // leave `archs` unset.
-        assert_eq!(metadata_for(toml, "cpu").backend.archs, None);
+        assert_eq!(metadata_for(&general, "cpu").backend.archs, None);
     }
 
     #[test]
     fn metadata_archs_unset_when_not_declared() {
-        let toml = r#"
-[general]
-name = "my-kernel"
-version = 1
-license = "Apache-2.0"
-backends = ["cuda"]
+        let general = general_with_archs(None, None);
 
-[torch-noarch]
-"#;
-
-        assert_eq!(metadata_for(toml, "cuda").backend.archs, None);
+        assert_eq!(metadata_for(&general, "cuda").backend.archs, None);
     }
 }

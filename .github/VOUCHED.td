@@ -9,8 +9,10 @@ burtenshaw
 danieldk
 danielfleischer
 drbh
+jiqing-feng
 kaixuanliu
 mfuntowicz
 sayakpaul
 shadeMe
 sywangyi
+vasqu

@@ -35,7 +35,7 @@ buildPythonPackage {
     bzip2
     xz
     zlib
-    zstd.dev
+    zstd
   ];
 
   dependencies = [

@@ -386,10 +386,12 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
 def _get_kernel_layer(repo: LayerRepositoryProtocol, kernel: ModuleType) -> Type["nn.Module"]:
     """Get a layer from a kernel."""
 
-    if getattr(kernel, "layers", None) is None:
-        raise ValueError(f"Kernel repo {repo} does not define any layers.")
+    kernel_layers = getattr(kernel, "layers", None)
+    kernel_ext_layers = getattr(kernel, "ext", None)
+    if kernel_layers is None and kernel_ext_layers is None:
+        raise ValueError(f"Kernel repo {repo} does not define any (external) layers.")
 
-    layer = getattr(kernel.layers, repo.layer_name, None)
+    layer = getattr(kernel_layers, repo.layer_name, None) or getattr(kernel_ext_layers, repo.layer_name, None)
     if layer is None:
         raise ValueError(f"Layer `{repo.layer_name}` not found in kernel repo {repo}.")
     return layer

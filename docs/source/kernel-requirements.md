@@ -75,6 +75,7 @@ metadata. Currently the following top-level keys are supported:
   this build variant supports.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
   from a curated set of Python dependencies.
+- `digest` (`Digest`, required): hash digest of the kernel files.
 
 Example `metadata.json`:
 
@@ -88,6 +89,15 @@ Example `metadata.json`:
   "backend": {
     "type": "cuda",
     "archs": ["7.0", "7.2", "7.5", "8.0", "8.6", "8.7", "8.9", "9.0+PTX"]
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "files": {
+      "__init__.py": "xLMbARTcTl8L/m1kJLc/h/QL4Kzt772F872a46pfRGI=",
+      "_mykernel_cuda_7645816_dirty.abi3.so": "vtdzzToloH38HZkVs7sFEf69QFDxROuPsBAond3Jic0=",
+      "_ops.py": "Hrp5aF4o0eHSttw4sQGsbBAXFqvLJ42Y9YJ2KkqvZhg=",
+      "mykernel/__init__.py": "DFYPlrhXwYjEqCl/8n0SmWGZV8NFml5DPhMjKfv98GY="
+    }
   }
 }
 ```

@@ -9,6 +9,7 @@
 
   kernel-builder,
   get-kernel-check,
+  hash-kernel-hook,
   kernel-layout-check,
   python3,
   remove-bytecode-hook,
@@ -88,6 +89,7 @@ stdenv.mkDerivation (prevAttrs: {
   buildInputs = [ torch ];
 
   nativeBuildInputs = [
+    hash-kernel-hook
     kernel-builder
     kernel-layout-check
     remove-bytecode-hook

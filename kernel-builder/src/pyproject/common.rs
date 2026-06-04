@@ -46,7 +46,7 @@ pub fn write_metadata(
             upstream: general.upstream.clone(),
             python_depends,
             backend: BackendInfo {
-                archs: general.backend_archs(*backend).map(<[String]>::to_vec),
+                archs: general.backend_archs(*backend).cloned(),
                 backend_type: *backend,
             },
         };

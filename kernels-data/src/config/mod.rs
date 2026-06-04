@@ -136,13 +136,13 @@ impl General {
         }))
     }
 
-    pub fn backend_archs(&self, backend: Backend) -> Option<&[String]> {
+    pub fn backend_archs(&self, backend: Backend) -> Option<&Vec<String>> {
         match backend {
             Backend::Cuda => self
                 .cuda
                 .as_ref()
-                .and_then(|cuda| cuda.capabilities.as_deref()),
-            Backend::Rocm => self.rocm.as_ref().and_then(|rocm| rocm.archs.as_deref()),
+                .and_then(|cuda| cuda.capabilities.as_ref()),
+            Backend::Rocm => self.rocm.as_ref().and_then(|rocm| rocm.archs.as_ref()),
             _ => None,
         }
     }

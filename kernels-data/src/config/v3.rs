@@ -171,7 +171,10 @@ impl TryFrom<Build> for super::Build {
         let framework = match build.framework {
             Some(Framework::Torch(torch)) => super::Framework::Torch(torch.into()),
             Some(Framework::TvmFfi(tvm_ffi)) => super::Framework::TvmFfi(tvm_ffi.into()),
-            None => super::Framework::TorchNoarch(super::TorchNoarch {}),
+            None => super::Framework::TorchNoarch(super::TorchNoarch {
+                cuda_capabilities: None,
+                rocm_archs: None,
+            }),
         };
 
         Ok(Self {
@@ -200,7 +203,6 @@ impl TryFrom<General> for super::General {
             hub: general.hub.map(Into::into),
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
-            rocm: None,
             xpu: general.xpu.map(Into::into),
         })
     }
@@ -209,7 +211,6 @@ impl TryFrom<General> for super::General {
 impl From<CudaGeneral> for super::CudaGeneral {
     fn from(cuda: CudaGeneral) -> Self {
         Self {
-            capabilities: None,
             minver: cuda.minver,
             maxver: cuda.maxver,
             python_depends: cuda.python_depends,

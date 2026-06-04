@@ -48,6 +48,13 @@ impl Framework {
             _ => None,
         }
     }
+
+    pub fn torch_noarch(&self) -> Option<&TorchNoarch> {
+        match self {
+            Framework::TorchNoarch(torch_noarch) => Some(torch_noarch),
+            _ => None,
+        }
+    }
 }
 
 impl Build {
@@ -82,7 +89,6 @@ pub struct General {
 
     pub cuda: Option<CudaGeneral>,
     pub neuron: Option<NeuronGeneral>,
-    pub rocm: Option<RocmGeneral>,
     pub xpu: Option<XpuGeneral>,
 }
 
@@ -135,21 +141,9 @@ impl General {
             }
         }))
     }
-
-    pub fn backend_archs(&self, backend: Backend) -> Option<&Vec<String>> {
-        match backend {
-            Backend::Cuda => self
-                .cuda
-                .as_ref()
-                .and_then(|cuda| cuda.capabilities.as_ref()),
-            Backend::Rocm => self.rocm.as_ref().and_then(|rocm| rocm.archs.as_ref()),
-            _ => None,
-        }
-    }
 }
 
 pub struct CudaGeneral {
-    pub capabilities: Option<Vec<String>>,
     pub minver: Option<Version>,
     pub maxver: Option<Version>,
     pub python_depends: Option<Vec<String>>,
@@ -161,10 +155,6 @@ pub struct XpuGeneral {
 
 pub struct NeuronGeneral {
     pub python_depends: Option<Vec<String>>,
-}
-
-pub struct RocmGeneral {
-    pub archs: Option<Vec<String>>,
 }
 
 pub struct Hub {
@@ -205,7 +195,23 @@ impl Torch {
         data_extensions(self.pyext.as_deref())
     }
 }
-pub struct TorchNoarch {}
+/// A noarch kernel has no compile step, so it cannot detect the GPU
+/// architectures it supports the way arch kernels do. Instead it declares
+/// them here, and they are exported to each variant's `metadata.json`.
+pub struct TorchNoarch {
+    pub cuda_capabilities: Option<Vec<String>>,
+    pub rocm_archs: Option<Vec<String>>,
+}
+
+impl TorchNoarch {
+    pub fn backend_archs(&self, backend: Backend) -> Option<&Vec<String>> {
+        match backend {
+            Backend::Cuda => self.cuda_capabilities.as_ref(),
+            Backend::Rocm => self.rocm_archs.as_ref(),
+            _ => None,
+        }
+    }
+}
 
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,

@@ -206,7 +206,6 @@ The following sections enumerate all supported options for `build.toml`.
 
 ### `general.cuda`
 
-- `capabilities` (optional): a list of CUDA compute capabilities.
 - `maxver`: the maximum CUDA toolkit version (inclusive). This option
   _must not_ be set under normal circumstances, since it can exclude Torch
   build variants that are [required for compliant kernels](../kernel-requirements.md).
@@ -217,11 +216,6 @@ The following sections enumerate all supported options for `build.toml`.
   build variants that are [required for compliant kernels](../kernel-requirements.md).
   This option is provided for kernels that require functionality only
   provided by newer CUDA toolkits.
-
-### `general.rocm`
-
-- `archs` (optional): a list of ROCm architectures that the kernel supports
-  (e.g. `["gfx942"]`).
 
 ### `torch`
 
@@ -244,6 +238,19 @@ options:
   [stable ABI headers](https://docs.pytorch.org/docs/2.12/notes/libtorch_stable_abi.html).
   For an example, see the [`relu-torch-stable-abi`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-torch-stable-abi)
   example kernel.
+
+### `torch-noarch`
+
+This marks a kernel as a "noarch" Torch kernel (pure Python/Triton,
+with no compile step). Since there is no compilation, the supported GPU
+architectures cannot be detected automatically as they are for arch
+kernels. They can instead be declared here and are exported to each
+variant's `metadata.json` (`backend.archs`):
+
+- `cuda-capabilities` (optional): a list of CUDA compute capabilities the
+  kernel supports (e.g. `["9.0", "10.0"]`).
+- `rocm-archs` (optional): a list of ROCm architectures the kernel supports
+  (e.g. `["gfx942"]`).
 
 ### `kernel.<name>`
 

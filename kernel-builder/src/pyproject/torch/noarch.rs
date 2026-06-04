@@ -6,7 +6,7 @@ use kernels_data::config::{Backend, Build, General, Torch};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::write_compat_py;
-use crate::pyproject::common::write_metadata;
+use crate::pyproject::common::{write_metadata, write_noarch_metadata};
 use crate::pyproject::fileset::FileSet;
 use crate::pyproject::ops_identifier::KernelIdentifier;
 
@@ -28,7 +28,10 @@ pub fn write_torch_ext_noarch(
     )?;
     write_pyproject_toml(env, build.framework.torch(), &build.general, &mut file_set)?;
     write_setup_py(&mut file_set)?;
-    write_metadata(&build.general, kernel_id, &mut file_set)?;
+    match build.framework.torch_noarch() {
+        Some(noarch) => write_noarch_metadata(&build.general, noarch, kernel_id, &mut file_set)?,
+        None => write_metadata(&build.general, kernel_id, &mut file_set)?,
+    }
 
     Ok(file_set)
 }

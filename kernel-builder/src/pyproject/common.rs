@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use eyre::Result;
 use itertools::Itertools;
 
-use kernels_data::config::{Backend, General};
+use kernels_data::config::{Backend, General, TorchNoarch};
 use kernels_data::metadata::{BackendInfo, Metadata};
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
@@ -22,6 +22,28 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
 
 pub fn write_metadata(
     general: &General,
+    kernel_id: &KernelIdentifier,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    write_metadata_impl(general, None, kernel_id, file_set)
+}
+
+/// Like [`write_metadata`], but also exports the GPU architectures that a
+/// noarch kernel declares in its `[torch-noarch]` section. Arch kernels
+/// detect their architectures at build time instead, so they use
+/// [`write_metadata`].
+pub fn write_noarch_metadata(
+    general: &General,
+    noarch: &TorchNoarch,
+    kernel_id: &KernelIdentifier,
+    file_set: &mut FileSet,
+) -> Result<()> {
+    write_metadata_impl(general, Some(noarch), kernel_id, file_set)
+}
+
+fn write_metadata_impl(
+    general: &General,
+    noarch: Option<&TorchNoarch>,
     kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
@@ -46,7 +68,9 @@ pub fn write_metadata(
             upstream: general.upstream.clone(),
             python_depends,
             backend: BackendInfo {
-                archs: general.backend_archs(*backend).cloned(),
+                archs: noarch
+                    .and_then(|noarch| noarch.backend_archs(*backend))
+                    .cloned(),
                 backend_type: *backend,
             },
         };
@@ -87,14 +111,14 @@ pub fn write_cmake_file(file_set: &mut FileSet, filename: &str, content: &[u8]) 
 
 #[cfg(test)]
 mod tests {
-    use kernels_data::config::{Backend, CudaGeneral, General, KernelName, RocmGeneral};
+    use kernels_data::config::{Backend, General, KernelName, TorchNoarch};
     use kernels_data::metadata::Metadata;
 
-    use super::write_metadata;
+    use super::write_noarch_metadata;
     use crate::pyproject::fileset::FileSet;
     use crate::pyproject::ops_identifier::KernelIdentifier;
 
-    fn general_with_archs(cuda: Option<CudaGeneral>, rocm: Option<RocmGeneral>) -> General {
+    fn general() -> General {
         General {
             name: KernelName::new("my-kernel").unwrap(),
             version: 1,
@@ -103,19 +127,19 @@ mod tests {
             backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
             hub: None,
             python_depends: None,
-            cuda,
+            cuda: None,
             neuron: None,
-            rocm,
             xpu: None,
         }
     }
 
-    fn metadata_for(general: &General, backend: &str) -> Metadata {
+    fn metadata_for(noarch: &TorchNoarch, backend: &str) -> Metadata {
+        let general = general();
         let kernel_id =
             KernelIdentifier::new(".", general.name.to_string(), Some("abc1234".into()));
 
         let mut file_set = FileSet::default();
-        write_metadata(general, &kernel_id, &mut file_set).unwrap();
+        write_noarch_metadata(&general, noarch, &kernel_id, &mut file_set).unwrap();
 
         let dir = tempfile::tempdir().unwrap();
         file_set.write(dir.path(), false).unwrap();
@@ -127,35 +151,31 @@ mod tests {
 
     #[test]
     fn noarch_capabilities_are_exported_to_metadata() {
-        let general = general_with_archs(
-            Some(CudaGeneral {
-                capabilities: Some(vec!["9.0".to_string(), "10.0".to_string()]),
-                minver: None,
-                maxver: None,
-                python_depends: None,
-            }),
-            Some(RocmGeneral {
-                archs: Some(vec!["gfx942".to_string()]),
-            }),
-        );
+        let noarch = TorchNoarch {
+            cuda_capabilities: Some(vec!["9.0".to_string(), "10.0".to_string()]),
+            rocm_archs: Some(vec!["gfx942".to_string()]),
+        };
 
         assert_eq!(
-            metadata_for(&general, "cuda").backend.archs.as_deref(),
+            metadata_for(&noarch, "cuda").backend.archs.as_deref(),
             Some(["9.0".to_string(), "10.0".to_string()].as_slice()),
         );
         assert_eq!(
-            metadata_for(&general, "rocm").backend.archs.as_deref(),
+            metadata_for(&noarch, "rocm").backend.archs.as_deref(),
             Some(["gfx942".to_string()].as_slice()),
         );
         // Backends without declared archs (and CPU, which has no arch concept)
         // leave `archs` unset.
-        assert_eq!(metadata_for(&general, "cpu").backend.archs, None);
+        assert_eq!(metadata_for(&noarch, "cpu").backend.archs, None);
     }
 
     #[test]
     fn metadata_archs_unset_when_not_declared() {
-        let general = general_with_archs(None, None);
+        let noarch = TorchNoarch {
+            cuda_capabilities: None,
+            rocm_archs: None,
+        };
 
-        assert_eq!(metadata_for(&general, "cuda").backend.archs, None);
+        assert_eq!(metadata_for(&noarch, "cuda").backend.archs, None);
     }
 }

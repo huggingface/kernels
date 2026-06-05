@@ -501,7 +501,11 @@ def get_kernel(
         revision=revision,
     )
     variant_path = install_kernel(
-        repo_id, backend=backend, revision=revision, user_agent=user_agent, validate_dependencies=True
+        repo_id,
+        backend=backend,
+        revision=revision,
+        user_agent=user_agent,
+        validate_dependencies=True,
     )
     return _import_from_path(variant_path, repo_info=repo_info)
 
@@ -620,7 +624,11 @@ def get_kernel_variants(
 
 
 def load_kernel(
-    repo_id: str, *, lockfile: Path | None, backend: str | None = None, revision: str | None = None
+    repo_id: str,
+    *,
+    lockfile: Path | None,
+    backend: str | None = None,
+    revision: str | None = None,
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -694,7 +702,10 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
     variant_path = install_kernel(
-        repo_id, revision=locked_sha, local_files_only=local_files_only, validate_dependencies=True
+        repo_id,
+        revision=locked_sha,
+        local_files_only=local_files_only,
+        validate_dependencies=True,
     )
 
     return _import_from_path(variant_path)
@@ -745,7 +756,7 @@ def _get_caller_module() -> ModuleType | None:
 
 
 def validate_kernel(*, repo_path: Path, variant: str, hash: str):
-    """Validate the given build variant of a kernel against a hasht."""
+    """Validate the given build variant of a kernel against a hash."""
     variant_path = repo_path / "build" / variant
 
     # Get the file paths. The first element is a byte-encoded relative path

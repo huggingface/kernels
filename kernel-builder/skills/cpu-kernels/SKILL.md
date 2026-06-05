@@ -163,10 +163,12 @@ python scripts/cpu_profiler.py --kernel-package <pkg> --op <func>
 | **IPC < 1.0** | Memory bound → add prefetch, change cache blocking |
 | **L1 miss rate high** | Tile too large for L1 → reduce tile size |
 | **L3 miss rate high** | Working set too large → add cache blocking |
-| **Plateau after 2+ trials** | Switch algorithm path (tinygemm ↔ brgemm, change blocking strategy) |
+| **Plateau after 2+ trials** | Do NOT keep tuning the same knobs. Change the **approach**: switch algorithm path (tinygemm ↔ brgemm), change the fusion/blocking/data-layout strategy, or reconsider the dispatch heuristic. A different structure beats endless parameter sweeps. |
 | **Max trials reached** | Stop — must run all `max_trials` from `config.yaml` |
 
 #### Optimization Search Space (Phase 2)
+
+> These tables are a **starting menu of values seen in existing kernels, not an exhaustive recipe**. Use them to seed trials, but when a branch plateaus, prefer a structurally different idea (algorithm, fusion, memory strategy) over sweeping these knobs further. See the try-harder tree in [optimization_levels.yaml](references/optimization_levels.yaml).
 
 **GEMM kernels (quantized GEMM, Flash Attention, MoE):**
 
@@ -220,7 +222,8 @@ python scripts/benchmark_cpu.py baseline.py --kernel-package <pkg> --op <func>
 | `references/brgemm_patterns.yaml` | brgemm API usage, VNNI packing, tinygemm vs brgemm selection (GEMM kernels only) |
 | `references/memory_patterns.yaml` | Prefetch, alignment, cache blocking |
 | `references/threading_patterns.yaml` | OpenMP parallel patterns |
-| `references/optimization_levels.yaml` | Progressive L1→L4 optimization checklist |
+| `references/dtype_optimizations.yaml` | bf16/fp8/int8 handling and conversion on CPU |
+| `references/optimization_levels.yaml` | Progressive L1→L5 optimization checklist + try-harder tree |
 | `references/optimization_strategies.md` | Strategy reference, decision tree, checklist |
 | `references/workflow_details.md` | Detailed trial loop workflow |
 | `references/huggingface-kernels-integration.md` | Hub integration for CPU kernels |
@@ -403,7 +406,7 @@ cpu-kernels/
     ├── memory_patterns.yaml                    # Prefetch, alignment, cache blocking
     ├── threading_patterns.yaml                 # OpenMP parallel patterns
     ├── dtype_optimizations.yaml                # bf16/fp8/int8 handling on CPU
-    ├── optimization_levels.yaml                # Progressive L1→L4 optimization checklist
+    ├── optimization_levels.yaml                # Progressive L1→L5 optimization checklist
     ├── implementation_reference.md             # C++ kernel templates and examples
     ├── optimization_strategies.md              # Strategy reference + decision tree
     ├── workflow_details.md                     # Detailed workflow reference

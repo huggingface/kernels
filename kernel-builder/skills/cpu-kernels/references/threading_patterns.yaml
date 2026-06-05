@@ -82,4 +82,3 @@ environment:
     # cores-per-node). Cross-socket traffic otherwise makes timings noisy, and on
     # big-L3 Xeons a cache-resident working set produces misleading speedups.
     numactl --cpunodebind=0 --membind=0 python benchmark.py
-

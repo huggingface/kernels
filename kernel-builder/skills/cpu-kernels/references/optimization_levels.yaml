@@ -119,7 +119,7 @@ decision_tree:
 
     - condition: "Speedup 2.5-3x after Level 4"
       action: "Check IPC via perf stat. If IPC > 2, compute-bound — try AMX. If IPC < 1, still memory-bound — try different blocking."
-      reference: "references/amx_patterns.yaml"
+      reference: "references/brgemm_patterns.yaml (Level 5 / AMX is reached via brgemm)"
 
     - condition: "Speedup 3-5x"
       action: "Good for most workloads. Level 5 (AMX) for critical-path kernels only."

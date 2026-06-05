@@ -1,5 +1,6 @@
 import functools
 import inspect
+import warnings
 from inspect import Parameter, Signature
 from pathlib import Path
 from types import ModuleType
@@ -27,6 +28,9 @@ class FuncRepositoryProtocol(RepositoryProtocol, Protocol):
 class FuncRepository:
     """
     Repository and name of a function for kernel mapping.
+
+    **Warning**: `FuncRepository` is deprecated and will be removed in kernels
+    0.17. Use [`LayerRepository`] instead.
 
     Args:
         repo_id (`str`):
@@ -68,6 +72,12 @@ class FuncRepository:
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
     ):
+        warnings.warn(
+            "FuncRepository is deprecated and will be removed in kernels 0.17. Use LayerRepository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
         if revision is None and version is None:
@@ -92,7 +102,9 @@ class FuncRepository:
 
     def load(self) -> Type["nn.Module"]:
         kernel = get_kernel(
-            self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code
+            self._repo_id,
+            revision=self._resolve_revision(),
+            trust_remote_code=self._trust_remote_code,
         )
         return _get_kernel_func(self, kernel)
 
@@ -107,7 +119,15 @@ class FuncRepository:
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_id, self._revision, self._version, self._trust_remote_code))
+        return hash(
+            (
+                self.func_name,
+                self._repo_id,
+                self._revision,
+                self._version,
+                self._trust_remote_code,
+            )
+        )
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._resolve_revision()}), function `{self.func_name}`"
@@ -116,6 +136,9 @@ class FuncRepository:
 class LocalFuncRepository:
     """
     Repository and function name from a local directory for kernel mapping.
+
+    **Warning**: `LocalFuncRepository` is deprecated and will be removed in kernels
+    0.17. Use [`LocalLayerRepository`] instead.
 
     Args:
         repo_path (`Path`):
@@ -143,6 +166,12 @@ class LocalFuncRepository:
         *,
         func_name: str,
     ):
+        warnings.warn(
+            "LocalFuncRepository is deprecated and will be removed in kernels 0.17. Use LocalLayerRepository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         self._repo_path = repo_path
         self.func_name = func_name
 
@@ -225,6 +254,17 @@ class LockedFuncRepository:
 
     In contrast to `FuncRepository`, this class uses repositories that
     are locked inside a project.
+
+    **Warning**: `LockedFuncRepository` is deprecated and will be removed in kernels
+    0.17. Use [`LockedLayerRepository`] instead.
+
+    Args:
+        repo_id (`str`): The Hub repository containing the function.
+        lockfile (`Path`, *optional*): Path to the lockfile. If not provided,
+            the lockfile will be inferred from the caller's context.
+        func_name (`str`): The name of the function within the kernel repository.
+        trust_remote_code (`bool`, *optional*, defaults to `False`):
+            Whether to allow loading kernels from untrusted organisations.
     """
 
     def __init__(
@@ -238,14 +278,13 @@ class LockedFuncRepository:
         """
         Construct a function repository.
 
-        Args:
-            repo_id (`str`): The Hub repository containing the function.
-            lockfile (`Path`, *optional*): Path to the lockfile. If not provided,
-                the lockfile will be inferred from the caller's context.
-            func_name (`str`): The name of the function within the kernel repository.
-            trust_remote_code (`bool`, *optional*, defaults to `False`):
-                Whether to allow loading kernels from untrusted organisations.
         """
+        warnings.warn(
+            "LockedFuncRepository is deprecated and will be removed in kernels 0.17. Use LockedLayerRepository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.func_name = func_name
@@ -265,7 +304,11 @@ class LockedFuncRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision, trust_remote_code=self._trust_remote_code)
+        kernel = get_kernel(
+            repo_id=self._repo_id,
+            revision=self._revision,
+            trust_remote_code=self._trust_remote_code,
+        )
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):

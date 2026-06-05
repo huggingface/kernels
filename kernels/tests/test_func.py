@@ -13,6 +13,7 @@ from kernels import (
     use_kernel_forward_from_hub,
     use_kernel_func_from_hub,
     use_kernel_mapping,
+    use_kernelized_func,
 )
 
 
@@ -22,13 +23,10 @@ def surprise_me(x: torch.Tensor):
     return x
 
 
+@use_kernelized_func(surprise_me)
 class SurpriseMe(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.surprise_me = surprise_me
-
     def forward(self, x: torch.Tensor):
-        return self.surprise_me(x)
+        return surprise_me(x)
 
 
 def test_decorator():

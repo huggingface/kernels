@@ -258,10 +258,18 @@ def kernelize(
 
     for _, module in model.named_modules():
         module_class = type(module)
-        if not hasattr(module_class, "kernel_layer_name"):
-            continue
 
-        kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
+        # Kernel functions attached to a module through `use_kernelized_func`.
+        for kernel_func in getattr(module, "_kernel_funcs", {}).values():
+            kernelize_layer(
+                kernel_func,
+                mode=mode,
+                device_type=device_type,
+                use_fallback=use_fallback,
+            )
+
+        if hasattr(module_class, "kernel_layer_name"):
+            kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
 
     return model
 

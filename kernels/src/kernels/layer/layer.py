@@ -278,7 +278,7 @@ def use_kernel_forward_from_hub(layer_name: str):
     made extensible using the given layer name, and then the class is instantiated.
     Since `nn.Module` also implements the `__call__` method, the module can still be
     used as if it was a function. Note that a decorated function is only visible to
-    [`kernelize`] if it is used as a member variable of another layer.
+    [`kernelize`] if it is attached to a module using [`use_kernelized_func`].
 
     Args:
         layer_name (`str`):
@@ -293,6 +293,7 @@ def use_kernel_forward_from_hub(layer_name: str):
         import torch.nn as nn
 
         from kernels import use_kernel_forward_from_hub
+        from kernels import use_kernelized_func
         from kernels import Mode, kernelize
 
         @use_kernel_forward_from_hub("MyCustomLayer")
@@ -315,12 +316,10 @@ def use_kernel_forward_from_hub(layer_name: str):
         def identity(x: torch.Tensor) -> torch.Tensor:
             return x
 
+        @use_kernelized_func(identity)
         class LayerUsingIdentity(nn.Module):
-            def __init__(self, ...):
-                # The function needs to be attached to a layer to be
-                # discoverable by `kernelize`.
-                self.identity = identity
-                # ...
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return identity(x)
 
         ```
     """
@@ -335,6 +334,70 @@ def use_kernel_forward_from_hub(layer_name: str):
             return ty
         else:
             raise TypeError("@use_kernel_forward_from_hub can only be applied to classes or functions")
+
+    return decorator
+
+
+def use_kernelized_func(*args: Callable):
+    """
+    This decorator attaches the target function within the module as a plain
+    attribute (not as a submodule). This makes the function visible to
+    [`kernelize`].
+
+    Args:
+        *args (`Callable`):
+            Kernel functions to attach to the module.
+
+    Returns:
+        `Callable`: A decorator function that can be applied to modules.
+
+    Example:
+        ```python
+        import torch
+        import torch.nn as nn
+
+        from kernels import use_kernel_forward_from_hub
+        from kernels import use_kernelized_func
+        from kernels import Mode, kernelize
+
+        # Use on a function (converts the function to `nn.Module`):
+        @use_kernel_forward_from_hub("MyCustomLayer")
+        def identity(x: torch.Tensor) -> torch.Tensor:
+            return x
+
+        @use_kernelized_func(identity)
+        class LayerUsingIdentity(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return identity(x)
+
+        model = LayerUsingIdentity()
+
+        # The layer can now be kernelized:
+        # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
+        ```
+
+    """
+
+    decorator_args = args
+
+    def decorator(cls):
+        orig_init = cls.__init__
+
+        def new_init(self, *args, **kwargs):
+            orig_init(self, *args, **kwargs)
+
+            # Register new function as non-submodule within the modules dict
+            hidden_kernels = self.__dict__.setdefault("_kernel_funcs", {})
+            for fn in decorator_args:
+                name = getattr(fn, "__name__", None) or getattr(fn, "kernel_layer_name", None)
+                if name is None:
+                    raise ValueError(f"Could not infer kernel function name for {fn!r}")
+
+                # Do not register as submodule! Hide it behind a dict to be removed later after registering it
+                hidden_kernels[name] = fn
+
+        cls.__init__ = new_init
+        return cls
 
     return decorator
 

@@ -4,9 +4,10 @@ import functools
 import inspect
 import logging
 import warnings
+from inspect import Parameter, Signature
 from pathlib import Path
 from types import MethodType, ModuleType
-from typing import TYPE_CHECKING, Protocol, Type
+from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from .._versions import select_revision_or_version
 from ..utils import (
@@ -270,8 +271,14 @@ def use_kernel_forward_from_hub(layer_name: str):
     """
     Decorator factory that makes a layer extensible using the specified layer name.
 
-    This is a decorator factory that returns a decorator which prepares a layer class to use kernels from the
-    Hugging Face Hub.
+    This decorator which prepares a layer class to use kernel layers from the Hugging
+    Face Hub.
+
+    When applied to a function, the function is converted into a layer (`nn.Module`),
+    made extensible using the given layer name, and then the class is instantiated.
+    Since `nn.Module` also implements the `__call__` method, the module can still be
+    used as if it was a function. Note that a decorated function is only visible to
+    [`kernelize`] if it is used as a member variable of another layer.
 
     Args:
         layer_name (`str`):
@@ -302,12 +309,32 @@ def use_kernel_forward_from_hub(layer_name: str):
 
         # The layer can now be kernelized:
         # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
+
+        # Use on a function (converts the function to `nn.Module`):
+        @use_kernel_forward_from_hub("MyCustomLayer")
+        def identity(x: torch.Tensor) -> torch.Tensor:
+            return x
+
+        class LayerUsingIdentity(nn.Module):
+            def __init__(self, ...):
+                # The function needs to be attached to a layer to be
+                # discoverable by `kernelize`.
+                self.identity = identity
+                # ...
+
         ```
     """
 
-    def decorator(cls):
-        replace_kernel_forward_from_hub(cls, layer_name)
-        return cls
+    def decorator(ty):
+        if inspect.isfunction(ty):
+            Func = _create_func_module(ty)
+            replace_kernel_forward_from_hub(Func, layer_name)
+            return Func()
+        elif inspect.isclass(ty):
+            replace_kernel_forward_from_hub(ty, layer_name)
+            return ty
+        else:
+            raise TypeError("@use_kernel_forward_from_hub can only be applied to classes or functions")
 
     return decorator
 
@@ -505,3 +532,27 @@ def _get_layer_memoize(repo: RepositoryProtocol, module_class: Type["nn.Module"]
     _CACHED_LAYER[repo] = layer
 
     return layer
+
+
+def _create_func_module(func: Callable) -> Type["nn.Module"]:
+    from torch import nn
+
+    class Func(nn.Module):
+        # Same flags as possible with normal `nn.Module` objects that are exchanged
+        can_torch_compile = getattr(func, "can_torch_compile", False)
+        has_backward = getattr(func, "has_backward", True)
+
+        def forward(self, *args, **kwargs):
+            return func(*args, **kwargs)
+
+    # Use function signature with args prepended by self to support
+    # module validation.
+    func_sig = inspect.signature(func)
+    new_args = [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
+    new_args.extend(func_sig.parameters.values())
+    Func.forward.__signature__ = Signature(  # type: ignore[attr-defined]
+        parameters=new_args,
+        return_annotation=func_sig.return_annotation,
+    )
+
+    return Func

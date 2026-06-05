@@ -1,12 +1,8 @@
 import functools
-import inspect
 import warnings
-from inspect import Parameter, Signature
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Callable, Protocol, Type
-
-from kernels.layer.repos import RepositoryProtocol
+from typing import TYPE_CHECKING, Protocol, Type
 
 from .._versions import select_revision_or_version
 from ..utils import (
@@ -15,6 +11,8 @@ from ..utils import (
     get_kernel,
     get_local_kernel,
 )
+from .layer import _create_func_module, use_kernel_forward_from_hub
+from .repos import RepositoryProtocol
 
 if TYPE_CHECKING:
     from torch import nn
@@ -239,13 +237,13 @@ def use_kernel_func_from_hub(func_name: str):
         # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
         ```
     """
+    warnings.warn(
+        "use_kernel_func_from_hub is deprecated and will be removed in kernels 0.17. Use [`use_kernel_func_from_hub`] instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    def decorator(func):
-        Func = _create_func_module(func)
-        Func.kernel_layer_name = func_name
-        return Func()
-
-    return decorator
+    return use_kernel_forward_from_hub(func_name)
 
 
 class LockedFuncRepository:
@@ -333,27 +331,3 @@ def _get_kernel_func(repo: FuncRepositoryProtocol, kernel: ModuleType) -> Type["
         raise ValueError(f"Function `{repo.func_name}` not found in `{repo}`")
 
     return _create_func_module(func)
-
-
-def _create_func_module(func: Callable) -> Type["nn.Module"]:
-    from torch import nn
-
-    class Func(nn.Module):
-        # Same flags as possible with normal `nn.Module` objects that are exchanged
-        can_torch_compile = getattr(func, "can_torch_compile", False)
-        has_backward = getattr(func, "has_backward", True)
-
-        def forward(self, *args, **kwargs):
-            return func(*args, **kwargs)
-
-    # Use function signature with args prepended by self to support
-    # module validation.
-    func_sig = inspect.signature(func)
-    new_args = [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-    new_args.extend(func_sig.parameters.values())
-    Func.forward.__signature__ = Signature(  # type: ignore[attr-defined]
-        parameters=new_args,
-        return_annotation=func_sig.return_annotation,
-    )
-
-    return Func

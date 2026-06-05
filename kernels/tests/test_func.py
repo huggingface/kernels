@@ -10,13 +10,14 @@ from kernels import (
     Mode,
     install_kernel,
     kernelize,
+    use_kernel_forward_from_hub,
     use_kernel_func_from_hub,
     use_kernel_mapping,
 )
 
 
 # A function + layer that we can map arbitrary functions to for testing.
-@use_kernel_func_from_hub("surprise_me")
+@use_kernel_forward_from_hub("surprise_me")
 def surprise_me(x: torch.Tensor):
     return x
 
@@ -31,6 +32,15 @@ class SurpriseMe(nn.Module):
 
 
 def test_decorator():
+    @use_kernel_forward_from_hub("identity_func")
+    def identity(x):
+        return x
+
+    assert type(identity).kernel_layer_name == "identity_func"
+    assert isinstance(identity, nn.Module)
+
+
+def test_deprecated_decorator():
     @use_kernel_func_from_hub("identity_func")
     def identity(x):
         return x
@@ -39,12 +49,12 @@ def test_decorator():
     assert isinstance(identity, nn.Module)
 
 
-def test_kernel_func_requires_version_or_revision():
+def test_deprecated_func_repository_requires_version_or_revision():
     with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
         FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul")
 
 
-def test_kernel_func(device):
+def test_deprecated_func_repository(device):
     model = SurpriseMe()
 
     x = torch.arange(-10, 10, device=device).float()
@@ -102,7 +112,7 @@ def test_kernel_func_with_layer():
     assert model(x) is x
 
 
-def test_local_kernel_func(device):
+def test_deprecated_local_kernel_func(device):
     model = SurpriseMe()
 
     x = torch.arange(-10, 10).float()

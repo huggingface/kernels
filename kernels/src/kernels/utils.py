@@ -302,6 +302,7 @@ def install_kernel(
         _validate_variant_dependencies(Path(metadata_path).parent)
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
+    ignore_patterns = ["*.pyc", "**/__pycache__/**"]
 
     repo_path = Path(
         str(
@@ -309,6 +310,7 @@ def install_kernel(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns=allow_patterns,
+                ignore_patterns=ignore_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=False,
@@ -366,12 +368,14 @@ def _resolve_local_variant_path(
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
+    ignore_patterns = ["*.pyc", "**/__pycache__/**"]
     repo_path = Path(
         str(
             api.snapshot_download(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns=allow_patterns,
+                ignore_patterns=ignore_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=True,
@@ -416,6 +420,7 @@ def install_kernel_all_variants(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns="build/*",
+                ignore_patterns=["*.pyc", "**/__pycache__/**"],
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=local_files_only,

@@ -30,8 +30,8 @@ impl Digest {
                 // hashes. It is protected by the detached signature.
                 || entry.path().file_name().and_then(|f| f.to_str()) == Some("metadata.json")
                 || entry.path().file_name().and_then(|f| f.to_str()) == Some("metadata.json.sigstore")
-                // Python likes to create .pyc files in the cache.
-                || entry.path().extension().and_then(|e| e.to_str()) == Some("pyc")
+                // Python likes to create .pyc files in __pycache__/ directories.
+                || entry.path().components().any(|c| c.as_os_str() == "__pycache__")
             {
                 continue;
             }
@@ -124,18 +124,28 @@ mod tests {
     #[test]
     fn hash_variant_skips_excluded_files() -> Result<()> {
         let dir = TempDir::new()?;
+        let pycache_dir = dir.path().join("pkg").join("__pycache__");
+        fs::create_dir_all(&pycache_dir)?;
         fs::write(dir.path().join("_extension.so"), b"content")?;
         fs::write(dir.path().join("metadata.json"), b"{}")?;
         fs::write(dir.path().join("metadata.json.sigstore"), b"sig")?;
-        fs::write(dir.path().join("cache.pyc"), b"bytecode")?;
+        fs::write(pycache_dir.join("mod.cpython-311.pyc"), b"bytecode")?;
+        // A .pyc outside __pycache__/ must be included — it was not generated
+        // locally by Python and should be covered by the digest.
+        fs::write(dir.path().join("payload.pyc"), b"smuggled")?;
 
         let digest = Digest::hash_variant(DigestAlgorithm::SHA256, dir.path())?;
 
-        assert_eq!(digest.files().len(), 1);
+        assert_eq!(digest.files().len(), 2);
         assert!(digest.files().contains_key("_extension.so"));
+        assert!(digest.files().contains_key("payload.pyc"));
         assert!(!digest.files().contains_key("metadata.json"));
         assert!(!digest.files().contains_key("metadata.json.sigstore"));
-        assert!(!digest.files().contains_key("cache.pyc"));
+        assert!(
+            !digest
+                .files()
+                .contains_key("pkg/__pycache__/mod.cpython-311.pyc")
+        );
         Ok(())
     }
 

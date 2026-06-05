@@ -73,9 +73,9 @@ metadata. Currently the following top-level keys are supported:
   list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
 - `backend` (`dict`, required): information about the compute backend that
   this build variant supports.
+- `digest` (`Digest`, required): hash digest of the kernel files.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
   from a curated set of Python dependencies.
-- `digest` (`Digest`, required): hash digest of the kernel files.
 
 Example `metadata.json`:
 

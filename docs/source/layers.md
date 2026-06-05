@@ -47,30 +47,35 @@ compatible with layers from the hub.
 
 Sometimes it can be useful to make a function extensible, for example
 because the function cannot be replaced by a layer. In such cases, you
-can annotate the function with the [`~kernels.use_kernel_func_from_hub`] decorator:
+can use the [`~kernels.use_kernel_forward_from_hub`] decorator on a
+function:
 
 ```python
-@use_kernel_func_from_hub("silu_and_mul")
+@use_kernel_forward_from_hub("silu_and_mul")
 def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
     d = x.shape[-1] // 2
     return F.silu(x[..., :d]) * x[..., d:]
 ```
 
 This will replace the function by an instantiated `torch.nn.Module`
-(singleton) that calls the function itself in its forward method.
+(singleton) that calls the function itself in its forward method. It will
+still behave as a function, since `torch.nn.Module` provides an
+implementation of `__call__` that delegates to `forward`.
 
-**Note:** for kernelization to see the function, it must be a member of
-another `torch.nn.Module` that is part of the model. For example:
+For kernelization to see the function, you must use
+[`~kernels.use_kernelized_func`] on an `torch.nn.Module` that is part
+of the to-be kernlized module to make the function visible to
+[`~kernels.kernelize`]. The function is typically attached to the module
+that uses it. For example:
 
 ```python
+@use_kernelized_func(silu_and_mul)
 class FeedForward(nn.Module):
   def __init__(self, in_features: int, out_features: int):
       self.linear = nn.Linear(in_features, out_features)
-      # Note: silu_and_mul is a Torch module.
-      self.silu_and_mul = silu_and_mul
 
   def forward(self, x: torch.Tensor) -> torch.Tensor:
-      return self.silu_and_mul(self.linear(x))
+      return silu_and_mul(self.linear(x))
 ```
 
 ## Kernelizing a model

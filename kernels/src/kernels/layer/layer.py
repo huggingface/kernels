@@ -278,7 +278,7 @@ def use_kernel_forward_from_hub(layer_name: str):
     made extensible using the given layer name, and then the class is instantiated.
     Since `nn.Module` also implements the `__call__` method, the module can still be
     used as if it was a function. Note that a decorated function is only visible to
-    [`kernelize`] if it is attached to a module using [`use_kernelized_func`].
+    [`~kernels.kernelize`] if it is attached to a module using [`~kernels.use_kernelized_func`].
 
     Args:
         layer_name (`str`):
@@ -342,7 +342,7 @@ def use_kernelized_func(*args: Callable):
     """
     This decorator attaches the target function within the module as a plain
     attribute (not as a submodule). This makes the function visible to
-    [`kernelize`].
+    [`~kernels.kernelize`].
 
     Args:
         *args (`Callable`):

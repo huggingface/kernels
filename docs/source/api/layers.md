@@ -12,7 +12,7 @@
 
 ### use_kernelized_func
 
-[autodoc]] kernels.use_kernelized_func
+[[autodoc]] kernels.use_kernelized_func
 
 ### replace_kernel_forward_from_hub
 

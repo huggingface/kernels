@@ -21,7 +21,7 @@ in
   triton-xpu_3_7_1 = generic {
     version = "3.7.1";
     url = "https://download.pytorch.org/whl/test/triton_xpu-3.7.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
-    hash = "sha256-M0rAWqvME2Vb0bzyo3LLgns5Lr3OTAP5t/dsE5XS+Jc=";
+    hash = "sha256-T9rtG6/FHTooNGVqNCCmaGp06iJlCHZaSb8V1Y/zqTA=";
   };
 
 }

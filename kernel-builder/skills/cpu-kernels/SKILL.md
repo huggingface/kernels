@@ -93,6 +93,9 @@ At the start of every session, read `scripts/config.yaml`. It controls:
 | **Profile** | `python scripts/cpu_profiler.py --kernel-package <pkg> --op <func>` | `perf stat` hardware counters + optimization recommendations |
 | **Trial Manager** | `python scripts/trial_manager.py <command> ...` | Trial tree management (init/save/result/status/best/finalize) |
 
+> **Benchmark discipline**: Pin to a single NUMA node — `numactl --cpunodebind=0 --membind=0 python scripts/benchmark_cpu.py ...`. See [threading_patterns.yaml](references/threading_patterns.yaml).
+
+
 ### Phase 1: Correctness (Linear, No Branching)
 
 Build the kernel tier by tier. Each tier must be correct before moving on.
@@ -371,6 +374,7 @@ The parameterized components:
 | **Missing tail handling** | Wrong results for non-aligned sizes | Add scalar loop for remainder elements |
 | **OpenMP on small tensor** | Slower than baseline | Add `if (num_tokens > threshold)` guard |
 | **Wrong compiler flags** | Intrinsics not recognized | Check build.toml `cxx-flags` matches code |
+| **Silent scalar `at::vec`** | Kernel ~2x slow, no error; `objdump` shows 0 `%zmm` / `nm` shows `expf@GLIBC` | Define `CPU_CAPABILITY_AVX512` for TUs using `at::vec::Vectorized` (see build_system.yaml) |
 | **CPUID detection wrong** | Crashes on older CPU | Verify `cpu_features.hpp` checks OS support (XCR0) |
 
 ## Project Structure

@@ -134,6 +134,58 @@ cxx-flags = ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16", "-mavx5
 
 > **Note**: For GEMM kernels, always include the `-mamx-tile`, `-mamx-bf16`, and `-mamx-int8` flags. Even if `brgemm` dispatches to AMX internally via oneDNN, these flags are required if the kernel (like flash-attn2 or megablocks) uses custom AMX definitions or `cpuid` based checks that compile conditionally.
 
+### `at::vec::Vectorized` needs a `CPU_CAPABILITY` macro — `-mavx512f` is NOT enough
+
+This only applies if your kernel uses ATen's portable vector wrapper
+`at::vec::Vectorized<T>` (e.g. `convert_from_float`, `Vectorized<float>::exp()`)
+instead of raw `_mm512_*` intrinsics. Raw intrinsics are fine with the flags above.
+
+`<ATen/cpu/vec/vec.h>` picks the vec512 vs scalar implementation from a **PyTorch
+preprocessor macro**, not from the `-m` arch flags:
+
+```cpp
+#if defined(CPU_CAPABILITY_AVX512)
+#include <ATen/cpu/vec/vec512/vec512.h>   // real AVX512 + Sleef
+#else
+#include <ATen/cpu/vec/vec256/vec256.h>   // and without CPU_CAPABILITY_AVX2 → scalar vec_base.h
+#endif
+```
+
+- `-mavx512f` only defines the *compiler* macro `__AVX512F__`. It does **NOT** define
+  `CPU_CAPABILITY_AVX512`, so `at::vec` silently falls back to the **scalar**
+  `vec_base.h`. `-march=native` has the same problem.
+- Consequence is worst for transcendentals: scalar `Vectorized<float>::exp()` calls
+  `std::expf` element-by-element, while the vec512 path calls `Sleef_expf16_u10`
+  (16-wide). This alone made a fused silu kernel ~2x slower than PyTorch until fixed.
+
+Fix — do ONE of these for any TU that uses `at::vec`:
+
+```cpp
+// (a) Source-level, before including vec.h (what gptq_avx512.cpp does):
+#define CPU_CAPABILITY_AVX512
+#include <ATen/cpu/vec/vec.h>
+```
+```toml
+# (b) Or in build.toml cxx-flags for that section:
+cxx-flags = [..., "-DCPU_CAPABILITY_AVX512"]
+```
+
+`-DCPU_CAPABILITY=AVX512` (the inline-namespace name) is what upstream PyTorch also
+passes; it is optional for correctness but harmless to add alongside.
+
+### Verify the build actually vectorized (cheap sanity check)
+
+After building, confirm the `.so` really emitted AVX512 and (if you use `at::vec`
+transcendentals) linked Sleef. A scalar fallback is otherwise invisible:
+
+```bash
+objdump -d *.so | grep -c '%zmm'     # AVX512 active → should be > 0
+nm -C *.so | grep -i sleef           # at::vec exp/etc. → expect U Sleef_expf16_u10
+```
+
+If `%zmm` count is 0 or you see `U expf@GLIBC` (scalar libm) where you expected
+vectorized math, the `CPU_CAPABILITY_AVX512` macro above is missing.
+
 ## File Naming Conventions
 
 | File | Purpose |

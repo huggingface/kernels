@@ -156,3 +156,23 @@ common_patterns:
       Too small: data not ready when needed.
       Too large: evicts useful data from cache.
       Try: 64, 128, 256, 512 bytes. Measure with perf stat L1-dcache-load-misses.
+
+at_vec_portable_wrapper:
+  name: "at::vec::Vectorized — requires CPU_CAPABILITY_AVX512"
+  description: |
+    Some kernels use ATen's portable wrapper at::vec::Vectorized<T> (e.g.
+    convert_from_float, or Vectorized<float>::exp() for silu/gelu) instead of raw
+    _mm512_* intrinsics. Unlike raw intrinsics, at::vec selects its SIMD vs scalar
+    implementation from the preprocessor macro CPU_CAPABILITY_AVX512 — NOT from the
+    -mavx512f / -march=native compiler flags.
+
+    Without that macro, at::vec silently compiles to scalar vec_base.h: in
+    particular exp() degrades from Sleef_expf16_u10 (16-wide) to scalar std::expf,
+    which can make the kernel ~2x slower with no visible error.
+  fix: |
+    // For any TU using at::vec, define the macro before including vec.h:
+    #define CPU_CAPABILITY_AVX512
+    #include <ATen/cpu/vec/vec.h>
+    // OR add -DCPU_CAPABILITY_AVX512 to that section's cxx-flags in build.toml.
+  see_also: "build_system.yaml → 'at::vec::Vectorized needs a CPU_CAPABILITY macro' and the objdump/nm build self-check."
+

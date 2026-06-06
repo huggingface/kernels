@@ -1,7 +1,7 @@
 { makeSetupHook, kernel-builder }:
 
 makeSetupHook {
-  name = "remove-bytecode-hook";
+  name = "hash-kernel-hook";
   substitutions = {
     kernel_builder = kernel-builder;
   };

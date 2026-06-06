@@ -19,7 +19,7 @@ pub fn hash_kernel(kernel_dir: Option<PathBuf>) -> Result<()> {
         let metadata_path = variant_path.join("metadata.json");
 
         eprintln!(
-            "Signing variant `{}`...",
+            "Hashing variant `{}`...",
             variant.file_name().unwrap().to_string_lossy()
         );
 

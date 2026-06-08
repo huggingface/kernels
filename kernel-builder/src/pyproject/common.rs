@@ -73,6 +73,7 @@ fn write_metadata_impl(
                     .cloned(),
                 backend_type: *backend,
             },
+            digest: None,
         };
 
         serde_json::to_writer_pretty(writer, &metadata)?;

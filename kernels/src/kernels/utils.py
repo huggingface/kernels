@@ -36,6 +36,12 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
+# Exclude patter for bytecode. These are not included in kernel builds,
+# but builds not done using kernel-builder might accidentally include
+# bytcode. So these patterns are used to ensure that they are never
+# downloaded.
+_BYTECODE_IGNORE_PATTERNS = ["*.pyc", "**/__pycache__/**"]
+
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
@@ -302,6 +308,7 @@ def install_kernel(
         _validate_variant_dependencies(Path(metadata_path).parent)
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
+    ignore_patterns = _BYTECODE_IGNORE_PATTERNS
 
     repo_path = Path(
         str(
@@ -309,6 +316,7 @@ def install_kernel(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns=allow_patterns,
+                ignore_patterns=ignore_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=False,
@@ -366,12 +374,14 @@ def _resolve_local_variant_path(
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
+    ignore_patterns = _BYTECODE_IGNORE_PATTERNS
     repo_path = Path(
         str(
             api.snapshot_download(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns=allow_patterns,
+                ignore_patterns=ignore_patterns,
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=True,
@@ -416,6 +426,7 @@ def install_kernel_all_variants(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns="build/*",
+                ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=local_files_only,
@@ -496,7 +507,11 @@ def get_kernel(
         revision=revision,
     )
     variant_path = install_kernel(
-        repo_id, backend=backend, revision=revision, user_agent=user_agent, validate_dependencies=True
+        repo_id,
+        backend=backend,
+        revision=revision,
+        user_agent=user_agent,
+        validate_dependencies=True,
     )
     return _import_from_path(variant_path, repo_info=repo_info)
 
@@ -615,7 +630,11 @@ def get_kernel_variants(
 
 
 def load_kernel(
-    repo_id: str, *, lockfile: Path | None, backend: str | None = None, revision: str | None = None
+    repo_id: str,
+    *,
+    lockfile: Path | None,
+    backend: str | None = None,
+    revision: str | None = None,
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -689,7 +708,10 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
         raise ValueError(f"Kernel `{repo_id}` is not locked")
 
     variant_path = install_kernel(
-        repo_id, revision=locked_sha, local_files_only=local_files_only, validate_dependencies=True
+        repo_id,
+        revision=locked_sha,
+        local_files_only=local_files_only,
+        validate_dependencies=True,
     )
 
     return _import_from_path(variant_path)
@@ -740,7 +762,7 @@ def _get_caller_module() -> ModuleType | None:
 
 
 def validate_kernel(*, repo_path: Path, variant: str, hash: str):
-    """Validate the given build variant of a kernel against a hasht."""
+    """Validate the given build variant of a kernel against a hash."""
     variant_path = repo_path / "build" / variant
 
     # Get the file paths. The first element is a byte-encoded relative path

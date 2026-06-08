@@ -19,6 +19,9 @@ use develop::{devshell, testshell};
 mod build;
 use build::{run_build, run_build_and_copy};
 
+mod hash;
+use hash::hash_kernel;
+
 mod hf;
 
 mod init;
@@ -208,6 +211,12 @@ enum Commands {
         arch: bool,
     },
 
+    /// Hash the builds of a kernel.
+    Hash {
+        #[arg(name = "KERNEL_DIR")]
+        kernel_dir: Option<PathBuf>,
+    },
+
     /// Spawn a kernel test shell.
     Testshell {
         #[arg(name = "KERNEL_DIR")]
@@ -369,6 +378,7 @@ fn main() -> Result<()> {
             variant,
         ),
         Commands::ListVariants { kernel_dir, arch } => list_variants(kernel_dir, arch),
+        Commands::Hash { kernel_dir } => hash_kernel(kernel_dir),
         Commands::Testshell {
             kernel_dir,
             variant,

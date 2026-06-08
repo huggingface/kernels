@@ -1,18 +1,12 @@
 final: prev:
-let
-  # For XPU we use MKL from the joined oneAPI toolkit.
-  useMKL = final.stdenv.isx86_64 && !(final.config.xpuSupport or false);
-in
 {
-  # Use MKL for BLAS/LAPACK on x86_64.
-  blas = if useMKL then prev.blas.override { blasProvider = prev.mkl; } else prev.blas;
-  lapack = if useMKL then prev.lapack.override { lapackProvider = prev.mkl; } else prev.lapack;
-
   kernel-builder = final.callPackage ./pkgs/kernel-builder { };
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
+
+  hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };
 
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 

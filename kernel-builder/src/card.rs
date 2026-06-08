@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use eyre::{bail, Context, Result};
+use eyre::{Context, Result};
 use minijinja::{context, Environment};
 use rustpython_parser::{ast, Parse};
 
@@ -102,21 +102,24 @@ fn extract_layers(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     }
 }
 
-fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
-    let card_template_path = kernel_dir.join("CARD.md");
-    if !card_template_path.exists() {
-        bail!(
-            "CARD.md template not found at `{}`",
-            card_template_path.display()
-        );
-    }
+const CARD_TEMPLATE: &str = include_str!("init/templates/CARD.md");
 
-    let template_content = fs::read_to_string(&card_template_path)
-        .wrap_err_with(|| format!("Cannot read `{}`", card_template_path.display()))?;
+fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
+    let mut strip_env = Environment::new();
+    strip_env.set_trim_blocks(true);
+    strip_env.set_lstrip_blocks(true);
+    strip_env
+        .add_template_owned("card_raw", CARD_TEMPLATE.to_owned())
+        .wrap_err("Cannot load embedded card template")?;
+    let card_template = strip_env
+        .get_template("card_raw")
+        .wrap_err("Cannot get embedded card template")?
+        .render(())
+        .wrap_err("Cannot strip raw markers from card template")?;
 
     let mut env = Environment::new();
     env.set_trim_blocks(true);
-    env.add_template_owned("card", template_content)
+    env.add_template_owned("card", card_template)
         .wrap_err("Cannot load card template")?;
 
     let repo_id = build.repo_id().ok_or(eyre::eyre!(
@@ -165,6 +168,94 @@ pub fn fill_card(kernel_dir: Option<PathBuf>, output: Option<PathBuf>) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::util::parse_build;
+
+    #[test]
+    fn test_render_card_uses_embedded_template_with_version() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        // Note: deliberately no committed `CARD.md` in the kernel dir. The card is
+        // rendered from the embedded template, so a stale/absent committed file
+        // does not affect the output.
+        fs::write(
+            kernel_dir.join("build.toml"),
+            r#"[general]
+name = "test-kernel"
+license = "Apache-2.0"
+backends = ["cuda"]
+version = 3
+
+[general.hub]
+repo-id = "test/kernel"
+
+[torch]
+"#,
+        )
+        .unwrap();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_kernel");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(module_dir.join("__init__.py"), r#"__all__ = ["my_func"]"#).unwrap();
+
+        let build = parse_build(kernel_dir).unwrap();
+        let card = render_card(&build, kernel_dir).unwrap();
+
+        assert!(
+            card.contains(r#"get_kernel("test/kernel", version=3)"#),
+            "usage snippet should include the version argument, card was:\n{card}"
+        );
+    }
+
+    /// Regression test for version-less cards on the Hub: a kernel may carry a
+    /// stale committed `CARD.md` (e.g. the pre-#544 template without `version=`).
+    /// The render must ignore it and use the canonical embedded template.
+    #[test]
+    fn test_render_card_ignores_stale_committed_card() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        fs::write(
+            kernel_dir.join("build.toml"),
+            r#"[general]
+name = "test-kernel"
+license = "Apache-2.0"
+backends = ["cuda"]
+version = 3
+
+[general.hub]
+repo-id = "test/kernel"
+
+[torch]
+"#,
+        )
+        .unwrap();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_kernel");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(module_dir.join("__init__.py"), r#"__all__ = ["my_func"]"#).unwrap();
+
+        // A stale committed template with the legacy, version-less snippet and a
+        // marker string. The marker must not leak into the rendered card.
+        fs::write(
+            kernel_dir.join("CARD.md"),
+            "STALE_COMMITTED_MARKER\nkernel_module = get_kernel(\"{{ repo_id }}\")\n",
+        )
+        .unwrap();
+
+        let build = parse_build(kernel_dir).unwrap();
+        let card = render_card(&build, kernel_dir).unwrap();
+
+        assert!(
+            card.contains(r#"get_kernel("test/kernel", version=3)"#),
+            "should render the canonical (versioned) snippet, card was:\n{card}"
+        );
+        assert!(
+            !card.contains("STALE_COMMITTED_MARKER"),
+            "the committed CARD.md must not be read, card was:\n{card}"
+        );
+    }
 
     #[test]
     fn test_extract_functions() {

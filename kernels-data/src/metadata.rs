@@ -4,6 +4,7 @@ use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::config::{Backend, KernelName};
+use crate::digest::Digest;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -26,6 +27,8 @@ pub struct Metadata {
     pub upstream: Option<url::Url>,
     pub python_depends: Vec<String>,
     pub backend: BackendInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub digest: Option<Digest>,
 }
 
 impl Metadata {

@@ -14,6 +14,8 @@ in
 
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
+  hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };
+
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
   nvtx = final.callPackage ./pkgs/nvtx { };

@@ -14,6 +14,7 @@
   cmakeNvccThreadsHook,
   cuda_nvcc,
   get-kernel-check,
+  hash-kernel-hook,
   kernel-layout-check,
   torch-ops-check,
   ninja,
@@ -161,6 +162,7 @@ stdenv.mkDerivation (prevAttrs: {
 
   nativeBuildInputs = [
     cmake
+    hash-kernel-hook
     ninja
     kernel-builder
     kernel-layout-check

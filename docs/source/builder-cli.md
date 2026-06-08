@@ -17,6 +17,7 @@ This document contains the help content for the `kernel-builder` command-line pr
 * [`kernel-builder create-pyproject`↴](#kernel-builder-create-pyproject)
 * [`kernel-builder devshell`↴](#kernel-builder-devshell)
 * [`kernel-builder list-variants`↴](#kernel-builder-list-variants)
+* [`kernel-builder hash`↴](#kernel-builder-hash)
 * [`kernel-builder testshell`↴](#kernel-builder-testshell)
 * [`kernel-builder update-build`↴](#kernel-builder-update-build)
 * [`kernel-builder skills`↴](#kernel-builder-skills)
@@ -43,6 +44,7 @@ Build Hugging Face Hub kernels
 * `create-pyproject` — Generate CMake files for a kernel extension build
 * `devshell` — Spawn a kernel development shell
 * `list-variants` — List build variants
+* `hash` — Hash the builds of a kernel
 * `testshell` — Spawn a kernel test shell
 * `update-build` — Update a `build.toml` to the current format
 * `skills` — Install skills for AI coding assistants (Claude, Codex, OpenCode)
@@ -277,6 +279,18 @@ List build variants
 ###### **Options:**
 
 * `--arch` — Only list variants for the current architecture
+
+
+
+## `kernel-builder hash`
+
+Hash the builds of a kernel
+
+**Usage:** `kernel-builder hash [KERNEL_DIR]`
+
+###### **Arguments:**
+
+* `<KERNEL_DIR>`
 
 
 

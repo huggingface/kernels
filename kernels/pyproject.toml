@@ -45,6 +45,15 @@ benchmark = [
   "torch",
 ]
 torch = ["torch"]
+curated = [
+  "nvidia-cutlass-dsl",
+  "einops",
+  "apache-tvm-ffi>=0.1.9,<0.2.0",
+]
+curated-xpu = [
+  "einops",
+  "apache-tvm-ffi>=0.1.9,<0.2.0",
+]
 docs = [
   "hf-doc-builder",
 ]

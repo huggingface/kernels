@@ -11,27 +11,47 @@ argument-hint: "kernel type: rmsnorm, flash-attention, quantized-gemm, activatio
 
 This skill provides patterns and guidance for developing optimized C++ kernels targeting x86 CPUs (Intel Xeon and compatible processors) with AVX2 and AVX512 intrinsics. Kernels are compiled via `kernel-builder` and distributed through the Hugging Face kernels ecosystem.
 
+> **Who runs these commands?** *You*, the agent — not a human. This is an autonomous loop: you write/edit the C++ kernel, build it, then run the scripts below as tools (via Bash) to check correctness, benchmark, and profile. You read each result, record it with `trial_manager.py`, decide the next change from the Phase 2 decision tree, and repeat until you hit `early_stop_speedup` or run all `max_trials`.
+
+## Key Concepts (read before the Quick Start)
+
+The commands use a few names that mean different things. They are **not** interchangeable:
+
+| Name (example) | What it is | Used by |
+|----------------|-----------|---------|
+| **`baseline.py`** | The **PyTorch reference implementation** you optimize against. It is the ground truth for correctness *and* the speed reference for speedup. **It must define `get_inputs()`** and **either** `get_reference_output()` **or** a `Model` class (plus optional `get_init_inputs()`). You write this file (or it is given) before starting. | every script |
+| **`my_rmsnorm`** | A **trial-tree label** — an arbitrary name you pick for this optimization task. `trial_manager.py` stores all attempts under `trials/my_rmsnorm/`. It is *only* a tracking ID. | `trial_manager.py` only |
+| **`my_kernel`** | The **installed Python package name** — the build artifact produced by `kernel-builder build` + `pip install`. This is the importable module that contains your compiled kernel. | `--kernel-package` |
+| **`my_kernel.rms_norm`** | An **`<package>.<function>` path** — the actual callable inside the installed package. Passed to `--op` to tell the benchmark/profiler which function to run. | `--op` |
+
+> ⚠️ **`--op` means two different things depending on the script.** In `analyze_op.py`, `--op` is a plain **operation name** (e.g. `"rms_norm"`) used to look up compute/memory characteristics. In `benchmark_cpu.py` and `cpu_profiler.py`, `--op` is a **`package.function` path** (e.g. `my_kernel.rms_norm`) used to import and call your kernel. Same flag, different meaning — read each command below carefully.
+
 ## Quick Start
 
 ### Write a New CPU Kernel
 
+The example below optimizes an RMSNorm kernel. The trial label is `my_rmsnorm`, the built package is `my_kernel`, and its function is `my_kernel.rms_norm` — keep these consistent across all six steps.
+
 ```bash
-# 1. Analyze the target PyTorch operation
+# 1. Analyze the target op. Here --op is an OPERATION NAME (looked up in the
+#    knowledge base), not a package path.
 python scripts/analyze_op.py --op "rms_norm" --shapes "1024x4096,2048x8192"
 
-# 2. Initialize trial tracking
+# 2. Initialize trial tracking. Args: <trial-label> <baseline-file>.
+#    Creates trials/my_rmsnorm/ and records baseline.py as the reference.
 python scripts/trial_manager.py init my_rmsnorm baseline.py
 
-# 3. Build the kernel package
-cd /path/to/my-kernel && kernel-builder build --release
+# 3. Build the kernel package (produces the installable 'my_kernel' wheel).
+cd /path/to/my-kernel && kernel-builder build --release && pip install dist/*.whl --force-reinstall
 
-# 4. Benchmark correctness + performance
-python scripts/benchmark_cpu.py baseline.py --kernel-package my_kernel --op my_kernel.apply_rms_norm
+# 4. Benchmark correctness + performance. Here --op is a PACKAGE.FUNCTION path.
+#    Compares my_kernel.rms_norm against baseline.py (correctness + speedup).
+python scripts/benchmark_cpu.py baseline.py --kernel-package my_kernel --op my_kernel.rms_norm
 
-# 5. Profile with perf stat
-python scripts/cpu_profiler.py --kernel-package my_kernel --op my_kernel.apply_rms_norm
+# 5. Profile with perf stat (same package.function path as step 4).
+python scripts/cpu_profiler.py --kernel-package my_kernel --op my_kernel.rms_norm
 
-# 6. Finalize best trial
+# 6. Finalize: promote the best trial in trials/my_rmsnorm/ into output/.
 python scripts/trial_manager.py finalize my_rmsnorm output/
 ```
 
@@ -113,7 +133,7 @@ kernel-builder build --release
 pip install dist/*.whl --force-reinstall
 
 # Benchmark (this also establishes the PyTorch baseline time)
-python scripts/benchmark_cpu.py baseline.py --kernel-package my_kernel --op my_kernel.forward
+python scripts/benchmark_cpu.py baseline.py --kernel-package my_kernel --op my_kernel.rms_norm
 ```
 
 #### Tier 1: AVX2 (Optional)

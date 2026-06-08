@@ -72,7 +72,10 @@ def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
             if sibling.blob_id is None:
                 raise ValueError(f"Cannot get blob ID for {sibling.rfilename}")
 
-            if sibling.rfilename.endswith(".pyc") or "__pycache__" in sibling.rfilename:
+            # Exclude Python bytecode. If bytecode exists, it is generated
+            # by the interpreter, since we exclude bytecode from builds
+            # and downloads.
+            if sibling.rfilename.endswith(".pyc") or "__pycache__" in sibling.rfilename.split("/"):
                 continue
 
             path = Path(sibling.rfilename)

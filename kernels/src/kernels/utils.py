@@ -36,6 +36,12 @@ from kernels.variants import (
 
 KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 
+# Exclude patter for bytecode. These are not included in kernel builds,
+# but builds not done using kernel-builder might accidentally include
+# bytcode. So these patterns are used to ensure that they are never
+# downloaded.
+_BYTECODE_IGNORE_PATTERNS = ["*.pyc", "**/__pycache__/**"]
+
 
 def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
@@ -302,7 +308,7 @@ def install_kernel(
         _validate_variant_dependencies(Path(metadata_path).parent)
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
-    ignore_patterns = ["*.pyc", "**/__pycache__/**"]
+    ignore_patterns = _BYTECODE_IGNORE_PATTERNS
 
     repo_path = Path(
         str(
@@ -368,7 +374,7 @@ def _resolve_local_variant_path(
         )
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
-    ignore_patterns = ["*.pyc", "**/__pycache__/**"]
+    ignore_patterns = _BYTECODE_IGNORE_PATTERNS
     repo_path = Path(
         str(
             api.snapshot_download(
@@ -420,7 +426,7 @@ def install_kernel_all_variants(
                 repo_id,
                 repo_type="kernel",
                 allow_patterns="build/*",
-                ignore_patterns=["*.pyc", "**/__pycache__/**"],
+                ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                 cache_dir=CACHE_DIR,
                 revision=revision,
                 local_files_only=local_files_only,

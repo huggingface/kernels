@@ -11,6 +11,11 @@ Skill files are downloaded from the `huggingface/kernels` directory in this [rep
 
 Skills instruct agents how to deal with hardware-specific optimizations, integrate with libraries like diffusers and transformers, and benchmark kernel performance in consistent ways.
 
+> [!TIP]
+> **When are CPU kernels actually helpful?** Two main cases:
+> - **Better performance on Intel Xeon** — custom AVX2/AVX512 kernels (and AMX via brgemm for quantized GEMM) outperform generic PyTorch ops for element-wise and quantized workloads, especially in CPU-only or latency-sensitive serving.
+> - **Enabling functionality that otherwise can't run** — some kernels are a hard requirement, e.g. `megablocks` MoE on CPU, where without the kernel you simply cannot run MXFP4.
+
 Examples:
 
 ```bash

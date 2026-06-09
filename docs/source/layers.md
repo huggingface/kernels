@@ -64,7 +64,7 @@ implementation of `__call__` that delegates to `forward`.
 
 For [`~kernels.kernelize`] to see the function, you must use
 [`~kernels.use_kernelized_func`] on an `torch.nn.Module` that is part
-of the to-be kernlized module to make the function visible to
+of the to-be kernlized model to make the function visible to
 [`~kernels.kernelize`]. The function is typically attached to the module
 that uses it. For example:
 
@@ -77,6 +77,9 @@ class FeedForward(nn.Module):
   def forward(self, x: torch.Tensor) -> torch.Tensor:
       return silu_and_mul(self.linear(x))
 ```
+
+Functions used by [`~kernels.use_kernelized_func`] must always have a
+[`~kernels.use_kernel_forward_from_hub`] decorator.
 
 ## Kernelizing a model
 

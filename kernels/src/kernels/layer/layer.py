@@ -381,6 +381,14 @@ def use_kernelized_func(*args: Callable):
     decorator_args = args
 
     def decorator(cls):
+        # Validate that the functions that are passed are kernel functions.
+        for fn in decorator_args:
+            print("Checking", fn)
+            if not hasattr(fn, "kernel_layer_name"):
+                raise ValueError(
+                    f"Function `{fn.__name__}` is not decorated with @use_kernel_forward_from_hub and cannot be used with @use_kernelized_func"
+                )
+
         orig_init = cls.__init__
 
         def new_init(self, *args, **kwargs):

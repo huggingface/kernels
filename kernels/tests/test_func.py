@@ -138,6 +138,18 @@ def test_deprecated_local_kernel_func(device):
     assert model(x) is x
 
 
+def test_use_kernelized_func_used_on_non_kernelized_func():
+    def not_kernelized(x):
+        return x
+
+    with pytest.raises(ValueError, match="Function `not_kernelized` is not decorated"):
+
+        @use_kernelized_func(not_kernelized)
+        class NotKernelized(nn.Module):
+            def forward(self, x: torch.Tensor):
+                return not_kernelized(x)
+
+
 def _silu_and_mul(x: torch.Tensor) -> torch.Tensor:
     d = x.shape[-1] // 2
     return F.silu(x[..., :d]) * x[..., d:]

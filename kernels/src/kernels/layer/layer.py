@@ -400,8 +400,7 @@ def use_kernelized_func(*args: Callable):
             hidden_kernels = self.__dict__.setdefault("_kernel_funcs", {})
             for fn in decorator_args:
                 name = getattr(fn, "__name__", None) or getattr(fn, "kernel_layer_name", None)
-                if name is None:
-                    raise ValueError(f"Could not infer kernel function name for {fn!r}")
+                assert name is not None
 
                 hidden_kernels[name] = fn
 

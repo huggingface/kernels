@@ -311,7 +311,8 @@ def use_kernel_forward_from_hub(layer_name: str):
         # The layer can now be kernelized:
         # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
 
-        # Use on a function (converts the function to `nn.Module`):
+        # Use on a function (converts the function to `nn.Module`). The function
+        # can then be replaced with a layer mapping for `MyCustomLayer`.
         @use_kernel_forward_from_hub("MyCustomLayer")
         def identity(x: torch.Tensor) -> torch.Tensor:
             return x
@@ -360,7 +361,8 @@ def use_kernelized_func(*args: Callable):
         from kernels import use_kernelized_func
         from kernels import Mode, kernelize
 
-        # Use on a function (converts the function to `nn.Module`):
+        # Use on a function (converts the function to `nn.Module`). The function
+        # can then be replaced with a layer mapping for `MyCustomLayer`.
         @use_kernel_forward_from_hub("MyCustomLayer")
         def identity(x: torch.Tensor) -> torch.Tensor:
             return x

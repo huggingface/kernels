@@ -1,0 +1,178 @@
+# SIMD Optimization Patterns for AVX2 and AVX512
+#
+# Vector type abstractions and common SIMD patterns extracted from
+# kernels-community CPU kernels (rmsnorm, flash-attn2, quantization-*).
+
+vector_type_abstractions:
+  name: "Typed Vector Wrappers"
+  description: |
+    Wrap raw __m256/__m512 intrinsics in C++ structs for type safety and
+    readability. Each struct knows its element count, supports arithmetic
+    operators, and provides conversion between precision levels.
+
+    Source: kernels-community/rmsnorm/rmsnorm_cpu/cpu_types_avx512.hpp
+
+  avx512_types:
+    - name: FP32Vec16
+      register: __m512
+      elements: 16
+      operations: |
+        struct FP32Vec16 {
+            __m512 reg;
+            constexpr static int VEC_ELEM_NUM = 16;
+            FP32Vec16(float v) : reg(_mm512_set1_ps(v)) {}
+            FP32Vec16(__m512 r) : reg(r) {}
+            FP32Vec16 operator+(const FP32Vec16& o) const { return _mm512_add_ps(reg, o.reg); }
+            FP32Vec16 operator*(const FP32Vec16& o) const { return _mm512_mul_ps(reg, o.reg); }
+            float reduce_sum() const { return _mm512_reduce_add_ps(reg); }
+        };
+
+    - name: BF16Vec32
+      register: __m512i
+      elements: 32
+      operations: |
+        struct BF16Vec32 {
+            __m512i reg;
+            constexpr static int VEC_ELEM_NUM = 32;
+            BF16Vec32(const at::BFloat16* ptr) : reg(_mm512_loadu_si512(ptr)) {}
+            void save(at::BFloat16* ptr) const { _mm512_storeu_si512(ptr, reg); }
+        };
+
+    - name: FP16Vec16
+      register: __m256i
+      elements: 16
+      note: "FP16 uses 256-bit registers (16 elements) to match AVX512 fp32 width"
+
+  avx2_types:
+    - name: FP32Vec8
+      register: __m256
+      elements: 8
+      operations: "Same pattern as FP32Vec16 but with _mm256_* intrinsics"
+
+  conversion_pattern: |
+    // BF16 → FP32 (widen)
+    FP32Vec16::FP32Vec16(const BF16Vec32& v) {
+        reg = _mm512_castsi512_ps(
+            _mm512_slli_epi32(
+                _mm512_cvtepu16_epi32(_mm512_extracti32x8_epi32(v.reg, 0)), 16));
+    }
+
+    // FP32 → BF16 (narrow, two FP32Vec16 → one BF16Vec32)
+    BF16Vec32::BF16Vec32(const FP32Vec16& lo, const FP32Vec16& hi) {
+        reg = (__m512i)_mm512_cvtne2ps_pbh(hi.reg, lo.reg);
+    }
+
+  dispatch_macro: |
+    // Dispatch over scalar types at runtime
+    #define DISPATCH_FLOATING_TYPES(TYPE, NAME, ...) \
+      AT_DISPATCH_SWITCH(TYPE, NAME,                  \
+        AT_DISPATCH_CASE(at::ScalarType::Float, __VA_ARGS__)    \
+        AT_DISPATCH_CASE(at::ScalarType::BFloat16, __VA_ARGS__) \
+        AT_DISPATCH_CASE(at::ScalarType::Half, __VA_ARGS__))
+
+    // Usage:
+    DISPATCH_FLOATING_TYPES(input.scalar_type(), "my_kernel", [&] {
+        using scalar_vec_t = vec_t<scalar_t>;
+        constexpr int VEC_ELEM_NUM = scalar_vec_t::get_elem_num();
+        // ...
+    });
+
+common_patterns:
+  - name: "Vectorized Reduction (RMSNorm variance)"
+    description: "Compute sum of squares using SIMD, then scalar reduce"
+    code: |
+      FP32Vec16 variance(0.0f);
+      for (int j = 0; j < hidden_size; j += VEC_ELEM_NUM) {
+          scalar_vec_t x(input_p + j);
+          FP32Vec16 fp32_x(x);
+          variance = variance + fp32_x * fp32_x;
+      }
+      float s_variance = 1.0f / sqrtf(variance.reduce_sum() / (float)hidden_size + epsilon);
+
+  - name: "Vectorized Scale+Store (RMSNorm output)"
+    description: "Multiply normalized input by weight, store as original dtype"
+    code: |
+      FP32Vec16 fp32_s_variance(s_variance);
+      for (int j = 0; j < hidden_size; j += VEC_ELEM_NUM) {
+          scalar_vec_t x(input_p + j);
+          scalar_vec_t w(weight + j);
+          FP32Vec16 fp32_x(x);
+          FP32Vec16 fp32_w(w);
+          FP32Vec16 fp32_out = fp32_x * fp32_s_variance * fp32_w;
+          scalar_vec_t out(fp32_out);
+          out.save(output_p + j);
+      }
+
+  - name: "BF16 Dot Product Accumulation"
+    description: "Use _mm512_dpbf16_ps for fused bf16 multiply-add into fp32"
+    code: |
+      // Accumulate bf16 dot products into fp32
+      __m512 acc = _mm512_setzero_ps();
+      for (int k = 0; k < K; k += 2) {
+          __m512bh a = ...;  // load bf16 pair
+          __m512bh b = ...;  // load bf16 pair
+          acc = _mm512_dpbf16_ps(acc, a, b);  // acc += a[0]*b[0] + a[1]*b[1] (in fp32)
+      }
+    note: "_mm512_dpbf16_ps processes TWO bf16 pairs per call — K must be even"
+
+  - name: "Compile-Time Loop Unrolling"
+    description: "Template-based unrolling for register-tiled micro-kernels"
+    code: |
+      template <typename T, T count, typename F>
+      constexpr void unroll_loop(F&& f) {
+          [&]<T... I>(std::integer_sequence<T, I...>) {
+              (f(std::integral_constant<T, I>{}), ...);
+          }(std::make_integer_sequence<T, count>{});
+      }
+
+      // Usage:
+      template <int N> struct Unroll {
+          template <typename F, typename... Args>
+          void operator()(F&& f, Args&&... args) const {
+              unroll_loop<int, N>([&](auto i) { f(i, std::forward<Args>(args)...); });
+          }
+      };
+
+      // In micro-kernel:
+      Unroll<ROWS * COLS>{}(compute, k);
+
+  - name: "CVT_BF16_TO_FP32 Macro"
+    description: "Convert 16 bf16 values to 16 fp32 values via bit shift"
+    code: |
+      #define CVT_BF16_TO_FP32(a) \
+          _mm512_castsi512_ps(_mm512_slli_epi32(_mm512_cvtepu16_epi32(a), 16))
+    note: "BF16 is the upper 16 bits of FP32, so left-shift by 16 is exact conversion"
+
+  - name: "Prefetch for Memory-Bound Kernels"
+    description: "Software prefetch to hide memory latency"
+    code: |
+      constexpr int PREFETCH_SIZE_K = 16 * 4;  // prefetch 4 iterations ahead
+      // Inside inner loop:
+      if constexpr (PREFETCH_SIZE_K > 0) {
+          _mm_prefetch(B + (k + PREFETCH_SIZE_K) * ldb + n, _MM_HINT_T0);
+      }
+    tuning: |
+      Prefetch distance is a Phase 2 tuning parameter.
+      Too small: data not ready when needed.
+      Too large: evicts useful data from cache.
+      Try: 64, 128, 256, 512 bytes. Measure with perf stat L1-dcache-load-misses.
+
+at_vec_portable_wrapper:
+  name: "at::vec::Vectorized — requires CPU_CAPABILITY_AVX512"
+  description: |
+    Some kernels use ATen's portable wrapper at::vec::Vectorized<T> (e.g.
+    convert_from_float, or Vectorized<float>::exp() for silu/gelu) instead of raw
+    _mm512_* intrinsics. Unlike raw intrinsics, at::vec selects its SIMD vs scalar
+    implementation from the preprocessor macro CPU_CAPABILITY_AVX512 — NOT from the
+    -mavx512f / -march=native compiler flags.
+
+    Without that macro, at::vec silently compiles to scalar vec_base.h: in
+    particular exp() degrades from Sleef_expf16_u10 (16-wide) to scalar std::expf,
+    which can make the kernel ~2x slower with no visible error.
+  fix: |
+    // For any TU using at::vec, define the macro before including vec.h:
+    #define CPU_CAPABILITY_AVX512
+    #include <ATen/cpu/vec/vec.h>
+    // OR add -DCPU_CAPABILITY_AVX512 to that section's cxx-flags in build.toml.
+  see_also: "build_system.yaml → 'at::vec::Vectorized needs a CPU_CAPABILITY macro' and the objdump/nm build self-check."
+

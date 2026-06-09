@@ -1,0 +1,75 @@
+# Data Type Optimizations for CPU Kernels
+
+bf16_on_cpu:
+  name: "BFloat16 on CPU"
+  description: |
+    BF16 is the primary inference dtype for LLMs on CPU.
+    AVX512-BF16 extension provides hardware support.
+  key_instructions:
+    - name: "_mm512_dpbf16_ps"
+      description: "Dot product of bf16 pairs, accumulate in fp32"
+      note: "Processes TWO bf16 pairs per call (k must be even)"
+    - name: "_mm512_cvtne2ps_pbh"
+      description: "Convert two fp32 vectors to one bf16 vector (round-to-nearest-even)"
+    - name: "CVT_BF16_TO_FP32 macro"
+      description: "Left-shift bf16 by 16 bits to get fp32 (exact, no rounding)"
+      code: |
+        #define CVT_BF16_TO_FP32(a) \
+            _mm512_castsi512_ps(_mm512_slli_epi32(_mm512_cvtepu16_epi32(a), 16))
+  precision_guidelines:
+    - "Always accumulate in fp32 (_mm512 / float), never in bf16"
+    - "Convert to bf16 only for final output store"
+    - "Add epsilon BEFORE rsqrt, not after (avoids underflow)"
+    - "Correctness tolerance: atol=1e-2, rtol=1e-2 vs fp32 reference"
+
+fp16_on_cpu:
+  name: "Float16 on CPU"
+  description: |
+    FP16 has better precision than BF16 (10-bit mantissa vs 7-bit)
+    but narrower dynamic range (5-bit exponent vs 8-bit).
+  support:
+    avx2: "F16C extension: _mm256_cvtph_ps / _mm256_cvtps_ph"
+    avx512: "_mm512_cvtph_ps / _mm512_cvtps_ph"
+    avx512_fp16: "AVX512-FP16: Native FP16 vector compute (_mm512_add_ph, _mm512_fmadd_ph)"
+    amx_fp16: "AMX-FP16 (Intel Xeon 6+): Native FP16 tile compute (_tile_dpfp16ps)"
+  note: |
+    Some older Intel architectures lack native FP16 compute and require converting to fp32 for calculation.
+    Newer architectures support AVX512-FP16 for vector operations, and Intel Xeon 6 (Granite Rapids) and newer support AMX-FP16 for matrix multiplication.
+    BF16 remains highly prevalent in the ecosystem because AMX-BF16 support was adopted earlier.
+
+int8_quantization:
+  name: "INT8 on CPU"
+  description: |
+    INT8 quantization for weight-only or W8A8 inference.
+  instructions:
+    avx512_vnni: "_mm512_dpbusd_epi32: uint8 × int8 → int32 dot product"
+    amx_int8: "_tile_dpbssd: int8 × int8 → int32 tile multiply"
+  pattern: |
+    // W8A8: quantize activation, multiply, dequantize
+    // 1. Quantize input: fp32/bf16 → int8 (per-token scale)
+    // 2. GEMM: int8 × int8 → int32
+    // 3. Dequantize: int32 → fp32/bf16 (multiply by scale_a × scale_w)
+
+fp8_on_cpu:
+  name: "FP8 on CPU"
+  description: |
+    FP8 (E4M3 or E5M2) conversion on CPU via bit manipulation.
+    No native FP8 compute — convert to bf16 for computation.
+  conversion: |
+    // FP8 E4M3 → BF16: adjust exponent bias and sign
+    inline __m512bh CVT_FP8_TO_BF16(__m256i a) {
+        __m512i x = _mm512_cvtepu8_epi16(a);
+        __m512i vsign = _mm512_slli_epi16(_mm512_and_si512(x, _mm512_set1_epi16(0x80)), 8);
+        x = _mm512_and_si512(x, _mm512_set1_epi16(0x7F));
+        x = _mm512_add_epi16(x, bias_adjust);  // adjust FP8→BF16 exponent bias
+        return (__m512bh)_mm512_or_si512(x, vsign);
+    }
+
+dtype_selection_guide:
+  description: "Choose dtype based on operation type and precision needs"
+  rules:
+    - "Normalization (RMSNorm, LayerNorm): compute in fp32, output matches input dtype"
+    - "GEMM: bf16 input, fp32 accumulate, bf16 output"
+    - "Quantized GEMM: int4/int8 weights, bf16 activation, fp32 accumulate"
+    - "Attention: bf16 QK^T, fp32 softmax, bf16 output"
+    - "Activation functions: compute in fp32 if accuracy matters (GELU, SiLU)"

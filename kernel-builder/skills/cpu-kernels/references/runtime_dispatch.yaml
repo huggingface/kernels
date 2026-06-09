@@ -1,0 +1,252 @@
+# Runtime CPU Feature Detection and Multi-Tier Dispatch
+#
+# Every CPU kernel MUST implement this pattern. The dispatcher detects
+# hardware features at runtime via CPUID and routes to the best implementation.
+#
+# Source: Extracted from kernels-community/rmsnorm, flash-attn2, quantization-gptq
+
+dispatch_pattern:
+  name: "Three-Tier Runtime Dispatch"
+  description: |
+    All CPU kernels share the same dispatch architecture:
+      1. cpu_features.hpp — CPUID detection (compile-time header, no SIMD flags needed)
+      2. *_cpu.cpp — dispatcher entry point (compiled without SIMD flags)
+      3. *_avx2.cpp / *_avx512.cpp — SIMD implementations (compiled WITH flags)
+
+    The dispatcher is compiled WITHOUT any -mavx* flags so it runs on any CPU.
+    Each SIMD implementation is in a SEPARATE translation unit compiled with its own flags.
+
+  flow: |
+    CPUFeatures::hasAVX512BF16()
+        ├─ true  → avx512::kernel_impl()
+        ├─ false → CPUFeatures::hasAVX2()
+        │            ├─ true  → avx2::kernel_impl()
+        │            └─ false → ATen fallback (torch ops)
+        └─ (never crashes — always has a fallback)
+
+cpu_features_hpp:
+  name: "cpu_features.hpp — CPUID Detection"
+  description: |
+    Shared header that detects CPU features at runtime. Uses cpuid instruction
+    directly (no external dependency). Results are cached in static variables.
+
+    CRITICAL: Must also check OS support via XCR0 register (XGETBV) — the CPU
+    may support AVX512 but the OS may not have enabled the save/restore of
+    AVX512 state. Without this check, the kernel SEGFAULTS on WSL1 and some VMs.
+
+  detection_methods:
+    - name: hasAVX2
+      cpuid_leaf: 7
+      register: EBX
+      bit: 5
+      description: "AVX2 — 256-bit integer SIMD"
+
+    - name: hasAVX512
+      cpuid_leaf: 7
+      register: EBX
+      bit: 16
+      os_check: "XCR0 bits 1,2,5,6,7 must be set (SSE + AVX + AVX512 state)"
+      description: "AVX-512 Foundation"
+
+    - name: hasAVX512BF16
+      cpuid_leaf: 7
+      subleaf: 1
+      register: EAX
+      bit: 5
+      depends_on: hasAVX512
+      description: "AVX-512 BF16 — _mm512_dpbf16_ps"
+
+    - name: hasAMX
+      cpuid_leaf: 7
+      register: EDX
+      bits: [22, 24]
+      os_check: "XCR0 bits 17,18 must be set (XTILEDATA + XTILECFG)"
+      description: "AMX-BF16 (bit 22), AMX-TILE (bit 24)"
+      note: |
+        Explicit AMX detection is ONLY used by specific kernels (like flash-attn2 and megablocks) that strictly gate their execution on full hardware support (`hasAllRequiredFeatures()`). 
+        For standard quantized GEMMs (GPTQ, AWQ, BnB), `hasAMX` is omitted — you just check `hasAVX512BF16()` and let `brgemm` silently fall back to AVX512 if AMX is absent.
+
+  template: |
+    #pragma once
+    #ifdef _MSC_VER
+    #include <intrin.h>
+    #else
+    #include <cpuid.h>
+    #endif
+
+    namespace my_kernel_cpu {
+
+    class CPUFeatures {
+    public:
+        static bool hasAVX2() {
+            static bool supported = checkAVX2();
+            return supported;
+        }
+        static bool hasAVX512BF16() {
+            static bool supported = checkAVX512BF16();
+            return supported;
+        }
+    private:
+        static bool checkAVX2() {
+            unsigned int eax, ebx, ecx, edx;
+            if (__get_cpuid_max(0, nullptr) < 7) return false;
+            __cpuid_count(7, 0, eax, ebx, ecx, edx);
+            return (ebx & (1 << 5)) != 0;  // EBX bit 5
+        }
+        static bool checkAVX512() {
+            unsigned int eax, ebx, ecx, edx;
+            if (__get_cpuid_max(0, nullptr) < 7) return false;
+            __cpuid_count(7, 0, eax, ebx, ecx, edx);
+            if (!(ebx & (1 << 16))) return false;  // AVX-512 Foundation
+            // Check OS support for AVX512 state save/restore
+            if (__get_cpuid(1, &eax, &ebx, &ecx, &edx) == 0) return false;
+            if (!(ecx & (1 << 27))) return false;  // OSXSAVE
+            unsigned int xcr0_lo, xcr0_hi;
+            __asm__ volatile("xgetbv" : "=a"(xcr0_lo), "=d"(xcr0_hi) : "c"(0));
+            unsigned long long xcr0 = ((unsigned long long)xcr0_hi << 32) | xcr0_lo;
+            return (xcr0 & 0xE6ULL) == 0xE6ULL;  // bits 1,2,5,6,7
+        }
+        static bool checkAVX512BF16() {
+            if (!checkAVX512()) return false;
+            unsigned int eax, ebx, ecx, edx;
+            __cpuid_count(7, 1, eax, ebx, ecx, edx);
+            return (eax & (1 << 5)) != 0;  // EAX bit 5
+        }
+    };
+
+    }  // namespace
+
+dispatcher_pattern:
+  name: "Dispatcher Entry Point (*_cpu.cpp)"
+  description: |
+    The main dispatch file includes headers for all SIMD tiers and routes
+    based on runtime detection. This file is compiled WITHOUT -mavx* flags.
+
+  template: |
+    #include "cpu_features.hpp"
+    #include "my_kernel_avx2.hpp"
+    #include "my_kernel_avx512.hpp"
+    #include <ATen/ATen.h>
+
+    namespace my_kernel_cpu {
+
+    void forward(torch::Tensor& out, const torch::Tensor& input,
+                 const torch::Tensor& weight, float epsilon) {
+        if (CPUFeatures::hasAVX512BF16()) {
+            avx512::forward_impl(out, input, weight, epsilon);
+        } else if (CPUFeatures::hasAVX2()) {
+            avx2::forward_impl(out, input, weight, epsilon);
+        } else {
+            // Generic ATen fallback
+            auto x = input.to(at::kFloat);
+            auto variance = at::mean(at::pow(x, 2), -1, true);
+            out = at::mul(weight, at::mul(x, at::rsqrt(at::add(variance, epsilon))))
+                  .to(input.scalar_type());
+        }
+    }
+
+    }  // namespace
+
+torch_binding_pattern:
+  name: "torch_binding.cpp — PyTorch C++ Extension Binding"
+  description: |
+    The binding file uses #if defined(CPU_KERNEL) preprocessor guards to
+    conditionally compile CPU-specific code. Multiple backends (CPU, XPU, CUDA)
+    can coexist in the same binding file.
+
+  template: |
+    #include <torch/all.h>
+    #include "registration.h"
+
+    #if defined(CPU_KERNEL)
+    torch::Tensor my_kernel_cpu_forward(
+        const torch::Tensor& input, const torch::Tensor& weight, double epsilon);
+    #endif
+
+    torch::Tensor forward(const torch::Tensor& input,
+                          const torch::Tensor& weight, double epsilon) {
+    #if defined(CPU_KERNEL)
+        if (input.device().type() == torch::kCPU) {
+            return my_kernel_cpu_forward(input, weight, epsilon);
+        }
+    #endif
+        TORCH_CHECK(false, "Unsupported device type");
+    }
+
+    // Register via TORCH_LIBRARY
+    // See: references/huggingface-kernels-integration.md
+
+build_toml_pattern:
+  name: "build.toml — Multi-Target CPU Compilation"
+  description: |
+    Each SIMD tier is a separate [kernel.*] section. The generic dispatcher
+    is compiled without SIMD flags; each optimized tier gets its own flags.
+
+    CRITICAL: The generic kernel MUST list cpu_features.hpp in its src
+    so the header is available at compile time.
+
+  example: |
+    [general]
+    name = "my-kernel"
+    license = "Apache-2.0"
+    version = 1
+    backends = ["cpu"]
+
+    [general.hub]
+    repo-id = "kernels-community/my-kernel"
+
+    [torch]
+    src = ["torch-ext/torch_binding.cpp"]
+
+    [kernel.my_kernel_cpu]
+    backend = "cpu"
+    depends = ["torch"]
+    include = ["my_kernel_cpu"]
+    src = [
+        "my_kernel_cpu/my_kernel_cpu_torch.cpp",
+        "my_kernel_cpu/my_kernel_cpu.cpp",
+        "my_kernel_cpu/my_kernel_cpu.hpp",
+        "my_kernel_cpu/cpu_features.hpp",
+    ]
+
+    [kernel.my_kernel_cpu_avx2]
+    backend = "cpu"
+    cxx-flags = ["-mavx2", "-mfma", "-mf16c", "-fopenmp"]
+    depends = ["torch"]
+    include = ["my_kernel_cpu"]
+    src = [
+        "my_kernel_cpu/my_kernel_avx2.cpp",
+        "my_kernel_cpu/my_kernel_avx2.hpp",
+        "my_kernel_cpu/cpu_types_avx2.hpp",
+    ]
+
+    [kernel.my_kernel_cpu_avx512]
+    backend = "cpu"
+    cxx-flags = [
+        "-mfma", "-fopenmp", "-mf16c",
+        "-mavx512f", "-mavx512bf16", "-mavx512vl",
+    ]
+    depends = ["torch"]
+    include = ["my_kernel_cpu"]
+    src = [
+        "my_kernel_cpu/my_kernel_avx512.cpp",
+        "my_kernel_cpu/my_kernel_avx512.hpp",
+        "my_kernel_cpu/cpu_types_avx512.hpp",
+    ]
+
+  compiler_flags_reference:
+    avx2:
+      required: ["-mavx2", "-mfma"]
+      optional: ["-mf16c", "-fopenmp"]
+    avx512_basic:
+      required: ["-mavx512f"]
+      optional: ["-mavx512vl", "-mavx512dq", "-mavx512bw", "-fopenmp"]
+    avx512_bf16:
+      required: ["-mavx512f", "-mavx512bf16"]
+      optional: ["-mavx512vl", "-mfma", "-mf16c", "-fopenmp"]
+    avx512_full:
+      all: ["-mfma", "-fopenmp", "-mf16c", "-mavx512f", "-mavx512bf16",
+            "-mavx512vl", "-mavx512dq", "-mavx512bw", "-mavx512vbmi"]
+    amx:
+      required: ["-mamx-bf16", "-mamx-int8", "-mamx-tile"]
+      combined_with: "avx512_full"

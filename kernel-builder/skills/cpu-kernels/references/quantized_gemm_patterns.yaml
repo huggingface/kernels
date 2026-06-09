@@ -1,0 +1,387 @@
+# Quantized GEMM Patterns for CPU (INT4, NF4, FP4, FP8, MXFP4)
+#
+# All 4-bit quantized GEMM kernels in kernels-community share the same
+# architecture. This reference documents the common skeleton and the
+# parameterized "slots" that differ between quantization formats.
+#
+# Source: Extracted from kernels-community/quantization-gptq,
+#         quantization-bitsandbytes, megablocks
+
+overview:
+  description: |
+    Quantized GEMM on CPU fuses dequantization with matrix multiplication
+    to avoid materializing full-precision weights. The core pipeline is:
+
+      packed INT4 bytes → nibble split → LUT lookup → scale × dequantized
+      → _mm512_dpbf16_ps accumulate → bf16 output
+
+    This is implemented as a "tinygemm" micro-kernel for small M (decode),
+    and falls back to "brgemm" (unpack + ATen BLAS) for large M (prefill).
+
+  common_skeleton: |
+    1. unpack_B()     — dequantize packed weights to bf16 using LUT
+    2. tinygemm_kernel_nn<BLOCK_M, BLOCK_N>  — fused dequant+GEMM micro-kernel
+    3. brgemm         — unpack whole block then call ATen cpublas::brgemm
+    4. gemm_4bit()    — top-level dispatcher (selects tinygemm vs brgemm)
+
+parameterized_slots:
+  - name: "Lookup Table (LUT)"
+    description: |
+      Maps 4-bit integer values to their dequantized bf16 representation.
+      This is the ONLY component that differs between quantization formats.
+    variants:
+      gptq_int4:
+        description: "Linear INT4: value = (int4_val - zero_point) * scale"
+        lut_content: |
+          __m512i lut = _mm512_set_epi16(
+              0x0000, 0x4170, 0x4160, 0x4150, 0x4140, 0x4130, 0x4120, 0x4110,
+              0x4100, 0x40E0, 0x40C0, 0x40A0, 0x4080, 0x4040, 0x4000, 0x3F80,
+              0x0000, -0x4080, -0x4000, -0x3FC0, -0x3F80, -0x3F60, -0x3F40, -0x3F20,
+              -0x3F00, -0x3EF0, -0x3EE0, -0x3ED0, -0x3EC0, -0x3EB0, -0x3EA0, -0x3E90);
+        has_zero_point: true
+        zero_point_type: "per-group uint8"
+
+      bitsandbytes_nf4:
+        description: "NormalFloat4: 16 non-uniform values from normal distribution quantiles"
+        lut_values: [-1.0, -0.6962, -0.5251, -0.3949, -0.2844, -0.1848, -0.0911, 0.0,
+                      0.0796, 0.1609, 0.2461, 0.3379, 0.4407, 0.5626, 0.7230, 1.0]
+        has_zero_point: false
+        note: "Zero is encoded in the LUT at index 7, no separate zero_point tensor"
+
+      bitsandbytes_fp4:
+        description: "4-bit floating point"
+        lut_values: [0.0, 0.0052, 0.6667, 1.0, 0.3333, 0.5, 0.1667, 0.25,
+                     0.0, -0.0052, -0.6667, -1.0, -0.3333, -0.5, -0.1667, -0.25]
+        has_zero_point: false
+
+      megablocks_fp8:
+        description: "FP8 E4M3: 8-bit float, converted via bit manipulation (shift + ternary logic)"
+        conversion: |
+          // FP8 to BF16: separate sign, shift exponent+mantissa, combine
+          __m512i x = _mm512_cvtepu8_epi16(a);
+          __m512i vsign = _mm512_and_si512(x, mask_sign);         // extract sign bit
+          __m512i vexp_and_mant = _mm512_and_si512(x, mask_nosign);
+          vexp_and_mant = _mm512_slli_epi16(vexp_and_mant, 4);    // shift to bf16 position
+          // combine sign + shifted exp/mantissa via ternary logic OR
+          __m512i result = _mm512_ternarylogic_epi32(vsign, mask2, vexp_and_mant, 0b11111110);
+        has_zero_point: false
+        scale_type: "per-block float"
+
+      megablocks_mxfp4:
+        description: "Microscaling FP4 E2M1: 4-bit float with shared exponent"
+        conversion: |
+          // MXFP4 to BF16 via LUT + scale multiplication
+          const __m512 values = _mm512_set_ps(MXFP4_VALUES);  // 16 float values
+          const __m512i lut = (__m512i)(_mm512_cvtne2ps_pbh(values, values));
+          x0 = _mm512_permutexvar_epi16(x0, lut);
+          // Emulate bf16 mul with shared scale: add exponent in integer domain
+          x0 = _mm512_add_epi16(x0, scale_bf16);
+        has_zero_point: false
+        scale_type: "per-block bf16 (shared exponent)"
+
+  - name: "Zero-Point Handling"
+    description: |
+      GPTQ uses explicit per-group zero_points (uint8). BnB/FP8/MXFP4 encode
+      the zero mapping in the LUT itself, eliminating the zero_point tensor.
+    gptq_pattern: |
+      // Load 32 zero points, repeat-interleave to match weight layout
+      __m256i zraw = _mm256_loadu_si256((const __m256i*)(Bz + kgs * strideBz + n));
+      zeros_lo = _mm256_permutexvar_epi8(z_idx0, zraw);
+      zeros_hi = _mm256_permutexvar_epi8(z_idx1, zraw);
+      // Subtract before LUT
+      w_lo = _mm256_sub_epi8(w_lo, zeros_lo);
+    bitsandbytes_pattern: |
+      // No zero_point tensor — just shift to LUT index range
+      w_lo = _mm256_add_epi8(w_lo, fifteen);  // shift [0,15] → [0,30] for LUT
+
+  - name: "Scale Application"
+    all_formats: |
+      // Load scales (bf16) → convert to fp32 → broadcast to match tile layout
+      __m512i scales_bf16 = _mm512_loadu_si512((const __m512i*)(Bs + kgs * strideBs + n));
+      scale_lo_fp32 = CVT_BF16_TO_FP32(_mm512_extracti32x8_epi32(scales_bf16, 0));
+      scale_hi_fp32 = CVT_BF16_TO_FP32(_mm512_extracti32x8_epi32(scales_bf16, 1));
+      // Permute to match 16-element groups
+      scales[0] = _mm512_permutexvar_ps(s_idx0, scale_lo_fp32);
+      scales[1] = _mm512_permutexvar_ps(s_idx1, scale_lo_fp32);
+
+unpack_b_template:
+  name: "unpack_B — Weight Dequantization"
+  description: |
+    Dequantizes packed INT4 weights to bf16. Called either:
+    - Per-block inside tinygemm (fused, for small M)
+    - Once for full weight matrix before brgemm (materialized, for large M)
+  code: |
+    inline void unpack_B(
+        at::BFloat16* __restrict__ Btmp,
+        const unsigned char* __restrict__ packed_B,
+        const at::BFloat16* __restrict__ Bs,  // scales
+        int64_t N, int64_t K, int blocksize,
+        int64_t ldb, int64_t ldb_tmp, int64_t strideBs)
+    {
+        const int64_t K2 = K >> 1;  // 2 weights per byte
+        const int64_t gs2 = blocksize >> 1;
+        __m256i mask = _mm256_set1_epi8(0xF);
+
+        for (int64_t n = 0; n < N; n += 32) {
+            for (int64_t k = 0; k < K2; ++k) {
+                if (k % gs2 == 0) {
+                    // Load scales for this group
+                    // ... (see parameterized_slots.scale_application)
+                }
+                // Load 32 packed bytes → 64 INT4 values
+                __m256i w_u4 = _mm256_loadu_si256((const __m256i*)(packed_B + k * ldb + n));
+
+                // Split nibbles
+                __m256i w_lo = w_u4 & mask;
+                __m256i w_hi = _mm256_srli_epi16(w_u4, 4) & mask;
+
+                // === FORMAT-SPECIFIC SLOT: zero_point + LUT ===
+                // GPTQ: subtract zero, then LUT
+                // BnB:  shift to range, then LUT
+
+                // LUT lookup → bf16
+                __m512i w_lo_bf16 = _mm512_permutexvar_epi16(
+                    _mm512_cvtepi8_epi16(w_lo), lut);
+
+                // Scale and convert
+                __m512 w_fp32 = CVT_BF16_TO_FP32(...) * scales[...];
+                __m512bh packed = _mm512_cvtne2ps_pbh(w_hi_fp32, w_lo_fp32);
+                _mm512_storeu_si512(Btmp + offset, (__m512i)packed);
+            }
+        }
+    }
+
+tinygemm_template:
+  name: "tinygemm_kernel_nn — Fused Dequant+GEMM Micro-Kernel"
+  description: |
+    For small M (typical in decode/generation), fuse dequantization into the
+    GEMM inner loop. Each iteration: load A tile, dequant B tile, dpbf16_ps.
+
+    Template parameters:
+    - BLOCK_M: output rows (typically 1-32 for decode)
+    - BLOCK_N: output columns (typically 32, matching nibble pack width)
+    - Unroll<ROWS * COLS>{} — compile-time loop unrolling helper
+
+  key_instructions:
+    - "_mm512_dpbf16_ps(acc, a_bf16, b_bf16)  // dot product bf16→fp32 accumulate"
+    - "_mm512_cvtne2ps_pbh(hi, lo)            // pack two fp32 vectors to bf16"
+    - "_mm512_permutexvar_epi16(idx, lut)     // LUT lookup for dequantization"
+
+  four_stage_loop: |
+    // Stage 1: loadc — zero accumulators
+    auto loadc = [&](auto i) { vc_master[i] = _mm512_set1_ps(0.f); };
+    Unroll<ROWS * COLS>{}(loadc);
+
+    for (int64_t k = 0; k < K2; k += gs2) {
+        // Stage 2: pre_compute — load scales (and zeros for GPTQ)
+        auto pre_compute = [&](auto i, int64_t kgs) {
+            if constexpr (row == 0 && col % 2 == 0) {
+                // Load and broadcast scales for this group
+            }
+        };
+        Unroll<ROWS * COLS>{}(pre_compute, k / gs2);
+
+        for (int64_t k_offset = 0; k_offset < gs2; ++k_offset) {
+            // Stage 3: compute — dequant + dpbf16_ps
+            auto compute = [&](auto i, int64_t k) {
+                if constexpr (col == 0) {
+                    va = (__m512bh)(_mm512_set1_ps(a_ptr[row * lda2 + k]));
+                }
+                if constexpr (row == 0 && col % 2 == 0) {
+                    // Dequant: load INT4, split nibbles, LUT, scale
+                }
+                vc[i] = _mm512_dpbf16_ps(vc[i], va, vb[col]);
+            };
+            Unroll<ROWS * COLS>{}(compute, k + k_offset);
+        }
+        // Stage 4: post_compute — apply group scale to accumulator
+        auto post_compute = [&](auto i, int64_t kgs) {
+            vc_master[i] = _mm512_fmadd_ps(vc[i], scales[i % COLS], vc_master[i]);
+        };
+        Unroll<ROWS * COLS>{}(post_compute, k / gs2);
+    }
+
+    // Stage 5: storec — convert fp32 accumulators to bf16 and store
+    auto storec = [&](auto i) {
+        if constexpr (col % 2 == 0) {
+            _mm512_storeu_si512(C + row * ldc + col * 16,
+                (__m512i)(_mm512_cvtne2ps_pbh(vc_master[i+1], vc_master[i])));
+        }
+    };
+    Unroll<ROWS * COLS>{}(storec);
+
+algorithm_selection:
+  name: "tinygemm vs brgemm Selection & Dequant Policy"
+  description: |
+    For small M (M ≤ 4 for bf16, typical decode), use tinygemm (fused dequant+GEMM).
+    For large M (M > 4), use brgemm via parallel_2d.
+    
+    Within the brgemm path, we further differentiate the dequantization policy based on M:
+    - use_brgemm_dequant_out = true (M > 100, Prefill): Pre-dequantize all N×K weights into VNNI format upfront in parallel, then run GEMM.
+    - use_brgemm_dequant_out = false (4 < M ≤ 100, Decode/Medium): Dequantize per K-block (chunk) within the inner loop on-the-fly.
+
+    Both paths are wrapped in `tinygemm_kernel` which uses `parallel_2d`
+    for 2D thread decomposition over (M/BLOCK_M, N/BLOCK_N) tiles.
+  code: |
+    void gemm_4bit(const torch::Tensor& input, const torch::Tensor& weight,
+                   const torch::Tensor& scales, torch::Tensor& out, int blocksize) {
+        int64_t M = input.size(0);
+        if (CPUFeatures::hasAVX512BF16()) {
+            const bool use_brgemm = M > 4;
+            const bool use_brgemm_dequant_out = M > 100;  // pre-dequant all B
+            tinygemm_kernel<scalar_t>(
+                A, B, C, Bz, Bs, Btmp, Ctmp,
+                M, N, K, blocksize, lda, ldb, ldc,
+                strideBz, strideBs,
+                use_brgemm, use_brgemm_dequant_out
+            );
+        } else {
+            // Generic fallback: unpack with PyTorch ops, then torch::matmul
+            auto unpacked = unpack_with_torch(weight, zeros, scales, blocksize);
+            torch::matmul_out(out, input, unpacked.t());
+        }
+    }
+
+weight_format:
+  name: "Weight Format and Conversion (CRITICAL)"
+  description: |
+    The CPU kernel expects weight in a specific block-interleaved format:
+      qweight: [N, K/2] uint8, BLOCK_N=32 interleaved
+    This is NOT the standard GPTQ/BnB checkpoint format. Each framework does
+    its own conversion BEFORE calling the kernel for the first time.
+
+  kernel_api:
+    gptq: |
+      gemm_int4_forward(input, weight, zeros, absmax, blocksize)
+        input:  [M, K] bf16
+        weight: [N, K/2] uint8 — block-interleaved (BLOCK_N=32)
+        zeros:  [num_groups, N] uint8 — per-group zero-points
+        absmax: [num_groups, N] bf16 — per-group scales (called "absmax" in API, actually scales)
+        output: [M, N] bf16
+    bitsandbytes: |
+      gemm_4bit_forward(input, weight, absmax, blocksize, quant_type)
+        input:     [M, K] bf16
+        weight:    [N, K/2] uint8 — block-interleaved (BLOCK_N=32)
+        absmax:    [K/blocksize, N] bf16 — per-block scales (TRANSPOSED vs GPTQ!)
+        blocksize: int (typically 64)
+        quant_type: 0=NF4, 1=FP4
+        output:    [M, N] bf16
+        NOTE: No zeros param — NF4/FP4 LUT encodes zero mapping
+
+  block_interleaved_format: |
+    ## Block-Interleaved Packing (BLOCK_N=32)
+
+    Both GPTQ and BnB use the SAME packing algorithm to convert
+    [N, K] uint8 (individual 4-bit values) → [N, K/2] uint8 (packed):
+
+    1. Reshape to [N/32, 32, K/2, 2]         — split N into blocks of 32
+    2. Transpose to [N/32, K/2, 32, 2]       — put K/2 before BLOCK_N
+    3. Flatten to [-1, 64], split high 32 / low 32
+    4. Pack: ((high << 4) | low).to(uint8)   — two nibbles per byte
+    5. Reshape back to [N, K/2]
+
+    This interleaving groups 32 N-elements together in memory, which maps
+    directly to AVX512 register width (32 × 16-bit = 512 bits after dequant).
+    The C++ kernel's unpack_B() reverses this with _mm512_permutexvar_epi8.
+
+  gptq_conversion:
+    name: "GPTQ Weight Conversion (in GPTQModel repo)"
+    description: |
+      Performed by HFKernelLinear.transform() at first inference forward.
+      Two steps: transform_cpu() then convert_weight_packed_zp().
+    where: "GPTQModel/gptqmodel/nn_modules/qlinear/gemm_hf_kernel.py"
+    triggered_by: "HFKernelLinear.forward() → self.transform(x.device.type)"
+    step1_transform_cpu: |
+      def transform_cpu(self):
+          # 1. Convert scales to bf16
+          self.scales = self.scales.to(torch.bfloat16).contiguous()
+
+          # 2. Unpack qweight from int32 packed → uint8 individual values
+          #    Original: [N/pack_factor, K] int32 (each int32 holds 8 int4 values)
+          weight = bitwise_and(bitwise_right_shift(qweight.unsqueeze(1).expand(...), wf), maxq)
+
+          # 3. Reorder by g_idx for desc_act support
+          ret_idx = self._build_ret_idx()  # inverse permutation of g_idx
+          weight = weight.reshape(...).index_select(0, ret_idx)
+
+          # 4. Transpose: [K, N] → [N, K] uint8
+          weight = weight.t()
+          self.qweight = weight.contiguous()  # [N, K] uint8 (0-15)
+
+          # 5. Unpack qzeros similarly → [num_groups, N] uint8
+          zeros = bitwise_and(bitwise_right_shift(qzeros.unsqueeze(2).expand(...), wf), maxq)
+          self.qzeros = zeros.reshape(num_groups, N).contiguous()
+    step2_convert_weight_packed_zp: |
+      def convert_weight_packed_zp(self, block_n=32):
+          # Takes [N, K] uint8 → [N, K/2] uint8 block-interleaved
+          # (see block_interleaved_format above for algorithm)
+
+  bnb_conversion:
+    name: "BitsAndBytes Weight Conversion (in bitsandbytes repo)"
+    description: |
+      Performed by _convert_weight_packed_for_cpu() called from
+      Linear4bit.forward() when device is CPU.
+    where: "bitsandbytes/bitsandbytes/functional.py"
+    triggered_by: "Linear4bit.forward() → _convert_weight_packed_for_cpu(qweight, quant_state)"
+    steps: |
+      def _convert_weight_packed_for_cpu(qweight, quant_state, block_n=32):
+          # 1. View as uint8 if stored as different dtype
+          qweight = qweight.view(torch.uint8)
+
+          # 2. Unpack BnB nibble format → [N, K] uint8
+          #    BnB stores: high nibble = even position, low nibble = odd position
+          unpacked_w = empty(qweight.shape[0] * 2)
+          unpacked_w[1::2] = qweight & 0xF       # low nibble → odd
+          unpacked_w[::2]  = qweight >> 4          # high nibble → even
+          qweight_final = unpacked_w.reshape(N, K).to(uint8)
+
+          # 3. Block-interleaved packing: [N, K] → [N, K/2]
+          #    (same algorithm as GPTQ's convert_weight_packed_zp)
+
+          # 4. Denest absmax (if nested/double quantization)
+          if quant_state.nested:
+              absmax = dequantize_blockwise(quant_state.absmax, quant_state.state2)
+              absmax += quant_state.offset
+
+          # 5. Reshape + TRANSPOSE absmax → [K/blocksize, N] bf16
+          #    NOTE: GPTQ keeps scales as [num_groups, N],
+          #          BnB TRANSPOSES to [K/blocksize, N]
+          quant_state.absmax = (
+              quant_state.absmax
+              .reshape(N, K // blocksize)  # [N, num_groups]
+              .T                            # [num_groups, N]
+              .to(torch.bfloat16)
+              .contiguous()
+          )
+
+  key_differences:
+    name: "GPTQ vs BnB Format Differences"
+    table: |
+      | Aspect              | GPTQ                                  | BitsAndBytes                           |
+      |---------------------|----------------------------------------|----------------------------------------|
+      | Original format     | int32 packed (8×int4 per int32)        | uint8 packed (2×nibble per byte)       |
+      | Unpacking           | bitwise_right_shift + mask             | qw >> 4 (even), qw & 0xF (odd)        |
+      | g_idx reorder       | Yes (desc_act support via ret_idx)     | No                                     |
+      | Final qweight       | [N, K/2] uint8 block-interleaved       | [N, K/2] uint8 block-interleaved       |
+      | Zero-points         | [num_groups, N] uint8                  | None (encoded in NF4/FP4 LUT)         |
+      | Scales shape        | [num_groups, N] bf16                   | [K/blocksize, N] bf16 (TRANSPOSED)    |
+      | Scales name in API  | absmax                                 | absmax                                 |
+      | Conversion location | GPTQModel repo (gemm_hf_kernel.py)     | bitsandbytes repo (functional.py)      |
+      | Triggered by        | first forward (self.linear_mode=None)  | first forward on CPU device            |
+      | Reversible          | No (one-way transform)                 | Yes (_convert_weight_packed_for_cpu_inverse) |
+
+adding_new_format:
+  name: "How to Add a New Quantization Format"
+  steps:
+    - "1. Define the LUT values (16 entries for 4-bit, 256 for 8-bit)"
+    - "2. Decide zero_point strategy: explicit tensor, or encoded in LUT"
+    - "3. Copy an existing kernel (e.g., quantization-gptq) as template"
+    - "4. Replace the LUT constant and zero_point handling"
+    - "5. Adjust the unpack_B function if packing layout differs"
+    - "6. Keep tinygemm_kernel_nn and brgemm logic unchanged"
+    - "7. Update build.toml with the new kernel name"
+    - "8. Write test with ref_gemm_Xbit() using pure PyTorch"
+  note: |
+    ~90% of the code is reusable. Only the LUT, zero-point, and scale
+    loading code change between formats. The tinygemm micro-kernel,
+    Unroll<> helper, and brgemm fallback are identical.

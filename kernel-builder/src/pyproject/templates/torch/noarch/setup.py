@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-from typing import Any
-from pathlib import Path
 import shutil
 import sys
+from pathlib import Path
+from typing import Any
 
 from setuptools import setup
 from setuptools.command.build import build
@@ -73,9 +73,10 @@ class BuildKernel(build):
             raise FileNotFoundError(f"torch-ext/{module_name} does not exist")
         for item in torch_ext_dir.rglob("*"):
             if item.is_file():
-                if item.suffix == ".pyc" or item.parent.name == "__pycache__":
-                    continue
                 rel_path = item.relative_to(torch_ext_dir)
+                # Skip Python bytecode.
+                if item.suffix == ".pyc" or "__pycache__" in rel_path.parts:
+                    continue
                 dest = variant_dir / rel_path
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, dest)

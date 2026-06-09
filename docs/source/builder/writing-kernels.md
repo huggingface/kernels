@@ -195,6 +195,11 @@ The following sections enumerate all supported options for `build.toml`.
   branch named `v<version>`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
+- `upstream`: Git-compatible URL (passable to `git clone`) of the original
+  upstream repository where the kernel source code comes from.
+- `source`: Git-compatible URL (passable to `git clone`) of the kernel-builder
+  formatted source repository. This repository must contain a `build.toml` and
+  `flake.nix` so that it can be pulled and built with the kernel builder.
 - `python-depends` (**experimental**): a list of additional Python dependencies
   that the kernel requires. The only supported dependencies are `einops`
   and `nvidia-cutlass-dsl`.

@@ -10,6 +10,9 @@ pub use deps::{Dependency, PythonDependency};
 mod compat;
 pub use compat::BuildCompat;
 
+mod git_url;
+pub use git_url::GitUrl;
+
 mod name;
 pub use name::KernelName;
 
@@ -73,8 +76,11 @@ pub struct General {
     /// Hugging Face Hub license identifier.
     pub license: String,
 
-    /// Source repository or reference for the kernel code.
-    pub upstream: Option<url::Url>,
+    /// Original upstream repository for the kernel code.
+    pub upstream: Option<GitUrl>,
+
+    /// Kernel-builder formatted source repository (must contain build.toml and flake.nix).
+    pub source: Option<GitUrl>,
 
     pub backends: Vec<Backend>,
     pub hub: Option<Hub>,

@@ -108,6 +108,7 @@ impl TryFrom<Build> for super::Build {
                 version: None,
                 license: None,
                 upstream: None,
+                source: None,
                 backends,
                 hub: None,
                 neuron: None,

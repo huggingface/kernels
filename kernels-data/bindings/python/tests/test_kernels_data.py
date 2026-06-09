@@ -95,6 +95,7 @@ def test_metadata_load_full(tmp_path):
                 "name": "my-kernel",
                 "license": "Apache-2.0",
                 "upstream": "https://github.com/example/kernel",
+                "source": "https://github.com/example/kernel-builder",
                 "python-depends": ["torch"],
                 "backend": {"type": "cuda", "archs": ["9.0", "10.0"]},
             }
@@ -106,6 +107,7 @@ def test_metadata_load_full(tmp_path):
     assert m.version == 1
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"
+    assert m.source == "https://github.com/example/kernel-builder"
     assert m.python_depends == ["torch"]
     assert m.backend.backend_type == Backend.CUDA
     assert m.backend.archs == ["9.0", "10.0"]
@@ -129,6 +131,7 @@ def test_metadata_load_minimal(tmp_path):
     assert m.version == 1
     assert m.license == "Apache-2.0"
     assert m.upstream is None
+    assert m.source is None
     assert m.python_depends == []
     assert m.backend.backend_type == Backend.CPU
 

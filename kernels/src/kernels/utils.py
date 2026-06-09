@@ -132,7 +132,8 @@ class LoadedKernel:
     - `name` (`str`): the name of the kernel.
     - `version` (`int`): the version of the kernel.
     - `license` (`str`): the license of the kernel.
-    - `upstream` (`str | None`): the upstream repository of the kernel.
+    - `upstream` (`str | None`): the original upstream repository of the kernel.
+    - `source` (`str | None`): the kernel-builder formatted source repository.
     - `python_depends` (`list[str]`): required Python dependencies.
     - `backend`: information about the kernel's backend.
     """

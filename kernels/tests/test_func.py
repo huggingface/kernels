@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -15,6 +17,7 @@ from kernels import (
     use_kernel_mapping,
     use_kernelized_func,
 )
+from kernels.layer.func import LockedFuncRepository
 
 
 # A function + layer that we can map arbitrary functions to for testing.
@@ -38,6 +41,7 @@ def test_decorator():
     assert isinstance(identity, nn.Module)
 
 
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_decorator():
     @use_kernel_func_from_hub("identity_func")
     def identity(x):
@@ -47,11 +51,13 @@ def test_deprecated_decorator():
     assert isinstance(identity, nn.Module)
 
 
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_func_repository_requires_version_or_revision():
     with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
         FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul")
 
 
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_func_repository(device):
     model = SurpriseMe()
 
@@ -110,6 +116,7 @@ def test_kernel_func_with_layer():
     assert model(x) is x
 
 
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_local_kernel_func(device):
     model = SurpriseMe()
 
@@ -136,6 +143,32 @@ def test_deprecated_local_kernel_func(device):
         model = kernelize(model, mode=Mode.INFERENCE, device=device)
 
     assert model(x) is x
+
+
+def test_deprecated_kernel_func():
+    with pytest.deprecated_call(match="kernels 0.17"):
+        FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul", version=1)
+
+    project_dir = Path(__file__).parent / "layer_locking"
+    with pytest.deprecated_call(match="kernels 0.17"):
+        LockedFuncRepository(
+            "kernels-test/versions",
+            func_name="version",
+            lockfile=project_dir / "kernels.lock",
+        )
+
+    with pytest.deprecated_call(match="kernels 0.17"):
+        LocalFuncRepository(
+            # We are never loading the kernel, so we can just use an invalid path.
+            repo_path=Path("."),
+            func_name="silu_and_mul",
+        )
+
+    with pytest.deprecated_call(match="kernels 0.17"):
+
+        @use_kernel_func_from_hub("deprecated")
+        def deprecated_func(x):
+            return x
 
 
 def test_use_kernelized_func_used_on_non_kernelized_func():

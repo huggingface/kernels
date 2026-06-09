@@ -241,7 +241,7 @@ def use_kernel_func_from_hub(func_name: str):
         ```
     """
     warnings.warn(
-        "use_kernel_func_from_hub is deprecated and will be removed in kernels 0.17. Use [`use_kernel_func_from_hub`] instead.",
+        "use_kernel_func_from_hub is deprecated and will be removed in kernels 0.17. Use [`use_kernel_forward_from_hub`] instead.",
         DeprecationWarning,
         stacklevel=2,
     )

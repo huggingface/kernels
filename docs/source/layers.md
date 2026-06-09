@@ -62,7 +62,7 @@ This will replace the function by an instantiated `torch.nn.Module`
 still behave as a function, since `torch.nn.Module` provides an
 implementation of `__call__` that delegates to `forward`.
 
-For kernelization to see the function, you must use
+For [`~kernels.kernelize`] to see the function, you must use
 [`~kernels.use_kernelized_func`] on an `torch.nn.Module` that is part
 of the to-be kernlized module to make the function visible to
 [`~kernels.kernelize`]. The function is typically attached to the module

@@ -1,0 +1,131 @@
+# Optimization Levels for CPU Kernel Development
+#
+# Use this framework when optimizing a kernel in Phase 2.
+# Most production kernels should reach at least Level 2.
+
+levels:
+  - id: level_1_generic_baseline
+    name: "Level 1: Generic ATen Baseline"
+    phase: 1
+    description: |
+      Get the kernel working with pure PyTorch/ATen operations.
+      No SIMD intrinsics. This is the portable fallback.
+    checklist:
+      - Implement using torch/ATen ops only
+      - Correct for all dtypes (float32, bfloat16, float16)
+      - Handle arbitrary tensor shapes (no alignment requirements)
+      - Register via torch_binding.cpp with proper device dispatch
+    typical_speedup: "1.0x (this IS the baseline)"
+    when_done: "Move to Level 2. This tier is just for correctness."
+
+  - id: level_2_avx2
+    name: "Level 2: AVX2 SIMD (Optional/Disabled by default)"
+    phase: 1
+    description: |
+      Add 256-bit SIMD vectorization. Most x86 CPUs since 2013 support AVX2.
+      Note: This tier is disabled/skipped by default in most kernels as they transition directly to AVX512.
+    checklist:
+      - Use _mm256_* intrinsics with FMA
+      - Handle tail elements (hidden_size % 8 != 0)
+      - Add -mavx2 -mfma -fopenmp to build.toml cxx-flags
+      - Runtime dispatch via cpu_features.hpp
+      - Verify correctness against Level 1 output
+    typical_speedup: "1.5-2x vs ATen"
+    when_done: "Move to Level 3. AVX2 is an optional stepping stone, often skipped in favor of AVX512 directly."
+
+  - id: level_3_avx512_basic
+    name: "Level 3: AVX512 Basic"
+    phase: 2
+    description: |
+      Add 512-bit SIMD with AVX512 Foundation. This is the entry point
+      to Phase 2 — performance optimization starts here.
+    checklist:
+      - Use _mm512_* intrinsics
+      - Use vector type abstractions (FP32Vec16, BF16Vec32) from cpu_types_avx512.hpp
+      - Add bf16 support via _mm512_dpbf16_ps (if AVX512BF16 available)
+      - OpenMP parallelization with #pragma omp parallel for
+      - Proper compiler flags in build.toml
+    typical_speedup: "2-3x vs ATen"
+    when_done: |
+      Run perf stat / cpu_profiler.py. Check if memory-bound or compute-bound.
+      If memory-bound → Level 4. If compute-bound → check tile sizes.
+
+  - id: level_4_avx512_optimized
+    name: "Level 4: AVX512 Optimized"
+    phase: 2
+    description: |
+      Optimize the AVX512 implementation for the target microarchitecture.
+      This is where most of the Phase 2 trial loop effort goes.
+    checklist:
+      - Cache blocking (tile M, N, K dimensions to fit L1/L2)
+      - Prefetch instructions (_mm_prefetch with appropriate distance)
+      - Loop unrolling (manual or via Unroll<N>{} template)
+      - Minimize register pressure (reuse accumulators)
+      - OpenMP grain size tuning (avoid overhead for small tensors)
+      - Data layout optimization (ensure contiguous access patterns)
+    optimization_search_space:
+      tile_size: "Try BLOCK_M in {16, 32, 64}, BLOCK_N in {16, 32, 64}"
+      prefetch_distance: "Try 0, 64, 128, 256 bytes ahead"
+      unroll_depth: "Try 2, 4, 8 iterations"
+      omp_threshold: "Skip OpenMP for num_tokens < threshold (try 4, 8, 16)"
+    typical_speedup: "3-5x vs ATen"
+    when_done: |
+      If speedup > early_stop_speedup → finalize.
+      If not, consider Level 5 (AMX) or algorithmic changes.
+
+  - id: level_5_amx
+    name: "Level 5: AMX via brgemm"
+    phase: 2
+    description: |
+      Use Intel AMX for matrix-heavy kernels (attention, GEMM) via brgemm.
+      AMX provides hardware tile matrix multiplication units (SPR+).
+      Existing HF kernels access AMX indirectly through brgemm, NOT via
+      direct tile intrinsics. oneDNN handles AMX tile configuration internally.
+    checklist:
+      - Call at::native::cpublas::brgemm() for large-M GEMM
+      - Pre-dequantize weights to bf16 before brgemm (for quantized kernels)
+      - Use parallel_2d for 2D thread decomposition over tiles
+      - Call brgemm_release() after parallel region
+      - No AMX flags needed in build.toml — oneDNN dispatches internally
+    note: |
+      Direct AMX intrinsics (_tile_loadconfig, _tile_dpbf16ps, etc.) are NOT used
+      by any existing HF kernel. They are listed here for reference only:
+      - _tile_loadconfig: configure tile registers
+      - _tile_dpbf16ps: bf16 matrix multiply (16×16 for bf16, 16×64 for int8)
+      - _tile_dpbssd: int8 matrix multiply
+      - Only 8 tile registers (tmm0-tmm7)
+    applies_when:
+      - "Flash Attention forward pass"
+      - "Large GEMM (M > 4 for bf16)"
+      - "INT8 quantized inference"
+    does_not_apply_when:
+      - "Element-wise ops (RMSNorm, activations)"
+      - "Small reductions"
+      - "Target CPUs without AMX (pre-SPR)"
+    typical_speedup: "5-10x vs ATen for GEMM-heavy kernels"
+
+decision_tree:
+  name: "Try Harder Decision Tree"
+  description: |
+    Use this when you're stuck at a given speedup level.
+  rules:
+    - condition: "Speedup < 1.5x after Level 3"
+      action: "Check if OpenMP is actually parallelizing (OMP_NUM_THREADS). Check for false sharing."
+      reference: "references/threading_patterns.yaml"
+
+    - condition: "Speedup 1.5-2.5x after Level 3"
+      action: "Memory-bound. Add prefetch, try cache blocking, check alignment."
+      reference: "references/memory_patterns.yaml"
+
+    - condition: "Speedup 2.5-3x after Level 4"
+      action: "Check IPC via perf stat. If IPC > 2, compute-bound — try AMX. If IPC < 1, still memory-bound — try different blocking."
+      reference: "references/brgemm_patterns.yaml (Level 5 / AMX is reached via brgemm)"
+
+    - condition: "Speedup 3-5x"
+      action: "Good for most workloads. Level 5 (AMX) for critical-path kernels only."
+
+    - condition: "Speedup > 5x"
+      action: "Excellent. Finalize unless there's clear headroom."
+
+    - condition: "For quantized GEMM specifically"
+      action: "Higher speedup is expected (5-10x+) because baseline includes dequant overhead. Don't stop at 3x."

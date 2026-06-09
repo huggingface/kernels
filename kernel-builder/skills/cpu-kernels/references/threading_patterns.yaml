@@ -1,0 +1,84 @@
+# OpenMP Threading Patterns for CPU Kernels
+
+basic_parallel_for:
+  name: "Token-Level Parallelism"
+  description: |
+    The most common pattern: parallelize over the batch/token dimension.
+    Each token is independent, so no synchronization needed.
+  code: |
+    #pragma omp parallel for
+    for (int i = 0; i < num_tokens; ++i) {
+        // Process token i (independent)
+        auto input_p = input + i * hidden_size;
+        auto output_p = out + i * hidden_size;
+        // ... SIMD inner loop over hidden_size ...
+    }
+  applies_to: "RMSNorm, LayerNorm, activations, most elementwise ops"
+
+size_threshold:
+  name: "Small Tensor Guard"
+  description: |
+    OpenMP fork/join costs ~10-50us. For small tensors, serial is faster.
+  code: |
+    if (num_tokens >= OMP_THRESHOLD) {
+        #pragma omp parallel for
+        for (int i = 0; i < num_tokens; ++i) { ... }
+    } else {
+        for (int i = 0; i < num_tokens; ++i) { ... }
+    }
+  tuning: |
+    OMP_THRESHOLD depends on hidden_size:
+    - hidden_size >= 4096: threshold = 4 (parallel pays off quickly)
+    - hidden_size >= 1024: threshold = 8
+    - hidden_size < 1024:  threshold = 16-32
+
+reduction:
+  name: "Parallel Reduction"
+  description: |
+    For operations that accumulate across tokens (e.g., grad_weight in RMSNorm backward).
+  code: |
+    // Thread-local accumulators to avoid false sharing
+    #pragma omp parallel
+    {
+        std::vector<float> local_grad_w(hidden_size, 0.0f);
+        #pragma omp for
+        for (int i = 0; i < num_tokens; ++i) {
+            for (int j = 0; j < hidden_size; ++j) {
+                local_grad_w[j] += grad_output[i * hidden_size + j]
+                                 * normalized[i * hidden_size + j];
+            }
+        }
+        #pragma omp critical
+        for (int j = 0; j < hidden_size; ++j) {
+            grad_weight[j] += local_grad_w[j];
+        }
+    }
+  alternative: |
+    Use #pragma omp parallel for reduction(+:sum) for simple scalar reductions.
+    For array reductions, OpenMP 4.5+ supports array reduction but
+    compiler support varies — thread-local + critical is more portable.
+
+nested_parallelism:
+  name: "Avoid Nested Parallelism"
+  description: |
+    Do NOT nest #pragma omp parallel regions. This oversubscribes cores.
+  rule: |
+    If the outer loop is already parallel, the inner loop must be serial.
+    The inner loop uses SIMD instead of threads.
+
+environment:
+  name: "Environment Variables"
+  variables:
+    OMP_NUM_THREADS: "Number of threads (default: num cores)"
+    OMP_PROC_BIND: "Thread binding (close, spread, master)"
+    OMP_SCHEDULE: "Loop scheduling (static, dynamic, guided)"
+  recommended: |
+    # For benchmarking:
+    export OMP_NUM_THREADS=$(nproc)
+    export OMP_PROC_BIND=close
+    export OMP_SCHEDULE=static
+
+    # Pin benchmarks to a single NUMA node (bind by node, so it adapts to any
+    # cores-per-node). Cross-socket traffic otherwise makes timings noisy, and on
+    # big-L3 Xeons a cache-resident working set produces misleading speedups.
+    numactl --cpunodebind=0 --membind=0 python benchmark.py

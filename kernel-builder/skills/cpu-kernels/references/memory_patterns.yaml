@@ -1,0 +1,78 @@
+# Memory Optimization Patterns for CPU Kernels
+
+cache_blocking:
+  name: "Cache Blocking (Tiling)"
+  description: |
+    Partition the computation into tiles that fit in L1/L2 cache.
+    For GEMM: tile over M, N, K dimensions.
+    L1 is typically 48KB (data), L2 is 1.25-2MB, L3 is shared.
+  pattern: |
+    // Tile the K dimension to fit working set in L2
+    for (int64_t kb = 0; kb < K; kb += BLOCK_K) {
+        int64_t kb_size = std::min(BLOCK_K, K - kb);
+        // Process tile [M, kb:kb+BLOCK_K] x [kb:kb+BLOCK_K, N]
+    }
+  tuning: |
+    BLOCK_K sizing rule of thumb:
+    - A tile (BLOCK_M × BLOCK_K) + B tile (BLOCK_K × BLOCK_N) should fit in L2
+    - For bf16: each element is 2 bytes
+    - Example: BLOCK_M=32, BLOCK_N=32, BLOCK_K=128
+      → 32×128×2 + 128×32×2 = 16KB, fits easily in L1
+
+prefetch:
+  name: "Software Prefetch"
+  description: |
+    Use _mm_prefetch to bring data into cache before it's needed.
+    Most effective for streaming access patterns (sequential reads).
+  hints:
+    - "_MM_HINT_T0: prefetch to L1 (closest, smallest)"
+    - "_MM_HINT_T1: prefetch to L2"
+    - "_MM_HINT_T2: prefetch to L3"
+    - "_MM_HINT_NTA: non-temporal (bypass cache, for write-only streams)"
+  guideline: |
+    Prefetch distance = memory_latency × bandwidth / element_size
+    Typical: 4-16 cache lines ahead for L1, 64+ for L2
+
+alignment:
+  name: "Memory Alignment"
+  description: |
+    PyTorch's memory allocator guarantees 64-byte alignment for the BASE pointer of a tensor.
+    However, tensor views and slicing (e.g., `tensor[1:]`, or indexing specific attention heads) add offsets that frequently break 64-byte alignment.
+    Using aligned instructions (`_mm512_load_ps`) on unaligned addresses causes an immediate hardware SEGFAULT.
+    Furthermore, on modern Intel CPUs (Skylake/AVX-512 and newer), unaligned instructions (`_mm512_loadu_ps`) have ZERO performance penalty when the address happens to be aligned.
+  rules:
+    - "ALWAYS use unaligned loads/stores (_mm512_loadu_*, _mm512_storeu_*). Kernels-community exclusively uses `loadu`; zero `load` instructions exist in the repo."
+    - "For local stack buffers, use `alignas(64)` so the CPU hardware can take the optimal fast-path when your `loadu` instructions read from them."
+    - "For heap buffers, use `aligned_alloc(64, size)` or `posix_memalign`."
+
+numa:
+  name: "NUMA Awareness"
+  description: |
+    On multi-socket systems, memory access across NUMA nodes is 2-3x slower.
+    PyTorch allocates on the current NUMA node by default.
+  rules:
+    - "Use numactl --cpunodebind=0 --membind=0 for single-socket benchmarking"
+    - "For production, let the PyTorch allocator handle NUMA placement"
+    - "Avoid cross-socket OpenMP thread migration: OMP_PROC_BIND=close"
+
+streaming_store:
+  name: "Non-Temporal Stores"
+  description: |
+    For large output buffers that won't be read back soon, use streaming stores
+    to bypass cache and avoid polluting L1/L2.
+  code: |
+    _mm512_stream_si512((__m512i*)(output + j), result);
+  warning: |
+    Only use for large, sequential, write-only buffers.
+    Requires 64-byte alignment. _mm_sfence() after all stores.
+
+data_layout:
+  name: "Data Layout for SIMD"
+  description: |
+    SIMD works best on contiguous, stride-1 data.
+    Ensure tensors are contiguous before kernel entry.
+  pattern: |
+    // In torch_binding.cpp or kernel entry:
+    auto input_c = input.contiguous();
+    auto weight_c = weight.contiguous();
+    // Then pass data_ptr<scalar_t>() to the C++ kernel

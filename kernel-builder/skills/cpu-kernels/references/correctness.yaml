@@ -1,0 +1,148 @@
+# Correctness Constraints for CPU Kernels
+#
+# CRITICAL: Read this file before writing any CPU kernel.
+# Violating these constraints causes SEGFAULT, wrong results, or silent corruption.
+
+alignment:
+  - id: unaligned_simd_load
+    severity: critical
+    description: |
+      Use UNALIGNED load/store intrinsics unless you guarantee alignment.
+      Aligned intrinsics (_mm512_load_ps) will SEGFAULT on unaligned data.
+    rule: "Default to _mm512_loadu_ps / _mm512_storeu_si512 (note the 'u')"
+    exception: "Use aligned versions only if you allocate with posix_memalign or torch's aligned allocator AND the stride guarantees alignment"
+
+  - id: stack_alignment
+    severity: high
+    description: |
+      AVX512 requires 64-byte stack alignment for local __m512 variables.
+      Most compilers handle this, but be careful with alloca or VLAs.
+    rule: "Use __attribute__((aligned(64))) for stack arrays holding SIMD data"
+
+tail_handling:
+  - id: vector_width_remainder
+    severity: critical
+    description: |
+      When hidden_size is not divisible by the SIMD vector width (16 for AVX512 fp32,
+      32 for AVX512 bf16), the tail elements must be handled separately.
+    patterns:
+      - name: "Scalar tail loop"
+        code: |
+          int j = 0;
+          for (; j + VEC_ELEM_NUM <= hidden_size; j += VEC_ELEM_NUM) {
+              // SIMD loop
+          }
+          for (; j < hidden_size; ++j) {
+              // Scalar fallback for remaining elements
+          }
+      - name: "Masked SIMD"
+        code: |
+          __mmask16 tail_mask = (1 << (hidden_size % 16)) - 1;
+          _mm512_mask_storeu_ps(out + j, tail_mask, result);
+      - name: "TORCH_CHECK assertion"
+        code: |
+          // If the kernel ONLY supports aligned sizes, assert early:
+          TORCH_CHECK(hidden_size % VEC_ELEM_NUM == 0,
+              "hidden_size must be divisible by ", VEC_ELEM_NUM);
+
+floating_point:
+  - id: ftz_daz
+    severity: medium
+    description: |
+      PyTorch may set FTZ (Flush-to-Zero) and DAZ (Denormals-Are-Zero) mode.
+      Do NOT assume IEEE 754 denormal behavior in your kernel.
+      This affects near-zero values in RMSNorm variance computation.
+    rule: "Accumulate in fp32 to minimize precision loss. Add epsilon BEFORE rsqrt."
+
+  - id: bf16_precision
+    severity: medium
+    description: |
+      bf16 has only 7 bits of mantissa (vs 23 for fp32). Operations like
+      pow(2), mean, rsqrt accumulate error quickly in bf16.
+    rule: |
+      Always accumulate in fp32, convert to bf16 only for final store.
+      Use atol=1e-2, rtol=1e-2 for correctness checks against fp32 reference.
+
+  - id: fp32_accumulation
+    severity: high
+    description: |
+      _mm512_dpbf16_ps takes bf16 inputs but accumulates in fp32.
+      This is correct. Do NOT try to accumulate in bf16.
+    rule: "Accumulator type must be __m512 (fp32), not __m512bh (bf16)"
+
+openmp:
+  - id: omp_small_tensor_overhead
+    severity: high
+    description: |
+      OpenMP thread fork/join has non-trivial overhead (~10-50us).
+      For small tensors, this overhead exceeds the computation time.
+    rule: |
+      Guard parallel regions with a size threshold:
+        if (num_tokens > OMP_THRESHOLD) {
+            #pragma omp parallel for
+            for (...) { ... }
+        } else {
+            for (...) { ... }  // serial
+        }
+    typical_threshold: "4-16 tokens for RMSNorm, depends on hidden_size"
+
+  - id: omp_false_sharing
+    severity: medium
+    description: |
+      When threads write to adjacent memory locations, cache line bouncing
+      (false sharing) kills performance. Each cache line is 64 bytes.
+    rule: "Ensure each thread writes to a separate cache line. For reductions, use thread-local accumulators."
+
+  - id: omp_num_threads
+    severity: low
+    description: |
+      Respect OMP_NUM_THREADS environment variable. Do NOT hardcode thread count.
+    rule: "Let OpenMP determine thread count unless benchmarking specific configurations"
+
+cpuid:
+  - id: os_support_check
+    severity: critical
+    description: |
+      A CPU may support AVX512 but the OS may not enable the state save/restore.
+      This happens on WSL1, some VMs, and containers without proper CPU passthrough.
+      Using AVX512 without OS support causes SIGILL.
+    rule: |
+      Always check XCR0 register via XGETBV after checking CPUID.
+      See references/runtime_dispatch.yaml for the full pattern.
+
+  - id: feature_caching
+    severity: low
+    description: |
+      CPUID is slow (~100 cycles). Cache results in static variables.
+    rule: |
+      static bool supported = checkAVX512();
+      return supported;  // checked once, cached forever
+
+build_system:
+  - id: separate_translation_units
+    severity: critical
+    description: |
+      The dispatcher (*_cpu.cpp) must be compiled WITHOUT -mavx* flags.
+      SIMD implementations must be in SEPARATE .cpp files with their own flags.
+      Mixing flags in one translation unit causes the compiler to emit
+      AVX512 instructions even in the "generic" code path.
+    rule: "One [kernel.*] section per SIMD tier in build.toml, each with its own cxx-flags"
+
+  - id: include_guards
+    severity: medium
+    description: |
+      Headers shared between translation units (cpu_features.hpp, cpu_types_*.hpp)
+      must use #pragma once or include guards. Without them, the linker sees
+      duplicate symbols from separate SIMD compilation units.
+    rule: "Use #pragma once at the top of every .hpp file"
+
+  - id: namespace_isolation
+    severity: medium
+    description: |
+      Each SIMD tier should be in its own namespace to avoid ODR violations.
+      The dispatcher calls into each namespace explicitly.
+    rule: |
+      namespace my_kernel_cpu {
+          namespace avx2 { void impl(...); }
+          namespace avx512 { void impl(...); }
+      }

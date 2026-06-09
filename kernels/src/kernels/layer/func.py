@@ -27,8 +27,9 @@ class FuncRepository:
     """
     Repository and name of a function for kernel mapping.
 
-    **Warning**: `FuncRepository` is deprecated and will be removed in kernels
-    0.17. Use [`~kernels.LayerRepository`] instead.
+    > [!WARNING]
+    > `FuncRepository` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.LayerRepository`] instead.
 
     Args:
         repo_id (`str`):
@@ -135,8 +136,9 @@ class LocalFuncRepository:
     """
     Repository and function name from a local directory for kernel mapping.
 
-    **Warning**: `LocalFuncRepository` is deprecated and will be removed in kernels
-    0.17. Use [`~kernels.LocalLayerRepository`] instead.
+    > [!WARNING]
+    > `LocalFuncRepository` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.LocalLayerRepository`] instead.
 
     Args:
         repo_path (`Path`):
@@ -203,8 +205,9 @@ def use_kernel_func_from_hub(func_name: str):
     kernelized, it **must** be a member of another `torch.nn.Module` that is
     part of the model (see the example).
 
-    **Warning**: `use_kernel_func_from_hub` is deprecated and will be removed in kernels
-    0.17. Use [`~kernels.use_kernel_forward_from_hub`] instead.
+    > [!WARNING]
+    > `use_kernel_func_from_hub` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.use_kernel_forward_from_hub`] instead.
 
     Args:
         func_name (`str`):
@@ -256,8 +259,9 @@ class LockedFuncRepository:
     In contrast to `FuncRepository`, this class uses repositories that
     are locked inside a project.
 
-    **Warning**: `LockedFuncRepository` is deprecated and will be removed in kernels
-    0.17. Use [`~kernels.LockedLayerRepository`] instead.
+    > [!WARNING]
+    > `LockedFuncRepository` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.LockedLayerRepository`] instead.
 
     Args:
         repo_id (`str`): The Hub repository containing the function.

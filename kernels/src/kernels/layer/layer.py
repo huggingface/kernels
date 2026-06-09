@@ -403,7 +403,6 @@ def use_kernelized_func(*args: Callable):
                 if name is None:
                     raise ValueError(f"Could not infer kernel function name for {fn!r}")
 
-                # Do not register as submodule! Hide it behind a dict to be removed later after registering it
                 hidden_kernels[name] = fn
 
         cls.__init__ = new_init

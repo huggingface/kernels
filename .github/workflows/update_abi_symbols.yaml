@@ -1,0 +1,50 @@
+name: Update ABI symbol files
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Refresh vendored ABI symbol files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Refresh ABI symbol files
+        run: python3 scripts/update_abi_symbols.py
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          commit-message: "kernel-abi-check: refresh vendored ABI symbol files"
+          title: "kernel-abi-check: refresh vendored ABI symbol files"
+          body: |
+            The vendored ABI symbol files in `kernel-abi-check` are out of date
+            with their upstream sources. This PR was opened automatically by the
+            `update_abi_symbols` workflow.
+
+            Sources:
+            - [CPython `stable_abi.toml`](https://raw.githubusercontent.com/python/cpython/main/Misc/stable_abi.toml)
+            - [auditwheel `manylinux-policy.json`](https://raw.githubusercontent.com/pypa/auditwheel/main/src/auditwheel/policy/manylinux-policy.json)
+            - [PyTorch `shim_function_versions.txt`](https://raw.githubusercontent.com/pytorch/pytorch/refs/heads/main/torch/csrc/stable/c/shim_function_versions.txt)
+          branch: update-abi-symbols
+          delete-branch: true
+          add-paths: |
+            kernel-abi-check/src/python_abi/stable_abi.toml
+            kernel-abi-check/src/manylinux/manylinux-policy.json
+            kernel-abi-check/src/torch_stable_abi/shim_function_versions.txt

@@ -307,7 +307,7 @@ For a self-contained, runnable example that demonstrates all patterns above:
 
 ```bash
 cd examples/ltx_video
-uv pip install -e .  # Build kernels
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
 python ../../.claude/skills/h100-diffusers-kernels/references/ltx_kernel_injection_example.py
 ```
 

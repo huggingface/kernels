@@ -215,8 +215,17 @@ my-kernel/
 
 ```toml
 [general]
-name = "my_kernel"
+# Dash-separated lowercase name (underscores are rejected by check-config);
+# the Python package dir is torch-ext/<name with dashes -> underscores>.
+name = "my-kernel"
 backends = ["cuda"]
+version = 1
+license = "Apache-2.0"
+
+[general.hub]
+# Hub repository to upload to (used by `kernel-builder build-and-upload`);
+# together with `version` this selects the version branch (e.g. v1).
+repo-id = "my-username/my-kernel"
 
 [torch]
 src = [
@@ -234,6 +243,8 @@ cuda-capabilities = ["7.5", "8.0", "9.0"]  # T4, A100, H100
 ```
 
 ### Torch Bindings
+
+> This is the **only** supported binding pattern. Do NOT use pybind11 (`PYBIND11_MODULE`, `#include <torch/extension.h>`) or `TORCH_LIBRARY` with a hardcoded namespace — both fail under kernel-builder's ABI3 build. See "Hard Constraints" in SKILL.md.
 
 **torch_binding.h:**
 ```cpp
@@ -277,17 +288,20 @@ def forward(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor
 
 **Using kernel-builder (Nix):**
 ```bash
-# Build for all platforms
-nix run github:huggingface/kernel-builder -- build
+# Build the kernel locally (run inside the kernel directory)
+kernel-builder build-and-copy -L
 
-# Push to Hub
-huggingface-cli upload my-username/my-kernel ./dist
+# Build and upload to the Hub in one go
+kernel-builder build-and-upload
 ```
 
-**Using pip (local development):**
+The target repository is determined by the `repo-id` and `version` fields in `build.toml` (see above). Uploads go to a **`kernel`-type** Hub repository (the first-class kernel repository type), not a model repo — the owning user or org needs kernel-creation access, requested via [huggingface.co/settings/account](https://huggingface.co/settings/account) ("Request Kernels Creation"). If a `CARD.md` template is present in the source repo, it is filled and uploaded as the `README.md`.
+
+**Editable install for local development** (never hand-write a `setup.py` — `torch.utils.cpp_extension`/pybind11 cannot build under ABI3):
 ```bash
-pip install kernel-builder
-kernel-builder build
+kernel-builder create-pyproject -f
+pip install wheel
+pip install --no-build-isolation -e .
 ```
 
 ## Available Community Kernels

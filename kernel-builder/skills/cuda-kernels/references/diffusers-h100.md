@@ -42,7 +42,7 @@ Use this skill when:
 
 A complete working example is available at `examples/ltx_video/`. This demonstrates:
 - Custom CUDA kernels (RMSNorm, RoPE 3D, GEGLU, AdaLN)
-- Build system setup with setup.py, build.toml, and flake.nix
+- Build system setup with build.toml and flake.nix
 - PyTorch C++ bindings and Python API
 - Benchmarking script for comparing optimized vs baseline performance
 
@@ -132,7 +132,7 @@ examples/ltx_video/                  # Complete working example
 ├── torch-ext/                      # PyTorch bindings
 ├── generate_video.py               # Full benchmark script
 ├── benchmark_rmsnorm.py            # Isolated kernel benchmark
-└── setup.py                        # pip install -e .
+└── build.toml                      # kernel-builder build configuration
 ```
 
 ## H100 Architecture Reference
@@ -225,21 +225,34 @@ All kernels support three precision modes:
 nix run .#build-and-copy --max-jobs 2 --cores 8 -L
 ```
 
-### With pip/uv
+### Editable install for local development
+Never hand-write a `setup.py` (it leads to `torch.utils.cpp_extension`/pybind11, which cannot build under ABI3). Let kernel-builder generate the project files:
 ```bash
-uv pip install -e .
+kernel-builder create-pyproject -f
+pip install wheel
+pip install --no-build-isolation -e .
 ```
 
 ### build.toml Configuration
 ```toml
 [general]
-name = "ltx_kernels"
+# Dash-separated lowercase name (underscores are rejected); license required.
+name = "ltx-kernels"
 backends = ["cuda"]
+version = 1
+license = "Apache-2.0"
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h"
+]
 
 [kernel.your_kernel]
 backend = "cuda"
 src = ["kernel_src/your_kernel.cu"]
-cuda-capabilities = ["9.0"]
+depends = ["torch"]
+# Only constrain cuda-capabilities when the kernel truly requires it.
 ```
 
 ## Diffusers Integration

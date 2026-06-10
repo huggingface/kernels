@@ -383,7 +383,7 @@ For a self-contained, runnable example:
 
 ```bash
 cd examples/ltx_video
-uv pip install -e .  # Build kernels
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
 python ../../.claude/skills/h100-diffusers-kernels/scripts/transformers_injection_example.py
 ```
 

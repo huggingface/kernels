@@ -439,6 +439,6 @@ For complete, production-ready implementations, see `examples/ltx_video/`:
 **Build and test:**
 ```bash
 cd examples/ltx_video
-uv pip install -e .
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
 uv run python generate_video.py --num-frames 13 --steps 20
 ```

@@ -272,10 +272,16 @@ def demo_publishing_info():
           ├── torch_binding.h
           └── my_kernel/__init__.py
 
-   2. Configure build.toml:
+   2. Configure build.toml (name must be dash-separated, license required;
+      the project dir must be a committed git repo):
       [general]
-      name = "my_kernel"
+      name = "my-kernel"
       backends = ["cuda"]
+      version = 1
+      license = "Apache-2.0"
+
+      [general.hub]
+      repo-id = "my-username/my-kernel"
 
       [torch]
       src = ["torch-ext/torch_binding.cpp", "torch-ext/torch_binding.h"]
@@ -286,10 +292,14 @@ def demo_publishing_info():
       depends = ["torch"]
       cuda-capabilities = ["7.5", "8.0", "9.0"]
 
-   3. Build and publish:
-      $ pip install kernel-builder
-      $ kernel-builder build
-      $ huggingface-cli upload my-username/my-kernel ./dist
+   3. Build and publish (bindings must use TORCH_LIBRARY_EXPAND, never pybind11):
+      $ kernel-builder build-and-copy -L   # local build into build/
+      $ kernel-builder build-and-upload    # build + upload to the Hub in one go
+
+      The target repo comes from `repo-id` under [general.hub] and `version`
+      under [general] in build.toml. Uploads go to a kernel-type Hub repo
+      (not a model repo); the owning user/org needs kernel-creation access
+      ("Request Kernels Creation" at hf.co/settings/account).
 
    See: https://huggingface.co/docs/kernels
    """)

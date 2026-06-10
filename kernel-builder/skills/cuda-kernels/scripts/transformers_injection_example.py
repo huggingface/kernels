@@ -13,7 +13,7 @@ Key lessons:
 
 Usage:
     cd examples/ltx_video
-    uv pip install -e .  # Build kernels first
+    nix run .#build-and-copy -L  # Build kernels first (kernel-builder)
     python ../../.claude/skills/h100-diffusers-kernels/scripts/transformers_injection_example.py
 """
 

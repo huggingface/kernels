@@ -36,6 +36,14 @@
 
 [[autodoc]] kernels.Device
 
+### CUDAProperties
+
+[[autodoc]] kernels.CUDAProperties
+
+### ROCMProperties
+
+[[autodoc]] kernels.ROCMProperties
+
 ### Mode
 
 [[autodoc]] kernels.Mode

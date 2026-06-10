@@ -458,4 +458,4 @@ cpu-kernels/
 
 ## Acknowledgments
 
-The methodology of this skill — the YAML knowledge base, the benchmark/validation harnesses, and the branching trial-manager optimization loop — was adapted from the [xpu-kernels skill](../xpu-kernels/SKILL.md) built by the Intel XPU kernels team, which is itself based on [Xe-Forge](https://github.com/IntelLabs/Xe-Forge) (IntelLabs). Thanks to the original authors for a solid foundation to build on.
+The methodology of this skill — the YAML knowledge base, the benchmark/validation harnesses, and the branching trial-manager optimization loop — was adapted from the [xpu-kernels skill](../xpu-kernels/SKILL.md) built by a group of Intel AI researchers, the IntelLabs team behind [Xe-Forge](https://github.com/IntelLabs/Xe-Forge), where the methodology originates. Thanks to the original authors for a solid foundation to build on.

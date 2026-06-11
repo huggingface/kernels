@@ -238,6 +238,16 @@ impl PyMetadata {
             })
     }
 
+    /// Parse `metadata.json` from JSON in a byte array.
+    ///
+    /// Raises `ValueError` on any parse error.
+    #[staticmethod]
+    fn from_bytes(bytes: &[u8]) -> PyResult<Self> {
+        Metadata::from_bytes(bytes)
+            .map(Into::into)
+            .map_err(|err| PyValueError::new_err(format!("Cannot parse metadata: {err:#}")))
+    }
+
     #[getter]
     fn id(&self) -> &str {
         &self.id

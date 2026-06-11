@@ -209,6 +209,15 @@ class Metadata:
         """
         ...
 
+    @staticmethod
+    def from_bytes(bytes: bytes) -> "Metadata":
+        """Parse ``metadata.json`` from JSON in a byte array.
+
+        Raises:
+            ValueError: On any parse error.
+        """
+        ...
+
     @property
     def id(self) -> str: ...
     @property

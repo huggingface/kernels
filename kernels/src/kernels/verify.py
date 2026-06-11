@@ -172,11 +172,13 @@ def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None
     verifier = Verifier.production()
     verify_policy = policy.AnyOf(policies)
 
+    metadata_bytes = metadata_path.read_bytes()
+
     # WARNING: always verify the metadata before reading it, this avoids
     #          that a malicious modification can attack the JSON parser.
     try:
         verifier.verify_artifact(
-            metadata_path.read_bytes(),
+            metadata_bytes,
             signature_bundle,
             verify_policy,
         )
@@ -184,7 +186,7 @@ def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None
         return VerificationResult.SignatureVerificationFailure(reason=str(e))
 
     try:
-        metadata = Metadata.read_from_file(metadata_path)
+        metadata = Metadata.from_bytes(metadata_bytes)
     except (OSError, ValueError) as e:
         return VerificationResult.MetadataInvalid(reason=str(e))
 

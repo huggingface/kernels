@@ -12,9 +12,9 @@ Key lessons:
 4. Use Flash Attention 2 for attention optimization instead of custom processors
 
 Usage:
-    cd examples/ltx_video
+    cd <your-kernel-project>     # kernel-builder project with your kernels
     nix run .#build-and-copy -L  # Build kernels first (kernel-builder)
-    python ../../.claude/skills/h100-diffusers-kernels/scripts/transformers_injection_example.py
+    python path/to/skills/cuda-kernels/scripts/transformers_injection_example.py
 """
 
 import sys

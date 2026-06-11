@@ -563,6 +563,16 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME)
 ```
 
+For kernels with multiple backends in one `build.toml`, guard each `ops.impl`
+with the backend macro kernel-builder defines, so the same binding file
+compiles for every variant:
+
+```cpp
+#if defined(CUDA_KERNEL) || defined(ROCM_KERNEL)
+  ops.impl("your_kernel_forward", torch::kCUDA, &your_kernel_forward);
+#endif
+```
+
 ## Template 5: Python API
 
 ```python
@@ -648,28 +658,34 @@ def test_your_kernel_with_preallocated():
 
 ## Working Example Reference
 
-For complete, working implementations of all these templates, see:
+For complete, working implementations following these templates, see the
+examples in the kernels repo (`examples/kernels/`, also on
+[GitHub](https://github.com/huggingface/kernels/tree/main/examples/kernels)):
 
 ```
-examples/ltx_video/
-├── kernel_src/
-│   ├── rmsnorm.cu      # Row-wise reduction pattern
-│   ├── rope.cu         # Element-wise 1D/3D RoPE
-│   ├── geglu.cu        # Element-wise gated activation
-│   └── adaln.cu        # Combined reduction + element-wise
-├── torch-ext/
-│   ├── torch_binding.cpp
-│   └── ltx_kernels/__init__.py
+examples/kernels/relu/
 ├── build.toml
 ├── flake.nix
-└── generate_video.py   # Usage with diffusers
+├── CARD.md
+├── relu_cuda/relu.cu             # CUDA kernel source
+├── torch-ext/
+│   ├── torch_binding.h / .cpp    # TORCH_LIBRARY_EXPAND bindings
+│   └── relu/__init__.py          # Python API (+ layers/)
+└── tests/test_relu.py
+```
+
+`relu-backprop-compile/` additionally shows backward-pass registration and
+`torch.compile` fake ops. To scaffold a fresh project with this exact layout:
+
+```bash
+kernel-builder init --name my-username/my-kernel
 ```
 
 Build and test with:
 ```bash
-cd examples/ltx_video
+cd examples/kernels/relu
 nix run .#build-and-copy -L
-python -c "from ltx_kernels import rmsnorm, geglu, rope_3d; print('OK')"
+nix run .#ci-test
 ```
 
 For an editable dev install, generate the project files with kernel-builder (never hand-write a `setup.py`):

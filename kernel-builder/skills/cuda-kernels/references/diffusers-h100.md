@@ -40,11 +40,11 @@ Use this skill when:
 
 ## Working Example
 
-A complete working example is available at `examples/ltx_video/`. This demonstrates:
-- Custom CUDA kernels (RMSNorm, RoPE 3D, GEGLU, AdaLN)
+Complete working examples ship with the kernels repo under `examples/kernels/` (e.g. `relu/`, `relu-backprop-compile/`). They demonstrate:
+- Custom CUDA kernels with the canonical project layout
 - Build system setup with build.toml and flake.nix
-- PyTorch C++ bindings and Python API
-- Benchmarking script for comparing optimized vs baseline performance
+- PyTorch C++ bindings (`TORCH_LIBRARY_EXPAND`) and Python API
+- Kernel tests runnable via `nix run .#ci-test`
 
 ## Benchmarking Kernels
 
@@ -114,7 +114,7 @@ The vectorized RMSNorm kernel achieves **2.67x average speedup** over PyTorch ba
 ## Project Structure
 
 ```
-.claude/skills/h100-diffusers-kernels/
+skills/cuda-kernels/
 ├── scripts/
 │   ├── benchmark_example.py        # End-to-end video generation benchmark
 │   ├── benchmark_rmsnorm.py        # Isolated RMSNorm micro-benchmark
@@ -126,13 +126,12 @@ The vectorized RMSNorm kernel achieves **2.67x average speedup** over PyTorch ba
 │   └── h100-optimization-guide.md  # H100 optimization deep dive
 └── SKILL.md                        # This file
 
-examples/ltx_video/                  # Complete working example
-├── kernel_src/
-│   └── rmsnorm.cu                  # Vectorized RMSNorm kernel (2.67x faster)
-├── torch-ext/                      # PyTorch bindings
-├── generate_video.py               # Full benchmark script
-├── benchmark_rmsnorm.py            # Isolated kernel benchmark
-└── build.toml                      # kernel-builder build configuration
+examples/kernels/relu/               # Canonical working example (kernels repo)
+├── build.toml                      # kernel-builder build configuration
+├── flake.nix                       # Nix build entry point
+├── relu_cuda/relu.cu               # CUDA kernel source
+├── torch-ext/                      # TORCH_LIBRARY_EXPAND bindings + Python API
+└── tests/                          # Kernel tests
 ```
 
 ## H100 Architecture Reference
@@ -419,4 +418,4 @@ def _(out, input, weight, eps):
 - [troubleshooting.md](references/troubleshooting.md) - Common issues and solutions
 - [kernel-templates.md](references/kernel-templates.md) - Complete kernel templates
 - [h100-optimization-guide.md](references/h100-optimization-guide.md) - Deep dive on H100 optimizations
-- [examples/ltx_video/](../../../examples/ltx_video/) - Full LTX-Video example directory
+- [examples/kernels/relu/](../../../../examples/kernels/relu/) - Canonical working kernel example

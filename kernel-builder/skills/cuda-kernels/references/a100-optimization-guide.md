@@ -309,12 +309,12 @@ ncu --set full -o a100_metrics.ncu-rep python your_script.py
 ## Working Example
 
 ```bash
-cd examples/ltx_video
+cd <your-kernel-project>
 
-# Build for A100
-# Ensure build.toml includes cuda-capabilities = ["8.0"]
+# Leave cuda-capabilities unspecified in build.toml unless the kernel
+# truly requires specific architectures (A100 is sm_80).
 nix run .#build-and-copy -L  # Build kernels with kernel-builder
 
-# Run benchmark
-python generate_video.py --use-optimized-kernels
+# Run the kernel's test suite
+nix run .#ci-test
 ```

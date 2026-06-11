@@ -156,11 +156,10 @@ Use this skill when:
 
 ## Working Example
 
-A complete working example is available at `examples/ltx_video/`. This demonstrates:
-- Custom CUDA kernels (RMSNorm, RoPE 3D, GEGLU, AdaLN)
-- Build system setup with build.toml and flake.nix
-- PyTorch C++ bindings (`TORCH_LIBRARY_EXPAND`) and Python API
-- Benchmarking script for comparing optimized vs baseline performance
+Complete working examples ship with the kernels repo under `examples/kernels/` (also at [github.com/huggingface/kernels](https://github.com/huggingface/kernels/tree/main/examples/kernels)):
+- `relu/` — the canonical minimal kernel: build.toml, flake.nix, `TORCH_LIBRARY_EXPAND` bindings, Python API, `layers/`, tests
+- `relu-backprop-compile/` — backward pass + `torch.compile` support (fake-op registration)
+- `silu-and-mul/` — activation kernel following the same layout
 
 ## Benchmarking Kernels
 
@@ -248,13 +247,15 @@ The vectorized RMSNorm kernel achieves **2.67x average speedup** over PyTorch ba
 │   └── t4-optimization-guide.md          # T4 (Turing) optimization deep dive
 └── SKILL.md                              # This file
 
-examples/ltx_video/                  # Complete working example
-├── kernel_src/
-│   └── rmsnorm.cu                  # Vectorized RMSNorm kernel (2.67x faster)
-├── torch-ext/                      # PyTorch bindings (TORCH_LIBRARY_EXPAND)
-├── generate_video.py               # Full benchmark script
-├── benchmark_rmsnorm.py            # Isolated kernel benchmark
-└── build.toml                      # kernel-builder build configuration
+examples/kernels/relu/               # Canonical working example (kernels repo)
+├── build.toml                      # kernel-builder build configuration
+├── flake.nix                       # Nix build entry point
+├── CARD.md                         # Kernel card template (becomes README.md)
+├── relu_cuda/relu.cu               # CUDA kernel source
+├── torch-ext/
+│   ├── torch_binding.h / .cpp      # TORCH_LIBRARY_EXPAND bindings
+│   └── relu/__init__.py            # Python API (+ optional layers/)
+└── tests/test_relu.py              # Kernel tests (nix run .#ci-test)
 ```
 
 ## GPU Architecture Reference
@@ -356,6 +357,16 @@ All kernels support three precision modes:
 
 ## Building Kernels
 
+### Scaffold a new kernel project
+
+Start new kernels with `kernel-builder init` instead of creating files by hand — it generates the compliant layout in one shot:
+
+```bash
+kernel-builder init --name my-username/my-kernel
+```
+
+This creates `build.toml` (valid dash-separated name, license, `[general.hub] repo-id` already wired), `flake.nix`, `torch-ext/` with compilable `torch_binding.{h,cpp}` and the Python package, a `<name>_cuda/` kernel source dir, `tests/`, `benchmarks/`, `example.py`, and `CARD.md` — and it initializes a git repository (required for builds). Then replace the stub kernel with your own sources and update the `src` lists in `build.toml`.
+
 ### With Nix (Recommended)
 ```bash
 nix run .#build-and-copy --max-jobs 2 --cores 8 -L
@@ -418,8 +429,9 @@ Load pre-compiled, optimized kernels directly from HuggingFace Hub without local
 ```python
 from kernels import get_kernel, has_kernel
 
-# Check availability and load
-if has_kernel("kernels-community/activation"):
+# Check availability and load — Hub loads REQUIRE version= (or revision=);
+# a bare get_kernel(repo_id) raises ValueError.
+if has_kernel("kernels-community/activation", version=1):
     activation = get_kernel("kernels-community/activation", version=1)
 
     # Use the kernel
@@ -429,9 +441,11 @@ if has_kernel("kernels-community/activation"):
 ```
 
 **Key functions:**
-- `get_kernel(repo_id, version=None)` - Download and load kernel from Hub
-- `has_kernel(repo_id)` - Check if compatible build exists
-- `get_local_kernel(path)` - Load from local directory (development)
+- `get_kernel(repo_id, version=N)` - Download and load kernel from Hub; `version=` (major version) or `revision=` (branch/tag/commit) is **required**
+- `has_kernel(repo_id, version=N)` - Check if compatible build exists
+- `get_local_kernel(Path("path/to/kernel-project"))` - Load a local build (looks in `<path>` and `<path>/build`) — use during development
+
+**Testing local builds through the `get_kernel()` code path:** set `LOCAL_KERNELS="org/name=/path/to/kernel-project"` and call `get_kernel("org/name")` unchanged — the override short-circuits the Hub entirely (no download, no version needed), so integration code can be tested verbatim against a local build.
 
 **Popular community kernels:**
 - `kernels-community/activation` - GELU, SiLU, etc.
@@ -641,7 +655,7 @@ def _(out, input, weight, eps):
 ### Reference
 - [troubleshooting.md](references/troubleshooting.md) - Common issues and solutions
 - [kernel-templates.md](references/kernel-templates.md) - Complete kernel templates
-- [examples/ltx_video/](../../../examples/ltx_video/) - Full LTX-Video example directory
+- [examples/kernels/relu/](../../../examples/kernels/relu/) - Canonical working kernel example (bindings, layers, tests)
 
 ### External Resources
 - [HuggingFace Kernels Documentation](https://huggingface.co/docs/kernels/en/index)

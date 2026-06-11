@@ -38,7 +38,7 @@ from kernels import get_kernel
 # get_kernel(repo_id) raises ValueError — version= or revision= is required.
 kernel = get_kernel("kernels-community/activation", version=1)
 
-# Or pin an explicit revision (branch/tag/commit)
+# Or pin an explicit revision (branch/tag/commit). This is for exceptional cases, using `version` is strongly recommended.
 kernel = get_kernel("kernels-community/flash-attn", revision="v2.0.0")
 ```
 

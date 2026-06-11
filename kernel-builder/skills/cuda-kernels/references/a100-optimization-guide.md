@@ -312,7 +312,7 @@ ncu --set full -o a100_metrics.ncu-rep python your_script.py
 cd <your-kernel-project>
 
 # Leave cuda-capabilities unspecified in build.toml unless the kernel
-# truly requires specific architectures (A100 is sm_80).
+# truly requires specific architectures (A100 is `cuda-capabilities = ["8.0"]`).
 nix run .#build-and-copy -L  # Build kernels with kernel-builder
 
 # Run the kernel's test suite

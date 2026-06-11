@@ -621,6 +621,19 @@ def get_kernel_variants(
     Returns:
         `list[Decision]`: One `VariantAccepted` or `VariantRejected` per build variant
             in the repository, compatible variants first.
+
+    Example:
+        ```python
+         from kernels import get_kernel_variants, VariantAccepted
+
+        for decision in get_kernel_variants("kernels-community/activation", version=1):
+            name = decision.variant.variant_str
+            if isinstance(decision, VariantAccepted):
+                print(f"{name}: compatible")
+            else:
+                print(f"{name}: rejected ({decision.reason})")
+
+        ```
     """
     revision = select_revision_or_version(repo_id, revision=revision, version=version)
 

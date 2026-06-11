@@ -4,7 +4,17 @@ import os
 from enum import Enum
 from typing import Optional, final
 
-__all__ = ["Backend", "BackendInfo", "KernelName", "Metadata", "Version", "__version__"]
+__all__ = [
+    "Backend",
+    "BackendInfo",
+    "KernelName",
+    "Metadata",
+    "Digest",
+    "DigestViolation",
+    "DigestValidationError",
+    "Version",
+    "__version__",
+]
 
 __version__: str
 
@@ -100,6 +110,93 @@ class KernelName:
     def __hash__(self) -> int: ...
 
 @final
+class Digest:
+    """Source digest for a kernel build variant."""
+
+    @staticmethod
+    def hash_variant(algorithm: str, variant_path: os.PathLike[str] | str) -> "Digest":
+        """Hash the files in ``variant_path`` using ``algorithm``.
+
+        Args:
+            algorithm: Digest algorithm to use. One of ``"sha256"`` or ``"sha512"``.
+            variant_path: Path to the variant directory to hash.
+
+        Raises:
+            ValueError: If the algorithm is unknown.
+            OSError: If a file cannot be read or the directory cannot be walked.
+            RuntimeError: For other unexpected failures.
+        """
+        ...
+
+    @property
+    def algorithm(self) -> str:
+        """Digest algorithm used (e.g. ``"sha256"``)"""
+        ...
+
+    @property
+    def files(self) -> dict[str, str]:
+        """Mapping of relative file path to base64-encoded digest."""
+        ...
+
+    def validate(self, other: "Digest") -> None:
+        """Validate ``other`` (actual) against this digest (expected).
+
+        Returns when the digests match. Otherwise, a `DigestValidationError` is
+        raised.
+
+        Raises:
+            DigestValidationError: If ``other`` deviates from this digest.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+
+class DigestViolation:
+    """A violation of a digest when validated against a reference digest.
+
+    This tagged union covers the types of violations. Each violation can be
+    converted to a string using ``str(violation)``.
+    """
+
+    @final
+    class MissingFile(DigestViolation):
+        """A file in the reference digest is missing from the digest."""
+
+        path: str
+        __match_args__ = ("path",)
+        def __new__(cls, path: str) -> "DigestViolation.MissingFile": ...
+
+    @final
+    class UnknownFile(DigestViolation):
+        """A file present in the digest is not part of the reference digest."""
+
+        path: str
+        __match_args__ = ("path",)
+        def __new__(cls, path: str) -> "DigestViolation.UnknownFile": ...
+
+    @final
+    class HashMismatch(DigestViolation):
+        """The hashes for the file differ."""
+
+        path: str
+        expected: str
+        got: str
+        __match_args__ = ("path", "expected", "got")
+        def __new__(
+            cls, path: str, expected: str, got: str
+        ) -> "DigestViolation.HashMismatch": ...
+
+    def __str__(self) -> str: ...
+
+class DigestValidationError(Exception):
+    """Raised by :meth:`Digest.validate` when a digest cannot be validated against the reference."""
+
+    @property
+    def violations(self) -> list[DigestViolation]:
+        """The individual digest violations."""
+        ...
+
+@final
 class Metadata:
     """Parsed ``metadata.json`` for a kernel build variant."""
 
@@ -128,4 +225,6 @@ class Metadata:
     def python_depends(self) -> list[str]: ...
     @property
     def backend(self) -> BackendInfo: ...
+    @property
+    def digest(self) -> Optional[Digest]: ...
     def __repr__(self) -> str: ...

@@ -319,6 +319,30 @@ class MyKernelLayer(torch.nn.Module):
         return out
 ```
 
+A layer's `forward` may also use member variables (e.g. `weight`, `bias`) that are defined by the layer it extends. Since the layer defines no constructor, these are not assigned here — but their types can be annotated as class-level type hints purely for type checking:
+
+```python
+# torch-ext/my_kernel/layers.py
+import torch
+from ._ops import ops
+
+class RMSNorm(torch.nn.Module):
+    has_backward: bool = True
+    can_torch_compile: bool = True
+
+    # Defined by the layer being extended; annotated for type checking.
+    weight: torch.Tensor
+    variance_epsilon: float
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # `rms_norm` is defined by the kernel.
+        return ops.rms_norm(
+            hidden_states,
+            self.weight,
+            self.variance_epsilon,
+        )
+```
+
 ```python
 # torch-ext/my_kernel/__init__.py
 from . import layers

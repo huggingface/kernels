@@ -204,7 +204,12 @@ def _validate_variant_dependencies(variant_path: Path) -> None:
     validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
 
 
-def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
+def _import_from_path(
+    variant_path: Path,
+    repo_info: RepoInfo | None = None,
+    *,
+    telemetry_repo_info: RepoInfo | None = None,
+) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
@@ -231,6 +236,12 @@ def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> 
         module=module,
         repo_info=repo_info,
     )
+
+    # Under the hood, we use `send_telemetry()` from `hugginggface_hub`.
+    # That already respect the env var concerning disabling telemetry
+    # and is also thread non-blocking.
+    _send_load_telemetry(metadata, repo_info or telemetry_repo_info)
+
     return module
 
 
@@ -687,7 +698,10 @@ def load_kernel(
             "applicable variant. Make sure it's downloaded locally via "
             "`kernels download <project>`."
         ) from e
-    return _import_from_path(variant_path)
+    return _import_from_path(
+        variant_path,
+        telemetry_repo_info=RepoInfo(repo_id=repo_id, revision=locked_sha),
+    )
 
 
 def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
@@ -715,7 +729,10 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
         validate_dependencies=True,
     )
 
-    return _import_from_path(variant_path)
+    return _import_from_path(
+        variant_path,
+        telemetry_repo_info=RepoInfo(repo_id=repo_id, revision=locked_sha),
+    )
 
 
 def _get_caller_locked_kernel(repo_id: str) -> str | None:
@@ -827,6 +844,65 @@ def _platform() -> str:
     return f"{cpu}-{os}"
 
 
+def _system_user_agent() -> dict[str, str]:
+    from . import __version__
+
+    python = ".".join(platform.python_version_tuple()[:2])
+    backend = _select_backend(None).variant_str
+    parts: dict[str, str] = {
+        "kernels": __version__,
+        "python": python,
+        "backend": backend,
+        "platform": _platform(),
+        "file_type": "kernel",
+    }
+
+    if has_torch:
+        import torch
+
+        parts["torch"] = torch.__version__
+    if has_tvm_ffi:
+        import tvm_ffi
+
+        parts["tvm-ffi"] = tvm_ffi.__version__
+
+    # Add glibc version if available
+    glibc = glibc_version()
+    if glibc is not None:
+        parts["glibc"] = glibc
+
+    return parts
+
+
+def _send_load_telemetry(metadata: Metadata, repo_info: RepoInfo | None) -> None:
+    try:
+        from huggingface_hub.utils import send_telemetry
+
+        from . import __version__
+
+        # `kernels_event/load` is set only on load pings and on no other Hub
+        # request, so loads can be separated from other requests by the UA
+        # alone. The kernel-specific fields that follow identify which kernel
+        # was loaded.
+        user_agent: dict[str, str] = {"kernels_event": "load"}
+        if repo_info is not None:
+            user_agent["kernel"] = repo_info.repo_id
+            user_agent["revision"] = repo_info.revision
+        user_agent["kernel_name"] = metadata.name.python_name
+        user_agent["kernel_version"] = str(metadata.version)
+        user_agent.update(_system_user_agent())
+
+        send_telemetry(
+            "kernels/loaded",
+            library_name="kernels",
+            library_version=__version__,
+            user_agent=user_agent,
+        )
+    except Exception:
+        # Telemetry is best-effort and must never interfere with loading a kernel.
+        pass
+
+
 def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
     """Returns an instance of HfApi with proper settings."""
 
@@ -843,31 +919,7 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
             parts.append(user_agent)
 
         # System info
-        python = ".".join(platform.python_version_tuple()[:2])
-        backend = _select_backend(None).variant_str
-        parts.extend(
-            [
-                f"kernels/{__version__}",
-                f"python/{python}",
-                f"backend/{backend}",
-                f"platform/{_platform()}",
-                "file_type/kernel",
-            ]
-        )
-
-        if has_torch:
-            import torch
-
-            parts.append(f"torch/{torch.__version__}")
-        if has_tvm_ffi:
-            import tvm_ffi
-
-            parts.append(f"tvm-ffi/{tvm_ffi.__version__}")
-
-        # Add glibc version if available
-        glibc = glibc_version()
-        if glibc is not None:
-            parts.append(f"glibc/{glibc}")
+        parts.extend(f"{k}/{v}" for k, v in _system_user_agent().items())
 
         user_agent_str = "; ".join(parts)
 

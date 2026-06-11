@@ -67,6 +67,8 @@
       title: Build Variants
     - local: builder/agents-guide
       title: Building kernels with agents
+    - local: builder/github-actions
+      title: GitHub Actions & HF Jobs
     - local: builder-cli
       title: Builder CLI Reference
   title: Building kernels

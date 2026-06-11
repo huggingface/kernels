@@ -1,13 +1,15 @@
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
+use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
 use kernels_data::metadata::{BackendInfo, Metadata};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
-use pyo3::exceptions::{PyOSError, PyValueError};
+use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 /// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
@@ -198,6 +200,7 @@ struct PyMetadata {
     source: Option<String>,
     python_depends: Vec<String>,
     backend: PyBackendInfo,
+    digest: Option<PyDigest>,
 }
 
 impl From<Metadata> for PyMetadata {
@@ -211,6 +214,7 @@ impl From<Metadata> for PyMetadata {
             source: m.source.map(|u| u.as_url().to_string()),
             python_depends: m.python_depends,
             backend: m.backend.into(),
+            digest: m.digest.map(Into::into),
         }
     }
 }
@@ -274,9 +278,14 @@ impl PyMetadata {
         self.backend.clone()
     }
 
+    #[getter]
+    fn digest(&self) -> Option<PyDigest> {
+        self.digest.clone()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={})",
+            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={}, digest={})",
             self.id,
             self.name,
             self.version,
@@ -284,7 +293,181 @@ impl PyMetadata {
             self.upstream,
             self.source,
             self.python_depends,
-            self.backend.__repr__()
+            self.backend.__repr__(),
+            self.digest
+                .as_ref()
+                .map_or("None".to_string(), |sd| sd.__repr__())
+        )
+    }
+}
+
+/// A violation of a digest when validated against a reference digest.
+///
+/// This tagged union covers the types of violations. Each violation can be
+/// converted to a string using ``str(violation)``.
+#[pyclass(name = "DigestViolation")]
+#[derive(Clone)]
+enum PyDigestViolation {
+    MissingFile {
+        path: String,
+    },
+    UnknownFile {
+        path: String,
+    },
+    HashMismatch {
+        path: String,
+        expected: String,
+        got: String,
+    },
+}
+
+impl From<DigestViolation> for PyDigestViolation {
+    fn from(v: DigestViolation) -> Self {
+        match v {
+            DigestViolation::MissingFile { path } => Self::MissingFile { path },
+            DigestViolation::UnknownFile { path } => Self::UnknownFile { path },
+            DigestViolation::HashMismatch {
+                path,
+                expected,
+                got,
+            } => Self::HashMismatch {
+                path,
+                expected,
+                got,
+            },
+        }
+    }
+}
+
+impl From<PyDigestViolation> for DigestViolation {
+    fn from(v: PyDigestViolation) -> Self {
+        match v {
+            PyDigestViolation::MissingFile { path } => Self::MissingFile { path },
+            PyDigestViolation::UnknownFile { path } => Self::UnknownFile { path },
+            PyDigestViolation::HashMismatch {
+                path,
+                expected,
+                got,
+            } => Self::HashMismatch {
+                path,
+                expected,
+                got,
+            },
+        }
+    }
+}
+
+#[pymethods]
+impl PyDigestViolation {
+    // Delegate to the core `Display` impl so the message formatting lives in a
+    // single place.
+    fn __str__(&self) -> String {
+        DigestViolation::from(self.clone()).to_string()
+    }
+}
+
+pyo3::create_exception!(
+    kernels_data,
+    DigestValidationError,
+    PyException,
+    "Raised by `Digest.validate` when the actual digest does not match the \
+     reference digest.\n\n\
+     The string representation lists every violation. The individual violations \
+     are also available as a list of `DigestViolation` via the `violations` \
+     attribute."
+);
+
+/// Digest for a kernel build variant.
+#[pyclass(name = "Digest", frozen)]
+#[derive(Clone, Debug)]
+struct PyDigest {
+    inner: Digest,
+}
+
+impl From<Digest> for PyDigest {
+    fn from(inner: Digest) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl PyDigest {
+    /// Hash the files in `variant_path` using `algorithm` (`"sha256"` or `"sha512"`).
+    #[staticmethod]
+    fn hash_variant(algorithm: &str, variant_path: PathBuf) -> PyResult<PyDigest> {
+        let algo = match algorithm.to_lowercase().as_str() {
+            "sha256" => DigestAlgorithm::SHA256,
+            "sha512" => DigestAlgorithm::SHA512,
+            _ => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown digest algorithm: {algorithm}. Supported: sha256, sha512"
+                )));
+            }
+        };
+
+        match Digest::hash_variant(algo, &variant_path) {
+            Ok(digest) => Ok(digest.into()),
+            Err(err) => {
+                let msg = format!(
+                    "Failed to hash variant `{}`: {err:#}",
+                    variant_path.display()
+                );
+                let is_io = err
+                    .chain()
+                    .any(|e| e.downcast_ref::<std::io::Error>().is_some());
+                if is_io {
+                    Err(PyOSError::new_err(msg))
+                } else {
+                    Err(PyRuntimeError::new_err(msg))
+                }
+            }
+        }
+    }
+
+    /// Validate `other` against this digest.
+    ///
+    /// Raises `DigestValidationError` if the digests do not match.
+    fn validate(&self, py: Python<'_>, other: &PyDigest) -> PyResult<()> {
+        match self.inner.validate(&other.inner) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                let violations = err
+                    .violations()
+                    .iter()
+                    .cloned()
+                    .map(PyDigestViolation::from)
+                    .collect::<Vec<_>>();
+
+                // Build the exception instance with the rendered message as its
+                // single argument (so `str(exc)` lists every violation), and
+                // expose the structured violations via a `violations` attribute.
+                let instance = py
+                    .get_type::<DigestValidationError>()
+                    .call1((err.to_string(),))?;
+                instance.setattr("violations", violations)?;
+                Err(PyErr::from_value(instance))
+            }
+        }
+    }
+
+    #[getter]
+    fn algorithm(&self) -> &str {
+        match self.inner.algorithm() {
+            DigestAlgorithm::SHA256 => "sha256",
+            DigestAlgorithm::SHA512 => "sha512",
+        }
+    }
+
+    #[getter]
+    fn files(&self) -> BTreeMap<String, String> {
+        self.inner.files().clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Digest(algorithm={}, files={:?})",
+            self.algorithm(),
+            self.inner.files()
         )
     }
 }
@@ -296,6 +479,12 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
+    m.add_class::<PyDigest>()?;
+    m.add_class::<PyDigestViolation>()?;
+    m.add(
+        "DigestValidationError",
+        m.py().get_type::<DigestValidationError>(),
+    )?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

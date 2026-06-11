@@ -140,7 +140,7 @@ print(dir(flash_attn))
 import torch
 from kernels import get_kernel
 
-layer_norm = get_kernel("kernels-community/triton-layer-norm", revision="main")
+layer_norm = get_kernel("kernels-community/triton-layer-norm", version=1)
 
 # Apply RMSNorm
 x = torch.randn(2, 1024, 2048, dtype=torch.bfloat16, device="cuda")
@@ -156,7 +156,7 @@ import torch.nn as nn
 from kernels import get_kernel
 
 # Load RMSNorm kernel
-rmsnorm_kernel = get_kernel("kernels-community/triton-layer-norm", revision="main")
+rmsnorm_kernel = get_kernel("kernels-community/triton-layer-norm", version=1)
 
 def patch_rmsnorm_with_hub_kernel(model):
     """Patch model's RMSNorm to use Hub kernel."""

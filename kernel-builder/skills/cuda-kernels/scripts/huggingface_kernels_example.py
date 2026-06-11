@@ -158,13 +158,12 @@ def demo_model_integration():
         # Check for layer norm kernel
         repo_id = "kernels-community/triton-layer-norm"
 
-        # This repo has no version branches yet, so pin an explicit revision.
-        if not has_kernel(repo_id, revision="main"):
+        if not has_kernel(repo_id, version=1):
             print(f"   {repo_id} not available, skipping")
             return
 
         print(f"\n1. Loading {repo_id}...")
-        layer_norm = get_kernel(repo_id, revision="main")
+        layer_norm = get_kernel(repo_id, version=1)
 
         # Check available functions
         print(f"\n2. Available functions:")

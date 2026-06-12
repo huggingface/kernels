@@ -9,8 +9,8 @@
 #    `PyO3/maturin-action` + PyPI trusted publishing (see plan.md §3a, §3b)
 #  - pull_request trigger gained `paths-ignore` for docs-only PRs
 #  - concurrency block added (cancel-in-progress only for PRs, never on tag/main)
-#  - free-threaded 3.13t build steps removed: abi3 wheels for free-threaded
-#    CPython are only supported on 3.15+ (maturin rejects 3.13t with abi3)
+#  - free-threaded 3.13t build steps removed: not supported by maturin
+#    anymore.
 name: CI
 
 on:

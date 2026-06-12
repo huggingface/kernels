@@ -1,12 +1,15 @@
 from types import SimpleNamespace
 
 import huggingface_hub.utils
+from kernels_data import KernelName
 
 from kernels.utils import RepoInfo, _send_load_telemetry
 
 
-def _stub_metadata(python_name="relu", version=1):
-    return SimpleNamespace(name=SimpleNamespace(python_name=python_name), version=version)
+def _stub_metadata(name="relu", version=1):
+    # `name` is a real `KernelName` so `str(...)` mirrors production: the normal
+    # name is reported, not the underscore-separated Python name.
+    return SimpleNamespace(name=KernelName(name), version=version)
 
 
 def _capture(monkeypatch):
@@ -36,7 +39,7 @@ def test_load_telemetry_includes_repo_id_when_available(monkeypatch):
     _send_load_telemetry(_stub_metadata(version=3), RepoInfo(repo_id="org/relu", revision="abc123"))
 
     ua = calls[0][1]["user_agent"]
-    assert ua["kernel"] == "org/relu"
+    assert ua["repo_id"] == "org/relu"
     assert ua["revision"] == "abc123"
     assert ua["kernel_name"] == "relu"
     assert ua["kernel_version"] == "3"
@@ -51,9 +54,19 @@ def test_load_telemetry_without_repo_info_omits_repo_id(monkeypatch):
     _send_load_telemetry(_stub_metadata(), None)
 
     ua = calls[0][1]["user_agent"]
-    assert "kernel" not in ua
+    assert "repo_id" not in ua
     assert "revision" not in ua
     assert ua["kernel_name"] == "relu"
+
+
+def test_load_telemetry_reports_normal_kernel_name(monkeypatch):
+    calls = _capture(monkeypatch)
+
+    # The normal (hyphenated) name is reported, not the Python name where
+    # dashes are replaced by underscores.
+    _send_load_telemetry(_stub_metadata(name="flash-attn"), None)
+
+    assert calls[0][1]["user_agent"]["kernel_name"] == "flash-attn"
 
 
 def test_load_telemetry_always_sets_load_marker(monkeypatch):

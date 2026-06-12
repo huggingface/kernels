@@ -884,9 +884,9 @@ def _send_load_telemetry(metadata: Metadata, repo_info: RepoInfo | None) -> None
         # was loaded.
         user_agent: dict[str, str] = {"kernels_event": "load"}
         if repo_info is not None:
-            user_agent["kernel"] = repo_info.repo_id
+            user_agent["repo_id"] = repo_info.repo_id
             user_agent["revision"] = repo_info.revision
-        user_agent["kernel_name"] = metadata.name.python_name
+        user_agent["kernel_name"] = str(metadata.name)
         user_agent["kernel_version"] = str(metadata.version)
         user_agent.update(_system_user_agent())
 

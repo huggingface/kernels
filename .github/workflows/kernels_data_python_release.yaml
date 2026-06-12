@@ -9,6 +9,8 @@
 #    `PyO3/maturin-action` + PyPI trusted publishing (see plan.md §3a, §3b)
 #  - pull_request trigger gained `paths-ignore` for docs-only PRs
 #  - concurrency block added (cancel-in-progress only for PRs, never on tag/main)
+#  - free-threaded 3.13t build steps removed: not supported by maturin
+#    anymore.
 name: CI
 
 on:
@@ -61,13 +63,6 @@ jobs:
           args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
-      - name: Build free-threaded wheels (3.13t)
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml -i python3.13t
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: auto
       - name: Build free-threaded wheels (3.14t)
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -104,13 +99,6 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: musllinux_1_2
-      - name: Build free-threaded wheels (3.13t)
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml -i python3.13t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Build free-threaded wheels (3.14t)
@@ -155,18 +143,6 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         if: matrix.platform.target != 'aarch64'
         with:
-          python-version: 3.13t
-          architecture: ${{ matrix.platform.python_arch }}
-      - name: Build free-threaded wheels (3.13t)
-        if: matrix.platform.target != 'aarch64'
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml -i python3.13t
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        if: matrix.platform.target != 'aarch64'
-        with:
           python-version: 3.14t
           architecture: ${{ matrix.platform.python_arch }}
       - name: Build free-threaded wheels (3.14t)
@@ -201,15 +177,6 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: 3.13t
-      - name: Build free-threaded wheels (3.13t)
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out dist --manifest-path kernels-data/bindings/python/Cargo.toml -i python3.13t
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:

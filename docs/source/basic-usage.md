@@ -30,6 +30,11 @@ for older PyTorch versions. This ensures that your code will continue to work.
 
 Hub kernels must be loaded with either a `version` or an explicit `revision`.
 
+> [!NOTE]
+> Version `0` kernels are excluded from the API compatibility requirement,
+> since it is used for alpha/beta-quality kernels that may still have
+> rapidly changing APIs.
+
 ## Checking Kernel Availability
 
 You can check if a particular version of a kernel supports the environment
@@ -43,7 +48,7 @@ is_available = has_kernel("kernels-community/activation", version=1)
 print(f"Kernel available: {is_available}")
 ```
 
-When no compatible kernel is found, [`~kernels.has_kernel`] does not say *why*.
+When no compatible kernel is found, [`~kernels.has_kernel`] does not say _why_.
 [`~kernels.get_kernel_variants`] returns the full resolution trace instead: one
 decision per build variant in the repository, with compatible variants listed
 first. Each decision is a `VariantAccepted` or a `VariantRejected`, and rejected

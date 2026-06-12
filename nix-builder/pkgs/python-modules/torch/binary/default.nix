@@ -14,6 +14,7 @@
 
 {
   triton-cuda,
+  triton-rocm,
   triton-xpu,
   xpuPackages,
   version,
@@ -40,6 +41,11 @@ let
       or (throw "Unsupported framework: ${framework} for torch version: ${version} on system: ${system}");
 in
 callPackage ./generic.nix {
-  inherit triton-cuda triton-xpu xpuPackages;
+  inherit
+    triton-cuda
+    triton-rocm
+    triton-xpu
+    xpuPackages
+    ;
   inherit (urlHash) url hash version;
 }

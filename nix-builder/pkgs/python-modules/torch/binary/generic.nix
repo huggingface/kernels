@@ -40,6 +40,7 @@
   sympy,
   triton,
   triton-cuda,
+  triton-rocm,
   triton-xpu,
   typing-extensions,
 
@@ -53,6 +54,8 @@ let
   effectiveTriton =
     if cudaSupport then
       triton-cuda
+    else if rocmSupport then
+      triton-rocm
     else if xpuSupport then
       triton-xpu
     else

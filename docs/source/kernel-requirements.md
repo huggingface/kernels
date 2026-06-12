@@ -199,6 +199,12 @@ The version **must** be bumped in the following cases:
 In both cases, build variants that are not updated must be removed from
 the new version's branch.
 
+> [!NOTE]
+> By convention, we reserve version `0` for kernels that are still in
+> alpha or beta stage and are not recommended for production use (e.g.
+> because the API is still changing regularly or there are still too
+> many issues).
+
 ## Native Python module
 
 Kernels will typically contain a native Python module with precompiled

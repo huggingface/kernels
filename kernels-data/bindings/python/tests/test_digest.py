@@ -1,12 +1,12 @@
 import pytest
 
-from kernels_data import Digest, DigestValidationError, DigestViolation
+from kernels_data import Digest, DigestAlgorithm, DigestValidationError, DigestViolation
 
 
 def test_hash_variant_hashes_file_with_sha256(tmp_path):
     (tmp_path / "_extension.so").write_bytes(b"hello world")
 
-    digest = Digest.hash_variant("sha256", tmp_path)
+    digest = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     assert len(digest.files) == 1
     assert (
@@ -17,7 +17,7 @@ def test_hash_variant_hashes_file_with_sha256(tmp_path):
 def test_hash_variant_hashes_file_with_sha512(tmp_path):
     (tmp_path / "_extension.so").write_bytes(b"hello world")
 
-    digest = Digest.hash_variant("sha512", tmp_path)
+    digest = Digest.hash_variant(DigestAlgorithm.SHA512, tmp_path)
 
     assert len(digest.files) == 1
     assert (
@@ -32,7 +32,7 @@ def test_hash_variant_skips_excluded_files(tmp_path):
     (tmp_path / "metadata.json.sigstore").write_bytes(b"sig")
     (tmp_path / "cache.pyc").write_bytes(b"bytecode")
 
-    digest = Digest.hash_variant("sha256", tmp_path)
+    digest = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     assert len(digest.files) == 1
     assert "_extension.so" in digest.files
@@ -46,13 +46,13 @@ def test_hash_variant_uses_forward_slash_paths(tmp_path):
     subdir.mkdir(parents=True)
     (subdir / "__init__.py").write_bytes(b"data")
 
-    digest = Digest.hash_variant("sha256", tmp_path)
+    digest = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     assert "some/subdir/__init__.py" in digest.files
 
 
 def test_hash_variant_returns_empty_map_for_empty_dir(tmp_path):
-    digest = Digest.hash_variant("sha256", tmp_path)
+    digest = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     assert digest.files == {}
 
@@ -60,8 +60,8 @@ def test_hash_variant_returns_empty_map_for_empty_dir(tmp_path):
 def test_hash_variant_produces_deterministic_results(tmp_path):
     (tmp_path / "_extension.so").write_bytes(b"hello world")
 
-    digest1 = Digest.hash_variant("sha256", tmp_path)
-    digest2 = Digest.hash_variant("sha256", tmp_path)
+    digest1 = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
+    digest2 = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     assert digest1.files == digest2.files
 
@@ -69,8 +69,8 @@ def test_hash_variant_produces_deterministic_results(tmp_path):
 def test_validate_returns_no_violations_for_identical_digests(tmp_path):
     (tmp_path / "_extension.so").write_bytes(b"hello world")
 
-    expected = Digest.hash_variant("sha256", tmp_path)
-    actual = Digest.hash_variant("sha256", tmp_path)
+    expected = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
+    actual = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     expected.validate(actual)
 
@@ -92,8 +92,8 @@ def mismatched_digests(tmp_path):
     # Present only in the actual digest -> unknown file.
     (actual_dir / "extra.bin").write_bytes(b"data")
 
-    expected = Digest.hash_variant("sha256", expected_dir)
-    actual = Digest.hash_variant("sha256", actual_dir)
+    expected = Digest.hash_variant(DigestAlgorithm.SHA256, expected_dir)
+    actual = Digest.hash_variant(DigestAlgorithm.SHA256, actual_dir)
     return expected, actual
 
 

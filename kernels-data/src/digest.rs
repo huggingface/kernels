@@ -32,6 +32,12 @@ pub enum DigestViolation {
         expected: String,
         got: String,
     },
+
+    /// The digest algorithms differ.
+    AlgorithmMismatch {
+        expected: DigestAlgorithm,
+        got: DigestAlgorithm,
+    },
 }
 
 impl fmt::Display for DigestViolation {
@@ -46,6 +52,10 @@ impl fmt::Display for DigestViolation {
             } => write!(
                 f,
                 "File hash mismatch for {path}: expected: {expected}, got: {got}"
+            ),
+            DigestViolation::AlgorithmMismatch { expected, got } => write!(
+                f,
+                "Algorithm mismatch: expected: {expected:?}, got: {got:?}"
             ),
         }
     }
@@ -134,6 +144,13 @@ impl Digest {
     pub fn validate(&self, other: &Self) -> Result<(), DigestError> {
         let mut violations = Vec::new();
 
+        if self.algorithm != other.algorithm {
+            violations.push(DigestViolation::AlgorithmMismatch {
+                expected: self.algorithm,
+                got: other.algorithm,
+            });
+        }
+
         for (path, expected) in &self.files {
             match other.files.get(path) {
                 None => {
@@ -169,7 +186,7 @@ impl Digest {
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub enum DigestAlgorithm {
     #[serde(rename = "sha256")]
     SHA256,
@@ -378,6 +395,29 @@ mod tests {
              File hash mismatch for changed.so: expected: old, got: new\n\
              Missing file: gone.py\n\
              Unknown file: extra.bin"
+        );
+    }
+
+    #[test]
+    fn validate_detects_algorithm_mismatch_for_empty_digest() {
+        let expected = Digest {
+            algorithm: DigestAlgorithm::SHA256,
+            files: BTreeMap::new(),
+        };
+        let actual = Digest {
+            algorithm: DigestAlgorithm::SHA512,
+            files: BTreeMap::new(),
+        };
+
+        assert_ne!(expected.algorithm(), actual.algorithm());
+
+        let err = expected.validate(&actual).unwrap_err();
+
+        assert_eq!(err.violations().len(), 1);
+        assert_eq!(
+            err.to_string(),
+            "kernel does not match the expected digest:\n\
+             Algorithm mismatch: expected: SHA256, got: SHA512"
         );
     }
 }

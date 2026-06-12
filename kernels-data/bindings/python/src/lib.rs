@@ -329,6 +329,55 @@ enum PyDigestViolation {
         expected: String,
         got: String,
     },
+    AlgorithmMismatch {
+        expected: PyDigestAlgorithm,
+        got: PyDigestAlgorithm,
+    },
+}
+
+/// Digest algorithm.
+#[pyclass(name = "DigestAlgorithm", frozen, eq, hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum PyDigestAlgorithm {
+    #[pyo3(name = "SHA256")]
+    Sha256,
+    #[pyo3(name = "SHA512")]
+    Sha512,
+}
+
+impl From<DigestAlgorithm> for PyDigestAlgorithm {
+    fn from(a: DigestAlgorithm) -> Self {
+        match a {
+            DigestAlgorithm::SHA256 => Self::Sha256,
+            DigestAlgorithm::SHA512 => Self::Sha512,
+        }
+    }
+}
+
+impl From<PyDigestAlgorithm> for DigestAlgorithm {
+    fn from(a: PyDigestAlgorithm) -> Self {
+        match a {
+            PyDigestAlgorithm::Sha256 => DigestAlgorithm::SHA256,
+            PyDigestAlgorithm::Sha512 => DigestAlgorithm::SHA512,
+        }
+    }
+}
+
+#[pymethods]
+impl PyDigestAlgorithm {
+    fn __str__(&self) -> &'static str {
+        match self {
+            Self::Sha256 => "sha256",
+            Self::Sha512 => "sha512",
+        }
+    }
+
+    fn __repr__(&self) -> &'static str {
+        match self {
+            Self::Sha256 => "DigestAlgorithm.SHA256",
+            Self::Sha512 => "DigestAlgorithm.SHA512",
+        }
+    }
 }
 
 impl From<DigestViolation> for PyDigestViolation {
@@ -344,6 +393,10 @@ impl From<DigestViolation> for PyDigestViolation {
                 path,
                 expected,
                 got,
+            },
+            DigestViolation::AlgorithmMismatch { expected, got } => Self::AlgorithmMismatch {
+                expected: expected.into(),
+                got: got.into(),
             },
         }
     }
@@ -362,6 +415,10 @@ impl From<PyDigestViolation> for DigestViolation {
                 path,
                 expected,
                 got,
+            },
+            PyDigestViolation::AlgorithmMismatch { expected, got } => Self::AlgorithmMismatch {
+                expected: expected.into(),
+                got: got.into(),
             },
         }
     }
@@ -402,20 +459,10 @@ impl From<Digest> for PyDigest {
 
 #[pymethods]
 impl PyDigest {
-    /// Hash the files in `variant_path` using `algorithm` (`"sha256"` or `"sha512"`).
+    /// Hash the files in `variant_path` using `algorithm`.
     #[staticmethod]
-    fn hash_variant(algorithm: &str, variant_path: PathBuf) -> PyResult<PyDigest> {
-        let algo = match algorithm.to_lowercase().as_str() {
-            "sha256" => DigestAlgorithm::SHA256,
-            "sha512" => DigestAlgorithm::SHA512,
-            _ => {
-                return Err(PyValueError::new_err(format!(
-                    "Unknown digest algorithm: {algorithm}. Supported: sha256, sha512"
-                )));
-            }
-        };
-
-        match Digest::hash_variant(algo, &variant_path) {
+    fn hash_variant(algorithm: PyDigestAlgorithm, variant_path: PathBuf) -> PyResult<PyDigest> {
+        match Digest::hash_variant(algorithm.into(), &variant_path) {
             Ok(digest) => Ok(digest.into()),
             Err(err) => {
                 let msg = format!(
@@ -461,11 +508,8 @@ impl PyDigest {
     }
 
     #[getter]
-    fn algorithm(&self) -> &str {
-        match self.inner.algorithm() {
-            DigestAlgorithm::SHA256 => "sha256",
-            DigestAlgorithm::SHA512 => "sha512",
-        }
+    fn algorithm(&self) -> PyDigestAlgorithm {
+        self.inner.algorithm().into()
     }
 
     #[getter]
@@ -476,7 +520,7 @@ impl PyDigest {
     fn __repr__(&self) -> String {
         format!(
             "Digest(algorithm={}, files={:?})",
-            self.algorithm(),
+            self.algorithm().__repr__(),
             self.inner.files()
         )
     }
@@ -489,6 +533,7 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
+    m.add_class::<PyDigestAlgorithm>()?;
     m.add_class::<PyDigest>()?;
     m.add_class::<PyDigestViolation>()?;
     m.add(

@@ -7,6 +7,7 @@ from typing import Optional, final
 __all__ = [
     "Backend",
     "BackendInfo",
+    "DigestAlgorithm",
     "KernelName",
     "Metadata",
     "Digest",
@@ -110,27 +111,38 @@ class KernelName:
     def __hash__(self) -> int: ...
 
 @final
+class DigestAlgorithm(Enum):
+    """Digest algorithm."""
+
+    SHA256 = "SHA256"
+    SHA512 = "SHA512"
+
+    def __str__(self) -> str: ...
+    def __repr__(self) -> str: ...
+
+@final
 class Digest:
     """Source digest for a kernel build variant."""
 
     @staticmethod
-    def hash_variant(algorithm: str, variant_path: os.PathLike[str] | str) -> "Digest":
+    def hash_variant(
+        algorithm: DigestAlgorithm, variant_path: os.PathLike[str] | str
+    ) -> "Digest":
         """Hash the files in ``variant_path`` using ``algorithm``.
 
         Args:
-            algorithm: Digest algorithm to use. One of ``"sha256"`` or ``"sha512"``.
+            algorithm: Digest algorithm to use.
             variant_path: Path to the variant directory to hash.
 
         Raises:
-            ValueError: If the algorithm is unknown.
             OSError: If a file cannot be read or the directory cannot be walked.
             RuntimeError: For other unexpected failures.
         """
         ...
 
     @property
-    def algorithm(self) -> str:
-        """Digest algorithm used (e.g. ``"sha256"``)"""
+    def algorithm(self) -> DigestAlgorithm:
+        """Digest algorithm used."""
         ...
 
     @property
@@ -185,6 +197,21 @@ class DigestViolation:
         def __new__(
             cls, path: str, expected: str, got: str
         ) -> "DigestViolation.HashMismatch": ...
+
+    @final
+    class AlgorithmMismatch(DigestViolation):
+        """The digest algorithms differ.
+
+        The digest with algorithm ``got`` cannot be validated against the
+        reference digest with algorithm ``expected``.
+        """
+
+        expected: DigestAlgorithm
+        got: DigestAlgorithm
+        __match_args__ = ("expected", "got")
+        def __new__(
+            cls, expected: DigestAlgorithm, got: DigestAlgorithm
+        ) -> "DigestViolation.AlgorithmMismatch": ...
 
     def __str__(self) -> str: ...
 

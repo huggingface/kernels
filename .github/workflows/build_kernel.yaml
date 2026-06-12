@@ -63,6 +63,7 @@ jobs:
             relu-tvm-ffi-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel
+            relu-triton-kernel
             silu-and-mul-kernel
 
   test:

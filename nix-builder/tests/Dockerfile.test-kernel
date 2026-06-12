@@ -67,6 +67,7 @@ COPY relu-tvm-ffi-kernel ./relu-tvm-ffi-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
+COPY relu-triton-kernel ./relu-triton-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
 COPY extra-data ./extra-data
 COPY cpp20-symbols-kernel ./cpp20-symbols-kernel
@@ -76,6 +77,7 @@ COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 COPY examples/kernels/cutlass-gemm-tvm-ffi/tests ./cutlass_gemm_tvm_ffi_tests
 COPY examples/kernels/cpp20-symbols/tests ./cpp20_symbols_tests
+COPY examples/kernels/relu-triton/tests ./relu_triton_tests
 
 # Run tests
 ADD nix-builder/tests/run-tests.sh ./run-tests.sh

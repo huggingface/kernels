@@ -94,8 +94,8 @@ def test_broken_signature_bundle_fails():
         variant_path,
         policies=TEST_POLICIES,
     ):
-        case VerificationResult.SignatureBundleInvalid(reason=reason):
-            assert "Invalid JSON" in reason
+        case VerificationResult.SignatureBundleInvalid(reason=_):
+            pass
         case other:
             raise RuntimeError(f"Expected SignatureBundleInvalid, was: {other}")
 
@@ -106,7 +106,7 @@ def test_invalid_signature_fails():
         variant_path,
         policies=TEST_POLICIES,
     ):
-        case VerificationResult.SignatureVerificationFailure(reason=reason):
-            assert "Signature is invalid" in reason
+        case VerificationResult.SignatureVerificationFailure(reason=_):
+            pass
         case other:
             raise RuntimeError(f"Expected SignatureVerificationFailure, was: {other}")

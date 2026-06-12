@@ -29,6 +29,7 @@ def test_dataclass_shape():
     assert tuple(f.name for f in fields(RepoInfo)) == (
         "repo_id",
         "revision",
+        "local",
     )
 
 

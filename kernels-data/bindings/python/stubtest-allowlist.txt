@@ -1,3 +1,13 @@
 # The `.so` submodule `kernels_data.kernels_data` is a pyo3/maturin
 # implementation detail; end users import from the `kernels_data` package.
 kernels_data\.kernels_data
+
+# pyo3 complex enums compile to a Rust-backed (disjoint) base class. The
+# `@disjoint_base` marker only lives in `typing_extensions`, which this
+# dependency-free extension package does not pull in, so the stub omits it.
+kernels_data\.DigestViolation
+
+# `DigestValidationError.violations` is attached as a per-instance attribute by
+# the `Digest.validate` binding (via `setattr`), so it is not visible on the
+# class object that stubtest inspects, even though instances always have it.
+kernels_data\.DigestValidationError\.violations

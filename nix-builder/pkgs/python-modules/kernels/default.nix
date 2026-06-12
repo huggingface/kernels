@@ -6,6 +6,7 @@
   huggingface-hub,
   kernels-data,
   pyyaml,
+  sigstore,
   tomlkit,
   torch,
 }:
@@ -35,6 +36,7 @@ buildPythonPackage {
     huggingface-hub
     kernels-data
     pyyaml
+    sigstore
     tomlkit
     torch
   ];

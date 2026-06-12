@@ -1,16 +1,83 @@
-use std::{collections::BTreeMap, fs, path::Path};
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fs;
+use std::path::Path;
 
 use base64::prelude::{BASE64_STANDARD, Engine as _};
 use digest::{Digest as _, DynDigest};
 use eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Sha512};
+use thiserror::Error;
 use walkdir::WalkDir;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Digest {
     algorithm: DigestAlgorithm,
     files: BTreeMap<String, String>,
+}
+
+/// Digest violation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DigestViolation {
+    /// A file in the reference digest is missing from the actual digest.
+    MissingFile { path: String },
+
+    /// A file present in the actual digest is not part of the reference digest.
+    UnknownFile { path: String },
+
+    /// The hashes for the file differ.
+    HashMismatch {
+        path: String,
+        expected: String,
+        got: String,
+    },
+
+    /// The digest algorithms differ.
+    AlgorithmMismatch {
+        expected: DigestAlgorithm,
+        got: DigestAlgorithm,
+    },
+}
+
+impl fmt::Display for DigestViolation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DigestViolation::MissingFile { path } => write!(f, "Missing file: {path}"),
+            DigestViolation::UnknownFile { path } => write!(f, "Unknown file: {path}"),
+            DigestViolation::HashMismatch {
+                path,
+                expected,
+                got,
+            } => write!(
+                f,
+                "File hash mismatch for {path}: expected: {expected}, got: {got}"
+            ),
+            DigestViolation::AlgorithmMismatch { expected, got } => write!(
+                f,
+                "Algorithm mismatch: expected: {expected:?}, got: {got:?}"
+            ),
+        }
+    }
+}
+
+/// Error for digest mismatches.
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[error(
+    "kernel does not match the expected digest:\n{}",
+    .0.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")
+)]
+pub struct DigestError(Vec<DigestViolation>);
+
+impl DigestError {
+    /// Get the violations.
+    ///
+    /// This is never empty. Violations are ordered deterministically: files
+    /// missing from or differing in the actual digest come first (ordered by
+    /// path), followed by files only present in the actual digest.
+    pub fn violations(&self) -> &[DigestViolation] {
+        &self.0
+    }
 }
 
 impl Digest {
@@ -69,13 +136,57 @@ impl Digest {
         self.algorithm
     }
 
+    /// Validate a digest against the reference.
+    ///
+    /// Returns `Ok(())` if the two digests match. Otherwise returns a
+    /// [`DigestError`] describing every way in which `other` deviates from
+    /// `self`.
+    pub fn validate(&self, other: &Self) -> Result<(), DigestError> {
+        let mut violations = Vec::new();
+
+        if self.algorithm != other.algorithm {
+            violations.push(DigestViolation::AlgorithmMismatch {
+                expected: self.algorithm,
+                got: other.algorithm,
+            });
+        }
+
+        for (path, expected) in &self.files {
+            match other.files.get(path) {
+                None => {
+                    violations.push(DigestViolation::MissingFile { path: path.clone() });
+                }
+                Some(got) if got != expected => {
+                    violations.push(DigestViolation::HashMismatch {
+                        path: path.clone(),
+                        expected: expected.clone(),
+                        got: got.clone(),
+                    });
+                }
+                Some(_) => {}
+            }
+        }
+
+        for path in other.files.keys() {
+            if !self.files.contains_key(path) {
+                violations.push(DigestViolation::UnknownFile { path: path.clone() });
+            }
+        }
+
+        if violations.is_empty() {
+            Ok(())
+        } else {
+            Err(DigestError(violations))
+        }
+    }
+
     /// Mapping of relative path -> base64 digest.
     pub fn files(&self) -> &BTreeMap<String, String> {
         &self.files
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub enum DigestAlgorithm {
     #[serde(rename = "sha256")]
     SHA256,
@@ -182,6 +293,132 @@ mod tests {
 
         assert_eq!(digest1.files(), digest2.files());
         Ok(())
+    }
+
+    fn digest_with(files: &[(&str, &str)]) -> Digest {
+        Digest {
+            algorithm: DigestAlgorithm::SHA256,
+            files: files
+                .iter()
+                .map(|(path, hash)| (path.to_string(), hash.to_string()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn validate_returns_no_violations_for_identical_digests() {
+        let expected = digest_with(&[("a.so", "aaa"), ("b.py", "bbb")]);
+        let actual = digest_with(&[("a.so", "aaa"), ("b.py", "bbb")]);
+
+        assert_eq!(expected.validate(&actual), Ok(()));
+    }
+
+    #[test]
+    fn validate_detects_missing_file() {
+        let expected = digest_with(&[("a.so", "aaa"), ("b.py", "bbb")]);
+        let actual = digest_with(&[("a.so", "aaa")]);
+
+        assert_eq!(
+            expected.validate(&actual),
+            Err(DigestError(vec![DigestViolation::MissingFile {
+                path: "b.py".to_string()
+            }]))
+        );
+    }
+
+    #[test]
+    fn validate_detects_unknown_file() {
+        let expected = digest_with(&[("a.so", "aaa")]);
+        let actual = digest_with(&[("a.so", "aaa"), ("extra.so", "xxx")]);
+
+        assert_eq!(
+            expected.validate(&actual),
+            Err(DigestError(vec![DigestViolation::UnknownFile {
+                path: "extra.so".to_string()
+            }]))
+        );
+    }
+
+    #[test]
+    fn validate_detects_hash_mismatch() {
+        let expected = digest_with(&[("a.so", "aaa")]);
+        let actual = digest_with(&[("a.so", "zzz")]);
+
+        assert_eq!(
+            expected.validate(&actual),
+            Err(DigestError(vec![DigestViolation::HashMismatch {
+                path: "a.so".to_string(),
+                expected: "aaa".to_string(),
+                got: "zzz".to_string(),
+            }]))
+        );
+    }
+
+    #[test]
+    fn validate_collects_all_violations() {
+        let expected = digest_with(&[("keep.so", "k"), ("gone.py", "g"), ("changed.so", "old")]);
+        let actual = digest_with(&[("keep.so", "k"), ("changed.so", "new"), ("extra.bin", "e")]);
+
+        // Violations are ordered: missing/mismatched files (in path order)
+        // first, then files only present in the actual digest.
+        assert_eq!(
+            expected.validate(&actual),
+            Err(DigestError(vec![
+                DigestViolation::HashMismatch {
+                    path: "changed.so".to_string(),
+                    expected: "old".to_string(),
+                    got: "new".to_string(),
+                },
+                DigestViolation::MissingFile {
+                    path: "gone.py".to_string()
+                },
+                DigestViolation::UnknownFile {
+                    path: "extra.bin".to_string()
+                },
+            ]))
+        );
+    }
+
+    #[test]
+    fn digest_error_exposes_violations_and_renders_all_messages() {
+        let expected = digest_with(&[("gone.py", "g"), ("changed.so", "old")]);
+        let actual = digest_with(&[("changed.so", "new"), ("extra.bin", "e")]);
+
+        let err = expected.validate(&actual).unwrap_err();
+
+        assert_eq!(err.violations().len(), 3);
+
+        // Violations are rendered in their deterministic stored order.
+        assert_eq!(
+            err.to_string(),
+            "kernel does not match the expected digest:\n\
+             File hash mismatch for changed.so: expected: old, got: new\n\
+             Missing file: gone.py\n\
+             Unknown file: extra.bin"
+        );
+    }
+
+    #[test]
+    fn validate_detects_algorithm_mismatch_for_empty_digest() {
+        let expected = Digest {
+            algorithm: DigestAlgorithm::SHA256,
+            files: BTreeMap::new(),
+        };
+        let actual = Digest {
+            algorithm: DigestAlgorithm::SHA512,
+            files: BTreeMap::new(),
+        };
+
+        assert_ne!(expected.algorithm(), actual.algorithm());
+
+        let err = expected.validate(&actual).unwrap_err();
+
+        assert_eq!(err.violations().len(), 1);
+        assert_eq!(
+            err.to_string(),
+            "kernel does not match the expected digest:\n\
+             Algorithm mismatch: expected: SHA256, got: SHA512"
+        );
     }
 }
 

@@ -237,9 +237,7 @@ def _import_from_path(
         repo_info=repo_info,
     )
 
-    # Under the hood, we use `send_telemetry()` from `hugginggface_hub`.
-    # That already respect the env var concerning disabling telemetry
-    # and is also thread non-blocking.
+    # Telemetry request is non-blocking.
     _send_load_telemetry(metadata, repo_info or telemetry_repo_info)
 
     return module

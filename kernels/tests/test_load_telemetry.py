@@ -41,11 +41,23 @@ def test_load_telemetry_includes_repo_id_when_available(monkeypatch):
     ua = calls[0][1]["user_agent"]
     assert ua["repo_id"] == "org/relu"
     assert ua["revision"] == "abc123"
+    # Defaults to a downloaded kernel.
+    assert ua["local"] == "false"
     assert ua["kernel_name"] == "relu"
     assert ua["kernel_version"] == "3"
     # System info is merged in so loads can be sliced by backend/platform/etc.
     assert "backend" in ua
     assert ua["kernels"]
+
+
+def test_load_telemetry_flags_locally_loaded_kernels(monkeypatch):
+    calls = _capture(monkeypatch)
+
+    # A pre-downloaded/locked kernel is flagged so downloads can be separated
+    # from local loads.
+    _send_load_telemetry(_stub_metadata(), RepoInfo(repo_id="org/relu", revision="abc123", local=True))
+
+    assert calls[0][1]["user_agent"]["local"] == "true"
 
 
 def test_load_telemetry_without_repo_info_omits_repo_id(monkeypatch):
@@ -56,6 +68,7 @@ def test_load_telemetry_without_repo_info_omits_repo_id(monkeypatch):
     ua = calls[0][1]["user_agent"]
     assert "repo_id" not in ua
     assert "revision" not in ua
+    assert "local" not in ua
     assert ua["kernel_name"] == "relu"
 
 

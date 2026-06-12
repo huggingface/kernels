@@ -108,10 +108,13 @@ class RepoInfo:
 
     - `repo_id` (`str`): the Hub repository containing the kernel.
     - `revision` (`str`): the specific revision of the kernel.
+    - `local` (`bool`): whether the kernel was loaded from pre-downloaded local
+      files (`True`) rather than downloaded from the Hub (`False`).
     """
 
     repo_id: str
     revision: str
+    local: bool = False
 
 
 @dataclass(frozen=True)
@@ -121,10 +124,10 @@ class LoadedKernel:
 
     - `metadata` (`Metadata`): kernel metadata.
     - `module` (`ModuleType`): the imported kernel module.
-    - `repo_info` (`kernels.utils.RepoInfo | None`): populated only for
-      kernels loaded via `get_kernel`. Loaders that work from a local path
-      (`get_local_kernel`) or a lockfile (`get_locked_kernel`, `load_kernel`)
-      leave this as `None`.
+    - `repo_info` (`kernels.utils.RepoInfo | None`): populated for kernels loaded
+      from a known Hub repository, i.e. via `get_kernel`, `get_locked_kernel`, or
+      `load_kernel`. Only `get_local_kernel`, which loads from an arbitrary local
+      path, leaves this as `None`.
 
     The metadata includes the following properties that describe a kernel:
 
@@ -207,8 +210,6 @@ def _validate_variant_dependencies(variant_path: Path) -> None:
 def _import_from_path(
     variant_path: Path,
     repo_info: RepoInfo | None = None,
-    *,
-    telemetry_repo_info: RepoInfo | None = None,
 ) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
@@ -238,7 +239,7 @@ def _import_from_path(
     )
 
     # Telemetry request is non-blocking.
-    _send_load_telemetry(metadata, repo_info or telemetry_repo_info)
+    _send_load_telemetry(metadata, repo_info)
 
     return module
 
@@ -698,7 +699,7 @@ def load_kernel(
         ) from e
     return _import_from_path(
         variant_path,
-        telemetry_repo_info=RepoInfo(repo_id=repo_id, revision=locked_sha),
+        repo_info=RepoInfo(repo_id=repo_id, revision=locked_sha, local=True),
     )
 
 
@@ -729,7 +730,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
 
     return _import_from_path(
         variant_path,
-        telemetry_repo_info=RepoInfo(repo_id=repo_id, revision=locked_sha),
+        repo_info=RepoInfo(repo_id=repo_id, revision=locked_sha),
     )
 
 
@@ -886,6 +887,7 @@ def _send_load_telemetry(metadata: Metadata, repo_info: RepoInfo | None) -> None
         if repo_info is not None:
             user_agent["repo_id"] = repo_info.repo_id
             user_agent["revision"] = repo_info.revision
+            user_agent["local"] = str(repo_info.local).lower()
         user_agent["kernel_name"] = str(metadata.name)
         user_agent["kernel_version"] = str(metadata.version)
         user_agent.update(_system_user_agent())

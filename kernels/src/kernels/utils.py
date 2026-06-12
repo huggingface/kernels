@@ -634,7 +634,7 @@ def get_kernel_variants(
 
     Example:
         ```python
-         from kernels import get_kernel_variants, VariantAccepted
+        from kernels import get_kernel_variants, VariantAccepted
 
         for decision in get_kernel_variants("kernels-community/activation", version=1):
             name = decision.variant.variant_str

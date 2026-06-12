@@ -36,8 +36,8 @@ class Backend(Enum):
         """Parse a backend name.
 
         Args:
-            s: One of ``"cann"``, ``"cpu"``, ``"cuda"``, ``"metal"``,
-               ``"neuron"``, ``"rocm"``, ``"xpu"``.
+            s: One of `"cann"`, `"cpu"`, `"cuda"`, `"metal"`,
+               `"neuron"`, `"rocm"`, `"xpu"`.
 
         Raises:
             ValueError: If the backend name is unknown.
@@ -65,14 +65,14 @@ class BackendInfo:
 
 @final
 class Version:
-    """A dotted numeric version (e.g. ``12.8.0``).
+    """A dotted numeric version (e.g. `12.8.0`).
 
     Trailing zeros are stripped during normalization.
     """
 
     @staticmethod
     def from_str(s: str) -> "Version":
-        """Parse a version string of the form ``X``, ``X.Y``, ``X.Y.Z``, ...
+        """Parse a version string of the form `X`, `X.Y`, `X.Y.Z`, ...
 
         Raises:
             ValueError: If the string is empty or contains non-numeric parts.
@@ -90,10 +90,10 @@ class Version:
 
 @final
 class KernelName:
-    """A validated kernel name matching ``^[a-z][-a-z0-9]*[a-z0-9]$``."""
+    """A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`."""
 
     def __new__(cls, name: str) -> "KernelName":
-        """Create a new ``KernelName``.
+        """Create a new `KernelName`.
 
         Raises:
             ValueError: If the name does not match the required pattern.
@@ -128,7 +128,7 @@ class Digest:
     def hash_variant(
         algorithm: DigestAlgorithm, variant_path: os.PathLike[str] | str
     ) -> "Digest":
-        """Hash the files in ``variant_path`` using ``algorithm``.
+        """Hash the files in `variant_path` using `algorithm`.
 
         Args:
             algorithm: Digest algorithm to use.
@@ -151,13 +151,13 @@ class Digest:
         ...
 
     def validate(self, other: "Digest") -> None:
-        """Validate ``other`` (actual) against this digest (expected).
+        """Validate `other` (actual) against this digest (expected).
 
         Returns when the digests match. Otherwise, a `DigestValidationError` is
         raised.
 
         Raises:
-            DigestValidationError: If ``other`` deviates from this digest.
+            DigestValidationError: If `other` deviates from this digest.
         """
         ...
 
@@ -167,7 +167,7 @@ class DigestViolation:
     """A violation of a digest when validated against a reference digest.
 
     This tagged union covers the types of violations. Each violation can be
-    converted to a string using ``str(violation)``.
+    converted to a string using `str(violation)`.
     """
 
     @final
@@ -202,8 +202,8 @@ class DigestViolation:
     class AlgorithmMismatch(DigestViolation):
         """The digest algorithms differ.
 
-        The digest with algorithm ``got`` cannot be validated against the
-        reference digest with algorithm ``expected``.
+        The digest with algorithm `got` cannot be validated against the
+        reference digest with algorithm `expected`.
         """
 
         expected: DigestAlgorithm
@@ -216,7 +216,7 @@ class DigestViolation:
     def __str__(self) -> str: ...
 
 class DigestValidationError(Exception):
-    """Raised by :meth:`Digest.validate` when a digest cannot be validated against the reference."""
+    """Raised by `Digest.validate` when a digest cannot be validated against the reference."""
 
     @property
     def violations(self) -> list[DigestViolation]:
@@ -225,11 +225,11 @@ class DigestValidationError(Exception):
 
 @final
 class Metadata:
-    """Parsed ``metadata.json`` for a kernel build variant."""
+    """Parsed `metadata.json` for a kernel build variant."""
 
     @staticmethod
     def read_from_file(metadata_path: os.PathLike[str] | str) -> "Metadata":
-        """Parse ``metadata.json`` at the given path.
+        """Parse `metadata.json` at the given path.
 
         Raises:
             ValueError: On any I/O or parse error.
@@ -238,7 +238,7 @@ class Metadata:
 
     @staticmethod
     def from_bytes(bytes: bytes) -> "Metadata":
-        """Parse ``metadata.json`` from JSON in a byte array.
+        """Parse `metadata.json` from JSON in a byte array.
 
         Raises:
             ValueError: On any parse error.

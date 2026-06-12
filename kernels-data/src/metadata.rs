@@ -34,6 +34,12 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    /// Read the metadata from a JSON byte slice.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        Ok(serde_json::from_slice(bytes)?)
+    }
+
+    /// Read the metadata from a JSON `std::io::Read`.
     pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self> {
         Ok(serde_json::from_reader(reader)?)
     }

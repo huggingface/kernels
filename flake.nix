@@ -174,6 +174,7 @@
               pytest
               pytest-benchmark
               pyyaml
+              sigstore
               tabulate
               tomlkit
               torch

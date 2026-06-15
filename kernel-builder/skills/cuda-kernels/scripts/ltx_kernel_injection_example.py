@@ -3,7 +3,7 @@
 Minimal example: Inject custom CUDA kernels into LTX-Video pipeline.
 
 This script demonstrates the essential pattern for integrating custom CUDA kernels
-with diffusers pipelines. For full usage, see examples/ltx_video/generate_video.py.
+with diffusers pipelines. For benchmarking, see scripts/benchmark_example.py.
 
 Key lessons:
 1. Check if RMSNorm has weight (elementwise_affine may be False)
@@ -12,9 +12,9 @@ Key lessons:
 4. Inject kernels AFTER loading to CUDA, BEFORE CPU offloading
 
 Usage:
-    cd examples/ltx_video
-    uv pip install -e .  # Build kernels first
-    python ../../.claude/skills/h100-diffusers-kernels/references/ltx_kernel_injection_example.py
+    cd <your-kernel-project>     # kernel-builder project with your kernels
+    nix run .#build-and-copy -L  # Build kernels first (kernel-builder)
+    python path/to/skills/cuda-kernels/scripts/ltx_kernel_injection_example.py
 """
 
 import sys

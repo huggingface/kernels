@@ -427,9 +427,11 @@ nvcc -arch=sm_90 -O3 your_kernel.cu
 
 ## Working Example
 
-For complete, production-ready implementations, see `examples/ltx_video/`:
+For complete, working kernel projects, see `examples/kernels/` in the
+[kernels repo](https://github.com/huggingface/kernels/tree/main/examples/kernels)
+(e.g. `relu/`, `relu-backprop-compile/`).
 
-**Benchmark results on H100:**
+**Benchmark results on H100 (custom LTX-Video kernels):**
 | Kernel | Shape | Time |
 |--------|-------|------|
 | RMSNorm | [2, 1024, 2048] | 0.054 ms |
@@ -438,7 +440,7 @@ For complete, production-ready implementations, see `examples/ltx_video/`:
 
 **Build and test:**
 ```bash
-cd examples/ltx_video
-uv pip install -e .
-uv run python generate_video.py --num-frames 13 --steps 20
+cd <your-kernel-project>
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
+nix run .#ci-test            # Run the kernel's test suite
 ```

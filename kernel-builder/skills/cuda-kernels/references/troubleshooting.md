@@ -34,26 +34,50 @@ output[idx] = from_float(result, (scalar_t*)nullptr);
 
 **Problem:** Undeclared types `__half`, `__nv_bfloat16`
 
-**Solution:** Include required headers:
+**Solution:** Include required headers (never `<torch/extension.h>` — it pulls in pybind11, which breaks the ABI3 build):
 ```cpp
-#include <torch/extension.h>
+#include <torch/torch.h>
+#include <torch/library.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
 #include <c10/cuda/CUDAGuard.h>
 ```
 
-### 3. Build Fails with "No module named torch"
+### 3. Build Errors Mentioning pybind11 / Py_LIMITED_API / abi3
 
-**Solution:** Add torch to build dependencies in pyproject.toml:
-```toml
-[build-system]
-requires = ["setuptools", "wheel", "torch>=2.0"]
+**Problem:** Errors like `pybind11 does not support the limited API`, undefined `PyCFunction` variants, or `kernel-builder check-abi` failures.
+
+**Cause:** The kernel uses a disallowed binding pattern — `#include <torch/extension.h>` (which transitively includes pybind11), `PYBIND11_MODULE`, or a hand-written `setup.py` with `torch.utils.cpp_extension.CUDAExtension`. kernel-builder compiles against the Python limited API (ABI3); pybind11 and setuptools extensions cannot be used.
+
+**Solution:** Remove all pybind11 usage and any hand-written `setup.py`. Register ops in `torch-ext/torch_binding.cpp` with `TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops)` + `REGISTER_EXTENSION(TORCH_EXTENSION_NAME)`, build with `nix run .#build-and-copy -L`, and call ops in Python via `from ._ops import ops`. See "Hard Constraints" in SKILL.md.
+
+### 4. Python Can't Find the Op (`torch.ops.my_kernel` has no attribute ...)
+
+**Problem:** Calling `torch.ops.my_kernel.fn(...)` raises `AttributeError`.
+
+**Cause:** kernel-builder registers ops under a hash-suffixed namespace (e.g. `_my_kernel_a1b2c3d`), so the hardcoded name never exists.
+
+**Solution:** Always go through the generated module: `from ._ops import ops; ops.fn(...)`.
+
+### 5. check-config Fails: Invalid Kernel Name or Missing license
+
+**Problem:** `kernel-builder check-config` rejects `build.toml` with `Invalid kernel name` or `missing field 'license'`.
+
+**Solution:** In `[general]`, `name` must be dash-separated lowercase (`my-kernel`, never `my_kernel`) and `license` is required (e.g. `license = "Apache-2.0"`). The Python package directory uses the underscored form: `torch-ext/my_kernel/` for `name = "my-kernel"`.
+
+### 6. Build Fails: "Kernel is not in a git repository"
+
+**Problem:** Nix evaluation fails with `error: Kernel is not in a git repository, this will create a non-reproducible build.`
+
+**Solution:** The kernel project directory must be a git repository with the files committed:
+```bash
+git init && git add -A && git commit -m "initial kernel"
 ```
 
 ## Performance Issues
 
-### 4. Bank Conflicts in Shared Memory
+### 7. Bank Conflicts in Shared Memory
 
 **Problem:** Poor performance due to shared memory bank conflicts.
 
@@ -62,7 +86,7 @@ requires = ["setuptools", "wheel", "torch>=2.0"]
 __shared__ float data[32][33];  // 33 instead of 32
 ```
 
-### 5. Poor Occupancy
+### 8. Poor Occupancy
 
 **Problem:** Low SM utilization.
 
@@ -71,7 +95,7 @@ __shared__ float data[32][33];  // 33 instead of 32
 nvcc --ptxas-options=-v your_kernel.cu
 ```
 
-### 6. Memory Coalescing
+### 9. Memory Coalescing
 
 **Problem:** Poor memory bandwidth utilization.
 
@@ -79,7 +103,7 @@ nvcc --ptxas-options=-v your_kernel.cu
 
 ## Integration Issues
 
-### 7. AttributeError: 'NoneType' has no attribute 'contiguous' (RMSNorm weight is None)
+### 10. AttributeError: 'NoneType' has no attribute 'contiguous' (RMSNorm weight is None)
 
 **Problem:** Model uses `elementwise_affine=False`, so `module.weight` is `None`:
 ```
@@ -99,7 +123,7 @@ else:
     output = rmsnorm(x, weight, eps=eps)
 ```
 
-### 8. GEGLU Kernel Not Being Used
+### 11. GEGLU Kernel Not Being Used
 
 **Problem:** You patched GEGLU modules but the kernel isn't being called.
 
@@ -114,7 +138,7 @@ for name, module in model.named_modules():
 
 **Solution:** LTX-Video uses `GELU`, not `GEGLU`. Only patch GEGLU for models that actually use it (e.g., SD3, FLUX).
 
-### 9. Kernel Patching Doesn't Persist Through CPU Offloading
+### 12. Kernel Patching Doesn't Persist Through CPU Offloading
 
 **Problem:** After `enable_model_cpu_offload()`, patched modules don't work correctly.
 
@@ -126,7 +150,7 @@ inject_optimized_kernels(pipe)  # Patch modules
 pipe.enable_model_cpu_offload()  # Now enable offloading
 ```
 
-### 10. isinstance() Check Misses Diffusers Modules
+### 13. isinstance() Check Misses Diffusers Modules
 
 **Problem:** `isinstance(module, torch.nn.RMSNorm)` returns `False` for diffusers modules.
 
@@ -147,7 +171,7 @@ if type(module).__name__ == 'RMSNorm':
 
 ## torch.compile Compatibility
 
-### 11. Custom Kernels Don't Work with torch.compile
+### 14. Custom Kernels Don't Work with torch.compile
 
 **Problem:** When using `--use-optimized-kernels` with `--compile`, you get an error:
 ```
@@ -172,17 +196,14 @@ torch._dynamo.exc.TorchRuntimeError: Cannot access data pointer of Tensor (e.g. 
    python generate_video.py --no-optimized-kernels --compile
    ```
 
-2. **Register as a PyTorch custom op (advanced):**
+2. **Register a fake (meta) implementation for the op (advanced):** ops registered via `TORCH_LIBRARY_EXPAND` in C++ are already proper custom ops — do NOT re-wrap them with `@torch.library.custom_op` in Python. Add a fake impl using the generated `_ops.py` helpers:
    ```python
    import torch
+   from ._ops import ops, add_op_namespace_prefix
 
-   @torch.library.custom_op("ltx_kernels::rmsnorm", mutates_args={"out"})
-   def rmsnorm_op(out: torch.Tensor, input: torch.Tensor, weight: torch.Tensor, eps: float) -> None:
-       ops.rmsnorm_forward(out, input.contiguous(), weight.contiguous(), eps)
-
-   @rmsnorm_op.register_fake
+   @torch.library.register_fake(add_op_namespace_prefix("rmsnorm_forward"))
    def _(out, input, weight, eps):
-       pass  # No shape/dtype changes, output written to 'out'
+       return None  # No shape/dtype changes, output written to 'out'
    ```
 
 3. **Use `torch.compiler.allow_in_graph` (limited):**
@@ -196,7 +217,7 @@ torch._dynamo.exc.TorchRuntimeError: Cannot access data pointer of Tensor (e.g. 
    ```
    Note: This approach fails for most C++ extensions because they access data pointers.
 
-### 12. Performance Comparison: Custom Kernels vs torch.compile
+### 15. Performance Comparison: Custom Kernels vs torch.compile
 
 | Configuration | End-to-End Speedup | Notes |
 |:---|:---:|:---|

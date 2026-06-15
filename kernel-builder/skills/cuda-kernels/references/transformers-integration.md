@@ -382,9 +382,9 @@ inject_optimized_kernels(model)  # Inject first
 For a self-contained, runnable example:
 
 ```bash
-cd examples/ltx_video
-uv pip install -e .  # Build kernels
-python ../../.claude/skills/h100-diffusers-kernels/scripts/transformers_injection_example.py
+cd <your-kernel-project>     # kernel-builder project with your kernels
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
+python path/to/skills/cuda-kernels/scripts/transformers_injection_example.py
 ```
 
 This example:

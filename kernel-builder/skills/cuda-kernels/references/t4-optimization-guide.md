@@ -224,12 +224,21 @@ output[i] = __float2half(result);
 
 ```toml
 [general]
-name = "ltx_kernels"
+name = "ltx-kernels"   # dash-separated; underscores are rejected
 backends = ["cuda"]
+version = 1
+license = "Apache-2.0"
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h"
+]
 
 [kernel.your_kernel]
 backend = "cuda"
 src = ["kernel_src/your_kernel.cu"]
+depends = ["torch"]
 cuda-capabilities = ["7.5"]  # sm_75 for T4
 ```
 
@@ -402,18 +411,14 @@ def get_optimal_config():
 ## Working Example
 
 ```bash
-cd examples/ltx_video
+cd <your-kernel-project>
 
-# Build for T4
-# Ensure build.toml includes cuda-capabilities = ["7.5"]
-uv pip install -e .
+# Leave cuda-capabilities unspecified in build.toml unless the kernel
+# truly requires specific architectures (T4 is sm_75).
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
 
-# Run with T4-appropriate settings
-python generate_video.py \
-    --use-optimized-kernels \
-    --height 256 \
-    --width 384 \
-    --num-frames 9
+# Run the kernel's test suite
+nix run .#ci-test
 ```
 
 ## T4 Cloud Instance Notes

@@ -182,12 +182,21 @@ TF32: Best throughput for FP32-like accuracy (A100 specific)
 
 ```toml
 [general]
-name = "ltx_kernels"
+name = "ltx-kernels"   # dash-separated; underscores are rejected
 backends = ["cuda"]
+version = 1
+license = "Apache-2.0"
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h"
+]
 
 [kernel.your_kernel]
 backend = "cuda"
 src = ["kernel_src/your_kernel.cu"]
+depends = ["torch"]
 cuda-capabilities = ["8.0"]  # sm_80 for A100
 ```
 
@@ -300,12 +309,12 @@ ncu --set full -o a100_metrics.ncu-rep python your_script.py
 ## Working Example
 
 ```bash
-cd examples/ltx_video
+cd <your-kernel-project>
 
-# Build for A100
-# Ensure build.toml includes cuda-capabilities = ["8.0"]
-uv pip install -e .
+# Leave cuda-capabilities unspecified in build.toml unless the kernel
+# truly requires specific architectures (A100 is `cuda-capabilities = ["8.0"]`).
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
 
-# Run benchmark
-python generate_video.py --use-optimized-kernels
+# Run the kernel's test suite
+nix run .#ci-test
 ```

@@ -306,9 +306,9 @@ See SKILL.md "Common Issues and Solutions" for:
 For a self-contained, runnable example that demonstrates all patterns above:
 
 ```bash
-cd examples/ltx_video
-uv pip install -e .  # Build kernels
-python ../../.claude/skills/h100-diffusers-kernels/references/ltx_kernel_injection_example.py
+cd <your-kernel-project>     # kernel-builder project with your kernels
+nix run .#build-and-copy -L  # Build kernels with kernel-builder
+python path/to/skills/cuda-kernels/scripts/ltx_kernel_injection_example.py
 ```
 
 This example:

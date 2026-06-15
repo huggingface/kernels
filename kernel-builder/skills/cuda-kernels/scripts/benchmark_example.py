@@ -12,7 +12,7 @@ Build kernels (optional, for --use-optimized-kernels):
     nix flake update && nix run .#build-and-copy -L
 
     # Or using pip/uv
-    uv pip install -e .
+    nix run .#build-and-copy -L  # Build kernels with kernel-builder
 
 Usage:
     # Benchmark with optimized kernels

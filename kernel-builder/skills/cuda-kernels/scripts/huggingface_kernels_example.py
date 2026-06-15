@@ -52,7 +52,8 @@ def demo_basic_kernel_loading():
         repo_id = "kernels-community/activation"
 
         print(f"\n1. Checking kernel availability: {repo_id}")
-        if has_kernel(repo_id):
+        # version= (or revision=) is required for Hub loads
+        if has_kernel(repo_id, version=1):
             print("   Kernel is available for this environment")
 
             # Load the kernel
@@ -157,12 +158,12 @@ def demo_model_integration():
         # Check for layer norm kernel
         repo_id = "kernels-community/triton-layer-norm"
 
-        if not has_kernel(repo_id):
+        if not has_kernel(repo_id, version=1):
             print(f"   {repo_id} not available, skipping")
             return
 
         print(f"\n1. Loading {repo_id}...")
-        layer_norm = get_kernel(repo_id)
+        layer_norm = get_kernel(repo_id, version=1)
 
         # Check available functions
         print(f"\n2. Available functions:")
@@ -235,15 +236,17 @@ def demo_local_kernel():
     print("=" * 60)
 
     try:
-        from kernels import get_local_kernel
+        from kernels import get_local_kernel  # noqa: F401
 
-        # Example: Load from local path (adjust path as needed)
-        local_path = "torch-ext"  # Path to your local kernel
-
-        print(f"\n   To load a local kernel:")
-        print(f"   >>> from kernels import get_local_kernel")
-        print(f"   >>> kernel = get_local_kernel('{local_path}')")
-        print(f"\n   This is useful for development before publishing to Hub.")
+        print("\n   To load a locally built kernel, pass the project root")
+        print("   (variants are resolved from <path> or <path>/build):")
+        print("   >>> from pathlib import Path")
+        print("   >>> from kernels import get_local_kernel")
+        print("   >>> kernel = get_local_kernel(Path('/path/to/my-kernel'))")
+        print("\n   Or test the get_kernel() code path unchanged via an override:")
+        print("   $ LOCAL_KERNELS='my-username/my-kernel=/path/to/my-kernel' python app.py")
+        print("   # get_kernel('my-username/my-kernel') now loads the local build/")
+        print("\n   Both are useful for development before publishing to the Hub.")
 
     except ImportError:
         print("   kernels library not installed")
@@ -262,34 +265,50 @@ def demo_publishing_info():
     print("""
    To publish your own kernels:
 
-   1. Create project structure:
+   1. Scaffold the project (generates the compliant layout, a valid
+      build.toml, flake.nix, and an initialized git repo):
+      $ kernel-builder init --name my-username/my-kernel
+
       my-kernel/
       ├── build.toml
-      ├── kernel_src/
+      ├── flake.nix
+      ├── CARD.md
+      ├── my_kernel_cuda/
       │   └── my_kernel.cu
-      └── torch-ext/
-          ├── torch_binding.cpp
-          ├── torch_binding.h
-          └── my_kernel/__init__.py
+      ├── torch-ext/
+      │   ├── torch_binding.cpp
+      │   ├── torch_binding.h
+      │   └── my_kernel/__init__.py
+      └── tests/
 
-   2. Configure build.toml:
+   2. Configure build.toml (name must be dash-separated, license required;
+      the project dir must be a committed git repo):
       [general]
-      name = "my_kernel"
+      name = "my-kernel"
       backends = ["cuda"]
+      version = 1
+      license = "Apache-2.0"
+
+      [general.hub]
+      repo-id = "my-username/my-kernel"
 
       [torch]
       src = ["torch-ext/torch_binding.cpp", "torch-ext/torch_binding.h"]
 
       [kernel.my_kernel]
       backend = "cuda"
-      src = ["kernel_src/my_kernel.cu"]
+      src = ["my_kernel_cuda/my_kernel.cu"]
       depends = ["torch"]
-      cuda-capabilities = ["7.5", "8.0", "9.0"]
+      # leave cuda-capabilities unset unless truly required
 
-   3. Build and publish:
-      $ pip install kernel-builder
-      $ kernel-builder build
-      $ huggingface-cli upload my-username/my-kernel ./dist
+   3. Build and publish (bindings must use TORCH_LIBRARY_EXPAND, never pybind11):
+      $ kernel-builder build-and-copy -L   # local build into build/
+      $ kernel-builder build-and-upload    # build + upload to the Hub in one go
+
+      The target repo comes from `repo-id` under [general.hub] and `version`
+      under [general] in build.toml. Uploads go to a kernel-type Hub repo
+      (not a model repo); the owning user/org needs kernel-creation access
+      ("Request Kernels Creation" at hf.co/settings/account).
 
    See: https://huggingface.co/docs/kernels
    """)

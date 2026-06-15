@@ -1,4 +1,4 @@
-# Layers API Reference
+# Kernelizing layers
 
 ## Making layers kernel-aware
 

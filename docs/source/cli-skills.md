@@ -1,4 +1,4 @@
-### kernel-builder skills add
+# Install agent skills
 
 Use `kernel-builder skills add` to install the skills for AI coding assistants like Claude, Codex, and OpenCode.
 Supported skills include:

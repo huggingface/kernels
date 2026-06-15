@@ -1,4 +1,4 @@
-# Kernels CLI Reference
+# Overview
 
 The `kernels` CLI provides commands for managing compute kernels.
 

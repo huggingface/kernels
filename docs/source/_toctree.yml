@@ -1,78 +1,84 @@
 - sections:
     - local: index
-      title: Introduction
+      title: Kernels
     - local: why_kernels
       title: Why kernels?
     - local: installation
       title: Installation
-    - local: talks
-      title: Talks
-  title: Getting started
+  title: Get started
 - sections:
     - local: basic-usage
       title: Quickstart
     - local: layers
-      title: Using Layers
+      title: Use layers
     - local: locking
-      title: Locking Kernel Versions
+      title: Lock kernel versions
     - local: env
-      title: Environment Variables
-    - local: migration
-      title: Migrating from older versions
+      title: Environment variables
     - local: integrating-kernels
-      title: Integrating kernels into a project
+      title: Projects using kernels
+    - local: migration
+      title: Migrate from older versions
     - local: faq
       title: FAQ
-  title: Using kernels
-- sections:
-    - local: api/kernels
-      title: Kernels
-    - local: api/layers
-      title: Layers
-  title: Kernels API Reference
-- sections:
-    - local: cli
-      title: Kernels CLI
-    - local: cli-benchmark
-      title: kernels benchmark
-    - local: cli-versions
-      title: kernels versions
-    - local: cli-lock
-      title: kernels lock
-    - local: cli-download
-      title: kernels download
-    - local: cli-skills
-      title: kernel-builder skills
-    - local: cli-verify-signature
-      title: kernels verify-signature
-  title: Kernels CLI Reference
+  title: Use kernels
 - sections:
     - local: builder/writing-kernels
-      title: Writing Kernels
+      title: Write kernels
     - local: builder/build
-      title: Building kernels
+      title: Build with Nix
     - local: builder/local-dev
-      title: Local Development
+      title: Develop locally
     - local: builder/ide-setup
-      title: IDE Setup
-    - local: kernel-requirements
-      title: Kernel Requirements
+      title: Set up your IDE
+    - local: builder/metal
+      title: Set up for Metal kernels
+    - local: builder/agents-guide
+      title: Build kernels with agents
     - local: builder/security
-      title: Security
+      title: Secure your kernels
+  title: Build kernels
+- sections:
+    - sections:
+        - local: api/kernels
+          title: Loading kernels
+        - local: api/layers
+          title: Kernelizing layers
+      title: Python API
+    - sections:
+        - local: cli
+          title: Overview
+        - local: cli-versions
+          title: kernels versions
+        - local: cli-lock
+          title: kernels lock
+        - local: cli-download
+          title: kernels download
+        - local: cli-benchmark
+          title: kernels benchmark
+      title: kernels CLI
+    - sections:
+        - local: builder-cli
+          title: CLI reference for kernel-builder
+        - local: cli-skills
+          title: Install agent skills
+      title: kernel-builder CLI
+    - sections:
+        - local: kernel-requirements
+          title: Kernel requirements
+        - local: builder/build-variants
+          title: Build variants
+      title: Kernel specifications
+  title: Reference
+- sections:
     - local: builder/why-nix
       title: Why Nix?
-    - local: builder/metal
-      title: Metal Notes
-    - local: builder/build-variants
-      title: Build Variants
-    - local: builder/agents-guide
-      title: Building kernels with agents
-    - local: builder-cli
-      title: Builder CLI Reference
-  title: Building kernels
-- sections:
     - local: builder/design-overview
-      title: Overview
+      title: Architecture overview
     - local: builder/design-nix-builder
-      title: Nix Builder
-  title: Design
+      title: Nix builder design
+  title: Concepts & design
+- sections:
+    - local: talks
+      title: Talks
+  title: Resources

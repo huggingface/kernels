@@ -1,4 +1,4 @@
-# Layers
+# Use layers
 
 A kernel can provide layers in addition to kernel functions. A layer from
 the Hub can replace the `forward` method of an existing layer for a certain

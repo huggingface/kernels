@@ -1,4 +1,4 @@
-# Local development of kernels
+# Develop locally
 
 ## Introduction
 

@@ -1,4 +1,4 @@
-# Migrating from older versions
+# Migrate from older versions
 
 ## 0.12
 

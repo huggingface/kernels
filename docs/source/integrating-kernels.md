@@ -1,4 +1,4 @@
-# Integrating kernels
+# Projects using kernels
 
 This page shows how different projects use `kernels`.
 

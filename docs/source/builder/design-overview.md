@@ -1,4 +1,4 @@
-# Design overview
+# Architecture overview
 
 The Kernel Builder is a Nix flake that combines two components:
 

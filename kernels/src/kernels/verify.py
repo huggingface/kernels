@@ -33,12 +33,12 @@ class GitHubWorkflowPolicy(VerificationPolicy):
         self,
         *,
         repo_id: str,
-        workflowNames: list[str] | None = None,
-        workflowRef: str | None = None,
+        workflow_names: list[str] | None = None,
+        workflow_ref: str | None = None,
     ):
         self.repo_id = repo_id
-        self.workflowNames = workflowNames
-        self.workflowRef = workflowRef
+        self.workflowNames = workflow_names
+        self.workflowRef = workflow_ref
 
     def verify(self, cert: Certificate) -> None:
         policies: list[VerificationPolicy] = [
@@ -67,18 +67,18 @@ This is a curated set of trusted kernel developers.
 DEFAULT_POLICIES: list[VerificationPolicy] = [
     GitHubWorkflowPolicy(
         repo_id="huggingface/kernels-community",
-        workflowNames=["Build", "Build (macOS)", "Build (Windows)"],
-        workflowRef="refs/heads/main",
+        workflow_names=["Build", "Build (macOS)", "Build (Windows)"],
+        workflow_ref="refs/heads/main",
     ),
     GitHubWorkflowPolicy(
         repo_id="huggingface/kernels-staging",
-        workflowNames=["Build", "Build (macOS)", "Build (Windows)"],
-        workflowRef="refs/heads/main",
+        workflow_names=["Build", "Build (macOS)", "Build (Windows)"],
+        workflow_ref="refs/heads/main",
     ),
     GitHubWorkflowPolicy(
         repo_id="huggingface/kernels-test",
-        workflowNames=["Build", "Build (macOS)", "Build (Windows)"],
-        workflowRef="refs/heads/main",
+        workflow_names=["Build", "Build (macOS)", "Build (Windows)"],
+        workflow_ref="refs/heads/main",
     ),
 ]
 

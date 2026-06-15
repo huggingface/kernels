@@ -142,10 +142,20 @@
           path = ./silu-and-mul;
           drv = sys: out: out.devShells.${sys}.test;
         }
+        {
+          name = "relu-triton-kernel";
+          path = ./relu-triton;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
+        }
       ];
 
       # ROCm kernels to build in CI.
       ciRocmKernels = [
+        {
+          name = "relu-triton-kernel";
+          path = ./relu-triton;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
+        }
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
@@ -198,6 +208,11 @@
 
       # XPU kernels to build in CI.
       ciXpuKernels = [
+        {
+          name = "relu-triton-kernel";
+          path = ./relu-triton;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
+        }
         {
           name = "relu-kernel";
           path = ./relu;

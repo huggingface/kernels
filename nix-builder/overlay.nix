@@ -50,10 +50,12 @@ final: prev:
       with python-self;
       let
         triton = callPackage ./pkgs/python-modules/triton { };
+        triton-rocm = callPackage ./pkgs/python-modules/triton-rocm { };
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
       in
       {
         inherit (triton) triton_3_5_0 triton_3_6_0 triton_3_7_0;
+        inherit (triton-rocm) triton-rocm_3_6_0 triton-rocm_3_7_0;
         inherit (triton-xpu) triton-xpu_3_6_0 triton-xpu_3_7_0 triton-xpu_3_7_1;
 
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
@@ -155,6 +157,7 @@ final: prev:
         torch-bin_2_9 = mkTorch {
           version = "2.9";
           triton-cuda = triton_3_5_0;
+          triton-rocm = null;
           triton-xpu = null;
           # Not supported anymore.
           xpuPackages = null;
@@ -163,6 +166,7 @@ final: prev:
         torch-bin_2_11 = mkTorch {
           version = "2.11";
           triton-cuda = triton_3_6_0;
+          triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_7_0;
           xpuPackages = final.xpuPackages_2025_3_2;
         };
@@ -170,6 +174,7 @@ final: prev:
         torch-bin_2_12 = mkTorch {
           version = "2.12";
           triton-cuda = triton_3_7_0;
+          triton-rocm = triton-rocm_3_7_0;
           triton-xpu = triton-xpu_3_7_1;
           xpuPackages = final.xpuPackages_2025_3_2;
         };

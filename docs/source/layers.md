@@ -180,6 +180,11 @@ work.
 Hub-backed [`~kernels.LayerRepository`] and [`~kernels.FuncRepository`] entries must specify
 either a `version` or an explicit `revision`.
 
+> [!NOTE]
+> Version `0` kernels are excluded from the API compatibility requirement,
+> since it is used for alpha/beta-quality kernels that may still have
+> rapidly changing APIs.
+
 You can register a mapping, like the one above, using [`~kernels.register_kernel_mapping`]:
 
 ```python

@@ -30,6 +30,11 @@ for older PyTorch versions. This ensures that your code will continue to work.
 
 Hub kernels must be loaded with either a `version` or an explicit `revision`.
 
+> [!NOTE]
+> Version `0` kernels are excluded from the API compatibility requirement,
+> since it is used for alpha/beta-quality kernels that may still have
+> rapidly changing APIs.
+
 ## Checking Kernel Availability
 
 You can check if a particular version of a kernel supports the environment
@@ -43,7 +48,7 @@ is_available = has_kernel("kernels-community/activation", version=1)
 print(f"Kernel available: {is_available}")
 ```
 
-When no compatible kernel is found, [`~kernels.has_kernel`] does not say *why*.
+When no compatible kernel is found, [`~kernels.has_kernel`] does not say _why_.
 [`~kernels.get_kernel_variants`] returns the full resolution trace instead: one
 decision per build variant in the repository, with compatible variants listed
 first. Each decision is a `VariantAccepted` or a `VariantRejected`, and rejected
@@ -63,9 +68,9 @@ for decision in get_kernel_variants("kernels-community/activation", version=1):
 ## Inspecting Loaded Kernels
 
 [`~kernels.get_loaded_kernels`] returns a snapshot of every kernel that has been loaded
-into the current process. Each entry is a [`~kernels.LoadedKernel`] with the kernel
-`metadata`, the imported `module`, and a `repo_info` ([`~kernels.RepoInfo`] with the
-`repo_id`, resolved `revision`, and a `local` flag).
+into the current process. Each entry is a [`~kernels.LoadedKernel`] namedtuple with the
+imported `module`, the `package_name`, and `repo_infos` (repo id, resolved
+revision, and the backend argument that was passed).
 
 ```python
 from kernels import get_kernel, get_loaded_kernels
@@ -73,15 +78,12 @@ from kernels import get_kernel, get_loaded_kernels
 get_kernel("kernels-community/activation", version=1)
 
 for loaded in get_loaded_kernels():
-    print(loaded.metadata.name, loaded.repo_info)
+    print(loaded.package_name, loaded.repo_infos)
 ```
 
-`repo_info` is populated for kernels loaded from a known Hub repository, i.e. via
-[`~kernels.get_kernel`], [`~kernels.get_locked_kernel`], or [`~kernels.load_kernel`].
-Only [`~kernels.get_local_kernel`], which loads from an arbitrary local path, leaves
-`repo_info=None`. Its `local` flag distinguishes kernels downloaded from the Hub
-(`local=False`) from pre-downloaded, locked kernels loaded from local files
-(`local=True`).
+`repo_infos` is populated only for kernels loaded with [`~kernels.get_kernel`]. Kernels
+loaded from a local path ([`~kernels.get_local_kernel`]) or via a lockfile
+([`~kernels.get_locked_kernel`], [`~kernels.load_kernel`]) have `repo_infos=None`.
 
 Browse through different kernels compatible with `kernels` from [here](https://huggingface.co/kernels).
 

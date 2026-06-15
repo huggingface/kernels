@@ -14,6 +14,11 @@ for never breaking a kernel within a major version and should bump up
 the major version if the kernel API changes and/or when support for
 older Torch versions is removed.
 
+> [!NOTE]
+> Version `0` kernels are excluded from the API compatibility requirement,
+> since it is used for alpha/beta-quality kernels that may still have
+> rapidly changing APIs.
+
 You can find the versions that are supported by a kernel using the
 `kernels versions command`. For example:
 

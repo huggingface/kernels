@@ -25,17 +25,20 @@ class GitHubWorkflowPolicy(VerificationPolicy):
     def __init__(
         self,
         *,
+        repo_id: str,
         signer_uris: list[str],
     ):
         if not signer_uris:
             raise ValueError("At least one signer URI must be provided")
 
+        self.repo_id = repo_id
         self.signer_uris = signer_uris
 
     def verify(self, cert: Certificate) -> None:
         policies: list[VerificationPolicy] = [
             policy.OIDCIssuer("https://token.actions.githubusercontent.com"),
             policy.OIDCIssuerV2("https://token.actions.githubusercontent.com"),
+            policy.OIDCSourceRepositoryURI(f"https://github.com/{self.repo_id}"),
         ]
 
         policies.append(policy.AnyOf([policy.OIDCBuildSignerURI(signer_uri) for signer_uri in self.signer_uris]))
@@ -50,6 +53,7 @@ This is a curated set of trusted kernel developers.
 """
 DEFAULT_POLICIES: list[VerificationPolicy] = [
     GitHubWorkflowPolicy(
+        repo_id="huggingface/kernels-community",
         signer_uris=[
             "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
             "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",

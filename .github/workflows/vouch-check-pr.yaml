@@ -12,7 +12,24 @@ jobs:
     name: Check PR author
     runs-on: ubuntu-latest
     steps:
+      # When a maintainer reopens a PR that was auto-closed, don't run the
+      # vouch check again (it would just re-close it). Reopens by the PR author
+      # or other non-maintainers still get checked.
+      - name: Skip if a maintainer reopened the PR
+        id: maintainer
+        if: github.event.action == 'reopened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          PERM=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
+          echo "Actor ${ACTOR} reopened the PR with permission: ${PERM}"
+          if [ "$PERM" = "admin" ] || [ "$PERM" = "write" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: mitchellh/vouch/action/check-pr@c6d80ead49839655b61b422700b7a3bc9d0804a9 # v1.4.2
+        if: steps.maintainer.outputs.skip != 'true'
         with:
           pr-number: ${{ github.event.pull_request.number }}
           auto-close: true

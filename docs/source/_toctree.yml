@@ -25,6 +25,24 @@
       title: FAQ
   title: Using kernels
 - sections:
+    - local: cli
+      title: Kernels CLI
+    - local: cli-benchmark
+      title: kernels benchmark
+    - local: cli-versions
+      title: kernels versions
+    - local: cli-lock
+      title: kernels lock
+    - local: cli-download
+      title: kernels download
+    - local: cli-skills
+      title: kernel-builder skills
+    - local: cli-verify-signature
+      title: kernels verify-signature
+    - local: builder-cli
+      title: Builder CLI Reference
+  title: CLI Reference
+- sections:
     - local: builder/writing-kernels
       title: Writing Kernels
     - local: builder/build
@@ -51,25 +69,7 @@
       title: Kernels
     - local: api/layers
       title: Layers
-    - local: cli
-      title: Kernels CLI
   title: API Reference
-- sections:
-    - local: cli-benchmark
-      title: kernels benchmark
-    - local: cli-versions
-      title: kernels versions
-    - local: cli-lock
-      title: kernels lock
-    - local: cli-download
-      title: kernels download
-    - local: cli-skills
-      title: kernel-builder skills
-    - local: cli-verify-signature
-      title: kernels verify-signature
-    - local: builder-cli
-      title: Builder CLI Reference
-  title: CLI Reference
 - sections:
     - local: builder/design-overview
       title: Overview

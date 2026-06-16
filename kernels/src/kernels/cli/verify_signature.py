@@ -1,6 +1,10 @@
 import argparse
 import sys
-from typing import assert_never
+
+if sys.version_info >= (3, 11):
+    from typing import assert_never
+else:
+    from typing_extensions import assert_never
 
 from kernels._versions import select_revision_or_version
 from kernels.utils import install_kernel, install_kernel_all_variants

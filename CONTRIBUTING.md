@@ -38,7 +38,23 @@ please fill out the LLM disclosure section in the PR template honestly.
 
 ## Development
 
-The Python package lives in [`kernels/`](kernels/). Install it with the dev extras:
+The quickest way to get a full development environment — with all the tooling for
+both the Python package and `kernel-builder` — is [Nix](https://nixos.org/):
+
+```bash
+nix develop
+```
+
+Or, if you use [direnv](https://direnv.net/), let it load the flake automatically:
+
+```bash
+echo "use flake" > .envrc && direnv allow
+```
+
+Check out our [IDE setup doc](./docs/source/builder/ide-setup.md) for more details.
+
+The Python package lives in [`kernels/`](kernels/). If you'd rather not use Nix,
+install it with the dev extras:
 
 ```bash
 pip install -e "kernels/[dev]"
@@ -58,6 +74,8 @@ cd kernels && pytest
 ```
 
 New or changed functionality should come with test coverage.
+
+For contributing to `kernel-builder`, we recommend the Nix environment above.
 
 ## Opening the PR
 

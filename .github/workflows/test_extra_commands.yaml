@@ -33,3 +33,5 @@ jobs:
           USER: runner
       - name: Test nix run .#kernels
         run: ( cd examples/kernels/relu ; nix run .#kernels -- lock ../../../nix-builder/tests/run-kernels )
+      - name: Test verify-signature
+        run: nix run .#kernels -- verify-signature kernels-community/relu 1

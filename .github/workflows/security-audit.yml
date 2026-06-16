@@ -136,7 +136,7 @@ jobs:
             cat /tmp/changes.diff
           } | claude -p --model claude-opus-4-8 > /tmp/audit_result.txt
 
-          if grep -q "NO_FINDINGS" /tmp/audit_result.txt; then
+          if grep -qE '^NO_FINDINGS$' /tmp/audit_result.txt && [ "$(wc -l < /tmp/audit_result.txt)" -eq 1 ]; then
             echo "has_findings=false" >> "$GITHUB_OUTPUT"
             echo "Security audit complete — no findings."
           else

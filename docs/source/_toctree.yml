@@ -65,6 +65,8 @@
       title: kernels download
     - local: cli-skills
       title: kernel-builder skills
+    - local: cli-verify-signature
+      title: kernels verify-signature
     - local: builder-cli
       title: Builder CLI Reference
   title: CLI Reference

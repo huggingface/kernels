@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
 from kernels.lockfile import KernelLock, get_kernel_locks
@@ -82,6 +83,25 @@ def main():
         help="Output PNG and GIF formats instead of SVG",
     )
     benchmark_parser.set_defaults(func=run_benchmark)
+
+    verify_signature_parser = subparsers.add_parser(
+        "verify-signature",
+        help="Verify the signature of a kernel",
+    )
+    verify_signature_parser.add_argument(
+        "--all-variants",
+        action="store_true",
+        help="Download all build variants of the kernel",
+    )
+    verify_signature_parser.add_argument("--filter-unsigned", action="store_true", help="Skip unsigned variants")
+    verify_signature_parser.add_argument(
+        "--filter-no-digest",
+        action="store_true",
+        help="Skip variants without a digest in the metadata",
+    )
+    verify_signature_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    verify_signature_parser.add_argument("version", type=int, help="Kernel version to verify")
+    verify_signature_parser.set_defaults(func=verify_signature)
 
     args = parser.parse_args()
     args.func(args)

@@ -4,60 +4,11 @@ The `kernels` CLI provides commands for managing compute kernels.
 
 ## Commands
 
-| Command                                                 | Description                                              |
-| ------------------------------------------------------- | -------------------------------------------------------- |
-| [benchmark](cli-benchmark.md)                           | Run benchmark results for a kernel                       |                           |
-| [versions](cli-versions.md)                             | Show kernel versions                                     |
-| [lock](cli-lock.md)                                     | Lock kernel revisions                                    |
-| [download](cli-download.md)                                     | Download a kernel                                    |
+| Command                                     | Description                        |
+| ------------------------------------------- | ---------------------------------- | --- |
+| [benchmark](cli-benchmark.md)               | Run benchmark results for a kernel |     |
+| [download](cli-download.md)                 | Download a kernel                  |
+| [lock](cli-lock.md)                         | Lock kernel revisions              |
+| [verify-signature](cli-verify-signature.md) | Verify a kernel signature          |
+| [versions](cli-versions.md)                 | Show kernel versions               |
 
-## Quick Start
-
-For building and writing kernels, please refer [building kernels](./builder/build.md) and 
-[writing kernels](./builder/writing-kernels.md).
-
-### Use kernels in your project
-
-#### Directly from the Hub
-
-```python
-import torch
-
-from kernels import get_kernel
-
-# Download optimized kernels from the Hugging Face hub
-my_kernel = get_kernel("my-username/my-kernel", version=1)
-
-# Random tensor
-x = torch.randn((10, 10), dtype=torch.float16, device="cuda")
-
-# Run the kernel
-y = torch.empty_like(x)
-my_kernel.my_kernel_function(y, x)
-
-print(y)
-```
-
-or
-
-#### Locked and downloaded
-
-Add to `pyproject.toml`:
-
-```toml
-[tool.kernels.dependencies]
-"my-username/my-kernel" = "1"
-```
-
-Then lock and download:
-
-```bash
-kernels lock .
-kernels download .
-```
-
-### See help
-
-```bash
-kernels --help
-```

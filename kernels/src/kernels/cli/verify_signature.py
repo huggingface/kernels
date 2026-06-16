@@ -35,10 +35,8 @@ def verify_signature(args: argparse.Namespace) -> None:
                     failed = True
                 continue
             case VerificationResult.SignatureBundleInvalid(reason=reason):
-                if not args.filter_unsigned:
-                    print(f"❌ {variant_str}: cannot verify kernel integrity, invalid signature bundle:\n{reason}")
-                    failed = True
-                continue
+                print(f"❌ {variant_str}: cannot verify kernel integrity, invalid signature bundle:\n{reason}")
+                failed = True
             case VerificationResult.MetadataInvalid(reason=reason):
                 print(f"❌ {variant_str}: cannot verify kernel integrity, invalid metadata:\n{reason}")
                 failed = True

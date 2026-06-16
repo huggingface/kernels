@@ -16,45 +16,29 @@ class GitHubWorkflowPolicy(VerificationPolicy):
     given GitHub repository.
 
     Args:
-        repo_id (`str`):
-            The GitHub repository in the format `owner/repo` that matches
-            the workflow that signed the kernel.
-        workflowNames (`list[str]`, *optional*):
-            The workflows within the repository from which signed artifacts
-            are accepted. It is strongly recommended to set this to block
-            signatures from arbitrary workflows.
-        workflowRef (`str`, *optional*):
-            The ref of the workflow that signed the artifact, such as
-            `refs/heads/main`. It is strongly recommended to set the ref to
-            block signatures from arbitrary branches or tags.
+        signer_uris (`list[str]`):
+            List of workflows URIs that are allowed as kernel signers. Each
+            URI has the shape:
+            `https://github.com/<org>/<repo>/.github/workflows/<workflow>.yaml@<ref>`
     """
 
     def __init__(
         self,
         *,
-        repo_id: str,
-        workflow_names: list[str] | None = None,
-        workflow_ref: str | None = None,
+        signer_uris: list[str],
     ):
-        self.repo_id = repo_id
-        self.workflowNames = workflow_names
-        self.workflowRef = workflow_ref
+        if not signer_uris:
+            raise ValueError("At least one signer URI must be provided")
+
+        self.signer_uris = signer_uris
 
     def verify(self, cert: Certificate) -> None:
         policies: list[VerificationPolicy] = [
             policy.OIDCIssuer("https://token.actions.githubusercontent.com"),
-            policy.GitHubWorkflowRepository(self.repo_id),
             policy.OIDCIssuerV2("https://token.actions.githubusercontent.com"),
-            policy.OIDCSourceRepositoryURI(f"https://github.com/{self.repo_id}"),
         ]
 
-        if self.workflowRef is not None:
-            policies.append(policy.GitHubWorkflowRef(self.workflowRef))
-
-        if self.workflowNames is not None:
-            policies.append(
-                policy.AnyOf([policy.GitHubWorkflowName(workflowName) for workflowName in self.workflowNames])
-            )
+        policies.append(policy.AnyOf([policy.OIDCBuildSignerURI(signer_uri) for signer_uri in self.signer_uris]))
 
         return policy.AllOf(policies).verify(cert)
 
@@ -66,19 +50,11 @@ This is a curated set of trusted kernel developers.
 """
 DEFAULT_POLICIES: list[VerificationPolicy] = [
     GitHubWorkflowPolicy(
-        repo_id="huggingface/kernels-community",
-        workflow_names=["Build", "Build (macOS)", "Build (Windows)"],
-        workflow_ref="refs/heads/main",
-    ),
-    GitHubWorkflowPolicy(
-        repo_id="huggingface/kernels-staging",
-        workflow_names=["Build", "Build (macOS)", "Build (Windows)"],
-        workflow_ref="refs/heads/main",
-    ),
-    GitHubWorkflowPolicy(
-        repo_id="huggingface/kernels-test",
-        workflow_names=["Build", "Build (macOS)", "Build (Windows)"],
-        workflow_ref="refs/heads/main",
+        signer_uris=[
+            "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
+            "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",
+            "https://github.com/huggingface/kernels-community/.github/workflows/build-windows.yaml@refs/heads/main",
+        ],
     ),
 ]
 

@@ -25,6 +25,12 @@
       title: FAQ
   title: Using kernels
 - sections:
+    - local: api/kernels
+      title: Kernels
+    - local: api/layers
+      title: Layers
+  title: Kernels API Reference
+- sections:
     - local: cli
       title: Kernels CLI
     - local: cli-benchmark
@@ -39,9 +45,7 @@
       title: kernel-builder skills
     - local: cli-verify-signature
       title: kernels verify-signature
-    - local: builder-cli
-      title: Builder CLI Reference
-  title: CLI Reference
+  title: Kernels CLI Reference
 - sections:
     - local: builder/writing-kernels
       title: Writing Kernels
@@ -63,13 +67,9 @@
       title: Build Variants
     - local: builder/agents-guide
       title: Building kernels with agents
+    - local: builder-cli
+      title: Builder CLI Reference
   title: Building kernels
-- sections:
-    - local: api/kernels
-      title: Kernels
-    - local: api/layers
-      title: Layers
-  title: API Reference
 - sections:
     - local: builder/design-overview
       title: Overview

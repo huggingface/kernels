@@ -4,7 +4,7 @@ Compiling a kernel is CPU-intensive and testing it requires an accelerator (such
 
 Two prebuilt actions make this possible:
 
-- [`huggingface/kernel-builder-job`](https://github.com/huggingface/kernel-builder-job) runs the Nix kernel builder on a CPU flavor and uploads the result to the Hub.
+- [`huggingface/kernel-builder-job`](https://github.com/huggingface/kernel-builder-job) runs the Nix kernel builder on a CPU flavor and publishes the built kernel to the Hub.
 - [`huggingface/hf-jobs-action`](https://github.com/huggingface/hf-jobs-action) runs an arbitrary script on any flavor (including GPUs), which is convenient for testing the kernel you just built.
 
 A typical setup has two workflows: one that **builds** the kernel on push, and one that **tests** it on a GPU. They communicate through the Hub, the build uploads artifacts, the test pulls them back down.

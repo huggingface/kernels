@@ -34,16 +34,16 @@
     - local: builder/metal
       title: Set up for Metal kernels
     - local: builder/agents-guide
-      title: Build kernels with agents
+      title: Develop kernels with agents
     - local: builder/security
       title: Secure your kernels
   title: Build kernels
 - sections:
     - sections:
         - local: api/kernels
-          title: Loading kernels
+          title: Kernels API Reference
         - local: api/layers
-          title: Kernelizing layers
+          title: Layers API Reference
       title: Python API
     - sections:
         - local: cli
@@ -56,6 +56,8 @@
           title: kernels download
         - local: cli-benchmark
           title: kernels benchmark
+        - local: cli-verify-signature
+          title: kernels verify-signature
       title: kernels CLI
     - sections:
         - local: builder-cli

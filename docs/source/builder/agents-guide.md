@@ -1,4 +1,4 @@
-# Build kernels with agents
+# Develop kernels with agents
 
 Code agents are a good fit to build custom kernels because the hard part is not just writing in Domain Specific Language (DSLs) like CUDA. You also need the right project layout, PyTorch bindings, architecture-specific choices, model-specific integration, and trustworthy benchmarks. 
 

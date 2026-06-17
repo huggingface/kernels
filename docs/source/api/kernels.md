@@ -1,4 +1,4 @@
-# Loading kernels
+# Kernels API Reference
 
 ## Main Functions
 

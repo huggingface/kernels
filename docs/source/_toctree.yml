@@ -41,9 +41,9 @@
 - sections:
     - sections:
         - local: api/kernels
-          title: Kernels API Reference
+          title: Kernels
         - local: api/layers
-          title: Layers API Reference
+          title: Layers
       title: Python API
     - sections:
         - local: cli

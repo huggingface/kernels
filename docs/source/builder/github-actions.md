@@ -33,6 +33,7 @@ on:
     paths:
       - "csrc/**"
       - "torch-ext/**"
+      - build.toml
       - flake.nix
       - flake.lock
   workflow_dispatch:
@@ -74,6 +75,13 @@ The path filter keeps the build from running on unrelated commits, and `workflow
 > variant is compiled. Set a generous `timeout` (the example allows six hours)
 > and rely on the [Hugging Face binary cache](build.md#using-the-hugging-face-binary-cache)
 > to keep subsequent builds fast.
+
+You can speed up builds by tuning how much work runs in parallel. `--max-jobs`
+sets how many kernel variants are built concurrently, while `--cores` sets how
+many CPU cores each of those jobs may use. Pick values that fit the chosen CPU
+`flavor`: a larger flavor (such as `cpu-xl`) has more cores to spread across
+jobs, so raising `--max-jobs` and `--cores` together shortens the total build
+time. Setting them too high for the flavor only adds scheduling overhead.
 
 ### `kernel-builder-job` inputs
 
@@ -155,6 +163,11 @@ Run the build workflow before the test workflow so the Hub has a fresh kernel to
 ## Choosing a flavor
 
 Flavors map to the machine types available on Hugging Face Jobs, CPU flavors such as `cpu-upgrade` and `cpu-xl` for builds, and GPU flavors such as `l4x1`, `a100-large`, `h200`, or `rtx-pro-6000` for tests. Pick the most reasonable GPU that fits your model to keep jobs low cost. The current list and pricing are in the [Hugging Face Jobs documentation](https://huggingface.co/docs/huggingface_hub/guides/jobs).
+
+> [!NOTE]
+> HF Jobs currently only offers a few CPU architectures, so the kernel is built
+> for whatever architecture the available CPU flavors provide. This is a current
+> limitation to keep in mind if you need to target a specific architecture.
 
 > [!WARNING]
 > HF Jobs containers start with shell tracing enabled (`set -x`). Always run

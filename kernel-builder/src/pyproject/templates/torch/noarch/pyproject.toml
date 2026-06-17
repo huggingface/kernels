@@ -19,11 +19,11 @@ package-dir = { "" = "torch-ext" }
 
 [tool.setuptools.packages.find]
 where = ["torch-ext"]
-include = ["{{name}}*"]
+include = ["{{ name }}*"]
 
 {% if data_globs %}
 [tool.setuptools.package-data]
-{{ name }} = [ {{ data_globs }} ]
+{{ python_name }} = [ {{ data_globs }} ]
 {% endif %}
 
 [tool.pytest.ini_options]

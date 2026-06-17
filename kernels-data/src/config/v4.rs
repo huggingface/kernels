@@ -95,7 +95,9 @@ pub struct Torch {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct TorchNoarch {}
+pub struct TorchNoarch {
+    pub pyext: Option<Vec<String>>,
+}
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -258,8 +260,10 @@ impl From<Torch> for super::Torch {
 }
 
 impl From<TorchNoarch> for super::TorchNoarch {
-    fn from(_torch_noarch: TorchNoarch) -> Self {
-        Self {}
+    fn from(torch_noarch: TorchNoarch) -> Self {
+        Self {
+            pyext: torch_noarch.pyext,
+        }
     }
 }
 
@@ -453,8 +457,10 @@ impl From<super::Torch> for Torch {
     }
 }
 impl From<super::TorchNoarch> for TorchNoarch {
-    fn from(_torch_noarch: super::TorchNoarch) -> Self {
-        Self {}
+    fn from(torch_noarch: super::TorchNoarch) -> Self {
+        Self {
+            pyext: torch_noarch.pyext,
+        }
     }
 }
 

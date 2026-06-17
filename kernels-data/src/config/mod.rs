@@ -45,6 +45,13 @@ impl Framework {
         }
     }
 
+    pub fn torch_noarch(&self) -> Option<&TorchNoarch> {
+        match self {
+            Framework::TorchNoarch(torch_noarch) => Some(torch_noarch),
+            _ => None,
+        }
+    }
+
     pub fn tvm_ffi(&self) -> Option<&TvmFfi> {
         match self {
             Framework::TvmFfi(tvm_ffi) => Some(tvm_ffi),
@@ -55,7 +62,7 @@ impl Framework {
 
 impl Build {
     pub fn is_noarch(&self) -> bool {
-        self.kernels.is_empty()
+        matches!(self.framework, Framework::TorchNoarch(_))
     }
 
     pub fn branch(&self) -> Option<&str> {
@@ -194,7 +201,16 @@ impl Torch {
         data_extensions(self.pyext.as_deref())
     }
 }
-pub struct TorchNoarch {}
+
+pub struct TorchNoarch {
+    pub pyext: Option<Vec<String>>,
+}
+
+impl TorchNoarch {
+    pub fn data_extensions(&self) -> Option<Vec<String>> {
+        data_extensions(self.pyext.as_deref())
+    }
+}
 
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,

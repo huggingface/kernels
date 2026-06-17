@@ -1,6 +1,6 @@
 # Building and testing kernels with GitHub Actions
 
-Compiling a kernel is CPU-intensive and testing it requires a GPU, two things that GitHub's standard runners do not provide cheaply. Instead of maintaining self-hosted runners, you can offload both steps to [Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) directly from a GitHub Actions workflow.
+Compiling a kernel is CPU-intensive and testing it requires an accelerator (such as a GPU), two things that GitHub's standard runners do not provide cheaply. Instead of maintaining self-hosted runners, you can offload both steps to [Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs) directly from a GitHub Actions workflow.
 
 Two prebuilt actions make this possible:
 

@@ -169,7 +169,12 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         .send()
     {
         Ok(url) => url,
-        Err(HFError::Forbidden { .. }) => bail!(kernel_publishing_guidance(&repo_id)),
+        Err(err @ HFError::Forbidden { .. }) => {
+            if hf::whoami_username().is_err() {
+                return Err(err).wrap_err("Cannot create repository");
+            }
+            bail!(kernel_publishing_guidance(&repo_id));
+        }
         Err(err) => return Err(err).wrap_err("Cannot create repository"),
     };
     // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos

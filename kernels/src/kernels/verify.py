@@ -58,6 +58,9 @@ DEFAULT_POLICIES: list[VerificationPolicy] = [
             "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
             "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",
             "https://github.com/huggingface/kernels-community/.github/workflows/build-windows.yaml@refs/heads/main",
+            # This workflow was used to sign existing builds, around Torch 2.10-2.12. Can be removed once these
+            # Torch versions are ancient.
+            "https://github.com/huggingface/kernels-community/.github/workflows/sign-old-builds.yaml@refs/heads/main",
         ],
     ),
 ]

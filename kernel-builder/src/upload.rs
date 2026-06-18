@@ -39,7 +39,7 @@ impl ProgressHandler for IndicatifProgress {
 const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
-const KERNELS_COMMUNITY_URL: &str = "https://huggingface.co/kernels-community";
+const KERNELS_COMMUNITY_URL: &str = "https://huggingface.co/spaces/kernels-community/README/discussions/new";
 
 const KERNEL_PUBLISHING_MAINTAINERS: &[&str] = &["danieldk", "drbh", "sayakpaul"];
 

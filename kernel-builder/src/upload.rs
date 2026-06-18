@@ -41,14 +41,7 @@ const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
 
 const KERNELS_COMMUNITY_URL: &str = "https://huggingface.co/spaces/kernels-community/README/discussions/new";
 
-const KERNEL_PUBLISHING_MAINTAINERS: &[&str] = &["danieldk", "drbh", "sayakpaul"];
-
 fn kernel_publishing_guidance(repo_id: &str) -> String {
-    let maintainers = KERNEL_PUBLISHING_MAINTAINERS
-        .iter()
-        .map(|m| format!("@{m}"))
-        .collect::<Vec<_>>()
-        .join(", ");
     format!(
         "You do not have permission to publish the kernel `{repo_id}`.
 
@@ -63,8 +56,6 @@ In the discussion, please include:
   - The kernel's purpose and where it fits in the ecosystem (which models or
     libraries benefit from it).
   - Benchmark numbers, if available.
-
-Please tag {maintainers} in the discussion so the team is notified.
 
 Providing this information helps the team review your request and grant access."
     )
@@ -510,9 +501,6 @@ mod tests {
         assert!(guidance.contains(KERNELS_COMMUNITY_URL));
         assert!(guidance.contains("source URI"));
         assert!(guidance.contains("Benchmark"));
-        for maintainer in KERNEL_PUBLISHING_MAINTAINERS {
-            assert!(guidance.contains(&format!("@{maintainer}")));
-        }
     }
 
     #[test]

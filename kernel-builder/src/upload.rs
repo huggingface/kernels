@@ -10,7 +10,7 @@ use eyre::{bail, Context, Result};
 use hf_hub::{
     progress::{Progress, ProgressEvent, ProgressHandler, UploadEvent},
     repository::{AddSource, CommitOperation},
-    RepoType, RepoTypeKernel, RepoTypeModel,
+    HFError, RepoType, RepoTypeKernel, RepoTypeModel,
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use kernels_data::metadata::Metadata;
@@ -38,6 +38,28 @@ impl ProgressHandler for IndicatifProgress {
 
 const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
+
+const KERNELS_COMMUNITY_URL: &str = "https://huggingface.co/kernels-community";
+
+fn kernel_publishing_guidance(repo_id: &str) -> String {
+    format!(
+        "You do not have permission to publish the kernel `{repo_id}`.
+
+Publishing kernels to the Hugging Face Hub requires approval. To request access,
+open a discussion on the `kernels-community` organization:
+
+    {KERNELS_COMMUNITY_URL}
+
+In the discussion, please include:
+  - Confirmation that you already have a working, built kernel.
+  - The source URI / code for the kernel.
+  - The kernel's purpose and where it fits in the ecosystem (which models or
+    libraries benefit from it).
+  - Benchmark numbers, if available.
+
+Providing this information helps the team review your request and grant access."
+    )
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum RepoTypeArg {
@@ -129,14 +151,18 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
-    let repo_url = api
+    let repo_url = match api
         .create_repository()
         .repo_id(&repo_id)
         .repo_type(T::default())
         .private(args.private)
         .exist_ok(true)
         .send()
-        .wrap_err("Cannot create repository")?;
+    {
+        Ok(url) => url,
+        Err(HFError::Forbidden { .. }) => bail!(kernel_publishing_guidance(&repo_id)),
+        Err(err) => return Err(err).wrap_err("Cannot create repository"),
+    };
     // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
     let repo_id = repo_url
         .url
@@ -462,6 +488,15 @@ fn walk_files(dir: &Path) -> impl Iterator<Item = PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_kernel_publishing_guidance() {
+        let guidance = kernel_publishing_guidance("my-user/my-kernel");
+        assert!(guidance.contains("my-user/my-kernel"));
+        assert!(guidance.contains(KERNELS_COMMUNITY_URL));
+        assert!(guidance.contains("source URI"));
+        assert!(guidance.contains("Benchmark"));
+    }
 
     #[test]
     fn test_collect_readme_commit_ops() {

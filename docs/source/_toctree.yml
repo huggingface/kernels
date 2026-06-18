@@ -23,6 +23,26 @@
       title: FAQ
   title: Use kernels
 - sections:
+    - local: api/kernels
+      title: Kernels
+    - local: api/layers
+      title: Layers
+  title: Python API
+- sections:
+    - local: cli
+      title: Overview
+    - local: cli-versions
+      title: kernels versions
+    - local: cli-lock
+      title: kernels lock
+    - local: cli-download
+      title: kernels download
+    - local: cli-benchmark
+      title: kernels benchmark
+    - local: cli-verify-signature
+      title: kernels verify-signature
+  title: kernels CLI
+- sections:
     - local: builder/writing-kernels
       title: Write kernels
     - local: builder/build
@@ -39,39 +59,17 @@
       title: Secure your kernels
   title: Build kernels
 - sections:
-    - sections:
-        - local: api/kernels
-          title: Kernels
-        - local: api/layers
-          title: Layers
-      title: Python API
-    - sections:
-        - local: cli
-          title: Overview
-        - local: cli-versions
-          title: kernels versions
-        - local: cli-lock
-          title: kernels lock
-        - local: cli-download
-          title: kernels download
-        - local: cli-benchmark
-          title: kernels benchmark
-        - local: cli-verify-signature
-          title: kernels verify-signature
-      title: kernels CLI
-    - sections:
-        - local: builder-cli
-          title: CLI reference for kernel-builder
-        - local: cli-skills
-          title: Install agent skills
-      title: kernel-builder CLI
-    - sections:
-        - local: kernel-requirements
-          title: Kernel requirements
-        - local: builder/build-variants
-          title: Build variants
-      title: Kernel specifications
-  title: Reference
+    - local: builder-cli
+      title: CLI reference for kernel-builder
+    - local: cli-skills
+      title: Install agent skills
+  title: kernel-builder CLI
+- sections:
+    - local: kernel-requirements
+      title: Kernel requirements
+    - local: builder/build-variants
+      title: Build variants
+  title: Kernel specifications
 - sections:
     - local: builder/why-nix
       title: Why Nix?

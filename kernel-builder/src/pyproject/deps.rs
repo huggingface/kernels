@@ -81,6 +81,17 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     )
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
+            Dependency::Cutlass4_5 => {
+                env.get_template("cuda/dep-cutlass.cmake")
+                    .wrap_err("Cannot get CUTLASS dependency template")?
+                    .render_captured_to(
+                        context! {
+                            version => "4.5.2",
+                        },
+                        &mut *write,
+                    )
+                    .wrap_err("Cannot render CUTLASS dependency template")?;
+            }
             Dependency::SyclTla => {
                 env.get_template("xpu/dep-sycl-tla.cmake")
                     .wrap_err("Cannot get SYCL TLA dependency template")?

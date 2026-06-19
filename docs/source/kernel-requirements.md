@@ -96,6 +96,12 @@ metadata. Currently the following top-level keys are supported:
   a build, `kernel-builder` warns when uploading it, and a warning banner is
   added to the Hub repository's README.
 
+  > **Note:** For Nix builds, dirtiness follows Nix's flake tree status, which
+  > also counts **untracked** files (including an uncommitted `flake.lock`).
+  > Commit your `flake.lock` (and avoid stray untracked files) so that clean
+  > builds are not flagged as dirty. Local `create-pyproject` runs only
+  > consider changes to tracked files.
+
 Example `metadata.json`:
 
 ```json

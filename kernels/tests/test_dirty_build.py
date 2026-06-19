@@ -89,9 +89,7 @@ def test_both_dirty_warns_with_both_reasons():
 
 def test_warning_includes_repo_id_when_available():
     build_info = {"kernel-builder": _dirty_builder(), "kernel": _clean_kernel()}
-    messages = _warnings_for(
-        _metadata(build_info), RepoInfo(repo_id="acme/relu", revision="main")
-    )
+    messages = _warnings_for(_metadata(build_info), RepoInfo(repo_id="acme/relu", revision="main"))
     assert "acme/relu" in messages[0]
 
 

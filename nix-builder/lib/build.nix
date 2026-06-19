@@ -113,6 +113,7 @@ rec {
       rev,
       doGetKernelCheck,
       stripRPath ? false,
+      provenanceArgs ? "",
     }:
     let
       inherit (lib) fileset;
@@ -151,6 +152,7 @@ rec {
           doGetKernelCheck
           pythonDeps
           backendPythonDeps
+          provenanceArgs
           ;
         kernelName = kernelConfig.name;
       }
@@ -166,6 +168,7 @@ rec {
           rev
           pythonDeps
           backendPythonDeps
+          provenanceArgs
           ;
 
         kernelName = kernelConfig.name;
@@ -183,6 +186,7 @@ rec {
           rev
           pythonDeps
           backendPythonDeps
+          provenanceArgs
           ;
 
         inherit (kernelConfig) torchStableAbiVersion;
@@ -199,6 +203,7 @@ rec {
       doGetKernelCheck,
       bundleOnly,
       buildSets,
+      provenanceArgs ? "",
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -212,6 +217,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
+              provenanceArgs
               ;
             stripRPath = true;
           };
@@ -227,6 +233,7 @@ rec {
       rev,
       doGetKernelCheck,
       buildSets,
+      provenanceArgs ? "",
     }:
     let
       extensions = mkDistTorchExtensions {
@@ -235,6 +242,7 @@ rec {
           path
           rev
           doGetKernelCheck
+          provenanceArgs
           ;
         bundleOnly = true;
       };
@@ -334,6 +342,7 @@ rec {
       buildSets,
       doGetKernelCheck,
       pythonCheckInputs,
+      provenanceArgs ? "",
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -350,6 +359,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
+              provenanceArgs
               ;
           };
           testPython =

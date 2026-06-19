@@ -6,6 +6,7 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
+use kernels_data::metadata::{GitInfo, KernelBuilderInfo};
 use minijinja::Environment;
 
 use crate::{
@@ -39,16 +40,38 @@ pub fn create_pyproject_file_set(build: Build, kernel_id: &KernelIdentifier) -> 
     Ok(file_set)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_pyproject(
     kernel_dir: Option<PathBuf>,
     target_dir: Option<PathBuf>,
     force: bool,
     unique_id: Option<String>,
+    kernel_sha: Option<String>,
+    kernel_dirty: bool,
+    kernel_builder_sha: Option<String>,
+    kernel_builder_dirty: bool,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = parse_build(&kernel_dir)?;
-    let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
+    let git_override = kernel_sha.map(|sha| GitInfo {
+        sha,
+        dirty: kernel_dirty,
+    });
+    // The version is always that of the running `kernel-builder`; only the
+    // git provenance is supplied externally (e.g. by Nix).
+    let kernel_builder_override = kernel_builder_sha.map(|sha| KernelBuilderInfo {
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        sha: Some(sha),
+        dirty: kernel_builder_dirty,
+    });
+    let kernel_id = KernelIdentifier::new(
+        &kernel_dir,
+        build.general.name.python_name(),
+        unique_id,
+        git_override,
+        kernel_builder_override,
+    );
     let file_set = create_pyproject_file_set(build, &kernel_id)?;
     file_set.write(&target_dir, force)?;
 
@@ -65,7 +88,14 @@ pub fn clean_pyproject(
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = parse_build(&kernel_dir)?;
-    let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
+    // Provenance is irrelevant when computing the set of files to clean.
+    let kernel_id = KernelIdentifier::new(
+        &kernel_dir,
+        build.general.name.python_name(),
+        unique_id,
+        None,
+        None,
+    );
 
     let generated_files = create_pyproject_file_set(build, &kernel_id)?.into_names();
 

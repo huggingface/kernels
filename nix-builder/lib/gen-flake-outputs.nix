@@ -11,6 +11,12 @@
   rev ? null,
   self ? null,
 
+  # Git provenance of the `kernel-builder` itself (the flake revision it was
+  # evaluated from), recorded in the build metadata. `null`/`false` when
+  # `kernel-builder` is used from a non-git source (e.g. a local `path:`).
+  builderRev ? null,
+  builderDirty ? false,
+
   doGetKernelCheck,
   pythonCheckInputs,
   pythonNativeCheckInputs,
@@ -35,6 +41,31 @@ let
       throw "Flake's `self` must be passed to `genKernelFlakeOutputs` as follows:\n\n${supportedFormat}";
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
+
+  # Extra `kernel-builder create-pyproject` flags that record the full git
+  # provenance (commit SHA + dirty state) of both the kernel source and
+  # `kernel-builder` in the build metadata. The Nix sandbox has no `.git`, so
+  # this information has to be passed in explicitly.
+  provenanceArgs =
+    let
+      kernelSha =
+        if self == null then
+          null
+        else if self ? rev then
+          self.rev
+        else if self ? dirtyRev then
+          lib.removeSuffix "-dirty" self.dirtyRev
+        else
+          null;
+      kernelDirty = self != null && !(self ? rev);
+      builderSha = if builderRev == null then null else lib.removeSuffix "-dirty" builderRev;
+      parts =
+        lib.optional (kernelSha != null) "--kernel-sha ${kernelSha}"
+        ++ lib.optional (kernelSha != null && kernelDirty) "--kernel-dirty"
+        ++ lib.optional (builderSha != null) "--kernel-builder-sha ${builderSha}"
+        ++ lib.optional (builderSha != null && builderDirty) "--kernel-builder-dirty";
+    in
+    lib.concatStringsSep " " parts;
 
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 
@@ -153,12 +184,12 @@ in
   packages =
     let
       bundle = build.mkExtensionBundle {
-        inherit path doGetKernelCheck;
+        inherit path doGetKernelCheck provenanceArgs;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };
       ciTests = build.mkCiTests {
-        inherit path doGetKernelCheck pythonCheckInputs;
+        inherit path doGetKernelCheck pythonCheckInputs provenanceArgs;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };
@@ -175,7 +206,7 @@ in
           builtins.map (backend: {
             name = backend;
             value = build.mkExtensionBundle {
-              inherit path doGetKernelCheck;
+              inherit path doGetKernelCheck provenanceArgs;
               buildSets = builtins.filter (
                 set: buildConfigBackend set.buildConfig == backend
               ) applicableBuildSets;
@@ -241,7 +272,7 @@ in
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
         build.mkExtensionBundle {
-          inherit path doGetKernelCheck;
+          inherit path doGetKernelCheck provenanceArgs;
           buildSets = onePerFramework;
           rev = revUnderscored;
         };
@@ -254,7 +285,7 @@ in
           builtins.map (backend: {
             name = backend;
             value = build.mkExtensionBundle {
-              inherit path doGetKernelCheck;
+              inherit path doGetKernelCheck provenanceArgs;
               # It is too costly to build all variants in CI, so we just build one per framework.
               buildSets = headOrEmpty (
                 builtins.filter (set: set.buildConfig.framework == backend) buildSetsSorted
@@ -277,7 +308,7 @@ in
         };
 
       redistributable = build.mkDistTorchExtensions {
-        inherit path doGetKernelCheck;
+        inherit path doGetKernelCheck provenanceArgs;
         bundleOnly = false;
         rev = revUnderscored;
         buildSets = applicableBuildSets;

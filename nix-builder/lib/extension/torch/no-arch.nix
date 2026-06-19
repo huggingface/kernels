@@ -41,6 +41,10 @@
   pythonDeps,
 
   backendPythonDeps,
+
+  # Extra `create-pyproject` flags recording git provenance (commit SHA and
+  # dirty state) of the kernel source and `kernel-builder`.
+  provenanceArgs ? "",
 }:
 
 # Extra validation - the environment should correspind to the build config.
@@ -79,7 +83,7 @@ stdenv.mkDerivation (prevAttrs: {
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --unique-id ${rev} $out
+      --unique-id ${rev} ${provenanceArgs} $out
   '';
 
   framework = "torch";

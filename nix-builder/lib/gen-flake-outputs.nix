@@ -189,7 +189,12 @@ in
         rev = revUnderscored;
       };
       ciTests = build.mkCiTests {
-        inherit path doGetKernelCheck pythonCheckInputs provenanceArgs;
+        inherit
+          path
+          doGetKernelCheck
+          pythonCheckInputs
+          provenanceArgs
+          ;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };

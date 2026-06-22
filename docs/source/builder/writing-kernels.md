@@ -222,11 +222,20 @@ The following sections enumerate all supported options for `build.toml`.
   This option is provided for kernels that require functionality only
   provided by newer CUDA toolkits.
 
+### Framework sections
+
+The the framework section specifies framework-specific settings. The name of
+the section depends on the framework that is used. The currently-supported
+frameworks are:
+
+- AOT-compiled Torch kernel (`torch`).
+- AOT-compiled TVM-FFI kernel (`tvm-ffi`).
+- JIT-compiled or not-compiled Torch kernel (`torch-noarch`, experimental).
+
 ### `torch`
 
-This section describes the Torch extension. In the future, there may be
-similar sections for other frameworks. This section has the following
-options:
+This framework section is used for AOT-compiled Torch kernels, and has the
+following options:
 
 - `src` (required): a list of source files and headers.
 - `pyext` (optional): the list of extensions for Python files. Default:
@@ -243,6 +252,35 @@ options:
   [stable ABI headers](https://docs.pytorch.org/docs/2.12/notes/libtorch_stable_abi.html).
   For an example, see the [`relu-torch-stable-abi`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-torch-stable-abi)
   example kernel.
+
+### `tvm-ffi`
+
+This framework section is used for AOT-compiled TVM-FFI kernels.
+
+- `src` (required): a list of source files and headers.
+- `pyext` (optional): the list of extensions for Python files. Default:
+  `["py", "pyi"]`.
+- `include` (optional): include directories relative to the project root.
+  Default: `[]`.
+
+### `torch-noarch`
+
+The `torch-noarch` section is used for JIT-compiled kernels or kernels that
+do not require any compilation (e.g. a kernel that packages plain PyTorch
+layers).
+
+Normally, it is expected that this type of kernel runs on all CUDA capabilities
+or ROCm architectures. However, for kernels that support only a limited range
+of archs, the `cuda-capabilites` and `rocm-archs` options can be used to specify
+the supported archs. These are then exported to `metadata.json` for consumption
+by e.g. the Hugging Face Hub.
+
+- `pyext` (optional): the list of extensions for Python files. Default:
+  `["py", "pyi"]`.
+- `cuda-capabilities` (optional): a list of CUDA compute capabilities the
+  kernel supports (e.g. `["9.0", "10.0"]`).
+- `rocm-archs` (optional): a list of ROCm architectures the kernel supports
+  (e.g. `["gfx942"]`).
 
 ### `kernel.<name>`
 

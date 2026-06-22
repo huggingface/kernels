@@ -97,6 +97,12 @@ pub struct Torch {
 #[serde(deny_unknown_fields)]
 pub struct TorchNoarch {
     pub pyext: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub cuda_capabilities: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub rocm_archs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -263,6 +269,8 @@ impl From<TorchNoarch> for super::TorchNoarch {
     fn from(torch_noarch: TorchNoarch) -> Self {
         Self {
             pyext: torch_noarch.pyext,
+            cuda_capabilities: torch_noarch.cuda_capabilities,
+            rocm_archs: torch_noarch.rocm_archs,
         }
     }
 }
@@ -460,6 +468,8 @@ impl From<super::TorchNoarch> for TorchNoarch {
     fn from(torch_noarch: super::TorchNoarch) -> Self {
         Self {
             pyext: torch_noarch.pyext,
+            cuda_capabilities: torch_noarch.cuda_capabilities,
+            rocm_archs: torch_noarch.rocm_archs,
         }
     }
 }

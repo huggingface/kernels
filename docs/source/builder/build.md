@@ -210,6 +210,10 @@ repo-id = "kernels-community/flash-attn4"
 See [Writing Kernels](writing-kernels.md) for more details on the `build.toml`
 format.
 
+> [!TIP]
+> You can automate building, uploading, and testing kernels on Hugging Face
+> Jobs from CI, see [Building and testing kernels with GitHub Actions](./github-actions.md).
+
 ## Updating the kernel build toolchain
 
 The kernel's dependencies are fully pinned down in the `flake.lock` that

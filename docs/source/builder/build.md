@@ -212,7 +212,7 @@ format.
 
 > [!TIP]
 > You can automate building, uploading, and testing kernels on Hugging Face
-> Jobs from CI, see [Building and testing kernels with GitHub Actions](github-actions.md).
+> Jobs from CI, see [Building and testing kernels with GitHub Actions](./github-actions.md).
 
 ## Updating the kernel build toolchain
 

@@ -1,4 +1,4 @@
-# Security
+# Secure your kernels
 
 ## Introduction
 

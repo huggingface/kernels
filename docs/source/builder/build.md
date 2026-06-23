@@ -1,4 +1,4 @@
-# Using the kernel builder with Nix
+# Build with Nix
 
 ## Installation
 

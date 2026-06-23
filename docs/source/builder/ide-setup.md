@@ -1,4 +1,4 @@
-# IDE setup with direnv and the kernel devshell
+# Set up your IDE
 
 ## Introduction
 

@@ -1,4 +1,4 @@
-# Writing Hub kernels with kernel-builder
+# Write kernels
 
 ## Introduction
 

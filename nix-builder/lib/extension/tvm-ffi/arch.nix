@@ -68,6 +68,10 @@
   # Revision to bake into the ops name.
   rev,
 
+  # Extra `create-pyproject` flags recording git provenance (commit SHA and
+  # dirty state) of the kernel source and `kernel-builder`.
+  provenanceArgs ? "",
+
   src,
 }:
 
@@ -129,7 +133,7 @@ stdenv.mkDerivation (prevAttrs: {
   # Generate build files.
   postPatch = ''
     kernel-builder create-pyproject \
-      --unique-id ${rev} .
+      --unique-id ${rev} ${provenanceArgs} .
   '';
 
   preConfigure =

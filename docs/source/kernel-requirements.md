@@ -81,6 +81,26 @@ metadata. Currently the following top-level keys are supported:
 - `digest` (`Digest`, required): hash digest of the kernel files.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
   from a curated set of Python dependencies.
+- `build-info` (`dict`, optional): provenance of the build, used to flag
+  non-reproducible (dirty) builds. It contains two optional sub-objects:
+  - `kernel-builder`: the `kernel-builder` that produced the build, with its
+    `version` (`str`), the `sha` (`str`) of the `kernel-builder` source it was
+    built from (when known), and a `dirty` (`bool`) flag that is `true` when
+    `kernel-builder` was built from a source tree with uncommitted changes.
+  - `kernel`: the kernel source that was built, with its commit `sha` (`str`)
+    and a `dirty` (`bool`) flag that is `true` when the kernel source had
+    uncommitted changes.
+
+  When either `dirty` flag is set, the kernel was built from uncommitted
+  sources and cannot be reliably reproduced. `kernels` warns when loading such
+  a build, `kernel-builder` warns when uploading it, and a warning banner is
+  added to the Hub repository's README.
+
+  > **Note:** For Nix builds, dirtiness follows Nix's flake tree status, which
+  > also counts **untracked** files (including an uncommitted `flake.lock`).
+  > Commit your `flake.lock` (and avoid stray untracked files) so that clean
+  > builds are not flagged as dirty. Local `create-pyproject` runs only
+  > consider changes to tracked files.
 
 Example `metadata.json`:
 

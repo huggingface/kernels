@@ -150,6 +150,11 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         build_dir.display()
     );
 
+    let dirty_build = detect_dirty_build(&variants);
+    if dirty_build {
+        eprintln!("{DIRTY_BUILD_WARNING}");
+    }
+
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
     let repo_url = match api
@@ -207,6 +212,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     collect_readme_commit_ops(
         &kernel_dir,
+        dirty_build,
         operations_by_branch
             .entry(MAIN_BRANCH.to_owned())
             .or_default(),
@@ -363,14 +369,49 @@ fn collect_benchmark_commit_ops(
 }
 
 /// Collect README commit operation: upload build/CARD.md as README.md.
-fn collect_readme_commit_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
+fn collect_readme_commit_ops(
+    kernel_dir: &Path,
+    dirty_build: bool,
+    operations: &mut Vec<CommitOperation>,
+) {
     let Ok(card_path) = discover_build_file(kernel_dir, "CARD.md") else {
         return;
     };
+
+    let source = if dirty_build {
+        match fs::read_to_string(&card_path) {
+            Ok(content) => AddSource::Bytes(prepend_dirty_banner(&content).into_bytes()),
+            Err(err) => {
+                eprintln!(
+                    "Warning: cannot read `{}` to add dirty-build banner: {err}",
+                    card_path.display()
+                );
+                AddSource::File(card_path)
+            }
+        }
+    } else {
+        AddSource::File(card_path)
+    };
+
     operations.push(CommitOperation::Add {
         path_in_repo: "README.md".to_owned(),
-        source: AddSource::File(card_path),
+        source,
     });
+}
+
+fn prepend_dirty_banner(content: &str) -> String {
+    let banner = format!("{DIRTY_BUILD_BANNER}\n\n");
+
+    // Keep the YAML front matter (delimited by `---`) at the very top.
+    if let Some(rest) = content.strip_prefix("---\n") {
+        if let Some(end) = rest.find("\n---\n") {
+            let split = "---\n".len() + end + "\n---\n".len();
+            let (front_matter, body) = content.split_at(split);
+            return format!("{front_matter}\n{banner}{}", body.trim_start_matches('\n'));
+        }
+    }
+
+    format!("{banner}{content}")
 }
 
 /// Collect build artifact commit operations: add variant files, delete stale ones.
@@ -456,6 +497,29 @@ fn discover_build_file(
     );
 }
 
+const DIRTY_BUILD_WARNING: &str = "\
+Warning: one or more build variants were built from uncommitted (dirty) \
+sources.\n         Such builds are not reproducible. A warning banner will be \
+added to the\n         repository README.";
+
+/// Markdown banner prepended to the Hub README for dirty builds.
+const DIRTY_BUILD_BANNER: &str = "> [!WARNING]\n\
+     > This kernel was built from uncommitted (dirty) sources and is therefore \
+     **not reproducible**. It should not be relied upon for production use.";
+
+fn detect_dirty_build(variants: &[PathBuf]) -> bool {
+    variants.iter().any(|variant| {
+        let metadata_path = variant.join("metadata.json");
+        let Ok(file) = File::open(&metadata_path) else {
+            return false;
+        };
+        match Metadata::from_reader(BufReader::new(file)) {
+            Ok(metadata) => metadata.build_info.as_ref().is_some_and(|bi| bi.is_dirty()),
+            Err(_) => false,
+        }
+    })
+}
+
 /// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
     let mut versions: HashSet<usize> = HashSet::new();
@@ -513,22 +577,68 @@ mod tests {
         fs::write(kernel_dir.join("build/CARD.md"), "# Readme").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(kernel_dir, &mut operations);
+        collect_readme_commit_ops(kernel_dir, false, &mut operations);
 
         assert_eq!(operations.len(), 1);
         match &operations[0] {
-            CommitOperation::Add { path_in_repo, .. } => {
+            CommitOperation::Add {
+                path_in_repo,
+                source,
+            } => {
                 assert_eq!(path_in_repo, "README.md");
+                assert!(matches!(source, AddSource::File(_)));
             }
             _ => panic!("Expected Add operation"),
         }
     }
 
     #[test]
+    fn test_collect_readme_commit_ops_dirty() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        fs::create_dir_all(kernel_dir.join("build")).unwrap();
+        fs::write(kernel_dir.join("build/CARD.md"), "# Readme").unwrap();
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(kernel_dir, true, &mut operations);
+
+        assert_eq!(operations.len(), 1);
+        match &operations[0] {
+            CommitOperation::Add {
+                path_in_repo,
+                source,
+            } => {
+                assert_eq!(path_in_repo, "README.md");
+                match source {
+                    AddSource::Bytes(bytes) => {
+                        let content = String::from_utf8(bytes.clone()).unwrap();
+                        assert!(content.contains("[!WARNING]"));
+                        assert!(content.contains("# Readme"));
+                    }
+                    _ => panic!("Expected Bytes source for dirty build"),
+                }
+            }
+            _ => panic!("Expected Add operation"),
+        }
+    }
+
+    #[test]
+    fn test_prepend_dirty_banner_with_front_matter() {
+        let content = "---\nlicense: apache-2.0\n---\n# Title\n\nBody.";
+        let result = prepend_dirty_banner(content);
+        assert!(result.starts_with("---\nlicense: apache-2.0\n---\n"));
+        assert!(result.contains("[!WARNING]"));
+        let banner_pos = result.find("[!WARNING]").unwrap();
+        let title_pos = result.find("# Title").unwrap();
+        assert!(banner_pos < title_pos);
+    }
+
+    #[test]
     fn test_collect_readme_commit_ops_no_card() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut operations = vec![];
-        collect_readme_commit_ops(temp_dir.path(), &mut operations);
+        collect_readme_commit_ops(temp_dir.path(), false, &mut operations);
         assert!(operations.is_empty());
     }
 

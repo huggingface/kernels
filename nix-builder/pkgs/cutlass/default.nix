@@ -28,8 +28,14 @@ in
     version = "3.9.2";
     hash = "sha256-teziPNA9csYvhkG5t2ht8W8x5+1YGGbHm8VKx4JoxgI=";
   };
+
   cutlass_4_0 = builder {
     version = "4.0.0";
     hash = "sha256-HJY+Go1viPkSVZPEs/NyMtYJzas4mMLiIZF3kNX+WgA=";
+  };
+
+  cutlass_4_5 = builder {
+    version = "4.5.2";
+    hash = "sha256-jnxookfCEPynRrxMGGsMwPlK84ChQQW3xocmYcNTVLw=";
   };
 }

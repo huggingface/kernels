@@ -57,9 +57,9 @@
       title: Develop kernels with agents
     - local: builder/security
       title: Secure your kernels
-  title: Build kernels
     - local: builder/github-actions
       title: GitHub Actions & HF Jobs
+  title: Build kernels
 - sections:
     - local: builder-cli
       title: CLI reference for kernel-builder

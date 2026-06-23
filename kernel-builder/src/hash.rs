@@ -12,11 +12,10 @@ use crate::util::{check_or_infer_kernel_dir, discover_variants};
 
 pub fn hash_kernel(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let (build_dir, variants) = discover_variants(&kernel_dir)?;
+    let (_, variants) = discover_variants(&kernel_dir)?;
 
     for variant in variants {
-        let variant_path = build_dir.join(&variant);
-        let metadata_path = variant_path.join("metadata.json");
+        let metadata_path = variant.join("metadata.json");
 
         eprintln!(
             "Hashing variant `{}`...",
@@ -29,7 +28,7 @@ pub fn hash_kernel(kernel_dir: Option<PathBuf>) -> Result<()> {
         ))?;
         let mut metadata: Metadata = serde_json::from_reader(BufReader::new(f))?;
 
-        let source_digest = Digest::hash_variant(DigestAlgorithm::SHA256, &variant_path)?;
+        let source_digest = Digest::hash_variant(DigestAlgorithm::SHA256, &variant)?;
         metadata.digest = Some(source_digest);
 
         let f = File::create(&metadata_path).context(format!(

@@ -422,6 +422,7 @@ rec {
               ++ [
                 buildSet.torch
                 kernels
+                ninja
                 pip
                 pytest
               ]

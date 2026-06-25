@@ -58,6 +58,17 @@ impl Framework {
             _ => None,
         }
     }
+
+    pub(crate) fn precomputable_backend_archs(&self, backend: Backend) -> Option<Vec<String>> {
+        match self {
+            Framework::TorchNoarch(torch_noarch) => match backend {
+                Backend::Cuda => torch_noarch.cuda_capabilities.clone(),
+                Backend::Rocm => torch_noarch.rocm_archs.clone(),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 impl Build {
@@ -99,7 +110,7 @@ pub struct General {
 }
 
 impl General {
-    pub fn python_depends(
+    pub fn general_python_depends(
         &self,
     ) -> Box<dyn Iterator<Item = Result<(&str, &PythonDependency)>> + '_> {
         let general_python_deps = match self.python_depends.as_ref() {
@@ -146,6 +157,16 @@ impl General {
                 Err(e) => Err(e.into()),
             }
         }))
+    }
+
+    pub fn all_python_depends(&self, backend: Backend) -> Result<Vec<String>> {
+        self.general_python_depends()
+            .map(|deps| Ok(deps?.0.to_owned()))
+            .chain(
+                self.backend_python_depends(backend)
+                    .map(|deps| Ok(deps?.0.to_owned())),
+            )
+            .collect::<Result<Vec<_>>>()
     }
 }
 
@@ -204,6 +225,11 @@ impl Torch {
 
 pub struct TorchNoarch {
     pub pyext: Option<Vec<String>>,
+    /// CUDA capabilities to write into metadata.
+    pub cuda_capabilities: Option<Vec<String>>,
+
+    /// ROCM archs to write into metadata.
+    pub rocm_archs: Option<Vec<String>>,
 }
 
 impl TorchNoarch {

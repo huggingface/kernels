@@ -224,8 +224,8 @@ The following sections enumerate all supported options for `build.toml`.
 
 ### Framework sections
 
-The the framework section specifies framework-specific settings. The name of
-the section depends on the framework that is used. The currently-supported
+The framework section specifies framework-specific settings. The name of
+the section depends on the framework that is used. The currently supported
 frameworks are:
 
 - AOT-compiled Torch kernel (`torch`).
@@ -266,7 +266,7 @@ This framework section is used for AOT-compiled TVM-FFI kernels.
 ### `torch-noarch`
 
 The `torch-noarch` section is used for JIT-compiled kernels or kernels that
-do not require any compilation (e.g. a kernel that packages plain PyTorch
+do not require any ahead-of-time compilation (e.g. a kernel that packages plain PyTorch
 layers).
 
 Normally, it is expected that this type of kernel runs on all CUDA capabilities

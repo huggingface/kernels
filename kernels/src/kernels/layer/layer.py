@@ -4,9 +4,10 @@ import functools
 import inspect
 import logging
 import warnings
+from inspect import Parameter, Signature
 from pathlib import Path
 from types import MethodType, ModuleType
-from typing import TYPE_CHECKING, Protocol, Type
+from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from .._versions import select_revision_or_version
 from ..utils import (
@@ -270,8 +271,14 @@ def use_kernel_forward_from_hub(layer_name: str):
     """
     Decorator factory that makes a layer extensible using the specified layer name.
 
-    This is a decorator factory that returns a decorator which prepares a layer class to use kernels from the
-    Hugging Face Hub.
+    This decorator which prepares a layer class to use kernel layers from the Hugging
+    Face Hub.
+
+    When applied to a function, the function is converted into a layer (`nn.Module`),
+    made extensible using the given layer name, and then the class is instantiated.
+    Since `nn.Module` also implements the `__call__` method, the module can still be
+    used as if it was a function. Note that a decorated function is only visible to
+    [`~kernels.kernelize`] if it is attached to a module using [`~kernels.use_kernelized_func`].
 
     Args:
         layer_name (`str`):
@@ -286,6 +293,7 @@ def use_kernel_forward_from_hub(layer_name: str):
         import torch.nn as nn
 
         from kernels import use_kernel_forward_from_hub
+        from kernels import use_kernelized_func
         from kernels import Mode, kernelize
 
         @use_kernel_forward_from_hub("MyCustomLayer")
@@ -302,11 +310,100 @@ def use_kernel_forward_from_hub(layer_name: str):
 
         # The layer can now be kernelized:
         # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
+
+        # Use on a function (converts the function to `nn.Module`). The function
+        # can then be replaced with a layer mapping for `MyCustomLayer`.
+        @use_kernel_forward_from_hub("MyCustomLayer")
+        def identity(x: torch.Tensor) -> torch.Tensor:
+            return x
+
+        @use_kernelized_func(identity)
+        class LayerUsingIdentity(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return identity(x)
+
         ```
     """
 
+    def decorator(ty):
+        if inspect.isfunction(ty):
+            Func = _create_func_module(ty)
+            replace_kernel_forward_from_hub(Func, layer_name)
+            return Func()
+        elif inspect.isclass(ty):
+            replace_kernel_forward_from_hub(ty, layer_name)
+            return ty
+        else:
+            raise TypeError("@use_kernel_forward_from_hub can only be applied to classes or functions")
+
+    return decorator
+
+
+def use_kernelized_func(*args: Callable):
+    """
+    This decorator attaches the target function within the module as a plain
+    attribute (not as a submodule). This makes the function visible to
+    [`~kernels.kernelize`].
+
+    Args:
+        *args (`Callable`):
+            Kernel functions to attach to the module.
+
+    Returns:
+        `Callable`: A decorator function that can be applied to modules.
+
+    Example:
+        ```python
+        import torch
+        import torch.nn as nn
+
+        from kernels import use_kernel_forward_from_hub
+        from kernels import use_kernelized_func
+        from kernels import Mode, kernelize
+
+        # Use on a function (converts the function to `nn.Module`). The function
+        # can then be replaced with a layer mapping for `MyCustomLayer`.
+        @use_kernel_forward_from_hub("MyCustomLayer")
+        def identity(x: torch.Tensor) -> torch.Tensor:
+            return x
+
+        @use_kernelized_func(identity)
+        class LayerUsingIdentity(nn.Module):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                return identity(x)
+
+        model = LayerUsingIdentity()
+
+        # The layer can now be kernelized:
+        # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
+        ```
+
+    """
+
+    decorator_args = args
+
     def decorator(cls):
-        replace_kernel_forward_from_hub(cls, layer_name)
+        # Validate that the functions that are passed are kernel functions.
+        for fn in decorator_args:
+            if not hasattr(fn, "kernel_layer_name"):
+                raise ValueError(
+                    f"Function `{fn.__name__}` is not decorated with @use_kernel_forward_from_hub and cannot be used with @use_kernelized_func"
+                )
+
+        orig_init = cls.__init__
+
+        def new_init(self, *args, **kwargs):
+            orig_init(self, *args, **kwargs)
+
+            # Register new function as non-submodule within the modules dict
+            hidden_kernels = self.__dict__.setdefault("_kernel_funcs", {})
+            for fn in decorator_args:
+                name = getattr(fn, "__name__", None) or getattr(fn, "kernel_layer_name", None)
+                assert name is not None
+
+                hidden_kernels[name] = fn
+
+        cls.__init__ = new_init
         return cls
 
     return decorator
@@ -505,3 +602,27 @@ def _get_layer_memoize(repo: RepositoryProtocol, module_class: Type["nn.Module"]
     _CACHED_LAYER[repo] = layer
 
     return layer
+
+
+def _create_func_module(func: Callable) -> Type["nn.Module"]:
+    from torch import nn
+
+    class Func(nn.Module):
+        # Same flags as possible with normal `nn.Module` objects that are exchanged
+        can_torch_compile = getattr(func, "can_torch_compile", False)
+        has_backward = getattr(func, "has_backward", True)
+
+        def forward(self, *args, **kwargs):
+            return func(*args, **kwargs)
+
+    # Use function signature with args prepended by self to support
+    # module validation.
+    func_sig = inspect.signature(func)
+    new_args = [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
+    new_args.extend(func_sig.parameters.values())
+    Func.forward.__signature__ = Signature(  # type: ignore[attr-defined]
+        parameters=new_args,
+        return_annotation=func_sig.return_annotation,
+    )
+
+    return Func

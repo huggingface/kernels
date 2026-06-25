@@ -143,11 +143,11 @@ For attention, prefer the model library's existing optimized path when one alrea
 
 ## 5. Build and test, and benchmark
 
-Kernel Hub kernels must support all recent PyTorch and CUDA configurations. The kernel-builder Nix flake handles this automatically. Copy the [example `flake.nix`](https://github.com/huggingface/kernels/blob/main/builder/examples/relu/flake.nix) into your project and run:
+Kernel Hub kernels must support all recent PyTorch and CUDA configurations. The kernel-builder Nix flake handles this automatically. This step needs both Nix and `kernel-builder`; the easiest way to get both is the [quick install script](writing-kernels.md#quick-install). Copy the [example `flake.nix`](https://github.com/huggingface/kernels/blob/main/builder/examples/relu/flake.nix) into your project and run:
 
 ```shell
 nix flake update
-nix run .#build-and-copy -L
+kernel-builder build-and-copy -L
 ```
 
 This builds the kernel for every required PyTorch/CUDA variant and places the results in `build/`. For faster builds, enable the HuggingFace Nix cache:

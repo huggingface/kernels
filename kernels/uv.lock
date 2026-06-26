@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer = "2026-06-19T07:02:11.14082404Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -1158,7 +1158,7 @@ wheels = [
 
 [[package]]
 name = "kernels"
-version = "0.16.0.dev0"
+version = "0.17.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },
@@ -1168,6 +1168,7 @@ dependencies = [
     { name = "sigstore" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "tomlkit" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 
 [package.optional-dependencies]
@@ -1228,6 +1229,7 @@ requires-dist = [
     { name = "tomlkit", specifier = ">=0.13.3" },
     { name = "torch", marker = "extra == 'benchmark'" },
     { name = "torch", marker = "extra == 'torch'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'", specifier = ">=4.0" },
 ]
 provides-extras = ["benchmark", "torch", "curated", "curated-xpu", "docs"]
 

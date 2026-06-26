@@ -196,6 +196,7 @@ pub struct Torch {
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
     pub stable_abi: Option<Version>,
+    pub cxx_flags: Option<Vec<String>>,
 }
 
 fn data_extensions(py_ext: Option<&[String]>) -> Option<Vec<String>> {
@@ -242,6 +243,7 @@ pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
+    pub cxx_flags: Option<Vec<String>>,
 }
 
 impl TvmFfi {

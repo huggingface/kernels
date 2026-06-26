@@ -254,6 +254,7 @@ impl From<Torch> for super::Torch {
             pyext: torch.pyext,
             src: torch.src,
             stable_abi: None,
+            cxx_flags: None,
         }
     }
 }
@@ -264,6 +265,7 @@ impl From<TvmFfi> for super::TvmFfi {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
             src: tvm_ffi.src,
+            cxx_flags: None,
         }
     }
 }

@@ -154,6 +154,7 @@ pub fn render_binding(
                 includes => tvm_ffi.include.as_ref().map(prefix_and_join_includes),
                 name => name,
                 src => tvm_ffi.src,
+                cxx_flags => tvm_ffi.cxx_flags.as_deref().map(|flags| flags.join(";")),
             },
             &mut *write,
         )

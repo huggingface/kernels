@@ -181,13 +181,15 @@ function(xpu_kernel_component SRC_VAR)
 
     # Add SYCL-specific compilation flags for XPU sources
     if(KERNEL_SYCL_FLAGS)
-        # Use kernel-specific SYCL flags
+        # Use kernel-specific SYCL flags plus SYCL flags from the parent scope.
+        set(_SYCL_FLAGS ${sycl_flags})
+        list(APPEND _SYCL_FLAGS ${KERNEL_SYCL_FLAGS})
         foreach(_SRC ${_KERNEL_SRC})
             if(_SRC MATCHES ".*\\.(cpp|cxx|cc)$")
                 set_property(
                     SOURCE ${_SRC}
                     APPEND PROPERTY
-                    COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:${KERNEL_SYCL_FLAGS}>"
+                    COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:${_SYCL_FLAGS}>"
                 )
             endif()
         endforeach()

@@ -91,6 +91,8 @@ pub struct Torch {
     pub src: Vec<PathBuf>,
 
     pub stable_abi: Option<Version>,
+
+    pub cxx_flags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -106,11 +108,12 @@ pub struct TorchNoarch {
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
+    pub cxx_flags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -261,6 +264,7 @@ impl From<Torch> for super::Torch {
             pyext: torch.pyext,
             src: torch.src,
             stable_abi: torch.stable_abi,
+            cxx_flags: torch.cxx_flags,
         }
     }
 }
@@ -281,6 +285,7 @@ impl From<TvmFfi> for super::TvmFfi {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
             src: tvm_ffi.src,
+            cxx_flags: tvm_ffi.cxx_flags,
         }
     }
 }
@@ -461,6 +466,7 @@ impl From<super::Torch> for Torch {
             pyext: torch.pyext,
             src: torch.src,
             stable_abi: torch.stable_abi,
+            cxx_flags: torch.cxx_flags,
         }
     }
 }
@@ -480,6 +486,7 @@ impl From<super::TvmFfi> for TvmFfi {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
             src: tvm_ffi.src,
+            cxx_flags: tvm_ffi.cxx_flags,
         }
     }
 }

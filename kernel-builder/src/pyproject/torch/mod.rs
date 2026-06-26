@@ -126,7 +126,8 @@ fn render_binding(
             context! {
                 includes => torch.include.as_ref().map(prefix_and_join_includes),
                 name => name,
-                src => torch.src
+                src => torch.src,
+                cxx_flags => torch.cxx_flags.as_deref().map(|flags| flags.join(";")),
             },
             &mut *write,
         )

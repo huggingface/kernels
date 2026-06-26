@@ -163,6 +163,7 @@ mod tests {
                 include: None,
                 pyext: None,
                 src: vec![],
+                cxx_flags: None,
             }),
         };
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();

@@ -99,9 +99,8 @@ To migrate an existing `model`-type kernel repository:
 
 ## 0.16
 
-### Deprecation of kernel functions.
-
-`use_kernel_func_from_hub`, `FuncRepository`, `LocalFuncRepository`, and
+> [!WARNING] **Deprecation of kernel functions.**
+> `use_kernel_func_from_hub`, `FuncRepository`, `LocalFuncRepository`, and
 `LockedFuncRepository` are now deprecated.
 
 To make a function extensible by a layer, use the same decorator as for

@@ -83,7 +83,7 @@ $ cmake --build build-ext --target local_install
 This will build the kernel and puts the output in the `build` directory
 and can be used with the `kernels` library.
 
-Noarch (JIT-compiled) kernels do not use CMake. For these reason, we also
+Noarch (JIT-compiled) kernels do not use CMake. For this reason, we also
 create a `setup.py` that works both for arch and noarch kernels:
 
 ```bash

@@ -65,7 +65,7 @@ pub fn write_tvm_ffi_ext(
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 
-    write_metadata(&build.general, kernel_id, &mut file_set)?;
+    write_metadata(build, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }
@@ -107,10 +107,11 @@ pub fn write_pyproject_toml(
     let writer = file_set.entry("pyproject.toml");
 
     // Common python dependencies (no backend-specific ones)
-    let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
-        iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
-            .join(", ")
-    })?;
+    let python_dependencies =
+        itertools::process_results(general.general_python_depends(), |iter| {
+            iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
+                .join(", ")
+        })?;
 
     // Collect backend-specific dependencies for all backends
     let mut backend_dependencies = Vec::new();
@@ -153,6 +154,7 @@ pub fn render_binding(
                 includes => tvm_ffi.include.as_ref().map(prefix_and_join_includes),
                 name => name,
                 src => tvm_ffi.src,
+                cxx_flags => tvm_ffi.cxx_flags.as_deref().map(|flags| flags.join(";")),
             },
             &mut *write,
         )

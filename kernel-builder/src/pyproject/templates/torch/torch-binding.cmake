@@ -15,4 +15,11 @@ set_source_files_properties(
   PROPERTIES INCLUDE_DIRECTORIES "{{ includes }}")
 {% endif %}
 
+{% if cxx_flags %}
+set_property(
+  SOURCE {{'${TORCH_' + name + '_SRC}'}}
+  APPEND PROPERTY
+  COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:{{ cxx_flags }}>")
+{% endif %}
+
 list(APPEND SRC {{'"${TORCH_' + name + '_SRC}"'}})

@@ -1,11 +1,8 @@
 import functools
-import inspect
-from inspect import Parameter, Signature
+import warnings
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Callable, Protocol, Type
-
-from kernels.layer.repos import RepositoryProtocol
+from typing import TYPE_CHECKING, Protocol, Type
 
 from .._versions import select_revision_or_version
 from ..utils import (
@@ -14,6 +11,8 @@ from ..utils import (
     get_kernel,
     get_local_kernel,
 )
+from .layer import _create_func_module, use_kernel_forward_from_hub
+from .repos import RepositoryProtocol
 
 if TYPE_CHECKING:
     from torch import nn
@@ -27,6 +26,10 @@ class FuncRepositoryProtocol(RepositoryProtocol, Protocol):
 class FuncRepository:
     """
     Repository and name of a function for kernel mapping.
+
+    > [!WARNING]
+    > `FuncRepository` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.LayerRepository`] instead.
 
     Args:
         repo_id (`str`):
@@ -68,6 +71,12 @@ class FuncRepository:
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
     ):
+        warnings.warn(
+            "FuncRepository is deprecated and will be removed in kernels 0.17. Use LayerRepository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
         if revision is None and version is None:
@@ -92,7 +101,9 @@ class FuncRepository:
 
     def load(self) -> Type["nn.Module"]:
         kernel = get_kernel(
-            self._repo_id, revision=self._resolve_revision(), trust_remote_code=self._trust_remote_code
+            self._repo_id,
+            revision=self._resolve_revision(),
+            trust_remote_code=self._trust_remote_code,
         )
         return _get_kernel_func(self, kernel)
 
@@ -107,7 +118,15 @@ class FuncRepository:
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_id, self._revision, self._version, self._trust_remote_code))
+        return hash(
+            (
+                self.func_name,
+                self._repo_id,
+                self._revision,
+                self._version,
+                self._trust_remote_code,
+            )
+        )
 
     def __str__(self) -> str:
         return f"`{self._repo_id}` (revision: {self._resolve_revision()}), function `{self.func_name}`"
@@ -116,6 +135,10 @@ class FuncRepository:
 class LocalFuncRepository:
     """
     Repository and function name from a local directory for kernel mapping.
+
+    > [!WARNING]
+    > `LocalFuncRepository` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.LocalLayerRepository`] instead.
 
     Args:
         repo_path (`Path`):
@@ -143,6 +166,12 @@ class LocalFuncRepository:
         *,
         func_name: str,
     ):
+        warnings.warn(
+            "LocalFuncRepository is deprecated and will be removed in kernels 0.17. Use LocalLayerRepository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         self._repo_path = repo_path
         self.func_name = func_name
 
@@ -175,6 +204,10 @@ def use_kernel_func_from_hub(func_name: str):
     the function is called in `forward`. For the function to be properly
     kernelized, it **must** be a member of another `torch.nn.Module` that is
     part of the model (see the example).
+
+    > [!WARNING]
+    > `use_kernel_func_from_hub` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.use_kernel_forward_from_hub`] instead.
 
     Args:
         func_name (`str`):
@@ -210,13 +243,13 @@ def use_kernel_func_from_hub(func_name: str):
         # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
         ```
     """
+    warnings.warn(
+        "use_kernel_func_from_hub is deprecated and will be removed in kernels 0.17. Use [`use_kernel_forward_from_hub`] instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    def decorator(func):
-        Func = _create_func_module(func)
-        Func.kernel_layer_name = func_name
-        return Func()
-
-    return decorator
+    return use_kernel_forward_from_hub(func_name)
 
 
 class LockedFuncRepository:
@@ -225,6 +258,18 @@ class LockedFuncRepository:
 
     In contrast to `FuncRepository`, this class uses repositories that
     are locked inside a project.
+
+    > [!WARNING]
+    > `LockedFuncRepository` is deprecated and will be removed in kernels 0.17.
+    > Use [`~kernels.LockedLayerRepository`] instead.
+
+    Args:
+        repo_id (`str`): The Hub repository containing the function.
+        lockfile (`Path`, *optional*): Path to the lockfile. If not provided,
+            the lockfile will be inferred from the caller's context.
+        func_name (`str`): The name of the function within the kernel repository.
+        trust_remote_code (`bool`, *optional*, defaults to `False`):
+            Whether to allow loading kernels from untrusted organisations.
     """
 
     def __init__(
@@ -238,14 +283,13 @@ class LockedFuncRepository:
         """
         Construct a function repository.
 
-        Args:
-            repo_id (`str`): The Hub repository containing the function.
-            lockfile (`Path`, *optional*): Path to the lockfile. If not provided,
-                the lockfile will be inferred from the caller's context.
-            func_name (`str`): The name of the function within the kernel repository.
-            trust_remote_code (`bool`, *optional*, defaults to `False`):
-                Whether to allow loading kernels from untrusted organisations.
         """
+        warnings.warn(
+            "LockedFuncRepository is deprecated and will be removed in kernels 0.17. Use LockedLayerRepository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.func_name = func_name
@@ -265,7 +309,11 @@ class LockedFuncRepository:
         return locked_sha
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(repo_id=self._repo_id, revision=self._revision, trust_remote_code=self._trust_remote_code)
+        kernel = get_kernel(
+            repo_id=self._repo_id,
+            revision=self._revision,
+            trust_remote_code=self._trust_remote_code,
+        )
         return _get_kernel_func(self, kernel)
 
     def __eq__(self, other):
@@ -290,27 +338,3 @@ def _get_kernel_func(repo: FuncRepositoryProtocol, kernel: ModuleType) -> Type["
         raise ValueError(f"Function `{repo.func_name}` not found in `{repo}`")
 
     return _create_func_module(func)
-
-
-def _create_func_module(func: Callable) -> Type["nn.Module"]:
-    from torch import nn
-
-    class Func(nn.Module):
-        # Same flags as possible with normal `nn.Module` objects that are exchanged
-        can_torch_compile = getattr(func, "can_torch_compile", False)
-        has_backward = getattr(func, "has_backward", True)
-
-        def forward(self, *args, **kwargs):
-            return func(*args, **kwargs)
-
-    # Use function signature with args prepended by self to support
-    # module validation.
-    func_sig = inspect.signature(func)
-    new_args = [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-    new_args.extend(func_sig.parameters.values())
-    Func.forward.__signature__ = Signature(  # type: ignore[attr-defined]
-        parameters=new_args,
-        return_annotation=func_sig.return_annotation,
-    )
-
-    return Func

@@ -69,10 +69,11 @@ fn write_pyproject_toml(
     let writer = file_set.entry("pyproject.toml");
 
     // Common python dependencies (no backend-specific ones)
-    let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
-        iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
-            .join(", ")
-    })?;
+    let python_dependencies =
+        itertools::process_results(general.general_python_depends(), |iter| {
+            iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
+                .join(", ")
+        })?;
 
     // Collect backend-specific dependencies for all backends
     let mut backend_dependencies = Vec::new();
@@ -125,7 +126,8 @@ fn render_binding(
             context! {
                 includes => torch.include.as_ref().map(prefix_and_join_includes),
                 name => name,
-                src => torch.src
+                src => torch.src,
+                cxx_flags => torch.cxx_flags.as_deref().map(|flags| flags.join(";")),
             },
             &mut *write,
         )
@@ -271,7 +273,7 @@ pub fn write_torch_ext(
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(&build.general, kernel_id, &mut file_set)?;
+    write_metadata(build, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }

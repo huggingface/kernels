@@ -91,20 +91,29 @@ pub struct Torch {
     pub src: Vec<PathBuf>,
 
     pub stable_abi: Option<Version>,
+
+    pub cxx_flags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TorchNoarch {
     pub pyext: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub cuda_capabilities: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub rocm_archs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
+    pub cxx_flags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -255,6 +264,7 @@ impl From<Torch> for super::Torch {
             pyext: torch.pyext,
             src: torch.src,
             stable_abi: torch.stable_abi,
+            cxx_flags: torch.cxx_flags,
         }
     }
 }
@@ -263,6 +273,8 @@ impl From<TorchNoarch> for super::TorchNoarch {
     fn from(torch_noarch: TorchNoarch) -> Self {
         Self {
             pyext: torch_noarch.pyext,
+            cuda_capabilities: torch_noarch.cuda_capabilities,
+            rocm_archs: torch_noarch.rocm_archs,
         }
     }
 }
@@ -273,6 +285,7 @@ impl From<TvmFfi> for super::TvmFfi {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
             src: tvm_ffi.src,
+            cxx_flags: tvm_ffi.cxx_flags,
         }
     }
 }
@@ -453,6 +466,7 @@ impl From<super::Torch> for Torch {
             pyext: torch.pyext,
             src: torch.src,
             stable_abi: torch.stable_abi,
+            cxx_flags: torch.cxx_flags,
         }
     }
 }
@@ -460,6 +474,8 @@ impl From<super::TorchNoarch> for TorchNoarch {
     fn from(torch_noarch: super::TorchNoarch) -> Self {
         Self {
             pyext: torch_noarch.pyext,
+            cuda_capabilities: torch_noarch.cuda_capabilities,
+            rocm_archs: torch_noarch.rocm_archs,
         }
     }
 }
@@ -470,6 +486,7 @@ impl From<super::TvmFfi> for TvmFfi {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
             src: tvm_ffi.src,
+            cxx_flags: tvm_ffi.cxx_flags,
         }
     }
 }

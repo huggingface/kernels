@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -10,27 +12,37 @@ from kernels import (
     Mode,
     install_kernel,
     kernelize,
+    use_kernel_forward_from_hub,
     use_kernel_func_from_hub,
     use_kernel_mapping,
+    use_kernelized_func,
 )
+from kernels.layer.func import LockedFuncRepository
 
 
 # A function + layer that we can map arbitrary functions to for testing.
-@use_kernel_func_from_hub("surprise_me")
+@use_kernel_forward_from_hub("surprise_me")
 def surprise_me(x: torch.Tensor):
     return x
 
 
+@use_kernelized_func(surprise_me)
 class SurpriseMe(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.surprise_me = surprise_me
-
     def forward(self, x: torch.Tensor):
-        return self.surprise_me(x)
+        return surprise_me(x)
 
 
 def test_decorator():
+    @use_kernel_forward_from_hub("identity_func")
+    def identity(x):
+        return x
+
+    assert type(identity).kernel_layer_name == "identity_func"
+    assert isinstance(identity, nn.Module)
+
+
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
+def test_deprecated_decorator():
     @use_kernel_func_from_hub("identity_func")
     def identity(x):
         return x
@@ -39,12 +51,14 @@ def test_decorator():
     assert isinstance(identity, nn.Module)
 
 
-def test_kernel_func_requires_version_or_revision():
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
+def test_deprecated_func_repository_requires_version_or_revision():
     with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
         FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul")
 
 
-def test_kernel_func(device):
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
+def test_deprecated_func_repository(device):
     model = SurpriseMe()
 
     x = torch.arange(-10, 10, device=device).float()
@@ -102,7 +116,8 @@ def test_kernel_func_with_layer():
     assert model(x) is x
 
 
-def test_local_kernel_func(device):
+@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
+def test_deprecated_local_kernel_func(device):
     model = SurpriseMe()
 
     x = torch.arange(-10, 10).float()
@@ -128,6 +143,44 @@ def test_local_kernel_func(device):
         model = kernelize(model, mode=Mode.INFERENCE, device=device)
 
     assert model(x) is x
+
+
+def test_deprecated_kernel_func():
+    with pytest.deprecated_call(match="kernels 0.17"):
+        FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul", version=1)
+
+    project_dir = Path(__file__).parent / "layer_locking"
+    with pytest.deprecated_call(match="kernels 0.17"):
+        LockedFuncRepository(
+            "kernels-test/versions",
+            func_name="version",
+            lockfile=project_dir / "kernels.lock",
+        )
+
+    with pytest.deprecated_call(match="kernels 0.17"):
+        LocalFuncRepository(
+            # We are never loading the kernel, so we can just use an invalid path.
+            repo_path=Path("."),
+            func_name="silu_and_mul",
+        )
+
+    with pytest.deprecated_call(match="kernels 0.17"):
+
+        @use_kernel_func_from_hub("deprecated")
+        def deprecated_func(x):
+            return x
+
+
+def test_use_kernelized_func_used_on_non_kernelized_func():
+    def not_kernelized(x):
+        return x
+
+    with pytest.raises(ValueError, match="Function `not_kernelized` is not decorated"):
+
+        @use_kernelized_func(not_kernelized)
+        class NotKernelized(nn.Module):
+            def forward(self, x: torch.Tensor):
+                return not_kernelized(x)
 
 
 def _silu_and_mul(x: torch.Tensor) -> torch.Tensor:

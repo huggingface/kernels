@@ -23,6 +23,7 @@ from kernels.layer import (
     use_kernel_forward_from_hub,
     use_kernel_func_from_hub,
     use_kernel_mapping,
+    use_kernelized_func,
 )
 from kernels.utils import (
     LoadedKernel,
@@ -75,4 +76,5 @@ __all__ = [
     "use_kernel_forward_from_hub",
     "use_kernel_func_from_hub",
     "use_kernel_mapping",
+    "use_kernelized_func",
 ]

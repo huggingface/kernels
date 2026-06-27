@@ -171,7 +171,11 @@ impl TryFrom<Build> for super::Build {
         let framework = match build.framework {
             Some(Framework::Torch(torch)) => super::Framework::Torch(torch.into()),
             Some(Framework::TvmFfi(tvm_ffi)) => super::Framework::TvmFfi(tvm_ffi.into()),
-            None => super::Framework::TorchNoarch(super::TorchNoarch { pyext: None }),
+            None => super::Framework::TorchNoarch(super::TorchNoarch {
+                pyext: None,
+                cuda_capabilities: None,
+                rocm_archs: None,
+            }),
         };
 
         Ok(Self {
@@ -250,6 +254,7 @@ impl From<Torch> for super::Torch {
             pyext: torch.pyext,
             src: torch.src,
             stable_abi: None,
+            cxx_flags: None,
         }
     }
 }
@@ -260,6 +265,7 @@ impl From<TvmFfi> for super::TvmFfi {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
             src: tvm_ffi.src,
+            cxx_flags: None,
         }
     }
 }

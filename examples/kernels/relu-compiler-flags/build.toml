@@ -16,6 +16,7 @@ src = [
     "torch-ext/torch_binding.cpp",
     "torch-ext/torch_binding.h",
 ]
+cxx-flags = ["-DCANARY_IN_THE_KERNEL"]
 
 [kernel.activation_xpu]
 backend = "xpu"

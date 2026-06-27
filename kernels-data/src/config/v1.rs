@@ -171,6 +171,7 @@ impl From<Torch> for super::Torch {
             maxver: None,
             pyext: torch.pyext,
             src: torch.src,
+            cxx_flags: None,
         }
     }
 }

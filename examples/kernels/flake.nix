@@ -53,6 +53,12 @@
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-tvm-ffi-compiler-flags-kernel";
+          path = ./relu-tvm-ffi-compiler-flags;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+        }
+        {
           name = "extra-data";
           path = ./extra-data;
           drv =
@@ -222,6 +228,12 @@
         {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${xpuVersion}-${sys}"};
+        }
+        {
+          name = "relu-tvm-ffi-compiler-flags-kernel";
+          path = ./relu-tvm-ffi-compiler-flags;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${xpuVersion}-${sys}"};
         }

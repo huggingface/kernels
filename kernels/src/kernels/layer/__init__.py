@@ -16,6 +16,7 @@ from .layer import (
     LockedLayerRepository,
     replace_kernel_forward_from_hub,
     use_kernel_forward_from_hub,
+    use_kernelized_func,
 )
 from .mode import Mode
 
@@ -36,4 +37,5 @@ __all__ = [
     "use_kernel_forward_from_hub",
     "use_kernel_func_from_hub",
     "use_kernel_mapping",
+    "use_kernelized_func",
 ]

@@ -35,6 +35,7 @@
   networkx,
   numpy,
   pyyaml,
+  pyzes,
   requests,
   setuptools,
   sympy,
@@ -64,6 +65,7 @@ let
   aotritonVersions = with rocmPackages; {
     "2.11" = aotriton_0_11_2;
     "2.12" = aotriton_0_11_2;
+    "2.13" = aotriton_0_12;
   };
 
   aotriton =
@@ -105,7 +107,7 @@ let
         rocsparse
         roctracer
       ]
-      ++ lib.optionals (lib.versions.majorMinor version == "2.12") [
+      ++ lib.optionals (lib.versionAtLeast version "2.12") [
         rocprofiler-sdk
       ];
 
@@ -229,10 +231,14 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   ]
   ++ lib.optionals (cudaSupport && lib.versionAtLeast version "2.10") [
     cuda-bindings
+  ]
+  ++ lib.optionals (xpuSupport && lib.versionAtLeast version "2.13") [
+    pyzes
   ];
 
   pythonRelaxWheelDeps = [
     "cuda-bindings"
+    "pyzes"
     "sympy"
   ];
 

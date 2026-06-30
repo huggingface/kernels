@@ -19,7 +19,7 @@ def rocm_version_to_framework(rocm_version: str) -> str:
 
 def system_to_platform(system: str, framework_type: str, torch_version: str) -> str:
     """Convert system identifier to platform string for wheel naming"""
-    if framework_type == "xpu":
+    if framework_type == "xpu" and Version(torch_version) < Version("2.13"):
         xpu_platform_map = {
             "x86_64-linux": "linux_x86_64",
         }
@@ -119,4 +119,4 @@ def generate_pytorch_rc_hf_url(
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
 
-    return f"https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/{testing_release}/{wheel_name}"
+    return f"https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/{torch_version}/{testing_release}/{wheel_name}"

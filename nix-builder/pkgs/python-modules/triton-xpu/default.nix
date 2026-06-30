@@ -24,4 +24,10 @@ in
     hash = "sha256-T9rtG6/FHTooNGVqNCCmaGp06iJlCHZaSb8V1Y/zqTA=";
   };
 
+  triton-xpu_3_7_2 = generic {
+    version = "3.7.2";
+    url = "https://download.pytorch.org/whl/test/triton_xpu-3.7.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+    hash = "sha256-VT/b0J1ErR1JGlenWqEJ3oMHmYOyGblhbfnb1mhDDiw=";
+  };
+
 }

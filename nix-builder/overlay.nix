@@ -54,7 +54,12 @@ final: prev:
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
       in
       {
-        inherit (triton) triton_3_5_0 triton_3_6_0 triton_3_7_0;
+        inherit (triton)
+          triton_3_5_0
+          triton_3_6_0
+          triton_3_7_0
+          triton_3_7_1
+          ;
         inherit (triton-rocm) triton-rocm_3_6_0 triton-rocm_3_7_0;
         inherit (triton-xpu)
           triton-xpu_3_6_0

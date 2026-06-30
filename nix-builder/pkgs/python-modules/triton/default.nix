@@ -36,6 +36,17 @@ let
         hash = "sha256-LoFYjFyKWMAkMMrTeOgAopRK81mqm+fEQPTuOplp9jY=";
       };
     };
+    "3.7.1" = {
+      x86_64-linux = {
+        url = "https://download.pytorch.org/whl/test/triton-3.7.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-rbGqMgvSXOzCUVn+uttWPqvTu/QpybET8ktSo8RlpRU=";
+      };
+      aarch64-linux = {
+        url = "https://download.pytorch.org/whl/test/triton-3.7.1-cp313-cp313-linux_aarch64.whl";
+        hash = "sha256-I8VGCcF+X5DlfiAzVCXZZA7+jTC4Qi/QYd8vx+lFk1Y=";
+      };
+    };
+
   };
   generic = callPackage ./generic.nix { };
   versionAttr = lib.replaceStrings [ "." ] [ "_" ];

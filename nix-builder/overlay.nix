@@ -145,6 +145,8 @@ final: prev:
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
 
+        pyzes = callPackage ./pkgs/python-modules/pyzes { };
+
         scipy = python-super.scipy.overrideAttrs (
           _: prevAttrs: {
             # Three tests have a slight deviance.

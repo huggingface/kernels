@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelName};
+use super::{Dependency, GitUrl, KernelName, TorchAbi};
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -90,7 +90,7 @@ pub struct Torch {
     #[serde(default)]
     pub src: Vec<PathBuf>,
 
-    pub stable_abi: Option<Version>,
+    pub stable_abi: Option<TorchAbi>,
 
     pub cxx_flags: Option<Vec<String>>,
 }
@@ -576,5 +576,86 @@ impl From<super::Kernel> for Kernel {
                 src,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::{Backend, TorchAbi};
+    use crate::version::Version;
+
+    use super::{Build, Framework};
+
+    fn parse(toml: &str) -> Build {
+        toml::from_str(toml).expect("config should parse")
+    }
+
+    fn torch_stable_abi(build: &Build) -> Option<&TorchAbi> {
+        match &build.framework {
+            Framework::Torch(torch) => torch.stable_abi.as_ref(),
+            _ => panic!("expected a torch framework"),
+        }
+    }
+
+    const HEADER: &str = r#"
+[general]
+name = "relu"
+version = 1
+license = "Apache-2.0"
+backends = ["cuda", "rocm", "cpu"]
+"#;
+
+    #[test]
+    fn scalar_stable_abi_applies_to_all_backends() {
+        let build = parse(&format!(
+            r#"{HEADER}
+[torch]
+stable-abi = "2.11"
+src = []
+"#
+        ));
+        let abi = torch_stable_abi(&build).expect("stable abi should be set");
+        let expected: Version = "2.11".parse().unwrap();
+        assert!(matches!(abi, TorchAbi::All(_)));
+        assert_eq!(abi.for_backend(Backend::Cuda), Some(&expected));
+        assert_eq!(abi.for_backend(Backend::Rocm), Some(&expected));
+        assert_eq!(abi.for_backend(Backend::Cpu), Some(&expected));
+    }
+
+    #[test]
+    fn per_backend_stable_abi_mapping() {
+        let build = parse(&format!(
+            r#"{HEADER}
+[torch]
+src = []
+
+[torch.stable-abi]
+cuda = "2.11"
+rocm = "2.9"
+"#
+        ));
+        let abi = torch_stable_abi(&build).expect("stable abi should be set");
+        assert!(matches!(abi, TorchAbi::Mapping(_)));
+        assert_eq!(
+            abi.for_backend(Backend::Cuda),
+            Some(&"2.11".parse().unwrap())
+        );
+        assert_eq!(
+            abi.for_backend(Backend::Rocm),
+            Some(&"2.9".parse().unwrap())
+        );
+        // Backends not in the mapping are built without the stable ABI.
+        assert_eq!(abi.for_backend(Backend::Cpu), None);
+    }
+
+    #[test]
+    fn no_stable_abi() {
+        let build = parse(&format!(
+            r#"{HEADER}
+[torch]
+src = []
+"#
+        ));
+        assert!(torch_stable_abi(&build).is_none());
     }
 }

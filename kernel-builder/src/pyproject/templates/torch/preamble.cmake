@@ -70,18 +70,28 @@ endif()
 {% endif %}
 
 {% if stable_abi %}
-if (TORCH_VERSION VERSION_LESS {{ stable_abi }})
-  message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
-    "version {{ stable_abi }}. Cannot build with stable ABI targeting a newer version of Torch.")
+# Select the stable ABI version (if any) for the detected backend.
+set(_STABLE_ABI_VERSION "")
+{% for entry in stable_abi %}
+if(BACKEND STREQUAL "{{ entry.backend }}")
+  set(_STABLE_ABI_VERSION "{{ entry.version }}")
 endif()
+{% endfor %}
 
-# From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
-string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "{{ stable_abi }}")
-list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
-list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
-math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
+if(_STABLE_ABI_VERSION)
+  if (TORCH_VERSION VERSION_LESS ${_STABLE_ABI_VERSION})
+    message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
+      "version ${_STABLE_ABI_VERSION}. Cannot build with stable ABI targeting a newer version of Torch.")
+  endif()
 
-add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
+  # From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
+  string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "${_STABLE_ABI_VERSION}")
+  list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
+  list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
+  math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
+
+  add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
+endif()
 {% endif %}
 
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
@@ -214,7 +224,10 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/build-variants.cmake)
 
 # Generate build variant name.
 {% if stable_abi %}
-set(_STABLE_ABI_ARG TORCH_STABLE_ABI "{{ stable_abi }}")
+set(_STABLE_ABI_ARG "")
+if(_STABLE_ABI_VERSION)
+  set(_STABLE_ABI_ARG TORCH_STABLE_ABI "${_STABLE_ABI_VERSION}")
+endif()
 {% endif %}
 if(GPU_LANG STREQUAL "CUDA")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}" ${_STABLE_ABI_ARG})

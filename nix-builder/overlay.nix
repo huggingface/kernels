@@ -259,6 +259,7 @@ final: prev:
     xpuVersions = [
       "2025.3.1"
       "2025.3.2"
+      "2026.0.0"
     ];
     newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
   in

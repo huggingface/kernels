@@ -174,18 +174,18 @@
     bundleBuild = true;
   }
   # Broken: https://github.com/ROCm/ROCm/issues/6322
-  # {
-  #   torchVersion = "2.13";
-  #   rocmVersion = "7.1";
-  #   systems = [ "x86_64-linux" ];
-  #   bundleBuild = true;
-  # }
-  # {
-  #   torchVersion = "2.13";
-  #   rocmVersion = "7.2";
-  #   systems = [ "x86_64-linux" ];
-  #   bundleBuild = true;
-  # }
+  {
+    torchVersion = "2.13";
+    rocmVersion = "7.1";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.13";
+    rocmVersion = "7.2";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
   {
     torchVersion = "2.13";
     xpuVersion = "2025.3.2";

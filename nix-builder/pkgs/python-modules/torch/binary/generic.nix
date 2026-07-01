@@ -23,6 +23,7 @@
 
   # Build inputs
   cudaPackages,
+  numactl,
   rocmPackages,
   xpuPackages,
   zlib,
@@ -52,6 +53,8 @@
   effectiveStdenv ? if cudaSupport then cudaPackages.backendStdenv else stdenv,
 }:
 let
+  torchMajorMinor = lib.versions.majorMinor version;
+
   effectiveTriton =
     if cudaSupport then
       triton-cuda
@@ -69,9 +72,6 @@ let
   };
 
   aotriton =
-    let
-      torchMajorMinor = lib.versions.majorMinor version;
-    in
     aotritonVersions.${torchMajorMinor}
       or (throw "aotriton version is not specified Torch ${torchMajorMinor}");
 
@@ -354,6 +354,16 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   postFixup = ''
     mkdir -p "$cxxdev/nix-support"
     printWords "''${propagatedCxxBuildInputs[@]}" >> "$cxxdev/nix-support/propagated-build-inputs"
+  '';
+
+  # We need to add this rpath after postFixup (otherwise it might be ordered
+  # before autoPatchelfHook), but before the import check to ensure that the
+  # rpath is used during the import check.
+  preInstallCheck = lib.optionalString (rocmSupport && torchMajorMinor == "2.13") ''
+    # libtorch_shmem dynamically loads libnuma. For added fun, if libnuma
+    # cannot be found, it exit()s inside a constructor, calling an atexit()
+    # hook, which then proceeds to deadlock.
+    patchelf --add-rpath ${numactl}/lib $out/${python.sitePackages}/torch/lib/libtorch_rocshmem.so
   '';
 
   dontStrip = true;

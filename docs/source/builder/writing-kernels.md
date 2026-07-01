@@ -264,8 +264,9 @@ following options:
   rocm = "2.9"
   ```
 
-  Every backend referenced in the table must also be listed in
-  `[general].backends`.
+  Entries for backends that are not in `[general].backends` are ignored, so a
+  backend can be commented out of `[general].backends` for testing without
+  having to also remove it from the table.
 
 ### `tvm-ffi`
 

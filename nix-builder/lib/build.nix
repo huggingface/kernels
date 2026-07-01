@@ -447,7 +447,6 @@ rec {
             buildInputs = [ python ];
             inputsFrom = [ extension ];
             env = lib.optionalAttrs rocmSupport {
-              PYTORCH_ROCM_ARCH = lib.concatStringsSep ";" buildSet.torch.rocmArchs;
               HIP_PATH = pkgs.rocmPackages.clr;
             };
 

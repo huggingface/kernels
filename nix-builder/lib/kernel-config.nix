@@ -15,6 +15,14 @@ let
             nix run github:huggingface/kernels#kernel-builder update-build build.toml'';
     buildToml;
   toml = validate (readToml (path + "/build.toml"));
+
+  # `stable-abi` is either a single version (all backends) or a per-backend mapping.
+  torchStableAbiVersionForBackend =
+    backend:
+    let
+      cfg = lib.attrByPath [ "torch" "stable-abi" ] { } toml;
+    in
+    if builtins.isString cfg then cfg else cfg.${backend} or null;
 in
 {
   inherit toml;
@@ -25,11 +33,10 @@ in
   # Is the kernel a tvm-ffi kernel.
   isTvmFfi = toml ? tvm-ffi;
 
-  # Does the kernel use the torch stable ABI.
-  isTorchStableAbi = lib.attrByPath [ "torch" "stable-abi" ] null toml != null;
+  inherit torchStableAbiVersionForBackend;
 
-  # Torch stable ABI version.
-  torchStableAbiVersion = lib.attrByPath [ "torch" "stable-abi" ] null toml;
+  # Does the given backend use the torch stable ABI.
+  isTorchStableAbiForBackend = backend: torchStableAbiVersionForBackend backend != null;
 
   # Kernel backends.
   backends =

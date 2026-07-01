@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelName};
+use super::{Dependency, GitUrl, KernelName, TorchAbi};
 use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -90,7 +90,7 @@ pub struct Torch {
     #[serde(default)]
     pub src: Vec<PathBuf>,
 
-    pub stable_abi: Option<Version>,
+    pub stable_abi: Option<TorchAbi>,
 
     pub cxx_flags: Option<Vec<String>>,
 }

@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fmt::Display, path::PathBuf, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use eyre::Result;
 use serde::{Deserialize, Serialize};
@@ -195,8 +200,28 @@ pub struct Torch {
     pub maxver: Option<Version>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
-    pub stable_abi: Option<Version>,
+    pub stable_abi: Option<TorchAbi>,
     pub cxx_flags: Option<Vec<String>>,
+}
+
+/// Torch stable ABI version: a single version for all backends, or per-backend
+/// versions. Backends absent from a mapping are built without the stable ABI.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum TorchAbi {
+    All(Version),
+    Mapping(BTreeMap<Backend, Version>),
+}
+
+impl TorchAbi {
+    /// Stable ABI version to target for `backend`, or `None` if it should be
+    /// built without the stable ABI.
+    pub fn for_backend(&self, backend: Backend) -> Option<&Version> {
+        match self {
+            TorchAbi::All(version) => Some(version),
+            TorchAbi::Mapping(mapping) => mapping.get(&backend),
+        }
+    }
 }
 
 fn data_extensions(py_ext: Option<&[String]>) -> Option<Vec<String>> {

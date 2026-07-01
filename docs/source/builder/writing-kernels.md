@@ -253,6 +253,21 @@ following options:
   For an example, see the [`relu-torch-stable-abi`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-torch-stable-abi)
   example kernel.
 
+  The stable ABI can also be configured per-backend by providing a table
+  mapping backend names to Torch versions instead of a single version. Backends
+  that are not listed in the table are built normally (without the stable ABI),
+  allowing a kernel to mix stable-ABI and full-ABI backends:
+
+  ```toml
+  [torch.stable-abi]
+  cuda = "2.11"
+  rocm = "2.9"
+  ```
+
+  Entries for backends that are not in `[general].backends` are ignored, so a
+  backend can be commented out of `[general].backends` for testing without
+  having to also remove it from the table.
+
 ### `tvm-ffi`
 
 This framework section is used for AOT-compiled TVM-FFI kernels.

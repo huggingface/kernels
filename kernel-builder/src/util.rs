@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use eyre::{bail, ensure, Context, Result};
 
-use kernels_data::config::{v4, Backend, Build, BuildCompat, CurrentConfig, TorchAbi};
+use kernels_data::config::{Build, BuildCompat, CurrentConfig};
 
 pub(crate) fn parse_build(kernel_dir: impl AsRef<Path>) -> Result<Build> {
     let build_compat = parse_and_validate(kernel_dir)?;
@@ -56,35 +56,7 @@ pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<Current
     let build: CurrentConfig = toml::from_str(&toml_data)
         .wrap_err_with(|| format!("Cannot parse TOML in {}", build_toml.to_string_lossy()))?;
 
-    validate_stable_abi(&build)
-        .wrap_err_with(|| format!("Invalid configuration in {}", build_toml.to_string_lossy()))?;
-
     Ok(build)
-}
-
-/// Validate that a per-backend `[torch.stable-abi]` mapping only references
-/// backends that are declared in `[general].backends`.
-fn validate_stable_abi(build: &CurrentConfig) -> Result<()> {
-    let v4::Framework::Torch(torch) = &build.framework else {
-        return Ok(());
-    };
-
-    let Some(TorchAbi::Mapping(mapping)) = &torch.stable_abi else {
-        return Ok(());
-    };
-
-    for backend in mapping.keys() {
-        ensure!(
-            build
-                .general
-                .backends
-                .iter()
-                .any(|declared| Backend::from(*declared) == *backend),
-            "`torch.stable-abi` targets backend `{backend}`, which is not listed in `general.backends`"
-        );
-    }
-
-    Ok(())
 }
 
 pub(crate) fn parse_and_validate_compat(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {
@@ -139,61 +111,6 @@ pub(crate) fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathB
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn parse_config(toml: &str) -> CurrentConfig {
-        toml::from_str(toml).expect("config should parse")
-    }
-
-    const STABLE_ABI_HEADER: &str = r#"
-[general]
-name = "relu"
-version = 1
-license = "Apache-2.0"
-backends = ["cuda", "rocm"]
-"#;
-
-    #[test]
-    fn validate_stable_abi_accepts_declared_backends() {
-        let build = parse_config(&format!(
-            r#"{STABLE_ABI_HEADER}
-[torch]
-src = []
-
-[torch.stable-abi]
-cuda = "2.11"
-rocm = "2.9"
-"#
-        ));
-        assert!(validate_stable_abi(&build).is_ok());
-    }
-
-    #[test]
-    fn validate_stable_abi_accepts_scalar() {
-        let build = parse_config(&format!(
-            r#"{STABLE_ABI_HEADER}
-[torch]
-src = []
-stable-abi = "2.11"
-"#
-        ));
-        assert!(validate_stable_abi(&build).is_ok());
-    }
-
-    #[test]
-    fn validate_stable_abi_rejects_undeclared_backend() {
-        let build = parse_config(&format!(
-            r#"{STABLE_ABI_HEADER}
-[torch]
-src = []
-
-[torch.stable-abi]
-cuda = "2.11"
-cpu = "2.9"
-"#
-        ));
-        let err = validate_stable_abi(&build).unwrap_err();
-        assert!(err.to_string().contains("cpu"));
-    }
 
     #[test]
     fn test_discover_variants() {

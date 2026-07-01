@@ -531,7 +531,7 @@ function (define_gpu_extension_target GPU_MOD_NAME)
     GPU
     "WITH_SOABI"
     "DESTINATION;LANGUAGE;USE_SABI"
-    "SOURCES;ARCHITECTURES;COMPILE_FLAGS;INCLUDE_DIRECTORIES;LIBRARIES")
+    "SOURCES;COMPILE_FLAGS;INCLUDE_DIRECTORIES;LIBRARIES")
 
   # Add hipify preprocessing step when building with HIP/ROCm.
   if (GPU_LANGUAGE STREQUAL "HIP")
@@ -553,16 +553,9 @@ function (define_gpu_extension_target GPU_MOD_NAME)
   if (GPU_LANGUAGE STREQUAL "HIP")
     # Make this target dependent on the hipify preprocessor step.
     add_dependencies(${GPU_MOD_NAME} hipify${GPU_MOD_NAME})
-  endif()
 
-  if (GPU_ARCHITECTURES)
-    if (GPU_LANGUAGE STREQUAL "HIP")
-      # Clear target architectures, we are passing arch flags per source file.
-      set_property(TARGET ${GPU_MOD_NAME} PROPERTY HIP_ARCHITECTURES off)
-    else()
-      set_target_properties(${GPU_MOD_NAME} PROPERTIES
-        ${GPU_LANGUAGE}_ARCHITECTURES "${GPU_ARCHITECTURES}")
-    endif()
+    # Clear target architectures, we are passing arch flags per source file.
+    set_property(TARGET ${GPU_MOD_NAME} PROPERTY HIP_ARCHITECTURES off)
   endif()
 
   if (TORCH_VERSION VERSION_LESS 2.12.0)

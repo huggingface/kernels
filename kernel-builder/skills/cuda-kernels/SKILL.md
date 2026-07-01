@@ -378,13 +378,13 @@ kernel-builder build-and-upload
 ```
 The target repo is set by `repo-id` under `[general.hub]` and `version` under `[general]` in `build.toml`. Uploads go to a **`kernel`-type** Hub repository (not a model repo); the owning user/org needs kernel-creation access ("Request Kernels Creation" at [huggingface.co/settings/account](https://huggingface.co/settings/account)).
 
-### Editable install for local development
-Never hand-write a `setup.py` (it leads to `torch.utils.cpp_extension`/pybind11, which cannot build under ABI3). Let kernel-builder generate the project files:
+### Local build for development
+Never hand-write a `setup.py` (it leads to `torch.utils.cpp_extension`/pybind11, which cannot build under ABI3). Let kernel-builder generate the project files, then build with `setup.py build_kernel` (no `pip install`/editable install needed):
 ```bash
 kernel-builder create-pyproject -f
-pip install wheel
-pip install --no-build-isolation -e .
+python setup.py build_kernel
 ```
+This builds the kernel and puts the output in `build`, which can be loaded directly with `kernels.get_local_kernel(Path("build"))`. Inside `kernel-builder devshell`/`testshell`, `LOCAL_KERNELS` is set automatically so `get_kernel("<repo-id>")` resolves to this local build.
 
 ### build.toml Configuration
 ```toml

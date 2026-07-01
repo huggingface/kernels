@@ -20,12 +20,9 @@ let
   torchStableAbiVersionForBackend =
     backend:
     let
-      cfg = lib.attrByPath [ "torch" "stable-abi" ] {} toml;
+      cfg = lib.attrByPath [ "torch" "stable-abi" ] { } toml;
     in
-    if builtins.isString cfg then
-      cfg
-    else
-      cfg.${backend} or null;
+    if builtins.isString cfg then cfg else cfg.${backend} or null;
 in
 {
   inherit toml;

@@ -274,6 +274,7 @@ rec {
     }:
     let
       kernelConfig = readKernelConfig path;
+      repoId = lib.attrByPath [ "toml" "general" "hub" "repo-id" ] null kernelConfig;
       shellForBuildSet =
         { path, rev }:
         buildSet:
@@ -303,6 +304,7 @@ rec {
                 ++ pythonCheckInputs ps
                 ++ [
                   buildSet.torch
+                  kernels
                   pytest
                 ]
                 ++ pythonCheckInputs ps
@@ -320,6 +322,9 @@ rec {
               # make testing as pure as possible.
               unset LD_LIBRARY_PATH
               export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
+            ''
+            + ''
+              export LOCAL_KERNELS="${repoId}=${extension}"
             '';
           };
         };
@@ -392,6 +397,7 @@ rec {
     }:
     let
       kernelConfig = readKernelConfig path;
+      repoId = lib.attrByPath [ "toml" "general" "hub" "repo-id" ] null kernelConfig;
       shellForBuildSet =
         buildSet:
         let
@@ -416,6 +422,7 @@ rec {
               ++ [
                 buildSet.torch
                 kernels
+                ninja
                 pip
                 pytest
               ]
@@ -457,6 +464,9 @@ rec {
               fi
               source "${venvDir}/bin/activate"
               unset LD_LIBRARY_PATH
+            ''
+            + lib.optionals (repoId != null) ''
+              export LOCAL_KERNELS="${repoId}=$(pwd)/build"
             '';
           };
         };

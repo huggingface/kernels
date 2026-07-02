@@ -115,24 +115,7 @@ def _metadata_info(metadata: Metadata | None, trace: list[Decision]) -> dict:
         else:
             backends.add(variant.arch.backend_name)
 
-    info: dict[str, Any] = {
-        "name": None,
-        "version": None,
-        "license": None,
-        "upstream": None,
-        "source": None,
-        "python_depends": [],
-        "backends": sorted(backends),
-        "variants": [
-            {
-                "variant": decision.variant.variant_str,
-                "compatible": isinstance(decision, VariantAccepted),
-                "reason": None if isinstance(decision, VariantAccepted) else decision.reason,
-            }
-            for decision in trace
-        ],
-    }
-
+    info: dict[str, Any] = {}
     if metadata is not None:
         info.update(
             {
@@ -144,6 +127,16 @@ def _metadata_info(metadata: Metadata | None, trace: list[Decision]) -> dict:
                 "python_depends": metadata.python_depends,
             }
         )
+
+    info["backends"] = sorted(backends)
+    info["variants"] = [
+        {
+            "variant": decision.variant.variant_str,
+            "compatible": isinstance(decision, VariantAccepted),
+            "reason": None if isinstance(decision, VariantAccepted) else decision.reason,
+        }
+        for decision in trace
+    ]
 
     return info
 
@@ -158,11 +151,12 @@ def _print_human(info: dict, trace: list[Decision]):
     else:
         print(f"Path: {info['path']}")
 
-    print(f"Name: {value(info['name'])}")
-    print(f"Version: {value(info['version'])}")
-    print(f"License: {value(info['license'])}")
-    print(f"Upstream: {value(info['upstream'])}")
-    print(f"Source: {value(info['source'])}")
-    print(f"Python dependencies: {', '.join(info['python_depends']) if info['python_depends'] else '-'}")
+    print(f"Name: {value(info.get('name'))}")
+    print(f"Version: {value(info.get('version'))}")
+    print(f"License: {value(info.get('license'))}")
+    print(f"Upstream: {value(info.get('upstream'))}")
+    print(f"Source: {value(info.get('source'))}")
+    python_depends = info.get("python_depends")
+    print(f"Python dependencies: {', '.join(python_depends) if python_depends else '-'}")
     print(f"Backends: {', '.join(info['backends'])}")
     print(f"Variants:\n\n{variants_trace_str(trace)}")

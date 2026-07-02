@@ -163,6 +163,7 @@ backends = [
 ]
 name = "mykernel"
 version = 1
+edition = 5
 
 [general.hub]
 repo-id = "myorg/mykernel"
@@ -193,6 +194,9 @@ The following sections enumerate all supported options for `build.toml`.
   The version is written to the kernel's `metadata.json` and is used
   by the `kernels upload` command to upload the kernel to a version
   branch named `v<version>`.
+- `edition` (required): the `build.toml` format edition. The current
+  edition is `5`. Older `build.toml` files can be migrated with
+  `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
 - `upstream`: Git-compatible URL (passable to `git clone`) of the original
@@ -246,17 +250,15 @@ following options:
   non-compliant kernels if the version range does not correspond to the [required variants](build-variants.md).
 - `minver` (optional): only build for this Torch version and later. Use cautiously, since this option produces
   non-compliant kernels if the version range does not correspond to the [required variants](build-variants.md).
-- `stable-abi` (**experimental**): when set to a Torch version (e.g.
-  `"2.11"`), the kernel is built using the Torch stable ABI. This
-  requires that the kernel itself only use
+- `stable-abi` (**experimental**): a table mapping backend names to the Torch
+  version (e.g. `"2.11"`) that the backend is built against using the Torch
+  stable ABI. This requires that the kernel itself only use
   [stable ABI headers](https://docs.pytorch.org/docs/2.12/notes/libtorch_stable_abi.html).
   For an example, see the [`relu-torch-stable-abi`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-torch-stable-abi)
   example kernel.
 
-  The stable ABI can also be configured per-backend by providing a table
-  mapping backend names to Torch versions instead of a single version. Backends
-  that are not listed in the table are built normally (without the stable ABI),
-  allowing a kernel to mix stable-ABI and full-ABI backends:
+  Backends that are not listed in the table are built normally (without the
+  stable ABI), allowing a kernel to mix stable-ABI and full-ABI backends:
 
   ```toml
   [torch.stable-abi]

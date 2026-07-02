@@ -155,7 +155,7 @@ if(GPU_LANG STREQUAL "CUDA")
   add_compile_definitions(USE_CUDA=1)
   add_compile_definitions(CUDA_KERNEL)
 elseif(GPU_LANG STREQUAL "HIP")
-  if(NOT HIP_FOUND)
+  if(NOT HIP_FOUND AND NOT PYTORCH_FOUND_HIP)
     message(FATAL_ERROR "GPU language is set to HIP, but cannot find ROCm toolkit")
   endif()
 

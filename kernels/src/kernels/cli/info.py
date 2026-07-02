@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from kernels_data import Metadata
 
@@ -114,7 +115,7 @@ def _metadata_info(metadata: Metadata | None, trace: list[Decision]) -> dict:
         else:
             backends.add(variant.arch.backend_name)
 
-    info = {
+    info: dict[str, Any] = {
         "name": None,
         "version": None,
         "license": None,

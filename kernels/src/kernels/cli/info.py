@@ -9,12 +9,9 @@ from kernels._versions import _get_available_versions, resolve_version_spec_as_r
 from kernels.utils import CACHE_DIR, _get_hf_api
 from kernels.variants import (
     ArchVariant,
-    Decision,
-    VariantAccepted,
+    Variant,
     get_variants,
     get_variants_local,
-    resolve_variants,
-    variants_trace_str,
 )
 
 
@@ -31,14 +28,14 @@ def print_kernel_info(
         if revision is not None or version is not None:
             print("--revision and --version cannot be used with a local path", file=sys.stderr)
             sys.exit(1)
-        info, trace = _local_kernel_info(path)
+        info = _local_kernel_info(path)
     else:
-        info, trace = _hub_kernel_info(kernel, revision=revision, version=version)
+        info = _hub_kernel_info(kernel, revision=revision, version=version)
 
     if json_output:
         print(json.dumps(info, indent=2))
     else:
-        _print_human(info, trace)
+        _print_human(info)
 
 
 def _hub_kernel_info(
@@ -46,7 +43,7 @@ def _hub_kernel_info(
     *,
     revision: str | None,
     version: int | None,
-) -> tuple[dict, list[Decision]]:
+) -> dict:
     if revision is not None and version is not None:
         print("Only one of --revision or --version can be specified", file=sys.stderr)
         sys.exit(1)
@@ -63,8 +60,6 @@ def _hub_kernel_info(
         print(f"No build variants found in {repo_id} (revision: {revision})", file=sys.stderr)
         sys.exit(1)
 
-    _, trace = resolve_variants(variants, None)
-
     # The metadata fields that describe the kernel (rather than a specific
     # build) are the same for every variant, so reading one suffices.
     metadata = None
@@ -72,7 +67,7 @@ def _hub_kernel_info(
         metadata_path = api.hf_hub_download(
             repo_id,
             repo_type="kernel",
-            filename=f"build/{trace[0].variant.variant_str}/metadata.json",
+            filename=f"build/{variants[0].variant_str}/metadata.json",
             cache_dir=CACHE_DIR,
             revision=revision,
         )
@@ -81,35 +76,32 @@ def _hub_kernel_info(
         pass
 
     info = {"repo_id": repo_id, "revision": revision}
-    info.update(_metadata_info(metadata, trace))
-    return info, trace
+    info.update(_metadata_info(metadata, variants))
+    return info
 
 
-def _local_kernel_info(repo_path: Path) -> tuple[dict, list[Decision]]:
+def _local_kernel_info(repo_path: Path) -> dict:
     build_path = repo_path / "build"
     variants = get_variants_local(build_path)
     if not variants:
         print(f"No build variants found in: {build_path}", file=sys.stderr)
         sys.exit(1)
 
-    _, trace = resolve_variants(variants, None)
-
     metadata = None
-    for decision in trace:
-        metadata_path = build_path / decision.variant.variant_str / "metadata.json"
+    for variant in variants:
+        metadata_path = build_path / variant.variant_str / "metadata.json"
         if metadata_path.exists():
             metadata = Metadata.read_from_file(metadata_path)
             break
 
     info = {"path": str(repo_path)}
-    info.update(_metadata_info(metadata, trace))
-    return info, trace
+    info.update(_metadata_info(metadata, variants))
+    return info
 
 
-def _metadata_info(metadata: Metadata | None, trace: list[Decision]) -> dict:
+def _metadata_info(metadata: Metadata | None, variants: list[Variant]) -> dict:
     backends = set()
-    for decision in trace:
-        variant = decision.variant
+    for variant in variants:
         if isinstance(variant, ArchVariant):
             backends.add(variant.arch.backend.name)
         else:
@@ -129,19 +121,11 @@ def _metadata_info(metadata: Metadata | None, trace: list[Decision]) -> dict:
         )
 
     info["backends"] = sorted(backends)
-    info["variants"] = [
-        {
-            "variant": decision.variant.variant_str,
-            "compatible": isinstance(decision, VariantAccepted),
-            "reason": None if isinstance(decision, VariantAccepted) else decision.reason,
-        }
-        for decision in trace
-    ]
 
     return info
 
 
-def _print_human(info: dict, trace: list[Decision]):
+def _print_human(info: dict):
     def value(v) -> str:
         return "-" if v is None else str(v)
 
@@ -159,4 +143,3 @@ def _print_human(info: dict, trace: list[Decision]):
     python_depends = info.get("python_depends")
     print(f"Python dependencies: {', '.join(python_depends) if python_depends else '-'}")
     print(f"Backends: {', '.join(info['backends'])}")
-    print(f"Variants:\n\n{variants_trace_str(trace)}")

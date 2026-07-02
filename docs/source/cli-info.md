@@ -2,8 +2,9 @@
 
 Use `kernels info` to describe a kernel from a Hub repo ID or a local path.
 It prints the kernel metadata (name, version, license, upstream/source
-repositories, Python dependencies, and supported backends) and lists each
-build variant along with its compatibility with the current system.
+repositories, Python dependencies, and supported backends). To list the
+build variants of a kernel and their compatibility with the current system,
+use [kernels versions](cli-versions.md).
 
 ## Usage
 
@@ -56,13 +57,6 @@ Upstream: -
 Source: -
 Python dependencies: -
 Backends: cuda, metal
-Variants:
-
-torch212-metal-aarch64-darwin compatible, preferred ✅
-torch211-metal-aarch64-darwin: Torch version (2.11) does not match environment Torch version (2.12)
-torch211-cxx11-cu128-x86_64-linux: CPU (x86_64) does not match system CPU (aarch64)
-torch210-cxx11-cu126-aarch64-linux: OS (linux) does not match system OS (darwin)
-...
 ```
 
 ## See Also

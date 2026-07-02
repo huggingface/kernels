@@ -13,7 +13,7 @@ def test_info_hub(capsys):
     assert "Name: activation" in out
     assert "Version: 1" in out
     assert "License: Apache-2.0" in out
-    assert "Variants:" in out
+    assert "Backends:" in out
 
 
 def test_info_hub_json(capsys):
@@ -25,9 +25,6 @@ def test_info_hub_json(capsys):
     assert info["version"] == 1
     assert info["license"] == "Apache-2.0"
     assert "cuda" in info["backends"]
-    assert len(info["variants"]) > 0
-    for variant in info["variants"]:
-        assert (variant["reason"] is None) == variant["compatible"]
 
 
 def test_info_hub_rejects_revision_and_version():
@@ -62,7 +59,6 @@ def test_info_local(tmp_path, capsys):
     assert info["source"] is None
     assert info["python_depends"] == ["torch"]
     assert info["backends"] == ["cuda"]
-    assert [v["variant"] for v in info["variants"]] == ["torch28-cxx11-cu128-x86_64-linux"]
 
 
 def test_info_local_rejects_revision(tmp_path):

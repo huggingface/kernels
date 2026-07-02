@@ -779,6 +779,7 @@ name = "test-kernel"
 license = "Apache-2.0"
 backends = ["cuda"]
 version = 1
+edition = 5
 
 [general.hub]
 repo-id = "test/kernel"

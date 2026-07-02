@@ -23,12 +23,14 @@ pub use name::KernelName;
 
 pub mod v3;
 pub mod v4;
+pub mod v5;
 
 use itertools::Itertools;
 
 use crate::version::Version;
 
-pub type CurrentConfig = v4::Build;
+pub type CurrentConfig = v5::Build;
+pub const CURRENT_EDITION: usize = 5;
 
 pub struct Build {
     pub general: General,

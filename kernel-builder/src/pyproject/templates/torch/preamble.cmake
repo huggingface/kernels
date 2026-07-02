@@ -70,13 +70,12 @@ endif()
 {% endif %}
 
 {% if stable_abi %}
-# Select the stable ABI version (if any) for the detected backend.
-set(_STABLE_ABI_VERSION "")
+# `stable-abi` may cover only some backends, so select the version for the
+# backend detected at configure time (empty when it does not use the stable ABI).
 {% for entry in stable_abi %}
-if(BACKEND STREQUAL "{{ entry.backend }}")
-  set(_STABLE_ABI_VERSION "{{ entry.version }}")
-endif()
+set(_STABLE_ABI_VERSION_{{ entry.backend }} "{{ entry.version }}")
 {% endfor %}
+set(_STABLE_ABI_VERSION "${_STABLE_ABI_VERSION_${BACKEND}}")
 
 if(_STABLE_ABI_VERSION)
   if (TORCH_VERSION VERSION_LESS ${_STABLE_ABI_VERSION})

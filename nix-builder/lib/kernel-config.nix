@@ -16,13 +16,15 @@ let
     buildToml;
   toml = validate (readToml (path + "/build.toml"));
 
-  # `stable-abi` is either a single version (all backends) or a per-backend mapping.
+  # Torch stable ABI version for a backend, or null if it does not use the stable
+  # ABI. `stable-abi` is either a single version string (all backends) or a
+  # per-backend mapping.
   torchStableAbiVersionForBackend =
     backend:
     let
-      cfg = lib.attrByPath [ "torch" "stable-abi" ] { } toml;
+      stableAbi = lib.attrByPath [ "torch" "stable-abi" ] null toml;
     in
-    if builtins.isString cfg then cfg else cfg.${backend} or null;
+    if builtins.isString stableAbi then stableAbi else stableAbi.${backend} or null;
 in
 {
   inherit toml;

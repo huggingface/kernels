@@ -67,8 +67,11 @@ stdenv.mkDerivation rec {
     "libze_loader.so.1"
     "libtbbmalloc.so.2"
     "libtbb.so.12"
-    "libsycl.so.8" # Intel SYCL runtime library
-    "libmkl_sycl_blas.so.5"
+
+    # Intel SYCL runtime libraries
+    "libsycl.so.8"
+    "libsycl.so.9"
+
     "libhwloc.so.15" # Hardware Locality library
     "libhwloc.so.5" # Hardware Locality library
 

@@ -188,7 +188,7 @@
   }
   {
     torchVersion = "2.13";
-    xpuVersion = "2025.3.2";
+    xpuVersion = "2026.0.0";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }

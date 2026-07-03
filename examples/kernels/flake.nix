@@ -27,6 +27,12 @@
       # - drv (system -> flakeOutputs -> derivation): the derivation for the given
       #        system and flake outputs.
       # - torchVersions: optional override for the torchVersions argument
+      # - checkRocmArchs: optional list of ROCm architectures (e.g. "gfx942").
+      #        When set, the kernel dylib must contain exactly this set of
+      #        architectures.
+      # - checkCudaCapabilities: optional list of CUDA capabilities (e.g. "9.0").
+      #        When set, the kernel dylib must contain exactly this set of
+      #        capabilities.
       ciKernels = [
         {
           name = "cpp20-symbols-kernel";
@@ -38,6 +44,28 @@
           path = ./relu;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          checkCudaCapabilities = [
+            "7.0"
+            "7.2"
+            "7.5"
+            "8.0"
+            "8.6"
+            "8.7"
+            "8.9"
+            "9.0"
+          ];
+        }
+        {
+          # Check arch intersection. 5.0 is dropped because it is not supported.
+          name = "relu-archs-subset";
+          path = ./relu-archs-subset;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          checkCudaCapabilities = [
+            "7.5"
+            "8.0"
+            "9.0"
+          ];
         }
         {
           name = "relu-torch-stable-abi-kernel";
@@ -175,6 +203,30 @@
           path = ./relu;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          checkRocmArchs = [
+            "gfx906"
+            "gfx908"
+            "gfx90a"
+            "gfx942"
+            "gfx950"
+            "gfx1030"
+            "gfx1100"
+            "gfx1101"
+            "gfx1200"
+            "gfx1201"
+          ];
+        }
+        {
+          # Check arch intersection. gfx940 is dropped because it is not supported.
+          name = "relu-archs-subset";
+          path = ./relu-archs-subset;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          checkRocmArchs = [
+            "gfx90a"
+            "gfx942"
+            "gfx1100"
+          ];
         }
         {
           name = "relu-compiler-flags";
@@ -279,6 +331,59 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
 
+          # Check that every *.so in the output of `drv` contains exactly the
+          # given set of architectures. `listArchs` is a shell command that
+          # prints the architectures of the kernel library `$so`, one per
+          # line. On success, the output is a symlink to `drv`.
+          checkKernelArchs =
+            drv: expectedArchs: listArchs:
+            pkgs.runCommand "${drv.name}-check-archs"
+              {
+                expected = lib.concatLines expectedArchs;
+                passAsFile = [ "expected" ];
+              }
+              ''
+                kernelLibs=$(find ${drv}/ -name '*.so')
+                if [ -z "$kernelLibs" ]; then
+                  echo "no *.so files found in ${drv}" >&2
+                  exit 1
+                fi
+
+                sort -u "$expectedPath" > expected
+                for so in $kernelLibs; do
+                  (
+                    ${listArchs}
+                  ) | sort -u > actual
+                  if ! diff -u expected actual; then
+                    echo "unexpected architectures in $so" >&2
+                    exit 1
+                  fi
+                done
+
+                ln -s ${drv} $out
+              '';
+
+          checkRocmArchs =
+            drv: expectedArchs:
+            checkKernelArchs drv expectedArchs
+              # Use the ROCm LLVM that the kernel was built with. Stock
+              # llvm-readobj does not support `--offloading`.
+              ''
+                ${drv.torch.rocmPackages.rocm-llvm}/llvm/bin/llvm-readobj --offloading "$so" \
+                    | grep -oE 'gfx[0-9]+[a-z]?'
+              '';
+
+          checkCudaCapabilities =
+            drv: expectedCapabilities:
+            let
+              # Convert capabilities like "9.0a" to sm names like "sm_90a".
+              smArchs = map (cap: "sm_" + lib.replaceStrings [ "." ] [ "" ] cap) expectedCapabilities;
+            in
+            checkKernelArchs drv smArchs ''
+              ${drv.torch.cudaPackages.cuda_cuobjdump}/bin/cuobjdump "$so" \
+                  | grep -oE 'sm_[0-9]+[af]?'
+            '';
+
           resolveKernels =
             kernelOutputsList:
             map (kernel: {
@@ -292,6 +397,10 @@
                     drv = baseDrv;
                     expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
                   }
+                else if kernel ? checkRocmArchs then
+                  checkRocmArchs baseDrv kernel.checkRocmArchs
+                else if kernel ? checkCudaCapabilities then
+                  checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
                 else
                   baseDrv;
             }) kernelOutputsList;

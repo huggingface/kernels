@@ -1,0 +1,45 @@
+[general]
+name = "relu-archs-subset"
+version = 1
+license = "Apache-2.0"
+backends = [
+    "cuda",
+    "rocm",
+]
+
+[general.hub]
+repo-id = "kernels-test/relu-archs-subset"
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+# The capability/architecture sets below intentionally contain entries that
+# are not supported by the toolchain versions used in CI (e.g. CUDA 10.0/12.0
+# capabilities require CUDA >= 12.8, gfx940 is not in the supported arch set).
+# CI checks that the built kernels contain exactly the intersection with the
+# supported sets.
+
+[kernel.relu_rocm]
+backend = "rocm"
+depends = ["torch"]
+rocm-archs = [
+    "gfx90a",
+    "gfx940",
+    "gfx942",
+    "gfx1100",
+]
+src = ["relu_cuda/relu.cu"]
+
+[kernel.relu]
+backend = "cuda"
+depends = ["torch"]
+cuda-capabilities = [
+    "5.0",
+    "7.5",
+    "8.0",
+    "9.0",
+]
+src = ["relu_cuda/relu.cu"]

@@ -1,10 +1,19 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
 use super::{Dependency, GitUrl, KernelName};
 use crate::version::Version;
+
+// `monostate` validates the edition on read but provides no `Serialize` impl for it.
+fn serialize_edition<S>(_edition: &MustBe!(5), serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u64(5)
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -32,6 +41,10 @@ pub struct General {
     pub name: KernelName,
 
     pub version: usize,
+
+    /// Build format edition. Must be `5` for this schema.
+    #[serde(serialize_with = "serialize_edition")]
+    pub edition: MustBe!(5),
 
     pub license: String,
 
@@ -90,7 +103,8 @@ pub struct Torch {
     #[serde(default)]
     pub src: Vec<PathBuf>,
 
-    pub stable_abi: Option<Version>,
+    /// Single version for all backends, or a per-backend table.
+    pub stable_abi: Option<super::TorchAbi>,
 
     pub cxx_flags: Option<Vec<String>>,
 }
@@ -263,8 +277,7 @@ impl From<Torch> for super::Torch {
             maxver: torch.maxver,
             pyext: torch.pyext,
             src: torch.src,
-            // v4 has a single version for all backends
-            stable_abi: torch.stable_abi.map(super::TorchAbi::All),
+            stable_abi: torch.stable_abi,
             cxx_flags: torch.cxx_flags,
         }
     }
@@ -369,6 +382,209 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             } => super::Kernel::Xpu {
+                cxx_flags,
+                depends,
+                sycl_flags,
+                include,
+                src,
+            },
+        }
+    }
+}
+
+impl From<super::Build> for Build {
+    fn from(build: super::Build) -> Self {
+        Self {
+            general: build.general.into(),
+            framework: build.framework.into(),
+            kernels: build
+                .kernels
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+impl From<super::General> for General {
+    fn from(general: super::General) -> Self {
+        Self {
+            name: general.name,
+            version: general.version,
+            edition: Default::default(),
+            license: general.license,
+            upstream: general.upstream,
+            source: general.source,
+            backends: general.backends.into_iter().map(Into::into).collect(),
+            cuda: general.cuda.map(Into::into),
+            hub: general.hub.map(Into::into),
+            neuron: general.neuron.map(Into::into),
+            python_depends: general.python_depends,
+            xpu: general.xpu.map(Into::into),
+        }
+    }
+}
+
+impl From<super::Framework> for Framework {
+    fn from(framework: super::Framework) -> Self {
+        match framework {
+            super::Framework::Torch(torch) => Framework::Torch(torch.into()),
+            super::Framework::TorchNoarch(torch_noarch) => {
+                Framework::TorchNoarch(torch_noarch.into())
+            }
+            super::Framework::TvmFfi(tvm_ffi) => Framework::TvmFfi(tvm_ffi.into()),
+        }
+    }
+}
+
+impl From<super::CudaGeneral> for CudaGeneral {
+    fn from(cuda: super::CudaGeneral) -> Self {
+        Self {
+            minver: cuda.minver,
+            maxver: cuda.maxver,
+            python_depends: cuda.python_depends,
+        }
+    }
+}
+
+impl From<super::NeuronGeneral> for NeuronGeneral {
+    fn from(neuron: super::NeuronGeneral) -> Self {
+        Self {
+            python_depends: neuron.python_depends,
+        }
+    }
+}
+
+impl From<super::XpuGeneral> for XpuGeneral {
+    fn from(xpu: super::XpuGeneral) -> Self {
+        Self {
+            python_depends: xpu.python_depends,
+        }
+    }
+}
+
+impl From<super::Hub> for Hub {
+    fn from(hub: super::Hub) -> Self {
+        Self {
+            repo_id: hub.repo_id,
+            branch: hub.branch,
+        }
+    }
+}
+
+impl From<super::Torch> for Torch {
+    fn from(torch: super::Torch) -> Self {
+        Self {
+            include: torch.include,
+            minver: torch.minver,
+            maxver: torch.maxver,
+            pyext: torch.pyext,
+            src: torch.src,
+            stable_abi: torch.stable_abi,
+            cxx_flags: torch.cxx_flags,
+        }
+    }
+}
+
+impl From<super::TorchNoarch> for TorchNoarch {
+    fn from(torch_noarch: super::TorchNoarch) -> Self {
+        Self {
+            pyext: torch_noarch.pyext,
+            cuda_capabilities: torch_noarch.cuda_capabilities,
+            rocm_archs: torch_noarch.rocm_archs,
+        }
+    }
+}
+
+impl From<super::TvmFfi> for TvmFfi {
+    fn from(tvm_ffi: super::TvmFfi) -> Self {
+        Self {
+            include: tvm_ffi.include,
+            pyext: tvm_ffi.pyext,
+            src: tvm_ffi.src,
+            cxx_flags: tvm_ffi.cxx_flags,
+        }
+    }
+}
+
+impl From<super::Backend> for Backend {
+    fn from(backend: super::Backend) -> Self {
+        match backend {
+            super::Backend::Cann => Backend::Cann,
+            super::Backend::Cpu => Backend::Cpu,
+            super::Backend::Cuda => Backend::Cuda,
+            super::Backend::Metal => Backend::Metal,
+            super::Backend::Neuron => Backend::Neuron,
+            super::Backend::Rocm => Backend::Rocm,
+            super::Backend::Xpu => Backend::Xpu,
+        }
+    }
+}
+
+impl From<super::Kernel> for Kernel {
+    fn from(kernel: super::Kernel) -> Self {
+        match kernel {
+            super::Kernel::Cpu {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            } => Kernel::Cpu {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            },
+            super::Kernel::Cuda {
+                cuda_capabilities,
+                cuda_flags,
+                cuda_minver,
+                cxx_flags,
+                depends,
+                include,
+                src,
+            } => Kernel::Cuda {
+                cuda_capabilities,
+                cuda_flags,
+                cuda_minver,
+                cxx_flags,
+                depends,
+                include,
+                src,
+            },
+            super::Kernel::Metal {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            } => Kernel::Metal {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            },
+            super::Kernel::Rocm {
+                cxx_flags,
+                depends,
+                rocm_archs,
+                hip_flags,
+                include,
+                src,
+            } => Kernel::Rocm {
+                cxx_flags,
+                depends,
+                rocm_archs,
+                hip_flags,
+                include,
+                src,
+            },
+            super::Kernel::Xpu {
+                cxx_flags,
+                depends,
+                sycl_flags,
+                include,
+                src,
+            } => Kernel::Xpu {
                 cxx_flags,
                 depends,
                 sycl_flags,

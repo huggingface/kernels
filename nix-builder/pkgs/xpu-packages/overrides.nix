@@ -84,6 +84,14 @@ applyOverrides {
       ];
     };
 
+  intel-oneapi-mkl-sycl-sparse =
+    { intel-oneapi-mkl-sycl-blas }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        intel-oneapi-mkl-sycl-blas
+      ];
+    };
+
   intel-oneapi-mpi =
     {
       autoAddDriverRunpath,

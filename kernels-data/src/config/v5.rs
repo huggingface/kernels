@@ -1,10 +1,19 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{CURRENT_EDITION, Dependency, GitUrl, KernelName};
+use super::{Dependency, GitUrl, KernelName};
 use crate::version::Version;
+
+// `monostate` validates the edition on read but provides no `Serialize` impl for it.
+fn serialize_edition<S>(_edition: &MustBe!(5), serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_u64(5)
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -34,7 +43,8 @@ pub struct General {
     pub version: usize,
 
     /// Build format edition. Must be `5` for this schema.
-    pub edition: usize,
+    #[serde(serialize_with = "serialize_edition")]
+    pub edition: MustBe!(5),
 
     pub license: String,
 
@@ -401,7 +411,7 @@ impl From<super::General> for General {
         Self {
             name: general.name,
             version: general.version,
-            edition: CURRENT_EDITION,
+            edition: Default::default(),
             license: general.license,
             upstream: general.upstream,
             source: general.source,

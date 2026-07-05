@@ -407,7 +407,7 @@ def mykernel(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tenso
 ## Registering Torch operators
 
 You may want to register Torch ops from your kernel's Python code or
-register fake ops for `torch.compile` support. It is important to register
+[register](https://docs.pytorch.org/tutorials/advanced/custom_ops_landing_page.html) fake ops for `torch.compile` support. It is important to register
 such ops in the namespace that kernel-builder makes for your kernel
 build. This is required for compliant kernels to ensure that multiple
 versions of the same kernel can be loaded at the same time without

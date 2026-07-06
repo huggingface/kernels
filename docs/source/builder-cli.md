@@ -246,8 +246,6 @@ Generate CMake files for a kernel extension build
 * `--unique-id <UNIQUE_ID>` — This is an optional unique identifier that is suffixed to the kernel name to avoid name collisions. (e.g. Git SHA)
 * `--kernel-sha <KERNEL_SHA>` — Full commit SHA of the kernel source, recorded in the build metadata. When absent, it is detected from the kernel's git repository (used by Nix builds where the source has no `.git`)
 * `--kernel-dirty` — Mark the kernel source as having uncommitted changes in the build metadata. Only meaningful together with `--kernel-sha`
-* `--kernel-builder-sha <KERNEL_BUILDER_SHA>` — Full commit SHA of the `kernel-builder` source, recorded in the build metadata. When absent, the SHA baked in at compile time is used (Nix builds pass this since the sandbox has no `.git`)
-* `--kernel-builder-dirty` — Mark `kernel-builder` as having uncommitted changes in the build metadata. Only meaningful together with `--kernel-builder-sha`
 
 
 

@@ -5,6 +5,13 @@
   pkg-config,
   libgit2,
   openssl,
+
+  # Git provenance of `kernel-builder` itself. Burned into the binary at build
+  # time (the build sandbox has no `.git`, so `build.rs` cannot detect it) and
+  # later recorded in the build metadata of the kernels it builds. `null`/`false`
+  # when `kernel-builder` is built from a non-git source (e.g. a local `path:`).
+  builderRev ? null,
+  builderDirty ? false,
 }:
 
 let
@@ -18,6 +25,12 @@ in
 rustPlatform.buildRustPackage {
   inherit version;
   pname = "kernel-builder";
+
+  # Consumed by `kernel-builder/build.rs` and baked into the binary.
+  KERNEL_BUILDER_GIT_SHA = lib.optionalString (builderRev != null) (
+    lib.removeSuffix "-dirty" builderRev
+  );
+  KERNEL_BUILDER_GIT_DIRTY = if builderDirty then "1" else "0";
 
   src =
     let

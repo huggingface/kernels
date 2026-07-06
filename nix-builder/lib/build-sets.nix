@@ -1,6 +1,10 @@
 {
   nixpkgs,
   rust-overlay,
+
+  # Git provenance of `kernel-builder` itself, burned into the binary.
+  builderRev ? null,
+  builderDirty ? false,
 }:
 
 let
@@ -24,7 +28,14 @@ let
     in
     builtins.map (buildConfig: buildConfig // { backend = backend buildConfig; }) systemBuildConfigs;
 
-  mkBuildSet = import ./mk-build-set.nix { inherit nixpkgs rust-overlay; };
+  mkBuildSet = import ./mk-build-set.nix {
+    inherit
+      nixpkgs
+      rust-overlay
+      builderRev
+      builderDirty
+      ;
+  };
 
 in
 rec {

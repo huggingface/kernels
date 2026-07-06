@@ -6,7 +6,7 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
-use kernels_data::metadata::{BuildInfo, GitInfo, KernelBuilderInfo};
+use kernels_data::metadata::{BuildInfo, GitInfo};
 use minijinja::Environment;
 
 use crate::{
@@ -44,7 +44,6 @@ pub fn create_pyproject_file_set(
     Ok(file_set)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn create_pyproject(
     kernel_dir: Option<PathBuf>,
     target_dir: Option<PathBuf>,
@@ -52,35 +51,24 @@ pub fn create_pyproject(
     unique_id: Option<String>,
     kernel_sha: Option<String>,
     kernel_dirty: bool,
-    kernel_builder_sha: Option<String>,
-    kernel_builder_dirty: bool,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = parse_build(&kernel_dir)?;
 
-    // Assemble build provenance. Prefer an explicitly provided git provenance
-    // (e.g. passed by Nix builds, where the source tree has no `.git`); fall
-    // back to detecting it from the kernel's git repository.
+    // Assemble build provenance. Prefer an explicitly provided kernel git
+    // provenance (e.g. passed by Nix builds, where the source tree has no
+    // `.git`); fall back to detecting it from the kernel's git repository. The
+    // `kernel-builder` provenance is always the one baked into this binary at
+    // compile time.
     let kernel = kernel_sha
         .map(|sha| GitInfo {
             sha,
             dirty: kernel_dirty,
         })
         .or_else(|| ops_identifier::git_info(&kernel_dir));
-    // The version is always that of the running `kernel-builder`; only the git
-    // provenance may be supplied externally (e.g. by Nix). Otherwise fall back
-    // to the provenance baked in at compile time.
-    let kernel_builder = match kernel_builder_sha {
-        Some(sha) => KernelBuilderInfo {
-            version: env!("CARGO_PKG_VERSION").to_owned(),
-            sha: Some(sha),
-            dirty: kernel_builder_dirty,
-        },
-        None => common::kernel_builder_info(),
-    };
     let build_info = BuildInfo {
-        kernel_builder: Some(kernel_builder),
+        kernel_builder: Some(common::kernel_builder_info()),
         kernel,
     };
 

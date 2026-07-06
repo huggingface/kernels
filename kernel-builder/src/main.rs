@@ -185,17 +185,6 @@ enum Commands {
         /// metadata. Only meaningful together with `--kernel-sha`.
         #[arg(long)]
         kernel_dirty: bool,
-
-        /// Full commit SHA of the `kernel-builder` source, recorded in the
-        /// build metadata. When absent, the SHA baked in at compile time is
-        /// used (Nix builds pass this since the sandbox has no `.git`).
-        #[arg(long)]
-        kernel_builder_sha: Option<String>,
-
-        /// Mark `kernel-builder` as having uncommitted changes in the build
-        /// metadata. Only meaningful together with `--kernel-builder-sha`.
-        #[arg(long)]
-        kernel_builder_dirty: bool,
     },
 
     /// Spawn a kernel development shell.
@@ -389,8 +378,6 @@ fn main() -> Result<()> {
             unique_id,
             kernel_sha,
             kernel_dirty,
-            kernel_builder_sha,
-            kernel_builder_dirty,
         } => create_pyproject(
             kernel_dir,
             target_dir,
@@ -398,8 +385,6 @@ fn main() -> Result<()> {
             unique_id,
             kernel_sha,
             kernel_dirty,
-            kernel_builder_sha,
-            kernel_builder_dirty,
         ),
         Commands::Devshell {
             kernel_dir,

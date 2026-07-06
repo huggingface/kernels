@@ -27,23 +27,27 @@
       rust-overlay,
     }:
     let
+      # Git provenance of `kernel-builder` itself, burned into the binary at
+      # build time and recorded in the build metadata of the kernels it builds.
+      # `self` here is the `kernel-builder` flake (as resolved in the consuming
+      # kernel's lock).
+      builderRev = self.rev or self.dirtyRev or null;
+      builderDirty = !(self ? rev);
+
       inherit
         (import ./nix-builder/lib/build-sets.nix {
-          inherit nixpkgs rust-overlay;
+          inherit
+            nixpkgs
+            rust-overlay
+            builderRev
+            builderDirty
+            ;
         })
         mkBuildSets
         partitionBuildSetsBySystem
         partitionBuildSetsBySystemBackend
         ;
       inherit (import ./nix-builder/lib/cache.nix) mkForCache;
-
-      # Git provenance of `kernel-builder` itself, recorded in the build
-      # metadata of kernels it builds. `self` here is the `kernel-builder`
-      # flake (as resolved in the consuming kernel's lock). It is captured
-      # here because the `self` argument of `genKernelFlakeOutputs` below
-      # shadows it with the *kernel's* `self`.
-      builderRev = self.rev or self.dirtyRev or null;
-      builderDirty = !(self ? rev);
 
       systems = with flake-utils.lib.system; [
         aarch64-darwin
@@ -117,8 +121,6 @@
                 path
                 rev
                 self
-                builderRev
-                builderDirty
                 doGetKernelCheck
                 pythonCheckInputs
                 pythonNativeCheckInputs

@@ -11,12 +11,6 @@
   rev ? null,
   self ? null,
 
-  # Git provenance of the `kernel-builder` itself (the flake revision it was
-  # evaluated from), recorded in the build metadata. `null`/`false` when
-  # `kernel-builder` is used from a non-git source (e.g. a local `path:`).
-  builderRev ? null,
-  builderDirty ? false,
-
   doGetKernelCheck,
   pythonCheckInputs,
   pythonNativeCheckInputs,
@@ -42,10 +36,10 @@ let
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
 
-  # Extra `kernel-builder create-pyproject` flags that record the full git
-  # provenance (commit SHA + dirty state) of both the kernel source and
-  # `kernel-builder` in the build metadata. The Nix sandbox has no `.git`, so
-  # this information has to be passed in explicitly.
+  # Extra `kernel-builder create-pyproject` flags that record the git provenance
+  # (commit SHA + dirty state) of the kernel source in the build metadata. The
+  # Nix sandbox has no `.git`, so this information has to be passed in
+  # explicitly. (`kernel-builder`'s own provenance is burned into its binary.)
   provenanceArgs =
     let
       kernelSha =
@@ -58,12 +52,9 @@ let
         else
           null;
       kernelDirty = self != null && !(self ? rev);
-      builderSha = if builderRev == null then null else lib.removeSuffix "-dirty" builderRev;
       parts =
         lib.optional (kernelSha != null) "--kernel-sha ${kernelSha}"
-        ++ lib.optional (kernelSha != null && kernelDirty) "--kernel-dirty"
-        ++ lib.optional (builderSha != null) "--kernel-builder-sha ${builderSha}"
-        ++ lib.optional (builderSha != null && builderDirty) "--kernel-builder-dirty";
+        ++ lib.optional (kernelSha != null && kernelDirty) "--kernel-dirty";
     in
     lib.concatStringsSep " " parts;
 

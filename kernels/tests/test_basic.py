@@ -229,6 +229,13 @@ def test_neuron():
     torch.testing.assert_close(relu.relu(x), x.relu())
 
 
+@pytest.mark.tpu_only
+def test_tpu():
+    relu = get_kernel("kernels-test/relu-tpu", version=1)
+    x = torch.randn((16, 16), device="tpu")
+    torch.testing.assert_close(relu.relu(x), x.relu())
+
+
 def test_trust_remote_code_blocks_untrusted_org():
     """Kernels from untrusted orgs should be rejected by default."""
     with pytest.raises(ValueError, match=r"not from a trusted publisher"):

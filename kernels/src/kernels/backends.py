@@ -127,6 +127,24 @@ class Neuron:
         return Neuron()
 
 
+@strict
+@dataclass(unsafe_hash=True)
+class TPU:
+    @property
+    def name(self) -> str:
+        return "tpu"
+
+    @property
+    def variant_str(self) -> str:
+        return "tpu"
+
+    @staticmethod
+    def parse(s: str) -> "TPU":
+        if s != "tpu":
+            raise ValueError(f"Invalid TPU variant string: {s!r}")
+        return TPU()
+
+
 @dataclass(unsafe_hash=True)
 class ROCm:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
@@ -179,6 +197,8 @@ def parse_backend(s: str) -> Backend:
         return Metal.parse(s)
     elif s == "neuron":
         return Neuron.parse(s)
+    elif s == "tpu":
+        return TPU.parse(s)
     elif s.startswith("cu"):
         return CUDA.parse(s)
     elif s.startswith("rocm"):
@@ -195,7 +215,10 @@ def _backend() -> Backend:
     if has_torch:
         import torch
 
-        if hasattr(torch, "neuron"):
+        if hasattr(torch, "tpu"):
+            # torch_tpu registers a torch.tpu namespace on import.
+            return TPU()
+        elif hasattr(torch, "neuron"):
             # Needs to be sorted before specific Torch builds, since Neuron
             # extension can be loaded into e.g. CUDA Torch builds.
             return Neuron()

@@ -255,6 +255,47 @@ def test_hub_forward_neuron():
     assert smol.relu.n_calls == 1
 
 
+@pytest.mark.tpu_only
+def test_hub_forward_tpu():
+    torch.manual_seed(0)
+
+    mapping = {"ReLU": {"tpu": LayerRepository(repo_id="kernels-test/relu-tpu", version=1, layer_name="ReLU")}}
+
+    relu = ReLU()
+    X = torch.randn((16, 16), device="tpu")
+    Y = relu(X)
+
+    with use_kernel_mapping(mapping):
+        relu_with_kernel = kernelize(ReLUWithKernel(), device="tpu", mode=Mode.INFERENCE)
+    Y_kernel = relu_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert relu.n_calls == 1
+    assert relu_with_kernel.n_calls == 0
+
+    # Check that the device type can be determined automatically.
+    class SMOL(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(16, 16)
+            self.relu = ReLUWithKernel()
+
+        def forward(self, x):
+            return self.relu(self.linear(x))
+
+    smol = SMOL().to("tpu")
+
+    Y = smol(X)
+
+    with use_kernel_mapping(mapping):
+        smol = kernelize(smol, mode=Mode.INFERENCE)
+    Y_kernel = smol(X)
+
+    torch.testing.assert_close(Y, Y_kernel)
+    assert smol.relu.n_calls == 1
+
+
 @pytest.mark.rocm_only
 def test_hub_forward_rocm():
     torch.manual_seed(0)

@@ -74,6 +74,7 @@ NOARCH_VARIANT_STRINGS = [
     "torch-metal",
     "torch-neuron",
     "torch-rocm",
+    "torch-tpu",
     "torch-xpu",
     "torch-npu",
     "torch-universal",

@@ -100,6 +100,13 @@ metadata. Currently the following top-level keys are supported:
   > builds are not flagged as dirty. Local `create-pyproject` runs only
   > consider changes to tracked files.
 
+  > **Note:** The kernel `sha`/`dirty` are captured at the moment
+  > `create-pyproject` runs, so they describe the source tree as it was *then*.
+  > Running `create-pyproject` and committing afterwards is bad practice: the
+  > recorded provenance keeps pointing at the pre-commit state (a stale `sha`,
+  > and `dirty: true` if the tree was dirty) even though the committed source
+  > differs. Generate the metadata from the final, committed source instead.
+
 Example `metadata.json`:
 
 ```json

@@ -25,7 +25,7 @@ pub struct GitHash {
 /// Provenance of the `kernel-builder` that produced a build.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct KernelBuilderInfo {
+pub struct KernelBuilderVersion {
     pub version: String,
     /// Commit SHA + dirty state of the `kernel-builder` source, when known.
     #[serde(flatten)]
@@ -36,7 +36,7 @@ pub struct KernelBuilderInfo {
 #[serde(rename_all = "kebab-case")]
 pub struct BuildInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub kernel_builder: Option<KernelBuilderInfo>,
+    pub kernel_builder: Option<KernelBuilderVersion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kernel: Option<GitHash>,
 }
@@ -126,11 +126,11 @@ mod tests {
 
     use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
 
-    use super::{BuildInfo, GitHash, KernelBuilderInfo, Metadata};
+    use super::{BuildInfo, GitHash, KernelBuilderVersion, Metadata};
 
     fn sample_build_info(kernel_builder_dirty: bool, kernel_dirty: bool) -> BuildInfo {
         BuildInfo {
-            kernel_builder: Some(KernelBuilderInfo {
+            kernel_builder: Some(KernelBuilderVersion {
                 version: "0.1.0".to_string(),
                 git: Some(GitHash {
                     sha: "a".repeat(40),
@@ -275,8 +275,8 @@ mod tests {
     }
 
     #[test]
-    fn kernel_builder_info_flattens_git_hash() {
-        let kernel_builder = KernelBuilderInfo {
+    fn kernel_builder_version_flattens_git_hash() {
+        let kernel_builder = KernelBuilderVersion {
             version: "0.1.0".to_string(),
             git: Some(GitHash {
                 sha: "c".repeat(40),
@@ -291,17 +291,17 @@ mod tests {
         assert_eq!(value["dirty"], true);
         assert!(value.get("git").is_none());
 
-        let parsed: KernelBuilderInfo = serde_json::from_value(value).unwrap();
+        let parsed: KernelBuilderVersion = serde_json::from_value(value).unwrap();
         let git = parsed.git.expect("git should round-trip");
         assert_eq!(git.sha, "c".repeat(40));
         assert!(git.dirty);
     }
 
     #[test]
-    fn kernel_builder_info_without_git_round_trips_to_none() {
+    fn kernel_builder_version_without_git_round_trips_to_none() {
         // When the `kernel-builder` git provenance is unknown, only `version`
         // is serialized and it must deserialize back to `git: None`.
-        let kernel_builder = KernelBuilderInfo {
+        let kernel_builder = KernelBuilderVersion {
             version: "0.1.0".to_string(),
             git: None,
         };
@@ -309,7 +309,7 @@ mod tests {
         let json = serde_json::to_string(&kernel_builder).unwrap();
         assert_eq!(json, r#"{"version":"0.1.0"}"#);
 
-        let parsed: KernelBuilderInfo = serde_json::from_str(&json).unwrap();
+        let parsed: KernelBuilderVersion = serde_json::from_str(&json).unwrap();
         assert!(parsed.git.is_none());
     }
 }

@@ -68,7 +68,7 @@ pub fn create_pyproject(
         })
         .or_else(|| ops_identifier::git_hash(&kernel_dir));
     let build_info = BuildInfo {
-        kernel_builder: Some(common::kernel_builder_info()),
+        kernel_builder: Some(common::kernel_builder_version()),
         kernel,
     };
 

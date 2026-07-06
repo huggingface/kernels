@@ -10,7 +10,7 @@ __all__ = [
     "BuildInfo",
     "DigestAlgorithm",
     "GitHash",
-    "KernelBuilderInfo",
+    "KernelBuilderVersion",
     "KernelName",
     "Metadata",
     "Digest",
@@ -83,7 +83,7 @@ class GitHash:
     def __repr__(self) -> str: ...
 
 @final
-class KernelBuilderInfo:
+class KernelBuilderVersion:
     """Provenance of the `kernel-builder` that produced a build."""
 
     @property
@@ -103,7 +103,7 @@ class BuildInfo:
     """Build provenance: git state of the `kernel-builder` and kernel source."""
 
     @property
-    def kernel_builder(self) -> Optional[KernelBuilderInfo]:
+    def kernel_builder(self) -> Optional[KernelBuilderVersion]:
         """Provenance of the `kernel-builder` that produced the build."""
         ...
 

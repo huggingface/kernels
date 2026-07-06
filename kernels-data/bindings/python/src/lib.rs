@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
-use kernels_data::metadata::{BackendInfo, BuildInfo, GitHash, KernelBuilderInfo, Metadata};
+use kernels_data::metadata::{BackendInfo, BuildInfo, GitHash, KernelBuilderVersion, Metadata};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
@@ -221,15 +221,15 @@ impl PyGitHash {
     }
 }
 
-#[pyclass(name = "KernelBuilderInfo", frozen)]
+#[pyclass(name = "KernelBuilderVersion", frozen)]
 #[derive(Clone, Debug)]
-struct PyKernelBuilderInfo {
+struct PyKernelBuilderVersion {
     version: String,
     git: Option<PyGitHash>,
 }
 
-impl From<KernelBuilderInfo> for PyKernelBuilderInfo {
-    fn from(kb: KernelBuilderInfo) -> Self {
+impl From<KernelBuilderVersion> for PyKernelBuilderVersion {
+    fn from(kb: KernelBuilderVersion) -> Self {
         Self {
             version: kb.version,
             git: kb.git.map(Into::into),
@@ -238,7 +238,7 @@ impl From<KernelBuilderInfo> for PyKernelBuilderInfo {
 }
 
 #[pymethods]
-impl PyKernelBuilderInfo {
+impl PyKernelBuilderVersion {
     #[getter]
     fn version(&self) -> &str {
         &self.version
@@ -252,7 +252,7 @@ impl PyKernelBuilderInfo {
 
     fn __repr__(&self) -> String {
         format!(
-            "KernelBuilderInfo(version={:?}, git={})",
+            "KernelBuilderVersion(version={:?}, git={})",
             self.version,
             self.git
                 .as_ref()
@@ -264,7 +264,7 @@ impl PyKernelBuilderInfo {
 #[pyclass(name = "BuildInfo", frozen)]
 #[derive(Clone, Debug)]
 struct PyBuildInfo {
-    kernel_builder: Option<PyKernelBuilderInfo>,
+    kernel_builder: Option<PyKernelBuilderVersion>,
     kernel: Option<PyGitHash>,
 }
 
@@ -280,7 +280,7 @@ impl From<BuildInfo> for PyBuildInfo {
 #[pymethods]
 impl PyBuildInfo {
     #[getter]
-    fn kernel_builder(&self) -> Option<PyKernelBuilderInfo> {
+    fn kernel_builder(&self) -> Option<PyKernelBuilderVersion> {
         self.kernel_builder.clone()
     }
 
@@ -666,7 +666,7 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackendInfo>()?;
     m.add_class::<PyBuildInfo>()?;
     m.add_class::<PyGitHash>()?;
-    m.add_class::<PyKernelBuilderInfo>()?;
+    m.add_class::<PyKernelBuilderVersion>()?;
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;

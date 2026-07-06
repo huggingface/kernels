@@ -225,16 +225,14 @@ impl PyGitHash {
 #[derive(Clone, Debug)]
 struct PyKernelBuilderInfo {
     version: String,
-    sha: Option<String>,
-    dirty: bool,
+    git: Option<PyGitHash>,
 }
 
 impl From<KernelBuilderInfo> for PyKernelBuilderInfo {
     fn from(kb: KernelBuilderInfo) -> Self {
         Self {
             version: kb.version,
-            sha: kb.sha,
-            dirty: kb.dirty,
+            git: kb.git.map(Into::into),
         }
     }
 }
@@ -246,20 +244,19 @@ impl PyKernelBuilderInfo {
         &self.version
     }
 
+    /// Commit SHA + dirty state of the `kernel-builder` source, when known.
     #[getter]
-    fn sha(&self) -> Option<&str> {
-        self.sha.as_deref()
-    }
-
-    #[getter]
-    fn dirty(&self) -> bool {
-        self.dirty
+    fn git(&self) -> Option<PyGitHash> {
+        self.git.clone()
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "KernelBuilderInfo(version={:?}, sha={:?}, dirty={})",
-            self.version, self.sha, self.dirty
+            "KernelBuilderInfo(version={:?}, git={})",
+            self.version,
+            self.git
+                .as_ref()
+                .map_or("None".to_string(), |g| g.__repr__())
         )
     }
 }
@@ -295,7 +292,10 @@ impl PyBuildInfo {
     /// Whether either the `kernel-builder` or the kernel source was dirty.
     #[getter]
     fn dirty(&self) -> bool {
-        self.kernel_builder.as_ref().is_some_and(|kb| kb.dirty)
+        self.kernel_builder
+            .as_ref()
+            .and_then(|kb| kb.git.as_ref())
+            .is_some_and(|g| g.dirty)
             || self.kernel.as_ref().is_some_and(|k| k.dirty)
     }
 

@@ -4,7 +4,7 @@ use eyre::Result;
 use itertools::Itertools;
 
 use kernels_data::config::{Backend, Build};
-use kernels_data::metadata::{BuildInfo, KernelBuilderInfo, Metadata};
+use kernels_data::metadata::{BuildInfo, GitHash, KernelBuilderInfo, Metadata};
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
@@ -26,10 +26,13 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
 /// build sandboxes without a `.git` (e.g. Nix), the derivation supplies it via
 /// `built`'s `BUILT_OVERRIDE_hf_kernel_builder_GIT_*` environment variables.
 pub(crate) fn kernel_builder_info() -> KernelBuilderInfo {
+    let git = crate::built_info::GIT_COMMIT_HASH.map(|sha| GitHash {
+        sha: sha.to_owned(),
+        dirty: crate::built_info::GIT_DIRTY.unwrap_or(false),
+    });
     KernelBuilderInfo {
         version: env!("CARGO_PKG_VERSION").to_owned(),
-        sha: crate::built_info::GIT_COMMIT_HASH.map(str::to_owned),
-        dirty: crate::built_info::GIT_DIRTY.unwrap_or(false),
+        git,
     }
 }
 

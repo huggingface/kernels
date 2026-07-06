@@ -92,13 +92,8 @@ class KernelBuilderInfo:
         ...
 
     @property
-    def sha(self) -> Optional[str]:
-        """Commit SHA of the `kernel-builder` source, when known."""
-        ...
-
-    @property
-    def dirty(self) -> bool:
-        """Whether `kernel-builder` was built from a dirty source tree."""
+    def git(self) -> Optional[GitHash]:
+        """Commit SHA and dirty state of the `kernel-builder` source, when known."""
         ...
 
     def __repr__(self) -> str: ...

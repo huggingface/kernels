@@ -1,6 +1,7 @@
 [general]
 name = "relu-invalid-capability"
 version = 1
+edition = 5
 license = "Apache-2.0"
 backends = [
     "cpu",

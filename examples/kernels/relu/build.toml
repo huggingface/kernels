@@ -1,6 +1,7 @@
 [general]
 name = "relu"
 version = 1
+edition = 5
 license = "Apache-2.0"
 backends = [
     "cpu",
@@ -36,18 +37,6 @@ src = [
 [kernel.relu_rocm]
 backend = "rocm"
 depends = ["torch"]
-rocm-archs = [
-    "gfx906",
-    "gfx908",
-    "gfx90a",
-    "gfx942",
-    "gfx950",
-    "gfx1030",
-    "gfx1100",
-    "gfx1101",
-    "gfx1200",
-    "gfx1201",
-]
 src = ["relu_cuda/relu.cu"]
 
 [kernel.relu_cpu]

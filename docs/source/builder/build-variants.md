@@ -66,7 +66,7 @@ available. This list will be updated as new PyTorch versions are released.
 
 - `torch211-cxx11-xpu20253-x86_64-linux`
 - `torch212-cxx11-xpu20253-x86_64-linux`
-- `torch213-cxx11-xpu20253-x86_64-linux`
+- `torch213-cxx11-xpu20260-x86_64-linux`
 
 ## Python-only kernels
 

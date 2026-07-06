@@ -6,7 +6,7 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
-use kernels_data::metadata::{GitInfo, KernelBuilderInfo};
+use kernels_data::metadata::{BuildInfo, GitInfo, KernelBuilderInfo};
 use minijinja::Environment;
 
 use crate::{
@@ -24,17 +24,21 @@ mod tvm_ffi;
 
 pub use fileset::FileSet;
 
-pub fn create_pyproject_file_set(build: Build, kernel_id: &KernelIdentifier) -> Result<FileSet> {
+pub fn create_pyproject_file_set(
+    build: Build,
+    kernel_id: &KernelIdentifier,
+    build_info: Option<&BuildInfo>,
+) -> Result<FileSet> {
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
     let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
-        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id)?
+        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, build_info)?
     } else if build.is_noarch() {
-        torch::write_torch_ext_noarch(&env, &build, kernel_id)?
+        torch::write_torch_ext_noarch(&env, &build, kernel_id, build_info)?
     } else {
-        torch::write_torch_ext(&env, &build, kernel_id)?
+        torch::write_torch_ext(&env, &build, kernel_id, build_info)?
     };
 
     Ok(file_set)
@@ -54,25 +58,34 @@ pub fn create_pyproject(
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = parse_build(&kernel_dir)?;
-    let git_override = kernel_sha.map(|sha| GitInfo {
-        sha,
-        dirty: kernel_dirty,
-    });
-    // The version is always that of the running `kernel-builder`; only the
-    // git provenance is supplied externally (e.g. by Nix).
-    let kernel_builder_override = kernel_builder_sha.map(|sha| KernelBuilderInfo {
-        version: env!("CARGO_PKG_VERSION").to_owned(),
-        sha: Some(sha),
-        dirty: kernel_builder_dirty,
-    });
-    let kernel_id = KernelIdentifier::new(
-        &kernel_dir,
-        build.general.name.python_name(),
-        unique_id,
-        git_override,
-        kernel_builder_override,
-    );
-    let file_set = create_pyproject_file_set(build, &kernel_id)?;
+
+    // Assemble build provenance. Prefer an explicitly provided git provenance
+    // (e.g. passed by Nix builds, where the source tree has no `.git`); fall
+    // back to detecting it from the kernel's git repository.
+    let kernel = kernel_sha
+        .map(|sha| GitInfo {
+            sha,
+            dirty: kernel_dirty,
+        })
+        .or_else(|| ops_identifier::git_info(&kernel_dir));
+    // The version is always that of the running `kernel-builder`; only the git
+    // provenance may be supplied externally (e.g. by Nix). Otherwise fall back
+    // to the provenance baked in at compile time.
+    let kernel_builder = match kernel_builder_sha {
+        Some(sha) => KernelBuilderInfo {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            sha: Some(sha),
+            dirty: kernel_builder_dirty,
+        },
+        None => common::kernel_builder_info(),
+    };
+    let build_info = BuildInfo {
+        kernel_builder: Some(kernel_builder),
+        kernel,
+    };
+
+    let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
+    let file_set = create_pyproject_file_set(build, &kernel_id, Some(&build_info))?;
     file_set.write(&target_dir, force)?;
 
     Ok(())
@@ -89,15 +102,9 @@ pub fn clean_pyproject(
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
     let build = parse_build(&kernel_dir)?;
     // Provenance is irrelevant when computing the set of files to clean.
-    let kernel_id = KernelIdentifier::new(
-        &kernel_dir,
-        build.general.name.python_name(),
-        unique_id,
-        None,
-        None,
-    );
+    let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
 
-    let generated_files = create_pyproject_file_set(build, &kernel_id)?.into_names();
+    let generated_files = create_pyproject_file_set(build, &kernel_id, None)?.into_names();
 
     if generated_files.is_empty() {
         eprintln!("No generated artifacts found to clean.");

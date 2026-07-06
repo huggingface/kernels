@@ -3,7 +3,7 @@ use std::path::Path;
 use eyre::{Result, WrapErr};
 use git2::Repository;
 use kernels_data::config::Backend;
-use kernels_data::metadata::{GitInfo, KernelBuilderInfo};
+use kernels_data::metadata::GitInfo;
 use rand::Rng;
 
 pub fn random_identifier() -> String {
@@ -43,11 +43,14 @@ pub fn git_info(target_dir: impl AsRef<Path>) -> Option<GitInfo> {
     Some(GitInfo { sha, dirty })
 }
 
+/// Uniquely identifies a kernel for the purpose of ops-name generation.
+///
+/// This type is intentionally small and atomic: it carries only what is
+/// needed to name a kernel's ops. Build provenance (git SHA, dirty flags,
+/// `kernel-builder` version) is handled separately when writing metadata.
 pub struct KernelIdentifier {
     name: String,
     unique_id: String,
-    git_info: Option<GitInfo>,
-    kernel_builder: Option<KernelBuilderInfo>,
 }
 
 impl KernelIdentifier {
@@ -58,42 +61,17 @@ impl KernelIdentifier {
     /// source revision. If this identefier is not provided, a Git short
     /// hash is extracted from the repository of `target_dir`. If that
     /// fails, a random identifier is generated.
-    pub fn new(
-        kernel_dir: impl AsRef<Path>,
-        name: String,
-        unique_id: Option<String>,
-        git_override: Option<GitInfo>,
-        kernel_builder: Option<KernelBuilderInfo>,
-    ) -> Self {
-        // Prefer an explicitly provided git provenance (e.g. passed by Nix
-        // builds, where the source tree has no `.git`); fall back to detecting
-        // it from the kernel's git repository.
-        let git_info = git_override.or_else(|| git_info(kernel_dir.as_ref()));
+    pub fn new(kernel_dir: impl AsRef<Path>, name: String, unique_id: Option<String>) -> Self {
         let unique_id = unique_id.unwrap_or_else(|| match git_identifier(kernel_dir.as_ref()) {
             Ok(rev) => rev,
             Err(_) => random_identifier(),
         });
 
-        Self {
-            name,
-            unique_id,
-            git_info,
-            kernel_builder,
-        }
+        Self { name, unique_id }
     }
 
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    pub fn git_info(&self) -> Option<&GitInfo> {
-        self.git_info.as_ref()
-    }
-
-    /// Externally-provided `kernel-builder` provenance, when available. When
-    /// `None`, the compile-time baked provenance is used instead.
-    pub fn kernel_builder(&self) -> Option<&KernelBuilderInfo> {
-        self.kernel_builder.as_ref()
     }
 
     /// Create the kernel identifier string for a given backend.
@@ -111,53 +89,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn explicit_provenance_overrides_are_stored() {
+    fn kernel_identifier_uses_provided_unique_id() {
         let tmp = tempfile::tempdir().unwrap();
-        let git = GitInfo {
-            sha: "a".repeat(40),
-            dirty: true,
-        };
-        let kernel_builder = KernelBuilderInfo {
-            version: "0.16.0-dev0".to_owned(),
-            sha: Some("b".repeat(40)),
-            dirty: false,
-        };
-
-        let id = KernelIdentifier::new(
-            tmp.path(),
-            "relu".to_owned(),
-            Some("rev123".to_owned()),
-            Some(git),
-            Some(kernel_builder),
-        );
+        let id = KernelIdentifier::new(tmp.path(), "relu".to_owned(), Some("rev123".to_owned()));
 
         assert_eq!(id.unique_id(), "rev123");
         assert_eq!(id.to_string_for_backend(Backend::Cuda), "_relu_cuda_rev123");
-
-        let git = id.git_info().expect("kernel git info");
-        assert_eq!(git.sha, "a".repeat(40));
-        assert!(git.dirty);
-
-        let kb = id.kernel_builder().expect("kernel-builder info");
-        assert_eq!(kb.sha.as_deref(), Some(&"b".repeat(40)[..]));
-        assert!(!kb.dirty);
     }
 
     #[test]
-    fn no_provenance_in_non_git_dir() {
+    fn git_info_is_none_in_non_git_dir() {
         let tmp = tempfile::tempdir().unwrap();
-        let id = KernelIdentifier::new(
-            tmp.path(),
-            "relu".to_owned(),
-            Some("x".to_owned()),
-            None,
-            None,
-        );
-
-        // No overrides supplied and the temp dir is not a git repository, so
-        // no kernel provenance is recorded. The kernel-builder provenance is
-        // filled in later from the compile-time default in `write_metadata`.
-        assert!(id.git_info().is_none());
-        assert!(id.kernel_builder().is_none());
+        assert!(git_info(tmp.path()).is_none());
     }
 }

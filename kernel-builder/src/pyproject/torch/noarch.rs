@@ -4,6 +4,7 @@ use eyre::{Context, Result};
 use itertools::Itertools;
 use kernels_data::config::TorchNoarch;
 use kernels_data::config::{Backend, Build, General};
+use kernels_data::metadata::BuildInfo;
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::write_compat_py;
@@ -17,6 +18,7 @@ pub fn write_torch_ext_noarch(
     env: &Environment,
     build: &Build,
     kernel_id: &KernelIdentifier,
+    build_info: Option<&BuildInfo>,
 ) -> Result<FileSet> {
     let mut file_set = FileSet::default();
 
@@ -34,7 +36,7 @@ pub fn write_torch_ext_noarch(
         &mut file_set,
     )?;
     write_setup_py(&mut file_set)?;
-    write_metadata(build, kernel_id, &mut file_set)?;
+    write_metadata(build, kernel_id, build_info, &mut file_set)?;
 
     Ok(file_set)
 }

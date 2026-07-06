@@ -3,6 +3,7 @@ use std::io::Write;
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
 use kernels_data::config::{Backend, Build, General, TvmFfi};
+use kernels_data::metadata::BuildInfo;
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::{
@@ -42,6 +43,7 @@ pub fn write_tvm_ffi_ext(
     env: &Environment,
     build: &Build,
     kernel_id: &KernelIdentifier,
+    build_info: Option<&BuildInfo>,
 ) -> Result<FileSet> {
     let tvm_ffi_ext = match build.framework.tvm_ffi() {
         Some(torch_ext) => torch_ext,
@@ -65,7 +67,7 @@ pub fn write_tvm_ffi_ext(
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 
-    write_metadata(build, kernel_id, &mut file_set)?;
+    write_metadata(build, kernel_id, build_info, &mut file_set)?;
 
     Ok(file_set)
 }

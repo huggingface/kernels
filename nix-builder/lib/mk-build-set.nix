@@ -2,10 +2,9 @@
   nixpkgs,
   rust-overlay,
 
-  # Git provenance of `kernel-builder` itself, burned into the binary so that
-  # the kernels it builds record which `kernel-builder` produced them.
-  builderRev ? null,
-  builderDirty ? false,
+  # The `kernel-builder` flake itself, so its git provenance can be burned into
+  # the binary that the kernels it builds record.
+  builderSelf ? null,
 }:
 
 let
@@ -13,10 +12,10 @@ let
 
   overlay = import ../overlay.nix;
 
-  # Inject the `kernel-builder` git provenance into the package. It cannot be
-  # detected from `.git` in the build sandbox, so it is passed through here.
+  # Inject the `kernel-builder` flake so the package can burn its git provenance
+  # into the binary. It cannot be detected from `.git` in the build sandbox.
   builderProvenanceOverlay = _final: prev: {
-    kernel-builder = prev.kernel-builder.override { inherit builderRev builderDirty; };
+    kernel-builder = prev.kernel-builder.override { inherit builderSelf; };
   };
 
   flattenVersion = version: lib.replaceStrings [ "." ] [ "_" ] (lib.versions.pad 2 version);

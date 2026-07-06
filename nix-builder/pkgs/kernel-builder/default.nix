@@ -6,12 +6,11 @@
   libgit2,
   openssl,
 
-  # Git provenance of `kernel-builder` itself. Burned into the binary at build
-  # time (the build sandbox has no `.git`, so `build.rs` cannot detect it) and
-  # later recorded in the build metadata of the kernels it builds. `null`/`false`
-  # when `kernel-builder` is built from a non-git source (e.g. a local `path:`).
-  builderRev ? null,
-  builderDirty ? false,
+  # The `kernel-builder` flake itself (or `null` for a non-git source). Its git
+  # provenance is burned into the binary at build time and later recorded in the
+  # build metadata of the kernels it builds. The build sandbox has no `.git`, so
+  # `build.rs` cannot detect it; it is derived from the flake here instead.
+  builderSelf ? null,
 }:
 
 let
@@ -21,18 +20,20 @@ let
     "-p"
     "hf-kernel-builder"
   ];
+
+  builderProvenance = import ../../lib/flake-provenance.nix { inherit lib; } builderSelf;
 in
 rustPlatform.buildRustPackage {
   inherit version;
   pname = "kernel-builder";
 
-  # The build sandbox has no `.git`, so the `built` crate cannot detect the
-  # `kernel-builder` git provenance. Supply it through `built`'s override
-  # environment variables (`hf_kernel_builder` is the package name with hyphens
-  # replaced by underscores), which `build.rs` bakes into the binary.
+  # Supply the git provenance through `built`'s override environment variables
+  # (`hf_kernel_builder` is the package name with hyphens replaced by
+  # underscores), which `build.rs` bakes into the binary.
   "BUILT_OVERRIDE_hf_kernel_builder_GIT_COMMIT_HASH" =
-    if builderRev == null then "BUILT_OVERRIDE_NONE" else lib.removeSuffix "-dirty" builderRev;
-  "BUILT_OVERRIDE_hf_kernel_builder_GIT_DIRTY" = if builderDirty then "true" else "false";
+    if builderProvenance == null then "BUILT_OVERRIDE_NONE" else builderProvenance.sha;
+  "BUILT_OVERRIDE_hf_kernel_builder_GIT_DIRTY" =
+    if builderProvenance != null && builderProvenance.dirty then "true" else "false";
 
   src =
     let

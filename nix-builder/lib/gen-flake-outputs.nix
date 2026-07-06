@@ -36,30 +36,11 @@ let
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
 
-  # Git provenance (commit SHA + dirty state) of the kernel source, recorded in
-  # the build metadata. The Nix sandbox has no `.git`, so it has to be passed in
-  # explicitly; the value is atomic data (`{ sha; dirty; }`, or `null` when
-  # unknown), not pre-formatted `create-pyproject` flags. (`kernel-builder`'s own
-  # provenance is burned into its binary.)
-  kernelProvenance =
-    let
-      kernelSha =
-        if self == null then
-          null
-        else if self ? rev then
-          self.rev
-        else if self ? dirtyRev then
-          lib.removeSuffix "-dirty" self.dirtyRev
-        else
-          null;
-    in
-    if kernelSha == null then
-      null
-    else
-      {
-        sha = kernelSha;
-        dirty = self != null && !(self ? rev);
-      };
+  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
+  # in the build metadata. The Nix sandbox has no `.git`, so it is derived from
+  # the kernel flake's `self` here and passed in explicitly. (`kernel-builder`'s
+  # own provenance is burned into its binary.)
+  kernelProvenance = import ./flake-provenance.nix { inherit lib; } self;
 
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 

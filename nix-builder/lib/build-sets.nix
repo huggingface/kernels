@@ -2,9 +2,9 @@
   nixpkgs,
   rust-overlay,
 
-  # Git provenance of `kernel-builder` itself, burned into the binary.
-  builderRev ? null,
-  builderDirty ? false,
+  # The `kernel-builder` flake itself, so its git provenance can be burned into
+  # the binary.
+  builderSelf ? null,
 }:
 
 let
@@ -32,8 +32,7 @@ let
     inherit
       nixpkgs
       rust-overlay
-      builderRev
-      builderDirty
+      builderSelf
       ;
   };
 

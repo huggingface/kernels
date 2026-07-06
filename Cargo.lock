@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "hf-kernel-builder"
-version = "0.16.0-dev0"
+version = "0.17.0-dev0"
 dependencies = [
  "base32",
  "clap",
@@ -1609,7 +1609,7 @@ dependencies = [
 
 [[package]]
 name = "kernel-abi-check"
-version = "0.16.0-dev0"
+version = "0.17.0-dev0"
 dependencies = [
  "cpp_demangle",
  "eyre",
@@ -1623,12 +1623,13 @@ dependencies = [
 
 [[package]]
 name = "kernels-data"
-version = "0.16.0-dev0"
+version = "0.17.0-dev0"
 dependencies = [
  "base64",
  "digest 0.11.2",
  "eyre",
  "itertools 0.13.0",
+ "monostate",
  "regex",
  "serde",
  "serde-value",
@@ -1636,13 +1637,14 @@ dependencies = [
  "sha2 0.11.0",
  "tempfile",
  "thiserror 1.0.69",
+ "toml",
  "url",
  "walkdir",
 ]
 
 [[package]]
 name = "kernels-data-python"
-version = "0.16.0-dev0"
+version = "0.17.0-dev0"
 dependencies = [
  "kernels-data",
  "pyo3",
@@ -1916,6 +1918,28 @@ dependencies = [
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "monostate"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3341a273f6c9d5bef1908f17b7267bbab0e95c9bf69a0d4dcf8e9e1b2c76ef67"
+dependencies = [
+ "monostate-impl",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "monostate-impl"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4db6d5580af57bf992f59068d4ea26fd518574ff48d7639b255a36f9de6e7e9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

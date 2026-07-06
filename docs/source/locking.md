@@ -1,4 +1,4 @@
-# Locking kernel/layer versions
+# Lock kernel versions
 
 Projects that use `setuptools` can lock the kernel versions that should be
 used. First specify the accepted versions in `pyproject.toml` and make

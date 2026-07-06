@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from kernels.cli.info import print_kernel_info
 from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
@@ -34,6 +35,29 @@ def main():
         help="Download all build variants of the kernel",
     )
     download_parser.set_defaults(func=download_kernels)
+
+    info_parser = subparsers.add_parser("info", help="Describe a kernel")
+    info_parser.add_argument(
+        "kernel",
+        type=str,
+        help="The kernel repo ID or a local path to a kernel repository",
+    )
+    info_parser.add_argument(
+        "--revision",
+        type=str,
+        help="The kernel revision (branch, tag, or commit). Cannot be used together with --version.",
+    )
+    info_parser.add_argument(
+        "--version",
+        type=int,
+        help="The kernel version. Cannot be used together with --revision.",
+    )
+    info_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the kernel information as JSON",
+    )
+    info_parser.set_defaults(func=kernel_info)
 
     versions_parser = subparsers.add_parser("versions", help="Show kernel versions")
     versions_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
@@ -144,6 +168,15 @@ def download_kernels(args):
 
     if not all_successful:
         sys.exit(1)
+
+
+def kernel_info(args):
+    print_kernel_info(
+        args.kernel,
+        revision=args.revision,
+        version=args.version,
+        json_output=args.json,
+    )
 
 
 def kernel_versions(args):

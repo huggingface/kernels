@@ -4,8 +4,8 @@ Kernels on the Hub must fulfill the requirements outlined on this page. By
 ensuring kernels are compliant, they can be used on a wide range of Linux
 systems and Torch builds.
 
-[Join us on Discord](https://discord.gg/H6Tkmd88N3) for questions and discussions
-about building kernels!
+[Join us on GitHub Discussions](https://github.com/huggingface/kernels/discussions/categories/kernel-builder)
+for questions and discussions about building kernels!
 
 ## Repository type
 

@@ -10,7 +10,8 @@ The kernel-builder is a build system for creating Hub-compatible compute kernels
 Typically the ABI does not break during release candidates. If it does,
 you have to recompile your kernels with the final 2.10.0 release.
 
-[Join us on Discord](https://discord.gg/H6Tkmd88N3) for questions and discussions!
+[Join us on GitHub Discussions](https://github.com/huggingface/kernels/discussions)
+for questions and discussions!
 
 This repo contains a Nix package that can be used to build custom machine learning kernels for PyTorch. The kernels are built using the [PyTorch C++ Frontend](https://pytorch.org/cppdocs/frontend.html) and can be loaded from the Hub with the [kernels](https://github.com/huggingface/kernels)
 Python package.

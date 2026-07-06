@@ -1,4 +1,4 @@
-# Writing Hub kernels with kernel-builder
+# Write kernels
 
 ## Introduction
 
@@ -163,6 +163,7 @@ backends = [
 ]
 name = "mykernel"
 version = 1
+edition = 5
 
 [general.hub]
 repo-id = "myorg/mykernel"
@@ -193,6 +194,9 @@ The following sections enumerate all supported options for `build.toml`.
   The version is written to the kernel's `metadata.json` and is used
   by the `kernels upload` command to upload the kernel to a version
   branch named `v<version>`.
+- `edition` (required): the `build.toml` format edition. The current
+  edition is `5`. Older `build.toml` files can be migrated with
+  `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
 - `upstream`: Git-compatible URL (passable to `git clone`) of the original
@@ -222,11 +226,20 @@ The following sections enumerate all supported options for `build.toml`.
   This option is provided for kernels that require functionality only
   provided by newer CUDA toolkits.
 
+### Framework sections
+
+The framework section specifies framework-specific settings. The name of
+the section depends on the framework that is used. The currently supported
+frameworks are:
+
+- AOT-compiled Torch kernel (`torch`).
+- AOT-compiled TVM-FFI kernel (`tvm-ffi`).
+- JIT-compiled or not-compiled Torch kernel (`torch-noarch`, experimental).
+
 ### `torch`
 
-This section describes the Torch extension. In the future, there may be
-similar sections for other frameworks. This section has the following
-options:
+This framework section is used for AOT-compiled Torch kernels, and has the
+following options:
 
 - `src` (required): a list of source files and headers.
 - `pyext` (optional): the list of extensions for Python files. Default:
@@ -237,12 +250,54 @@ options:
   non-compliant kernels if the version range does not correspond to the [required variants](build-variants.md).
 - `minver` (optional): only build for this Torch version and later. Use cautiously, since this option produces
   non-compliant kernels if the version range does not correspond to the [required variants](build-variants.md).
-- `stable-abi` (**experimental**): when set to a Torch version (e.g.
-  `"2.11"`), the kernel is built using the Torch stable ABI. This
-  requires that the kernel itself only use
+- `stable-abi` (**experimental**): a table mapping backend names to the Torch
+  version (e.g. `"2.11"`) that the backend is built against using the Torch
+  stable ABI. This requires that the kernel itself only use
   [stable ABI headers](https://docs.pytorch.org/docs/2.12/notes/libtorch_stable_abi.html).
   For an example, see the [`relu-torch-stable-abi`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-torch-stable-abi)
   example kernel.
+
+  Backends that are not listed in the table are built normally (without the
+  stable ABI), allowing a kernel to mix stable-ABI and full-ABI backends:
+
+  ```toml
+  [torch.stable-abi]
+  cuda = "2.11"
+  rocm = "2.9"
+  ```
+
+  Entries for backends that are not in `[general].backends` are ignored, so a
+  backend can be commented out of `[general].backends` for testing without
+  having to also remove it from the table.
+
+### `tvm-ffi`
+
+This framework section is used for AOT-compiled TVM-FFI kernels.
+
+- `src` (required): a list of source files and headers.
+- `pyext` (optional): the list of extensions for Python files. Default:
+  `["py", "pyi"]`.
+- `include` (optional): include directories relative to the project root.
+  Default: `[]`.
+
+### `torch-noarch`
+
+The `torch-noarch` section is used for JIT-compiled kernels or kernels that
+do not require any ahead-of-time compilation (e.g. a kernel that packages plain PyTorch
+layers).
+
+Normally, it is expected that this type of kernel runs on all CUDA capabilities
+or ROCm architectures. However, for kernels that support only a limited range
+of archs, the `cuda-capabilites` and `rocm-archs` options can be used to specify
+the supported archs. These are then exported to `metadata.json` for consumption
+by e.g. the Hugging Face Hub.
+
+- `pyext` (optional): the list of extensions for Python files. Default:
+  `["py", "pyi"]`.
+- `cuda-capabilities` (optional): a list of CUDA compute capabilities the
+  kernel supports (e.g. `["9.0", "10.0"]`).
+- `rocm-archs` (optional): a list of ROCm architectures the kernel supports
+  (e.g. `["gfx942"]`).
 
 ### `kernel.<name>`
 
@@ -369,7 +424,7 @@ def mykernel(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tenso
 ## Registering Torch operators
 
 You may want to register Torch ops from your kernel's Python code or
-register fake ops for `torch.compile` support. It is important to register
+[register](https://docs.pytorch.org/tutorials/advanced/custom_ops_landing_page.html) fake ops for `torch.compile` support. It is important to register
 such ops in the namespace that kernel-builder makes for your kernel
 build. This is required for compliant kernels to ensure that multiple
 versions of the same kernel can be loaded at the same time without
@@ -407,12 +462,51 @@ def relu_fwd_fake(input: torch.Tensor) -> torch.Tensor:
     return torch.empty_like(input)
 ```
 
+> [!WARNING]
+> To facilitate static analysis of ops by kernel-builder, `add_op_namespace_prefix` should not be rewrapped. Furthermore, no fallbacks should be added when importing `add_op_namnespace_prefix`, since such fallbacks can mask issues (e.g. incorrect import paths), resulting in non-unique op names. Below is an example of this antipattern:
+
+```py
+try:
+    from ._ops import add_op_namespace_prefix as _generated_add_op_namespace_prefix
+except ImportError:
+    def _generated_add_op_namespace_prefix(name: str) -> str:
+        return name if "::" in name else f"my_kernel::{name}"
+
+def add_op_namespace_prefix(name: str) -> str:
+    return _generated_add_op_namespace_prefix(name)
+```
+
 ## Kernel tests
 
-Kernel tests are stored in the `tests` directory. Since running all
-kernel tests in CI may be prohibitively expensive, the `pyproject.toml`
-generated by the builder adds support for the special `kernels_ci`
-PyTest marker that can be used as follows:
+### Use `get_kernel` in tests
+
+Kernel tests are stored in the `tests` directory. Tests must not use direct
+imports, but instead use `get_kernel` to test the kernel as it will be used.
+For example:
+
+```python
+import kernels
+import torch
+import torch.nn.functional as F
+
+relu = kernels.get_kernel("kernels-community/relu", version=1)
+
+def test_relu():
+    x = torch.randn(1024, 1024, dtype=torch.float32, device=torch.device("cuda"))
+    y = relu.relu(x, torch.empty_like(x))
+    y_ref = F.relu(x)
+    torch.testing.assert_close(y_ref, y)
+```
+
+Development shells (`kernel-builder devshell`/`kernel-builder testshell`)
+will set the `LOCAL_KERNELS` variable to ensure that the kernel will be
+loaded from the development environment.
+
+### Mark CI tests
+
+Since running all kernel tests in CI may be prohibitively expensive, the
+`pyproject.toml` generated by the builder adds support for the special
+`kernels_ci` PyTest marker that can be used as follows:
 
 ```python
 import pytest

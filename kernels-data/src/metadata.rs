@@ -3,7 +3,7 @@ use std::str::FromStr;
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Backend, GitUrl, KernelName};
+use crate::config::{Backend, Build, GitUrl, KernelName};
 use crate::digest::Digest;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -70,6 +70,33 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    /// Construct metadata for a specific backend.
+    ///
+    /// This constructor creates metadata for a specific backend from the
+    /// kernel build configuration and kernel identifier.
+    ///
+    /// Supported backend archs are only supported for Torch noarch, since
+    /// the archs need to be computed at build time for arch frameworks.
+    pub fn for_backend(build: &Build, id: String, backend: Backend) -> Result<Self> {
+        let python_depends = build.general.all_python_depends(backend)?;
+        let archs = build.framework.precomputable_backend_archs(backend);
+
+        Ok(Self {
+            id,
+            name: build.general.name.clone(),
+            version: build.general.version,
+            license: build.general.license.clone(),
+            upstream: build.general.upstream.clone(),
+            source: build.general.source.clone(),
+            python_depends,
+            backend: BackendInfo {
+                archs,
+                backend_type: backend,
+            },
+            digest: None,
+        })
+    }
+
     /// Read the metadata from a JSON byte slice.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         Ok(serde_json::from_slice(bytes)?)
@@ -91,77 +118,93 @@ impl FromStr for Metadata {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashMap;
 
-    const METADATA_NO_BUILD_INFO: &str = r#"{
-        "name": "relu",
-        "id": "_relu_cuda_abc1234",
-        "version": 1,
-        "license": "Apache-2.0",
-        "python-depends": [],
-        "backend": { "type": "cuda" }
-    }"#;
+    use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
 
-    const METADATA_WITH_BUILD_INFO: &str = r#"{
-        "name": "relu",
-        "id": "_relu_cuda_abc1234",
-        "version": 1,
-        "license": "Apache-2.0",
-        "python-depends": [],
-        "backend": { "type": "cuda" },
-        "build-info": {
-            "kernel-builder": { "version": "0.16.0-dev0", "sha": "1111111111111111111111111111111111111111", "dirty": true },
-            "kernel": { "sha": "2222222222222222222222222222222222222222", "dirty": false }
-        }
-    }"#;
+    use super::Metadata;
 
-    #[test]
-    fn parses_metadata_without_build_info() {
-        let metadata: Metadata = METADATA_NO_BUILD_INFO.parse().unwrap();
-        assert!(metadata.build_info.is_none());
-    }
-
-    #[test]
-    fn parses_and_reports_dirty_build_info() {
-        let metadata: Metadata = METADATA_WITH_BUILD_INFO.parse().unwrap();
-        let build_info = metadata.build_info.expect("build-info should be present");
-        assert!(build_info.is_dirty());
-
-        let kernel_builder = build_info.kernel_builder.unwrap();
-        assert_eq!(kernel_builder.version, "0.16.0-dev0");
-        assert!(kernel_builder.dirty);
-        assert_eq!(kernel_builder.sha.as_deref(), Some(&"1".repeat(40)[..]));
-
-        let kernel = build_info.kernel.unwrap();
-        assert!(!kernel.dirty);
-        assert_eq!(kernel.sha, "2".repeat(40));
-    }
-
-    #[test]
-    fn build_info_round_trips_with_kebab_case_keys() {
-        let metadata: Metadata = METADATA_WITH_BUILD_INFO.parse().unwrap();
-        let json = serde_json::to_string(&metadata).unwrap();
-        assert!(json.contains("\"build-info\""));
-        assert!(json.contains("\"kernel-builder\""));
-
-        // Re-parsing the serialized form yields the same dirtiness.
-        let reparsed: Metadata = json.parse().unwrap();
-        assert!(reparsed.build_info.unwrap().is_dirty());
-    }
-
-    #[test]
-    fn build_info_is_not_dirty_when_all_clean() {
-        let build_info = BuildInfo {
-            kernel_builder: Some(KernelBuilderInfo {
-                version: "0.16.0".to_owned(),
-                sha: None,
-                dirty: false,
+    fn torch_noarch_build() -> Build {
+        Build {
+            general: General {
+                name: KernelName::new("test-kernel").unwrap(),
+                version: 1,
+                license: "apache-2.0".to_string(),
+                upstream: None,
+                source: None,
+                backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
+                hub: None,
+                python_depends: None,
+                cuda: None,
+                neuron: None,
+                xpu: None,
+            },
+            kernels: HashMap::new(),
+            framework: Framework::TorchNoarch(TorchNoarch {
+                pyext: None,
+                cuda_capabilities: Some(vec!["7.0".to_string(), "8.0".to_string()]),
+                rocm_archs: Some(vec!["gfx90a".to_string()]),
             }),
-            kernel: Some(GitInfo {
-                sha: "abc".to_owned(),
-                dirty: false,
+        }
+    }
+
+    #[test]
+    fn cuda_archs_for_torch_noarch() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        assert_eq!(metadata.backend.backend_type, Backend::Cuda);
+        assert_eq!(
+            metadata.backend.archs,
+            Some(vec!["7.0".to_string(), "8.0".to_string()])
+        );
+    }
+
+    #[test]
+    fn rocm_archs_for_torch_noarch() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Rocm).unwrap();
+
+        assert_eq!(metadata.backend.backend_type, Backend::Rocm);
+        assert_eq!(metadata.backend.archs, Some(vec!["gfx90a".to_string()]));
+    }
+
+    #[test]
+    fn no_archs_for_cpu_with_torch_noarch() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cpu).unwrap();
+
+        assert_eq!(metadata.backend.backend_type, Backend::Cpu);
+        assert!(metadata.backend.archs.is_none());
+    }
+
+    #[test]
+    fn no_archs_for_arch_framework() {
+        let build = Build {
+            general: General {
+                name: KernelName::new("test-kernel").unwrap(),
+                version: 1,
+                license: "apache-2.0".to_string(),
+                upstream: None,
+                source: None,
+                backends: vec![Backend::Cuda],
+                hub: None,
+                python_depends: None,
+                cuda: None,
+                neuron: None,
+                xpu: None,
+            },
+            kernels: HashMap::new(),
+            framework: Framework::TvmFfi(TvmFfi {
+                include: None,
+                pyext: None,
+                src: vec![],
+                cxx_flags: None,
             }),
         };
-        assert!(!build_info.is_dirty());
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        assert_eq!(metadata.backend.backend_type, Backend::Cuda);
+        assert!(metadata.backend.archs.is_none());
     }
 }

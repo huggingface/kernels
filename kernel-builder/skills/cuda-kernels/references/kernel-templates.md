@@ -688,8 +688,8 @@ nix run .#build-and-copy -L
 nix run .#ci-test
 ```
 
-For an editable dev install, generate the project files with kernel-builder (never hand-write a `setup.py`):
+For a local dev build, generate the project files with kernel-builder (never hand-write a `setup.py`):
 ```bash
 kernel-builder create-pyproject -f
-pip install wheel && pip install --no-build-isolation -e .
+python setup.py build_kernel
 ```

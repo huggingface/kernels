@@ -27,9 +27,9 @@ rec {
   #
   # 1. Filter out sets that do not correspond to the given constraints
   #    (e.g. CUDA version, Pytorch version).
-  # 2. If the kernel config uses the Torch stable ABI, we only need a
-  #    build set for the latest Torch for a given backend + backend version
-  #    combination.
+  # 2. For backends that use the Torch stable ABI, we only need a build set
+  #    for the latest Torch for a given backend + backend version combination.
+  #    Backends without the stable ABI keep every supported Torch version.
   filterApplicableBuildSets =
     kernelConfig: buildSets:
     let
@@ -88,11 +88,11 @@ rec {
         in
         builtins.attrValues newestPerGroup;
 
+      byStableAbi = lib.partition (
+        buildSet: kernelConfig.isTorchStableAbiForBackend buildSet.buildConfig.backend
+      ) (buildSetsWithinBounds buildSets);
     in
-    if kernelConfig.isTorchStableAbi then
-      deduplicateForStableAbi (buildSetsWithinBounds buildSets)
-    else
-      buildSetsWithinBounds buildSets;
+    deduplicateForStableAbi byStableAbi.right ++ byStableAbi.wrong;
 
   applicableBuildSets =
     { path, buildSets }: filterApplicableBuildSets (readKernelConfig path) buildSets;
@@ -189,7 +189,7 @@ rec {
           provenanceArgs
           ;
 
-        inherit (kernelConfig) torchStableAbiVersion;
+        torchStableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
 
         kernelName = kernelConfig.name;
         doAbiCheck = true;
@@ -282,6 +282,7 @@ rec {
     }:
     let
       kernelConfig = readKernelConfig path;
+      repoId = lib.attrByPath [ "toml" "general" "hub" "repo-id" ] null kernelConfig;
       shellForBuildSet =
         { path, rev }:
         buildSet:
@@ -311,6 +312,7 @@ rec {
                 ++ pythonCheckInputs ps
                 ++ [
                   buildSet.torch
+                  kernels
                   pytest
                 ]
                 ++ pythonCheckInputs ps
@@ -328,6 +330,9 @@ rec {
               # make testing as pure as possible.
               unset LD_LIBRARY_PATH
               export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
+            ''
+            + ''
+              export LOCAL_KERNELS="${repoId}=${extension}"
             '';
           };
         };
@@ -402,6 +407,7 @@ rec {
     }:
     let
       kernelConfig = readKernelConfig path;
+      repoId = lib.attrByPath [ "toml" "general" "hub" "repo-id" ] null kernelConfig;
       shellForBuildSet =
         buildSet:
         let
@@ -426,6 +432,7 @@ rec {
               ++ [
                 buildSet.torch
                 kernels
+                ninja
                 pip
                 pytest
               ]
@@ -450,7 +457,6 @@ rec {
             buildInputs = [ python ];
             inputsFrom = [ extension ];
             env = lib.optionalAttrs rocmSupport {
-              PYTORCH_ROCM_ARCH = lib.concatStringsSep ";" buildSet.torch.rocmArchs;
               HIP_PATH = pkgs.rocmPackages.clr;
             };
 
@@ -467,6 +473,9 @@ rec {
               fi
               source "${venvDir}/bin/activate"
               unset LD_LIBRARY_PATH
+            ''
+            + lib.optionals (repoId != null) ''
+              export LOCAL_KERNELS="${repoId}=$(pwd)/build"
             '';
           };
         };

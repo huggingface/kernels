@@ -1,4 +1,4 @@
-# Nix Builder design
+# Nix builder design
 
 ## Introduction
 

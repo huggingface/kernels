@@ -36,6 +36,17 @@ let
         hash = "sha256-LoFYjFyKWMAkMMrTeOgAopRK81mqm+fEQPTuOplp9jY=";
       };
     };
+    "3.7.1" = {
+      x86_64-linux = {
+        url = "https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/2.13.0/rc12/triton-3.7.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-Y4tqGZspqK+IVwfkHXy/6UXhyHnbuV/Gl0eFYAyNcjo=";
+      };
+      aarch64-linux = {
+        url = "https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/2.13.0/rc12/triton-3.7.1-cp313-cp313-linux_aarch64.whl";
+        hash = "sha256-P3X6N2FOk8du/RGR2ipQ9+b7hUeR+GC/3kOKQJrHq/g=";
+      };
+    };
+
   };
   generic = callPackage ./generic.nix { };
   versionAttr = lib.replaceStrings [ "." ] [ "_" ];

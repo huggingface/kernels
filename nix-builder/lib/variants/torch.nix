@@ -32,9 +32,10 @@ in
     kernelConfig:
     let
       archVariant = kernelConfig.kernelBackends.${buildConfig.backend};
+      stableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
     in
-    if archVariant && kernelConfig.isTorchStableAbi then
-      "torch-stable-abi${flattenVersion (lib.versions.majorMinor kernelConfig.torchStableAbiVersion)}-${computeString}-${buildConfig.system}"
+    if archVariant && stableAbiVersion != null then
+      "torch-stable-abi${flattenVersion (lib.versions.majorMinor stableAbiVersion)}-${computeString}-${buildConfig.system}"
     else if archVariant then
       archString
     else

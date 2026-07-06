@@ -8,12 +8,14 @@ applyOverrides {
     {
       intel-oneapi-compiler-dpcpp-cpp-runtime,
       intel-oneapi-compiler-shared-runtime,
+      intel-oneapi-mpi,
       intel-oneapi-openmp,
     }:
     prevAttrs: {
       buildInputs = prevAttrs.buildInputs ++ [
         intel-oneapi-compiler-dpcpp-cpp-runtime
         intel-oneapi-compiler-shared-runtime
+        intel-oneapi-mpi
         intel-oneapi-openmp
       ];
     };
@@ -54,6 +56,39 @@ applyOverrides {
         intel-oneapi-openmp
         intel-oneapi-compiler-shared-runtime
         intel-oneapi-mpi
+      ];
+    };
+
+  intel-oneapi-mkl-sycl-blas =
+    { intel-oneapi-compiler-dpcpp-cpp-runtime }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        intel-oneapi-compiler-dpcpp-cpp-runtime
+      ];
+    };
+
+  intel-oneapi-mkl-sycl-dft =
+    { intel-oneapi-compiler-dpcpp-cpp-runtime }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        intel-oneapi-compiler-dpcpp-cpp-runtime
+      ];
+    };
+
+  intel-oneapi-mkl-sycl-lapack =
+    { intel-oneapi-compiler-dpcpp-cpp-runtime, intel-oneapi-mkl-sycl-blas }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        intel-oneapi-compiler-dpcpp-cpp-runtime
+        intel-oneapi-mkl-sycl-blas
+      ];
+    };
+
+  intel-oneapi-mkl-sycl-sparse =
+    { intel-oneapi-mkl-sycl-blas }:
+    prevAttrs: {
+      buildInputs = prevAttrs.buildInputs ++ [
+        intel-oneapi-mkl-sycl-blas
       ];
     };
 

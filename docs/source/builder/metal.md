@@ -1,4 +1,4 @@
-# Metal kernels 🤘
+# Set up for Metal kernels
 
 Instructions on this page assume that you installed Nix with the
 [Determinate Nix installer](https://docs.determinate.systems/determinate-nix/).

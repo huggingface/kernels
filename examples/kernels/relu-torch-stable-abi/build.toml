@@ -1,6 +1,7 @@
 [general]
 name = "relu-torch-stable-abi"
 version = 1
+edition = 5
 license = "Apache-2.0"
 backends = [
     "cpu",
@@ -14,11 +15,17 @@ backends = [
 repo-id = "kernels-test/relu-torch-stable-abi"
 
 [torch]
-stable-abi = "2.11"
 src = [
     "torch-ext/torch_binding.cpp",
     "torch-ext/torch_binding.h",
 ]
+
+[torch.stable-abi]
+cpu = "2.11"
+cuda = "2.11"
+metal = "2.11"
+rocm = "2.11"
+xpu = "2.11"
 
 [kernel.relu_xpu]
 backend = "xpu"

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use eyre::Result;
 use itertools::Itertools;
 
-use kernels_data::config::{Backend, General};
-use kernels_data::metadata::{BackendInfo, BuildInfo, KernelBuilderInfo, Metadata};
+use kernels_data::config::{Backend, Build};
+use kernels_data::metadata::Metadata;
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
@@ -29,7 +29,7 @@ fn kernel_builder_info() -> KernelBuilderInfo {
 }
 
 pub fn write_metadata(
-    general: &General,
+    build: &Build,
     kernel_id: &KernelIdentifier,
     file_set: &mut FileSet,
 ) -> Result<()> {
@@ -47,31 +47,8 @@ pub fn write_metadata(
     for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
-        let python_depends = general
-            .python_depends()
-            .map(|deps| Ok(deps?.0.to_owned()))
-            .chain(
-                general
-                    .backend_python_depends(*backend)
-                    .map(|deps| Ok(deps?.0.to_owned())),
-            )
-            .collect::<Result<Vec<_>>>()?;
-
-        let metadata = Metadata {
-            id: kernel_id.to_string_for_backend(*backend),
-            name: general.name.clone(),
-            version: general.version,
-            license: general.license.clone(),
-            upstream: general.upstream.clone(),
-            source: general.source.clone(),
-            python_depends,
-            backend: BackendInfo {
-                archs: None,
-                backend_type: *backend,
-            },
-            digest: None,
-            build_info: Some(build_info.clone()),
-        };
+        let metadata =
+            Metadata::for_backend(build, kernel_id.to_string_for_backend(*backend), *backend)?;
 
         serde_json::to_writer_pretty(writer, &metadata)?;
     }

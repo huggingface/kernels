@@ -1,4 +1,4 @@
-# Migrating from older versions
+# Migrate from older versions
 
 ## 0.12
 
@@ -96,3 +96,86 @@ To migrate an existing `model`-type kernel repository:
    created `kernel`-type repository.
 3. Update consumers' [`~kernels.get_kernel`] and [`~kernels.LayerRepository`] calls
    to reference the new repository if the `repo-id` changed.
+
+## 0.16
+
+> [!WARNING] **Deprecation of kernel functions.**
+> `use_kernel_func_from_hub`, `FuncRepository`, `LocalFuncRepository`, and
+`LockedFuncRepository` are now deprecated.
+
+To make a function extensible by a layer, use the same decorator as for
+layers ([`~kernels.use_kernel_forward_from_hub`]). This makes it clearer
+that the function is actually replaced by a layer. You can also use the
+[`~kernels.use_kernelized_func`] decorator to attach such a function to
+the layer where it is used, making it discoverable by
+[`~kernels.kernelize`].
+
+For example:
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from kernels import use_kernel_func_from_hub  # old
+from kernels import use_kernel_forward_from_hub, use_kernelized_func
+
+# Old:
+@use_kernel_func_from_hub("silu_and_mul")
+def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
+    d = x.shape[-1] // 2
+    return F.silu(x[..., :d]) * x[..., d:]
+
+class FeedForward(nn.Module):
+    def __init__(self, in_features: int, out_features: int):
+        super().__init__()
+        self.silu_and_mul = silu_and_mul
+        self.linear = nn.Linear(in_features, out_features)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.silu_and_mul(self.linear(x))
+
+# New:
+@use_kernel_forward_from_hub("silu_and_mul")
+def silu_and_mul(x: torch.Tensor) -> torch.Tensor:
+    d = x.shape[-1] // 2
+    return F.silu(x[..., :d]) * x[..., d:]
+
+@use_kernelized_func(silu_and_mul)
+class FeedForward(nn.Module):
+    def __init__(self, in_features: int, out_features: int):
+        super().__init__()
+        self.linear = nn.Linear(in_features, out_features)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return silu_and_mul(self.linear(x))
+```
+
+`FuncRepository`, `LocalFuncRepository`, and `LockedFuncRepository` are
+not replaced. They allowed using an arbitrary function from a kernel
+as a layer, but this was easily misused and did not have a clean way
+of marking such a function as supporting `torch.compile` or backward
+passes. Going forward, kernel functions should be exposed as regular
+kernel layers and used with [`~kernels.LayerRepository`],
+[`~kernels.LocalLayerRepository`], or [`~kernels.LockedLayerRepository`].
+For example:
+
+```python
+import torch
+import torch.nn as nn
+
+# Old:
+def fast_silu_and_mul(x: torch.Tensor) -> torch.Tensor:
+  ...
+
+# New:
+def fast_silu_and_mul(x: torch.Tensor) -> torch.Tensor:
+  ...
+
+# Kernel layer that exposes the function.
+class FastSiluAndMul(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return fast_silu_and_mul(x)
+```
+
+For more information, see the [layer documentation](layers.md).

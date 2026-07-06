@@ -3,6 +3,10 @@
 #include "registration.h"
 #include "torch_binding.h"
 
+#ifndef CANARY_IN_THE_KERNEL
+#error "Framework cxx-flags are not correctly handled."
+#endif
+
 TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
   ops.def("relu(Tensor! out, Tensor input) -> ()");
 #if defined(CUDA_KERNEL) || defined(ROCM_KERNEL)

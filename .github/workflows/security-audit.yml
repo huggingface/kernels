@@ -182,18 +182,24 @@ jobs:
 
           MENTION=""
           if [ -n "${SLACK_IDS[$COMMIT_AUTHOR]:-}" ]; then
-            ROLE=$(gh api "repos/${REPO}/collaborators/${COMMIT_AUTHOR}/permission" --jq '.role_name' 2>/dev/null || true)
-            if [ "$ROLE" = "admin" ] || [ "$ROLE" = "maintain" ]; then
-              MENTION="<@${SLACK_IDS[$COMMIT_AUTHOR]}> "
+            ROLE=$(gh api "repos/${REPO}/collaborators/${COMMIT_AUTHOR}/permission" --jq '.role_name' 2>/dev/null || echo "none")
+            if [ "$ROLE" != "admin" ] && [ "$ROLE" != "maintain" ]; then
+              echo "Error: Commit author ${COMMIT_AUTHOR} does not have admin or maintain role (role: ${ROLE})"
+              exit 1
             fi
+            MENTION="<@${SLACK_IDS[$COMMIT_AUTHOR]}> "
+          else
+            echo "Error: Commit author ${COMMIT_AUTHOR} not in authorized SLACK_IDS list"
+            exit 1
           fi
 
-          printf -v HEADER '%s*Security Audit Finding*\n*Commit:* <%s|%s>\n*Author:* %s\n\n---\n\n' \
-            "$MENTION" "$COMMIT_URL" "$COMMIT_TITLE" "$COMMIT_AUTHOR"
-
           jq -n \
-            --arg text "${HEADER}${FINDINGS}" \
-            '{"text": $text}' > /tmp/slack_payload.json
+            --arg mention "$MENTION" \
+            --arg commit_url "$COMMIT_URL" \
+            --arg commit_title "$COMMIT_TITLE" \
+            --arg commit_author "$COMMIT_AUTHOR" \
+            --arg findings "$FINDINGS" \
+            '{"text": (($mention + "*Security Audit Finding*\n*Commit:* <" + $commit_url + "|" + $commit_title + ">\n*Author:* " + $commit_author + "\n\n---\n\n" + $findings))}' > /tmp/slack_payload.json
 
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \

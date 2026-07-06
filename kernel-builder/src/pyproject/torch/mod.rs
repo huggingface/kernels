@@ -69,10 +69,11 @@ fn write_pyproject_toml(
     let writer = file_set.entry("pyproject.toml");
 
     // Common python dependencies (no backend-specific ones)
-    let python_dependencies = itertools::process_results(general.python_depends(), |iter| {
-        iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
-            .join(", ")
-    })?;
+    let python_dependencies =
+        itertools::process_results(general.general_python_depends(), |iter| {
+            iter.flat_map(|(_, deps)| deps.python.iter().map(|d| format!("\"{}\"", d.pkg)))
+                .join(", ")
+        })?;
 
     // Collect backend-specific dependencies for all backends
     let mut backend_dependencies = Vec::new();
@@ -125,7 +126,8 @@ fn render_binding(
             context! {
                 includes => torch.include.as_ref().map(prefix_and_join_includes),
                 name => name,
-                src => torch.src
+                src => torch.src,
+                cxx_flags => torch.cxx_flags.as_deref().map(|flags| flags.join(";")),
             },
             &mut *write,
         )
@@ -185,6 +187,12 @@ fn render_extension(
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+struct StableAbiBackend {
+    backend: String,
+    version: String,
+}
+
 fn render_preamble(
     env: &minijinja::Environment,
     general: &General,
@@ -194,6 +202,23 @@ fn render_preamble(
 ) -> Result<()> {
     let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
     let cuda_maxver = general.cuda.as_ref().and_then(|c| c.maxver.as_ref());
+
+    // The backend is detected at CMake configure time, so render the stable ABI
+    // version (if any) for each backend and let CMake select the right one.
+    let stable_abi: Vec<StableAbiBackend> = general
+        .backends
+        .iter()
+        .filter_map(|backend| {
+            torch
+                .stable_abi
+                .as_ref()
+                .and_then(|abi| abi.for_backend(*backend))
+                .map(|version| StableAbiBackend {
+                    backend: backend.as_str().to_string(),
+                    version: version.to_string(),
+                })
+        })
+        .collect();
 
     env.get_template("torch/preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
@@ -206,7 +231,7 @@ fn render_preamble(
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
                 torch_minver => torch.minver.as_ref().map(|v| v.to_string()),
                 torch_maxver => torch.maxver.as_ref().map(|v| v.to_string()),
-                stable_abi => torch.stable_abi.as_ref().map(|v| v.to_string()),
+                stable_abi => stable_abi,
             },
             &mut *write,
         )
@@ -271,7 +296,7 @@ pub fn write_torch_ext(
 
     write_torch_registration_macros(&mut file_set)?;
 
-    write_metadata(&build.general, kernel_id, &mut file_set)?;
+    write_metadata(build, kernel_id, &mut file_set)?;
 
     Ok(file_set)
 }

@@ -25,8 +25,30 @@ let
   };
 
   # An overlay that overides CUDA to the given version.
-  overlayForCudaVersion = cudaVersion: self: super: {
-    cudaPackages = super."cudaPackages_${flattenVersion cudaVersion}";
+  overlayForCudaVersion = cudaVersion: ptxasVersion: self: super: {
+    cudaPackages =
+      let
+        cudaPackages' = super."cudaPackages_${flattenVersion cudaVersion}";
+        ptxasPackages = super."cudaPackages_${flattenVersion ptxasVersion}";
+      in
+      if ptxasVersion == cudaVersion then
+        cudaPackages'
+      else
+        cudaPackages'.overrideScope (
+          self: super: {
+            cuda_nvcc = super.cuda_nvcc.overrideAttrs (prevAttrs: {
+              # Do this before the original postInstall, so that subsequent
+              # postInstall steps are applied.
+              postInstall = ''
+                cp ${ptxasPackages.cuda_nvcc.src}/bin/ptxas $out/bin/ptxas
+                cp ${ptxasPackages.cuda_nvcc.src}/bin/nvlink $out/bin/nvlink
+                cp ${ptxasPackages.cuda_nvcc.src}/nvvm/bin/* $out/nvvm/bin/
+              ''
+              + prevAttrs.postInstall or "";
+            });
+          }
+        );
+
   };
 
   overlayForRocmVersion = rocmVersion: self: super: {
@@ -74,6 +96,7 @@ buildConfig@{
   backend,
   cpu ? false,
   cudaVersion ? null,
+  ptxasVersion ? cudaVersion,
   metal ? false,
   rocmVersion ? null,
   xpuVersion ? null,
@@ -88,13 +111,13 @@ let
     if buildConfig.backend == "cpu" then
       [ ]
     else if buildConfig.backend == "cuda" then
-      [ (overlayForCudaVersion buildConfig.cudaVersion) ]
+      [ (overlayForCudaVersion cudaVersion ptxasVersion) ]
     else if buildConfig.backend == "rocm" then
-      [ (overlayForRocmVersion buildConfig.rocmVersion) ]
+      [ (overlayForRocmVersion rocmVersion) ]
     else if buildConfig.backend == "metal" then
       [ ]
     else if buildConfig.backend == "xpu" then
-      [ (overlayForXpuVersion buildConfig.xpuVersion) ]
+      [ (overlayForXpuVersion xpuVersion) ]
     else
       throw "No compute framework set in Torch version";
   config =

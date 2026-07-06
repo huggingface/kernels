@@ -1,4 +1,4 @@
-# Local development of kernels
+# Develop locally
 
 ## Introduction
 
@@ -27,12 +27,24 @@ $ kernel-builder create-pyproject -f
 The `-f` flag is optional and instructs `kernel-builder` to overwrite
 existing files.
 
-It is recommended to do an editable install of the generated project into
-your Python virtual environment for development:
+You can build the kernel with
 
 ```bash
-$ pip install wheel # Needed once to enable bdist_wheel.
-$ pip install --no-build-isolation -e .
+$ python setup.py build_kernel
+```
+
+This builds the kernel and puts the variant that is compatible with the build
+environment in `build`. The build can then be loaded directly with `kernels`:
+
+```shell
+$ python -c 'import pathlib; import kernels; k = kernels.get_local_kernel(pathlib.Path("build")); print(k)'
+```
+
+For AOT kernels, if you want to skip the CMake configuration step in subsequent
+builds, you can also run Ninja directly to do incremental builds:
+
+```shell
+$ ninja -C _cmake_build local_install
 ```
 
 You can also create a Python project for a kernel in another directory:

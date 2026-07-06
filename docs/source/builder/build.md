@@ -1,4 +1,4 @@
-# Using the kernel builder with Nix
+# Build with Nix
 
 ## Installation
 
@@ -69,25 +69,27 @@ for monitoring the build. The compiled kernel will then be in the local
 
 `kernel-builder` provides shells for developing kernels. In such a shell,
 all required dependencies are available, as well as `kernel-builder` for generating
-project files. For example:
+project files. For example, you can use the development shell to build a
+arch (AOT-compiled) kernel:
 
 ```bash
 $ kernel-builder devshell
 # A devshell is opened in which you can run the following commands:
 $ kernel-builder create-pyproject
 $ cmake -B build-ext
-$ cmake --build build-ext
+$ cmake --build build-ext --target local_install
 ```
 
-If you want to test the kernel as a Python package, you can do so.
-`kernel-builder devshell` will automatically create a virtual environment in
-the `.venv` and activate it. You can install the kernel as a regular
-Python package in this virtual environment:
+This will build the kernel and puts the output in the `build` directory
+and can be used with the `kernels` library.
+
+Noarch (JIT-compiled) kernels do not use CMake. For this reason, we also
+create a `setup.py` that works both for arch and noarch kernels:
 
 ```bash
 $ kernel-builder devshell
 $ kernel-builder create-pyproject
-$ pip install --no-build-isolation -e .
+$ python setup.py build_kernel
 ```
 
 Development shells are available for every build configuration. For
@@ -209,6 +211,10 @@ repo-id = "kernels-community/flash-attn4"
 
 See [Writing Kernels](writing-kernels.md) for more details on the `build.toml`
 format.
+
+> [!TIP]
+> You can automate building, uploading, and testing kernels on Hugging Face
+> Jobs from CI, see [Building and testing kernels with GitHub Actions](./github-actions.md).
 
 ## Updating the kernel build toolchain
 

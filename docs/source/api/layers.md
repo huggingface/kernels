@@ -10,6 +10,10 @@
 
 [[autodoc]] kernels.use_kernel_func_from_hub
 
+### use_kernelized_func
+
+[[autodoc]] kernels.use_kernelized_func
+
 ### replace_kernel_forward_from_hub
 
 [[autodoc]] kernels.replace_kernel_forward_from_hub

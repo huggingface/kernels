@@ -4,7 +4,10 @@ def get_backend() -> str:
     """Detect the backend by inspecting torch."""
     import torch
 
-    if hasattr(torch, "neuron"):
+    if hasattr(torch, "tpu"):
+        # torch_tpu registers a torch.tpu namespace on import.
+        return "tpu"
+    elif hasattr(torch, "neuron"):
         # Needs to be sorted before specific Torch builds, since Neuron
         # extension can be loaded into e.g. CUDA Torch builds.
         return "neuron"

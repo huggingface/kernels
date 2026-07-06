@@ -113,6 +113,7 @@ pub struct General {
 
     pub cuda: Option<CudaGeneral>,
     pub neuron: Option<NeuronGeneral>,
+    pub tpu: Option<TpuGeneral>,
     pub xpu: Option<XpuGeneral>,
 }
 
@@ -188,6 +189,10 @@ pub struct XpuGeneral {
 }
 
 pub struct NeuronGeneral {
+    pub python_depends: Option<Vec<String>>,
+}
+
+pub struct TpuGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -379,11 +384,12 @@ pub enum Backend {
     Metal,
     Neuron,
     Rocm,
+    Tpu,
     Xpu,
 }
 
 impl Backend {
-    pub const fn all() -> [Backend; 7] {
+    pub const fn all() -> [Backend; 8] {
         [
             Backend::Cann,
             Backend::Cpu,
@@ -391,6 +397,7 @@ impl Backend {
             Backend::Metal,
             Backend::Neuron,
             Backend::Rocm,
+            Backend::Tpu,
             Backend::Xpu,
         ]
     }
@@ -403,6 +410,7 @@ impl Backend {
             Backend::Metal => "metal",
             Backend::Neuron => "neuron",
             Backend::Rocm => "rocm",
+            Backend::Tpu => "tpu",
             Backend::Xpu => "xpu",
         }
     }
@@ -417,6 +425,7 @@ impl Display for Backend {
             Backend::Metal => write!(f, "metal"),
             Backend::Neuron => write!(f, "neuron"),
             Backend::Rocm => write!(f, "rocm"),
+            Backend::Tpu => write!(f, "tpu"),
             Backend::Xpu => write!(f, "xpu"),
         }
     }
@@ -433,6 +442,7 @@ impl FromStr for Backend {
             "metal" => Ok(Backend::Metal),
             "neuron" => Ok(Backend::Neuron),
             "rocm" => Ok(Backend::Rocm),
+            "tpu" => Ok(Backend::Tpu),
             "xpu" => Ok(Backend::Xpu),
             _ => Err(format!("Unknown backend: {s}")),
         }

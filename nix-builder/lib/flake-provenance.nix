@@ -3,21 +3,18 @@
 # (no revision is available, e.g. a local `path:`).
 { lib }:
 flakeSelf:
-let
-  sha =
-    if flakeSelf == null then
-      null
-    else if flakeSelf ? rev then
-      flakeSelf.rev
-    else if flakeSelf ? dirtyRev then
-      lib.removeSuffix "-dirty" flakeSelf.dirtyRev
-    else
-      null;
-in
-if sha == null then
+
+if flakeSelf == null then
   null
-else
+else if flakeSelf ? rev then
   {
-    inherit sha;
-    dirty = !(flakeSelf ? rev);
+    sha = flakeSelf.rev;
+    dirty = false;
   }
+else if flakeSelf ? dirtyRev then
+  {
+    sha = lib.removeSuffix "-dirty" flakeSelf.dirtyRev;
+    dirty = true;
+  }
+else
+  null

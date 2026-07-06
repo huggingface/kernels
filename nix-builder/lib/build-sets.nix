@@ -2,15 +2,13 @@
   nixpkgs,
   rust-overlay,
 
-  # The `kernel-builder` flake itself, so its git provenance can be burned into
-  # the binary.
-  builderSelf ? null,
+  # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder` flake,
+  # so it can be burned into the binary.
+  builderProvenance ? null,
 }:
 
 let
   inherit (nixpkgs) lib;
-
-  overlay = import ../nix/overlay.nix;
 
   inherit (import ./torch-version-utils.nix { inherit lib; })
     backend
@@ -32,7 +30,7 @@ let
     inherit
       nixpkgs
       rust-overlay
-      builderSelf
+      builderProvenance
       ;
   };
 

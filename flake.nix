@@ -27,13 +27,16 @@
       rust-overlay,
     }:
     let
+      # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder`
+      # flake itself, so it can be burned into the binary at build time and
+      # recorded in the build metadata of the kernels it builds.
+      builderProvenance = import ./nix-builder/lib/flake-provenance.nix {
+        inherit (nixpkgs) lib;
+      } self;
+
       inherit
         (import ./nix-builder/lib/build-sets.nix {
-          inherit nixpkgs rust-overlay;
-          # The `kernel-builder` flake itself, so its git provenance can be
-          # burned into the binary at build time and recorded in the build
-          # metadata of the kernels it builds.
-          builderSelf = self;
+          inherit nixpkgs rust-overlay builderProvenance;
         })
         mkBuildSets
         partitionBuildSetsBySystem

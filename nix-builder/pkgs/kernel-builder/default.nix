@@ -6,11 +6,11 @@
   libgit2,
   openssl,
 
-  # The `kernel-builder` flake itself (or `null` for a non-git source). Its git
-  # provenance is burned into the binary at build time and later recorded in the
-  # build metadata of the kernels it builds. The build sandbox has no `.git`, so
-  # `build.rs` cannot detect it; it is derived from the flake here instead.
-  builderSelf ? null,
+  # Git provenance (`{ sha, dirty }`, or `null` for a non-git source) of the
+  # `kernel-builder` flake. It is burned into the binary at build time and
+  # later recorded in the build metadata of the kernels it builds. The build
+  # sandbox has no `.git`, so `build.rs` cannot detect it.
+  builderProvenance ? null,
 }:
 
 let
@@ -20,8 +20,6 @@ let
     "-p"
     "hf-kernel-builder"
   ];
-
-  builderProvenance = import ../../lib/flake-provenance.nix { inherit lib; } builderSelf;
 in
 rustPlatform.buildRustPackage (
   # Supply the git provenance through `built`'s override environment variables

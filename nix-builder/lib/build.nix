@@ -113,7 +113,7 @@ rec {
       rev,
       doGetKernelCheck,
       stripRPath ? false,
-      provenanceArgs ? "",
+      kernelProvenance ? null,
     }:
     let
       inherit (lib) fileset;
@@ -152,7 +152,7 @@ rec {
           doGetKernelCheck
           pythonDeps
           backendPythonDeps
-          provenanceArgs
+          kernelProvenance
           ;
         kernelName = kernelConfig.name;
       }
@@ -168,7 +168,7 @@ rec {
           rev
           pythonDeps
           backendPythonDeps
-          provenanceArgs
+          kernelProvenance
           ;
 
         kernelName = kernelConfig.name;
@@ -186,7 +186,7 @@ rec {
           rev
           pythonDeps
           backendPythonDeps
-          provenanceArgs
+          kernelProvenance
           ;
 
         torchStableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
@@ -203,7 +203,7 @@ rec {
       doGetKernelCheck,
       bundleOnly,
       buildSets,
-      provenanceArgs ? "",
+      kernelProvenance ? null,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -217,7 +217,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
-              provenanceArgs
+              kernelProvenance
               ;
             stripRPath = true;
           };
@@ -233,7 +233,7 @@ rec {
       rev,
       doGetKernelCheck,
       buildSets,
-      provenanceArgs ? "",
+      kernelProvenance ? null,
     }:
     let
       extensions = mkDistTorchExtensions {
@@ -242,7 +242,7 @@ rec {
           path
           rev
           doGetKernelCheck
-          provenanceArgs
+          kernelProvenance
           ;
         bundleOnly = true;
       };
@@ -347,7 +347,7 @@ rec {
       buildSets,
       doGetKernelCheck,
       pythonCheckInputs,
-      provenanceArgs ? "",
+      kernelProvenance ? null,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -364,7 +364,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
-              provenanceArgs
+              kernelProvenance
               ;
           };
           testPython =

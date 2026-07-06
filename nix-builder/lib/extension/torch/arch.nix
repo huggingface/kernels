@@ -71,9 +71,9 @@
   # Revision to bake into the ops name.
   rev,
 
-  # Extra `create-pyproject` flags recording git provenance (commit SHA and
-  # dirty state) of the kernel source and `kernel-builder`.
-  provenanceArgs ? "",
+  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
+  # in the build metadata.
+  kernelProvenance ? null,
 
   src,
 }:
@@ -115,6 +115,8 @@ let
 
   metalSupport = buildConfig.metal or false;
 
+  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
+
 in
 
 stdenv.mkDerivation (prevAttrs: {
@@ -136,7 +138,7 @@ stdenv.mkDerivation (prevAttrs: {
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --unique-id ${rev} ${provenanceArgs} $out
+      --unique-id ${rev} ${provenanceFlags} $out
   '';
 
   preConfigure =

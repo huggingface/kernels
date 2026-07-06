@@ -36,11 +36,12 @@ let
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
 
-  # Extra `kernel-builder create-pyproject` flags that record the git provenance
-  # (commit SHA + dirty state) of the kernel source in the build metadata. The
-  # Nix sandbox has no `.git`, so this information has to be passed in
-  # explicitly. (`kernel-builder`'s own provenance is burned into its binary.)
-  provenanceArgs =
+  # Git provenance (commit SHA + dirty state) of the kernel source, recorded in
+  # the build metadata. The Nix sandbox has no `.git`, so it has to be passed in
+  # explicitly; the value is atomic data (`{ sha; dirty; }`, or `null` when
+  # unknown), not pre-formatted `create-pyproject` flags. (`kernel-builder`'s own
+  # provenance is burned into its binary.)
+  kernelProvenance =
     let
       kernelSha =
         if self == null then
@@ -51,12 +52,14 @@ let
           lib.removeSuffix "-dirty" self.dirtyRev
         else
           null;
-      kernelDirty = self != null && !(self ? rev);
-      parts =
-        lib.optional (kernelSha != null) "--kernel-sha ${kernelSha}"
-        ++ lib.optional (kernelSha != null && kernelDirty) "--kernel-dirty";
     in
-    lib.concatStringsSep " " parts;
+    if kernelSha == null then
+      null
+    else
+      {
+        sha = kernelSha;
+        dirty = self != null && !(self ? rev);
+      };
 
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 
@@ -175,7 +178,7 @@ in
   packages =
     let
       bundle = build.mkExtensionBundle {
-        inherit path doGetKernelCheck provenanceArgs;
+        inherit path doGetKernelCheck kernelProvenance;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };
@@ -184,7 +187,7 @@ in
           path
           doGetKernelCheck
           pythonCheckInputs
-          provenanceArgs
+          kernelProvenance
           ;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
@@ -202,7 +205,7 @@ in
           builtins.map (backend: {
             name = backend;
             value = build.mkExtensionBundle {
-              inherit path doGetKernelCheck provenanceArgs;
+              inherit path doGetKernelCheck kernelProvenance;
               buildSets = builtins.filter (
                 set: buildConfigBackend set.buildConfig == backend
               ) applicableBuildSets;
@@ -268,7 +271,7 @@ in
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
         build.mkExtensionBundle {
-          inherit path doGetKernelCheck provenanceArgs;
+          inherit path doGetKernelCheck kernelProvenance;
           buildSets = onePerFramework;
           rev = revUnderscored;
         };
@@ -281,7 +284,7 @@ in
           builtins.map (backend: {
             name = backend;
             value = build.mkExtensionBundle {
-              inherit path doGetKernelCheck provenanceArgs;
+              inherit path doGetKernelCheck kernelProvenance;
               # It is too costly to build all variants in CI, so we just build one per framework.
               buildSets = headOrEmpty (
                 builtins.filter (set: set.buildConfig.framework == backend) buildSetsSorted
@@ -304,7 +307,7 @@ in
         };
 
       redistributable = build.mkDistTorchExtensions {
-        inherit path doGetKernelCheck provenanceArgs;
+        inherit path doGetKernelCheck kernelProvenance;
         bundleOnly = false;
         rev = revUnderscored;
         buildSets = applicableBuildSets;

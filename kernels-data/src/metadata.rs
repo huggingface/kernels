@@ -123,7 +123,21 @@ mod tests {
 
     use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
 
-    use super::Metadata;
+    use super::{BuildInfo, GitInfo, KernelBuilderInfo, Metadata};
+
+    fn sample_build_info(kernel_builder_dirty: bool, kernel_dirty: bool) -> BuildInfo {
+        BuildInfo {
+            kernel_builder: Some(KernelBuilderInfo {
+                version: "0.1.0".to_string(),
+                sha: Some("a".repeat(40)),
+                dirty: kernel_builder_dirty,
+            }),
+            kernel: Some(GitInfo {
+                sha: "b".repeat(40),
+                dirty: kernel_dirty,
+            }),
+        }
+    }
 
     fn torch_noarch_build() -> Build {
         Build {
@@ -207,5 +221,46 @@ mod tests {
 
         assert_eq!(metadata.backend.backend_type, Backend::Cuda);
         assert!(metadata.backend.archs.is_none());
+    }
+
+    #[test]
+    fn build_info_is_dirty_reflects_either_source() {
+        assert!(!sample_build_info(false, false).is_dirty());
+        assert!(sample_build_info(true, false).is_dirty());
+        assert!(sample_build_info(false, true).is_dirty());
+        assert!(sample_build_info(true, true).is_dirty());
+    }
+
+    #[test]
+    fn metadata_without_build_info_serializes_without_key() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(!json.contains("build-info"));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        assert!(parsed.build_info.is_none());
+    }
+
+    #[test]
+    fn metadata_round_trips_build_info_in_kebab_case() {
+        let build = torch_noarch_build();
+        let mut metadata =
+            Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+        metadata.build_info = Some(sample_build_info(false, true));
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains("\"build-info\""));
+        assert!(json.contains("\"kernel-builder\""));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        let build_info = parsed.build_info.expect("build-info should round-trip");
+        assert!(build_info.is_dirty());
+        assert_eq!(build_info.kernel.unwrap().sha, "b".repeat(40));
+
+        let kernel_builder = build_info.kernel_builder.unwrap();
+        assert_eq!(kernel_builder.version, "0.1.0");
+        assert!(!kernel_builder.dirty);
     }
 }

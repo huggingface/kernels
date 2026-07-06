@@ -204,36 +204,12 @@ def _validate_variant_dependencies(variant_path: Path) -> None:
     validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
 
 
-def _warn_if_dirty_build(metadata: Metadata, repo_info: "RepoInfo | None") -> None:
-    build_info = metadata.build_info
-    if build_info is None or not build_info.dirty:
-        return
-
-    where = f" of `{repo_info.repo_id}`" if repo_info is not None else ""
-    reasons = []
-    kernel_builder = build_info.kernel_builder
-    if kernel_builder is not None and kernel_builder.dirty:
-        reasons.append("the `kernel-builder` had uncommitted changes")
-    kernel = build_info.kernel
-    if kernel is not None and kernel.dirty:
-        reasons.append("the kernel source had uncommitted changes")
-
-    warnings.warn(
-        f"Kernel `{metadata.id}`{where} was built from a dirty source tree "
-        f"({' and '.join(reasons)}). Such builds are not reproducible and "
-        f"should not be relied upon.",
-        stacklevel=2,
-    )
-
-
 def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
     module_name = metadata.name.python_name
-
-    _warn_if_dirty_build(metadata, repo_info)
 
     file_path = variant_path / "__init__.py"
     if not file_path.exists():

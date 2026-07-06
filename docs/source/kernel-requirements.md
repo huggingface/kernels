@@ -92,9 +92,7 @@ metadata. Currently the following top-level keys are supported:
     uncommitted changes.
 
   When either `dirty` flag is set, the kernel was built from uncommitted
-  sources and cannot be reliably reproduced. `kernels` warns when loading such
-  a build, `kernel-builder` warns when uploading it, and a warning banner is
-  added to the Hub repository's README.
+  sources and cannot be reliably reproduced.
 
   > **Note:** For Nix builds, dirtiness follows Nix's flake tree status, which
   > also counts **untracked** files (including an uncommitted `flake.lock`).

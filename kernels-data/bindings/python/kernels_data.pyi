@@ -7,7 +7,7 @@ from typing import Optional, final
 __all__ = [
     "Backend",
     "BackendInfo",
-    "BuildInfo",
+    "Provenance",
     "DigestAlgorithm",
     "GitHash",
     "KernelBuilderVersion",
@@ -99,7 +99,7 @@ class KernelBuilderVersion:
     def __repr__(self) -> str: ...
 
 @final
-class BuildInfo:
+class Provenance:
     """Build provenance: git state of the `kernel-builder` and kernel source."""
 
     @property
@@ -320,5 +320,5 @@ class Metadata:
     @property
     def digest(self) -> Optional[Digest]: ...
     @property
-    def build_info(self) -> Optional[BuildInfo]: ...
+    def provenance(self) -> Optional[Provenance]: ...
     def __repr__(self) -> str: ...

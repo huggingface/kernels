@@ -32,16 +32,18 @@ pub struct KernelBuilderVersion {
     pub git: Option<GitHash>,
 }
 
+/// Provenance of a kernel build: the git state of the `kernel-builder` and of
+/// the kernel source it was built from.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct BuildInfo {
+pub struct Provenance {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kernel_builder: Option<KernelBuilderVersion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kernel: Option<GitHash>,
 }
 
-impl BuildInfo {
+impl Provenance {
     /// Whether either the `kernel-builder` or the kernel source was dirty.
     pub fn is_dirty(&self) -> bool {
         self.kernel_builder
@@ -69,7 +71,7 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub digest: Option<Digest>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub build_info: Option<BuildInfo>,
+    pub provenance: Option<Provenance>,
 }
 
 impl Metadata {
@@ -97,7 +99,7 @@ impl Metadata {
                 backend_type: backend,
             },
             digest: None,
-            build_info: None,
+            provenance: None,
         })
     }
 
@@ -126,10 +128,10 @@ mod tests {
 
     use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
 
-    use super::{BuildInfo, GitHash, KernelBuilderVersion, Metadata};
+    use super::{GitHash, KernelBuilderVersion, Metadata, Provenance};
 
-    fn sample_build_info(kernel_builder_dirty: bool, kernel_dirty: bool) -> BuildInfo {
-        BuildInfo {
+    fn sample_provenance(kernel_builder_dirty: bool, kernel_dirty: bool) -> Provenance {
+        Provenance {
             kernel_builder: Some(KernelBuilderVersion {
                 version: "0.1.0".to_string(),
                 git: Some(GitHash {
@@ -229,42 +231,42 @@ mod tests {
     }
 
     #[test]
-    fn build_info_is_dirty_reflects_either_source() {
-        assert!(!sample_build_info(false, false).is_dirty());
-        assert!(sample_build_info(true, false).is_dirty());
-        assert!(sample_build_info(false, true).is_dirty());
-        assert!(sample_build_info(true, true).is_dirty());
+    fn provenance_is_dirty_reflects_either_source() {
+        assert!(!sample_provenance(false, false).is_dirty());
+        assert!(sample_provenance(true, false).is_dirty());
+        assert!(sample_provenance(false, true).is_dirty());
+        assert!(sample_provenance(true, true).is_dirty());
     }
 
     #[test]
-    fn metadata_without_build_info_serializes_without_key() {
+    fn metadata_without_provenance_serializes_without_key() {
         let build = torch_noarch_build();
         let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
 
         let json = serde_json::to_string(&metadata).unwrap();
-        assert!(!json.contains("build-info"));
+        assert!(!json.contains("provenance"));
 
         let parsed: Metadata = serde_json::from_str(&json).unwrap();
-        assert!(parsed.build_info.is_none());
+        assert!(parsed.provenance.is_none());
     }
 
     #[test]
-    fn metadata_round_trips_build_info_in_kebab_case() {
+    fn metadata_round_trips_provenance_in_kebab_case() {
         let build = torch_noarch_build();
         let mut metadata =
             Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
-        metadata.build_info = Some(sample_build_info(false, true));
+        metadata.provenance = Some(sample_provenance(false, true));
 
         let json = serde_json::to_string(&metadata).unwrap();
-        assert!(json.contains("\"build-info\""));
+        assert!(json.contains("\"provenance\""));
         assert!(json.contains("\"kernel-builder\""));
 
         let parsed: Metadata = serde_json::from_str(&json).unwrap();
-        let build_info = parsed.build_info.expect("build-info should round-trip");
-        assert!(build_info.is_dirty());
-        assert_eq!(build_info.kernel.unwrap().sha, "b".repeat(40));
+        let provenance = parsed.provenance.expect("provenance should round-trip");
+        assert!(provenance.is_dirty());
+        assert_eq!(provenance.kernel.unwrap().sha, "b".repeat(40));
 
-        let kernel_builder = build_info.kernel_builder.unwrap();
+        let kernel_builder = provenance.kernel_builder.unwrap();
         assert_eq!(kernel_builder.version, "0.1.0");
         // The embedded `GitHash` is flattened into the `kernel-builder` object.
         let git = kernel_builder

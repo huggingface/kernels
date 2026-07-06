@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
-use kernels_data::metadata::{BackendInfo, BuildInfo, GitHash, KernelBuilderVersion, Metadata};
+use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
@@ -261,15 +261,15 @@ impl PyKernelBuilderVersion {
     }
 }
 
-#[pyclass(name = "BuildInfo", frozen)]
+#[pyclass(name = "Provenance", frozen)]
 #[derive(Clone, Debug)]
-struct PyBuildInfo {
+struct PyProvenance {
     kernel_builder: Option<PyKernelBuilderVersion>,
     kernel: Option<PyGitHash>,
 }
 
-impl From<BuildInfo> for PyBuildInfo {
-    fn from(b: BuildInfo) -> Self {
+impl From<Provenance> for PyProvenance {
+    fn from(b: Provenance) -> Self {
         Self {
             kernel_builder: b.kernel_builder.map(Into::into),
             kernel: b.kernel.map(Into::into),
@@ -278,7 +278,7 @@ impl From<BuildInfo> for PyBuildInfo {
 }
 
 #[pymethods]
-impl PyBuildInfo {
+impl PyProvenance {
     #[getter]
     fn kernel_builder(&self) -> Option<PyKernelBuilderVersion> {
         self.kernel_builder.clone()
@@ -301,7 +301,7 @@ impl PyBuildInfo {
 
     fn __repr__(&self) -> String {
         format!(
-            "BuildInfo(kernel_builder={}, kernel={})",
+            "Provenance(kernel_builder={}, kernel={})",
             self.kernel_builder
                 .as_ref()
                 .map_or("None".to_string(), |kb| kb.__repr__()),
@@ -325,7 +325,7 @@ struct PyMetadata {
     python_depends: Vec<String>,
     backend: PyBackendInfo,
     digest: Option<PyDigest>,
-    build_info: Option<PyBuildInfo>,
+    provenance: Option<PyProvenance>,
 }
 
 impl From<Metadata> for PyMetadata {
@@ -340,7 +340,7 @@ impl From<Metadata> for PyMetadata {
             python_depends: m.python_depends,
             backend: m.backend.into(),
             digest: m.digest.map(Into::into),
-            build_info: m.build_info.map(Into::into),
+            provenance: m.provenance.map(Into::into),
         }
     }
 }
@@ -420,13 +420,13 @@ impl PyMetadata {
     }
 
     #[getter]
-    fn build_info(&self) -> Option<PyBuildInfo> {
-        self.build_info.clone()
+    fn provenance(&self) -> Option<PyProvenance> {
+        self.provenance.clone()
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={}, digest={}, build_info={})",
+            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={}, digest={}, provenance={})",
             self.id,
             self.name,
             self.version,
@@ -438,7 +438,7 @@ impl PyMetadata {
             self.digest
                 .as_ref()
                 .map_or("None".to_string(), |sd| sd.__repr__()),
-            self.build_info
+            self.provenance
                 .as_ref()
                 .map_or("None".to_string(), |bi| bi.__repr__())
         )
@@ -664,7 +664,7 @@ impl PyDigest {
 fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyBackendInfo>()?;
-    m.add_class::<PyBuildInfo>()?;
+    m.add_class::<PyProvenance>()?;
     m.add_class::<PyGitHash>()?;
     m.add_class::<PyKernelBuilderVersion>()?;
     m.add_class::<PyKernelName>()?;

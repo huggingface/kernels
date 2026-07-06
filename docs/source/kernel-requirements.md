@@ -81,7 +81,7 @@ metadata. Currently the following top-level keys are supported:
 - `digest` (`Digest`, required): hash digest of the kernel files.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
   from a curated set of Python dependencies.
-- `build-info` (`dict`, optional): provenance of the build, used to flag
+- `provenance` (`dict`, optional): provenance of the build, used to flag
   non-reproducible (dirty) builds. It contains two optional sub-objects:
   - `kernel-builder`: the `kernel-builder` that produced the build, with its
     `version` (`str`), the `sha` (`str`) of the `kernel-builder` source it was

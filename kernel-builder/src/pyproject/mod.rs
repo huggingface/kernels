@@ -6,7 +6,7 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
-use kernels_data::metadata::{BuildInfo, GitHash};
+use kernels_data::metadata::{GitHash, Provenance};
 use minijinja::Environment;
 
 use crate::{
@@ -27,18 +27,18 @@ pub use fileset::FileSet;
 pub fn create_pyproject_file_set(
     build: Build,
     kernel_id: &KernelIdentifier,
-    build_info: Option<&BuildInfo>,
+    provenance: Option<&Provenance>,
 ) -> Result<FileSet> {
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
     let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
-        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, build_info)?
+        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?
     } else if build.is_noarch() {
-        torch::write_torch_ext_noarch(&env, &build, kernel_id, build_info)?
+        torch::write_torch_ext_noarch(&env, &build, kernel_id, provenance)?
     } else {
-        torch::write_torch_ext(&env, &build, kernel_id, build_info)?
+        torch::write_torch_ext(&env, &build, kernel_id, provenance)?
     };
 
     Ok(file_set)
@@ -67,13 +67,13 @@ pub fn create_pyproject(
             dirty: kernel_dirty,
         })
         .or_else(|| ops_identifier::git_hash(&kernel_dir));
-    let build_info = BuildInfo {
+    let provenance = Provenance {
         kernel_builder: Some(common::kernel_builder_version()),
         kernel,
     };
 
     let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
-    let file_set = create_pyproject_file_set(build, &kernel_id, Some(&build_info))?;
+    let file_set = create_pyproject_file_set(build, &kernel_id, Some(&provenance))?;
     file_set.write(&target_dir, force)?;
 
     Ok(())

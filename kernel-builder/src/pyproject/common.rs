@@ -4,7 +4,7 @@ use eyre::Result;
 use itertools::Itertools;
 
 use kernels_data::config::{Backend, Build};
-use kernels_data::metadata::{BuildInfo, GitHash, KernelBuilderVersion, Metadata};
+use kernels_data::metadata::{GitHash, KernelBuilderVersion, Metadata, Provenance};
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
@@ -39,7 +39,7 @@ pub(crate) fn kernel_builder_version() -> KernelBuilderVersion {
 pub fn write_metadata(
     build: &Build,
     kernel_id: &KernelIdentifier,
-    build_info: Option<&BuildInfo>,
+    provenance: Option<&Provenance>,
     file_set: &mut FileSet,
 ) -> Result<()> {
     for backend in &Backend::all() {
@@ -47,7 +47,7 @@ pub fn write_metadata(
 
         let mut metadata =
             Metadata::for_backend(build, kernel_id.to_string_for_backend(*backend), *backend)?;
-        metadata.build_info = build_info.cloned();
+        metadata.provenance = provenance.cloned();
 
         serde_json::to_writer_pretty(writer, &metadata)?;
     }

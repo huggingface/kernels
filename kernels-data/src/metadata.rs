@@ -37,8 +37,11 @@ pub struct KernelBuilderVersion {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Provenance {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub kernel_builder: Option<KernelBuilderVersion>,
+    /// The `kernel-builder` that produced the build. Always known: it is baked
+    /// into the `kernel-builder` binary at compile time.
+    pub kernel_builder: KernelBuilderVersion,
+    /// Git provenance of the kernel source. `None` when the kernel source was
+    /// not built from a git repository (so its revision is unknown).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kernel: Option<GitHash>,
 }
@@ -46,10 +49,7 @@ pub struct Provenance {
 impl Provenance {
     /// Whether either the `kernel-builder` or the kernel source was dirty.
     pub fn is_dirty(&self) -> bool {
-        self.kernel_builder
-            .as_ref()
-            .and_then(|kb| kb.git.as_ref())
-            .is_some_and(|g| g.dirty)
+        self.kernel_builder.git.as_ref().is_some_and(|g| g.dirty)
             || self.kernel.as_ref().is_some_and(|k| k.dirty)
     }
 }
@@ -132,13 +132,13 @@ mod tests {
 
     fn sample_provenance(kernel_builder_dirty: bool, kernel_dirty: bool) -> Provenance {
         Provenance {
-            kernel_builder: Some(KernelBuilderVersion {
+            kernel_builder: KernelBuilderVersion {
                 version: "0.1.0".to_string(),
                 git: Some(GitHash {
                     sha: "a".repeat(40),
                     dirty: kernel_builder_dirty,
                 }),
-            }),
+            },
             kernel: Some(GitHash {
                 sha: "b".repeat(40),
                 dirty: kernel_dirty,
@@ -266,7 +266,7 @@ mod tests {
         assert!(provenance.is_dirty());
         assert_eq!(provenance.kernel.unwrap().sha, "b".repeat(40));
 
-        let kernel_builder = provenance.kernel_builder.unwrap();
+        let kernel_builder = provenance.kernel_builder;
         assert_eq!(kernel_builder.version, "0.1.0");
         // The embedded `GitHash` is flattened into the `kernel-builder` object.
         let git = kernel_builder

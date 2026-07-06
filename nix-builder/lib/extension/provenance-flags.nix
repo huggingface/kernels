@@ -3,7 +3,7 @@
 # `.git`, so the kernel's commit SHA and dirty state are passed in explicitly.
 {
   lib,
-  kernelProvenance ? null,
+  kernelProvenance,
 }:
 lib.optionalString (kernelProvenance != null) (
   "--kernel-sha ${kernelProvenance.sha}" + lib.optionalString kernelProvenance.dirty " --kernel-dirty"

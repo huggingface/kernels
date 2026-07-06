@@ -113,7 +113,7 @@ rec {
       rev,
       doGetKernelCheck,
       stripRPath ? false,
-      kernelProvenance ? null,
+      kernelProvenance,
     }:
     let
       inherit (lib) fileset;
@@ -203,7 +203,7 @@ rec {
       doGetKernelCheck,
       bundleOnly,
       buildSets,
-      kernelProvenance ? null,
+      kernelProvenance,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -233,7 +233,7 @@ rec {
       rev,
       doGetKernelCheck,
       buildSets,
-      kernelProvenance ? null,
+      kernelProvenance,
     }:
     let
       extensions = mkDistTorchExtensions {
@@ -297,6 +297,8 @@ rec {
               rev
               doGetKernelCheck
               ;
+            # Dev/test shells do not record build provenance.
+            kernelProvenance = null;
           };
         in
         {
@@ -347,7 +349,7 @@ rec {
       buildSets,
       doGetKernelCheck,
       pythonCheckInputs,
-      kernelProvenance ? null,
+      kernelProvenance,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -422,6 +424,8 @@ rec {
               rev
               doGetKernelCheck
               ;
+            # Dev/test shells do not record build provenance.
+            kernelProvenance = null;
           };
           python = (
             pkgs.python3.withPackages (

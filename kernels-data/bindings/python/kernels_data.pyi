@@ -103,8 +103,8 @@ class Provenance:
     """Build provenance: git state of the `kernel-builder` and kernel source."""
 
     @property
-    def kernel_builder(self) -> Optional[KernelBuilderVersion]:
-        """Provenance of the `kernel-builder` that produced the build."""
+    def kernel_builder(self) -> KernelBuilderVersion:
+        """The `kernel-builder` that produced the build (always known)."""
         ...
 
     @property

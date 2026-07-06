@@ -264,14 +264,14 @@ impl PyKernelBuilderVersion {
 #[pyclass(name = "Provenance", frozen)]
 #[derive(Clone, Debug)]
 struct PyProvenance {
-    kernel_builder: Option<PyKernelBuilderVersion>,
+    kernel_builder: PyKernelBuilderVersion,
     kernel: Option<PyGitHash>,
 }
 
 impl From<Provenance> for PyProvenance {
     fn from(b: Provenance) -> Self {
         Self {
-            kernel_builder: b.kernel_builder.map(Into::into),
+            kernel_builder: b.kernel_builder.into(),
             kernel: b.kernel.map(Into::into),
         }
     }
@@ -280,7 +280,7 @@ impl From<Provenance> for PyProvenance {
 #[pymethods]
 impl PyProvenance {
     #[getter]
-    fn kernel_builder(&self) -> Option<PyKernelBuilderVersion> {
+    fn kernel_builder(&self) -> PyKernelBuilderVersion {
         self.kernel_builder.clone()
     }
 
@@ -292,19 +292,14 @@ impl PyProvenance {
     /// Whether either the `kernel-builder` or the kernel source was dirty.
     #[getter]
     fn dirty(&self) -> bool {
-        self.kernel_builder
-            .as_ref()
-            .and_then(|kb| kb.git.as_ref())
-            .is_some_and(|g| g.dirty)
+        self.kernel_builder.git.as_ref().is_some_and(|g| g.dirty)
             || self.kernel.as_ref().is_some_and(|k| k.dirty)
     }
 
     fn __repr__(&self) -> String {
         format!(
             "Provenance(kernel_builder={}, kernel={})",
-            self.kernel_builder
-                .as_ref()
-                .map_or("None".to_string(), |kb| kb.__repr__()),
+            self.kernel_builder.__repr__(),
             self.kernel
                 .as_ref()
                 .map_or("None".to_string(), |k| k.__repr__())

@@ -70,7 +70,7 @@
 
   # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
   # in the build metadata.
-  kernelProvenance ? null,
+  kernelProvenance,
 
   src,
 }:

@@ -68,7 +68,7 @@ pub fn create_pyproject(
         })
         .or_else(|| ops_identifier::git_hash(&kernel_dir));
     let provenance = Provenance {
-        kernel_builder: Some(common::kernel_builder_version()),
+        kernel_builder: common::kernel_builder_version(),
         kernel,
     };
 

@@ -17,7 +17,7 @@ pub struct BackendInfo {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct GitInfo {
+pub struct GitHash {
     pub sha: String,
     pub dirty: bool,
 }
@@ -38,7 +38,7 @@ pub struct BuildInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kernel_builder: Option<KernelBuilderInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub kernel: Option<GitInfo>,
+    pub kernel: Option<GitHash>,
 }
 
 impl BuildInfo {
@@ -123,7 +123,7 @@ mod tests {
 
     use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
 
-    use super::{BuildInfo, GitInfo, KernelBuilderInfo, Metadata};
+    use super::{BuildInfo, GitHash, KernelBuilderInfo, Metadata};
 
     fn sample_build_info(kernel_builder_dirty: bool, kernel_dirty: bool) -> BuildInfo {
         BuildInfo {
@@ -132,7 +132,7 @@ mod tests {
                 sha: Some("a".repeat(40)),
                 dirty: kernel_builder_dirty,
             }),
-            kernel: Some(GitInfo {
+            kernel: Some(GitHash {
                 sha: "b".repeat(40),
                 dirty: kernel_dirty,
             }),

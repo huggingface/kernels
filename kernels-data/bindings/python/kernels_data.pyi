@@ -9,7 +9,7 @@ __all__ = [
     "BackendInfo",
     "BuildInfo",
     "DigestAlgorithm",
-    "GitInfo",
+    "GitHash",
     "KernelBuilderInfo",
     "KernelName",
     "Metadata",
@@ -67,7 +67,7 @@ class BackendInfo:
     def __repr__(self) -> str: ...
 
 @final
-class GitInfo:
+class GitHash:
     """Git provenance (commit SHA and dirty state) of a source tree."""
 
     @property
@@ -113,7 +113,7 @@ class BuildInfo:
         ...
 
     @property
-    def kernel(self) -> Optional[GitInfo]:
+    def kernel(self) -> Optional[GitHash]:
         """Git provenance of the kernel source that was built."""
         ...
 

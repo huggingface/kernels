@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
-use kernels_data::metadata::{BackendInfo, BuildInfo, GitInfo, KernelBuilderInfo, Metadata};
+use kernels_data::metadata::{BackendInfo, BuildInfo, GitHash, KernelBuilderInfo, Metadata};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
@@ -188,15 +188,15 @@ impl PyBackendInfo {
     }
 }
 
-#[pyclass(name = "GitInfo", frozen)]
+#[pyclass(name = "GitHash", frozen)]
 #[derive(Clone, Debug)]
-struct PyGitInfo {
+struct PyGitHash {
     sha: String,
     dirty: bool,
 }
 
-impl From<GitInfo> for PyGitInfo {
-    fn from(g: GitInfo) -> Self {
+impl From<GitHash> for PyGitHash {
+    fn from(g: GitHash) -> Self {
         Self {
             sha: g.sha,
             dirty: g.dirty,
@@ -205,7 +205,7 @@ impl From<GitInfo> for PyGitInfo {
 }
 
 #[pymethods]
-impl PyGitInfo {
+impl PyGitHash {
     #[getter]
     fn sha(&self) -> &str {
         &self.sha
@@ -217,7 +217,7 @@ impl PyGitInfo {
     }
 
     fn __repr__(&self) -> String {
-        format!("GitInfo(sha={:?}, dirty={})", self.sha, self.dirty)
+        format!("GitHash(sha={:?}, dirty={})", self.sha, self.dirty)
     }
 }
 
@@ -268,7 +268,7 @@ impl PyKernelBuilderInfo {
 #[derive(Clone, Debug)]
 struct PyBuildInfo {
     kernel_builder: Option<PyKernelBuilderInfo>,
-    kernel: Option<PyGitInfo>,
+    kernel: Option<PyGitHash>,
 }
 
 impl From<BuildInfo> for PyBuildInfo {
@@ -288,7 +288,7 @@ impl PyBuildInfo {
     }
 
     #[getter]
-    fn kernel(&self) -> Option<PyGitInfo> {
+    fn kernel(&self) -> Option<PyGitHash> {
         self.kernel.clone()
     }
 
@@ -665,7 +665,7 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyBackendInfo>()?;
     m.add_class::<PyBuildInfo>()?;
-    m.add_class::<PyGitInfo>()?;
+    m.add_class::<PyGitHash>()?;
     m.add_class::<PyKernelBuilderInfo>()?;
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;

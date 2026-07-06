@@ -6,7 +6,7 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
-use kernels_data::metadata::{BuildInfo, GitInfo};
+use kernels_data::metadata::{BuildInfo, GitHash};
 use minijinja::Environment;
 
 use crate::{
@@ -62,11 +62,11 @@ pub fn create_pyproject(
     // `kernel-builder` provenance is always the one baked into this binary at
     // compile time.
     let kernel = kernel_sha
-        .map(|sha| GitInfo {
+        .map(|sha| GitHash {
             sha,
             dirty: kernel_dirty,
         })
-        .or_else(|| ops_identifier::git_info(&kernel_dir));
+        .or_else(|| ops_identifier::git_hash(&kernel_dir));
     let build_info = BuildInfo {
         kernel_builder: Some(common::kernel_builder_info()),
         kernel,

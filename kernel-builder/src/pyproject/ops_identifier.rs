@@ -3,7 +3,7 @@ use std::path::Path;
 use eyre::{Result, WrapErr};
 use git2::Repository;
 use kernels_data::config::Backend;
-use kernels_data::metadata::GitInfo;
+use kernels_data::metadata::GitHash;
 use rand::Rng;
 
 pub fn random_identifier() -> String {
@@ -29,7 +29,7 @@ pub fn git_identifier(target_dir: impl AsRef<Path>) -> Result<String> {
     Ok(if dirty { format!("{rev}_dirty") } else { rev })
 }
 
-pub fn git_info(target_dir: impl AsRef<Path>) -> Option<GitInfo> {
+pub fn git_hash(target_dir: impl AsRef<Path>) -> Option<GitHash> {
     let repo = Repository::discover(target_dir.as_ref()).ok()?;
     let head = repo.head().ok()?;
     let commit = head.peel_to_commit().ok()?;
@@ -40,7 +40,7 @@ pub fn git_info(target_dir: impl AsRef<Path>) -> Option<GitInfo> {
     status_options.exclude_submodules(true);
     let dirty = !repo.statuses(Some(&mut status_options)).ok()?.is_empty();
 
-    Some(GitInfo { sha, dirty })
+    Some(GitHash { sha, dirty })
 }
 
 /// Uniquely identifies a kernel for the purpose of ops-name generation.
@@ -98,8 +98,8 @@ mod tests {
     }
 
     #[test]
-    fn git_info_is_none_in_non_git_dir() {
+    fn git_hash_is_none_in_non_git_dir() {
         let tmp = tempfile::tempdir().unwrap();
-        assert!(git_info(tmp.path()).is_none());
+        assert!(git_hash(tmp.path()).is_none());
     }
 }

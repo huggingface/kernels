@@ -21,11 +21,15 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
 }
 
 /// `kernel-builder` provenance baked in at compile time.
+///
+/// The git provenance is gathered by the `built` crate (see `build.rs`). In
+/// build sandboxes without a `.git` (e.g. Nix), the derivation supplies it via
+/// `built`'s `BUILT_OVERRIDE_hf_kernel_builder_GIT_*` environment variables.
 pub(crate) fn kernel_builder_info() -> KernelBuilderInfo {
     KernelBuilderInfo {
         version: env!("CARGO_PKG_VERSION").to_owned(),
-        sha: option_env!("KERNEL_BUILDER_GIT_SHA").map(str::to_owned),
-        dirty: matches!(option_env!("KERNEL_BUILDER_GIT_DIRTY"), Some("1")),
+        sha: crate::built_info::GIT_COMMIT_HASH.map(str::to_owned),
+        dirty: crate::built_info::GIT_DIRTY.unwrap_or(false),
     }
 }
 

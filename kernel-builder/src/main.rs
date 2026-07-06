@@ -50,6 +50,13 @@ use validate_builds::check_builds;
 
 use crate::util::parse_and_validate_compat;
 
+/// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
+/// crate (see `build.rs`), including the `kernel-builder` git provenance that is
+/// recorded in the build metadata of the kernels it builds.
+mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Args, Debug)]
 struct NixArgs {
     /// Maximum number of parallel Nix build jobs.

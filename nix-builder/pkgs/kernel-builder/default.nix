@@ -26,11 +26,13 @@ rustPlatform.buildRustPackage {
   inherit version;
   pname = "kernel-builder";
 
-  # Consumed by `kernel-builder/build.rs` and baked into the binary.
-  KERNEL_BUILDER_GIT_SHA = lib.optionalString (builderRev != null) (
-    lib.removeSuffix "-dirty" builderRev
-  );
-  KERNEL_BUILDER_GIT_DIRTY = if builderDirty then "1" else "0";
+  # The build sandbox has no `.git`, so the `built` crate cannot detect the
+  # `kernel-builder` git provenance. Supply it through `built`'s override
+  # environment variables (`hf_kernel_builder` is the package name with hyphens
+  # replaced by underscores), which `build.rs` bakes into the binary.
+  "BUILT_OVERRIDE_hf_kernel_builder_GIT_COMMIT_HASH" =
+    if builderRev == null then "BUILT_OVERRIDE_NONE" else lib.removeSuffix "-dirty" builderRev;
+  "BUILT_OVERRIDE_hf_kernel_builder_GIT_DIRTY" = if builderDirty then "true" else "false";
 
   src =
     let

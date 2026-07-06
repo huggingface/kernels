@@ -4,7 +4,7 @@ use eyre::Result;
 use itertools::Itertools;
 
 use kernels_data::config::{Backend, Build};
-use kernels_data::metadata::Metadata;
+use kernels_data::metadata::{BuildInfo, KernelBuilderInfo, Metadata};
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
@@ -47,8 +47,9 @@ pub fn write_metadata(
     for backend in &Backend::all() {
         let writer = file_set.entry(format!("metadata-{backend}.json"));
 
-        let metadata =
+        let mut metadata =
             Metadata::for_backend(build, kernel_id.to_string_for_backend(*backend), *backend)?;
+        metadata.build_info = Some(build_info.clone());
 
         serde_json::to_writer_pretty(writer, &metadata)?;
     }

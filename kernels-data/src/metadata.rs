@@ -94,6 +94,7 @@ impl Metadata {
                 backend_type: backend,
             },
             digest: None,
+            build_info: None,
         })
     }
 

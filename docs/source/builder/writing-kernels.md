@@ -445,6 +445,20 @@ def relu_fwd_fake(input: torch.Tensor) -> torch.Tensor:
     return torch.empty_like(input)
 ```
 
+> [!WARNING]
+> To facilitate static analysis of ops by kernel-builder, `add_op_namespace_prefix` should not be rewrapped. Furthermore, no fallbacks should be added when importing `add_op_namnespace_prefix`, since such fallbacks can mask issues (e.g. incorrect import paths), resulting in non-unique op names. Below is an example of this antipattern:
+
+```py
+try:
+    from ._ops import add_op_namespace_prefix as _generated_add_op_namespace_prefix
+except ImportError:
+    def _generated_add_op_namespace_prefix(name: str) -> str:
+        return name if "::" in name else f"my_kernel::{name}"
+
+def add_op_namespace_prefix(name: str) -> str:
+    return _generated_add_op_namespace_prefix(name)
+```
+
 ## Kernel tests
 
 ### Use `get_kernel` in tests

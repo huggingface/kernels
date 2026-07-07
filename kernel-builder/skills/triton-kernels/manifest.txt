@@ -1,0 +1,8 @@
+SKILL.md
+references/autotune-guide.md
+references/kernel-patterns.md
+references/benchmarking-guide.md
+scripts/benchmark_template.py
+scripts/correctness_template.py
+examples/fused_softmax.py
+CHANGELOG.md

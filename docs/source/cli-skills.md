@@ -6,6 +6,7 @@ Supported skills include:
 - `rocm-kernels`
 - `xpu-kernels`
 - `cpu-kernels`
+- `triton-kernels`
 
 Skill files are downloaded from the `huggingface/kernels` directory in this [repository](https://github.com/huggingface/kernels/tree/main/kernel-builder/skills).
 
@@ -21,6 +22,15 @@ Example CPU kernels built with this skill (available on the Hub under [`kernels-
 - [`kernels-community/megablocks`](https://huggingface.co/kernels-community/megablocks) — MoE kernels with a CPU backend that enable running MXFP4 MoE models on CPU.
 - [`kernels-community/quantization-gptq`](https://huggingface.co/kernels-community/quantization-gptq) — INT4 quantized GEMM using AVX512.
 - [`kernels-community/rmsnorm`](https://huggingface.co/kernels-community/rmsnorm) — RMSNorm with AVX2/AVX512 element-wise paths.
+
+> [!TIP]
+> **When are Triton kernels useful?** Two main cases:
+> - **Portability across NVIDIA and AMD** — a single Triton kernel runs on both CUDA and ROCm without modification. No vendor-specific code needed.
+> - **Fusing multiple ops to reduce memory traffic** — operations like softmax (5 PyTorch ops, ~8MN memory ops) become a single kernel (2MN ops) with a ~4x reduction in DRAM round-trips. Any chain of element-wise + reduction ops that PyTorch executes as separate kernels is a fusion opportunity.
+
+Example Triton kernels built with this skill:
+
+- [`jaygala223/triton-layernorm`](https://huggingface.co/kernels/jaygala223/triton-layernorm) — fused LayerNorm with fp32 accumulation, ~1.45x faster than PyTorch on V100.
 
 Examples:
 

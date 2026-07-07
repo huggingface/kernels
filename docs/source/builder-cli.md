@@ -351,7 +351,7 @@ Install a kernels skill for an AI assistant
 
   Default value: `cuda-kernels`
 
-  Possible values: `cuda-kernels`, `cpu-kernels`, `rocm-kernels`, `xpu-kernels`
+  Possible values: `cuda-kernels`, `cpu-kernels`, `rocm-kernels`, `triton-kernels`, `xpu-kernels`
 
 * `--claude` — Install for Claude
 * `--codex` — Install for Codex

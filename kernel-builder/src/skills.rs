@@ -16,6 +16,7 @@ pub enum SkillId {
     CudaKernels,
     CpuKernels,
     RocmKernels,
+    TritonKernels,
     XpuKernels,
 }
 
@@ -25,6 +26,7 @@ impl SkillId {
             SkillId::CudaKernels => "cuda-kernels",
             SkillId::CpuKernels => "cpu-kernels",
             SkillId::RocmKernels => "rocm-kernels",
+            SkillId::TritonKernels => "triton-kernels",
             SkillId::XpuKernels => "xpu-kernels",
         }
     }

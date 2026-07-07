@@ -192,7 +192,7 @@ The following sections enumerate all supported options for `build.toml`.
   extension must be stored in `torch-ext/<name>`.
 - `version` (int): the major version of the kernel.
   The version is written to the kernel's `metadata.json` and is used
-  by the `kernels upload` command to upload the kernel to a version
+  by the `kernel-builder upload` command to upload the kernel to a version
   branch named `v<version>`.
 - `edition` (required): the `build.toml` format edition. The current
   edition is `5`. Older `build.toml` files can be migrated with

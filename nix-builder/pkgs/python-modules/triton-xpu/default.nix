@@ -26,8 +26,8 @@ in
 
   triton-xpu_3_7_2 = generic {
     version = "3.7.2";
-    url = "https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/2.13.0/rc12/triton_xpu-3.7.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
-    hash = "sha256-Yrt6iZwqYmmIfyMYOCxyA4dwttEdNeUN9ArZFCUaTJs=";
+    url = "https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/2.13.0/rc15/triton_xpu-3.7.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+    hash = "sha256-jMwVkt3aI6sunRQ9orS2nrQIIRcsW9S8TiYjI9x/UXI=";
   };
 
 }

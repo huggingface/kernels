@@ -41,6 +41,10 @@
   pythonDeps,
 
   backendPythonDeps,
+
+  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
+  # in the build metadata.
+  kernelProvenance,
 }:
 
 # Extra validation - the environment should correspind to the build config.
@@ -68,6 +72,7 @@ let
     ++ [ torch ];
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
   metalSupport = buildConfig.metal or false;
+  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 in
 
 stdenv.mkDerivation (prevAttrs: {
@@ -79,7 +84,7 @@ stdenv.mkDerivation (prevAttrs: {
     mkdir -p $out
     cp -r --no-preserve=mode ${src}/* $out/
     ${pkgs.kernel-builder}/bin/kernel-builder create-pyproject \
-      --unique-id ${rev} $out
+      --unique-id ${rev} ${provenanceFlags} $out
   '';
 
   framework = "torch";

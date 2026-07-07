@@ -7,7 +7,10 @@ from typing import Optional, final
 __all__ = [
     "Backend",
     "BackendInfo",
+    "Provenance",
     "DigestAlgorithm",
+    "GitHash",
+    "KernelBuilderVersion",
     "KernelName",
     "Metadata",
     "Digest",
@@ -59,6 +62,59 @@ class BackendInfo:
     @property
     def archs(self) -> Optional[list[str]]:
         """Optional list of target architectures."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class GitHash:
+    """Git provenance (commit SHA and dirty state) of a source tree."""
+
+    @property
+    def sha(self) -> str:
+        """Full 40-character commit SHA."""
+        ...
+
+    @property
+    def dirty(self) -> bool:
+        """Whether the working tree had uncommitted changes to tracked files."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class KernelBuilderVersion:
+    """Provenance of the `kernel-builder` that produced a build."""
+
+    @property
+    def version(self) -> str:
+        """`kernel-builder` package version."""
+        ...
+
+    @property
+    def git(self) -> Optional[GitHash]:
+        """Commit SHA and dirty state of the `kernel-builder` source, when known."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class Provenance:
+    """Build provenance: git state of the `kernel-builder` and kernel source."""
+
+    @property
+    def kernel_builder(self) -> KernelBuilderVersion:
+        """The `kernel-builder` that produced the build (always known)."""
+        ...
+
+    @property
+    def kernel(self) -> Optional[GitHash]:
+        """Git provenance of the kernel source that was built."""
+        ...
+
+    @property
+    def dirty(self) -> bool:
+        """Whether either the `kernel-builder` or the kernel source was dirty."""
         ...
 
     def __repr__(self) -> str: ...
@@ -263,4 +319,6 @@ class Metadata:
     def backend(self) -> BackendInfo: ...
     @property
     def digest(self) -> Optional[Digest]: ...
+    @property
+    def provenance(self) -> Optional[Provenance]: ...
     def __repr__(self) -> str: ...

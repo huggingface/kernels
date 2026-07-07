@@ -50,6 +50,13 @@ use validate_builds::check_builds;
 
 use crate::util::parse_and_validate_compat;
 
+/// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
+/// crate (see `build.rs`), including the `kernel-builder` git provenance that is
+/// recorded in the build metadata of the kernels it builds.
+mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Args, Debug)]
 struct NixArgs {
     /// Maximum number of parallel Nix build jobs.
@@ -174,6 +181,17 @@ enum Commands {
         /// kernel name to avoid name collisions. (e.g. Git SHA)
         #[arg(long)]
         unique_id: Option<String>,
+
+        /// Full commit SHA of the kernel source, recorded in the build
+        /// metadata. When absent, it is detected from the kernel's git
+        /// repository (used by Nix builds where the source has no `.git`).
+        #[arg(long)]
+        kernel_sha: Option<String>,
+
+        /// Mark the kernel source as having uncommitted changes in the build
+        /// metadata. Only meaningful together with `--kernel-sha`.
+        #[arg(long)]
+        kernel_dirty: bool,
     },
 
     /// Spawn a kernel development shell.
@@ -365,7 +383,16 @@ fn main() -> Result<()> {
             force,
             target_dir,
             unique_id,
-        } => create_pyproject(kernel_dir, target_dir, force, unique_id),
+            kernel_sha,
+            kernel_dirty,
+        } => create_pyproject(
+            kernel_dir,
+            target_dir,
+            force,
+            unique_id,
+            kernel_sha,
+            kernel_dirty,
+        ),
         Commands::Devshell {
             kernel_dir,
             variant,

@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelName};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
-use kernels_data::metadata::{BackendInfo, Metadata};
+use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
@@ -188,6 +188,125 @@ impl PyBackendInfo {
     }
 }
 
+#[pyclass(name = "GitHash", frozen)]
+#[derive(Clone, Debug)]
+struct PyGitHash {
+    sha: String,
+    dirty: bool,
+}
+
+impl From<GitHash> for PyGitHash {
+    fn from(g: GitHash) -> Self {
+        Self {
+            sha: g.sha,
+            dirty: g.dirty,
+        }
+    }
+}
+
+#[pymethods]
+impl PyGitHash {
+    #[getter]
+    fn sha(&self) -> &str {
+        &self.sha
+    }
+
+    #[getter]
+    fn dirty(&self) -> bool {
+        self.dirty
+    }
+
+    fn __repr__(&self) -> String {
+        format!("GitHash(sha={:?}, dirty={})", self.sha, self.dirty)
+    }
+}
+
+#[pyclass(name = "KernelBuilderVersion", frozen)]
+#[derive(Clone, Debug)]
+struct PyKernelBuilderVersion {
+    version: String,
+    git: Option<PyGitHash>,
+}
+
+impl From<KernelBuilderVersion> for PyKernelBuilderVersion {
+    fn from(kb: KernelBuilderVersion) -> Self {
+        Self {
+            version: kb.version,
+            git: kb.git.map(Into::into),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelBuilderVersion {
+    #[getter]
+    fn version(&self) -> &str {
+        &self.version
+    }
+
+    /// Commit SHA + dirty state of the `kernel-builder` source, when known.
+    #[getter]
+    fn git(&self) -> Option<PyGitHash> {
+        self.git.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "KernelBuilderVersion(version={:?}, git={})",
+            self.version,
+            self.git
+                .as_ref()
+                .map_or("None".to_string(), |g| g.__repr__())
+        )
+    }
+}
+
+#[pyclass(name = "Provenance", frozen)]
+#[derive(Clone, Debug)]
+struct PyProvenance {
+    kernel_builder: PyKernelBuilderVersion,
+    kernel: Option<PyGitHash>,
+}
+
+impl From<Provenance> for PyProvenance {
+    fn from(b: Provenance) -> Self {
+        Self {
+            kernel_builder: b.kernel_builder.into(),
+            kernel: b.kernel.map(Into::into),
+        }
+    }
+}
+
+#[pymethods]
+impl PyProvenance {
+    #[getter]
+    fn kernel_builder(&self) -> PyKernelBuilderVersion {
+        self.kernel_builder.clone()
+    }
+
+    #[getter]
+    fn kernel(&self) -> Option<PyGitHash> {
+        self.kernel.clone()
+    }
+
+    /// Whether either the `kernel-builder` or the kernel source was dirty.
+    #[getter]
+    fn dirty(&self) -> bool {
+        self.kernel_builder.git.as_ref().is_some_and(|g| g.dirty)
+            || self.kernel.as_ref().is_some_and(|k| k.dirty)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Provenance(kernel_builder={}, kernel={})",
+            self.kernel_builder.__repr__(),
+            self.kernel
+                .as_ref()
+                .map_or("None".to_string(), |k| k.__repr__())
+        )
+    }
+}
+
 /// Parsed `metadata.json` for a kernel build variant.
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
@@ -201,6 +320,7 @@ struct PyMetadata {
     python_depends: Vec<String>,
     backend: PyBackendInfo,
     digest: Option<PyDigest>,
+    provenance: Option<PyProvenance>,
 }
 
 impl From<Metadata> for PyMetadata {
@@ -215,6 +335,7 @@ impl From<Metadata> for PyMetadata {
             python_depends: m.python_depends,
             backend: m.backend.into(),
             digest: m.digest.map(Into::into),
+            provenance: m.provenance.map(Into::into),
         }
     }
 }
@@ -293,9 +414,14 @@ impl PyMetadata {
         self.digest.clone()
     }
 
+    #[getter]
+    fn provenance(&self) -> Option<PyProvenance> {
+        self.provenance.clone()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={}, digest={})",
+            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={}, digest={}, provenance={})",
             self.id,
             self.name,
             self.version,
@@ -306,7 +432,10 @@ impl PyMetadata {
             self.backend.__repr__(),
             self.digest
                 .as_ref()
-                .map_or("None".to_string(), |sd| sd.__repr__())
+                .map_or("None".to_string(), |sd| sd.__repr__()),
+            self.provenance
+                .as_ref()
+                .map_or("None".to_string(), |bi| bi.__repr__())
         )
     }
 }
@@ -530,6 +659,9 @@ impl PyDigest {
 fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyBackendInfo>()?;
+    m.add_class::<PyProvenance>()?;
+    m.add_class::<PyGitHash>()?;
+    m.add_class::<PyKernelBuilderVersion>()?;
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;

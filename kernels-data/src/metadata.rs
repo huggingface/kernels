@@ -15,6 +15,45 @@ pub struct BackendInfo {
     pub archs: Option<Vec<String>>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct GitHash {
+    pub sha: String,
+    pub dirty: bool,
+}
+
+/// Provenance of the `kernel-builder` that produced a build.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct KernelBuilderVersion {
+    pub version: String,
+    /// Commit SHA + dirty state of the `kernel-builder` source, when known.
+    #[serde(flatten)]
+    pub git: Option<GitHash>,
+}
+
+/// Provenance of a kernel build: the git state of the `kernel-builder` and of
+/// the kernel source it was built from.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Provenance {
+    /// The `kernel-builder` that produced the build. Always known: it is baked
+    /// into the `kernel-builder` binary at compile time.
+    pub kernel_builder: KernelBuilderVersion,
+    /// Git provenance of the kernel source. `None` when the kernel source was
+    /// not built from a git repository (so its revision is unknown).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kernel: Option<GitHash>,
+}
+
+impl Provenance {
+    /// Whether either the `kernel-builder` or the kernel source was dirty.
+    pub fn is_dirty(&self) -> bool {
+        self.kernel_builder.git.as_ref().is_some_and(|g| g.dirty)
+            || self.kernel.as_ref().is_some_and(|k| k.dirty)
+    }
+}
+
 /// Kernel metadata.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -31,6 +70,8 @@ pub struct Metadata {
     pub backend: BackendInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub digest: Option<Digest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<Provenance>,
 }
 
 impl Metadata {
@@ -58,6 +99,7 @@ impl Metadata {
                 backend_type: backend,
             },
             digest: None,
+            provenance: None,
         })
     }
 
@@ -86,7 +128,23 @@ mod tests {
 
     use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
 
-    use super::Metadata;
+    use super::{GitHash, KernelBuilderVersion, Metadata, Provenance};
+
+    fn sample_provenance(kernel_builder_dirty: bool, kernel_dirty: bool) -> Provenance {
+        Provenance {
+            kernel_builder: KernelBuilderVersion {
+                version: "0.1.0".to_string(),
+                git: Some(GitHash {
+                    sha: "a".repeat(40),
+                    dirty: kernel_builder_dirty,
+                }),
+            },
+            kernel: Some(GitHash {
+                sha: "b".repeat(40),
+                dirty: kernel_dirty,
+            }),
+        }
+    }
 
     fn torch_noarch_build() -> Build {
         Build {
@@ -170,5 +228,90 @@ mod tests {
 
         assert_eq!(metadata.backend.backend_type, Backend::Cuda);
         assert!(metadata.backend.archs.is_none());
+    }
+
+    #[test]
+    fn provenance_is_dirty_reflects_either_source() {
+        assert!(!sample_provenance(false, false).is_dirty());
+        assert!(sample_provenance(true, false).is_dirty());
+        assert!(sample_provenance(false, true).is_dirty());
+        assert!(sample_provenance(true, true).is_dirty());
+    }
+
+    #[test]
+    fn metadata_without_provenance_serializes_without_key() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(!json.contains("provenance"));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        assert!(parsed.provenance.is_none());
+    }
+
+    #[test]
+    fn metadata_round_trips_provenance_in_kebab_case() {
+        let build = torch_noarch_build();
+        let mut metadata =
+            Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+        metadata.provenance = Some(sample_provenance(false, true));
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains("\"provenance\""));
+        assert!(json.contains("\"kernel-builder\""));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        let provenance = parsed.provenance.expect("provenance should round-trip");
+        assert!(provenance.is_dirty());
+        assert_eq!(provenance.kernel.unwrap().sha, "b".repeat(40));
+
+        let kernel_builder = provenance.kernel_builder;
+        assert_eq!(kernel_builder.version, "0.1.0");
+        // The embedded `GitHash` is flattened into the `kernel-builder` object.
+        let git = kernel_builder
+            .git
+            .expect("kernel-builder git should round-trip");
+        assert_eq!(git.sha, "a".repeat(40));
+        assert!(!git.dirty);
+    }
+
+    #[test]
+    fn kernel_builder_version_flattens_git_hash() {
+        let kernel_builder = KernelBuilderVersion {
+            version: "0.1.0".to_string(),
+            git: Some(GitHash {
+                sha: "c".repeat(40),
+                dirty: true,
+            }),
+        };
+
+        // The `GitHash` fields are flattened into the same object as `version`.
+        let value: serde_json::Value = serde_json::to_value(&kernel_builder).unwrap();
+        assert_eq!(value["version"], "0.1.0");
+        assert_eq!(value["sha"], "c".repeat(40));
+        assert_eq!(value["dirty"], true);
+        assert!(value.get("git").is_none());
+
+        let parsed: KernelBuilderVersion = serde_json::from_value(value).unwrap();
+        let git = parsed.git.expect("git should round-trip");
+        assert_eq!(git.sha, "c".repeat(40));
+        assert!(git.dirty);
+    }
+
+    #[test]
+    fn kernel_builder_version_without_git_round_trips_to_none() {
+        // When the `kernel-builder` git provenance is unknown, only `version`
+        // is serialized and it must deserialize back to `git: None`.
+        let kernel_builder = KernelBuilderVersion {
+            version: "0.1.0".to_string(),
+            git: None,
+        };
+
+        let json = serde_json::to_string(&kernel_builder).unwrap();
+        assert_eq!(json, r#"{"version":"0.1.0"}"#);
+
+        let parsed: KernelBuilderVersion = serde_json::from_str(&json).unwrap();
+        assert!(parsed.git.is_none());
     }
 }

@@ -212,6 +212,28 @@ repo-id = "kernels-community/flash-attn4"
 See [Writing Kernels](writing-kernels.md) for more details on the `build.toml`
 format.
 
+### Uploading through a pull request
+
+If you do not have write access to the target repository — for example,
+when proposing builds for a kernel maintained by another user or org —
+you can pass `--create-pr` to the `upload` or `build-and-upload`
+subcommands:
+
+```bash
+$ kernel-builder build-and-upload --create-pr
+```
+
+Instead of committing directly, this opens a pull request on the Hub for
+each branch that has changes: one against `main` for the kernel card and
+one against the `v<version>` branch for the build artifacts and
+benchmarks. The pull request URLs are printed after the upload, so that
+the repository maintainers can be pointed to them for review.
+
+> [!NOTE]
+> A pull request can only target an existing branch. If the `v<version>`
+> branch does not exist yet and you do not have write access to create
+> it, ask a maintainer of the repository to create the branch first.
+
 > [!TIP]
 > You can automate building, uploading, and testing kernels on Hugging Face
 > Jobs from CI, see [Building and testing kernels with GitHub Actions](./github-actions.md).

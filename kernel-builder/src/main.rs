@@ -133,6 +133,11 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
         repo_type: RepoTypeArg,
 
+        /// Open a pull request with the changes rather than committing them
+        /// directly (does not require write access to the repository).
+        #[arg(long)]
+        create_pr: bool,
+
         /// Suppress progress output.
         #[arg(long, short)]
         quiet: bool,
@@ -342,6 +347,7 @@ fn main() -> Result<()> {
             branch,
             private,
             repo_type,
+            create_pr,
             quiet,
         } => {
             run_build(
@@ -357,6 +363,7 @@ fn main() -> Result<()> {
                 branch,
                 private,
                 repo_type,
+                create_pr,
                 quiet,
             })
         }
@@ -424,6 +431,39 @@ fn main() -> Result<()> {
             force,
             ops_id,
         } => clean_pyproject(kernel_dir, target_dir, dry_run, force, ops_id),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upload_create_pr_flag() {
+        let cli = Cli::try_parse_from(["kernel-builder", "upload", "--create-pr"]).unwrap();
+        match cli.command {
+            Commands::Upload(args) => assert!(args.create_pr),
+            _ => panic!("Expected upload subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_upload_create_pr_defaults_to_false() {
+        let cli = Cli::try_parse_from(["kernel-builder", "upload"]).unwrap();
+        match cli.command {
+            Commands::Upload(args) => assert!(!args.create_pr),
+            _ => panic!("Expected upload subcommand"),
+        }
+    }
+
+    #[test]
+    fn test_build_and_upload_create_pr_flag() {
+        let cli =
+            Cli::try_parse_from(["kernel-builder", "build-and-upload", "--create-pr"]).unwrap();
+        match cli.command {
+            Commands::BuildAndUpload { create_pr, .. } => assert!(create_pr),
+            _ => panic!("Expected build-and-upload subcommand"),
+        }
     }
 }
 

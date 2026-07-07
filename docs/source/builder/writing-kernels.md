@@ -211,7 +211,10 @@ The following sections enumerate all supported options for `build.toml`.
 ### `general.hub`
 
 - `repo-id`: the Hub repository to upload the kernel to when the `upload` or
-  `build-and-upload` subcommands of `kernel-builder` are used.
+  `build-and-upload` subcommands of `kernel-builder` are used. If you do not
+  have write access to the repository, both subcommands accept the
+  `--create-pr` option to propose the upload through a pull request instead
+  (see [Uploading through a pull request](build.md#uploading-through-a-pull-request)).
 
 ### `general.cuda`
 

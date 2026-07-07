@@ -88,4 +88,41 @@ in
     ];
   };
 
+  aotriton_0_12 = generic rec {
+    version = "0.12b";
+
+    hashes = {
+      "7.0" = "sha256-9quh/lkxIATM0T39pNCp41RXUn/sGDSNLnWilKEFHvU=";
+      "7.1" = "sha256-odcxdFkpthWY0IjuqtMdioKicDKqUeOnyDHkWpnglcI=";
+      "7.2" = "sha256-W5fo0EGxYMhAhZYfPTvXuYkGQrFGussEyZGqmtao3Kg=";
+    };
+
+    images = mkImages version [
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.12b/aotriton-0.12b-images-amd-gfx90a.tar.gz";
+        hash = "sha256-u4vyI3t3/FA7wpZ+oNmdbKQZEmxHnpUepCtxJzcSgIY=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.12b/aotriton-0.12b-images-amd-gfx942.tar.gz";
+        hash = "sha256-8I7az4PJzPHEvctR8cqwUtFoCr6jHJ4DXz+frbLxO6Q=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.12b/aotriton-0.12b-images-amd-gfx950.tar.gz";
+        hash = "sha256-MHo31ynNo6ISBEmQnlGSzXHCutzL038CInhgmOacepE=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.12b/aotriton-0.12b-images-amd-gfx110x.tar.gz";
+        hash = "sha256-ycrHz28ncWjhZZrC8EcG+II1gLfH4+iV9aVQPta91V8=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.12b/aotriton-0.12b-images-amd-gfx115x.tar.gz";
+        hash = "sha256-MXc4ehXGeLMAV/RYTR/BuPjbVhY4kMtcmPJ0UCCfWns=";
+      })
+      (fetchurl {
+        url = "https://github.com/ROCm/aotriton/releases/download/0.12b/aotriton-0.12b-images-amd-gfx120x.tar.gz";
+        hash = "sha256-aFclEc5kh6g/kBS9JVvWnIlD+H0Mk71XstqsX7xsecE=";
+      })
+    ];
+  };
+
 }

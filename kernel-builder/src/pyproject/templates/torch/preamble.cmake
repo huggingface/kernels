@@ -70,18 +70,27 @@ endif()
 {% endif %}
 
 {% if stable_abi %}
-if (TORCH_VERSION VERSION_LESS {{ stable_abi }})
-  message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
-    "version {{ stable_abi }}. Cannot build with stable ABI targeting a newer version of Torch.")
+# `stable-abi` may cover only some backends, so select the version for the
+# backend detected at configure time (empty when it does not use the stable ABI).
+{% for entry in stable_abi %}
+set(_STABLE_ABI_VERSION_{{ entry.backend }} "{{ entry.version }}")
+{% endfor %}
+set(_STABLE_ABI_VERSION "${_STABLE_ABI_VERSION_${BACKEND}}")
+
+if(_STABLE_ABI_VERSION)
+  if (TORCH_VERSION VERSION_LESS ${_STABLE_ABI_VERSION})
+    message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
+      "version ${_STABLE_ABI_VERSION}. Cannot build with stable ABI targeting a newer version of Torch.")
+  endif()
+
+  # From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
+  string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "${_STABLE_ABI_VERSION}")
+  list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
+  list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
+  math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
+
+  add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
 endif()
-
-# From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
-string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "{{ stable_abi }}")
-list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
-list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
-math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
-
-add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
 {% endif %}
 
 option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
@@ -146,7 +155,7 @@ if(GPU_LANG STREQUAL "CUDA")
   add_compile_definitions(USE_CUDA=1)
   add_compile_definitions(CUDA_KERNEL)
 elseif(GPU_LANG STREQUAL "HIP")
-  if(NOT HIP_FOUND)
+  if(NOT HIP_FOUND AND NOT PYTORCH_FOUND_HIP)
     message(FATAL_ERROR "GPU language is set to HIP, but cannot find ROCm toolkit")
   endif()
 
@@ -198,7 +207,6 @@ elseif(GPU_LANG STREQUAL "SYCL")
   set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
   set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
   set(GPU_FLAGS "${sycl_flags}")
-  set(GPU_ARCHES "")
 
 
   add_compile_definitions(XPU_KERNEL)
@@ -214,7 +222,10 @@ include(${CMAKE_CURRENT_LIST_DIR}/cmake/build-variants.cmake)
 
 # Generate build variant name.
 {% if stable_abi %}
-set(_STABLE_ABI_ARG TORCH_STABLE_ABI "{{ stable_abi }}")
+set(_STABLE_ABI_ARG "")
+if(_STABLE_ABI_VERSION)
+  set(_STABLE_ABI_ARG TORCH_STABLE_ABI "${_STABLE_ABI_VERSION}")
+endif()
 {% endif %}
 if(GPU_LANG STREQUAL "CUDA")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}" ${_STABLE_ABI_ARG})

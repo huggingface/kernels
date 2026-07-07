@@ -363,12 +363,12 @@ kernel-builder build-and-upload
 
 The target repository is determined by the `repo-id` and `version` fields in `build.toml` (see above). Uploads go to a **`kernel`-type** Hub repository (the first-class kernel repository type), not a model repo — the owning user or org needs kernel-creation access, requested via [huggingface.co/settings/account](https://huggingface.co/settings/account) ("Request Kernels Creation"). If a `CARD.md` template is present in the source repo, it is filled and uploaded as the `README.md`.
 
-**Editable install for local development** (never hand-write a `setup.py` — `torch.utils.cpp_extension`/pybind11 cannot build under ABI3):
+**Local build for development** (never hand-write a `setup.py` — `torch.utils.cpp_extension`/pybind11 cannot build under ABI3):
 ```bash
 kernel-builder create-pyproject -f
-pip install wheel
-pip install --no-build-isolation -e .
+python setup.py build_kernel
 ```
+This builds the kernel into `build`, loadable directly with `kernels.get_local_kernel(Path("build"))`. In `kernel-builder devshell`/`testshell`, `LOCAL_KERNELS` is set automatically so `get_kernel("<repo-id>")` resolves to this local build instead of the Hub.
 
 ## Available Community Kernels
 

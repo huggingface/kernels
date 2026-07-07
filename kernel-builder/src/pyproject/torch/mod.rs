@@ -187,6 +187,12 @@ fn render_extension(
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+struct StableAbiBackend {
+    backend: String,
+    version: String,
+}
+
 fn render_preamble(
     env: &minijinja::Environment,
     general: &General,
@@ -196,6 +202,23 @@ fn render_preamble(
 ) -> Result<()> {
     let cuda_minver = general.cuda.as_ref().and_then(|c| c.minver.as_ref());
     let cuda_maxver = general.cuda.as_ref().and_then(|c| c.maxver.as_ref());
+
+    // The backend is detected at CMake configure time, so render the stable ABI
+    // version (if any) for each backend and let CMake select the right one.
+    let stable_abi: Vec<StableAbiBackend> = general
+        .backends
+        .iter()
+        .filter_map(|backend| {
+            torch
+                .stable_abi
+                .as_ref()
+                .and_then(|abi| abi.for_backend(*backend))
+                .map(|version| StableAbiBackend {
+                    backend: backend.as_str().to_string(),
+                    version: version.to_string(),
+                })
+        })
+        .collect();
 
     env.get_template("torch/preamble.cmake")
         .wrap_err("Cannot get CMake prelude template")?
@@ -208,7 +231,7 @@ fn render_preamble(
                 cuda_maxver => cuda_maxver.map(|v| v.to_string()),
                 torch_minver => torch.minver.as_ref().map(|v| v.to_string()),
                 torch_maxver => torch.maxver.as_ref().map(|v| v.to_string()),
-                stable_abi => torch.stable_abi.as_ref().map(|v| v.to_string()),
+                stable_abi => stable_abi,
             },
             &mut *write,
         )

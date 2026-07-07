@@ -31,6 +31,8 @@
 - sections:
     - local: cli
       title: Overview
+    - local: cli-info
+      title: kernels info
     - local: cli-versions
       title: kernels versions
     - local: cli-lock

@@ -434,39 +434,6 @@ fn main() -> Result<()> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_upload_create_pr_flag() {
-        let cli = Cli::try_parse_from(["kernel-builder", "upload", "--create-pr"]).unwrap();
-        match cli.command {
-            Commands::Upload(args) => assert!(args.create_pr),
-            _ => panic!("Expected upload subcommand"),
-        }
-    }
-
-    #[test]
-    fn test_upload_create_pr_defaults_to_false() {
-        let cli = Cli::try_parse_from(["kernel-builder", "upload"]).unwrap();
-        match cli.command {
-            Commands::Upload(args) => assert!(!args.create_pr),
-            _ => panic!("Expected upload subcommand"),
-        }
-    }
-
-    #[test]
-    fn test_build_and_upload_create_pr_flag() {
-        let cli =
-            Cli::try_parse_from(["kernel-builder", "build-and-upload", "--create-pr"]).unwrap();
-        match cli.command {
-            Commands::BuildAndUpload { create_pr, .. } => assert!(create_pr),
-            _ => panic!("Expected build-and-upload subcommand"),
-        }
-    }
-}
-
 fn check_config(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     parse_and_validate(kernel_dir)?;

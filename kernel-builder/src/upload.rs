@@ -180,13 +180,14 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
     let repo_id = repo_url
         .as_ref()
-        .map(|repo_url| {
+        .and_then(|repo_url| {
             repo_url
                 .url
                 .trim_end_matches('/')
                 .strip_prefix("https://huggingface.co/")
                 .map(|s| s.strip_prefix("kernels/").unwrap_or(s).to_owned())
-        });
+        })
+        .unwrap_or(repo_id);
 
     let repo = repo_handle::<T>(&api, &repo_id);
 
@@ -198,21 +199,19 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         let exists = refs.branches.iter().any(|r| r.name == *branch);
 
         if !exists {
-            let created = repo
-                .create_branch()
+            repo.create_branch()
                 .branch(branch)
                 .send()
-                .wrap_err_with(||
-                if args.create_pr {
-                  format!(
-                        "Pull requests can only target an existing branch. Ask a \
-                         maintainer of `{repo_id}` to create the branch `{branch}` first."
-                    )
-                }
-                else {
-                    format!("Cannot create branch `{branch}`"))
-                 }
-                 );
+                .wrap_err_with(|| {
+                    if args.create_pr {
+                        format!(
+                            "Pull requests can only target an existing branch. Ask a \
+                             maintainer of `{repo_id}` to create the branch `{branch}` first."
+                        )
+                    } else {
+                        format!("Cannot create branch `{branch}`")
+                    }
+                })?;
         }
         eprintln!(
             "Using branch `{branch}`{}",

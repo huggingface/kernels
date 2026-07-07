@@ -62,6 +62,10 @@ available. This list will be updated as new PyTorch versions are released.
 - `torch213-cxx11-rocm71-x86_64-linux`
 - `torch213-cxx11-rocm72-x86_64-linux`
 
+## TPU x86_64-linux
+
+- `torch-tpu`
+
 ## XPU x86_64-linux
 
 - `torch211-cxx11-xpu20253-x86_64-linux`
@@ -77,4 +81,5 @@ one or more of the following variants:
 - `torch-cuda`
 - `torch-metal`
 - `torch-rocm`
+- `torch-tpu`
 - `torch-xpu`

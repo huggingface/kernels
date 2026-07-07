@@ -48,6 +48,7 @@ in
         cuda = false;
         metal = false;
         rocm = false;
+        tpu = false;
         xpu = false;
       };
     in
@@ -63,6 +64,7 @@ in
         cuda = false;
         metal = false;
         rocm = false;
+        tpu = false;
         xpu = false;
       };
     in

@@ -150,6 +150,9 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         build_dir.display()
     );
 
+    let dirty_variants = dirty_variant_names(&variants);
+    warn_dirty_variants(&dirty_variants);
+
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
     let repo_url = match api
@@ -207,6 +210,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     collect_readme_commit_ops(
         &kernel_dir,
+        &dirty_variants,
         operations_by_branch
             .entry(MAIN_BRANCH.to_owned())
             .or_default(),
@@ -363,14 +367,77 @@ fn collect_benchmark_commit_ops(
 }
 
 /// Collect README commit operation: upload build/CARD.md as README.md.
-fn collect_readme_commit_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
+///
+/// When any variant was built from a dirty git tree, a warning banner naming
+/// those variants is injected into the card so it is visible on the Hub.
+fn collect_readme_commit_ops(
+    kernel_dir: &Path,
+    dirty_variants: &[String],
+    operations: &mut Vec<CommitOperation>,
+) {
     let Ok(card_path) = discover_build_file(kernel_dir, "CARD.md") else {
         return;
     };
+
+    // Without a dirty build there is nothing to inject, so stream the file
+    // directly rather than reading it into memory.
+    if dirty_variants.is_empty() {
+        operations.push(CommitOperation::Add {
+            path_in_repo: "README.md".to_owned(),
+            source: AddSource::File(card_path),
+        });
+        return;
+    }
+
+    let source = match fs::read_to_string(&card_path) {
+        Ok(card) => {
+            AddSource::Bytes(render_card_with_dirty_banner(&card, dirty_variants).into_bytes())
+        }
+        // If the card cannot be read as UTF-8, fall back to uploading it
+        // verbatim rather than dropping the README entirely.
+        Err(_) => AddSource::File(card_path),
+    };
     operations.push(CommitOperation::Add {
         path_in_repo: "README.md".to_owned(),
-        source: AddSource::File(card_path),
+        source,
     });
+}
+
+/// Insert a "dirty build" warning banner into a model card.
+///
+/// The banner is placed after the YAML front matter (if any) so the front
+/// matter stays parseable, otherwise at the very top of the card.
+fn render_card_with_dirty_banner(card: &str, dirty_variants: &[String]) -> String {
+    let banner = format!(
+        "> [!WARNING]\n\
+         > This kernel was built from a dirty git tree (uncommitted changes) for the \
+         following variant(s): {}. The recorded git revision does not fully identify \
+         the sources they were built from, so the build may not be reproducible.\n",
+        dirty_variants
+            .iter()
+            .map(|v| format!("`{v}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    // Detect leading YAML front matter delimited by `---` lines.
+    let body = card
+        .strip_prefix("---\n")
+        .or_else(|| card.strip_prefix("---\r\n"));
+    if let Some(after_open) = body {
+        if let Some(end) = after_open.find("\n---") {
+            // Split just past the closing `---` line (and its newline, if present).
+            let rest = &after_open[end + "\n---".len()..];
+            let rest = rest
+                .strip_prefix("\r\n")
+                .or_else(|| rest.strip_prefix('\n'))
+                .unwrap_or(rest);
+            let front_matter = &card[..card.len() - rest.len()];
+            return format!("{front_matter}\n{banner}\n{rest}");
+        }
+    }
+
+    format!("{banner}\n{card}")
 }
 
 /// Collect build artifact commit operations: add variant files, delete stale ones.
@@ -456,6 +523,51 @@ fn discover_build_file(
     );
 }
 
+/// Warn about build variants whose provenance is dirty.
+///
+/// A dirty variant was built from a working tree with uncommitted changes, so
+/// its recorded git SHA does not fully identify the sources it was built from
+/// and the build may not be reproducible. Metadata that cannot be read is
+/// silently skipped: this is a best-effort warning, not a hard check.
+fn warn_dirty_variants(dirty: &[String]) {
+    if dirty.is_empty() {
+        return;
+    }
+
+    eprintln!(
+        "warning: uploading {} build variant(s) built from a dirty git tree \
+         (uncommitted changes): {}. Their recorded git revision does not fully \
+         identify the sources they were built from, so the build may not be \
+         reproducible.",
+        dirty.len(),
+        dirty.join(", ")
+    );
+}
+
+/// Names of the build variants whose provenance is dirty, sorted.
+///
+/// Metadata that cannot be read is silently skipped: this backs a best-effort
+/// warning, not a hard check.
+fn dirty_variant_names(variants: &[PathBuf]) -> Vec<String> {
+    let mut dirty: Vec<String> = variants
+        .iter()
+        .filter(|variant| {
+            File::open(variant.join("metadata.json"))
+                .ok()
+                .and_then(|f| Metadata::from_reader(BufReader::new(f)).ok())
+                .and_then(|m| m.provenance)
+                .is_some_and(|p| p.is_dirty())
+        })
+        .filter_map(|variant| {
+            variant
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
+        .collect();
+    dirty.sort();
+    dirty
+}
+
 /// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
     let mut versions: HashSet<usize> = HashSet::new();
@@ -513,12 +625,17 @@ mod tests {
         fs::write(kernel_dir.join("build/CARD.md"), "# Readme").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(kernel_dir, &mut operations);
+        collect_readme_commit_ops(kernel_dir, &[], &mut operations);
 
         assert_eq!(operations.len(), 1);
         match &operations[0] {
-            CommitOperation::Add { path_in_repo, .. } => {
+            CommitOperation::Add {
+                path_in_repo,
+                source,
+            } => {
                 assert_eq!(path_in_repo, "README.md");
+                // A clean build streams the card file verbatim.
+                assert!(matches!(source, AddSource::File(_)));
             }
             _ => panic!("Expected Add operation"),
         }
@@ -528,8 +645,58 @@ mod tests {
     fn test_collect_readme_commit_ops_no_card() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut operations = vec![];
-        collect_readme_commit_ops(temp_dir.path(), &mut operations);
+        collect_readme_commit_ops(temp_dir.path(), &[], &mut operations);
         assert!(operations.is_empty());
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops_injects_dirty_banner() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+        fs::create_dir_all(kernel_dir.join("build")).unwrap();
+        fs::write(
+            kernel_dir.join("build/CARD.md"),
+            "---\ntags: [kernel]\n---\n# Readme\n",
+        )
+        .unwrap();
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(kernel_dir, &["torch-cuda".to_owned()], &mut operations);
+
+        assert_eq!(operations.len(), 1);
+        let CommitOperation::Add {
+            source: AddSource::Bytes(bytes),
+            ..
+        } = &operations[0]
+        else {
+            panic!("Expected Add operation with rewritten bytes");
+        };
+        let rendered = String::from_utf8(bytes.clone()).unwrap();
+        assert!(rendered.contains("[!WARNING]"));
+        assert!(rendered.contains("`torch-cuda`"));
+        // Front matter is preserved at the top and the body still follows.
+        assert!(rendered.starts_with("---\ntags: [kernel]\n---\n"));
+        assert!(rendered.contains("# Readme"));
+    }
+
+    #[test]
+    fn test_render_card_with_dirty_banner_after_front_matter() {
+        let card = "---\ntags: [kernel]\n---\n# Title\n\nBody.\n";
+        let rendered = render_card_with_dirty_banner(card, &["torch-cuda".to_owned()]);
+        // Front matter stays intact at the top, then the banner, then the body.
+        assert!(rendered.starts_with("---\ntags: [kernel]\n---\n"));
+        let banner_pos = rendered.find("[!WARNING]").unwrap();
+        let title_pos = rendered.find("# Title").unwrap();
+        assert!(banner_pos < title_pos);
+    }
+
+    #[test]
+    fn test_render_card_with_dirty_banner_no_front_matter() {
+        let card = "# Title\n\nBody.\n";
+        let rendered = render_card_with_dirty_banner(card, &["a".to_owned(), "b".to_owned()]);
+        assert!(rendered.starts_with("> [!WARNING]"));
+        assert!(rendered.contains("`a`, `b`"));
+        assert!(rendered.trim_end().ends_with("Body."));
     }
 
     #[test]
@@ -665,6 +832,38 @@ mod tests {
 
     const METADATA_V3: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
     const METADATA_V0: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 0, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
+
+    const METADATA_DIRTY: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 1, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}, "provenance": {"kernel-builder": {"version": "0.1.0", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false}, "kernel": {"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "dirty": true}}}"#;
+
+    #[test]
+    fn test_dirty_variant_names() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let clean = temp_dir.path().join("torch-cpu");
+        fs::create_dir_all(&clean).unwrap();
+        fs::write(clean.join("metadata.json"), METADATA_V3).unwrap();
+
+        let dirty = temp_dir.path().join("torch-cuda");
+        fs::create_dir_all(&dirty).unwrap();
+        fs::write(dirty.join("metadata.json"), METADATA_DIRTY).unwrap();
+
+        // A variant with unreadable metadata is skipped rather than failing.
+        let broken = temp_dir.path().join("torch-rocm");
+        fs::create_dir_all(&broken).unwrap();
+
+        let names = dirty_variant_names(&[clean, dirty, broken]);
+        assert_eq!(names, vec!["torch-cuda".to_owned()]);
+    }
+
+    #[test]
+    fn test_dirty_variant_names_none_dirty() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let clean = temp_dir.path().join("torch-cpu");
+        fs::create_dir_all(&clean).unwrap();
+        fs::write(clean.join("metadata.json"), METADATA_V3).unwrap();
+
+        assert!(dirty_variant_names(&[clean]).is_empty());
+    }
 
     #[test]
     fn test_detect_branch_from_metadata() {

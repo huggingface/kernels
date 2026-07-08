@@ -1,5 +1,6 @@
 final: prev:
 {
+  # Local packages/hooks.
   kernel-builder = final.callPackage ./pkgs/kernel-builder { };
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
@@ -34,6 +35,17 @@ final: prev:
         inherit (finalAttrs) src;
         hash = "sha256-EQERi5NSMUK7qfFYWilzhacYlK4ShQl9Koz8t/8I6+U=";
       };
+    }
+  );
+
+  # nixpkgs overrides
+  ucc = prev.ucc.overrideAttrs (
+    _: prevAttrs: {
+      # Concurrent build flags do not seem to get passed through? So instead, let's
+      # add parallelism to building CUDA files.
+      preConfigure = prevAttrs.preConfigure + ''
+        export NVCC_CFLAGS="--threads $NIX_BUILD_CORES"
+      '';
     }
   );
 

@@ -194,7 +194,7 @@ stdenv.mkDerivation (prevAttrs: {
 
       # Make dependent on build configuration dependencies once
       # the Torch dependency is gone.
-      cuda_cccl
+      cccl
       libcublas
       libcusolver
       libcusparse

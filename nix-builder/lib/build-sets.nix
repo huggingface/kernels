@@ -6,8 +6,6 @@
 let
   inherit (nixpkgs) lib;
 
-  overlay = import ../nix/overlay.nix;
-
   inherit (import ./torch-version-utils.nix { inherit lib; })
     backend
     flattenSystems

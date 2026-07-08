@@ -85,4 +85,6 @@
 - sections:
     - local: talks
       title: Talks
+    - local: blog
+      title: Blog posts
   title: Resources

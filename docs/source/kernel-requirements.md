@@ -224,6 +224,14 @@ The version **must** be bumped in the following cases:
 In both cases, build variants that are not updated must be removed from
 the new version's branch.
 
+> [!IMPORTANT]
+> The *kernel API* covered by these versioning guarantees is only the
+> public API: the symbols listed in the `__all__` of the kernel's
+> top-level `__init__.py`. Anything not in `__all__` (e.g. internal
+> helpers or names prefixed with `_`) is considered private and may
+> change or be removed at any time without a version bump. Export every
+> symbol you intend consumers to rely on in `__all__`.
+
 > [!NOTE]
 > By convention, we reserve version `0` for kernels that are still in
 > alpha or beta stage and are not recommended for production use (e.g.
@@ -393,6 +401,12 @@ __all__ = [
   # ...
 ]
 ```
+
+> [!IMPORTANT]
+> Only symbols listed in `__all__` are treated as the kernel's public
+> API. This is the surface that consumers can rely on and that the
+> [versioning guarantees](#versioning) apply to, so be sure to export
+> every function, class, and `layers` module you want to expose.
 
 ## Python requirements
 

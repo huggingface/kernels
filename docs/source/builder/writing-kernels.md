@@ -192,7 +192,7 @@ The following sections enumerate all supported options for `build.toml`.
   extension must be stored in `torch-ext/<name>`.
 - `version` (int): the major version of the kernel.
   The version is written to the kernel's `metadata.json` and is used
-  by the `kernels upload` command to upload the kernel to a version
+  by the `kernel-builder upload` command to upload the kernel to a version
   branch named `v<version>`.
 - `edition` (required): the `build.toml` format edition. The current
   edition is `5`. Older `build.toml` files can be migrated with
@@ -424,7 +424,7 @@ def mykernel(x: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tenso
 ## Registering Torch operators
 
 You may want to register Torch ops from your kernel's Python code or
-register fake ops for `torch.compile` support. It is important to register
+[register](https://docs.pytorch.org/tutorials/advanced/custom_ops_landing_page.html) fake ops for `torch.compile` support. It is important to register
 such ops in the namespace that kernel-builder makes for your kernel
 build. This is required for compliant kernels to ensure that multiple
 versions of the same kernel can be loaded at the same time without
@@ -460,6 +460,20 @@ so it should be seen as a last-resort check if human review failed:
 @some_indirection_for_register_fake("relu::relu_fwd")
 def relu_fwd_fake(input: torch.Tensor) -> torch.Tensor:
     return torch.empty_like(input)
+```
+
+> [!WARNING]
+> To facilitate static analysis of ops by kernel-builder, `add_op_namespace_prefix` should not be rewrapped. Furthermore, no fallbacks should be added when importing `add_op_namnespace_prefix`, since such fallbacks can mask issues (e.g. incorrect import paths), resulting in non-unique op names. Below is an example of this antipattern:
+
+```py
+try:
+    from ._ops import add_op_namespace_prefix as _generated_add_op_namespace_prefix
+except ImportError:
+    def _generated_add_op_namespace_prefix(name: str) -> str:
+        return name if "::" in name else f"my_kernel::{name}"
+
+def add_op_namespace_prefix(name: str) -> str:
+    return _generated_add_op_namespace_prefix(name)
 ```
 
 ## Kernel tests

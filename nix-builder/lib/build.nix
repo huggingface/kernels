@@ -113,6 +113,7 @@ rec {
       rev,
       doGetKernelCheck,
       stripRPath ? false,
+      kernelProvenance,
     }:
     let
       inherit (lib) fileset;
@@ -151,6 +152,7 @@ rec {
           doGetKernelCheck
           pythonDeps
           backendPythonDeps
+          kernelProvenance
           ;
         kernelName = kernelConfig.name;
       }
@@ -166,6 +168,7 @@ rec {
           rev
           pythonDeps
           backendPythonDeps
+          kernelProvenance
           ;
 
         kernelName = kernelConfig.name;
@@ -183,6 +186,7 @@ rec {
           rev
           pythonDeps
           backendPythonDeps
+          kernelProvenance
           ;
 
         torchStableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
@@ -199,6 +203,7 @@ rec {
       doGetKernelCheck,
       bundleOnly,
       buildSets,
+      kernelProvenance,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -212,6 +217,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
+              kernelProvenance
               ;
             stripRPath = true;
           };
@@ -227,6 +233,7 @@ rec {
       rev,
       doGetKernelCheck,
       buildSets,
+      kernelProvenance,
     }:
     let
       extensions = mkDistTorchExtensions {
@@ -235,6 +242,7 @@ rec {
           path
           rev
           doGetKernelCheck
+          kernelProvenance
           ;
         bundleOnly = true;
       };
@@ -289,6 +297,8 @@ rec {
               rev
               doGetKernelCheck
               ;
+            # Dev/test shells do not record build provenance.
+            kernelProvenance = null;
           };
         in
         {
@@ -339,6 +349,7 @@ rec {
       buildSets,
       doGetKernelCheck,
       pythonCheckInputs,
+      kernelProvenance,
     }:
     let
       kernelConfig = readKernelConfig path;
@@ -355,6 +366,7 @@ rec {
               kernelConfig
               rev
               doGetKernelCheck
+              kernelProvenance
               ;
           };
           testPython =
@@ -412,6 +424,8 @@ rec {
               rev
               doGetKernelCheck
               ;
+            # Dev/test shells do not record build provenance.
+            kernelProvenance = null;
           };
           python = (
             pkgs.python3.withPackages (

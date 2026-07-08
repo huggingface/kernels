@@ -87,6 +87,7 @@ impl TryFrom<Build> for super::Build {
                 Backend::Cpu,
                 Backend::Cuda,
                 Backend::Metal,
+                Backend::Mlu,
                 Backend::Neuron,
                 Backend::Rocm,
                 Backend::Xpu,

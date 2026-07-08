@@ -413,6 +413,8 @@ def collect_machine_info() -> MachineInfo:
             backend_type = "MPS"
         elif backend_name == "cann":
             backend_type = "NPU"
+        elif backend_name == "mlu":
+            backend_type = "MLU"
         else:
             backend_type = "CPU"
 

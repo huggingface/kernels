@@ -76,11 +76,14 @@ def test_backend_all_variants_and_casing():
     assert repr(Backend.Metal) == "Backend.Metal"
     assert str(Backend.Neuron) == "neuron"
     assert repr(Backend.Neuron) == "Backend.Neuron"
+    assert str(Backend.MLU) == "mlu"
+    assert repr(Backend.MLU) == "Backend.MLU"
     assert str(Backend.ROCm) == "rocm"
     assert repr(Backend.ROCm) == "Backend.ROCm"
     assert repr(Backend.XPU) == "Backend.XPU"
     assert repr(Backend.CANN) == "Backend.CANN"
     assert Backend.from_str("cann") == Backend.CANN
+    assert Backend.from_str("mlu") == Backend.MLU
     assert Backend.from_str("ROCM") == Backend.ROCm
     assert Backend.from_str("metal") == Backend.Metal
 

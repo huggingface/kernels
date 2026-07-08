@@ -34,7 +34,7 @@ from kernels.variants import (
     variants_trace_str,
 )
 
-KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
+KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu", "mlu"}
 
 # Exclude patter for bytecode. These are not included in kernel builds,
 # but builds not done using kernel-builder might accidentally include

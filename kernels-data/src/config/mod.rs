@@ -377,18 +377,20 @@ pub enum Backend {
     Cpu,
     Cuda,
     Metal,
+    Mlu,
     Neuron,
     Rocm,
     Xpu,
 }
 
 impl Backend {
-    pub const fn all() -> [Backend; 7] {
+    pub const fn all() -> [Backend; 8] {
         [
             Backend::Cann,
             Backend::Cpu,
             Backend::Cuda,
             Backend::Metal,
+            Backend::Mlu,
             Backend::Neuron,
             Backend::Rocm,
             Backend::Xpu,
@@ -401,6 +403,7 @@ impl Backend {
             Backend::Cpu => "cpu",
             Backend::Cuda => "cuda",
             Backend::Metal => "metal",
+            Backend::Mlu => "mlu",
             Backend::Neuron => "neuron",
             Backend::Rocm => "rocm",
             Backend::Xpu => "xpu",
@@ -415,6 +418,7 @@ impl Display for Backend {
             Backend::Cpu => write!(f, "cpu"),
             Backend::Cuda => write!(f, "cuda"),
             Backend::Metal => write!(f, "metal"),
+            Backend::Mlu => write!(f, "mlu"),
             Backend::Neuron => write!(f, "neuron"),
             Backend::Rocm => write!(f, "rocm"),
             Backend::Xpu => write!(f, "xpu"),
@@ -431,6 +435,7 @@ impl FromStr for Backend {
             "cpu" => Ok(Backend::Cpu),
             "cuda" => Ok(Backend::Cuda),
             "metal" => Ok(Backend::Metal),
+            "mlu" => Ok(Backend::Mlu),
             "neuron" => Ok(Backend::Neuron),
             "rocm" => Ok(Backend::Rocm),
             "xpu" => Ok(Backend::Xpu),

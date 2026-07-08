@@ -293,6 +293,27 @@ def test_hub_forward_xpu():
     assert rms_norm_with_kernel.n_calls == 0
 
 
+@pytest.mark.mlu_only
+def test_hub_forward_mlu():
+    torch.manual_seed(0)
+
+    hidden_size = 1024
+    weight = torch.ones(hidden_size, device="mlu")
+    rms_norm = RMSNorm(weight).to("mlu")
+    X = torch.randn(4, 16, hidden_size, device="mlu", dtype=torch.float32)
+    Y = rms_norm(X)
+
+    rms_norm_with_kernel = kernelize(RMSNormWithKernel(weight), mode=Mode.INFERENCE, device="mlu")
+    Y_kernel = rms_norm_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert rms_norm.n_calls == 1
+    # Currently no MLU kernels exist, so expect fallback (n_calls == 1).
+    # When MLU kernels are added, this will become n_calls == 0.
+    assert rms_norm_with_kernel.n_calls in [0, 1]
+
+
 def test_rocm_kernel_mapping(device):
     """Test that ROCm shorthand device mapping works correctly."""
 

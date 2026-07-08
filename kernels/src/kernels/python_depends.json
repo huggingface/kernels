@@ -18,6 +18,7 @@
       }
     },
     "metal": {},
+    "mlu": {},
     "neuron": {
       "nki": {
         "nix": [],

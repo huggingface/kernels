@@ -46,14 +46,15 @@ The compiled kernel will then be available in the local `build/` directory.
 
 ## 🎯 Hardware Support
 
-| Hardware   | Kernels Support | Kernel-Builder Support | Kernels Validated in CI | Tier |
-| ---------- | --------------- | ---------------------- | ----------------------- | ---- |
-| CUDA       | ✓               | ✓                      | ✓                       | 1    |
-| ROCm       | ✓               | ✓                      | ✗                       | 2    |
-| XPU        | ✓               | ✓                      | ✗                       | 2    |
-| Metal      | ✓               | ✓                      | ✗                       | 2    |
-| Huawei NPU | ✓               | ✗                      | ✗                       | 3    |
-| Neuron     | ✓               | x                      | x                       | 3    |
+| Hardware     | Kernels Support | Kernel-Builder Support | Kernels Validated in CI | Tier |
+| ------------ | --------------- | ---------------------- | ----------------------- | ---- |
+| CUDA         | ✓               | ✓                      | ✓                       | 1    |
+| ROCm         | ✓               | ✓                      | ✗                       | 2    |
+| XPU          | ✓               | ✓                      | ✗                       | 2    |
+| Metal        | ✓               | ✓                      | ✗                       | 2    |
+| Huawei NPU   | ✓               | ✗                      | ✗                       | 3    |
+| Neuron       | ✓               | x                      | x                       | 3    |
+| Cambricon MLU| ✓               | ✗                      | ✗                       | 3    |
 
 **Warning:** Neuron support is experimental and currently requires pre-release packages.
 

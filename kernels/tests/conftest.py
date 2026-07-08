@@ -34,6 +34,8 @@ has_xpu = (
 
 has_npu = torch is not None and _get_torch_privateuse_backend_name() == "npu"
 
+has_mlu = torch is not None and hasattr(torch, "mlu") and torch.mlu.device_count() > 0
+
 has_jax = importlib.util.find_spec("jax") is not None and importlib.util.find_spec("jax_tvm_ffi") is not None
 
 
@@ -74,5 +76,7 @@ def pytest_runtest_setup(item):
         pytest.skip("skipping XPU-only test on host without XPU")
     if "npu_only" in item.keywords and not has_npu:
         pytest.skip("skipping NPU-only test on host without NPU")
+    if "mlu_only" in item.keywords and not has_mlu:
+        pytest.skip("skipping MLU-only test on host without MLU")
     if "token" in item.keywords and not item.config.getoption("--token"):
         pytest.skip("need --token option to run this test")

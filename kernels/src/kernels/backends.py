@@ -127,6 +127,24 @@ class Neuron:
         return Neuron()
 
 
+@strict
+@dataclass(unsafe_hash=True)
+class MLU:
+    @property
+    def name(self) -> str:
+        return "mlu"
+
+    @property
+    def variant_str(self) -> str:
+        return "mlu"
+
+    @staticmethod
+    def parse(s: str) -> "MLU":
+        if s != "mlu":
+            raise ValueError(f"Invalid MLU variant string: {s!r}")
+        return MLU()
+
+
 @dataclass(unsafe_hash=True)
 class ROCm:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
@@ -179,6 +197,8 @@ def parse_backend(s: str) -> Backend:
         return Metal.parse(s)
     elif s == "neuron":
         return Neuron.parse(s)
+    elif s == "mlu":
+        return MLU.parse(s)
     elif s.startswith("cu"):
         return CUDA.parse(s)
     elif s.startswith("rocm"):
@@ -215,6 +235,8 @@ def _backend() -> Backend:
 
             cann_major, cann_minor = get_cann_version()[0], get_cann_version()[2]
             return CANN(version=Version(f"{cann_major}.{cann_minor}"))
+        elif hasattr(torch, "mlu") and torch.mlu.device_count() > 0:
+            return MLU()
         else:
             return CPU()
     else:

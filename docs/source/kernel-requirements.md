@@ -148,7 +148,7 @@ The `backend` specifies a dictionary of the following form:
 }
 ```
 
-The backend `type` must be one of `cann`, `cpu`, `cuda`, `metal`, `neuron`,
+The backend `type` must be one of `cann`, `cpu`, `cuda`, `metal`, `mlu`, `neuron`,
 `rocm`, or `xpu`. For CUDA and ROCm, the supported architectures must
 be specified in the `archs` field.
 

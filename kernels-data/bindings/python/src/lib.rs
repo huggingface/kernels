@@ -84,6 +84,8 @@ enum PyBackend {
     Cuda,
     #[pyo3(name = "Metal")]
     Metal,
+    #[pyo3(name = "MLU")]
+    Mlu,
     #[pyo3(name = "Neuron")]
     Neuron,
     #[pyo3(name = "ROCm")]
@@ -99,6 +101,7 @@ impl From<Backend> for PyBackend {
             Backend::Cpu => PyBackend::Cpu,
             Backend::Cuda => PyBackend::Cuda,
             Backend::Metal => PyBackend::Metal,
+            Backend::Mlu => PyBackend::Mlu,
             Backend::Neuron => PyBackend::Neuron,
             Backend::Rocm => PyBackend::Rocm,
             Backend::Xpu => PyBackend::Xpu,
@@ -113,6 +116,7 @@ impl From<PyBackend> for Backend {
             PyBackend::Cpu => Backend::Cpu,
             PyBackend::Cuda => Backend::Cuda,
             PyBackend::Metal => Backend::Metal,
+            PyBackend::Mlu => Backend::Mlu,
             PyBackend::Neuron => Backend::Neuron,
             PyBackend::Rocm => Backend::Rocm,
             PyBackend::Xpu => Backend::Xpu,
@@ -123,7 +127,7 @@ impl From<PyBackend> for Backend {
 #[pymethods]
 impl PyBackend {
     /// Parse a backend name (`"cann"`, `"cpu"`, `"cuda"`, `"metal"`,
-    /// `"neuron"`, `"rocm"`, `"xpu"`).
+    /// `"mlu"`, `"neuron"`, `"rocm"`, `"xpu"`).
     #[staticmethod]
     #[pyo3(name = "from_str")]
     fn py_from_str(s: &str) -> PyResult<Self> {
@@ -142,6 +146,7 @@ impl PyBackend {
             PyBackend::Cpu => "CPU",
             PyBackend::Cuda => "CUDA",
             PyBackend::Metal => "Metal",
+            PyBackend::Mlu => "MLU",
             PyBackend::Neuron => "Neuron",
             PyBackend::Rocm => "ROCm",
             PyBackend::Xpu => "XPU",

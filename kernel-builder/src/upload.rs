@@ -157,37 +157,38 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
-    let repo_url = match api
-        .create_repository()
-        .repo_id(&repo_id)
-        .repo_type(T::default())
-        .private(args.private)
-        .exist_ok(true)
-        .send()
-    {
-        Ok(url) => Some(url),
-        // With --create-pr, write access is not required: the repository only
-        // needs to exist, so continue and let the Hub open a pull request.
-        Err(HFError::Forbidden { .. }) if args.create_pr => None,
-        Err(err @ HFError::Forbidden { .. }) => {
-            if hf::whoami_username().is_err() {
-                return Err(err).wrap_err("Cannot create repository");
+    // With --create-pr, write access is not required and we must not create a
+    // new repository: the repository only needs to already exist for the Hub to
+    // open a pull request against it. Skip repository creation entirely and use
+    // the provided repo id as-is.
+    let repo_id = if args.create_pr {
+        repo_id
+    } else {
+        let repo_url = match api
+            .create_repository()
+            .repo_id(&repo_id)
+            .repo_type(T::default())
+            .private(args.private)
+            .exist_ok(true)
+            .send()
+        {
+            Ok(url) => url,
+            Err(err @ HFError::Forbidden { .. }) => {
+                if hf::whoami_username().is_err() {
+                    return Err(err).wrap_err("Cannot create repository");
+                }
+                bail!(kernel_publishing_guidance(&repo_id));
             }
-            bail!(kernel_publishing_guidance(&repo_id));
-        }
-        Err(err) => return Err(err).wrap_err("Cannot create repository"),
+            Err(err) => return Err(err).wrap_err("Cannot create repository"),
+        };
+        // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos.
+        repo_url
+            .url
+            .trim_end_matches('/')
+            .strip_prefix("https://huggingface.co/")
+            .map(|s| s.strip_prefix("kernels/").unwrap_or(s).to_owned())
+            .unwrap_or(repo_id)
     };
-    // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
-    let repo_id = repo_url
-        .as_ref()
-        .and_then(|repo_url| {
-            repo_url
-                .url
-                .trim_end_matches('/')
-                .strip_prefix("https://huggingface.co/")
-                .map(|s| s.strip_prefix("kernels/").unwrap_or(s).to_owned())
-        })
-        .unwrap_or(repo_id);
 
     let repo = repo_handle::<T>(&api, &repo_id);
 

@@ -228,7 +228,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     let mut pr_urls: Vec<String> = Vec::new();
 
     collect_readme_commit_ops(
-        &kernel_dir,
+        &build_dir,
         operations_by_branch
             .entry(MAIN_BRANCH.to_owned())
             .or_default(),
@@ -460,11 +460,17 @@ fn collect_benchmark_commit_ops(
     Ok(())
 }
 
-/// Collect README commit operation: upload build/CARD.md as README.md.
-fn collect_readme_commit_ops(kernel_dir: &Path, operations: &mut Vec<CommitOperation>) {
-    let Ok(card_path) = discover_build_file(kernel_dir, "CARD.md") else {
+/// Collect README commit operation: upload the `CARD.md` as `README.md`.
+///
+/// The card is only looked for in `build_dir`, i.e. the same directory that
+/// holds the build variants (as returned by `discover_variants`). This ensures
+/// the card is taken from the same location as the variants rather than an
+/// unrelated directory elsewhere in the repository (see issue #659).
+fn collect_readme_commit_ops(build_dir: &Path, operations: &mut Vec<CommitOperation>) {
+    let card_path = build_dir.join("CARD.md");
+    if !card_path.is_file() {
         return;
-    };
+    }
     operations.push(CommitOperation::Add {
         path_in_repo: "README.md".to_owned(),
         source: AddSource::File(card_path),
@@ -525,35 +531,6 @@ fn collect_build_commit_ops(
     Ok(())
 }
 
-fn discover_build_file(
-    kernel_dir: impl AsRef<Path>,
-    filename: impl AsRef<Path>,
-) -> Result<PathBuf> {
-    let kernel_dir = kernel_dir.as_ref();
-    let filename = filename.as_ref();
-
-    let candidates = [
-        kernel_dir.join("result").join(filename),
-        kernel_dir.join("build").join(filename),
-        kernel_dir.join(filename),
-    ];
-
-    for candidate in &candidates {
-        if candidate.is_file() {
-            return Ok(candidate.clone());
-        }
-    }
-
-    bail!(
-        "No build directory found: {}",
-        candidates
-            .iter()
-            .map(|p| p.to_string_lossy())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-}
-
 /// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
     let mut versions: HashSet<usize> = HashSet::new();
@@ -605,18 +582,25 @@ mod tests {
     #[test]
     fn test_collect_readme_commit_ops() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let kernel_dir = temp_dir.path();
+        let build_dir = temp_dir.path().join("build");
 
-        fs::create_dir_all(kernel_dir.join("build")).unwrap();
-        fs::write(kernel_dir.join("build/CARD.md"), "# Readme").unwrap();
+        fs::create_dir_all(&build_dir).unwrap();
+        fs::write(build_dir.join("CARD.md"), "# Readme").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(kernel_dir, &mut operations);
+        collect_readme_commit_ops(&build_dir, &mut operations);
 
         assert_eq!(operations.len(), 1);
         match &operations[0] {
-            CommitOperation::Add { path_in_repo, .. } => {
+            CommitOperation::Add {
+                path_in_repo,
+                source,
+            } => {
                 assert_eq!(path_in_repo, "README.md");
+                match source {
+                    AddSource::File(path) => assert_eq!(*path, build_dir.join("CARD.md")),
+                    _ => panic!("Expected file source"),
+                }
             }
             _ => panic!("Expected Add operation"),
         }
@@ -627,6 +611,25 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut operations = vec![];
         collect_readme_commit_ops(temp_dir.path(), &mut operations);
+        assert!(operations.is_empty());
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops_ignores_card_outside_build_dir() {
+        // A card in the kernel directory (or any other directory) must not be
+        // picked up when the variants — and thus `build_dir` — live in `build/`.
+        // See issue #659.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+        let build_dir = kernel_dir.join("build");
+
+        fs::create_dir_all(&build_dir).unwrap();
+        // Stray card outside the variants directory.
+        fs::write(kernel_dir.join("CARD.md"), "# Stray card").unwrap();
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(&build_dir, &mut operations);
+
         assert!(operations.is_empty());
     }
 
@@ -812,57 +815,32 @@ mod tests {
     }
 
     #[test]
-    fn test_discover_build_file_in_result_symlink() {
+    fn test_collect_readme_commit_ops_from_result_symlink() {
+        // When variants live in a Nix store output exposed via a `result`
+        // symlink, the card next to them must be picked up through the symlink.
         let temp_dir = tempfile::tempdir().unwrap();
         let kernel_dir = temp_dir.path();
 
-        // Mock a Nix store directory with the file inside
         let store_dir = kernel_dir.join("nix-store-output");
-        let target = store_dir.join("CARD.md");
         fs::create_dir_all(&store_dir).unwrap();
-        fs::write(&target, "# Test card").unwrap();
-
-        // Create result symlink pointing to store output
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
+        fs::write(store_dir.join("CARD.md"), "# Test card").unwrap();
 
         #[cfg(unix)]
         {
-            let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
-            assert_eq!(found, kernel_dir.join("result").join("CARD.md"));
+            std::os::unix::fs::symlink(&store_dir, kernel_dir.join("result")).unwrap();
+            let build_dir = kernel_dir.join("result");
+
+            let mut operations = vec![];
+            collect_readme_commit_ops(&build_dir, &mut operations);
+
+            assert_eq!(operations.len(), 1);
+            match &operations[0] {
+                CommitOperation::Add { path_in_repo, .. } => {
+                    assert_eq!(path_in_repo, "README.md");
+                }
+                _ => panic!("Expected Add operation"),
+            }
         }
-    }
-
-    #[test]
-    fn test_discover_build_file_in_build() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let kernel_dir = temp_dir.path();
-
-        let target = kernel_dir.join("build").join("CARD.md");
-        fs::create_dir_all(kernel_dir.join("build")).unwrap();
-        fs::write(&target, "# Test card").unwrap();
-
-        let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
-        assert_eq!(found, target);
-    }
-
-    #[test]
-    fn test_discover_build_file_in_fully_specified_build_dir() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let kernel_dir = temp_dir.path();
-
-        let target = kernel_dir.join("CARD.md");
-        fs::write(&target, "# Test card").unwrap();
-
-        let found = discover_build_file(kernel_dir, "CARD.md").unwrap();
-        assert_eq!(found, target);
-    }
-
-    #[test]
-    fn test_discover_build_file_not_found() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let result = discover_build_file(temp_dir.path(), "CARD.md");
-        assert!(result.is_err());
     }
 
     #[test]

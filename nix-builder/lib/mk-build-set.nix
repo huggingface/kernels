@@ -52,7 +52,6 @@ let
             });
           }
         );
-
   };
 
   overlayForRocmVersion = rocmVersion: self: super: {

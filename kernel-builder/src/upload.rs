@@ -6,11 +6,11 @@ use std::{
 };
 
 use clap::Args;
-use eyre::{bail, Context, Result};
+use eyre::{bail, eyre, Context, Result};
 use hf_hub::{
     progress::{Progress, ProgressEvent, ProgressHandler, UploadEvent},
-    repository::{AddSource, CommitOperation},
-    HFError, RepoType, RepoTypeKernel, RepoTypeModel,
+    repository::{AddSource, CommitInfo, CommitOperation},
+    HFError, HFRepositorySync, RepoType, RepoTypeKernel, RepoTypeModel,
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use kernels_data::metadata::Metadata;
@@ -92,6 +92,11 @@ pub struct UploadArgs {
     #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
     pub repo_type: RepoTypeArg,
 
+    /// Open a pull request with the changes rather than committing them
+    /// directly (does not require write access to the repository).
+    #[arg(long)]
+    pub create_pr: bool,
+
     /// Suppress progress output.
     #[arg(long, short)]
     pub quiet: bool,
@@ -152,31 +157,38 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
-    let repo_url = match api
-        .create_repository()
-        .repo_id(&repo_id)
-        .repo_type(T::default())
-        .private(args.private)
-        .exist_ok(true)
-        .send()
-    {
-        Ok(url) => url,
-        Err(err @ HFError::Forbidden { .. }) => {
-            if hf::whoami_username().is_err() {
-                return Err(err).wrap_err("Cannot create repository");
+    // With --create-pr, write access is not required and we must not create a
+    // new repository: the repository only needs to already exist for the Hub to
+    // open a pull request against it. Skip repository creation entirely and use
+    // the provided repo id as-is.
+    let repo_id = if args.create_pr {
+        repo_id
+    } else {
+        let repo_url = match api
+            .create_repository()
+            .repo_id(&repo_id)
+            .repo_type(T::default())
+            .private(args.private)
+            .exist_ok(true)
+            .send()
+        {
+            Ok(url) => url,
+            Err(err @ HFError::Forbidden { .. }) => {
+                if hf::whoami_username().is_err() {
+                    return Err(err).wrap_err("Cannot create repository");
+                }
+                bail!(kernel_publishing_guidance(&repo_id));
             }
-            bail!(kernel_publishing_guidance(&repo_id));
-        }
-        Err(err) => return Err(err).wrap_err("Cannot create repository"),
+            Err(err) => return Err(err).wrap_err("Cannot create repository"),
+        };
+        // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos.
+        repo_url
+            .url
+            .trim_end_matches('/')
+            .strip_prefix("https://huggingface.co/")
+            .map(|s| s.strip_prefix("kernels/").unwrap_or(s).to_owned())
+            .unwrap_or(repo_id)
     };
-    // Extract repo_id from URL, stripping "kernels/" prefix for kernel repos
-    let repo_id = repo_url
-        .url
-        .trim_end_matches('/')
-        .strip_prefix("https://huggingface.co/")
-        .map(|s| s.strip_prefix("kernels/").unwrap_or(s))
-        .unwrap_or(&repo_id)
-        .to_owned();
 
     let repo = repo_handle::<T>(&api, &repo_id);
 
@@ -191,7 +203,16 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             repo.create_branch()
                 .branch(branch)
                 .send()
-                .wrap_err_with(|| format!("Cannot create branch `{branch}`"))?;
+                .wrap_err_with(|| {
+                    if args.create_pr {
+                        format!(
+                            "Pull requests can only target an existing branch. Ask a \
+                             maintainer of `{repo_id}` to create the branch `{branch}` first."
+                        )
+                    } else {
+                        format!("Cannot create branch `{branch}`")
+                    }
+                })?;
         }
         eprintln!(
             "Using branch `{branch}`{}",
@@ -204,6 +225,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     // README goes to main branch, build artifacts go to version branch.
     let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
+    let mut pr_urls: Vec<String> = Vec::new();
 
     collect_readme_commit_ops(
         &kernel_dir,
@@ -271,6 +293,11 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
             Some(Progress::new(IndicatifProgress(pb)))
         };
 
+        // With --create-pr, the first batch opens a pull request against the
+        // branch; follow-up batches are pushed to the pull request ref so that
+        // one upload always results in a single pull request per branch.
+        let mut pr_revision: Option<String> = None;
+
         for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
             let commit_message = if batch_count > 1 {
                 format!(
@@ -281,21 +308,43 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
                 "Uploaded using `kernel-builder`.".to_owned()
             };
 
-            repo.create_commit()
+            let open_pr = args.create_pr && pr_revision.is_none();
+            let revision = pr_revision.clone().unwrap_or_else(|| branch.clone());
+
+            let commit_info = repo
+                .create_commit()
                 .operations(chunk.to_vec())
                 .commit_message(&commit_message)
-                .revision(branch.clone())
+                .revision(revision)
+                .create_pr(open_pr)
                 .maybe_progress(progress_handler.clone())
                 .send()
                 .wrap_err_with(|| format!("Cannot create commit on branch `{branch}`"))?;
+
+            if open_pr {
+                let (pr_ref, pr_url) =
+                    resolve_pr(&repo, &repo_id, &commit_info).wrap_err_with(|| {
+                        format!("Cannot determine the pull request opened for branch `{branch}`")
+                    })?;
+                pr_revision = Some(pr_ref);
+                pr_urls.push(pr_url);
+            }
         }
 
-        progress.finish_with_message(format!("Uploaded to `{branch}`"));
+        progress.finish_with_message(if args.create_pr {
+            format!("Opened pull request against `{branch}`")
+        } else {
+            format!("Uploaded to `{branch}`")
+        });
     }
 
     let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();
     if total_ops == 0 {
         eprintln!("No changes to upload.");
+    } else if args.create_pr {
+        for url in &pr_urls {
+            println!("Pull request created: {url}");
+        }
     } else {
         let type_prefix = T::default().url_prefix();
         let tree_path = branch
@@ -305,6 +354,55 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Resolve the ref and URL of the pull request opened by a `create_pr` commit.
+///
+/// The Hub reports the pull request as `pullRequestUrl` in the commit
+/// response, which hf-hub 1.0.0-rc.0 does not deserialize into `CommitInfo`
+/// (it expects `prUrl`/`prNum`), so fall back to matching the commit OID
+/// against the repository's pull-request refs.
+fn resolve_pr<T: RepoType>(
+    repo: &HFRepositorySync<T>,
+    repo_id: &str,
+    commit_info: &CommitInfo,
+) -> Result<(String, String)> {
+    let pr_url_for = |num: &str| {
+        format!(
+            "https://hf.co/{}{repo_id}/discussions/{num}",
+            T::default().url_prefix()
+        )
+    };
+
+    if let Some(num) = commit_info.pr_num {
+        let url = commit_info
+            .pr_url
+            .clone()
+            .unwrap_or_else(|| pr_url_for(&num.to_string()));
+        return Ok((format!("refs/pr/{num}"), url));
+    }
+
+    let oid = commit_info
+        .commit_oid
+        .as_deref()
+        .ok_or_else(|| eyre!("The Hub returned neither a pull request nor a commit OID"))?;
+    let refs = repo
+        .list_refs()
+        .include_pull_requests(true)
+        .send()
+        .wrap_err("Cannot list repository refs")?;
+    let pr = refs
+        .pull_requests
+        .iter()
+        .find(|r| r.target_commit == oid)
+        .ok_or_else(|| eyre!("No pull-request ref points at the created commit `{oid}`"))?;
+    let num = pr
+        .git_ref
+        .rsplit('/')
+        .next()
+        .ok_or_else(|| eyre!("Malformed pull-request ref `{}`", pr.git_ref))?;
+
+    Ok((pr.git_ref.clone(), pr_url_for(num)))
 }
 
 /// Collect benchmark file commit operations: add matching files, delete stale ones.

@@ -60,6 +60,12 @@
   }
   {
     torchVersion = "2.11";
+    tpu = true;
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
     xpuVersion = "2025.3.2";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;

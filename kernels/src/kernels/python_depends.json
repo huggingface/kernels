@@ -37,11 +37,11 @@
     },
     "tpu": {
       "torch_tpu": {
-        "nix": [],
+        "nix": ["torch_tpu"],
         "python": [{ "pkg": "torch_tpu", "import": "torch_tpu" }]
       },
       "jax": {
-        "nix": [],
+        "nix": ["jax"],
         "python": [{ "pkg": "jax", "import": "jax" }]
       },
       "libtpu": {

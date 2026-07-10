@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from torch_tpu._internal.pallas import jax_op
 
 
-def _jax_relu(x):
+def _jax_relu(x: jax.Array) -> jax.Array:
     return jnp.maximum(x, 0)
 
 

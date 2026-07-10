@@ -145,6 +145,10 @@ impl General {
                 .cuda
                 .as_ref()
                 .and_then(|cuda| cuda.python_depends.as_ref()),
+            Backend::Tpu => self
+                .tpu
+                .as_ref()
+                .and_then(|tpu| tpu.python_depends.as_ref()),
             Backend::Xpu => self
                 .xpu
                 .as_ref()
@@ -453,4 +457,52 @@ impl FromStr for Backend {
 pub enum ConfigError {
     #[error("Cannot migrate configuration: {reason:?}")]
     Migration { reason: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn general_with_tpu_deps() -> General {
+        General {
+            name: KernelName::new("test-kernel").unwrap(),
+            version: 1,
+            license: "apache-2.0".to_string(),
+            upstream: None,
+            source: None,
+            backends: vec![Backend::Tpu],
+            hub: None,
+            python_depends: None,
+            cuda: None,
+            neuron: None,
+            tpu: Some(TpuGeneral {
+                python_depends: Some(vec!["torch_tpu".to_string()]),
+            }),
+            xpu: None,
+        }
+    }
+
+    #[test]
+    fn backend_python_depends_resolves_tpu() {
+        let general = general_with_tpu_deps();
+        let deps = general
+            .backend_python_depends(Backend::Tpu)
+            .map(|dep| dep.map(|(name, _)| name.to_string()))
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert_eq!(deps, vec!["torch_tpu".to_string()]);
+    }
+
+    #[test]
+    fn backend_python_depends_empty_for_backend_without_deps() {
+        let general = general_with_tpu_deps();
+
+        assert!(
+            general
+                .backend_python_depends(Backend::Cpu)
+                .next()
+                .is_none()
+        );
+    }
 }

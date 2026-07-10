@@ -140,6 +140,11 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = RepoTypeArg::Kernel)]
         repo_type: RepoTypeArg,
 
+        /// Open a pull request with the changes rather than committing them
+        /// directly (does not require write access to the repository).
+        #[arg(long)]
+        create_pr: bool,
+
         /// Suppress progress output.
         #[arg(long, short)]
         quiet: bool,
@@ -360,6 +365,7 @@ fn main() -> Result<()> {
             branch,
             private,
             repo_type,
+            create_pr,
             quiet,
         } => {
             run_build(
@@ -375,6 +381,7 @@ fn main() -> Result<()> {
                 branch,
                 private,
                 repo_type,
+                create_pr,
                 quiet,
             })
         }

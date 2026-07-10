@@ -12,11 +12,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "20"
 
@@ -37,7 +37,34 @@ jobs:
             git diff "$PUSH_BEFORE"..."$PUSH_SHA" > /tmp/changes.diff
           fi
 
+      - name: Check authorization
+        id: authz
+        env:
+          COMMIT_AUTHOR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || github.event.head_commit.author.username || github.event.head_commit.author.name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          declare -A SLACK_IDS=(
+            ["danieldk"]="U072206PXLK"
+            ["drbh"]="U06C9TW7RDY"
+            ["sayakpaul"]="U03AU4E7DJB"
+          )
+
+          if [ -z "${SLACK_IDS[$COMMIT_AUTHOR]:-}" ]; then
+            echo "Error: Commit author ${COMMIT_AUTHOR} not in authorized SLACK_IDS list"
+            exit 1
+          fi
+
+          ROLE=$(gh api "repos/${REPO}/collaborators/${COMMIT_AUTHOR}/permission" --jq '.role_name' 2>/dev/null || echo "none")
+          if [ "$ROLE" != "admin" ] && [ "$ROLE" != "maintain" ]; then
+            echo "Error: Commit author ${COMMIT_AUTHOR} does not have admin or maintain role (role: ${ROLE})"
+            exit 1
+          fi
+
+          echo "authorized=true" >> "$GITHUB_OUTPUT"
+
       - name: Run security audit
+        if: steps.authz.outputs.authorized == 'true'
         id: audit
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -164,42 +191,25 @@ jobs:
           COMMIT_URL: ${{ github.event_name == 'pull_request' && github.event.pull_request.html_url || github.event.head_commit.url }}
           COMMIT_MESSAGE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || github.event.head_commit.message }}
           COMMIT_AUTHOR: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login || github.event.head_commit.author.username || github.event.head_commit.author.name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
         shell: bash
         run: |
           FINDINGS=$(cat /tmp/audit_result.txt)
-          COMMIT_TITLE=$(printf '%s\n' "$COMMIT_MESSAGE" | head -n1)
 
-          # GitHub username -> Slack member ID. Entries here are only tagged
-          # when the GitHub API confirms the user currently has the admin or
-          # maintain role on this repo, so stale entries are inert.
           declare -A SLACK_IDS=(
             ["danieldk"]="U072206PXLK"
             ["drbh"]="U06C9TW7RDY"
             ["sayakpaul"]="U03AU4E7DJB"
           )
 
-          MENTION=""
-          if [ -n "${SLACK_IDS[$COMMIT_AUTHOR]:-}" ]; then
-            ROLE=$(gh api "repos/${REPO}/collaborators/${COMMIT_AUTHOR}/permission" --jq '.role_name' 2>/dev/null || echo "none")
-            if [ "$ROLE" != "admin" ] && [ "$ROLE" != "maintain" ]; then
-              echo "Error: Commit author ${COMMIT_AUTHOR} does not have admin or maintain role (role: ${ROLE})"
-              exit 1
-            fi
-            MENTION="<@${SLACK_IDS[$COMMIT_AUTHOR]}> "
-          else
-            echo "Error: Commit author ${COMMIT_AUTHOR} not in authorized SLACK_IDS list"
-            exit 1
-          fi
+          MENTION="<@${SLACK_IDS[$COMMIT_AUTHOR]}> "
 
           jq -n \
             --arg mention "$MENTION" \
             --arg commit_url "$COMMIT_URL" \
-            --arg commit_title "$COMMIT_TITLE" \
+            --arg commit_message "$COMMIT_MESSAGE" \
             --arg commit_author "$COMMIT_AUTHOR" \
             --arg findings "$FINDINGS" \
-            '{"text": (($mention + "*Security Audit Finding*\n*Commit:* <" + $commit_url + "|" + $commit_title + ">\n*Author:* " + $commit_author + "\n\n---\n\n" + $findings))}' > /tmp/slack_payload.json
+            '{"text": (($mention + "*Security Audit Finding*\n*Commit:* <" + $commit_url + "|" + ($commit_message | split("\n")[0]) + ">\n*Author:* " + $commit_author + "\n\n---\n\n" + $findings))}' > /tmp/slack_payload.json
 
           curl -sf -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \

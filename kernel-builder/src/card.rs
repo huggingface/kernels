@@ -78,13 +78,16 @@ fn extract_layers(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
         return None;
     }
 
-    let layers_init = kernel_dir
-        .join("torch-ext")
-        .join(module_name)
-        .join("layers")
-        .join("__init__.py");
+    // `from . import layers` resolves to either a `layers/` package or a flat
+    // `layers.py` module, so accept whichever the kernel provides.
+    let module_dir = kernel_dir.join("torch-ext").join(module_name);
+    let layers_pkg = module_dir.join("layers").join("__init__.py");
+    let layers_mod = module_dir.join("layers.py");
+    let layers_path = [layers_pkg, layers_mod]
+        .into_iter()
+        .find(|path| path.exists())?;
 
-    let content = fs::read_to_string(&layers_init).ok()?;
+    let content = fs::read_to_string(&layers_path).ok()?;
     let stmts = ast::Suite::parse(&content, "<module>").ok()?;
 
     let classes: Vec<String> = stmts
@@ -267,6 +270,43 @@ mod tests {
         fs::create_dir_all(&layers_dir).unwrap();
         fs::write(
             layers_dir.join("__init__.py"),
+            r#"
+import torch.nn as nn
+
+
+class ReLU(nn.Module):
+    pass
+
+
+class Softmax(nn.Module):
+    pass
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_layers(kernel_dir, "test_module"),
+            Some(vec!["ReLU".to_owned(), "Softmax".to_owned()])
+        );
+    }
+
+    #[test]
+    fn test_extract_layers_flat_module() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let kernel_dir = temp_dir.path();
+
+        let module_dir = kernel_dir.join("torch-ext").join("test_module");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(
+            module_dir.join("__init__.py"),
+            r#"__all__ = ["layers", "func_a"]"#,
+        )
+        .unwrap();
+
+        // Layers exposed via a flat `layers.py` module instead of a `layers/`
+        // package, as instructed by the docs' `from . import layers` convention.
+        fs::write(
+            module_dir.join("layers.py"),
             r#"
 import torch.nn as nn
 

@@ -1,7 +1,8 @@
-{ lib
-, buildPythonPackage
-, fetchurl
-, python312
+{
+  lib,
+  buildPythonPackage,
+  fetchurl,
+  python,
 }:
 
 # Fetched directly from Google's Artifact Registry, which requires an
@@ -24,14 +25,21 @@
 # Apache-2.0 (unlike torch_tpu). The tpu buildSet therefore sets
 # allowUnfree = true (see lib/mk-build-set.nix).
 
+let
+  # The wheel ships per-CPython-ABI builds (cp311..cp314); pick the tag
+  # matching the python this package set is built for. The hash below is
+  # for cp313 (the nixpkgs default python); re-run
+  # scripts/helpers/get_torch_tpu_hash.sh when either moves.
+  abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
+in
 buildPythonPackage rec {
   pname = "libtpu";
   version = "0.0.43";
   format = "wheel";
 
   src = fetchurl {
-    url = "https://us-python.pkg.dev/ml-oss-artifacts-transient/torch-tpu-virtual-registry/libtpu/libtpu-${version}-cp312-cp312-manylinux_2_31_x86_64.whl";
-    hash = "sha256-cInxat7P+bjjy+vIVdBMU6bXEMXPSgdDggzCc9WNc0o=";
+    url = "https://us-python.pkg.dev/ml-oss-artifacts-transient/torch-tpu-virtual-registry/libtpu/libtpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
+    hash = "sha256-X5LVmwJuRcNkMG+m7kKgcaOSKnWjeuw4HtCU+lfWamY="; # cp313
     netrcImpureEnvVars = [ "GCLOUD_ACCESS_TOKEN" ];
     netrcPhase = ''
       if [ -z "''${GCLOUD_ACCESS_TOKEN:-}" ]; then
@@ -44,7 +52,6 @@ buildPythonPackage rec {
     '';
   };
 
-  python = python312; # only cp312 wheels
   dependencies = [ ];
 
   pythonImportsCheck = [ "libtpu" ];
@@ -52,7 +59,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "TPU runtime shared library, dlopened by torch_tpu and jaxlib";
-    homepage = "https://github.com/google-pytorch/torch_tpu";
+    homepage = "https://cloud.google.com/tpu";
     license = licenses.unfree; # "Google Cloud Platform Terms of Service"
     platforms = [ "x86_64-linux" ];
   };

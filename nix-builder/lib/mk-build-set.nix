@@ -110,6 +110,7 @@ buildConfig@{
   ptxasVersion ? cudaVersion,
   metal ? false,
   rocmVersion ? null,
+  tpu ? false,
   xpuVersion ? null,
   torchVersion,
   system,
@@ -148,10 +149,7 @@ let
 
   torch = pkgs.python3.pkgs.torch;
 
-  extension = pkgs.callPackage ./extension {
-    inherit torch;
-    python3 = if buildConfig.backend == "tpu" then pkgs.python312 else pkgs.python3;
-  };
+  extension = pkgs.callPackage ./extension { inherit torch; };
 
   variants = import ./variants {
     inherit lib buildConfig;

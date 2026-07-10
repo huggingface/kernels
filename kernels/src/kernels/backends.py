@@ -127,24 +127,6 @@ class Neuron:
         return Neuron()
 
 
-@strict
-@dataclass(unsafe_hash=True)
-class TPU:
-    @property
-    def name(self) -> str:
-        return "tpu"
-
-    @property
-    def variant_str(self) -> str:
-        return "tpu"
-
-    @staticmethod
-    def parse(s: str) -> "TPU":
-        if s != "tpu":
-            raise ValueError(f"Invalid TPU variant string: {s!r}")
-        return TPU()
-
-
 @dataclass(unsafe_hash=True)
 class ROCm:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"rocm(\d+)(\d+)")
@@ -165,6 +147,24 @@ class ROCm:
         if not m:
             raise ValueError(f"Invalid ROCm variant string: {s!r}")
         return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
+
+
+@strict
+@dataclass(unsafe_hash=True)
+class TPU:
+    @property
+    def name(self) -> str:
+        return "tpu"
+
+    @property
+    def variant_str(self) -> str:
+        return "tpu"
+
+    @staticmethod
+    def parse(s: str) -> "TPU":
+        if s != "tpu":
+            raise ValueError(f"Invalid TPU variant string: {s!r}")
+        return TPU()
 
 
 @dataclass(unsafe_hash=True)
@@ -215,8 +215,12 @@ def _backend() -> Backend:
     if has_torch:
         import torch
 
-        if hasattr(torch, "tpu"):
-            # torch_tpu registers a torch.tpu namespace on import.
+        if hasattr(torch.backends, "tpu"):
+            # torch_tpu sets torch.backends.tpu when it is imported (via
+            # torch's device-backend autoload), regardless of whether TPU
+            # hardware is present — analogous to torch.version.cuda being
+            # set on CUDA builds without a GPU. The hardware-gated
+            # torch.tpu namespace only appears on hosts with TPU devices.
             return TPU()
         elif hasattr(torch, "neuron"):
             # Needs to be sorted before specific Torch builds, since Neuron

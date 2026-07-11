@@ -232,7 +232,6 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     collect_readme_commit_ops(
         &build_dir,
-        &dirty_variants,
         operations_by_branch
             .entry(MAIN_BRANCH.to_owned())
             .or_default(),
@@ -470,78 +469,15 @@ fn collect_benchmark_commit_ops(
 /// holds the build variants (as returned by `discover_variants`). This ensures
 /// the card is taken from the same location as the variants rather than an
 /// unrelated directory elsewhere in the repository (see issue #659).
-///
-/// When any variant was built from a dirty git tree, a warning banner naming
-/// those variants is injected into the card so it is visible on the Hub.
-fn collect_readme_commit_ops(
-    build_dir: &Path,
-    dirty_variants: &[String],
-    operations: &mut Vec<CommitOperation>,
-) {
+fn collect_readme_commit_ops(build_dir: &Path, operations: &mut Vec<CommitOperation>) {
     let card_path = build_dir.join("CARD.md");
     if !card_path.is_file() {
         return;
     }
-
-    // Without a dirty build there is nothing to inject, so stream the file
-    // directly rather than reading it into memory.
-    if dirty_variants.is_empty() {
-        operations.push(CommitOperation::Add {
-            path_in_repo: "README.md".to_owned(),
-            source: AddSource::File(card_path),
-        });
-        return;
-    }
-
-    let source = match fs::read_to_string(&card_path) {
-        Ok(card) => {
-            AddSource::Bytes(render_card_with_dirty_banner(&card, dirty_variants).into_bytes())
-        }
-        // If the card cannot be read as UTF-8, fall back to uploading it
-        // verbatim rather than dropping the README entirely.
-        Err(_) => AddSource::File(card_path),
-    };
     operations.push(CommitOperation::Add {
         path_in_repo: "README.md".to_owned(),
-        source,
+        source: AddSource::File(card_path),
     });
-}
-
-/// Insert a "dirty build" warning banner into a model card.
-///
-/// The banner is placed after the YAML front matter (if any) so the front
-/// matter stays parseable, otherwise at the very top of the card.
-fn render_card_with_dirty_banner(card: &str, dirty_variants: &[String]) -> String {
-    let banner = format!(
-        "> [!WARNING]\n\
-         > This kernel was built from a dirty git tree (uncommitted changes) for the \
-         following variant(s): {}. The recorded git revision does not fully identify \
-         the sources they were built from, so the build may not be reproducible.\n",
-        dirty_variants
-            .iter()
-            .map(|v| format!("`{v}`"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-
-    // Detect leading YAML front matter delimited by `---` lines.
-    let body = card
-        .strip_prefix("---\n")
-        .or_else(|| card.strip_prefix("---\r\n"));
-    if let Some(after_open) = body {
-        if let Some(end) = after_open.find("\n---") {
-            // Split just past the closing `---` line (and its newline, if present).
-            let rest = &after_open[end + "\n---".len()..];
-            let rest = rest
-                .strip_prefix("\r\n")
-                .or_else(|| rest.strip_prefix('\n'))
-                .unwrap_or(rest);
-            let front_matter = &card[..card.len() - rest.len()];
-            return format!("{front_matter}\n{banner}\n{rest}");
-        }
-    }
-
-    format!("{banner}\n{card}")
 }
 
 /// Collect build artifact commit operations: add variant files, delete stale ones.
@@ -700,7 +636,7 @@ mod tests {
         fs::write(build_dir.join("CARD.md"), "# Readme").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(&build_dir, &[], &mut operations);
+        collect_readme_commit_ops(&build_dir, &mut operations);
 
         assert_eq!(operations.len(), 1);
         match &operations[0] {
@@ -709,7 +645,6 @@ mod tests {
                 source,
             } => {
                 assert_eq!(path_in_repo, "README.md");
-                // A clean build streams the card file verbatim.
                 match source {
                     AddSource::File(path) => assert_eq!(*path, build_dir.join("CARD.md")),
                     _ => panic!("Expected file source"),
@@ -723,58 +658,8 @@ mod tests {
     fn test_collect_readme_commit_ops_no_card() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut operations = vec![];
-        collect_readme_commit_ops(temp_dir.path(), &[], &mut operations);
+        collect_readme_commit_ops(temp_dir.path(), &mut operations);
         assert!(operations.is_empty());
-    }
-
-    #[test]
-    fn test_collect_readme_commit_ops_injects_dirty_banner() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let build_dir = temp_dir.path().join("build");
-        fs::create_dir_all(&build_dir).unwrap();
-        fs::write(
-            build_dir.join("CARD.md"),
-            "---\ntags: [kernel]\n---\n# Readme\n",
-        )
-        .unwrap();
-
-        let mut operations = vec![];
-        collect_readme_commit_ops(&build_dir, &["torch-cuda".to_owned()], &mut operations);
-
-        assert_eq!(operations.len(), 1);
-        let CommitOperation::Add {
-            source: AddSource::Bytes(bytes),
-            ..
-        } = &operations[0]
-        else {
-            panic!("Expected Add operation with rewritten bytes");
-        };
-        let rendered = String::from_utf8(bytes.clone()).unwrap();
-        assert!(rendered.contains("[!WARNING]"));
-        assert!(rendered.contains("`torch-cuda`"));
-        // Front matter is preserved at the top and the body still follows.
-        assert!(rendered.starts_with("---\ntags: [kernel]\n---\n"));
-        assert!(rendered.contains("# Readme"));
-    }
-
-    #[test]
-    fn test_render_card_with_dirty_banner_after_front_matter() {
-        let card = "---\ntags: [kernel]\n---\n# Title\n\nBody.\n";
-        let rendered = render_card_with_dirty_banner(card, &["torch-cuda".to_owned()]);
-        // Front matter stays intact at the top, then the banner, then the body.
-        assert!(rendered.starts_with("---\ntags: [kernel]\n---\n"));
-        let banner_pos = rendered.find("[!WARNING]").unwrap();
-        let title_pos = rendered.find("# Title").unwrap();
-        assert!(banner_pos < title_pos);
-    }
-
-    #[test]
-    fn test_render_card_with_dirty_banner_no_front_matter() {
-        let card = "# Title\n\nBody.\n";
-        let rendered = render_card_with_dirty_banner(card, &["a".to_owned(), "b".to_owned()]);
-        assert!(rendered.starts_with("> [!WARNING]"));
-        assert!(rendered.contains("`a`, `b`"));
-        assert!(rendered.trim_end().ends_with("Body."));
     }
 
     #[test]
@@ -791,7 +676,7 @@ mod tests {
         fs::write(kernel_dir.join("CARD.md"), "# Stray card").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(&build_dir, &[], &mut operations);
+        collect_readme_commit_ops(&build_dir, &mut operations);
 
         assert!(operations.is_empty());
     }
@@ -1026,7 +911,7 @@ mod tests {
             let build_dir = kernel_dir.join("result");
 
             let mut operations = vec![];
-            collect_readme_commit_ops(&build_dir, &[], &mut operations);
+            collect_readme_commit_ops(&build_dir, &mut operations);
 
             assert_eq!(operations.len(), 1);
             match &operations[0] {

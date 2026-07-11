@@ -4,6 +4,10 @@
       "nix": ["einops"],
       "python": [{ "pkg": "einops", "import": "einops" }]
     },
+    "helion": {
+      "nix": ["helion"],
+      "python": [{ "pkg": "helion", "import": "helion" }]
+    },
     "tvm-ffi": {
       "nix": ["tvm-ffi"],
       "python": [{ "pkg": "apache-tvm-ffi", "import": "tvm_ffi" }]

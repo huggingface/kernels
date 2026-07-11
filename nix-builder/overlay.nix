@@ -147,6 +147,16 @@ final: prev:
           };
         });
 
+        helion = python-super.helion.overrideAttrs (
+          _: prevAttrs: {
+            # nixpkgs marks Helion as broken without CUDA, but it also
+            # supports ROCm and XPU through Triton.
+            meta = prevAttrs.meta // {
+              broken = false;
+            };
+          }
+        );
+
         jax = python-super.jax.overrideAttrs (
           _: prevAttrs: {
             dontUsePytestCheck = true;

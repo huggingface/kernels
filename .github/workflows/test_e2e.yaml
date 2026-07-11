@@ -84,8 +84,7 @@ jobs:
         id: variant
         run: |
           cd /tmp/${{ env.E2E_REPO_NAME }}
-          # NOTE: Remove Torch 2.13 grep once it is released.
-          VARIANT=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants . | grep -v torch213 | tail -1)
+          VARIANT=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants . | tail -1)
           echo "name=$VARIANT" >> $GITHUB_OUTPUT
           echo "Building variant: $VARIANT"
 

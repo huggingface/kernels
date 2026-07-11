@@ -200,6 +200,7 @@ The following dependencies are currently allowed:
 **General dependencies:**
 
 - `einops`
+- `helion`
 
 **Backend-specific dependencies:**
 

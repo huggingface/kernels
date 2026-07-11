@@ -205,8 +205,8 @@ The following sections enumerate all supported options for `build.toml`.
   formatted source repository. This repository must contain a `build.toml` and
   `flake.nix` so that it can be pulled and built with the kernel builder.
 - `python-depends` (**experimental**): a list of additional Python dependencies
-  that the kernel requires. The only supported dependencies are `einops`
-  and `nvidia-cutlass-dsl`.
+  that the kernel requires. The only supported dependencies are `einops`,
+  `helion`, and `nvidia-cutlass-dsl`.
 
 ### `general.hub`
 

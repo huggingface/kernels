@@ -155,6 +155,9 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         build_dir.display()
     );
 
+    let dirty_variants = dirty_variant_names(&variants);
+    warn_dirty_variants(&dirty_variants);
+
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
     // With --create-pr, write access is not required and we must not create a
@@ -531,6 +534,51 @@ fn collect_build_commit_ops(
     Ok(())
 }
 
+/// Warn about build variants whose provenance is dirty.
+///
+/// A dirty variant was built from a working tree with uncommitted changes, so
+/// its recorded git SHA does not fully identify the sources it was built from
+/// and the build may not be reproducible. Metadata that cannot be read is
+/// silently skipped: this is a best-effort warning, not a hard check.
+fn warn_dirty_variants(dirty: &[String]) {
+    if dirty.is_empty() {
+        return;
+    }
+
+    eprintln!(
+        "warning: uploading {} build variant(s) built from a dirty git tree \
+         (uncommitted changes): {}. Their recorded git revision does not fully \
+         identify the sources they were built from, so the build may not be \
+         reproducible.",
+        dirty.len(),
+        dirty.join(", ")
+    );
+}
+
+/// Names of the build variants whose provenance is dirty, sorted.
+///
+/// Metadata that cannot be read is silently skipped: this backs a best-effort
+/// warning, not a hard check.
+fn dirty_variant_names(variants: &[PathBuf]) -> Vec<String> {
+    let mut dirty: Vec<String> = variants
+        .iter()
+        .filter(|variant| {
+            File::open(variant.join("metadata.json"))
+                .ok()
+                .and_then(|f| Metadata::from_reader(BufReader::new(f)).ok())
+                .and_then(|m| m.provenance)
+                .is_some_and(|p| p.is_dirty())
+        })
+        .filter_map(|variant| {
+            variant
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
+        .collect();
+    dirty.sort();
+    dirty
+}
+
 /// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
     let mut versions: HashSet<usize> = HashSet::new();
@@ -766,6 +814,38 @@ mod tests {
 
     const METADATA_V3: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
     const METADATA_V0: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 0, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
+
+    const METADATA_DIRTY: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 1, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}, "provenance": {"kernel-builder": {"version": "0.1.0", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false}, "kernel": {"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "dirty": true}}}"#;
+
+    #[test]
+    fn test_dirty_variant_names() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let clean = temp_dir.path().join("torch-cpu");
+        fs::create_dir_all(&clean).unwrap();
+        fs::write(clean.join("metadata.json"), METADATA_V3).unwrap();
+
+        let dirty = temp_dir.path().join("torch-cuda");
+        fs::create_dir_all(&dirty).unwrap();
+        fs::write(dirty.join("metadata.json"), METADATA_DIRTY).unwrap();
+
+        // A variant with unreadable metadata is skipped rather than failing.
+        let broken = temp_dir.path().join("torch-rocm");
+        fs::create_dir_all(&broken).unwrap();
+
+        let names = dirty_variant_names(&[clean, dirty, broken]);
+        assert_eq!(names, vec!["torch-cuda".to_owned()]);
+    }
+
+    #[test]
+    fn test_dirty_variant_names_none_dirty() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let clean = temp_dir.path().join("torch-cpu");
+        fs::create_dir_all(&clean).unwrap();
+        fs::write(clean.join("metadata.json"), METADATA_V3).unwrap();
+
+        assert!(dirty_variant_names(&[clean]).is_empty());
+    }
 
     #[test]
     fn test_detect_branch_from_metadata() {

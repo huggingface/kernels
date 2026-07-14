@@ -69,3 +69,13 @@ Before building a kernel, ensure that all changes are committed. This
 makes it possible to reproduce a build from exactly the same source code.
 We bake the git shorthash into the ops name, so that it is clear from
 which git hash a kernel was built.
+
+The build [`provenance`](kernel-requirements.md) records a `dirty` flag when
+a variant was built from a working tree with uncommitted changes. To keep
+these builds from slipping by unnoticed:
+
+- `kernel-builder upload` prints a warning listing every dirty variant it is
+  about to publish, and injects a warning banner into the uploaded
+  `README.md` (built from `CARD.md`) naming those variants.
+- The `kernels` loader emits a warning when a kernel variant it loads was
+  built from a dirty tree.

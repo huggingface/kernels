@@ -145,6 +145,10 @@ enum Commands {
         #[arg(long)]
         create_pr: bool,
 
+        /// Write a machine-readable JSON summary of the upload to this path.
+        #[arg(long, value_name = "PATH")]
+        output_json: Option<PathBuf>,
+
         /// Suppress progress output.
         #[arg(long, short)]
         quiet: bool,
@@ -366,6 +370,7 @@ fn main() -> Result<()> {
             private,
             repo_type,
             create_pr,
+            output_json,
             quiet,
         } => {
             run_build(
@@ -382,6 +387,7 @@ fn main() -> Result<()> {
                 private,
                 repo_type,
                 create_pr,
+                output_json,
                 quiet,
             })
         }

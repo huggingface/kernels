@@ -701,6 +701,52 @@ mod tests {
     }
 
     #[test]
+    fn test_write_output_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let output_path = temp_dir.path().join("upload-result.json");
+        let outcome = UploadOutcome {
+            status: UploadStatus::PullRequestCreated,
+            repo_id: "user/my-kernel".to_owned(),
+            branch: Some("v3".to_owned()),
+            url: None,
+            pull_requests: vec![
+                PullRequest {
+                    branch: MAIN_BRANCH.to_owned(),
+                    url: "https://hf.co/kernels/user/my-kernel/discussions/1".to_owned(),
+                },
+                PullRequest {
+                    branch: "v3".to_owned(),
+                    url: "https://hf.co/kernels/user/my-kernel/discussions/2".to_owned(),
+                },
+            ],
+        };
+
+        write_output_json(&output_path, &outcome).unwrap();
+
+        let contents = fs::read_to_string(output_path).unwrap();
+        assert!(contents.ends_with('\n'));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&contents).unwrap(),
+            serde_json::json!({
+                "status": "pull_request_created",
+                "repo_id": "user/my-kernel",
+                "branch": "v3",
+                "url": null,
+                "pull_requests": [
+                    {
+                        "branch": "main",
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/1"
+                    },
+                    {
+                        "branch": "v3",
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/2"
+                    }
+                ]
+            })
+        );
+    }
+
+    #[test]
     fn test_collect_readme_commit_ops() {
         let temp_dir = tempfile::tempdir().unwrap();
         let build_dir = temp_dir.path().join("build");

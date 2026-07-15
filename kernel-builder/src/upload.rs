@@ -14,6 +14,7 @@ use hf_hub::{
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use kernels_data::metadata::Metadata;
+use serde::Serialize;
 use walkdir::WalkDir;
 
 use crate::{
@@ -97,9 +98,44 @@ pub struct UploadArgs {
     #[arg(long)]
     pub create_pr: bool,
 
+    /// Write a machine-readable JSON summary of the upload to this path.
+    #[arg(long, value_name = "PATH")]
+    pub output_json: Option<PathBuf>,
+
     /// Suppress progress output.
     #[arg(long, short)]
     pub quiet: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum UploadStatus {
+    NoChanges,
+    Uploaded,
+    PullRequestCreated,
+}
+
+#[derive(Debug, Serialize)]
+struct PullRequest {
+    branch: String,
+    url: String,
+}
+
+#[derive(Debug, Serialize)]
+struct UploadOutcome {
+    status: UploadStatus,
+    repo_id: String,
+    branch: Option<String>,
+    url: Option<String>,
+    pull_requests: Vec<PullRequest>,
+}
+
+fn write_output_json(path: &Path, outcome: &UploadOutcome) -> Result<()> {
+    let mut json =
+        serde_json::to_string_pretty(outcome).wrap_err("Cannot serialize the upload result")?;
+    json.push('\n');
+    fs::write(path, json)
+        .wrap_err_with(|| format!("Cannot write the upload result to `{}`", path.display()))
 }
 
 /// Get repository and branch from the given arguments, or fallback to
@@ -228,7 +264,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     // README goes to main branch, build artifacts go to version branch.
     let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
-    let mut pr_urls: Vec<String> = Vec::new();
+    let mut pull_requests: Vec<PullRequest> = Vec::new();
 
     collect_readme_commit_ops(
         &build_dir,
@@ -330,7 +366,10 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
                         format!("Cannot determine the pull request opened for branch `{branch}`")
                     })?;
                 pr_revision = Some(pr_ref);
-                pr_urls.push(pr_url);
+                pull_requests.push(PullRequest {
+                    branch: branch.clone(),
+                    url: pr_url,
+                });
             }
         }
 
@@ -342,18 +381,52 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     }
 
     let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();
-    if total_ops == 0 {
-        eprintln!("No changes to upload.");
+    let outcome = if total_ops == 0 {
+        UploadOutcome {
+            status: UploadStatus::NoChanges,
+            repo_id,
+            branch,
+            url: None,
+            pull_requests,
+        }
     } else if args.create_pr {
-        for url in &pr_urls {
-            println!("Pull request created: {url}");
+        UploadOutcome {
+            status: UploadStatus::PullRequestCreated,
+            repo_id,
+            branch,
+            url: None,
+            pull_requests,
         }
     } else {
         let type_prefix = T::default().url_prefix();
         let tree_path = branch
             .as_ref()
             .map_or(String::new(), |b| format!("/tree/{b}"));
-        println!("Kernel uploaded: https://hf.co/{type_prefix}{repo_id}{tree_path}");
+        UploadOutcome {
+            status: UploadStatus::Uploaded,
+            url: Some(format!("https://hf.co/{type_prefix}{repo_id}{tree_path}")),
+            repo_id,
+            branch,
+            pull_requests,
+        }
+    };
+
+    match outcome.status {
+        UploadStatus::NoChanges => eprintln!("No changes to upload."),
+        UploadStatus::PullRequestCreated => {
+            for pr in &outcome.pull_requests {
+                println!("Pull request created: {}", pr.url);
+            }
+        }
+        UploadStatus::Uploaded => {
+            if let Some(ref url) = outcome.url {
+                println!("Kernel uploaded: {url}");
+            }
+        }
+    }
+
+    if let Some(ref path) = args.output_json {
+        write_output_json(path, &outcome)?;
     }
 
     Ok(())
@@ -625,6 +698,52 @@ mod tests {
         assert!(guidance.contains(KERNELS_COMMUNITY_URL));
         assert!(guidance.contains("source URI"));
         assert!(guidance.contains("Benchmark"));
+    }
+
+    #[test]
+    fn test_write_output_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let output_path = temp_dir.path().join("upload-result.json");
+        let outcome = UploadOutcome {
+            status: UploadStatus::PullRequestCreated,
+            repo_id: "user/my-kernel".to_owned(),
+            branch: Some("v3".to_owned()),
+            url: None,
+            pull_requests: vec![
+                PullRequest {
+                    branch: MAIN_BRANCH.to_owned(),
+                    url: "https://hf.co/kernels/user/my-kernel/discussions/1".to_owned(),
+                },
+                PullRequest {
+                    branch: "v3".to_owned(),
+                    url: "https://hf.co/kernels/user/my-kernel/discussions/2".to_owned(),
+                },
+            ],
+        };
+
+        write_output_json(&output_path, &outcome).unwrap();
+
+        let contents = fs::read_to_string(output_path).unwrap();
+        assert!(contents.ends_with('\n'));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&contents).unwrap(),
+            serde_json::json!({
+                "status": "pull_request_created",
+                "repo_id": "user/my-kernel",
+                "branch": "v3",
+                "url": null,
+                "pull_requests": [
+                    {
+                        "branch": "main",
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/1"
+                    },
+                    {
+                        "branch": "v3",
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/2"
+                    }
+                ]
+            })
+        );
     }
 
     #[test]

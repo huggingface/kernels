@@ -68,7 +68,7 @@ def test_backend_hash():
 
 def test_backend_unknown():
     with pytest.raises(ValueError):
-        Backend.from_str("tpu")
+        Backend.from_str("dsp")
 
 
 def test_backend_all_variants_and_casing():
@@ -80,8 +80,11 @@ def test_backend_all_variants_and_casing():
     assert repr(Backend.ROCm) == "Backend.ROCm"
     assert repr(Backend.XPU) == "Backend.XPU"
     assert repr(Backend.CANN) == "Backend.CANN"
+    assert str(Backend.TPU) == "tpu"
+    assert repr(Backend.TPU) == "Backend.TPU"
     assert Backend.from_str("cann") == Backend.CANN
     assert Backend.from_str("ROCM") == Backend.ROCm
+    assert Backend.from_str("TPU") == Backend.TPU
     assert Backend.from_str("metal") == Backend.Metal
 
 

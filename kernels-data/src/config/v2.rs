@@ -179,6 +179,7 @@ impl General {
             hub: general.hub.map(Into::into),
             neuron: None,
             python_depends: None,
+            tpu: None,
             xpu: None,
         }
     }

@@ -165,6 +165,10 @@ final: prev:
 
         jax-tvm-ffi = python-self.callPackage ./pkgs/python-modules/jax-tvm-ffi { };
 
+        libtpu = python-self.callPackage ./pkgs/python-modules/libtpu { };
+
+        torch_tpu = python-self.callPackage ./pkgs/python-modules/torch_tpu { };
+
         jupyter-server = python-super.jupyter-server.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.

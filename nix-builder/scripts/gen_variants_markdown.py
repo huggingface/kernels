@@ -8,6 +8,7 @@ _PLATFORM_NAMES = {
     "cuda": "CUDA",
     "metal": "Metal",
     "rocm": "ROCm",
+    "tpu": "TPU",
     "xpu": "XPU",
 }
 

@@ -49,6 +49,8 @@ pub struct General {
 
     pub python_depends: Option<Vec<String>>,
 
+    pub tpu: Option<TpuGeneral>,
+
     pub xpu: Option<XpuGeneral>,
 }
 
@@ -63,6 +65,12 @@ pub struct CudaGeneral {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NeuronGeneral {
+    pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct TpuGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -171,6 +179,7 @@ pub enum Backend {
     Metal,
     Neuron,
     Rocm,
+    Tpu,
     Xpu,
 }
 
@@ -203,6 +212,7 @@ impl From<General> for super::General {
             hub: general.hub.map(Into::into),
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            tpu: general.tpu.map(Into::into),
             xpu: general.xpu.map(Into::into),
         }
     }
@@ -234,6 +244,14 @@ impl From<NeuronGeneral> for super::NeuronGeneral {
     fn from(neuron: NeuronGeneral) -> Self {
         Self {
             python_depends: neuron.python_depends,
+        }
+    }
+}
+
+impl From<TpuGeneral> for super::TpuGeneral {
+    fn from(tpu: TpuGeneral) -> Self {
+        Self {
+            python_depends: tpu.python_depends,
         }
     }
 }
@@ -300,6 +318,7 @@ impl From<Backend> for super::Backend {
             Backend::Metal => super::Backend::Metal,
             Backend::Neuron => super::Backend::Neuron,
             Backend::Rocm => super::Backend::Rocm,
+            Backend::Tpu => super::Backend::Tpu,
             Backend::Xpu => super::Backend::Xpu,
         }
     }

@@ -34,6 +34,20 @@
         "nix": [],
         "python": [{ "pkg": "onednn-devel" }]
       }
+    },
+    "tpu": {
+      "torch_tpu": {
+        "nix": ["torch_tpu"],
+        "python": [{ "pkg": "torch_tpu", "import": "torch_tpu" }]
+      },
+      "jax": {
+        "nix": ["jax"],
+        "python": [{ "pkg": "jax", "import": "jax" }]
+      },
+      "libtpu": {
+        "nix": ["libtpu"],
+        "python": [{ "pkg": "libtpu" }]
+      }
     }
   }
 }

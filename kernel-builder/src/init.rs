@@ -44,7 +44,7 @@ pub struct InitArgs {
     #[arg(long, value_name = "OWNER/REPO")]
     pub name: Option<RepoInfo>,
 
-    /// Backends to enable (`all`, `cpu`, `cuda`, `metal`, `neuron`, `rocm`, `xpu`).
+    /// Backends to enable (`all`, `cpu`, `cuda`, `metal`, `neuron`, `rocm`, `tpu`, `xpu`).
     #[arg(long, num_args = 1.., default_values_t = default_init_backends())]
     pub backends: Vec<BackendSelection>,
 

@@ -82,6 +82,14 @@ let
       rocmSupport = true;
     };
 
+    tpu = {
+      # torch_tpu is Apache-2.0, but libtpu's wheel METADATA declares
+      # its license as "Google Cloud Platform Terms of Service"
+      # (unfree), so the tpu buildSet needs allowUnfree just like the
+      # cuda/rocm/xpu sets. See pkgs/python-modules/libtpu/default.nix.
+      allowUnfree = true;
+    };
+
     xpu = {
       allowUnfree = true;
       xpuSupport = true;
@@ -102,6 +110,7 @@ buildConfig@{
   ptxasVersion ? cudaVersion,
   metal ? false,
   rocmVersion ? null,
+  tpu ? false,
   xpuVersion ? null,
   torchVersion,
   system,
@@ -117,6 +126,8 @@ let
       [ (overlayForCudaVersion cudaVersion ptxasVersion) ]
     else if buildConfig.backend == "rocm" then
       [ (overlayForRocmVersion rocmVersion) ]
+    else if buildConfig.backend == "tpu" then
+      [ ]
     else if buildConfig.backend == "metal" then
       [ ]
     else if buildConfig.backend == "xpu" then

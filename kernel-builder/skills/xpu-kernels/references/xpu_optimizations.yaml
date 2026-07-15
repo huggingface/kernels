@@ -272,6 +272,55 @@ patterns:
     expected_speedup: "workload-dependent"
     applies_to: [gemm, compute_bound]
 
+  - id: xpu_register_spill_autotune_pruning
+    name: "Register-spill-aware autotune pruning"
+    stage: xpu_specific
+    description: "Use early_config_prune to skip autotune configs that are very likely to spill on XPU"
+    rationale: |
+      XPU kernels with large accumulator and operand live sets can spend substantial autotune time
+      compiling and benchmarking configurations that spill even after large-GRF recompilation.
+      Add a coarse register-pressure estimator as an early_config_prune filter, then keep borderline
+      configs for real benchmarking.
+    pattern_after: |
+      def grf_config_pruner(
+          configs,
+          named_args,
+          *,
+          n_accumulators=1,
+          n_weight_tiles=1,
+          grf_regs=256,
+          headroom=0.82,
+        ):
+          if not is_xpu():
+              return configs
+
+          def meta(config, name, default):
+              return config.kwargs.get(name, named_args.get(name, default))
+
+          def estimate(config):
+              bm = meta(config, "BLOCK_M", 1)
+              bn = meta(config, "BLOCK_N", 1)
+              bk = meta(config, "BLOCK_K", 1)
+              stages = getattr(config, "num_stages", 1) or 1
+              warps = getattr(config, "num_warps", 1) or 1
+              warp_size = 32
+
+              live_values = (
+                  n_accumulators * bm * bn
+                  + stages * (bm * bk + n_weight_tiles * bn * bk)
+              )
+              return live_values / (warps * warp_size)
+
+          budget = grf_regs * headroom
+          kept = [config for config in configs if estimate(config) <= budget]
+          return kept or [min(configs, key=estimate)]
+    pitfalls:
+      - "Use this as a coarse pre-filter, not a replacement for benchmarking."
+      - "Keep a never-empty fallback so autotune always has at least one config."
+      - "Treat headroom as a workload- and backend-version-dependent tuning knob; calibrate it with profiler spill counters."
+      - "Do not apply globally to non-XPU backends."
+    applies_to: [gemm, grouped_gemm, moe, compute_bound]
+
   - id: xpu_warp_count
     name: "Warp count (tune; avoid hard-coded '32 warps')"
     stage: xpu_specific

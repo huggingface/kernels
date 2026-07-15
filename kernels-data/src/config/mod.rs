@@ -325,6 +325,8 @@ pub enum Kernel {
         src: Vec<String>,
         lib_name: Option<String>,
         features: Option<Vec<String>>,
+        device_manifest: Option<String>,
+        ptx_dir: Option<String>,
         cuda_capabilities: Option<Vec<String>>,
     },
 }

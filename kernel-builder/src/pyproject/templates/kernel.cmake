@@ -317,7 +317,7 @@ function(metal_kernel_component SRC_VAR)
 endfunction()
 
 function(rust_kernel_component LIBS_VAR TARGETS_VAR)
-    set(oneValueArgs NAME MANIFEST_PATH LIB_NAME)
+    set(oneValueArgs NAME MANIFEST_PATH LIB_NAME DEVICE_MANIFEST PTX_DIR)
     set(multiValueArgs FEATURES CUDA_CAPABILITIES)
     cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -347,6 +347,46 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
     # Cargo writes the staticlib into its target directory.
     set(_CARGO_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME})
     set(_STATICLIB ${_CARGO_TARGET_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}${KERNEL_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set(_RUST_KERNEL_DEPENDS)
+
+    if(KERNEL_DEVICE_MANIFEST)
+        # Build cuda-oxide device code before the host crate embeds its PTX.
+        if(NOT DEFINED ENV{CUDA_OXIDE_BACKEND} OR "$ENV{CUDA_OXIDE_BACKEND}" STREQUAL "")
+            message(FATAL_ERROR "rust_kernel_component: DEVICE_MANIFEST requires CUDA_OXIDE_BACKEND")
+        endif()
+        if(NOT KERNEL_PTX_DIR)
+            set(KERNEL_PTX_DIR kernels-ptx)
+        endif()
+
+        get_filename_component(_DEVICE_MANIFEST ${KERNEL_DEVICE_MANIFEST} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+        get_filename_component(_PTX_DIR ${KERNEL_PTX_DIR} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+        set(_DEVICE_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME}-device)
+        set(_DEVICE_ENV)
+
+        if(_KERNEL_ARCHS)
+            list(SORT _KERNEL_ARCHS COMPARE NATURAL)
+            # PTX JITs forward, so target the lowest supported arch.
+            list(GET _KERNEL_ARCHS 0 _OXIDE_ARCH)
+            string(REPLACE "+PTX" "" _OXIDE_ARCH "${_OXIDE_ARCH}")
+            string(REPLACE "." "" _OXIDE_ARCH "${_OXIDE_ARCH}")
+            list(APPEND _DEVICE_ENV "CUDA_OXIDE_TARGET=sm_${_OXIDE_ARCH}")
+        endif()
+
+        add_custom_target(${KERNEL_NAME}_oxide_device_build ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_PTX_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env
+                "CUDA_OXIDE_PTX_DIR=${_PTX_DIR}"
+                "RUSTFLAGS=-Zcodegen-backend=$ENV{CUDA_OXIDE_BACKEND} -Copt-level=3 -Cdebug-assertions=off -Zmir-enable-passes=-JumpThreading -Csymbol-mangling-version=v0"
+                ${_DEVICE_ENV}
+                ${CARGO_EXECUTABLE} build --release --locked
+                    --manifest-path ${_DEVICE_MANIFEST}
+                    --target-dir ${_DEVICE_TARGET_DIR}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Building Rust CUDA device kernel ${KERNEL_NAME}"
+            VERBATIM
+        )
+        list(APPEND _RUST_KERNEL_DEPENDS ${KERNEL_NAME}_oxide_device_build)
+    endif()
 
     set(_CARGO_ARGS rustc --release --locked --lib --crate-type staticlib
         --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH}
@@ -365,6 +405,7 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
             "KERNEL_BUILDER_CUDA_ARCHS=${_KERNEL_ARCHS}"
             ${CARGO_EXECUTABLE} ${_CARGO_ARGS}
         BYPRODUCTS ${_STATICLIB}
+        DEPENDS ${_RUST_KERNEL_DEPENDS}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Building Rust kernel ${KERNEL_NAME} with cargo"
         VERBATIM

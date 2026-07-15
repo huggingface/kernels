@@ -110,6 +110,7 @@ let
     ];
 
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
+  kernelToml = (builtins.fromTOML (builtins.readFile (src + "/build.toml"))).kernel or { };
 
   # On Darwin, we need the host's xcrun for `xcrun metal` to compile Metal shaders.
   # It's not supported by the nixpkgs shim.
@@ -124,8 +125,46 @@ let
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
   hasRustKernels = builtins.any (kernel: kernel.backend == "rust-${buildConfig.backend}") (
-    lib.attrValues ((builtins.fromTOML (builtins.readFile (src + "/build.toml"))).kernel or { })
+    lib.attrValues kernelToml
   );
+
+  hasRustCudaDeviceKernels = builtins.any (
+    kernel: kernel.backend == "rust-cuda" && kernel ? "device-manifest"
+  ) (lib.attrValues kernelToml);
+
+  cudaOxideSrc = pkgs.fetchFromGitHub {
+    owner = "drbh";
+    repo = "cuda-oxide";
+    rev = "bc5f33bb1d556671c35e475439bb821d25caa2cb";
+    hash = "sha256-ZIpS0XFDI9yDSXk33OyQ3mGB5gRhE7tldmmex226tLA=";
+  };
+
+  cudaOxideRust =
+    if rust-bin != null then
+      rust-bin.fromRustupToolchainFile "${cudaOxideSrc}/rust-toolchain.toml"
+    else
+      rustc;
+  cudaOxideRustPlatform = pkgs.makeRustPlatform {
+    cargo = cudaOxideRust;
+    rustc = cudaOxideRust;
+  };
+  cudaOxideBackend = cudaOxideRustPlatform.buildRustPackage {
+    pname = "rustc-codegen-cuda";
+    version = "0.2.1";
+    src = cudaOxideSrc;
+    sourceRoot = "source/crates/rustc-codegen-cuda";
+    cargoLock = {
+      lockFile = "${cudaOxideSrc}/crates/rustc-codegen-cuda/Cargo.lock";
+      allowBuiltinFetchGit = true;
+    };
+    buildInputs = with pkgs; [
+      libffi
+      libxml2
+      zstd
+      zlib
+    ];
+    doCheck = false;
+  };
 
   rustCudaEnv =
     let
@@ -141,6 +180,7 @@ let
     {
       CUDA_HOME = cudaHome;
       CUDA_TOOLKIT_PATH = cudaHome;
+      LIBRARY_PATH = "${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs";
       LIBCLANG_PATH = "${lib.getLib libclang}/lib";
       BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
         "-isystem ${lib.getLib libclang}/lib/clang/${lib.versions.major libclang.version}/include"
@@ -290,7 +330,10 @@ stdenv.mkDerivation (prevAttrs: {
       MKLROOT = oneapi-torch-dev;
       SYCL_ROOT = oneapi-torch-dev;
     }
-    // lib.optionalAttrs (hasRustKernels && cudaSupport) rustCudaEnv;
+    // lib.optionalAttrs (hasRustKernels && cudaSupport) rustCudaEnv
+    // lib.optionalAttrs hasRustCudaDeviceKernels {
+      CUDA_OXIDE_BACKEND = "${cudaOxideBackend}/lib/librustc_codegen_cuda.so";
+    };
 
   # If we use the default setup, CMAKE_CUDA_HOST_COMPILER gets set to nixpkgs g++.
   dontSetupCUDAToolkitCompilers = true;

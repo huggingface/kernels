@@ -186,6 +186,8 @@ pub enum Kernel {
         src: Vec<String>,
         lib_name: Option<String>,
         features: Option<Vec<String>>,
+        device_manifest: Option<String>,
+        ptx_dir: Option<String>,
         cuda_capabilities: Option<Vec<String>>,
     },
 }
@@ -415,11 +417,15 @@ impl From<Kernel> for super::Kernel {
                 src,
                 lib_name,
                 features,
+                device_manifest,
+                ptx_dir,
                 cuda_capabilities,
             } => super::Kernel::RustCuda {
                 src,
                 lib_name,
                 features,
+                device_manifest,
+                ptx_dir,
                 cuda_capabilities,
             },
         }
@@ -638,11 +644,15 @@ impl From<super::Kernel> for Kernel {
                 src,
                 lib_name,
                 features,
+                device_manifest,
+                ptx_dir,
                 cuda_capabilities,
             } => Kernel::RustCuda {
                 src,
                 lib_name,
                 features,
+                device_manifest,
+                ptx_dir,
                 cuda_capabilities,
             },
         }

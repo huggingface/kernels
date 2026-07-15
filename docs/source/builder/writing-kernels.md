@@ -364,6 +364,13 @@ src = ["Cargo.toml", "Cargo.lock", "src"]
 Optional fields are `features`, `lib-name` as an override, and, for
 `rust-cuda`, `cuda-capabilities`. The project root must include a `Cargo.lock`.
 
+For cuda-oxide device crates, add the device manifest and PTX output directory:
+
+```toml
+device-manifest = "kernels/Cargo.toml"
+ptx-dir = "kernels-ptx"
+```
+
 ## Torch bindings
 
 ### Defining bindings

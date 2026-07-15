@@ -63,36 +63,43 @@ fn render_kernel_component_rust(
     kernel: &Kernel,
     write: &mut impl Write,
 ) -> Result<()> {
-    let (template, src, lib_name, features, cuda_capabilities) = match kernel {
-        Kernel::RustCpu {
-            src,
-            lib_name,
-            features,
-            ..
-        } => (
-            "kernel-component/rust-cpu.cmake",
-            src,
-            lib_name,
-            features,
-            None,
-        ),
-        Kernel::RustCuda {
-            src,
-            lib_name,
-            features,
-            cuda_capabilities,
-            ..
-        } => (
-            "kernel-component/rust-cuda.cmake",
-            src,
-            lib_name,
-            features,
-            cuda_capabilities.as_ref(),
-        ),
-        _ => {
-            unreachable!("render_kernel_component_rust only accepts Rust kernels")
-        }
-    };
+    let (template, src, lib_name, features, device_manifest, ptx_dir, cuda_capabilities) =
+        match kernel {
+            Kernel::RustCpu {
+                src,
+                lib_name,
+                features,
+                ..
+            } => (
+                "kernel-component/rust-cpu.cmake",
+                src,
+                lib_name,
+                features,
+                None,
+                None,
+                None,
+            ),
+            Kernel::RustCuda {
+                src,
+                lib_name,
+                features,
+                device_manifest,
+                ptx_dir,
+                cuda_capabilities,
+                ..
+            } => (
+                "kernel-component/rust-cuda.cmake",
+                src,
+                lib_name,
+                features,
+                device_manifest.as_deref(),
+                ptx_dir.as_deref(),
+                cuda_capabilities.as_ref(),
+            ),
+            _ => {
+                unreachable!("render_kernel_component_rust only accepts Rust kernels")
+            }
+        };
     let manifest_path = rust_manifest_src(kernel_name, src)?;
 
     let lib_name = rust_lib_name(manifest_path, lib_name).ok_or_else(|| {
@@ -108,10 +115,12 @@ fn render_kernel_component_rust(
         .render_captured_to(
             context! {
                 cuda_capabilities => cuda_capabilities,
+                device_manifest => device_manifest,
                 features => features,
                 lib_name => lib_name,
                 manifest_path => manifest_path,
                 name => kernel_name,
+                ptx_dir => ptx_dir,
             },
             &mut *write,
         )

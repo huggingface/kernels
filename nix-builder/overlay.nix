@@ -1,6 +1,14 @@
+{
+  # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder` flake,
+  # burned into the binary. It cannot be detected from `.git` in the build
+  # sandbox.
+  builderProvenance ? null,
+}:
+
 final: prev:
 {
-  kernel-builder = final.callPackage ./pkgs/kernel-builder { };
+  # Local packages/hooks.
+  kernel-builder = final.callPackage ./pkgs/kernel-builder { inherit builderProvenance; };
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
@@ -34,6 +42,17 @@ final: prev:
         inherit (finalAttrs) src;
         hash = "sha256-EQERi5NSMUK7qfFYWilzhacYlK4ShQl9Koz8t/8I6+U=";
       };
+    }
+  );
+
+  # nixpkgs overrides
+  ucc = prev.ucc.overrideAttrs (
+    _: prevAttrs: {
+      # Concurrent build flags do not seem to get passed through? So instead, let's
+      # add parallelism to building CUDA files.
+      preConfigure = prevAttrs.preConfigure + ''
+        export NVCC_CFLAGS="--threads $NIX_BUILD_CORES"
+      '';
     }
   );
 
@@ -127,6 +146,16 @@ final: prev:
             hash = "sha256-TOgBT0l7TvJamVdIAdAUFRWs8AMRRY+Ydoh6e+3dEp0=";
           };
         });
+
+        helion = python-super.helion.overrideAttrs (
+          _: prevAttrs: {
+            # nixpkgs marks Helion as broken without CUDA, but it also
+            # supports ROCm and XPU through Triton.
+            meta = prevAttrs.meta // {
+              broken = false;
+            };
+          }
+        );
 
         jax = python-super.jax.overrideAttrs (
           _: prevAttrs: {

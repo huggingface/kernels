@@ -36,6 +36,12 @@ let
 
   revUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] flakeRev;
 
+  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
+  # in the build metadata. The Nix sandbox has no `.git`, so it is derived from
+  # the kernel flake's `self` here and passed in explicitly. (`kernel-builder`'s
+  # own provenance is burned into its binary.)
+  kernelProvenance = import ./flake-provenance.nix { inherit lib; } self;
+
   applicableBuildSets = build.applicableBuildSets { inherit path buildSets; };
 
   kernelConfig = (import ./kernel-config.nix { inherit lib; }) path;
@@ -153,12 +159,17 @@ in
   packages =
     let
       bundle = build.mkExtensionBundle {
-        inherit path doGetKernelCheck;
+        inherit path doGetKernelCheck kernelProvenance;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };
       ciTests = build.mkCiTests {
-        inherit path doGetKernelCheck pythonCheckInputs;
+        inherit
+          path
+          doGetKernelCheck
+          pythonCheckInputs
+          kernelProvenance
+          ;
         buildSets = applicableBuildSets;
         rev = revUnderscored;
       };
@@ -175,7 +186,7 @@ in
           builtins.map (backend: {
             name = backend;
             value = build.mkExtensionBundle {
-              inherit path doGetKernelCheck;
+              inherit path doGetKernelCheck kernelProvenance;
               buildSets = builtins.filter (
                 set: buildConfigBackend set.buildConfig == backend
               ) applicableBuildSets;
@@ -241,7 +252,7 @@ in
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
         build.mkExtensionBundle {
-          inherit path doGetKernelCheck;
+          inherit path doGetKernelCheck kernelProvenance;
           buildSets = onePerFramework;
           rev = revUnderscored;
         };
@@ -254,7 +265,7 @@ in
           builtins.map (backend: {
             name = backend;
             value = build.mkExtensionBundle {
-              inherit path doGetKernelCheck;
+              inherit path doGetKernelCheck kernelProvenance;
               # It is too costly to build all variants in CI, so we just build one per framework.
               buildSets = headOrEmpty (
                 builtins.filter (set: set.buildConfig.framework == backend) buildSetsSorted
@@ -277,7 +288,7 @@ in
         };
 
       redistributable = build.mkDistTorchExtensions {
-        inherit path doGetKernelCheck;
+        inherit path doGetKernelCheck kernelProvenance;
         bundleOnly = false;
         rev = revUnderscored;
         buildSets = applicableBuildSets;

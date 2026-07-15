@@ -1,12 +1,16 @@
 {
   nixpkgs,
   rust-overlay,
+
+  # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder` flake,
+  # so it can be burned into the binary that the kernels it builds record.
+  builderProvenance ? null,
 }:
 
 let
   inherit (nixpkgs) lib;
 
-  overlay = import ../overlay.nix;
+  overlay = import ../overlay.nix { inherit builderProvenance; };
 
   flattenVersion = version: lib.replaceStrings [ "." ] [ "_" ] (lib.versions.pad 2 version);
 
@@ -48,7 +52,6 @@ let
             });
           }
         );
-
   };
 
   overlayForRocmVersion = rocmVersion: self: super: {

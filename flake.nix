@@ -10,7 +10,10 @@
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
+    # Temporarily pin this commit to fix ucx issues:
+    # https://github.com/NixOS/nixpkgs/pull/538738
+    nixpkgs.url = "github:NixOS/nixpkgs/ec1a11210589d294f0ac99d3290a27e6c73dfa1d";
+    #nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     flake-compat.url = "github:edolstra/flake-compat";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -27,9 +30,16 @@
       rust-overlay,
     }:
     let
+      # Git provenance (`{ sha, dirty }` or `null`) of the `kernel-builder`
+      # flake itself, so it can be burned into the binary at build time and
+      # recorded in the build metadata of the kernels it builds.
+      builderProvenance = import ./nix-builder/lib/flake-provenance.nix {
+        inherit (nixpkgs) lib;
+      } self;
+
       inherit
         (import ./nix-builder/lib/build-sets.nix {
-          inherit nixpkgs rust-overlay;
+          inherit nixpkgs rust-overlay builderProvenance;
         })
         mkBuildSets
         partitionBuildSetsBySystem

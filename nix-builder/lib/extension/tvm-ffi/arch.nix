@@ -68,6 +68,10 @@
   # Revision to bake into the ops name.
   rev,
 
+  # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
+  # in the build metadata.
+  kernelProvenance,
+
   src,
 }:
 
@@ -111,6 +115,8 @@ let
 
   metalSupport = buildConfig.metal or false;
 
+  provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
+
 in
 
 stdenv.mkDerivation (prevAttrs: {
@@ -129,7 +135,7 @@ stdenv.mkDerivation (prevAttrs: {
   # Generate build files.
   postPatch = ''
     kernel-builder create-pyproject \
-      --unique-id ${rev} .
+      --unique-id ${rev} ${provenanceFlags} .
   '';
 
   preConfigure =
@@ -194,7 +200,7 @@ stdenv.mkDerivation (prevAttrs: {
 
       # Make dependent on build configuration dependencies once
       # the Torch dependency is gone.
-      cuda_cccl
+      cccl
       libcublas
       libcusolver
       libcusparse

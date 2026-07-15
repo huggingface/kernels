@@ -151,6 +151,7 @@ Build the kernel and upload to Hugging Face Hub
 
   Possible values: `model`, `kernel`
 
+* `--create-pr` — Open a pull request with the changes rather than committing them directly (does not require write access to the repository)
 * `-q`, `--quiet` — Suppress progress output
 
 
@@ -176,6 +177,7 @@ Upload kernel build artifacts to the Hugging Face Hub
 
   Possible values: `model`, `kernel`
 
+* `--create-pr` — Open a pull request with the changes rather than committing them directly (does not require write access to the repository)
 * `-q`, `--quiet` — Suppress progress output
 
 
@@ -244,6 +246,8 @@ Generate CMake files for a kernel extension build
 
 * `-f`, `--force` — Force-overwrite existing files
 * `--unique-id <UNIQUE_ID>` — This is an optional unique identifier that is suffixed to the kernel name to avoid name collisions. (e.g. Git SHA)
+* `--kernel-sha <KERNEL_SHA>` — Full commit SHA of the kernel source, recorded in the build metadata. When absent, it is detected from the kernel's git repository (used by Nix builds where the source has no `.git`)
+* `--kernel-dirty` — Mark the kernel source as having uncommitted changes in the build metadata. Only meaningful together with `--kernel-sha`
 
 
 
@@ -349,7 +353,7 @@ Install a kernels skill for an AI assistant
 
   Default value: `cuda-kernels`
 
-  Possible values: `cuda-kernels`, `cpu-kernels`, `rocm-kernels`, `xpu-kernels`
+  Possible values: `cuda-kernels`, `cpu-kernels`, `rocm-kernels`, `triton-kernels`, `xpu-kernels`
 
 * `--claude` — Install for Claude
 * `--codex` — Install for Codex

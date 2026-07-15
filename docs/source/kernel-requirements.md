@@ -81,6 +81,31 @@ metadata. Currently the following top-level keys are supported:
 - `digest` (`Digest`, required): hash digest of the kernel files.
 - `python-depends` (`list[str]`, optional): list of Python dependencies
   from a curated set of Python dependencies.
+- `provenance` (`dict`, optional): provenance of the build, used to flag
+  non-reproducible (dirty) builds. It contains two optional sub-objects:
+  - `kernel-builder`: the `kernel-builder` that produced the build, with its
+    `version` (`str`), the `sha` (`str`) of the `kernel-builder` source it was
+    built from (when known), and a `dirty` (`bool`) flag that is `true` when
+    `kernel-builder` was built from a source tree with uncommitted changes.
+  - `kernel`: the kernel source that was built, with its commit `sha` (`str`)
+    and a `dirty` (`bool`) flag that is `true` when the kernel source had
+    uncommitted changes.
+
+  When either `dirty` flag is set, the kernel was built from uncommitted
+  sources and cannot be reliably reproduced.
+
+  > **Note:** For Nix builds, dirtiness follows Nix's flake tree status, which
+  > also counts **untracked** files (including an uncommitted `flake.lock`).
+  > Commit your `flake.lock` (and avoid stray untracked files) so that clean
+  > builds are not flagged as dirty. Local `create-pyproject` runs only
+  > consider changes to tracked files.
+
+  > **Note:** The kernel `sha`/`dirty` are captured at the moment
+  > `create-pyproject` runs, so they describe the source tree as it was *then*.
+  > Running `create-pyproject` and committing afterwards is bad practice: the
+  > recorded provenance keeps pointing at the pre-commit state (a stale `sha`,
+  > and `dirty: true` if the tree was dirty) even though the committed source
+  > differs. Generate the metadata from the final, committed source instead.
 
 Example `metadata.json`:
 
@@ -175,6 +200,7 @@ The following dependencies are currently allowed:
 **General dependencies:**
 
 - `einops`
+- `helion`
 
 **Backend-specific dependencies:**
 
@@ -198,6 +224,14 @@ The version **must** be bumped in the following cases:
 
 In both cases, build variants that are not updated must be removed from
 the new version's branch.
+
+> [!IMPORTANT]
+> The *kernel API* covered by these versioning guarantees is only the
+> public API: the symbols listed in the `__all__` of the kernel's
+> top-level `__init__.py`. Anything not in `__all__` (e.g. internal
+> helpers or names prefixed with `_`) is considered private and may
+> change or be removed at any time without a version bump. Export every
+> symbol you intend consumers to rely on in `__all__`.
 
 > [!NOTE]
 > By convention, we reserve version `0` for kernels that are still in
@@ -368,6 +402,12 @@ __all__ = [
   # ...
 ]
 ```
+
+> [!IMPORTANT]
+> Only symbols listed in `__all__` are treated as the kernel's public
+> API. This is the surface that consumers can rely on and that the
+> [versioning guarantees](#versioning) apply to, so be sure to export
+> every function, class, and `layers` module you want to expose.
 
 ## Python requirements
 

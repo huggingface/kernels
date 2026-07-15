@@ -204,11 +204,39 @@ def _validate_variant_dependencies(variant_path: Path) -> None:
     validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
 
 
+def _warn_if_dirty(metadata: Metadata, variant_str: str) -> None:
+    """Warn when a kernel variant was built from a dirty git tree.
+
+    A dirty build was produced from a working tree with uncommitted changes,
+    so its git SHA does not fully identify the sources it was built from and
+    the build may not be reproducible.
+    """
+    provenance = metadata.provenance
+    if provenance is None or not provenance.dirty:
+        return
+
+    dirty_sources = []
+    if provenance.kernel is not None and provenance.kernel.dirty:
+        dirty_sources.append("kernel source")
+    builder_git = provenance.kernel_builder.git
+    if builder_git is not None and builder_git.dirty:
+        dirty_sources.append("kernel-builder")
+
+    warnings.warn(
+        f"Kernel '{metadata.name}' variant '{variant_str}' was built from a dirty "
+        f"git tree ({', '.join(dirty_sources)} had uncommitted changes). Its "
+        "recorded git revision does not fully identify the sources it was built "
+        "from, so the build may not be reproducible.",
+        stacklevel=3,
+    )
+
+
 def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
+    _warn_if_dirty(metadata, variant_path.name)
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"

@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, path::Path};
 
 use eyre::{Context, Result};
 use itertools::Itertools;
@@ -12,7 +12,7 @@ pub fn render_kernel_components(
     build: &Build,
     write: &mut impl Write,
 ) -> Result<()> {
-    for (kernel_name, kernel) in build.kernels.iter() {
+    for (kernel_name, kernel) in build.kernels.iter().sorted_by(|(a, _), (b, _)| a.cmp(b)) {
         render_kernel_component(env, kernel_name, kernel, write)?;
     }
 
@@ -49,9 +49,97 @@ fn render_kernel_component(
         Kernel::Xpu { .. } => {
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
+        Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => {
+            render_kernel_component_rust(env, kernel_name, kernel, write)?
+        }
     }
 
     Ok(())
+}
+
+fn render_kernel_component_rust(
+    env: &Environment,
+    kernel_name: &str,
+    kernel: &Kernel,
+    write: &mut impl Write,
+) -> Result<()> {
+    let (template, src, lib_name, features, cuda_capabilities) = match kernel {
+        Kernel::RustCpu {
+            src,
+            lib_name,
+            features,
+            ..
+        } => (
+            "kernel-component/rust-cpu.cmake",
+            src,
+            lib_name,
+            features,
+            None,
+        ),
+        Kernel::RustCuda {
+            src,
+            lib_name,
+            features,
+            cuda_capabilities,
+            ..
+        } => (
+            "kernel-component/rust-cuda.cmake",
+            src,
+            lib_name,
+            features,
+            cuda_capabilities.as_ref(),
+        ),
+        _ => {
+            unreachable!("render_kernel_component_rust only accepts Rust kernels")
+        }
+    };
+    let manifest_path = rust_manifest_src(kernel_name, src)?;
+
+    let lib_name = rust_lib_name(manifest_path, lib_name).ok_or_else(|| {
+        eyre::eyre!(
+            "Rust kernel `{kernel_name}`: cannot derive `lib-name` from \
+             `src = [\"{}\"]`, set it explicitly",
+            manifest_path
+        )
+    })?;
+
+    env.get_template(template)
+        .wrap_err("Cannot get Rust kernel template")?
+        .render_captured_to(
+            context! {
+                cuda_capabilities => cuda_capabilities,
+                features => features,
+                lib_name => lib_name,
+                manifest_path => manifest_path,
+                name => kernel_name,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render Rust kernel template")?;
+
+    write.write_all(b"\n")?;
+
+    Ok(())
+}
+
+fn rust_manifest_src<'a>(kernel_name: &str, src: &'a [String]) -> Result<&'a str> {
+    src.iter()
+        .find(|path| {
+            Path::new(path.as_str())
+                .file_name()
+                .is_some_and(|name| name == "Cargo.toml")
+        })
+        .map(String::as_str)
+        .ok_or_else(|| eyre::eyre!("Rust kernel `{kernel_name}`: `src` must include Cargo.toml"))
+}
+
+fn rust_lib_name(manifest_path: &str, lib_name: &Option<String>) -> Option<String> {
+    lib_name.clone().or_else(|| {
+        Path::new(manifest_path)
+            .parent()
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy().replace('-', "_"))
+    })
 }
 
 fn render_kernel_component_cpu(

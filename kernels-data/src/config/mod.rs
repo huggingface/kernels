@@ -316,6 +316,17 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
+    RustCpu {
+        src: Vec<String>,
+        lib_name: Option<String>,
+        features: Option<Vec<String>>,
+    },
+    RustCuda {
+        src: Vec<String>,
+        lib_name: Option<String>,
+        features: Option<Vec<String>>,
+        cuda_capabilities: Option<Vec<String>>,
+    },
 }
 
 impl Kernel {
@@ -326,6 +337,7 @@ impl Kernel {
             | Kernel::Metal { cxx_flags, .. }
             | Kernel::Rocm { cxx_flags, .. }
             | Kernel::Xpu { cxx_flags, .. } => cxx_flags.as_deref(),
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
         }
     }
 
@@ -336,6 +348,7 @@ impl Kernel {
             | Kernel::Metal { include, .. }
             | Kernel::Rocm { include, .. }
             | Kernel::Xpu { include, .. } => include.as_deref(),
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
         }
     }
 
@@ -346,6 +359,8 @@ impl Kernel {
             Kernel::Metal { .. } => Backend::Metal,
             Kernel::Rocm { .. } => Backend::Rocm,
             Kernel::Xpu { .. } => Backend::Xpu,
+            Kernel::RustCpu { .. } => Backend::Cpu,
+            Kernel::RustCuda { .. } => Backend::Cuda,
         }
     }
 
@@ -356,6 +371,7 @@ impl Kernel {
             | Kernel::Metal { depends, .. }
             | Kernel::Rocm { depends, .. }
             | Kernel::Xpu { depends, .. } => depends,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => &[],
         }
     }
 
@@ -365,7 +381,9 @@ impl Kernel {
             | Kernel::Cuda { src, .. }
             | Kernel::Metal { src, .. }
             | Kernel::Rocm { src, .. }
-            | Kernel::Xpu { src, .. } => src,
+            | Kernel::Xpu { src, .. }
+            | Kernel::RustCpu { src, .. }
+            | Kernel::RustCuda { src, .. } => src,
         }
     }
 }

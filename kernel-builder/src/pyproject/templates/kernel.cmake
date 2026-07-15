@@ -315,3 +315,67 @@ function(metal_kernel_component SRC_VAR)
         set(METAL_INCLUDE_DIRS ${_TMP_METAL_INCLUDES} PARENT_SCOPE)
     endif()
 endfunction()
+
+function(rust_kernel_component LIBS_VAR TARGETS_VAR)
+    set(oneValueArgs NAME MANIFEST_PATH LIB_NAME)
+    set(multiValueArgs FEATURES CUDA_CAPABILITIES)
+    cmake_parse_arguments(KERNEL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT KERNEL_NAME OR NOT KERNEL_MANIFEST_PATH OR NOT KERNEL_LIB_NAME)
+        message(FATAL_ERROR "rust_kernel_component requires NAME, MANIFEST_PATH, and LIB_NAME")
+    endif()
+
+    find_program(CARGO_EXECUTABLE cargo REQUIRED)
+
+    # Export CUDA archs for Rust build scripts.
+    set(_KERNEL_ARCHS "")
+    if(GPU_LANG STREQUAL "CUDA")
+        if(KERNEL_CUDA_CAPABILITIES)
+            cuda_archs_loose_intersection(_KERNEL_ARCHS "${KERNEL_CUDA_CAPABILITIES}" "${CUDA_ARCHS}")
+            if(NOT _KERNEL_ARCHS)
+                message(FATAL_ERROR "Rust kernel: ${KERNEL_NAME}, empty set of capabilities after intersection (kernel: ${KERNEL_CUDA_CAPABILITIES}, supported: ${CUDA_ARCHS})")
+            endif()
+        else()
+            set(_KERNEL_ARCHS "${CUDA_KERNEL_ARCHS}")
+        endif()
+        message(STATUS "Rust kernel: ${KERNEL_NAME}, capabilities: ${_KERNEL_ARCHS}")
+
+        accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
+        set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
+    endif()
+
+    # Cargo writes the staticlib into its target directory.
+    set(_CARGO_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME})
+    set(_STATICLIB ${_CARGO_TARGET_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}${KERNEL_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
+
+    set(_CARGO_ARGS rustc --release --locked --lib --crate-type staticlib
+        --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH}
+        --target-dir ${_CARGO_TARGET_DIR})
+    if(KERNEL_FEATURES)
+        list(JOIN KERNEL_FEATURES "," _KERNEL_FEATURES)
+        list(APPEND _CARGO_ARGS --features ${_KERNEL_FEATURES})
+    endif()
+
+    get_filename_component(_PYTHON_BIN_DIR ${Python_EXECUTABLE} DIRECTORY)
+
+    add_custom_target(${KERNEL_NAME}_cargo_build ALL
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PATH=${_PYTHON_BIN_DIR}:$ENV{PATH}"
+            "KERNEL_BUILDER_GPU_LANG=${GPU_LANG}"
+            "KERNEL_BUILDER_CUDA_ARCHS=${_KERNEL_ARCHS}"
+            ${CARGO_EXECUTABLE} ${_CARGO_ARGS}
+        BYPRODUCTS ${_STATICLIB}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Building Rust kernel ${KERNEL_NAME} with cargo"
+        VERBATIM
+    )
+
+    # Register the cargo artifact as a CMake library target.
+    add_library(${KERNEL_NAME}_rust STATIC IMPORTED GLOBAL)
+    set_target_properties(${KERNEL_NAME}_rust PROPERTIES
+        IMPORTED_LOCATION ${_STATICLIB})
+
+    # Return the library and build target to the extension scope.
+    set(${LIBS_VAR} ${${LIBS_VAR}} ${KERNEL_NAME}_rust PARENT_SCOPE)
+    set(${TARGETS_VAR} ${${TARGETS_VAR}} ${KERNEL_NAME}_cargo_build PARENT_SCOPE)
+endfunction()

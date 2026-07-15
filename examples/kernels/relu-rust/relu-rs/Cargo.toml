@@ -1,0 +1,12 @@
+[package]
+name = "relu-rs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+tvm-ffi = { git = "https://github.com/apache/tvm-ffi.git", rev = "2af558e255ff2f398095835ae18e6457635b0262" }

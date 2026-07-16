@@ -36,6 +36,6 @@ in
 
   cutlass_4_5 = builder {
     version = "4.5.2";
-    hash = "sha256-jnxookfCEPynRrxMGGsMwPlK84ChQQW3xocmYcNTVLw=";
+    hash = "sha256-5SMEfoqB2QXRfH5wBwTKKjez0x2zhR8T8EA0bqPMqwM=";
   };
 }

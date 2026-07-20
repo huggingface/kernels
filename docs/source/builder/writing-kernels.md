@@ -348,6 +348,29 @@ are available:
 - `cxx-flags`: a list of additional flags to be passed to the C++
   compiler.
 
+### Rust kernels (experimental)
+
+Rust kernels are experimental `tvm-ffi` kernels declared with
+`backend = "rust-cpu"` or `backend = "rust-cuda"` in a normal
+`kernel.<name>` section. Include the crate `Cargo.toml` and Rust sources in
+`src`; the library name is inferred from that manifest.
+
+```toml
+[kernel.my_kernel]
+backend = "rust-cuda"
+src = ["Cargo.toml", "Cargo.lock", "src"]
+```
+
+Optional fields are `features`, `lib-name` as an override, and, for
+`rust-cuda`, `cuda-capabilities`. The project root must include a `Cargo.lock`.
+
+For cuda-oxide device crates, add the device manifest and PTX output directory:
+
+```toml
+device-manifest = "kernels/Cargo.toml"
+ptx-dir = "kernels-ptx"
+```
+
 ## Torch bindings
 
 ### Defining bindings

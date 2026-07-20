@@ -5,7 +5,7 @@ use std::{
 };
 
 use eyre::{bail, Result};
-use kernels_data::config::{Build, Framework};
+use kernels_data::config::{Build, Framework, Kernel};
 use kernels_data::metadata::{GitHash, Provenance};
 use minijinja::Environment;
 
@@ -32,6 +32,18 @@ pub fn create_pyproject_file_set(
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
+
+    if build
+        .kernels
+        .values()
+        .any(|kernel| matches!(kernel, Kernel::RustCpu { .. } | Kernel::RustCuda { .. }))
+        && !matches!(build.framework, Framework::TvmFfi(_))
+    {
+        bail!(
+            "`backend = \"rust-cpu\"` and `backend = \"rust-cuda\"` kernels are \
+             currently only supported together with the `[tvm-ffi]` framework"
+        );
+    }
 
     let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
         tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?

@@ -1,0 +1,18 @@
+[general]
+name = "relu-tirx"
+version = 1
+edition = 5
+license = "Apache-2.0"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "kernels-test/relu-tirx"
+
+[tvm-ffi]
+src = ["tvm-ffi-ext/tvm_ffi_binding.cu"]
+
+[kernel.relu_tirx]
+backend = "cuda"
+lang = "tirx"
+depends = []
+src = ["tirx/relu.py"]

@@ -21,6 +21,7 @@ static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 static DETECT_CUDA_CAPABILITY_PY: &str =
     include_str!("../templates/tvm_ffi/cuda/detect-cuda-capability.py");
+static TIRX_CODEGEN_PY: &str = include_str!("../templates/tvm_ffi/tirx_codegen.py");
 
 fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
@@ -51,6 +52,14 @@ pub fn write_tvm_ffi_ext(
     };
 
     let mut file_set = FileSet::default();
+
+    if build
+        .kernels
+        .values()
+        .any(|kernel| kernel.lang() == kernels_data::config::Lang::Tirx)
+    {
+        write_cmake_file(&mut file_set, "tirx_codegen.py", TIRX_CODEGEN_PY.as_bytes());
+    }
 
     write_cmake(
         env,

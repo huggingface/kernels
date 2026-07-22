@@ -313,6 +313,8 @@ impl From<Kernel> for super::Kernel {
                 cxx_flags,
                 depends,
                 include,
+                // Editions before 5 have no `lang`; they are always CUDA C++.
+                lang: None,
                 src,
             },
             Kernel::Metal {

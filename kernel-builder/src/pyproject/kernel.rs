@@ -2,7 +2,7 @@ use std::io::Write;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Build, Kernel};
+use kernels_data::config::{Build, Kernel, Lang};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;
@@ -37,6 +37,9 @@ fn render_kernel_component(
         Kernel::Cpu { .. } => {
             render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
         }
+        Kernel::Cuda { .. } if kernel.lang() == Lang::Tirx => {
+            render_kernel_component_tirx(env, kernel_name, kernel, sources, write)?
+        }
         Kernel::Cuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
@@ -50,6 +53,51 @@ fn render_kernel_component(
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
     }
+
+    Ok(())
+}
+
+/// TIRx kernels are CUDA kernels whose sources are generated: the TIRx modules
+/// are compiled to CUDA C++ first, then handed to the regular CUDA component so
+/// that they pick up the same architecture and flag handling.
+fn render_kernel_component_tirx(
+    env: &Environment,
+    kernel_name: &str,
+    kernel: &Kernel,
+    sources: String,
+    write: &mut impl Write,
+) -> Result<()> {
+    let (cuda_capabilities, cuda_flags, cuda_minver) = match kernel {
+        Kernel::Cuda {
+            cuda_capabilities,
+            cuda_flags,
+            cuda_minver,
+            ..
+        } => (
+            cuda_capabilities.as_deref(),
+            cuda_flags.as_deref(),
+            cuda_minver.as_ref(),
+        ),
+        _ => unreachable!("render_kernel_component_tirx only accepts CUDA kernels"),
+    };
+
+    env.get_template("kernel-component/tirx.cmake")
+        .wrap_err("Cannot get TIRx kernel template")?
+        .render_captured_to(
+            context! {
+                name => kernel_name,
+                cuda_capabilities => cuda_capabilities,
+                cuda_flags => cuda_flags.map(|flags| flags.join(";")),
+                cuda_minver => cuda_minver.map(ToString::to_string),
+                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
+                includes => kernel.include().map(prefix_and_join_includes),
+                sources => sources,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render TIRx kernel template")?;
+
+    write.write_all(b"\n")?;
 
     Ok(())
 }

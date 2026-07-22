@@ -117,6 +117,12 @@ let
 
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
+  kernelToml = (builtins.fromTOML (builtins.readFile (src + "/build.toml"))).kernel or { };
+
+  hasTirxKernels = builtins.any (kernel: (kernel.lang or "cuda") == "tirx") (
+    lib.attrValues kernelToml
+  );
+
 in
 
 stdenv.mkDerivation (prevAttrs: {
@@ -241,10 +247,14 @@ stdenv.mkDerivation (prevAttrs: {
     (lib.cmakeBool "BUILD_ALL_SUPPORTED_ARCHS" true)
     (lib.cmakeFeature "Python_EXECUTABLE" "${
       python3.withPackages (
-        ps: with ps; [
+        ps:
+        with ps;
+        [
           tvm-ffi
           typing-extensions
         ]
+        # TIRx codegen runs the Apache TVM compiler at build time.
+        ++ lib.optionals hasTirxKernels [ apache-tvm ]
       )
     }/bin/python")
     # Fix: file RPATH_CHANGE could not write new RPATH, we are rewriting

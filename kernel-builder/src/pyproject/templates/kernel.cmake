@@ -315,3 +315,57 @@ function(metal_kernel_component SRC_VAR)
         set(METAL_INCLUDE_DIRS ${_TMP_METAL_INCLUDES} PARENT_SCOPE)
     endif()
 endfunction()
+
+# Compile TIRx modules (Python) to CUDA C++ sources. Returns the generated
+# sources in SRC_VAR; the caller passes them to cuda_kernel_component so that
+# they get the same architecture and flag handling as hand-written CUDA.
+function(tirx_codegen SRC_VAR)
+    cmake_parse_arguments(TIRX "" "NAME" "SRC;CUDA_CAPABILITIES" ${ARGN})
+
+    if(NOT TIRX_NAME)
+        message(FATAL_ERROR "tirx_codegen requires NAME")
+    endif()
+
+    # Codegen targets a single architecture; nvcc then compiles the generated
+    # source for every requested architecture. Use the oldest one so that the
+    # generated source does not rely on intrinsics newer targets provide.
+    if(TIRX_CUDA_CAPABILITIES)
+        cuda_archs_loose_intersection(_tirx_archs "${TIRX_CUDA_CAPABILITIES}" "${CUDA_ARCHS}")
+        if(NOT _tirx_archs)
+            message(FATAL_ERROR "TIRx kernel: ${TIRX_NAME}, empty set of capabilities after intersection (kernel: ${TIRX_CUDA_CAPABILITIES}, supported: ${CUDA_ARCHS})")
+        endif()
+    else()
+        set(_tirx_archs "${CUDA_KERNEL_ARCHS}")
+    endif()
+    list(SORT _tirx_archs COMPARE NATURAL)
+    list(GET _tirx_archs 0 _tirx_arch)
+    # Capabilities look like "8.9", "9.0a", or "9.0+PTX"; codegen wants "sm_89".
+    string(REPLACE "+PTX" "" _tirx_arch "${_tirx_arch}")
+    string(REPLACE "." "" _tirx_arch "${_tirx_arch}")
+    if(NOT _tirx_arch MATCHES "^[0-9]+[a-z]?$")
+        message(FATAL_ERROR "TIRx kernel: ${TIRX_NAME}, cannot derive codegen arch from `${_tirx_archs}`")
+    endif()
+
+    set(_tirx_codegen ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tirx_codegen.py)
+    set(_tirx_gen_dir ${CMAKE_CURRENT_BINARY_DIR}/tirx_generated)
+
+    set(_tirx_gen_srcs)
+    foreach(_tirx_src ${TIRX_SRC})
+        get_filename_component(_tirx_stem ${_tirx_src} NAME_WE)
+        set(_tirx_out ${_tirx_gen_dir}/${TIRX_NAME}_${_tirx_stem}.cu)
+        add_custom_command(
+            OUTPUT ${_tirx_out}
+            COMMAND ${Python_EXECUTABLE} ${_tirx_codegen}
+                --input ${CMAKE_CURRENT_SOURCE_DIR}/${_tirx_src}
+                --output ${_tirx_out}
+                --arch sm_${_tirx_arch}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_tirx_src} ${_tirx_codegen}
+            COMMENT "TIRx codegen: ${_tirx_src} (sm_${_tirx_arch})"
+            VERBATIM)
+        list(APPEND _tirx_gen_srcs ${_tirx_out})
+    endforeach()
+
+    set_source_files_properties(${_tirx_gen_srcs} PROPERTIES LANGUAGE CUDA GENERATED TRUE)
+
+    set(${SRC_VAR} ${_tirx_gen_srcs} PARENT_SCOPE)
+endfunction()

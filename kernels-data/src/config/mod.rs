@@ -293,6 +293,7 @@ pub enum Kernel {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
+        lang: Option<Lang>,
         src: Vec<String>,
     },
     Metal {
@@ -316,6 +317,19 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
+}
+
+/// The source language a kernel is written in.
+///
+/// A kernel's `backend` says what hardware it is compiled for, `lang` says how
+/// its sources are written. Backends accept the languages they can lower.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub enum Lang {
+    /// CUDA C++ sources, compiled directly by `nvcc`.
+    Cuda,
+    /// TIRx sources, compiled to CUDA C++ before `nvcc` runs.
+    Tirx,
 }
 
 impl Kernel {
@@ -346,6 +360,14 @@ impl Kernel {
             Kernel::Metal { .. } => Backend::Metal,
             Kernel::Rocm { .. } => Backend::Rocm,
             Kernel::Xpu { .. } => Backend::Xpu,
+        }
+    }
+
+    /// The source language of the kernel.
+    pub fn lang(&self) -> Lang {
+        match self {
+            Kernel::Cuda { lang, .. } => lang.unwrap_or(Lang::Cuda),
+            _ => Lang::Cuda,
         }
     }
 

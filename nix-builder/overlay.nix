@@ -87,6 +87,8 @@ final: prev:
           triton-xpu_3_7_2
           ;
 
+        apache-tvm = python-self.callPackage ./pkgs/python-modules/apache-tvm { };
+
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };

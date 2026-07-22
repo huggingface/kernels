@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelName};
+use super::{Dependency, GitUrl, KernelName, Lang};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -148,6 +148,7 @@ pub enum Kernel {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
+        lang: Option<Lang>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -339,6 +340,7 @@ impl From<Kernel> for super::Kernel {
                 cxx_flags,
                 depends,
                 include,
+                lang,
                 src,
             } => super::Kernel::Cuda {
                 cuda_capabilities,
@@ -347,6 +349,7 @@ impl From<Kernel> for super::Kernel {
                 cxx_flags,
                 depends,
                 include,
+                lang,
                 src,
             },
             Kernel::Metal {
@@ -542,6 +545,7 @@ impl From<super::Kernel> for Kernel {
                 cxx_flags,
                 depends,
                 include,
+                lang,
                 src,
             } => Kernel::Cuda {
                 cuda_capabilities,
@@ -550,6 +554,7 @@ impl From<super::Kernel> for Kernel {
                 cxx_flags,
                 depends,
                 include,
+                lang,
                 src,
             },
             super::Kernel::Metal {

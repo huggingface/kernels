@@ -348,6 +348,40 @@ are available:
 - `cxx-flags`: a list of additional flags to be passed to the C++
   compiler.
 
+### TIRx kernels (experimental)
+
+A CUDA kernel can be written in the
+[TIRx DSL](https://tvm.apache.org/2026/06/22/tirx) instead of CUDA C++ by
+setting `lang = "tirx"` (the default is `lang = "cuda"`). `src` then lists
+Python modules that define TIRx PrimFuncs and export the ones to build in a
+`__tirx_kernels__` list:
+
+```toml
+[kernel.my_kernel]
+backend = "cuda"
+lang = "tirx"
+depends = []
+src = ["tirx/my_kernel.py"]
+```
+
+Since TIRx kernels are CUDA kernels, all the `cuda` options above
+(`cuda-capabilities`, `cuda-flags`, `cuda-minver`) apply as usual. TIRx
+kernels currently require the `[tvm-ffi]` framework, because that is where
+the TIRx compiler is wired into the build environment.
+
+At build time each module is compiled through the TIRx pipeline and the
+generated CUDA source is added to the `tvm-ffi` extension. The generated
+kernels are plain `extern "C" __global__` functions (named after the
+PrimFunc, with a `_kernel` suffix); the extension's `tvm-ffi` binding
+declares them and owns the host-side launch:
+
+```cpp
+extern "C" __global__ void my_kernel_kernel(float* in, float* out, int n);
+```
+
+Codegen targets the oldest selected architecture; `nvcc` then compiles the
+generated source for all of them.
+
 ## Torch bindings
 
 ### Defining bindings

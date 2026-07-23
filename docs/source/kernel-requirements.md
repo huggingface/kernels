@@ -277,8 +277,8 @@ These requirements can be checked with the ABI checker (see below).
 
 - Use [ABI3/Limited API](https://docs.python.org/3/c-api/stable.html#stable-application-binary-interface)
   for compatibility with Python 3.9 and later.
-- macOS deployment target 15.0.
-- Metal 3.0 (`-std=metal3.0`).
+- macOS deployment target 26.0.
+- Metal 4.0 (`-std=metal4.0`).
 
 The ABI3 requirement can be checked with the ABI checker (see below).
 

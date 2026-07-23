@@ -18,11 +18,18 @@ from kernels.backends import (
     CUDA,
     XPU,
     Backend,
+    Metal,
     ROCm,
     _select_backend,
     parse_backend,
 )
 from kernels.compat import has_torch, has_tvm_ffi
+
+# Metal kernels are currently built with `-std=metal4.0`, which requires
+# macOS 26 or later. Until the macOS/Metal version is encoded in the build
+# variant, reject Metal arch variants on older systems, since they fail to
+# load at runtime.
+_METAL_MIN_MACOS_VERSION = Version("26.0")
 
 
 @dataclass(unsafe_hash=True)
@@ -285,8 +292,12 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> tup
     cpu = platform.machine()
     os = platform.system().lower()
 
+    macos_version = None
     if os == "darwin":
         cpu = "aarch64" if cpu == "arm64" else cpu
+        mac_release = platform.mac_ver()[0]
+        if mac_release:
+            macos_version = parse(mac_release)
     elif os == "windows":
         cpu = "x86_64" if cpu == "AMD64" else cpu
 
@@ -317,6 +328,7 @@ def resolve_variants(variants: list[Variant], backend: str | None = None) -> tup
         torch_version=torch_version,
         torch_cxx11_abi=torch_cxx11_abi,
         tvm_ffi_version=tvm_ffi_version,
+        macos_version=macos_version,
     )
 
 
@@ -328,6 +340,7 @@ def _resolve_variant_for_system(
     torch_version: Version | None,
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
+    macos_version: Version | None = None,
 ) -> tuple[list[Variant], list[Decision]]:
     """Resolve the best matching variant given explicit system parameters.
 
@@ -341,6 +354,7 @@ def _resolve_variant_for_system(
         torch_version,
         torch_cxx11_abi,
         tvm_ffi_version,
+        macos_version,
     )
     trace = _sort_variants(trace)
 
@@ -362,6 +376,7 @@ def _check_variants(
     torch_version: Version | None,
     torch_cxx11_abi: bool | None,
     tvm_ffi_version: Version | None,
+    macos_version: Version | None = None,
 ) -> list[Decision]:
     """Return only the variants applicable to the current system."""
     is_unsupported_free_threaded = _is_unsupported_free_threaded_build()
@@ -463,6 +478,16 @@ def _check_variants(
                     VariantRejected(
                         variant=v,
                         reason=f"backend ({v.arch.backend.variant_str}) does not match selected backend ({selected_backend.variant_str})",
+                    )
+                )
+                continue
+            elif isinstance(v.arch.backend, Metal) and (
+                macos_version is None or macos_version < _METAL_MIN_MACOS_VERSION
+            ):
+                result.append(
+                    VariantRejected(
+                        variant=v,
+                        reason=f"Metal kernels require macOS {_METAL_MIN_MACOS_VERSION} or later, system macOS version is {macos_version}",
                     )
                 )
                 continue

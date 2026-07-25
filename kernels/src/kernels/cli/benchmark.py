@@ -463,13 +463,16 @@ def run_benchmark_class(
     # Load kernel once for all workloads
     from kernels import get_kernel, get_local_kernel
 
+    # Detect the backend first
+    backend_name = _backend().name
+
     if is_local:
-        kernel = get_local_kernel(Path(repo_id))
+        kernel = get_local_kernel(Path(repo_id), backend=backend_name)
     else:
-        kernel = get_kernel(repo_id, revision=revision)
+        kernel = get_kernel(repo_id, revision=revision, backend=backend_name)
 
     kernel_sha = get_kernel_sha_from_build_name(kernel)
-    backend_name = _backend().name
+
     # Map backend names to torch device names
     device_map = {
         "rocm": "cuda",
@@ -477,7 +480,7 @@ def run_benchmark_class(
         "cann": "npu",
     }
     device = device_map.get(backend_name, backend_name)
-    print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
+    print(f"  Running {benchmark_cls.__name__} on {device} (backend: {backend_name})", file=sys.stderr)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")

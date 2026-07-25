@@ -463,7 +463,7 @@ def run_benchmark_class(
     # Load kernel once for all workloads
     from kernels import get_kernel, get_local_kernel
 
-    # Detect the backend first
+    # Detect the backend
     backend_name = _backend().name
 
     if is_local:

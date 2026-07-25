@@ -211,8 +211,7 @@ def _warn_if_dirty(metadata: Metadata, variant_str: str) -> None:
     so its git SHA does not fully identify the sources it was built from and
     the build may not be reproducible.
     """
-    # Check if provenance attribute exists (it may not in older metadata versions)
-    provenance = getattr(metadata, "provenance", None)
+    provenance = metadata.provenance
     if provenance is None or not provenance.dirty:
         return
 

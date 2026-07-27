@@ -2,7 +2,7 @@
   lib,
   autoPatchelfHook,
   buildPythonPackage,
-  fetchurl,
+  requireFile,
   python,
   stdenv,
 
@@ -23,27 +23,24 @@
   torch,
 }:
 
-# Fetched directly from Google's Artifact Registry, which requires an
-# OAuth2 bearer token. The token is passed at fetch time through the
-# GCLOUD_ACCESS_TOKEN environment variable and turned into a netrc
-# entry, so it never appears in the URL or the .drv:
+# torch_tpu is served from Google's gated Artifact Registry, which
+# requires an OAuth2 bearer token. That token can't be handed to a build
+# sandbox without making the derivation impure, so instead the wheel is
+# prefetched out-of-band and handed to `requireFile`, which only checks
+# that a file matching `name` + `hash` already exists in the store:
 #
-#   export GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token)
+#   GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token) \
+#     nix-builder/scripts/helpers/prefetch-tpu-wheel.sh torch_tpu 0.1.1.dev20260707090224
 #
-# (With a multi-user Nix daemon the variable must be visible to the
-# daemon, not the client shell.) The dev build is dated; bump the date
-# suffix in `version` below, then recompute `hash` with:
-#
-#   nix store prefetch-file --json --hash-type sha256 \
-#     --option netrc-file <(printf 'machine us-python.pkg.dev\nlogin oauth2accesstoken\npassword %s\n' "$(gcloud auth print-access-token)") \
-#     'https://us-python.pkg.dev/ml-oss-artifacts-transient/torch-tpu-virtual-registry/torch-tpu/torch_tpu-<version>-<abi>-<abi>-manylinux_2_31_x86_64.whl' \
-#     | jq -r .hash
+# The script prints the `hash` line to paste in below. The dev build is
+# dated; bump the date suffix in `version` below, then re-run the
+# script with the new version.
 
 let
   # The wheel ships per-CPython-ABI builds (cp311..cp314); pick the tag
   # matching the python this package set is built for. The hash below is
   # for cp313 (the nixpkgs default python); if either moves, recompute
-  # via the command above.
+  # via the prefetch script above.
   abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
 in
 buildPythonPackage rec {
@@ -51,18 +48,15 @@ buildPythonPackage rec {
   version = "0.1.1.dev20260707090224";
   format = "wheel";
 
-  src = fetchurl {
-    url = "https://us-python.pkg.dev/ml-oss-artifacts-transient/torch-tpu-virtual-registry/torch-tpu/torch_tpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
+  src = requireFile {
+    name = "torch_tpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
     hash = "sha256-eCjwoX0UKd/L/IccxXn88p0GdyQjFdPl2Er1luZz4H0="; # cp313
-    netrcImpureEnvVars = [ "GCLOUD_ACCESS_TOKEN" ];
-    netrcPhase = ''
-      if [ -z "''${GCLOUD_ACCESS_TOKEN:-}" ]; then
-        echo "GCLOUD_ACCESS_TOKEN is not set; cannot fetch torch_tpu." >&2
-        echo "Run: export GCLOUD_ACCESS_TOKEN=\$(gcloud auth print-access-token)" >&2
-        exit 1
-      fi
-      printf 'machine us-python.pkg.dev\nlogin oauth2accesstoken\npassword %s\n' \
-        "$GCLOUD_ACCESS_TOKEN" > netrc
+    message = ''
+      torch_tpu is served from a gated Google Artifact Registry and
+      cannot be fetched by a pure Nix build. Fetch and register it with:
+
+        GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token) \
+          nix-builder/scripts/helpers/prefetch-tpu-wheel.sh torch_tpu ${version} ${abi}
     '';
   };
 

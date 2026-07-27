@@ -14,6 +14,7 @@ use hf_hub::{
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use kernels_data::metadata::Metadata;
+use serde::Serialize;
 use walkdir::WalkDir;
 
 use crate::{
@@ -97,9 +98,44 @@ pub struct UploadArgs {
     #[arg(long)]
     pub create_pr: bool,
 
+    /// Write a machine-readable JSON summary of the upload to this path.
+    #[arg(long, value_name = "PATH")]
+    pub output_json: Option<PathBuf>,
+
     /// Suppress progress output.
     #[arg(long, short)]
     pub quiet: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum UploadStatus {
+    NoChanges,
+    Uploaded,
+    PullRequestCreated,
+}
+
+#[derive(Debug, Serialize)]
+struct PullRequest {
+    branch: String,
+    url: String,
+}
+
+#[derive(Debug, Serialize)]
+struct UploadOutcome {
+    status: UploadStatus,
+    repo_id: String,
+    branch: Option<String>,
+    url: Option<String>,
+    pull_requests: Vec<PullRequest>,
+}
+
+fn write_output_json(path: &Path, outcome: &UploadOutcome) -> Result<()> {
+    let mut json =
+        serde_json::to_string_pretty(outcome).wrap_err("Cannot serialize the upload result")?;
+    json.push('\n');
+    fs::write(path, json)
+        .wrap_err_with(|| format!("Cannot write the upload result to `{}`", path.display()))
 }
 
 /// Get repository and branch from the given arguments, or fallback to
@@ -154,6 +190,9 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         variants.len(),
         build_dir.display()
     );
+
+    let dirty_variants = dirty_variant_names(&variants);
+    warn_dirty_variants(&dirty_variants);
 
     let (repo_id, branch) = get_repo_and_branch(&kernel_dir, args.repo_id, args.branch, &variants)?;
 
@@ -225,7 +264,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     // README goes to main branch, build artifacts go to version branch.
     let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
-    let mut pr_urls: Vec<String> = Vec::new();
+    let mut pull_requests: Vec<PullRequest> = Vec::new();
 
     collect_readme_commit_ops(
         &build_dir,
@@ -327,7 +366,10 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
                         format!("Cannot determine the pull request opened for branch `{branch}`")
                     })?;
                 pr_revision = Some(pr_ref);
-                pr_urls.push(pr_url);
+                pull_requests.push(PullRequest {
+                    branch: branch.clone(),
+                    url: pr_url,
+                });
             }
         }
 
@@ -339,18 +381,52 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
     }
 
     let total_ops: usize = operations_by_branch.values().map(|v| v.len()).sum();
-    if total_ops == 0 {
-        eprintln!("No changes to upload.");
+    let outcome = if total_ops == 0 {
+        UploadOutcome {
+            status: UploadStatus::NoChanges,
+            repo_id,
+            branch,
+            url: None,
+            pull_requests,
+        }
     } else if args.create_pr {
-        for url in &pr_urls {
-            println!("Pull request created: {url}");
+        UploadOutcome {
+            status: UploadStatus::PullRequestCreated,
+            repo_id,
+            branch,
+            url: None,
+            pull_requests,
         }
     } else {
         let type_prefix = T::default().url_prefix();
         let tree_path = branch
             .as_ref()
             .map_or(String::new(), |b| format!("/tree/{b}"));
-        println!("Kernel uploaded: https://hf.co/{type_prefix}{repo_id}{tree_path}");
+        UploadOutcome {
+            status: UploadStatus::Uploaded,
+            url: Some(format!("https://hf.co/{type_prefix}{repo_id}{tree_path}")),
+            repo_id,
+            branch,
+            pull_requests,
+        }
+    };
+
+    match outcome.status {
+        UploadStatus::NoChanges => eprintln!("No changes to upload."),
+        UploadStatus::PullRequestCreated => {
+            for pr in &outcome.pull_requests {
+                println!("Pull request created: {}", pr.url);
+            }
+        }
+        UploadStatus::Uploaded => {
+            if let Some(ref url) = outcome.url {
+                println!("Kernel uploaded: {url}");
+            }
+        }
+    }
+
+    if let Some(ref path) = args.output_json {
+        write_output_json(path, &outcome)?;
     }
 
     Ok(())
@@ -531,6 +607,51 @@ fn collect_build_commit_ops(
     Ok(())
 }
 
+/// Warn about build variants whose provenance is dirty.
+///
+/// A dirty variant was built from a working tree with uncommitted changes, so
+/// its recorded git SHA does not fully identify the sources it was built from
+/// and the build may not be reproducible. Metadata that cannot be read is
+/// silently skipped: this is a best-effort warning, not a hard check.
+fn warn_dirty_variants(dirty: &[String]) {
+    if dirty.is_empty() {
+        return;
+    }
+
+    eprintln!(
+        "warning: uploading {} build variant(s) built from a dirty git tree \
+         (uncommitted changes): {}. Their recorded git revision does not fully \
+         identify the sources they were built from, so the build may not be \
+         reproducible.",
+        dirty.len(),
+        dirty.join(", ")
+    );
+}
+
+/// Names of the build variants whose provenance is dirty, sorted.
+///
+/// Metadata that cannot be read is silently skipped: this backs a best-effort
+/// warning, not a hard check.
+fn dirty_variant_names(variants: &[PathBuf]) -> Vec<String> {
+    let mut dirty: Vec<String> = variants
+        .iter()
+        .filter(|variant| {
+            File::open(variant.join("metadata.json"))
+                .ok()
+                .and_then(|f| Metadata::from_reader(BufReader::new(f)).ok())
+                .and_then(|m| m.provenance)
+                .is_some_and(|p| p.is_dirty())
+        })
+        .filter_map(|variant| {
+            variant
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
+        .collect();
+    dirty.sort();
+    dirty
+}
+
 /// Determine the branch name (`v{version}`) from variant metadata.
 fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
     let mut versions: HashSet<usize> = HashSet::new();
@@ -577,6 +698,52 @@ mod tests {
         assert!(guidance.contains(KERNELS_COMMUNITY_URL));
         assert!(guidance.contains("source URI"));
         assert!(guidance.contains("Benchmark"));
+    }
+
+    #[test]
+    fn test_write_output_json() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let output_path = temp_dir.path().join("upload-result.json");
+        let outcome = UploadOutcome {
+            status: UploadStatus::PullRequestCreated,
+            repo_id: "user/my-kernel".to_owned(),
+            branch: Some("v3".to_owned()),
+            url: None,
+            pull_requests: vec![
+                PullRequest {
+                    branch: MAIN_BRANCH.to_owned(),
+                    url: "https://hf.co/kernels/user/my-kernel/discussions/1".to_owned(),
+                },
+                PullRequest {
+                    branch: "v3".to_owned(),
+                    url: "https://hf.co/kernels/user/my-kernel/discussions/2".to_owned(),
+                },
+            ],
+        };
+
+        write_output_json(&output_path, &outcome).unwrap();
+
+        let contents = fs::read_to_string(output_path).unwrap();
+        assert!(contents.ends_with('\n'));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&contents).unwrap(),
+            serde_json::json!({
+                "status": "pull_request_created",
+                "repo_id": "user/my-kernel",
+                "branch": "v3",
+                "url": null,
+                "pull_requests": [
+                    {
+                        "branch": "main",
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/1"
+                    },
+                    {
+                        "branch": "v3",
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/2"
+                    }
+                ]
+            })
+        );
     }
 
     #[test]
@@ -766,6 +933,38 @@ mod tests {
 
     const METADATA_V3: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
     const METADATA_V0: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 0, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
+
+    const METADATA_DIRTY: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 1, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}, "provenance": {"kernel-builder": {"version": "0.1.0", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false}, "kernel": {"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "dirty": true}}}"#;
+
+    #[test]
+    fn test_dirty_variant_names() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let clean = temp_dir.path().join("torch-cpu");
+        fs::create_dir_all(&clean).unwrap();
+        fs::write(clean.join("metadata.json"), METADATA_V3).unwrap();
+
+        let dirty = temp_dir.path().join("torch-cuda");
+        fs::create_dir_all(&dirty).unwrap();
+        fs::write(dirty.join("metadata.json"), METADATA_DIRTY).unwrap();
+
+        // A variant with unreadable metadata is skipped rather than failing.
+        let broken = temp_dir.path().join("torch-rocm");
+        fs::create_dir_all(&broken).unwrap();
+
+        let names = dirty_variant_names(&[clean, dirty, broken]);
+        assert_eq!(names, vec!["torch-cuda".to_owned()]);
+    }
+
+    #[test]
+    fn test_dirty_variant_names_none_dirty() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let clean = temp_dir.path().join("torch-cpu");
+        fs::create_dir_all(&clean).unwrap();
+        fs::write(clean.join("metadata.json"), METADATA_V3).unwrap();
+
+        assert!(dirty_variant_names(&[clean]).is_empty());
+    }
 
     #[test]
     fn test_detect_branch_from_metadata() {

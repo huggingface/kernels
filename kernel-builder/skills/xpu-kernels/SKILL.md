@@ -176,6 +176,30 @@ def kernel(...):
     ...
 ```
 
+### Register-Spill-Aware Autotune Pruning
+
+For autotuned XPU kernels, prune configs that are likely to spill even after large-GRF recompilation. This avoids slow double-compile/benchmark cycles where the Intel backend reports spills, recompiles in large GRF mode, and still spills.
+
+Use an `early_config_prune` that estimates per-thread GRF pressure from the live accumulator and operand tiles:
+
+```text
+regs ~= (accumulators * BM * BN + stages * (BM * BK + weight_tiles * BN * BK))
+        / (num_warps * warp_size)
+```
+
+Guidelines:
+- Apply this only on XPU; leave other backends' configs unchanged.
+- Read `BM`, `BN`, and `BK` from either autotune config kwargs or launch args.
+- Count accumulator tiles explicitly: gate/up fused kernels often have 2 accumulators, down/simple GEMM usually has 1.
+- Count weight tiles explicitly: gate/up fused kernels often load 2 weight tiles, down/simple GEMM usually loads 1.
+- Use `num_stages` for pipelined MMA paths; use 1 for scalar/non-pipelined paths.
+- Keep a never-empty fallback, such as the config with the lowest estimated register pressure.
+- Treat the model as a coarse filter for catastrophic spillers, not a perfect predictor; leave borderline configs for real benchmarking.
+
+This complements `grf_mode='256'`: large GRF increases the register budget, while pruning removes configs that are still too register-heavy to be useful.
+
+For an implementation pattern, see `references/xpu_optimizations.yaml (xpu_register_spill_autotune_pruning)`.
+
 ### Tile Swizzling
 
 Use 1D grid with GROUP_SIZE_M for L2 locality:

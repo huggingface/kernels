@@ -172,6 +172,8 @@ final: prev:
           }
         );
 
+        nvidia-cuda-nvdisasm = python-self.callPackage ./pkgs/python-modules/nvidia-cuda-nvdisasm { };
+
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };

@@ -178,6 +178,10 @@ final: prev:
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };
 
+        nvidia-cutlass-dsl-libs-core =
+          python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs-core
+            { };
+
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
         kernels-data = callPackage ./pkgs/python-modules/kernels-data { };

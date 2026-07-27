@@ -126,6 +126,7 @@ pub struct TorchNoarch {
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
+    #[serde(default)]
     pub src: Vec<PathBuf>,
     pub cxx_flags: Option<Vec<String>>,
 }
@@ -173,6 +174,21 @@ pub enum Kernel {
         sycl_flags: Option<Vec<String>>,
         include: Option<Vec<String>>,
         src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    RustCpu {
+        src: Vec<String>,
+        lib_name: Option<String>,
+        features: Option<Vec<String>>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    RustCuda {
+        src: Vec<String>,
+        lib_name: Option<String>,
+        features: Option<Vec<String>>,
+        device_manifest: Option<String>,
+        ptx_dir: Option<String>,
+        cuda_capabilities: Option<Vec<String>>,
     },
 }
 
@@ -388,6 +404,30 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             },
+            Kernel::RustCpu {
+                src,
+                lib_name,
+                features,
+            } => super::Kernel::RustCpu {
+                src,
+                lib_name,
+                features,
+            },
+            Kernel::RustCuda {
+                src,
+                lib_name,
+                features,
+                device_manifest,
+                ptx_dir,
+                cuda_capabilities,
+            } => super::Kernel::RustCuda {
+                src,
+                lib_name,
+                features,
+                device_manifest,
+                ptx_dir,
+                cuda_capabilities,
+            },
         }
     }
 }
@@ -590,6 +630,30 @@ impl From<super::Kernel> for Kernel {
                 sycl_flags,
                 include,
                 src,
+            },
+            super::Kernel::RustCpu {
+                src,
+                lib_name,
+                features,
+            } => Kernel::RustCpu {
+                src,
+                lib_name,
+                features,
+            },
+            super::Kernel::RustCuda {
+                src,
+                lib_name,
+                features,
+                device_manifest,
+                ptx_dir,
+                cuda_capabilities,
+            } => Kernel::RustCuda {
+                src,
+                lib_name,
+                features,
+                device_manifest,
+                ptx_dir,
+                cuda_capabilities,
             },
         }
     }

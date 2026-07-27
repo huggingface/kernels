@@ -6,22 +6,28 @@
   lib,
   pkgs,
   stdenv,
-  writeText,
 
   # Native build inputs
   kernel-builder,
+  cargo,
   cmake,
   cmakeNvccThreadsHook,
   cuda_nvcc,
   get-kernel-check,
   hash-kernel-hook,
   kernel-layout-check,
+  libclang,
   ninja,
   python3,
   remove-bytecode-hook,
   rewrite-nix-paths-macho,
+  rustc,
+  rustPlatform,
+  symlinkJoin,
   torch-ops-check,
   writeScriptBin,
+
+  rust-bin ? null,
 
   # Framework packages
   cudaPackages,
@@ -104,6 +110,7 @@ let
     ];
 
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
+  kernelToml = (builtins.fromTOML (builtins.readFile (src + "/build.toml"))).kernel or { };
 
   # On Darwin, we need the host's xcrun for `xcrun metal` to compile Metal shaders.
   # It's not supported by the nixpkgs shim.
@@ -116,6 +123,70 @@ let
   metalSupport = buildConfig.metal or false;
 
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
+
+  hasRustKernels = builtins.any (kernel: kernel.backend == "rust-${buildConfig.backend}") (
+    lib.attrValues kernelToml
+  );
+
+  hasRustCudaDeviceKernels = builtins.any (
+    kernel: kernel.backend == "rust-cuda" && kernel ? "device-manifest"
+  ) (lib.attrValues kernelToml);
+
+  cudaOxideSrc = pkgs.fetchFromGitHub {
+    owner = "drbh";
+    repo = "cuda-oxide";
+    rev = "bc5f33bb1d556671c35e475439bb821d25caa2cb";
+    hash = "sha256-ZIpS0XFDI9yDSXk33OyQ3mGB5gRhE7tldmmex226tLA=";
+  };
+
+  cudaOxideRust =
+    if rust-bin != null then
+      rust-bin.fromRustupToolchainFile "${cudaOxideSrc}/rust-toolchain.toml"
+    else
+      rustc;
+  cudaOxideRustPlatform = pkgs.makeRustPlatform {
+    cargo = cudaOxideRust;
+    rustc = cudaOxideRust;
+  };
+  cudaOxideBackend = cudaOxideRustPlatform.buildRustPackage {
+    pname = "rustc-codegen-cuda";
+    version = "0.2.1";
+    src = cudaOxideSrc;
+    sourceRoot = "source/crates/rustc-codegen-cuda";
+    cargoLock = {
+      lockFile = "${cudaOxideSrc}/crates/rustc-codegen-cuda/Cargo.lock";
+      allowBuiltinFetchGit = true;
+    };
+    buildInputs = with pkgs; [
+      libffi
+      libxml2
+      zstd
+      zlib
+    ];
+    doCheck = false;
+  };
+
+  rustCudaEnv =
+    let
+      cudaHome = symlinkJoin {
+        name = "cuda-home";
+        paths = with cudaPackages; [
+          (lib.getDev cuda_cudart)
+          (lib.getLib cuda_cudart)
+          (lib.getDev cccl)
+        ];
+      };
+    in
+    {
+      CUDA_HOME = cudaHome;
+      CUDA_TOOLKIT_PATH = cudaHome;
+      LIBRARY_PATH = "${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs";
+      LIBCLANG_PATH = "${lib.getLib libclang}/lib";
+      BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
+        "-isystem ${lib.getLib libclang}/lib/clang/${lib.versions.major libclang.version}/include"
+        "-isystem ${lib.getDev stdenv.cc.libc}/include"
+      ];
+    };
 
 in
 
@@ -131,6 +202,15 @@ stdenv.mkDerivation (prevAttrs: {
     ;
 
   framework = "tvm-ffi";
+
+  cargoDeps =
+    if hasRustKernels then
+      rustPlatform.importCargoLock {
+        lockFile = src + "/Cargo.lock";
+        allowBuiltinFetchGit = true;
+      }
+    else
+      null;
 
   # Generate build files.
   postPatch = ''
@@ -163,6 +243,11 @@ stdenv.mkDerivation (prevAttrs: {
     chmod -R u+w .
   '';
 
+  preInstallCheck = lib.optionalString (hasRustKernels && cudaSupport) ''
+    addToSearchPath LD_LIBRARY_PATH "${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs"
+    export LD_LIBRARY_PATH
+  '';
+
   nativeBuildInputs = [
     cmake
     hash-kernel-hook
@@ -172,6 +257,18 @@ stdenv.mkDerivation (prevAttrs: {
     remove-bytecode-hook
     torch-ops-check
   ]
+  ++ lib.optionals hasRustKernels (
+    [ rustPlatform.cargoSetupHook ]
+    ++ (
+      if rust-bin != null && builtins.pathExists (src + "/rust-toolchain.toml") then
+        [ (rust-bin.fromRustupToolchainFile (src + "/rust-toolchain.toml")) ]
+      else
+        [
+          cargo
+          rustc
+        ]
+    )
+  )
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
   ]
@@ -232,6 +329,10 @@ stdenv.mkDerivation (prevAttrs: {
     // lib.optionalAttrs xpuSupport {
       MKLROOT = oneapi-torch-dev;
       SYCL_ROOT = oneapi-torch-dev;
+    }
+    // lib.optionalAttrs (hasRustKernels && cudaSupport) rustCudaEnv
+    // lib.optionalAttrs hasRustCudaDeviceKernels {
+      CUDA_OXIDE_BACKEND = "${cudaOxideBackend}/lib/librustc_codegen_cuda.so";
     };
 
   # If we use the default setup, CMAKE_CUDA_HOST_COMPILER gets set to nixpkgs g++.
@@ -250,6 +351,10 @@ stdenv.mkDerivation (prevAttrs: {
     # Fix: file RPATH_CHANGE could not write new RPATH, we are rewriting
     # rpaths anyway.
     (lib.cmakeBool "CMAKE_SKIP_RPATH" true)
+  ]
+  ++ lib.optionals hasRustKernels [
+    (lib.cmakeFeature "CMAKE_C_COMPILER" "${stdenv.cc}/bin/cc")
+    (lib.cmakeFeature "CMAKE_CXX_COMPILER" "${stdenv.cc}/bin/c++")
   ]
   ++ lib.optionals cudaSupport [
     (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")

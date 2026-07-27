@@ -13,7 +13,13 @@
 #   export GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token)
 #
 # (With a multi-user Nix daemon the variable must be visible to the
-# daemon, not the client shell.)
+# daemon, not the client shell.) To bump the version, update `version`
+# below, then recompute `hash` with:
+#
+#   nix store prefetch-file --json --hash-type sha256 \
+#     --option netrc-file <(printf 'machine us-python.pkg.dev\nlogin oauth2accesstoken\npassword %s\n' "$(gcloud auth print-access-token)") \
+#     'https://us-python.pkg.dev/ml-oss-artifacts-transient/torch-tpu-virtual-registry/libtpu/libtpu-<version>-<abi>-<abi>-manylinux_2_31_x86_64.whl' \
+#     | jq -r .hash
 #
 # libtpu ships the `libtpu/libtpu.so` runtime that both torch_tpu and
 # jaxlib dlopen. Pinned to 0.0.x to match the jax 0.10.x / torch_tpu
@@ -28,8 +34,8 @@
 let
   # The wheel ships per-CPython-ABI builds (cp311..cp314); pick the tag
   # matching the python this package set is built for. The hash below is
-  # for cp313 (the nixpkgs default python); re-run
-  # scripts/helpers/get_torch_tpu_hash.sh when either moves.
+  # for cp313 (the nixpkgs default python); if either moves, recompute
+  # via the command above.
   abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
 in
 buildPythonPackage rec {

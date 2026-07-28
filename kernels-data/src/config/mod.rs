@@ -476,7 +476,7 @@ mod tests {
             cuda: None,
             neuron: None,
             tpu: Some(TpuGeneral {
-                python_depends: Some(vec!["torch_tpu".to_string()]),
+                python_depends: Some(vec!["torch-tpu".to_string()]),
             }),
             xpu: None,
         }
@@ -491,7 +491,7 @@ mod tests {
             .collect::<Result<Vec<_>>>()
             .unwrap();
 
-        assert_eq!(deps, vec!["torch_tpu".to_string()]);
+        assert_eq!(deps, vec!["torch-tpu".to_string()]);
     }
 
     #[test]

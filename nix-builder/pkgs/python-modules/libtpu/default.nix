@@ -52,8 +52,6 @@ buildPythonPackage rec {
     '';
   };
 
-  dependencies = [ ];
-
   pythonImportsCheck = [ "libtpu" ];
   doInstallCheck = false; # requires actual /dev/accel
 

@@ -1,5 +1,11 @@
 [
   {
+    "torchVersion": "2.11.0",
+    "cpu": true,
+    "systems": ["x86_64-linux"]
+  },
+
+  {
     "torchVersion": "2.12.0",
     "cudaVersion": "12.6",
     "systems": ["x86_64-linux", "aarch64-linux"]

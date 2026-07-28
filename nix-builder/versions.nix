@@ -1,5 +1,14 @@
 [
   {
+    torchVersion = "2.11";
+    cpu = true;
+    systems = [
+      "x86_64-linux"
+    ];
+    bundleBuild = false;
+  }
+
+  {
     torchVersion = "2.12";
     cpu = true;
     systems = [

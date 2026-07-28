@@ -190,13 +190,12 @@ final: prev:
           }
         );
 
-        # Remove once sglang moves to a newer Torch version.
-        torch-bin_2_9 = mkTorch {
-          version = "2.9";
-          triton-cuda = triton_3_5_0;
+        # Maintain a minimal version for TPU support.
+        torch-bin_2_11 = mkTorch {
+          version = "2.11";
+          triton-cuda = null;
           triton-rocm = null;
           triton-xpu = null;
-          # Not supported anymore.
           xpuPackages = null;
         };
 

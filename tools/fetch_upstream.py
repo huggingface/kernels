@@ -19,9 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, Sequence
@@ -34,26 +32,9 @@ from latest_tag import (
     latest_tag,
     list_remote_tags,
     parse_version,
+    run_git,
+    validate_url,
 )
-
-
-def _run_git(args: Sequence[str], *, timeout: int) -> subprocess.CompletedProcess:
-    env = dict(os.environ)
-    env.setdefault("GIT_TERMINAL_PROMPT", "0")
-    try:
-        return subprocess.run(
-            ["git", *args],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-        )
-    except FileNotFoundError as err:
-        raise RuntimeError("`git` was not found on PATH") from err
-    except subprocess.TimeoutExpired as err:
-        raise RuntimeError(
-            f"`git {' '.join(args)}` timed out after {timeout}s"
-        ) from err
 
 
 def _prepare_dest(dest: Path, force: bool) -> None:
@@ -106,6 +87,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     prerelease = None
     try:
+        validate_url(args.url)
         if args.tag == "latest":
             resolved, candidates = latest_tag(
                 args.url,
@@ -134,7 +116,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         if not args.json:
             print(f"Cloning {args.url} at {tag} into {args.dest}", file=sys.stderr)
-        clone = _run_git(
+        clone = run_git(
             [
                 "clone",
                 "--depth",
@@ -150,9 +132,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if clone.returncode != 0:
             return bail(f"clone failed: {clone.stderr.strip()}", EXIT_ERROR)
 
-        rev = _run_git(
-            ["-C", str(args.dest), "rev-parse", "HEAD"], timeout=args.timeout
-        )
+        rev = run_git(["-C", str(args.dest), "rev-parse", "HEAD"], timeout=args.timeout)
         sha = rev.stdout.strip() if rev.returncode == 0 else None
 
         if args.strip_git:

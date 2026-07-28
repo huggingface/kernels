@@ -92,6 +92,16 @@ python tools/latest_tag.py https://github.com/Dao-AILab/flash-attention.git \
 With `--json` the output also carries the tag's commit SHA and the next
 `--limit` candidates.
 
+### Accepted URLs
+
+A URL handed to an agent may come from an untrusted place, and git has
+features that turn a hostile URL into command execution — `ext::<command>`
+runs its argument, and local/`file://` remotes honour
+`--upload-pack=<command>`. Both fetchers therefore accept only `https://`,
+`ssh://`, `git://`, and `user@host:path`, reject anything starting with
+`-`, and pin `GIT_ALLOW_PROTOCOL` for the git subprocess. Local paths and
+`file://` are refused; point them at a real remote.
+
 ## `fetch_upstream.py` — clone a repository at a tag
 
 ```bash

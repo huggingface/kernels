@@ -34,6 +34,26 @@ EXIT_OK = 0
 EXIT_NO_MATCH = 1
 EXIT_ERROR = 2
 
+# Transports we are willing to hand to git.
+#
+# A URL reaching these tools is not necessarily trustworthy: an agent syncing
+# a kernel may take it from an upstream README, issue, or config file. Two
+# git features turn a hostile URL into command execution:
+#
+#   * `ext::<command>` runs the command as a transport helper;
+#   * local paths and `file://` accept `--upload-pack=<command>`, which git
+#     then runs locally.
+#
+# Both are refused by `validate_url`, and `GIT_ALLOW_PROTOCOL` enforces the
+# same list inside git itself, so a URL that slips past the check (or a
+# permissive local `protocol.*.allow` config) still cannot select them.
+GIT_PROTOCOL_ALLOWLIST = "https:ssh:git"
+
+_ALLOWED_SCHEMES = ("https://", "ssh://", "git://")
+
+# `user@host:path`, the scp-like form of an ssh URL.
+_SCP_LIKE_URL = re.compile(r"^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:")
+
 # A version anywhere inside a tag name, with an optional PEP 440-ish
 # pre-release and post-release suffix.
 _VERSION_RE = re.compile(
@@ -123,28 +143,66 @@ def parse_version(tag: str) -> Optional[Version]:
     return best
 
 
-def list_remote_tags(url: str, *, timeout: int = 60) -> List[Tuple[str, str]]:
-    """Return `(tag, sha)` pairs for `url` without cloning it.
+def validate_url(url: str) -> None:
+    """Reject Git URLs that could make git run a command.
 
     Raises:
-        RuntimeError: if `git ls-remote` is unavailable or fails.
+        RuntimeError: if `url` names a transport outside
+            `GIT_PROTOCOL_ALLOWLIST`, or could be parsed as an option.
     """
+    if url.startswith("-"):
+        # Otherwise git parses it as an option, e.g. `--upload-pack=<command>`.
+        raise RuntimeError(f"refusing Git URL that starts with '-': {url!r}")
+    if url.startswith(_ALLOWED_SCHEMES) or _SCP_LIKE_URL.match(url):
+        return
+    raise RuntimeError(
+        f"refusing unsupported Git URL {url!r}; expected one of "
+        "https://, ssh://, git://, or user@host:path"
+    )
+
+
+def git_env() -> dict:
+    """Environment for git subprocesses."""
     env = dict(os.environ)
     # Never block on a credential prompt: an unreachable or private repo
     # should fail fast rather than hang an agent's tool call.
     env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    # Set, not defaulted: this must win over any ambient value.
+    env["GIT_ALLOW_PROTOCOL"] = GIT_PROTOCOL_ALLOWLIST
+    return env
+
+
+def run_git(args: Sequence[str], *, timeout: int) -> subprocess.CompletedProcess:
+    """Run a git command with the hardened environment.
+
+    Raises:
+        RuntimeError: if git is missing or the command times out.
+    """
     try:
-        completed = subprocess.run(
-            ["git", "ls-remote", "--tags", "--refs", url],
+        return subprocess.run(
+            ["git", *args],
             capture_output=True,
             text=True,
             timeout=timeout,
-            env=env,
+            env=git_env(),
         )
     except FileNotFoundError as err:
         raise RuntimeError("`git` was not found on PATH") from err
     except subprocess.TimeoutExpired as err:
-        raise RuntimeError(f"`git ls-remote {url}` timed out after {timeout}s") from err
+        raise RuntimeError(
+            f"`git {' '.join(args)}` timed out after {timeout}s"
+        ) from err
+
+
+def list_remote_tags(url: str, *, timeout: int = 60) -> List[Tuple[str, str]]:
+    """Return `(tag, sha)` pairs for `url` without cloning it.
+
+    Raises:
+        RuntimeError: if `url` is rejected, or `git ls-remote` fails.
+    """
+    validate_url(url)
+    # `--` keeps git from parsing the URL as an option.
+    completed = run_git(["ls-remote", "--tags", "--refs", "--", url], timeout=timeout)
 
     if completed.returncode != 0:
         raise RuntimeError(f"`git ls-remote {url}` failed: {completed.stderr.strip()}")

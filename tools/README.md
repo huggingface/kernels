@@ -197,6 +197,20 @@ methods on the object returned by `custom_op`
 (`lib.define(...)`) take a function or a bare schema rather than a
 qualified op name, and are left alone.
 
+### JIT and AOT kernels
+
+`torch` (AOT) and `torch-noarch` (JIT) both generate
+`add_op_namespace_prefix`, so the tool behaves identically on either.
+`tvm-ffi` names the helper `torch_add_op_namespace_prefix` instead and has
+no unprefixed alias, so the framework is read from `build.toml`;
+`--helper-name` overrides the detection.
+
+What differs is *where the ops are*. AOT kernels register most ops in
+`torch_binding.cpp`, where `TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops)`
+already supplies the unique namespace — this tool reads Python only and
+leaves C++ alone. JIT kernels register in Python, so that is where nearly
+all of the work is.
+
 Not auto-fixed, reported for review:
 
 * `non-literal-op-name` — the op name is a variable or expression, so the

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set
@@ -50,8 +51,18 @@ from _report import Change, Issue, Report, display_path, emit, fail
 
 TOOL = "fix-op-definitions"
 
-HELPER = "add_op_namespace_prefix"
 OPS_MODULE = "_ops"
+
+# The prefix helper that the generated `_ops` module exposes. The `torch`
+# (AOT) and `torch-noarch` (JIT) frameworks both name it
+# `add_op_namespace_prefix`; `tvm-ffi` names it
+# `torch_add_op_namespace_prefix` and has no unprefixed alias, so the name
+# is picked per kernel by `detect_helper`.
+HELPER = "add_op_namespace_prefix"
+TVM_FFI_HELPER = "torch_add_op_namespace_prefix"
+KNOWN_HELPERS = frozenset({HELPER, TVM_FFI_HELPER})
+
+_TVM_FFI_SECTION = re.compile(r"^\s*\[tvm-ffi\]", re.MULTILINE)
 
 # `torch.library` functions whose first positional argument is an op name.
 #
@@ -89,10 +100,13 @@ def _func_name(node: ast.Call) -> Optional[str]:
 class FileFixer:
     """Collects the op-registration edits for a single file."""
 
-    def __init__(self, source: SourceFile, ops_ref: str, label: str):
+    def __init__(
+        self, source: SourceFile, ops_ref: str, label: str, helper: str = HELPER
+    ):
         self.source = source
         self.ops_ref = ops_ref
         self.label = label
+        self.helper = helper
         self.edits: List[Edit] = []
         self.changes: List[Change] = []
         self.issues: List[Issue] = []
@@ -136,14 +150,14 @@ class FileFixer:
                         if alias.name == "library":
                             self.torch_library_modules.add(alias.asname or alias.name)
                 for alias in node.names:
-                    if (alias.asname or alias.name) == HELPER:
+                    if (alias.asname or alias.name) in KNOWN_HELPERS:
                         self.helper_bound = True
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     if alias.name == "torch.library" and alias.asname:
                         self.torch_library_modules.add(alias.asname)
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if node.name == HELPER:
+                if node.name in KNOWN_HELPERS:
                     self.helper_bound = True
 
     def _check_antipatterns(self) -> None:
@@ -152,7 +166,8 @@ class FileFixer:
                 imports_helper = any(
                     isinstance(child, ast.ImportFrom)
                     and any(
-                        (alias.asname or alias.name) == HELPER for alias in child.names
+                        (alias.asname or alias.name) in KNOWN_HELPERS
+                        for alias in child.names
                     )
                     for child in ast.walk(node)
                 )
@@ -160,16 +175,16 @@ class FileFixer:
                     self._issue(
                         node,
                         "fallback-import",
-                        f"`{HELPER}` is imported with a fallback; a fallback masks a broken "
+                        f"`{self.helper}` is imported with a fallback; a fallback masks a broken "
                         "import path and yields non-unique op names. Import it directly from "
                         f"`{OPS_MODULE}`.",
                     )
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if node.name == HELPER:
+                if node.name in KNOWN_HELPERS:
                     self._issue(
                         node,
                         "rewrapped-helper",
-                        f"`{HELPER}` is redefined here; it must be used directly from "
+                        f"`{self.helper}` is redefined here; it must be used directly from "
                         f"`{OPS_MODULE}` so that ops can be analyzed statically.",
                     )
             elif isinstance(node, ast.Call):
@@ -184,7 +199,7 @@ class FileFixer:
                         node,
                         "hardcoded-library-namespace",
                         "`torch.library.Library(...)` fixes the op namespace at construction; "
-                        f"pass `{HELPER}(...)`-derived names or register ops with "
+                        f"pass `{self.helper}(...)`-derived names or register ops with "
                         "`torch.library.custom_op` instead.",
                     )
 
@@ -207,7 +222,7 @@ class FileFixer:
             return
         arg = node.args[0]
 
-        if isinstance(arg, ast.Call) and _func_name(arg) == HELPER:
+        if isinstance(arg, ast.Call) and _func_name(arg) in KNOWN_HELPERS:
             return  # Already prefixed.
 
         if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
@@ -215,7 +230,7 @@ class FileFixer:
                 node,
                 "non-literal-op-name",
                 f"`{_func_name(node)}` is called with a non-literal op name, so the namespace "
-                f"prefix cannot be added automatically. Wrap it in `{HELPER}(...)` by hand.",
+                f"prefix cannot be added automatically. Wrap it in `{self.helper}(...)` by hand.",
             )
             return
 
@@ -224,7 +239,7 @@ class FileFixer:
         # supplies the unique one that the build generates.
         _, _, bare = op_name.rpartition("::")
         quote = "'" if '"' in bare else '"'
-        replacement = f"{HELPER}({quote}{bare}{quote})"
+        replacement = f"{self.helper}({quote}{bare}{quote})"
 
         start, end = self.source.span(arg)
         self.edits.append(Edit(start, end, replacement))
@@ -240,7 +255,7 @@ class FileFixer:
 
     def _insert_helper_import(self) -> None:
         """Add `from <dots>_ops import add_op_namespace_prefix` after the imports."""
-        statement = f"from {self.ops_ref} import {HELPER}"
+        statement = f"from {self.ops_ref} import {self.helper}"
         body = self.source.tree.body
         anchor = None
         for node in body:
@@ -273,6 +288,27 @@ class FileFixer:
         self.helper_bound = True
 
 
+def detect_helper(package_root: Path) -> str:
+    """Pick the prefix helper name the kernel's `_ops` module will expose.
+
+    `_ops.py` is generated at build time and is usually absent from a source
+    checkout, so the framework is read from `build.toml` instead: `tvm-ffi`
+    kernels get `torch_add_op_namespace_prefix`, everything else gets
+    `add_op_namespace_prefix`.
+    """
+    current = package_root.resolve()
+    for directory in (current, *current.parents):
+        build_toml = directory / "build.toml"
+        if not build_toml.is_file():
+            continue
+        try:
+            text = build_toml.read_text(encoding="utf-8")
+        except OSError:
+            return HELPER
+        return TVM_FFI_HELPER if _TVM_FFI_SECTION.search(text) else HELPER
+    return HELPER
+
+
 def find_package_root(path: Path) -> Path:
     """Return the outermost directory of the package `path` belongs to."""
     directory = path if path.is_dir() else path.parent
@@ -292,6 +328,7 @@ def process(
     package_root: Optional[Path],
     write: bool,
     exclude: Sequence[str],
+    helper: Optional[str] = None,
 ) -> Report:
     report = Report(tool=TOOL, mode="write" if write else "check")
     for path in iter_python_files(paths, exclude=exclude):
@@ -321,7 +358,7 @@ def process(
             dir_parts = ()
         ops_ref = relative_import(dir_parts, (OPS_MODULE,))
 
-        fixer = FileFixer(source, ops_ref, label)
+        fixer = FileFixer(source, ops_ref, label, helper or detect_helper(root))
         fixer.run()
         report.issues.extend(fixer.issues)
         if not fixer.edits:
@@ -354,6 +391,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ),
     )
     parser.add_argument(
+        "--helper-name",
+        metavar="NAME",
+        help=(
+            "Prefix helper exposed by the generated _ops module "
+            f"(default: detected from build.toml -- `{HELPER}`, or "
+            f"`{TVM_FFI_HELPER}` for tvm-ffi kernels)."
+        ),
+    )
+    parser.add_argument(
         "--exclude",
         action="append",
         default=[],
@@ -375,6 +421,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             package_root=args.package_root,
             write=args.write,
             exclude=args.exclude,
+            helper=args.helper_name,
         )
     except (OSError, ValueError) as err:
         return fail(str(err), as_json=args.json, tool=TOOL)

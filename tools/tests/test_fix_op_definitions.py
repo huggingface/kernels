@@ -213,6 +213,79 @@ def test_aliased_torch_library_import_is_matched(tmp_path):
     assert 'add_op_namespace_prefix("b")' in (pkg / "ops.py").read_text()
 
 
+def _kernel_with_op(root: Path, build_toml: str) -> Path:
+    """A kernel-builder project laid out as torch-ext/<name>."""
+    (root).mkdir(parents=True, exist_ok=True)
+    (root / "build.toml").write_text(build_toml)
+    return build(
+        root / "torch-ext" / "mykernel",
+        {
+            "__init__.py": "",
+            "ops.py": (
+                "import torch\n"
+                "\n"
+                '@torch.library.custom_op("a::b", mutates_args=())\n'
+                "def b(x):\n"
+                "    return x\n"
+            ),
+        },
+    )
+
+
+def test_aot_and_jit_kernels_use_the_same_helper(tmp_path):
+    # `torch` (AOT) and `torch-noarch` (JIT) both generate
+    # `add_op_namespace_prefix`, so the tool behaves identically.
+    for name, section in [("aot", "[torch]\n"), ("jit", "[torch-noarch]\n")]:
+        pkg = _kernel_with_op(
+            tmp_path / name, f'[general]\nname = "mykernel"\n{section}'
+        )
+        assert run(pkg) == 0
+        text = (pkg / "ops.py").read_text()
+        assert "from ._ops import add_op_namespace_prefix" in text
+        assert 'add_op_namespace_prefix("b")' in text
+
+
+def test_tvm_ffi_kernel_uses_its_own_helper(tmp_path):
+    # tvm-ffi's generated _ops exposes `torch_add_op_namespace_prefix` and
+    # has no `add_op_namespace_prefix`, so importing the latter would break.
+    pkg = _kernel_with_op(
+        tmp_path / "k", '[general]\nname = "mykernel"\n[tvm-ffi]\nsrc = []\n'
+    )
+    assert run(pkg) == 0
+    text = (pkg / "ops.py").read_text()
+    assert "from ._ops import torch_add_op_namespace_prefix" in text
+    assert 'torch_add_op_namespace_prefix("b")' in text
+    assert "import add_op_namespace_prefix" not in text
+
+
+def test_tvm_ffi_helper_is_recognized_as_already_prefixed(tmp_path):
+    pkg = build(
+        tmp_path / "mykernel",
+        {
+            "__init__.py": "",
+            "ops.py": (
+                "import torch\n"
+                "from ._ops import torch_add_op_namespace_prefix\n"
+                "\n"
+                "@torch.library.custom_op(torch_add_op_namespace_prefix('b'), mutates_args=())\n"
+                "def b(x):\n"
+                "    return x\n"
+            ),
+        },
+    )
+    report = check(pkg)
+    assert report.changes == []
+    assert report.issues == []
+
+
+def test_helper_name_can_be_overridden(tmp_path):
+    pkg = _kernel_with_op(
+        tmp_path / "k", '[general]\nname = "mykernel"\n[torch]\nsrc = []\n'
+    )
+    assert run(pkg, "--helper-name", "torch_add_op_namespace_prefix") == 0
+    assert "torch_add_op_namespace_prefix" in (pkg / "ops.py").read_text()
+
+
 def test_non_literal_op_name_is_reported(tmp_path):
     pkg = build(
         tmp_path / "mykernel",

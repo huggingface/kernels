@@ -28,22 +28,22 @@ let
     };
     "3.7.0" = {
       x86_64-linux = {
-        url = "https://download.pytorch.org/whl/test/triton-3.7.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        url = "https://download.pytorch.org/whl/triton-3.7.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
         hash = "sha256-0BA4KB83Yz8GFC8dTazEh+pNRRsC6zPt/edY0TZii6I=";
       };
       aarch64-linux = {
-        url = "https://download.pytorch.org/whl/test/triton-3.7.0-cp313-cp313-linux_aarch64.whl";
-        hash = "sha256-LoFYjFyKWMAkMMrTeOgAopRK81mqm+fEQPTuOplp9jY=";
+        url = "https://download-r2.pytorch.org/whl/triton-3.7.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl";
+        hash = "sha256-m4KV9sctz4QNP0ysJcGy/0gu8enq0jQVtI/C2Dc6Fw0=";
       };
     };
     "3.7.1" = {
       x86_64-linux = {
-        url = "https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/2.13.0/rc15/triton-3.7.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
-        hash = "sha256-Otz3YvSp/kIrhcoXTrBszD+GLRvVL9gFx03GAy3Auso=";
+        url = "https://download.pytorch.org/whl/triton-3.7.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-WWiLm5JPiHMW3ND66ejL5pfuHR9qs4ZyOYLMns3r7gE=";
       };
       aarch64-linux = {
-        url = "https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/2.13.0/rc15/triton-3.7.1-cp313-cp313-linux_aarch64.whl";
-        hash = "sha256-vpT2B672MVVY9Lh6I1NTTiMnqxJRLZWjEZNjWuwyHYM=";
+        url = "https://download.pytorch.org/whl/triton-3.7.1-cp313-cp313-linux_aarch64.whl";
+        hash = "sha256-NIlNUa/xq/ewF/vQxen+chEwXDWZFX/KJR4/QryPAM8=";
       };
     };
 

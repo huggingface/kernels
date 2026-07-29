@@ -28,6 +28,9 @@ let
     "cutlass_4_5" = [
       pkgs.cutlass_4_5
     ];
+    "cutlass_4_6" = [
+      pkgs.cutlass_4_6
+    ];
     "torch" = [
       torch
     ];

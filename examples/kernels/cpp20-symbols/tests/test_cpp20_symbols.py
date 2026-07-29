@@ -1,6 +1,8 @@
-import cpp20_symbols
+import kernels
 import pytest
 import torch
+
+cpp20_symbols = kernels.get_kernel("kernels-test/cpp20-symbols", version=1)
 
 
 @pytest.mark.kernels_ci

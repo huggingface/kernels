@@ -2,9 +2,10 @@ import pytest
 from huggingface_hub import HfApi
 from packaging.version import Version
 
-from kernels.backends import CPU, CUDA, ROCm
+from kernels.backends import CPU, CUDA, Metal, ROCm
 from kernels.variants import (
     VariantAccepted,
+    VariantRejected,
     _resolve_variant_for_system,
     get_variants,
     parse_variant,
@@ -283,17 +284,68 @@ def test_resolve_cpu_darwin():
 def test_resolve_metal_darwin():
     result, trace = _resolve_variant_for_system(
         variants=RESOLVE_VARIANTS,
-        selected_backend=CPU(),
+        selected_backend=Metal(),
         cpu="aarch64",
         os="darwin",
         torch_version=Version("2.10"),
         torch_cxx11_abi=None,
         tvm_ffi_version=None,
+        macos_version=Version("26.0"),
     )
     assert result != []
-    assert result[0].variant_str == "torch210-cpu-aarch64-darwin"
+    assert result[0].variant_str == "torch210-metal-aarch64-darwin"
     assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
     assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS)
+
+
+RESOLVE_VARIANTS_METAL = [
+    parse_variant(s)
+    for s in [
+        "torch210-cpu-aarch64-darwin",
+        "torch210-metal-aarch64-darwin",
+        "torch-metal",
+    ]
+]
+
+
+@pytest.mark.parametrize("macos_version", [Version("15.7"), None])
+def test_resolve_metal_darwin_old_macos(macos_version):
+    # Metal arch kernels are built for macOS 26+, so they must be rejected
+    # on older systems (falling back to the noarch variant).
+    result, trace = _resolve_variant_for_system(
+        variants=RESOLVE_VARIANTS_METAL,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=None,
+        tvm_ffi_version=None,
+        macos_version=macos_version,
+    )
+    assert result != []
+    assert result[0].variant_str == "torch-metal"
+    rejected = {vs.variant.variant_str: vs.reason for vs in trace if isinstance(vs, VariantRejected)}
+    assert "require macOS 26.0" in rejected["torch210-metal-aarch64-darwin"]
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_METAL)
+
+
+def test_resolve_metal_darwin_new_macos():
+    # On macOS 26+ the Metal arch kernel is accepted and preferred.
+    result, trace = _resolve_variant_for_system(
+        variants=RESOLVE_VARIANTS_METAL,
+        selected_backend=Metal(),
+        cpu="aarch64",
+        os="darwin",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=None,
+        tvm_ffi_version=None,
+        macos_version=Version("26.1"),
+    )
+    assert result != []
+    assert result[0].variant_str == "torch210-metal-aarch64-darwin"
+    assert result == [vs.variant for vs in trace if isinstance(vs, VariantAccepted)]
+    assert {vs.variant for vs in trace} == set(RESOLVE_VARIANTS_METAL)
 
 
 def test_resolve_noarch_fallback():

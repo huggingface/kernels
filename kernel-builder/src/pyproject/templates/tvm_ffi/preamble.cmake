@@ -155,13 +155,15 @@ elseif(GPU_LANG STREQUAL "SYCL")
     set(sycl_link_flags
       "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS};-Xsycl-target-backend=spir64_gen;-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'")
 
-    # SYCL_SPIRV_EXT must be a COMPLETE list: the translator treats the last
-    # -spirv-ext as a replacement, so a short list drops defaults (e.g. bfloat16).
-    # Bare -Xspirv-translator (no triple) targets the single spir64_gen image;
-    # SHELL: keeps the option and value together.
+    # SYCL_SPIRV_EXT must be a COMPLETE list (translator replaces, not merges).
+    # A custom -spirv-ext only reaches an image whose triple matches the exact
+    # fsycl-targets alias, so emit one -Xspirv-translator=<alias> per target.
     if(SYCL_SPIRV_EXT)
-      string(APPEND sycl_link_flags
-        ";SHELL:-Xspirv-translator -spirv-ext=${SYCL_SPIRV_EXT}")
+      string(REPLACE "," ";" _sycl_ext_targets "${SYCL_OFFLOAD_TARGETS}")
+      foreach(_tgt IN LISTS _sycl_ext_targets)
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xspirv-translator=${_tgt} -spirv-ext=${SYCL_SPIRV_EXT}")
+      endforeach()
     endif()
   endmacro()
 

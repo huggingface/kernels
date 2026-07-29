@@ -21,7 +21,7 @@ A typical setup has two workflows: one that **builds** the kernel on push, and o
 
 ## Building on push
 
-The build action checks out nothing by itself, your script clones the exact commit and invokes the Nix builder. Compilation happens on the HF Jobs CPU flavor, and `build-and-upload` pushes the finished variants to the Hub.
+The build action checks out nothing by itself, your script clones the exact commit and invokes `kernel-builder`, which comes preinstalled in the default job image. Compilation happens on the HF Jobs CPU flavor, and `build-and-upload` pushes the finished variants to the Hub.
 
 ```yaml
 # .github/workflows/build-kernel.yml
@@ -62,7 +62,7 @@ jobs:
             cd kernel
             git checkout "${{ github.sha }}"
 
-            nix run github:huggingface/kernels#kernel-builder -- build-and-upload \
+            kernel-builder build-and-upload \
               --max-jobs 4 \
               --cores 8 \
               --repo-id your-username/your-kernel
@@ -85,16 +85,26 @@ time. Setting them too high for the flavor only adds scheduling overhead.
 
 ### `kernel-builder-job` inputs
 
-| Input       | Required | Default            | Description                                       |
-| ----------- | -------- | ------------------ | ------------------------------------------------- |
-| `token`     | yes      |                    | HF token with `job.write` permission.             |
-| `namespace` | yes      |                    | HF namespace (username or org) that owns the job. |
-| `script`    | yes      |                    | Shell script to run in the container.             |
-| `flavor`    | no       | `cpu-upgrade`      | Hardware flavor (e.g. `cpu-xl`).                  |
-| `image`     | no       | Nix + cachix image | Container image to run the build in.              |
-| `timeout`   | no       | `1200`             | Maximum seconds to wait for the job.              |
+| Input       | Required | Default                                         | Description                                       |
+| ----------- | -------- | ----------------------------------------------- | ------------------------------------------------- |
+| `token`     | yes      |                                                 | HF token with `job.write` permission.             |
+| `namespace` | yes      |                                                 | HF namespace (username or org) that owns the job. |
+| `script`    | yes      |                                                 | Shell script to run in the container.             |
+| `flavor`    | no       | `cpu-upgrade`                                   | Hardware flavor (e.g. `cpu-xl`).                  |
+| `image`     | no       | `ghcr.io/huggingface/kernel-builder-job:latest` | Container image to run the build in.              |
+| `timeout`   | no       | `1200`                                          | Maximum seconds to wait for the job.              |
 
 The action exposes `job_id` and `job_url` outputs that link to the run on huggingface.co.
+
+> [!NOTE]
+> The default image ships `kernel-builder` on `PATH`, so the script can call it
+> directly. Every push to the action's `main` branch republishes `:latest` and
+> also pushes an immutable `sha-<commit>` tag, so you can pin a known-good image
+> through the `image` input. If you point `image` at your own image that only has
+> Nix, either install the CLI first with
+> `nix profile install --accept-flake-config github:huggingface/kernels#kernel-builder`
+> or invoke it ad-hoc with
+> `nix run github:huggingface/kernels#kernel-builder -- build-and-upload ...`.
 
 ## Testing on a GPU
 

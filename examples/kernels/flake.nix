@@ -17,7 +17,7 @@
       cudaVersion = "cu126";
       rocmVersion = "rocm71";
       xpuVersion = "xpu20253";
-      torchVersion = "211";
+      torchVersion = "212";
       tvmFfiVersion = "01";
 
       # All example kernels to build in CI.
@@ -70,9 +70,7 @@
         {
           name = "relu-torch-stable-abi-kernel";
           path = ./relu-torch-stable-abi;
-          drv =
-            sys: out:
-            out.packages.${sys}.redistributable.${"torch-stable-abi${torchVersion}-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";
@@ -127,8 +125,8 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.11";
-              cudaVersion = "12.8";
+              torchVersion = "2.12";
+              cudaVersion = "12.6";
               systems = [
                 "x86_64-linux"
                 "aarch64-linux"

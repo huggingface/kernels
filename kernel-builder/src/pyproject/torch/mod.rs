@@ -8,8 +8,7 @@ use kernels_data::metadata::Provenance;
 use minijinja::context;
 
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
-    write_metadata,
+    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_metadata,
 };
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
@@ -291,8 +290,6 @@ pub fn write_torch_ext(
     )?;
 
     write_setup_py(env, &build.general, torch_ext, kernel_id, &mut file_set)?;
-
-    write_compat_py(&mut file_set)?;
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 

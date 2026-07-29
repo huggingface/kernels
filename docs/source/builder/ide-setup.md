@@ -88,7 +88,7 @@ the `Creating new venv environment in path: './.venv'` line from the
 To pin a non-default build variant, name it explicitly:
 
 ```bash
-$ echo 'use flake .#devShells.torch211-cxx11-rocm71-x86_64-linux' > .envrc
+$ echo 'use flake .#devShells.torch212-cxx11-rocm71-x86_64-linux' > .envrc
 $ direnv allow
 ```
 
@@ -145,7 +145,7 @@ Add `.vscode/settings.json` (do not commit):
   "clangd.arguments": ["--compile-commands-dir=${workspaceFolder}"],
 
   // Microsoft C/C++ extension
-  "C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json"
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/compile_commands.json",
 }
 ```
 
@@ -182,13 +182,13 @@ variant. For example:
 
 ```bash
 # CUDA 13.0
-use flake .#devShells.torch211-cxx11-cu130-x86_64-linux
+use flake .#devShells.torch212-cxx11-cu130-x86_64-linux
 
 # ROCm 7.1
-use flake .#devShells.torch211-cxx11-rocm71-x86_64-linux
+use flake .#devShells.torch212-cxx11-rocm71-x86_64-linux
 
 # XPU
-use flake .#devShells.torch211-cxx11-xpu20253-x86_64-linux
+use flake .#devShells.torch212-cxx11-xpu20253-x86_64-linux
 ```
 
 Remove `.venv/` first if it was created against a different variant,

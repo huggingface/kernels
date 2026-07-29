@@ -98,7 +98,7 @@ using:
 
 ```bash
 $ rm -rf .venv  # Remove existing venv if any.
-$ kernel-builder devshell --variant torch211-cxx11-rocm71-x86_64-linux
+$ kernel-builder devshell --variant torch212-cxx11-rocm71-x86_64-linux
 ```
 
 For an editor-driven workflow with `direnv` activating the devshell on

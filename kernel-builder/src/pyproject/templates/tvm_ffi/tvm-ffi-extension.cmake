@@ -11,6 +11,7 @@ tvm_ffi_configure_target(${OPS_NAME})
 # that happen to have clashes.
 check_cxx_compiler_flag("-fno-gnu-unique" CXX_HAS_NO_GNU_UNIQUE)
 if(CXX_HAS_NO_GNU_UNIQUE)
+  target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique>)
   target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:GPU_LANGUAGE>:-fno-gnu-unique>)
 endif()
 

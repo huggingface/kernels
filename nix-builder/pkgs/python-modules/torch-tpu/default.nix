@@ -1,10 +1,12 @@
 {
   lib,
-  autoPatchelfHook,
+  stdenv,
   buildPythonPackage,
   requireFile,
+
+  autoPatchelfHook,
+  proot,
   python,
-  stdenv,
 
   # jax is not a hard dependency of the torch_tpu wheel, but TPU kernels
   # import torch_tpu._internal.pallas (jax_op), which needs jax at import
@@ -44,7 +46,7 @@ let
   abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
 in
 buildPythonPackage rec {
-  pname = "torch_tpu";
+  pname = "torch-tpu";
   version = "0.1.1.dev20260707090224";
   format = "wheel";
 
@@ -73,14 +75,29 @@ buildPythonPackage rec {
   # The bundled extensions link against libtorch_python.so / libc10.so /
   # libtorch_cpu.so, which live in torch's site-packages, not on the
   # default search path.
-  nativeBuildInputs = [ autoPatchelfHook ];
+  nativeBuildInputs = [
+    autoPatchelfHook
+    proot
+  ];
   buildInputs = [ stdenv.cc.cc.lib ];
+
   preFixup = ''
     addAutoPatchelfSearchPath ${torch}/${python.sitePackages}/torch/lib
   '';
 
-  pythonImportsCheck = [ "torch_tpu" ];
-  doInstallCheck = false; # requires actual /dev/accel
+  installCheckPhase = ''
+    # tcmalloc hard-crashes if /sys is not available:
+    # 
+    # https://github.com/google/tcmalloc/issues/245
+    #
+    # We would still like to do an import check with sandboxing enabled,
+    # so use proot to fake presence of the relevant part of /sys.
+    mkdir -p fake-sys/devices/system/cpu
+    echo "0-1" > fake-sys/devices/system/cpu/possible
+    PYTHONPATH="$out/${python.sitePackages}:$PYTHONPATH" \
+      proot -b fake-sys:/sys \
+        ${python.interpreter} -c 'import torch_tpu'
+  '';
 
   meta = with lib; {
     description = "Torch TPU backend (PrivateUse1 name: \"tpu\")";

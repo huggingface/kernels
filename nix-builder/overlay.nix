@@ -163,7 +163,7 @@ final: prev:
 
         libtpu = python-self.callPackage ./pkgs/python-modules/libtpu { };
 
-        torch_tpu = python-self.callPackage ./pkgs/python-modules/torch_tpu { };
+        torch-tpu = python-self.callPackage ./pkgs/python-modules/torch-tpu { };
 
         jupyter-server = python-super.jupyter-server.overrideAttrs (
           _: prevAttrs: {

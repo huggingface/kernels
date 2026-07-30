@@ -37,7 +37,7 @@
     },
     "tpu": {
       "torch-tpu": {
-        "nix": ["torch_tpu"],
+        "nix": ["torch-tpu"],
         "python": [{ "pkg": "torch_tpu", "import": "torch_tpu" }]
       }
     }

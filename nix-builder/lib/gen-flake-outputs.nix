@@ -287,6 +287,15 @@ in
           meta.mainProgram = "kernels";
         };
 
+      # Package set by build variant, makes them easily available for tests,
+      # ad-hoc shells, etc.
+      pkgs = builtins.listToAttrs (
+        map (buildSet: {
+          name = buildSet.variants.kernelVariant kernelConfig;
+          value = buildSet.pkgs;
+        }) applicableBuildSets
+      );
+
       redistributable = build.mkDistTorchExtensions {
         inherit path doGetKernelCheck kernelProvenance;
         bundleOnly = false;

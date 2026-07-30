@@ -1,9 +1,10 @@
+import kernels
 import pytest
 import torch
 import torch.nn.functional as F
 from torch.library import opcheck
 
-from silu_and_mul import layers, ops, silu_and_mul
+silu_and_mul = kernels.get_kernel("kernels-test/silu-and-mul", version=1)
 
 
 def silu_and_mul_ref(x: torch.Tensor) -> torch.Tensor:
@@ -11,15 +12,17 @@ def silu_and_mul_ref(x: torch.Tensor) -> torch.Tensor:
     return F.silu(x[..., :d]) * x[..., d:]
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 @pytest.mark.parametrize("requires_grad", [False, True])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
 def test_opcheck(device, requires_grad, dtype):
     torch.manual_seed(42)
     x = torch.randn(32, 128, device=device, requires_grad=requires_grad, dtype=dtype)
-    opcheck(ops.silu_and_mul, (x,))
+    opcheck(silu_and_mul.ops.silu_and_mul, (x,))
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 @pytest.mark.parametrize("requires_grad", [False, True])
 # Only do float32, the numerical instabilities of float16 and bfloat16
@@ -35,7 +38,7 @@ def test_silu_and_mul(device, requires_grad, dtype):
         x.copy_(x_ref)
 
     y_ref = silu_and_mul_ref(x_ref)
-    y = silu_and_mul(x)
+    y = silu_and_mul.silu_and_mul(x)
 
     torch.testing.assert_close(y_ref, y)
 
@@ -46,6 +49,7 @@ def test_silu_and_mul(device, requires_grad, dtype):
         torch.testing.assert_close(x_ref.grad, x.grad)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("device", ["cpu", "cuda"])
 @pytest.mark.parametrize("requires_grad", [False, True])
 # Only do float32, the numerical instabilities of float16 and bfloat16
@@ -61,7 +65,7 @@ def test_silu_and_mul_layer(device, requires_grad, dtype):
         x.copy_(x_ref)
 
     y_ref = silu_and_mul_ref(x_ref)
-    y = layers.SiluAndMul()(x)
+    y = silu_and_mul.layers.SiluAndMul()(x)
 
     torch.testing.assert_close(y_ref, y)
 

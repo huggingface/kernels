@@ -7,7 +7,6 @@ use kernels_data::config::{Backend, Build, General};
 use kernels_data::metadata::Provenance;
 use minijinja::{context, Environment};
 
-use crate::pyproject::common::write_compat_py;
 use crate::pyproject::common::write_metadata;
 use crate::pyproject::fileset::FileSet;
 use crate::pyproject::ops_identifier::KernelIdentifier;
@@ -22,7 +21,6 @@ pub fn write_torch_ext_noarch(
 ) -> Result<FileSet> {
     let mut file_set = FileSet::default();
 
-    write_compat_py(&mut file_set)?;
     write_ops_py(
         env,
         &build.general.name.python_name(),

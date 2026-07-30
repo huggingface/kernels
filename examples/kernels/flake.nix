@@ -91,6 +91,11 @@
             sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-kernel-cpu";
+          path = ./relu;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+        }
+        {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
           drv =
@@ -312,11 +317,6 @@
 
       # CPU kernels to build in CI.
       ciCpuKernels = [
-        {
-          name = "relu-kernel-cpu";
-          path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
-        }
         {
           # This test only requires a CPU, so let's run the test directly during the build.
           name = "symbol-conflicts-pytest";

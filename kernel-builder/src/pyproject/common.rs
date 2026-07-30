@@ -9,16 +9,7 @@ use kernels_data::metadata::{GitHash, KernelBuilderVersion, Metadata, Provenance
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
 
-static COMPAT_PY: &str = include_str!("templates/compat.py");
 static ADD_BUILD_METADATA_PY: &str = include_str!("templates/torch/add_build_metadata.py");
-
-pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("compat.py");
-    file_set.entry(path).extend_from_slice(COMPAT_PY.as_bytes());
-
-    Ok(())
-}
 
 /// `kernel-builder` provenance baked in at compile time.
 ///

@@ -1,11 +1,14 @@
 import platform
 
+import kernels
 import pytest
 import torch
 import torch.nn.functional as F
 from torch.library import opcheck
 
-import relu_backprop_compile
+relu_backprop_compile = kernels.get_kernel(
+    "kernels-test/relu-backprop-compile", version=1
+)
 
 
 def get_device():
@@ -25,6 +28,7 @@ DTYPES = [
 ]
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
 def test_relu_forward(dtype):
     device = get_device()
@@ -34,12 +38,14 @@ def test_relu_forward(dtype):
     torch.testing.assert_close(expected, actual)
 
 
+@pytest.mark.kernels_ci
 def test_relu_gradient_numerical():
     device = get_device()
     x = torch.randn(32, 32, dtype=torch.float64, device=device, requires_grad=True)
     assert torch.autograd.gradcheck(relu_backprop_compile.relu, x)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
 def test_relu_gradient_large_tensor(dtype):
     device = get_device()
@@ -59,6 +65,7 @@ def test_relu_gradient_large_tensor(dtype):
     torch.testing.assert_close(x.grad, expected_grad)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
 def test_relu_gradient_comparison(dtype):
     device = get_device()
@@ -82,6 +89,7 @@ def test_relu_gradient_comparison(dtype):
     torch.testing.assert_close(x_kernel.grad, x_torch.grad)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
 def test_relu_backward_chain(dtype):
     device = get_device()
@@ -102,6 +110,7 @@ def test_relu_backward_chain(dtype):
     torch.testing.assert_close(x.grad, expected_grad)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
 @pytest.mark.parametrize(
     "shape",
@@ -118,8 +127,9 @@ def test_relu_fwd_opcheck(shape, dtype):
     opcheck(relu_backprop_compile.ops.relu_fwd, (x,))
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
-def test_relu_torch_compile(dtype):
+def test_torch_compile(dtype):
     device = get_device()
 
     class SimpleModel(torch.nn.Module):
@@ -158,6 +168,7 @@ def test_relu_torch_compile(dtype):
     torch.testing.assert_close(grad_original, grad_compiled)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.parametrize("dtype", DTYPES)
 def test_torch_compile_recompilation_and_graph_break(dtype):
     device = get_device()
@@ -171,7 +182,7 @@ def test_torch_compile_recompilation_and_graph_break(dtype):
             return relu_backprop_compile.relu(self.linear(x))
 
     model = SimpleModel().to(device).to(dtype)
-    compiled_model = torch.compile(model, fullgraph=True)
+    torch.compile(model, fullgraph=True)
 
     x = torch.randn((16, 16), dtype=dtype, device=device, requires_grad=True)
     with (

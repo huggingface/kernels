@@ -353,6 +353,7 @@ rec {
     }:
     let
       kernelConfig = readKernelConfig path;
+      repoId = lib.attrByPath [ "hub" "repo-id" ] null kernelConfig.toml.general;
       runnerForBuildSet =
         { path, rev }:
         buildSet:
@@ -377,6 +378,7 @@ rec {
               extension.dependencies
               ++ [
                 buildSet.torch
+                kernels
                 pytest
               ]
               ++ pythonCheckInputs ps
@@ -390,6 +392,9 @@ rec {
               if [ -d ${extension.src}/tests ]; then
                 unset LD_LIBRARY_PATH
                 export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
+                ${lib.optionalString (repoId != null) ''
+                  export LOCAL_KERNELS="${repoId}=${extension}"
+                ''}
                 # Accept exit code 5: no tests are selected
                 ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci -p no:cacheprovider || test $? -eq 5
               fi

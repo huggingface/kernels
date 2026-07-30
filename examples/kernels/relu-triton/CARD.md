@@ -12,6 +12,10 @@ This is the repository card of {{ repo_id }} that has been pushed on the Hub. It
 # make sure `kernels` is installed: `pip install -U kernels`
 from kernels import get_kernel
 
+# If the org / user isn't a trusted publisher, pass `trust_remote_code=True` to the
+# `get_kernel` call. You can find whether this kernel is from a trusted publisher
+# by going to the kernel's Hub page and finding the "Trusted publisher" status at
+# the top of the page.
 kernel_module = get_kernel("{{ repo_id }}", version={{ version }})
 {{ functions[0] }} = kernel_module.{{ functions[0] }}
 

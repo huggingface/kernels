@@ -8,7 +8,7 @@ version = 1
 edition = 5
 
 [general.hub]
-repo-id = "kernels-test/symbol-conflicts2"
+repo-id = "kernels-test/symbol-conflicts"
 
 [torch]
 src = [

@@ -86,7 +86,18 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot get CUTLASS dependency template")?
                     .render_captured_to(
                         context! {
-                            version => "4.5.2",
+                            version => "4.5.3",
+                        },
+                        &mut *write,
+                    )
+                    .wrap_err("Cannot render CUTLASS dependency template")?;
+            }
+            Dependency::Cutlass4_6 => {
+                env.get_template("cuda/dep-cutlass.cmake")
+                    .wrap_err("Cannot get CUTLASS dependency template")?
+                    .render_captured_to(
+                        context! {
+                            version => "4.6.1",
                         },
                         &mut *write,
                     )

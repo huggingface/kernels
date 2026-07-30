@@ -9,6 +9,11 @@
   cudaPackages,
 
   nvidia-cutlass-dsl-libs,
+
+  # Versioned so several CuteDSL releases can coexist (same pattern as the C++ `cutlass_*`
+  # attributes): kernels pick one via `python-depends`, nobody is migrated implicitly.
+  version ? "4.5.0",
+  hash ? "sha256-OwUf4CymlCKrhA5k2YZWZ6uiiKOYSnykzNA4qCrvE0Q=",
 }:
 
 let
@@ -16,15 +21,14 @@ let
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl";
-  version = "4.6.1";
-  inherit format;
+  inherit format version;
 
   src = fetchPypi {
     inherit format version;
     pname = "nvidia_cutlass_dsl";
     dist = "py3";
     python = "py3";
-    hash = "sha256-kxNanUjhvt9YSCjgoCHxdKwxWR7yH26lPCBhacy/qyY=";
+    inherit hash;
   };
 
   nativeBuildInputs = [

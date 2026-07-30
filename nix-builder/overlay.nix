@@ -172,6 +172,26 @@ final: prev:
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };
 
+        # CuteDSL 4.6 alongside 4.5: sonic-moe pins 4.6, flash-attn4 and msa are unvalidated on
+        # it, so kernels opt in per-kernel via `python-depends` rather than all moving at once.
+        nvidia-cutlass-dsl_4_6 = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl {
+          version = "4.6.1";
+          hash = "sha256-kxNanUjhvt9YSCjgoCHxdKwxWR7yH26lPCBhacy/qyY=";
+          nvidia-cutlass-dsl-libs = python-self.nvidia-cutlass-dsl-libs_4_6;
+        };
+
+        nvidia-cutlass-dsl-libs_4_6 =
+          python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs
+            {
+              version = "4.6.1";
+              hashes = {
+                cp313-x86_64-linux-cu12 = "sha256-CaaqzoQVlOo5z3X3zuaNwxuM88263/y9SU8I/HPGRm0=";
+                cp313-aarch64-linux-cu12 = "sha256-fKTlypvQyqLseX67HkBLs+sPdtI1gjYReVyxTY00Hkw=";
+                cp313-x86_64-linux-cu13 = "sha256-famVhPTw1JjKcKZHAiqylcpUoglJRBGBzQwyiVhNqKM=";
+                cp313-aarch64-linux-cu13 = "sha256-gTcFEd/Z4cCNojAs8UD0reyJ31BOw0iiOwiqAXRyDsM=";
+              };
+            };
+
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
         kernels-data = callPackage ./pkgs/python-modules/kernels-data { };

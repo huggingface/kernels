@@ -19,6 +19,10 @@
       "nvidia-cutlass-dsl": {
         "nix": ["nvidia-cutlass-dsl"],
         "python": [{ "pkg": "nvidia-cutlass-dsl", "import": "cutlass" }]
+      },
+      "nvidia-cutlass-dsl_4_6": {
+        "nix": ["nvidia-cutlass-dsl_4_6"],
+        "python": [{ "pkg": "nvidia-cutlass-dsl", "import": "cutlass" }]
       }
     },
     "metal": {},

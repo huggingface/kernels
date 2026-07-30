@@ -1,0 +1,22 @@
+[general]
+name = "symbol-conflicts"
+license = "Apache-2.0"
+backends = [
+  "cpu",
+]
+version = 1
+edition = 5
+
+[general.hub]
+repo-id = "kernels-test/symbol-conflicts"
+
+[torch]
+src = [
+  "torch-ext/torch_binding.cpp",
+  "torch-ext/torch_binding.h",
+]
+
+[kernel.conflicts_cpu]
+backend = "cpu"
+depends = ["torch"]
+src = ["conflicts_cpu/conflicts_cpu.cpp"]

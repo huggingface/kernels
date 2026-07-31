@@ -88,6 +88,7 @@ let
       # (unfree), so the tpu buildSet needs allowUnfree just like the
       # cuda/rocm/xpu sets. See pkgs/python-modules/libtpu/default.nix.
       allowUnfree = true;
+      tpuSupport = true;
     };
 
     xpu = {

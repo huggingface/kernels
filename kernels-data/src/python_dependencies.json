@@ -34,12 +34,6 @@
         "nix": [],
         "python": [{ "pkg": "onednn-devel" }]
       }
-    },
-    "tpu": {
-      "torch-tpu": {
-        "nix": ["torch-tpu"],
-        "python": [{ "pkg": "torch_tpu", "import": "torch_tpu" }]
-      }
     }
   }
 }

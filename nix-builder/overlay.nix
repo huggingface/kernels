@@ -163,8 +163,6 @@ final: prev:
 
         libtpu = python-self.callPackage ./pkgs/python-modules/libtpu { };
 
-        torch-tpu = python-self.callPackage ./pkgs/python-modules/torch-tpu { };
-
         jupyter-server = python-super.jupyter-server.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.

@@ -463,7 +463,7 @@ pub enum ConfigError {
 mod tests {
     use super::*;
 
-    fn general_with_tpu_deps() -> General {
+    fn general_with_cuda_deps() -> General {
         General {
             name: KernelName::new("test-kernel").unwrap(),
             version: 1,
@@ -473,30 +473,32 @@ mod tests {
             backends: vec![Backend::Tpu],
             hub: None,
             python_depends: None,
-            cuda: None,
-            neuron: None,
-            tpu: Some(TpuGeneral {
-                python_depends: Some(vec!["torch-tpu".to_string()]),
+            cuda: Some(CudaGeneral {
+                minver: None,
+                maxver: None,
+                python_depends: Some(vec!["nvidia-cutlass-dsl".to_string()]),
             }),
+            neuron: None,
+            tpu: None,
             xpu: None,
         }
     }
 
     #[test]
-    fn backend_python_depends_resolves_tpu() {
-        let general = general_with_tpu_deps();
+    fn backend_python_depends_resolves_cuda() {
+        let general = general_with_cuda_deps();
         let deps = general
-            .backend_python_depends(Backend::Tpu)
+            .backend_python_depends(Backend::Cuda)
             .map(|dep| dep.map(|(name, _)| name.to_string()))
             .collect::<Result<Vec<_>>>()
             .unwrap();
 
-        assert_eq!(deps, vec!["torch-tpu".to_string()]);
+        assert_eq!(deps, vec!["nvidia-cutlass-dsl".to_string()]);
     }
 
     #[test]
     fn backend_python_depends_empty_for_backend_without_deps() {
-        let general = general_with_tpu_deps();
+        let general = general_with_cuda_deps();
 
         assert!(
             general

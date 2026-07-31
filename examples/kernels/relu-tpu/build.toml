@@ -8,9 +8,6 @@ backends = ["tpu"]
 [general.hub]
 repo-id = "kernels-test/relu-tpu"
 
-[general.tpu]
-python-depends = ["torch-tpu"]
-
 [torch-noarch]
 
 [kernel]

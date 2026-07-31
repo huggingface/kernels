@@ -37,12 +37,12 @@ let
 in
 buildPythonPackage rec {
   pname = "libtpu";
-  version = "0.0.43";
+  version = "0.0.44.1";
   format = "wheel";
 
   src = requireFile {
     name = "libtpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
-    hash = "sha256-X5LVmwJuRcNkMG+m7kKgcaOSKnWjeuw4HtCU+lfWamY="; # cp313
+    hash = "sha256-qd34JzD0TpphtqLj67/HqYgVg/bXT3gF6E+pYQyaCsA="; # cp313
     message = ''
       libtpu is served from a gated Google Artifact Registry and cannot
       be fetched by a pure Nix build. Fetch and register it with:

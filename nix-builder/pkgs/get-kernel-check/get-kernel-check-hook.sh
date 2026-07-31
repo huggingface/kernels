@@ -21,11 +21,23 @@ _getKernelCheckHook() {
     export DYLD_LIBRARY_PATH="${TORCH_DIR}/lib:${DYLD_LIBRARY_PATH}"
   fi
 
+
+  # Prepare fake /sys for tcmalloc. Without this path, tcmalloc will crash:
+  #
+  # https://github.com/google/tcmalloc/issues/245
+  #
+  # tcmalloc is used by the TPU libraries.
+  FAKESYS="$(mktemp -d)"
+  trap 'rm -rf -- "${FAKESYS}"' EXIT
+  mkdir -p "${FAKESYS}/devices/system/cpu"
+  echo "0-1" > "${FAKESYS}/devices/system/cpu/possible"
+
   # Some kernels want to write stuff (especially when they use Triton).
   HOME=$(mktemp -d -t test.XXXXXX) || exit 1
   trap "rm -rf '$HOME'" EXIT
 
   PYTHONPATH="@kernels@" \
+    @proot@ -b ${FAKESYS}:/sys \
     @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'))"
 }
 

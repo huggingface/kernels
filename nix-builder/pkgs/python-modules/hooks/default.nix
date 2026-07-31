@@ -15,7 +15,7 @@ in
       name = "python-kernel-imports-check-hook.sh";
       substitutions = {
         inherit pythonCheckInterpreter pythonSitePackages;
-        inherit (pkgs) proot;
+        proot = "${pkgs.proot}/bin/proot";
       };
     } ./python-kernel-imports-check-hook.sh
   ) { };

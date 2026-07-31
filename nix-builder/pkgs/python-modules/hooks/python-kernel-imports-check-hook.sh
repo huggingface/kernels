@@ -3,7 +3,6 @@
 # This is the imports check hook from nixpkgs, modified to fake a /sys path
 # required for tcmalloc. Without this path, tcmalloc will crash:
 #
-#
 # https://github.com/google/tcmalloc/issues/245
 
 # Setup hook for checking whether Python imports succeed
@@ -22,7 +21,7 @@ pythonKernelImportsCheckPhase() {
         fi
         export PYTHONPATH="$pythonKernelImportsCheckOutput/@pythonSitePackages@:$PYTHONPATH"
 
-        # Prepare fake /sys
+        # Prepare fake /sys for tcmalloc.
         FAKESYS="$(mktemp -d)"
         trap 'rm -rf -- "${FAKESYS}"' EXIT
         mkdir -p "${FAKESYS}/devices/system/cpu"
@@ -33,7 +32,7 @@ pythonKernelImportsCheckPhase() {
         # shellcheck disable=SC2048,SC2086
         (
           cd "$pythonKernelImportsCheckOutput" && 
-          @proot@/bin/proot -b ${FAKESYS}:/sys \
+          @proot@ -b ${FAKESYS}:/sys \
           @pythonCheckInterpreter@ -c 'import sys; import importlib; list(map(lambda mod: importlib.import_module(mod), sys.argv[1:]))' ${pythonKernelImportsCheck[*]}
         )
     fi

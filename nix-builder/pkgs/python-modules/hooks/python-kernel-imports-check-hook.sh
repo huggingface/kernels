@@ -21,18 +21,23 @@ pythonKernelImportsCheckPhase() {
         fi
         export PYTHONPATH="$pythonKernelImportsCheckOutput/@pythonSitePackages@:$PYTHONPATH"
 
-        # Prepare fake /sys for tcmalloc.
-        FAKESYS="$(mktemp -d)"
-        trap 'rm -rf -- "${FAKESYS}"' EXIT
-        mkdir -p "${FAKESYS}/devices/system/cpu"
-        echo "0-1" > "${FAKESYS}/devices/system/cpu/possible"
+        local prootCmd=""
+        if [[ -n "@useFakeSys@" ]]; then
+            echo "Faking /sys for tcmalloc"
+            local fakeSys
+            fakeSys="$(mktemp -d)"
+            trap 'rm -rf -- "${fakeSys}"' EXIT
+            mkdir -p "${fakeSys}/devices/system/cpu"
+            echo "0-1" > "${fakeSys}/devices/system/cpu/possible"
+            prootCmd="@proot@ -b ${fakeSys}:/sys"
+        fi
 
         # Python modules and namespaces names are Python identifiers, which must not contain spaces.
         # See https://docs.python.org/3/reference/lexical_analysis.html
         # shellcheck disable=SC2048,SC2086
         (
-          cd "$pythonKernelImportsCheckOutput" && 
-          @proot@ -b ${FAKESYS}:/sys \
+          cd "$pythonKernelImportsCheckOutput" &&
+          ${prootCmd} \
           @pythonCheckInterpreter@ -c 'import sys; import importlib; list(map(lambda mod: importlib.import_module(mod), sys.argv[1:]))' ${pythonKernelImportsCheck[*]}
         )
     fi

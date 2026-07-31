@@ -5,6 +5,7 @@ let
   pythonInterpreter = pythonOnBuildForHost.interpreter;
   pythonSitePackages = python.sitePackages;
   pythonCheckInterpreter = python.interpreter;
+  useFakeSys = pkgs.config.tpuSupport or false;
 in
 {
   # Ideally we'd just call this pythonImportsCheckHook, but it  would cause
@@ -15,7 +16,8 @@ in
       name = "python-kernel-imports-check-hook.sh";
       substitutions = {
         inherit pythonCheckInterpreter pythonSitePackages;
-        proot = "${pkgs.proot}/bin/proot";
+        proot = lib.optionalString useFakeSys "${pkgs.proot}/bin/proot";
+        useFakeSys = lib.optionalString useFakeSys "1";
       };
     } ./python-kernel-imports-check-hook.sh
   ) { };

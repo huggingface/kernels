@@ -7,8 +7,7 @@ use kernels_data::metadata::Provenance;
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
-    write_metadata,
+    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_metadata,
 };
 use crate::pyproject::deps::render_deps;
 use crate::pyproject::kernel::render_kernel_components;
@@ -62,8 +61,6 @@ pub fn write_tvm_ffi_ext(
     )?;
 
     write_setup_py(env, &build.general, tvm_ffi_ext, kernel_id, &mut file_set)?;
-
-    write_compat_py(&mut file_set)?;
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 

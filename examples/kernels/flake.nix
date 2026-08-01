@@ -17,7 +17,7 @@
       cudaVersion = "cu126";
       rocmVersion = "rocm71";
       xpuVersion = "xpu20253";
-      torchVersion = "211";
+      torchVersion = "212";
       tvmFfiVersion = "01";
 
       # All example kernels to build in CI.
@@ -70,9 +70,7 @@
         {
           name = "relu-torch-stable-abi-kernel";
           path = ./relu-torch-stable-abi;
-          drv =
-            sys: out:
-            out.packages.${sys}.redistributable.${"torch-stable-abi${torchVersion}-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";
@@ -127,8 +125,8 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.11";
-              cudaVersion = "12.8";
+              torchVersion = "2.12";
+              cudaVersion = "12.6";
               systems = [
                 "x86_64-linux"
                 "aarch64-linux"
@@ -317,8 +315,45 @@
         }
       ];
 
+      # CPU kernels to build in CI.
+      ciCpuKernels = [
+        {
+          # This test only requires a CPU, so let's run the test directly during the build.
+          name = "symbol-conflicts-pytest";
+          path = ./symbol-conflicts2;
+          drv =
+            sys: _out:
+            let
+              variant = "torch${torchVersion}-cxx11-cpu-${sys}";
+              conflictsFlake = mkKernelOutputs { path = ./symbol-conflicts; };
+              conflicts2Flake = mkKernelOutputs { path = ./symbol-conflicts2; };
+              conflicts = conflictsFlake.packages.${sys}.redistributable.${variant};
+              conflicts2 = conflicts2Flake.packages.${sys}.redistributable.${variant};
+              kernelPkgs = conflictsFlake.packages.${sys}.pkgs.${variant};
+              testPython = kernelPkgs.python3.withPackages (
+                ps: with ps; [
+                  torch
+                  pytest
+                  kernels
+                ]
+              );
+            in
+            kernelPkgs.runCommand "symbol-conflicts-pytest"
+              {
+                nativeBuildInputs = [ testPython ];
+              }
+              ''
+                export HOME=$TMPDIR
+                export LOCAL_KERNELS="kernels-test/symbol-conflicts=${conflicts}:kernels-test/symbol-conflicts2=${conflicts2}"
+                python -m pytest ${conflicts2.src}/tests -m kernels_ci -p no:cacheprovider
+                touch $out
+              '';
+        }
+      ];
+
       ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
       ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
+      ciCpuKernelOutputs = mkKernelOutputs' ciCpuKernels;
     in
     flake-utils.lib.eachSystem
       [
@@ -418,6 +453,7 @@
           ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
           ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
           ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
+          ci-build-cpu = mkCiBuild "ci-kernels-cpu" ciCpuKernelOutputs;
         in
         {
           packages = {
@@ -426,6 +462,7 @@
               ci-build-rocm
               ci-build-xpu
               ci-build-metal
+              ci-build-cpu
               ;
             default = ci-build-cuda;
           };

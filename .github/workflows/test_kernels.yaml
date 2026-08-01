@@ -29,11 +29,11 @@ jobs:
       max-parallel: 4
       matrix:
         python-version: ["3.10", "3.14"]
-        torch-version: ["2.11.0", "2.12.0"]
+        torch-version: ["2.12.0", "2.13.0"]
 
     env:
       UV_PYTHON_PREFERENCE: only-managed
-      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.12.0' }}
+      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.13.0' }}
 
     steps:
       - name: Checkout code

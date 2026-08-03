@@ -19,14 +19,14 @@ jobs:
     name: Run lints
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Run ruff check
-        uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b  # v4.0.0
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89  # v4.1.0
         with:
           src: kernels
           version: ${{ env.RUFF_VERSION }}
       - name: Run ruff format check
-        uses: astral-sh/ruff-action@0ce1b0bf8b818ef400413f810f8a11cdbda0034b  # v4.0.0
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89  # v4.1.0
         with:
           src: kernels
           version: ${{ env.RUFF_VERSION }}
@@ -38,11 +38,11 @@ jobs:
     env:
       UV_PYTHON_PREFERENCE: only-managed
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           python-version: "3.12"
       - name: Check for breaking changes
@@ -52,7 +52,7 @@ jobs:
     name: Validate python_depends.json
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Validate python_depends.json is up-to-date
         run: diff kernels-data/src/python_dependencies.json kernels/src/kernels/python_depends.json

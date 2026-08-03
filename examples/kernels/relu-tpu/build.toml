@@ -1,0 +1,13 @@
+[general]
+name = "relu-tpu"
+version = 1
+edition = 5
+license = "Apache-2.0"
+backends = ["tpu"]
+
+[general.hub]
+repo-id = "kernels-test/relu-tpu"
+
+[torch-noarch]
+
+[kernel]

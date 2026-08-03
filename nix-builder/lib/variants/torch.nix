@@ -13,6 +13,8 @@ let
       "metal"
     else if buildConfig.backend == "rocm" then
       "rocm${flattenVersion (lib.versions.majorMinor buildConfig.rocmVersion)}"
+    else if buildConfig.backend == "tpu" then
+      "tpu"
     else if buildConfig.backend == "xpu" then
       "xpu${flattenVersion (lib.versions.majorMinor buildConfig.xpuVersion)}"
     else

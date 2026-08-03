@@ -26,7 +26,10 @@ rec {
           throw "No compute framework set in Torch version";
     in
     version:
-    if version.system == "aarch64-darwin" then
+    # TPU builds are noarch: one variant, independent of Torch version and system.
+    if backend version == "tpu" then
+      "torch-tpu"
+    else if version.system == "aarch64-darwin" then
       "torch${flattenVersion version.torchVersion}-${computeString version}-${version.system}"
     else
       "torch${flattenVersion version.torchVersion}-cxx11-${computeString version}-${version.system}";

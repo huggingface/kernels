@@ -54,8 +54,9 @@ The compiled kernel will then be available in the local `build/` directory.
 | Metal      | ✓               | ✓                      | ✗                       | 2    |
 | Huawei NPU | ✓               | ✗                      | ✗                       | 3    |
 | Neuron     | ✓               | x                      | x                       | 3    |
+| TPU        | ✓               | ✗                      | ✗                       | 3    |
 
-**Warning:** Neuron support is experimental and currently requires pre-release packages.
+**Warning:** Neuron and TPU support are experimental and packages are not public yet.
 
 # 📚 Documentation
 

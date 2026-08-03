@@ -3,7 +3,7 @@
 
 export check_dirs := kernels/src kernels/tests kernels-data/bindings/python
 
-all: src/kernels/python_depends.json
+all: kernels/src/kernels/python_depends.json
 
 kernels/src/kernels/python_depends.json: kernels-data/src/python_dependencies.json
 	cp $< $@

@@ -7,10 +7,12 @@
   buildPythonPackage,
   fetchFromGitHub,
   fetchurl,
+  requireFile,
 
   cudaSupport ? config.cudaSupport,
   metalSupport ? config.metalSupport,
   rocmSupport ? config.rocmSupport,
+  tpuSupport ? (config.tpuSupport or false),
   tritonSupport ? (!stdenv.hostPlatform.isDarwin),
   xpuSupport ? (config.xpuSupport or false),
 
@@ -18,6 +20,7 @@
   autoAddDriverRunpath,
   autoPatchelfHook,
   python,
+  pythonKernelImportsCheckHook,
   pythonRelaxWheelDepsHook,
   pythonWheelDepsCheckHook,
 
@@ -31,15 +34,21 @@
   # Python dependencies
   cuda-bindings,
   filelock,
+  frozendict,
   fsspec,
+  immutabledict,
+  jax,
   jinja2,
+  libtpu,
   networkx,
   numpy,
+  portpicker,
   pyyaml,
   pyzes,
   requests,
   setuptools,
   sympy,
+  tensorboard,
   triton,
   triton-cuda,
   triton-rocm,
@@ -122,6 +131,24 @@ let
     '';
   };
 
+  # Once we require multiple versions, factor this out.
+  torch-tpu =
+    let
+      abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
+      version = "0.1.1.dev20260707090224";
+    in
+    requireFile {
+      name = "torch_tpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
+      hash = "sha256-eCjwoX0UKd/L/IccxXn88p0GdyQjFdPl2Er1luZz4H0="; # cp313
+      message = ''
+        torch_tpu is served from a gated Google Artifact Registry and
+        cannot be fetched by a pure Nix build. Fetch and register it with:
+
+          GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token) \
+            nix-builder/scripts/helpers/prefetch-tpu-wheel.sh torch_tpu ${version} ${abi}
+      '';
+    };
+
 in
 buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pname = "torch";
@@ -139,10 +166,20 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     inherit url hash;
   };
 
+  # If we are building for TPU, merge torch-tpu into the output path.
+  # Note that we cannot simply depend on torch-tpu, because torch-tpu
+  # itself depends on torch. The wheel unpacking hook does not seemt
+  # to support `srcs`, so we'll just copy over the wheel on TPU.
+  preUnpack = lib.optionals tpuSupport ''
+    mkdir -p dist
+    cp "${torch-tpu}" "dist/$(stripHash "${torch-tpu}")"
+  '';
+
   # We use our own pythonWheelDepsHook.
   dontCheckRuntimeDeps = true;
 
   nativeBuildInputs = [
+    pythonKernelImportsCheckHook
     pythonRelaxWheelDepsHook
     pythonWheelDepsCheckHook
   ]
@@ -224,6 +261,14 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     setuptools
     sympy
     typing-extensions
+  ]
+  ++ lib.optionals tpuSupport [
+    libtpu
+    jax
+    frozendict
+    immutabledict
+    portpicker
+    tensorboard
   ]
   ++ lib.optionals tritonSupport [
     effectiveTriton
@@ -367,7 +412,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
 
   dontStrip = true;
 
-  pythonImportsCheck = [ "torch" ];
+  pythonKernelImportsCheck = if tpuSupport then [ "torch_tpu" ] else [ "torch" ];
 
   passthru = {
     inherit

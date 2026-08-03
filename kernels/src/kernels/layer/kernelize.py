@@ -192,7 +192,7 @@ def kernelize(
             `Mode.TRAINING | Mode.TORCH_COMPILE` kernelizes the model for training with
             `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. Supported device types are: "cuda", "mps", "npu", "rocm", "xpu".
+            The device type to load kernels for. Supported device types are: "cuda", "mps", "npu", "rocm", "tpu", "xpu".
             The device type will be inferred from the model parameters when not provided.
         use_fallback (`bool`, *optional*, defaults to `True`):
             Whether to use the original forward method of modules when no compatible kernel could be found.
@@ -276,7 +276,7 @@ def kernelize(
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cpu", "cuda", "mps", "neuron", "npu", "rocm", "xpu"}
+    supported_devices = {"cpu", "cuda", "mps", "neuron", "npu", "rocm", "tpu", "xpu"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"

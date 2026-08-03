@@ -32,6 +32,7 @@ class Backend(Enum):
     Metal = "Metal"
     Neuron = "Neuron"
     ROCm = "ROCm"
+    TPU = "TPU"
     XPU = "XPU"
 
     @staticmethod
@@ -40,7 +41,7 @@ class Backend(Enum):
 
         Args:
             s: One of `"cann"`, `"cpu"`, `"cuda"`, `"metal"`,
-               `"neuron"`, `"rocm"`, `"xpu"`.
+               `"neuron"`, `"rocm"`, `"tpu"`, `"xpu"`.
 
         Raises:
             ValueError: If the backend name is unknown.

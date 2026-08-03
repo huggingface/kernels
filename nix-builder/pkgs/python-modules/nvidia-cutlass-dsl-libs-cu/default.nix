@@ -15,32 +15,32 @@
   numpy,
   nvidia-cuda-nvdisasm,
   nvidia-cutlass-dsl-libs-core,
-  nvidia-cutlass-dsl-libs-cu,
   protobuf6,
   typing-extensions,
 }:
 
 let
+  cudaMajor = cudaPackages.cudaMajorVersion;
   format = "wheel";
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
   hashes = {
-    cp313-x86_64-linux-cu12 = "sha256-CaaqzoQVlOo5z3X3zuaNwxuM88263/y9SU8I/HPGRm0=";
-    cp313-aarch64-linux-cu12 = "sha256-fKTlypvQyqLseX67HkBLs+sPdtI1gjYReVyxTY00Hkw=";
-    cp313-x86_64-linux-cu13 = "sha256-CaaqzoQVlOo5z3X3zuaNwxuM88263/y9SU8I/HPGRm0=";
-    cp313-aarch64-linux-cu13 = "sha256-fKTlypvQyqLseX67HkBLs+sPdtI1gjYReVyxTY00Hkw=";
+    cp313-x86_64-linux-cu12 = "sha256-JQS1vbLwIQpqG8kjrO/peQBjZmlLc/FFijyFca7zt2U=";
+    cp313-aarch64-linux-cu12 = "sha256-F9nVvbj1MCZtyEJCNqgFI+4qmAfoUqJMIglkOKEt870=";
+    cp313-x86_64-linux-cu13 = "sha256-famVhPTw1JjKcKZHAiqylcpUoglJRBGBzQwyiVhNqKM=";
+    cp313-aarch64-linux-cu13 = "sha256-gTcFEd/Z4cCNojAs8UD0reyJ31BOw0iiOwiqAXRyDsM=";
   };
   hash =
-    hashes."${pyShortVersion}-${stdenv.system}-cu${cudaPackages.cudaMajorVersion}"
-      or (throw "Unsupported Python version: ${pyShortVersion}-${stdenv.system}-cu${cudaPackages.cudaMajorVersion}");
+    hashes."${pyShortVersion}-${stdenv.system}-cu${cudaMajor}"
+      or (throw "Unsupported Python version: ${pyShortVersion}-${stdenv.system}-cu${cudaMajor}");
 
 in
 buildPythonPackage rec {
-  pname = "nvidia-cutlass-dsl-libs";
+  pname = "nvidia-cutlass-dsl-libs-cu${cudaMajor}";
   version = "4.6.1";
   inherit format;
 
   src = fetchPypi {
-    pname = "nvidia_cutlass_dsl_libs_base";
+    pname = "nvidia_cutlass_dsl_libs_cu${cudaMajor}";
     python = pyShortVersion;
     abi = pyShortVersion;
     dist = pyShortVersion;
@@ -60,7 +60,6 @@ buildPythonPackage rec {
     numpy
     nvidia-cuda-nvdisasm
     nvidia-cutlass-dsl-libs-core
-    nvidia-cutlass-dsl-libs-cu
     protobuf6
     typing-extensions
   ];

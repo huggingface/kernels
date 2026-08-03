@@ -22,7 +22,7 @@ let
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
   hashes = {
     cp313-aarch64-linux = "sha256-3UdRiE+QFrm22/AHq961aB0KLtxzHdPS/anW2Hjoj3M=";
-    cp313-x86_64-linux = "";
+    cp313-x86_64-linux = "sha256-+hcISwfA3KaKQokvdxtLG0D76bkWYCCWI+Yc6mEcrow=";
   };
   hash =
     hashes."${pyShortVersion}-${stdenv.system}"

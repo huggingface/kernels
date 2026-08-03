@@ -295,7 +295,11 @@ impl From<Kernel> for super::Kernel {
             } => super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                // Editions before 5 have no `dsl`; they are always C++.
+                dsl: None,
+                features: None,
                 include,
+                lib_name: None,
                 src,
             },
             Kernel::Cuda {
@@ -312,7 +316,13 @@ impl From<Kernel> for super::Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest: None,
+                // Editions before 5 have no `dsl`; they are always C++.
+                dsl: None,
+                features: None,
                 include,
+                lib_name: None,
+                ptx_dir: None,
                 src,
             },
             Kernel::Metal {

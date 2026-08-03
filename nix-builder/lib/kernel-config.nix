@@ -57,13 +57,7 @@ in
   kernelBackends =
     let
       kernels = lib.attrValues (toml.kernel or { });
-      kernelBackend =
-        kernel:
-        {
-          rust-cpu = "cpu";
-          rust-cuda = "cuda";
-        }
-        .${kernel.backend} or kernel.backend;
+      kernelBackend = kernel: kernel.backend;
       init = {
         cpu = false;
         cuda = false;

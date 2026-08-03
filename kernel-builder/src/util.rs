@@ -82,8 +82,11 @@ pub(crate) fn parse_and_validate_compat(kernel_dir: impl AsRef<Path>) -> Result<
 
 fn infer_rust_kernel_lib_names(build: &mut Build, kernel_dir: &Path) -> Result<()> {
     for (kernel_name, kernel) in &mut build.kernels {
+        if !kernel.dsl().is_cargo_built() {
+            continue;
+        }
         let (src, lib_name) = match kernel {
-            Kernel::RustCpu { src, lib_name, .. } | Kernel::RustCuda { src, lib_name, .. } => {
+            Kernel::Cpu { src, lib_name, .. } | Kernel::Cuda { src, lib_name, .. } => {
                 (src, lib_name)
             }
             _ => continue,

@@ -283,7 +283,10 @@ pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
         src: Vec<String>,
     },
     Cuda {
@@ -292,7 +295,12 @@ pub enum Kernel {
         cuda_minver: Option<Version>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        device_manifest: Option<String>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
+        ptx_dir: Option<String>,
         src: Vec<String>,
     },
     Metal {
@@ -316,19 +324,33 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
-    RustCpu {
-        src: Vec<String>,
-        lib_name: Option<String>,
-        features: Option<Vec<String>>,
-    },
-    RustCuda {
-        src: Vec<String>,
-        lib_name: Option<String>,
-        features: Option<Vec<String>>,
-        device_manifest: Option<String>,
-        ptx_dir: Option<String>,
-        cuda_capabilities: Option<Vec<String>>,
-    },
+}
+
+/// The language a kernel's sources are written in.
+///
+/// A kernel's `backend` says what hardware it is compiled for, `dsl` says how
+/// its sources are written. Backends accept the DSLs they can lower.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub enum Dsl {
+    /// C++ sources in the backend's dialect (CUDA C++, HIP, SYCL, ...),
+    /// compiled directly by the backend's compiler.
+    Cpp,
+    /// Rust sources, built by `cargo` into a staticlib that is linked into the
+    /// extension.
+    Rust,
+    /// Rust sources whose device code is compiled to PTX by the `cuda-oxide`
+    /// `rustc` codegen backend before the host crate is built. Requires the
+    /// `cuda` backend and a `device-manifest`.
+    CudaOxide,
+}
+
+impl Dsl {
+    /// Whether the kernel's sources are built by `cargo` rather than by the
+    /// backend's C++ toolchain.
+    pub fn is_cargo_built(&self) -> bool {
+        matches!(self, Dsl::Rust | Dsl::CudaOxide)
+    }
 }
 
 impl Kernel {
@@ -339,7 +361,6 @@ impl Kernel {
             | Kernel::Metal { cxx_flags, .. }
             | Kernel::Rocm { cxx_flags, .. }
             | Kernel::Xpu { cxx_flags, .. } => cxx_flags.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
         }
     }
 
@@ -350,7 +371,6 @@ impl Kernel {
             | Kernel::Metal { include, .. }
             | Kernel::Rocm { include, .. }
             | Kernel::Xpu { include, .. } => include.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
         }
     }
 
@@ -361,8 +381,14 @@ impl Kernel {
             Kernel::Metal { .. } => Backend::Metal,
             Kernel::Rocm { .. } => Backend::Rocm,
             Kernel::Xpu { .. } => Backend::Xpu,
-            Kernel::RustCpu { .. } => Backend::Cpu,
-            Kernel::RustCuda { .. } => Backend::Cuda,
+        }
+    }
+
+    /// The DSL the kernel's sources are written in.
+    pub fn dsl(&self) -> Dsl {
+        match self {
+            Kernel::Cpu { dsl, .. } | Kernel::Cuda { dsl, .. } => dsl.unwrap_or(Dsl::Cpp),
+            _ => Dsl::Cpp,
         }
     }
 
@@ -373,7 +399,6 @@ impl Kernel {
             | Kernel::Metal { depends, .. }
             | Kernel::Rocm { depends, .. }
             | Kernel::Xpu { depends, .. } => depends,
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => &[],
         }
     }
 
@@ -383,9 +408,7 @@ impl Kernel {
             | Kernel::Cuda { src, .. }
             | Kernel::Metal { src, .. }
             | Kernel::Rocm { src, .. }
-            | Kernel::Xpu { src, .. }
-            | Kernel::RustCpu { src, .. }
-            | Kernel::RustCuda { src, .. } => src,
+            | Kernel::Xpu { src, .. } => src,
         }
     }
 }

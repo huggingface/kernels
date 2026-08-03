@@ -11,5 +11,7 @@ repo-id = "kernels-test/relu-rust"
 [tvm-ffi]
 
 [kernel.relu_rust]
-backend = "rust-cpu"
+backend = "cpu"
+dsl = "rust"
+depends = []
 src = ["relu-rs/Cargo.toml", "relu-rs/src", "Cargo.toml", "Cargo.lock"]

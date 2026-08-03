@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelName};
+use super::{Dependency, Dsl, GitUrl, KernelName};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -138,7 +138,10 @@ pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -148,7 +151,12 @@ pub enum Kernel {
         cuda_minver: Option<Version>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        device_manifest: Option<String>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
+        ptx_dir: Option<String>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -174,21 +182,6 @@ pub enum Kernel {
         sycl_flags: Option<Vec<String>>,
         include: Option<Vec<String>>,
         src: Vec<String>,
-    },
-    #[serde(rename_all = "kebab-case")]
-    RustCpu {
-        src: Vec<String>,
-        lib_name: Option<String>,
-        features: Option<Vec<String>>,
-    },
-    #[serde(rename_all = "kebab-case")]
-    RustCuda {
-        src: Vec<String>,
-        lib_name: Option<String>,
-        features: Option<Vec<String>>,
-        device_manifest: Option<String>,
-        ptx_dir: Option<String>,
-        cuda_capabilities: Option<Vec<String>>,
     },
 }
 
@@ -340,12 +333,18 @@ impl From<Kernel> for super::Kernel {
             Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             } => super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             },
             Kernel::Cuda {
@@ -354,7 +353,12 @@ impl From<Kernel> for super::Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             } => super::Kernel::Cuda {
                 cuda_capabilities,
@@ -362,7 +366,12 @@ impl From<Kernel> for super::Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             },
             Kernel::Metal {
@@ -403,30 +412,6 @@ impl From<Kernel> for super::Kernel {
                 sycl_flags,
                 include,
                 src,
-            },
-            Kernel::RustCpu {
-                src,
-                lib_name,
-                features,
-            } => super::Kernel::RustCpu {
-                src,
-                lib_name,
-                features,
-            },
-            Kernel::RustCuda {
-                src,
-                lib_name,
-                features,
-                device_manifest,
-                ptx_dir,
-                cuda_capabilities,
-            } => super::Kernel::RustCuda {
-                src,
-                lib_name,
-                features,
-                device_manifest,
-                ptx_dir,
-                cuda_capabilities,
             },
         }
     }
@@ -567,12 +552,18 @@ impl From<super::Kernel> for Kernel {
             super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             } => Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             },
             super::Kernel::Cuda {
@@ -581,7 +572,12 @@ impl From<super::Kernel> for Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             } => Kernel::Cuda {
                 cuda_capabilities,
@@ -589,7 +585,12 @@ impl From<super::Kernel> for Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             },
             super::Kernel::Metal {
@@ -630,30 +631,6 @@ impl From<super::Kernel> for Kernel {
                 sycl_flags,
                 include,
                 src,
-            },
-            super::Kernel::RustCpu {
-                src,
-                lib_name,
-                features,
-            } => Kernel::RustCpu {
-                src,
-                lib_name,
-                features,
-            },
-            super::Kernel::RustCuda {
-                src,
-                lib_name,
-                features,
-                device_manifest,
-                ptx_dir,
-                cuda_capabilities,
-            } => Kernel::RustCuda {
-                src,
-                lib_name,
-                features,
-                device_manifest,
-                ptx_dir,
-                cuda_capabilities,
             },
         }
     }

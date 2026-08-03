@@ -350,26 +350,48 @@ are available:
 
 ### Rust kernels (experimental)
 
-Rust kernels are experimental `tvm-ffi` kernels declared with
-`backend = "rust-cpu"` or `backend = "rust-cuda"` in a normal
-`kernel.<name>` section. Include the crate `Cargo.toml` and Rust sources in
-`src`; the library name is inferred from that manifest.
+A `cpu` or `cuda` kernel can be written in Rust instead of C++ by setting
+`dsl = "rust"` (the default is `dsl = "cpp"`). Include the crate `Cargo.toml`
+and the Rust sources in `src`; the library name is inferred from that
+manifest:
 
 ```toml
 [kernel.my_kernel]
-backend = "rust-cuda"
+backend = "cpu"
+dsl = "rust"
+depends = []
 src = ["Cargo.toml", "Cargo.lock", "src"]
 ```
 
-Optional fields are `features`, `lib-name` as an override, and, for
-`rust-cuda`, `cuda-capabilities`. The project root must include a `Cargo.lock`.
+The crate is built by cargo as a staticlib and whole-archive linked into the
+extension, so it must export the `__tvm_ffi_*` symbols itself. Rust kernels
+currently require the `[tvm-ffi]` framework, and the project root must include
+a `Cargo.lock`.
 
-For cuda-oxide device crates, add the device manifest and PTX output directory:
+Optional fields are `features`, `lib-name` as an override, and, for the `cuda`
+backend, `cuda-capabilities`.
+
+#### cuda-oxide device code
+
+`dsl = "rust"` builds host code only, so a `cuda` kernel using it has to
+supply its device code some other way (for example by embedding pregenerated
+PTX). To have the device crate compiled to PTX during the build by the
+[cuda-oxide](https://github.com/NVlabs/cuda-oxide) `rustc` codegen backend,
+use `dsl = "cuda-oxide"` and point at the device manifest:
 
 ```toml
+[kernel.my_kernel]
+backend = "cuda"
+dsl = "cuda-oxide"
+depends = []
+src = ["Cargo.toml", "Cargo.lock", "src"]
 device-manifest = "kernels/Cargo.toml"
 ptx-dir = "kernels-ptx"
 ```
+
+The device crate is built before the host crate, so the host crate can embed
+the PTX written to `ptx-dir` (default `kernels-ptx`). `device-manifest` is
+required by `dsl = "cuda-oxide"` and rejected by `dsl = "rust"`.
 
 ## Torch bindings
 

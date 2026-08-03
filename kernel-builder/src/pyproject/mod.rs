@@ -5,7 +5,7 @@ use std::{
 };
 
 use eyre::{bail, Result};
-use kernels_data::config::{Build, Framework, Kernel};
+use kernels_data::config::{Build, Framework};
 use kernels_data::metadata::{GitHash, Provenance};
 use minijinja::Environment;
 
@@ -33,15 +33,17 @@ pub fn create_pyproject_file_set(
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
+    // Cargo-built kernels are linked as a staticlib into the extension, which
+    // is currently only wired up for the `tvm-ffi` framework.
     if build
         .kernels
         .values()
-        .any(|kernel| matches!(kernel, Kernel::RustCpu { .. } | Kernel::RustCuda { .. }))
+        .any(|kernel| kernel.dsl().is_cargo_built())
         && !matches!(build.framework, Framework::TvmFfi(_))
     {
         bail!(
-            "`backend = \"rust-cpu\"` and `backend = \"rust-cuda\"` kernels are \
-             currently only supported together with the `[tvm-ffi]` framework"
+            "`dsl = \"rust\"` and `dsl = \"cuda-oxide\"` kernels are currently \
+             only supported together with the `[tvm-ffi]` framework"
         );
     }
 

@@ -1,8 +1,8 @@
 use std::{io::Write, path::Path};
 
-use eyre::{Context, Result};
+use eyre::{ensure, Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Build, Kernel};
+use kernels_data::config::{Build, Dsl, Kernel};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;
@@ -34,6 +34,9 @@ fn render_kernel_component(
         .join("\n");
 
     match kernel {
+        Kernel::Cpu { .. } | Kernel::Cuda { .. } if kernel.dsl().is_cargo_built() => {
+            render_kernel_component_rust(env, kernel_name, kernel, write)?
+        }
         Kernel::Cpu { .. } => {
             render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
         }
@@ -49,37 +52,45 @@ fn render_kernel_component(
         Kernel::Xpu { .. } => {
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => {
-            render_kernel_component_rust(env, kernel_name, kernel, write)?
-        }
     }
 
     Ok(())
 }
 
+/// Rust kernels are built by cargo into a staticlib that is whole-archive
+/// linked into the extension, so unlike the C++ DSL they contribute no sources
+/// to the CMake build and render a component of their own.
 fn render_kernel_component_rust(
     env: &Environment,
     kernel_name: &str,
     kernel: &Kernel,
     write: &mut impl Write,
 ) -> Result<()> {
+    let dsl = kernel.dsl();
     let (template, src, lib_name, features, device_manifest, ptx_dir, cuda_capabilities) =
         match kernel {
-            Kernel::RustCpu {
+            Kernel::Cpu {
                 src,
                 lib_name,
                 features,
                 ..
-            } => (
-                "kernel-component/rust-cpu.cmake",
-                src,
-                lib_name,
-                features,
-                None,
-                None,
-                None,
-            ),
-            Kernel::RustCuda {
+            } => {
+                ensure!(
+                    dsl != Dsl::CudaOxide,
+                    "Kernel `{kernel_name}`: `dsl = \"cuda-oxide\"` requires \
+                     `backend = \"cuda\"`"
+                );
+                (
+                    "kernel-component/rust-cpu.cmake",
+                    src,
+                    lib_name,
+                    features,
+                    None,
+                    None,
+                    None,
+                )
+            }
+            Kernel::Cuda {
                 src,
                 lib_name,
                 features,
@@ -97,9 +108,26 @@ fn render_kernel_component_rust(
                 cuda_capabilities.as_ref(),
             ),
             _ => {
-                unreachable!("render_kernel_component_rust only accepts Rust kernels")
+                unreachable!("cargo-built DSLs are only supported for the cpu and cuda backends")
             }
         };
+
+    // `device-manifest`/`ptx-dir` drive the cuda-oxide device build; without
+    // the cuda-oxide DSL nothing would consume them, and without them the
+    // cuda-oxide DSL would silently build no device code at all.
+    if dsl == Dsl::CudaOxide {
+        ensure!(
+            device_manifest.is_some(),
+            "Kernel `{kernel_name}`: `dsl = \"cuda-oxide\"` requires `device-manifest`"
+        );
+    } else {
+        ensure!(
+            device_manifest.is_none() && ptx_dir.is_none(),
+            "Kernel `{kernel_name}`: `device-manifest` and `ptx-dir` require \
+             `dsl = \"cuda-oxide\"`"
+        );
+    }
+
     let manifest_path = rust_manifest_src(kernel_name, src)?;
 
     let lib_name = rust_lib_name(manifest_path, lib_name).ok_or_else(|| {

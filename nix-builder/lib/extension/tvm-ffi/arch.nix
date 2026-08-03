@@ -124,13 +124,22 @@ let
 
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
-  hasRustKernels = builtins.any (kernel: kernel.backend == "rust-${buildConfig.backend}") (
+  kernelDsl = kernel: kernel.dsl or "cpp";
+
+  # Both cargo-built DSLs need the Rust toolchain; only cuda-oxide additionally
+  # needs the rustc codegen backend that compiles device code to PTX.
+  hasRustKernels = builtins.any (
+    kernel:
+    builtins.elem (kernelDsl kernel) [
+      "rust"
+      "cuda-oxide"
+    ]
+    && kernel.backend == buildConfig.backend
+  ) (lib.attrValues kernelToml);
+
+  hasCudaOxideKernels = builtins.any (kernel: kernelDsl kernel == "cuda-oxide") (
     lib.attrValues kernelToml
   );
-
-  hasRustCudaDeviceKernels = builtins.any (
-    kernel: kernel.backend == "rust-cuda" && kernel ? "device-manifest"
-  ) (lib.attrValues kernelToml);
 
   cudaOxideSrc = pkgs.fetchFromGitHub {
     owner = "drbh";
@@ -331,7 +340,7 @@ stdenv.mkDerivation (prevAttrs: {
       SYCL_ROOT = oneapi-torch-dev;
     }
     // lib.optionalAttrs (hasRustKernels && cudaSupport) rustCudaEnv
-    // lib.optionalAttrs hasRustCudaDeviceKernels {
+    // lib.optionalAttrs hasCudaOxideKernels {
       CUDA_OXIDE_BACKEND = "${cudaOxideBackend}/lib/librustc_codegen_cuda.so";
     };
 

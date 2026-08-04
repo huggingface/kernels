@@ -203,8 +203,6 @@ def install_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
-        variant_locks (`dict[str, VariantLock]`, *optional*):
-            Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
         validate_dependencies (`bool`, defaults to False):
@@ -215,7 +213,7 @@ def install_kernel(
         `Path`: The path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
-    if local_files_only or constants.HF_HUB_OFFLINE:
+    if local_files_only:
         # Same local-cache resolution path used by `load_kernel`, which is
         # always offline. Sharing the helper avoids the network dependency
         # that `get_variants` would otherwise introduce.
@@ -423,6 +421,7 @@ def get_kernel(
         revision=revision,
         user_agent=user_agent,
         validate_dependencies=True,
+        local_files_only=constants.HF_HUB_OFFLINE,
     )
     return _import_from_path(variant_path, repo_info=repo_info)
 
@@ -598,7 +597,7 @@ def load_kernel(
     return _import_from_path(variant_path)
 
 
-def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
+def get_locked_kernel(repo_id: str) -> ModuleType:
     """
     Get a kernel using a lock file.
 
@@ -619,7 +618,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     variant_path = install_kernel(
         repo_id,
         revision=locked_sha,
-        local_files_only=local_files_only,
+        local_files_only=constants.HF_HUB_OFFLINE,
         validate_dependencies=True,
     )
 

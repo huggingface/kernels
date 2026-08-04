@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def _get_available_versions(repo_id: str) -> dict[int, GitRefInfo]:
     """Get kernel versions that are available in the repository."""
-    from kernels.utils import _get_hf_api
+    from kernels.hf_hub import _get_hf_api
 
     if constants.HF_HUB_OFFLINE:
         return _get_available_versions_from_cache(repo_id)

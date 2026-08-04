@@ -6,6 +6,7 @@ from kernels_data import Metadata
 
 from kernels._windows import _add_additional_dll_paths
 from kernels.benchmark import Benchmark
+from kernels.hf_hub import RepoInfo
 from kernels.layer import (
     CUDAProperties,
     Device,
@@ -27,7 +28,6 @@ from kernels.layer import (
 )
 from kernels.utils import (
     LoadedKernel,
-    RepoInfo,
     get_kernel,
     get_kernel_variants,
     get_loaded_kernels,

@@ -5,7 +5,8 @@ find_package(SyclTla)
 if(DPCPP_VERSION STREQUAL "2025.3")
   set(SYCL_TLA_REVISION "v0.8" CACHE STRING "sycl-tla revision to use")
 elseif(DPCPP_VERSION STREQUAL "2026.0")
-  set(SYCL_TLA_REVISION "v0.9.1" CACHE STRING "sycl-tla revision to use")
+  # v0.9.2 == the rev pinned in nix-builder; v0.9.1 has no cri kernel support.
+  set(SYCL_TLA_REVISION "v0.9.2" CACHE STRING "sycl-tla revision to use")
 else()
   message(FATAL_ERROR "Unknown DPCPP_VERSION: ${DPCPP_VERSION}")
 endif()
@@ -68,17 +69,12 @@ if(SYCL_TLA_REVISION MATCHES "^v3\\.9")
   add_compile_definitions(OLD_API=1)
 endif()
 
-# --- Tri-target fat binary: pvc + bmg (fp16/bf16) + cri (fp16/bf16 + MXFP) ----
-# One .so, three AOT images. fp16/bf16 TUs compile multi-target below; the
-# block-scaled MXFP TUs are gated behind __SYCL_TARGET_INTEL_GPU_CRI__ and must
-# compile spir64_gen-only (that macro + -fsycl-targets=spir64_gen is set per
-# MXFP kernel component in build.toml, since MXFP BDPAS AOT works ONLY on cri --
-# ocloc aborts it for pvc/bmg). The generic spir64_gen image is AOT-lowered to
-# cri via `-device cri`; the pvc/bmg alias images self-target and carry no MXFP.
+# --- Fat binary: pvc + bmg + cri AOT images, plus a spir64 JIT fallback ------
+# `-device cri` lowers the generic spir64_gen image; pvc/bmg alias images
+# self-target. MXFP is cri-only (ocloc aborts it elsewhere), so build.toml
+# builds those TUs spir64_gen-only and dispatch gates them on IP version >= 35.
 set(SYCL_AOT_DEVICES "cri")
-
-# Compile fp16/bf16 for all three; MXFP components override to spir64_gen only.
-set(SYCL_OFFLOAD_TARGETS "intel_gpu_pvc,intel_gpu_bmg_g21,spir64_gen")
+set(SYCL_OFFLOAD_TARGETS "intel_gpu_pvc,intel_gpu_bmg_g21,spir64_gen,spir64")
 
 # sycl-tla needs extra extensions (split-barrier always; block-IO and
 # matrix-multiply on newer DPCPP). Since the translator replaces the whole

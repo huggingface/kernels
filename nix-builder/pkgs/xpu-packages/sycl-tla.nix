@@ -19,8 +19,7 @@ let
       hash = "sha256-xXAxIDBesjDDOIa6/YsGznyW+5+NpaO1L96lBuqRzrk=";
     };
     "2026.0" = {
-      version = "0.9.1-main-d54352d";
-      rev = "d54352dffe8daab532abd88fc6ab0e9c9fbc6d62";
+      version = "0.9.2";
       hash = "sha256-Hn51Ah1wEscOnrt9O/aXBW7IC6Mcl4gUWynAmDeAOlM=";
     };
   };

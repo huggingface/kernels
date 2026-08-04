@@ -153,7 +153,6 @@ def download_kernels(args):
             install_kernel_all_variants(
                 kernel_lock.repo_id,
                 revision=kernel_lock.sha,
-                variant_locks=kernel_lock.variants,
             )
         else:
             try:

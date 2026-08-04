@@ -1,5 +1,4 @@
 import functools
-import hashlib
 import importlib
 import importlib.metadata
 import inspect
@@ -308,7 +307,6 @@ def install_kernel(
             repo_id,
             revision=revision,
             backend=backend,
-            variant_locks=variant_locks,
         )
         # For locally downloaded kernels, we run the validation after resolving the path
         if validate_dependencies:
@@ -357,7 +355,6 @@ def install_kernel(
         return _find_kernel_in_repo_path(
             repo_path,
             variant=variant,
-            variant_locks=variant_locks,
         )
     except FileNotFoundError:
         raise FileNotFoundError(f"Cannot install kernel from repo {repo_id} (revision: {revision})")
@@ -369,7 +366,6 @@ def _resolve_local_variant_path(
     *,
     revision: str,
     backend: str | None = None,
-    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     """Resolve a kernel variant path from the local Hugging Face cache only.
 
@@ -403,25 +399,21 @@ def _resolve_local_variant_path(
             f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(status)}"
         )
 
-    return _find_kernel_in_repo_path(local_repo_path, variant=variant, variant_locks=variant_locks)
+    return _find_kernel_in_repo_path(
+        local_repo_path,
+        variant=variant,
+    )
 
 
 def _find_kernel_in_repo_path(
     repo_path: Path,
     *,
     variant: Variant,
-    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     variant_str = variant.variant_str
     variant_path = repo_path / "build" / variant_str
     if not variant_path.exists():
         raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
-
-    if variant_locks is not None:
-        variant_lock = variant_locks.get(variant_str)
-        if variant_lock is None:
-            raise ValueError(f"No lock found for build variant: {variant}")
-        validate_kernel(repo_path=repo_path, variant=variant_str, hash=variant_lock.hash)
 
     return variant_path
 
@@ -431,7 +423,6 @@ def install_kernel_all_variants(
     *,
     revision: str,
     local_files_only: bool = False,
-    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     api = _get_hf_api()
 
@@ -448,16 +439,6 @@ def install_kernel_all_variants(
             )
         )
     )
-
-    if variant_locks is not None:
-        for entry in (repo_path / "build").iterdir():
-            variant = entry.parts[-1]
-
-            variant_lock = variant_locks.get(variant)
-            if variant_lock is None:
-                raise ValueError(f"No lock found for build variant: {variant}")
-
-            validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
 
     return repo_path / "build"
 
@@ -787,59 +768,6 @@ def _get_caller_module() -> ModuleType | None:
         if module is not None and module != first_module:
             return module
     return first_module
-
-
-def validate_kernel(*, repo_path: Path, variant: str, hash: str):
-    """Validate the given build variant of a kernel against a hash."""
-    variant_path = repo_path / "build" / variant
-
-    # Get the file paths. The first element is a byte-encoded relative path
-    # used for sorting. The second element is the absolute path.
-    files: list[tuple[bytes, Path]] = []
-    # Ideally we'd use Path.walk, but it's only available in Python 3.12.
-    for dirpath, _, filenames in os.walk(variant_path):
-        for filename in filenames:
-            file_abs = Path(dirpath) / filename
-
-            # Python likes to create files when importing modules from the
-            # cache, only hash files that are symlinked blobs.
-            if file_abs.is_symlink():
-                files.append(
-                    (
-                        file_abs.relative_to(variant_path).as_posix().encode("utf-8"),
-                        file_abs,
-                    )
-                )
-
-    m = hashlib.sha256()
-
-    for filename_bytes, full_path in sorted(files):
-        m.update(filename_bytes)
-
-        blob_filename = full_path.resolve().name
-        if len(blob_filename) == 40:
-            # SHA-1 hashed, so a Git blob.
-            m.update(git_hash_object(full_path.read_bytes()))
-        elif len(blob_filename) == 64:
-            # SHA-256 hashed, so a Git LFS blob.
-            m.update(hashlib.sha256(full_path.read_bytes()).digest())
-        else:
-            raise ValueError(f"Unexpected blob filename length: {len(blob_filename)}")
-
-    computedHash = f"sha256-{m.hexdigest()}"
-    if computedHash != hash:
-        raise ValueError(
-            f"Lock file specifies kernel with hash {hash}, but downloaded kernel has hash: {computedHash}"
-        )
-
-
-def git_hash_object(data: bytes, object_type: str = "blob"):
-    """Calculate git SHA1 of data."""
-    header = f"{object_type} {len(data)}\0".encode()
-    m = hashlib.sha1()
-    m.update(header)
-    m.update(data)
-    return m.digest()
 
 
 def _platform() -> str:

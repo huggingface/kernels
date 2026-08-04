@@ -21,7 +21,7 @@ from kernels._versions import select_revision_or_version
 from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
-from kernels.lockfile import KernelLock, VariantLock
+from kernels.lockfile import KernelLock
 from kernels.status import resolve_status
 from kernels.variants import (
     Decision,
@@ -267,7 +267,6 @@ def install_kernel(
     revision: str,
     local_files_only: bool = False,
     backend: str | None = None,
-    variant_locks: dict[str, VariantLock] | None = None,
     user_agent: str | dict | None = None,
     validate_dependencies: bool = False,
 ) -> Path:

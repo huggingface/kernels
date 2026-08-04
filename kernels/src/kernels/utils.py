@@ -587,15 +587,8 @@ def load_kernel(
             f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
         )
 
-    api = _get_hf_api()
-
     try:
-        variant_path = _resolve_local_variant_path(
-            api,
-            repo_id,
-            revision=locked_sha,
-            backend=backend,
-        )
+        variant_path = install_kernel(repo_id, revision=locked_sha, backend=backend, local_files_only=True)
     except FileNotFoundError as e:
         raise FileNotFoundError(
             f"Locked kernel `{repo_id}` was not downloaded or does not have an "

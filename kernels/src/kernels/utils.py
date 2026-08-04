@@ -382,6 +382,7 @@ def _resolve_local_variant_path(
                 api.snapshot_download(
                     repo_id,
                     repo_type="kernel",
+                    ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                     cache_dir=CACHE_DIR,
                     revision=revision,
                     local_files_only=True,
@@ -402,22 +403,7 @@ def _resolve_local_variant_path(
             f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(status)}"
         )
 
-    allow_patterns = [f"build/{variant.variant_str}/*"]
-    ignore_patterns = _BYTECODE_IGNORE_PATTERNS
-    repo_path = Path(
-        str(
-            api.snapshot_download(
-                repo_id,
-                repo_type="kernel",
-                allow_patterns=allow_patterns,
-                ignore_patterns=ignore_patterns,
-                cache_dir=CACHE_DIR,
-                revision=revision,
-                local_files_only=True,
-            )
-        )
-    )
-    return _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
+    return _find_kernel_in_repo_path(local_repo_path, variant=variant, variant_locks=variant_locks)
 
 
 def _find_kernel_in_repo_path(

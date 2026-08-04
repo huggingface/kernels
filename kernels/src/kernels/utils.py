@@ -640,7 +640,6 @@ def load_kernel(
     *,
     lockfile: Path | None,
     backend: str | None = None,
-    revision: str | None = None,
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -655,20 +654,13 @@ def load_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
-        revision (`str`, *optional*):
-            The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
 
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    if lockfile is not None and revision is not None:
-        raise ValueError("`lockfile` and `revision` both cannot be specified at the same time.")
-
-    if lockfile is None and revision is None:
+    if lockfile is None:
         locked_sha = _get_caller_locked_kernel(repo_id)
-    elif revision is not None:
-        locked_sha = revision
-    elif lockfile is not None:
+    else:
         with open(lockfile, "r") as f:
             locked_sha = _get_locked_kernel(repo_id, f.read())
 

@@ -1,14 +1,10 @@
 import functools
 import importlib
-import importlib.metadata
-import inspect
-import json
 import os
 import platform
 import sys
 import warnings
 from dataclasses import dataclass
-from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
@@ -21,7 +17,10 @@ from kernels._versions import select_revision_or_version
 from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
-from kernels.lockfile import KernelLock
+from kernels.locking import (
+    get_caller_locked_kernel_revision,
+    get_locked_kernel_revision,
+)
 from kernels.status import resolve_status
 from kernels.variants import (
     Decision,
@@ -659,10 +658,10 @@ def load_kernel(
         `ModuleType`: The imported kernel module.
     """
     if lockfile is None:
-        locked_sha = _get_caller_locked_kernel(repo_id)
+        locked_sha = get_caller_locked_kernel_revision(repo_id)
     else:
         with open(lockfile, "r") as f:
-            locked_sha = _get_locked_kernel(repo_id, f.read())
+            locked_sha = get_locked_kernel_revision(repo_id, f.read())
 
     if locked_sha is None:
         raise ValueError(
@@ -700,7 +699,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    locked_sha = _get_caller_locked_kernel(repo_id)
+    locked_sha = get_caller_locked_kernel_revision(repo_id)
 
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
@@ -713,50 +712,6 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     )
 
     return _import_from_path(variant_path)
-
-
-def _get_caller_locked_kernel(repo_id: str) -> str | None:
-    for dist in _get_caller_distributions():
-        lock_json = dist.read_text("kernels.lock")
-        if lock_json is None:
-            continue
-        locked_sha = _get_locked_kernel(repo_id, lock_json)
-        if locked_sha is not None:
-            return locked_sha
-    return None
-
-
-def _get_locked_kernel(repo_id: str, lock_json: str) -> str | None:
-    for kernel_lock_json in json.loads(lock_json):
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
-        if kernel_lock.repo_id == repo_id:
-            return kernel_lock.sha
-    return None
-
-
-def _get_caller_distributions() -> list[Distribution]:
-    module = _get_caller_module()
-    if module is None:
-        return []
-
-    # Look up all possible distributions that this module could be from.
-    package = module.__name__.split(".")[0]
-    dist_names = importlib.metadata.packages_distributions().get(package)
-    if dist_names is None:
-        return []
-
-    return [importlib.metadata.distribution(dist_name) for dist_name in dist_names]
-
-
-def _get_caller_module() -> ModuleType | None:
-    stack = inspect.stack()
-    # Get first module in the stack that is not the current module.
-    first_module = inspect.getmodule(stack[0][0])
-    for frame in stack[1:]:
-        module = inspect.getmodule(frame[0])
-        if module is not None and module != first_module:
-            return module
-    return first_module
 
 
 def _platform() -> str:

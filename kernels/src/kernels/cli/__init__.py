@@ -8,7 +8,7 @@ from kernels.cli.info import print_kernel_info
 from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, get_kernel_locks
+from kernels.locking import KernelLock, get_kernel_locks
 from kernels.utils import (
     install_kernel,
     install_kernel_all_variants,

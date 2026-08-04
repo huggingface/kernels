@@ -159,7 +159,6 @@ def download_kernels(args):
                 install_kernel(
                     kernel_lock.repo_id,
                     revision=kernel_lock.sha,
-                    variant_locks=kernel_lock.variants,
                 )
             except FileNotFoundError as e:
                 print(e, file=sys.stderr)

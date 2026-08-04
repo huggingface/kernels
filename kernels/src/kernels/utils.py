@@ -422,7 +422,6 @@ def install_kernel_all_variants(
     repo_id: str,
     *,
     revision: str,
-    local_files_only: bool = False,
 ) -> Path:
     api = _get_hf_api()
 
@@ -435,7 +434,6 @@ def install_kernel_all_variants(
                 ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                 cache_dir=CACHE_DIR,
                 revision=revision,
-                local_files_only=local_files_only,
             )
         )
     )

@@ -7,7 +7,7 @@ else:
     from typing_extensions import assert_never
 
 from kernels._versions import select_revision_or_version
-from kernels.utils import install_kernel, install_kernel_all_variants
+from kernels.install import install_kernel, install_kernel_all_variants
 from kernels.variants import get_variants_local
 from kernels.verify import VerificationResult, verify_variant
 

@@ -30,8 +30,6 @@ from kernels.variants import (
     variants_trace_str,
 )
 
-KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
-
 # Exclude patter for bytecode. These are not included in kernel builds,
 # but builds not done using kernel-builder might accidentally include
 # bytcode. So these patterns are used to ensure that they are never

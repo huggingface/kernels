@@ -74,15 +74,11 @@ final: prev:
       in
       {
         inherit (triton)
-          triton_3_5_0
-          triton_3_6_0
           triton_3_7_0
           triton_3_7_1
           ;
-        inherit (triton-rocm) triton-rocm_3_6_0 triton-rocm_3_7_0;
+        inherit (triton-rocm) triton-rocm_3_7_0;
         inherit (triton-xpu)
-          triton-xpu_3_6_0
-          triton-xpu_3_7_0
           triton-xpu_3_7_1
           triton-xpu_3_7_2
           ;
@@ -165,6 +161,8 @@ final: prev:
 
         jax-tvm-ffi = python-self.callPackage ./pkgs/python-modules/jax-tvm-ffi { };
 
+        libtpu = python-self.callPackage ./pkgs/python-modules/libtpu { };
+
         jupyter-server = python-super.jupyter-server.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.
@@ -172,9 +170,19 @@ final: prev:
           }
         );
 
+        nvidia-cuda-nvdisasm = python-self.callPackage ./pkgs/python-modules/nvidia-cuda-nvdisasm { };
+
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };
+
+        nvidia-cutlass-dsl-libs-core =
+          python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs-core
+            { };
+
+        nvidia-cutlass-dsl-libs-cu =
+          python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs-cu
+            { };
 
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
@@ -194,22 +202,13 @@ final: prev:
           }
         );
 
-        # Remove once sglang moves to a newer Torch version.
-        torch-bin_2_9 = mkTorch {
-          version = "2.9";
-          triton-cuda = triton_3_5_0;
-          triton-rocm = null;
-          triton-xpu = null;
-          # Not supported anymore.
-          xpuPackages = null;
-        };
-
+        # Maintain a minimal version for TPU support.
         torch-bin_2_11 = mkTorch {
           version = "2.11";
-          triton-cuda = triton_3_6_0;
-          triton-rocm = triton-rocm_3_6_0;
-          triton-xpu = triton-xpu_3_7_0;
-          xpuPackages = final.xpuPackages_2025_3_2;
+          triton-cuda = null;
+          triton-rocm = null;
+          triton-xpu = null;
+          xpuPackages = null;
         };
 
         torch-bin_2_12 = mkTorch {
@@ -274,7 +273,6 @@ final: prev:
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     versions = [
-      "7.0.2"
       "7.1.1"
       "7.2.1"
     ];
@@ -294,7 +292,6 @@ final: prev:
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
     xpuVersions = [
-      "2025.3.1"
       "2025.3.2"
       "2026.0.0"
     ];

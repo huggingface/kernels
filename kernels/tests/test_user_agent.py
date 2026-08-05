@@ -1,6 +1,6 @@
 import platform
 
-from kernels.utils import _get_hf_api, _platform
+from kernels.hf_hub import _get_hf_api, _platform
 
 
 def test_user_agent_contains_core_fields():

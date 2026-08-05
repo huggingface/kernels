@@ -1,15 +1,9 @@
 import functools
-import hashlib
 import importlib
-import importlib.metadata
-import inspect
-import json
 import os
-import platform
 import sys
 import warnings
 from dataclasses import dataclass
-from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
@@ -17,12 +11,14 @@ from huggingface_hub import HfApi, constants
 from huggingface_hub.errors import LocalEntryNotFoundError
 from kernels_data import Metadata
 
-from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
-from kernels.backends import _backend, _select_backend
-from kernels.compat import has_torch, has_tvm_ffi
+from kernels.backends import _backend
 from kernels.deps import validate_dependencies
-from kernels.lockfile import KernelLock, VariantLock
+from kernels.hf_hub import CACHE_DIR, RepoInfo, _check_trust_remote_code, _get_hf_api
+from kernels.locking import (
+    get_caller_locked_kernel_revision,
+    get_locked_kernel_revision,
+)
 from kernels.status import resolve_status
 from kernels.variants import (
     Decision,
@@ -41,77 +37,6 @@ KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 # bytcode. So these patterns are used to ensure that they are never
 # downloaded.
 _BYTECODE_IGNORE_PATTERNS = ["*.pyc", "**/__pycache__/**"]
-
-
-def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
-    """Check whether a kernel repository is trusted.
-
-    When ``trust_remote_code`` is ``False`` (the default), only repositories
-    whose publisher organization has ``trustedKernelPublisher`` enabled on the
-    Hub are allowed. Repositories from untrusted publishers will raise a
-    ``ValueError``.
-
-    When ``trust_remote_code`` is ``True``, all repositories are allowed.
-
-    When ``trust_remote_code`` is a list of strings, it is treated as a list
-    of signing identities to verify against.  Signing verification is not yet
-    implemented, so passing a list currently emits a warning and falls back
-    to the default trust check (i.e. only trusted publishers are allowed).
-    """
-    if trust_remote_code is True:
-        return
-
-    if isinstance(trust_remote_code, list):
-        warnings.warn(
-            "Signing identity verification is not yet implemented. "
-            "The provided signing identities will be ignored and the "
-            "kernel will be treated as untrusted. Use trust_remote_code=True "
-            "to bypass trust checks.",
-            stacklevel=3,
-        )
-
-    if constants.HF_HUB_OFFLINE:
-        # Publisher trust cannot be verified offline. The user opted into
-        # offline mode and the kernel must already be in the local cache,
-        # so trust was established when it was originally downloaded.
-        warnings.warn(
-            f"Skipping publisher trust check for '{repo_id}' because Hugging Face Hub is in offline mode.",
-            stacklevel=3,
-        )
-        return
-
-    publisher = repo_id.split("/", 1)[0]
-
-    try:
-        info = _get_hf_api().get_organization_overview(publisher)
-    except Exception:
-        raise ValueError(
-            f"Kernel repository '{repo_id}' could not verify publisher trust status. "
-            "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-        )
-
-    if getattr(info, "trustedKernelPublisher", False):
-        return
-
-    raise ValueError(
-        f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-        "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-    )
-
-
-@dataclass(frozen=True)
-class RepoInfo:
-    """
-    This dataclass stores the origin of the kernel.
-
-    The following fields are available:
-
-    - `repo_id` (`str`): the Hub repository containing the kernel.
-    - `revision` (`str`): the specific revision of the kernel.
-    """
-
-    repo_id: str
-    revision: str
 
 
 @dataclass(frozen=True)
@@ -168,11 +93,6 @@ def get_loaded_kernels() -> list[LoadedKernel]:
     return list(_loaded_kernels.values())
 
 
-def _get_cache_dir() -> str | None:
-    """Returns the kernels cache directory."""
-    return os.environ.get("KERNELS_CACHE", None)
-
-
 def _get_local_kernel_overrides() -> dict[str, Path]:
     """Returns list local overrides for kernels."""
     local_kerels = os.environ.get("LOCAL_KERNELS", None)
@@ -194,9 +114,6 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
         overrides[repo_id] = Path(path)
 
     return overrides
-
-
-CACHE_DIR: str | None = _get_cache_dir()
 
 
 def _validate_variant_dependencies(variant_path: Path) -> None:
@@ -268,7 +185,6 @@ def install_kernel(
     revision: str,
     local_files_only: bool = False,
     backend: str | None = None,
-    variant_locks: dict[str, VariantLock] | None = None,
     user_agent: str | dict | None = None,
     validate_dependencies: bool = False,
 ) -> Path:
@@ -287,8 +203,6 @@ def install_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
-        variant_locks (`dict[str, VariantLock]`, *optional*):
-            Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
         validate_dependencies (`bool`, defaults to False):
@@ -299,7 +213,7 @@ def install_kernel(
         `Path`: The path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
-    if local_files_only or constants.HF_HUB_OFFLINE:
+    if local_files_only:
         # Same local-cache resolution path used by `load_kernel`, which is
         # always offline. Sharing the helper avoids the network dependency
         # that `get_variants` would otherwise introduce.
@@ -308,7 +222,6 @@ def install_kernel(
             repo_id,
             revision=revision,
             backend=backend,
-            variant_locks=variant_locks,
         )
         # For locally downloaded kernels, we run the validation after resolving the path
         if validate_dependencies:
@@ -357,7 +270,6 @@ def install_kernel(
         return _find_kernel_in_repo_path(
             repo_path,
             variant=variant,
-            variant_locks=variant_locks,
         )
     except FileNotFoundError:
         raise FileNotFoundError(f"Cannot install kernel from repo {repo_id} (revision: {revision})")
@@ -369,7 +281,6 @@ def _resolve_local_variant_path(
     *,
     revision: str,
     backend: str | None = None,
-    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     """Resolve a kernel variant path from the local Hugging Face cache only.
 
@@ -382,6 +293,7 @@ def _resolve_local_variant_path(
                 api.snapshot_download(
                     repo_id,
                     repo_type="kernel",
+                    ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                     cache_dir=CACHE_DIR,
                     revision=revision,
                     local_files_only=True,
@@ -402,40 +314,21 @@ def _resolve_local_variant_path(
             f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(status)}"
         )
 
-    allow_patterns = [f"build/{variant.variant_str}/*"]
-    ignore_patterns = _BYTECODE_IGNORE_PATTERNS
-    repo_path = Path(
-        str(
-            api.snapshot_download(
-                repo_id,
-                repo_type="kernel",
-                allow_patterns=allow_patterns,
-                ignore_patterns=ignore_patterns,
-                cache_dir=CACHE_DIR,
-                revision=revision,
-                local_files_only=True,
-            )
-        )
+    return _find_kernel_in_repo_path(
+        local_repo_path,
+        variant=variant,
     )
-    return _find_kernel_in_repo_path(repo_path, variant=variant, variant_locks=variant_locks)
 
 
 def _find_kernel_in_repo_path(
     repo_path: Path,
     *,
     variant: Variant,
-    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     variant_str = variant.variant_str
     variant_path = repo_path / "build" / variant_str
     if not variant_path.exists():
         raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
-
-    if variant_locks is not None:
-        variant_lock = variant_locks.get(variant_str)
-        if variant_lock is None:
-            raise ValueError(f"No lock found for build variant: {variant}")
-        validate_kernel(repo_path=repo_path, variant=variant_str, hash=variant_lock.hash)
 
     return variant_path
 
@@ -444,8 +337,6 @@ def install_kernel_all_variants(
     repo_id: str,
     *,
     revision: str,
-    local_files_only: bool = False,
-    variant_locks: dict[str, VariantLock] | None = None,
 ) -> Path:
     api = _get_hf_api()
 
@@ -458,20 +349,9 @@ def install_kernel_all_variants(
                 ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                 cache_dir=CACHE_DIR,
                 revision=revision,
-                local_files_only=local_files_only,
             )
         )
     )
-
-    if variant_locks is not None:
-        for entry in (repo_path / "build").iterdir():
-            variant = entry.parts[-1]
-
-            variant_lock = variant_locks.get(variant)
-            if variant_lock is None:
-                raise ValueError(f"No lock found for build variant: {variant}")
-
-            validate_kernel(repo_path=repo_path, variant=variant, hash=variant_lock.hash)
 
     return repo_path / "build"
 
@@ -541,6 +421,7 @@ def get_kernel(
         revision=revision,
         user_agent=user_agent,
         validate_dependencies=True,
+        local_files_only=constants.HF_HUB_OFFLINE,
     )
     return _import_from_path(variant_path, repo_info=repo_info)
 
@@ -676,7 +557,6 @@ def load_kernel(
     *,
     lockfile: Path | None,
     backend: str | None = None,
-    revision: str | None = None,
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
@@ -691,37 +571,23 @@ def load_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
-        revision (`str`, *optional*):
-            The specific revision (branch, tag, or commit) to download. Cannot be used together with `version`.
 
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    if lockfile is not None and revision is not None:
-        raise ValueError("`lockfile` and `revision` both cannot be specified at the same time.")
-
-    if lockfile is None and revision is None:
-        locked_sha = _get_caller_locked_kernel(repo_id)
-    elif revision is not None:
-        locked_sha = revision
-    elif lockfile is not None:
+    if lockfile is None:
+        locked_sha = get_caller_locked_kernel_revision(repo_id)
+    else:
         with open(lockfile, "r") as f:
-            locked_sha = _get_locked_kernel(repo_id, f.read())
+            locked_sha = get_locked_kernel_revision(repo_id, f.read())
 
     if locked_sha is None:
         raise ValueError(
             f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
         )
 
-    api = _get_hf_api()
-
     try:
-        variant_path = _resolve_local_variant_path(
-            api,
-            repo_id,
-            revision=locked_sha,
-            backend=backend,
-        )
+        variant_path = install_kernel(repo_id, revision=locked_sha, backend=backend, local_files_only=True)
     except FileNotFoundError as e:
         raise FileNotFoundError(
             f"Locked kernel `{repo_id}` was not downloaded or does not have an "
@@ -731,7 +597,7 @@ def load_kernel(
     return _import_from_path(variant_path)
 
 
-def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
+def get_locked_kernel(repo_id: str) -> ModuleType:
     """
     Get a kernel using a lock file.
 
@@ -744,7 +610,7 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    locked_sha = _get_caller_locked_kernel(repo_id)
+    locked_sha = get_caller_locked_kernel_revision(repo_id)
 
     if locked_sha is None:
         raise ValueError(f"Kernel `{repo_id}` is not locked")
@@ -752,164 +618,8 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     variant_path = install_kernel(
         repo_id,
         revision=locked_sha,
-        local_files_only=local_files_only,
+        local_files_only=constants.HF_HUB_OFFLINE,
         validate_dependencies=True,
     )
 
     return _import_from_path(variant_path)
-
-
-def _get_caller_locked_kernel(repo_id: str) -> str | None:
-    for dist in _get_caller_distributions():
-        lock_json = dist.read_text("kernels.lock")
-        if lock_json is None:
-            continue
-        locked_sha = _get_locked_kernel(repo_id, lock_json)
-        if locked_sha is not None:
-            return locked_sha
-    return None
-
-
-def _get_locked_kernel(repo_id: str, lock_json: str) -> str | None:
-    for kernel_lock_json in json.loads(lock_json):
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
-        if kernel_lock.repo_id == repo_id:
-            return kernel_lock.sha
-    return None
-
-
-def _get_caller_distributions() -> list[Distribution]:
-    module = _get_caller_module()
-    if module is None:
-        return []
-
-    # Look up all possible distributions that this module could be from.
-    package = module.__name__.split(".")[0]
-    dist_names = importlib.metadata.packages_distributions().get(package)
-    if dist_names is None:
-        return []
-
-    return [importlib.metadata.distribution(dist_name) for dist_name in dist_names]
-
-
-def _get_caller_module() -> ModuleType | None:
-    stack = inspect.stack()
-    # Get first module in the stack that is not the current module.
-    first_module = inspect.getmodule(stack[0][0])
-    for frame in stack[1:]:
-        module = inspect.getmodule(frame[0])
-        if module is not None and module != first_module:
-            return module
-    return first_module
-
-
-def validate_kernel(*, repo_path: Path, variant: str, hash: str):
-    """Validate the given build variant of a kernel against a hash."""
-    variant_path = repo_path / "build" / variant
-
-    # Get the file paths. The first element is a byte-encoded relative path
-    # used for sorting. The second element is the absolute path.
-    files: list[tuple[bytes, Path]] = []
-    # Ideally we'd use Path.walk, but it's only available in Python 3.12.
-    for dirpath, _, filenames in os.walk(variant_path):
-        for filename in filenames:
-            file_abs = Path(dirpath) / filename
-
-            # Python likes to create files when importing modules from the
-            # cache, only hash files that are symlinked blobs.
-            if file_abs.is_symlink():
-                files.append(
-                    (
-                        file_abs.relative_to(variant_path).as_posix().encode("utf-8"),
-                        file_abs,
-                    )
-                )
-
-    m = hashlib.sha256()
-
-    for filename_bytes, full_path in sorted(files):
-        m.update(filename_bytes)
-
-        blob_filename = full_path.resolve().name
-        if len(blob_filename) == 40:
-            # SHA-1 hashed, so a Git blob.
-            m.update(git_hash_object(full_path.read_bytes()))
-        elif len(blob_filename) == 64:
-            # SHA-256 hashed, so a Git LFS blob.
-            m.update(hashlib.sha256(full_path.read_bytes()).digest())
-        else:
-            raise ValueError(f"Unexpected blob filename length: {len(blob_filename)}")
-
-    computedHash = f"sha256-{m.hexdigest()}"
-    if computedHash != hash:
-        raise ValueError(
-            f"Lock file specifies kernel with hash {hash}, but downloaded kernel has hash: {computedHash}"
-        )
-
-
-def git_hash_object(data: bytes, object_type: str = "blob"):
-    """Calculate git SHA1 of data."""
-    header = f"{object_type} {len(data)}\0".encode()
-    m = hashlib.sha1()
-    m.update(header)
-    m.update(data)
-    return m.digest()
-
-
-def _platform() -> str:
-    cpu = platform.machine()
-    os = platform.system().lower()
-
-    if os == "darwin":
-        cpu = "aarch64" if cpu == "arm64" else cpu
-    elif os == "windows":
-        cpu = "x86_64" if cpu == "AMD64" else cpu
-
-    return f"{cpu}-{os}"
-
-
-def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
-    """Returns an instance of HfApi with proper settings."""
-
-    from . import __version__
-
-    user_agent_str = ""
-    if not constants.HF_HUB_DISABLE_TELEMETRY:
-        parts: list[str] = []
-
-        # User-defined info
-        if isinstance(user_agent, dict):
-            parts.extend(f"{k}/{v}" for k, v in user_agent.items())
-        elif isinstance(user_agent, str) and user_agent:
-            parts.append(user_agent)
-
-        # System info
-        python = ".".join(platform.python_version_tuple()[:2])
-        backend = _select_backend(None).variant_str
-        parts.extend(
-            [
-                f"kernels/{__version__}",
-                f"python/{python}",
-                f"backend/{backend}",
-                f"platform/{_platform()}",
-                "file_type/kernel",
-            ]
-        )
-
-        if has_torch:
-            import torch
-
-            parts.append(f"torch/{torch.__version__}")
-        if has_tvm_ffi:
-            import tvm_ffi
-
-            parts.append(f"tvm-ffi/{tvm_ffi.__version__}")
-
-        # Add glibc version if available
-        glibc = glibc_version()
-        if glibc is not None:
-            parts.append(f"glibc/{glibc}")
-
-        user_agent_str = "; ".join(parts)
-
-    return HfApi(library_name="kernels", library_version=__version__, user_agent=user_agent_str)

@@ -34,8 +34,13 @@ in
     hash = "sha256-HJY+Go1viPkSVZPEs/NyMtYJzas4mMLiIZF3kNX+WgA=";
   };
 
+  cutlass_4_4 = builder {
+    version = "4.4.2";
+    hash = "sha256-0q9Ad0Z6E/rO2PdM4uQc8H0E0qs9uKc3reHepiHhjEc=";
+  };
+
   cutlass_4_5 = builder {
     version = "4.5.2";
-    hash = "sha256-jnxookfCEPynRrxMGGsMwPlK84ChQQW3xocmYcNTVLw=";
+    hash = "sha256-5SMEfoqB2QXRfH5wBwTKKjez0x2zhR8T8EA0bqPMqwM=";
   };
 }

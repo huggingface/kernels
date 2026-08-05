@@ -4,6 +4,7 @@ let
   isCuda = version: version ? cudaVersion;
   isMetal = version: version.metal or false;
   isRocm = version: version ? rocmVersion;
+  isTpu = version: version.tpu or false;
   isXpu = version: version ? xpuVersion;
 
 in
@@ -25,6 +26,8 @@ rec {
       "metal"
     else if isRocm version then
       "rocm"
+    else if isTpu version then
+      "tpu"
     else if isXpu version then
       "xpu"
     else

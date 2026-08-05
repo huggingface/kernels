@@ -1,5 +1,9 @@
 # Write kernels
 
+> [!TIP]
+> Refer to the [kernel requirements' page](../kernel-requirements.md) to
+> get an idea of what is expected from the kernel structure and content. 
+
 ## Introduction
 
 The Kernel Hub allows Python libraries and applications to load compute

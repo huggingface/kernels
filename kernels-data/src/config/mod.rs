@@ -113,6 +113,7 @@ pub struct General {
 
     pub cuda: Option<CudaGeneral>,
     pub neuron: Option<NeuronGeneral>,
+    pub tpu: Option<TpuGeneral>,
     pub xpu: Option<XpuGeneral>,
 }
 
@@ -144,6 +145,10 @@ impl General {
                 .cuda
                 .as_ref()
                 .and_then(|cuda| cuda.python_depends.as_ref()),
+            Backend::Tpu => self
+                .tpu
+                .as_ref()
+                .and_then(|tpu| tpu.python_depends.as_ref()),
             Backend::Xpu => self
                 .xpu
                 .as_ref()
@@ -188,6 +193,10 @@ pub struct XpuGeneral {
 }
 
 pub struct NeuronGeneral {
+    pub python_depends: Option<Vec<String>>,
+}
+
+pub struct TpuGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -386,11 +395,12 @@ pub enum Backend {
     Metal,
     Neuron,
     Rocm,
+    Tpu,
     Xpu,
 }
 
 impl Backend {
-    pub const fn all() -> [Backend; 7] {
+    pub const fn all() -> [Backend; 8] {
         [
             Backend::Cann,
             Backend::Cpu,
@@ -398,6 +408,7 @@ impl Backend {
             Backend::Metal,
             Backend::Neuron,
             Backend::Rocm,
+            Backend::Tpu,
             Backend::Xpu,
         ]
     }
@@ -410,6 +421,7 @@ impl Backend {
             Backend::Metal => "metal",
             Backend::Neuron => "neuron",
             Backend::Rocm => "rocm",
+            Backend::Tpu => "tpu",
             Backend::Xpu => "xpu",
         }
     }
@@ -424,6 +436,7 @@ impl Display for Backend {
             Backend::Metal => write!(f, "metal"),
             Backend::Neuron => write!(f, "neuron"),
             Backend::Rocm => write!(f, "rocm"),
+            Backend::Tpu => write!(f, "tpu"),
             Backend::Xpu => write!(f, "xpu"),
         }
     }
@@ -440,6 +453,7 @@ impl FromStr for Backend {
             "metal" => Ok(Backend::Metal),
             "neuron" => Ok(Backend::Neuron),
             "rocm" => Ok(Backend::Rocm),
+            "tpu" => Ok(Backend::Tpu),
             "xpu" => Ok(Backend::Xpu),
             _ => Err(format!("Unknown backend: {s}")),
         }
@@ -450,4 +464,54 @@ impl FromStr for Backend {
 pub enum ConfigError {
     #[error("Cannot migrate configuration: {reason:?}")]
     Migration { reason: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn general_with_cuda_deps() -> General {
+        General {
+            name: KernelName::new("test-kernel").unwrap(),
+            version: 1,
+            license: "apache-2.0".to_string(),
+            upstream: None,
+            source: None,
+            backends: vec![Backend::Tpu],
+            hub: None,
+            python_depends: None,
+            cuda: Some(CudaGeneral {
+                minver: None,
+                maxver: None,
+                python_depends: Some(vec!["nvidia-cutlass-dsl".to_string()]),
+            }),
+            neuron: None,
+            tpu: None,
+            xpu: None,
+        }
+    }
+
+    #[test]
+    fn backend_python_depends_resolves_cuda() {
+        let general = general_with_cuda_deps();
+        let deps = general
+            .backend_python_depends(Backend::Cuda)
+            .map(|dep| dep.map(|(name, _)| name.to_string()))
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert_eq!(deps, vec!["nvidia-cutlass-dsl".to_string()]);
+    }
+
+    #[test]
+    fn backend_python_depends_empty_for_backend_without_deps() {
+        let general = general_with_cuda_deps();
+
+        assert!(
+            general
+                .backend_python_depends(Backend::Cpu)
+                .next()
+                .is_none()
+        );
+    }
 }

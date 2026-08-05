@@ -1,8 +1,9 @@
+import kernels
 import pytest
 import torch
 import torch.nn.functional as F
 
-import relu
+relu = kernels.get_kernel("kernels-test/relu", version=1)
 
 
 @pytest.mark.kernels_ci

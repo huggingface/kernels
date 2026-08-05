@@ -155,6 +155,7 @@ pub enum Backend {
     Metal,
     Neuron,
     Rocm,
+    Tpu,
     Xpu,
 }
 
@@ -205,6 +206,7 @@ impl TryFrom<General> for super::General {
             hub: general.hub.map(Into::into),
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            tpu: None,
             xpu: general.xpu.map(Into::into),
         })
     }
@@ -279,6 +281,7 @@ impl From<Backend> for super::Backend {
             Backend::Metal => super::Backend::Metal,
             Backend::Neuron => super::Backend::Neuron,
             Backend::Rocm => super::Backend::Rocm,
+            Backend::Tpu => super::Backend::Tpu,
             Backend::Xpu => super::Backend::Xpu,
         }
     }

@@ -28,6 +28,7 @@ set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1
 # we set the arches per-file later anyway.
 set(ENV{PYTORCH_ROCM_ARCH} "${HIP_SUPPORTED_ARCHS}")
 
+include(CheckCXXCompilerFlag)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/get_gpu_lang.cmake)

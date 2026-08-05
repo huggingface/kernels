@@ -29,18 +29,18 @@ jobs:
       max-parallel: 4
       matrix:
         python-version: ["3.10", "3.14"]
-        torch-version: ["2.11.0", "2.12.0"]
+        torch-version: ["2.12.0", "2.13.0"]
 
     env:
       UV_PYTHON_PREFERENCE: only-managed
-      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.12.0' }}
+      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.13.0' }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: ${{ matrix.python-version }}
 

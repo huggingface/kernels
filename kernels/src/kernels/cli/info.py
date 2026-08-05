@@ -6,7 +6,7 @@ from typing import Any
 from kernels_data import Metadata
 
 from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
-from kernels.utils import CACHE_DIR, _get_hf_api
+from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.variants import (
     ArchVariant,
     Variant,

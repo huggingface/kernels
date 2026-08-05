@@ -58,6 +58,8 @@ let
       "xpu"
     else if buildConfig.metal or false then
       "metal"
+    else if buildConfig.tpu or false then
+      "tpu"
     else
       throw "Cannot determine framework for build set";
 
@@ -249,6 +251,7 @@ in
             ++ (headOrEmpty (setsWithFramework "cuda"))
             ++ (headOrEmpty (setsWithFramework "metal"))
             ++ (headOrEmpty (setsWithFramework "rocm"))
+            ++ (headOrEmpty (setsWithFramework "tpu"))
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
         build.mkExtensionBundle {
@@ -286,6 +289,15 @@ in
         // {
           meta.mainProgram = "kernels";
         };
+
+      # Package set by build variant, makes them easily available for tests,
+      # ad-hoc shells, etc.
+      pkgs = builtins.listToAttrs (
+        map (buildSet: {
+          name = buildSet.variants.kernelVariant kernelConfig;
+          value = buildSet.pkgs;
+        }) applicableBuildSets
+      );
 
       redistributable = build.mkDistTorchExtensions {
         inherit path doGetKernelCheck kernelProvenance;

@@ -13,6 +13,7 @@ from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import RepoFolder
 from packaging.version import Version, parse
 
+from kernels._versions import select_revision_or_version
 from kernels.backends import (
     CANN,
     CUDA,
@@ -552,6 +553,57 @@ def _sort_variants(
             return (decision_order, 2, 0, 0, universal_order)
 
     return sorted(variants, key=sort_key)
+
+
+def get_kernel_variants(
+    repo_id: str,
+    revision: str | None = None,
+    version: int | None = None,
+    backend: str | None = None,
+) -> list[Decision]:
+    """
+    Resolve all build variants of a kernel against the current environment.
+
+    The decisions are sorted with compatible variants first, the most preferred
+    variant leading.
+
+    Args:
+        repo_id (`str`):
+            The Hub repository containing the kernel.
+        revision (`str`, *optional*):
+            The specific revision (branch, tag, or commit) to inspect. Cannot be used together with `version`.
+        version (`int`, *optional*):
+            The kernel version to inspect. Cannot be used together with `revision`.
+            Either `version` or `revision` must be specified.
+        backend (`str`, *optional*):
+            The backend to resolve variants for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
+
+    Returns:
+        `list[Decision]`: One `VariantAccepted` or `VariantRejected` per build variant
+            in the repository, compatible variants first.
+
+    Example:
+        ```python
+        from kernels import get_kernel_variants, VariantAccepted
+
+        for decision in get_kernel_variants("kernels-community/activation", version=1):
+            name = decision.variant.variant_str
+            if isinstance(decision, VariantAccepted):
+                print(f"{name}: compatible")
+            else:
+                print(f"{name}: rejected ({decision.reason})")
+
+        ```
+    """
+    from kernels.hf_hub import _get_hf_api
+
+    revision = select_revision_or_version(repo_id, revision=revision, version=version)
+
+    api = _get_hf_api()
+    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    _, trace = resolve_variants(variants, backend)
+    return trace
 
 
 def variants_trace_str(trace: list[Decision]) -> str:

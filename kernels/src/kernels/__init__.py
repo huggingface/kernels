@@ -29,7 +29,6 @@ from kernels.layer import (
 from kernels.utils import (
     LoadedKernel,
     get_kernel,
-    get_kernel_variants,
     get_loaded_kernels,
     get_local_kernel,
     get_locked_kernel,
@@ -40,6 +39,7 @@ from kernels.utils import (
 from kernels.variants import (
     VariantAccepted,
     VariantRejected,
+    get_kernel_variants,
 )
 
 _add_additional_dll_paths()

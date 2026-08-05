@@ -39,7 +39,7 @@ def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
     """
     Get the locks for a kernel with the given version.
     """
-    from kernels.utils import _get_hf_api
+    from kernels.hf_hub import _get_hf_api
 
     api = _get_hf_api()
 

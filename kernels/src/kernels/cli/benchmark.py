@@ -21,7 +21,8 @@ from huggingface_hub.utils import (
 )
 
 from kernels.benchmark import Benchmark
-from kernels.utils import _backend, _get_hf_api
+from kernels.hf_hub import _get_hf_api
+from kernels.utils import _backend
 
 MISSING_DEPS: list[str] = []
 

@@ -1,5 +1,5 @@
 from kernels._versions import _get_available_versions
-from kernels.utils import _get_hf_api
+from kernels.hf_hub import _get_hf_api
 from kernels.variants import (
     get_variants,
     resolve_variants,

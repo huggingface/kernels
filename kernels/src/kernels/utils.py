@@ -1,7 +1,6 @@
 import functools
 import importlib
 import os
-import platform
 import sys
 import warnings
 from dataclasses import dataclass
@@ -12,11 +11,10 @@ from huggingface_hub import HfApi, constants
 from huggingface_hub.errors import LocalEntryNotFoundError
 from kernels_data import Metadata
 
-from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
-from kernels.backends import _backend, _select_backend
-from kernels.compat import has_torch, has_tvm_ffi
+from kernels.backends import _backend
 from kernels.deps import validate_dependencies
+from kernels.hf_hub import CACHE_DIR, RepoInfo, _check_trust_remote_code, _get_hf_api
 from kernels.locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
@@ -39,77 +37,6 @@ KNOWN_BACKENDS = {"cpu", "cuda", "metal", "neuron", "rocm", "xpu", "npu"}
 # bytcode. So these patterns are used to ensure that they are never
 # downloaded.
 _BYTECODE_IGNORE_PATTERNS = ["*.pyc", "**/__pycache__/**"]
-
-
-def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
-    """Check whether a kernel repository is trusted.
-
-    When ``trust_remote_code`` is ``False`` (the default), only repositories
-    whose publisher organization has ``trustedKernelPublisher`` enabled on the
-    Hub are allowed. Repositories from untrusted publishers will raise a
-    ``ValueError``.
-
-    When ``trust_remote_code`` is ``True``, all repositories are allowed.
-
-    When ``trust_remote_code`` is a list of strings, it is treated as a list
-    of signing identities to verify against.  Signing verification is not yet
-    implemented, so passing a list currently emits a warning and falls back
-    to the default trust check (i.e. only trusted publishers are allowed).
-    """
-    if trust_remote_code is True:
-        return
-
-    if isinstance(trust_remote_code, list):
-        warnings.warn(
-            "Signing identity verification is not yet implemented. "
-            "The provided signing identities will be ignored and the "
-            "kernel will be treated as untrusted. Use trust_remote_code=True "
-            "to bypass trust checks.",
-            stacklevel=3,
-        )
-
-    if constants.HF_HUB_OFFLINE:
-        # Publisher trust cannot be verified offline. The user opted into
-        # offline mode and the kernel must already be in the local cache,
-        # so trust was established when it was originally downloaded.
-        warnings.warn(
-            f"Skipping publisher trust check for '{repo_id}' because Hugging Face Hub is in offline mode.",
-            stacklevel=3,
-        )
-        return
-
-    publisher = repo_id.split("/", 1)[0]
-
-    try:
-        info = _get_hf_api().get_organization_overview(publisher)
-    except Exception:
-        raise ValueError(
-            f"Kernel repository '{repo_id}' could not verify publisher trust status. "
-            "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-        )
-
-    if getattr(info, "trustedKernelPublisher", False):
-        return
-
-    raise ValueError(
-        f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-        "Set trust_remote_code=True to allow loading kernels from untrusted sources."
-    )
-
-
-@dataclass(frozen=True)
-class RepoInfo:
-    """
-    This dataclass stores the origin of the kernel.
-
-    The following fields are available:
-
-    - `repo_id` (`str`): the Hub repository containing the kernel.
-    - `revision` (`str`): the specific revision of the kernel.
-    """
-
-    repo_id: str
-    revision: str
 
 
 @dataclass(frozen=True)
@@ -166,11 +93,6 @@ def get_loaded_kernels() -> list[LoadedKernel]:
     return list(_loaded_kernels.values())
 
 
-def _get_cache_dir() -> str | None:
-    """Returns the kernels cache directory."""
-    return os.environ.get("KERNELS_CACHE", None)
-
-
 def _get_local_kernel_overrides() -> dict[str, Path]:
     """Returns list local overrides for kernels."""
     local_kerels = os.environ.get("LOCAL_KERNELS", None)
@@ -192,9 +114,6 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
         overrides[repo_id] = Path(path)
 
     return overrides
-
-
-CACHE_DIR: str | None = _get_cache_dir()
 
 
 def _validate_variant_dependencies(variant_path: Path) -> None:
@@ -284,8 +203,6 @@ def install_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
-        variant_locks (`dict[str, VariantLock]`, *optional*):
-            Optional dictionary of variant locks for validation.
         user_agent (`Union[str, dict]`, *optional*):
             The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
         validate_dependencies (`bool`, defaults to False):
@@ -296,7 +213,7 @@ def install_kernel(
         `Path`: The path to the variant directory.
     """
     api = _get_hf_api(user_agent=user_agent)
-    if local_files_only or constants.HF_HUB_OFFLINE:
+    if local_files_only:
         # Same local-cache resolution path used by `load_kernel`, which is
         # always offline. Sharing the helper avoids the network dependency
         # that `get_variants` would otherwise introduce.
@@ -504,6 +421,7 @@ def get_kernel(
         revision=revision,
         user_agent=user_agent,
         validate_dependencies=True,
+        local_files_only=constants.HF_HUB_OFFLINE,
     )
     return _import_from_path(variant_path, repo_info=repo_info)
 
@@ -668,15 +586,8 @@ def load_kernel(
             f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
         )
 
-    api = _get_hf_api()
-
     try:
-        variant_path = _resolve_local_variant_path(
-            api,
-            repo_id,
-            revision=locked_sha,
-            backend=backend,
-        )
+        variant_path = install_kernel(repo_id, revision=locked_sha, backend=backend, local_files_only=True)
     except FileNotFoundError as e:
         raise FileNotFoundError(
             f"Locked kernel `{repo_id}` was not downloaded or does not have an "
@@ -686,7 +597,7 @@ def load_kernel(
     return _import_from_path(variant_path)
 
 
-def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleType:
+def get_locked_kernel(repo_id: str) -> ModuleType:
     """
     Get a kernel using a lock file.
 
@@ -707,67 +618,8 @@ def get_locked_kernel(repo_id: str, local_files_only: bool = False) -> ModuleTyp
     variant_path = install_kernel(
         repo_id,
         revision=locked_sha,
-        local_files_only=local_files_only,
+        local_files_only=constants.HF_HUB_OFFLINE,
         validate_dependencies=True,
     )
 
     return _import_from_path(variant_path)
-
-
-def _platform() -> str:
-    cpu = platform.machine()
-    os = platform.system().lower()
-
-    if os == "darwin":
-        cpu = "aarch64" if cpu == "arm64" else cpu
-    elif os == "windows":
-        cpu = "x86_64" if cpu == "AMD64" else cpu
-
-    return f"{cpu}-{os}"
-
-
-def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
-    """Returns an instance of HfApi with proper settings."""
-
-    from . import __version__
-
-    user_agent_str = ""
-    if not constants.HF_HUB_DISABLE_TELEMETRY:
-        parts: list[str] = []
-
-        # User-defined info
-        if isinstance(user_agent, dict):
-            parts.extend(f"{k}/{v}" for k, v in user_agent.items())
-        elif isinstance(user_agent, str) and user_agent:
-            parts.append(user_agent)
-
-        # System info
-        python = ".".join(platform.python_version_tuple()[:2])
-        backend = _select_backend(None).variant_str
-        parts.extend(
-            [
-                f"kernels/{__version__}",
-                f"python/{python}",
-                f"backend/{backend}",
-                f"platform/{_platform()}",
-                "file_type/kernel",
-            ]
-        )
-
-        if has_torch:
-            import torch
-
-            parts.append(f"torch/{torch.__version__}")
-        if has_tvm_ffi:
-            import tvm_ffi
-
-            parts.append(f"tvm-ffi/{tvm_ffi.__version__}")
-
-        # Add glibc version if available
-        glibc = glibc_version()
-        if glibc is not None:
-            parts.append(f"glibc/{glibc}")
-
-        user_agent_str = "; ".join(parts)
-
-    return HfApi(library_name="kernels", library_version=__version__, user_agent=user_agent_str)

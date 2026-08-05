@@ -3,7 +3,7 @@ import json
 import pytest
 from kernels_data import Metadata
 
-from kernels.utils import _import_from_path, _loaded_kernels, _warn_if_dirty
+from kernels.importer import _import_from_path, _loaded_kernels, _warn_if_dirty
 
 
 def _write_variant(tmp_path, provenance):

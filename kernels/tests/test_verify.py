@@ -2,7 +2,7 @@ from kernels_data import DigestViolation
 from sigstore.verify import policy
 
 from kernels import install_kernel
-from kernels.utils import select_revision_or_version
+from kernels._versions import select_revision_or_version
 from kernels.verify import VerificationResult, verify_variant
 
 TEST_POLICIES: list[policy.VerificationPolicy] = [

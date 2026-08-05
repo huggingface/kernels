@@ -28,7 +28,7 @@ from kernels.layer import (
     use_kernel_mapping,
     use_kernelized_func,
 )
-from kernels.utils import (
+from kernels.load import (
     get_kernel,
     get_local_kernel,
     get_locked_kernel,

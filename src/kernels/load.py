@@ -226,7 +226,9 @@ def load_kernel(
         )
 
     try:
-        variant_path = install_kernel(repo_id, revision=locked_sha, backend=backend, local_files_only=True)
+        variant_path = install_kernel(
+            repo_id, revision=locked_sha, backend=backend, local_files_only=True
+        )
     except FileNotFoundError as e:
         raise FileNotFoundError(
             f"Locked kernel `{repo_id}` was not downloaded or does not have an "

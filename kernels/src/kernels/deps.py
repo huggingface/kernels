@@ -4,8 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from huggingface_hub.dataclasses import strict
+from kernels_data import Metadata
 
-from kernels.backends import Backend
+from kernels.backends import Backend, _backend
 
 
 @strict
@@ -57,6 +58,11 @@ try:
         _DEPENDENCY_DATA = DependencyData.from_dict(json.load(f))
 except FileNotFoundError:
     raise FileNotFoundError("Cannot load dependency data, is `kernels` correctly installed?")
+
+
+def validate_variant_dependencies(variant_path: Path) -> None:
+    metadata = Metadata.read_from_file(variant_path / "metadata.json")
+    validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
 
 
 def validate_dependencies(kernel_module_name: str, dependencies: list[str], backend: Backend):

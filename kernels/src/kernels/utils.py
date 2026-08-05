@@ -5,11 +5,9 @@ from types import ModuleType
 
 from huggingface_hub import HfApi, constants
 from huggingface_hub.errors import LocalEntryNotFoundError
-from kernels_data import Metadata
 
 from kernels._versions import select_revision_or_version
-from kernels.backends import _backend
-from kernels.deps import validate_dependencies
+from kernels.deps import validate_variant_dependencies
 from kernels.hf_hub import CACHE_DIR, RepoInfo, _check_trust_remote_code, _get_hf_api
 from kernels.importer import _import_from_path
 from kernels.locking import (
@@ -53,11 +51,6 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
         overrides[repo_id] = Path(path)
 
     return overrides
-
-
-def _validate_variant_dependencies(variant_path: Path) -> None:
-    metadata = Metadata.read_from_file(variant_path / "metadata.json")
-    validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
 
 
 def install_kernel(
@@ -106,7 +99,7 @@ def install_kernel(
         )
         # For locally downloaded kernels, we run the validation after resolving the path
         if validate_dependencies:
-            _validate_variant_dependencies(variant_path)
+            validate_variant_dependencies(variant_path)
         return variant_path
 
     repo_id, revision = resolve_status(api, repo_id, revision)
@@ -128,7 +121,7 @@ def install_kernel(
             revision=revision,
             local_files_only=False,
         )
-        _validate_variant_dependencies(Path(metadata_path).parent)
+        validate_variant_dependencies(Path(metadata_path).parent)
 
     allow_patterns = [f"build/{variant.variant_str}/*"]
     ignore_patterns = _BYTECODE_IGNORE_PATTERNS
@@ -330,14 +323,14 @@ def get_local_kernel(
 
         if variant is not None:
             variant_path = base_path / variant.variant_str
-            _validate_variant_dependencies(variant_path)
+            validate_variant_dependencies(variant_path)
             return _import_from_path(variant_path)
 
     # If we didn't find the package in the repo we may have a explicit
     # package path.
     variant_path = repo_path
     if variant_path.exists():
-        _validate_variant_dependencies(variant_path)
+        validate_variant_dependencies(variant_path)
         return _import_from_path(variant_path)
 
     raise FileNotFoundError(f"Could not find kernel in {repo_path}")

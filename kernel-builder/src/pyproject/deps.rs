@@ -93,9 +93,28 @@ pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> 
                     .wrap_err("Cannot render CUTLASS dependency template")?;
             }
             Dependency::SyclTla => {
+                // An Xe35-only TU puts MXFP code that ocloc rejects elsewhere into the
+                // generic image, so that image can only lower to cri and pvc/bmg need
+                // alias targets. Otherwise one image serves all three, halving the
+                // device compilations per TU.
+                let cri_isolated_image = build.kernels.values().any(|kernel| {
+                    kernel.sycl_flags().is_some_and(|flags| {
+                        flags
+                            .iter()
+                            .any(|flag| flag.contains("__SYCL_TARGET_INTEL_GPU_CRI__"))
+                    })
+                });
+                let (sycl_aot_devices, sycl_offload_targets) = if cri_isolated_image {
+                    ("cri", "intel_gpu_pvc,intel_gpu_bmg_g21,spir64_gen,spir64")
+                } else {
+                    ("pvc,bmg-g21,cri", "spir64_gen,spir64")
+                };
                 env.get_template("xpu/dep-sycl-tla.cmake")
                     .wrap_err("Cannot get SYCL TLA dependency template")?
-                    .render_captured_to(context! {}, &mut *write)
+                    .render_captured_to(
+                        context! { sycl_aot_devices, sycl_offload_targets },
+                        &mut *write,
+                    )
                     .wrap_err("Cannot render SYCL TLA dependency template")?;
             }
             Dependency::MetalCpp => {

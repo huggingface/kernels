@@ -220,9 +220,22 @@ elseif(GPU_LANG STREQUAL "SYCL")
     set(sycl_flags
       "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
 
-    # spir64_gen bakes the per-device AOT images; -device selects the GPUs.
     set(sycl_link_flags
-      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS};-Xsycl-target-backend=spir64_gen;-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'")
+      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    # Backend options reach one target each: spir64_gen takes -device, the
+    # intel_gpu_* aliases imply theirs. SHELL: stops CMake from deduplicating
+    # the identical -options and silently dropping all but the first target.
+    string(REPLACE "," ";" _sycl_aot_targets "${SYCL_OFFLOAD_TARGETS}")
+    foreach(_tgt IN LISTS _sycl_aot_targets)
+      if(_tgt STREQUAL "spir64_gen")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=spir64_gen \"-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      elseif(_tgt MATCHES "^intel_gpu_")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=${_tgt} \"-options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      endif()
+    endforeach()
 
     # SYCL_SPIRV_EXT must be a COMPLETE list (translator replaces, not merges).
     # A custom -spirv-ext only reaches an image whose triple matches the exact

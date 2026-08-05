@@ -69,12 +69,14 @@ if(SYCL_TLA_REVISION MATCHES "^v3\\.9")
   add_compile_definitions(OLD_API=1)
 endif()
 
-# --- Fat binary: pvc + bmg + cri AOT images, plus a spir64 JIT fallback ------
-# `-device cri` lowers the generic spir64_gen image; pvc/bmg alias images
-# self-target. MXFP is cri-only (ocloc aborts it elsewhere), so build.toml
-# builds those TUs spir64_gen-only and dispatch gates them on IP version >= 35.
-set(SYCL_AOT_DEVICES "cri")
-set(SYCL_OFFLOAD_TARGETS "intel_gpu_pvc,intel_gpu_bmg_g21,spir64_gen,spir64")
+# Fat binary: AOT images for SYCL_AOT_DEVICES plus a spir64 JIT fallback.
+# cri needs sycl-tla v0.9.2 and ocloc >= 26.22, so only 2026.0 gets AOT images.
+if(DPCPP_VERSION STREQUAL "2026.0")
+  set(SYCL_AOT_DEVICES "{{ sycl_aot_devices }}")
+  set(SYCL_OFFLOAD_TARGETS "{{ sycl_offload_targets }}")
+else()
+  set(SYCL_OFFLOAD_TARGETS "spir64")
+endif()
 
 # sycl-tla needs extra extensions (split-barrier always; block-IO and
 # matrix-multiply on newer DPCPP). Since the translator replaces the whole
@@ -90,17 +92,18 @@ file(WRITE "${_sycl_ext_probe}" "int main() { return 0; }\n")
 # rest of the COMMAND, making icpx read from stdin instead of dumping its flags.
 execute_process(
   COMMAND ${ICPX_COMPILER} -fsycl -fsycl-targets=spir64_gen "-###" "${_sycl_ext_probe}"
+  RESULT_VARIABLE _sycl_ext_probe_rc
   OUTPUT_VARIABLE _sycl_ext_probe_out
   ERROR_VARIABLE _sycl_ext_probe_err)
 string(REGEX MATCH "-spirv-ext=[^\" ]+" _sycl_default_ext "${_sycl_ext_probe_out}${_sycl_ext_probe_err}")
-if(_sycl_default_ext)
+if(_sycl_ext_probe_rc EQUAL 0 AND _sycl_default_ext)
   # Strip the "-spirv-ext=-all," prefix, leaving the "+ext,+ext,..." default set.
   string(REGEX REPLACE "^-spirv-ext=(-all,)?" "" _sycl_default_ext "${_sycl_default_ext}")
   set(SYCL_SPIRV_EXT "${_sycl_default_ext},${_sycl_tla_extra_ext}")
 else()
-  message(WARNING "Could not determine default SPIR-V extensions from ${ICPX_COMPILER}; "
-                  "using sycl-tla extras only, which may disable compiler defaults.")
-  set(SYCL_SPIRV_EXT "${_sycl_tla_extra_ext}")
+  # Silently dropping the compiler defaults would ship a miscompiled kernel.
+  message(FATAL_ERROR "Could not determine default SPIR-V extensions from ${ICPX_COMPILER} "
+                      "(exit ${_sycl_ext_probe_rc}): ${_sycl_ext_probe_err}")
 endif()
 
 xpu_compose_sycl_flags()

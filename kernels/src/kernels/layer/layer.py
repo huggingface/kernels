@@ -10,13 +10,13 @@ from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from .._versions import select_revision_or_version
+from ..load import (
+    get_kernel,
+    get_local_kernel,
+)
 from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
-)
-from ..utils import (
-    get_kernel,
-    get_local_kernel,
 )
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING

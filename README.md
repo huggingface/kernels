@@ -32,7 +32,7 @@ packages in that they are made to be:
 ## Components
 
 - You can load kernels from the Hub using the [`kernels`](kernels/) Python package.
-- If you are a kernel author, you can build your kernels with [kernel-builder](builder/).
+- If you are a kernel author, you can build your kernels with [kernel-builder](kernel-builder/).
 - Hugging Face maintains a set of kernels in [kernels-community](https://huggingface.co/kernels-community).
 
 ## 🚀 Quick Start

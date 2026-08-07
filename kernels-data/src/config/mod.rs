@@ -348,6 +348,13 @@ impl Kernel {
         }
     }
 
+    pub fn sycl_flags(&self) -> Option<&[String]> {
+        match self {
+            Kernel::Xpu { sycl_flags, .. } => sycl_flags.as_deref(),
+            _ => None,
+        }
+    }
+
     pub fn backend(&self) -> Backend {
         match self {
             Kernel::Cpu { .. } => Backend::Cpu,

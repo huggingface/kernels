@@ -5,7 +5,8 @@ find_package(SyclTla)
 if(DPCPP_VERSION STREQUAL "2025.3")
   set(SYCL_TLA_REVISION "v0.8" CACHE STRING "sycl-tla revision to use")
 elseif(DPCPP_VERSION STREQUAL "2026.0")
-  set(SYCL_TLA_REVISION "v0.9.1" CACHE STRING "sycl-tla revision to use")
+  # v0.9.2 == the rev pinned in nix-builder; v0.9.1 has no cri kernel support.
+  set(SYCL_TLA_REVISION "v0.9.2" CACHE STRING "sycl-tla revision to use")
 else()
   message(FATAL_ERROR "Unknown DPCPP_VERSION: ${DPCPP_VERSION}")
 endif()
@@ -68,12 +69,43 @@ if(SYCL_TLA_REVISION MATCHES "^v3\\.9")
   add_compile_definitions(OLD_API=1)
 endif()
 
-string(REPLACE "-fsycl-targets=spir64_gen,spir64" "-fsycl-targets=spir64" sycl_link_flags "${sycl_link_flags}")
-string(REPLACE "-device pvc,xe-lpg,ats-m150" "-device bmg_g21,pvc" sycl_link_flags "${sycl_link_flags}")
-string(APPEND sycl_link_flags "-Xspirv-translator;-spirv-ext=+SPV_INTEL_split_barrier")
-if(DPCPP_VERSION STREQUAL "2025.2" OR DPCPP_VERSION STREQUAL "2025.3" OR DPCPP_VERSION STREQUAL "2026.0" OR SYCL_TLA_REVISION STREQUAL "v0.5")
-  string(APPEND sycl_link_flags ",+SPV_INTEL_2d_block_io,+SPV_INTEL_subgroup_matrix_multiply_accumulate")
+# Fat binary: AOT images for SYCL_AOT_DEVICES plus a spir64 JIT fallback.
+# cri needs sycl-tla v0.9.2 and ocloc >= 26.22, so only 2026.0 gets AOT images.
+if(DPCPP_VERSION STREQUAL "2026.0")
+  set(SYCL_AOT_DEVICES "{{ sycl_aot_devices }}")
+  set(SYCL_OFFLOAD_TARGETS "{{ sycl_offload_targets }}")
+else()
+  set(SYCL_OFFLOAD_TARGETS "spir64")
 endif()
-string(REPLACE "-fsycl-targets=spir64_gen,spir64" "-fsycl-targets=spir64" sycl_flags "${sycl_flags}")
+
+# sycl-tla needs extra extensions (split-barrier always; block-IO and
+# matrix-multiply on newer DPCPP). Since the translator replaces the whole
+# -spirv-ext list, we query the driver's defaults and append the extras.
+set(_sycl_tla_extra_ext "+SPV_INTEL_split_barrier")
+if(DPCPP_VERSION STREQUAL "2025.2" OR DPCPP_VERSION STREQUAL "2025.3" OR DPCPP_VERSION STREQUAL "2026.0" OR SYCL_TLA_REVISION STREQUAL "v0.5")
+  string(APPEND _sycl_tla_extra_ext ",+SPV_INTEL_2d_block_io,+SPV_INTEL_subgroup_matrix_multiply_accumulate")
+endif()
+
+set(_sycl_ext_probe "${CMAKE_CURRENT_BINARY_DIR}/_sycl_spirv_ext_probe.cpp")
+file(WRITE "${_sycl_ext_probe}" "int main() { return 0; }\n")
+# "-###" MUST be quoted: an unquoted # starts a CMake comment and would drop the
+# rest of the COMMAND, making icpx read from stdin instead of dumping its flags.
+execute_process(
+  COMMAND ${ICPX_COMPILER} -fsycl -fsycl-targets=spir64_gen "-###" "${_sycl_ext_probe}"
+  RESULT_VARIABLE _sycl_ext_probe_rc
+  OUTPUT_VARIABLE _sycl_ext_probe_out
+  ERROR_VARIABLE _sycl_ext_probe_err)
+string(REGEX MATCH "-spirv-ext=[^\" ]+" _sycl_default_ext "${_sycl_ext_probe_out}${_sycl_ext_probe_err}")
+if(_sycl_ext_probe_rc EQUAL 0 AND _sycl_default_ext)
+  # Strip the "-spirv-ext=-all," prefix, leaving the "+ext,+ext,..." default set.
+  string(REGEX REPLACE "^-spirv-ext=(-all,)?" "" _sycl_default_ext "${_sycl_default_ext}")
+  set(SYCL_SPIRV_EXT "${_sycl_default_ext},${_sycl_tla_extra_ext}")
+else()
+  # Silently dropping the compiler defaults would ship a miscompiled kernel.
+  message(FATAL_ERROR "Could not determine default SPIR-V extensions from ${ICPX_COMPILER} "
+                      "(exit ${_sycl_ext_probe_rc}): ${_sycl_ext_probe_err}")
+endif()
+
+xpu_compose_sycl_flags()
 
 endif(GPU_LANG STREQUAL "SYCL")

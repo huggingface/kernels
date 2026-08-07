@@ -136,8 +136,56 @@ elseif(GPU_LANG STREQUAL "SYCL")
     message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
   endif()
 
-  set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
-  set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  # --- SYCL fat-binary flags ------------------------------------------------
+  # One .so carries an AOT image per GPU in SYCL_AOT_DEVICES plus a spir64 JIT
+  # fallback; the runtime picks the matching image at load time.
+  # These variables are the single source of truth: a dependency may change them
+  # and call xpu_compose_sycl_flags() again to rebuild the flags.
+  set(SYCL_OFFLOAD_TARGETS "spir64_gen,spir64")
+  set(SYCL_AOT_DEVICES "pvc,xe-lpg,ats-m150")
+  set(SYCL_AOT_BACKEND_OPTIONS " -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required")
+  set(SYCL_SPIRV_EXT "")
+
+  # Rebuild sycl_flags (compile) and sycl_link_flags (link) from the variables
+  # above. A macro so it runs in the including scope and can be re-invoked.
+  macro(xpu_compose_sycl_flags)
+    set(sycl_flags
+      "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    # spir64_gen bakes the per-device AOT images; -device selects the GPUs.
+    set(sycl_link_flags
+      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    # Backend options reach exactly one target each, so emit them per target:
+    # spir64_gen takes -device (it bakes the generic AOT image), while every
+    # intel_gpu_* alias already implies its device.
+    # Backend options reach one target each: spir64_gen takes -device, the
+    # intel_gpu_* aliases imply theirs. SHELL: stops CMake from deduplicating
+    # the identical -options and silently dropping all but the first target.
+    string(REPLACE "," ";" _sycl_aot_targets "${SYCL_OFFLOAD_TARGETS}")
+    foreach(_tgt IN LISTS _sycl_aot_targets)
+      if(_tgt STREQUAL "spir64_gen")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=spir64_gen \"-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      elseif(_tgt MATCHES "^intel_gpu_")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=${_tgt} \"-options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      endif()
+    endforeach()
+
+    # SYCL_SPIRV_EXT must be a COMPLETE list (translator replaces, not merges).
+    # A custom -spirv-ext only reaches an image whose triple matches the exact
+    # fsycl-targets alias, so emit one -Xspirv-translator=<alias> per target.
+    if(SYCL_SPIRV_EXT)
+      string(REPLACE "," ";" _sycl_ext_targets "${SYCL_OFFLOAD_TARGETS}")
+      foreach(_tgt IN LISTS _sycl_ext_targets)
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xspirv-translator=${_tgt} -spirv-ext=${SYCL_SPIRV_EXT}")
+      endforeach()
+    endif()
+  endmacro()
+
+  xpu_compose_sycl_flags()
   set(GPU_FLAGS "${sycl_flags}")
 
   add_compile_definitions(XPU_KERNEL)

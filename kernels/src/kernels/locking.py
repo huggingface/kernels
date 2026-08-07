@@ -1,4 +1,3 @@
-import hashlib
 import importlib.metadata
 import inspect
 import json
@@ -6,13 +5,13 @@ from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
+from typing import Self
 
 from huggingface_hub.dataclasses import strict
-from huggingface_hub.hf_api import RepoFile
+from kernels_data import KernelDependency, KernelVersion
 
-from kernels._versions import resolve_version_spec_as_ref
 from kernels.compat import tomllib
-from kernels.status import resolve_status
+from kernels.deps import DepTreeNode, LocalKernel, RemoteKernel, resolve_kernel_tree
 
 
 @strict
@@ -27,12 +26,31 @@ class VariantLock:
 class KernelLock:
     repo_id: str
     sha: str
-    variants: dict[str, VariantLock]
+    kernel_depends: dict[str, Self]
 
     @classmethod
     def from_json(cls, o: dict):
-        variants = {variant: VariantLock(**lock) for variant, lock in o["variants"].items()}
-        return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
+        kernel_depends = o.get("kernel_depends", {})
+        kernel_depends = {dep_repo_id: cls.from_json(lock_json) for dep_repo_id, lock_json in kernel_depends.items()}
+        return cls(
+            repo_id=o["repo_id"],
+            sha=o["sha"],
+            kernel_depends=kernel_depends,
+        )
+
+
+def extract_locks(tree: DepTreeNode[LocalKernel | RemoteKernel]) -> KernelLock:
+    if isinstance(tree.location, LocalKernel):
+        raise ValueError("Cannot extract locks from a local kernel")
+
+    repo_id = tree.location.repo_id
+    sha = tree.location.revision
+
+    locked_deps = {}
+    for name, dep_tree in tree.depends.items():
+        locked_deps[name] = extract_locks(dep_tree)
+
+    return KernelLock(repo_id=repo_id, sha=sha, kernel_depends=locked_deps)
 
 
 def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
@@ -43,70 +61,18 @@ def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
 
     api = _get_hf_api()
 
-    # NOTE: the destination of a redirect is respected but we still use
-    # resolve_version_spec_as_ref to resolve the version specifier of the
-    # final destination repo.
-    repo_id, _ = resolve_status(api, repo_id, "main")
-
-    tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
-
-    revision = tag_for_newest.target_commit
-
-    r = api.repo_info(
-        repo_id=repo_id,
-        repo_type="kernel",
-        revision=revision,
+    tree = resolve_kernel_tree(
+        api=api,
+        backend=None,
+        local_kernels={},
+        kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Version(version_spec)),
+        local_files_only=False,
+        kernel_locks=None,
+        # TODO: what is the right policy here?
+        trust_remote_code=False,
     )
-    if r.sha is None:
-        raise ValueError(f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}")
 
-    siblings = [
-        f
-        for f in api.list_repo_tree(
-            repo_id=repo_id,
-            repo_type="kernel",
-            revision=revision,
-            recursive=True,
-        )
-        if isinstance(f, RepoFile)
-    ]
-
-    variant_files: dict[str, list[tuple[bytes, str]]] = {}
-    for sibling in siblings:
-        if sibling.rfilename.startswith("build/torch"):
-            if sibling.blob_id is None:
-                raise ValueError(f"Cannot get blob ID for {sibling.rfilename}")
-
-            # Exclude Python bytecode. If bytecode exists, it is generated
-            # by the interpreter, since we exclude bytecode from builds
-            # and downloads.
-            if sibling.rfilename.endswith(".pyc") or "__pycache__" in sibling.rfilename.split("/"):
-                continue
-
-            path = Path(sibling.rfilename)
-            variant = path.parts[1]
-            filename = Path(*path.parts[2:])
-
-            hash = sibling.lfs.sha256 if sibling.lfs is not None else sibling.blob_id
-
-            files = variant_files.setdefault(variant, [])
-
-            # Encode as posix for consistent slash handling, then encode
-            # as utf-8 for byte-wise sorting later.
-            files.append((filename.as_posix().encode("utf-8"), hash))
-
-    variant_locks = {}
-    for variant, files in variant_files.items():
-        m = hashlib.sha256()
-        for filename_bytes, hash in sorted(files):
-            # Filename as bytes.
-            m.update(filename_bytes)
-            # Git blob or LFS file hash as bytes.
-            m.update(bytes.fromhex(hash))
-
-        variant_locks[variant] = VariantLock(hash=f"sha256-{m.hexdigest()}")
-
-    return KernelLock(repo_id=repo_id, sha=r.sha, variants=variant_locks)
+    return extract_locks(tree)
 
 
 def write_egg_lockfile(cmd, basename, filename):
@@ -134,6 +100,27 @@ def write_egg_lockfile(cmd, basename, filename):
         data = open(lock_path, "r").read()
 
     cmd.write_or_delete_file(basename, filename, data)
+
+
+def get_locked_kernel_revisions(lock_json: str) -> dict[str, str]:
+    kernel_locks = {}
+
+    for kernel_lock_json in json.loads(lock_json):
+        kernel_lock = KernelLock.from_json(kernel_lock_json)
+        kernel_locks[kernel_lock.repo_id] = kernel_lock.sha
+
+    return kernel_locks
+
+
+def get_caller_locked_kernel_revisions() -> dict[str, str]:
+    for dist in _get_caller_distributions():
+        lock_json = dist.read_text("kernels.lock")
+        if lock_json is None:
+            continue
+        kernel_locks = get_locked_kernel_revisions(lock_json)
+        if len(kernel_locks) > 0:
+            return kernel_locks
+    return {}
 
 
 def get_locked_kernel_revision(repo_id: str, lock_json: str) -> str | None:

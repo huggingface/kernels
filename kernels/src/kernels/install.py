@@ -3,8 +3,8 @@ from pathlib import Path
 from huggingface_hub import HfApi
 from huggingface_hub.errors import LocalEntryNotFoundError
 
-from kernels.deps import validate_variant_dependencies
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
+from kernels.python_deps import validate_variant_dependencies
 from kernels.status import resolve_status
 from kernels.variants import (
     Variant,

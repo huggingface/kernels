@@ -13,7 +13,7 @@ from kernels.verify import VerificationResult, verify_variant
 
 
 def verify_signature(args: argparse.Namespace) -> None:
-    revision = select_revision_or_version(args.repo_id, revision=None, version=args.version)
+    revision = select_revision_or_version(args.repo_id, revision=None, version=args.version, local_files_only=False)
 
     if args.all_variants:
         repo_path = install_kernel_all_variants(args.repo_id, revision=revision)

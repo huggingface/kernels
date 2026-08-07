@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, constants
 from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import RepoFolder
 from packaging.version import Version, parse
@@ -557,6 +557,7 @@ def _sort_variants(
 
 def get_kernel_variants(
     repo_id: str,
+    *,
     revision: str | None = None,
     version: int | None = None,
     backend: str | None = None,
@@ -598,7 +599,12 @@ def get_kernel_variants(
     """
     from kernels.hf_hub import _get_hf_api
 
-    revision = select_revision_or_version(repo_id, revision=revision, version=version)
+    revision = select_revision_or_version(
+        repo_id,
+        revision=revision,
+        version=version,
+        local_files_only=constants.HF_HUB_OFFLINE,
+    )
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)

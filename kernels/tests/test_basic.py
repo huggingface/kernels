@@ -210,7 +210,10 @@ def test_local_overrides(monkeypatch, local_kernel_path):
             "LOCAL_KERNELS",
             "kernels-test/non-existing2=/non/existing:kernels-test/activation=/non/existing",
         )
-        with pytest.raises(FileNotFoundError, match=r"Could not find kernel in /non/existing"):
+        with pytest.raises(
+            FileNotFoundError,
+            match=r"Cannot find a build variant for this system in /non/existing",
+        ):
             get_kernel("kernels-test/activation", revision="main")
 
     with monkeypatch.context() as m:
@@ -301,12 +304,10 @@ def test_install_kernel_offline_uncached_revision():
         )
 
 
-def test_version_resolution_offline_missing(monkeypatch):
+def test_version_resolution_offline_missing():
     """resolve_version_spec_as_ref should raise a clear error when offline and no cache."""
-    monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
-
     with pytest.raises(ValueError, match=r"offline mode"):
-        resolve_version_spec_as_ref("kernels-test/this-repo-should-not-exist", 1)
+        resolve_version_spec_as_ref("kernels-test/this-repo-should-not-exist", 1, local_files_only=True)
 
 
 def silu_and_mul_torch(x: torch.Tensor):

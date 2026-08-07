@@ -12,7 +12,7 @@ backends = [
 ]
 
 kernel-depends = [
-    { repo-id = "kernels-staging/einops", revision = "pr1053" },
+    { repo-id = "kernels-community/einops", version = 1 },
 ]
 
 [general.hub]

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
-from typing import Self
 
 from huggingface_hub.dataclasses import strict
 from kernels_data import KernelDependency, KernelVersion
@@ -26,7 +25,7 @@ class VariantLock:
 class KernelLock:
     repo_id: str
     sha: str
-    kernel_depends: dict[str, Self]
+    kernel_depends: dict[str, "KernelLock"]
 
     @classmethod
     def from_json(cls, o: dict):

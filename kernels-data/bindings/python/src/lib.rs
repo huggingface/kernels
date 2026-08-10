@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use kernels_data::config::{Backend, KernelName};
+use kernels_data::config::{Backend, KernelDependency, KernelName, KernelVersion};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
 use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
@@ -312,6 +312,78 @@ impl PyProvenance {
     }
 }
 
+/// A kernel version: either a numeric version or a git revision string.
+#[pyclass(name = "KernelVersion", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+enum PyKernelVersion {
+    Version { version: usize },
+    Revision { revision: String },
+}
+
+impl From<KernelVersion> for PyKernelVersion {
+    fn from(v: KernelVersion) -> Self {
+        match v {
+            KernelVersion::Version(n) => Self::Version { version: n },
+            KernelVersion::Revision(s) => Self::Revision { revision: s },
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelVersion {
+    fn __repr__(&self) -> String {
+        match self {
+            Self::Version { version } => format!("KernelVersion.Version(version={version})"),
+            Self::Revision { revision } => {
+                format!("KernelVersion.Revision(revision={revision:?})")
+            }
+        }
+    }
+}
+
+/// A dependency on another kernel.
+#[pyclass(name = "KernelDependency", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct PyKernelDependency {
+    repo_id: String,
+    version: PyKernelVersion,
+}
+
+impl From<KernelDependency> for PyKernelDependency {
+    fn from(d: KernelDependency) -> Self {
+        Self {
+            repo_id: d.repo_id,
+            version: d.version.into(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelDependency {
+    #[new]
+    fn new(repo_id: String, version: PyKernelVersion) -> Self {
+        Self { repo_id, version }
+    }
+
+    #[getter]
+    fn repo_id(&self) -> &str {
+        &self.repo_id
+    }
+
+    #[getter]
+    fn version(&self) -> PyKernelVersion {
+        self.version.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "KernelDependency(repo_id={:?}, version={})",
+            self.repo_id,
+            self.version.__repr__()
+        )
+    }
+}
+
 /// Parsed `metadata.json` for a kernel build variant.
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
@@ -323,6 +395,7 @@ struct PyMetadata {
     upstream: Option<String>,
     source: Option<String>,
     python_depends: Vec<String>,
+    kernel_depends: Vec<PyKernelDependency>,
     backend: PyBackendInfo,
     digest: Option<PyDigest>,
     provenance: Option<PyProvenance>,
@@ -338,6 +411,7 @@ impl From<Metadata> for PyMetadata {
             upstream: m.upstream.map(|u| u.as_url().to_string()),
             source: m.source.map(|u| u.as_url().to_string()),
             python_depends: m.python_depends,
+            kernel_depends: m.kernel_depends.into_iter().map(Into::into).collect(),
             backend: m.backend.into(),
             digest: m.digest.map(Into::into),
             provenance: m.provenance.map(Into::into),
@@ -410,6 +484,11 @@ impl PyMetadata {
     }
 
     #[getter]
+    fn kernel_depends(&self) -> Vec<PyKernelDependency> {
+        self.kernel_depends.clone()
+    }
+
+    #[getter]
     fn backend(&self) -> PyBackendInfo {
         self.backend.clone()
     }
@@ -426,7 +505,7 @@ impl PyMetadata {
 
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, backend={}, digest={}, provenance={})",
+            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, kernel_depends={:?}, backend={}, digest={}, provenance={})",
             self.id,
             self.name,
             self.version,
@@ -434,6 +513,7 @@ impl PyMetadata {
             self.upstream,
             self.source,
             self.python_depends,
+            self.kernel_depends,
             self.backend.__repr__(),
             self.digest
                 .as_ref()
@@ -668,6 +748,8 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyGitHash>()?;
     m.add_class::<PyKernelBuilderVersion>()?;
     m.add_class::<PyKernelName>()?;
+    m.add_class::<PyKernelVersion>()?;
+    m.add_class::<PyKernelDependency>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
     m.add_class::<PyDigestAlgorithm>()?;

@@ -18,6 +18,9 @@ pub use compat::BuildCompat;
 mod git_url;
 pub use git_url::GitUrl;
 
+mod kernel_deps;
+pub use kernel_deps::{KernelDependency, KernelVersion};
+
 mod name;
 pub use name::KernelName;
 
@@ -109,6 +112,7 @@ pub struct General {
 
     pub backends: Vec<Backend>,
     pub hub: Option<Hub>,
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 
     pub cuda: Option<CudaGeneral>,
@@ -171,6 +175,7 @@ impl General {
         }))
     }
 
+    /// Get the general + backend-specific Python dependencies for the given backend.
     pub fn all_python_depends(&self, backend: Backend) -> Result<Vec<String>> {
         self.general_python_depends()
             .map(|deps| Ok(deps?.0.to_owned()))
@@ -180,19 +185,36 @@ impl General {
             )
             .collect::<Result<Vec<_>>>()
     }
+
+    /// Get the general + backend-specific kernel dependencies for the given backend.
+    pub fn all_kernel_depends(&self, backend: Backend) -> Vec<KernelDependency> {
+        let general = self.kernel_depends.iter().flatten().cloned();
+        let backend_depends = match backend {
+            Backend::Cuda => self.cuda.as_ref().and_then(|c| c.kernel_depends.as_ref()),
+            Backend::Neuron => self.neuron.as_ref().and_then(|n| n.kernel_depends.as_ref()),
+            Backend::Xpu => self.xpu.as_ref().and_then(|x| x.kernel_depends.as_ref()),
+            _ => None,
+        };
+        general
+            .chain(backend_depends.into_iter().flatten().cloned())
+            .collect()
+    }
 }
 
 pub struct CudaGeneral {
     pub minver: Option<Version>,
     pub maxver: Option<Version>,
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
 
 pub struct XpuGeneral {
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
 
 pub struct NeuronGeneral {
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -472,10 +494,12 @@ mod tests {
             source: None,
             backends: vec![Backend::Tpu],
             hub: None,
+            kernel_depends: None,
             python_depends: None,
             cuda: Some(CudaGeneral {
                 minver: None,
                 maxver: None,
+                kernel_depends: None,
                 python_depends: Some(vec!["nvidia-cutlass-dsl".to_string()]),
             }),
             neuron: None,

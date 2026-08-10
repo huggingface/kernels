@@ -16,7 +16,7 @@ let
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl";
-  version = "4.5.0";
+  version = "4.6.1";
   inherit format;
 
   src = fetchPypi {
@@ -24,7 +24,7 @@ buildPythonPackage rec {
     pname = "nvidia_cutlass_dsl";
     dist = "py3";
     python = "py3";
-    hash = "sha256-OwUf4CymlCKrhA5k2YZWZ6uiiKOYSnykzNA4qCrvE0Q=";
+    hash = "sha256-kxNanUjhvt9YSCjgoCHxdKwxWR7yH26lPCBhacy/qyY=";
   };
 
   nativeBuildInputs = [
@@ -36,10 +36,10 @@ buildPythonPackage rec {
   ];
 
   pythonRemoveDeps = lib.optionals (cudaPackages.cudaAtLeast "13.0") [
-    # nvidia-cutlass-dsl-libs-cu13 has a dependency on the base package,
-    # but it has the same contents + CUDA 13 extensions.
-    "nvidia-cutlass-dsl-libs-base"
+    "nvidia-cutlass-dsl-libs-cu12"
   ];
+
+  pythonImportsCheck = [ "nvidia_cutlass_dsl" ];
 
   meta = {
     broken = nvidia-cutlass-dsl-libs.meta.broken;

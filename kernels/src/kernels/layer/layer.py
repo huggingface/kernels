@@ -10,11 +10,13 @@ from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from .._versions import select_revision_or_version
-from ..utils import (
-    _get_caller_locked_kernel,
-    _get_locked_kernel,
+from ..load import (
     get_kernel,
     get_local_kernel,
+)
+from ..locking import (
+    get_caller_locked_kernel_revision,
+    get_locked_kernel_revision,
 )
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
@@ -207,10 +209,10 @@ class LockedLayerRepository:
 
     def _resolve_revision(self) -> str:
         if self._lockfile is None:
-            locked_sha = _get_caller_locked_kernel(self._repo_id)
+            locked_sha = get_caller_locked_kernel_revision(self._repo_id)
         else:
             with open(self._lockfile, "r") as f:
-                locked_sha = _get_locked_kernel(self._repo_id, f.read())
+                locked_sha = get_locked_kernel_revision(self._repo_id, f.read())
 
         if locked_sha is None:
             raise ValueError(f"Kernel `{self._repo_id}` is not locked")

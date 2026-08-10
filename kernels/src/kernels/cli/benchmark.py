@@ -20,8 +20,9 @@ from huggingface_hub.utils import (
     hf_raise_for_status,
 )
 
+from kernels.backends import _backend
 from kernels.benchmark import Benchmark
-from kernels.utils import _backend, _get_hf_api
+from kernels.hf_hub import _get_hf_api
 
 MISSING_DEPS: list[str] = []
 

@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import pytest
 import torch
@@ -7,7 +8,7 @@ from huggingface_hub import constants
 from huggingface_hub.errors import HfHubHTTPError
 
 from kernels import get_kernel, get_local_kernel, has_kernel, install_kernel
-from kernels._versions import resolve_version_spec_as_ref, select_revision_or_version
+from kernels._versions import resolve_version_spec_as_ref
 
 
 @pytest.fixture
@@ -252,17 +253,16 @@ def test_trust_remote_code_flag_allows_untrusted():
     get_kernel("kernels-test-untrusted/ci-test-kernel", version=1, trust_remote_code=True)
 
 
-def test_install_kernel_offline_with_revision(monkeypatch, local_kernel_path):
+def test_install_kernel_offline_with_revision(local_kernel_path):
     """install_kernel should resolve a cached snapshot when HF_HUB_OFFLINE=1."""
     expected_path = local_kernel_path
-    monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
 
-    path = install_kernel("kernels-community/relu", revision="v1")
+    path = install_kernel("kernels-community/relu", revision="v1", local_files_only=True)
     assert path == expected_path
 
 
 def test_install_kernel_offline_avoids_network(monkeypatch, local_kernel_path):
-    """When HF_HUB_OFFLINE=1, install_kernel must not make any Hub requests."""
+    """When offline, install_kernel must not make any Hub requests."""
     expected_path = local_kernel_path
 
     class _NoNetwork(RuntimeError):
@@ -279,8 +279,7 @@ def test_install_kernel_offline_avoids_network(monkeypatch, local_kernel_path):
 
     # Offline mode resolves entirely from the local cache, so get_session is
     # never called.
-    monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
-    path = install_kernel("kernels-community/relu", revision="v1")
+    path = install_kernel("kernels-community/relu", revision="v1", local_files_only=True)
     assert path == expected_path
 
 
@@ -288,20 +287,17 @@ def test_install_kernel_offline_with_version(monkeypatch, local_kernel_path):
     """get_kernel(version=) should resolve via local refs when HF_HUB_OFFLINE=1."""
     expected_path = local_kernel_path
     monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
-
-    commit = select_revision_or_version("kernels-community/relu", revision=None, version=1)
-    path = install_kernel("kernels-community/relu", revision=commit)
+    path = Path(get_kernel("kernels-community/relu", version=1).__file__).parent
     assert path == expected_path
 
 
-def test_install_kernel_offline_uncached_revision(monkeypatch):
+def test_install_kernel_offline_uncached_revision():
     """install_kernel should fail with a helpful error when offline and uncached."""
-    monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
-
     with pytest.raises(FileNotFoundError, match=r"local snapshot"):
         install_kernel(
             "kernels-test/this-repo-should-not-exist",
             revision="0000000000000000000000000000000000000000",
+            local_files_only=True,
         )
 
 

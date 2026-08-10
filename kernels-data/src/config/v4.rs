@@ -202,6 +202,7 @@ impl From<General> for super::General {
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
+            kernel_depends: None,
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
             tpu: None,
@@ -227,6 +228,7 @@ impl From<CudaGeneral> for super::CudaGeneral {
         Self {
             minver: cuda.minver,
             maxver: cuda.maxver,
+            kernel_depends: None,
             python_depends: cuda.python_depends,
         }
     }
@@ -235,6 +237,7 @@ impl From<CudaGeneral> for super::CudaGeneral {
 impl From<NeuronGeneral> for super::NeuronGeneral {
     fn from(neuron: NeuronGeneral) -> Self {
         Self {
+            kernel_depends: None,
             python_depends: neuron.python_depends,
         }
     }
@@ -243,6 +246,7 @@ impl From<NeuronGeneral> for super::NeuronGeneral {
 impl From<XpuGeneral> for super::XpuGeneral {
     fn from(xpu: XpuGeneral) -> Self {
         Self {
+            kernel_depends: None,
             python_depends: xpu.python_depends,
         }
     }

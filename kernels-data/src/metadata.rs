@@ -3,7 +3,7 @@ use std::str::FromStr;
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Backend, Build, GitUrl, KernelName};
+use crate::config::{Backend, Build, GitUrl, KernelDependency, KernelName};
 use crate::digest::Digest;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -67,6 +67,8 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<GitUrl>,
     pub python_depends: Vec<String>,
+    #[serde(default)]
+    pub kernel_depends: Vec<KernelDependency>,
     pub backend: BackendInfo,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub digest: Option<Digest>,
@@ -84,6 +86,7 @@ impl Metadata {
     /// the archs need to be computed at build time for arch frameworks.
     pub fn for_backend(build: &Build, id: String, backend: Backend) -> Result<Self> {
         let python_depends = build.general.all_python_depends(backend)?;
+        let kernel_depends = build.general.all_kernel_depends(backend);
         let archs = build.framework.precomputable_backend_archs(backend);
 
         Ok(Self {
@@ -94,6 +97,7 @@ impl Metadata {
             upstream: build.general.upstream.clone(),
             source: build.general.source.clone(),
             python_depends,
+            kernel_depends,
             backend: BackendInfo {
                 archs,
                 backend_type: backend,
@@ -156,6 +160,7 @@ mod tests {
                 source: None,
                 backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
                 hub: None,
+                kernel_depends: None,
                 python_depends: None,
                 cuda: None,
                 neuron: None,
@@ -212,6 +217,7 @@ mod tests {
                 source: None,
                 backends: vec![Backend::Cuda],
                 hub: None,
+                kernel_depends: None,
                 python_depends: None,
                 cuda: None,
                 neuron: None,
@@ -250,6 +256,18 @@ mod tests {
 
         let parsed: Metadata = serde_json::from_str(&json).unwrap();
         assert!(parsed.provenance.is_none());
+    }
+
+    #[test]
+    fn metadata_always_emits_kernel_depends() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains("\"kernel-depends\":[]"));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        assert!(parsed.kernel_depends.is_empty());
     }
 
     #[test]

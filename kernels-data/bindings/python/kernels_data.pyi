@@ -11,7 +11,9 @@ __all__ = [
     "DigestAlgorithm",
     "GitHash",
     "KernelBuilderVersion",
+    "KernelDependency",
     "KernelName",
+    "KernelVersion",
     "Metadata",
     "Digest",
     "DigestViolation",
@@ -280,6 +282,48 @@ class DigestValidationError(Exception):
         """The individual digest violations."""
         ...
 
+class KernelVersion:
+    """A kernel version: either a numeric version or a git revision string."""
+
+    @final
+    class Version(KernelVersion):
+        """A numeric kernel version."""
+
+        version: int
+        __match_args__ = ("version",)
+        def __new__(cls, version: int) -> "KernelVersion.Version": ...
+
+    @final
+    class Revision(KernelVersion):
+        """A git revision (e.g. commit SHA or branch/tag name)."""
+
+        revision: str
+        __match_args__ = ("revision",)
+        def __new__(cls, revision: str) -> "KernelVersion.Revision": ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
+@final
+class KernelDependency:
+    """A dependency on another kernel."""
+
+    def __new__(cls, repo_id: str, version: KernelVersion) -> "KernelDependency": ...
+    @property
+    def repo_id(self) -> str:
+        """Identifier of the kernel repository this dependency points to."""
+        ...
+
+    @property
+    def version(self) -> KernelVersion:
+        """Version specifier for the dependency."""
+        ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
 @final
 class Metadata:
     """Parsed `metadata.json` for a kernel build variant."""
@@ -316,6 +360,8 @@ class Metadata:
     def source(self) -> Optional[str]: ...
     @property
     def python_depends(self) -> list[str]: ...
+    @property
+    def kernel_depends(self) -> list[KernelDependency]: ...
     @property
     def backend(self) -> BackendInfo: ...
     @property

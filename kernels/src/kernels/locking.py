@@ -1,6 +1,11 @@
 import hashlib
+import importlib.metadata
+import inspect
+import json
 from dataclasses import dataclass
+from importlib.metadata import Distribution
 from pathlib import Path
+from types import ModuleType
 
 from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import RepoFile
@@ -34,7 +39,7 @@ def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
     """
     Get the locks for a kernel with the given version.
     """
-    from kernels.utils import _get_hf_api
+    from kernels.hf_hub import _get_hf_api
 
     api = _get_hf_api()
 
@@ -129,3 +134,47 @@ def write_egg_lockfile(cmd, basename, filename):
         data = open(lock_path, "r").read()
 
     cmd.write_or_delete_file(basename, filename, data)
+
+
+def get_locked_kernel_revision(repo_id: str, lock_json: str) -> str | None:
+    for kernel_lock_json in json.loads(lock_json):
+        kernel_lock = KernelLock.from_json(kernel_lock_json)
+        if kernel_lock.repo_id == repo_id:
+            return kernel_lock.sha
+    return None
+
+
+def get_caller_locked_kernel_revision(repo_id: str) -> str | None:
+    for dist in _get_caller_distributions():
+        lock_json = dist.read_text("kernels.lock")
+        if lock_json is None:
+            continue
+        locked_sha = get_locked_kernel_revision(repo_id, lock_json)
+        if locked_sha is not None:
+            return locked_sha
+    return None
+
+
+def _get_caller_distributions() -> list[Distribution]:
+    module = _get_caller_module()
+    if module is None:
+        return []
+
+    # Look up all possible distributions that this module could be from.
+    package = module.__name__.split(".")[0]
+    dist_names = importlib.metadata.packages_distributions().get(package)
+    if dist_names is None:
+        return []
+
+    return [importlib.metadata.distribution(dist_name) for dist_name in dist_names]
+
+
+def _get_caller_module() -> ModuleType | None:
+    stack = inspect.stack()
+    # Get first module in the stack that is not the current module.
+    first_module = inspect.getmodule(stack[0][0])
+    for frame in stack[1:]:
+        module = inspect.getmodule(frame[0])
+        if module is not None and module != first_module:
+            return module
+    return first_module

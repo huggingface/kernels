@@ -77,6 +77,7 @@ COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
 COPY relu-triton-kernel ./relu-triton-kernel
+COPY gemm-triton-autotune-kernel ./gemm-triton-autotune-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
 COPY extra-data ./extra-data
 COPY cpp20-symbols-kernel ./cpp20-symbols-kernel

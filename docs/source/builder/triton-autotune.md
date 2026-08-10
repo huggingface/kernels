@@ -6,8 +6,13 @@ problem shape. Autotuning finds good values for these parameters, but doing
 it at runtime (e.g. with the
 [`@triton.autotune`](https://triton-lang.org/main/python-api/generated/triton.autotune.html)
 decorator) re-benchmarks every candidate configuration in each new process.
-For kernels on the Hub, there is a better option: run the autotuner once per
-GPU model, store the best configurations as JSON files, and ship those files
+
+
+However, one can run the tuner for the GPU models they like and store the
+best found configurations as files for using them later. This effectively
+reduces the potentially costly tuning time.
+
+`kernels` support this by packaging these configurations as JSON files
 with the kernel. At runtime, the kernel looks up the configuration for the
 current GPU and shape and falls back to sensible defaults when there is no
 matching configuration.
@@ -41,9 +46,6 @@ repo-id = "kernels-test/gemm-triton-autotune"
 [torch-noarch]
 pyext = ["json", "py"]
 ```
-
-This works the same for AOT-compiled kernels — the `torch` section also
-supports `pyext`.
 
 ## Configuration file layout
 
@@ -166,7 +168,7 @@ build:
 $ LOCAL_KERNELS=kernels-test/gemm-triton-autotune=build python tune.py --n 4096 --k 4096
 ```
 
-## Does it matter?
+## Impact
 
 Tuned configurations are cheap to ship and can make a large difference. On
 an NVIDIA L4, the tuned configuration for a `(1024, 4096) @ (4096, 4096)`

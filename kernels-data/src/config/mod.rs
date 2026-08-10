@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -23,6 +23,9 @@ pub use kernel_deps::{KernelDependency, KernelVersion};
 
 mod name;
 pub use name::KernelName;
+
+mod parse;
+pub use parse::{parse_and_validate, parse_and_validate_compat};
 
 pub mod v3;
 pub mod v4;
@@ -82,6 +85,11 @@ impl Framework {
 }
 
 impl Build {
+    pub fn open(kernel_dir: impl AsRef<Path>) -> Result<Build> {
+        let build_compat = parse::parse_and_validate(kernel_dir)?;
+        Ok(build_compat.into())
+    }
+
     pub fn is_noarch(&self) -> bool {
         matches!(self.framework, Framework::TorchNoarch(_))
     }

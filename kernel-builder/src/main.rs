@@ -2,13 +2,14 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-mod card;
-mod check_abi;
-use check_abi::{run_check_abi, CheckAbiArgs};
-
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
+use kernels_data::config::{parse_and_validate, parse_and_validate_compat, v5, Build, BuildCompat};
+
+mod card;
+mod check_abi;
+use check_abi::{run_check_abi, CheckAbiArgs};
 
 mod completions;
 use completions::print_completions;
@@ -36,19 +37,15 @@ use upload::{run_upload, RepoTypeArg, UploadArgs};
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
-use kernels_data::config::{v5, Build, BuildCompat};
-
 mod nix;
 
 mod skills;
 
 mod util;
-use util::{check_or_infer_kernel_dir, parse_and_validate};
+use util::check_or_infer_kernel_dir;
 
 mod validate_builds;
 use validate_builds::check_builds;
-
-use crate::util::parse_and_validate_compat;
 
 /// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
 /// crate (see `build.rs`), including the `kernel-builder` git provenance that is

@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use kernels_data::config::{Backend, KernelDependency, KernelName, KernelVersion};
+use kernels_data::config::{Backend, Build, General, KernelDependency, KernelName, KernelVersion};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
 use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
@@ -384,6 +384,73 @@ impl PyKernelDependency {
     }
 }
 
+/// General kernel configuration common to all backends.
+#[pyclass(name = "General", frozen)]
+#[derive(Clone, Debug)]
+struct PyGeneral {
+    backends: Vec<PyBackend>,
+}
+
+impl From<&General> for PyGeneral {
+    fn from(general: &General) -> Self {
+        Self {
+            backends: general.backends.iter().copied().map(Into::into).collect(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyGeneral {
+    #[getter]
+    fn backends(&self) -> Vec<PyBackend> {
+        self.backends.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("General(backends={:?})", self.backends)
+    }
+}
+
+/// Parsed and validated `build.toml` configuration for a kernel.
+#[pyclass(name = "Build", frozen)]
+struct PyBuild {
+    inner: Build,
+}
+
+#[pymethods]
+impl PyBuild {
+    /// Parse and validate the `build.toml` in `kernel_dir`.
+    ///
+    /// Raises `ValueError` if the build configuration cannot be parsed or
+    /// validated.
+    #[staticmethod]
+    fn open(kernel_dir: PathBuf) -> PyResult<PyBuild> {
+        Build::open(&kernel_dir)
+            .map(|inner| PyBuild { inner })
+            .map_err(|err| {
+                PyValueError::new_err(format!(
+                    "Cannot parse build configuration in `{}`: {err:#}",
+                    kernel_dir.display()
+                ))
+            })
+    }
+
+    #[getter]
+    fn general(&self) -> PyGeneral {
+        PyGeneral::from(&self.inner.general)
+    }
+
+    /// Get the general + backend-specific kernel dependencies for `backend`.
+    fn all_kernel_depends(&self, backend: PyBackend) -> Vec<PyKernelDependency> {
+        self.inner
+            .general
+            .all_kernel_depends(backend.into())
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+}
+
 /// Parsed `metadata.json` for a kernel build variant.
 #[pyclass(name = "Metadata", frozen)]
 #[derive(Clone, Debug)]
@@ -750,6 +817,8 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyKernelVersion>()?;
     m.add_class::<PyKernelDependency>()?;
+    m.add_class::<PyGeneral>()?;
+    m.add_class::<PyBuild>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
     m.add_class::<PyDigestAlgorithm>()?;

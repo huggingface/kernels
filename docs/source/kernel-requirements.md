@@ -256,7 +256,7 @@ If the answer is yes, the version needs to be bumped, unless one of the
 
 ### Why additions need a version bump
 
-Suppose that `mykernel` exposes a single function `a` and that there are
+Suppose that a kernel exposes a single function `a` and that there are
 already builds for Torch 2.9 up to Torch 2.13. Now a function `b` is
 added. Since `kernel-builder` only builds for the last two Torch
 versions, only the Torch 2.12 and 2.13 variants will contain `b`.

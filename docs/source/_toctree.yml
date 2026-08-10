@@ -47,6 +47,8 @@
 - sections:
     - local: builder/writing-kernels
       title: Write kernels
+    - local: builder/triton-autotune
+      title: Ship Triton autotune configurations
     - local: builder/build
       title: Build with Nix
     - local: builder/local-dev

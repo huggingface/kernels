@@ -87,6 +87,7 @@ COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 COPY examples/kernels/cutlass-gemm-tvm-ffi/tests ./cutlass_gemm_tvm_ffi_tests
 COPY examples/kernels/cpp20-symbols/tests ./cpp20_symbols_tests
 COPY examples/kernels/relu-triton/tests ./relu_triton_tests
+COPY examples/kernels/gemm-triton-autotune/tests ./gemm_triton_autotune_tests
 
 # Run tests
 ADD nix-builder/tests/run-tests.sh ./run-tests.sh

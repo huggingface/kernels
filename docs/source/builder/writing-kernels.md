@@ -37,7 +37,9 @@ format of the `build.toml` file, and some additional Python glue that
 `kernel-builder` provides. We will use a [simple ReLU kernel](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu)
 as the running example. After reading this page, you may also want to have
 a look at the more realistic [ReLU kernel with backprop and `torch.compile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-backprop-compile)
-support.
+support. For Triton kernels, see
+[Ship Triton autotune configurations](triton-autotune.md) for how to tune a
+kernel and ship the tuned configurations with it.
 
 > [!TIP]
 > We maintain a set of conforming kernels in the
@@ -247,7 +249,9 @@ following options:
 
 - `src` (required): a list of source files and headers.
 - `pyext` (optional): the list of extensions for Python files. Default:
-  `["py", "pyi"]`.
+  `["py", "pyi"]`. Additional extensions can be listed to ship data files
+  with the kernel, such as `json` for
+  [Triton autotune configurations](triton-autotune.md).
 - `include` (optional): include directories relative to the project root.
   Default: `[]`.
 - `maxver` (optional): only build for this Torch version and earlier. Use cautiously, since this option produces
@@ -297,7 +301,9 @@ the supported archs. These are then exported to `metadata.json` for consumption
 by e.g. the Hugging Face Hub.
 
 - `pyext` (optional): the list of extensions for Python files. Default:
-  `["py", "pyi"]`.
+  `["py", "pyi"]`. Additional extensions can be listed to ship data files
+  with the kernel, such as `json` for
+  [Triton autotune configurations](triton-autotune.md).
 - `cuda-capabilities` (optional): a list of CUDA compute capabilities the
   kernel supports (e.g. `["9.0", "10.0"]`).
 - `rocm-archs` (optional): a list of ROCm architectures the kernel supports

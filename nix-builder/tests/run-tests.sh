@@ -9,6 +9,7 @@ RELU_TVM_FFI_PATH=$(echo relu-tvm-ffi-kernel/tvm-ffi*)
 CUTLASS_PATH=$(echo cutlass-gemm-kernel/torch*)
 CUTLASS_TVM_FFI_PATH=$(echo cutlass-gemm-tvm-ffi-kernel/tvm-ffi*)
 RELU_TRITON_PATH=$(echo relu-triton-kernel/torch*)
+GEMM_TRITON_AUTOTUNE_PATH=$(echo gemm-triton-autotune-kernel/torch*)
 SILU_MUL_PATH=$(echo silu-and-mul-kernel/torch*)
 RELU_CPU_PATH=$(echo relu-kernel-cpu/torch*)
 CPP20_SYMBOLS_PATH=$(echo cpp20-symbols-kernel/torch*)
@@ -18,6 +19,9 @@ LOCAL_KERNELS="kernels-test/extra-data=${EXTRA_DATA_PATH}:kernels-test/relu=${RE
 
 LOCAL_KERNELS="kernels-test/relu-triton=${RELU_TRITON_PATH}" \
   .venv/bin/pytest relu_triton_tests
+
+LOCAL_KERNELS="kernels-test/gemm-triton-autotune=${GEMM_TRITON_AUTOTUNE_PATH}" \
+  .venv/bin/pytest gemm_triton_autotune_tests
 
 # We only care about importing, the kernel is trivial.
 LOCAL_KERNELS="kernels-test/silu-and-mul=${SILU_MUL_PATH}" \

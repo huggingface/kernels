@@ -20,11 +20,21 @@ class _JSONEncoder(json.JSONEncoder):
 
 
 @strict
-@dataclass  # (frozen=True)
+@dataclass
 class KernelLock:
     repo_id: str
     revision: str
     depends: dict[str, "KernelLock"]
+
+    @classmethod
+    def from_json(cls, o: dict):
+        depends = o.get("depends", {})
+        depends = {dep_repo_id: cls.from_json(lock_json) for dep_repo_id, lock_json in depends.items()}
+        return cls(
+            repo_id=o["repo_id"],
+            revision=o["revision"],
+            depends=depends,
+        )
 
 
 _LOCK_METADATA_CACHE: dict[KernelDependency, KernelLock] = {}
@@ -88,7 +98,7 @@ def full_dependency_tree(
     return lock
 
 
-def print_nix_deps(project_dir: Path):
+def print_lock_kernel_depends(project_dir: Path):
     build_toml = project_dir / "build.toml"
     if not build_toml.exists():
         raise FileNotFoundError(f"build.toml not found in {project_dir}")

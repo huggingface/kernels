@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from kernels.cli.info import print_kernel_info
-from kernels.cli.nix_deps import print_nix_deps
+from kernels.cli.lock_kernel_depends import print_lock_kernel_depends
 from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
@@ -128,16 +128,16 @@ def main():
     verify_signature_parser.add_argument("version", type=int, help="Kernel version to verify")
     verify_signature_parser.set_defaults(func=verify_signature)
 
-    nix_deps_parser = subparsers.add_parser(
-        "nix-deps",
+    lock_kernel_depends_parser = subparsers.add_parser(
+        "lock-kernel-depends",
         help="Print Nix dependencies for a project",
     )
-    nix_deps_parser.add_argument(
+    lock_kernel_depends_parser.add_argument(
         "project_dir",
         type=Path,
         help="The project directory",
     )
-    nix_deps_parser.set_defaults(func=nix_deps)
+    lock_kernel_depends_parser.set_defaults(func=lock_kernel_depends)
 
     args = parser.parse_args()
     args.func(args)
@@ -193,8 +193,8 @@ def kernel_versions(args):
     print_kernel_versions(args.repo_id)
 
 
-def nix_deps(args):
-    print_nix_deps(args.project_dir)
+def lock_kernel_depends(args):
+    print_lock_kernel_depends(args.project_dir)
 
 
 def lock_kernels(args):

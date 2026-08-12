@@ -1,5 +1,12 @@
 # Migrate from older versions
 
+> [!CAUTION]
+> To prevent disruptions we kept the "model" type repositories of
+> kernels alive. However, starting September 13, 2026, we will
+> be taking them down. Please ensure you're using the latest
+> version of `kernels`. If you face any issues, please file them
+> here: https://github.com/huggingface/kernels/issues/new
+
 ## 0.12
 
 ### Adopting kernel versions

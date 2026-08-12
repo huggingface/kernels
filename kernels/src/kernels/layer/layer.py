@@ -17,6 +17,7 @@ from ..load import (
     get_local_kernel,
 )
 from ..locking import (
+    KernelLock,
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
@@ -208,24 +209,24 @@ class LockedLayerRepository:
         self._lockfile = lockfile
         self.layer_name = layer_name
         self._trust_remote_code = trust_remote_code
-        self._revision = self._resolve_revision()
+        self._lock = self._get_lock()
 
-    def _resolve_revision(self) -> str:
+    def _get_lock(self) -> KernelLock:
         if self._lockfile is None:
-            locked_sha = get_caller_locked_kernel_revision(self._repo_id)
+            kernel_lock = get_caller_locked_kernel_revision(self._repo_id)
         else:
             with open(self._lockfile, "r") as f:
-                locked_sha = get_locked_kernel_revision(self._repo_id, f.read())
+                kernel_lock = get_locked_kernel_revision(self._repo_id, f.read())
 
-        if locked_sha is None:
+        if kernel_lock is None:
             raise ValueError(f"Kernel `{self._repo_id}` is not locked")
 
-        return locked_sha
+        return kernel_lock
 
     def load(self) -> Type["nn.Module"]:
         kernel = get_kernel(
             repo_id=self._repo_id,
-            revision=self._revision,
+            revision=self._lock,
             trust_remote_code=self._trust_remote_code,
         )
         return _get_kernel_layer(self, kernel)
@@ -235,15 +236,16 @@ class LockedLayerRepository:
             isinstance(other, LockedLayerRepository)
             and self.layer_name == other.layer_name
             and self._repo_id == other._repo_id
-            and self._revision == other._revision
+            and self._lock == other._lock
             and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id, self._revision, self._trust_remote_code))
+        print(self)
+        return hash((self.layer_name, self._repo_id, self._lock, self._trust_remote_code))
 
     def __str__(self) -> str:
-        return f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
+        return f"`{self._repo_id}` (revision: {self._lock.revision}), layer `{self.layer_name}`)"
 
 
 _CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}

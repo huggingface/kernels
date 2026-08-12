@@ -12,6 +12,7 @@ from kernels._versions import resolve_kernel_version
 from kernels.backends import _backend
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.importer import _import_from_path
+from kernels.locking import KernelLock
 from kernels.python_deps import validate_dependencies
 from kernels.variants import (
     Variant,
@@ -38,6 +39,8 @@ class LocalKernel:
     """A kernel that can be loaded from a local path."""
 
     variant_path: Path
+
+    variant: Variant | None
 
     def install(self, *, api: HfApi) -> Self:
         # Local kernels are already installed, so we just return self.
@@ -71,7 +74,10 @@ class RemoteKernel:
             )
         )
 
-        return LocalKernel(variant_path=repo_path / "build" / self.variant.variant_str)
+        return LocalKernel(
+            variant_path=repo_path / "build" / self.variant.variant_str,
+            variant=self.variant,
+        )
 
 
 def get_kernel_metadata(
@@ -130,7 +136,7 @@ def _get_local_kernel_metadata(repo_path: Path, *, backend: str | None) -> Tuple
         )
 
     metadata_path = variant_path / "metadata.json"
-    location = LocalKernel(variant_path=variant_path)
+    location = LocalKernel(variant_path=variant_path, variant=variant)
 
     return location, metadata_path
 
@@ -179,7 +185,7 @@ def _get_offline_kernel_metadata(
         raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
 
     metadata_path = variant_path / "metadata.json"
-    location = LocalKernel(variant_path=variant_path)
+    location = LocalKernel(variant_path=variant_path, variant=variant)
 
     return location, metadata_path
 
@@ -240,7 +246,7 @@ def load_kernel_with_deps(
     local_kernels: dict[str, Path],
     kernel: KernelDependency,
     local_files_only: bool,
-    kernel_locks: dict[str, str] | None,
+    kernel_locks: dict[str, KernelLock] | None,
     trust_remote_code: bool | list[str],
 ) -> ModuleType:
     tree = resolve_kernel_tree(
@@ -261,7 +267,7 @@ def resolve_kernel_tree(
     api: HfApi,
     kernel: KernelDependency,
     backend: str | None,
-    kernel_locks: dict[str, str] | None,
+    kernel_locks: dict[str, KernelLock] | None,
     local_files_only: bool,
     local_kernels: dict[str, Path],
     trust_remote_code: bool | list[str],
@@ -273,6 +279,7 @@ def resolve_kernel_tree(
     Constructs a tree where nodes encode kernel information (e.g. location and
     metadata) and edges kernel-kernel dependendies.
     """
+    print(f"=== {kernel} ===")
 
     if seen is None:
         seen = set()
@@ -301,11 +308,12 @@ def resolve_kernel_tree(
         if kernel_locks is not None:
             # If kernel locks are provided, we use the revision from the
             # locks. We also require *all* kernels to be locked.
-            revision = kernel_locks.get(kernel.repo_id, None)
-            if revision is None:
+            kernel_lock = kernel_locks.get(kernel.repo_id, None)
+            if kernel_lock is None:
                 raise ValueError(
                     f"Kernel `{kernel.repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
                 )
+            revision = kernel_lock.revision
         else:
             revision = resolve_kernel_version(kernel, local_files_only=local_files_only)
 
@@ -319,6 +327,17 @@ def resolve_kernel_tree(
             )
         else:
             location, metadata_path = get_kernel_metadata(kernel.repo_id, api=api, revision=revision, backend=backend)
+
+        if kernel_locks is not None:
+            if isinstance(location, LocalKernel) and location.variant is None:
+                raise ValueError("Cannot determine variant for a local kernel.")
+            kernel_lock = kernel_locks.get(kernel.repo_id, None)
+            assert kernel_lock is not None
+            kernel_locks = kernel_lock.depends.get(location.variant.variant_str, None)
+            if kernel_locks is None:
+                raise ValueError(
+                    f"Kernel `{kernel.repo_id}` does not have a lock for variant `{location.variant.variant_str}`. Please lock it with `kernels lock <project>` and then reinstall the project."
+                )
 
     metadata = Metadata.read_from_file(metadata_path)
 

@@ -4,16 +4,19 @@ import json
 import sys
 from pathlib import Path
 
+from kernels_data import KernelDependency, KernelVersion
+
 from kernels.cli.info import print_kernel_info
 from kernels.cli.lock_kernel_depends import print_lock_kernel_depends
 from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
 from kernels.compat import tomllib
+from kernels.hf_hub import _get_hf_api
 from kernels.install import (
     install_kernel,
     install_kernel_all_variants,
 )
-from kernels.locking import KernelLock, get_kernel_locks
+from kernels.locking import KernelLock, extract_dependency_locks
 
 
 def main():
@@ -155,22 +158,22 @@ def download_kernels(args):
 
     all_successful = True
 
-    for kernel_lock_json in lock_json:
+    for repo_id, kernel_lock_json in lock_json.items():
         kernel_lock = KernelLock.from_json(kernel_lock_json)
         print(
-            f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
+            f"Downloading `{kernel_lock.repo_id}` with revision: {kernel_lock.revision}",
             file=sys.stderr,
         )
         if args.all_variants:
             install_kernel_all_variants(
                 kernel_lock.repo_id,
-                revision=kernel_lock.sha,
+                revision=kernel_lock.revision,
             )
         else:
             try:
                 install_kernel(
                     kernel_lock.repo_id,
-                    revision=kernel_lock.sha,
+                    revision=kernel_lock.revision,
                 )
             except FileNotFoundError as e:
                 print(e, file=sys.stderr)
@@ -203,12 +206,15 @@ def lock_kernels(args):
 
     kernel_versions = data.get("tool", {}).get("kernels", {}).get("dependencies", None)
 
-    all_locks = []
-    for kernel, version in kernel_versions.items():
-        all_locks.append(get_kernel_locks(kernel, version))
+    depends = [
+        KernelDependency(repo_id=kernel, version=KernelVersion.Version(version))
+        for kernel, version in kernel_versions.items()
+    ]
+
+    locks = extract_dependency_locks(depends, api=_get_hf_api(), backend=None)
 
     with open(args.project_dir / "kernels.lock", "w") as f:
-        json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
+        json.dump(locks, f, cls=_JSONEncoder, indent=2)
 
 
 class _JSONEncoder(json.JSONEncoder):

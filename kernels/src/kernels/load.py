@@ -226,7 +226,10 @@ def load_kernel(
     return load_kernel_with_deps(
         api=_get_hf_api(),
         backend=backend,
-        kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Revision(kernel_locks[repo_id])),
+        kernel=KernelDependency(
+            repo_id=repo_id,
+            version=KernelVersion.Revision(kernel_locks[repo_id].revision),
+        ),
         kernel_locks=kernel_locks,
         local_files_only=True,
         local_kernels={},
@@ -265,10 +268,12 @@ def get_locked_kernel(
             f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
         )
 
+    kernel_lock = kernel_locks[repo_id]
+
     return load_kernel_with_deps(
         api=_get_hf_api(user_agent=user_agent),
         backend=None,
-        kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Revision(kernel_locks[repo_id])),
+        kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Revision(kernel_lock.repo_id)),
         kernel_locks=kernel_locks,
         local_files_only=False,
         local_kernels={},

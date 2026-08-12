@@ -4,13 +4,16 @@ import json
 from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 
 from huggingface_hub.dataclasses import strict
-from kernels_data import KernelDependency, KernelVersion
+from huggingface_hub.hf_api import HfApi
+from kernels_data import KernelDependency, Metadata
 
+from kernels._versions import resolve_kernel_version
 from kernels.compat import tomllib
-from kernels.deps import DepTreeNode, LocalKernel, RemoteKernel, resolve_kernel_tree
+from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
+from kernels.variants import ArchVariant, NoarchVariant, get_variants
 
 
 @strict
@@ -21,57 +24,109 @@ class VariantLock:
 
 
 @strict
-@dataclass
+# @dataclass
+@dataclass(frozen=True)
 class KernelLock:
     repo_id: str
-    sha: str
-    kernel_depends: dict[str, "KernelLock"]
+    revision: str
+    depends: MappingProxyType[str, "KernelLock"]
 
     @classmethod
     def from_json(cls, o: dict):
-        kernel_depends = o.get("kernel_depends", {})
-        kernel_depends = {dep_repo_id: cls.from_json(lock_json) for dep_repo_id, lock_json in kernel_depends.items()}
+        depends_json = o.get("depends", {})
+        depends = {}
+        for variant, variant_locks in depends_json.items():
+            variant_depends = {
+                dep_repo_id: cls.from_json(lock_json) for dep_repo_id, lock_json in variant_locks.items()
+            }
+            depends[variant] = MappingProxyType(variant_depends)
         return cls(
             repo_id=o["repo_id"],
-            sha=o["sha"],
-            kernel_depends=kernel_depends,
+            revision=o["revision"],
+            depends=MappingProxyType(depends),
         )
 
 
-def extract_locks(tree: DepTreeNode[LocalKernel | RemoteKernel]) -> KernelLock:
-    if isinstance(tree.location, LocalKernel):
-        raise ValueError("Cannot extract locks from a local kernel")
-
-    repo_id = tree.location.repo_id
-    sha = tree.location.revision
-
-    locked_deps = {}
-    for name, dep_tree in tree.depends.items():
-        locked_deps[name] = extract_locks(dep_tree)
-
-    return KernelLock(repo_id=repo_id, sha=sha, kernel_depends=locked_deps)
+_LOCK_METADATA_CACHE: dict[tuple[str | None, KernelDependency], KernelLock] = {}
 
 
-def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
-    """
-    Get the locks for a kernel with the given version.
-    """
-    from kernels.hf_hub import _get_hf_api
+def dependency_locks(
+    kernel: KernelDependency,
+    *,
+    api: HfApi,
+    backend: str | None,
+    seen: set[KernelDependency] | None = None,
+) -> KernelLock:
 
-    api = _get_hf_api()
+    if (lock := _LOCK_METADATA_CACHE.get((backend, kernel), None)) is not None:
+        return lock
 
-    tree = resolve_kernel_tree(
-        api=api,
-        backend=None,
-        local_kernels={},
-        kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Version(version_spec)),
+    if seen is None:
+        seen = set()
+
+    # Check for cycles.
+    if kernel in seen:
+        raise ValueError(f"Cyclic kernel dependency detected: {kernel.repo_id}")
+    seen.add(kernel)
+
+    # Check if the repo is trusted before downloading anything.
+    _check_trust_remote_code(
+        repo_id=kernel.repo_id,
         local_files_only=False,
-        kernel_locks=None,
-        # TODO: what is the right policy here?
         trust_remote_code=False,
     )
 
-    return extract_locks(tree)
+    revision = resolve_kernel_version(kernel, local_files_only=False)
+
+    variant_depends = {}
+
+    for variant in get_variants(api, repo_id=kernel.repo_id, revision=revision):
+        if backend is not None:
+            if isinstance(variant, ArchVariant):
+                if variant.arch.backend.name != backend:
+                    continue
+            elif isinstance(variant, NoarchVariant):
+                if variant.arch.backend_name != backend:
+                    continue
+            else:
+                raise ValueError(f"Unknown variant type: {variant}")
+
+        metadata_path = Path(
+            api.hf_hub_download(
+                kernel.repo_id,
+                repo_type="kernel",
+                filename=f"build/{variant.variant_str}/metadata.json",
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=False,
+            )
+        )
+        metadata = Metadata.read_from_file(metadata_path)
+
+        kernel_deps = {}
+        for dep in metadata.kernel_depends:
+            kernel_deps[dep.repo_id] = dependency_locks(dep, api=api, backend=backend, seen=seen)
+        variant_depends[variant.variant_str] = kernel_deps
+
+    seen.remove(kernel)
+
+    lock = KernelLock(repo_id=kernel.repo_id, revision=revision, depends=variant_depends)
+
+    _LOCK_METADATA_CACHE[(backend, kernel)] = lock
+
+    return lock
+
+
+def extract_dependency_locks(
+    kernels: list[KernelDependency],
+    *,
+    api: HfApi,
+    backend: str | None,
+) -> dict[str, KernelLock]:
+    kernel_locks = {}
+    for kernel in kernels:
+        kernel_locks[kernel.repo_id] = dependency_locks(kernel, api=api, backend=backend)
+    return kernel_locks
 
 
 def write_egg_lockfile(cmd, basename, filename):
@@ -101,17 +156,17 @@ def write_egg_lockfile(cmd, basename, filename):
     cmd.write_or_delete_file(basename, filename, data)
 
 
-def get_locked_kernel_revisions(lock_json: str) -> dict[str, str]:
+def get_locked_kernel_revisions(lock_json: str) -> dict[str, KernelLock]:
     kernel_locks = {}
 
-    for kernel_lock_json in json.loads(lock_json):
+    for kernel_repo_id, kernel_lock_json in json.loads(lock_json).items():
         kernel_lock = KernelLock.from_json(kernel_lock_json)
-        kernel_locks[kernel_lock.repo_id] = kernel_lock.sha
+        kernel_locks[kernel_repo_id] = kernel_lock
 
     return kernel_locks
 
 
-def get_caller_locked_kernel_revisions() -> dict[str, str]:
+def get_caller_locked_kernel_revisions() -> dict[str, KernelLock]:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
         if lock_json is None:
@@ -119,18 +174,19 @@ def get_caller_locked_kernel_revisions() -> dict[str, str]:
         kernel_locks = get_locked_kernel_revisions(lock_json)
         if len(kernel_locks) > 0:
             return kernel_locks
+
     return {}
 
 
-def get_locked_kernel_revision(repo_id: str, lock_json: str) -> str | None:
-    for kernel_lock_json in json.loads(lock_json):
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
-        if kernel_lock.repo_id == repo_id:
-            return kernel_lock.sha
-    return None
+def get_locked_kernel_revision(repo_id: str, lock_json: str) -> KernelLock | None:
+    locks = json.loads(lock_json)
+    lock = locks.get(repo_id, None)
+    if lock is None:
+        return None
+    return KernelLock.from_json(lock)
 
 
-def get_caller_locked_kernel_revision(repo_id: str) -> str | None:
+def get_caller_locked_kernel_revision(repo_id: str) -> KernelLock | None:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
         if lock_json is None:

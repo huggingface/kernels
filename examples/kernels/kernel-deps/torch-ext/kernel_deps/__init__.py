@@ -2,7 +2,7 @@ import kernels
 import torch
 
 
-einops = kernels.get_kernel_dep("kernels-staging/einops")
+einops = kernels.get_kernel_dep("kernels-community/einops")
 
 
 def swap_last_dimensions(x: torch.Tensor) -> torch.Tensor:

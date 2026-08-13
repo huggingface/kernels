@@ -211,8 +211,6 @@ def lock_kernels(args):
 
     locks = extract_dependency_locks(depends, api=_get_hf_api(), backend=None)
 
-    print(locks)
-
     with open(args.project_dir / "kernels.lock", "w") as f:
         f.write(locks.to_json())
 

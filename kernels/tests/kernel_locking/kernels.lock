@@ -1,23 +1,47 @@
 [
   {
-    "repo_id": "kernels-community/relu",
-    "sha": "d649efb56fb249ac8f7a57fa1866728ad0c60e52",
-    "kernel_depends": {}
+    "dependency": {
+      "repo-id": "kernels-community/relu",
+      "version": 1
+    },
+    "lock": {
+      "repo-id": "kernels-community/relu",
+      "revision": "d649efb56fb249ac8f7a57fa1866728ad0c60e52",
+      "depends": []
+    }
   },
   {
-    "repo_id": "kernels-test/versions",
-    "sha": "f609e51b856b3d874b0ae8445913e200f02c1735",
-    "kernel_depends": {}
+    "dependency": {
+      "repo-id": "kernels-test/kernel-deps",
+      "version": 1
+    },
+    "lock": {
+      "repo-id": "kernels-test/kernel-deps",
+      "revision": "ba92dc9483ef2ef7254ebfa2051382ed45ea8747",
+      "depends": [
+        {
+          "dependency": {
+            "repo-id": "kernels-community/einops",
+            "version": 1
+          },
+          "lock": {
+            "repo-id": "kernels-community/einops",
+            "revision": "0bd00775195dda6f84c16c31f6d94564232d08b3",
+            "depends": []
+          }
+        }
+      ]
+    }
   },
   {
-    "repo_id": "kernels-test/kernel-deps",
-    "sha": "ba92dc9483ef2ef7254ebfa2051382ed45ea8747",
-    "kernel_depends": {
-      "kernels-community/einops": {
-        "repo_id": "kernels-community/einops",
-        "sha": "0bd00775195dda6f84c16c31f6d94564232d08b3",
-        "kernel_depends": {}
-      }
+    "dependency": {
+      "repo-id": "kernels-test/versions",
+      "version": 2
+    },
+    "lock": {
+      "repo-id": "kernels-test/versions",
+      "revision": "f609e51b856b3d874b0ae8445913e200f02c1735",
+      "depends": []
     }
   }
 ]

@@ -12,7 +12,7 @@ from kernels._versions import resolve_kernel_version
 from kernels.backends import _backend
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.importer import _import_from_path
-from kernels.locking import KernelLock
+from kernels.locking import KernelLock, KernelLocks
 from kernels.python_deps import validate_dependencies
 from kernels.variants import (
     Variant,
@@ -267,7 +267,7 @@ def resolve_kernel_tree(
     api: HfApi,
     kernel: KernelDependency,
     backend: str | None,
-    kernel_locks: dict[str, KernelLock] | None,
+    kernel_locks: KernelLocks | None,
     local_files_only: bool,
     local_kernels: dict[str, Path],
     trust_remote_code: bool | list[str],
@@ -279,10 +279,11 @@ def resolve_kernel_tree(
     Constructs a tree where nodes encode kernel information (e.g. location and
     metadata) and edges kernel-kernel dependendies.
     """
-    print(f"=== {kernel} ===")
-
     if seen is None:
         seen = set()
+
+    print(kernel)
+    print(kernel_locks)
 
     # Check for cycles.
     if kernel in seen:
@@ -291,6 +292,7 @@ def resolve_kernel_tree(
 
     location: LocalKernel | RemoteKernel
     metadata_path: Path
+    kernel_lock = None
 
     if kernel.repo_id in local_kernels:
         # Shortcut for kernels with local overrides.
@@ -308,7 +310,7 @@ def resolve_kernel_tree(
         if kernel_locks is not None:
             # If kernel locks are provided, we use the revision from the
             # locks. We also require *all* kernels to be locked.
-            kernel_lock = kernel_locks.get(kernel.repo_id, None)
+            kernel_lock = kernel_locks.locks.get(kernel, None)
             if kernel_lock is None:
                 raise ValueError(
                     f"Kernel `{kernel.repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
@@ -328,20 +330,21 @@ def resolve_kernel_tree(
         else:
             location, metadata_path = get_kernel_metadata(kernel.repo_id, api=api, revision=revision, backend=backend)
 
-        if kernel_locks is not None:
-            if isinstance(location, LocalKernel) and location.variant is None:
-                raise ValueError("Cannot determine variant for a local kernel.")
-            kernel_lock = kernel_locks.get(kernel.repo_id, None)
-            assert kernel_lock is not None
-            kernel_locks = kernel_lock.depends.get(location.variant.variant_str, None)
-            if kernel_locks is None:
-                raise ValueError(
-                    f"Kernel `{kernel.repo_id}` does not have a lock for variant `{location.variant.variant_str}`. Please lock it with `kernels lock <project>` and then reinstall the project."
-                )
+            # if kernel_locks is not None:
+            # if isinstance(location, LocalKernel) and location.variant is None:
+            #    raise ValueError("Cannot determine variant for a local kernel.")
+            # kernel_lock = kernel_locks.get(kernel.repo_id, None)
+            # assert kernel_lock is not None
+            # kernel_locks = kernel_lock.depends.get(location.variant.variant_str, None)
+            # if kernel_locks is None:
+            #    raise ValueError(
+            #        f"Kernel `{kernel.repo_id}` does not have a lock for variant `{location.variant.variant_str}`. Please lock it with `kernels lock <project>` and then reinstall the project."
+            #    )
 
     metadata = Metadata.read_from_file(metadata_path)
 
     kernel_deps = {}
+    print("depends", kernel_lock, kernel_lock.depends)
 
     # Recurse into dependencies.
     for dep in metadata.kernel_depends:
@@ -349,7 +352,7 @@ def resolve_kernel_tree(
             api=api,
             backend=backend,
             seen=seen,
-            kernel_locks=kernel_locks,
+            kernel_locks=(kernel_lock.depends if kernel_lock is not None else None),
             local_files_only=local_files_only,
             local_kernels=local_kernels,
             kernel=dep,

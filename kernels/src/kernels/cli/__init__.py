@@ -16,7 +16,7 @@ from kernels.install import (
     install_kernel,
     install_kernel_all_variants,
 )
-from kernels.locking import KernelLock, extract_dependency_locks
+from kernels.locking import KernelLock, LockJSONEncoder, extract_dependency_locks
 
 
 def main():
@@ -213,15 +213,10 @@ def lock_kernels(args):
 
     locks = extract_dependency_locks(depends, api=_get_hf_api(), backend=None)
 
+    print(locks)
+
     with open(args.project_dir / "kernels.lock", "w") as f:
-        json.dump(locks, f, cls=_JSONEncoder, indent=2)
-
-
-class _JSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
+        f.write(locks.to_json())
 
 
 def _check_moved(_args):

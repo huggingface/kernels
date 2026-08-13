@@ -14,6 +14,8 @@ __all__ = [
     "GitHash",
     "KernelBuilderVersion",
     "KernelDependency",
+    "KernelLock",
+    "KernelLocks",
     "KernelName",
     "KernelVersion",
     "Metadata",
@@ -325,6 +327,79 @@ class KernelDependency:
     def __repr__(self) -> str: ...
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self) -> int: ...
+
+@final
+class KernelLock:
+    """A locked kernel revision and its transitive dependencies."""
+
+    def __new__(
+        cls,
+        repo_id: str,
+        revision: str,
+        depends: "KernelLocks",
+    ) -> "KernelLock": ...
+    @property
+    def repo_id(self) -> str:
+        """Identifier of the locked kernel repository."""
+        ...
+
+    @property
+    def revision(self) -> str:
+        """Locked Git revision of the kernel."""
+        ...
+
+    @property
+    def depends(self) -> "KernelLocks":
+        """Transitive kernel dependencies."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "KernelLock":
+        """Parse a `KernelLock` from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the lock to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the lock cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class KernelLocks:
+    """A collection of locked kernels keyed by the dependency they resolve."""
+
+    def __new__(cls, locks: dict[KernelDependency, KernelLock]) -> "KernelLocks": ...
+    @property
+    def locks(self) -> dict[KernelDependency, KernelLock]:
+        """Mapping from kernel dependency to kernel lock."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "KernelLocks":
+        """Parse a `KernelLocks` collection from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the locks collection to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the locks cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
 
 @final
 class General:

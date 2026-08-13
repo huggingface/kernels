@@ -1,35 +1,41 @@
+import dataclasses
 import importlib.metadata
 import inspect
 import json
 from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
-from types import MappingProxyType, ModuleType
+from types import ModuleType
 
 from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import HfApi
-from kernels_data import KernelDependency, Metadata
+from kernels_data import (
+    KernelDependency,
+    KernelLock,
+    KernelLocks,
+    Metadata,
+)
 
 from kernels._versions import resolve_kernel_version
 from kernels.compat import tomllib
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
-from kernels.variants import ArchVariant, NoarchVariant, get_variants
+from kernels.variants import get_variants
 
 
-@strict
-@dataclass
-class VariantLock:
-    hash: str
-    hash_type: str = "git_lfs_concat"
+class LockJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if dataclasses.is_dataclass(o):
+            return dataclasses.asdict(o)
+        return super().default(o)
 
 
 @strict
 # @dataclass
 @dataclass(frozen=True)
-class KernelLock:
+class KernelLock_:
     repo_id: str
     revision: str
-    depends: MappingProxyType[str, "KernelLock"]
+    depends: dict[KernelDependency, "KernelLock"]
 
     @classmethod
     def from_json(cls, o: dict):
@@ -39,11 +45,11 @@ class KernelLock:
             variant_depends = {
                 dep_repo_id: cls.from_json(lock_json) for dep_repo_id, lock_json in variant_locks.items()
             }
-            depends[variant] = MappingProxyType(variant_depends)
+            depends[variant] = variant_depends
         return cls(
             repo_id=o["repo_id"],
             revision=o["revision"],
-            depends=MappingProxyType(depends),
+            depends=depends,
         )
 
 
@@ -78,19 +84,9 @@ def dependency_locks(
 
     revision = resolve_kernel_version(kernel, local_files_only=False)
 
-    variant_depends = {}
+    kernel_deps = {}
 
     for variant in get_variants(api, repo_id=kernel.repo_id, revision=revision):
-        if backend is not None:
-            if isinstance(variant, ArchVariant):
-                if variant.arch.backend.name != backend:
-                    continue
-            elif isinstance(variant, NoarchVariant):
-                if variant.arch.backend_name != backend:
-                    continue
-            else:
-                raise ValueError(f"Unknown variant type: {variant}")
-
         metadata_path = Path(
             api.hf_hub_download(
                 kernel.repo_id,
@@ -105,12 +101,11 @@ def dependency_locks(
 
         kernel_deps = {}
         for dep in metadata.kernel_depends:
-            kernel_deps[dep.repo_id] = dependency_locks(dep, api=api, backend=backend, seen=seen)
-        variant_depends[variant.variant_str] = kernel_deps
+            kernel_deps[dep] = dependency_locks(dep, api=api, backend=backend, seen=seen)
 
     seen.remove(kernel)
 
-    lock = KernelLock(repo_id=kernel.repo_id, revision=revision, depends=variant_depends)
+    lock = KernelLock(repo_id=kernel.repo_id, revision=revision, depends=kernel_deps)
 
     _LOCK_METADATA_CACHE[(backend, kernel)] = lock
 
@@ -122,11 +117,11 @@ def extract_dependency_locks(
     *,
     api: HfApi,
     backend: str | None,
-) -> dict[str, KernelLock]:
+) -> KernelLocks:
     kernel_locks = {}
     for kernel in kernels:
-        kernel_locks[kernel.repo_id] = dependency_locks(kernel, api=api, backend=backend)
-    return kernel_locks
+        kernel_locks[kernel] = dependency_locks(kernel, api=api, backend=backend)
+    return KernelLocks(locks=kernel_locks)
 
 
 def write_egg_lockfile(cmd, basename, filename):
@@ -156,17 +151,11 @@ def write_egg_lockfile(cmd, basename, filename):
     cmd.write_or_delete_file(basename, filename, data)
 
 
-def get_locked_kernel_revisions(lock_json: str) -> dict[str, KernelLock]:
-    kernel_locks = {}
-
-    for kernel_repo_id, kernel_lock_json in json.loads(lock_json).items():
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
-        kernel_locks[kernel_repo_id] = kernel_lock
-
-    return kernel_locks
+def get_locked_kernel_revisions(lock_json: str) -> KernelLocks:
+    return KernelLocks.from_json(lock_json)
 
 
-def get_caller_locked_kernel_revisions() -> dict[str, KernelLock]:
+def get_caller_locked_kernel_revisions() -> KernelLocks:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
         if lock_json is None:

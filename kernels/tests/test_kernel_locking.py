@@ -43,6 +43,7 @@ def test_get_locked_kernel():
     project_dir = Path(__file__).parent / "kernel_locking"
     # Also validates that hashing works correctly.
     get_locked_kernel("kernels-community/relu", lockfile=project_dir / "kernels.lock")
+    get_locked_kernel("kernels-test/kernel-deps", lockfile=project_dir / "kernels.lock")
 
 
 def test_layer_locked(device):

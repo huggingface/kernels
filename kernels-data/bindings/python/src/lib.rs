@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use kernels_data::config::{Backend, Build, General, KernelDependency, KernelName, KernelVersion};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
+use kernels_data::lock::{KernelLock, KernelLocks};
 use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
@@ -329,6 +330,15 @@ impl From<KernelVersion> for PyKernelVersion {
     }
 }
 
+impl From<PyKernelVersion> for KernelVersion {
+    fn from(v: PyKernelVersion) -> Self {
+        match v {
+            PyKernelVersion::Version { version } => Self::Version(version),
+            PyKernelVersion::Revision { revision } => Self::Revision(revision),
+        }
+    }
+}
+
 #[pymethods]
 impl PyKernelVersion {
     fn __repr__(&self) -> String {
@@ -351,6 +361,15 @@ struct PyKernelDependency {
 
 impl From<KernelDependency> for PyKernelDependency {
     fn from(d: KernelDependency) -> Self {
+        Self {
+            repo_id: d.repo_id,
+            version: d.version.into(),
+        }
+    }
+}
+
+impl From<PyKernelDependency> for KernelDependency {
+    fn from(d: PyKernelDependency) -> Self {
         Self {
             repo_id: d.repo_id,
             version: d.version.into(),
@@ -381,6 +400,157 @@ impl PyKernelDependency {
             self.repo_id,
             self.version.__repr__()
         )
+    }
+}
+
+/// A locked kernel revision and its transitive dependencies.
+#[pyclass(name = "KernelLock", frozen)]
+#[derive(Clone, Debug)]
+struct PyKernelLock {
+    repo_id: String,
+    revision: String,
+    depends: PyKernelLocks,
+}
+
+impl From<KernelLock> for PyKernelLock {
+    fn from(lock: KernelLock) -> Self {
+        Self {
+            repo_id: lock.repo_id,
+            revision: lock.revision,
+            depends: lock.depends.into(),
+        }
+    }
+}
+
+impl From<PyKernelLock> for KernelLock {
+    fn from(lock: PyKernelLock) -> Self {
+        Self {
+            repo_id: lock.repo_id,
+            revision: lock.revision,
+            depends: lock.depends.into(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelLock {
+    #[new]
+    fn new(repo_id: String, revision: String, depends: PyKernelLocks) -> Self {
+        Self {
+            repo_id,
+            revision,
+            depends,
+        }
+    }
+
+    #[getter]
+    fn repo_id(&self) -> &str {
+        &self.repo_id
+    }
+
+    #[getter]
+    fn revision(&self) -> &str {
+        &self.revision
+    }
+
+    #[getter]
+    fn depends(&self) -> PyKernelLocks {
+        self.depends.clone()
+    }
+
+    /// Parse a `KernelLock` from a JSON string.
+    #[staticmethod]
+    #[pyo3(name = "from_json")]
+    fn py_from_json(s: &str) -> PyResult<Self> {
+        let lock: KernelLock = serde_json::from_str(s)
+            .map_err(|err| PyValueError::new_err(format!("Cannot parse KernelLock: {err:#}")))?;
+        Ok(lock.into())
+    }
+
+    /// Serialize the lock to a pretty-printed JSON string.
+    fn to_json(&self) -> PyResult<String> {
+        let lock: KernelLock = self.clone().into();
+        serde_json::to_string_pretty(&lock)
+            .map_err(|err| PyValueError::new_err(format!("Cannot serialize KernelLock: {err:#}")))
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "KernelLock(repo_id={:?}, revision={:?}, depends={})",
+            self.repo_id,
+            self.revision,
+            self.depends.__repr__()
+        )
+    }
+}
+
+/// A collection of locked kernels keyed by the dependency they resolve.
+#[pyclass(name = "KernelLocks", frozen)]
+#[derive(Clone, Debug)]
+struct PyKernelLocks {
+    locks: std::collections::HashMap<PyKernelDependency, PyKernelLock>,
+}
+
+impl From<KernelLocks> for PyKernelLocks {
+    fn from(locks: KernelLocks) -> Self {
+        Self {
+            locks: locks
+                .locks
+                .into_iter()
+                .map(|(dep, lock)| (dep.into(), lock.into()))
+                .collect(),
+        }
+    }
+}
+
+impl From<PyKernelLocks> for KernelLocks {
+    fn from(locks: PyKernelLocks) -> Self {
+        Self {
+            locks: locks
+                .locks
+                .into_iter()
+                .map(|(dep, lock)| (dep.into(), lock.into()))
+                .collect(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelLocks {
+    #[new]
+    fn new(locks: std::collections::HashMap<PyKernelDependency, PyKernelLock>) -> Self {
+        Self { locks }
+    }
+
+    #[getter]
+    fn locks(&self) -> std::collections::HashMap<PyKernelDependency, PyKernelLock> {
+        self.locks.clone()
+    }
+
+    /// Parse a `KernelLocks` collection from a JSON string.
+    #[staticmethod]
+    #[pyo3(name = "from_json")]
+    fn py_from_json(s: &str) -> PyResult<Self> {
+        let locks: KernelLocks = serde_json::from_str(s)
+            .map_err(|err| PyValueError::new_err(format!("Cannot parse KernelLocks: {err:#}")))?;
+        Ok(locks.into())
+    }
+
+    /// Serialize the locks collection to a pretty-printed JSON string.
+    fn to_json(&self) -> PyResult<String> {
+        let locks: KernelLocks = self.clone().into();
+        serde_json::to_string_pretty(&locks)
+            .map_err(|err| PyValueError::new_err(format!("Cannot serialize KernelLocks: {err:#}")))
+    }
+
+    fn __repr__(&self) -> String {
+        let locks = self
+            .locks
+            .iter()
+            .map(|(dependency, lock)| format!("{}: {}", dependency.__repr__(), lock.__repr__()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("KernelLocks(locks={{{locks}}})")
     }
 }
 
@@ -817,6 +987,8 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyKernelVersion>()?;
     m.add_class::<PyKernelDependency>()?;
+    m.add_class::<PyKernelLock>()?;
+    m.add_class::<PyKernelLocks>()?;
     m.add_class::<PyGeneral>()?;
     m.add_class::<PyBuild>()?;
     m.add_class::<PyMetadata>()?;

@@ -1,6 +1,5 @@
 import importlib.metadata
 import inspect
-import json
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
@@ -120,39 +119,40 @@ def write_egg_lockfile(cmd, basename, filename):
     cmd.write_or_delete_file(basename, filename, data)
 
 
-def get_locked_kernel_revisions(lock_json: str) -> KernelLocks:
-    return KernelLocks.from_json(lock_json)
+def _get_locked_kernel_revision(repo_id: str, lock_json: str) -> tuple[KernelLocks, KernelDependency]:
+    kernel_locks = KernelLocks.from_json(lock_json)
+
+    # Lock files are keyed `KernelDependency`, but for project-locked
+    # kenels we only have one version at the top level, so we have to
+    # do a linear search.
+    kernel_dep = next((dep for dep in kernel_locks.locks.keys() if dep.repo_id == repo_id), None)
+
+    if kernel_dep is None:
+        raise ValueError(
+            f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
+        )
+
+    return kernel_locks, kernel_dep
 
 
-def get_caller_locked_kernel_revisions() -> KernelLocks:
+def get_locked_kernel_revision(repo_id: str, lockfile: Path) -> tuple[KernelLocks, KernelDependency]:
+    with open(lockfile, "r") as f:
+        return _get_locked_kernel_revision(repo_id, f.read())
+
+
+def get_caller_locked_kernel_revision(
+    repo_id: str,
+) -> tuple[KernelLocks, KernelDependency]:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
         if lock_json is None:
             continue
-        kernel_locks = get_locked_kernel_revisions(lock_json)
-        if len(kernel_locks) > 0:
-            return kernel_locks
 
-    return {}
+        return _get_locked_kernel_revision(repo_id, lock_json)
 
-
-def get_locked_kernel_revision(repo_id: str, lock_json: str) -> KernelLock | None:
-    locks = json.loads(lock_json)
-    lock = locks.get(repo_id, None)
-    if lock is None:
-        return None
-    return KernelLock.from_json(lock)
-
-
-def get_caller_locked_kernel_revision(repo_id: str) -> KernelLock | None:
-    for dist in _get_caller_distributions():
-        lock_json = dist.read_text("kernels.lock")
-        if lock_json is None:
-            continue
-        locked_sha = get_locked_kernel_revision(repo_id, lock_json)
-        if locked_sha is not None:
-            return locked_sha
-    return None
+    raise ValueError(
+        "Could not find a `kernels.lock` file in the caller's package metadata. Please lock kernels with `kernels lock <project>` and then reinstall the project."
+    )
 
 
 def _get_caller_distributions() -> list[Distribution]:

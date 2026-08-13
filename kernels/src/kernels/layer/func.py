@@ -5,8 +5,11 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Protocol, Type
 
 from huggingface_hub import constants
+from kernels_data import KernelDependency, KernelLocks
 
 from .._versions import select_revision_or_version
+from ..deps import load_kernel_with_deps
+from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
     get_local_kernel,
@@ -299,24 +302,24 @@ class LockedFuncRepository:
         self._lockfile = lockfile
         self.func_name = func_name
         self._trust_remote_code = trust_remote_code
-        self._revision = self._resolve_revision()
+        kernel_locks, kernel_dep = self._get_lock()
+        self.kernel_locks = kernel_locks
+        self.kernel_dep = kernel_dep
 
-    def _resolve_revision(self) -> str:
+    def _get_lock(self) -> tuple[KernelLocks, KernelDependency]:
         if self._lockfile is None:
-            locked_sha = get_caller_locked_kernel_revision(self._repo_id)
+            return get_caller_locked_kernel_revision(self._repo_id)
         else:
-            with open(self._lockfile, "r") as f:
-                locked_sha = get_locked_kernel_revision(self._repo_id, f.read())
-
-        if locked_sha is None:
-            raise ValueError(f"Kernel `{self._repo_id}` is not locked")
-
-        return locked_sha
+            return get_locked_kernel_revision(self._repo_id, self._lockfile)
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(
-            repo_id=self._repo_id,
-            revision=self._revision,
+        kernel = load_kernel_with_deps(
+            api=_get_hf_api(),
+            backend=None,
+            kernel=self.kernel_dep,
+            kernel_locks=self.kernel_locks,
+            local_files_only=True,
+            local_kernels={},
             trust_remote_code=self._trust_remote_code,
         )
         return _get_kernel_func(self, kernel)
@@ -326,15 +329,25 @@ class LockedFuncRepository:
             isinstance(other, LockedFuncRepository)
             and self.func_name == other.func_name
             and self._repo_id == other._repo_id
-            and self._revision == other._revision
+            and self.kernel_dep == other.kernel_dep
+            and self.kernel_locks == other.kernel_locks
             and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.func_name, self._repo_id, self._revision, self._trust_remote_code))
+        return hash(
+            (
+                self.func_name,
+                self._repo_id,
+                self.kernel_dep,
+                self.kernel_locks,
+                self._trust_remote_code,
+            )
+        )
 
     def __str__(self) -> str:
-        return f"`{self._repo_id}` (revision: {self._revision}), function `{self.func_name}`"
+        revision = self.kernel_locks.locks[self.kernel_dep].revision
+        return f"`{self._repo_id}` (revision: {revision}), function `{self.func_name}`"
 
 
 def _get_kernel_func(repo: FuncRepositoryProtocol, kernel: ModuleType) -> Type["nn.Module"]:

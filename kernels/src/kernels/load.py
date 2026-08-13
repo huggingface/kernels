@@ -10,8 +10,8 @@ from kernels._versions import revision_or_version, select_revision_or_version
 from kernels.deps import load_kernel_with_deps
 from kernels.hf_hub import _get_hf_api
 from kernels.locking import (
-    get_caller_locked_kernel_revisions,
-    get_locked_kernel_revisions,
+    get_caller_locked_kernel_revision,
+    get_locked_kernel_revision,
 )
 from kernels.variants import (
     get_variants,
@@ -213,19 +213,9 @@ def load_kernel(
         `ModuleType`: The imported kernel module.
     """
     if lockfile is None:
-        kernel_locks = get_caller_locked_kernel_revisions()
+        kernel_locks, kernel_dep = get_caller_locked_kernel_revision(repo_id)
     else:
-        with open(lockfile, "r") as f:
-            kernel_locks = get_locked_kernel_revisions(f.read())
-
-    # Lock files are keyed `KernelDependency`, but for project-locked
-    # kenels we only have one version at the top level, so we have to
-    # do a linear search.
-    kernel_dep = next((dep for dep in kernel_locks.locks.keys() if dep.repo_id == repo_id), None)
-    if kernel_dep is None:
-        raise ValueError(
-            f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
-        )
+        kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
     return load_kernel_with_deps(
         api=_get_hf_api(),
@@ -259,19 +249,9 @@ def get_locked_kernel(
         `ModuleType`: The imported kernel module.
     """
     if lockfile is None:
-        kernel_locks = get_caller_locked_kernel_revisions()
+        kernel_locks, kernel_dep = get_caller_locked_kernel_revision(repo_id)
     else:
-        with open(lockfile, "r") as f:
-            kernel_locks = get_locked_kernel_revisions(f.read())
-
-    # Lock files are keyed `KernelDependency`, but for project-locked
-    # kenels we only have one version at the top level, so we have to
-    # do a linear search.
-    kernel_dep = next((dep for dep in kernel_locks.locks.keys() if dep.repo_id == repo_id), None)
-    if kernel_dep is None:
-        raise ValueError(
-            f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
-        )
+        kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
     return load_kernel_with_deps(
         api=_get_hf_api(user_agent=user_agent),

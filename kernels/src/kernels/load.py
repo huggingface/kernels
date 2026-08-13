@@ -218,7 +218,11 @@ def load_kernel(
         with open(lockfile, "r") as f:
             kernel_locks = get_locked_kernel_revisions(f.read())
 
-    if repo_id not in kernel_locks:
+    # Lock files are keyed `KernelDependency`, but for project-locked
+    # kenels we only have one version at the top level, so we have to
+    # do a linear search.
+    kernel_dep = next((dep for dep in kernel_locks.locks.keys() if dep.repo_id == repo_id), None)
+    if kernel_dep is None:
         raise ValueError(
             f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
         )
@@ -226,10 +230,7 @@ def load_kernel(
     return load_kernel_with_deps(
         api=_get_hf_api(),
         backend=backend,
-        kernel=KernelDependency(
-            repo_id=repo_id,
-            version=KernelVersion.Revision(kernel_locks[repo_id].revision),
-        ),
+        kernel=kernel_dep,
         kernel_locks=kernel_locks,
         local_files_only=True,
         local_kernels={},

@@ -1,13 +1,10 @@
-import dataclasses
 import importlib.metadata
 import inspect
 import json
-from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
-from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import HfApi
 from kernels_data import (
     KernelDependency,
@@ -20,38 +17,6 @@ from kernels._versions import resolve_kernel_version
 from kernels.compat import tomllib
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.variants import get_variants
-
-
-class LockJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
-
-
-@strict
-# @dataclass
-@dataclass(frozen=True)
-class KernelLock_:
-    repo_id: str
-    revision: str
-    depends: dict[KernelDependency, "KernelLock"]
-
-    @classmethod
-    def from_json(cls, o: dict):
-        depends_json = o.get("depends", {})
-        depends = {}
-        for variant, variant_locks in depends_json.items():
-            variant_depends = {
-                dep_repo_id: cls.from_json(lock_json) for dep_repo_id, lock_json in variant_locks.items()
-            }
-            depends[variant] = variant_depends
-        return cls(
-            repo_id=o["repo_id"],
-            revision=o["revision"],
-            depends=depends,
-        )
-
 
 _LOCK_METADATA_CACHE: dict[tuple[str | None, KernelDependency], KernelLock] = {}
 

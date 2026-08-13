@@ -1,10 +1,8 @@
 import argparse
-import dataclasses
-import json
 import sys
 from pathlib import Path
 
-from kernels_data import KernelDependency, KernelVersion
+from kernels_data import KernelDependency, KernelLocks, KernelVersion
 
 from kernels.cli.info import print_kernel_info
 from kernels.cli.lock_kernel_depends import print_lock_kernel_depends
@@ -16,7 +14,7 @@ from kernels.install import (
     install_kernel,
     install_kernel_all_variants,
 )
-from kernels.locking import KernelLock, LockJSONEncoder, extract_dependency_locks
+from kernels.locking import extract_dependency_locks
 
 
 def main():
@@ -154,12 +152,12 @@ def download_kernels(args):
         sys.exit(1)
 
     with open(args.project_dir / "kernels.lock", "r") as f:
-        lock_json = json.load(f)
+        kernel_locks = KernelLocks.from_json(f.read())
 
     all_successful = True
 
-    for repo_id, kernel_lock_json in lock_json.items():
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
+    # TODO: recurse into locks to also fetch dependencies.
+    for _, kernel_lock in kernel_locks.locks.items():
         print(
             f"Downloading `{kernel_lock.repo_id}` with revision: {kernel_lock.revision}",
             file=sys.stderr,

@@ -12,7 +12,7 @@ from kernels._versions import resolve_kernel_version
 from kernels.backends import _backend
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.importer import _import_from_path
-from kernels.locking import KernelLock, KernelLocks
+from kernels.locking import KernelLocks
 from kernels.python_deps import validate_dependencies
 from kernels.variants import (
     Variant,
@@ -246,7 +246,7 @@ def load_kernel_with_deps(
     local_kernels: dict[str, Path],
     kernel: KernelDependency,
     local_files_only: bool,
-    kernel_locks: dict[str, KernelLock] | None,
+    kernel_locks: KernelLocks | None,
     trust_remote_code: bool | list[str],
 ) -> ModuleType:
     tree = resolve_kernel_tree(

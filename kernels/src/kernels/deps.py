@@ -40,8 +40,6 @@ class LocalKernel:
 
     variant_path: Path
 
-    variant: Variant | None
-
     def install(self, *, api: HfApi) -> Self:
         # Local kernels are already installed, so we just return self.
         return self
@@ -76,7 +74,6 @@ class RemoteKernel:
 
         return LocalKernel(
             variant_path=repo_path / "build" / self.variant.variant_str,
-            variant=self.variant,
         )
 
 
@@ -136,7 +133,9 @@ def _get_local_kernel_metadata(repo_path: Path, *, backend: str | None) -> Tuple
         )
 
     metadata_path = variant_path / "metadata.json"
-    location = LocalKernel(variant_path=variant_path, variant=variant)
+    location = LocalKernel(
+        variant_path=variant_path,
+    )
 
     return location, metadata_path
 
@@ -185,7 +184,7 @@ def _get_offline_kernel_metadata(
         raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
 
     metadata_path = variant_path / "metadata.json"
-    location = LocalKernel(variant_path=variant_path, variant=variant)
+    location = LocalKernel(variant_path=variant_path)
 
     return location, metadata_path
 

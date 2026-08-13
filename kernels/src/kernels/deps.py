@@ -282,9 +282,6 @@ def resolve_kernel_tree(
     if seen is None:
         seen = set()
 
-    print(kernel)
-    print(kernel_locks)
-
     # Check for cycles.
     if kernel in seen:
         raise ValueError(f"Cyclic kernel dependency detected: {kernel.repo_id}")
@@ -330,23 +327,10 @@ def resolve_kernel_tree(
         else:
             location, metadata_path = get_kernel_metadata(kernel.repo_id, api=api, revision=revision, backend=backend)
 
-            # if kernel_locks is not None:
-            # if isinstance(location, LocalKernel) and location.variant is None:
-            #    raise ValueError("Cannot determine variant for a local kernel.")
-            # kernel_lock = kernel_locks.get(kernel.repo_id, None)
-            # assert kernel_lock is not None
-            # kernel_locks = kernel_lock.depends.get(location.variant.variant_str, None)
-            # if kernel_locks is None:
-            #    raise ValueError(
-            #        f"Kernel `{kernel.repo_id}` does not have a lock for variant `{location.variant.variant_str}`. Please lock it with `kernels lock <project>` and then reinstall the project."
-            #    )
-
     metadata = Metadata.read_from_file(metadata_path)
 
-    kernel_deps = {}
-    print("depends", kernel_lock, kernel_lock.depends)
-
     # Recurse into dependencies.
+    kernel_deps = {}
     for dep in metadata.kernel_depends:
         kernel_deps[dep.repo_id] = resolve_kernel_tree(
             api=api,

@@ -17,7 +17,7 @@
     },
     "lock": {
       "repo-id": "kernels-test/kernel-deps",
-      "revision": "ba92dc9483ef2ef7254ebfa2051382ed45ea8747",
+      "revision": "b1c7a501401316a27653d46107b98259ee79d888",
       "depends": [
         {
           "dependency": {

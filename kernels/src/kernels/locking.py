@@ -105,7 +105,11 @@ def dependency_locks(
 
     seen.remove(kernel)
 
-    lock = KernelLock(repo_id=kernel.repo_id, revision=revision, depends=kernel_deps)
+    lock = KernelLock(
+        repo_id=kernel.repo_id,
+        revision=revision,
+        depends=KernelLocks(locks=kernel_deps),
+    )
 
     _LOCK_METADATA_CACHE[(backend, kernel)] = lock
 

@@ -10,9 +10,9 @@ pub fn api() -> Result<hf_hub::HFClientSync> {
 pub fn repo_handle<T: RepoType>(api: &HFClientSync, repo_id: &str) -> HFRepositorySync<T> {
     let parts: Vec<&str> = repo_id.splitn(2, '/').collect();
     if parts.len() == 2 {
-        api.repository::<T>(parts[0], parts[1])
+        api.repository(T::default(), parts[0], parts[1])
     } else {
-        api.repository::<T>("", repo_id)
+        api.repository(T::default(), "", repo_id)
     }
 }
 

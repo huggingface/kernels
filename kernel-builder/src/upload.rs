@@ -434,9 +434,8 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
 /// Resolve the ref and URL of the pull request opened by a `create_pr` commit.
 ///
-/// The Hub reports the pull request as `pullRequestUrl` in the commit
-/// response, which hf-hub 1.0.0-rc.0 does not deserialize into `CommitInfo`
-/// (it expects `prUrl`/`prNum`), so fall back to matching the commit OID
+/// The Hub may return a pull-request URL and commit OID without a pull-request
+/// number in the commit response, so fall back to matching the commit OID
 /// against the repository's pull-request refs.
 fn resolve_pr<T: RepoType>(
     repo: &HFRepositorySync<T>,

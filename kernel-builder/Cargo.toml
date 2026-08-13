@@ -18,7 +18,7 @@ clap-markdown = "0.1.5"
 clap_complete = "4"
 eyre = "0.6.12"
 git2 = "0.20"
-hf-hub = { version = "1.0.0-rc.0", features = ["blocking"] }
+hf-hub = { version = "1.1.0", git = "https://github.com/huggingface/hf-hub", rev = "8b00e9eab4a27a614e414692d71791d8e33f7149", features = ["blocking"] }
 indicatif = "0.17"
 itertools = "0.13"
 minijinja = "2.5"

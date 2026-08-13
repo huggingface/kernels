@@ -226,6 +226,12 @@ In both cases, build variants that are not updated must be removed from
 the new version's branch.
 
 > [!IMPORTANT]
+> The second case covers *additions* as well: adding a function, layer, or
+> any other public symbol also requires a version bump, not just API
+> changes or removals. It also covers extensions that do not change the
+> API surface at all, see [below](#extensions-without-api-changes).
+
+> [!IMPORTANT]
 > The *kernel API* covered by these versioning guarantees is only the
 > public API: the symbols listed in the `__all__` of the kernel's
 > top-level `__init__.py`. Anything not in `__all__` (e.g. internal
@@ -238,6 +244,52 @@ the new version's branch.
 > alpha or beta stage and are not recommended for production use (e.g.
 > because the API is still changing regularly or there are still too
 > many issues).
+
+### Rule of thumb
+
+> The human test is: does this PR change anything such that code may work
+> with the builds that would be the output of this PR, but not older
+> builds?
+
+If the answer is yes, the version needs to be bumped, unless one of the
+[exceptions](#exceptions) applies.
+
+### Why additions need a version bump
+
+Suppose that a kernel exposes a single function `a` and that there are
+already builds for Torch 2.9 up to Torch 2.13. Now a function `b` is
+added. Since `kernel-builder` only builds for the last two Torch
+versions, only the Torch 2.12 and 2.13 variants will contain `b`.
+
+If the version is not bumped, downstream software (e.g. Transformers)
+will start using `b` and then fail on Torch 2.9 to 2.11 with a nasty
+exception that the function cannot be found. If the version *is* bumped
+(and the stale variants are removed from the new version's branch),
+`kernels` will instead tell the user that there is no build variant for
+their current system, which is a far clearer error.
+
+### Extensions without API changes
+
+The same reasoning applies to extensions that leave the API surface
+untouched. For example, the function signatures could be the same, but if
+a kernel internally first only covered tensors of `float16` and then adds
+support for tensors of `bfloat16`, that is also a change that warrants a
+bump. Downstream software that passes `bfloat16` tensors would otherwise
+fail on the build variants that were not rebuilt.
+
+### Exceptions
+
+A version bump is not needed when every existing build variant is
+replaced by the new build:
+
+- Python-only (noarch) kernels, e.g. `torch-cuda`. All build variants get
+  updated, so this issue does not exist.
+- AoT-compiled kernels where a build replaces all variants. This is the
+  case for:
+  - Very new kernels that only have builds for the latest two Torch
+    versions.
+  - Torch stable ABI kernels, as long as the CUDA versions that get built
+    overlap with the current build variants.
 
 ## Native Python module
 

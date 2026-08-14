@@ -125,7 +125,7 @@ def _get_locked_kernel_revision(repo_id: str, lock_json: str) -> tuple[KernelLoc
     # Lock files are keyed `KernelDependency`, but for project-locked
     # kenels we only have one version at the top level, so we have to
     # do a linear search.
-    kernel_dep = next((dep for dep in kernel_locks.locks.keys() if dep.repo_id == repo_id), None)
+    kernel_dep = next((dep for dep in kernel_locks.keys() if dep.repo_id == repo_id), None)
 
     if kernel_dep is None:
         raise ValueError(

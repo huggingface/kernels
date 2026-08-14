@@ -10,7 +10,7 @@ use kernels_data::lock::{KernelLock, KernelLocks};
 use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
-use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyException, PyKeyError, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 /// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
@@ -315,7 +315,7 @@ impl PyProvenance {
 
 /// A kernel version: either a numeric version or a git revision string.
 #[pyclass(name = "KernelVersion", frozen, eq, hash)]
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum PyKernelVersion {
     Version { version: usize },
     Revision { revision: String },
@@ -353,7 +353,7 @@ impl PyKernelVersion {
 
 /// A dependency on another kernel.
 #[pyclass(name = "KernelDependency", frozen, eq, hash)]
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct PyKernelDependency {
     repo_id: String,
     version: PyKernelVersion,
@@ -404,8 +404,8 @@ impl PyKernelDependency {
 }
 
 /// A locked kernel revision and its transitive dependencies.
-#[pyclass(name = "KernelLock", frozen)]
-#[derive(Clone, Debug)]
+#[pyclass(name = "KernelLock", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct PyKernelLock {
     repo_id: String,
     revision: String,
@@ -485,10 +485,30 @@ impl PyKernelLock {
 }
 
 /// A collection of locked kernels keyed by the dependency they resolve.
-#[pyclass(name = "KernelLocks", frozen)]
-#[derive(Clone, Debug)]
+///
+/// Behaves as a read-only mapping from [`PyKernelDependency`] to
+/// [`PyKernelLock`]. The map is ordered, so iteration is deterministic.
+#[pyclass(name = "KernelLocks", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct PyKernelLocks {
-    locks: std::collections::HashMap<PyKernelDependency, PyKernelLock>,
+    locks: BTreeMap<PyKernelDependency, PyKernelLock>,
+}
+
+/// Iterator over the dependencies of a [`PyKernelLocks`].
+#[pyclass(name = "KernelLocksIterator")]
+struct PyKernelLocksIterator {
+    dependencies: std::vec::IntoIter<PyKernelDependency>,
+}
+
+#[pymethods]
+impl PyKernelLocksIterator {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self) -> Option<PyKernelDependency> {
+        self.dependencies.next()
+    }
 }
 
 impl From<KernelLocks> for PyKernelLocks {
@@ -518,13 +538,63 @@ impl From<PyKernelLocks> for KernelLocks {
 #[pymethods]
 impl PyKernelLocks {
     #[new]
-    fn new(locks: std::collections::HashMap<PyKernelDependency, PyKernelLock>) -> Self {
+    fn new(locks: BTreeMap<PyKernelDependency, PyKernelLock>) -> Self {
         Self { locks }
     }
 
-    #[getter]
-    fn locks(&self) -> std::collections::HashMap<PyKernelDependency, PyKernelLock> {
-        self.locks.clone()
+    fn __len__(&self) -> usize {
+        self.locks.len()
+    }
+
+    fn __getitem__(&self, dependency: &PyKernelDependency) -> PyResult<PyKernelLock> {
+        self.locks
+            .get(dependency)
+            .cloned()
+            .ok_or_else(|| PyKeyError::new_err(dependency.__repr__()))
+    }
+
+    fn __contains__(&self, dependency: &PyBound<'_, PyAny>) -> bool {
+        dependency
+            .extract::<PyKernelDependency>()
+            .is_ok_and(|dependency| self.locks.contains_key(&dependency))
+    }
+
+    fn __iter__(&self) -> PyKernelLocksIterator {
+        PyKernelLocksIterator {
+            dependencies: self.keys().into_iter(),
+        }
+    }
+
+    /// Get the lock for `dependency`, or `default` if it is not locked.
+    #[pyo3(signature = (dependency, default = None))]
+    fn get(
+        &self,
+        dependency: &PyBound<'_, PyAny>,
+        default: Option<PyKernelLock>,
+    ) -> Option<PyKernelLock> {
+        dependency
+            .extract::<PyKernelDependency>()
+            .ok()
+            .and_then(|dependency| self.locks.get(&dependency).cloned())
+            .or(default)
+    }
+
+    /// Get the locked dependencies.
+    fn keys(&self) -> Vec<PyKernelDependency> {
+        self.locks.keys().cloned().collect()
+    }
+
+    /// Get the kernel locks.
+    fn values(&self) -> Vec<PyKernelLock> {
+        self.locks.values().cloned().collect()
+    }
+
+    /// Get the (dependency, lock) pairs.
+    fn items(&self) -> Vec<(PyKernelDependency, PyKernelLock)> {
+        self.locks
+            .iter()
+            .map(|(dependency, lock)| (dependency.clone(), lock.clone()))
+            .collect()
     }
 
     /// Parse a `KernelLocks` collection from a JSON string.
@@ -550,7 +620,7 @@ impl PyKernelLocks {
             .map(|(dependency, lock)| format!("{}: {}", dependency.__repr__(), lock.__repr__()))
             .collect::<Vec<_>>()
             .join(", ");
-        format!("KernelLocks(locks={{{locks}}})")
+        format!("KernelLocks({{{locks}}})")
     }
 }
 

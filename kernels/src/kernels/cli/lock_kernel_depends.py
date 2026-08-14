@@ -19,7 +19,7 @@ def print_lock_kernel_depends(project_dir: Path):
     for backend in build.general.backends:
         for dep, lock in extract_dependency_locks(
             build.all_kernel_depends(backend), api=api, backend=str(backend)
-        ).locks.items():
+        ).items():
             kernel_locks[dep] = lock
 
     print(KernelLocks(locks=kernel_locks).to_json())

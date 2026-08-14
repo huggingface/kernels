@@ -255,7 +255,7 @@ class LockedLayerRepository:
         )
 
     def __str__(self) -> str:
-        revision = self.kernel_locks.locks[self.kernel_dep].revision
+        revision = self.kernel_locks[self.kernel_dep].revision
         return f"`{self._repo_id}` (revision: {revision}), layer `{self.layer_name}`)"
 
 

@@ -157,7 +157,7 @@ def download_kernels(args):
     all_successful = True
 
     # TODO: recurse into locks to also fetch dependencies.
-    for _, kernel_lock in kernel_locks.locks.items():
+    for _, kernel_lock in kernel_locks.items():
         print(
             f"Downloading `{kernel_lock.repo_id}` with revision: {kernel_lock.revision}",
             file=sys.stderr,

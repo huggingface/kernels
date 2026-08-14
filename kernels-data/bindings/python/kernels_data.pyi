@@ -1,6 +1,7 @@
 """Type stubs for kernels_data module."""
 
 import os
+from collections.abc import Iterator
 from enum import Enum
 from typing import Optional, final
 
@@ -371,15 +372,45 @@ class KernelLock:
         ...
 
     def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
 
 @final
 class KernelLocks:
-    """A collection of locked kernels keyed by the dependency they resolve."""
+    """A collection of locked kernels keyed by the dependency they resolve.
+
+    Behaves as a read-only mapping from `KernelDependency` to `KernelLock`.
+    Iteration order is deterministic (sorted by dependency).
+    """
 
     def __new__(cls, locks: dict[KernelDependency, KernelLock]) -> "KernelLocks": ...
-    @property
-    def locks(self) -> dict[KernelDependency, KernelLock]:
-        """Mapping from kernel dependency to kernel lock."""
+    def __len__(self) -> int: ...
+    def __getitem__(self, dependency: KernelDependency) -> KernelLock:
+        """Get the lock for `dependency`.
+
+        Raises:
+            KeyError: If the dependency is not locked.
+        """
+        ...
+
+    def __contains__(self, dependency: object) -> bool: ...
+    def __iter__(self) -> Iterator[KernelDependency]: ...
+    def get(
+        self, dependency: KernelDependency, default: Optional[KernelLock] = None
+    ) -> Optional[KernelLock]:
+        """Get the lock for `dependency`, or `default` if it is not locked."""
+        ...
+
+    def keys(self) -> list[KernelDependency]:
+        """Get the locked dependencies."""
+        ...
+
+    def values(self) -> list[KernelLock]:
+        """Get the kernel locks."""
+        ...
+
+    def items(self) -> list[tuple[KernelDependency, KernelLock]]:
+        """Get the (dependency, lock) pairs."""
         ...
 
     @staticmethod
@@ -400,6 +431,8 @@ class KernelLocks:
         ...
 
     def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
 
 @final
 class General:

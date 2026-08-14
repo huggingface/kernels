@@ -346,7 +346,7 @@ class LockedFuncRepository:
         )
 
     def __str__(self) -> str:
-        revision = self.kernel_locks.locks[self.kernel_dep].revision
+        revision = self.kernel_locks[self.kernel_dep].revision
         return f"`{self._repo_id}` (revision: {revision}), function `{self.func_name}`"
 
 

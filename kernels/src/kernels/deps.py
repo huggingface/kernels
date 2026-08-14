@@ -306,7 +306,7 @@ def resolve_kernel_tree(
         if kernel_locks is not None:
             # If kernel locks are provided, we use the revision from the
             # locks. We also require *all* kernels to be locked.
-            kernel_lock = kernel_locks.locks.get(kernel, None)
+            kernel_lock = kernel_locks.get(kernel, None)
             if kernel_lock is None:
                 raise ValueError(
                     f"Kernel `{kernel.repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."

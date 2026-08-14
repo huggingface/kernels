@@ -34,6 +34,9 @@ buildPythonPackage {
 
   cargoDeps = rustPlatform.importCargoLock {
     lockFile = ../../../../Cargo.lock;
+    outputHashes = {
+      "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
+    };
   };
 
   maturinBuildFlags = cargoFlags;

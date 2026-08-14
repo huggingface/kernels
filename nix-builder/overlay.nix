@@ -12,6 +12,8 @@ final: prev:
 
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
+  fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };
+
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
   hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };

@@ -2,7 +2,14 @@ import json
 
 import pytest
 
-from kernels_data import Backend, KernelName, Metadata, Version
+from kernels_data import (
+    Backend,
+    KernelDependency,
+    KernelName,
+    KernelVersion,
+    Metadata,
+    Version,
+)
 
 
 def _write_metadata(path, **fields):
@@ -200,3 +207,41 @@ def test_metadata_load(tmp_path):
 def test_metadata_load_missing_file(tmp_path):
     with pytest.raises(OSError):
         Metadata.read_from_file(tmp_path / "does-not-exist.json")
+
+
+def test_kernel_version_eq_and_hash():
+    assert KernelVersion.Version(1) == KernelVersion.Version(1)
+    assert KernelVersion.Revision("abc") == KernelVersion.Revision("abc")
+    assert KernelVersion.Version(1) != KernelVersion.Version(2)
+    assert KernelVersion.Version(1) != KernelVersion.Revision("1")
+    assert hash(KernelVersion.Version(1)) == hash(KernelVersion.Version(1))
+    assert hash(KernelVersion.Revision("abc")) == hash(KernelVersion.Revision("abc"))
+    assert {KernelVersion.Version(1), KernelVersion.Version(1)} == {
+        KernelVersion.Version(1)
+    }
+
+
+def test_kernel_dependency_eq_and_hash():
+    a = KernelDependency(repo_id="foo/bar", version=KernelVersion.Version(1))
+    b = KernelDependency(repo_id="foo/bar", version=KernelVersion.Version(1))
+    c = KernelDependency(repo_id="foo/bar", version=KernelVersion.Revision("deadbeef"))
+    d = KernelDependency(repo_id="other/repo", version=KernelVersion.Version(1))
+
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c
+    assert a != d
+
+    # Distinct instances with equal content collapse in sets/dicts.
+    assert {a, b, c, d} == {a, c, d}
+
+    cache: dict[KernelDependency, int] = {a: 1}
+    assert cache[b] == 1
+
+
+def test_kernel_dependency_is_immutable():
+    dep = KernelDependency(repo_id="foo/bar", version=KernelVersion.Version(1))
+    with pytest.raises(AttributeError):
+        dep.repo_id = "other/repo"
+    with pytest.raises(AttributeError):
+        dep.version = KernelVersion.Version(2)

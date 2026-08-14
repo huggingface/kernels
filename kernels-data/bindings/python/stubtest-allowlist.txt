@@ -6,6 +6,7 @@ kernels_data\.kernels_data
 # `@disjoint_base` marker only lives in `typing_extensions`, which this
 # dependency-free extension package does not pull in, so the stub omits it.
 kernels_data\.DigestViolation
+kernels_data\.KernelVersion
 
 # `DigestValidationError.violations` is attached as a per-instance attribute by
 # the `Digest.validate` binding (via `setattr`), so it is not visible on the

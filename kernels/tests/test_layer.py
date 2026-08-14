@@ -19,12 +19,12 @@ from kernels import (
     use_kernel_forward_from_hub,
     use_kernel_mapping,
 )
+from kernels.install import (
+    install_kernel,
+)
 from kernels.layer.layer import (
     _KERNEL_MAPPING,
     _validate_layer,
-)
-from kernels.utils import (
-    install_kernel,
 )
 
 

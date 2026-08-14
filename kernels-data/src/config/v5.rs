@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelName};
+use super::{Dependency, GitUrl, KernelDependency, KernelName};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -58,6 +58,8 @@ pub struct General {
 
     pub hub: Option<Hub>,
 
+    pub kernel_depends: Option<Vec<KernelDependency>>,
+
     pub neuron: Option<NeuronGeneral>,
 
     pub python_depends: Option<Vec<String>>,
@@ -72,12 +74,14 @@ pub struct General {
 pub struct CudaGeneral {
     pub minver: Option<Version>,
     pub maxver: Option<Version>,
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NeuronGeneral {
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -90,6 +94,7 @@ pub struct TpuGeneral {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct XpuGeneral {
+    pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -224,6 +229,7 @@ impl From<General> for super::General {
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
+            kernel_depends: general.kernel_depends,
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
             tpu: general.tpu.map(Into::into),
@@ -249,6 +255,7 @@ impl From<CudaGeneral> for super::CudaGeneral {
         Self {
             minver: cuda.minver,
             maxver: cuda.maxver,
+            kernel_depends: cuda.kernel_depends,
             python_depends: cuda.python_depends,
         }
     }
@@ -257,6 +264,7 @@ impl From<CudaGeneral> for super::CudaGeneral {
 impl From<NeuronGeneral> for super::NeuronGeneral {
     fn from(neuron: NeuronGeneral) -> Self {
         Self {
+            kernel_depends: neuron.kernel_depends,
             python_depends: neuron.python_depends,
         }
     }
@@ -273,6 +281,7 @@ impl From<TpuGeneral> for super::TpuGeneral {
 impl From<XpuGeneral> for super::XpuGeneral {
     fn from(xpu: XpuGeneral) -> Self {
         Self {
+            kernel_depends: xpu.kernel_depends,
             python_depends: xpu.python_depends,
         }
     }
@@ -437,6 +446,7 @@ impl From<super::General> for General {
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
+            kernel_depends: general.kernel_depends,
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
             tpu: general.tpu.map(Into::into),
@@ -462,6 +472,7 @@ impl From<super::CudaGeneral> for CudaGeneral {
         Self {
             minver: cuda.minver,
             maxver: cuda.maxver,
+            kernel_depends: cuda.kernel_depends,
             python_depends: cuda.python_depends,
         }
     }
@@ -470,6 +481,7 @@ impl From<super::CudaGeneral> for CudaGeneral {
 impl From<super::NeuronGeneral> for NeuronGeneral {
     fn from(neuron: super::NeuronGeneral) -> Self {
         Self {
+            kernel_depends: neuron.kernel_depends,
             python_depends: neuron.python_depends,
         }
     }
@@ -486,6 +498,7 @@ impl From<super::TpuGeneral> for TpuGeneral {
 impl From<super::XpuGeneral> for XpuGeneral {
     fn from(xpu: super::XpuGeneral) -> Self {
         Self {
+            kernel_depends: xpu.kernel_depends,
             python_depends: xpu.python_depends,
         }
     }

@@ -5,13 +5,13 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Protocol, Type
 
 from .._versions import select_revision_or_version
+from ..load import (
+    get_kernel,
+    get_local_kernel,
+)
 from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
-)
-from ..utils import (
-    get_kernel,
-    get_local_kernel,
 )
 from .layer import _create_func_module, use_kernel_forward_from_hub
 from .repos import RepositoryProtocol

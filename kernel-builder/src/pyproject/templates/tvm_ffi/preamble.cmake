@@ -148,17 +148,17 @@ elseif(GPU_LANG STREQUAL "SYCL")
 
   # Rebuild sycl_flags (compile) and sycl_link_flags (link) from the variables
   # above. A macro so it runs in the including scope and can be re-invoked.
+  #
+  # -foffload-fp32-prec-* keeps fp32 division and sqrt IEEE correctly rounded,
+  # matching PyTorch; both the compile and the link step need them.
   macro(xpu_compose_sycl_flags)
     set(sycl_flags
-      "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+      "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
 
     # spir64_gen bakes the per-device AOT images; -device selects the GPUs.
     set(sycl_link_flags
-      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
 
-    # Backend options reach exactly one target each, so emit them per target:
-    # spir64_gen takes -device (it bakes the generic AOT image), while every
-    # intel_gpu_* alias already implies its device.
     # Backend options reach one target each: spir64_gen takes -device, the
     # intel_gpu_* aliases imply theirs. SHELL: stops CMake from deduplicating
     # the identical -options and silently dropping all but the first target.

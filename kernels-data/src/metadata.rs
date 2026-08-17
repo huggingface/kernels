@@ -468,19 +468,12 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_kernel_builder_git_is_dropped() {
-        // `KernelBuilderVersion::git` is flattened, and serde deserializes a
-        // flattened `Option` by discarding the error rather than propagating
-        // it. So an unreadable `kernel-builder` git status drops that status
-        // instead of rejecting the metadata.
+    fn unreadable_kernel_builder_git_is_an_error() {
+        // Invalid legacy `sha` field should be rejected rather than dropped.
         let mut value: serde_json::Value = serde_json::from_str(LEGACY_HUB_METADATA).unwrap();
         value["provenance"]["kernel-builder"]["sha"] = serde_json::json!("not-an-oid");
 
-        let metadata: Metadata = serde_json::from_value(value).unwrap();
-        let provenance = metadata.provenance.expect("provenance should be read");
-        assert!(provenance.kernel_builder.git.is_none());
-        assert_eq!(provenance.kernel_builder.version, "0.17.0-dev0");
-        assert!(provenance.kernel.is_some());
+        assert!(serde_json::from_value::<Metadata>(value).is_err());
     }
 
     #[test]

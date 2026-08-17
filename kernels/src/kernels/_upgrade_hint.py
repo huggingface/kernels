@@ -8,7 +8,7 @@ from huggingface_hub import HfApi
 from huggingface_hub.errors import LocalEntryNotFoundError
 
 from kernels._versions import _get_available_versions
-from kernels.backends import CANN, CUDA, ROCm, XPU
+from kernels.backends import CANN, CUDA, XPU, ROCm
 from kernels.hf_hub import CACHE_DIR
 from kernels.variants import (
     ArchVariant,

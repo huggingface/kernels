@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
 use eyre::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::config::{Backend, Build, GitUrl, KernelDependency, KernelName};
 use crate::digest::Digest;
-use crate::git::GitStatus;
+use crate::git::{GitStatus, Oid};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -16,9 +16,27 @@ pub struct BackendInfo {
     pub archs: Option<Vec<String>>,
 }
 
+fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+// Use a repr type because a flattened `Option<GitStatus>` silently drops invalid fields.
+#[derive(Deserialize)]
+struct KernelBuilderVersionRepr {
+    version: String,
+    #[serde(default, alias = "sha", deserialize_with = "deserialize_present")]
+    commit: Option<Oid>,
+    #[serde(default, deserialize_with = "deserialize_present")]
+    dirty: Option<bool>,
+}
+
 /// Provenance of the `kernel-builder` that produced a build.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", try_from = "KernelBuilderVersionRepr")]
 pub struct KernelBuilderVersion {
     pub version: String,
     /// Git state of the `kernel-builder` source, when known.
@@ -27,6 +45,23 @@ pub struct KernelBuilderVersion {
     /// same shape in the serialized form.
     #[serde(flatten)]
     pub git: Option<GitStatus>,
+}
+
+impl TryFrom<KernelBuilderVersionRepr> for KernelBuilderVersion {
+    type Error = &'static str;
+
+    fn try_from(repr: KernelBuilderVersionRepr) -> Result<Self, Self::Error> {
+        let git = match (repr.commit, repr.dirty) {
+            (None, None) => None,
+            (Some(commit), Some(dirty)) => Some(GitStatus { commit, dirty }),
+            _ => return Err("git commit and dirty must be specified together"),
+        };
+
+        Ok(Self {
+            version: repr.version,
+            git,
+        })
+    }
 }
 
 /// Provenance of a kernel build: the git state of the `kernel-builder` and of
@@ -446,6 +481,21 @@ mod tests {
         assert!(provenance.kernel_builder.git.is_none());
         assert_eq!(provenance.kernel_builder.version, "0.17.0-dev0");
         assert!(provenance.kernel.is_some());
+    }
+
+    #[test]
+    fn invalid_kernel_builder_commit_is_rejected_instead_of_dropped() {
+        let json = r#"{
+            "version": "0.1.0",
+            "commit": "not-an-oid",
+            "dirty": true
+        }"#;
+
+        // This previously became `KernelBuilderVersion { version: "0.1.0", git: None }`, hiding `dirty: true`.
+        let error = serde_json::from_str::<KernelBuilderVersion>(json)
+            .expect_err("invalid git provenance should be rejected");
+
+        assert!(error.to_string().contains("Invalid git object id"));
     }
 
     #[test]

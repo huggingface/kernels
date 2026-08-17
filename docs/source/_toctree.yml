@@ -70,6 +70,10 @@
     - local: cli-skills
       title: Install agent skills
   title: kernel-builder CLI
+- section: 
+    - local: builder/triton-autotune
+      title: Ship Triton autotune configurations
+  title: Advanced practices
 - sections:
     - local: kernel-requirements
       title: Kernel requirements

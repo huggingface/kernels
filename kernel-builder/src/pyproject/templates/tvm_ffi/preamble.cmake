@@ -136,8 +136,10 @@ elseif(GPU_LANG STREQUAL "SYCL")
     message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
   endif()
 
-  set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
-  set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  # -foffload-fp32-prec-* keeps fp32 division and sqrt IEEE correctly rounded,
+  # matching PyTorch; both the compile and the link step need them.
+  set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
+  set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
   set(GPU_FLAGS "${sycl_flags}")
 
   add_compile_definitions(XPU_KERNEL)

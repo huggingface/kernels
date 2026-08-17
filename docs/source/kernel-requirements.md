@@ -84,12 +84,15 @@ metadata. Currently the following top-level keys are supported:
 - `provenance` (`dict`, optional): provenance of the build, used to flag
   non-reproducible (dirty) builds. It contains two optional sub-objects:
   - `kernel-builder`: the `kernel-builder` that produced the build, with its
-    `version` (`str`), the `sha` (`str`) of the `kernel-builder` source it was
-    built from (when known), and a `dirty` (`bool`) flag that is `true` when
+    `version` (`str`), the `commit` (`str`) of the `kernel-builder` source it
+    was built from (when known), and a `dirty` (`bool`) flag that is `true` when
     `kernel-builder` was built from a source tree with uncommitted changes.
-  - `kernel`: the kernel source that was built, with its commit `sha` (`str`)
+  - `kernel`: the kernel source that was built, with its `commit` (`str`)
     and a `dirty` (`bool`) flag that is `true` when the kernel source had
     uncommitted changes.
+
+  A `commit` is the object identifier of the Git commit: the hexadecimal
+  encoding of its SHA-1 or SHA-256 hash.
 
   When either `dirty` flag is set, the kernel was built from uncommitted
   sources and cannot be reliably reproduced.
@@ -100,10 +103,10 @@ metadata. Currently the following top-level keys are supported:
   > builds are not flagged as dirty. Local `create-pyproject` runs only
   > consider changes to tracked files.
 
-  > **Note:** The kernel `sha`/`dirty` are captured at the moment
-  > `create-pyproject` runs, so they describe the source tree as it was *then*.
+  > **Note:** The kernel `commit`/`dirty` are captured at the moment
+  > `create-pyproject` runs, so they describe the source tree as it was _then_.
   > Running `create-pyproject` and committing afterwards is bad practice: the
-  > recorded provenance keeps pointing at the pre-commit state (a stale `sha`,
+  > recorded provenance keeps pointing at the pre-commit state (a stale `commit`,
   > and `dirty: true` if the tree was dirty) even though the committed source
   > differs. Generate the metadata from the final, committed source instead.
 

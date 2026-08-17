@@ -3,6 +3,7 @@ from pathlib import Path
 from huggingface_hub import HfApi
 from huggingface_hub.errors import LocalEntryNotFoundError
 
+from kernels._upgrade_hint import maybe_upgrade_hint
 from kernels.deps import validate_variant_dependencies
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.status import resolve_status
@@ -75,9 +76,20 @@ def install_kernel(
     variant, trace = resolve_variant(variants, backend)
 
     if variant is None:
-        raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(trace)}"
+        msg = (
+            f"Cannot find a build variant for this system in {repo_id} "
+            f"(revision: {revision}):\n\n{variants_trace_str(trace)}"
         )
+        suggestion = maybe_upgrade_hint(
+            repo_id,
+            revision,
+            api=api,
+            backend=backend,
+            local_files_only=False,
+        )
+        if suggestion is not None:
+            msg = f"{msg}\n\n{suggestion}"
+        raise FileNotFoundError(msg)
 
     # Validate Python dependencies before downloading the variant.
     if validate_dependencies:
@@ -152,9 +164,20 @@ def _resolve_local_variant_path(
     variants = get_variants_local(local_repo_path / "build")
     variant, status = resolve_variant(variants, backend)
     if variant is None:
-        raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(status)}"
+        msg = (
+            f"Cannot find a build variant for this system in {repo_id} "
+            f"(revision: {revision}):\n\n{variants_trace_str(status)}"
         )
+        suggestion = maybe_upgrade_hint(
+            repo_id,
+            revision,
+            api=api,
+            backend=backend,
+            local_files_only=True,
+        )
+        if suggestion is not None:
+            msg = f"{msg}\n\n{suggestion}"
+        raise FileNotFoundError(msg)
 
     return _find_kernel_in_repo_path(
         local_repo_path,

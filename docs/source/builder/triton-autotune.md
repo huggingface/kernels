@@ -1,7 +1,7 @@
 # Ship Triton autotune configurations
 
-Triton kernels typically have parameters — tile sizes, number of warps,
-number of pipeline stages — whose optimal values depend on the GPU and the
+Triton kernels typically have parameters, such as tile sizes, number of warps and 
+number of pipeline stages, whose optimal values depend on the GPU and the
 problem shape. Autotuning finds good values for these parameters, but doing
 it at runtime (e.g. with the
 [`@triton.autotune`](https://triton-lang.org/main/python-api/generated/triton.autotune.html)
@@ -12,7 +12,7 @@ However, one can run the tuner for the GPU models they like and store the
 best found configurations as files for using them later. This effectively
 reduces the potentially costly tuning time.
 
-`kernels` support this by packaging these configurations as JSON files
+`kernel-builder` support this by packaging these configurations as JSON files
 with the kernel. At runtime, the kernel looks up the configuration for the
 current GPU and shape and falls back to sensible defaults when there is no
 matching configuration.
@@ -27,9 +27,10 @@ example kernel, a Triton GEMM published as
 
 ## Shipping data files with a kernel
 
-Configuration files are plain JSON files inside the kernel's Python package,
-in `torch-ext/<package_name>/configs/`. By default, only `py` and `pyi`
-files are picked up from the package directory, so add `json` to the
+Since autotune files are plain JSON files, we can store them anywhere inside the
+kernels main Python sources in `torch-ext/<kernel_name>`. For this example,
+we will use  `torch-ext/<kernel_name>/configs/`. By default, only `py` and `pyi`
+files are picked up from the kenel's Python source directory, so add `json` to the
 [`pyext` option](writing-kernels.md#torch-noarch) in `build.toml`:
 
 ```toml
@@ -97,7 +98,7 @@ and logs a warning. The lookup is cached, so the file is read at most once
 per process:
 
 ```python
-@functools.lru_cache
+@functools.cache
 def _load_tuned_configs(N: int, K: int) -> Optional[Dict[int, Dict[str, int]]]:
     path = _CONFIGS_DIR / config_file_name(N, K)
     if path.exists():
@@ -117,7 +118,7 @@ def _load_tuned_configs(N: int, K: int) -> Optional[Dict[int, Dict[str, int]]]:
 
 def get_config(M: int, N: int, K: int) -> Dict[str, int]:
     tuned = _load_tuned_configs(N, K)
-    if tuned:
+    if tuned is not None:
         # Tuned Ms are spaced logarithmically, so pick the nearest in log space.
         nearest_m = min(tuned, key=lambda m: abs(math.log(M / m)))
         return tuned[nearest_m]

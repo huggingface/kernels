@@ -37,9 +37,7 @@ format of the `build.toml` file, and some additional Python glue that
 `kernel-builder` provides. We will use a [simple ReLU kernel](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu)
 as the running example. After reading this page, you may also want to have
 a look at the more realistic [ReLU kernel with backprop and `torch.compile`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-backprop-compile)
-support. For Triton kernels, see
-[Ship Triton autotune configurations](triton-autotune.md) for how to tune a
-kernel and ship the tuned configurations with it.
+support.
 
 > [!TIP]
 > We maintain a set of conforming kernels in the

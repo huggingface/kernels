@@ -24,16 +24,16 @@ def _write_variant(tmp_path, provenance):
 
 
 CLEAN_PROVENANCE = {
-    "kernel-builder": {"version": "0.1.0", "sha": "a" * 40, "dirty": False},
-    "kernel": {"sha": "b" * 40, "dirty": False},
+    "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
+    "kernel": {"commit": "b" * 40, "dirty": False},
 }
 DIRTY_KERNEL = {
-    "kernel-builder": {"version": "0.1.0", "sha": "a" * 40, "dirty": False},
-    "kernel": {"sha": "b" * 40, "dirty": True},
+    "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
+    "kernel": {"commit": "b" * 40, "dirty": True},
 }
 DIRTY_BUILDER = {
-    "kernel-builder": {"version": "0.1.0", "sha": "a" * 40, "dirty": True},
-    "kernel": {"sha": "b" * 40, "dirty": False},
+    "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": True},
+    "kernel": {"commit": "b" * 40, "dirty": False},
 }
 
 

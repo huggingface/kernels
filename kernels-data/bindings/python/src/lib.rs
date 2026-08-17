@@ -6,7 +6,8 @@ use std::str::FromStr;
 
 use kernels_data::config::{Backend, KernelDependency, KernelName, KernelVersion};
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
-use kernels_data::metadata::{BackendInfo, GitHash, KernelBuilderVersion, Metadata, Provenance};
+use kernels_data::git::{GitStatus, Oid};
+use kernels_data::metadata::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
 use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
@@ -193,27 +194,27 @@ impl PyBackendInfo {
     }
 }
 
-#[pyclass(name = "GitHash", frozen)]
+#[pyclass(name = "GitStatus", frozen)]
 #[derive(Clone, Debug)]
-struct PyGitHash {
-    sha: String,
+struct PyGitStatus {
+    commit: Oid,
     dirty: bool,
 }
 
-impl From<GitHash> for PyGitHash {
-    fn from(g: GitHash) -> Self {
+impl From<GitStatus> for PyGitStatus {
+    fn from(status: GitStatus) -> Self {
         Self {
-            sha: g.sha,
-            dirty: g.dirty,
+            commit: status.commit,
+            dirty: status.dirty,
         }
     }
 }
 
 #[pymethods]
-impl PyGitHash {
+impl PyGitStatus {
     #[getter]
-    fn sha(&self) -> &str {
-        &self.sha
+    fn commit(&self) -> &str {
+        self.commit.as_str()
     }
 
     #[getter]
@@ -222,7 +223,11 @@ impl PyGitHash {
     }
 
     fn __repr__(&self) -> String {
-        format!("GitHash(sha={:?}, dirty={})", self.sha, self.dirty)
+        format!(
+            "GitStatus(commit={:?}, dirty={})",
+            self.commit.as_str(),
+            self.dirty
+        )
     }
 }
 
@@ -230,7 +235,7 @@ impl PyGitHash {
 #[derive(Clone, Debug)]
 struct PyKernelBuilderVersion {
     version: String,
-    git: Option<PyGitHash>,
+    git: Option<PyGitStatus>,
 }
 
 impl From<KernelBuilderVersion> for PyKernelBuilderVersion {
@@ -249,9 +254,9 @@ impl PyKernelBuilderVersion {
         &self.version
     }
 
-    /// Commit SHA + dirty state of the `kernel-builder` source, when known.
+    /// Git state of the `kernel-builder` source, when known.
     #[getter]
-    fn git(&self) -> Option<PyGitHash> {
+    fn git(&self) -> Option<PyGitStatus> {
         self.git.clone()
     }
 
@@ -270,7 +275,7 @@ impl PyKernelBuilderVersion {
 #[derive(Clone, Debug)]
 struct PyProvenance {
     kernel_builder: PyKernelBuilderVersion,
-    kernel: Option<PyGitHash>,
+    kernel: Option<PyGitStatus>,
 }
 
 impl From<Provenance> for PyProvenance {
@@ -290,7 +295,7 @@ impl PyProvenance {
     }
 
     #[getter]
-    fn kernel(&self) -> Option<PyGitHash> {
+    fn kernel(&self) -> Option<PyGitStatus> {
         self.kernel.clone()
     }
 
@@ -745,7 +750,7 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyBackendInfo>()?;
     m.add_class::<PyProvenance>()?;
-    m.add_class::<PyGitHash>()?;
+    m.add_class::<PyGitStatus>()?;
     m.add_class::<PyKernelBuilderVersion>()?;
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyKernelVersion>()?;

@@ -1,0 +1,45 @@
+{
+  "name": "einops",
+  "id": "_einops_cpu_d45adda",
+  "version": 1,
+  "license": "MIT",
+  "upstream": "https://github.com/arogozhnikov/einops.git",
+  "python-depends": [],
+  "backend": {
+    "type": "cpu"
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "files": {
+      "__init__.py": "Zi5UF5cdv0EjT90oh0zsv0Jfi4QbTrfZnE0Tv5on8F8=",
+      "_backends.py": "7BAiKWdBLLvAiryfhwDbwxglGDW9Dh5FNMT1ERSuzxk=",
+      "_ops.py": "11R2mMPUK6wLQIwJo8geCYiUgC/WM4OCjMiT15zK3hQ=",
+      "_torch_specific.py": "CxpGcgqlBn4BH+Qkpmr3dFBPTid1Rz/R0f9TGb36Bsw=",
+      "array_api.py": "jOb8RhwLS9wob/Y/e/KrnBR6ihQPoB2Ly0tfrHr+/Zk=",
+      "einops.py": "sXvD8SWFqufziyQJKRPmfAGHVN1cMDvYOPNuZ8L1XQU=",
+      "experimental/__init__.py": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+      "experimental/indexing.py": "yFFflW3+kV6/5PPJU7/jOJsJBCWCWlE4dGlu9gwSPXo=",
+      "layers/__init__.py": "vBtnAt2afs4QlqpeFU4dlZNxBuC9IXl3fmilk+2OzHM=",
+      "layers/_einmix.py": "9cDMcCmn2y1jN9xLx587GAY1GCb+9TvEjJWaNNX4Vps=",
+      "layers/flax.py": "zFy83gSLRm31cLuKFRvZ82/HsefnXPbRvkKZh1KkC1I=",
+      "layers/keras.py": "+7So0w94phvf9HdW0xi2mSeBg02qVPvAyfp/1XR02NM=",
+      "layers/oneflow.py": "YEPzz4xc7BDRQfb8ulD3teqQJdbO6qQg7Z4KIPVTLz8=",
+      "layers/paddle.py": "8cRZQ8BT9vYEczh7pNProuTM/3XjLty2ht2sdvXNFiI=",
+      "layers/tensorflow.py": "T9uhSVwbXREahc31ARAHoN5K+7zsuS8NRNPdY6Zk1Bc=",
+      "layers/torch.py": "504G99kEgy7dk1UPBbj9hzJmZkAHwVhMDFN/8J+p3C8=",
+      "packing.py": "vBjwbVWs3OwmI83BMNoeu3jBFAbAiy10i3ClmZxZtCQ=",
+      "parsing.py": "tXcSr4W1mbePUu+oIYgG0cKYNxsPXuVYFIHynj1FCg4="
+    }
+  },
+  "provenance": {
+    "kernel-builder": {
+      "version": "0.17.0-dev0",
+      "sha": "d0610aa58db33b142c86b59598a2a1c730f52996",
+      "dirty": false
+    },
+    "kernel": {
+      "sha": "d45addadb0c380f3d7cc2813310b3bcd75f8aa9a",
+      "dirty": false
+    }
+  }
+}

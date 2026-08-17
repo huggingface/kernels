@@ -6,7 +6,8 @@ use std::{
 
 use eyre::{bail, Result};
 use kernels_data::config::{Build, Framework};
-use kernels_data::metadata::{GitHash, Provenance};
+use kernels_data::git::{GitStatus, Oid};
+use kernels_data::metadata::Provenance;
 use minijinja::Environment;
 
 use crate::{
@@ -49,7 +50,7 @@ pub fn create_pyproject(
     target_dir: Option<PathBuf>,
     force: bool,
     unique_id: Option<String>,
-    kernel_sha: Option<String>,
+    kernel_sha: Option<Oid>,
     kernel_dirty: bool,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
@@ -62,11 +63,11 @@ pub fn create_pyproject(
     // `kernel-builder` provenance is always the one baked into this binary at
     // compile time.
     let kernel = kernel_sha
-        .map(|sha| GitHash {
-            sha,
+        .map(|commit| GitStatus {
+            commit,
             dirty: kernel_dirty,
         })
-        .or_else(|| ops_identifier::git_hash(&kernel_dir));
+        .or_else(|| ops_identifier::git_status(&kernel_dir));
     let provenance = Provenance {
         kernel_builder: common::kernel_builder_version(),
         kernel,

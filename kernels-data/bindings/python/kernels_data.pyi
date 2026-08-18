@@ -7,6 +7,8 @@ from typing import Optional, final
 __all__ = [
     "Backend",
     "BackendInfo",
+    "Build",
+    "General",
     "Provenance",
     "DigestAlgorithm",
     "GitStatus",
@@ -323,6 +325,39 @@ class KernelDependency:
     def __repr__(self) -> str: ...
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self) -> int: ...
+
+@final
+class General:
+    """General kernel configuration common to all backends."""
+
+    @property
+    def backends(self) -> list[Backend]:
+        """Backends the kernel supports."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class Build:
+    """Parsed and validated `build.toml` configuration for a kernel."""
+
+    @staticmethod
+    def open(kernel_dir: os.PathLike[str] | str) -> "Build":
+        """Parse and validate the `build.toml` in `kernel_dir`.
+
+        Raises:
+            ValueError: If the build configuration cannot be parsed or validated.
+        """
+        ...
+
+    @property
+    def general(self) -> General:
+        """General kernel configuration."""
+        ...
+
+    def all_kernel_depends(self, backend: Backend) -> list[KernelDependency]:
+        """Get the general + backend-specific kernel dependencies for `backend`."""
+        ...
 
 @final
 class Metadata:

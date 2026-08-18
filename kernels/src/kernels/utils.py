@@ -14,11 +14,12 @@ from pathlib import Path
 from types import ModuleType
 
 from huggingface_hub import HfApi, constants
-from huggingface_hub.errors import LocalEntryNotFoundError
+from huggingface_hub.errors import EntryNotFoundError, LocalEntryNotFoundError
 from kernels_data import Metadata
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
+from kernels.archs import check_arch_compatibility, is_arch_compatible
 from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
@@ -455,6 +456,7 @@ def get_kernel(
     backend: str | None = None,
     user_agent: str | dict | None = None,
     trust_remote_code: bool | list[str] = False,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -481,6 +483,12 @@ def get_kernel(
             repositories are allowed. A list of strings will be used to verify signing
             identities in a future release; for now it emits a warning and falls
             back to the default trust check.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -514,6 +522,9 @@ def get_kernel(
         user_agent=user_agent,
         validate_dependencies=True,
     )
+    if check_arch:
+        metadata = Metadata.read_from_file(variant_path / "metadata.json")
+        check_arch_compatibility(metadata, variant_path.name)
     return _import_from_path(variant_path, repo_info=repo_info)
 
 
@@ -558,6 +569,7 @@ def has_kernel(
     revision: str | None = None,
     version: int | None = None,
     backend: str | None = None,
+    check_arch: bool = True,
 ) -> bool:
     """
     Check whether a kernel build exists for the current environment (Torch version and compute framework).
@@ -573,6 +585,12 @@ def has_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
@@ -586,12 +604,26 @@ def has_kernel(
     if variant is None:
         return False
 
-    return api.file_exists(
-        repo_id,
-        repo_type="kernel",
-        revision=revision,
-        filename=f"build/{variant.variant_str}/metadata.json",
-    )
+    if not check_arch:
+        return api.file_exists(
+            repo_id,
+            repo_type="kernel",
+            revision=revision,
+            filename=f"build/{variant.variant_str}/metadata.json",
+        )
+
+    try:
+        metadata_path = api.hf_hub_download(
+            repo_id,
+            repo_type="kernel",
+            revision=revision,
+            filename=f"build/{variant.variant_str}/metadata.json",
+            cache_dir=CACHE_DIR,
+        )
+    except EntryNotFoundError:
+        return False
+
+    return is_arch_compatible(Metadata.read_from_file(metadata_path))
 
 
 def get_kernel_variants(

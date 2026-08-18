@@ -14,8 +14,10 @@ use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 mod config;
+mod lock;
 
 use config::{PyBuild, PyGeneral};
+use lock::{PyKernelLock, PyKernelLocks, PyKernelPaths, PyNixKernelLock, PyNixKernelLocks};
 
 /// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
 /// during normalization.
@@ -323,7 +325,7 @@ impl PyProvenance {
 
 /// A kernel version: either a numeric version or a git revision string.
 #[pyclass(name = "KernelVersion", frozen, eq, hash)]
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum PyKernelVersion {
     Version { version: usize },
     Revision { revision: String },
@@ -334,6 +336,15 @@ impl From<KernelVersion> for PyKernelVersion {
         match v {
             KernelVersion::Version(n) => Self::Version { version: n },
             KernelVersion::Revision(s) => Self::Revision { revision: s },
+        }
+    }
+}
+
+impl From<PyKernelVersion> for KernelVersion {
+    fn from(v: PyKernelVersion) -> Self {
+        match v {
+            PyKernelVersion::Version { version } => Self::Version(version),
+            PyKernelVersion::Revision { revision } => Self::Revision(revision),
         }
     }
 }
@@ -352,7 +363,7 @@ impl PyKernelVersion {
 
 /// A dependency on another kernel.
 #[pyclass(name = "KernelDependency", frozen, eq, hash)]
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct PyKernelDependency {
     repo_id: String,
     version: PyKernelVersion,
@@ -360,6 +371,15 @@ pub(crate) struct PyKernelDependency {
 
 impl From<KernelDependency> for PyKernelDependency {
     fn from(d: KernelDependency) -> Self {
+        Self {
+            repo_id: d.repo_id,
+            version: d.version.into(),
+        }
+    }
+}
+
+impl From<PyKernelDependency> for KernelDependency {
+    fn from(d: PyKernelDependency) -> Self {
         Self {
             repo_id: d.repo_id,
             version: d.version.into(),
@@ -759,6 +779,11 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyKernelVersion>()?;
     m.add_class::<PyKernelDependency>()?;
+    m.add_class::<PyKernelLock>()?;
+    m.add_class::<PyKernelLocks>()?;
+    m.add_class::<PyNixKernelLock>()?;
+    m.add_class::<PyNixKernelLocks>()?;
+    m.add_class::<PyKernelPaths>()?;
     m.add_class::<PyGeneral>()?;
     m.add_class::<PyBuild>()?;
     m.add_class::<PyMetadata>()?;

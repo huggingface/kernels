@@ -1576,6 +1576,7 @@ version = "0.17.0-dev0"
 dependencies = [
  "kernels-data",
  "pyo3",
+ "serde_json",
 ]
 
 [[package]]

@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.26", features = ["abi3", "abi3-py38"] }
+serde_json = "1"
 
 [dependencies.kernels-data]
 path = "../.."

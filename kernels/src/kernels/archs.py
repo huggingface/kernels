@@ -1,17 +1,25 @@
-import re
-
 from kernels_data import Backend, Metadata
 
 from kernels.compat import has_torch
 
 
-class UnsupportedArchError(RuntimeError):
-    """The kernel build does not support the architecture of the current device."""
+def _parse_cuda_arch(arch: str) -> tuple[int, int, str] | None:
+    """Parse a CUDA arch into its capability and suffix.
 
+    CUDA archs are compute capabilities like `9.0`, optionally with an
+    architecture-specific (`9.0a`) or family-specific (`10.0f`) suffix.
+    Returns `None` when the arch string is not in this format.
+    """
+    suffix = ""
+    if arch.endswith(("a", "f")):
+        suffix = arch[-1]
+        arch = arch[:-1]
 
-# CUDA archs are compute capabilities like `9.0`, optionally with an
-# architecture-specific (`9.0a`) or family-specific (`10.0f`) suffix.
-_CUDA_ARCH_REGEX = re.compile(r"(\d+)\.(\d+)([af]?)")
+    arch_major, sep, arch_minor = arch.partition(".")
+    if not sep or not arch_major.isdigit() or not arch_minor.isdigit():
+        return None
+
+    return int(arch_major), int(arch_minor), suffix
 
 
 def _cuda_arch_supports(arch: str, capability: tuple[int, int]) -> bool | None:
@@ -19,11 +27,11 @@ def _cuda_arch_supports(arch: str, capability: tuple[int, int]) -> bool | None:
 
     Returns `None` when the arch string is not in a known format.
     """
-    m = _CUDA_ARCH_REGEX.fullmatch(arch)
-    if m is None:
+    parsed = _parse_cuda_arch(arch)
+    if parsed is None:
         return None
 
-    arch_major, arch_minor, suffix = int(m.group(1)), int(m.group(2)), m.group(3)
+    arch_major, arch_minor, suffix = parsed
     major, minor = capability
 
     if suffix == "a":
@@ -77,22 +85,3 @@ def _arch_incompatibility(metadata: Metadata) -> str | None:
         )
 
     return None
-
-
-def check_arch_compatibility(metadata: Metadata, variant_str: str) -> None:
-    """Raise `UnsupportedArchError` when the build does not support the current device."""
-    reason = _arch_incompatibility(metadata)
-    if reason is not None:
-        raise UnsupportedArchError(
-            f"Kernel '{metadata.name}' variant '{variant_str}' does not support "
-            f"the current device: {reason}. The declared architectures can be "
-            "incomplete (e.g. when a kernel has a Triton fallback), pass "
-            "`check_arch=False` to skip this check. Warning: the kernel may "
-            "fail or crash the process at run time when it does not support "
-            "the device."
-        )
-
-
-def is_arch_compatible(metadata: Metadata) -> bool:
-    """Check whether the build supports the architecture of the current device."""
-    return _arch_incompatibility(metadata) is None

@@ -19,7 +19,7 @@ from kernels_data import Metadata
 
 from kernels._system import glibc_version
 from kernels._versions import select_revision_or_version
-from kernels.archs import check_arch_compatibility, is_arch_compatible
+from kernels.archs import _arch_incompatibility
 from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
@@ -524,7 +524,16 @@ def get_kernel(
     )
     if check_arch:
         metadata = Metadata.read_from_file(variant_path / "metadata.json")
-        check_arch_compatibility(metadata, variant_path.name)
+        reason = _arch_incompatibility(metadata)
+        if reason is not None:
+            raise RuntimeError(
+                f"Kernel '{metadata.name}' variant '{variant_path.name}' does not "
+                f"support the current device: {reason}. The declared architectures "
+                "can be incomplete (e.g. when a kernel has a Triton fallback), pass "
+                "`check_arch=False` to skip this check. Warning: the kernel may "
+                "fail or crash the process at run time when it does not support "
+                "the device."
+            )
     return _import_from_path(variant_path, repo_info=repo_info)
 
 
@@ -623,7 +632,7 @@ def has_kernel(
     except EntryNotFoundError:
         return False
 
-    return is_arch_compatible(Metadata.read_from_file(metadata_path))
+    return _arch_incompatibility(Metadata.read_from_file(metadata_path)) is None
 
 
 def get_kernel_variants(

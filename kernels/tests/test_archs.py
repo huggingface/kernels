@@ -107,6 +107,15 @@ def test_check_skipped_for_backends_without_archs(fake_cuda_device):
     assert _arch_incompatibility(make_metadata("metal", ["applegpu_g13"])) is None
 
 
+def test_issue_707_fa3_on_b200(fake_cuda_device):
+    # https://github.com/huggingface/kernels/issues/707: flash-attn3 only
+    # declares sm_80/sm_90a archs, but loading it on a B200 (capability 10.0)
+    # succeeded and the first launch exited the process. The declared archs
+    # must be rejected for this device.
+    metadata = make_metadata("cuda", ["8.0", "9.0a"])
+    assert _arch_incompatibility(metadata) is not None
+
+
 @pytest.mark.cuda_only
 def test_get_kernel_rejects_unsupported_capability(monkeypatch):
     variant_path = install_kernel("kernels-community/relu", revision="v1")

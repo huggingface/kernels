@@ -211,6 +211,7 @@
       rec {
         checks.default = pkgs.callPackage ./nix-builder/lib/checks.nix {
           inherit buildSets self;
+          inherit (buildSet.pkgs) fetchFromHuggingFace;
           inherit (self.lib) genKernelFlakeOutputs;
           build = buildPerSystem.${system};
         };

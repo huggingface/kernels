@@ -9,7 +9,7 @@ __all__ = [
     "BackendInfo",
     "Provenance",
     "DigestAlgorithm",
-    "GitHash",
+    "GitStatus",
     "KernelBuilderVersion",
     "KernelDependency",
     "KernelName",
@@ -70,12 +70,12 @@ class BackendInfo:
     def __repr__(self) -> str: ...
 
 @final
-class GitHash:
-    """Git provenance (commit SHA and dirty state) of a source tree."""
+class GitStatus:
+    """The state of a git working tree."""
 
     @property
-    def sha(self) -> str:
-        """Full 40-character commit SHA."""
+    def commit(self) -> str:
+        """Identifier of the `HEAD` commit, as lowercase hexadecimal digits."""
         ...
 
     @property
@@ -95,8 +95,8 @@ class KernelBuilderVersion:
         ...
 
     @property
-    def git(self) -> Optional[GitHash]:
-        """Commit SHA and dirty state of the `kernel-builder` source, when known."""
+    def git(self) -> Optional[GitStatus]:
+        """Git state of the `kernel-builder` source, when known."""
         ...
 
     def __repr__(self) -> str: ...
@@ -111,7 +111,7 @@ class Provenance:
         ...
 
     @property
-    def kernel(self) -> Optional[GitHash]:
+    def kernel(self) -> Optional[GitStatus]:
         """Git provenance of the kernel source that was built."""
         ...
 

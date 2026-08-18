@@ -933,7 +933,7 @@ mod tests {
     const METADATA_V3: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 3, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
     const METADATA_V0: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 0, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}}"#;
 
-    const METADATA_DIRTY: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 1, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}, "provenance": {"kernel-builder": {"version": "0.1.0", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false}, "kernel": {"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "dirty": true}}}"#;
+    const METADATA_DIRTY: &str = r#"{"name": "test-kernel", "id": "kernel_id", "version": 1, "license": "Apache-2.0", "python-depends": [], "backend": {"type": "cuda"}, "provenance": {"kernel-builder": {"version": "0.1.0", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false}, "kernel": {"commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "dirty": true}}}"#;
 
     #[test]
     fn test_dirty_variant_names() {

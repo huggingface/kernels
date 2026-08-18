@@ -2,13 +2,14 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-mod card;
-mod check_abi;
-use check_abi::{run_check_abi, CheckAbiArgs};
-
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
+use kernels_data::git::Oid;
+
+mod card;
+mod check_abi;
+use check_abi::{run_check_abi, CheckAbiArgs};
 
 mod completions;
 use completions::print_completions;
@@ -195,7 +196,7 @@ enum Commands {
         /// metadata. When absent, it is detected from the kernel's git
         /// repository (used by Nix builds where the source has no `.git`).
         #[arg(long)]
-        kernel_sha: Option<String>,
+        kernel_sha: Option<Oid>,
 
         /// Mark the kernel source as having uncommitted changes in the build
         /// metadata. Only meaningful together with `--kernel-sha`.

@@ -13,6 +13,10 @@ use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
+mod config;
+
+use config::{PyBuild, PyGeneral};
+
 /// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
 /// during normalization.
 #[pyclass(name = "Version", frozen, eq, ord, hash)]
@@ -76,7 +80,7 @@ impl PyKernelName {
 /// Kernel backend (hardware target).
 #[pyclass(name = "Backend", eq, frozen, hash)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum PyBackend {
+pub(crate) enum PyBackend {
     #[pyo3(name = "CANN")]
     Cann,
     #[pyo3(name = "CPU")]
@@ -349,7 +353,7 @@ impl PyKernelVersion {
 /// A dependency on another kernel.
 #[pyclass(name = "KernelDependency", frozen, eq, hash)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct PyKernelDependency {
+pub(crate) struct PyKernelDependency {
     repo_id: String,
     version: PyKernelVersion,
 }
@@ -755,6 +759,8 @@ fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKernelName>()?;
     m.add_class::<PyKernelVersion>()?;
     m.add_class::<PyKernelDependency>()?;
+    m.add_class::<PyGeneral>()?;
+    m.add_class::<PyBuild>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyVersion>()?;
     m.add_class::<PyDigestAlgorithm>()?;

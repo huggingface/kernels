@@ -5,12 +5,11 @@ use std::{
 };
 
 use eyre::{bail, Context, Result};
+use kernels_data::config::Build;
 use minijinja::{context, Environment};
 use rustpython_parser::{ast, Parse};
 
-use kernels_data::config::Build;
-
-use crate::util::{check_or_infer_kernel_dir, parse_build};
+use crate::util::check_or_infer_kernel_dir;
 
 fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let init_path = ["torch-ext", "tvm-ffi-ext"]
@@ -147,7 +146,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
 
 pub fn fill_card(kernel_dir: Option<PathBuf>, output: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let build = parse_build(&kernel_dir)?;
+    let build = Build::open(&kernel_dir)?;
     let content = render_card(&build, &kernel_dir)?;
 
     match output {

@@ -5,7 +5,7 @@ import torch
 from kernels_data import Metadata
 
 from kernels import get_kernel, has_kernel, install_kernel
-from kernels.archs import _arch_incompatibility, _supports_cuda_capability
+from kernels.archs import _check_arch_incompatibility, _supports_cuda_capability
 
 
 def make_metadata(backend_type: str, archs: list[str] | None) -> Metadata:
@@ -87,36 +87,37 @@ def fake_rocm_device(monkeypatch):
 
 
 def test_cuda_incompatible_arch_is_rejected(fake_cuda_device):
-    reason = _arch_incompatibility(make_metadata("cuda", ["8.0", "9.0a"]))
-    assert reason is not None
-    assert "CUDA capability 10.0" in reason
-    assert "8.0, 9.0a" in reason
+    with pytest.raises(RuntimeError) as exc_info:
+        _check_arch_incompatibility(make_metadata("cuda", ["8.0", "9.0a"]), "test-variant")
+    assert "test-variant" in str(exc_info.value)
+    assert "CUDA capability 10.0" in str(exc_info.value)
+    assert "8.0, 9.0a" in str(exc_info.value)
 
 
 def test_cuda_compatible_arch_is_accepted(fake_cuda_device):
     for archs in (["8.0", "10.0"], ["10.0a"], ["10.0f"], None):
-        assert _arch_incompatibility(make_metadata("cuda", archs)) is None
+        _check_arch_incompatibility(make_metadata("cuda", archs), "test-variant")
 
 
 def test_rocm_arch_check(fake_rocm_device):
-    assert _arch_incompatibility(make_metadata("rocm", ["gfx90a", "gfx942"])) is None
-    assert _arch_incompatibility(make_metadata("rocm", None)) is None
-    reason = _arch_incompatibility(make_metadata("rocm", ["gfx942"]))
-    assert reason is not None
-    assert "ROCm arch gfx90a" in reason
-    assert "gfx942" in reason
+    _check_arch_incompatibility(make_metadata("rocm", ["gfx90a", "gfx942"]), "test-variant")
+    _check_arch_incompatibility(make_metadata("rocm", None), "test-variant")
+    with pytest.raises(RuntimeError) as exc_info:
+        _check_arch_incompatibility(make_metadata("rocm", ["gfx942"]), "test-variant")
+    assert "ROCm arch gfx90a" in str(exc_info.value)
+    assert "gfx942" in str(exc_info.value)
 
 
 def test_check_skipped_without_device(monkeypatch):
     monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-    assert _arch_incompatibility(make_metadata("cuda", ["8.0"])) is None
+    _check_arch_incompatibility(make_metadata("cuda", ["8.0"]), "test-variant")
 
 
 def test_check_skipped_for_backends_without_archs(fake_cuda_device):
     # Archs of other backends cannot be checked against the current device.
-    assert _arch_incompatibility(make_metadata("cpu", None)) is None
-    assert _arch_incompatibility(make_metadata("metal", ["applegpu_g13"])) is None
+    _check_arch_incompatibility(make_metadata("cpu", None), "test-variant")
+    _check_arch_incompatibility(make_metadata("metal", ["applegpu_g13"]), "test-variant")
 
 
 def test_issue_707_fa3_on_b200(fake_cuda_device):
@@ -125,7 +126,8 @@ def test_issue_707_fa3_on_b200(fake_cuda_device):
     # succeeded and the first launch exited the process. The declared archs
     # must be rejected for this device.
     metadata = make_metadata("cuda", ["8.0", "9.0a"])
-    assert _arch_incompatibility(metadata) is not None
+    with pytest.raises(RuntimeError, match="does not support the current device"):
+        _check_arch_incompatibility(metadata, "test-variant")
 
 
 @pytest.mark.cuda_only

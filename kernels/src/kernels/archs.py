@@ -68,36 +68,48 @@ def _supports_cuda_capability(archs: list[str], capability: tuple[int, int]) -> 
     return any(supports)
 
 
-def _arch_incompatibility(metadata: Metadata) -> str | None:
-    """Check a kernel build against the architecture of the current device."""
+def _check_arch_incompatibility(metadata: Metadata, variant: str) -> None:
+    """Check a kernel build against the architecture of the current device.
+
+    Raises `RuntimeError` when the build does not support the device.
+    """
     archs = metadata.backend.archs
     if not archs or not has_torch:
-        return None
+        return
 
     import torch
 
+    reason = None
     backend_type = metadata.backend.backend_type
     if backend_type == Backend.CUDA:
         if torch.version.cuda is None or not torch.cuda.is_available():
-            return None
+            return
         major, minor = torch.cuda.get_device_capability()
-        if _supports_cuda_capability(archs, (major, minor)):
-            return None
-        return (
-            f"CUDA capability {major}.{minor} of the current device is not "
-            f"supported by the architectures of the build: {', '.join(archs)}"
-        )
+        if not _supports_cuda_capability(archs, (major, minor)):
+            reason = (
+                f"CUDA capability {major}.{minor} of the current device is not "
+                f"supported by the architectures of the build: {', '.join(archs)}"
+            )
     elif backend_type == Backend.ROCm:
         if torch.version.hip is None or not torch.cuda.is_available():
-            return None
+            return
         gcn_arch = torch.cuda.get_device_properties(torch.cuda.current_device()).gcnArchName
         # Strip feature flags, e.g. `gfx90a:sramecc+:xnack-` -> `gfx90a`.
         gcn_arch = gcn_arch.split(":")[0]
-        if gcn_arch in archs:
-            return None
-        return (
-            f"ROCm arch {gcn_arch} of the current device is not supported "
-            f"by the architectures of the build: {', '.join(archs)}"
-        )
+        if gcn_arch not in archs:
+            reason = (
+                f"ROCm arch {gcn_arch} of the current device is not supported "
+                f"by the architectures of the build: {', '.join(archs)}"
+            )
 
-    return None
+    if reason is None:
+        return
+
+    raise RuntimeError(
+        f"Kernel '{metadata.name}' variant '{variant}' does not support the "
+        f"current device: {reason}. The declared architectures can be "
+        "incomplete (e.g. when a kernel has a Triton fallback), pass "
+        "`check_arch=False` to skip this check. Warning: the kernel may "
+        "fail or crash the process at run time when it does not support "
+        "the device."
+    )

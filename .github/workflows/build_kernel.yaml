@@ -64,6 +64,7 @@ jobs:
             relu-kernel-cpu
             relu-backprop-compile-kernel
             relu-triton-kernel
+            gemm-triton-autotune-kernel
             silu-and-mul-kernel
 
   test:

@@ -247,7 +247,9 @@ following options:
 
 - `src` (required): a list of source files and headers.
 - `pyext` (optional): the list of extensions for Python files. Default:
-  `["py", "pyi"]`.
+  `["py", "pyi"]`. Additional extensions can be listed to ship data files
+  with the kernel, such as `json` for
+  [Triton autotune configurations](triton-autotune.md).
 - `include` (optional): include directories relative to the project root.
   Default: `[]`.
 - `maxver` (optional): only build for this Torch version and earlier. Use cautiously, since this option produces
@@ -297,7 +299,9 @@ the supported archs. These are then exported to `metadata.json` for consumption
 by e.g. the Hugging Face Hub.
 
 - `pyext` (optional): the list of extensions for Python files. Default:
-  `["py", "pyi"]`.
+  `["py", "pyi"]`. Additional extensions can be listed to ship data files
+  with the kernel, such as `json` for
+  [Triton autotune configurations](triton-autotune.md).
 - `cuda-capabilities` (optional): a list of CUDA compute capabilities the
   kernel supports (e.g. `["9.0", "10.0"]`).
 - `rocm-archs` (optional): a list of ROCm architectures the kernel supports

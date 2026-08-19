@@ -59,7 +59,7 @@ def _cuda_arch_supports(arch: str, capability: tuple[int, int]) -> bool | None:
     return major == arch_major and minor >= arch_minor
 
 
-def _cuda_archs_support_capability(archs: list[str], capability: tuple[int, int]) -> bool:
+def _supports_cuda_capability(archs: list[str], capability: tuple[int, int]) -> bool:
     supports = [_cuda_arch_supports(arch, capability) for arch in archs]
     if all(support is None for support in supports):
         # None of the arch strings are in a known format (e.g. produced by a
@@ -81,7 +81,7 @@ def _arch_incompatibility(metadata: Metadata) -> str | None:
         if torch.version.cuda is None or not torch.cuda.is_available():
             return None
         major, minor = torch.cuda.get_device_capability()
-        if _cuda_archs_support_capability(archs, (major, minor)):
+        if _supports_cuda_capability(archs, (major, minor)):
             return None
         return (
             f"CUDA capability {major}.{minor} of the current device is not "

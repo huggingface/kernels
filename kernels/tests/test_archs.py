@@ -5,7 +5,7 @@ import torch
 from kernels_data import Metadata
 
 from kernels import get_kernel, has_kernel, install_kernel
-from kernels.archs import _arch_incompatibility, _cuda_archs_support_capability
+from kernels.archs import _arch_incompatibility, _supports_cuda_capability
 
 
 def make_metadata(backend_type: str, archs: list[str] | None) -> Metadata:
@@ -62,8 +62,8 @@ def make_metadata(backend_type: str, archs: list[str] | None) -> Metadata:
         (["garbage"], (9, 0), True),
     ],
 )
-def test_cuda_archs_support_capability(archs, capability, supported):
-    assert _cuda_archs_support_capability(archs, capability) == supported
+def test_supports_cuda_capability(archs, capability, supported):
+    assert _supports_cuda_capability(archs, capability) == supported
 
 
 @pytest.fixture

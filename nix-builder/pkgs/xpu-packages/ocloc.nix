@@ -11,32 +11,32 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "ocloc";
-  version = "25.35";
+  version = "26.22";
 
   srcs = [
     (fetchurl {
-      url = "https://github.com/intel/compute-runtime/releases/download/25.35.35096.9/intel-ocloc_25.35.35096.9-0_amd64.deb";
-      hash = "sha256-AjzPj9iRKVi7PwCXcFbC+o3bzvjstLvHK9357LDuxvs=";
+      url = "https://github.com/intel/compute-runtime/releases/download/26.22.38646.4/intel-ocloc_26.22.38646.4-0_amd64.deb";
+      hash = "sha256-JXRYQeZiecf/H/bC1NqeyRFoXBLhycVgnZnk1Uo2TcA=";
     })
     (fetchurl {
-      url = "https://github.com/intel/intel-graphics-compiler/releases/download/v2.18.5/intel-igc-core-2_2.18.5+19820_amd64.deb";
-      hash = "sha256-fDQPRcTylOyjqXgKGz7ObUtpn9xR59yf+MXWMjxdjWQ=";
+      url = "https://github.com/intel/intel-graphics-compiler/releases/download/v2.36.3/intel-igc-core-2_2.36.3+21719_amd64.deb";
+      hash = "sha256-ngl1rHUBW0Meuy2oGoArn9HiijwnAxOpdWnNHmpsYEg=";
     })
     (fetchurl {
-      url = "https://github.com/intel/intel-graphics-compiler/releases/download/v2.18.5/intel-igc-opencl-2_2.18.5+19820_amd64.deb";
-      hash = "sha256-vLFDVIYXVnPxSxgO+4/Dn/MbdsYl4JsSU6B6cF78+cM=";
+      url = "https://github.com/intel/intel-graphics-compiler/releases/download/v2.36.3/intel-igc-opencl-2_2.36.3+21719_amd64.deb";
+      hash = "sha256-NQpSMx54S7f7ntQumTtcRLfmVi/HTSzzECsptqV2+oU=";
     })
     (fetchurl {
-      url = "https://github.com/intel/compute-runtime/releases/download/25.35.35096.9/intel-opencl-icd_25.35.35096.9-0_amd64.deb";
-      hash = "sha256-ifJSVTyTeyRW7pkZhY/yq2Xcaw3L0hnHOVNUhGWt8yU=";
+      url = "https://github.com/intel/compute-runtime/releases/download/26.22.38646.4/intel-opencl-icd_26.22.38646.4-0_amd64.deb";
+      hash = "sha256-b9rC6KKqz4ROv9kFIb9xArPrtE9pwbztGpeFp86Wo8I=";
     })
     (fetchurl {
-      url = "https://github.com/intel/compute-runtime/releases/download/25.35.35096.9/libigdgmm12_22.8.1_amd64.deb";
-      hash = "sha256-gQEU7wX01ExchvvC8LNGiBAvQVlqQHcqH/ekj132ns0=";
+      url = "https://github.com/intel/compute-runtime/releases/download/26.22.38646.4/libigdgmm12_22.10.0_amd64.deb";
+      hash = "sha256-YDGmPW6KEs5hwU78FfLI5ycGEobjgguFlObQBhXgTVQ=";
     })
     (fetchurl {
-      url = "https://github.com/intel/compute-runtime/releases/download/25.35.35096.9/libze-intel-gpu1_25.35.35096.9-0_amd64.deb";
-      hash = "sha256-phfUqwNRqPJxdDi+QyXKARB1hFDhDrb6AtYUrtElIHo=";
+      url = "https://github.com/intel/compute-runtime/releases/download/26.22.38646.4/libze-intel-gpu1_26.22.38646.4-0_amd64.deb";
+      hash = "sha256-i++fJOA/gm+TwHYIG9oTxqw6+9nkK5+48pj6tlIzDi8=";
     })
   ];
   dontStrip = true;

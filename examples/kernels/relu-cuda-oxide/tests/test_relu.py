@@ -1,8 +1,9 @@
+import kernels
 import pytest
 import torch
 import torch.nn.functional as F
 
-import relu_cuda_oxide
+relu_cuda_oxide = kernels.get_kernel("kernels-test/relu-cuda-oxide", version=1)
 
 
 @pytest.mark.kernels_ci

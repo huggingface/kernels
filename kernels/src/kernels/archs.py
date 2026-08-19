@@ -3,13 +3,19 @@ from kernels_data import Backend, Metadata
 from kernels.compat import has_torch
 
 
-def _parse_cuda_arch(arch: str) -> tuple[int, int, str] | None:
-    """Parse a CUDA arch into its capability and suffix.
+def _parse_cuda_arch(arch: str) -> tuple[int, int, str, bool] | None:
+    """Parse a CUDA arch into its capability, suffix, and PTX flag.
 
     CUDA archs are compute capabilities like `9.0`, optionally with an
-    architecture-specific (`9.0a`) or family-specific (`10.0f`) suffix.
-    Returns `None` when the arch string is not in this format.
+    architecture-specific (`9.0a`) or family-specific (`10.0f`) suffix
+    and/or a `+PTX` flag (`9.0+PTX`). Returns `None` when the arch string
+    is not in this format.
     """
+    ptx = False
+    if arch.endswith("+PTX"):
+        ptx = True
+        arch = arch[: -len("+PTX")]
+
     suffix = ""
     if arch.endswith(("a", "f")):
         suffix = arch[-1]
@@ -19,7 +25,7 @@ def _parse_cuda_arch(arch: str) -> tuple[int, int, str] | None:
     if not sep or not arch_major.isdigit() or not arch_minor.isdigit():
         return None
 
-    return int(arch_major), int(arch_minor), suffix
+    return int(arch_major), int(arch_minor), suffix, ptx
 
 
 def _cuda_arch_supports(arch: str, capability: tuple[int, int]) -> bool | None:
@@ -31,15 +37,25 @@ def _cuda_arch_supports(arch: str, capability: tuple[int, int]) -> bool | None:
     if parsed is None:
         return None
 
-    arch_major, arch_minor, suffix = parsed
+    arch_major, arch_minor, suffix, ptx = parsed
     major, minor = capability
 
     if suffix == "a":
         # Architecture-specific builds only run on that exact capability.
         return (major, minor) == (arch_major, arch_minor)
 
-    # Base and family-specific builds run on capabilities of the same
-    # generation with the same or a newer minor version.
+    if suffix == "f":
+        # Family-specific builds run on capabilities of the same generation
+        # with the same or a newer minor version.
+        return major == arch_major and minor >= arch_minor
+
+    if ptx:
+        # PTX is JIT-compiled for the current device, so the build also runs
+        # on any newer capability.
+        return (major, minor) >= (arch_major, arch_minor)
+
+    # Base builds run on capabilities of the same generation with the same
+    # or a newer minor version.
     return major == arch_major and minor >= arch_minor
 
 

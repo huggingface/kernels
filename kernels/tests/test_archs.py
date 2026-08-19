@@ -43,6 +43,18 @@ def make_metadata(backend_type: str, archs: list[str] | None) -> Metadata:
         (["10.0f"], (10, 0), True),
         (["10.0f"], (10, 3), True),
         (["10.0f"], (12, 0), False),
+        # PTX is JIT-compiled for the current device, so builds with `+PTX`
+        # also run on any newer capability.
+        (["9.0+PTX"], (9, 0), True),
+        (["9.0+PTX"], (9, 1), True),
+        (["9.0+PTX"], (10, 0), True),
+        (["9.0+PTX"], (12, 1), True),
+        (["9.0+PTX"], (8, 6), False),
+        # ...but the `a` and `f` suffixes keep their own semantics.
+        (["9.0a+PTX"], (9, 0), True),
+        (["9.0a+PTX"], (10, 0), False),
+        (["10.0f+PTX"], (10, 3), True),
+        (["10.0f+PTX"], (12, 0), False),
         # Arch strings in an unknown format do not count as a match...
         (["garbage", "8.0"], (9, 0), False),
         # ...but when no arch string can be parsed, compatibility cannot be

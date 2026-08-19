@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize, de};
 
 /// Kernel version (numeric or Git revision).
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(untagged, rename_all = "kebab-case")]
 pub enum KernelVersion {
     Version(usize),
@@ -9,7 +9,7 @@ pub enum KernelVersion {
 }
 
 /// A kernel dependency.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct KernelDependency {
     pub repo_id: String,
     pub version: KernelVersion,
@@ -27,7 +27,12 @@ pub struct KernelDependency {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 struct KernelDependencyRepr {
     repo_id: String,
+    // `version` and `revision` are mutually exclusive, so only ever serialize
+    // the variant that is in use. Missing fields deserialize as `None`, since
+    // serde treats `Option` fields as optional.
+    #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     revision: Option<String>,
 }
 
@@ -112,6 +117,47 @@ mod tests {
             parsed.version,
             KernelVersion::Revision(ref r) if r == "34fa"
         ));
+    }
+
+    #[test]
+    fn only_the_version_in_use_is_serialized_as_json() {
+        let version = KernelDependency {
+            repo_id: "kernels-staging/einops".to_string(),
+            version: KernelVersion::Version(1),
+        };
+        assert_eq!(
+            serde_json::to_value(&version).unwrap(),
+            serde_json::json!({"repo-id": "kernels-staging/einops", "version": 1})
+        );
+
+        let revision = KernelDependency {
+            repo_id: "kernels-staging/einops".to_string(),
+            version: KernelVersion::Revision("34fa".to_string()),
+        };
+        assert_eq!(
+            serde_json::to_value(&revision).unwrap(),
+            serde_json::json!({"repo-id": "kernels-staging/einops", "revision": "34fa"})
+        );
+    }
+
+    #[test]
+    fn json_round_trips() {
+        for dep in [
+            KernelDependency {
+                repo_id: "kernels-staging/einops".to_string(),
+                version: KernelVersion::Version(1),
+            },
+            KernelDependency {
+                repo_id: "kernels-staging/einops".to_string(),
+                version: KernelVersion::Revision("34fa".to_string()),
+            },
+        ] {
+            let json = serde_json::to_string(&dep).unwrap();
+            assert_eq!(
+                serde_json::from_str::<KernelDependency>(&json).unwrap(),
+                dep
+            );
+        }
     }
 
     #[test]

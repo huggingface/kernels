@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
@@ -24,6 +24,8 @@ pub use kernel_deps::{KernelDependency, KernelVersion};
 mod name;
 pub use name::KernelName;
 
+mod parse;
+
 pub mod v3;
 pub mod v4;
 pub mod v5;
@@ -39,6 +41,25 @@ pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
     pub framework: Framework,
+}
+
+impl Build {
+    pub fn open(kernel_dir: impl AsRef<Path>) -> Result<Build> {
+        let build_compat = parse::parse_and_validate(kernel_dir)?;
+        Ok(build_compat.into())
+    }
+
+    pub fn is_noarch(&self) -> bool {
+        matches!(self.framework, Framework::TorchNoarch(_))
+    }
+
+    pub fn branch(&self) -> Option<&str> {
+        self.general.hub.as_ref().and_then(|h| h.branch.as_deref())
+    }
+
+    pub fn repo_id(&self) -> Option<&str> {
+        self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
+    }
 }
 
 pub enum Framework {
@@ -78,20 +99,6 @@ impl Framework {
             },
             _ => None,
         }
-    }
-}
-
-impl Build {
-    pub fn is_noarch(&self) -> bool {
-        matches!(self.framework, Framework::TorchNoarch(_))
-    }
-
-    pub fn branch(&self) -> Option<&str> {
-        self.general.hub.as_ref().and_then(|h| h.branch.as_deref())
-    }
-
-    pub fn repo_id(&self) -> Option<&str> {
-        self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
     }
 }
 
@@ -367,6 +374,13 @@ impl Kernel {
             | Kernel::Metal { include, .. }
             | Kernel::Rocm { include, .. }
             | Kernel::Xpu { include, .. } => include.as_deref(),
+        }
+    }
+
+    pub fn sycl_flags(&self) -> Option<&[String]> {
+        match self {
+            Kernel::Xpu { sycl_flags, .. } => sycl_flags.as_deref(),
+            _ => None,
         }
     }
 

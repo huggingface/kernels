@@ -13,13 +13,14 @@ use hf_hub::{
     HFError, HFRepositorySync, RepoType, RepoTypeKernel, RepoTypeModel,
 };
 use indicatif::{ProgressBar, ProgressStyle};
+use kernels_data::config::Build;
 use kernels_data::metadata::Metadata;
 use serde::Serialize;
 use walkdir::WalkDir;
 
 use crate::{
     hf::{self, repo_handle},
-    util::{check_or_infer_kernel_dir, discover_variants, parse_build},
+    util::{check_or_infer_kernel_dir, discover_variants},
 };
 
 /// Bridges `ProgressHandler` events to an `indicatif::ProgressBar`.
@@ -146,7 +147,7 @@ fn get_repo_and_branch(
     branch: Option<String>,
     variants: &[PathBuf],
 ) -> Result<(String, Option<String>)> {
-    let build = parse_build(kernel_dir);
+    let build = Build::open(kernel_dir);
 
     let build_branch = build
         .as_ref()

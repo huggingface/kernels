@@ -1,20 +1,29 @@
 """Type stubs for kernels_data module."""
 
 import os
+from collections.abc import Iterator
 from enum import Enum
+from pathlib import Path
 from typing import Optional, final
 
 __all__ = [
     "Backend",
     "BackendInfo",
+    "Build",
+    "General",
     "Provenance",
     "DigestAlgorithm",
     "GitStatus",
     "KernelBuilderVersion",
     "KernelDependency",
+    "KernelLock",
+    "KernelPaths",
+    "KernelLocks",
     "KernelName",
     "KernelVersion",
     "Metadata",
+    "NixKernelLock",
+    "NixKernelLocks",
     "Digest",
     "DigestViolation",
     "DigestValidationError",
@@ -323,6 +332,303 @@ class KernelDependency:
     def __repr__(self) -> str: ...
     def __eq__(self, value: object, /) -> bool: ...
     def __hash__(self) -> int: ...
+
+@final
+class KernelLock:
+    """A locked kernel revision."""
+
+    def __new__(cls, commit: str) -> "KernelLock":
+        """Construct a lock from a commit.
+
+        Raises:
+            ValueError: If `commit` is not a full git object id.
+        """
+        ...
+
+    @property
+    def commit(self) -> str:
+        """Locked commit of the kernel, as lowercase hexadecimal digits."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "KernelLock":
+        """Parse a `KernelLock` from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the lock to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the lock cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
+@final
+class KernelLocks:
+    """Multiple kernel locks keyed by the dependency they resolve.
+
+    Behaves as a read-only mapping from `KernelDependency` to `KernelLock`.
+    """
+
+    def __new__(cls, locks: dict[KernelDependency, KernelLock]) -> "KernelLocks": ...
+    def __len__(self) -> int: ...
+    def __getitem__(self, dependency: KernelDependency, /) -> KernelLock:
+        """Get the lock for `dependency`.
+
+        Raises:
+            KeyError: If the dependency is not locked.
+        """
+        ...
+
+    def __contains__(self, dependency: object, /) -> bool: ...
+    def __iter__(self) -> Iterator[KernelDependency]: ...
+    def get(
+        self, dependency: KernelDependency, default: Optional[KernelLock] = None
+    ) -> Optional[KernelLock]:
+        """Get the lock for `dependency`, or `default` if it is not locked."""
+        ...
+
+    def keys(self) -> list[KernelDependency]:
+        """Get the locked dependencies."""
+        ...
+
+    def values(self) -> list[KernelLock]:
+        """Get the kernel locks."""
+        ...
+
+    def items(self) -> list[tuple[KernelDependency, KernelLock]]:
+        """Get the (dependency, lock) pairs."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "KernelLocks":
+        """Parse a `KernelLocks` collection from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the locks collection to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the locks cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
+@final
+class NixKernelLock:
+    """A locked kernel revision with the SRI hash of the Nix output path."""
+
+    def __new__(cls, commit: str, hash: str) -> "NixKernelLock":
+        """Construct a lock from a commit and a SRI hash.
+
+        Raises:
+            ValueError: If `commit` is not a full git object id.
+        """
+        ...
+
+    @property
+    def commit(self) -> str:
+        """Locked commit of the kernel, as lowercase hexadecimal digits."""
+        ...
+
+    @property
+    def hash(self) -> str:
+        """SRI hash of the repository snapshot, as used by fixed-output derivations."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "NixKernelLock":
+        """Parse a `NixKernelLock` from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the lock to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the lock cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
+@final
+class NixKernelLocks:
+    """Multiple (Nix) kernel locks keyed by the dependency they resolve.
+
+    This data structure is used to store lock files to be consumed
+    by nix-builder.
+
+    Behaves as a read-only mapping from `KernelDependency` to `NixKernelLock`.
+    """
+
+    def __new__(
+        cls, locks: dict[KernelDependency, NixKernelLock]
+    ) -> "NixKernelLocks": ...
+    def __len__(self) -> int: ...
+    def __getitem__(self, dependency: KernelDependency, /) -> NixKernelLock:
+        """Get the lock for `dependency`.
+
+        Raises:
+            KeyError: If the dependency is not locked.
+        """
+        ...
+
+    def __contains__(self, dependency: object, /) -> bool: ...
+    def __iter__(self) -> Iterator[KernelDependency]: ...
+    def get(
+        self, dependency: KernelDependency, default: Optional[NixKernelLock] = None
+    ) -> Optional[NixKernelLock]:
+        """Get the lock for `dependency`, or `default` if it is not locked."""
+        ...
+
+    def keys(self) -> list[KernelDependency]:
+        """Get the locked dependencies."""
+        ...
+
+    def values(self) -> list[NixKernelLock]:
+        """Get the kernel locks."""
+        ...
+
+    def items(self) -> list[tuple[KernelDependency, NixKernelLock]]:
+        """Get the (dependency, lock) pairs."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "NixKernelLocks":
+        """Parse a `NixKernelLocks` collection from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the locks collection to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the locks cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
+@final
+class KernelPaths:
+    """A collection of kernel paths keyed by the dependency they resolve.
+
+    Behaves as a read-only mapping from `KernelDependency` to `pathlib.Path`.
+    """
+
+    def __new__(
+        cls, paths: dict[KernelDependency, os.PathLike[str] | str]
+    ) -> "KernelPaths": ...
+    def __len__(self) -> int: ...
+    def __getitem__(self, dependency: KernelDependency, /) -> Path:
+        """Get the path for `dependency`.
+
+        Raises:
+            KeyError: If the dependency has no path.
+        """
+        ...
+
+    def __contains__(self, dependency: object, /) -> bool: ...
+    def __iter__(self) -> Iterator[KernelDependency]: ...
+    def get(
+        self,
+        dependency: KernelDependency,
+        default: Optional[os.PathLike[str] | str] = None,
+    ) -> Optional[Path]:
+        """Get the path for `dependency`, or `default` if it has no path."""
+        ...
+
+    def keys(self) -> list[KernelDependency]:
+        """Get the dependencies."""
+        ...
+
+    def values(self) -> list[Path]:
+        """Get the kernel paths."""
+        ...
+
+    def items(self) -> list[tuple[KernelDependency, Path]]:
+        """Get the (dependency, path) pairs."""
+        ...
+
+    @staticmethod
+    def from_json(s: str) -> "KernelPaths":
+        """Parse a `KernelPaths` collection from a JSON string.
+
+        Raises:
+            ValueError: If the JSON cannot be parsed.
+        """
+        ...
+
+    def to_json(self) -> str:
+        """Serialize the paths collection to a pretty-printed JSON string.
+
+        Raises:
+            ValueError: If the paths cannot be serialized.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self) -> int: ...
+
+@final
+class General:
+    """General kernel configuration common to all backends."""
+
+    @property
+    def backends(self) -> list[Backend]:
+        """Backends the kernel supports."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class Build:
+    """Parsed and validated `build.toml` configuration for a kernel."""
+
+    @staticmethod
+    def open(kernel_dir: os.PathLike[str] | str) -> "Build":
+        """Parse and validate the `build.toml` in `kernel_dir`.
+
+        Raises:
+            ValueError: If the build configuration cannot be parsed or validated.
+        """
+        ...
+
+    @property
+    def general(self) -> General:
+        """General kernel configuration."""
+        ...
+
+    def all_kernel_depends(self, backend: Backend) -> list[KernelDependency]:
+        """Get the general + backend-specific kernel dependencies for `backend`."""
+        ...
 
 @final
 class Metadata:

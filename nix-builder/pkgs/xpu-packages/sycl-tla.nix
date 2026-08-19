@@ -19,8 +19,8 @@ let
       hash = "sha256-xXAxIDBesjDDOIa6/YsGznyW+5+NpaO1L96lBuqRzrk=";
     };
     "2026.0" = {
-      version = "0.9.1";
-      hash = "sha256-c8ecf042tO9ChTiFav9vQvHhhVZyk1YH5govfWOxfF0=";
+      version = "0.9.2";
+      hash = "sha256-Hn51Ah1wEscOnrt9O/aXBW7IC6Mcl4gUWynAmDeAOlM=";
     };
   };
   syclTlaVersion =

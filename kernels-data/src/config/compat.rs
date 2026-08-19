@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use eyre::Result;
 use serde::{Deserialize, de};
 use serde_value::Value;
@@ -12,6 +14,12 @@ pub enum BuildCompat {
     V3(v3::Build),
     V4(v4::Build),
     V5(v5::Build),
+}
+
+impl BuildCompat {
+    pub fn open(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {
+        super::parse::parse_and_validate_compat(kernel_dir)
+    }
 }
 
 #[derive(Deserialize)]

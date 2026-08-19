@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
+use kernels_data::config::{v5, Build, BuildCompat};
 use kernels_data::git::Oid;
 
 mod card;
@@ -37,19 +38,15 @@ use upload::{run_upload, RepoTypeArg, UploadArgs};
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
-use kernels_data::config::{v5, Build, BuildCompat};
-
 mod nix;
 
 mod skills;
 
 mod util;
-use util::{check_or_infer_kernel_dir, parse_and_validate};
+use util::check_or_infer_kernel_dir;
 
 mod validate_builds;
 use validate_builds::check_builds;
-
-use crate::util::parse_and_validate_compat;
 
 /// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
 /// crate (see `build.rs`), including the `kernel-builder` git provenance that is
@@ -470,13 +467,13 @@ fn main() -> Result<()> {
 
 fn check_config(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    parse_and_validate(kernel_dir)?;
+    Build::open(kernel_dir)?;
     Ok(())
 }
 
 fn update_build(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let build_compat: BuildCompat = parse_and_validate_compat(&kernel_dir)?;
+    let build_compat = BuildCompat::open(&kernel_dir)?;
 
     if matches!(build_compat, BuildCompat::V5(_)) {
         return Ok(());

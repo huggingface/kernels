@@ -3,7 +3,19 @@ use hf_hub::{HFClientSync, HFRepositorySync, RepoType};
 
 /// Build a sync HF API client.
 pub fn api() -> Result<hf_hub::HFClientSync> {
-    hf_hub::HFClientSync::new().context("Cannot create Hugging Face API client")
+    let mut builder = hf_hub::HFClient::builder();
+
+    if let Ok(endpoint) = std::env::var("HF_ENDPOINT") {
+        builder = builder.endpoint(endpoint);
+    }
+
+    if let Ok(token) = std::env::var("HF_TOKEN") {
+        builder = builder.token(token);
+    }
+
+    builder
+        .build_sync()
+        .context("Cannot create Hugging Face API client")
 }
 
 /// Get a repo handle.

@@ -12,7 +12,7 @@ use minijinja::Environment;
 
 use crate::{
     pyproject::ops_identifier::KernelIdentifier,
-    util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build},
+    util::{check_or_infer_kernel_dir, check_or_infer_target_dir},
 };
 
 pub(crate) mod common;
@@ -55,7 +55,7 @@ pub fn create_pyproject(
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-    let build = parse_build(&kernel_dir)?;
+    let build = Build::open(&kernel_dir)?;
 
     // Assemble build provenance. Prefer an explicitly provided kernel git
     // provenance (e.g. passed by Nix builds, where the source tree has no
@@ -89,7 +89,7 @@ pub fn clean_pyproject(
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-    let build = parse_build(&kernel_dir)?;
+    let build = Build::open(&kernel_dir)?;
     // Provenance is irrelevant when computing the set of files to clean.
     let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
 

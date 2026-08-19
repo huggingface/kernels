@@ -12,7 +12,7 @@ use minijinja::Environment;
 
 use crate::{
     pyproject::ops_identifier::KernelIdentifier,
-    util::{check_or_infer_kernel_dir, check_or_infer_target_dir},
+    util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build},
 };
 
 pub(crate) mod common;
@@ -33,6 +33,20 @@ pub fn create_pyproject_file_set(
     let mut env = Environment::new();
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
+
+    // Cargo-built kernels are linked as a staticlib into the extension, which
+    // is currently only wired up for the `tvm-ffi` framework.
+    if build
+        .kernels
+        .values()
+        .any(|kernel| kernel.dsl().is_cargo_built())
+        && !matches!(build.framework, Framework::TvmFfi(_))
+    {
+        bail!(
+            "`dsl = \"rust\"` and `dsl = \"cuda-oxide\"` kernels are currently \
+             only supported together with the `[tvm-ffi]` framework"
+        );
+    }
 
     let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
         tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?
@@ -55,7 +69,7 @@ pub fn create_pyproject(
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-    let build = Build::open(&kernel_dir)?;
+    let build = parse_build(&kernel_dir)?;
 
     // Assemble build provenance. Prefer an explicitly provided kernel git
     // provenance (e.g. passed by Nix builds, where the source tree has no
@@ -89,7 +103,7 @@ pub fn clean_pyproject(
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-    let build = Build::open(&kernel_dir)?;
+    let build = parse_build(&kernel_dir)?;
     // Provenance is irrelevant when computing the set of files to clean.
     let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
 

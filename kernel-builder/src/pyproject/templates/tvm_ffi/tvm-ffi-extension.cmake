@@ -1,6 +1,12 @@
 # Avoid 'lib' prefix for the extension.
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
+# rust kernels export the symbols; CMake just needs a stub source for the shared library.
+if(NOT SRC AND RUST_KERNEL_LIBS)
+  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/_ops_stub.cpp "\n")
+  list(APPEND SRC ${CMAKE_CURRENT_BINARY_DIR}/_ops_stub.cpp)
+endif()
+
 add_library(${OPS_NAME} SHARED ${SRC})
 target_compile_definitions(${OPS_NAME} PRIVATE
   "-DTVM_FFI_EXTENSION_NAME=${OPS_NAME}")
@@ -13,6 +19,20 @@ check_cxx_compiler_flag("-fno-gnu-unique" CXX_HAS_NO_GNU_UNIQUE)
 if(CXX_HAS_NO_GNU_UNIQUE)
   target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique>)
   target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:GPU_LANGUAGE>:-fno-gnu-unique>)
+endif()
+
+if(RUST_KERNEL_LIBS)
+  add_dependencies(${OPS_NAME} ${RUST_KERNEL_TARGETS})
+  find_package(Threads REQUIRED)
+  target_link_libraries(${OPS_NAME} PRIVATE
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,${RUST_KERNEL_LIBS}>"
+    Threads::Threads
+    ${CMAKE_DL_LIBS})
+
+  if(GPU_LANG STREQUAL "CUDA")
+    find_package(CUDAToolkit REQUIRED)
+    target_link_libraries(${OPS_NAME} PRIVATE CUDA::cuda_driver)
+  endif()
 endif()
 
 if(GPU_LANG STREQUAL "SYCL")

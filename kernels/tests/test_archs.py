@@ -95,8 +95,16 @@ def test_cuda_incompatible_arch_is_rejected(fake_cuda_device):
 
 
 def test_cuda_compatible_arch_is_accepted(fake_cuda_device):
-    for archs in (["8.0", "10.0"], ["10.0a"], ["10.0f"], None):
+    for archs in (["8.0", "10.0"], ["10.0a"], ["10.0f"]):
         _check_arch_incompatibility(make_metadata("cuda", archs), "test-variant")
+
+
+def test_noarch_build_is_accepted(fake_cuda_device):
+    # Backends that support archs (e.g. CUDA) can have builds that do not
+    # declare any (noarch kernels, e.g. pure Triton builds). Such builds are
+    # never rejected.
+    _check_arch_incompatibility(make_metadata("cuda", None), "test-variant")
+    _check_arch_incompatibility(make_metadata("cuda", []), "test-variant")
 
 
 def test_rocm_arch_check(fake_rocm_device):

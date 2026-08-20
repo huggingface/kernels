@@ -7,6 +7,7 @@ from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
+from huggingface_hub import constants
 from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import RepoFile
 
@@ -48,7 +49,7 @@ def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
     # final destination repo.
     repo_id, _ = resolve_status(api, repo_id, "main")
 
-    tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec)
+    tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec, local_files_only=constants.HF_HUB_OFFLINE)
 
     revision = tag_for_newest.target_commit
 

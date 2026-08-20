@@ -1,3 +1,5 @@
+from huggingface_hub import constants
+
 from kernels._versions import _get_available_versions
 from kernels.hf_hub import _get_hf_api
 from kernels.variants import (
@@ -9,7 +11,7 @@ from kernels.variants import (
 
 def print_kernel_versions(repo_id: str):
     api = _get_hf_api()
-    versions = _get_available_versions(repo_id)
+    versions = _get_available_versions(repo_id, local_files_only=constants.HF_HUB_OFFLINE)
     if not versions:
         print(f"Repository does not support kernel versions: {repo_id}")
         return

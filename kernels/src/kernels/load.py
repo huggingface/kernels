@@ -96,9 +96,18 @@ def get_kernel(
     if override is not None:
         return get_local_kernel(override)
 
-    _check_trust_remote_code(repo_id, trust_remote_code)
+    _check_trust_remote_code(
+        repo_id=repo_id,
+        local_files_only=constants.HF_HUB_OFFLINE,
+        trust_remote_code=trust_remote_code,
+    )
 
-    revision = select_revision_or_version(repo_id, revision=revision, version=version)
+    revision = select_revision_or_version(
+        repo_id,
+        revision=revision,
+        version=version,
+        local_files_only=constants.HF_HUB_OFFLINE,
+    )
     repo_info = RepoInfo(
         repo_id=repo_id,
         revision=revision,
@@ -174,7 +183,12 @@ def has_kernel(
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
     """
-    revision = select_revision_or_version(repo_id, revision=revision, version=version)
+    revision = select_revision_or_version(
+        repo_id,
+        revision=revision,
+        version=version,
+        local_files_only=constants.HF_HUB_OFFLINE,
+    )
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)

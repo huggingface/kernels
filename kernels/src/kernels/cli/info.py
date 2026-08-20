@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from huggingface_hub import constants
 from kernels_data import Metadata
 
 from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
@@ -26,7 +27,10 @@ def print_kernel_info(
     path = Path(kernel)
     if path.is_dir():
         if revision is not None or version is not None:
-            print("--revision and --version cannot be used with a local path", file=sys.stderr)
+            print(
+                "--revision and --version cannot be used with a local path",
+                file=sys.stderr,
+            )
             sys.exit(1)
         info = _local_kernel_info(path)
     else:
@@ -49,15 +53,18 @@ def _hub_kernel_info(
         sys.exit(1)
 
     if version is not None:
-        revision = resolve_version_spec_as_ref(repo_id, version).name
+        revision = resolve_version_spec_as_ref(repo_id, version, local_files_only=constants.HF_HUB_OFFLINE).name
     elif revision is None:
-        versions = _get_available_versions(repo_id)
+        versions = _get_available_versions(repo_id, local_files_only=constants.HF_HUB_OFFLINE)
         revision = versions[max(versions.keys())].name if versions else "main"
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)
     if not variants:
-        print(f"No build variants found in {repo_id} (revision: {revision})", file=sys.stderr)
+        print(
+            f"No build variants found in {repo_id} (revision: {revision})",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # The metadata fields that describe the kernel (rather than a specific

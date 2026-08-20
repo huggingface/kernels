@@ -306,7 +306,11 @@ def test_version_resolution_offline_missing(monkeypatch):
     monkeypatch.setattr(constants, "HF_HUB_OFFLINE", True)
 
     with pytest.raises(ValueError, match=r"offline mode"):
-        resolve_version_spec_as_ref("kernels-test/this-repo-should-not-exist", 1)
+        resolve_version_spec_as_ref(
+            "kernels-test/this-repo-should-not-exist",
+            1,
+            local_files_only=constants.HF_HUB_OFFLINE,
+        )
 
 
 def silu_and_mul_torch(x: torch.Tensor):

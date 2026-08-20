@@ -11,13 +11,13 @@ TEST_POLICIES: list[policy.VerificationPolicy] = [
 
 
 def test_correctly_signed_kernel_passes_with_default_policy():
-    revision = select_revision_or_version("kernels-community/relu", revision=None, version=1)
+    revision = select_revision_or_version("kernels-community/relu", revision=None, version=1, local_files_only=False)
     variant_path = install_kernel("kernels-community/relu", revision=revision)
     assert verify_variant(variant_path) == VerificationResult.Success()
 
 
 def test_correctly_signed_kernel_passes():
-    revision = select_revision_or_version("kernels-test/signatures", revision=None, version=1)
+    revision = select_revision_or_version("kernels-test/signatures", revision=None, version=1, local_files_only=False)
     variant_path = install_kernel("kernels-test/signatures", revision=revision)
     assert (
         verify_variant(

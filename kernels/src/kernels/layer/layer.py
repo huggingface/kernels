@@ -9,6 +9,8 @@ from pathlib import Path
 from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Callable, Protocol, Type
 
+from huggingface_hub import constants
+
 from .._versions import select_revision_or_version
 from ..load import (
     get_kernel,
@@ -93,6 +95,7 @@ class LayerRepository:
             repo_id=self._repo_id,
             revision=self._revision,
             version=self._version,
+            local_files_only=constants.HF_HUB_OFFLINE,
         )
 
     def load(self) -> Type["nn.Module"]:

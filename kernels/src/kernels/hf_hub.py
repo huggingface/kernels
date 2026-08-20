@@ -92,7 +92,7 @@ class RepoInfo:
     revision: str
 
 
-def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) -> None:
+def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_code: bool | list[str]) -> None:
     """Check whether a kernel repository is trusted.
 
     When ``trust_remote_code`` is ``False`` (the default), only repositories
@@ -119,7 +119,7 @@ def _check_trust_remote_code(repo_id: str, trust_remote_code: bool | list[str]) 
             stacklevel=3,
         )
 
-    if constants.HF_HUB_OFFLINE:
+    if local_files_only:
         # Publisher trust cannot be verified offline. The user opted into
         # offline mode and the kernel must already be in the local cache,
         # so trust was established when it was originally downloaded.

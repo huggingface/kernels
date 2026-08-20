@@ -1,6 +1,8 @@
 import argparse
 import sys
 
+from huggingface_hub import constants
+
 if sys.version_info >= (3, 11):
     from typing import assert_never
 else:
@@ -13,7 +15,9 @@ from kernels.verify import VerificationResult, verify_variant
 
 
 def verify_signature(args: argparse.Namespace) -> None:
-    revision = select_revision_or_version(args.repo_id, revision=None, version=args.version)
+    revision = select_revision_or_version(
+        args.repo_id, revision=None, version=args.version, local_files_only=constants.HF_HUB_OFFLINE
+    )
 
     if args.all_variants:
         repo_path = install_kernel_all_variants(args.repo_id, revision=revision)

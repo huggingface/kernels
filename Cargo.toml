@@ -4,5 +4,6 @@ members = [
     "kernel-builder",
     "kernels-data",
     "kernels-data/bindings/python",
+    "kernel-port",
 ]
 resolver = "2"

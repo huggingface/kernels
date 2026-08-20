@@ -4,6 +4,7 @@ members = [
     "kernel-builder",
     "kernels",
     "kernels-common",
+    "kernel-port",
 ]
 resolver = "2"
 

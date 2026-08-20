@@ -33,6 +33,8 @@ jobs:
           ( cd kernels && cargo fmt --all -- --check )
       - name: Cargo fmt (kernel-builder)
         run: ( cd kernel-builder && cargo fmt --all -- --check )
+      - name: Cargo fmt (kernel-port)
+        run: ( cd kernel-port && cargo fmt --all -- --check )
 
   clippy:
     permissions:
@@ -62,6 +64,8 @@ jobs:
           ( cd kernels && cargo clippy -- -D warnings )
       - name: Clippy (kernel-builder)
         run: ( cd kernel-builder && cargo clippy -- -D warnings )
+      - name: Clippy (kernel-port)
+        run: ( cd kernel-port && cargo clippy -- -D warnings )
 
   test:
     permissions:
@@ -86,3 +90,5 @@ jobs:
         run: cargo test -p kernels-common
       - name: Test (kernel-builder)
         run: cargo test -p hf-kernel-builder
+      - name: Test (kernel-port)
+        run: cargo test -p kernel-port

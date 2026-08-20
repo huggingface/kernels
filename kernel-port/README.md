@@ -1,13 +1,9 @@
 # kernel-port
 
 > [!WARNING]
-> This is an experiment. The recipe language, the op set, and the CLI are all
-> subject to change without notice, and nothing here is covered by any
-> stability guarantee. Do not depend on it (yet).
+> This is an experiment. The recipe language, the op set, and the CLI are all subject to change without notice, and nothing here is covered by any stability guarantee. Do not depend on it (yet).
 
-Ports a kernel repo into the
-[kernel-builder](https://github.com/huggingface/kernel-builder) layout by
-running a recipe.
+Ports a kernel repo into the [kernel-builder](https://github.com/huggingface/kernel-builder) layout by running a recipe.
 
 - A port is a `port.kdl` recipe plus an `overlay/` directory of checked-in files.
 - Same pins and same recipe gives byte-identical output, every run.
@@ -16,17 +12,13 @@ running a recipe.
 
 ## The recipe
 
-A recipe is not a programming language. It is an ordered list of operations,
-written as a [KDL 2.0](https://kdl.dev) document.
+A recipe is not a programming language. It is an ordered list of operations, written as a [KDL 2.0](https://kdl.dev) document.
 
 - One node per op, with `key="value"` properties.
-- `//` comments, and raw multi-line strings (`#"""..."""#`) for exact-text
-  payloads.
+- `//` comments, and raw multi-line strings (`#"""..."""#`) for exact-text payloads.
 - No variables, no expressions, no control flow. Every pin is a literal.
-- KDL features with no meaning here are rejected rather than ignored: positional
-  arguments, children blocks, type annotations.
-- A recipe kept on disk opens with a `recipe version=N` header, declaring the
-  format it was written against. See [versioning](#versioning).
+- KDL features with no meaning here are rejected rather than ignored: positional arguments, children blocks, type annotations.
+- A recipe kept on disk opens with a `recipe version=N` header, declaring the format it was written against. See [versioning](#versioning).
 
 ## See it work, without a checkout
 
@@ -35,8 +27,7 @@ Two flags remove the setup:
 - `-e` takes the recipe inline, instead of a path to one.
 - `--file path=content` supplies the input tree, instead of `--dir`.
 
-Nothing is read from disk and nothing is written to it, so one command shows
-what an op does:
+Nothing is read from disk and nothing is written to it, so one command shows what an op does:
 
 ```sh
 kernel-port -e 'relativize_imports in="pkg/**" package_root="pkg" changes=1' \
@@ -51,9 +42,7 @@ FILE: pkg/__init__.py
 from .ops import hello
 ```
 
-Change `changes=1` to `changes=2` and the same command shows the other half of
-the design. The run refuses to proceed rather than porting something you did not
-sign off on:
+Change `changes=1` to `changes=2` and the same command shows the other half of the design. The run refuses to proceed rather than porting something you did not sign off on:
 
 ```
 error: recipe line 1: relativize_imports: expected exactly 2 change(s) but made 1 - upstream drifted; review the new rewrites and update changes=
@@ -69,19 +58,16 @@ cargo run -p kernel-port -- <recipe>.kdl --dir <upstream-checkout> --out <dir> \
 ```
 
 - `--dir` is the upstream checkout. It is read, never written.
-- `--out` writes the ported tree, wiped and regenerated on every run. Without
-  it, `--dir` is modified in place.
+- `--out` writes the ported tree, wiped and regenerated on every run. Without it, `--dir` is modified in place.
 - `--dry-run` computes the changes and writes nothing.
 - `--diff` prints unified diffs for changed files, moves included.
 - `--print` dumps every file in the resulting tree.
 - `--vendor name=dir` supplies a second pinned checkout for [`vendor`](#vendor).
-- `--partial` writes the state as of the last successful op to `--out`, to
-  inspect what a failing op saw. The run still exits non-zero.
+- `--partial` writes the state as of the last successful op to `--out`, to inspect what a failing op saw. The run still exits non-zero.
 
 ## Ops
 
-Each op links to its entry in the [cookbook](#cookbook) below, which gives the
-full argument list, a runnable example, and the failure modes.
+Each op links to its entry in the [cookbook](#cookbook) below, which gives the full argument list, a runnable example, and the failure modes.
 
 | Op | What it does |
 | --- | --- |
@@ -105,67 +91,44 @@ full argument list, a runnable example, and the failure modes.
 
 On top of whatever the recipe says:
 
-- `source` and `vendor` require a full 40-character SHA and a clean checkout,
-  untracked files included.
-- Every op is built before the first one runs, so an argument typo or a bad glob
-  anywhere fails the recipe before anything is mutated.
+- `source` and `vendor` require a full 40-character SHA and a clean checkout, untracked files included.
+- Every op is built before the first one runs, so an argument typo or a bad glob anywhere fails the recipe before anything is mutated.
 - After the last op, every added or modified Python file must still parse.
-- No absolute in-package import may remain under `torch-ext`. The Hub loads a
-  kernel under a build-variant directory name, so only relative intra-package
-  imports resolve at run time.
-- `--out` runs write a `.port-provenance.json`: recipe hash, runner version,
-  pinned sources, output tree hash. All deterministic, so the file reproduces
-  byte-for-byte.
+- No absolute in-package import may remain under `torch-ext`. The Hub loads a kernel under a build-variant directory name, so only relative intra-package imports resolve at run time.
+- `--out` runs write a `.port-provenance.json`: recipe hash, runner version, pinned sources, output tree hash. All deterministic, so the file reproduces byte-for-byte.
 
 ## Versioning
 
-A recipe is re-run later, by someone else, against a newer build of this tool.
-The header says which format it was written against.
+A recipe is re-run later, by someone else, against a newer build of this tool. The header says which format it was written against.
 
 ```kdl
 recipe version=1
 ```
 
 - The header must be the first node in the file. Comments above it are fine.
-- A recipe file that does not declare a version is rejected. An inline `-e`
-  recipe may omit it, since it does not outlive the command.
-- A version this build does not implement is rejected, rather than run under a
-  meaning the author never saw.
+- A recipe file that does not declare a version is rejected. An inline `-e` recipe may omit it, since it does not outlive the command.
+- A version this build does not implement is rejected, rather than run under a meaning the author never saw.
 - The version is recorded as `format` in `.port-provenance.json`.
 
-`version` is bumped when a change would give an existing recipe a *different
-meaning*, not when it gains a new capability. Adding an op or an optional
-argument leaves every existing recipe alone, so it is not a bump. Changing what
-an existing argument does is.
+`version` is bumped when a change would give an existing recipe a *different meaning*, not when it gains a new capability. Adding an op or an optional argument leaves every existing recipe alone, so it is not a bump. Changing what an existing argument does is.
 
 ## Cookbook
 
-One entry per op: what it takes, what it guarantees, a command you can run as
-written, and what makes it fail. Ops run top to bottom against an in-memory
-copy of the tree; nothing reaches disk until every op has succeeded.
+One entry per op: what it takes, what it guarantees, a command you can run as written, and what makes it fail. Ops run top to bottom against an in-memory copy of the tree; nothing reaches disk until every op has succeeded.
 
 Conventions used throughout:
 
-- **Globs** match repo-relative paths with `/` separators. `*` does not cross a
-  `/`, `**` does. `{a,b}` alternates. Args that take several globs (`src`,
-  `keep`, `torch_src`) split on commas outside braces.
-- **Pins** (`count=`, `files=`, `changes=`) are literal integers that must match
-  exactly. They are the point: they turn "upstream changed" from a silent
-  mis-port into a failed run.
-- **Payload strings** use `"..."` with `\n`/`\t`/`\"` escapes, or KDL's raw
-  multi-line form for exact text that contains quotes and newlines:
+- **Globs** match repo-relative paths with `/` separators. `*` does not cross a `/`, `**` does. `{a,b}` alternates. Args that take several globs (`src`, `keep`, `torch_src`) split on commas outside braces.
+- **Pins** (`count=`, `files=`, `changes=`) are literal integers that must match exactly. They are the point: they turn "upstream changed" from a silent mis-port into a failed run.
+- **Payload strings** use `"..."` with `\n`/`\t`/`\"` escapes, or KDL's raw multi-line form for exact text that contains quotes and newlines:
   ```kdl
   replace in="a.cpp" count=1 with="" find=#"""
   static auto registry = torch::RegisterOperators()
       .op("pkg::thing", &thing);
   """#
   ```
-  The first and last newlines are the delimiters, so the payload above starts at
-  `static` and ends at `;`.
-- The examples below build their input with `--file path=content` so they run
-  with no repository at all. `$'...'` is shell syntax for a string containing
-  real newlines. With no `--out`, the run prints the resulting tree; a trailing
-  `...` in an output block means the rest of that dump is elided here.
+  The first and last newlines are the delimiters, so the payload above starts at `static` and ends at `;`.
+- The examples below build their input with `--file path=content` so they run with no repository at all. `$'...'` is shell syntax for a string containing real newlines. With no `--out`, the run prints the resulting tree; a trailing `...` in an output block means the rest of that dump is elided here.
 
 ### The header
 
@@ -175,12 +138,9 @@ Conventions used throughout:
 recipe version=1
 ```
 
-Declare the recipe format, as the first node in the file. Not an op: it runs
-nothing and is not part of the pipeline. Required in a recipe file, optional
-inline. See [versioning](#versioning).
+Declare the recipe format, as the first node in the file. Not an op: it runs nothing and is not part of the pipeline. Required in a recipe file, optional inline. See [versioning](#versioning).
 
-Fails when: the version is one this build does not implement, or the header is
-not first.
+Fails when: the version is one this build does not implement, or the header is not first.
 
 ### Pinning the upstream
 
@@ -190,17 +150,13 @@ not first.
 source repo="<url>" commit="<40-char sha>"
 ```
 
-Assert what `--dir` is. Verifies the checkout's `HEAD` is exactly `commit`, that
-its `origin` URL is `repo`, and that the working tree is clean (untracked files
-included), then records the pin in `.port-provenance.json`. Every recipe that
-ports a real repository starts with this line.
+Assert what `--dir` is. Verifies the checkout's `HEAD` is exactly `commit`, that its `origin` URL is `repo`, and that the working tree is clean (untracked files included), then records the pin in `.port-provenance.json`. Every recipe that ports a real repository starts with this line.
 
 ```kdl
 source repo="https://github.com/rusty1s/pytorch_scatter" commit="f514c10f920b5aeed2eb162092f0ad20d3edee52"
 ```
 
-Fails when: `--dir` is not a git checkout, sits at a different commit, has a
-different origin, or has uncommitted or untracked changes.
+Fails when: `--dir` is not a git checkout, sits at a different commit, has a different origin, or has uncommitted or untracked changes.
 
 #### `vendor`
 
@@ -208,17 +164,14 @@ different origin, or has uncommitted or untracked changes.
 vendor name="<id>" repo="<url>" commit="<40-char sha>" path="<subdir>" to="<dir>"
 ```
 
-The same verification for a second repository, supplied on the command line as
-`--vendor <id>=<dir>`, then copies its `path` subtree into the workspace at
-`to`. For kernels that vendor a dependency's sources instead of depending on it.
+The same verification for a second repository, supplied on the command line as `--vendor <id>=<dir>`, then copies its `path` subtree into the workspace at `to`. For kernels that vendor a dependency's sources instead of depending on it.
 
 ```kdl
 vendor name="quack" repo="https://github.com/Dao-AILab/quack" commit="<sha>" \
     path="quack/cute" to="torch-ext/kernel/cute"
 ```
 
-Fails when: no `--vendor` was passed for that name, the checkout drifts from the
-pin, or `path` is not a directory in it.
+Fails when: no `--vendor` was passed for that name, the checkout drifts from the pin, or `path` is not a directory in it.
 
 ### Shaping the tree
 
@@ -228,9 +181,7 @@ pin, or `path` is not a directory in it.
 prune keep="<glob>[,<glob>...]"
 ```
 
-Delete everything the globs do not match. This is the port's statement of what
-it carries over, so it belongs near the top: whatever upstream adds later lands
-outside `keep` and is dropped, rather than silently shipping.
+Delete everything the globs do not match. This is the port's statement of what it carries over, so it belongs near the top: whatever upstream adds later lands outside `keep` and is dropped, rather than silently shipping.
 
 ```sh
 kernel-port -e 'prune keep="csrc/**,pkg/**"' \
@@ -243,8 +194,7 @@ D setup.py
 ...
 ```
 
-Fails when: `keep` is empty, or any glob in it matches nothing (a stale keep
-entry is a bug, not a no-op).
+Fails when: `keep` is empty, or any glob in it matches nothing (a stale keep entry is a bug, not a no-op).
 
 #### `delete`
 
@@ -252,8 +202,7 @@ entry is a bug, not a no-op).
 delete in="<glob>"
 ```
 
-Delete the matching files. Use it for a handful of paths; use `prune` when the
-list of what to keep is shorter than the list of what to drop.
+Delete the matching files. Use it for a handful of paths; use `prune` when the list of what to keep is shorter than the list of what to drop.
 
 ```sh
 kernel-port -e 'delete in="**/*.pyc"' --file 'pkg/a.py=a' --file 'pkg/a.pyc=binary'
@@ -273,9 +222,7 @@ Fails when: the glob matches nothing.
 move from="<path>" to="<path>"
 ```
 
-Rename a file, or a whole directory if `from` names one. Moves are recorded, so
-`--diff` can show a moved file's content change as `old path -> new path`
-instead of a delete plus an add.
+Rename a file, or a whole directory if `from` names one. Moves are recorded, so `--diff` can show a moved file's content change as `old path -> new path` instead of a delete plus an add.
 
 ```sh
 kernel-port -e 'move from="csrc" to="hello-kernel"' \
@@ -291,8 +238,7 @@ D csrc/k.h
 ...
 ```
 
-Fails when: `from` matches no file or directory, or a destination path already
-exists.
+Fails when: `from` matches no file or directory, or a destination path already exists.
 
 #### `overlay`
 
@@ -300,11 +246,7 @@ exists.
 overlay from="<dir>"
 ```
 
-Copy a directory of checked-in files over the workspace, overwriting what is
-there. `from` is relative to the recipe file. This is where the files with no
-upstream equivalent live: `torch_binding.cpp`, `flake.nix`, a CARD.md. Keep it
-small - anything derivable from upstream should be an op, not an overlay file,
-so that upstream drift is detected rather than papered over.
+Copy a directory of checked-in files over the workspace, overwriting what is there. `from` is relative to the recipe file. This is where the files with no upstream equivalent live: `torch_binding.cpp`, `flake.nix`, a CARD.md. Keep it small - anything derivable from upstream should be an op, not an overlay file, so that upstream drift is detected rather than papered over.
 
 ```kdl
 overlay from="overlay"
@@ -320,9 +262,7 @@ Fails when: the directory does not exist or contains no files.
 replace in="<glob>" find="<text>" with="<text>" count=N
 ```
 
-Exact-text find and replace across every matching file, where `count` is the
-total number of occurrences across all of them. `with=""` deletes the text. No
-regexes and no capture groups: what you pin is what gets rewritten.
+Exact-text find and replace across every matching file, where `count` is the total number of occurrences across all of them. `with=""` deletes the text. No regexes and no capture groups: what you pin is what gets rewritten.
 
 ```sh
 kernel-port -e 'replace in="*.cpp" find="TORCH_EXTENSION_NAME" with="ops" count=2' \
@@ -338,8 +278,7 @@ TORCH_LIBRARY(ops, m) {}
 REGISTER(ops)
 ```
 
-Fails when: the glob matches no files, or the occurrence total is not exactly
-`count`. The error names the per-file counts it did find.
+Fails when: the glob matches no files, or the occurrence total is not exactly `count`. The error names the per-file counts it did find.
 
 #### `strip_suffix`
 
@@ -347,9 +286,7 @@ Fails when: the glob matches no files, or the occurrence total is not exactly
 strip_suffix in="<glob>" suffix="<text>" files=N
 ```
 
-Remove one literal suffix from the end of every matching file, with both the
-number of files and the suffix on each of them pinned. For trailing content that
-upstream appends uniformly - a generated footer, a license tail.
+Remove one literal suffix from the end of every matching file, with both the number of files and the suffix on each of them pinned. For trailing content that upstream appends uniformly - a generated footer, a license tail.
 
 ```sh
 kernel-port -e 'strip_suffix in="*.h" suffix="\n// EOF\n" files=1' \
@@ -362,8 +299,7 @@ M k.h
 ...
 ```
 
-Fails when: the file count is not `files`, or any matched file does not end with
-`suffix`.
+Fails when: the file count is not `files`, or any matched file does not end with `suffix`.
 
 #### `expect`
 
@@ -372,14 +308,9 @@ expect in="<glob>" find="<text>" count=N
 expect in="<glob>" files=N
 ```
 
-A guard that changes nothing. The first form asserts an exact text occurs
-exactly `count` times across the matched files - `count=0` asserts absence. The
-second asserts the glob matches exactly `N` files.
+A guard that changes nothing. The first form asserts an exact text occurs exactly `count` times across the matched files - `count=0` asserts absence. The second asserts the glob matches exactly `N` files.
 
-Reach for it to state an invariant the rest of the recipe depends on but does
-not itself enforce: that no absolute import survived, that the upstream source
-list is still the size you reviewed. Guards hold regardless of which op was
-supposed to do the work, so they keep holding when the recipe is edited.
+Reach for it to state an invariant the rest of the recipe depends on but does not itself enforce: that no absolute import survived, that the upstream source list is still the size you reviewed. Guards hold regardless of which op was supposed to do the work, so they keep holding when the recipe is edited.
 
 ```sh
 kernel-port -e 'expect in="**/*.cu" files=3' --file 'a.cu=x' --file 'sub/b.cu=y'
@@ -389,15 +320,11 @@ kernel-port -e 'expect in="**/*.cu" files=3' --file 'a.cu=x' --file 'sub/b.cu=y'
 error: recipe line 1: expect: expected "**/*.cu" to match exactly 3 file(s), found 2 - the upstream file set drifted; update the port definition (a.cu, sub/b.cu)
 ```
 
-Fails when: the count or file count does not match. `find` and `files` are
-mutually exclusive.
+Fails when: the count or file count does not match. `find` and `files` are mutually exclusive.
 
 ### Rewriting Python imports
 
-These four go through libcst, so comments, quoting, and formatting survive
-byte-for-byte. Each takes an optional `changes=N` pinning exactly how many
-import statements it rewrites, which is what stops a newly added upstream file
-from being rewritten silently.
+These four go through libcst, so comments, quoting, and formatting survive byte-for-byte. Each takes an optional `changes=N` pinning exactly how many import statements it rewrites, which is what stops a newly added upstream file from being rewritten silently.
 
 #### `convert_import`
 
@@ -405,9 +332,7 @@ from being rewritten silently.
 convert_import in="<glob>" prefix="<dotted.path>" [changes=N]
 ```
 
-Rewrite `import a.b.c as x` into `from a.b import c as x`, for modules under
-`prefix`. The `from` form is what the later ops can relativize; the `import`
-form cannot be made relative at all.
+Rewrite `import a.b.c as x` into `from a.b import c as x`, for modules under `prefix`. The `from` form is what the later ops can relativize; the `import` form cannot be made relative at all.
 
 ```sh
 kernel-port -e 'convert_import in="**/*.py" prefix="pkg" changes=1' \
@@ -431,8 +356,7 @@ import os
 remap_module in="<glob>" from="<dotted.path>" to="<dotted.path>" [changes=N]
 ```
 
-Move a module prefix onto a new namespace. Prefix matching is boundary-aware, so
-`from="pkg.utils"` does not touch `pkg.utils_extra`.
+Move a module prefix onto a new namespace. Prefix matching is boundary-aware, so `from="pkg.utils"` does not touch `pkg.utils_extra`.
 
 ```sh
 kernel-port -e 'remap_module in="**/*.py" from="pkg" to="torch_ext.pkg" changes=2' \
@@ -454,15 +378,9 @@ from torch_ext.pkg.util import b
 relativize_imports in="<glob>" package_root="<dir>" [root_relative=#true] [changes=N]
 ```
 
-Rewrite absolute intra-package imports to their minimal-dot relative form. This
-is required, not cosmetic: the Hub loads a kernel under a build-variant
-directory name, so an absolute self-import resolves to nothing at run time. The
-runner re-checks this after the last op regardless of whether you ran this op.
+Rewrite absolute intra-package imports to their minimal-dot relative form. This is required, not cosmetic: the Hub loads a kernel under a build-variant directory name, so an absolute self-import resolves to nothing at run time. The runner re-checks this after the last op regardless of whether you ran this op.
 
-`package_root` is the package directory itself (`torch-ext/<pkg>`); each file's
-own package is derived from where it sits under it. `root_relative=#true`
-rewrites relative to the package root instead of the file, keeping the full
-module path visible (`from ...ops import base` rather than `from . import base`).
+`package_root` is the package directory itself (`torch-ext/<pkg>`); each file's own package is derived from where it sits under it. `root_relative=#true` rewrites relative to the package root instead of the file, keeping the full module path visible (`from ...ops import base` rather than `from . import base`).
 
 ```sh
 kernel-port -e 'relativize_imports in="pkg/**" package_root="pkg" changes=1' \
@@ -483,9 +401,7 @@ from .ops import hello
 ensure_init under="<dir>" [changes=N]
 ```
 
-Add an empty `__init__.py` to every directory under `under` that holds Python
-files but has no `__init__.py`. Upstream layouts that relied on namespace
-packages or on setuptools discovery need this to import as a package.
+Add an empty `__init__.py` to every directory under `under` that holds Python files but has no `__init__.py`. Upstream layouts that relied on namespace packages or on setuptools discovery need this to import as a package.
 
 ```sh
 kernel-port -e 'ensure_init under="torch-ext/pkg" changes=1' \
@@ -511,14 +427,9 @@ kernel name="<id>" backend="<cuda|rocm|cpu|metal|xpu|...>" src="<glob>[,<glob>..
     [rocm_archs="gfx942,..."] [repeat_src="<path>,..."]
 ```
 
-Record one `[kernel.<name>]` section for the manifest. It writes no files; the
-`manifest` op emits everything recorded before it. One `kernel` per backend, and
-the `src` globs are resolved when the op runs, so a source file added upstream
-inside an already-matched directory is picked up (and one added outside it is
-not - that is what `expect ... files=N` is for).
+Record one `[kernel.<name>]` section for the manifest. It writes no files; the `manifest` op emits everything recorded before it. One `kernel` per backend, and the `src` globs are resolved when the op runs, so a source file added upstream inside an already-matched directory is picked up (and one added outside it is not - that is what `expect ... files=N` is for).
 
-`depends` defaults to `torch`. `repeat_src` lists paths that must be compiled
-twice, and each must already be selected by `src`.
+`depends` defaults to `torch`. `repeat_src` lists paths that must be compiled twice, and each must already be selected by `src`.
 
 #### `manifest`
 
@@ -533,14 +444,9 @@ manifest name="<id>" backends="<b>[,<b>...]" torch_src="<glob>[,<glob>...]"
 manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
 ```
 
-Generate `build.toml` from the `kernel` sections recorded before it, plus the
-`[general]` and `[torch]` settings given here. The manifest is always generated,
-never overlaid: if it needs a field this op cannot emit, extend the op.
+Generate `build.toml` from the `kernel` sections recorded before it, plus the `[general]` and `[torch]` settings given here. The manifest is always generated, never overlaid: if it needs a field this op cannot emit, extend the op.
 
-`torch_src` selects the binding sources; `torch_include` adds include
-directories for them (which is how a binding can `#include` a header from the
-kernel directory instead of restating its declarations). `noarch=#true` switches
-to a `[torch-noarch]` manifest and rejects the torch-only arguments.
+`torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
 
 ```sh
 kernel-port --file 'hello-kernel/k.cu=// kernel' --file 'torch-ext/binding.cpp=// binding' \
@@ -574,13 +480,11 @@ src = [
 ...
 ```
 
-Fails when: no `kernel` section was declared (and `noarch` is not set), a glob
-matches nothing, or an `include` directory holds no files.
+Fails when: no `kernel` section was declared (and `noarch` is not set), a glob matches nothing, or an `include` directory holds no files.
 
 ### A whole port in one command
 
-The ops composed: an upstream layout goes in, a kernel-builder layout comes out,
-and still nothing touches the disk.
+The ops composed: an upstream layout goes in, a kernel-builder layout comes out, and still nothing touches the disk.
 
 ```sh
 kernel-port \
@@ -619,8 +523,7 @@ def hello(x):
     return _C.hello(x)
 ```
 
-Drop the `relativize_imports` and `replace` lines and every op still succeeds -
-but the run fails anyway, because the verify stage runs after the last op:
+Drop the `relativize_imports` and `replace` lines and every op still succeeds - but the run fails anyway, because the verify stage runs after the last op:
 
 ```
 error: verify: absolute in-package imports remain under torch-ext (they must be relative):

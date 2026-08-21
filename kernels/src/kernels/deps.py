@@ -1,106 +1,172 @@
-import importlib.util
-import json
-from dataclasses import dataclass, field
-from pathlib import Path
+from contextvars import ContextVar
+from dataclasses import dataclass
+from types import ModuleType
+from typing import Generic, TypeVar
 
-from huggingface_hub.dataclasses import strict
-from kernels_data import Metadata
+from huggingface_hub.hf_api import HfApi
+from kernels_data import KernelDependency, KernelVersion
 
-from kernels.backends import Backend, _backend
+from kernels.backends import _backend
+from kernels.hf_hub import RepoInfo
+from kernels.importer import _import_from_path
+from kernels.python_deps import validate_dependencies
+from kernels.resolver import (
+    LocalKernel,
+    RemoteKernel,
+    Resolver,
+)
+
+# Default state is `None`, to signal that we are not in a kernel
+# loading context.
+_KERNEL_DEPS: ContextVar[dict[str, ModuleType] | None] = ContextVar("_KERNEL_DEPS", default=None)
 
 
-@strict
+# Tree node type variable.
+#
+# `LocalKernel | RemoteKernel`: the initial tree.
+# `LocalKernel`: the tree after installing kernels.
+T = TypeVar("T", LocalKernel | RemoteKernel, LocalKernel)
+
+
 @dataclass
-class PythonPackage:
-    pkg: str
-    import_name: str | None
+class DepTreeNode(Generic[T]):
+    """Node in a kernel dependency tree.
 
-    @staticmethod
-    def from_dict(data: dict) -> "PythonPackage":
-        return PythonPackage(
-            pkg=data["pkg"],
-            import_name=data.get("import"),
+    The content of the node is the location of the kernel (`location`). The
+    outgoing edges (`deps`) are dependencies of the kernel."""
+
+    location: T
+    deps: dict[str, "DepTreeNode[T]"]
+
+    def install(self, *, api: HfApi) -> "DepTreeNode[LocalKernel]":
+        """Install the kernel and its dependencies.
+
+        This will download the kernel to the Hub cache if it is a remote
+        kernel. Otherwise, installation is a no-op."""
+        local_deps = {}
+        for repo_id, node in self.deps.items():
+            local_deps[repo_id] = node.install(api=api)
+
+        return DepTreeNode(
+            location=self.location.install(api=api),
+            deps=local_deps,
         )
 
+    def load(self) -> ModuleType:
+        if isinstance(self.location, RemoteKernel):
+            raise RuntimeError("Can only load installed kernels, run `install()` on the kernel dependency tree first.")
 
-@strict
-@dataclass
-class DependencyInfo:
-    nix: list[str]
-    python: list[PythonPackage]
+        deps = {repo_id: dep.load() for repo_id, dep in self.deps.items()}
 
-    @staticmethod
-    def from_dict(data: dict) -> "DependencyInfo":
-        return DependencyInfo(
-            nix=data.get("nix", []),
-            python=[PythonPackage.from_dict(p) for p in data.get("python", [])],
+        repo_info = (
+            RepoInfo(
+                repo_id=self.location.origin.repo_id,
+                revision=self.location.origin.revision,
+            )
+            if self.location.origin
+            else None
         )
 
+        return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
 
-@strict
-@dataclass
-class DependencyData:
-    general: dict = field(default_factory=dict)
-    backends: dict = field(default_factory=dict)
+    def validate_dependencies(self) -> None:
+        """Validate that the dependencies of this kernel are satisfied."""
 
-    @staticmethod
-    def from_dict(data: dict) -> "DependencyData":
-        general = {name: DependencyInfo.from_dict(info) for name, info in data.get("general", {}).items()}
-        backends = {
-            backend_name: {name: DependencyInfo.from_dict(info) for name, info in deps.items()}
-            for backend_name, deps in data.get("backends", {}).items()
-        }
-        return DependencyData(general=general, backends=backends)
+        validate_dependencies(
+            self.location.metadata.name.python_name,
+            self.location.metadata.python_depends,
+            _backend(),
+        )
+
+        for node in self.deps.values():
+            node.validate_dependencies()
 
 
-try:
-    with open(Path(__file__).parent / "python_depends.json", "r") as f:
-        _DEPENDENCY_DATA = DependencyData.from_dict(json.load(f))
-except FileNotFoundError:
-    raise FileNotFoundError("Cannot load dependency data, is `kernels` correctly installed?")
+LoadCache = dict[KernelDependency, DepTreeNode]
 
 
-def validate_variant_dependencies(variant_path: Path) -> None:
-    metadata = Metadata.read_from_file(variant_path / "metadata.json")
-    validate_dependencies(metadata.name.python_name, metadata.python_depends, _backend())
-
-
-def validate_dependencies(kernel_module_name: str, dependencies: list[str], backend: Backend):
+def resolve_kernel_tree(
+    api: HfApi,
+    kernel: KernelDependency,
+    backend: str | None,
+    resolver: Resolver | None,
+    seen: set[KernelDependency] | None = None,
+) -> DepTreeNode[LocalKernel | RemoteKernel]:
     """
-    Validate a list of dependencies to ensure they are installed.
+    Recursively solve kernel dependencies.
+
+    Constructs a tree where nodes encode kernel information (e.g. location and
+    metadata) and edges kernel-kernel dependendies.
+    """
+    if seen is None:
+        seen = set()
+
+    # Check for cycles.
+    if kernel in seen:
+        raise ValueError(f"Cyclic kernel dependency detected: {kernel.repo_id}")
+    seen.add(kernel)
+
+    location: LocalKernel | RemoteKernel | None
+
+    location = resolver.resolve(api=api, backend=backend, kernel=kernel) if resolver else None
+
+    if location is None:
+        match kernel.version:
+            case KernelVersion.Version(version=version):
+                version_str = f"version: {version}"
+            case KernelVersion.Revision(revision=revision):
+                version_str = f"revision: {revision}"
+        raise ValueError(f"Could not resolve kernel: {kernel.repo_id} ({version_str})")
+
+    # Recurse into dependencies.
+    kernel_deps = {}
+    for dep in location.metadata.kernel_depends:
+        kernel_deps[dep.repo_id] = resolve_kernel_tree(
+            api=api,
+            backend=backend,
+            seen=seen,
+            kernel=dep,
+            resolver=resolver,
+        )
+
+    seen.remove(kernel)
+
+    return DepTreeNode(
+        location=location,
+        deps=kernel_deps,
+    )
+
+
+def use_kernel_deps(deps: dict[str, ModuleType]):
+    class ContextManager:
+        def __enter__(self):
+            self.token = _KERNEL_DEPS.set(deps)
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            _KERNEL_DEPS.reset(self.token)
+
+    return ContextManager()
+
+
+def get_kernel_dep(repo_id: str) -> ModuleType:
+    """Get a kernel dependency.
+
+    This function can be used by a kernel to get one of its dependencies.
+    The exact version/revision of the dependency must be encoded in the
+    kernel metadata. This function can only be called during kernel loading.
 
     Args:
-        dependencies (`list[str]`): A list of dependency strings to validate.
-        backend (`str`): The backend to validate dependencies for.
+        repo_id (`str`):
+            The Hub kernel repository containing the dependency.
     """
-    general_deps = _DEPENDENCY_DATA.general
-    backend_deps = _DEPENDENCY_DATA.backends.get(backend.name, {})
+    deps = _KERNEL_DEPS.get()
+    if deps is None:
+        raise RuntimeError("`get_kernel_dep` only works during kernel loading.")
 
-    # Validate each dependency
-    for dependency in dependencies:
-        # Look up dependency in general dependencies first, then backend-specific
-        if dependency in general_deps:
-            dep_info = general_deps[dependency]
-        elif dependency in backend_deps:
-            dep_info = backend_deps[dependency]
-        else:
-            # Dependency not found in general or backend-specific dependencies
-            raise ValueError(f"Kernel module `{kernel_module_name}` uses unsupported kernel dependency: {dependency}")
+    module = deps.get(repo_id)
+    if module is None:
+        raise RuntimeError(
+            f"Dependency '{repo_id}' not found in kernel dependencies. Ensure the dependency is added to `kernel-deps` in build.toml."
+        )
 
-        # Check if each python package is installed
-        for python_package in dep_info.python:
-            pkg_name = python_package.pkg
-            # Assertion because this should not happen and is a bug.
-            assert pkg_name is not None, f"Invalid dependency data for `{dependency}`: missing `pkg` field."
-
-            module_name = python_package.import_name
-            if module_name is None:
-                # These are typically packages that do not provide any Python
-                # code, but get installed to Python's library dirctory. E.g.
-                # OneAPI.
-                continue
-
-            if importlib.util.find_spec(module_name) is None:
-                raise ImportError(
-                    f"Kernel module `{kernel_module_name}` requires Python dependency `{pkg_name}`. Please install with: pip install {pkg_name}"
-                )
+    return module

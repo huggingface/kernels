@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, Self, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
@@ -36,7 +36,7 @@ class LocalKernel:
     metadata: Metadata
     origin: "RemoteKernel | None" = None
 
-    def install(self, *, api: HfApi, all_variants: bool = False) -> Self:
+    def install(self, *, api: HfApi) -> "LocalKernel":
         # Local kernels are already installed, so we just return self.
         return self
 
@@ -50,38 +50,22 @@ class RemoteKernel:
     metadata: Metadata
     variant: Variant
 
-    def install(self, *, api: HfApi, all_variants: bool = False) -> LocalKernel:
-
+    def install(self, *, api: HfApi) -> LocalKernel:
         allow_patterns = [f"build/{self.variant.variant_str}/*"]
 
-        if all_variants:
-            repo_path = Path(
-                str(
-                    api.snapshot_download(
-                        self.repo_id,
-                        repo_type="kernel",
-                        allow_patterns="build/*",
-                        ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
-                        cache_dir=CACHE_DIR,
-                        revision=self.revision,
-                        local_files_only=False,
-                    )
+        repo_path = Path(
+            str(
+                api.snapshot_download(
+                    self.repo_id,
+                    repo_type="kernel",
+                    allow_patterns=allow_patterns,
+                    ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
+                    cache_dir=CACHE_DIR,
+                    revision=self.revision,
+                    local_files_only=False,
                 )
             )
-        else:
-            repo_path = Path(
-                str(
-                    api.snapshot_download(
-                        self.repo_id,
-                        repo_type="kernel",
-                        allow_patterns=allow_patterns,
-                        ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
-                        cache_dir=CACHE_DIR,
-                        revision=self.revision,
-                        local_files_only=False,
-                    )
-                )
-            )
+        )
 
         return LocalKernel(
             variant_path=repo_path / "build" / self.variant.variant_str,

@@ -6,7 +6,6 @@ from types import ModuleType
 from huggingface_hub import constants
 
 from kernels._versions import select_revision_or_version
-from kernels.deps import validate_variant_dependencies
 from kernels.hf_hub import RepoInfo, _check_trust_remote_code, _get_hf_api
 from kernels.importer import _import_from_path
 from kernels.install import install_kernel
@@ -14,6 +13,7 @@ from kernels.locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
+from kernels.python_deps import validate_variant_dependencies
 from kernels.variants import (
     get_variants,
     get_variants_local,
@@ -120,7 +120,7 @@ def get_kernel(
         validate_dependencies=True,
         local_files_only=constants.HF_HUB_OFFLINE,
     )
-    return _import_from_path(variant_path, repo_info=repo_info)
+    return _import_from_path(variant_path, deps={}, repo_info=repo_info)
 
 
 def get_local_kernel(
@@ -147,14 +147,14 @@ def get_local_kernel(
         if variant is not None:
             variant_path = base_path / variant.variant_str
             validate_variant_dependencies(variant_path)
-            return _import_from_path(variant_path)
+            return _import_from_path(variant_path, deps={})
 
     # If we didn't find the package in the repo we may have a explicit
     # package path.
     variant_path = repo_path
     if variant_path.exists():
         validate_variant_dependencies(variant_path)
-        return _import_from_path(variant_path)
+        return _import_from_path(variant_path, deps={})
 
     raise FileNotFoundError(f"Could not find kernel in {repo_path}")
 
@@ -247,7 +247,7 @@ def load_kernel(
             "applicable variant. Make sure it's downloaded locally via "
             "`kernels download <project>`."
         ) from e
-    return _import_from_path(variant_path)
+    return _import_from_path(variant_path, deps={})
 
 
 def get_locked_kernel(repo_id: str) -> ModuleType:
@@ -275,4 +275,4 @@ def get_locked_kernel(repo_id: str) -> ModuleType:
         validate_dependencies=True,
     )
 
-    return _import_from_path(variant_path)
+    return _import_from_path(variant_path, deps={})

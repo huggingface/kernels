@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, Self, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
@@ -36,7 +36,7 @@ class LocalKernel:
     metadata: Metadata
     origin: "RemoteKernel | None" = None
 
-    def install(self, *, api: HfApi) -> Self:
+    def install(self, *, api: HfApi) -> "LocalKernel":
         # Local kernels are already installed, so we just return self.
         return self
 

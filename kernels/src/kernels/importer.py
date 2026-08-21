@@ -91,7 +91,11 @@ def _warn_if_dirty(metadata: Metadata, variant_str: str) -> None:
     )
 
 
-def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
+def _import_from_path(
+    variant_path: Path,
+    deps: dict[str, ModuleType],
+    repo_info: RepoInfo | None = None,
+) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 

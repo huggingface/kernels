@@ -1,7 +1,7 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Generic, Self, TypeVar
+from typing import Generic, TypeVar
 
 from huggingface_hub.hf_api import HfApi
 from kernels_data import KernelDependency, KernelVersion
@@ -36,7 +36,7 @@ class DepTreeNode(Generic[T]):
     outgoing edges (`deps`) are dependencies of the kernel."""
 
     location: T
-    deps: dict[str, Self]
+    deps: dict[str, "DepTreeNode[T]"]
 
     def install(self, *, api: HfApi) -> "DepTreeNode[LocalKernel]":
         """Install the kernel and its dependencies.
@@ -67,7 +67,7 @@ class DepTreeNode(Generic[T]):
             else None
         )
 
-        return _import_from_path(self.location.variant_path, repo_info=repo_info, kernel_deps=deps)
+        return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
 
     def validate_dependencies(self) -> None:
         """Validate that the dependencies of this kernel are satisfied."""
@@ -111,11 +111,11 @@ def resolve_kernel_tree(
     location = resolver.resolve(api=api, backend=backend, kernel=kernel) if resolver else None
 
     if location is None:
-        version_str = (
-            f"version: {kernel.version.version}"
-            if isinstance(kernel.version, KernelVersion.Version)
-            else f"revision: {kernel.version.revision}"
-        )
+        match kernel.version:
+            case KernelVersion.Version(version=version):
+                version_str = f"version: {version}"
+            case KernelVersion.Revision(revision=revision):
+                version_str = f"revision: {revision}"
         raise ValueError(f"Could not resolve kernel: {kernel.repo_id} ({version_str})")
 
     # Recurse into dependencies.

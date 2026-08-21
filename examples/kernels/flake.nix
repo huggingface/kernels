@@ -79,6 +79,12 @@
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
+          name = "relu-cuda-oxide-kernel";
+          path = ./relu-cuda-oxide;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+        }
+        {
           name = "relu-tvm-ffi-compiler-flags-kernel";
           path = ./relu-tvm-ffi-compiler-flags;
           drv =
@@ -332,6 +338,26 @@
 
       # CPU kernels to build in CI.
       ciCpuKernels = [
+        {
+          name = "relu-rust-kernel";
+          path = ./relu-rust;
+          drv =
+            sys: out:
+            let
+              variant = "tvm-ffi${tvmFfiVersion}-cpu-${sys}";
+              extension = out.packages.${sys}.redistributable.${variant};
+              ciTest = out.packages.${sys}.ciTests.${variant};
+              kernelPkgs = out.packages.${sys}.pkgs.${variant};
+            in
+            kernelPkgs.runCommand "relu-rust-kernel-test"
+              {
+                nativeBuildInputs = [ ciTest ];
+              }
+              ''
+                ${ciTest}/bin/ci-test
+                ln -s ${extension} $out
+              '';
+        }
         {
           # This test only requires a CPU, so let's run the test directly during the build.
           name = "symbol-conflicts-pytest";

@@ -1,0 +1,10 @@
+[package]
+name = "relu-kernels"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+cuda-device = { git = "https://github.com/drbh/cuda-oxide.git", rev = "bc5f33bb1d556671c35e475439bb821d25caa2cb" }
+cuda-host = { git = "https://github.com/drbh/cuda-oxide.git", rev = "bc5f33bb1d556671c35e475439bb821d25caa2cb" }

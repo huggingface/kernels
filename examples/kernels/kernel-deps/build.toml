@@ -1,0 +1,23 @@
+[general]
+name = "kernel-deps"
+version = 1
+edition = 5
+license = "apache-2.0"
+backends = [
+    "cpu",
+    "cuda",
+    "metal",
+    "rocm",
+    "xpu",
+]
+
+kernel-depends = [
+    { repo-id = "kernels-community/einops", version = 1 },
+]
+
+[general.hub]
+repo-id = "kernels-test/kernel-deps"
+
+[torch-noarch]
+
+[kernel]

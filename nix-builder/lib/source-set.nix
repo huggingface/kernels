@@ -15,7 +15,10 @@ let
       "pyi"
     ];
   pyFilter = file: builtins.any (ext: file.hasExt ext) pyExt;
-  extSrc = extConfig.src or [ ] ++ [ "build.toml" ];
+  extSrc = extConfig.src or [ ] ++ [
+    "build.toml"
+    "kernels.lock"
+  ];
   torchExtPath = path + "/torch-ext";
   tvmFfiExtPath = path + "/tvm-ffi-ext";
   pySrcSet =

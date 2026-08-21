@@ -91,7 +91,12 @@ def _warn_if_dirty(metadata: Metadata, variant_str: str) -> None:
     )
 
 
-def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> ModuleType:
+def _import_from_path(
+    variant_path: Path,
+    *,
+    repo_info: RepoInfo | None = None,
+    kernel_deps: dict[str, ModuleType],
+) -> ModuleType:
     if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
         return loaded_kernel.module
 
@@ -112,7 +117,12 @@ def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> 
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[metadata.id] = module
-    spec.loader.exec_module(module)  # type: ignore
+
+    # Avoid an import cycle.
+    from kernels.deps import use_kernel_deps
+
+    with use_kernel_deps(kernel_deps):
+        spec.loader.exec_module(module)  # type: ignore
 
     _loaded_kernels[variant_path] = LoadedKernel(
         metadata=metadata,

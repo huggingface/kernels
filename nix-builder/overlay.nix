@@ -14,6 +14,8 @@ final: prev:
 
   fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };
 
+  fetchKernelDeps = final.callPackage ./pkgs/fetch-kernel-deps { };
+
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
   hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };
@@ -23,6 +25,8 @@ final: prev:
   nvtx = final.callPackage ./pkgs/nvtx { };
 
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };
+
+  lock-hashes = final.callPackage ./pkgs/lock-hashes { };
 
   rewrite-nix-paths-macho = final.callPackage ./pkgs/rewrite-nix-paths-macho { };
 

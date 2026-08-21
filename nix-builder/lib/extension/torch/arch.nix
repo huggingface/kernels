@@ -86,7 +86,7 @@ assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
   inherit
-    (import ../../deps.nix {
+    (import ../../python-deps.nix {
       inherit
         lib
         pkgs

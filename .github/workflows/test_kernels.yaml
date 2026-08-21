@@ -84,7 +84,7 @@ jobs:
           HF_HUB_DOWNLOAD_TIMEOUT: 60
         run: |
           uv pip install einops nvidia-cutlass-dsl
-          uv run pytest tests/test_deps.py
+          uv run pytest tests/test_python_deps.py
 
       - name: Import check without torch
         working-directory: ./kernels

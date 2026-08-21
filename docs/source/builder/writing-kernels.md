@@ -2,7 +2,7 @@
 
 > [!TIP]
 > Refer to the [kernel requirements' page](../kernel-requirements.md) to
-> get an idea of what is expected from the kernel structure and content. 
+> get an idea of what is expected from the kernel structure and content.
 
 ## Introduction
 
@@ -320,7 +320,7 @@ The following options can be set for a kernel:
   supported backends are `cpu`, `cuda`, `metal`, `rocm`, and `xpu`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
-  are listed in [`deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/deps.nix).
+  are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
 - `src` (required): a list of source files and headers.
 - `include` (optional): include directories relative to the project root.
   Default: `[]`.

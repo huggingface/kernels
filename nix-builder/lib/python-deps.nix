@@ -6,42 +6,6 @@
 }:
 
 let
-  cppDeps = {
-    "cutlass_2_10" = [
-      pkgs.cutlass_2_10
-    ];
-    "cutlass_3_5" = [
-      pkgs.cutlass_3_5
-    ];
-    "cutlass_3_6" = [
-      pkgs.cutlass_3_6
-    ];
-    "cutlass_3_8" = [
-      pkgs.cutlass_3_8
-    ];
-    "cutlass_3_9" = [
-      pkgs.cutlass_3_9
-    ];
-    "cutlass_4_0" = [
-      pkgs.cutlass_4_0
-    ];
-    "cutlass_4_4" = [
-      pkgs.cutlass_4_4
-    ];
-    "cutlass_4_5" = [
-      pkgs.cutlass_4_5
-    ];
-    "torch" = [
-      torch
-    ];
-    "sycl_tla" = [
-      (torch.xpuPackages.sycl-tla.override { inherit stdenv; })
-    ];
-    "metal-cpp" = [
-      (pkgs.metal-cpp.override { inherit stdenv; }).dev
-    ];
-  };
-
   pythonDeps =
     let
       depsJson = builtins.fromJSON (builtins.readFile ../../kernels-data/src/python_dependencies.json);
@@ -55,7 +19,6 @@ let
       backends = lib.mapAttrs updateBackend depsJson.backends;
     };
 
-  getCppDep = dep: cppDeps.${dep} or (throw "Unknown dependency: ${dep}");
   getPythonDep =
     dep: lib.attrByPath [ "general" dep "nix" ] (throw "Unknown Python dependency: ${dep}") pythonDeps;
   getBackendPythonDep =
@@ -72,7 +35,6 @@ let
     ] (throw "Unknown Python dependency for backend `${backend}`: ${dep}") backendDeps;
 in
 {
-  resolveCppDeps = deps: lib.flatten (map getCppDep deps);
   resolvePythonDeps = deps: lib.flatten (map getPythonDep deps);
   resolveBackendPythonDeps = backend: deps: lib.flatten (map (getBackendPythonDep backend) deps);
 }

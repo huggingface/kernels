@@ -7,6 +7,7 @@
   pkgs,
   stdenv,
 
+  fetchKernelDeps,
   kernel-builder,
   get-kernel-check,
   hash-kernel-hook,
@@ -55,7 +56,7 @@ assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
   inherit
-    (import ../../deps.nix {
+    (import ../../python-deps.nix {
       inherit
         lib
         pkgs
@@ -70,6 +71,7 @@ let
     resolvePythonDeps pythonDeps
     ++ resolveBackendPythonDeps buildConfig.backend backendPythonDeps
     ++ [ torch ];
+  kernelDeps = fetchKernelDeps src;
   moduleName = builtins.replaceStrings [ "-" ] [ "_" ] kernelName;
   metalSupport = buildConfig.metal or false;
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
@@ -77,6 +79,8 @@ in
 
 stdenv.mkDerivation (prevAttrs: {
   name = "${kernelName}-torch-ext";
+
+  inherit kernelDeps;
 
   inherit doKernelBuildCheck moduleName;
 

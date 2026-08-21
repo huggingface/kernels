@@ -6,6 +6,7 @@ from kernels_data import Metadata
 
 from kernels._windows import _add_additional_dll_paths
 from kernels.benchmark import Benchmark
+from kernels.deps import get_kernel_dep
 from kernels.hf_hub import RepoInfo
 from kernels.importer import LoadedKernel, get_loaded_kernels
 from kernels.install import install_kernel
@@ -62,6 +63,7 @@ __all__ = [
     "VariantAccepted",
     "VariantRejected",
     "get_kernel",
+    "get_kernel_dep",
     "get_kernel_variants",
     "get_loaded_kernels",
     "get_local_kernel",

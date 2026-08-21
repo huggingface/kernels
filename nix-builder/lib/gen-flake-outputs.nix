@@ -241,6 +241,20 @@ in
           ${uploadStr}
         '';
 
+      lock-deps =
+        let
+          lock = ../scripts/lock_hashes.py;
+        in
+        writeScriptBin "lock-kernel-deps" ''
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          kernel_dir="''${1:-.}"
+
+          ${pkgs.python3.pkgs.kernels}/bin/kernels lock --kernel "$kernel_dir" \
+            | ${pkgs.lock-hashes}/bin/lock-hashes -o "$kernel_dir/kernels.lock"
+        '';
+
       ci =
         let
           setsWithFramework =

@@ -91,13 +91,12 @@ in
 
   mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
 
-  inherit
-    (import ../deps.nix {
+  resolveCppDeps = (
+    import ../cpp-deps.nix {
       inherit lib pkgs torch;
       stdenv = effectiveStdenv;
-    })
-    resolveCppDeps
-    ;
+    }
+  );
 
   stdenv = effectiveStdenv;
 }

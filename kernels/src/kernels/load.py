@@ -6,7 +6,6 @@ from types import ModuleType
 from huggingface_hub import constants
 
 from kernels._versions import select_revision_or_version
-from kernels.deps import validate_variant_dependencies
 from kernels.hf_hub import RepoInfo, _check_trust_remote_code, _get_hf_api
 from kernels.importer import _import_from_path
 from kernels.install import install_kernel
@@ -14,6 +13,7 @@ from kernels.locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
+from kernels.python_deps import validate_variant_dependencies
 from kernels.variants import (
     get_variants,
     get_variants_local,

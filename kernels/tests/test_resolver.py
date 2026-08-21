@@ -1,6 +1,6 @@
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
 
 import pytest
@@ -31,6 +31,7 @@ from kernels.resolver import (
     SequentialResolver,
     _locked_revision,
 )
+from kernels.variants import parse_variant
 
 
 @pytest.fixture(scope="module")
@@ -75,6 +76,11 @@ def _local_kernel(variant_path: str) -> LocalKernel:
     return LocalKernel(variant_path=Path(variant_path), metadata=_metadata())
 
 
+def _variant():
+    # A noarch variant so the test does not depend on a specific backend.
+    return parse_variant("torch-cpu")
+
+
 def _write_variant(repo_path: Path, variant: str = "torch-cpu") -> Path:
     """Write a fake kernel build variant (CPU noarch) under `repo_path/build`."""
     variant_dir = repo_path / "build" / variant
@@ -92,6 +98,54 @@ def _write_variant(repo_path: Path, variant: str = "torch-cpu") -> Path:
         )
     )
     return variant_dir
+
+
+def test_local_kernel_eq_and_hash():
+    m = _metadata()
+    a = LocalKernel(variant_path=Path("/tmp/a"), metadata=m)
+    b = LocalKernel(variant_path=Path("/tmp/a"), metadata=m)
+    c = LocalKernel(variant_path=Path("/tmp/b"), metadata=m)
+
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c
+
+    assert {a, b, c} == {a, c}
+    assert {a: 1}[b] == 1
+
+
+def test_remote_kernel_eq_and_hash():
+    v = _variant()
+    m = _metadata()
+    a = RemoteKernel(repo_id="foo/bar", revision="deadbeef", variant=v, metadata=m)
+    b = RemoteKernel(repo_id="foo/bar", revision="deadbeef", variant=v, metadata=m)
+    c = RemoteKernel(repo_id="foo/bar", revision="cafef00d", variant=v, metadata=m)
+    d = RemoteKernel(repo_id="other/repo", revision="deadbeef", variant=v, metadata=m)
+
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c
+    assert a != d
+
+    assert {a, b, c, d} == {a, c, d}
+    assert {a: 1}[b] == 1
+
+
+def test_local_kernel_is_immutable():
+    kernel = LocalKernel(variant_path=Path("/tmp/a"), metadata=_metadata())
+    with pytest.raises(FrozenInstanceError):
+        kernel.variant_path = Path("/tmp/b")
+
+
+def test_remote_kernel_is_immutable():
+    v = _variant()
+    kernel = RemoteKernel(repo_id="foo/bar", revision="deadbeef", variant=v, metadata=_metadata())
+    with pytest.raises(FrozenInstanceError):
+        kernel.repo_id = "other/repo"
+    with pytest.raises(FrozenInstanceError):
+        kernel.revision = "cafef00d"
+    with pytest.raises(FrozenInstanceError):
+        kernel.variant = parse_variant("torch-cuda")
 
 
 def test_noop_resolver_never_resolves(api):

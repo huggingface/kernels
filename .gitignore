@@ -166,3 +166,6 @@ poetry.lock
 
 # Nix
 examples/kernels/**/flake.lock
+
+
+kernel-port/examples

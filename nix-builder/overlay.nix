@@ -78,6 +78,7 @@ final: prev:
         inherit (triton)
           triton_3_7_0
           triton_3_7_1
+          triton_3_8_0
           ;
         inherit (triton-rocm) triton-rocm_3_7_0;
         inherit (triton-xpu)

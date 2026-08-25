@@ -81,7 +81,10 @@ def test_resolve_kernel_tree_builds_tree():
     "kernel, message",
     [
         (_dep("test/kernel", version=1), "version: 1"),
-        (KernelDependency(repo_id="test/kernel", version=KernelVersion.Revision("main")), "revision: main"),
+        (
+            KernelDependency(repo_id="test/kernel", version=KernelVersion.Revision("main")),
+            "revision: main",
+        ),
     ],
 )
 @pytest.mark.parametrize("resolver", [None, _MapResolver({})])

@@ -3,30 +3,35 @@ import os
 from pathlib import Path
 from types import ModuleType
 
-from huggingface_hub import constants
+from huggingface_hub import HfApi, constants
+from kernels_data import KernelDependency, KernelVersion
 
-from kernels._versions import select_revision_or_version
-from kernels.hf_hub import RepoInfo, _check_trust_remote_code, _get_hf_api
-from kernels.importer import _import_from_path
-from kernels.install import install_kernel
+from kernels._versions import revision_or_version
+from kernels.deps import resolve_kernel_tree
+from kernels.hf_hub import _get_hf_api
 from kernels.locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
-from kernels.python_deps import validate_variant_dependencies
-from kernels.variants import (
-    get_variants,
-    get_variants_local,
-    resolve_variant,
+from kernels.resolver import (
+    HubCacheResolver,
+    HubResolver,
+    LockedHubCacheResolver,
+    LockedHubResolver,
+    NoopResolver,
+    RepoPathsResolver,
+    Resolver,
+    SequentialResolver,
 )
 
 
-def _get_local_kernel_overrides() -> dict[str, Path]:
+def _get_local_kernel_overrides() -> Resolver:
     """Returns list local overrides for kernels."""
     local_kerels = os.environ.get("LOCAL_KERNELS", None)
     if local_kerels is None:
-        return dict()
-    return _parse_local_kernel_overrides(local_kerels)
+        return NoopResolver()
+    overrides = _parse_local_kernel_overrides(local_kerels)
+    return RepoPathsResolver(local_kernels=overrides)
 
 
 @functools.lru_cache(maxsize=1)
@@ -44,8 +49,44 @@ def _parse_local_kernel_overrides(local_kernels: str) -> dict[str, Path]:
     return overrides
 
 
+def get_kernel_with_resolver(
+    *,
+    api: HfApi,
+    backend: str | None,
+    kernel: KernelDependency,
+    resolver: Resolver | None,
+) -> ModuleType:
+    """
+    Load a kernel and its (transitive) dependencies using the given resolver.
+
+    Args:
+        api (`HfApi`):
+            The Hugging Face Hub API client.
+        backend (`str`, *optional*):
+            The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
+            The backend will be detected automatically if not provided.
+        kernel (`KernelDependency`):
+            The kernel to load.
+        resolver (`Resolver`, *optional*):
+            The resolver used to resolve the kernel and its (transitive) dependencies.
+
+    Returns:
+        `ModuleType`: The imported kernel module.
+    """
+    tree = resolve_kernel_tree(
+        api=api,
+        backend=backend,
+        kernel=kernel,
+        resolver=resolver,
+    )
+    tree.validate_dependencies()
+    tree_only_local = tree.install(api=api)
+    return tree_only_local.load()
+
+
 def get_kernel(
     repo_id: str,
+    *,
     revision: str | None = None,
     version: int | None = None,
     backend: str | None = None,
@@ -92,43 +133,38 @@ def get_kernel(
         result = activation.relu(out, x)
         ```
     """
-    override = _get_local_kernel_overrides().get(repo_id, None)
-    if override is not None:
-        return get_local_kernel(override)
+    api = _get_hf_api(user_agent=user_agent)
 
-    _check_trust_remote_code(
-        repo_id=repo_id,
-        local_files_only=constants.HF_HUB_OFFLINE,
-        trust_remote_code=trust_remote_code,
-    )
+    kernel_version = revision_or_version(revision=revision, version=version)
 
-    revision = select_revision_or_version(
-        repo_id,
-        revision=revision,
-        version=version,
-        local_files_only=constants.HF_HUB_OFFLINE,
-    )
-    repo_info = RepoInfo(
-        repo_id=repo_id,
-        revision=revision,
-    )
-    variant_path = install_kernel(
-        repo_id,
+    resolvers = [
+        _get_local_kernel_overrides(),
+        (
+            HubCacheResolver(trust_remote_code=trust_remote_code)
+            if constants.HF_HUB_OFFLINE
+            else HubResolver(trust_remote_code=trust_remote_code)
+        ),
+    ]
+
+    return get_kernel_with_resolver(
+        api=api,
         backend=backend,
-        revision=revision,
-        user_agent=user_agent,
-        validate_dependencies=True,
-        local_files_only=constants.HF_HUB_OFFLINE,
+        kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
+        resolver=SequentialResolver(resolvers=resolvers),
     )
-    return _import_from_path(variant_path, deps={}, repo_info=repo_info)
 
 
 def get_local_kernel(
     repo_path: Path,
+    *,
     backend: str | None = None,
+    trust_remote_code: bool | list[str] = False,
+    user_agent: str | dict | None = None,
 ) -> ModuleType:
     """
     Import a kernel from a local kernel repository path.
+
+    If the kernel has any (transitive) dependencies, they will be downloaded.
 
     Args:
         repo_path (`Path`):
@@ -136,37 +172,53 @@ def get_local_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
+        user_agent (`Union[str, dict]`, *optional*):
+            The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+        trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
+            Whether to allow loading kernels from untrusted organisations. When ``False``,
+            only kernels from trusted organisations are allowed. When ``True``, all
+            repositories are allowed. A list of strings will be used to verify signing
+            identities in a future release; for now it emits a warning and falls
+            back to the default trust check.
+
+
 
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    for base_path in [repo_path, repo_path / "build"]:
-        variants = get_variants_local(base_path)
-        variant, _ = resolve_variant(variants, backend)
+    api = _get_hf_api(user_agent=user_agent)
 
-        if variant is not None:
-            variant_path = base_path / variant.variant_str
-            validate_variant_dependencies(variant_path)
-            return _import_from_path(variant_path, deps={})
+    resolvers = [
+        RepoPathsResolver(local_kernels={str(repo_path): repo_path}),
+        _get_local_kernel_overrides(),
+        (
+            HubCacheResolver(trust_remote_code=trust_remote_code)
+            if constants.HF_HUB_OFFLINE
+            else HubResolver(trust_remote_code=trust_remote_code)
+        ),
+    ]
 
-    # If we didn't find the package in the repo we may have a explicit
-    # package path.
-    variant_path = repo_path
-    if variant_path.exists():
-        validate_variant_dependencies(variant_path)
-        return _import_from_path(variant_path, deps={})
-
-    raise FileNotFoundError(f"Could not find kernel in {repo_path}")
+    return get_kernel_with_resolver(
+        api=api,
+        backend=backend,
+        # We don't have a name for the kernel, so let's just use the path.
+        kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
+        resolver=SequentialResolver(resolvers),
+    )
 
 
 def has_kernel(
     repo_id: str,
+    *,
     revision: str | None = None,
     version: int | None = None,
     backend: str | None = None,
+    trust_remote_code: bool | list[str] = False,
 ) -> bool:
     """
-    Check whether a kernel build exists for the current environment (Torch version and compute framework).
+    Check whether a kernel build exists for the current environment (framework version and backend).
+
+    If the kernel has any (transitive) dependencies, they will be checked as well.
 
     Args:
         repo_id (`str`):
@@ -179,30 +231,40 @@ def has_kernel(
         backend (`str`, *optional*):
             The backend to load the kernel for. Can only be `cpu` or the backend that Torch is compiled for.
             The backend will be detected automatically if not provided.
+        trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
+            Whether to allow loading kernels from untrusted organisations. When ``False``,
+            only kernels from trusted organisations are allowed. When ``True``, all
+            repositories are allowed. A list of strings will be used to verify signing
+            identities in a future release; for now it emits a warning and falls
+            back to the default trust check.
 
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
     """
-    revision = select_revision_or_version(
-        repo_id,
-        revision=revision,
-        version=version,
-        local_files_only=constants.HF_HUB_OFFLINE,
-    )
-
     api = _get_hf_api()
-    variants = get_variants(api, repo_id=repo_id, revision=revision)
-    variant, _ = resolve_variant(variants, backend)
 
-    if variant is None:
+    kernel_version = revision_or_version(revision=revision, version=version)
+
+    resolvers = [
+        _get_local_kernel_overrides(),
+        (
+            HubCacheResolver(trust_remote_code=trust_remote_code)
+            if constants.HF_HUB_OFFLINE
+            else HubResolver(trust_remote_code=trust_remote_code)
+        ),
+    ]
+
+    try:
+        resolve_kernel_tree(
+            api=api,
+            backend=backend,
+            kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
+            resolver=SequentialResolver(resolvers=resolvers),
+        )
+    except FileNotFoundError:
         return False
 
-    return api.file_exists(
-        repo_id,
-        repo_type="kernel",
-        revision=revision,
-        filename=f"build/{variant.variant_str}/metadata.json",
-    )
+    return True
 
 
 def load_kernel(
@@ -213,6 +275,9 @@ def load_kernel(
 ) -> ModuleType:
     """
     Get a pre-downloaded, locked kernel.
+
+    This function will never download anything and will fail when a kernel is
+    not available locally.
 
     If `lockfile` is not specified, the lockfile will be loaded from the caller's package metadata.
 
@@ -229,50 +294,57 @@ def load_kernel(
         `ModuleType`: The imported kernel module.
     """
     if lockfile is None:
-        locked_sha = get_caller_locked_kernel_revision(repo_id)
+        kernel_locks, kernel_dep = get_caller_locked_kernel_revision(repo_id)
     else:
-        with open(lockfile, "r") as f:
-            locked_sha = get_locked_kernel_revision(repo_id, f.read())
+        kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    if locked_sha is None:
-        raise ValueError(
-            f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
-        )
+    resolver = LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=False)
 
-    try:
-        variant_path = install_kernel(repo_id, revision=locked_sha, backend=backend, local_files_only=True)
-    except FileNotFoundError as e:
-        raise FileNotFoundError(
-            f"Locked kernel `{repo_id}` was not downloaded or does not have an "
-            "applicable variant. Make sure it's downloaded locally via "
-            "`kernels download <project>`."
-        ) from e
-    return _import_from_path(variant_path, deps={})
+    return get_kernel_with_resolver(
+        # We need to provide the API, but it is never used, so no need for a
+        # user agent.
+        api=_get_hf_api(),
+        backend=backend,
+        kernel=kernel_dep,
+        resolver=resolver,
+    )
 
 
-def get_locked_kernel(repo_id: str) -> ModuleType:
+def get_locked_kernel(
+    repo_id: str,
+    *,
+    lockfile: Path | None,
+    trust_remote_code: bool | list[str] = False,
+    user_agent: str | dict | None = None,
+) -> ModuleType:
     """
     Get a kernel using a lock file.
 
     Args:
         repo_id (`str`):
             The Hub repository containing the kernel.
-        local_files_only (`bool`, *optional*, defaults to `False`):
-            Whether to only use local files and not download from the Hub.
+        lockfile (`Path`, *optional*):
+            Path to the lockfile. If not provided, the lockfile will be loaded from the caller's package metadata.
+        user_agent (`Union[str, dict]`, *optional*):
+            The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
     Returns:
         `ModuleType`: The imported kernel module.
     """
-    locked_sha = get_caller_locked_kernel_revision(repo_id)
+    if lockfile is None:
+        kernel_locks, kernel_dep = get_caller_locked_kernel_revision(repo_id)
+    else:
+        kernel_locks, kernel_dep = get_locked_kernel_revision(repo_id, lockfile)
 
-    if locked_sha is None:
-        raise ValueError(f"Kernel `{repo_id}` is not locked")
-
-    variant_path = install_kernel(
-        repo_id,
-        revision=locked_sha,
-        local_files_only=constants.HF_HUB_OFFLINE,
-        validate_dependencies=True,
+    resolver = (
+        LockedHubCacheResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
+        if constants.HF_HUB_OFFLINE
+        else LockedHubResolver(kernel_locks=kernel_locks, trust_remote_code=trust_remote_code)
     )
 
-    return _import_from_path(variant_path, deps={})
+    return get_kernel_with_resolver(
+        api=_get_hf_api(user_agent=user_agent),
+        backend=None,
+        kernel=kernel_dep,
+        resolver=resolver,
+    )

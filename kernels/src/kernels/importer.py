@@ -116,7 +116,12 @@ def _import_from_path(
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
     sys.modules[metadata.id] = module
-    spec.loader.exec_module(module)  # type: ignore
+
+    # Avoid an import cycle.
+    from kernels.deps import use_kernel_deps
+
+    with use_kernel_deps(deps):
+        spec.loader.exec_module(module)  # type: ignore
 
     _loaded_kernels[variant_path] = LoadedKernel(
         metadata=metadata,

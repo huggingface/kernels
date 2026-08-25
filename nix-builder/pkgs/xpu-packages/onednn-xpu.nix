@@ -20,6 +20,10 @@ let
       version = "3.12.2";
       hash = "sha256-LrxXRe2La5SZudikqMeGggklLrY2S0okrBX6QXGD+Tc=";
     };
+    "2026.1" = {
+      version = "3.12.3";
+      hash = "sha256-cxlwxlVYoh8ByZJzS+e7rJ8geSoTqC/1AzEYFncq/sA=";
+    };
   };
   oneDnnVersion =
     oneDnnVersions.${lib.versions.majorMinor dpcppVersion}

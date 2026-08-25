@@ -65,7 +65,7 @@ def test_import_from_path_warns_on_dirty(tmp_path):
     _loaded_kernels.pop(variant_dir, None)
     try:
         with pytest.warns(UserWarning, match="dirty git tree"):
-            module = _import_from_path(variant_dir)
+            module = _import_from_path(variant_dir, deps={})
         assert module.value == 42
     finally:
         _loaded_kernels.pop(variant_dir, None)

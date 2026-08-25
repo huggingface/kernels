@@ -148,4 +148,78 @@
     bundleBuild = true;
   }
 
+  {
+    torchVersion = "2.14";
+    cpu = true;
+    systems = [
+      "aarch64-darwin"
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.14";
+    cudaVersion = "12.6";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.14";
+    cudaVersion = "13.0";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.14";
+    cudaVersion = "13.2";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  # Since 13.4 is a prerelease, not yet available on:
+  # https://developer.download.nvidia.com/compute/cuda/redist/
+  #{
+  #  torchVersion = "2.14";
+  #  cudaVersion = "13.4";
+  #  systems = [
+  #    "x86_64-linux"
+  #    "aarch64-linux"
+  #  ];
+  #  bundleBuild = true;
+  #  tvmFfiVersion = "0.1";
+  #}
+  {
+    torchVersion = "2.14";
+    metal = true;
+    systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.14";
+    rocmVersion = "7.2";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  #{
+  #  torchVersion = "2.14";
+  #  rocmVersion = "7.14";
+  #  systems = [ "x86_64-linux" ];
+  #  bundleBuild = true;
+  #}
+  {
+    torchVersion = "2.14";
+    xpuVersion = "2026.1.0";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+
 ]

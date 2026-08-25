@@ -78,11 +78,13 @@ final: prev:
         inherit (triton)
           triton_3_7_0
           triton_3_7_1
+          triton_3_8_0
           ;
         inherit (triton-rocm) triton-rocm_3_7_0;
         inherit (triton-xpu)
           triton-xpu_3_7_1
           triton-xpu_3_7_2
+          triton-xpu_3_8_0
           ;
 
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
@@ -229,6 +231,14 @@ final: prev:
           xpuPackages = final.xpuPackages_2026_0_0;
         };
 
+        torch-bin_2_14 = mkTorch {
+          version = "2.14";
+          triton-cuda = triton_3_8_0;
+          triton-rocm = triton-rocm_3_7_0;
+          triton-xpu = triton-xpu_3_8_0;
+          xpuPackages = final.xpuPackages_2026_1_0;
+        };
+
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
           version = "5.3.0";
           src = python-super.fetchPypi {
@@ -296,6 +306,7 @@ final: prev:
     xpuVersions = [
       "2025.3.2"
       "2026.0.0"
+      "2026.1.0"
     ];
     newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
   in

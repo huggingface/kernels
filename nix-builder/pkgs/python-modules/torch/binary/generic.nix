@@ -62,6 +62,8 @@
   effectiveStdenv ? if cudaSupport then cudaPackages.backendStdenv else stdenv,
 }:
 let
+  inherit (lib) versionAtLeast;
+
   torchMajorMinor = lib.versions.majorMinor version;
 
   effectiveTriton =
@@ -77,6 +79,7 @@ let
   aotritonVersions = with rocmPackages; {
     "2.12" = aotriton_0_11_2;
     "2.13" = aotriton_0_12;
+    "2.14" = aotriton_0_13;
   };
 
   aotriton =
@@ -115,7 +118,7 @@ let
         rocsparse
         roctracer
       ]
-      ++ lib.optionals (lib.versionAtLeast version "2.12") [
+      ++ lib.optionals (versionAtLeast version "2.12") [
         rocprofiler-sdk
       ];
 
@@ -227,7 +230,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         ))
       ]
     )
-    ++ lib.optionals (cudaSupport && lib.versionAtLeast version "2.9") [
+    ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [
       cudaPackages.libnvshmem
     ]
     ++ lib.optionals rocmSupport ([
@@ -273,10 +276,10 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   ++ lib.optionals tritonSupport [
     effectiveTriton
   ]
-  ++ lib.optionals (cudaSupport && lib.versionAtLeast version "2.10") [
+  ++ lib.optionals (cudaSupport && versionAtLeast version "2.10") [
     cuda-bindings
   ]
-  ++ lib.optionals (xpuSupport && lib.versionAtLeast version "2.13") [
+  ++ lib.optionals (xpuSupport && versionAtLeast version "2.13") [
     pyzes
   ];
 
@@ -403,7 +406,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   # We need to add this rpath after postFixup (otherwise it might be ordered
   # before autoPatchelfHook), but before the import check to ensure that the
   # rpath is used during the import check.
-  preInstallCheck = lib.optionalString (rocmSupport && torchMajorMinor == "2.13") ''
+  preInstallCheck = lib.optionalString (rocmSupport && versionAtLeast torchMajorMinor "2.13") ''
     # libtorch_shmem dynamically loads libnuma. For added fun, if libnuma
     # cannot be found, it exit()s inside a constructor, calling an atexit()
     # hook, which then proceeds to deadlock.

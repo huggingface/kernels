@@ -35,6 +35,10 @@
 
   src,
 
+  # Dependencies on other kernels. Path to a json file that maps
+  # kernel dependencies to output paths.
+  kernelDeps,
+
   # A stringly-typed list of Python dependencies. Ideally we'd take a
   # list of derivations, but we also need to write the dependencies to
   # the output.
@@ -55,7 +59,7 @@ assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
   inherit
-    (import ../../deps.nix {
+    (import ../../python-deps.nix {
       inherit
         lib
         pkgs
@@ -78,7 +82,7 @@ in
 stdenv.mkDerivation (prevAttrs: {
   name = "${kernelName}-torch-ext";
 
-  inherit doKernelBuildCheck moduleName;
+  inherit doKernelBuildCheck kernelDeps moduleName;
 
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out

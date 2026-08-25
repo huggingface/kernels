@@ -8,3 +8,7 @@ of the `huggingface_hub` package is used.
 ## `DISABLE_KERNEL_MAPPING`
 
 Disables kernel mappings for [`layers`](layers.md).
+
+## `HF_HUB_DISABLE_TELEMETRY`
+
+Disable telemetry.

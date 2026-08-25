@@ -15,6 +15,7 @@
       inherit (kernel-builder.inputs.nixpkgs) lib;
 
       cudaVersion = "cu126";
+      cuda13Version = "cu132";
       rocmVersion = "rocm71";
       xpuVersion = "xpu20253";
       torchVersion = "212";
@@ -39,6 +40,7 @@
           path = ./cpp20-symbols;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
         }
+        # This test should check the capabilities of the oldest supported CUDA.
         {
           name = "relu-kernel";
           path = ./relu;
@@ -53,6 +55,27 @@
             "8.7"
             "8.9"
             "9.0"
+          ];
+        }
+        # This test should check the capabilities of the latest supported CUDA.
+        {
+          name = "relu-kernel-cu13";
+          path = ./relu;
+          drv =
+            sys: out:
+            out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cuda13Version}-${sys}"};
+          checkCudaCapabilities = [
+            "7.5"
+            "8.0"
+            "8.6"
+            "8.7"
+            "8.9"
+            "9.0"
+            "10.0"
+            "10.3"
+            "11.0"
+            "12.0"
+            "12.1"
           ];
         }
         {

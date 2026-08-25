@@ -77,6 +77,7 @@ let
   aotritonVersions = with rocmPackages; {
     "2.12" = aotriton_0_11_2;
     "2.13" = aotriton_0_12;
+    "2.14" = aotriton_0_13;
   };
 
   aotriton =

@@ -10,6 +10,11 @@ _getKernelCheckHook() {
     exit 1
   fi
 
+  if [ -z ${kernelDeps+x} ]; then
+    echo "kernelDeps must be set in derivation"
+    exit 1
+  fi
+
   echo "Check whether the kernel can be loaded with get-kernel: ${moduleName}"
 
   # We strip the full library paths from the extension. Unfortunately,
@@ -42,7 +47,30 @@ _getKernelCheckHook() {
 
   PYTHONPATH="@kernels@" \
     ${prootCmd} \
-    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'))"
+    @python3@ -c "
+from pathlib import Path
+
+from kernels.load import get_kernel_with_resolver
+from kernels.hf_hub import _get_hf_api
+from kernels.resolver import KernelPathsResolver, RepoPathsResolver, SequentialResolver
+from kernels_data import KernelDependency, KernelPaths, KernelVersion
+
+with open('${kernelDeps}') as f:
+  kernel_paths = KernelPaths.from_json(f.read())
+
+kernel = KernelDependency(repo_id='${out}', version=KernelVersion.Version(0))
+resolvers = [
+  RepoPathsResolver(local_kernels={'${out}': Path('${out}')}),
+  KernelPathsResolver(kernel_paths=kernel_paths)
+]
+
+get_kernel_with_resolver(
+  api=_get_hf_api(),
+  backend=None,
+  kernel=kernel,
+  resolver=SequentialResolver(resolvers=resolvers)
+)
+"
 }
 
 postInstallCheckHooks+=(_getKernelCheckHook)

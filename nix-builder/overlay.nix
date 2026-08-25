@@ -14,11 +14,15 @@ final: prev:
 
   fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };
 
+  fetchKernelDeps = final.callPackage ./pkgs/fetch-kernel-deps { };
+
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
   hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };
 
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
+
+  lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
   nvtx = final.callPackage ./pkgs/nvtx { };
 

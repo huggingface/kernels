@@ -241,6 +241,15 @@ in
           ${uploadStr}
         '';
 
+      lock-kernel-deps = writeScriptBin "lock-kernel-deps" ''
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        kernel_dir="''${1:-.}"
+
+        ${pkgs.lock-kernel-deps}/bin/lock-kernel-deps "$kernel_dir" -o "$kernel_dir/kernels.lock"
+      '';
+
       ci =
         let
           setsWithFramework =

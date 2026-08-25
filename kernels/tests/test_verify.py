@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from kernels_data import DigestViolation
 from sigstore.verify import policy
 
 from kernels import install_kernel
 from kernels._versions import select_revision_or_version
+from kernels.hf_hub import CACHE_DIR, _get_hf_api
+from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
 from kernels.verify import VerificationResult, verify_variant
 
 TEST_POLICIES: list[policy.VerificationPolicy] = [
@@ -43,10 +47,34 @@ def test_invalid_digest_fails():
 
 
 def test_invalid_metadata_fails():
-    variant_path = install_kernel("kernels-test/signatures", revision="invalid-metadata")
+    # We cannot use regular code paths, because they require valid metadata.
+    revision = select_revision_or_version(
+        "kernels-test/signatures",
+        revision="invalid-metadata",
+        version=None,
+        local_files_only=False,
+    )
+
+    api = _get_hf_api()
+    variant_paths = (
+        Path(
+            str(
+                api.snapshot_download(
+                    "kernels-test/signatures",
+                    repo_type="kernel",
+                    allow_patterns="build/*",
+                    ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
+                    cache_dir=CACHE_DIR,
+                    revision=revision,
+                )
+            )
+        )
+        / "build"
+    )
 
     match verify_variant(
-        variant_path,
+        # No CUDA dependency, we are only checking metadata.
+        variant_paths / "torch-cuda",
         policies=TEST_POLICIES,
     ):
         case VerificationResult.MetadataInvalid(reason=reason):
@@ -67,10 +95,35 @@ def test_missing_digest_fails():
 
 
 def test_missing_metadata_fails():
-    variant_path = install_kernel("kernels-test/signatures", revision="missing-metadata")
+    # We cannot use regular code paths, because they require valid metadata.
+    revision = select_revision_or_version(
+        "kernels-test/signatures",
+        revision="missing-metadata",
+        version=None,
+        local_files_only=False,
+    )
+
+    api = _get_hf_api()
+    variant_paths = (
+        Path(
+            str(
+                api.snapshot_download(
+                    "kernels-test/signatures",
+                    repo_type="kernel",
+                    allow_patterns="build/*",
+                    ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
+                    cache_dir=CACHE_DIR,
+                    revision=revision,
+                )
+            )
+        )
+        / "build"
+    )
+
     assert (
         verify_variant(
-            variant_path,
+            # No CUDA dependency, we are only checking metadata.
+            variant_paths / "torch-cuda",
             policies=TEST_POLICIES,
         )
         == VerificationResult.MetadataMissing()

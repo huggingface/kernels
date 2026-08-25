@@ -10,10 +10,15 @@ from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from huggingface_hub import constants
+from kernels_data import KernelDependency, KernelLocks
+
+from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version
+from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
+    get_kernel_with_resolver,
     get_local_kernel,
 )
 from ..locking import (
@@ -208,25 +213,33 @@ class LockedLayerRepository:
         self._lockfile = lockfile
         self.layer_name = layer_name
         self._trust_remote_code = trust_remote_code
-        self._revision = self._resolve_revision()
+        kernel_locks, kernel_dep = self._get_lock()
+        self.kernel_locks = kernel_locks
+        self.kernel_dep = kernel_dep
 
-    def _resolve_revision(self) -> str:
+    def _get_lock(self) -> tuple[KernelLocks, KernelDependency]:
         if self._lockfile is None:
-            locked_sha = get_caller_locked_kernel_revision(self._repo_id)
+            return get_caller_locked_kernel_revision(self._repo_id)
         else:
-            with open(self._lockfile, "r") as f:
-                locked_sha = get_locked_kernel_revision(self._repo_id, f.read())
-
-        if locked_sha is None:
-            raise ValueError(f"Kernel `{self._repo_id}` is not locked")
-
-        return locked_sha
+            return get_locked_kernel_revision(self._repo_id, self._lockfile)
 
     def load(self) -> Type["nn.Module"]:
-        kernel = get_kernel(
-            repo_id=self._repo_id,
-            revision=self._revision,
-            trust_remote_code=self._trust_remote_code,
+        resolver = (
+            LockedHubCacheResolver(
+                kernel_locks=self.kernel_locks,
+                trust_remote_code=self._trust_remote_code,
+            )
+            if constants.HF_HUB_OFFLINE
+            else LockedHubResolver(
+                kernel_locks=self.kernel_locks,
+                trust_remote_code=self._trust_remote_code,
+            )
+        )
+        kernel = get_kernel_with_resolver(
+            api=_get_hf_api(),
+            backend=None,
+            kernel=self.kernel_dep,
+            resolver=resolver,
         )
         return _get_kernel_layer(self, kernel)
 
@@ -235,15 +248,25 @@ class LockedLayerRepository:
             isinstance(other, LockedLayerRepository)
             and self.layer_name == other.layer_name
             and self._repo_id == other._repo_id
-            and self._revision == other._revision
+            and self.kernel_dep == other.kernel_dep
+            and self.kernel_locks == other.kernel_locks
             and self._trust_remote_code == other._trust_remote_code
         )
 
     def __hash__(self):
-        return hash((self.layer_name, self._repo_id, self._revision, self._trust_remote_code))
+        return hash(
+            (
+                self.layer_name,
+                self._repo_id,
+                self.kernel_dep,
+                self.kernel_locks,
+                self._trust_remote_code,
+            )
+        )
 
     def __str__(self) -> str:
-        return f"`{self._repo_id}` (revision: {self._revision}), layer `{self.layer_name}`"
+        commit = self.kernel_locks[self.kernel_dep].commit
+        return f"`{self._repo_id}` (revision: {commit}), layer `{self.layer_name}`)"
 
 
 _CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}

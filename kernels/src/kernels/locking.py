@@ -1,113 +1,101 @@
-import hashlib
 import importlib.metadata
 import inspect
-import json
-from dataclasses import dataclass
 from importlib.metadata import Distribution
 from pathlib import Path
 from types import ModuleType
 
-from huggingface_hub import constants
-from huggingface_hub.dataclasses import strict
-from huggingface_hub.hf_api import RepoFile
+from huggingface_hub.hf_api import HfApi
+from kernels_data import (
+    KernelDependency,
+    KernelLock,
+    KernelLocks,
+    Metadata,
+)
 
-from kernels._versions import resolve_version_spec_as_ref
+from kernels._versions import resolve_kernel_version
 from kernels.compat import tomllib
-from kernels.status import resolve_status
+from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
+from kernels.variants import get_variants
 
 
-@strict
-@dataclass
-class VariantLock:
-    hash: str
-    hash_type: str = "git_lfs_concat"
+def lock_kernel_tree(
+    kernel: KernelDependency,
+    *,
+    api: HfApi,
+    seen: set[KernelDependency] | None = None,
+    kernel_locks: dict[KernelDependency, KernelLock] | None = None,
+) -> dict[KernelDependency, KernelLock]:
+    """Lock all kernels in the dependency tree"""
 
+    # NOTE: this function does not use resolve_kernel_tree, since that function
+    #       constructs a tree using the best-matching variant for a system. In
+    #       this function we need to explore all variants, since we want to lock
+    #       every possible variant (and its dependencies).
 
-@strict
-@dataclass
-class KernelLock:
-    repo_id: str
-    sha: str
-    variants: dict[str, VariantLock]
+    if kernel_locks is None:
+        kernel_locks = dict()
 
-    @classmethod
-    def from_json(cls, o: dict):
-        variants = {variant: VariantLock(**lock) for variant, lock in o["variants"].items()}
-        return cls(repo_id=o["repo_id"], sha=o["sha"], variants=variants)
+    # If the kernel is already in the locks, we have already resolved
+    # the kernel and its dependencies.
+    if kernel in kernel_locks:
+        return kernel_locks
 
+    if seen is None:
+        seen = set()
 
-def get_kernel_locks(repo_id: str, version_spec: int) -> KernelLock:
-    """
-    Get the locks for a kernel with the given version.
-    """
-    from kernels.hf_hub import _get_hf_api
+    # Check for cycles.
+    if kernel in seen:
+        raise ValueError(f"Cyclic kernel dependency detected: {kernel.repo_id}")
+    seen.add(kernel)
 
-    api = _get_hf_api()
-
-    # NOTE: the destination of a redirect is respected but we still use
-    # resolve_version_spec_as_ref to resolve the version specifier of the
-    # final destination repo.
-    repo_id, _ = resolve_status(api, repo_id, "main")
-
-    tag_for_newest = resolve_version_spec_as_ref(repo_id, version_spec, local_files_only=constants.HF_HUB_OFFLINE)
-
-    revision = tag_for_newest.target_commit
-
-    r = api.repo_info(
-        repo_id=repo_id,
-        repo_type="kernel",
-        revision=revision,
+    # Check if the repo is trusted before downloading anything.
+    _check_trust_remote_code(
+        repo_id=kernel.repo_id,
+        local_files_only=False,
+        trust_remote_code=False,
     )
-    if r.sha is None:
-        raise ValueError(f"Cannot get commit SHA for repo {repo_id} for tag {tag_for_newest.name}")
 
-    siblings = [
-        f
-        for f in api.list_repo_tree(
-            repo_id=repo_id,
-            repo_type="kernel",
-            revision=revision,
-            recursive=True,
+    revision = resolve_kernel_version(kernel, local_files_only=False)
+
+    for variant in get_variants(api, repo_id=kernel.repo_id, revision=revision):
+        metadata_path = Path(
+            api.hf_hub_download(
+                kernel.repo_id,
+                repo_type="kernel",
+                filename=f"build/{variant.variant_str}/metadata.json",
+                cache_dir=CACHE_DIR,
+                revision=revision,
+                local_files_only=False,
+            )
         )
-        if isinstance(f, RepoFile)
-    ]
+        metadata = Metadata.read_from_file(metadata_path)
 
-    variant_files: dict[str, list[tuple[bytes, str]]] = {}
-    for sibling in siblings:
-        if sibling.rfilename.startswith("build/torch"):
-            if sibling.blob_id is None:
-                raise ValueError(f"Cannot get blob ID for {sibling.rfilename}")
+        kernel_deps = {}
+        for dep in metadata.kernel_depends:
+            kernel_deps[dep] = lock_kernel_tree(dep, api=api, seen=seen, kernel_locks=kernel_locks)
 
-            # Exclude Python bytecode. If bytecode exists, it is generated
-            # by the interpreter, since we exclude bytecode from builds
-            # and downloads.
-            if sibling.rfilename.endswith(".pyc") or "__pycache__" in sibling.rfilename.split("/"):
-                continue
+    seen.remove(kernel)
 
-            path = Path(sibling.rfilename)
-            variant = path.parts[1]
-            filename = Path(*path.parts[2:])
+    kernel_locks[kernel] = KernelLock(
+        commit=revision,
+    )
 
-            hash = sibling.lfs.sha256 if sibling.lfs is not None else sibling.blob_id
+    return kernel_locks
 
-            files = variant_files.setdefault(variant, [])
 
-            # Encode as posix for consistent slash handling, then encode
-            # as utf-8 for byte-wise sorting later.
-            files.append((filename.as_posix().encode("utf-8"), hash))
+def extract_dependency_locks(
+    kernels: list[KernelDependency],
+    *,
+    api: HfApi,
+) -> KernelLocks:
+    kernel_locks = None
+    for kernel in kernels:
+        kernel_locks = lock_kernel_tree(kernel, api=api, kernel_locks=kernel_locks)
 
-    variant_locks = {}
-    for variant, files in variant_files.items():
-        m = hashlib.sha256()
-        for filename_bytes, hash in sorted(files):
-            # Filename as bytes.
-            m.update(filename_bytes)
-            # Git blob or LFS file hash as bytes.
-            m.update(bytes.fromhex(hash))
+    if kernel_locks is None:
+        raise ValueError("No kernels found to lock.")
 
-        variant_locks[variant] = VariantLock(hash=f"sha256-{m.hexdigest()}")
-
-    return KernelLock(repo_id=repo_id, sha=r.sha, variants=variant_locks)
+    return KernelLocks(locks=kernel_locks)
 
 
 def write_egg_lockfile(cmd, basename, filename):
@@ -137,23 +125,40 @@ def write_egg_lockfile(cmd, basename, filename):
     cmd.write_or_delete_file(basename, filename, data)
 
 
-def get_locked_kernel_revision(repo_id: str, lock_json: str) -> str | None:
-    for kernel_lock_json in json.loads(lock_json):
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
-        if kernel_lock.repo_id == repo_id:
-            return kernel_lock.sha
-    return None
+def _get_locked_kernel_revision(repo_id: str, lock_json: str) -> tuple[KernelLocks, KernelDependency]:
+    kernel_locks = KernelLocks.from_json(lock_json)
+
+    # Lock files are keyed `KernelDependency`, but for project-locked
+    # kenels we only have one version at the top level, so we have to
+    # do a linear search.
+    kernel_dep = next((dep for dep in kernel_locks.keys() if dep.repo_id == repo_id), None)
+
+    if kernel_dep is None:
+        raise ValueError(
+            f"Kernel `{repo_id}` is not locked. Please lock it with `kernels lock <project>` and then reinstall the project."
+        )
+
+    return kernel_locks, kernel_dep
 
 
-def get_caller_locked_kernel_revision(repo_id: str) -> str | None:
+def get_locked_kernel_revision(repo_id: str, lockfile: Path) -> tuple[KernelLocks, KernelDependency]:
+    with open(lockfile, "r") as f:
+        return _get_locked_kernel_revision(repo_id, f.read())
+
+
+def get_caller_locked_kernel_revision(
+    repo_id: str,
+) -> tuple[KernelLocks, KernelDependency]:
     for dist in _get_caller_distributions():
         lock_json = dist.read_text("kernels.lock")
         if lock_json is None:
             continue
-        locked_sha = get_locked_kernel_revision(repo_id, lock_json)
-        if locked_sha is not None:
-            return locked_sha
-    return None
+
+        return _get_locked_kernel_revision(repo_id, lock_json)
+
+    raise ValueError(
+        "Could not find a `kernels.lock` file in the caller's package metadata. Please lock kernels with `kernels lock <project>` and then reinstall the project."
+    )
 
 
 def _get_caller_distributions() -> list[Distribution]:

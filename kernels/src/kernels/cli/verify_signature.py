@@ -16,7 +16,10 @@ from kernels.verify import VerificationResult, verify_variant
 
 def verify_signature(args: argparse.Namespace) -> None:
     revision = select_revision_or_version(
-        args.repo_id, revision=None, version=args.version, local_files_only=constants.HF_HUB_OFFLINE
+        args.repo_id,
+        revision=None,
+        version=args.version,
+        local_files_only=constants.HF_HUB_OFFLINE,
     )
 
     if args.all_variants:

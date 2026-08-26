@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs::{self, File},
     io::BufReader,
     path::{Path, PathBuf},
@@ -263,19 +263,22 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         false
     };
 
-    // README goes to main branch, build artifacts go to version branch.
+    // README goes to main branch for Hub rendering, build artifacts and
+    // README go to version branch.
     let mut operations_by_branch: BTreeMap<String, Vec<CommitOperation>> = BTreeMap::new();
     let mut pull_requests: Vec<PullRequest> = Vec::new();
 
     collect_readme_commit_ops(
         &build_dir,
+        // No deletions in main.
+        &BTreeSet::new(),
         operations_by_branch
             .entry(MAIN_BRANCH.to_owned())
             .or_default(),
     );
 
     if let Some(ref branch) = branch {
-        let version_existing_files: Vec<String> = repo
+        let version_existing_files: BTreeSet<String> = repo
             .list_tree()
             .revision(branch.clone())
             .recursive(true)
@@ -290,6 +293,7 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
         let version_ops = operations_by_branch.entry(branch.clone()).or_default();
 
+        collect_readme_commit_ops(&build_dir, &version_existing_files, version_ops);
         collect_benchmark_commit_ops(
             &kernel_dir,
             &version_existing_files,
@@ -484,7 +488,7 @@ fn resolve_pr<T: RepoType>(
 /// Collect benchmark file commit operations: add matching files, delete stale ones.
 fn collect_benchmark_commit_ops(
     kernel_dir: &Path,
-    existing_files: &[String],
+    existing_files: &BTreeSet<String>,
     is_new_branch: bool,
     operations: &mut Vec<CommitOperation>,
 ) -> Result<()> {
@@ -542,22 +546,29 @@ fn collect_benchmark_commit_ops(
 /// holds the build variants (as returned by `discover_variants`). This ensures
 /// the card is taken from the same location as the variants rather than an
 /// unrelated directory elsewhere in the repository (see issue #659).
-fn collect_readme_commit_ops(build_dir: &Path, operations: &mut Vec<CommitOperation>) {
+fn collect_readme_commit_ops(
+    build_dir: &Path,
+    existing_files: &BTreeSet<String>,
+    operations: &mut Vec<CommitOperation>,
+) {
     let card_path = build_dir.join("CARD.md");
-    if !card_path.is_file() {
-        return;
+    if card_path.is_file() {
+        operations.push(CommitOperation::Add {
+            path_in_repo: "README.md".to_owned(),
+            source: AddSource::File(card_path),
+        });
+    } else if existing_files.contains("README.md") {
+        operations.push(CommitOperation::Delete {
+            path_in_repo: "README.md".to_owned(),
+        });
     }
-    operations.push(CommitOperation::Add {
-        path_in_repo: "README.md".to_owned(),
-        source: AddSource::File(card_path),
-    });
 }
 
 /// Collect build artifact commit operations: add variant files, delete stale ones.
 fn collect_build_commit_ops(
     build_dir: &Path,
     variants: &[PathBuf],
-    existing_files: &[String],
+    existing_files: &BTreeSet<String>,
     is_new_branch: bool,
     operations: &mut Vec<CommitOperation>,
 ) -> Result<()> {
@@ -755,7 +766,7 @@ mod tests {
         fs::write(build_dir.join("CARD.md"), "# Readme").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(&build_dir, &mut operations);
+        collect_readme_commit_ops(&build_dir, &BTreeSet::new(), &mut operations);
 
         assert_eq!(operations.len(), 1);
         match &operations[0] {
@@ -777,7 +788,48 @@ mod tests {
     fn test_collect_readme_commit_ops_no_card() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut operations = vec![];
-        collect_readme_commit_ops(temp_dir.path(), &mut operations);
+        collect_readme_commit_ops(temp_dir.path(), &BTreeSet::new(), &mut operations);
+        assert!(operations.is_empty());
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops_deletes_stale_readme() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let existing = BTreeSet::from(["README.md".to_owned()]);
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(temp_dir.path(), &existing, &mut operations);
+
+        assert_eq!(operations.len(), 1);
+        match &operations[0] {
+            CommitOperation::Delete { path_in_repo } => {
+                assert_eq!(path_in_repo, "README.md");
+            }
+            _ => panic!("Expected Delete operation"),
+        }
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops_card_takes_precedence_over_stale_readme() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs::write(temp_dir.path().join("CARD.md"), "# Readme").unwrap();
+        let existing = BTreeSet::from(["README.md".to_owned()]);
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(temp_dir.path(), &existing, &mut operations);
+
+        assert_eq!(operations.len(), 1);
+        assert!(matches!(operations[0], CommitOperation::Add { .. }));
+    }
+
+    #[test]
+    fn test_collect_readme_commit_ops_no_card_no_remote_readme() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let existing = BTreeSet::from(["build/torch-cpu/metadata.json".to_owned()]);
+
+        let mut operations = vec![];
+        collect_readme_commit_ops(temp_dir.path(), &existing, &mut operations);
+
         assert!(operations.is_empty());
     }
 
@@ -795,7 +847,7 @@ mod tests {
         fs::write(kernel_dir.join("CARD.md"), "# Stray card").unwrap();
 
         let mut operations = vec![];
-        collect_readme_commit_ops(&build_dir, &mut operations);
+        collect_readme_commit_ops(&build_dir, &BTreeSet::new(), &mut operations);
 
         assert!(operations.is_empty());
     }
@@ -812,7 +864,7 @@ mod tests {
         fs::write(benchmarks_dir.join("other.py"), "# not a benchmark").unwrap();
 
         let mut operations = vec![];
-        collect_benchmark_commit_ops(kernel_dir, &[], false, &mut operations).unwrap();
+        collect_benchmark_commit_ops(kernel_dir, &BTreeSet::new(), false, &mut operations).unwrap();
 
         // Should only include benchmark*.py files
         assert_eq!(operations.len(), 2);
@@ -827,7 +879,7 @@ mod tests {
         fs::create_dir_all(&benchmarks_dir).unwrap();
         fs::write(benchmarks_dir.join("benchmark.py"), "# benchmark").unwrap();
 
-        let existing = vec!["benchmarks/benchmark_old.py".to_owned()];
+        let existing = BTreeSet::from(["benchmarks/benchmark_old.py".to_owned()]);
         let mut operations = vec![];
         collect_benchmark_commit_ops(kernel_dir, &existing, false, &mut operations).unwrap();
 
@@ -857,7 +909,14 @@ mod tests {
 
         let variants = vec![variant];
         let mut operations = vec![];
-        collect_build_commit_ops(build_dir, &variants, &[], false, &mut operations).unwrap();
+        collect_build_commit_ops(
+            build_dir,
+            &variants,
+            &BTreeSet::new(),
+            false,
+            &mut operations,
+        )
+        .unwrap();
 
         assert_eq!(operations.len(), 2); // metadata.json + kernel.so
         let paths: Vec<_> = operations
@@ -880,10 +939,10 @@ mod tests {
         fs::create_dir_all(&variant).unwrap();
         fs::write(variant.join("metadata.json"), "{}").unwrap();
 
-        let existing = vec![
+        let existing = BTreeSet::from([
             "build/torch-cpu/stale.py".to_owned(),
             "build/torch-cuda/keep.py".to_owned(), // Different variant, should not delete
-        ];
+        ]);
         let variants = vec![variant];
         let mut operations = vec![];
         collect_build_commit_ops(build_dir, &variants, &existing, false, &mut operations).unwrap();
@@ -909,10 +968,10 @@ mod tests {
         fs::create_dir_all(&variant).unwrap();
         fs::write(variant.join("metadata.json"), "{}").unwrap();
 
-        let existing = vec![
+        let existing = BTreeSet::from([
             "build/torch-cpu/stale.py".to_owned(),
             "build/torch-cuda/inherited.py".to_owned(),
-        ];
+        ]);
         let variants = vec![variant];
         let mut operations = vec![];
         // is_new_branch = true
@@ -1030,7 +1089,7 @@ mod tests {
             let build_dir = kernel_dir.join("result");
 
             let mut operations = vec![];
-            collect_readme_commit_ops(&build_dir, &mut operations);
+            collect_readme_commit_ops(&build_dir, &BTreeSet::new(), &mut operations);
 
             assert_eq!(operations.len(), 1);
             match &operations[0] {
@@ -1079,7 +1138,14 @@ branch = "custom-branch"
 
         // Verify commit ops are generated - these would be uploaded to the branch above.
         let mut operations = vec![];
-        collect_build_commit_ops(&build_dir, &variants, &[], false, &mut operations).unwrap();
+        collect_build_commit_ops(
+            &build_dir,
+            &variants,
+            &BTreeSet::new(),
+            false,
+            &mut operations,
+        )
+        .unwrap();
         assert!(!operations.is_empty());
     }
 

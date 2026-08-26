@@ -1,6 +1,7 @@
 {
   self,
   lib,
+  cmake,
   runCommand,
   testers,
   python3,
@@ -30,6 +31,21 @@ let
     ];
   };
 
+  # Test the CUDA/ROCm arch intersection functions used by the CMake
+  # templates. `utils.cmake` is passed explicitly since the test script is
+  # copied to the store without its sibling files.
+  archIntersectionCheck =
+    runCommand "arch-intersection-check"
+      {
+        nativeBuildInputs = [ cmake ];
+      }
+      ''
+        cmake \
+          -DUTILS_CMAKE=${../../kernel-builder/src/pyproject/templates/utils.cmake} \
+          -P ${../../kernel-builder/tests/arch-intersection.cmake}
+        touch $out
+      '';
+
   fetchFromHuggingFaceCheck =
     runCommand "fetch-from-huggingface-check"
       {
@@ -55,6 +71,7 @@ assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.12.0"
 runCommand "builder-nix-checks"
   {
     buildInputs = [
+      archIntersectionCheck
       badRegistrationCheck
       fetchFromHuggingFaceCheck
     ];

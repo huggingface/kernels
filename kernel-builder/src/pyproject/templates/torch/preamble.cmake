@@ -134,7 +134,7 @@ if(GPU_LANG STREQUAL "CUDA")
   clear_gencode_flags()
 
   # Get the capabilities without +PTX suffixes, so that we can use them as
-  # the target archs in the loose intersection with a kernel's capabilities.
+  # the target archs in the intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
   message(STATUS "CUDA base archs used for intersection with kernel archs: ${CUDA_ARCHS}")
 

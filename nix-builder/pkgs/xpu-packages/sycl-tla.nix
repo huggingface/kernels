@@ -22,6 +22,10 @@ let
       version = "0.9.2";
       hash = "sha256-Hn51Ah1wEscOnrt9O/aXBW7IC6Mcl4gUWynAmDeAOlM=";
     };
+    "2026.1" = {
+      version = "0.9.2";
+      hash = "sha256-Hn51Ah1wEscOnrt9O/aXBW7IC6Mcl4gUWynAmDeAOlM=";
+    };
   };
   syclTlaVersion =
     syclTlaVersions.${lib.versions.majorMinor dpcppVersion}

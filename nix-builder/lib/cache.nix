@@ -19,6 +19,7 @@
         let
           isLinux = stdenv.hostPlatform.isLinux;
           cudaSupport = config.cudaSupport;
+          xpuSupport = config.xpuSupport or false;
         in
         (
           allOutputs buildSet.torch
@@ -35,6 +36,9 @@
           # Only works on recent CUDAs.
           ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (
             allOutputs python3.pkgs.nvidia-cutlass-dsl
+          )
+          ++ lib.optionals xpuSupport (
+            allOutputs (buildSet.torch.xpuPackages.sycl-tla.override { inherit (manylinux_2_28) stdenv; })
           )
         );
       buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.variants.torch.arch (buildSetOutputs buildSet);

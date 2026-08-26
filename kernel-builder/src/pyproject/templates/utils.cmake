@@ -341,38 +341,46 @@ endmacro()
 
 #
 # For the given `SRC_CUDA_ARCHS` list of gencode versions in the form
-#  `<major>.<minor>[letter]` compute the "loose intersection" with the
-#  `TGT_CUDA_ARCHS` list of gencodes. We also support the `+PTX` suffix in
-#  `SRC_CUDA_ARCHS` which indicates that the PTX code should be built when there
-#  is a CUDA_ARCH in `TGT_CUDA_ARCHS` that is equal to or larger than the
-#  architecture in `SRC_CUDA_ARCHS`.
-# The loose intersection is defined as:
-#   { max{ x \in tgt | x <= y } | y \in src, { x \in tgt | x <= y } != {} }
-#  where `<=` is the version comparison operator.
-# In other words, for each version in `TGT_CUDA_ARCHS` find the highest version
-#  in `SRC_CUDA_ARCHS` that is less or equal to the version in `TGT_CUDA_ARCHS`.
-# We have special handling for x.0a, if x.0a is in `SRC_CUDA_ARCHS` and x.0 is
-#  in `TGT_CUDA_ARCHS` then we should remove x.0a from `SRC_CUDA_ARCHS` and add
-#  x.0a to the result (and remove x.0 from TGT_CUDA_ARCHS).
+#  `<major>.<minor>[letter][+PTX]` compute the intersection with the
+#  `TGT_CUDA_ARCHS` list of gencodes. Since `TGT_CUDA_ARCHS` explicitly
+#  enumerates the capabilities supported by the CUDA toolkit, the
+#  intersection is exact, modulo suffixes:
+#
+#  - `<arch>+PTX` in `SRC_CUDA_ARCHS` matches `<arch>` in `TGT_CUDA_ARCHS`;
+#    the `+PTX` suffix is kept in the result (PTX is forward-compatible
+#    with later architectures through JIT compilation).
+#  - An arch-specific variant `x.0a`/`x.0f` in `SRC_CUDA_ARCHS` matches
+#    `x.0` in `TGT_CUDA_ARCHS` and is emitted *instead of* a plain `x.0`
+#    match.
+#
+#  In set notation, with base(s) the arch without suffixes, F the
+#  arch-specific variants in SRC_CUDA_ARCHS, and
+#  B = { base(f) | f in F, base(f) in T }:
+#
+#    OUT = { f in F | base(f) in T } u ( { s in S \ F | s in T } \ B )
+#
+#  where membership tests use base versions and `+PTX` suffixes are
+#  re-applied afterwards.
 # The result is stored in `OUT_CUDA_ARCHS`.
 #
 # Example:
 #   SRC_CUDA_ARCHS="7.5;8.0;8.6;9.0;9.0a"
 #   TGT_CUDA_ARCHS="8.0;8.9;9.0"
-#   cuda_archs_loose_intersection(OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_ARCHS)
-#   OUT_CUDA_ARCHS="8.0;8.6;9.0;9.0a"
+#   cuda_archs_intersection(OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_ARCHS)
+#   OUT_CUDA_ARCHS="8.0;9.0a"
 #
-# Example With PTX:
+# Example with PTX:
 #   SRC_CUDA_ARCHS="8.0+PTX"
-#   TGT_CUDA_ARCHS="9.0"
-#   cuda_archs_loose_intersection(OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_ARCHS)
+#   TGT_CUDA_ARCHS="8.0;9.0"
+#   cuda_archs_intersection(OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_ARCHS)
 #   OUT_CUDA_ARCHS="8.0+PTX"
 #
-function(cuda_archs_loose_intersection OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_ARCHS)
+function(cuda_archs_intersection OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_ARCHS)
   set(_SRC_CUDA_ARCHS "${SRC_CUDA_ARCHS}")
   set(_TGT_CUDA_ARCHS ${TGT_CUDA_ARCHS})
 
-  # handle +PTX suffix: separate base arch for matching, record PTX requests
+  # Handle the +PTX suffix: match on the base arch and record which archs
+  # requested PTX, so that the suffix can be re-applied to the result.
   set(_PTX_ARCHS)
   foreach(_arch ${_SRC_CUDA_ARCHS})
     if(_arch MATCHES "\\+PTX$")
@@ -385,8 +393,8 @@ function(cuda_archs_loose_intersection OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_AR
   list(REMOVE_DUPLICATES _PTX_ARCHS)
   list(REMOVE_DUPLICATES _SRC_CUDA_ARCHS)
 
-  # If x.0a or x.0f is in SRC_CUDA_ARCHS and x.0 is in CUDA_ARCHS then we should
-  # remove x.0a or x.0f from SRC_CUDA_ARCHS and add x.0a or x.0f to _CUDA_ARCHS
+  # Handle arch-specific variants (x.0a, x.0f): a variant matches when its
+  # base arch is a target, and is then emitted instead of the base arch.
   set(_CUDA_ARCHS)
   foreach(_arch ${_SRC_CUDA_ARCHS})
     if(_arch MATCHES "[af]$")
@@ -399,38 +407,16 @@ function(cuda_archs_loose_intersection OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_AR
     endif()
   endforeach()
 
-  list(SORT _SRC_CUDA_ARCHS COMPARE NATURAL ORDER ASCENDING)
-
-  # for each ARCH in TGT_CUDA_ARCHS find the highest arch in SRC_CUDA_ARCHS that
-  # is less or equal to ARCH (but has the same major version since SASS binary
-  # compatibility is only forward compatible within the same major version).
-  foreach(_ARCH ${_TGT_CUDA_ARCHS})
-    set(_TMP_ARCH)
-    # Extract the major version of the target arch
-    string(REGEX REPLACE "^([0-9]+)\\..*$" "\\1" TGT_ARCH_MAJOR "${_ARCH}")
-    foreach(_SRC_ARCH ${_SRC_CUDA_ARCHS})
-      # Extract the major version of the source arch
-      string(REGEX REPLACE "^([0-9]+)\\..*$" "\\1" SRC_ARCH_MAJOR "${_SRC_ARCH}")
-      # Check version-less-or-equal, and allow PTX arches to match across majors
-      if (_SRC_ARCH VERSION_LESS_EQUAL _ARCH)
-        if (_SRC_ARCH IN_LIST _PTX_ARCHS OR SRC_ARCH_MAJOR STREQUAL TGT_ARCH_MAJOR)
-          set(_TMP_ARCH "${_SRC_ARCH}")
-        endif()
-      else()
-        # If we hit a version greater than the target, we can break
-        break()
-      endif()
-    endforeach()
-
-    # If we found a matching _TMP_ARCH, append it to _CUDA_ARCHS
-    if (_TMP_ARCH)
-      list(APPEND _CUDA_ARCHS "${_TMP_ARCH}")
+  # Intersect the remaining archs with the target archs.
+  foreach(_arch ${_SRC_CUDA_ARCHS})
+    if(_arch IN_LIST _TGT_CUDA_ARCHS)
+      list(APPEND _CUDA_ARCHS "${_arch}")
     endif()
   endforeach()
 
   list(REMOVE_DUPLICATES _CUDA_ARCHS)
 
-  # reapply +PTX suffix to architectures that requested PTX
+  # Re-apply the +PTX suffix to archs that requested it.
   set(_FINAL_ARCHS)
   foreach(_arch ${_CUDA_ARCHS})
     if(_arch IN_LIST _PTX_ARCHS)
@@ -439,30 +425,28 @@ function(cuda_archs_loose_intersection OUT_CUDA_ARCHS SRC_CUDA_ARCHS TGT_CUDA_AR
       list(APPEND _FINAL_ARCHS "${_arch}")
     endif()
   endforeach()
-  set(_CUDA_ARCHS ${_FINAL_ARCHS})
 
-  list(SORT _CUDA_ARCHS COMPARE NATURAL ORDER ASCENDING)
+  list(SORT _FINAL_ARCHS COMPARE NATURAL ORDER ASCENDING)
 
-  set(${OUT_CUDA_ARCHS} ${_CUDA_ARCHS} PARENT_SCOPE)
+  set(${OUT_CUDA_ARCHS} ${_FINAL_ARCHS} PARENT_SCOPE)
 endfunction()
 
 #
 # For the given `SRC_ROCM_ARCHS` list of architecture versions in the form
-# `<name>` compute the "loose intersection" with the `TGT_ROCM_ARCHS` list.
-# The loose intersection is defined as:
-#   { max{ x \in tgt | x <= y } | y \in src, { x \in tgt | x <= y } != {} }
-#  where `<=` is the version comparison operator.
-# In other words, for each version in `TGT_ROCM_ARCHS` find the highest version
-#  in `SRC_ROCM_ARCHS` that is less or equal to the version in `TGT_ROCM_ARCHS`.
-# The result is stored in `OUT_ROCM_ARCHS`.
+# `<name>` compute the intersection with the `TGT_ROCM_ARCHS` list:
+#
+#   OUT = { s in S | s in T }
+#
+# ROCm does not provide forward compatibility between gfx architectures,
+# so only exact matches are kept. The result is stored in `OUT_ROCM_ARCHS`.
 #
 # Example:
 #   SRC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a"
 #   TGT_ROCM_ARCHS="gfx906;gfx908;gfx1030"
-#   hip_archs_loose_intersection(OUT_ROCM_ARCHS SRC_ROCM_ARCHS TGT_ROCM_ARCHS)
+#   hip_archs_intersection(OUT_ROCM_ARCHS SRC_ROCM_ARCHS TGT_ROCM_ARCHS)
 #   OUT_ROCM_ARCHS="gfx906;gfx908"
 #
-function(hip_archs_loose_intersection OUT_ROCM_ARCHS SRC_ROCM_ARCHS TGT_ROCM_ARCHS)
+function(hip_archs_intersection OUT_ROCM_ARCHS SRC_ROCM_ARCHS TGT_ROCM_ARCHS)
   list(REMOVE_DUPLICATES SRC_ROCM_ARCHS)
 
   # ROCm architectures are typically in format gfxNNN or gfxNNNx where N is a digit

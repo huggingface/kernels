@@ -142,7 +142,7 @@ fn run() -> Result<()> {
                 &facts.sources,
                 &ws.tree_hash(),
             );
-            std::fs::write(out.join(".port-provenance.json"), provenance)?;
+            std::fs::write(out.join("port-provenance.json"), provenance)?;
         }
         (None, Some(dir), false) => ws.materialize(dir)?,
         (None, _, _) => {}

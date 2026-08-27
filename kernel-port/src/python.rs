@@ -2,8 +2,9 @@
 // rewritten import survive byte-for-byte.
 use anyhow::{Context, Result, bail};
 use libcst_native::{
-    Codegen, CodegenState, CompoundStatement, Expression, Import, ImportFrom, ImportNames, Module,
-    NameOrAttribute, OrElse, SmallStatement, Statement, Suite,
+    AssignTargetExpression, Codegen, CodegenState, CompoundStatement, Expression, Import,
+    ImportAlias, ImportFrom, ImportNames, Module, NameOrAttribute, OrElse, SmallStatement,
+    Statement, Suite,
 };
 
 #[derive(Debug)]
@@ -400,7 +401,12 @@ fn statement_occurrences(text: &str, needle: &str) -> Vec<usize> {
         let pos = start + rel;
         let before_ok = pos == 0 || !is_ident(bytes[pos - 1]);
         let end = pos + needle.len();
-        let after_ok = end == bytes.len() || !is_ident(bytes[end]);
+        let suffix = &text[end..];
+        let after_ok = end == bytes.len()
+            || (!is_ident(bytes[end])
+                && bytes[end] != b'.'
+                && bytes[end] != b','
+                && !suffix.starts_with(" as "));
         if before_ok && after_ok {
             positions.push(pos);
         }
@@ -569,6 +575,250 @@ pub fn convert_imports_source(
         add_rewrite(&mut rewrites, render_indented(import, &indents), new);
     }
     finish_rewrites(path, src, rewrites, "converted")
+}
+
+fn import_alias_binding<'a>(path: &str, alias: &'a ImportAlias<'_>) -> Result<&'a str> {
+    if let Some(asname) = &alias.asname {
+        let AssignTargetExpression::Name(name) = &asname.name else {
+            bail!("{path}: unsupported import alias form");
+        };
+        return Ok(name.value);
+    }
+    let Some(parts) = flatten(&alias.name) else {
+        bail!("{path}: unsupported import name");
+    };
+    Ok(parts[0])
+}
+
+fn kernel_module_expr(helper: &str, suffix: &[&str]) -> String {
+    if suffix.is_empty() {
+        format!("{helper}()")
+    } else {
+        let suffix = serde_json::to_string(&suffix.join(".")).unwrap();
+        format!("{helper}({suffix})")
+    }
+}
+
+fn append_original_semicolon(text: &mut String, semicolon: Option<&libcst_native::Semicolon<'_>>) {
+    if let Some(semicolon) = semicolon {
+        text.push_str(&render(semicolon));
+    }
+}
+
+fn kernelize_from_import(
+    path: &str,
+    import: &ImportFrom<'_>,
+    package: &str,
+    helper: &str,
+) -> Result<Option<String>> {
+    if !import.relative.is_empty() {
+        return Ok(None);
+    }
+    let Some(target) = import.module.as_ref().and_then(flatten) else {
+        return Ok(None);
+    };
+    if target.first() != Some(&package) {
+        return Ok(None);
+    }
+    if import.lpar.is_some() || import.rpar.is_some() {
+        bail!(
+            "{path}: parenthesized import from `{}` is not supported by kernelize_imports; split it into a one-line import",
+            target.join(".")
+        );
+    }
+    let ImportNames::Aliases(aliases) = &import.names else {
+        bail!(
+            "{path}: wildcard import from `{}` cannot be kernelized safely",
+            target.join(".")
+        );
+    };
+    let module = kernel_module_expr(helper, &target[1..]);
+    let mut bindings = Vec::with_capacity(aliases.len());
+    let mut values = Vec::with_capacity(aliases.len());
+    for alias in aliases {
+        let Some(imported) = flatten(&alias.name) else {
+            bail!("{path}: unsupported imported name");
+        };
+        if imported.len() != 1 {
+            bail!("{path}: unsupported imported name {}", imported.join("."));
+        }
+        let binding = import_alias_binding(path, alias)?;
+        let imported = serde_json::to_string(imported[0]).unwrap();
+        bindings.push(binding);
+        values.push(format!("getattr({module}, {imported})"));
+    }
+    let mut replacement = format!("{} = {}", bindings.join(", "), values.join(", "));
+    append_original_semicolon(&mut replacement, import.semicolon.as_ref());
+    Ok(Some(replacement))
+}
+
+fn kernelize_plain_import(
+    path: &str,
+    import: &Import<'_>,
+    package: &str,
+    helper: &str,
+) -> Result<Option<String>> {
+    let matching: Vec<_> = import
+        .names
+        .iter()
+        .filter(|alias| flatten(&alias.name).is_some_and(|parts| parts.first() == Some(&package)))
+        .collect();
+    if matching.is_empty() {
+        return Ok(None);
+    }
+    if import.names.len() != 1 {
+        bail!(
+            "{path}: a multi-name import statement mentions {package:?}; split it before kernelize_imports"
+        );
+    }
+    let alias = matching[0];
+    let target = flatten(&alias.name).unwrap();
+    let binding = import_alias_binding(path, alias)?;
+    let root = kernel_module_expr(helper, &[]);
+    let mut replacement = if target.len() == 1 {
+        format!("{binding} = {root}")
+    } else {
+        let module = kernel_module_expr(helper, &target[1..]);
+        if alias.asname.is_some() {
+            format!("{binding} = {module}")
+        } else {
+            // `import pkg.sub` binds pkg and also loads pkg.sub.
+            format!("{binding} = {root}; {module}")
+        }
+    };
+    append_original_semicolon(&mut replacement, import.semicolon.as_ref());
+    Ok(Some(replacement))
+}
+
+fn is_module_docstring(statement: &Statement<'_>) -> bool {
+    let Statement::Simple(line) = statement else {
+        return false;
+    };
+    let [SmallStatement::Expr(expr)] = line.body.as_slice() else {
+        return false;
+    };
+    matches!(
+        expr.value,
+        Expression::SimpleString(_) | Expression::ConcatenatedString(_)
+    )
+}
+
+fn is_future_import(statement: &Statement<'_>) -> bool {
+    let Statement::Simple(line) = statement else {
+        return false;
+    };
+    let [SmallStatement::ImportFrom(import)] = line.body.as_slice() else {
+        return false;
+    };
+    import.relative.is_empty()
+        && import.module.as_ref().and_then(flatten).as_deref() == Some(["__future__"].as_slice())
+}
+
+fn insert_kernel_helper(
+    path: &str,
+    src: &str,
+    helper: &str,
+    kernel: &str,
+    version: usize,
+) -> Result<String> {
+    let module = parsed_module(path, src)?;
+    let mut body_index = usize::from(module.body.first().is_some_and(is_module_docstring));
+    while module.body.get(body_index).is_some_and(is_future_import) {
+        body_index += 1;
+    }
+
+    let mut state = CodegenState {
+        default_newline: module.default_newline,
+        default_indent: module.default_indent,
+        ..Default::default()
+    };
+    for header in &module.header {
+        header.codegen(&mut state);
+    }
+    for statement in &module.body[..body_index] {
+        statement.codegen(&mut state);
+    }
+    let insert_at = state.tokens.len();
+    if !src.starts_with(&state.tokens) {
+        bail!("{path}: could not locate the kernel import helper insertion point");
+    }
+
+    let newline = module.default_newline;
+    let indent = module.default_indent;
+    let kernel = serde_json::to_string(kernel).unwrap();
+    let mut helper_source = String::new();
+    if insert_at > 0 && !state.tokens.ends_with(['\n', '\r']) {
+        helper_source.push_str(newline);
+    }
+    let cached_root = format!("{helper}_root");
+    helper_source.push_str(&format!("{cached_root} = None{newline}"));
+    helper_source.push_str(&format!("def {helper}(module=\"\"):{newline}"));
+    helper_source.push_str(&format!("{indent}global {cached_root}{newline}"));
+    helper_source.push_str(&format!("{indent}if {cached_root} is None:{newline}"));
+    helper_source.push_str(&format!(
+        "{indent}{indent}{cached_root} = __import__(\"kernels\").get_kernel({kernel}, version={version}){newline}"
+    ));
+    helper_source.push_str(&format!("{indent}root = {cached_root}{newline}"));
+    helper_source.push_str(&format!("{indent}if not module:{newline}"));
+    helper_source.push_str(&format!("{indent}{indent}return root{newline}"));
+    helper_source.push_str(&format!(
+        "{indent}return __import__(\"importlib\").import_module(root.__name__ + \".\" + module){newline}{newline}"
+    ));
+
+    let mut result = src.to_string();
+    result.insert_str(insert_at, &helper_source);
+    check_parses(path, &result)?;
+    Ok(result)
+}
+
+pub fn kernelize_imports_source(
+    path: &str,
+    src: &str,
+    package: &str,
+    kernel: &str,
+    version: usize,
+) -> Result<Option<(String, usize)>> {
+    let parsed_package: DottedPath = package.parse()?;
+    if parsed_package.parts().len() != 1 {
+        bail!("kernelized package must be one top-level Python name, got {package:?}");
+    }
+    if kernel.is_empty() {
+        bail!("kernel must not be empty");
+    }
+
+    let helper_base = format!("__kernel_port_{package}");
+    let mut helper = helper_base.clone();
+    let mut suffix = 2;
+    while src.contains(&helper) {
+        helper = format!("{helper_base}_{suffix}");
+        suffix += 1;
+    }
+
+    let module = parsed_module(path, src)?;
+    let imports = module_imports(&module);
+    let mut rewrites = Vec::new();
+    for (import, indents) in imports.from_imports {
+        if let Some(new) = kernelize_from_import(path, import, package, &helper)? {
+            add_rewrite(&mut rewrites, render_indented(import, &indents), new);
+        }
+    }
+    for (import, indents) in imports.plain_imports {
+        if let Some(new) = kernelize_plain_import(path, import, package, &helper)? {
+            add_rewrite(&mut rewrites, render_indented(import, &indents), new);
+        }
+    }
+    let Some((result, count)) = finish_rewrites(path, src, rewrites, "kernelized")? else {
+        return Ok(None);
+    };
+    let result = insert_kernel_helper(path, &result, &helper, kernel, version)?;
+    let remaining = absolute_self_imports(path, &result, package)?;
+    if !remaining.is_empty() {
+        bail!(
+            "{path}: kernelize_imports left matching static import(s): {}",
+            remaining.join(", ")
+        );
+    }
+    Ok(Some((result, count)))
 }
 
 pub fn absolute_self_imports(path: &str, src: &str, package: &str) -> Result<Vec<String>> {

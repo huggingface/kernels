@@ -12,6 +12,20 @@ fn recipe_basic_statement() {
 }
 
 #[test]
+fn replace_defaults_to_one_match() {
+    let mut ws = Workspace::from_files(BTreeMap::from([
+        ("a.py".into(), b"before\n".to_vec()),
+        ("b.py".into(), b"before\n".to_vec()),
+    ]));
+    run_recipe(
+        &mut ws,
+        "replace in=\"*.py\" find=\"before\" with=\"after\"\n",
+    );
+    assert_eq!(ws.get_text("a.py").unwrap(), "after\n");
+    assert_eq!(ws.get_text("b.py").unwrap(), "after\n");
+}
+
+#[test]
 fn recipe_escapes_and_typed_values() {
     let parsed =
         recipe::parse(r#"replace in="f" find="a\nb\t\"q\"\\" with="" count=3 flag=#true"#).unwrap();
@@ -261,6 +275,114 @@ fn ensure_import_recipe_pins_changes() {
     assert!(
         err.contains("expected exactly 0 change(s) but made 1"),
         "{err}"
+    );
+}
+
+#[test]
+fn kernelize_imports_preserves_bindings_and_scope() {
+    let src = concat!(
+        "import os\n",
+        "import einops\n",
+        "import einops as eo\n",
+        "import einops.layers\n",
+        "import einops.layers.torch as torch_layers\n",
+        "from einops import rearrange, reduce as red  # public API\n",
+        "def load():\n",
+        "    from einops.layers.torch import Rearrange as R, Reduce\n",
+        "    return R, Reduce\n",
+    );
+    let (out, n) = python::kernelize_imports_source(
+        "tests/test_x.py",
+        src,
+        "einops",
+        "kernels-community/einops",
+        1,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(n, 6);
+    assert!(
+        out.starts_with(
+            "__kernel_port_einops_root = None\ndef __kernel_port_einops(module=\"\"):\n"
+        )
+    );
+    assert!(out.contains(
+        "root = __import__(\"kernels\").get_kernel(\"kernels-community/einops\", version=1)"
+    ));
+    assert!(out.contains("\nimport os\neinops = __kernel_port_einops()\n"));
+    assert!(out.contains("eo = __kernel_port_einops()"));
+    assert!(out.contains("einops = __kernel_port_einops(); __kernel_port_einops(\"layers\")"));
+    assert!(out.contains("torch_layers = __kernel_port_einops(\"layers.torch\")"));
+    assert!(out.contains("rearrange, red = getattr("));
+    assert!(out.contains("    R, Reduce = getattr("));
+    assert!(out.contains("  # public API\n"));
+    assert!(
+        python::absolute_self_imports("tests/test_x.py", &out, "einops")
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn kernelize_imports_rejects_unsafe_static_forms() {
+    for (src, message) in [
+        ("from einops import *\n", "wildcard import"),
+        (
+            "from einops import (rearrange, reduce)\n",
+            "parenthesized import",
+        ),
+        ("import os, einops\n", "multi-name import"),
+    ] {
+        let err = python::kernelize_imports_source(
+            "tests/test_x.py",
+            src,
+            "einops",
+            "kernels-community/einops",
+            1,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains(message), "{err}");
+    }
+}
+
+#[test]
+fn kernelize_imports_places_a_collision_free_helper_after_future_imports() {
+    let src = concat!(
+        "\"\"\"module docs\"\"\"\n",
+        "from __future__ import annotations\n",
+        "__kernel_port_einops = \"upstream name\"\n",
+        "from einops import rearrange\n",
+    );
+    let (out, _) = python::kernelize_imports_source(
+        "tests/test_x.py",
+        src,
+        "einops",
+        "kernels-community/einops",
+        1,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(out.starts_with(
+        "\"\"\"module docs\"\"\"\nfrom __future__ import annotations\n__kernel_port_einops_2_root = None\ndef __kernel_port_einops_2(module=\"\"):\n"
+    ));
+    assert!(out.contains("rearrange = getattr(__kernel_port_einops_2(), \"rearrange\")"));
+}
+
+#[test]
+fn kernelize_imports_recipe_pins_statements() {
+    let mut ws = Workspace::from_files(BTreeMap::from([(
+        "tests/test_x.py".into(),
+        b"from einops import rearrange\n".to_vec(),
+    )]));
+    run_recipe(
+        &mut ws,
+        "kernelize_imports in=\"tests/**\" package=\"einops\" kernel=\"kernels-community/einops\" version=1 changes=1\n",
+    );
+    assert!(
+        ws.get_text("tests/test_x.py")
+            .unwrap()
+            .contains("get_kernel(\"kernels-community/einops\", version=1)")
     );
 }
 

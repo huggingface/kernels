@@ -1,5 +1,6 @@
 mod convert_import;
 mod delete;
+mod ensure_import;
 mod ensure_init;
 mod expect;
 mod git;
@@ -17,6 +18,7 @@ mod vendor;
 
 pub use convert_import::ConvertImport;
 pub use delete::Delete;
+pub use ensure_import::EnsureImport;
 pub use ensure_init::EnsureInit;
 pub use expect::Expect;
 pub use kernel::Kernel;
@@ -278,6 +280,7 @@ pub enum Op {
     RelativizeImports(RelativizeImports),
     RemapModule(RemapModule),
     ConvertImport(ConvertImport),
+    EnsureImport(EnsureImport),
     EnsureInit(EnsureInit),
 }
 
@@ -298,6 +301,7 @@ pub fn build(inv: &Invocation, recipe_dir: &Path) -> Result<Op> {
         "relativize_imports" => Op::RelativizeImports(RelativizeImports::build(&mut args)?),
         "remap_module" => Op::RemapModule(RemapModule::build(&mut args)?),
         "convert_import" => Op::ConvertImport(ConvertImport::build(&mut args)?),
+        "ensure_import" => Op::EnsureImport(EnsureImport::build(&mut args)?),
         "ensure_init" => Op::EnsureInit(EnsureInit::build(&mut args)?),
         other => bail!("unknown op {other:?}"),
     };
@@ -322,6 +326,7 @@ impl Op {
             Self::RelativizeImports(op) => op.apply(ws),
             Self::RemapModule(op) => op.apply(ws),
             Self::ConvertImport(op) => op.apply(ws),
+            Self::EnsureImport(op) => op.apply(ws),
             Self::EnsureInit(op) => op.apply(ws),
         }
     }

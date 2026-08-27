@@ -77,12 +77,14 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`delete`](#delete) | Delete files matching a glob (must match something) |
 | [`move`](#move) | Rename a file or directory |
 | [`overlay`](#overlay) | Copy checked-in files (bindings, flake, docs) over the workspace |
-| [`replace`](#replace) | Exact-text find/replace with a required occurrence `count` |
+| [`replace`](#replace) | Exact-text find/replace with an optional occurrence `count` |
 | [`strip_suffix`](#strip_suffix) | Remove one literal suffix from every matched file, with a pinned `files=N` |
 | [`expect`](#expect) | Guard: assert an exact text occurs `count` times (0 asserts absence), or that a glob matches `files=N` |
 | [`convert_import`](#convert_import) | Rewrite `import a.b.c as x` into `from a.b import c as x` |
 | [`remap_module`](#remap_module) | Rewrite `from a.b import x` module prefixes onto a new namespace |
 | [`relativize_imports`](#relativize_imports) | Rewrite absolute intra-package imports to minimal-dot relative form |
+| [`kernelize_imports`](#kernelize_imports) | Resolve imports of a package through a Hub kernel |
+| [`ensure_import`](#ensure_import) | Ensure a module has an explicit top-level `from` import |
 | [`ensure_init`](#ensure_init) | Add an empty `__init__.py` to any package dir missing one |
 | [`kernel`](#kernel) | Record one `[kernel.<name>]` section for the manifest |
 | [`manifest`](#manifest) | Generate `build.toml` from the recorded kernel sections (or noarch mode) |
@@ -259,10 +261,14 @@ Fails when: the directory does not exist or contains no files.
 #### `replace`
 
 ```kdl
-replace in="<glob>" find="<text>" with="<text>" count=N
+replace in="<glob>" find="<text>" with="<text>" [count=N]
 ```
 
-Exact-text find and replace across every matching file, where `count` is the total number of occurrences across all of them. `with=""` deletes the text. No regexes and no capture groups: what you pin is what gets rewritten.
+Exact-text find and replace across every matching file. Without `count`, the
+text must occur exactly once in every matched file. When provided, `count` is
+the required total number of occurrences across all matched files. `with=""`
+deletes the text. No regexes and no capture groups: what you name is what gets
+rewritten.
 
 ```sh
 kernel-port -e 'replace in="*.cpp" find="TORCH_EXTENSION_NAME" with="ops" count=2' \
@@ -324,7 +330,7 @@ Fails when: the count or file count does not match. `find` and `files` are mutua
 
 ### Rewriting Python imports
 
-These four go through libcst, so comments, quoting, and formatting survive byte-for-byte. Each takes an optional `changes=N` pinning exactly how many import statements it rewrites, which is what stops a newly added upstream file from being rewritten silently.
+These operations go through libcst, so comments, quoting, and formatting survive byte-for-byte. Each takes an optional `changes=N` pinning exactly how many import statements it rewrites or adds, which is what stops a newly added upstream file from being changed silently.
 
 #### `convert_import`
 
@@ -394,6 +400,84 @@ M pkg/__init__.py
 FILE: pkg/__init__.py
 from .ops import hello
 ```
+
+#### `kernelize_imports`
+
+```kdl
+kernelize_imports in="<glob>" package="<top-level-name>" \
+    kernel="<org/name>" version=N [changes=N]
+```
+
+Resolve static imports rooted at `package` through `kernels.get_kernel`. The
+rewrite preserves the name each import binds and stays at the original lexical
+location, including inside functions and conditionals. Submodules are loaded
+with `importlib` using the kernel module's generated runtime name, rather than
+assuming the submodule is already exposed as an attribute.
+
+```sh
+kernel-port -e 'kernelize_imports in="tests/**" package="pkg" kernel="org/pkg" version=1 changes=2' \
+    --file $'tests/test_x.py=import pkg\nfrom pkg.layers import Layer as L\n'
+```
+
+The result includes one lazy helper per changed file and concise bindings at
+each original import location:
+
+```python
+__kernel_port_pkg_root = None
+def __kernel_port_pkg(module=""):
+    global __kernel_port_pkg_root
+    if __kernel_port_pkg_root is None:
+        __kernel_port_pkg_root = __import__("kernels").get_kernel("org/pkg", version=1)
+    root = __kernel_port_pkg_root
+    if not module:
+        return root
+    return __import__("importlib").import_module(root.__name__ + "." + module)
+
+pkg = __kernel_port_pkg()
+L = getattr(__kernel_port_pkg("layers"), "Layer")
+```
+
+The helper name is made collision-free against the input file, and it does not
+load the kernel until an original import location calls it. It then caches that
+root once per changed file. After rewriting, the op parses the result again and
+verifies that no matching static import remains.
+
+Wildcard imports, parenthesized imports, and mixed multi-name `import`
+statements are rejected rather than approximated. Split those statements with
+a reviewed `replace` first. Dynamic imports through `__import__` or
+`importlib.import_module` are outside this static operation's scope.
+
+#### `ensure_import`
+
+```kdl
+ensure_import in="<glob>" from="<module>" name="<name>" [changes=N]
+```
+
+Ensure every matched Python module has an explicit top-level `from` import.
+If a compatible import already contains `name`, the file is left untouched;
+otherwise a new import is appended to the module body. Appending is deliberate:
+package initializers often define names before importing modules that use them,
+so moving the import into a guessed import block could change initialization or
+circular-import behavior.
+
+```sh
+kernel-port -e 'ensure_import in="pkg/__init__.py" from="." name="array_api" changes=1' \
+    --file $'pkg/__init__.py=VALUE = 1\n'
+```
+
+```
+[line   1] ensure_import       added 1 import(s) in 1 file(s)
+M pkg/__init__.py
+
+FILE: pkg/__init__.py
+VALUE = 1
+from . import array_api
+```
+
+Only explicit imports satisfy the operation: wildcard imports and imports
+nested inside a function or conditional do not. Duplicate satisfying imports
+are rejected. With `changes=1`, the recipe also fails when upstream starts
+providing the import itself, prompting removal of the now-redundant operation.
 
 #### `ensure_init`
 

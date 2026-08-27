@@ -28,6 +28,104 @@ impl std::str::FromStr for DottedPath {
     }
 }
 
+// A parsed module borrows the text it came from, so caching one means keeping
+// the two together. `self_cell` owns the source alongside the tree that points
+// into it, which is what lets a `Module` outlive the caller's `&str`.
+self_cell::self_cell!(
+    struct OwnedModule {
+        owner: String,
+        #[covariant]
+        dependent: Module,
+    }
+);
+
+// Parsing is what a port spends its time on, and roughly half of it re-reads
+// bytes that were already parsed: an op matches a file an earlier op left
+// untouched, and the end-of-pipeline verify re-reads the whole tree once more.
+// Both checks below are pure functions of the text, so their answers are
+// memoized on a content digest instead of being recomputed.
+//
+// The digest is SHA-256, not a fast hash: a collision here would silently skip
+// a validation, and hashing is a rounding error next to a libcst parse.
+mod memo {
+    use super::OwnedModule;
+    use std::cell::RefCell;
+    use std::collections::{HashMap, HashSet};
+    use std::rc::Rc;
+
+    pub type Digest = [u8; 32];
+
+    // The wasm playground re-runs the pipeline on every recipe edit against one
+    // long-lived module, so the tables are capped rather than left to grow.
+    const CAP: usize = 8192;
+
+    // Parsed modules are held by content, so an op that matches a file an
+    // earlier op left alone reuses the tree instead of rebuilding it. Sharing
+    // is by `Rc` and the map borrow is released before the tree is handed out,
+    // so a caller that parses another file while holding one cannot deadlock.
+    thread_local! {
+        static PARSES: RefCell<HashSet<Digest>> = RefCell::new(HashSet::new());
+        static SELF_IMPORTS: RefCell<HashMap<(Digest, String), Vec<String>>> =
+            RefCell::new(HashMap::new());
+        static MODULES: RefCell<(HashMap<Digest, Rc<OwnedModule>>, usize)> =
+            RefCell::new((HashMap::new(), 0));
+    }
+
+    // Syntax trees are far larger than the text they came from, so the module
+    // cache is bounded by the source bytes it is holding rather than by entry
+    // count. Ports run against trees far below this; the bound is there for the
+    // playground, which keeps one module alive across many edits.
+    const MODULE_BUDGET: usize = 8 << 20;
+
+    pub fn module(key: &Digest) -> Option<Rc<OwnedModule>> {
+        MODULES.with_borrow(|(map, _)| map.get(key).cloned())
+    }
+
+    pub fn note_module(key: Digest, owned: OwnedModule) -> Rc<OwnedModule> {
+        let owned = Rc::new(owned);
+        MODULES.with_borrow_mut(|(map, bytes)| {
+            if *bytes >= MODULE_BUDGET {
+                map.clear();
+                *bytes = 0;
+            }
+            *bytes += owned.borrow_owner().len();
+            map.insert(key, Rc::clone(&owned));
+        });
+        owned
+    }
+
+    pub fn digest(src: &str) -> Digest {
+        use sha2::{Digest as _, Sha256};
+        Sha256::digest(src.as_bytes()).into()
+    }
+
+    pub fn parses(key: Digest) -> bool {
+        PARSES.with_borrow(|set| set.contains(&key))
+    }
+
+    pub fn note_parses(key: Digest) {
+        PARSES.with_borrow_mut(|set| {
+            if set.len() >= CAP {
+                set.clear();
+            }
+            set.insert(key);
+        });
+    }
+
+    pub fn self_imports(key: &(Digest, String)) -> Option<Vec<String>> {
+        SELF_IMPORTS.with_borrow(|map| map.get(key).cloned())
+    }
+
+    pub fn note_self_imports(key: (Digest, String), found: Vec<String>) {
+        SELF_IMPORTS.with_borrow_mut(|map| {
+            if map.len() >= CAP {
+                map.clear();
+            }
+            map.insert(key, found);
+        });
+    }
+}
+
 fn render<'a>(node: &impl Codegen<'a>) -> String {
     render_indented(node, &[])
 }
@@ -249,11 +347,36 @@ fn add_rewrite(rewrites: &mut Vec<Rewrite>, old: String, new: String) {
     }
 }
 
-fn parsed_module<'a>(path: &str, src: &'a str) -> Result<Module<'a>> {
-    let module = libcst_native::parse_module(src, None)
-        .map_err(|e| anyhow::anyhow!("parsing {path}: {e}"))?;
-    check_roundtrip(&module, src).with_context(|| path.to_string())?;
-    Ok(module)
+// Every parse in this module goes through here, including the ones that only
+// want to know whether the text is still valid Python: a validated tree is
+// worth keeping, because the op that reads that file next, and the verify pass
+// at the end of the run, would otherwise rebuild it from scratch.
+//
+// The error is returned as libcst wrote it so that each caller can keep the
+// wording of its own failure.
+fn cached_module(src: &str) -> std::result::Result<std::rc::Rc<OwnedModule>, String> {
+    let key = memo::digest(src);
+    if let Some(hit) = memo::module(&key) {
+        return Ok(hit);
+    }
+    let owned = OwnedModule::try_new(src.to_string(), |owner| {
+        libcst_native::parse_module(owner.as_str(), None).map_err(|e| e.to_string())
+    })?;
+    memo::note_parses(key);
+    Ok(memo::note_module(key, owned))
+}
+
+fn module_of(path: &str, src: &str) -> Result<std::rc::Rc<OwnedModule>> {
+    cached_module(src).map_err(|e| anyhow::anyhow!("parsing {path}: {e}"))
+}
+
+// The round-trip check gates rewriting, not reading, so it stays outside the
+// cache: `absolute_self_imports` only inspects imports and must not reject a
+// file merely because libcst would reformat it.
+fn parsed_module(path: &str, src: &str) -> Result<std::rc::Rc<OwnedModule>> {
+    let owned = module_of(path, src)?;
+    check_roundtrip(owned.borrow_dependent(), src).with_context(|| path.to_string())?;
+    Ok(owned)
 }
 
 pub fn validate_ensure_import(from: &str, name: &str) -> Result<()> {
@@ -316,7 +439,8 @@ pub fn ensure_import_source(
         unreachable!();
     };
 
-    let module = parsed_module(path, src)?;
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
     let mut matches = 0;
     for statement in &module.body {
         let Statement::Simple(line) = statement else {
@@ -367,7 +491,7 @@ pub fn ensure_import_source(
 
     let mut result = src.to_string();
     result.insert_str(insert_at, &addition);
-    if let Err(e) = libcst_native::parse_module(&result, None) {
+    if let Err(e) = cached_module(&result) {
         bail!("{path}: ensured import output no longer parses: {e}");
     }
     Ok(Some((result, 1)))
@@ -384,7 +508,7 @@ fn finish_rewrites(
     }
     let count = rewrites.iter().map(|r| r.nodes).sum();
     let result = splice(path, src, rewrites)?;
-    if let Err(e) = libcst_native::parse_module(&result, None) {
+    if let Err(e) = cached_module(&result) {
         bail!("{path}: {what} output no longer parses: {e}");
     }
     Ok(Some((result, count)))
@@ -442,9 +566,10 @@ fn rewrite_from_imports(
     src: &str,
     plan: impl Fn(&[&str]) -> Option<(usize, String)>,
 ) -> Result<Option<(String, usize)>> {
-    let module = parsed_module(path, src)?;
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
     let mut rewrites: Vec<Rewrite> = Vec::new();
-    for (import, indents) in module_imports(&module).from_imports {
+    for (import, indents) in module_imports(module).from_imports {
         if !import.relative.is_empty() {
             continue;
         }
@@ -524,9 +649,10 @@ pub fn convert_imports_source(
     prefix: &DottedPath,
 ) -> Result<Option<(String, usize)>> {
     let prefix = prefix.parts();
-    let module = parsed_module(path, src)?;
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
     let mut rewrites: Vec<Rewrite> = Vec::new();
-    for (import, indents) in module_imports(&module).plain_imports {
+    for (import, indents) in module_imports(module).plain_imports {
         let matching: Vec<_> = import
             .names
             .iter()
@@ -721,7 +847,8 @@ fn insert_kernel_helper(
     kernel: &str,
     version: usize,
 ) -> Result<String> {
-    let module = parsed_module(path, src)?;
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
     let mut body_index = usize::from(module.body.first().is_some_and(is_module_docstring));
     while module.body.get(body_index).is_some_and(is_future_import) {
         body_index += 1;
@@ -794,8 +921,9 @@ pub fn kernelize_imports_source(
         suffix += 1;
     }
 
-    let module = parsed_module(path, src)?;
-    let imports = module_imports(&module);
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
+    let imports = module_imports(module);
     let mut rewrites = Vec::new();
     for (import, indents) in imports.from_imports {
         if let Some(new) = kernelize_from_import(path, import, package, &helper)? {
@@ -822,9 +950,12 @@ pub fn kernelize_imports_source(
 }
 
 pub fn absolute_self_imports(path: &str, src: &str, package: &str) -> Result<Vec<String>> {
-    let module = libcst_native::parse_module(src, None)
-        .map_err(|e| anyhow::anyhow!("parsing {path}: {e}"))?;
-    let imports = module_imports(&module);
+    let key = (memo::digest(src), package.to_string());
+    if let Some(found) = memo::self_imports(&key) {
+        return Ok(found);
+    }
+    let owned = module_of(path, src)?;
+    let imports = module_imports(owned.borrow_dependent());
 
     let mut offenders = Vec::new();
     for (import, _) in imports.from_imports {
@@ -846,11 +977,15 @@ pub fn absolute_self_imports(path: &str, src: &str, package: &str) -> Result<Vec
             }
         }
     }
+    memo::note_self_imports(key, offenders.clone());
     Ok(offenders)
 }
 
 pub fn check_parses(path: &str, src: &str) -> Result<()> {
-    if let Err(e) = libcst_native::parse_module(src, None) {
+    if memo::parses(memo::digest(src)) {
+        return Ok(());
+    }
+    if let Err(e) = cached_module(src) {
         bail!("verify: {path} does not parse as Python: {e}");
     }
     Ok(())

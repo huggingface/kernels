@@ -5,6 +5,7 @@ mod ensure_init;
 mod expect;
 mod git;
 mod kernel;
+mod kernelize_imports;
 mod manifest;
 mod r#move;
 mod overlay;
@@ -22,6 +23,7 @@ pub use ensure_import::EnsureImport;
 pub use ensure_init::EnsureInit;
 pub use expect::Expect;
 pub use kernel::Kernel;
+pub use kernelize_imports::KernelizeImports;
 pub use manifest::Manifest;
 pub use r#move::Move;
 pub use overlay::Overlay;
@@ -276,6 +278,7 @@ pub enum Op {
     Overlay(Overlay),
     Prune(Prune),
     Kernel(Kernel),
+    KernelizeImports(KernelizeImports),
     Manifest(Manifest),
     RelativizeImports(RelativizeImports),
     RemapModule(RemapModule),
@@ -297,6 +300,7 @@ pub fn build(inv: &Invocation, recipe_dir: &Path) -> Result<Op> {
         "overlay" => Op::Overlay(Overlay::build(&mut args, recipe_dir)?),
         "prune" => Op::Prune(Prune::build(&mut args)?),
         "kernel" => Op::Kernel(Kernel::build(&mut args)?),
+        "kernelize_imports" => Op::KernelizeImports(KernelizeImports::build(&mut args)?),
         "manifest" => Op::Manifest(Manifest::build(&mut args)?),
         "relativize_imports" => Op::RelativizeImports(RelativizeImports::build(&mut args)?),
         "remap_module" => Op::RemapModule(RemapModule::build(&mut args)?),
@@ -322,6 +326,7 @@ impl Op {
             Self::Overlay(op) => op.apply(ws),
             Self::Prune(op) => op.apply(ws),
             Self::Kernel(op) => op.apply(ws, facts),
+            Self::KernelizeImports(op) => op.apply(ws),
             Self::Manifest(op) => op.apply(ws, facts),
             Self::RelativizeImports(op) => op.apply(ws),
             Self::RemapModule(op) => op.apply(ws),

@@ -10,6 +10,11 @@ _getKernelCheckHook() {
     exit 1
   fi
 
+  if [ -z ${kernelDeps+x} ]; then
+    echo "kernelDeps must be set in derivation"
+    exit 1
+  fi
+
   echo "Check whether the kernel can be loaded with get-kernel: ${moduleName}"
 
   # We strip the full library paths from the extension. Unfortunately,
@@ -42,7 +47,7 @@ _getKernelCheckHook() {
 
   PYTHONPATH="@kernels@" \
     ${prootCmd} \
-    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'))"
+      @python3@ @pyhook@
 }
 
 postInstallCheckHooks+=(_getKernelCheckHook)

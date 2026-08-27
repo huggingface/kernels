@@ -207,6 +207,11 @@
           path = ./gemm-triton-autotune;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
         }
+        {
+          name = "kernel-deps-kernel";
+          path = ./kernel-deps;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
+        }
       ];
 
       # ROCm kernels to build in CI.

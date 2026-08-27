@@ -136,6 +136,7 @@ rec {
           _: kernel: builtins.length (kernel.cuda-capabilities or supportedCudaCapabilities)
         ) kernelConfig.toml.kernel
       );
+      kernelDeps = pkgs.fetchKernelDeps src;
       pythonDeps = (kernelConfig.toml.general.python-depends or [ ]);
       backendPythonDeps =
         lib.attrByPath [ buildConfig.backend "python-depends" ] [ ]
@@ -150,6 +151,7 @@ rec {
           src
           rev
           doGetKernelCheck
+          kernelDeps
           pythonDeps
           backendPythonDeps
           kernelProvenance
@@ -166,6 +168,7 @@ rec {
           src
           stripRPath
           rev
+          kernelDeps
           pythonDeps
           backendPythonDeps
           kernelProvenance
@@ -184,6 +187,7 @@ rec {
           src
           stripRPath
           rev
+          kernelDeps
           pythonDeps
           backendPythonDeps
           kernelProvenance

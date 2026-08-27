@@ -1,0 +1,22 @@
+[
+  {
+    "dependency": {
+      "repo-id": "kernels-community/activation",
+      "version": 1
+    },
+    "lock": {
+      "commit": "36f4b285ab9125127d1b7364a786089ef10bcf8f",
+      "hash": "sha256-S2bSgxoK5JbuyBnzZSXNcV7NmMGtccuqfsjPgbwki7o="
+    }
+  },
+  {
+    "dependency": {
+      "repo-id": "kernels-community/einops",
+      "version": 1
+    },
+    "lock": {
+      "commit": "94986c119039ea0cb65592c210c57255de1089eb",
+      "hash": "sha256-qeQZSajDKBw4gfjZEE6wreqvdSKGfZmkwi/KnkjPj5g="
+    }
+  }
+]

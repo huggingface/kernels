@@ -15,9 +15,12 @@ let
       "pyi"
     ];
   pyFilter = file: builtins.any (ext: file.hasExt ext) pyExt;
-  extSrc = extConfig.src or [ ] ++ [ "build.toml" ];
+  extSrc = extConfig.src or [ ] ++ [
+    "build.toml"
+  ];
   torchExtPath = path + "/torch-ext";
   tvmFfiExtPath = path + "/tvm-ffi-ext";
+  lockSet = fileset.maybeMissing (path + "/kernels.lock");
   pySrcSet =
     let
       path =
@@ -46,6 +49,7 @@ fileset.toSource {
   root = path;
   fileset = fileset.unions [
     kernelsSrc
+    lockSet
     srcSet
     pySrcSet
     pyTestsSet

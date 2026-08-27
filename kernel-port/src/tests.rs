@@ -191,6 +191,79 @@ fn imports_inside_functions_are_rewritten() {
     assert_eq!(out, "def f():\n    from .a import b\n    return b\n");
 }
 
+#[test]
+fn ensure_import_appends_after_module_initialization() {
+    let src = "\"\"\"docs\"\"\"\n\nVALUE = 1\nfrom .packing import pack\n";
+    let (out, n) = python::ensure_import_source("pkg/__init__.py", src, ".", "array_api")
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(
+        out,
+        "\"\"\"docs\"\"\"\n\nVALUE = 1\nfrom .packing import pack\nfrom . import array_api\n"
+    );
+}
+
+#[test]
+fn ensure_import_recognizes_an_existing_name_in_a_group() {
+    let src = "from . import other, array_api  # public modules\n";
+    assert!(
+        python::ensure_import_source("pkg/__init__.py", src, ".", "array_api")
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn ensure_import_rejects_duplicate_names_in_one_group() {
+    let src = "from . import array_api, array_api\n";
+    let err = python::ensure_import_source("pkg/__init__.py", src, ".", "array_api")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("satisfied by 2 top-level imports"), "{err}");
+}
+
+#[test]
+fn ensure_import_ignores_nested_imports_and_preserves_no_final_newline() {
+    let src = "def load():\n    from . import array_api\n";
+    let (out, _) = python::ensure_import_source("pkg/__init__.py", src, ".", "array_api")
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        out,
+        "def load():\n    from . import array_api\nfrom . import array_api\n"
+    );
+
+    let (out, _) = python::ensure_import_source("pkg/__init__.py", "VALUE = 1", ".", "array_api")
+        .unwrap()
+        .unwrap();
+    assert_eq!(out, "VALUE = 1\nfrom . import array_api");
+}
+
+#[test]
+fn ensure_import_recipe_pins_changes() {
+    let original = BTreeMap::from([("pkg/__init__.py".into(), b"VALUE = 1\n".to_vec())]);
+    let mut ws = Workspace::from_files(original.clone());
+    run_recipe(
+        &mut ws,
+        "ensure_import in=\"pkg/__init__.py\" from=\".\" name=\"array_api\" changes=1\n",
+    );
+    assert_eq!(
+        ws.get_text("pkg/__init__.py").unwrap(),
+        "VALUE = 1\nfrom . import array_api\n"
+    );
+
+    let mut ws = Workspace::from_files(original);
+    let err = run_recipe_err(
+        &mut ws,
+        "ensure_import in=\"pkg/__init__.py\" from=\".\" name=\"array_api\" changes=0\n",
+    );
+    assert!(
+        err.contains("expected exactly 0 change(s) but made 1"),
+        "{err}"
+    );
+}
+
 fn run_recipe_err(ws: &mut Workspace, recipe_text: &str) -> String {
     let parsed = recipe::parse(recipe_text).unwrap();
     let inputs = ops::Inputs::default();

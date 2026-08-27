@@ -2,7 +2,7 @@
 // rewritten import survive byte-for-byte.
 use anyhow::{Context, Result, bail};
 use libcst_native::{
-    Codegen, CodegenState, CompoundStatement, Expression, Import, ImportFrom, Module,
+    Codegen, CodegenState, CompoundStatement, Expression, Import, ImportFrom, ImportNames, Module,
     NameOrAttribute, OrElse, SmallStatement, Statement, Suite,
 };
 
@@ -253,6 +253,123 @@ fn parsed_module<'a>(path: &str, src: &'a str) -> Result<Module<'a>> {
         .map_err(|e| anyhow::anyhow!("parsing {path}: {e}"))?;
     check_roundtrip(&module, src).with_context(|| path.to_string())?;
     Ok(module)
+}
+
+pub fn validate_ensure_import(from: &str, name: &str) -> Result<()> {
+    let statement = format!("from {from} import {name}\n");
+    let module = libcst_native::parse_module(&statement, None)
+        .map_err(|e| anyhow::anyhow!("invalid import `from {from} import {name}`: {e}"))?;
+    let [Statement::Simple(line)] = module.body.as_slice() else {
+        bail!("invalid import `from {from} import {name}`");
+    };
+    let [SmallStatement::ImportFrom(import)] = line.body.as_slice() else {
+        bail!("invalid import `from {from} import {name}`");
+    };
+    let ImportNames::Aliases(names) = &import.names else {
+        bail!("import name must be a Python identifier, got {name:?}");
+    };
+    if names.len() != 1
+        || names[0].asname.is_some()
+        || flatten(&names[0].name).is_none_or(|parts| parts.as_slice() != [name])
+    {
+        bail!("import name must be a Python identifier, got {name:?}");
+    }
+    Ok(())
+}
+
+fn same_import_source(import: &ImportFrom<'_>, wanted: &ImportFrom<'_>) -> bool {
+    import.relative.len() == wanted.relative.len()
+        && import.module.as_ref().and_then(flatten) == wanted.module.as_ref().and_then(flatten)
+}
+
+fn imported_name_count(import: &ImportFrom<'_>, name: &str) -> usize {
+    let ImportNames::Aliases(names) = &import.names else {
+        return 0;
+    };
+    names
+        .iter()
+        .filter(|alias| {
+            alias.asname.is_none()
+                && flatten(&alias.name).is_some_and(|parts| parts.as_slice() == [name])
+        })
+        .count()
+}
+
+// Ensure an explicit top-level from-import exists. New imports are appended to
+// the module body: package initializers commonly define names before their
+// imports, so moving the import into a guessed "import block" can change
+// initialization and circular-import behavior.
+pub fn ensure_import_source(
+    path: &str,
+    src: &str,
+    from: &str,
+    name: &str,
+) -> Result<Option<(String, usize)>> {
+    validate_ensure_import(from, name)?;
+    let wanted_text = format!("from {from} import {name}\n");
+    let wanted_module = libcst_native::parse_module(&wanted_text, None).unwrap();
+    let Statement::Simple(wanted_line) = &wanted_module.body[0] else {
+        unreachable!();
+    };
+    let SmallStatement::ImportFrom(wanted) = &wanted_line.body[0] else {
+        unreachable!();
+    };
+
+    let module = parsed_module(path, src)?;
+    let mut matches = 0;
+    for statement in &module.body {
+        let Statement::Simple(line) = statement else {
+            continue;
+        };
+        for small in &line.body {
+            if let SmallStatement::ImportFrom(import) = small
+                && same_import_source(import, wanted)
+            {
+                matches += imported_name_count(import, name);
+            }
+        }
+    }
+    if matches > 1 {
+        bail!(
+            "{path}: `from {from} import {name}` is already satisfied by {matches} top-level imports; remove the duplicate"
+        );
+    }
+    if matches == 1 {
+        return Ok(None);
+    }
+
+    let mut state = CodegenState {
+        default_newline: module.default_newline,
+        default_indent: module.default_indent,
+        ..Default::default()
+    };
+    for header in &module.header {
+        header.codegen(&mut state);
+    }
+    for statement in &module.body {
+        statement.codegen(&mut state);
+    }
+    let insert_at = state.tokens.len();
+    if !src.starts_with(&state.tokens) {
+        bail!("{path}: could not locate the end of the module body");
+    }
+
+    let newline = module.default_newline;
+    let mut addition = String::new();
+    if insert_at > 0 && !state.tokens.ends_with(['\n', '\r']) {
+        addition.push_str(newline);
+    }
+    addition.push_str(&format!("from {from} import {name}"));
+    if module.has_trailing_newline || !module.footer.is_empty() {
+        addition.push_str(newline);
+    }
+
+    let mut result = src.to_string();
+    result.insert_str(insert_at, &addition);
+    if let Err(e) = libcst_native::parse_module(&result, None) {
+        bail!("{path}: ensured import output no longer parses: {e}");
+    }
+    Ok(Some((result, 1)))
 }
 
 fn finish_rewrites(

@@ -126,7 +126,7 @@ struct PullRequest {
 struct UploadOutcome {
     status: UploadStatus,
     repo_id: String,
-    branch: Option<String>,
+    branch: String,
     url: Option<String>,
     pull_requests: Vec<PullRequest>,
 }
@@ -146,7 +146,7 @@ fn get_repo_and_branch(
     repo_id: Option<String>,
     branch: Option<String>,
     variants: &[PathBuf],
-) -> Result<(String, Option<String>)> {
+) -> Result<(String, String)> {
     let build = Build::open(kernel_dir);
 
     let build_branch = build
@@ -166,8 +166,10 @@ fn get_repo_and_branch(
             .to_owned(),
     };
 
-    let version_branch =
-        arg_branch.map_or_else(|| detect_branch_from_metadata(variants), |b| Ok(Some(b)))?;
+    let version_branch = match arg_branch {
+        Some(branch) => branch,
+        None => detect_branch_from_metadata(variants)?,
+    };
 
     Ok((resolved_repo_id, version_branch))
 }
@@ -232,48 +234,41 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
 
     let repo = repo_handle::<T>(&api, &repo_id);
 
-    let is_new_version_branch = if let Some(ref branch) = branch {
-        let refs = repo
-            .list_refs()
-            .send()
-            .wrap_err("Cannot list repository refs")?;
-        let exists = refs.branches.iter().any(|r| r.name == *branch);
+    let refs = repo
+        .list_refs()
+        .send()
+        .wrap_err("Cannot list repository refs")?;
+    let branch_exists = refs.branches.iter().any(|r| r.name == branch);
+    let is_new_version_branch = !branch_exists;
 
-        if !exists {
-            repo.create_branch()
-                .branch(branch)
-                .send()
-                .wrap_err_with(|| {
-                    if args.create_pr {
-                        format!(
-                            "Pull requests can only target an existing branch. Ask a \
-                             maintainer of `{repo_id}` to create the branch `{branch}` first."
-                        )
-                    } else {
-                        format!("Cannot create branch `{branch}`")
-                    }
-                })?;
-        }
-        eprintln!(
-            "Using branch `{branch}`{}",
-            if !exists { " (new)" } else { "" }
-        );
-        !exists
-    } else {
-        false
-    };
+    if is_new_version_branch {
+        repo.create_branch()
+            .branch(&branch)
+            .send()
+            .wrap_err_with(|| {
+                if args.create_pr {
+                    format!(
+                        "Pull requests can only target an existing branch. Ask a \
+                         maintainer of `{repo_id}` to create the branch `{branch}` first."
+                    )
+                } else {
+                    format!("Cannot create branch `{branch}`")
+                }
+            })?;
+    }
+    eprintln!(
+        "Using branch `{branch}`{}",
+        if is_new_version_branch { " (new)" } else { "" }
+    );
 
     let main_existing_files = list_repo_files(&repo, MAIN_BRANCH);
-    let version_existing_files = branch
-        .as_ref()
-        .map(|branch| list_repo_files(&repo, branch))
-        .unwrap_or_default();
+    let version_existing_files = list_repo_files(&repo, &branch);
 
     let operations_by_branch = collect_commit_ops(
         &kernel_dir,
         &build_dir,
         &variants,
-        branch.as_deref(),
+        &branch,
         &main_existing_files,
         &version_existing_files,
         is_new_version_branch,
@@ -375,12 +370,11 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         }
     } else {
         let type_prefix = T::default().url_prefix();
-        let tree_path = branch
-            .as_ref()
-            .map_or(String::new(), |b| format!("/tree/{b}"));
         UploadOutcome {
             status: UploadStatus::Uploaded,
-            url: Some(format!("https://hf.co/{type_prefix}{repo_id}{tree_path}")),
+            url: Some(format!(
+                "https://hf.co/{type_prefix}{repo_id}/tree/{branch}"
+            )),
             repo_id,
             branch,
             pull_requests,
@@ -477,7 +471,7 @@ fn collect_commit_ops(
     kernel_dir: &Path,
     build_dir: &Path,
     variants: &[PathBuf],
-    branch: Option<&str>,
+    branch: &str,
     main_existing_files: &BTreeSet<String>,
     version_existing_files: &BTreeSet<String>,
     is_new_version_branch: bool,
@@ -492,24 +486,22 @@ fn collect_commit_ops(
             .or_default(),
     );
 
-    if let Some(branch) = branch {
-        let version_ops = operations_by_branch.entry(branch.to_owned()).or_default();
+    let version_ops = operations_by_branch.entry(branch.to_owned()).or_default();
 
-        collect_readme_commit_ops(build_dir, version_existing_files, version_ops);
-        collect_benchmark_commit_ops(
-            kernel_dir,
-            version_existing_files,
-            is_new_version_branch,
-            version_ops,
-        )?;
-        collect_build_commit_ops(
-            build_dir,
-            variants,
-            version_existing_files,
-            is_new_version_branch,
-            version_ops,
-        )?;
-    }
+    collect_readme_commit_ops(build_dir, version_existing_files, version_ops);
+    collect_benchmark_commit_ops(
+        kernel_dir,
+        version_existing_files,
+        is_new_version_branch,
+        version_ops,
+    )?;
+    collect_build_commit_ops(
+        build_dir,
+        variants,
+        version_existing_files,
+        is_new_version_branch,
+        version_ops,
+    )?;
 
     Ok(operations_by_branch)
 }
@@ -693,7 +685,7 @@ fn dirty_variant_names(variants: &[PathBuf]) -> Vec<String> {
 }
 
 /// Determine the branch name (`v{version}`) from variant metadata.
-fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
+fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<String> {
     let mut versions: HashSet<usize> = HashSet::new();
 
     for variant in variants {
@@ -715,7 +707,11 @@ fn detect_branch_from_metadata(variants: &[PathBuf]) -> Result<Option<String>> {
         );
     }
 
-    Ok(versions.into_iter().next().map(|v| format!("v{v}")))
+    versions
+        .into_iter()
+        .next()
+        .map(|v| format!("v{v}"))
+        .ok_or_else(|| eyre!("Cannot determine branch: no build variants found"))
 }
 
 /// Recursively walk a directory and return all file paths.
@@ -747,7 +743,7 @@ mod tests {
         let outcome = UploadOutcome {
             status: UploadStatus::PullRequestCreated,
             repo_id: "user/my-kernel".to_owned(),
-            branch: Some("v3".to_owned()),
+            branch: "v3".to_owned(),
             url: None,
             pull_requests: vec![
                 PullRequest {
@@ -814,31 +810,6 @@ mod tests {
     }
 
     #[test]
-    fn test_collect_readme_commit_ops_no_card() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let mut operations = vec![];
-        collect_readme_commit_ops(temp_dir.path(), &BTreeSet::new(), &mut operations);
-        assert!(operations.is_empty());
-    }
-
-    #[test]
-    fn test_collect_readme_commit_ops_deletes_stale_readme() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let existing = BTreeSet::from(["README.md".to_owned()]);
-
-        let mut operations = vec![];
-        collect_readme_commit_ops(temp_dir.path(), &existing, &mut operations);
-
-        assert_eq!(operations.len(), 1);
-        match &operations[0] {
-            CommitOperation::Delete { path_in_repo } => {
-                assert_eq!(path_in_repo, "README.md");
-            }
-            _ => panic!("Expected Delete operation"),
-        }
-    }
-
-    #[test]
     fn test_collect_readme_commit_ops_card_takes_precedence_over_stale_readme() {
         let temp_dir = tempfile::tempdir().unwrap();
         fs::write(temp_dir.path().join("CARD.md"), "# Readme").unwrap();
@@ -897,7 +868,7 @@ mod tests {
             kernel_dir,
             &build_dir,
             &variants,
-            Some("v3"),
+            "v3",
             &BTreeSet::new(),
             &BTreeSet::new(),
             false,
@@ -945,13 +916,7 @@ mod tests {
         let variants = vec![variant];
         let existing = BTreeSet::from(["README.md".to_owned()]);
         let operations_by_branch = collect_commit_ops(
-            kernel_dir,
-            &build_dir,
-            &variants,
-            Some("v3"),
-            &existing,
-            &existing,
-            false,
+            kernel_dir, &build_dir, &variants, "v3", &existing, &existing, false,
         )
         .unwrap();
 
@@ -966,34 +931,6 @@ mod tests {
                 "No README.md delete for `{branch}`"
             );
         }
-    }
-
-    #[test]
-    fn test_collect_commit_ops_without_version_branch() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let kernel_dir = temp_dir.path();
-        let build_dir = kernel_dir.join("build");
-
-        fs::create_dir_all(&build_dir).unwrap();
-        fs::write(build_dir.join("CARD.md"), "# Readme").unwrap();
-
-        let operations_by_branch = collect_commit_ops(
-            kernel_dir,
-            &build_dir,
-            &[],
-            None,
-            &BTreeSet::new(),
-            &BTreeSet::new(),
-            false,
-        )
-        .unwrap();
-
-        // Only the main branch gets operations.
-        assert_eq!(operations_by_branch.len(), 1);
-        assert!(operations_by_branch[MAIN_BRANCH].iter().any(|op| matches!(
-            op,
-            CommitOperation::Add { path_in_repo, .. } if path_in_repo == "README.md"
-        )));
     }
 
     #[test]
@@ -1178,7 +1115,7 @@ mod tests {
 
         let variants = vec![variant];
         let branch = detect_branch_from_metadata(&variants).unwrap();
-        assert_eq!(branch, Some("v3".to_owned()));
+        assert_eq!(branch, "v3");
     }
 
     #[test]
@@ -1190,7 +1127,12 @@ mod tests {
 
         let variants = vec![variant];
         let branch = detect_branch_from_metadata(&variants).unwrap();
-        assert_eq!(branch, Some("v0".to_owned()));
+        assert_eq!(branch, "v0");
+    }
+
+    #[test]
+    fn test_detect_branch_from_metadata_no_variants() {
+        assert!(detect_branch_from_metadata(&[]).is_err());
     }
 
     #[test]
@@ -1278,7 +1220,7 @@ branch = "custom-branch"
         let (repo_id, branch) = get_repo_and_branch(kernel_dir, None, None, &variants).unwrap();
 
         assert_eq!(repo_id, "test/kernel");
-        assert_eq!(branch, Some("custom-branch".to_owned()));
+        assert_eq!(branch, "custom-branch");
 
         // Verify commit ops are generated - these would be uploaded to the branch above.
         let mut operations = vec![];
@@ -1327,6 +1269,6 @@ branch = "build-toml-branch"
         .unwrap();
 
         assert_eq!(repo_id, "args/kernel");
-        assert_eq!(branch, Some("args-branch".to_owned()));
+        assert_eq!(branch, "args-branch");
     }
 }

@@ -33,6 +33,29 @@ pub fn run_pipeline(
     root: &Path,
     vendors: BTreeMap<String, PathBuf>,
 ) -> Result<ops::Facts> {
+    run_pipeline_with(
+        ws,
+        recipe,
+        recipe_dir,
+        root,
+        vendors,
+        &mut |inv, summary| {
+            println!("[line {:>3}] {:<19} {}", inv.line, inv.op, summary);
+        },
+    )
+}
+
+// Same pipeline, with each op's summary handed to a callback instead of
+// stdout: a caller that is not a terminal (a wasm host, a test) has somewhere
+// to put the log.
+pub fn run_pipeline_with(
+    ws: &mut Workspace,
+    recipe: &[recipe::Invocation],
+    recipe_dir: &Path,
+    root: &Path,
+    vendors: BTreeMap<String, PathBuf>,
+    log: &mut dyn FnMut(&recipe::Invocation, &str),
+) -> Result<ops::Facts> {
     let inputs = ops::Inputs {
         root: root.to_path_buf(),
         vendors,
@@ -50,7 +73,7 @@ pub fn run_pipeline(
         let summary = op
             .apply(ws, &inputs, &mut facts)
             .with_context(|| format!("recipe line {}: {}", inv.line, inv.op))?;
-        println!("[line {:>3}] {:<19} {}", inv.line, inv.op, summary);
+        log(inv, &summary);
     }
     let changes = ws.changes();
     for path in changes.added.iter().chain(&changes.modified) {

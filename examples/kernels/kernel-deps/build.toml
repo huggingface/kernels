@@ -12,6 +12,7 @@ backends = [
 ]
 
 kernel-depends = [
+    { repo-id = "kernels-community/activation", version = 1 },
     { repo-id = "kernels-community/einops", version = 1 },
 ]
 

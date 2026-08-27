@@ -4,6 +4,12 @@ import kernels
 kernel_deps = kernels.get_kernel("kernels-test/kernel-deps", version=1)
 
 
+def test_silu():
+    torch.manual_seed(42)
+    x = torch.randn(4, 64, device="cuda")
+    torch.testing.assert_close(kernel_deps.silu(x), torch.nn.functional.silu(x))
+
+
 def test_swap_last_dimensions():
     torch.manual_seed(42)
     x = torch.randn(3, 4, 5, 6)

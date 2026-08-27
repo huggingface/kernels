@@ -58,7 +58,8 @@ def lock_kernel_deps(kernel_dir: Path) -> KernelLocks:
 
     for backend in build.general.backends:
         for dep, lock in extract_dependency_locks(
-            build.all_kernel_depends(backend), api=api, backend=str(backend)
+            build.all_kernel_depends(backend),
+            api=api,
         ).items():
             kernel_locks[dep] = lock
 

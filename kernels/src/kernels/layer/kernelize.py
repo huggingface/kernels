@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,8 @@ from .repos import DeviceRepos, RepositoryProtocol
 if TYPE_CHECKING:
     import torch
     from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 def use_kernel_mapping(
@@ -269,6 +272,15 @@ def kernelize(
             )
 
         if hasattr(module_class, "kernel_layer_name"):
+            cond = getattr(module_class, "kernel_condition", None)
+            if cond and not cond(module):
+                logger.info(
+                    "Skipping kernelization for %s using %s due to kernel_condition.",
+                    module_class.__name__,
+                    module_class.kernel_layer_name,
+                )
+                continue
+
             kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
 
     return model

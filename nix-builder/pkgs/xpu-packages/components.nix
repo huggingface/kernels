@@ -7,4 +7,4 @@ prev.lib.mapAttrs (
     inherit pname;
     inherit (metadata) components deps version;
   }
-) prev.packageMetadata
+) prev.manifest

@@ -263,7 +263,7 @@ final: prev:
     (import ./pkgs/python-modules/hooks)
   ];
 
-  xpuPackages = final.xpuPackages_2025_3_1;
+  xpuPackages = final.xpuPackages_2025_3_2;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
 // (
@@ -284,42 +284,11 @@ final: prev:
     }) versions
   )
 )
-// (
-  let
-    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
-    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
-    versions = [
-      "7.1.1"
-      "7.2.1"
-    ];
-    newRocmPackages = final.callPackage ./pkgs/rocm-packages { };
-  in
-  builtins.listToAttrs (
-    map (version: {
-      name = "rocmPackages_${flattenVersion (prev.lib.versions.majorMinor version)}";
-      value = newRocmPackages {
-        packageMetadata = readPackageMetadata ./pkgs/rocm-packages/rocm-${version}-metadata.json;
-      };
-    }) versions
-  )
-)
-// (
-  let
-    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
-    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
-    xpuVersions = [
-      "2025.3.2"
-      "2026.0.0"
-      "2026.1.0"
-    ];
-    newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
-  in
-  builtins.listToAttrs (
-    map (version: {
-      name = "xpuPackages_${flattenVersion version}";
-      value = newXpuPackages {
-        packageMetadata = readPackageMetadata ./pkgs/xpu-packages/intel-deep-learning-${version}.json;
-      };
-    }) xpuVersions
-  )
-)
+// (import ./pkgs/rocm-packages {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})
+// (import ./pkgs/xpu-packages {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})

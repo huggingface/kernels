@@ -27,9 +27,9 @@ pub struct General {
     #[serde(default)]
     pub universal: bool,
 
-    pub cuda_maxver: Option<Version>,
+    pub cuda_maxver: Option<Version<2>>,
 
-    pub cuda_minver: Option<Version>,
+    pub cuda_minver: Option<Version<2>>,
 
     pub hub: Option<Hub>,
 
@@ -63,8 +63,8 @@ impl Display for PythonDependency {
 #[serde(deny_unknown_fields)]
 pub struct Torch {
     pub include: Option<Vec<String>>,
-    pub minver: Option<Version>,
-    pub maxver: Option<Version>,
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
     pub pyext: Option<Vec<String>>,
 
     #[serde(default)]
@@ -85,7 +85,7 @@ pub enum Kernel {
     Cuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
-        cuda_minver: Option<Version>,
+        cuda_minver: Option<Version<2>>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,

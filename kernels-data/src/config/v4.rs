@@ -55,8 +55,8 @@ pub struct General {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct CudaGeneral {
-    pub minver: Option<Version>,
-    pub maxver: Option<Version>,
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -83,14 +83,14 @@ pub struct Hub {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Torch {
     pub include: Option<Vec<String>>,
-    pub minver: Option<Version>,
-    pub maxver: Option<Version>,
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
     pub pyext: Option<Vec<String>>,
 
     #[serde(default)]
     pub src: Vec<PathBuf>,
 
-    pub stable_abi: Option<Version>,
+    pub stable_abi: Option<Version<2>>,
 
     pub cxx_flags: Option<Vec<String>>,
 }
@@ -130,7 +130,7 @@ pub enum Kernel {
     Cuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
-        cuda_minver: Option<Version>,
+        cuda_minver: Option<Version<2>>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,

@@ -46,14 +46,13 @@ impl<const N: usize> TryFrom<Vec<usize>> for Version<N> {
     type Error = eyre::Report;
 
     fn try_from(value: Vec<usize>) -> Result<Self, Self::Error> {
-        // Remove trailing zeros for normalization.
-        let significant = value.len() - value.iter().rev().take_while(|&&x| x == 0).count();
         ensure!(
-            significant <= N,
-            "Version has {significant} components, expected at most {N}"
+            value.len() == N,
+            "Version has {} components, expected {N}",
+            value.len()
         );
         let mut parts = [0; N];
-        parts[..significant].copy_from_slice(&value[..significant]);
+        parts.copy_from_slice(&value);
         Ok(Version(parts))
     }
 }
@@ -84,11 +83,10 @@ mod tests {
     use super::Version;
 
     #[test]
-    fn trailing_zeros_are_insignificant() {
-        assert_eq!(
-            Version::<2>::from_str("5").unwrap(),
-            Version::from_str("5.0").unwrap()
-        );
+    fn versions_must_have_exactly_n_components() {
+        assert!(Version::<2>::from_str("12.8").is_ok());
+        assert!(Version::<2>::from_str("13").is_err());
+        assert!(Version::<2>::from_str("12.8.0").is_err());
     }
 
     #[test]
@@ -96,7 +94,7 @@ mod tests {
         assert_eq!(
             Version::<2>::from_str("5.0")
                 .unwrap()
-                .cmp(&Version::from_str("5").unwrap()),
+                .cmp(&Version::from_str("5.0").unwrap()),
             Ordering::Equal
         );
         assert_eq!(
@@ -114,13 +112,8 @@ mod tests {
     }
 
     #[test]
-    fn too_many_significant_components_is_an_error() {
-        assert!(Version::<2>::from_str("1.2.3").is_err());
-    }
-
-    #[test]
     fn display_keeps_all_components() {
-        assert_eq!(Version::<2>::from_str("12").unwrap().to_string(), "12.0");
+        assert_eq!(Version::<2>::from_str("12.0").unwrap().to_string(), "12.0");
     }
 
     #[test]

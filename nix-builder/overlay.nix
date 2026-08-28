@@ -284,25 +284,10 @@ final: prev:
     }) versions
   )
 )
-// (
-  let
-    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
-    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
-    versions = [
-      "7.1.1"
-      "7.2.1"
-    ];
-    newRocmPackages = final.callPackage ./pkgs/rocm-packages { };
-  in
-  builtins.listToAttrs (
-    map (version: {
-      name = "rocmPackages_${flattenVersion (prev.lib.versions.majorMinor version)}";
-      value = newRocmPackages {
-        packageMetadata = readPackageMetadata ./pkgs/rocm-packages/rocm-${version}-metadata.json;
-      };
-    }) versions
-  )
-)
+// (import ./pkgs/rocm-packages {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})
 // (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];

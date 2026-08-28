@@ -1,39 +1,33 @@
 {
-  lib,
+  # Needs to be from the `final` set to get all overrides.
   callPackage,
-  newScope,
-}:
 
-{
-  packageMetadata,
+  # Needs to be from the `prev` set. `lib` functions are used to create
+  # the set structure, so using lib from `final` will lead to an infinite
+  # recursion.
+  lib,
 }:
 
 let
-  inherit (lib.fixedPoints) extends composeManyExtensions;
+  flattenVersion = lib.replaceStrings [ "." ] [ "_" ];
+  mkPackages = callPackage ./mk-packages.nix { };
+  manifests =
+    lib.mapAttrs'
+      (
+        fileName: type:
+        let
+          version = lib.removeSuffix ".json" fileName;
+        in
+        {
+          name = version;
+          value = lib.importJSON (./manifests/${fileName});
+        }
+      )
 
-  fixedPoint = final: {
-    inherit lib packageMetadata;
-  };
-  composed = composeManyExtensions [
-    # Hooks
-    (import ./hooks.nix)
-    # Base package set.
-    (import ./components.nix)
-    # Overrides (adding dependencies, etc.)
-    (import ./overrides.nix)
-    # Compiler toolchain.
-    (callPackage ./llvm.nix { })
-    # Packages that are joins of other packages.
-    (callPackage ./joins.nix { })
-    # Add aotriton
-    (final: prev: {
-      inherit (final.callPackage ../aotriton { })
-        aotriton_0_11_1
-        aotriton_0_11_2
-        aotriton_0_12
-        aotriton_0_13
-        ;
-    })
-  ];
+      (builtins.readDir ./manifests);
+
 in
-lib.makeScope newScope (extends composed fixedPoint)
+lib.mapAttrs' (version: manifest: {
+  name = "rocmPackages_${flattenVersion (lib.versions.majorMinor version)}";
+  value = mkPackages manifest;
+}) manifests

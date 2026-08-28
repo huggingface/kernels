@@ -8,44 +8,17 @@ use kernels_data::config::{Backend, KernelDependency, KernelName, KernelVersion}
 use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
 use kernels_data::git::{GitStatus, Oid};
 use kernels_data::metadata::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
-use kernels_data::version::Version;
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 mod config;
 mod lock;
+mod version;
 
 use config::{PyBuild, PyGeneral};
 use lock::{PyKernelLock, PyKernelLocks, PyKernelPaths, PyNixKernelLock, PyNixKernelLocks};
-
-/// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
-/// during normalization.
-#[pyclass(name = "Version", frozen, eq, ord, hash)]
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-struct PyVersion {
-    inner: Version,
-}
-
-#[pymethods]
-impl PyVersion {
-    /// Parse a version string of the form `X`, `X.Y`, `X.Y.Z`, ...
-    #[staticmethod]
-    #[pyo3(name = "from_str")]
-    fn py_from_str(s: &str) -> PyResult<Self> {
-        Version::from_str(s)
-            .map(|inner| Self { inner })
-            .map_err(|err| PyValueError::new_err(format!("Cannot parse version `{s}`: {err}")))
-    }
-
-    fn __str__(&self) -> String {
-        self.inner.to_string()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("Version('{}')", self.inner)
-    }
-}
+use version::PyVersion;
 
 /// A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`.
 #[pyclass(name = "KernelName", frozen, eq, hash)]

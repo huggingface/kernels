@@ -209,8 +209,8 @@ impl General {
 }
 
 pub struct CudaGeneral {
-    pub minver: Option<Version>,
-    pub maxver: Option<Version>,
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
     pub kernel_depends: Option<Vec<KernelDependency>>,
     pub python_depends: Option<Vec<String>>,
 }
@@ -236,8 +236,8 @@ pub struct Hub {
 
 pub struct Torch {
     pub include: Option<Vec<String>>,
-    pub minver: Option<Version>,
-    pub maxver: Option<Version>,
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
     pub pyext: Option<Vec<String>>,
     pub src: Vec<PathBuf>,
     pub stable_abi: Option<TorchAbi>,
@@ -249,14 +249,14 @@ pub struct Torch {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum TorchAbi {
-    All(Version),
-    Mapping(BTreeMap<Backend, Version>),
+    All(Version<2>),
+    Mapping(BTreeMap<Backend, Version<2>>),
 }
 
 impl TorchAbi {
     /// Stable ABI version to target for `backend`, or `None` if it should be
     /// built without the stable ABI.
-    pub fn for_backend(&self, backend: Backend) -> Option<&Version> {
+    pub fn for_backend(&self, backend: Backend) -> Option<&Version<2>> {
         match self {
             TorchAbi::All(version) => Some(version),
             TorchAbi::Mapping(mapping) => mapping.get(&backend),
@@ -327,7 +327,7 @@ pub enum Kernel {
     Cuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
-        cuda_minver: Option<Version>,
+        cuda_minver: Option<Version<2>>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,

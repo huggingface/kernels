@@ -1,0 +1,38 @@
+{
+  lib,
+  callPackage,
+  newScope,
+}:
+
+manifest:
+
+let
+  inherit (lib.fixedPoints) extends composeManyExtensions;
+
+  fixedPoint = final: {
+    inherit lib manifest;
+  };
+  composed = composeManyExtensions [
+    # Hooks
+    (import ./hooks.nix)
+    # Base package set.
+    (import ./components.nix)
+    # Overrides (adding dependencies, etc.)
+    (import ./overrides.nix)
+    # Packages that are joins of other packages.
+    (final: prev: {
+      oneapi-torch-dev = final.callPackage ./oneapi-torch-dev.nix { };
+    })
+
+    (final: prev: {
+      onednn-xpu = final.callPackage ./onednn-xpu.nix { };
+    })
+    (final: prev: {
+      ocloc = final.callPackage ./ocloc.nix { };
+    })
+    (final: prev: {
+      sycl-tla = final.callPackage ./sycl-tla.nix { };
+    })
+  ];
+in
+lib.makeScope newScope (extends composed fixedPoint)

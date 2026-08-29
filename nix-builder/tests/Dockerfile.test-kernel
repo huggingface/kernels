@@ -73,6 +73,7 @@ RUN uv add ./kernels-src
 COPY relu-kernel ./relu-kernel
 COPY relu-torch-stable-abi-kernel ./relu-torch-stable-abi-kernel
 COPY relu-tvm-ffi-kernel ./relu-tvm-ffi-kernel
+COPY relu-cuda-oxide-kernel ./relu-cuda-oxide-kernel
 COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
@@ -84,6 +85,7 @@ COPY cpp20-symbols-kernel ./cpp20-symbols-kernel
 COPY examples/kernels/extra-data/tests ./extra_data_tests
 COPY examples/kernels/relu/tests ./relu_tests
 COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
+COPY examples/kernels/relu-cuda-oxide/tests ./relu_cuda_oxide_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 COPY examples/kernels/cutlass-gemm-tvm-ffi/tests ./cutlass_gemm_tvm_ffi_tests
 COPY examples/kernels/cpp20-symbols/tests ./cpp20_symbols_tests

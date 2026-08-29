@@ -321,7 +321,10 @@ pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
         src: Vec<String>,
     },
     Cuda {
@@ -330,7 +333,12 @@ pub enum Kernel {
         cuda_minver: Option<Version<2>>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        device_manifest: Option<String>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
+        ptx_dir: Option<String>,
         src: Vec<String>,
     },
     Metal {
@@ -354,6 +362,33 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
+}
+
+/// The language a kernel's sources are written in.
+///
+/// A kernel's `backend` says what hardware it is compiled for, `dsl` says how
+/// its sources are written. Backends accept the DSLs they can lower.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub enum Dsl {
+    /// C++ sources in the backend's dialect (CUDA C++, HIP, SYCL, ...),
+    /// compiled directly by the backend's compiler.
+    Cpp,
+    /// Rust sources, built by `cargo` into a staticlib that is linked into the
+    /// extension.
+    Rust,
+    /// Rust sources whose device code is compiled to PTX by the `cuda-oxide`
+    /// `rustc` codegen backend before the host crate is built. Requires the
+    /// `cuda` backend and a `device-manifest`.
+    CudaOxide,
+}
+
+impl Dsl {
+    /// Whether the kernel's sources are built by `cargo` rather than by the
+    /// backend's C++ toolchain.
+    pub fn is_cargo_built(&self) -> bool {
+        matches!(self, Dsl::Rust | Dsl::CudaOxide)
+    }
 }
 
 impl Kernel {
@@ -391,6 +426,14 @@ impl Kernel {
             Kernel::Metal { .. } => Backend::Metal,
             Kernel::Rocm { .. } => Backend::Rocm,
             Kernel::Xpu { .. } => Backend::Xpu,
+        }
+    }
+
+    /// The DSL the kernel's sources are written in.
+    pub fn dsl(&self) -> Dsl {
+        match self {
+            Kernel::Cpu { dsl, .. } | Kernel::Cuda { dsl, .. } => dsl.unwrap_or(Dsl::Cpp),
+            _ => Dsl::Cpp,
         }
     }
 
@@ -544,5 +587,62 @@ mod tests {
                 .next()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn v5_rust_dsls_round_trip() {
+        let config = r#"
+[general]
+name = "rust-dsls"
+version = 1
+edition = 5
+license = "Apache-2.0"
+backends = ["cpu", "cuda"]
+
+[tvm-ffi]
+
+[kernel.cpu_kernel]
+backend = "cpu"
+dsl = "rust"
+depends = []
+src = ["cpu/Cargo.toml"]
+
+[kernel.cuda_kernel]
+backend = "cuda"
+dsl = "cuda-oxide"
+depends = []
+src = ["Cargo.toml"]
+device-manifest = "device/Cargo.toml"
+"#;
+
+        let parsed: v5::Build = toml::from_str(config).unwrap();
+        let serialized = toml::to_string(&parsed).unwrap();
+        let build: Build = toml::from_str::<v5::Build>(&serialized).unwrap().into();
+
+        assert_eq!(build.kernels["cpu_kernel"].dsl(), Dsl::Rust);
+        assert_eq!(build.kernels["cuda_kernel"].dsl(), Dsl::CudaOxide);
+    }
+
+    #[test]
+    fn v5_missing_dsl_defaults_to_cpp() {
+        let config = r#"
+[general]
+name = "cpp-default"
+version = 1
+edition = 5
+license = "Apache-2.0"
+backends = ["cpu"]
+
+[tvm-ffi]
+
+[kernel.cpp_kernel]
+backend = "cpu"
+depends = []
+src = ["kernel.cpp"]
+"#;
+
+        let build: Build = toml::from_str::<v5::Build>(config).unwrap().into();
+
+        assert_eq!(build.kernels["cpp_kernel"].dsl(), Dsl::Cpp);
     }
 }

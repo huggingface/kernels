@@ -4,6 +4,15 @@ use std::path::{Path, PathBuf};
 
 use eyre::{bail, ensure, Context, Result};
 
+use kernels_data::config::{Build, Kernel};
+
+pub(crate) fn parse_build(kernel_dir: impl AsRef<Path>) -> Result<Build> {
+    let kernel_dir = kernel_dir.as_ref();
+    let mut build = Build::open(kernel_dir)?;
+    infer_rust_kernel_lib_names(&mut build, kernel_dir)?;
+    Ok(build)
+}
+
 pub(crate) fn check_or_infer_kernel_dir(kernel_dir: Option<impl AsRef<Path>>) -> Result<PathBuf> {
     match kernel_dir {
         Some(kernel_dir) => {
@@ -35,6 +44,46 @@ pub(crate) fn check_or_infer_target_dir(
         }
         None => Ok(std::path::absolute(kernel_dir)?),
     }
+}
+
+fn infer_rust_kernel_lib_names(build: &mut Build, kernel_dir: &Path) -> Result<()> {
+    for (kernel_name, kernel) in &mut build.kernels {
+        if !kernel.dsl().is_cargo_built() {
+            continue;
+        }
+        let (src, lib_name) = match kernel {
+            Kernel::Cpu { src, lib_name, .. } | Kernel::Cuda { src, lib_name, .. } => {
+                (src, lib_name)
+            }
+            _ => continue,
+        };
+        if lib_name.is_none() {
+            let manifest_path = src
+                .iter()
+                .find(|path| {
+                    Path::new(path.as_str())
+                        .file_name()
+                        .is_some_and(|name| name == "Cargo.toml")
+                })
+                .map(|path| kernel_dir.join(path))
+                .ok_or_else(|| {
+                    eyre::eyre!(
+                        "Rust kernel `{kernel_name}`: `src` must include the crate Cargo.toml"
+                    )
+                })?;
+            let manifest: toml::Value = toml::from_str(&fs::read_to_string(&manifest_path)?)?;
+            let name = |table| manifest.get(table)?.get("name")?.as_str();
+            *lib_name = Some(
+                name("lib")
+                    .or_else(|| name("package"))
+                    .ok_or_else(|| {
+                        eyre::eyre!("cannot infer `lib-name` from `{}`", manifest_path.display())
+                    })?
+                    .replace('-', "_"),
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Discover build variant directories (contain `metadata.json`).
@@ -75,6 +124,48 @@ pub(crate) fn discover_variants(kernel_dir: &Path) -> Result<(PathBuf, Vec<PathB
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_build_infers_rust_lib_name_from_root_manifest() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join("build.toml"),
+            r#"
+[general]
+name = "root-rust"
+version = 1
+edition = 5
+license = "Apache-2.0"
+backends = ["cuda"]
+
+[tvm-ffi]
+
+[kernel.root_rust]
+backend = "cuda"
+dsl = "cuda-oxide"
+depends = []
+src = ["Cargo.toml"]
+device-manifest = "device/Cargo.toml"
+"#,
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.path().join("Cargo.toml"),
+            r#"
+[package]
+name = "manifest-lib-name"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+
+        let build = parse_build(temp_dir.path()).unwrap();
+        let Kernel::Cuda { lib_name, .. } = &build.kernels["root_rust"] else {
+            panic!("expected CUDA kernel")
+        };
+
+        assert_eq!(lib_name.as_deref(), Some("manifest_lib_name"));
+    }
 
     #[test]
     fn test_discover_variants() {

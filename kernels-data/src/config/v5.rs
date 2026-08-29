@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelDependency, KernelName};
+use super::{Dependency, Dsl, GitUrl, KernelDependency, KernelName};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -139,6 +139,7 @@ pub struct TorchNoarch {
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
+    #[serde(default)]
     pub src: Vec<PathBuf>,
     pub cxx_flags: Option<Vec<String>>,
 }
@@ -150,7 +151,10 @@ pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -160,7 +164,12 @@ pub enum Kernel {
         cuda_minver: Option<Version<2>>,
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        device_manifest: Option<String>,
+        dsl: Option<Dsl>,
+        features: Option<Vec<String>>,
         include: Option<Vec<String>>,
+        lib_name: Option<String>,
+        ptx_dir: Option<String>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -352,12 +361,18 @@ impl From<Kernel> for super::Kernel {
             Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             } => super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             },
             Kernel::Cuda {
@@ -366,7 +381,12 @@ impl From<Kernel> for super::Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             } => super::Kernel::Cuda {
                 cuda_capabilities,
@@ -374,7 +394,12 @@ impl From<Kernel> for super::Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             },
             Kernel::Metal {
@@ -569,12 +594,18 @@ impl From<super::Kernel> for Kernel {
             super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             } => Kernel::Cpu {
                 cxx_flags,
                 depends,
+                dsl,
+                features,
                 include,
+                lib_name,
                 src,
             },
             super::Kernel::Cuda {
@@ -583,7 +614,12 @@ impl From<super::Kernel> for Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             } => Kernel::Cuda {
                 cuda_capabilities,
@@ -591,7 +627,12 @@ impl From<super::Kernel> for Kernel {
                 cuda_minver,
                 cxx_flags,
                 depends,
+                device_manifest,
+                dsl,
+                features,
                 include,
+                lib_name,
+                ptx_dir,
                 src,
             },
             super::Kernel::Metal {

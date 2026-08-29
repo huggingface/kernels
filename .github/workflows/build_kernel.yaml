@@ -61,6 +61,7 @@ jobs:
             relu-kernel
             relu-torch-stable-abi-kernel
             relu-tvm-ffi-kernel
+            relu-cuda-oxide-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel
             relu-triton-kernel

@@ -145,7 +145,8 @@ def test_get_kernel_rejects_unsupported_capability(monkeypatch):
     if not metadata.backend.archs:
         pytest.skip("kernel build does not declare archs")
 
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: (99, 9))
+    # Fake a capability *below* every declared arch.
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: (1, 0))
 
     with pytest.raises(RuntimeError, match="does not support the current device"):
         get_kernel("kernels-community/relu", version=1)

@@ -19,8 +19,14 @@ with open(kernelDeps) as f:
     kernel_paths = KernelPaths.from_json(f.read())
 
 kernel = KernelDependency(repo_id=out, version=KernelVersion.Version(0))
+
+# The build host may not expose the accelerator being targeted (e.g. Metal is
+# undetectable inside the sandboxed macOS build), so point the resolver at the
+# derivation's single variant instead of relying on backend auto-detection.
+[variant] = (p.parent for p in Path(out).glob("*/metadata.json"))
+
 resolvers = [
-    RepoPathsResolver(local_kernels={out: Path(out)}),
+    RepoPathsResolver(local_kernels={out: variant}),
     KernelPathsResolver(kernel_paths=kernel_paths),
 ]
 

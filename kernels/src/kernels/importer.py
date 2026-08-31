@@ -120,8 +120,17 @@ def _import_from_path(
     # Avoid an import cycle.
     from kernels.deps import use_kernel_deps
 
-    with use_kernel_deps(deps):
-        spec.loader.exec_module(module)  # type: ignore
+    try:
+        with use_kernel_deps(deps):
+            spec.loader.exec_module(module)  # type: ignore
+    except Exception as e:
+        # Remove the partially initialized module, so that a retry
+        # imports from scratch.
+        sys.modules.pop(metadata.id, None)
+        if hasattr(e, "add_note"):
+            origin = f" (from {repo_info.repo_id}, revision: {repo_info.revision})" if repo_info else ""
+            e.add_note(f"while importing kernel '{metadata.name}' variant '{variant_path.name}'{origin}")
+        raise
 
     _loaded_kernels[variant_path] = LoadedKernel(
         metadata=metadata,

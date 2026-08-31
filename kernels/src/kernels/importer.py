@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType
 
 from kernels_data import Metadata
+from packaging.version import parse
 
 from kernels.hf_hub import RepoInfo
 
@@ -27,6 +28,8 @@ class LoadedKernel:
     - `id` (`str`): kernel identifier that is unique to the kernel version + backend.
     - `name` (`str`): the name of the kernel.
     - `version` (`int`): the version of the kernel.
+    - `minver` (`str | None`): the minimum `kernels` library version
+      required to load the kernel.
     - `license` (`str`): the license of the kernel.
     - `upstream` (`str | None`): the original upstream repository of the kernel.
     - `source` (`str | None`): the kernel-builder formatted source repository.
@@ -91,6 +94,27 @@ def _warn_if_dirty(metadata: Metadata, variant_str: str) -> None:
     )
 
 
+def _warn_if_below_minver(metadata: Metadata, variant_str: str) -> None:
+    """Warn when the installed `kernels` library is older than the minimum
+    version required by a kernel.
+    """
+    minver = metadata.minver
+    if minver is None:
+        return
+
+    # Avoid an import cycle.
+    from kernels import __version__
+
+    if parse(__version__) < parse(minver):
+        warnings.warn(
+            f"Kernel '{metadata.name}' variant '{variant_str}' requires "
+            f"kernels>={minver}, but version {__version__} is installed. "
+            "The kernel may not load or work correctly; upgrade with: "
+            "pip install --upgrade kernels",
+            stacklevel=3,
+        )
+
+
 def _import_from_path(
     variant_path: Path,
     deps: dict[str, ModuleType],
@@ -101,6 +125,7 @@ def _import_from_path(
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
     _warn_if_dirty(metadata, variant_path.name)
+    _warn_if_below_minver(metadata, variant_path.name)
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"

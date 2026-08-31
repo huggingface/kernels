@@ -55,6 +55,7 @@ def get_kernel_with_resolver(
     backend: str | None,
     kernel: KernelDependency,
     resolver: Resolver | None,
+    check_arch: bool = False,
 ) -> ModuleType:
     """
     Load a kernel and its (transitive) dependencies using the given resolver.
@@ -69,6 +70,9 @@ def get_kernel_with_resolver(
             The kernel to load.
         resolver (`Resolver`, *optional*):
             The resolver used to resolve the kernel and its (transitive) dependencies.
+        check_arch (`bool`, *optional*, defaults to `False`):
+            Whether to check that the kernel builds support the architecture
+            (e.g. CUDA compute capability) of the current device.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -80,6 +84,8 @@ def get_kernel_with_resolver(
         resolver=resolver,
     )
     tree.validate_dependencies()
+    if check_arch:
+        tree.check_archs()
     tree_only_local = tree.install(api=api)
     return tree_only_local.load()
 
@@ -92,6 +98,7 @@ def get_kernel(
     backend: str | None = None,
     user_agent: str | dict | None = None,
     trust_remote_code: bool | list[str] = False,
+    check_arch: bool = True,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -118,6 +125,12 @@ def get_kernel(
             repositories are allowed. A list of strings will be used to verify signing
             identities in a future release; for now it emits a warning and falls
             back to the default trust check.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -151,6 +164,7 @@ def get_kernel(
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
         resolver=SequentialResolver(resolvers=resolvers),
+        check_arch=check_arch,
     )
 
 
@@ -214,6 +228,7 @@ def has_kernel(
     version: int | None = None,
     backend: str | None = None,
     trust_remote_code: bool | list[str] = False,
+    check_arch: bool = True,
 ) -> bool:
     """
     Check whether a kernel build exists for the current environment (framework version and backend).
@@ -237,6 +252,12 @@ def has_kernel(
             repositories are allowed. A list of strings will be used to verify signing
             identities in a future release; for now it emits a warning and falls
             back to the default trust check.
+        check_arch (`bool`, *optional*, defaults to `True`):
+            Whether to check that the kernel build supports the architecture
+            (e.g. CUDA compute capability) of the current device. Kernels can
+            support more architectures than they declare (e.g. through a
+            Triton fallback), `check_arch=False` skips the check for such
+            kernels.
 
     Returns:
         `bool`: `True` if a kernel is available for the current environment.
@@ -255,7 +276,7 @@ def has_kernel(
     ]
 
     try:
-        resolve_kernel_tree(
+        tree = resolve_kernel_tree(
             api=api,
             backend=backend,
             kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
@@ -263,6 +284,12 @@ def has_kernel(
         )
     except FileNotFoundError:
         return False
+
+    if check_arch:
+        try:
+            tree.check_archs()
+        except RuntimeError:
+            return False
 
     return True
 

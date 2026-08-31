@@ -6,6 +6,7 @@ from typing import Generic, TypeVar
 from huggingface_hub.hf_api import HfApi
 from kernels_data import KernelDependency, KernelVersion
 
+from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
 from kernels.hf_hub import RepoInfo
 from kernels.importer import _import_from_path
@@ -68,6 +69,17 @@ class DepTreeNode(Generic[T]):
         )
 
         return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
+
+    def check_archs(self) -> None:
+        """Check that this kernel and its dependencies support the current device.
+
+        Raises `RuntimeError` when a kernel build does not support the
+        architecture (e.g. CUDA compute capability) of the current device."""
+
+        _check_arch_incompatibility(self.location.metadata, self.location.variant_str)
+
+        for node in self.deps.values():
+            node.check_archs()
 
     def validate_dependencies(self) -> None:
         """Validate that the dependencies of this kernel are satisfied."""

@@ -393,6 +393,7 @@ struct PyMetadata {
     id: String,
     name: PyKernelName,
     version: usize,
+    minver: Option<String>,
     license: String,
     upstream: Option<String>,
     source: Option<String>,
@@ -409,6 +410,7 @@ impl From<Metadata> for PyMetadata {
             id: m.id,
             name: PyKernelName { inner: m.name },
             version: m.version,
+            minver: m.minver.map(|v| v.to_string()),
             license: m.license,
             upstream: m.upstream.map(|u| u.as_url().to_string()),
             source: m.source.map(|u| u.as_url().to_string()),
@@ -466,6 +468,11 @@ impl PyMetadata {
     }
 
     #[getter]
+    fn minver(&self) -> Option<&str> {
+        self.minver.as_deref()
+    }
+
+    #[getter]
     fn license(&self) -> &str {
         &self.license
     }
@@ -507,10 +514,11 @@ impl PyMetadata {
 
     fn __repr__(&self) -> String {
         format!(
-            "Metadata(id={}, name={:?}, version={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, kernel_depends={:?}, backend={}, digest={}, provenance={})",
+            "Metadata(id={}, name={:?}, version={:?}, minver={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, kernel_depends={:?}, backend={}, digest={}, provenance={})",
             self.id,
             self.name,
             self.version,
+            self.minver,
             self.license,
             self.upstream,
             self.source,

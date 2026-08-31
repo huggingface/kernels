@@ -117,6 +117,9 @@ pub struct General {
     /// Kernel-builder formatted source repository (must contain build.toml and flake.nix).
     pub source: Option<GitUrl>,
 
+    /// Minimum version of the `kernels` Python library required to load the kernel.
+    pub minver: Option<Version<3>>,
+
     pub backends: Vec<Backend>,
     pub hub: Option<Hub>,
     pub kernel_depends: Option<Vec<KernelDependency>>,
@@ -506,6 +509,7 @@ mod tests {
             license: "apache-2.0".to_string(),
             upstream: None,
             source: None,
+            minver: None,
             backends: vec![Backend::Tpu],
             hub: None,
             kernel_depends: None,

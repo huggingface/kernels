@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::config::{Backend, Build, GitUrl, KernelDependency, KernelName};
 use crate::digest::Digest;
 use crate::git::{GitStatus, Oid};
+use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -93,6 +94,8 @@ pub struct Metadata {
     pub name: KernelName,
     pub id: String,
     pub version: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minver: Option<Version<3>>,
     pub license: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream: Option<GitUrl>,
@@ -125,6 +128,7 @@ impl Metadata {
             id,
             name: build.general.name.clone(),
             version: build.general.version,
+            minver: build.general.minver.clone(),
             license: build.general.license.clone(),
             upstream: build.general.upstream.clone(),
             source: build.general.source.clone(),
@@ -165,6 +169,7 @@ mod tests {
 
     use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
     use crate::git::{GitStatus, Oid};
+    use crate::version::Version;
 
     use super::{KernelBuilderVersion, Metadata, Provenance};
 
@@ -203,6 +208,7 @@ mod tests {
                 license: "apache-2.0".to_string(),
                 upstream: None,
                 source: None,
+                minver: None,
                 backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
                 hub: None,
                 kernel_depends: None,
@@ -260,6 +266,7 @@ mod tests {
                 license: "apache-2.0".to_string(),
                 upstream: None,
                 source: None,
+                minver: None,
                 backends: vec![Backend::Cuda],
                 hub: None,
                 kernel_depends: None,
@@ -301,6 +308,31 @@ mod tests {
 
         let parsed: Metadata = serde_json::from_str(&json).unwrap();
         assert!(parsed.provenance.is_none());
+    }
+
+    #[test]
+    fn metadata_without_minver_serializes_without_key() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(!json.contains("minver"));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        assert!(parsed.minver.is_none());
+    }
+
+    #[test]
+    fn metadata_round_trips_minver() {
+        let mut build = torch_noarch_build();
+        build.general.minver = Some(Version::from_str("0.11.0").unwrap());
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains(r#""minver":"0.11.0""#));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.minver, Some(Version::from_str("0.11.0").unwrap()));
     }
 
     #[test]

@@ -208,6 +208,10 @@ The following sections enumerate all supported options for `build.toml`.
 - `source`: Git-compatible URL (passable to `git clone`) of the kernel-builder
   formatted source repository. This repository must contain a `build.toml` and
   `flake.nix` so that it can be pulled and built with the kernel builder.
+- `minver`: the minimum version of the `kernels` Python library required
+  to load the kernel (e.g. `"0.11.0"`). The version is written to the kernel's
+  `metadata.json` and the `kernels` library warns when it loads a kernel that
+  requires a newer version than the one that is installed.
 - `python-depends` (**experimental**): a list of additional Python dependencies
   that the kernel requires. The only supported dependencies are `einops`,
   `helion`, and `nvidia-cutlass-dsl`.

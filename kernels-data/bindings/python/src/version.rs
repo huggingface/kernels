@@ -2,8 +2,7 @@ use kernels_data::version::Version;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-/// A dotted numeric version (e.g. `12.8.0`). Trailing zeros are stripped
-/// during normalization.
+/// A dotted numeric version (e.g. `12.8.0`).
 #[pyclass(name = "Version", frozen, eq, ord, hash)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct PyVersion {
@@ -12,30 +11,21 @@ pub(crate) struct PyVersion {
     inner: Box<[usize]>,
 }
 
-impl PyVersion {
-    /// Construct a version from its components, stripping trailing zeros so
-    /// that versions that only differ in trailing zeros compare as equal.
-    fn normalized(mut parts: Vec<usize>) -> Self {
-        let trailing_zeros = parts.iter().rev().take_while(|&&x| x == 0).count();
-        parts.truncate(parts.len() - trailing_zeros);
-        Self {
-            inner: parts.into_boxed_slice(),
-        }
-    }
-}
-
 impl<const N: usize> From<Version<N>> for PyVersion {
     fn from(version: Version<N>) -> Self {
-        PyVersion::normalized(version.to_vec())
+        Self {
+            inner: Box::from(&*version),
+        }
     }
 }
 
 #[pymethods]
 impl PyVersion {
-    /// Parse a version string of the form `X`, `X.Y`, `X.Y.Z`, ...
+    /// Parse a version string with exactly `n_components` dotted components
+    /// (e.g. `12.8.0` for `n_components=3`).
     #[staticmethod]
     #[pyo3(name = "from_str")]
-    fn py_from_str(s: &str) -> PyResult<Self> {
+    fn py_from_str(s: &str, n_components: usize) -> PyResult<Self> {
         let version = s.trim();
         if version.is_empty() {
             return Err(PyValueError::new_err(format!(
@@ -51,7 +41,15 @@ impl PyVersion {
             })?;
             parts.push(component);
         }
-        Ok(PyVersion::normalized(parts))
+        if parts.len() != n_components {
+            return Err(PyValueError::new_err(format!(
+                "Version `{s}` has {} components, expected {n_components}",
+                parts.len()
+            )));
+        }
+        Ok(PyVersion {
+            inner: parts.into_boxed_slice(),
+        })
     }
 
     fn __str__(&self) -> String {

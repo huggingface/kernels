@@ -113,7 +113,13 @@ def _installed_version() -> Version | None:
     except InvalidVersion:
         return None
 
-    return Version.from_str(".".join(str(part) for part in release))
+    # `kernels_minver` always has three components, so bring the release
+    # segment to the same shape: pad shorter releases with zeros (PEP 440
+    # treats `0.17` and `0.17.0` as the same version) and drop any component
+    # beyond the third (a `X.Y.Z.W` release is never older than `X.Y.Z`).
+    parts = (release + (0, 0, 0))[:3]
+
+    return Version.from_str(".".join(str(part) for part in parts), 3)
 
 
 def _warn_if_below_minver(metadata: Metadata, variant_str: str) -> None:

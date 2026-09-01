@@ -157,7 +157,7 @@ def test_arch_validator_checks_entire_dependency_tree(monkeypatch):
         lambda metadata, variant: validated.append((metadata.backend.archs, variant)),
     )
 
-    ArchValidator().validate(tree=tree)
+    tree.validate(ArchValidator())
 
     assert validated == [
         (["8.0"], "root-variant"),

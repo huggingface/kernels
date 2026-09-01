@@ -82,7 +82,7 @@ def get_kernel_with_resolver(
         kernel=kernel,
         resolver=resolver,
     )
-    validator.validate(tree=tree)
+    tree.validate(validator)
     tree_only_local = tree.install(api=api)
     return tree_only_local.load()
 
@@ -289,7 +289,7 @@ def has_kernel(
 
     if check_arch:
         try:
-            ArchValidator().validate(tree=tree)
+            tree.validate(ArchValidator())
         except RuntimeError:
             return False
 

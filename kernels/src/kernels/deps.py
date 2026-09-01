@@ -70,15 +70,26 @@ class DepTreeNode(Generic[T]):
 
         return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
 
+    def validate(
+        self: "DepTreeNode[LocalKernel | RemoteKernel]",
+        validator: "Validator",
+    ) -> None:
+        """Validate this kernel and its dependencies with the given validator."""
+
+        validator.validate(tree=self)
+
+        for node in self.deps.values():
+            node.validate(validator)
+
 
 class Validator(Protocol):
-    """Validator for a resolved kernel dependency tree."""
+    """Validator for a node in a resolved kernel dependency tree."""
 
     def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None: ...
 
 
 class DependencyValidator:
-    """Validate the Python dependencies of every kernel in a tree."""
+    """Validate the Python dependencies of a kernel tree node."""
 
     def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         validate_dependencies(
@@ -87,18 +98,12 @@ class DependencyValidator:
             _backend(),
         )
 
-        for node in tree.deps.values():
-            self.validate(tree=node)
-
 
 class ArchValidator:
-    """Validate architecture compatibility for every kernel in a tree."""
+    """Validate architecture compatibility for a kernel tree node."""
 
     def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         _check_arch_incompatibility(tree.location.metadata, tree.location.variant_str)
-
-        for node in tree.deps.values():
-            self.validate(tree=node)
 
 
 @dataclass

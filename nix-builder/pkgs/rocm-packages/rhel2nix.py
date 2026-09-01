@@ -36,6 +36,17 @@ TRANSPARENT_BUNDLES = {
     "amdrocm-hpc-sdk",
 }
 
+# Groups of bundles with genuine link-level cyclic dependencies (proven from
+# soname requires in primary.xml; see HANDOFF.md "Known problem"). nix
+# buildInputs cannot express a cycle, so each group is unioned into a single
+# manifest entry, keyed by its first (canonical) member, before dependency
+# resolution runs. Internal cross-references between merged members then
+# collapse to self-edges and are dropped like any other self-dependency.
+MERGE_GROUPS: List[List[str]] = [
+    ["amdrocm-runtime", "amdrocm-base", "amdrocm-llvm"],
+    ["amdrocm-blas", "amdrocm-solver", "amdrocm-sparse"],
+]
+
 parser = argparse.ArgumentParser(description="Parse ROCm RHEL repository")
 parser.add_argument("version", help="ROCm version, e.g. 7.14.1")
 parser.add_argument(
@@ -234,6 +245,23 @@ def __main__():
 
     print(f"Grouped into {len(bundles)} bundles", file=sys.stderr)
 
+    # Merge cyclic bundle groups (see MERGE_GROUPS above) into their
+    # canonical member, so the cycle never shows up in the manifest.
+    merge_target: Dict[str, str] = {}
+    for group in MERGE_GROUPS:
+        canonical = group[0]
+        for name in group:
+            merge_target[name] = canonical
+        if canonical not in bundles:
+            continue
+        for name in group[1:]:
+            if name in bundles:
+                bundles[canonical].extend(bundles.pop(name))
+    print(
+        f"Merged cyclic bundle groups, {len(bundles)} bundles remain",
+        file=sys.stderr,
+    )
+
     def normalize_dep(name: str) -> Optional[str]:
         """Normalize a requires entry to a bundle name, or None to drop."""
         if not name or "(" in name or name.startswith("/"):
@@ -245,7 +273,8 @@ def __main__():
             base = base[: -len("-host")]
         elif base.endswith("-devel") and base[: -len("-devel")] in bundles:
             base = base[: -len("-devel")]
-        return base
+        # Redirect merged-away cyclic group members to their canonical name.
+        return merge_target.get(base, base)
 
     def dep_bundles(bundle: str, seen: Set[str]) -> Set[str]:
         """Direct dependency bundles of a bundle, splicing through

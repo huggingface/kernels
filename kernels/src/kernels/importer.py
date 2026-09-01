@@ -113,6 +113,11 @@ def _installed_version() -> Version | None:
     except InvalidVersion:
         return None
 
+    # packaging < 22 returns a LegacyVersion with `release = None` for
+    # non-PEP 440 versions instead of raising `InvalidVersion`.
+    if release is None:
+        return None
+
     return Version.from_str(".".join(str(part) for part in release))
 
 

@@ -2,16 +2,18 @@
 
 import argparse
 import json
+import re
 import sys
 import gzip
 import xml.etree.ElementTree as ET
-from typing import Set
+from typing import Dict, List, Optional, Set
 from urllib.parse import urljoin
 from urllib.request import urlopen
 
-BASEURL = "https://repo.radeon.com/rocm/rhel{rhel_version}/{version}/main/"
+BASEURL = "https://repo.amd.com/rocm/packages-multi-arch/rhel{rhel_version}/{arch}/"
 
 RHEL_VERSIONS = ["8", "9"]
+ARCHES = ["x86_64"]
 
 # XML namespaces used in RPM repo metadata
 RPM_NAMESPACES = {
@@ -21,17 +23,32 @@ RPM_NAMESPACES = {
 
 REPOMD_NAMESPACES = {"repo": "http://linux.duke.edu/metadata/repo"}
 
+# Suffix marking per-GPU-target subpackages, e.g. amdrocm-blas7.14-gfx942.
+GFX_SUFFIX = re.compile(r"-gfx\d+[a-z0-9]*$")
+
+# Pure dependency-tier metapackages. Not emitted; their dependencies are
+# spliced through to dependents.
+TRANSPARENT_BUNDLES = {
+    "amdrocm-core",
+    "amdrocm-core-devel",
+    "amdrocm-core-sdk",
+    "amdrocm-hpc",
+    "amdrocm-hpc-sdk",
+}
+
 parser = argparse.ArgumentParser(description="Parse ROCm RHEL repository")
-parser.add_argument("version", help="ROCm version")
+parser.add_argument("version", help="ROCm version, e.g. 7.14.1")
 parser.add_argument(
     "--rhel-version", help="RHEL version", choices=RHEL_VERSIONS, default="8"
+)
+parser.add_argument(
+    "--arch", help="Repository architecture", choices=ARCHES, default="x86_64"
 )
 
 
 class Package:
-    def __init__(self, package_elem, rhel_version: str, base_url: str):
+    def __init__(self, package_elem, base_url: str):
         self._elem = package_elem
-        self._rhel_version = rhel_version
         self._base_url = base_url
 
         # Parse package metadata.
@@ -56,28 +73,15 @@ class Package:
     def __str__(self):
         return f"{self._name} {self._version}"
 
-    def depends(self, version: str) -> Set[str]:
-        """Extract dependencies, filtering for ROCm packages"""
-        deps = set()
-
-        # Find requires entries in RPM format
+    def requires(self) -> List[str]:
+        """Raw requires entries from the RPM metadata."""
+        deps = []
         format_elem = self._elem.find("common:format", RPM_NAMESPACES)
         if format_elem is not None:
             requires_elem = format_elem.find("rpm:requires", RPM_NAMESPACES)
             if requires_elem is not None:
                 for entry in requires_elem.findall("rpm:entry", RPM_NAMESPACES):
-                    dep_name = entry.get("name", "")
-                    # Filter out system dependencies and focus on package names
-                    if (
-                        dep_name
-                        and not dep_name.startswith("/")
-                        and not dep_name.startswith("rpmlib(")
-                    ):
-                        # Remove any version suffix that matches the ROCm version
-                        if dep_name.endswith(version):
-                            dep_name = dep_name[: -len(version)]
-                        deps.add(dep_name)
-
+                    deps.append(entry.get("name", ""))
         return deps
 
     @property
@@ -90,19 +94,11 @@ class Package:
 
     @property
     def version(self) -> str:
-        # Remove RHEL-specific version suffix (e.g., .el8)
-        version = self._version
-        if f".el{self._rhel_version}" in version:
-            version = version.split(f".el{self._rhel_version}")[0]
-        return version
-
-    @property
-    def filename(self) -> str:
-        return f"{self._name}-{self._version}-{self._release}.{self._arch}.rpm"
+        return self._version
 
     @property
     def url(self) -> str:
-        return self._location
+        return urljoin(self._base_url, self._location)
 
 
 def fetch_and_parse_repodata(repo_url: str):
@@ -147,9 +143,9 @@ def fetch_and_parse_repodata(repo_url: str):
         sys.exit(1)
 
 
-def package_info(*, rhel_version: str, version: str):
+def package_info(*, rhel_version: str, arch: str):
     """Generator that yields Package objects from the RHEL repository"""
-    repo_url = BASEURL.format(rhel_version=rhel_version, version=version)
+    repo_url = BASEURL.format(rhel_version=rhel_version, arch=arch)
 
     metadata = fetch_and_parse_repodata(repo_url)
 
@@ -157,94 +153,167 @@ def package_info(*, rhel_version: str, version: str):
     for package_elem in metadata.findall(
         './/common:package[@type="rpm"]', RPM_NAMESPACES
     ):
-        yield Package(package_elem, rhel_version, repo_url)
+        yield Package(package_elem, repo_url)
+
+
+def major_minor(version: str) -> str:
+    """'7.14.1' -> '7.14' (the suffix used in versioned package names)."""
+    return ".".join(version.split(".")[:2])
 
 
 def __main__():
     args = parser.parse_args()
-    packages = {}
+    version_mm = major_minor(args.version)
 
     print(
-        f"Fetching ROCm {args.version} packages for RHEL {args.rhel_version}...",
+        f"Fetching ROCm {args.version} packages for RHEL {args.rhel_version} ({args.arch})...",
         file=sys.stderr,
     )
 
-    for pkg in package_info(rhel_version=args.rhel_version, version=args.version):
-        if "debuginfo" not in pkg.name and "debugsource" not in pkg.name:
-            packages[pkg.name] = pkg
+    # Select the packages that belong to the requested ROCm version. The
+    # multi-arch repo serves several versions from one URL.
+    packages = {}
+    available_versions = set()
+    for pkg in package_info(rhel_version=args.rhel_version, arch=args.arch):
+        available_versions.add(pkg.version)
+        if pkg.version != args.version:
+            continue
+        if "debuginfo" in pkg.name or "debugsource" in pkg.name:
+            continue
+        packages[pkg.name] = pkg
+
+    if not packages:
+        print(
+            f"No packages found for version {args.version}. "
+            f"Available versions: {', '.join(sorted(available_versions))}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     print(f"Found {len(packages)} packages", file=sys.stderr)
 
-    filtered_packages = {}
-    # Filter dupes like hip-devel vs. hip-devel6.4.1
-    for name, info in packages.items():
-        if name.endswith(args.version):
-            name_without_version = name[: -len(args.version)]
-            if name_without_version not in packages:
-                filtered_packages[name_without_version] = info
-        else:
-            filtered_packages[name] = info
-    packages = filtered_packages
+    def strip_suffixes(name: str) -> str:
+        """Reduce a package name to its bundle base.
 
-    print(f"After filtering duplicates: {len(packages)} packages", file=sys.stderr)
+        amdrocm-blas7.14-gfx942 -> amdrocm-blas7.14 -> amdrocm-blas
+        """
+        base = GFX_SUFFIX.sub("", name)
+        if base.endswith(version_mm):
+            base = base[: -len(version_mm)]
+        return base
 
-    # First pass: Find -devel and -rpath packages that should be merged.
-    dev_to_merge = {}
-    for name in packages.keys():
-        if name.endswith("-devel") and name[:-6] in packages:
-            dev_to_merge[name] = name[:-6]
-        elif name.endswith("-devel-rpath") and name[:-12] in packages:
-            dev_to_merge[name] = name[:-12]
-        elif name.endswith("-rpath") and name[:-6] in packages:
-            dev_to_merge[name] = name[:-6]
+    # Drop unversioned alias packages (amdrocm-blas -> amdrocm-blas7.14,
+    # amdrocm-core-gfx942 -> amdrocm-core7.14-gfx942): the unversioned
+    # names are 1-file aliases; the versioned names are real.
+    def is_alias(name: str) -> bool:
+        base = GFX_SUFFIX.sub("", name)
+        if base.endswith(version_mm):
+            return False
+        return f"{base}{version_mm}" in packages
 
-    print(f"Found {len(dev_to_merge)} packages to merge", file=sys.stderr)
+    aliases = [name for name in packages if is_alias(name)]
+    for name in aliases:
+        del packages[name]
+    print(f"Dropped {len(aliases)} unversioned alias packages", file=sys.stderr)
 
-    # Second pass: get ROCm dependencies and merge -devel packages.
+    # Group packages into bundles.
+    bundles: Dict[str, List[Package]] = {}
+    for pkg in packages.values():
+        bundles.setdefault(strip_suffixes(pkg.name), []).append(pkg)
+
+    # Merge variant bundles into their base bundle: "-host" always (the
+    # base package is just a meta), "-devel" when the base exists.
+    for bundle in list(bundles):
+        target = None
+        if bundle.endswith("-host"):
+            target = bundle[: -len("-host")]
+        elif bundle.endswith("-devel") and bundle[: -len("-devel")] in bundles:
+            target = bundle[: -len("-devel")]
+        if target is not None and target in bundles:
+            bundles[target].extend(bundles.pop(bundle))
+
+    print(f"Grouped into {len(bundles)} bundles", file=sys.stderr)
+
+    def normalize_dep(name: str) -> Optional[str]:
+        """Normalize a requires entry to a bundle name, or None to drop."""
+        if not name or "(" in name or name.startswith("/"):
+            # System, soname, rpmlib and config() dependencies.
+            return None
+        base = strip_suffixes(name)
+        # Mirror the variant merging above.
+        if base.endswith("-host") and base[: -len("-host")] in bundles:
+            base = base[: -len("-host")]
+        elif base.endswith("-devel") and base[: -len("-devel")] in bundles:
+            base = base[: -len("-devel")]
+        return base
+
+    def dep_bundles(bundle: str, seen: Set[str]) -> Set[str]:
+        """Direct dependency bundles of a bundle, splicing through
+        transparent metapackage tiers."""
+        deps = set()
+        for pkg in bundles.get(bundle, []):
+            for raw in pkg.requires():
+                dep = normalize_dep(raw)
+                if not dep or dep == bundle or dep in seen:
+                    continue
+                if dep in TRANSPARENT_BUNDLES:
+                    deps |= dep_bundles(dep, seen | {bundle})
+                elif dep in bundles:
+                    deps.add(dep)
+                # Otherwise: a system dependency, not part of the repo.
+        return deps
+
+    # Build the manifest, one entry per bundle.
     metadata = {}
-
-    # sorted will put -devel after non-devel packages.
-    for name in sorted(packages.keys()):
-        info = packages[name]
-        deps = {
-            dev_to_merge.get(dep, dep)
-            for dep in info.depends(args.version)
-            if dep in packages
-        }
-
-        pkg_metadata = {
-            "name": name,
-            "sha256": info.sha256,
-            "url": urljoin(
-                BASEURL.format(rhel_version=args.rhel_version, version=args.version),
-                info.url,
-            ),
-            "version": info.version,
-        }
-
-        if name in dev_to_merge:
-            target_pkg = dev_to_merge[name]
-            if target_pkg not in metadata:
-                metadata[target_pkg] = {
-                    "deps": set(),
-                    "components": [],
-                    "version": info.version,
-                }
-            metadata[target_pkg]["components"].append(pkg_metadata)
-            metadata[target_pkg]["deps"].update(deps)
-        else:
-            metadata[name] = {
-                "deps": deps,
-                "components": [pkg_metadata],
-                "version": info.version,
+    for bundle in sorted(bundles):
+        if bundle in TRANSPARENT_BUNDLES:
+            continue
+        components = [
+            {
+                "name": pkg.name,
+                "sha256": pkg.sha256,
+                "url": pkg.url,
+                "version": pkg.version,
             }
+            for pkg in sorted(bundles[bundle], key=lambda p: p.name)
+        ]
 
-    # Remove self-references and convert dependencies to list.
-    for name, pkg_metadata in metadata.items():
-        deps = pkg_metadata["deps"]
-        deps -= {name, f"{name}-devel"}
-        deps -= {name, f"{name}-rpath"}
-        pkg_metadata["deps"] = list(sorted(deps))
+        # dep_bundles already splices through (and drops) transparent tiers.
+        deps = dep_bundles(bundle, {bundle})
+
+        metadata[bundle] = {
+            "deps": deps,
+            "components": components,
+            "version": components[0]["version"] if components else args.version,
+        }
+
+    # Resolve dependency cycles (the new repo has them at the
+    # shared-library level, e.g. amdrocm-base -> amdrocm-runtime ->
+    # amdrocm-llvm -> amdrocm-runtime); nix buildInputs cannot be
+    # cyclic. Cyclic edges are dropped with a warning; see HANDOFF.md
+    # for the follow-up fix.
+    graph: Dict[str, List[str]] = {key: [] for key in metadata}
+
+    def reaches(src: str, dst: str) -> bool:
+        stack, visited = [src], set()
+        while stack:
+            node = stack.pop()
+            if node == dst:
+                return True
+            if node not in visited:
+                visited.add(node)
+                stack.extend(graph.get(node, []))
+        return False
+
+    for key in sorted(metadata):
+        kept = []
+        for dep in sorted(metadata[key]["deps"]):
+            if reaches(dep, key):
+                print(f"Breaking dependency cycle: {key} -> {dep}", file=sys.stderr)
+            else:
+                graph[key].append(dep)
+                kept.append(dep)
+        metadata[key]["deps"] = kept
 
     print(f"Generated metadata for {len(metadata)} packages", file=sys.stderr)
     print(json.dumps(metadata, indent=2))

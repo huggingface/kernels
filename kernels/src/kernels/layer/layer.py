@@ -15,6 +15,7 @@ from kernels_data import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version
+from ..deps import DependencyValidator
 from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
@@ -240,6 +241,7 @@ class LockedLayerRepository:
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
+            validator=DependencyValidator(),
         )
         return _get_kernel_layer(self, kernel)
 

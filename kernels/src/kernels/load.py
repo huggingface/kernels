@@ -7,7 +7,7 @@ from huggingface_hub import HfApi, constants
 from kernels_data import KernelDependency, KernelVersion
 
 from kernels._versions import revision_or_version
-from kernels.deps import resolve_kernel_tree
+from kernels.deps import AllValidator, ArchValidator, DependencyValidator, Validator, resolve_kernel_tree
 from kernels.hf_hub import _get_hf_api
 from kernels.locking import (
     get_caller_locked_kernel_revision,
@@ -55,7 +55,7 @@ def get_kernel_with_resolver(
     backend: str | None,
     kernel: KernelDependency,
     resolver: Resolver | None,
-    check_arch: bool = False,
+    validator: Validator,
 ) -> ModuleType:
     """
     Load a kernel and its (transitive) dependencies using the given resolver.
@@ -70,9 +70,8 @@ def get_kernel_with_resolver(
             The kernel to load.
         resolver (`Resolver`, *optional*):
             The resolver used to resolve the kernel and its (transitive) dependencies.
-        check_arch (`bool`, *optional*, defaults to `False`):
-            Whether to check that the kernel builds support the architecture
-            (e.g. CUDA compute capability) of the current device.
+        validator (`Validator`):
+            The validator to apply to the resolved kernel dependency tree.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -83,9 +82,7 @@ def get_kernel_with_resolver(
         kernel=kernel,
         resolver=resolver,
     )
-    tree.validate_dependencies()
-    if check_arch:
-        tree.check_archs()
+    validator.validate(tree=tree)
     tree_only_local = tree.install(api=api)
     return tree_only_local.load()
 
@@ -159,12 +156,16 @@ def get_kernel(
         ),
     ]
 
+    validators: list[Validator] = [DependencyValidator()]
+    if check_arch:
+        validators.append(ArchValidator())
+
     return get_kernel_with_resolver(
         api=api,
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
         resolver=SequentialResolver(resolvers=resolvers),
-        check_arch=check_arch,
+        validator=AllValidator(validators=validators),
     )
 
 
@@ -218,6 +219,7 @@ def get_local_kernel(
         # We don't have a name for the kernel, so let's just use the path.
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
+        validator=DependencyValidator(),
     )
 
 
@@ -287,7 +289,7 @@ def has_kernel(
 
     if check_arch:
         try:
-            tree.check_archs()
+            ArchValidator().validate(tree=tree)
         except RuntimeError:
             return False
 
@@ -334,6 +336,7 @@ def load_kernel(
         backend=backend,
         kernel=kernel_dep,
         resolver=resolver,
+        validator=DependencyValidator(),
     )
 
 
@@ -374,4 +377,5 @@ def get_locked_kernel(
         backend=None,
         kernel=kernel_dep,
         resolver=resolver,
+        validator=DependencyValidator(),
     )

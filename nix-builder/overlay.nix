@@ -284,7 +284,7 @@ final: prev:
     }) versions
   )
 )
-// (import ./pkgs/rocm-packages {
+// (import ./pkgs/rocm-packages-old {
   inherit (final) callPackage;
   inherit (prev) lib;
 })

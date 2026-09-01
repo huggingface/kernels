@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::config::{Backend, Build, GitUrl, KernelDependency, KernelName};
 use crate::digest::Digest;
 use crate::git::{GitStatus, Oid};
+use crate::version::Version;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -93,6 +94,10 @@ pub struct Metadata {
     pub name: KernelName,
     pub id: String,
     pub version: usize,
+    /// Minimum version of the `kernels` Python library required to load this
+    /// build variant. Absent in metadata written before this key existed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kernels_minver: Option<Version<3>>,
     pub license: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream: Option<GitUrl>,
@@ -125,6 +130,7 @@ impl Metadata {
             id,
             name: build.general.name.clone(),
             version: build.general.version,
+            kernels_minver: Some(build.required_kernels_version(backend)),
             license: build.general.license.clone(),
             upstream: build.general.upstream.clone(),
             source: build.general.source.clone(),
@@ -163,8 +169,12 @@ mod tests {
     use std::collections::HashMap;
     use std::str::FromStr;
 
-    use crate::config::{Backend, Build, Framework, General, KernelName, TorchNoarch, TvmFfi};
+    use crate::config::{
+        Backend, Build, Framework, General, KernelDependency, KernelName, KernelVersion,
+        TorchNoarch, TvmFfi,
+    };
     use crate::git::{GitStatus, Oid};
+    use crate::version::Version;
 
     use super::{KernelBuilderVersion, Metadata, Provenance};
 
@@ -301,6 +311,43 @@ mod tests {
 
         let parsed: Metadata = serde_json::from_str(&json).unwrap();
         assert!(parsed.provenance.is_none());
+    }
+
+    #[test]
+    fn metadata_kernels_minver_defaults_to_baseline() {
+        let build = torch_noarch_build();
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        assert!(json.contains(r#""kernels-minver":"0.14.0""#));
+
+        let parsed: Metadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed.kernels_minver,
+            Some(Version::from_str("0.14.0").unwrap())
+        );
+    }
+
+    #[test]
+    fn metadata_kernels_minver_bumped_for_kernel_depends() {
+        let mut build = torch_noarch_build();
+        build.general.kernel_depends = Some(vec![KernelDependency {
+            repo_id: "kernels-community/activation".to_string(),
+            version: KernelVersion::Version(1),
+        }]);
+        let metadata = Metadata::for_backend(&build, "test-id".to_string(), Backend::Cuda).unwrap();
+
+        assert_eq!(
+            metadata.kernels_minver,
+            Some(Version::from_str("0.17.0").unwrap())
+        );
+    }
+
+    #[test]
+    fn metadata_without_kernels_minver_parses() {
+        let json = r#"{"name":"test-kernel","id":"test-id","version":1,"license":"apache-2.0","python-depends":[],"backend":{"type":"cuda"}}"#;
+        let parsed: Metadata = serde_json::from_str(json).unwrap();
+        assert!(parsed.kernels_minver.is_none());
     }
 
     #[test]

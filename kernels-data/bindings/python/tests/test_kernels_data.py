@@ -8,6 +8,7 @@ from kernels_data import (
     KernelName,
     KernelVersion,
     Metadata,
+    Version,
 )
 
 
@@ -80,6 +81,7 @@ def test_metadata_load_full(tmp_path):
                 "version": 1,
                 "name": "my-kernel",
                 "license": "Apache-2.0",
+                "kernels-minver": "0.17.0",
                 "upstream": "https://github.com/example/kernel",
                 "source": "https://github.com/example/kernel-builder",
                 "python-depends": ["torch"],
@@ -91,6 +93,7 @@ def test_metadata_load_full(tmp_path):
     assert m.id == "_my_kernel_8a3be8f"
     assert m.name == KernelName("my-kernel")
     assert m.version == 1
+    assert m.kernels_minver == Version.from_str("0.17.0")
     assert m.license == "Apache-2.0"
     assert m.upstream == "https://github.com/example/kernel"
     assert m.source == "https://github.com/example/kernel-builder"
@@ -115,6 +118,7 @@ def test_metadata_load_minimal(tmp_path):
     )
     m = Metadata.read_from_file(path)
     assert m.version == 1
+    assert m.kernels_minver is None
     assert m.license == "Apache-2.0"
     assert m.upstream is None
     assert m.source is None

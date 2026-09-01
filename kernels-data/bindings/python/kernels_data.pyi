@@ -135,7 +135,7 @@ class Provenance:
 class Version:
     """A dotted numeric version (e.g. `12.8.0`).
 
-    Trailing zeros are stripped during normalization.
+    Versions that only differ in trailing zeros compare as equal.
     """
 
     @staticmethod
@@ -658,6 +658,13 @@ class Metadata:
     def name(self) -> KernelName: ...
     @property
     def version(self) -> Optional[int]: ...
+    @property
+    def kernels_minver(self) -> Optional[Version]:
+        """Minimum `kernels` library version required to load this variant.
+
+        `None` for metadata written before this key existed.
+        """
+        ...
     @property
     def license(self) -> Optional[str]: ...
     @property

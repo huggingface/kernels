@@ -8,6 +8,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Version<const N: usize>([usize; N]);
 
+impl<const N: usize> Version<N> {
+    /// Construct a version from its components.
+    pub const fn new(parts: [usize; N]) -> Self {
+        Version(parts)
+    }
+}
+
 impl<'de, const N: usize> Deserialize<'de> for Version<N> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

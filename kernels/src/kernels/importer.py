@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from kernels_data import Metadata
+from kernels_data import Metadata, Version
+from packaging.version import InvalidVersion, parse
 
 from kernels.hf_hub import RepoInfo
 
@@ -27,6 +28,8 @@ class LoadedKernel:
     - `id` (`str`): kernel identifier that is unique to the kernel version + backend.
     - `name` (`str`): the name of the kernel.
     - `version` (`int`): the version of the kernel.
+    - `kernels_minver` (`Version | None`): the minimum `kernels` library
+      version required to load the kernel.
     - `license` (`str`): the license of the kernel.
     - `upstream` (`str | None`): the original upstream repository of the kernel.
     - `source` (`str | None`): the kernel-builder formatted source repository.
@@ -91,6 +94,56 @@ def _warn_if_dirty(metadata: Metadata, variant_str: str) -> None:
     )
 
 
+def _installed_version() -> Version | None:
+    """The installed `kernels` version as a numeric version.
+
+    Pre-release and development suffixes are stripped, since kernel metadata
+    only records release versions. Without stripping, a development version
+    like `0.17.0.dev0` would compare as older than the `0.17.0` it implements.
+
+    Returns `None` if the installed version is not a PEP 440 version, which
+    can happen for versions derived from a VCS checkout. Such a version cannot
+    be compared, and this check must never make a kernel fail to load.
+    """
+    # Avoid an import cycle.
+    from kernels import __version__
+
+    try:
+        release = parse(__version__).release
+    except InvalidVersion:
+        return None
+
+    # packaging < 22 returns a LegacyVersion with `release = None` for
+    # non-PEP 440 versions instead of raising `InvalidVersion`.
+    if release is None:
+        return None
+
+    return Version.from_str(".".join(str(part) for part in release))
+
+
+def _warn_if_below_minver(metadata: Metadata, variant_str: str) -> None:
+    """Warn when the installed `kernels` library is older than the minimum
+    version required by a kernel.
+    """
+    minver = metadata.kernels_minver
+    if minver is None:
+        return
+
+    installed = _installed_version()
+    if installed is not None and installed < minver:
+        # Report the verbatim installed version, not the normalized one used
+        # for comparison, so the message matches what `pip show` reports.
+        from kernels import __version__
+
+        warnings.warn(
+            f"Kernel '{metadata.name}' variant '{variant_str}' requires "
+            f"kernels>={minver}, but version {__version__} is installed. "
+            "The kernel may not load or work correctly; upgrade with: "
+            "pip install --upgrade kernels",
+            stacklevel=3,
+        )
+
+
 def _import_from_path(
     variant_path: Path,
     deps: dict[str, ModuleType],
@@ -101,6 +154,7 @@ def _import_from_path(
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
     _warn_if_dirty(metadata, variant_path.name)
+    _warn_if_below_minver(metadata, variant_path.name)
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"

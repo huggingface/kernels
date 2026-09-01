@@ -37,6 +37,13 @@ use crate::version::Version;
 pub type CurrentConfig = v5::Build;
 pub const CURRENT_EDITION: usize = 5;
 
+/// Baseline `kernels` version that can load kernels built with the current
+/// metadata format.
+const KERNELS_VERSION_BASELINE: Version<3> = Version::new([0, 14, 0]);
+
+/// First `kernels` version that can resolve kernel dependencies.
+const KERNELS_VERSION_KERNEL_DEPENDS: Version<3> = Version::new([0, 17, 0]);
+
 pub struct Build {
     pub general: General,
     pub kernels: HashMap<String, Kernel>,
@@ -59,6 +66,24 @@ impl Build {
 
     pub fn repo_id(&self) -> Option<&str> {
         self.general.hub.as_ref().and_then(|h| h.repo_id.as_deref())
+    }
+
+    /// Minimum version of the `kernels` Python library required to load a
+    /// build variant for `backend`.
+    ///
+    /// The version is derived from the features that the kernel uses, rather
+    /// than being specified by the kernel author, who would have to keep track
+    /// of which `kernels` version introduced support for which feature.
+    pub fn required_kernels_version(&self, backend: Backend) -> Version<3> {
+        let mut required = KERNELS_VERSION_BASELINE;
+
+        // Kernel dependencies are only fetched by newer versions of `kernels`,
+        // older versions would fail to import the kernel.
+        if !self.general.all_kernel_depends(backend).is_empty() {
+            required = required.max(KERNELS_VERSION_KERNEL_DEPENDS);
+        }
+
+        required
     }
 }
 
@@ -116,9 +141,6 @@ pub struct General {
 
     /// Kernel-builder formatted source repository (must contain build.toml and flake.nix).
     pub source: Option<GitUrl>,
-
-    /// Minimum version of the `kernels` Python library required to load the kernel.
-    pub minver: Option<Version<3>>,
 
     pub backends: Vec<Backend>,
     pub hub: Option<Hub>,
@@ -509,7 +531,6 @@ mod tests {
             license: "apache-2.0".to_string(),
             upstream: None,
             source: None,
-            minver: None,
             backends: vec![Backend::Tpu],
             hub: None,
             kernel_depends: None,
@@ -548,5 +569,26 @@ mod tests {
                 .next()
                 .is_none()
         );
+    }
+
+    /// The minimum `kernels` version is derived from the features that a
+    /// kernel uses, so kernel authors must not be able to set it themselves.
+    #[test]
+    fn general_minver_is_rejected() {
+        let toml = r#"
+            [general]
+            name = "test-kernel"
+            version = 1
+            edition = 5
+            license = "apache-2.0"
+            backends = ["cuda"]
+            minver = "0.11.0"
+
+            [torch]
+            src = []
+        "#;
+
+        let err = toml::from_str::<v5::Build>(toml).unwrap_err().to_string();
+        assert!(err.contains("unknown field `minver`"), "{err}");
     }
 }

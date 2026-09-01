@@ -120,7 +120,7 @@ def _metadata_info(metadata: Metadata | None, variants: list[Variant]) -> dict:
             {
                 "name": str(metadata.name),
                 "version": metadata.version,
-                "minver": metadata.minver,
+                "kernels_minver": (str(metadata.kernels_minver) if metadata.kernels_minver is not None else None),
                 "license": metadata.license,
                 "upstream": metadata.upstream,
                 "source": metadata.source,
@@ -145,7 +145,7 @@ def _print_human(info: dict):
 
     print(f"Name: {value(info.get('name'))}")
     print(f"Version: {value(info.get('version'))}")
-    print(f"Minimum kernels version: {value(info.get('minver'))}")
+    print(f"Minimum kernels version: {value(info.get('kernels_minver'))}")
     print(f"License: {value(info.get('license'))}")
     print(f"Upstream: {value(info.get('upstream'))}")
     print(f"Source: {value(info.get('source'))}")

@@ -659,7 +659,12 @@ class Metadata:
     @property
     def version(self) -> Optional[int]: ...
     @property
-    def minver(self) -> Optional[str]: ...
+    def kernels_minver(self) -> Optional[Version]:
+        """Minimum `kernels` library version required to load this variant.
+
+        `None` for metadata written before this key existed.
+        """
+        ...
     @property
     def license(self) -> Optional[str]: ...
     @property

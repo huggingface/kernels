@@ -201,7 +201,6 @@ impl TryFrom<General> for super::General {
             license,
             upstream: general.upstream,
             source: None,
-            minver: None,
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),

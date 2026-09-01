@@ -52,8 +52,6 @@ pub struct General {
 
     pub source: Option<GitUrl>,
 
-    pub minver: Option<Version<3>>,
-
     pub backends: Vec<Backend>,
 
     pub cuda: Option<CudaGeneral>,
@@ -228,7 +226,6 @@ impl From<General> for super::General {
             license: general.license,
             upstream: general.upstream,
             source: general.source,
-            minver: general.minver,
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),
@@ -446,7 +443,6 @@ impl From<super::General> for General {
             license: general.license,
             upstream: general.upstream,
             source: general.source,
-            minver: general.minver,
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),
             hub: general.hub.map(Into::into),

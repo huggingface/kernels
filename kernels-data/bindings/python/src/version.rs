@@ -1,3 +1,4 @@
+use kernels_data::version::Version;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -9,6 +10,24 @@ pub(crate) struct PyVersion {
     // We are storing this as a `Box<[usize]>` to allow storing kernels-data
     // `Version` in directly in `PyVersion` as well.
     inner: Box<[usize]>,
+}
+
+impl PyVersion {
+    /// Construct a version from its components, stripping trailing zeros so
+    /// that versions that only differ in trailing zeros compare as equal.
+    fn normalized(mut parts: Vec<usize>) -> Self {
+        let trailing_zeros = parts.iter().rev().take_while(|&&x| x == 0).count();
+        parts.truncate(parts.len() - trailing_zeros);
+        Self {
+            inner: parts.into_boxed_slice(),
+        }
+    }
+}
+
+impl<const N: usize> From<Version<N>> for PyVersion {
+    fn from(version: Version<N>) -> Self {
+        PyVersion::normalized(version.to_vec())
+    }
 }
 
 #[pymethods]
@@ -32,12 +51,7 @@ impl PyVersion {
             })?;
             parts.push(component);
         }
-        // Remove trailing zeros for normalization.
-        let trailing_zeros = parts.iter().rev().take_while(|&&x| x == 0).count();
-        parts.truncate(parts.len() - trailing_zeros);
-        Ok(Self {
-            inner: parts.into_boxed_slice(),
-        })
+        Ok(PyVersion::normalized(parts))
     }
 
     fn __str__(&self) -> String {

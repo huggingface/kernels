@@ -69,10 +69,11 @@ metadata. Currently the following top-level keys are supported:
 - `name` (`str`, required): then name of the kernel. Replacing dashes
   by underscores should result in the module name of the kernel.
 - `version` (`int`, required): the kernel version number.
-- `minver` (`str`, optional): the minimum version of the `kernels`
-  Python library required to load the kernel (e.g. `"0.11.0"`). The
-  `kernels` library warns when it loads a kernel that requires a newer
-  version than the one that is installed.
+- `kernels-minver` (`str`, optional): the minimum version of the `kernels`
+  Python library required to load the kernel (e.g. `"0.17.0"`). This key is
+  determined by the kernel builder from the features that the kernel uses,
+  it is not set by kernel authors. The `kernels` library warns when it loads
+  a kernel that requires a newer version than the one that is installed.
 - `license` (`str`, required): the kernel license in. Refer to the
   list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
 - `upstream` (`str`, optional): Git-compatible URL (passable to `git clone`)

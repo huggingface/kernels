@@ -1,11 +1,12 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Generic, TypeVar
+from typing import Generic, Protocol, TypeVar
 
 from huggingface_hub.hf_api import HfApi
 from kernels_data import KernelDependency, KernelVersion
 
+from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
 from kernels.hf_hub import RepoInfo
 from kernels.importer import _import_from_path
@@ -69,17 +70,51 @@ class DepTreeNode(Generic[T]):
 
         return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
 
-    def validate_dependencies(self) -> None:
-        """Validate that the dependencies of this kernel are satisfied."""
+    def validate(
+        self: "DepTreeNode[LocalKernel | RemoteKernel]",
+        validator: "Validator",
+    ) -> None:
+        """Validate this kernel and its dependencies with the given validator."""
 
+        validator.validate(tree=self)
+
+        for node in self.deps.values():
+            node.validate(validator)
+
+
+class Validator(Protocol):
+    """Validator for a node in a resolved kernel dependency tree."""
+
+    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None: ...
+
+
+class DependencyValidator:
+    """Validate the Python dependencies of a kernel tree node."""
+
+    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         validate_dependencies(
-            self.location.metadata.name.python_name,
-            self.location.metadata.python_depends,
+            tree.location.metadata.name.python_name,
+            tree.location.metadata.python_depends,
             _backend(),
         )
 
-        for node in self.deps.values():
-            node.validate_dependencies()
+
+class ArchValidator:
+    """Validate architecture compatibility for a kernel tree node."""
+
+    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+        _check_arch_incompatibility(tree.location.metadata, tree.location.variant_str)
+
+
+@dataclass
+class AllValidator:
+    """Apply multiple validators to a kernel dependency tree."""
+
+    validators: list[Validator]
+
+    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+        for validator in self.validators:
+            validator.validate(tree=tree)
 
 
 LoadCache = dict[KernelDependency, DepTreeNode]

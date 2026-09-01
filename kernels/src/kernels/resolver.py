@@ -36,6 +36,10 @@ class LocalKernel:
     metadata: Metadata
     origin: "RemoteKernel | None" = None
 
+    @property
+    def variant_str(self) -> str:
+        return self.variant_path.name
+
     def install(self, *, api: HfApi) -> "LocalKernel":
         # Local kernels are already installed, so we just return self.
         return self
@@ -49,6 +53,10 @@ class RemoteKernel:
     revision: str
     metadata: Metadata
     variant: Variant
+
+    @property
+    def variant_str(self) -> str:
+        return self.variant.variant_str
 
     def install(self, *, api: HfApi) -> LocalKernel:
         allow_patterns = [f"build/{self.variant.variant_str}/*"]

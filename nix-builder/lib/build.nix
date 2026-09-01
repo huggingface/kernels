@@ -157,6 +157,7 @@ rec {
           kernelProvenance
           ;
         kernelName = kernelConfig.name;
+        variant = variants.kernelVariant kernelConfig;
       }
     else if kernelConfig.isTvmFfi then
       extension.mkTvmFfiExtension {
@@ -176,6 +177,7 @@ rec {
 
         kernelName = kernelConfig.name;
         doAbiCheck = true;
+        variant = variants.kernelVariant kernelConfig;
       }
     else
       extension.mkTorchExtension {
@@ -197,6 +199,7 @@ rec {
 
         kernelName = kernelConfig.name;
         doAbiCheck = true;
+        variant = variants.kernelVariant kernelConfig;
       };
 
   # Build multiple Torch extensions.

@@ -128,8 +128,8 @@ def _import_from_path(
         # imports from scratch.
         sys.modules.pop(metadata.id, None)
         if hasattr(e, "add_note"):
-            origin = f" (from {repo_info.repo_id}, revision: {repo_info.revision})" if repo_info else ""
-            e.add_note(f"while importing kernel '{metadata.name}' variant '{variant_path.name}'{origin}")
+            origin = f"({repo_info.repo_id}, revision: {repo_info.revision})" if repo_info else ""
+            e.add_note(f"while importing kernel '{metadata.name}', variant '{variant_path.name}' {origin}")
         raise
 
     _loaded_kernels[variant_path] = LoadedKernel(

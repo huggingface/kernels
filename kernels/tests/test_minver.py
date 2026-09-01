@@ -54,7 +54,7 @@ def test_no_warning_for_dev_version_of_required_release(tmp_path, recwarn, monke
 )
 def test_installed_version_uses_release_segment(monkeypatch, installed):
     monkeypatch.setattr(kernels, "__version__", installed)
-    assert _installed_version() == Version.from_str("0.17.0", 3)
+    assert _installed_version() == Version.from_str("0.17.0")
 
 
 def test_installed_version_is_none_for_non_pep440_version(monkeypatch):
@@ -75,8 +75,9 @@ def test_unparseable_installed_version_does_not_fail_load(tmp_path, recwarn, mon
 def test_version_ordering_is_numeric_not_lexicographic():
     # `0.9 < 0.10` only holds for numeric comparison; string comparison would
     # get this backwards.
-    assert Version.from_str("0.9.0", 3) < Version.from_str("0.10.0", 3)
-    assert Version.from_str("0.14.0", 3) < Version.from_str("0.14.1", 3)
+    assert Version.from_str("0.9") < Version.from_str("0.10")
+    assert Version.from_str("0.14") == Version.from_str("0.14.0")
+    assert Version.from_str("0.14.0") < Version.from_str("0.14.1")
 
 
 def test_warns_when_minver_not_met(tmp_path):

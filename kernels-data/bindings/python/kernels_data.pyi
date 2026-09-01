@@ -133,16 +133,17 @@ class Provenance:
 
 @final
 class Version:
-    """A dotted numeric version (e.g. `12.8.0`)."""
+    """A dotted numeric version (e.g. `12.8.0`).
+
+    Versions that only differ in trailing zeros compare as equal.
+    """
 
     @staticmethod
-    def from_str(s: str, n_components: int) -> "Version":
-        """Parse a version string with exactly `n_components` dotted
-        components (e.g. `12.8.0` for `n_components=3`).
+    def from_str(s: str) -> "Version":
+        """Parse a version string of the form `X`, `X.Y`, `X.Y.Z`, ...
 
         Raises:
-            ValueError: If the string is empty, contains non-numeric parts,
-                or does not have exactly `n_components` components.
+            ValueError: If the string is empty or contains non-numeric parts.
         """
         ...
 

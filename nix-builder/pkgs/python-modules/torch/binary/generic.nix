@@ -91,36 +91,49 @@ let
 
     paths =
       with rocmPackages;
-      [
-        aotriton
-        clr
-        comgr
-        hipblas
-        hipblas-common-devel
-        hipblaslt
-        hipfft
-        hipify-clang
-        hiprand
-        hipsolver
-        hipsparse
-        hipsparselt
-        hsa-rocr
-        miopen-hip
-        rccl
-        rocblas
-        rocm-core
-        rocm-device-libs
-        rocm-hip-runtime
-        rocm-smi-lib
-        rocminfo
-        rocrand
-        rocsolver
-        rocsparse
-        roctracer
-      ]
-      ++ lib.optionals (versionAtLeast version "2.12") [
-        rocprofiler-sdk
-      ];
+      if rocmPackages.theRock then
+        [
+          aotriton
+          clr
+          amdrocm-blas
+          amdrocm-dnn
+          amdrocm-fft
+          amdrocm-hipfile
+          amdrocm-profiler-base
+          amdrocm-rand
+          amdrocm-rccl
+        ]
+      else
+        [
+          aotriton
+          clr
+          comgr
+          hipblas
+          hipblas-common-devel
+          hipblaslt
+          hipfft
+          hipify-clang
+          hiprand
+          hipsolver
+          hipsparse
+          hipsparselt
+          hsa-rocr
+          miopen-hip
+          rccl
+          rocblas
+          rocm-core
+          rocm-device-libs
+          rocm-hip-runtime
+          rocm-smi-lib
+          rocminfo
+          rocrand
+          rocsolver
+          rocsparse
+          roctracer
+        ]
+        ++ lib.optionals (versionAtLeast version "2.12") [
+          rocprofiler-sdk
+        ];
 
     postBuild = ''
       # Fix `setuptools` not being found
@@ -233,9 +246,9 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [
       cudaPackages.libnvshmem
     ]
-    ++ lib.optionals rocmSupport ([
+    ++ lib.optionals rocmSupport [
       rocmtoolkit_joined
-    ])
+    ]
     ++ lib.optionals xpuSupport (
       with xpuPackages;
       [
@@ -330,6 +343,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
       )
     )
     ++ lib.optionals rocmSupport [
+      "rocm"
       # Ours is called 'triton'. Remove this once we build ROCm Triton from
       # a binary wheel.
       "triton-rocm"

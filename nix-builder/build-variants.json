@@ -51,6 +51,7 @@
       "torch212-cxx11-rocm72-x86_64-linux",
       "torch213-cxx11-rocm71-x86_64-linux",
       "torch213-cxx11-rocm72-x86_64-linux",
+      "torch214-cxx11-rocm714-x86_64-linux",
       "torch214-cxx11-rocm72-x86_64-linux"
     ],
     "xpu": [

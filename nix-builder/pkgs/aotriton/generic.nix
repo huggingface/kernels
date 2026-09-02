@@ -1,9 +1,8 @@
 {
   autoPatchelfHook,
-  clr,
   fetchurl,
   lib,
-  rocm-core,
+  rocmPackages,
   stdenv,
   xz,
 }:
@@ -15,7 +14,7 @@
 }:
 
 let
-  rocmVersion = lib.versions.majorMinor rocm-core.version;
+  rocmVersion = lib.versions.majorMinor rocmPackages.version;
   hash =
     hashes.${rocmVersion}
       or (throw "aotriton ${version} binary package is not specified for ROCm ${rocmVersion}");
@@ -31,9 +30,9 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = [ autoPatchelfHook ];
   buildInputs = [
-    clr
     stdenv.cc.cc.lib
     xz
+    rocmPackages.clr
   ];
 
   dontConfigure = true;

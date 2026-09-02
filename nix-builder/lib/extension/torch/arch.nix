@@ -215,23 +215,22 @@ stdenv.mkDerivation (prevAttrs: {
       libcusparse
     ]
   )
-  ++ lib.optionals (rocmSupport && rocmPackages.theRock) (
+  ++ lib.optionals rocmSupport (
     with rocmPackages;
-    [
-      amdrocm-ccl-devel
-      amdrocm-hipblas-common-devel
-    ]
-  )
-  ++ lib.optionals (rocmSupport && !rocmPackages.theRock) (
-    with rocmPackages;
-    [
-      hipcub-devel
-      hipsparselt
-      rocprim-devel
-      rocthrust-devel
-      rocshmem-devel
-      rocwmma-devel
-    ]
+    if theRock then
+      [
+        amdrocm-ccl-devel
+        amdrocm-hipblas-common-devel
+      ]
+    else
+      [
+        hipcub-devel
+        hipsparselt
+        rocprim-devel
+        rocthrust-devel
+        rocshmem-devel
+        rocwmma-devel
+      ]
   )
   ++ lib.optionals xpuSupport ([
     oneapi-torch-dev

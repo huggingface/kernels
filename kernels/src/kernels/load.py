@@ -125,9 +125,8 @@ def get_kernel(
         trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
             Whether to allow loading kernels from untrusted organisations. When ``False``,
             only kernels from trusted organisations are allowed. When ``True``, all
-            repositories are allowed. A list of strings will be used to verify signing
-            identities in a future release; for now it emits a warning and falls
-            back to the default trust check.
+            repositories are allowed. A list of repository IDs allows only those
+            repositories in addition to repositories from trusted organisations.
         check_arch (`bool`, *optional*, defaults to `True`):
             Whether to check that the kernel build supports the architecture
             (e.g. CUDA compute capability) of the current device. Kernels can
@@ -198,9 +197,8 @@ def get_local_kernel(
         trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
             Whether to allow loading kernels from untrusted organisations. When ``False``,
             only kernels from trusted organisations are allowed. When ``True``, all
-            repositories are allowed. A list of strings will be used to verify signing
-            identities in a future release; for now it emits a warning and falls
-            back to the default trust check.
+            repositories are allowed. A list of repository IDs allows only those
+            repositories in addition to repositories from trusted organisations.
 
 
 
@@ -257,9 +255,8 @@ def has_kernel(
         trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
             Whether to allow loading kernels from untrusted organisations. When ``False``,
             only kernels from trusted organisations are allowed. When ``True``, all
-            repositories are allowed. A list of strings will be used to verify signing
-            identities in a future release; for now it emits a warning and falls
-            back to the default trust check.
+            repositories are allowed. A list of repository IDs allows only those
+            repositories in addition to repositories from trusted organisations.
         check_arch (`bool`, *optional*, defaults to `True`):
             Whether to check that the kernel build supports the architecture
             (e.g. CUDA compute capability) of the current device. Kernels can

@@ -594,6 +594,33 @@ def test_layer_repository_requires_version_or_revision():
         LayerRepository(repo_id="kernels-test/silu-and-mul", layer_name="SiluAndMul")
 
 
+def test_layer_repository_with_trust_remote_code_allowlist_is_hashable():
+    allowlist = ["untrusted-org/allowed-kernel"]
+    repo = LayerRepository(
+        repo_id="untrusted-org/allowed-kernel",
+        layer_name="SiluAndMul",
+        revision="main",
+        trust_remote_code=allowlist,
+    )
+
+    original_hash = hash(repo)
+    allowlist.append("untrusted-org/another-kernel")
+
+    assert hash(repo) == original_hash
+
+
+def test_layer_repository_trust_remote_code_allowlist_blocks_unlisted():
+    repo = LayerRepository(
+        repo_id="kernels-test-untrusted/not-a-trused-org-kernel",
+        layer_name="SiluAndMul",
+        revision="main",
+        trust_remote_code=["kernels-test-untrusted/ci-test-kernel"],
+    )
+
+    with pytest.raises(ValueError, match=r"not from a trusted publisher"):
+        repo.load()
+
+
 def test_validate_kernel_layer():
     class BadLayer(nn.Module):
         def __init__(self, *args, **kwargs):

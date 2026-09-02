@@ -18,7 +18,7 @@ maintain an older `model`-type kernel repository.
 
 `kernels` only loads kernels from a curated set of trusted publishers by
 default. Loading from any other publisher raises an error unless the caller
-opts in with `trust_remote_code=True`:
+opts in with `trust_remote_code=True` or explicitly allowlists the repository:
 
 ```python
 # Trusted publisher: works without opt-in.
@@ -26,7 +26,17 @@ get_kernel("kernels-community/activation", version=1)
 
 # Untrusted publisher: must opt in explicitly.
 get_kernel("some-other-org/my-kernel", version=1, trust_remote_code=True)
+
+# Allow only specific repositories from untrusted publishers.
+get_kernel(
+    "some-other-org/my-kernel",
+    version=1,
+    trust_remote_code=["some-other-org/my-kernel"],
+)
 ```
+
+The repository IDs in the allowlist must match exactly. Other repositories
+from the same publisher remain subject to the default trust check.
 
 The Hub also exposes a `trustedKernelPublisher` flag on the kernel API and
 displays a corresponding badge in the UI.

@@ -256,6 +256,22 @@ def test_trust_remote_code_flag_allows_untrusted():
     get_kernel("kernels-test-untrusted/ci-test-kernel", version=1, trust_remote_code=True)
 
 
+def test_trust_remote_code_allowlist_allows_untrusted():
+    """An allowlist should bypass the org check for repositories it contains."""
+    repo_id = "kernels-test-untrusted/ci-test-kernel"
+    get_kernel(repo_id, version=1, trust_remote_code=[repo_id])
+
+
+def test_trust_remote_code_allowlist_blocks_unlisted():
+    """A non-empty allowlist should not bypass the org check for other repositories."""
+    with pytest.raises(ValueError, match=r"not from a trusted publisher"):
+        get_kernel(
+            "kernels-test-untrusted/not-a-trused-org-kernel",
+            version=1,
+            trust_remote_code=["kernels-test-untrusted/ci-test-kernel"],
+        )
+
+
 def test_install_kernel_offline_with_revision(local_kernel_path):
     """install_kernel should resolve a cached snapshot when HF_HUB_OFFLINE=1."""
     expected_path = local_kernel_path

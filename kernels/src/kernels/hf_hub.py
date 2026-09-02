@@ -102,22 +102,15 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
 
     When ``trust_remote_code`` is ``True``, all repositories are allowed.
 
-    When ``trust_remote_code`` is a list of strings, it is treated as a list
-    of signing identities to verify against.  Signing verification is not yet
-    implemented, so passing a list currently emits a warning and falls back
-    to the default trust check (i.e. only trusted publishers are allowed).
+    When ``trust_remote_code`` is a list of strings, it is treated as an
+    allowlist of repository IDs. Only repositories in the list and repositories
+    from trusted publishers are allowed.
     """
     if trust_remote_code is True:
         return
 
-    if isinstance(trust_remote_code, list):
-        warnings.warn(
-            "Signing identity verification is not yet implemented. "
-            "The provided signing identities will be ignored and the "
-            "kernel will be treated as untrusted. Use trust_remote_code=True "
-            "to bypass trust checks.",
-            stacklevel=3,
-        )
+    if isinstance(trust_remote_code, list) and repo_id in trust_remote_code:
+        return
 
     if local_files_only:
         # Publisher trust cannot be verified offline. The user opted into
@@ -136,7 +129,8 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
     except Exception:
         raise ValueError(
             f"Kernel repository '{repo_id}' could not verify publisher trust status. "
-            "Set trust_remote_code=True to allow loading kernels from untrusted sources."
+            "Set trust_remote_code=True or add the repository ID to the trust_remote_code allowlist "
+            "to allow loading kernels from untrusted sources."
         )
 
     if getattr(info, "trustedKernelPublisher", False):
@@ -144,5 +138,6 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
 
     raise ValueError(
         f"Kernel repository '{repo_id}' is not from a trusted publisher. "
-        "Set trust_remote_code=True to allow loading kernels from untrusted sources."
+        "Set trust_remote_code=True or add the repository ID to the trust_remote_code allowlist "
+        "to allow loading kernels from untrusted sources."
     )

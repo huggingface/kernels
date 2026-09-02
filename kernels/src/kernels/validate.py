@@ -11,16 +11,16 @@ from kernels.python_deps import validate_dependencies
 from kernels.resolver import LocalKernel, RemoteKernel
 
 
-class Validator(Protocol):
-    """Validator for a node in a resolved kernel dependency tree."""
+class MetadataValidator(Protocol):
+    """Metadata validator for a node in a resolved kernel dependency tree."""
 
-    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None: ...
+    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None: ...
 
 
 class DependencyValidator:
     """Validate the Python dependencies of a kernel tree node."""
 
-    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         validate_dependencies(
             tree.location.metadata.name.python_name,
             tree.location.metadata.python_depends,
@@ -31,7 +31,7 @@ class DependencyValidator:
 class ArchValidator:
     """Validate architecture compatibility for a kernel tree node."""
 
-    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         _check_arch_incompatibility(tree.location.metadata, tree.location.variant_str)
 
 
@@ -66,7 +66,7 @@ class MinverValidator:
     """Validate that the installed `kernels` library meets the minimum version
     required by a kernel."""
 
-    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         metadata = tree.location.metadata
         minver = metadata.kernels_minver
         if minver is None:
@@ -90,13 +90,13 @@ class MinverValidator:
 class AllValidator:
     """Apply multiple validators to a kernel dependency tree."""
 
-    validators: list[Validator]
+    validators: list[MetadataValidator]
 
-    def validate(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
         for validator in self.validators:
-            validator.validate(tree=tree)
+            validator.validate_metadata(tree=tree)
 
 
-def default_validators() -> list[Validator]:
-    """The validators that are applied to every kernel dependency tree."""
+def default_metadata_validators() -> list[MetadataValidator]:
+    """The metadata validators that are applied to every kernel dependency tree."""
     return [DependencyValidator(), MinverValidator()]

@@ -15,7 +15,7 @@ from kernels.resolver import (
 )
 
 if TYPE_CHECKING:
-    from kernels.validate import Validator
+    from kernels.validate import MetadataValidator
 
 # Default state is `None`, to signal that we are not in a kernel
 # loading context.
@@ -70,16 +70,16 @@ class DepTreeNode(Generic[T]):
 
         return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
 
-    def validate(
+    def validate_metadata(
         self: "DepTreeNode[LocalKernel | RemoteKernel]",
-        validator: "Validator",
+        validator: "MetadataValidator",
     ) -> None:
         """Validate this kernel and its dependencies with the given validator."""
 
-        validator.validate(tree=self)
+        validator.validate_metadata(tree=self)
 
         for node in self.deps.values():
-            node.validate(validator)
+            node.validate_metadata(validator)
 
 
 LoadCache = dict[KernelDependency, DepTreeNode]

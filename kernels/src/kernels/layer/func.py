@@ -20,7 +20,7 @@ from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
-from ..validate import AllValidator, default_validators
+from ..validate import AllValidator, default_metadata_validators
 from .layer import _create_func_module, use_kernel_forward_from_hub
 from .repos import RepositoryProtocol
 
@@ -332,7 +332,7 @@ class LockedFuncRepository:
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
-            validator=AllValidator(validators=default_validators()),
+            validator=AllValidator(validators=default_metadata_validators()),
         )
         return _get_kernel_func(self, kernel)
 

@@ -27,7 +27,7 @@ let
     if cudaSupport then
       "cu${flattenVersion cudaPackages.cudaMajorMinorVersion}"
     else if rocmSupport then
-      "rocm${flattenVersion (lib.versions.majorMinor rocmPackages.rocm.version)}"
+      "rocm${flattenVersion (lib.versions.majorMinor rocmPackages.version)}"
     else if xpuSupport then
       "xpu"
     else

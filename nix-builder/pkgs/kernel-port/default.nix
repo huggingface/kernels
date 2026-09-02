@@ -59,7 +59,7 @@ rustPlatform.buildRustPackage {
   cargoTestFlags = cargoFlags;
 
   meta = {
-    description = "Port third-party kernels to the Hugging Face kernel layout";
+    description = "Port third-party kernels to the Hugging Face Kernels layout";
     mainProgram = "kernel-port";
   };
 }

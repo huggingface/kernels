@@ -97,7 +97,7 @@ On top of whatever the recipe says:
 - Every op is built before the first one runs, so an argument typo or a bad glob anywhere fails the recipe before anything is mutated.
 - After the last op, every added or modified Python file must still parse.
 - No absolute in-package import may remain under `torch-ext`. The Hub loads a kernel under a build-variant directory name, so only relative intra-package imports resolve at run time.
-- `--out` runs write a `.port-provenance.json`: recipe hash, runner version, pinned sources, output tree hash. All deterministic, so the file reproduces byte-for-byte.
+- `--out` runs write a `port-provenance.json`: recipe hash, runner version, pinned sources, output tree hash. All deterministic, so the file reproduces byte-for-byte.
 
 ## Versioning
 
@@ -110,7 +110,7 @@ recipe version=1
 - The header must be the first node in the file. Comments above it are fine.
 - A recipe file that does not declare a version is rejected. An inline `-e` recipe may omit it, since it does not outlive the command.
 - A version this build does not implement is rejected, rather than run under a meaning the author never saw.
-- The version is recorded as `format` in `.port-provenance.json`.
+- The version is recorded as `format` in `port-provenance.json`.
 
 `version` is bumped when a change would give an existing recipe a *different meaning*, not when it gains a new capability. Adding an op or an optional argument leaves every existing recipe alone, so it is not a bump. Changing what an existing argument does is.
 
@@ -152,7 +152,7 @@ Fails when: the version is one this build does not implement, or the header is n
 source repo="<url>" commit="<40-char sha>"
 ```
 
-Assert what `--dir` is. Verifies the checkout's `HEAD` is exactly `commit`, that its `origin` URL is `repo`, and that the working tree is clean (untracked files included), then records the pin in `.port-provenance.json`. Every recipe that ports a real repository starts with this line.
+Assert what `--dir` is. Verifies the checkout's `HEAD` is exactly `commit`, that its `origin` URL is `repo`, and that the working tree is clean (untracked files included), then records the pin in `port-provenance.json`. Every recipe that ports a real repository starts with this line.
 
 ```kdl
 source repo="https://github.com/rusty1s/pytorch_scatter" commit="f514c10f920b5aeed2eb162092f0ad20d3edee52"
@@ -249,6 +249,8 @@ overlay from="<dir>"
 ```
 
 Copy a directory of checked-in files over the workspace, overwriting what is there. `from` is relative to the recipe file. This is where the files with no upstream equivalent live: `torch_binding.cpp`, `flake.nix`, a CARD.md. Keep it small - anything derivable from upstream should be an op, not an overlay file, so that upstream drift is detected rather than papered over.
+
+How big the overlay gets depends on the port. An external repository that already follows kernel-builder conventions needs almost nothing beyond a `flake.nix` - a PR against such a repo is essentially `port.kdl` plus that one file. A vendored port that combines upstream code with custom additions (the common case in kernels-community) checks all of those additions in as overlay files, so a larger overlay is normal there. The rule is the same either way: overlay files are for content with no upstream equivalent, and anything derived from upstream belongs in an op.
 
 ```kdl
 overlay from="overlay"

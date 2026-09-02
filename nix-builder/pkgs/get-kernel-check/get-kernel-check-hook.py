@@ -30,5 +30,5 @@ get_kernel_with_resolver(
     backend=None,
     kernel=kernel,
     resolver=SequentialResolver(resolvers=resolvers),
-    validator=AllValidator(validators=default_metadata_validators()),
+    metadata_validator=AllValidator(validators=default_metadata_validators()),
 )

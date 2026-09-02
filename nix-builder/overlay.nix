@@ -288,6 +288,10 @@ final: prev:
   inherit (final) callPackage;
   inherit (prev) lib;
 })
+// (import ./pkgs/rocm-packages-old {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})
 // (import ./pkgs/xpu-packages {
   inherit (final) callPackage;
   inherit (prev) lib;

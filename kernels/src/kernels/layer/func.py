@@ -332,7 +332,7 @@ class LockedFuncRepository:
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
-            validator=AllValidator(validators=default_metadata_validators()),
+            metadata_validator=AllValidator(validators=default_metadata_validators()),
         )
         return _get_kernel_func(self, kernel)
 

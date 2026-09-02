@@ -61,7 +61,7 @@ def get_kernel_with_resolver(
     backend: str | None,
     kernel: KernelDependency,
     resolver: Resolver | None,
-    validator: MetadataValidator,
+    metadata_validator: MetadataValidator,
 ) -> ModuleType:
     """
     Load a kernel and its (transitive) dependencies using the given resolver.
@@ -76,7 +76,7 @@ def get_kernel_with_resolver(
             The kernel to load.
         resolver (`Resolver`, *optional*):
             The resolver used to resolve the kernel and its (transitive) dependencies.
-        validator (`MetadataValidator`):
+        metadata_validator (`MetadataValidator`):
             The validator to apply to the resolved kernel dependency tree.
 
     Returns:
@@ -88,7 +88,7 @@ def get_kernel_with_resolver(
         kernel=kernel,
         resolver=resolver,
     )
-    tree.validate_metadata(validator)
+    tree.validate_metadata(metadata_validator)
     tree_only_local = tree.install(api=api)
     return tree_only_local.load()
 
@@ -171,7 +171,7 @@ def get_kernel(
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
         resolver=SequentialResolver(resolvers=resolvers),
-        validator=AllValidator(validators=validators),
+        metadata_validator=AllValidator(validators=validators),
     )
 
 
@@ -225,7 +225,7 @@ def get_local_kernel(
         # We don't have a name for the kernel, so let's just use the path.
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
-        validator=AllValidator(validators=default_metadata_validators()),
+        metadata_validator=AllValidator(validators=default_metadata_validators()),
     )
 
 
@@ -342,7 +342,7 @@ def load_kernel(
         backend=backend,
         kernel=kernel_dep,
         resolver=resolver,
-        validator=AllValidator(validators=default_metadata_validators()),
+        metadata_validator=AllValidator(validators=default_metadata_validators()),
     )
 
 
@@ -383,5 +383,5 @@ def get_locked_kernel(
         backend=None,
         kernel=kernel_dep,
         resolver=resolver,
-        validator=AllValidator(validators=default_metadata_validators()),
+        metadata_validator=AllValidator(validators=default_metadata_validators()),
     )

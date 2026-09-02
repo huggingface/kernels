@@ -7,13 +7,7 @@ from huggingface_hub import HfApi, constants
 from kernels_data import KernelDependency, KernelVersion
 
 from kernels._versions import revision_or_version
-from kernels.deps import (
-    AllValidator,
-    ArchValidator,
-    Validator,
-    default_validators,
-    resolve_kernel_tree,
-)
+from kernels.deps import resolve_kernel_tree
 from kernels.hf_hub import _get_hf_api
 from kernels.locking import (
     get_caller_locked_kernel_revision,
@@ -28,6 +22,12 @@ from kernels.resolver import (
     RepoPathsResolver,
     Resolver,
     SequentialResolver,
+)
+from kernels.validate import (
+    AllValidator,
+    ArchValidator,
+    Validator,
+    default_validators,
 )
 
 

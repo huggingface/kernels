@@ -15,7 +15,6 @@ from kernels_data import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version
-from ..deps import AllValidator, default_validators
 from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
@@ -26,6 +25,7 @@ from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
+from ..validate import AllValidator, default_validators
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode

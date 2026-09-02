@@ -1,9 +1,14 @@
 import importlib.util
+import json
 import sys
+from pathlib import Path
 
 import pytest
+from kernels_data import Metadata
 
 from kernels.backends import _get_torch_privateuse_backend_name
+from kernels.deps import DepTreeNode
+from kernels.resolver import LocalKernel
 
 try:
     import torch
@@ -59,6 +64,55 @@ def device():
         return "tpu"
 
     return "cpu"
+
+
+@pytest.fixture
+def make_metadata():
+    def _make_metadata(backend_type: str, archs: list[str] | None, kernels_minver: str | None = None) -> Metadata:
+        metadata = {
+            "name": "test-kernel",
+            "id": "test_id",
+            "version": 1,
+            "license": "mit",
+            "python-depends": [],
+            "backend": {"type": backend_type, "archs": archs},
+        }
+        if kernels_minver is not None:
+            metadata["kernels-minver"] = kernels_minver
+        return Metadata.from_bytes(json.dumps(metadata).encode("utf-8"))
+
+    return _make_metadata
+
+
+@pytest.fixture
+def make_tree():
+    def _make_tree(metadata: Metadata, variant: str = "test-variant") -> DepTreeNode:
+        return DepTreeNode(
+            location=LocalKernel(Path(variant), metadata),
+            deps={},
+        )
+
+    return _make_tree
+
+
+@pytest.fixture
+def fake_cuda_device(monkeypatch):
+    monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
+    monkeypatch.setattr(torch.version, "hip", None, raising=False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: (10, 0))
+
+
+@pytest.fixture
+def fake_rocm_device(monkeypatch):
+    class FakeProperties:
+        gcnArchName = "gfx90a:sramecc+:xnack-"
+
+    monkeypatch.setattr(torch.version, "cuda", None, raising=False)
+    monkeypatch.setattr(torch.version, "hip", "6.4.0", raising=False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda device: FakeProperties())
 
 
 def pytest_runtest_setup(item):

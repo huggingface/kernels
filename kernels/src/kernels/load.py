@@ -7,7 +7,13 @@ from huggingface_hub import HfApi, constants
 from kernels_data import KernelDependency, KernelVersion
 
 from kernels._versions import revision_or_version
-from kernels.deps import AllValidator, ArchValidator, DependencyValidator, Validator, resolve_kernel_tree
+from kernels.deps import (
+    AllValidator,
+    ArchValidator,
+    Validator,
+    default_validators,
+    resolve_kernel_tree,
+)
 from kernels.hf_hub import _get_hf_api
 from kernels.locking import (
     get_caller_locked_kernel_revision,
@@ -155,7 +161,7 @@ def get_kernel(
         ),
     ]
 
-    validators: list[Validator] = [DependencyValidator()]
+    validators: list[Validator] = default_validators()
     if check_arch:
         validators.append(ArchValidator())
 
@@ -217,7 +223,7 @@ def get_local_kernel(
         # We don't have a name for the kernel, so let's just use the path.
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
-        validator=DependencyValidator(),
+        validator=AllValidator(validators=default_validators()),
     )
 
 
@@ -333,7 +339,7 @@ def load_kernel(
         backend=backend,
         kernel=kernel_dep,
         resolver=resolver,
-        validator=DependencyValidator(),
+        validator=AllValidator(validators=default_validators()),
     )
 
 
@@ -374,5 +380,5 @@ def get_locked_kernel(
         backend=None,
         kernel=kernel_dep,
         resolver=resolver,
-        validator=DependencyValidator(),
+        validator=AllValidator(validators=default_validators()),
     )

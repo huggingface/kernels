@@ -15,6 +15,7 @@ let
   composed = composeManyExtensions [
     # Hooks
     (import ./hooks.nix)
+    (callPackage ./patchelf.nix { })
     # Base package set.
     (import ./components.nix)
     # Overrides (adding dependencies, etc.)

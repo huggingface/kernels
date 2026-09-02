@@ -215,7 +215,14 @@ stdenv.mkDerivation (prevAttrs: {
       libcusparse
     ]
   )
-  ++ lib.optionals rocmSupport (
+  ++ lib.optionals (rocmSupport && rocmPackages.theRock) (
+    with rocmPackages;
+    [
+      amdrocm-ccl-devel
+      amdrocm-hipblas-common-devel
+    ]
+  )
+  ++ lib.optionals (rocmSupport && !rocmPackages.theRock) (
     with rocmPackages;
     [
       hipcub-devel

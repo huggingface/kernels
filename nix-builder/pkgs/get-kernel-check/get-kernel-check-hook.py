@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from kernels.deps import DependencyValidator
+from kernels.deps import AllValidator, default_validators
 from kernels.hf_hub import _get_hf_api
 from kernels.load import get_kernel_with_resolver
 from kernels.resolver import KernelPathsResolver, RepoPathsResolver, SequentialResolver
@@ -30,5 +30,5 @@ get_kernel_with_resolver(
     backend=None,
     kernel=kernel,
     resolver=SequentialResolver(resolvers=resolvers),
-    validator=DependencyValidator(),
+    validator=AllValidator(validators=default_validators()),
 )

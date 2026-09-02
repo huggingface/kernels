@@ -10,7 +10,7 @@ from kernels_data import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version
-from ..deps import DependencyValidator
+from ..deps import AllValidator, default_validators
 from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
@@ -332,7 +332,7 @@ class LockedFuncRepository:
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
-            validator=DependencyValidator(),
+            validator=AllValidator(validators=default_validators()),
         )
         return _get_kernel_func(self, kernel)
 

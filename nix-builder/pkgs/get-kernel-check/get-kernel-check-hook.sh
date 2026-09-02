@@ -15,6 +15,11 @@ _getKernelCheckHook() {
     exit 1
   fi
 
+  if [ -z ${variant+x} ]; then
+    echo "variant must be set in derivation"
+    exit 1
+  fi
+
   echo "Check whether the kernel can be loaded with get-kernel: ${moduleName}"
 
   # We strip the full library paths from the extension. Unfortunately,

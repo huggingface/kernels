@@ -58,6 +58,8 @@ class LayerRepository:
             Whether to allow loading kernels from untrusted organisations. A list
             of signing identities can be provided for future verification support;
             until then it warns and falls back to the default trust check.
+        user_agent (`Union[str, dict]`, *optional*):
+            The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
 
     Example:
         ```python
@@ -80,6 +82,7 @@ class LayerRepository:
         revision: str | None = None,
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
+        user_agent: str | dict | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
@@ -89,6 +92,7 @@ class LayerRepository:
         self._repo_id = repo_id
         self.layer_name = layer_name
         self._trust_remote_code = trust_remote_code
+        self._user_agent = user_agent
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered LayerRepository.
@@ -109,6 +113,7 @@ class LayerRepository:
             self._repo_id,
             revision=self._resolve_revision(),
             trust_remote_code=self._trust_remote_code,
+            user_agent=self._user_agent
         )
         return _get_kernel_layer(self, kernel)
 

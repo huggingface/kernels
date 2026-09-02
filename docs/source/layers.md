@@ -212,6 +212,24 @@ with use_kernel_mapping(kernel_layer_mapping):
 This ensures that the mapping is not active anymore outside the
 `with`-scope.
 
+### Attributing Hub requests
+
+Libraries and applications can identify the Hub requests made while loading a
+layer by passing optional user-agent metadata to [`~kernels.LayerRepository`]:
+
+```python
+layer_repo = LayerRepository(
+    repo_id="kernels-community/activation",
+    layer_name="SiluAndMul",
+    version=1,
+    user_agent={"my-library": "1.0.0"},
+)
+```
+
+`user_agent` accepts either a string or a dictionary. If it is omitted, no
+application-specific metadata is added. Setting `HF_HUB_DISABLE_TELEMETRY=1`
+disables user-agent telemetry, including metadata supplied this way.
+
 If the layer is stateless (it does not use member variables in its forward _or_ it was
 originally a function that was converted into a kernel layer with
 [`~kernels.use_kernel_func_from_hub`]), it can also be mapped to a kernel function:

@@ -59,7 +59,7 @@ class LayerRepository:
             of signing identities can be provided for future verification support;
             until then it warns and falls back to the default trust check.
         user_agent (`Union[str, dict]`, *optional*):
-            The `user_agent` info to pass to `snapshot_download()` for internal telemetry.
+            Optional application metadata to include in the user-agent for Hub requests.
 
     Example:
         ```python
@@ -113,7 +113,7 @@ class LayerRepository:
             self._repo_id,
             revision=self._resolve_revision(),
             trust_remote_code=self._trust_remote_code,
-            user_agent=self._user_agent
+            user_agent=self._user_agent,
         )
         return _get_kernel_layer(self, kernel)
 

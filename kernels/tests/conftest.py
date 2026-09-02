@@ -1,14 +1,11 @@
 import importlib.util
 import json
 import sys
-from pathlib import Path
 
 import pytest
 from kernels_data import Metadata
 
 from kernels.backends import _get_torch_privateuse_backend_name
-from kernels.deps import DepTreeNode
-from kernels.resolver import LocalKernel
 
 try:
     import torch
@@ -82,17 +79,6 @@ def make_metadata():
         return Metadata.from_bytes(json.dumps(metadata).encode("utf-8"))
 
     return _make_metadata
-
-
-@pytest.fixture
-def make_tree():
-    def _make_tree(metadata: Metadata, variant: str = "test-variant") -> DepTreeNode:
-        return DepTreeNode(
-            location=LocalKernel(Path(variant), metadata),
-            deps={},
-        )
-
-    return _make_tree
 
 
 @pytest.fixture

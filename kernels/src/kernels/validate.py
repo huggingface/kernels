@@ -1,38 +1,36 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from kernels_data import Version
+from kernels_data import Metadata, Version
 from packaging.version import InvalidVersion, parse
 
 from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
-from kernels.deps import DepTreeNode
 from kernels.python_deps import validate_dependencies
-from kernels.resolver import LocalKernel, RemoteKernel
 
 
 class MetadataValidator(Protocol):
-    """Metadata validator for a node in a resolved kernel dependency tree."""
+    """Metadata validator for a kernel build variant."""
 
-    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None: ...
+    def validate_metadata(self, *, metadata: Metadata, variant: str) -> None: ...
 
 
 class DependencyValidator:
-    """Validate the Python dependencies of a kernel tree node."""
+    """Validate the Python dependencies of a kernel build variant."""
 
-    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+    def validate_metadata(self, *, metadata: Metadata, variant: str) -> None:
         validate_dependencies(
-            tree.location.metadata.name.python_name,
-            tree.location.metadata.python_depends,
+            metadata.name.python_name,
+            metadata.python_depends,
             _backend(),
         )
 
 
 class ArchValidator:
-    """Validate architecture compatibility for a kernel tree node."""
+    """Validate architecture compatibility for a kernel build variant."""
 
-    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
-        _check_arch_incompatibility(tree.location.metadata, tree.location.variant_str)
+    def validate_metadata(self, *, metadata: Metadata, variant: str) -> None:
+        _check_arch_incompatibility(metadata, variant)
 
 
 def _installed_version() -> Version | None:
@@ -66,8 +64,7 @@ class MinverValidator:
     """Validate that the installed `kernels` library meets the minimum version
     required by a kernel."""
 
-    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
-        metadata = tree.location.metadata
+    def validate_metadata(self, *, metadata: Metadata, variant: str) -> None:
         minver = metadata.kernels_minver
         if minver is None:
             return
@@ -80,7 +77,7 @@ class MinverValidator:
             from kernels import __version__
 
             raise RuntimeError(
-                f"Kernel '{metadata.name}' variant '{tree.location.variant_str}' requires "
+                f"Kernel '{metadata.name}' variant '{variant}' requires "
                 f"kernels>={minver}, but version {__version__} is installed. "
                 "Upgrade with: pip install --upgrade kernels"
             )
@@ -92,9 +89,9 @@ class AllValidator:
 
     validators: list[MetadataValidator]
 
-    def validate_metadata(self, *, tree: DepTreeNode[LocalKernel | RemoteKernel]) -> None:
+    def validate_metadata(self, *, metadata: Metadata, variant: str) -> None:
         for validator in self.validators:
-            validator.validate_metadata(tree=tree)
+            validator.validate_metadata(metadata=metadata, variant=variant)
 
 
 def default_metadata_validators() -> list[MetadataValidator]:

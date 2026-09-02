@@ -76,7 +76,7 @@ class DepTreeNode(Generic[T]):
     ) -> None:
         """Validate this kernel and its dependencies with the given validator."""
 
-        validator.validate_metadata(tree=self)
+        validator.validate_metadata(metadata=self.location.metadata, variant=self.location.variant_str)
 
         for node in self.deps.values():
             node.validate_metadata(validator)

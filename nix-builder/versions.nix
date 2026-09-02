@@ -209,17 +209,16 @@
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
-  #{
-  #  torchVersion = "2.14";
-  #  rocmVersion = "7.14";
-  #  systems = [ "x86_64-linux" ];
-  #  bundleBuild = true;
-  #}
+  {
+    torchVersion = "2.14";
+    rocmVersion = "7.14";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
   {
     torchVersion = "2.14";
     xpuVersion = "2026.1.0";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
-
 ]

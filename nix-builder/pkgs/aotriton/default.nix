@@ -95,6 +95,7 @@ in
 
     hashes = {
       "7.2" = "sha256-HN7rt+9hq2kfuh2B2pGbnbXYvvKCaciSowvROgSVt6A=";
+      "7.14" = "sha256-ehOXl8FrAC/V2bzXBtNtyYGbsQiHcVD4GG2iHQWQ6qY=";
     };
 
     images = mkImages version [

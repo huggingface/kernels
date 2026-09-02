@@ -15,19 +15,14 @@ let
   composed = composeManyExtensions [
     # Hooks
     (import ./hooks.nix)
-    (callPackage ./patchelf.nix { })
     # Base package set.
     (import ./components.nix)
     # Overrides (adding dependencies, etc.)
     (import ./overrides.nix)
     # Compiler toolchain.
     (callPackage ./llvm.nix { })
-    # ROCm compilation toolchain.
-    (final: prev: {
-      clr = final.callPackage ./clr.nix {
-        inherit (final.llvm) clang;
-      };
-    })
+    # Packages that are joins of other packages.
+    (callPackage ./joins.nix { })
     # Add aotriton
     (final: prev: {
       inherit (final.callPackage ../aotriton { })
@@ -37,10 +32,9 @@ let
         aotriton_0_13
         ;
     })
-    # Remove once the old package set is gone.
     (final: prev: {
-      theRock = true;
-      version = final.amdrocm.version;
+      theRock = false;
+      version = final.rocm.version;
     })
   ];
 in

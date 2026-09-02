@@ -2,10 +2,9 @@
   lib,
   autoPatchelfHook,
   callPackage,
-  cpio,
   fetchurl,
   stdenv,
-  rpm,
+  rpmextract,
   rsync,
   rocmPackages,
 
@@ -39,8 +38,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     autoPatchelfHook
     rocmPackages.markForRocmRootHook
-    cpio
-    rpm
+    rpmextract
     rsync
   ];
 
@@ -50,26 +48,17 @@ stdenv.mkDerivation rec {
   ]
   ++ (map (dep: rocmPackages.${dep}) filteredDeps);
 
-  # We do not use rpmextract anymore. It uses cpio, which fails to set
-  # the setgid bit on directories. cpio will extract correctly, but return
-  # an error, which causes rpmextract to fail. So instead we run cpio
-  # directly and allow this particular error, but bail on other errors.
+  # dpkg hook does not seem to work for multiple sources.
   unpackPhase = ''
     for src in $srcs; do
-      if ! rpm2cpio "$src" | cpio --extract --make-directories --quiet 2>cpio.err; then
-        if [ ! -s cpio.err ] || grep -v 'Cannot change mode' cpio.err >&2; then
-          echo "unpacking $src failed" >&2
-          exit 1
-        fi
-      fi
+      rpmextract "$src"
     done
-    rm -f cpio.err
   '';
 
   installPhase = ''
     runHook preInstall
     mkdir $out
-    cp -rT opt/rocm/core-* $out
+    cp -rT opt/rocm-* $out
     runHook postInstall
   '';
 

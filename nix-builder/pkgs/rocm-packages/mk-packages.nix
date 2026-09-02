@@ -32,6 +32,11 @@ let
         aotriton_0_13
         ;
     })
+    # Remove once the old package set is gone.
+    (final: prev: {
+      theRock = true;
+      version = final.amdrocm.version;
+    })
   ];
 in
 lib.makeScope newScope (extends composed fixedPoint)

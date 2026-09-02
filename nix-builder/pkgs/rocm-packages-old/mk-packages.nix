@@ -32,6 +32,10 @@ let
         aotriton_0_13
         ;
     })
+    (final: prev: {
+      theRock = false;
+      version = final.rocm.version;
+    })
   ];
 in
 lib.makeScope newScope (extends composed fixedPoint)

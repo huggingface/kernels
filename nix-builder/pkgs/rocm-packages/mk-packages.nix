@@ -22,8 +22,12 @@ let
     (import ./overrides.nix)
     # Compiler toolchain.
     (callPackage ./llvm.nix { })
-    # Packages that are joins of other packages.
-    (callPackage ./joins.nix { })
+    # ROCm compilation toolchain.
+    (final: prev: {
+      clr = final.callPackage ./clr.nix {
+        inherit (final.llvm) clang;
+      };
+    })
     # Add aotriton
     (final: prev: {
       inherit (final.callPackage ../aotriton { })

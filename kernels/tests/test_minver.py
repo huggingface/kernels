@@ -1,22 +1,17 @@
 import json
 import re
+from pathlib import Path
 
 import pytest
 from kernels_data import Metadata, Version
 
 import kernels
-from kernels.importer import (
-    _import_from_path,
-    _installed_version,
-    _loaded_kernels,
-    _warn_if_below_minver,
-)
+from kernels.deps import DepTreeNode, MinverValidator, _installed_version
+from kernels.resolver import LocalKernel
 
 
-def _write_variant(tmp_path, minver):
-    variant_dir = tmp_path / "build" / "torch28-cxx11-cu128-x86_64-linux"
-    variant_dir.mkdir(parents=True)
-    metadata = {
+def _make_tree(minver):
+    metadata_dict = {
         "id": "activation_1_cuda",
         "name": "activation",
         "version": 1,
@@ -25,27 +20,22 @@ def _write_variant(tmp_path, minver):
         "backend": {"type": "cuda"},
     }
     if minver is not None:
-        metadata["kernels-minver"] = minver
-    (variant_dir / "metadata.json").write_text(json.dumps(metadata))
-    return variant_dir
+        metadata_dict["kernels-minver"] = minver
+    metadata = Metadata.from_bytes(json.dumps(metadata_dict).encode("utf-8"))
+    variant_path = Path("build") / "torch28-cxx11-cu128-x86_64-linux"
+    return DepTreeNode(location=LocalKernel(variant_path, metadata), deps={})
 
 
 @pytest.mark.parametrize("minver", [None, "0.0.1"])
-def test_no_warning_when_minver_met(tmp_path, recwarn, minver):
-    variant_dir = _write_variant(tmp_path, minver)
-    metadata = Metadata.read_from_file(variant_dir / "metadata.json")
-    _warn_if_below_minver(metadata, variant_dir.name)
-    assert len(recwarn) == 0
+def test_no_error_when_minver_met(minver):
+    MinverValidator().validate(tree=_make_tree(minver))
 
 
-def test_no_warning_for_dev_version_of_required_release(tmp_path, recwarn, monkeypatch):
+def test_no_error_for_dev_version_of_required_release(monkeypatch):
     # A development version implements the release it leads up to, so
     # `0.17.0.dev0` must satisfy a `0.17.0` requirement.
     monkeypatch.setattr(kernels, "__version__", "0.17.0.dev0")
-    variant_dir = _write_variant(tmp_path, "0.17.0")
-    metadata = Metadata.read_from_file(variant_dir / "metadata.json")
-    _warn_if_below_minver(metadata, variant_dir.name)
-    assert len(recwarn) == 0
+    MinverValidator().validate(tree=_make_tree("0.17.0"))
 
 
 @pytest.mark.parametrize(
@@ -62,14 +52,11 @@ def test_installed_version_is_none_for_non_pep440_version(monkeypatch):
     assert _installed_version() is None
 
 
-def test_unparseable_installed_version_does_not_fail_load(tmp_path, recwarn, monkeypatch):
-    # A version that cannot be compared must not turn this advisory check into
-    # a hard failure.
+def test_unparseable_installed_version_does_not_fail_validation(monkeypatch):
+    # A version that cannot be compared must not turn this check into a
+    # failure.
     monkeypatch.setattr(kernels, "__version__", "0.17.0-dirty")
-    variant_dir = _write_variant(tmp_path, "999.1.0")
-    metadata = Metadata.read_from_file(variant_dir / "metadata.json")
-    _warn_if_below_minver(metadata, variant_dir.name)
-    assert len(recwarn) == 0
+    MinverValidator().validate(tree=_make_tree("999.1.0"))
 
 
 def test_version_ordering_is_numeric_not_lexicographic():
@@ -80,27 +67,11 @@ def test_version_ordering_is_numeric_not_lexicographic():
     assert Version.from_str("0.14.0") < Version.from_str("0.14.1")
 
 
-def test_warns_when_minver_not_met(tmp_path):
-    variant_dir = _write_variant(tmp_path, "999.1.0")
-    metadata = Metadata.read_from_file(variant_dir / "metadata.json")
-    with pytest.warns(UserWarning, match="requires kernels>=999.1"):
-        _warn_if_below_minver(metadata, variant_dir.name)
+def test_raises_when_minver_not_met():
+    with pytest.raises(RuntimeError, match="requires kernels>=999.1"):
+        MinverValidator().validate(tree=_make_tree("999.1.0"))
 
 
-def test_warning_mentions_installed_version(tmp_path):
-    variant_dir = _write_variant(tmp_path, "999.1.0")
-    metadata = Metadata.read_from_file(variant_dir / "metadata.json")
-    with pytest.warns(UserWarning, match=f"version {re.escape(kernels.__version__)} is installed"):
-        _warn_if_below_minver(metadata, variant_dir.name)
-
-
-def test_import_from_path_warns_on_unmet_minver(tmp_path):
-    variant_dir = _write_variant(tmp_path, "999.1.0")
-    (variant_dir / "__init__.py").write_text("value = 42\n")
-    _loaded_kernels.pop(variant_dir, None)
-    try:
-        with pytest.warns(UserWarning, match="requires kernels>=999.1"):
-            module = _import_from_path(variant_dir, deps={})
-        assert module.value == 42
-    finally:
-        _loaded_kernels.pop(variant_dir, None)
+def test_error_mentions_installed_version():
+    with pytest.raises(RuntimeError, match=f"version {re.escape(kernels.__version__)} is installed"):
+        MinverValidator().validate(tree=_make_tree("999.1.0"))

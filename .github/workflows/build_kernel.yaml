@@ -57,7 +57,6 @@ jobs:
             cpp20-symbols-kernel
             cutlass-gemm-kernel
             cutlass-gemm-tvm-ffi-kernel
-            extra-data
             relu-kernel
             relu-torch-stable-abi-kernel
             relu-tvm-ffi-kernel

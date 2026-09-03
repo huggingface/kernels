@@ -275,7 +275,7 @@ def kernelize(
             cond = getattr(module_class, "kernel_condition", None)
             if cond and not cond(module):
                 logger.info(
-                    "Skipping kernelization for %s using %s due to kernel_condition.",
+                    "Skipping kernelization for `%s` using `%s` due to kernel_condition.",
                     module_class.__name__,
                     module_class.kernel_layer_name,
                 )

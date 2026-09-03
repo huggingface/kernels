@@ -1,3 +1,4 @@
+import logging
 import sys
 from contextlib import nullcontext
 
@@ -423,14 +424,20 @@ def test_layer_fallback_works():
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
-def test_kernel_condition_skips_kernelization():
+def test_kernel_condition_skips_kernelization(caplog):
     @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: False)
     class SiluAndMulConditionSkipped(SiluAndMul):
         pass
 
     silu_and_mul = SiluAndMulConditionSkipped()
 
-    kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+    with caplog.at_level(logging.INFO, logger="kernels.layer.kernelize"):
+        kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+    assert (
+        "Skipping kernelization for `SiluAndMulConditionSkipped` using `SiluAndMulNonExisting` due to kernel_condition."
+        in caplog.text
+    )
 
     # The forward was not replaced...
     assert "forward" not in silu_and_mul.__dict__

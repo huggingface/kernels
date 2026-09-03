@@ -79,9 +79,7 @@ COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
 COPY relu-triton-kernel ./relu-triton-kernel
 COPY gemm-triton-autotune-kernel ./gemm-triton-autotune-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
-COPY extra-data ./extra-data
 COPY cpp20-symbols-kernel ./cpp20-symbols-kernel
-COPY examples/kernels/extra-data/tests ./extra_data_tests
 COPY examples/kernels/relu/tests ./relu_tests
 COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests

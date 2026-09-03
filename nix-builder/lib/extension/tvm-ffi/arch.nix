@@ -69,6 +69,9 @@
   # Wheter to strip rpath for non-nix use.
   stripRPath ? false,
 
+  # The variant that the build is expected to produce.
+  variant,
+
   # Revision to bake into the ops name.
   rev,
 
@@ -234,7 +237,10 @@ stdenv.mkDerivation (prevAttrs: {
   ++ extraDeps;
 
   env =
-    lib.optionalAttrs cudaSupport {
+    {
+      inherit variant;
+    }
+    // lib.optionalAttrs cudaSupport {
       CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
     }
     // lib.optionalAttrs xpuSupport {

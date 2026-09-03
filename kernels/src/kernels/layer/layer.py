@@ -55,9 +55,10 @@ class LayerRepository:
             The kernel version to download. Cannot be used together with `revision`.
             Either `version` or `revision` must be specified.
         trust_remote_code (`bool | list[str]`, *optional*, defaults to `False`):
-            Whether to allow loading kernels from untrusted organisations. A list
-            of signing identities can be provided for future verification support;
-            until then it warns and falls back to the default trust check.
+            Whether to allow loading kernels from untrusted organisations. When `False`,
+            only kernels from trusted organisations are allowed. When `True`, all
+            repositories are allowed. A list of repository IDs allows only those
+            repositories in addition to repositories from trusted organisations.
         user_agent (`Union[str, dict]`, *optional*):
             Optional application metadata to include in the user-agent for Hub requests.
 
@@ -91,7 +92,9 @@ class LayerRepository:
 
         self._repo_id = repo_id
         self.layer_name = layer_name
-        self._trust_remote_code = trust_remote_code
+        self._trust_remote_code = (
+            trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
+        )
         self._user_agent = user_agent
 
         # We are going to resolve these lazily, since we do not want
@@ -134,7 +137,9 @@ class LayerRepository:
                 self._repo_id,
                 self._revision,
                 self._version,
-                self._trust_remote_code,
+                tuple(self._trust_remote_code)
+                if isinstance(self._trust_remote_code, list)
+                else self._trust_remote_code,
             )
         )
 
@@ -218,7 +223,9 @@ class LockedLayerRepository:
         self._repo_id = repo_id
         self._lockfile = lockfile
         self.layer_name = layer_name
-        self._trust_remote_code = trust_remote_code
+        self._trust_remote_code = (
+            trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
+        )
         kernel_locks, kernel_dep = self._get_lock()
         self.kernel_locks = kernel_locks
         self.kernel_dep = kernel_dep
@@ -267,7 +274,9 @@ class LockedLayerRepository:
                 self._repo_id,
                 self.kernel_dep,
                 self.kernel_locks,
-                self._trust_remote_code,
+                tuple(self._trust_remote_code)
+                if isinstance(self._trust_remote_code, list)
+                else self._trust_remote_code,
             )
         )
 

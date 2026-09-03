@@ -46,6 +46,9 @@
 
   backendPythonDeps,
 
+  # The variant that the build is expected to produce.
+  variant,
+
   # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
   # in the build metadata.
   kernelProvenance,
@@ -92,6 +95,10 @@ stdenv.mkDerivation (prevAttrs: {
   '';
 
   framework = "torch";
+
+  env = {
+    inherit variant;
+  };
 
   # Add Torch as a dependency, so that devshells for universal kernels
   # also get torch as a build input.

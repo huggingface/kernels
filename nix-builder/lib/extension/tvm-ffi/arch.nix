@@ -236,17 +236,16 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ extraDeps;
 
-  env =
-    {
-      inherit variant;
-    }
-    // lib.optionalAttrs cudaSupport {
-      CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
-    }
-    // lib.optionalAttrs xpuSupport {
-      MKLROOT = oneapi-torch-dev;
-      SYCL_ROOT = oneapi-torch-dev;
-    };
+  env = {
+    inherit variant;
+  }
+  // lib.optionalAttrs cudaSupport {
+    CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
+  }
+  // lib.optionalAttrs xpuSupport {
+    MKLROOT = oneapi-torch-dev;
+    SYCL_ROOT = oneapi-torch-dev;
+  };
 
   # If we use the default setup, CMAKE_CUDA_HOST_COMPILER gets set to nixpkgs g++.
   dontSetupCUDAToolkitCompilers = true;

@@ -1,4 +1,4 @@
-import warnings
+import logging
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -8,6 +8,8 @@ from packaging.version import InvalidVersion, parse
 from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
 from kernels.python_deps import validate_dependencies
+
+logger = logging.getLogger(__name__)
 
 
 class MetadataValidator(Protocol):
@@ -49,7 +51,7 @@ class DirtyValidator:
         if builder_git is not None and builder_git.dirty:
             dirty_sources.append("kernel-builder")
 
-        warnings.warn(
+        logger.warning(
             f"Kernel '{metadata.name}' variant '{variant}' was built from a dirty "
             f"git tree ({', '.join(dirty_sources)} had uncommitted changes). Its "
             "recorded git revision does not fully identify the sources it was built "

@@ -3,7 +3,6 @@ import platform
 import re
 import sys
 import sysconfig
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -25,6 +24,8 @@ from kernels.backends import (
     parse_backend,
 )
 from kernels.compat import has_torch, has_tvm_ffi
+
+logger = logging.getLogger(__name__)
 
 # Metal kernels are currently built with `-std=metal4.0`, which requires
 # macOS 26 or later. Until the macOS/Metal version is encoded in the build
@@ -384,11 +385,10 @@ def _check_variants(
     # Prefilter all arch kernels on free-threaded Python pre-3.15, since
     # they do not support the stable ABI.
     if is_unsupported_free_threaded:
-        warnings.warn(
+        logger.warning(
             "Arch kernels use the stable ABI, which is not supported on free-threaded "
             "Python before version 3.15. Arch kernels will not be used. Consider using "
             "a non-free-threaded interpreter, or upgrade to Python 3.15+.",
-            UserWarning,
             stacklevel=2,
         )
         variants = [v for v in variants if not isinstance(v, ArchVariant)]

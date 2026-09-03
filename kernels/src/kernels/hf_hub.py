@@ -1,6 +1,6 @@
+import logging
 import os
 import platform
-import warnings
 from dataclasses import dataclass
 
 from huggingface_hub import HfApi, constants
@@ -8,6 +8,8 @@ from huggingface_hub import HfApi, constants
 from kernels._system import glibc_version
 from kernels.backends import _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
+
+logger = logging.getLogger(__name__)
 
 
 def _platform() -> str:
@@ -116,7 +118,7 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
         # Publisher trust cannot be verified offline. The user opted into
         # offline mode and the kernel must already be in the local cache,
         # so trust was established when it was originally downloaded.
-        warnings.warn(
+        logger.warning(
             f"Skipping publisher trust check for '{repo_id}' because Hugging Face Hub is in offline mode.",
             stacklevel=3,
         )

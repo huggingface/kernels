@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from pathlib import Path
 
@@ -47,19 +48,22 @@ def _metadata_with_provenance(provenance):
 
 
 @pytest.mark.parametrize("provenance", [None, CLEAN_PROVENANCE])
-def test_dirty_validator_does_not_warn_when_clean(recwarn, provenance):
-    DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(provenance), variant="test-variant")
-    assert len(recwarn) == 0
+def test_dirty_validator_does_not_warn_when_clean(caplog, provenance):
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(provenance), variant="test-variant")
+    assert not caplog.records
 
 
-def test_dirty_validator_warns_on_dirty_kernel_source():
-    with pytest.warns(UserWarning, match="dirty git tree"):
+def test_dirty_validator_warns_on_dirty_kernel_source(caplog):
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
         DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(DIRTY_KERNEL), variant="test-variant")
+    assert "dirty git tree" in caplog.text
 
 
-def test_dirty_validator_names_dirty_sources():
-    with pytest.warns(UserWarning, match="kernel-builder"):
+def test_dirty_validator_names_dirty_sources(caplog):
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
         DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(DIRTY_BUILDER), variant="test-variant")
+    assert "kernel-builder" in caplog.text
 
 
 def test_dirty_validator_is_enabled_by_default():

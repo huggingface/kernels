@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -41,7 +42,6 @@ def test_decorator():
     assert isinstance(identity, nn.Module)
 
 
-@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_decorator():
     @use_kernel_func_from_hub("identity_func")
     def identity(x):
@@ -51,13 +51,11 @@ def test_deprecated_decorator():
     assert isinstance(identity, nn.Module)
 
 
-@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_func_repository_requires_version_or_revision():
     with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
         FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul")
 
 
-@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_func_repository(device):
     model = SurpriseMe()
 
@@ -116,7 +114,6 @@ def test_kernel_func_with_layer():
     assert model(x) is x
 
 
-@pytest.mark.filterwarnings("ignore:.*will be removed in kernels 0.17:DeprecationWarning")
 def test_deprecated_local_kernel_func(device):
     model = SurpriseMe()
 
@@ -145,30 +142,28 @@ def test_deprecated_local_kernel_func(device):
     assert model(x) is x
 
 
-def test_deprecated_kernel_func():
-    with pytest.deprecated_call(match="kernels 0.17"):
+def test_deprecated_kernel_func(caplog):
+    with caplog.at_level(logging.WARNING, logger="kernels.layer.func"):
         FuncRepository("kernels-test/flattened-build", func_name="silu_and_mul", version=1)
 
-    project_dir = Path(__file__).parent / "layer_locking"
-    with pytest.deprecated_call(match="kernels 0.17"):
+        project_dir = Path(__file__).parent / "layer_locking"
         LockedFuncRepository(
             "kernels-test/versions",
             func_name="version",
             lockfile=project_dir / "kernels.lock",
         )
 
-    with pytest.deprecated_call(match="kernels 0.17"):
         LocalFuncRepository(
             # We are never loading the kernel, so we can just use an invalid path.
             repo_path=Path("."),
             func_name="silu_and_mul",
         )
 
-    with pytest.deprecated_call(match="kernels 0.17"):
-
         @use_kernel_func_from_hub("deprecated")
         def deprecated_func(x):
             return x
+
+    assert caplog.text.count("kernels 0.17") == 4
 
 
 def test_use_kernelized_func_used_on_non_kernelized_func():

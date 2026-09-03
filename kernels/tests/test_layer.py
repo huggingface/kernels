@@ -1,6 +1,7 @@
 import logging
 import sys
 from contextlib import nullcontext
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -671,6 +672,35 @@ def test_mapping_contexts():
 def test_layer_repository_requires_version_or_revision():
     with pytest.raises(ValueError, match="Either a revision or a version must be specified"):
         LayerRepository(repo_id="kernels-test/silu-and-mul", layer_name="SiluAndMul")
+
+
+@pytest.mark.parametrize("user_agent", [None, "transformers/5.0.0", {"transformers": "5.0.0"}])
+def test_layer_repository_forwards_user_agent(monkeypatch, user_agent):
+    calls = []
+
+    def get_kernel(repo_id, **kwargs):
+        calls.append((repo_id, kwargs))
+        return SimpleNamespace(layers=SimpleNamespace(SiluAndMul=SiluAndMul))
+
+    monkeypatch.setattr("kernels.layer.layer.get_kernel", get_kernel)
+    repo = LayerRepository(
+        repo_id="kernels-test/silu-and-mul",
+        layer_name="SiluAndMul",
+        revision="main",
+        user_agent=user_agent,
+    )
+
+    assert repo.load() is SiluAndMul
+    assert calls == [
+        (
+            "kernels-test/silu-and-mul",
+            {
+                "revision": "main",
+                "trust_remote_code": False,
+                "user_agent": user_agent,
+            },
+        )
+    ]
 
 
 def test_layer_repository_with_trust_remote_code_allowlist_is_hashable():

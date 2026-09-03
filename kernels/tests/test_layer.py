@@ -1,3 +1,4 @@
+import logging
 import sys
 from contextlib import nullcontext
 
@@ -423,6 +424,84 @@ def test_layer_fallback_works():
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
+def test_kernel_condition_skips_kernelization(caplog):
+    @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: False)
+    class SiluAndMulConditionSkipped(SiluAndMul):
+        pass
+
+    silu_and_mul = SiluAndMulConditionSkipped()
+
+    with caplog.at_level(logging.INFO, logger="kernels.layer.kernelize"):
+        kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+    assert (
+        "Skipping kernelization for `SiluAndMulConditionSkipped` using `SiluAndMulNonExisting` due to kernel_condition."
+        in caplog.text
+    )
+
+    # The forward was not replaced...
+    assert "forward" not in silu_and_mul.__dict__
+
+    # ... and the original implementation is still used.
+    X = torch.randn(32, 64)
+    silu_and_mul(X)
+    assert silu_and_mul.n_calls == 1
+
+
+def test_kernel_condition_holds():
+    @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: True)
+    class SiluAndMulConditionHolds(SiluAndMul):
+        pass
+
+    silu_and_mul = SiluAndMulConditionHolds()
+
+    # The condition holds, so kernelization is attempted and fails because
+    # there is no kernel mapping for the layer.
+    with pytest.raises(ValueError, match="No layer mapping for `SiluAndMulNonExisting`"):
+        kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+
+def test_kernel_condition_receives_module_instance():
+    received = []
+
+    @use_kernel_forward_from_hub(
+        "SiluAndMulNonExisting",
+        condition=lambda module: received.append(module) or False,
+    )
+    class SiluAndMulConditionArg(SiluAndMul):
+        pass
+
+    silu_and_mul = SiluAndMulConditionArg()
+    # No mapping, but uses fallback.
+    kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
+
+    assert received == [silu_and_mul]
+
+
+def test_kernel_condition_per_instance():
+    @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: module.allow_kernel)
+    class SiluAndMulConditional(SiluAndMul):
+        def __init__(self, allow_kernel: bool):
+            super().__init__()
+            self.allow_kernel = allow_kernel
+
+    skipped = SiluAndMulConditional(allow_kernel=False)
+    attempted = SiluAndMulConditional(allow_kernel=True)
+
+    # Only the instance for which the condition holds is kernelized.
+    kernelize(skipped, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+    with pytest.raises(ValueError, match="No layer mapping for `SiluAndMulNonExisting`"):
+        kernelize(attempted, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+
+def test_kernel_condition_defaults_to_true():
+    # Without an explicit condition, kernelization is never skipped. Accessing
+    # the condition through an instance must not bind it as a method.
+    silu_and_mul = SiluAndMulWithKernel()
+    assert SiluAndMulWithKernel.kernel_condition(silu_and_mul)
+    assert silu_and_mul.kernel_condition(silu_and_mul)
+
+
 def test_local_layer_repo(device):
     # Fetch a kernel to the local cache.
     path = install_kernel("kernels-test/backward-marker-test", revision="main")
@@ -628,7 +707,11 @@ def test_validate_kernel_layer():
             self.foo = 42
 
     def stub_repo(layer):
-        return LayerRepository(repo_id="kernels-test/nonexisting", layer_name=layer.__name__, revision="main")
+        return LayerRepository(
+            repo_id="kernels-test/nonexisting",
+            layer_name=layer.__name__,
+            revision="main",
+        )
 
     with pytest.raises(
         TypeError,

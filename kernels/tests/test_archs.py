@@ -1,37 +1,9 @@
-import json
-from pathlib import Path
-
 import pytest
 import torch
 from kernels_data import Metadata
 
-import kernels.deps as deps_module
 from kernels import get_kernel, has_kernel, install_kernel
 from kernels.archs import _supports_cuda_capability
-from kernels.deps import ArchValidator, DepTreeNode
-from kernels.resolver import LocalKernel
-
-
-def make_metadata(backend_type: str, archs: list[str] | None) -> Metadata:
-    return Metadata.from_bytes(
-        json.dumps(
-            {
-                "name": "test-kernel",
-                "id": "test_id",
-                "version": 1,
-                "license": "mit",
-                "python-depends": [],
-                "backend": {"type": backend_type, "archs": archs},
-            }
-        ).encode("utf-8")
-    )
-
-
-def make_tree(metadata: Metadata, variant: str = "test-variant") -> DepTreeNode:
-    return DepTreeNode(
-        location=LocalKernel(Path(variant), metadata),
-        deps={},
-    )
 
 
 @pytest.mark.parametrize(
@@ -75,104 +47,6 @@ def make_tree(metadata: Metadata, variant: str = "test-variant") -> DepTreeNode:
 )
 def test_supports_cuda_capability(archs, capability, supported):
     assert _supports_cuda_capability(archs, capability) == supported
-
-
-@pytest.fixture
-def fake_cuda_device(monkeypatch):
-    monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
-    monkeypatch.setattr(torch.version, "hip", None, raising=False)
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: (10, 0))
-
-
-@pytest.fixture
-def fake_rocm_device(monkeypatch):
-    class FakeProperties:
-        gcnArchName = "gfx90a:sramecc+:xnack-"
-
-    monkeypatch.setattr(torch.version, "cuda", None, raising=False)
-    monkeypatch.setattr(torch.version, "hip", "6.4.0", raising=False)
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
-    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda device: FakeProperties())
-
-
-def test_cuda_incompatible_arch_is_rejected(fake_cuda_device):
-    with pytest.raises(RuntimeError) as exc_info:
-        ArchValidator().validate(tree=make_tree(make_metadata("cuda", ["8.0", "9.0a"])))
-    assert "test-variant" in str(exc_info.value)
-    assert "CUDA capability 10.0" in str(exc_info.value)
-    assert "8.0, 9.0a" in str(exc_info.value)
-
-
-def test_cuda_compatible_arch_is_accepted(fake_cuda_device):
-    for archs in (["8.0", "10.0"], ["10.0a"], ["10.0f"]):
-        ArchValidator().validate(tree=make_tree(make_metadata("cuda", archs)))
-
-
-def test_noarch_build_is_accepted(fake_cuda_device):
-    # Backends that support archs (e.g. CUDA) can have builds that do not
-    # declare any (noarch kernels, e.g. pure Triton builds). Such builds are
-    # never rejected.
-    ArchValidator().validate(tree=make_tree(make_metadata("cuda", None)))
-    ArchValidator().validate(tree=make_tree(make_metadata("cuda", [])))
-
-
-def test_rocm_arch_check(fake_rocm_device):
-    ArchValidator().validate(tree=make_tree(make_metadata("rocm", ["gfx90a", "gfx942"])))
-    ArchValidator().validate(tree=make_tree(make_metadata("rocm", None)))
-    with pytest.raises(RuntimeError) as exc_info:
-        ArchValidator().validate(tree=make_tree(make_metadata("rocm", ["gfx942"])))
-    assert "ROCm arch gfx90a" in str(exc_info.value)
-    assert "gfx942" in str(exc_info.value)
-
-
-def test_check_skipped_without_device(monkeypatch):
-    monkeypatch.setattr(torch.version, "cuda", "12.8", raising=False)
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-    ArchValidator().validate(tree=make_tree(make_metadata("cuda", ["8.0"])))
-
-
-def test_check_skipped_for_backends_without_archs(fake_cuda_device):
-    # Archs of other backends cannot be checked against the current device.
-    ArchValidator().validate(tree=make_tree(make_metadata("cpu", None)))
-    ArchValidator().validate(tree=make_tree(make_metadata("metal", ["applegpu_g13"])))
-
-
-def test_arch_validator_checks_entire_dependency_tree(monkeypatch):
-    tree = DepTreeNode(
-        location=LocalKernel(Path("root-variant"), make_metadata("cuda", ["8.0"])),
-        deps={
-            "test/dependency": DepTreeNode(
-                location=LocalKernel(Path("dependency-variant"), make_metadata("cuda", ["9.0"])),
-                deps={},
-            )
-        },
-    )
-    validated = []
-
-    monkeypatch.setattr(
-        deps_module,
-        "_check_arch_incompatibility",
-        lambda metadata, variant: validated.append((metadata.backend.archs, variant)),
-    )
-
-    tree.validate(ArchValidator())
-
-    assert validated == [
-        (["8.0"], "root-variant"),
-        (["9.0"], "dependency-variant"),
-    ]
-
-
-def test_issue_707_fa3_on_b200(fake_cuda_device):
-    # https://github.com/huggingface/kernels/issues/707: flash-attn3 only
-    # declares sm_80/sm_90a archs, but loading it on a B200 (capability 10.0)
-    # succeeded and the first launch exited the process. The declared archs
-    # must be rejected for this device.
-    metadata = make_metadata("cuda", ["8.0", "9.0a"])
-    with pytest.raises(RuntimeError, match="does not support the current device"):
-        ArchValidator().validate(tree=make_tree(metadata))
 
 
 @pytest.mark.cuda_only

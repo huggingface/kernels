@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -31,6 +32,30 @@ class ArchValidator:
 
     def validate_metadata(self, *, metadata: Metadata, variant: str) -> None:
         _check_arch_incompatibility(metadata, variant)
+
+
+class DirtyValidator:
+    """Warn when a kernel variant was built from a dirty git tree."""
+
+    def validate_metadata(self, *, metadata: Metadata, variant: str) -> None:
+        provenance = metadata.provenance
+        if provenance is None or not provenance.dirty:
+            return
+
+        dirty_sources = []
+        if provenance.kernel is not None and provenance.kernel.dirty:
+            dirty_sources.append("kernel source")
+        builder_git = provenance.kernel_builder.git
+        if builder_git is not None and builder_git.dirty:
+            dirty_sources.append("kernel-builder")
+
+        warnings.warn(
+            f"Kernel '{metadata.name}' variant '{variant}' was built from a dirty "
+            f"git tree ({', '.join(dirty_sources)} had uncommitted changes). Its "
+            "recorded git revision does not fully identify the sources it was built "
+            "from, so the build may not be reproducible.",
+            stacklevel=3,
+        )
 
 
 def _installed_version() -> Version | None:
@@ -96,4 +121,4 @@ class AllValidator:
 
 def default_metadata_validators() -> list[MetadataValidator]:
     """The metadata validators that are applied to every kernel dependency tree."""
-    return [DependencyValidator(), MinverValidator()]
+    return [DependencyValidator(), MinverValidator(), DirtyValidator()]

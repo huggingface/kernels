@@ -1,15 +1,69 @@
+import json
 import re
 from pathlib import Path
 
 import pytest
 import torch
-from kernels_data import Version
+from kernels_data import Metadata, Version
 
 import kernels
 import kernels.validate as validate_module
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel
-from kernels.validate import ArchValidator, MinverValidator, _installed_version
+from kernels.validate import (
+    ArchValidator,
+    DirtyValidator,
+    MinverValidator,
+    _installed_version,
+    default_metadata_validators,
+)
+
+CLEAN_PROVENANCE = {
+    "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
+    "kernel": {"commit": "b" * 40, "dirty": False},
+}
+DIRTY_KERNEL = {
+    "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
+    "kernel": {"commit": "b" * 40, "dirty": True},
+}
+DIRTY_BUILDER = {
+    "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": True},
+    "kernel": {"commit": "b" * 40, "dirty": False},
+}
+
+
+def _metadata_with_provenance(provenance):
+    metadata = {
+        "id": "activation_1_cuda",
+        "name": "activation",
+        "version": 1,
+        "license": "Apache-2.0",
+        "python-depends": [],
+        "backend": {"type": "cuda"},
+    }
+    if provenance is not None:
+        metadata["provenance"] = provenance
+    return Metadata.from_bytes(json.dumps(metadata).encode())
+
+
+@pytest.mark.parametrize("provenance", [None, CLEAN_PROVENANCE])
+def test_dirty_validator_does_not_warn_when_clean(recwarn, provenance):
+    DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(provenance), variant="test-variant")
+    assert len(recwarn) == 0
+
+
+def test_dirty_validator_warns_on_dirty_kernel_source():
+    with pytest.warns(UserWarning, match="dirty git tree"):
+        DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(DIRTY_KERNEL), variant="test-variant")
+
+
+def test_dirty_validator_names_dirty_sources():
+    with pytest.warns(UserWarning, match="kernel-builder"):
+        DirtyValidator().validate_metadata(metadata=_metadata_with_provenance(DIRTY_BUILDER), variant="test-variant")
+
+
+def test_dirty_validator_is_enabled_by_default():
+    assert any(isinstance(validator, DirtyValidator) for validator in default_metadata_validators())
 
 
 @pytest.mark.parametrize("minver", [None, "0.0.1"])

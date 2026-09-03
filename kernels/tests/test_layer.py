@@ -622,6 +622,8 @@ def test_layer_repository_forwards_user_agent(monkeypatch, user_agent):
             },
         )
     ]
+
+
 def test_layer_repository_with_trust_remote_code_allowlist_is_hashable():
     allowlist = ["untrusted-org/allowed-kernel"]
     repo = LayerRepository(

@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
-import warnings
 from inspect import Parameter, Signature
 from pathlib import Path
 from types import MethodType, ModuleType
@@ -33,6 +32,8 @@ from .repos import RepositoryProtocol, _select_repository
 
 if TYPE_CHECKING:
     from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
@@ -478,7 +479,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     kernel = _KERNEL_MAPPING.get().get(str(layer_name))
 
     if kernel is None:
-        warnings.warn(
+        logger.warning(
             "\n"
             f"No kernel mapping found for layer `{layer_name}`. "
             f"Check if the layer name matches one of the kernels in the mapping or add the kernel "

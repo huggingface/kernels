@@ -1,7 +1,7 @@
 import ctypes
 import ctypes.util
+import logging
 import re
-import warnings
 from dataclasses import dataclass
 from typing import ClassVar, Optional, Protocol, runtime_checkable
 
@@ -9,6 +9,8 @@ from huggingface_hub.dataclasses import strict
 from packaging.version import Version
 
 from kernels.compat import has_torch
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -292,7 +294,7 @@ def _get_cuda() -> Optional[CUDA]:
     runtime_version = ctypes.c_int(0)
     result = libcudart.cudaRuntimeGetVersion(ctypes.byref(runtime_version))
     if result != 0:
-        warnings.warn("System has CUDA runtime library, but cannot get runtime version.")
+        logger.warning("System has CUDA runtime library, but cannot get runtime version.")
         return None
 
     # cudaRuntimeGetVersion encodes the version as (major * 1000 + minor * 10).

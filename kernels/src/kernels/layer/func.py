@@ -1,5 +1,5 @@
 import functools
-import warnings
+import logging
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Protocol, Type
@@ -26,6 +26,8 @@ from .repos import RepositoryProtocol
 
 if TYPE_CHECKING:
     from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 class FuncRepositoryProtocol(RepositoryProtocol, Protocol):
@@ -81,9 +83,8 @@ class FuncRepository:
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
     ):
-        warnings.warn(
+        logger.warning(
             "FuncRepository is deprecated and will be removed in kernels 0.17. Use LayerRepository instead.",
-            DeprecationWarning,
             stacklevel=2,
         )
 
@@ -181,9 +182,8 @@ class LocalFuncRepository:
         *,
         func_name: str,
     ):
-        warnings.warn(
+        logger.warning(
             "LocalFuncRepository is deprecated and will be removed in kernels 0.17. Use LocalLayerRepository instead.",
-            DeprecationWarning,
             stacklevel=2,
         )
 
@@ -258,9 +258,8 @@ def use_kernel_func_from_hub(func_name: str):
         # model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
         ```
     """
-    warnings.warn(
+    logger.warning(
         "use_kernel_func_from_hub is deprecated and will be removed in kernels 0.17. Use [`use_kernel_forward_from_hub`] instead.",
-        DeprecationWarning,
         stacklevel=2,
     )
 
@@ -299,9 +298,8 @@ class LockedFuncRepository:
         Construct a function repository.
 
         """
-        warnings.warn(
+        logger.warning(
             "LockedFuncRepository is deprecated and will be removed in kernels 0.17. Use LockedLayerRepository instead.",
-            DeprecationWarning,
             stacklevel=2,
         )
 

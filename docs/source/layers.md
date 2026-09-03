@@ -27,6 +27,23 @@ The decorator does not change the behavior of the class -- it annotates
 the class with the given name (here `SiluAndMul`). The [`~kernels.kernelize`] function
 described below uses this name to look up kernels for the layer.
 
+Sometimes you only want to kernelize a layer depending on some state inside
+that layer. For instance, an MLP layer could support multiple activations, but
+a kernel that you want to register only supports one particular activation. In
+such cases, you can add a condition to a `use_kernel_forward_from_hub` decorator.
+The layer will then only be kernelized when the condition holds. The condition
+must be a callable that takes the instantiated layer and returns a `bool`. For
+example:
+
+```python
+@use_kernel_forward_from_hub(
+    "SwiGLUMLP",
+    condition=lambda module: module.config.hidden_act == "silu",
+)
+class MyMLP(nn.Module):
+    ...
+```
+
 ### External layers
 
 An existing layer that does not (yet) have the [`~kernels.use_kernel_forward_from_hub`]

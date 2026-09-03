@@ -15,7 +15,6 @@ from kernels_data import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version
-from ..deps import AllValidator, default_validators
 from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
@@ -26,6 +25,7 @@ from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
+from ..validate import AllValidator, default_metadata_validators
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
@@ -253,7 +253,7 @@ class LockedLayerRepository:
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
-            validator=AllValidator(validators=default_validators()),
+            metadata_validator=AllValidator(validators=default_metadata_validators()),
         )
         return _get_kernel_layer(self, kernel)
 
@@ -288,10 +288,7 @@ class LockedLayerRepository:
 _CACHED_LAYER: dict[RepositoryProtocol, Type["nn.Module"]] = {}
 
 
-def replace_kernel_forward_from_hub(
-    cls,
-    layer_name: str,
-):
+def replace_kernel_forward_from_hub(cls, layer_name: str, condition: Callable[["nn.Module"], bool] | None = None):
     """
     Function that prepares a layer class to use kernels from the Hugging Face Hub.
 
@@ -299,6 +296,15 @@ def replace_kernel_forward_from_hub(
     This function should only be used as a last resort to extend third-party layers,
     it is inherently fragile since the member variables and `forward` signature
     of such a layer can change.
+
+    Args:
+        layer_name (`str`):
+            The name of the layer to use for kernel lookup in registered mappings.
+        condition (`Callable[["nn.Module"], bool]`, *optional*):
+            Additional condition that is checked during kernelization. The callable
+            is passed the module instance and is evaluated for every instance of
+            the layer when [`~kernels.kernelize`] is called. If it returns `False`,
+            kernelization is skipped for that instance.
 
     Example:
         ```python
@@ -309,9 +315,12 @@ def replace_kernel_forward_from_hub(
         ```
     """
     cls.kernel_layer_name = layer_name
+    # Wrap in `staticmethod` so that access through an instance does not bind
+    # it as a method (the condition takes the module as its only argument).
+    cls.kernel_condition = staticmethod(condition if condition is not None else lambda module: True)
 
 
-def use_kernel_forward_from_hub(layer_name: str):
+def use_kernel_forward_from_hub(layer_name: str, condition: Callable[["nn.Module"], bool] | None = None):
     """
     Decorator factory that makes a layer extensible using the specified layer name.
 
@@ -327,6 +336,11 @@ def use_kernel_forward_from_hub(layer_name: str):
     Args:
         layer_name (`str`):
             The name of the layer to use for kernel lookup in registered mappings.
+        condition (`Callable[["nn.Module"], bool]`, *optional*):
+            Additional condition that is checked during kernelization. The callable
+            is passed the module instance and is evaluated for every instance of
+            the layer when [`~kernels.kernelize`] is called. If it returns `False`,
+            kernelization is skipped for that instance.
 
     Returns:
         `Callable`: A decorator function that can be applied to layer classes.
@@ -372,10 +386,10 @@ def use_kernel_forward_from_hub(layer_name: str):
     def decorator(ty):
         if inspect.isfunction(ty):
             Func = _create_func_module(ty)
-            replace_kernel_forward_from_hub(Func, layer_name)
+            replace_kernel_forward_from_hub(Func, layer_name, condition)
             return Func()
         elif inspect.isclass(ty):
-            replace_kernel_forward_from_hub(ty, layer_name)
+            replace_kernel_forward_from_hub(ty, layer_name, condition)
             return ty
         else:
             raise TypeError("@use_kernel_forward_from_hub can only be applied to classes or functions")

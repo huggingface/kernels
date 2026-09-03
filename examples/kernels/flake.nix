@@ -108,12 +108,6 @@
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
-          name = "extra-data";
-          path = ./extra-data;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
-        }
-        {
           name = "relu-kernel-cpu";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};

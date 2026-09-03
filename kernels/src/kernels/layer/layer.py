@@ -59,6 +59,8 @@ class LayerRepository:
             only kernels from trusted organisations are allowed. When `True`, all
             repositories are allowed. A list of repository IDs allows only those
             repositories in addition to repositories from trusted organisations.
+        user_agent (`Union[str, dict]`, *optional*):
+            Optional application metadata to include in the user-agent for Hub requests.
 
     Example:
         ```python
@@ -81,6 +83,7 @@ class LayerRepository:
         revision: str | None = None,
         version: int | None = None,
         trust_remote_code: bool | list[str] = False,
+        user_agent: str | dict | None = None,
     ):
         if revision is not None and version is not None:
             raise ValueError("Either a revision or a version must be specified, not both.")
@@ -92,6 +95,7 @@ class LayerRepository:
         self._trust_remote_code = (
             trust_remote_code.copy() if isinstance(trust_remote_code, list) else trust_remote_code
         )
+        self._user_agent = user_agent
 
         # We are going to resolve these lazily, since we do not want
         # to do a network request for every registered LayerRepository.
@@ -112,6 +116,7 @@ class LayerRepository:
             self._repo_id,
             revision=self._resolve_revision(),
             trust_remote_code=self._trust_remote_code,
+            user_agent=self._user_agent,
         )
         return _get_kernel_layer(self, kernel)
 

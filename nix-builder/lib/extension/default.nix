@@ -55,16 +55,21 @@ in
       onednn-xpu
     ]
     ++ lib.optionals rocmSupport (
-      [
-        clr
-      ]
-      ++ (with rocmPackages; [
-        hipcub-devel
-        hipsparselt
-        rocprim-devel
-        rocthrust-devel
-        rocwmma-devel
-      ])
+      with rocmPackages;
+      if theRock then
+        [
+          amdrocm-ccl-devel
+          amdrocm-hipblas-common-devel
+        ]
+      else
+        [
+          hipcub-devel
+          hipsparselt
+          rocprim-devel
+          rocthrust-devel
+          rocshmem-devel
+          rocwmma-devel
+        ]
     );
 
   mkTvmFfiExtension = callPackage ./tvm-ffi/arch.nix {

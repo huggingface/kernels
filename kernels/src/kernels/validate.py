@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
-from typing import Protocol
+from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
 
 from kernels_data import Metadata, Version
 from packaging.version import InvalidVersion, parse
@@ -9,11 +10,22 @@ from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
 from kernels.python_deps import validate_dependencies
 
+from .compat import has_sigstore
+
+if TYPE_CHECKING:
+    from sigstore.verify.policy import VerificationPolicy
+
 logger = logging.getLogger(__name__)
 
 
+class KernelValidator(Protocol):
+    """Kernel (build variant) validator."""
+
+    def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path) -> None: ...
+
+
 class MetadataValidator(Protocol):
-    """Metadata validator for a kernel build variant."""
+    """Kernel metadata validator."""
 
     def validate_metadata(self, *, metadata: Metadata, variant: str) -> None: ...
 
@@ -124,3 +136,24 @@ class AllValidator:
 def default_metadata_validators() -> list[MetadataValidator]:
     """The metadata validators that are applied to every kernel dependency tree."""
     return [DependencyValidator(), MinverValidator(), DirtyValidator()]
+
+
+class SignatureValidator:
+    policy: "VerificationPolicy | None"
+
+    def __init__(self, policy: "VerificationPolicy|None"):
+        self.policy = policy
+
+    def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path) -> None:
+        if not has_sigstore:
+            return
+
+        from .verify import VerificationResult, verify_variant
+
+        result = verify_variant(variant_path, policy=self.policy)
+        match result:
+            case VerificationResult.Success():
+                logger.info(f"Kernel successfully verified: {variant_path}")
+            case _:
+                message = str(result)
+                logger.warning(f"{message[:1].upper()}{message[1:]}: {variant_path}")

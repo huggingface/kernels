@@ -9,15 +9,18 @@ from kernels_data import Metadata, Version
 
 import kernels
 import kernels.validate as validate_module
+import kernels.verify as verify_module
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel
 from kernels.validate import (
     ArchValidator,
     DirtyValidator,
     MinverValidator,
+    SignatureValidator,
     _installed_version,
     default_metadata_validators,
 )
+from kernels.verify import VerificationResult
 
 CLEAN_PROVENANCE = {
     "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
@@ -207,3 +210,67 @@ def test_issue_707_fa3_on_b200(fake_cuda_device, make_metadata):
     metadata = make_metadata("cuda", ["8.0", "9.0a"])
     with pytest.raises(RuntimeError, match="does not support the current device"):
         ArchValidator().validate_metadata(metadata=metadata, variant="test-variant")
+
+
+def test_signature_validator_logs_info_on_success(monkeypatch, caplog, make_metadata):
+    monkeypatch.setattr(
+        verify_module, "verify_variant", lambda variant_path, policy=None: VerificationResult.Success()
+    )
+    variant_path = Path("test-variant")
+    with caplog.at_level(logging.INFO, logger="kernels.validate"):
+        SignatureValidator(None).validate_kernel(
+            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=variant_path
+        )
+    assert f"Kernel successfully verified: {variant_path}" in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+def test_signature_validator_warns_on_failure(monkeypatch, caplog, make_metadata):
+    # Mixed case on purpose: the reason must be logged as-is and not
+    # lowercased (e.g. by str.capitalize()).
+    reason = "expected OIDC issuer https://token.actions.githubusercontent.com"
+    monkeypatch.setattr(
+        verify_module,
+        "verify_variant",
+        lambda variant_path, policy=None: VerificationResult.SignatureVerificationFailure(reason=reason),
+    )
+    variant_path = Path("test-variant")
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator(None).validate_kernel(
+            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=variant_path
+        )
+    assert f"Metadata signature verification failed:\n{reason}: {variant_path}" in caplog.text
+
+
+def test_signature_validator_noop_without_sigstore(monkeypatch, caplog, make_metadata):
+    monkeypatch.setattr(validate_module, "has_sigstore", False)
+
+    def fail_if_called(variant_path, policy=None):
+        raise AssertionError("verify_variant must not be called without sigstore")
+
+    monkeypatch.setattr(verify_module, "verify_variant", fail_if_called)
+    with caplog.at_level(logging.INFO, logger="kernels.validate"):
+        SignatureValidator(None).validate_kernel(
+            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=Path("test-variant")
+        )
+    assert not caplog.records
+
+
+def test_signature_validator_passes_policy_through(monkeypatch, make_metadata):
+    from sigstore.verify import policy as sigstore_policy
+
+    seen_policies = []
+
+    def fake_verify_variant(variant_path, policy=None):
+        seen_policies.append(policy)
+        return VerificationResult.Success()
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
+
+    test_policy = sigstore_policy.Identity(identity="me@danieldk.eu", issuer="https://github.com/login/oauth")
+    for policy in (test_policy, None):
+        SignatureValidator(policy).validate_kernel(
+            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=Path("test-variant")
+        )
+
+    assert seen_policies == [test_policy, None]

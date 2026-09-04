@@ -64,7 +64,7 @@ let
         touch $out
       '';
 in
-assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.12.0") kernelBuildSets)
+assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.13.0") kernelBuildSets)
   ''
     Torch minver/maxver filtering does not work.
   '';

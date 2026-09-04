@@ -6,7 +6,7 @@ from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
 from kernels_data import KernelDependency, KernelLocks, KernelPaths, Metadata
 
-from kernels._versions import resolve_kernel_version
+from kernels._versions import _get_available_versions, resolve_kernel_version
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.variants import (
     Variant,
@@ -123,8 +123,14 @@ def resolve_hub_kernel(
     )
     variant, trace = resolve_variant(variants, backend)
     if variant is None:
+        suggestion = _latest_compatible_version_suggestion(
+            api=api,
+            repo_id=repo_id,
+            backend=backend,
+        )
         raise FileNotFoundError(
-            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n{variants_trace_str(trace)}"
+            f"Cannot find a build variant for this system in {repo_id} (revision: {revision}):\n\n"
+            f"{variants_trace_str(trace)}{suggestion}"
         )
 
     metadata_path = Path(
@@ -142,6 +148,38 @@ def resolve_hub_kernel(
     location = RemoteKernel(repo_id=repo_id, revision=revision, variant=variant, metadata=metadata)
 
     return location
+
+
+def _latest_compatible_version_suggestion(
+    *,
+    api: HfApi,
+    repo_id: str,
+    backend: str | None,
+) -> str:
+    """
+    This runs only after variant resolution has failed. Version discovery and
+    variant inspection involve additional Hub requests, so the lookup is
+    best-effort and hence, we never mask the original resolution error.
+    """
+    try:
+        versions = _get_available_versions(repo_id, local_files_only=False)
+        if not versions:
+            return ""
+
+        latest_version = max(versions)
+        ref = versions[latest_version]
+        variants = get_variants(api, repo_id=repo_id, revision=ref.ref)
+        compatible_variant, _ = resolve_variant(variants, backend)
+        if compatible_variant is not None:
+            return (
+                f"\n\nHowever, version v{latest_version} of '{repo_id}' has a build compatible with your "
+                f"system ({compatible_variant.variant_str}). Consider upgrading to that version by specifying "
+                "the `version` argument."
+            )
+    except Exception:
+        return ""
+
+    return ""
 
 
 def resolve_hub_cache_kernel(

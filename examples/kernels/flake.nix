@@ -17,8 +17,8 @@
       cudaVersion = "cu126";
       cuda13Version = "cu132";
       rocmVersion = "rocm71";
-      xpuVersion = "xpu20253";
-      torchVersion = "212";
+      xpuVersion = "xpu20260";
+      torchVersion = "213";
       tvmFfiVersion = "01";
 
       # All example kernels to build in CI.
@@ -142,7 +142,7 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.12";
+              torchVersion = "2.13";
               cudaVersion = "12.6";
               systems = [
                 "x86_64-linux"

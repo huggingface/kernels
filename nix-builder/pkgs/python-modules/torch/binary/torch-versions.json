@@ -89,55 +89,41 @@
 
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "cudaVersion": "12.6",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "cudaVersion": "13.0",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "cudaVersion": "13.2",
     "systems": ["x86_64-linux", "aarch64-linux"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
-    "cudaVersion": "13.4",
-    "systems": ["x86_64-linux", "aarch64-linux"]
-  },
-  {
-    "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "cpu": true,
     "systems": ["aarch64-linux", "x86_64-linux"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "metal": true,
     "systems": ["aarch64-darwin"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "rocmVersion": "7.2",
     "systems": ["x86_64-linux"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "rocmVersion": "7.14",
     "systems": ["x86_64-linux"]
   },
   {
     "torchVersion": "2.14.0",
-    "torchTesting": "rc6",
     "xpuVersion": "2026.1.0",
     "systems": ["x86_64-linux"]
   }

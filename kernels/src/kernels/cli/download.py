@@ -1,6 +1,6 @@
 import sys
 
-from kernels_data import KernelLocks, KernelVersion
+from kernels_data import KernelLocks
 
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS, resolve_hub_kernel
@@ -36,14 +36,7 @@ def download_kernels(args):
                     revision=lock.commit,
                 )
             else:
-                version = dep.version.version if isinstance(dep.version, KernelVersion.Version) else None
-                location = resolve_hub_kernel(
-                    dep.repo_id,
-                    api=api,
-                    backend=None,
-                    revision=lock.commit,
-                    version=version,
-                )
+                location = resolve_hub_kernel(dep.repo_id, api=api, backend=None, revision=lock.commit)
                 location.install(api=api)
         except FileNotFoundError as e:
             print(e, file=sys.stderr)

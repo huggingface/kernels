@@ -4,7 +4,7 @@ from typing import Protocol, runtime_checkable
 
 from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
-from kernels_data import KernelDependency, KernelLocks, KernelPaths, KernelVersion, Metadata
+from kernels_data import KernelDependency, KernelLocks, KernelPaths, Metadata
 
 from kernels._versions import _get_available_versions, resolve_kernel_version
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
@@ -115,7 +115,6 @@ def resolve_hub_kernel(
     api: HfApi,
     backend: str | None,
     revision: str,
-    version: int | None = None,
 ) -> RemoteKernel:
     variants = get_variants(
         api,
@@ -124,11 +123,9 @@ def resolve_hub_kernel(
     )
     variant, trace = resolve_variant(variants, backend)
     if variant is None:
-        suggestion = _newer_compatible_version_suggestion(
+        suggestion = _latest_compatible_version_suggestion(
             api=api,
             repo_id=repo_id,
-            revision=revision,
-            version=version,
             backend=backend,
         )
         raise FileNotFoundError(
@@ -153,12 +150,10 @@ def resolve_hub_kernel(
     return location
 
 
-def _newer_compatible_version_suggestion(
+def _latest_compatible_version_suggestion(
     *,
     api: HfApi,
     repo_id: str,
-    revision: str,
-    version: int | None,
     backend: str | None,
 ) -> str:
     """
@@ -168,36 +163,19 @@ def _newer_compatible_version_suggestion(
     """
     try:
         versions = _get_available_versions(repo_id, local_files_only=False)
-
-        if version is None:
-            version = next(
-                (
-                    candidate
-                    for candidate, ref in versions.items()
-                    if revision in (ref.name, ref.ref, ref.target_commit)
-                ),
-                None,
-            )
-
-        if version is None:
+        if not versions:
             return ""
 
-        newer_versions = [candidate for candidate in versions if candidate > version]
-        newer_versions.sort(reverse=True)
-
-        for newer_version in newer_versions:
-            ref = versions[newer_version]
-            try:
-                variants = get_variants(api, repo_id=repo_id, revision=ref.ref)
-                compatible_variant, _ = resolve_variant(variants, backend)
-            except Exception:
-                continue
-            if compatible_variant is not None:
-                return (
-                    f"\n\nHowever, version v{newer_version} of '{repo_id}' has a build compatible with your "
-                    f"system ({compatible_variant.variant_str}). Consider upgrading to that version by specifying "
-                    "the `version` argument."
-                )
+        latest_version = max(versions)
+        ref = versions[latest_version]
+        variants = get_variants(api, repo_id=repo_id, revision=ref.ref)
+        compatible_variant, _ = resolve_variant(variants, backend)
+        if compatible_variant is not None:
+            return (
+                f"\n\nHowever, version v{latest_version} of '{repo_id}' has a build compatible with your "
+                f"system ({compatible_variant.variant_str}). Consider upgrading to that version by specifying "
+                "the `version` argument."
+            )
     except Exception:
         return ""
 
@@ -303,8 +281,7 @@ class HubResolver:
         revision = resolve_kernel_version(kernel, local_files_only=False)
 
         # Get the kernel metadata for the revision.
-        version = kernel.version.version if isinstance(kernel.version, KernelVersion.Version) else None
-        return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, version=version, backend=backend)
+        return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, backend=backend)
 
 
 @dataclass
@@ -364,8 +341,7 @@ class LockedHubResolver:
         revision = _locked_revision(self.kernel_locks, kernel)
 
         # Get the kernel metadata for the revision.
-        version = kernel.version.version if isinstance(kernel.version, KernelVersion.Version) else None
-        return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, version=version, backend=backend)
+        return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, backend=backend)
 
 
 @dataclass

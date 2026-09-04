@@ -280,7 +280,7 @@ def test_hub_resolver_no_matching_variant(api):
         )
 
 
-def test_resolve_hub_kernel_suggests_newest_compatible_version(monkeypatch):
+def test_resolve_hub_kernel_suggests_latest_compatible_version(monkeypatch):
     versions = {
         version: GitRefInfo(name=f"v{version}", ref=f"refs/heads/v{version}", target_commit=str(version) * 40)
         for version in (1, 2, 3)
@@ -295,7 +295,7 @@ def test_resolve_hub_kernel_suggests_newest_compatible_version(monkeypatch):
 
     def fake_get_variants(api, *, repo_id, revision):
         checked_revisions.append(revision)
-        return [parse_variant("torch-cpu" if revision == "refs/heads/v2" else "torch-cuda")]
+        return [parse_variant("torch-cpu" if revision == "refs/heads/v3" else "torch-cuda")]
 
     monkeypatch.setattr(resolver_module, "get_variants", fake_get_variants)
 
@@ -304,24 +304,24 @@ def test_resolve_hub_kernel_suggests_newest_compatible_version(monkeypatch):
             "test/kernel",
             api=object(),
             backend="cpu",
-            revision=versions[1].target_commit,
-            version=1,
+            revision="locked-commit",
         )
 
     message = str(exc_info.value)
     assert "Cannot find a build variant for this system" in message
     assert (
-        "However, version v2 of 'test/kernel' has a build compatible with your system (torch-cpu). "
+        "However, version v3 of 'test/kernel' has a build compatible with your system (torch-cpu). "
         "Consider upgrading to that version by specifying the `version` argument."
     ) in message
-    assert checked_revisions == [versions[1].target_commit, "refs/heads/v3", "refs/heads/v2"]
+    assert checked_revisions == ["locked-commit", "refs/heads/v3"]
 
 
-def test_resolve_hub_kernel_continues_when_newer_version_lookup_fails(monkeypatch):
+def test_resolve_hub_kernel_only_checks_latest_version(monkeypatch):
     versions = {
         version: GitRefInfo(name=f"v{version}", ref=f"refs/heads/v{version}", target_commit=str(version) * 40)
         for version in (1, 2, 3)
     }
+    checked_revisions = []
     monkeypatch.setattr(
         resolver_module,
         "_get_available_versions",
@@ -329,17 +329,19 @@ def test_resolve_hub_kernel_continues_when_newer_version_lookup_fails(monkeypatc
     )
 
     def fake_get_variants(api, *, repo_id, revision):
-        if revision == "refs/heads/v3":
-            raise OSError("branch is temporarily unavailable")
+        checked_revisions.append(revision)
         return [parse_variant("torch-cpu" if revision == "refs/heads/v2" else "torch-cuda")]
 
     monkeypatch.setattr(resolver_module, "get_variants", fake_get_variants)
 
-    with pytest.raises(FileNotFoundError, match="However, version v2"):
-        resolve_hub_kernel("test/kernel", api=object(), backend="cpu", revision="v1", version=1)
+    with pytest.raises(FileNotFoundError) as exc_info:
+        resolve_hub_kernel("test/kernel", api=object(), backend="cpu", revision="locked-commit")
+
+    assert "However, version" not in str(exc_info.value)
+    assert checked_revisions == ["locked-commit", "refs/heads/v3"]
 
 
-def test_resolve_hub_kernel_infers_version_from_revision(monkeypatch):
+def test_resolve_hub_kernel_preserves_original_error_when_latest_version_lookup_fails(monkeypatch):
     versions = {
         1: GitRefInfo(name="v1", ref="refs/heads/v1", target_commit="1" * 40),
         2: GitRefInfo(name="v2", ref="refs/heads/v2", target_commit="2" * 40),
@@ -349,16 +351,20 @@ def test_resolve_hub_kernel_infers_version_from_revision(monkeypatch):
         "_get_available_versions",
         lambda repo_id, *, local_files_only: versions,
     )
-    monkeypatch.setattr(
-        resolver_module,
-        "get_variants",
-        lambda api, *, repo_id, revision: [
-            parse_variant("torch-cpu" if revision == "refs/heads/v2" else "torch-cuda")
-        ],
-    )
 
-    with pytest.raises(FileNotFoundError, match="However, version v2"):
-        resolve_hub_kernel("test/kernel", api=object(), backend="cpu", revision="v1")
+    def fake_get_variants(api, *, repo_id, revision):
+        if revision == "refs/heads/v2":
+            raise OSError("latest branch is temporarily unavailable")
+        return [parse_variant("torch-cuda")]
+
+    monkeypatch.setattr(resolver_module, "get_variants", fake_get_variants)
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        resolve_hub_kernel("test/kernel", api=object(), backend="cpu", revision="locked-commit")
+
+    message = str(exc_info.value)
+    assert "Cannot find a build variant for this system" in message
+    assert "However, version" not in message
 
 
 def test_resolve_hub_kernel_preserves_original_error_when_version_lookup_fails(monkeypatch):
@@ -374,7 +380,7 @@ def test_resolve_hub_kernel_preserves_original_error_when_version_lookup_fails(m
     )
 
     with pytest.raises(FileNotFoundError) as exc_info:
-        resolve_hub_kernel("test/kernel", api=object(), backend="cpu", revision="v1", version=1)
+        resolve_hub_kernel("test/kernel", api=object(), backend="cpu", revision="locked-commit")
 
     message = str(exc_info.value)
     assert "Cannot find a build variant for this system" in message

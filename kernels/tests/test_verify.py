@@ -9,9 +9,9 @@ from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
 from kernels.verify import VerificationResult, verify_variant
 
-TEST_POLICIES: list[policy.VerificationPolicy] = [
-    policy.Identity(identity="me@danieldk.eu", issuer="https://github.com/login/oauth")
-]
+TEST_POLICY: policy.VerificationPolicy = policy.Identity(
+    identity="me@danieldk.eu", issuer="https://github.com/login/oauth"
+)
 
 
 def test_correctly_signed_kernel_passes_with_default_policy():
@@ -26,7 +26,7 @@ def test_correctly_signed_kernel_passes():
     assert (
         verify_variant(
             variant_path,
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.Success()
     )
@@ -37,7 +37,7 @@ def test_invalid_digest_fails():
 
     match verify_variant(
         variant_path,
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.DigestVerificationFailure(violations=violations):
             assert len(violations) == 1
@@ -75,7 +75,7 @@ def test_invalid_metadata_fails():
     match verify_variant(
         # No CUDA dependency, we are only checking metadata.
         variant_paths / "torch-cuda",
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.MetadataInvalid(reason=reason):
             assert "Cannot parse metadata" in reason
@@ -88,7 +88,7 @@ def test_missing_digest_fails():
     assert (
         verify_variant(
             variant_path,
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.DigestMissing()
     )
@@ -124,7 +124,7 @@ def test_missing_metadata_fails():
         verify_variant(
             # No CUDA dependency, we are only checking metadata.
             variant_paths / "torch-cuda",
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.MetadataMissing()
     )
@@ -135,7 +135,7 @@ def test_unsigned_kernel_fails():
     assert (
         verify_variant(
             variant_path,
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.SignatureBundleMissing()
     )
@@ -145,7 +145,7 @@ def test_broken_signature_bundle_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-broken")
     match verify_variant(
         variant_path,
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.SignatureBundleInvalid(reason=_):
             pass
@@ -157,7 +157,7 @@ def test_invalid_signature_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-invalid")
     match verify_variant(
         variant_path,
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.SignatureVerificationFailure(reason=_):
             pass

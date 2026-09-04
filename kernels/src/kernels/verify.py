@@ -47,23 +47,25 @@ class GitHubWorkflowPolicy(VerificationPolicy):
 
 
 """
-Default policies for the kernels package.
+Default policy for the kernels package.
 
 This is a curated set of trusted kernel developers.
 """
-DEFAULT_POLICIES: list[VerificationPolicy] = [
-    GitHubWorkflowPolicy(
-        repo_id="huggingface/kernels-community",
-        signer_uris=[
-            "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
-            "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",
-            "https://github.com/huggingface/kernels-community/.github/workflows/build-windows.yaml@refs/heads/main",
-            # This workflow was used to sign existing builds, around Torch 2.10-2.12. Can be removed once these
-            # Torch versions are ancient.
-            "https://github.com/huggingface/kernels-community/.github/workflows/sign-old-builds.yaml@refs/heads/main",
-        ],
-    ),
-]
+DEFAULT_POLICY: VerificationPolicy = policy.AnyOf(
+    [
+        GitHubWorkflowPolicy(
+            repo_id="huggingface/kernels-community",
+            signer_uris=[
+                "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
+                "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",
+                "https://github.com/huggingface/kernels-community/.github/workflows/build-windows.yaml@refs/heads/main",
+                # This workflow was used to sign existing builds, around Torch 2.10-2.12. Can be removed once these
+                # Torch versions are ancient.
+                "https://github.com/huggingface/kernels-community/.github/workflows/sign-old-builds.yaml@refs/heads/main",
+            ],
+        ),
+    ]
+)
 
 
 class VerificationResult:
@@ -153,26 +155,26 @@ class VerificationResult:
     )
 
 
-def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None = None) -> VerificationResult.Any:
+def verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
     """
     Verify a kernel variant.
 
-    The kernel variant at the given path is verified using a set of policies.
-    This validates that the metadata was signed using a key that is compliant
-    with the given policies and that the kernel hashes match the digest in the
-    kernel metadata.
+    The kernel variant at the given path is verified using a verification
+    policy. This validates that the metadata was signed using a key that is
+    compliant with the given policy and that the kernel hashes match the
+    digest in the kernel metadata.
 
     Args:
         variant_path (`Path`):
             Kernel variant path.
-        policies (`list[VerificationPolicy]`, *optional*):
-            List of verification policies that should be used while verifying
-            the kernel. A default set of policies that accepts kernels signed
-            by a curated set of trusted kernel developers is used if this
-            argument is set to `None`.
+        policy (`VerificationPolicy`, *optional*):
+            Verification policy that should be used while verifying the
+            kernel. A default policy that accepts kernels signed by a curated
+            set of trusted kernel developers is used if this argument is set
+            to `None`.
     """
-    if policies is None:
-        policies = DEFAULT_POLICIES
+    if policy is None:
+        policy = DEFAULT_POLICY
 
     bundle_path = variant_path / "metadata.json.sigstore"
     if not bundle_path.is_file():
@@ -189,7 +191,6 @@ def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None
         return VerificationResult.MetadataMissing()
 
     verifier = Verifier.production()
-    verify_policy = policy.AnyOf(policies)
 
     metadata_bytes = metadata_path.read_bytes()
 
@@ -199,7 +200,7 @@ def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None
         verifier.verify_artifact(
             metadata_bytes,
             signature_bundle,
-            verify_policy,
+            policy,
         )
     except VerificationError as e:
         return VerificationResult.SignatureVerificationFailure(reason=str(e))

@@ -81,6 +81,9 @@ class VerificationResult:
 
         violations: list[DigestViolation]
 
+        def __str__(self) -> str:
+            return "kernel integrity check failed\n" + "\n".join(str(violation) for violation in self.violations)
+
     @final
     @dataclass
     class MetadataInvalid:
@@ -89,6 +92,9 @@ class VerificationResult:
         """
 
         reason: str
+
+        def __str__(self) -> str:
+            return f"cannot verify kernel integrity, invalid metadata:\n{self.reason}"
 
     @final
     @dataclass
@@ -99,6 +105,9 @@ class VerificationResult:
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"cannot verify kernel integrity, invalid signature bundle:\n{self.reason}"
+
     @final
     @dataclass
     class SignatureVerificationFailure:
@@ -108,6 +117,9 @@ class VerificationResult:
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"metadata signature verification failed:\n{self.reason}"
+
     @final
     @dataclass
     class DigestMissing:
@@ -115,7 +127,8 @@ class VerificationResult:
         Verification failed because the metadata did not have a digest.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "cannot verify kernel integrity, metadata does not have a digest"
 
     @final
     @dataclass
@@ -124,7 +137,8 @@ class VerificationResult:
         Verification failed because the kernel did not have metadata.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "cannot verify kernel integrity, kernel metadata is missing"
 
     @final
     @dataclass
@@ -133,7 +147,8 @@ class VerificationResult:
         Verification failed because the kernel metadata was not signed.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "cannot verify kernel integrity, signature not found"
 
     @final
     @dataclass
@@ -142,7 +157,8 @@ class VerificationResult:
         Verification was successful.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "kernel metadata is correctly signed"
 
     Any: TypeAlias = (
         DigestMissing

@@ -157,3 +157,15 @@ class SignatureValidator:
             case _:
                 message = str(result)
                 logger.warning(f"{message[:1].upper()}{message[1:]}: {variant_path}")
+
+
+if TYPE_CHECKING:
+    # Ensure all validators obey the protocol.
+    _metadata_validators: tuple[MetadataValidator, ...] = (
+        DependencyValidator(),
+        ArchValidator(),
+        DirtyValidator(),
+        MinverValidator(),
+        AllValidator([]),
+    )
+    _kernel_validator: KernelValidator = SignatureValidator(None)

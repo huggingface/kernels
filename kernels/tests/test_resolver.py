@@ -280,7 +280,7 @@ def test_hub_resolver_no_matching_variant(api):
         )
 
 
-def test_resolve_hub_kernel_suggests_latest_compatible_version(monkeypatch):
+def test_resolve_hub_kernel_suggests_latest_compatible_version_for_unknown_revision(monkeypatch):
     versions = {
         version: GitRefInfo(name=f"v{version}", ref=f"refs/heads/v{version}", target_commit=str(version) * 40)
         for version in (1, 2, 3)
@@ -304,7 +304,7 @@ def test_resolve_hub_kernel_suggests_latest_compatible_version(monkeypatch):
             "test/kernel",
             api=object(),
             backend="cpu",
-            revision="locked-commit",
+            revision="unknown-revision",
         )
 
     message = str(exc_info.value)
@@ -313,7 +313,7 @@ def test_resolve_hub_kernel_suggests_latest_compatible_version(monkeypatch):
         "However, version v3 of 'test/kernel' has a build compatible with your system (torch-cpu). "
         "Consider upgrading to that version by specifying the `version` argument."
     ) in message
-    assert checked_revisions == ["locked-commit", "refs/heads/v3"]
+    assert checked_revisions == ["unknown-revision", "refs/heads/v3"]
 
 
 def test_resolve_hub_kernel_only_checks_latest_version(monkeypatch):

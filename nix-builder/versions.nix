@@ -26,6 +26,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.13";
@@ -35,6 +36,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.13";
@@ -44,6 +46,7 @@
       "aarch64-linux"
     ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.13";
@@ -61,7 +64,6 @@
     systems = [ "aarch64-darwin" ];
     bundleBuild = true;
   }
-  # Broken: https://github.com/ROCm/ROCm/issues/6322
   {
     torchVersion = "2.13";
     rocmVersion = "7.1";
@@ -79,6 +81,7 @@
     xpuVersion = "2026.0.0";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
 
   {

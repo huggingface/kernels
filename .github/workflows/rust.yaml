@@ -29,6 +29,8 @@ jobs:
           ( cd kernels-data/bindings/python && cargo fmt --all -- --check )
       - name: Cargo fmt (kernel-builder)
         run: ( cd kernel-builder && cargo fmt --all -- --check )
+      - name: Cargo fmt (kernel-port)
+        run: ( cd kernel-port && cargo fmt --all -- --check )
 
   clippy:
     name: Clippy
@@ -56,6 +58,8 @@ jobs:
           ( cd kernels-data/bindings/python && cargo clippy -- -D warnings )
       - name: Clippy (kernel-builder)
         run: ( cd kernel-builder && cargo clippy -- -D warnings )
+      - name: Clippy (kernel-port)
+        run: ( cd kernel-port && cargo clippy -- -D warnings )
 
   test:
     name: Test
@@ -78,3 +82,5 @@ jobs:
         run: cargo test -p kernels-data
       - name: Test (kernel-builder)
         run: cargo test -p hf-kernel-builder
+      - name: Test (kernel-port)
+        run: cargo test -p kernel-port

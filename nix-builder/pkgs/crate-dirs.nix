@@ -8,6 +8,7 @@ toSource {
     ../../Cargo.toml
     (fileFilter sourceFiles ../../kernel-abi-check)
     (fileFilter sourceFiles ../../kernel-builder)
+    (fileFilter sourceFiles ../../kernel-port)
     (fileFilter sourceFiles ../../kernels-data)
   ];
 }

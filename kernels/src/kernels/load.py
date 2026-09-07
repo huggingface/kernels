@@ -24,9 +24,12 @@ from kernels.resolver import (
     SequentialResolver,
 )
 from kernels.validate import (
+    AllKernelValidator,
     AllValidator,
     ArchValidator,
+    KernelValidator,
     MetadataValidator,
+    default_kernel_validators,
     default_metadata_validators,
 )
 
@@ -61,6 +64,7 @@ def get_kernel_with_resolver(
     backend: str | None,
     kernel: KernelDependency,
     resolver: Resolver | None,
+    kernel_validator: KernelValidator,
     metadata_validator: MetadataValidator,
 ) -> ModuleType:
     """
@@ -90,6 +94,7 @@ def get_kernel_with_resolver(
     )
     tree.validate_metadata(metadata_validator)
     tree_only_local = tree.install(api=api)
+    tree_only_local.validate_kernel(kernel_validator)
     return tree_only_local.load()
 
 
@@ -170,6 +175,7 @@ def get_kernel(
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
         resolver=SequentialResolver(resolvers=resolvers),
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
         metadata_validator=AllValidator(validators=validators),
     )
 
@@ -223,6 +229,7 @@ def get_local_kernel(
         # We don't have a name for the kernel, so let's just use the path.
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
         metadata_validator=AllValidator(validators=default_metadata_validators()),
     )
 
@@ -339,6 +346,7 @@ def load_kernel(
         backend=backend,
         kernel=kernel_dep,
         resolver=resolver,
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
         metadata_validator=AllValidator(validators=default_metadata_validators()),
     )
 
@@ -380,5 +388,6 @@ def get_locked_kernel(
         backend=None,
         kernel=kernel_dep,
         resolver=resolver,
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
         metadata_validator=AllValidator(validators=default_metadata_validators()),
     )

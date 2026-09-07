@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 import torch
+from sigstore.verify import policy as sigstore_policy
+from sigstore.verify.policy import VerificationPolicy
 
 import kernels
 import kernels.validate as validate_module
@@ -15,9 +17,11 @@ from kernels.resolver import LocalKernel
 from kernels.validate import (
     ArchValidator,
     DirtyValidator,
+    KernelValidator,
     MinverValidator,
     SignatureValidator,
     _installed_version,
+    default_kernel_validators,
     default_metadata_validators,
 )
 from kernels.verify import VerificationResult
@@ -213,12 +217,13 @@ def test_issue_707_fa3_on_b200(fake_cuda_device, make_metadata):
 
 
 def test_signature_validator_logs_info_on_success(monkeypatch, caplog, make_metadata):
-    monkeypatch.setattr(
-        verify_module, "verify_variant", lambda variant_path, policy=None: VerificationResult.Success()
-    )
+    def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
+        return VerificationResult.Success()
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
     variant_path = Path("test-variant")
     with caplog.at_level(logging.INFO, logger="kernels.validate"):
-        SignatureValidator(None).validate_kernel(
+        SignatureValidator().validate_kernel(
             metadata=make_metadata("cuda", None), variant="test-variant", variant_path=variant_path
         )
     assert f"Kernel successfully verified: {variant_path}" in caplog.text
@@ -229,14 +234,14 @@ def test_signature_validator_warns_on_failure(monkeypatch, caplog, make_metadata
     # Mixed case on purpose: the reason must be logged as-is and not
     # lowercased (e.g. by str.capitalize()).
     reason = "expected OIDC issuer https://token.actions.githubusercontent.com"
-    monkeypatch.setattr(
-        verify_module,
-        "verify_variant",
-        lambda variant_path, policy=None: VerificationResult.SignatureVerificationFailure(reason=reason),
-    )
+
+    def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
+        return VerificationResult.SignatureVerificationFailure(reason=reason)
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
     variant_path = Path("test-variant")
     with caplog.at_level(logging.WARNING, logger="kernels.validate"):
-        SignatureValidator(None).validate_kernel(
+        SignatureValidator().validate_kernel(
             metadata=make_metadata("cuda", None), variant="test-variant", variant_path=variant_path
         )
     assert f"Metadata signature verification failed:\n{reason}: {variant_path}" in caplog.text
@@ -245,32 +250,59 @@ def test_signature_validator_warns_on_failure(monkeypatch, caplog, make_metadata
 def test_signature_validator_noop_without_sigstore(monkeypatch, caplog, make_metadata):
     monkeypatch.setattr(validate_module, "has_sigstore", False)
 
-    def fail_if_called(variant_path, policy=None):
+    def fail_if_called(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
         raise AssertionError("verify_variant must not be called without sigstore")
 
     monkeypatch.setattr(verify_module, "verify_variant", fail_if_called)
     with caplog.at_level(logging.INFO, logger="kernels.validate"):
-        SignatureValidator(None).validate_kernel(
+        SignatureValidator().validate_kernel(
             metadata=make_metadata("cuda", None), variant="test-variant", variant_path=Path("test-variant")
         )
     assert not caplog.records
 
 
 def test_signature_validator_passes_policy_through(monkeypatch, make_metadata):
-    from sigstore.verify import policy as sigstore_policy
+    seen_policies: list[VerificationPolicy | None] = []
 
-    seen_policies = []
-
-    def fake_verify_variant(variant_path, policy=None):
+    def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
         seen_policies.append(policy)
         return VerificationResult.Success()
 
     monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
 
     test_policy = sigstore_policy.Identity(identity="me@danieldk.eu", issuer="https://github.com/login/oauth")
-    for policy in (test_policy, None):
-        SignatureValidator(policy).validate_kernel(
+    for verification_policy in (test_policy, None):
+        SignatureValidator(verification_policy).validate_kernel(
             metadata=make_metadata("cuda", None), variant="test-variant", variant_path=Path("test-variant")
         )
 
     assert seen_policies == [test_policy, None]
+
+
+def test_kernel_validator_checks_entire_dependency_tree(make_metadata):
+    tree = DepTreeNode(
+        location=LocalKernel(Path("root-variant"), make_metadata("cuda", ["8.0"])),
+        deps={
+            "test/dependency": DepTreeNode(
+                location=LocalKernel(Path("dependency-variant"), make_metadata("cuda", ["9.0"])),
+                deps={},
+            )
+        },
+    )
+    validated: list[tuple[str, Path]] = []
+
+    class RecordingValidator:
+        def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path):
+            validated.append((variant, variant_path))
+
+    validator: KernelValidator = RecordingValidator()
+    tree.validate_kernel(validator)
+
+    assert validated == [
+        ("root-variant", Path("root-variant")),
+        ("dependency-variant", Path("dependency-variant")),
+    ]
+
+
+def test_default_kernel_validators_include_signature_validator():
+    assert any(isinstance(validator, SignatureValidator) for validator in default_kernel_validators())

@@ -18,10 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class KernelValidator(Protocol):
-    """Kernel (build variant) validator."""
-
-    def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path) -> None: ...
+# Metadata validators.
 
 
 class MetadataValidator(Protocol):
@@ -138,11 +135,18 @@ def default_metadata_validators() -> list[MetadataValidator]:
     return [DependencyValidator(), MinverValidator(), DirtyValidator()]
 
 
-class SignatureValidator:
-    policy: "VerificationPolicy | None"
+# Kernel validators.
 
-    def __init__(self, policy: "VerificationPolicy|None"):
-        self.policy = policy
+
+class KernelValidator(Protocol):
+    """Kernel (build variant) validator."""
+
+    def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path) -> None: ...
+
+
+@dataclass
+class SignatureValidator:
+    policy: "VerificationPolicy | None" = None
 
     def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path) -> None:
         if not has_sigstore:
@@ -159,6 +163,22 @@ class SignatureValidator:
                 logger.warning(f"{message[:1].upper()}{message[1:]}: {variant_path}")
 
 
+def default_kernel_validators() -> list[KernelValidator]:
+    """The kernel validators that are applied to every kernel dependency tree."""
+    return [SignatureValidator()]
+
+
+@dataclass
+class AllKernelValidator:
+    """Apply multiple validators to a kernel dependency tree."""
+
+    validators: list[KernelValidator]
+
+    def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path) -> None:
+        for validator in self.validators:
+            validator.validate_kernel(metadata=metadata, variant=variant, variant_path=variant_path)
+
+
 if TYPE_CHECKING:
     # Ensure all validators obey the protocol.
     _metadata_validators: tuple[MetadataValidator, ...] = (
@@ -168,4 +188,4 @@ if TYPE_CHECKING:
         MinverValidator(),
         AllValidator([]),
     )
-    _kernel_validator: KernelValidator = SignatureValidator(None)
+    _kernel_validator: tuple[KernelValidator, ...] = (SignatureValidator(), AllKernelValidator([]))

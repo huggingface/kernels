@@ -1,12 +1,17 @@
+import logging
 from pathlib import Path
+from types import ModuleType
 
+import pytest
 from sigstore.verify import policy
 
 from kernels import install_kernel
-from kernels._data import DigestViolation
+from kernels._data import DigestViolation, KernelDependency, KernelVersion
 from kernels._versions import select_revision_or_version
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
-from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
+from kernels.load import get_kernel_with_resolver
+from kernels.resolver import _BYTECODE_IGNORE_PATTERNS, HubResolver
+from kernels.validate import AllKernelValidator, AllValidator, SignatureValidator
 from kernels.verify import VerificationResult, verify_variant
 
 TEST_POLICY: policy.VerificationPolicy = policy.Identity(
@@ -30,6 +35,41 @@ def test_correctly_signed_kernel_passes():
         )
         == VerificationResult.Success()
     )
+
+
+def _load_signatures_kernel(version: KernelVersion) -> ModuleType:
+    """Load kernels-test/signatures end-to-end."""
+    return get_kernel_with_resolver(
+        api=_get_hf_api(),
+        backend=None,
+        kernel=KernelDependency(repo_id="kernels-test/signatures", version=version),
+        resolver=HubResolver(trust_remote_code=True),
+        kernel_validator=AllKernelValidator(validators=[SignatureValidator(TEST_POLICY)]),
+        metadata_validator=AllValidator(validators=[]),
+    )
+
+
+def test_load_verifies_signature_e2e(caplog):
+    with caplog.at_level(logging.INFO, logger="kernels.validate"):
+        _load_signatures_kernel(KernelVersion.Version(1))
+
+    assert "Kernel successfully verified" in caplog.text
+    assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+@pytest.mark.parametrize(
+    ("revision", "message"),
+    [
+        ("signature-invalid", "Metadata signature verification failed"),
+        ("signature-missing", "Cannot verify kernel integrity, signature not found"),
+    ],
+)
+def test_load_warns_on_signature_failure_e2e(caplog, revision: str, message: str):
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        # Signature verification failures warn, but do not prevent loading.
+        _load_signatures_kernel(KernelVersion.Revision(revision))
+
+    assert message in caplog.text
 
 
 def test_invalid_digest_fails():

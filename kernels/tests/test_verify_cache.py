@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import Encoding
-from kernels_data import Metadata
 
 import kernels.verify_cache as verify_cache
+from kernels._data import Metadata
 from kernels.resolver import LocalKernel, RemoteKernel
 from kernels.variants import parse_variant
 from kernels.verify_cache import VerificationReceipt, load_receipt, receipt_key, store_receipt

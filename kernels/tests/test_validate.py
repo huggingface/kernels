@@ -14,8 +14,8 @@ from sigstore.verify.policy import VerificationPolicy
 import kernels
 import kernels.validate as validate_module
 import kernels.verify as verify_module
-from kernels._data import Metadata, Version
 import kernels.verify_cache as verify_cache_module
+from kernels._data import Metadata, Version
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel
 from kernels.validate import (

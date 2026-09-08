@@ -1571,7 +1571,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kernels-data-python"
+name = "kernels-python"
 version = "0.17.0-dev0"
 dependencies = [
  "kernels-data",

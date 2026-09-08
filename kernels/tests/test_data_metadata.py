@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from kernels_data import (
+from kernels._data import (
     Backend,
     KernelDependency,
     KernelName,
@@ -196,9 +196,7 @@ def test_kernel_version_eq_and_hash():
     assert KernelVersion.Version(1) != KernelVersion.Revision("1")
     assert hash(KernelVersion.Version(1)) == hash(KernelVersion.Version(1))
     assert hash(KernelVersion.Revision("abc")) == hash(KernelVersion.Revision("abc"))
-    assert {KernelVersion.Version(1), KernelVersion.Version(1)} == {
-        KernelVersion.Version(1)
-    }
+    assert {KernelVersion.Version(1), KernelVersion.Version(1)} == {KernelVersion.Version(1)}
 
 
 def test_kernel_dependency_eq_and_hash():

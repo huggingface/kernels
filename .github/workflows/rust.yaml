@@ -26,7 +26,7 @@ jobs:
       - name: Cargo fmt (kernels-data)
         run: |
           ( cd kernels-data && cargo fmt --all -- --check )
-          ( cd kernels-data/bindings/python && cargo fmt --all -- --check )
+          ( cd kernels && cargo fmt --all -- --check )
       - name: Cargo fmt (kernel-builder)
         run: ( cd kernel-builder && cargo fmt --all -- --check )
 
@@ -53,7 +53,7 @@ jobs:
       - name: Clippy (kernels-data)
         run: |
           ( cd kernels-data && cargo clippy -- -D warnings )
-          ( cd kernels-data/bindings/python && cargo clippy -- -D warnings )
+          ( cd kernels && cargo clippy -- -D warnings )
       - name: Clippy (kernel-builder)
         run: ( cd kernel-builder && cargo clippy -- -D warnings )
 

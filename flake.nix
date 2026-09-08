@@ -177,8 +177,8 @@
               huggingface-hub
               jax
               jax-tvm-ffi
-              kernels-data
               matplotlib
+              maturin
               mktestdocs
               openssl.dev
               pytest
@@ -201,7 +201,7 @@
 
             postVenvCreation = ''
               unset SOURCE_DATE_EPOCH
-              ( python -m pip install --no-build-isolation --no-dependencies -e kernels )
+              ( cd kernels && maturin develop )
               pre-commit install
             '';
 

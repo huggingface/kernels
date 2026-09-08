@@ -1,8 +1,8 @@
 import pytest
 import torch
-from kernels_data import Metadata
 
 from kernels import get_kernel, has_kernel, install_kernel
+from kernels._data import Metadata
 from kernels.archs import _supports_cuda_capability
 
 

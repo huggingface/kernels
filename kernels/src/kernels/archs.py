@@ -1,5 +1,4 @@
-from kernels_data import Backend, Metadata
-
+from kernels._data import Backend, Metadata
 from kernels.compat import has_torch
 
 

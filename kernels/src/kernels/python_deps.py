@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from huggingface_hub.dataclasses import strict
-from kernels_data import Metadata
 
+from kernels._data import Metadata
 from kernels.backends import Backend, _backend
 
 

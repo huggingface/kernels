@@ -3,11 +3,12 @@ from pathlib import Path
 from typing import TypeAlias, final
 
 from cryptography.x509 import Certificate
-from kernels_data import Digest, DigestValidationError, DigestViolation, Metadata
 from sigstore.errors import VerificationError
 from sigstore.models import Bundle, InvalidBundle
 from sigstore.verify import Verifier, policy
 from sigstore.verify.policy import VerificationPolicy
+
+from kernels._data import Digest, DigestValidationError, DigestViolation, Metadata
 
 
 class GitHubWorkflowPolicy(VerificationPolicy):

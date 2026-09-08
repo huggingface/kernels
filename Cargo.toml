@@ -2,7 +2,7 @@
 members = [
     "kernel-abi-check",
     "kernel-builder",
+    "kernels",
     "kernels-data",
-    "kernels-data/bindings/python",
 ]
 resolver = "2"

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 import torch
-from kernels_data import Metadata, Version
 
 import kernels
 import kernels.validate as validate_module
+from kernels._data import Metadata, Version
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel
 from kernels.validate import (

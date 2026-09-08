@@ -5,7 +5,8 @@ from pathlib import Path
 from huggingface_hub import constants
 from huggingface_hub.file_download import repo_folder_name
 from huggingface_hub.hf_api import GitRefInfo
-from kernels_data import KernelDependency, KernelVersion
+
+from kernels._data import KernelDependency, KernelVersion
 
 logger = logging.getLogger(__name__)
 

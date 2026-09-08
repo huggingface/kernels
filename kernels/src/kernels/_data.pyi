@@ -1,4 +1,4 @@
-"""Type stubs for kernels_data module."""
+"""Type stubs for the `kernels._data` module."""
 
 import os
 from collections.abc import Iterator
@@ -193,9 +193,7 @@ class Digest:
     """Source digest for a kernel build variant."""
 
     @staticmethod
-    def hash_variant(
-        algorithm: DigestAlgorithm, variant_path: os.PathLike[str] | str
-    ) -> "Digest":
+    def hash_variant(algorithm: DigestAlgorithm, variant_path: os.PathLike[str] | str) -> "Digest":
         """Hash the files in `variant_path` using `algorithm`.
 
         Args:
@@ -262,9 +260,7 @@ class DigestViolation:
         expected: str
         got: str
         __match_args__ = ("path", "expected", "got")
-        def __new__(
-            cls, path: str, expected: str, got: str
-        ) -> "DigestViolation.HashMismatch": ...
+        def __new__(cls, path: str, expected: str, got: str) -> "DigestViolation.HashMismatch": ...
 
     @final
     class AlgorithmMismatch(DigestViolation):
@@ -277,9 +273,7 @@ class DigestViolation:
         expected: DigestAlgorithm
         got: DigestAlgorithm
         __match_args__ = ("expected", "got")
-        def __new__(
-            cls, expected: DigestAlgorithm, got: DigestAlgorithm
-        ) -> "DigestViolation.AlgorithmMismatch": ...
+        def __new__(cls, expected: DigestAlgorithm, got: DigestAlgorithm) -> "DigestViolation.AlgorithmMismatch": ...
 
     def __str__(self) -> str: ...
 
@@ -390,9 +384,7 @@ class KernelLocks:
 
     def __contains__(self, dependency: object, /) -> bool: ...
     def __iter__(self) -> Iterator[KernelDependency]: ...
-    def get(
-        self, dependency: KernelDependency, default: Optional[KernelLock] = None
-    ) -> Optional[KernelLock]:
+    def get(self, dependency: KernelDependency, default: Optional[KernelLock] = None) -> Optional[KernelLock]:
         """Get the lock for `dependency`, or `default` if it is not locked."""
         ...
 
@@ -482,9 +474,7 @@ class NixKernelLocks:
     Behaves as a read-only mapping from `KernelDependency` to `NixKernelLock`.
     """
 
-    def __new__(
-        cls, locks: dict[KernelDependency, NixKernelLock]
-    ) -> "NixKernelLocks": ...
+    def __new__(cls, locks: dict[KernelDependency, NixKernelLock]) -> "NixKernelLocks": ...
     def __len__(self) -> int: ...
     def __getitem__(self, dependency: KernelDependency, /) -> NixKernelLock:
         """Get the lock for `dependency`.
@@ -496,9 +486,7 @@ class NixKernelLocks:
 
     def __contains__(self, dependency: object, /) -> bool: ...
     def __iter__(self) -> Iterator[KernelDependency]: ...
-    def get(
-        self, dependency: KernelDependency, default: Optional[NixKernelLock] = None
-    ) -> Optional[NixKernelLock]:
+    def get(self, dependency: KernelDependency, default: Optional[NixKernelLock] = None) -> Optional[NixKernelLock]:
         """Get the lock for `dependency`, or `default` if it is not locked."""
         ...
 
@@ -542,9 +530,7 @@ class KernelPaths:
     Behaves as a read-only mapping from `KernelDependency` to `pathlib.Path`.
     """
 
-    def __new__(
-        cls, paths: dict[KernelDependency, os.PathLike[str] | str]
-    ) -> "KernelPaths": ...
+    def __new__(cls, paths: dict[KernelDependency, os.PathLike[str] | str]) -> "KernelPaths": ...
     def __len__(self) -> int: ...
     def __getitem__(self, dependency: KernelDependency, /) -> Path:
         """Get the path for `dependency`.

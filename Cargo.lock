@@ -1056,7 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "hf-kernel-builder"
-version = "0.17.0-dev0"
+version = "0.17.0-dev1"
 dependencies = [
  "base32",
  "built",
@@ -1537,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "kernel-abi-check"
-version = "0.17.0-dev0"
+version = "0.17.0-dev1"
 dependencies = [
  "cpp_demangle",
  "eyre",
@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "kernels-data"
-version = "0.17.0-dev0"
+version = "0.17.0-dev1"
 dependencies = [
  "base64",
  "digest",
@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "kernels-python"
-version = "0.17.0-dev0"
+version = "0.17.0-dev1"
 dependencies = [
  "kernels-data",
  "pyo3",

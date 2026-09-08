@@ -1,6 +1,6 @@
 import pytest
 
-from kernels_data import Digest, DigestAlgorithm, DigestValidationError, DigestViolation
+from kernels._data import Digest, DigestAlgorithm, DigestValidationError, DigestViolation
 
 
 def test_hash_variant_hashes_file_with_sha256(tmp_path):
@@ -9,9 +9,7 @@ def test_hash_variant_hashes_file_with_sha256(tmp_path):
     digest = Digest.hash_variant(DigestAlgorithm.SHA256, tmp_path)
 
     assert len(digest.files) == 1
-    assert (
-        digest.files["_extension.so"] == "uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
-    )
+    assert digest.files["_extension.so"] == "uU0nuZNNPgilLlLX2n2r+sSE7+N6U4DukIj3rOLvzek="
 
 
 def test_hash_variant_hashes_file_with_sha512(tmp_path):

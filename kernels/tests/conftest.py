@@ -3,8 +3,8 @@ import json
 import sys
 
 import pytest
-from kernels_data import Metadata
 
+from kernels._data import Metadata
 from kernels.backends import _get_torch_privateuse_backend_name
 
 try:

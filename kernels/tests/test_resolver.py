@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 from huggingface_hub.hf_api import GitRefInfo
-from kernels_data import (
+
+import kernels.resolver as resolver_module
+from kernels._data import (
     KernelDependency,
     KernelLock,
     KernelLocks,
@@ -14,8 +16,6 @@ from kernels_data import (
     KernelVersion,
     Metadata,
 )
-
-import kernels.resolver as resolver_module
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.hf_hub import _get_hf_api
 from kernels.install import install_kernel

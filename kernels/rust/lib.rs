@@ -658,7 +658,7 @@ impl PyDigestViolation {
 }
 
 pyo3::create_exception!(
-    kernels_data,
+    _data,
     DigestValidationError,
     PyException,
     "Raised by `Digest.validate` when the actual digest does not match the \
@@ -750,8 +750,8 @@ impl PyDigest {
     }
 }
 
-#[pyo3::pymodule(name = "kernels_data")]
-fn kernels_data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
+#[pyo3::pymodule(name = "_data")]
+fn data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyBackendInfo>()?;
     m.add_class::<PyProvenance>()?;

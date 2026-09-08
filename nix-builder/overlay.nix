@@ -194,8 +194,6 @@ final: prev:
 
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
-        kernels-data = callPackage ./pkgs/python-modules/kernels-data { };
-
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };

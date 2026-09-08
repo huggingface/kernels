@@ -5,6 +5,8 @@ from types import ModuleType
 import pytest
 from sigstore.verify import policy
 
+import kernels.verify as verify_module
+import kernels.verify_cache as verify_cache_module
 from kernels import install_kernel
 from kernels._data import DigestViolation, KernelDependency, KernelVersion
 from kernels._versions import select_revision_or_version
@@ -17,6 +19,13 @@ from kernels.verify import VerificationResult, verify_variant
 TEST_POLICY: policy.VerificationPolicy = policy.Identity(
     identity="me@danieldk.eu", issuer="https://github.com/login/oauth"
 )
+
+
+@pytest.fixture
+def receipt_dir(tmp_path, monkeypatch):
+    """Isolate the verification receipt cache from the real kernel cache."""
+    monkeypatch.setattr(verify_cache_module, "_receipt_dir", lambda: tmp_path)
+    return tmp_path
 
 
 def test_correctly_signed_kernel_passes_with_default_policy():
@@ -49,7 +58,7 @@ def _load_signatures_kernel(version: KernelVersion) -> ModuleType:
     )
 
 
-def test_load_verifies_signature_e2e(caplog):
+def test_load_verifies_signature_e2e(receipt_dir, caplog):
     with caplog.at_level(logging.INFO, logger="kernels.validate"):
         _load_signatures_kernel(KernelVersion.Version(1))
 
@@ -64,12 +73,33 @@ def test_load_verifies_signature_e2e(caplog):
         ("signature-missing", "Cannot verify kernel integrity, signature not found"),
     ],
 )
-def test_load_warns_on_signature_failure_e2e(caplog, revision: str, message: str):
+def test_load_warns_on_signature_failure_e2e(receipt_dir, caplog, revision: str, message: str):
     with caplog.at_level(logging.WARNING, logger="kernels.validate"):
         # Signature verification failures warn, but do not prevent loading.
         _load_signatures_kernel(KernelVersion.Revision(revision))
 
     assert message in caplog.text
+
+
+def test_load_uses_verification_cache_e2e(receipt_dir, monkeypatch, caplog):
+    verify_calls: list[Path] = []
+    real_verify_variant = verify_module.verify_variant
+
+    def spy_verify_variant(
+        variant_path: Path, policy: policy.VerificationPolicy | None = None
+    ) -> VerificationResult.Any:
+        verify_calls.append(variant_path)
+        return real_verify_variant(variant_path, policy=policy)
+
+    monkeypatch.setattr(verify_module, "verify_variant", spy_verify_variant)
+
+    with caplog.at_level(logging.INFO, logger="kernels.validate"):
+        _load_signatures_kernel(KernelVersion.Version(1))
+        _load_signatures_kernel(KernelVersion.Version(1))
+
+    assert "Kernel successfully verified" in caplog.text
+    assert "Kernel already verified" in caplog.text
+    assert len(verify_calls) == 1
 
 
 def test_invalid_digest_fails():

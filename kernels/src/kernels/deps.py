@@ -69,9 +69,7 @@ class DepTreeNode(Generic[T]):
         return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
 
     def validate_kernel(self: "DepTreeNode[LocalKernel]", validator: KernelValidator):
-        validator.validate_kernel(
-            metadata=self.location.metadata, variant=self.location.variant_str, variant_path=self.location.variant_path
-        )
+        validator.validate_kernel(kernel=self.location)
 
         for node in self.deps.values():
             node.validate_kernel(validator)

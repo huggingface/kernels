@@ -1,10 +1,13 @@
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 import torch
+from cryptography.x509 import Certificate
+from sigstore.errors import VerificationError
 from sigstore.verify import policy as sigstore_policy
 from sigstore.verify.policy import VerificationPolicy
 
@@ -12,6 +15,7 @@ import kernels
 import kernels.validate as validate_module
 import kernels.verify as verify_module
 from kernels._data import Metadata, Version
+import kernels.verify_cache as verify_cache_module
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel
 from kernels.validate import (
@@ -25,6 +29,7 @@ from kernels.validate import (
     default_metadata_validators,
 )
 from kernels.verify import VerificationResult
+from kernels.verify_cache import VerificationReceipt, receipt_key, store_receipt
 
 CLEAN_PROVENANCE = {
     "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
@@ -216,21 +221,52 @@ def test_issue_707_fa3_on_b200(fake_cuda_device, make_metadata):
         ArchValidator().validate_metadata(metadata=metadata, variant="test-variant")
 
 
-def test_signature_validator_logs_info_on_success(monkeypatch, caplog, make_metadata):
+@pytest.fixture
+def receipt_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(verify_cache_module, "_receipt_dir", lambda: tmp_path)
+    return tmp_path
+
+
+class _AcceptPolicy:
+    """Test policy that accepts any signer."""
+
+    def verify(self, cert: Certificate) -> None: ...
+
+
+class _RejectPolicy:
+    """Test policy that rejects any signer."""
+
+    def verify(self, cert: Certificate) -> None:
+        raise VerificationError("test policy rejects the signer")
+
+
+def _seed_receipt(kernel: LocalKernel, certificate: Certificate, **fields: str) -> None:
+    """Store a receipt under the kernel's key."""
+    fields.setdefault("variant", kernel.variant_str)
+    store_receipt(
+        receipt_key(kernel),
+        VerificationReceipt(
+            certificate=certificate,
+            digest="test-digest",
+            verified_at=datetime.now(timezone.utc),
+            **fields,
+        ),
+    )
+
+
+def test_signature_validator_logs_info_on_success(receipt_dir, monkeypatch, caplog, make_metadata):
     def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
         return VerificationResult.Success()
 
     monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
-    variant_path = Path("test-variant")
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
     with caplog.at_level(logging.INFO, logger="kernels.validate"):
-        SignatureValidator().validate_kernel(
-            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=variant_path
-        )
-    assert f"Kernel successfully verified: {variant_path}" in caplog.text
+        SignatureValidator().validate_kernel(kernel=kernel)
+    assert f"Kernel successfully verified: {kernel.variant_path}" in caplog.text
     assert not [record for record in caplog.records if record.levelno >= logging.WARNING]
 
 
-def test_signature_validator_warns_on_failure(monkeypatch, caplog, make_metadata):
+def test_signature_validator_warns_on_failure(receipt_dir, monkeypatch, caplog, make_metadata):
     # Mixed case on purpose: the reason must be logged as-is and not
     # lowercased (e.g. by str.capitalize()).
     reason = "expected OIDC issuer https://token.actions.githubusercontent.com"
@@ -239,15 +275,13 @@ def test_signature_validator_warns_on_failure(monkeypatch, caplog, make_metadata
         return VerificationResult.SignatureVerificationFailure(reason=reason)
 
     monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
-    variant_path = Path("test-variant")
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
     with caplog.at_level(logging.WARNING, logger="kernels.validate"):
-        SignatureValidator().validate_kernel(
-            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=variant_path
-        )
-    assert f"Metadata signature verification failed:\n{reason}: {variant_path}" in caplog.text
+        SignatureValidator().validate_kernel(kernel=kernel)
+    assert f"Metadata signature verification failed:\n{reason}: {kernel.variant_path}" in caplog.text
 
 
-def test_signature_validator_noop_without_sigstore(monkeypatch, caplog, make_metadata):
+def test_signature_validator_noop_without_sigstore(receipt_dir, monkeypatch, caplog, make_metadata):
     monkeypatch.setattr(validate_module, "has_sigstore", False)
 
     def fail_if_called(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
@@ -255,13 +289,12 @@ def test_signature_validator_noop_without_sigstore(monkeypatch, caplog, make_met
 
     monkeypatch.setattr(verify_module, "verify_variant", fail_if_called)
     with caplog.at_level(logging.INFO, logger="kernels.validate"):
-        SignatureValidator().validate_kernel(
-            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=Path("test-variant")
-        )
+        kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
+        SignatureValidator().validate_kernel(kernel=kernel)
     assert not caplog.records
 
 
-def test_signature_validator_passes_policy_through(monkeypatch, make_metadata):
+def test_signature_validator_passes_policy_through(receipt_dir, monkeypatch, make_metadata):
     seen_policies: list[VerificationPolicy | None] = []
 
     def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
@@ -271,12 +304,83 @@ def test_signature_validator_passes_policy_through(monkeypatch, make_metadata):
     monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
 
     test_policy = sigstore_policy.Identity(identity="me@danieldk.eu", issuer="https://github.com/login/oauth")
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
     for verification_policy in (test_policy, None):
-        SignatureValidator(verification_policy).validate_kernel(
-            metadata=make_metadata("cuda", None), variant="test-variant", variant_path=Path("test-variant")
-        )
+        SignatureValidator(verification_policy).validate_kernel(kernel=kernel)
 
     assert seen_policies == [test_policy, None]
+
+
+def test_signature_validator_accepts_valid_receipt(receipt_dir, test_certificate, make_metadata, monkeypatch, caplog):
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
+    _seed_receipt(kernel, test_certificate, path=str(kernel.variant_path.resolve()))
+
+    def fail_if_called(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
+        raise AssertionError("verify_variant must not be called on a receipt hit")
+
+    monkeypatch.setattr(verify_module, "verify_variant", fail_if_called)
+    with caplog.at_level(logging.INFO, logger="kernels.validate"):
+        SignatureValidator(_AcceptPolicy()).validate_kernel(kernel=kernel)
+
+    assert f"Kernel already verified: {kernel.variant_path}" in caplog.text
+
+
+def test_signature_validator_rejects_signer_from_receipt(
+    receipt_dir, test_certificate, make_metadata, monkeypatch, caplog
+):
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
+    _seed_receipt(kernel, test_certificate, path=str(kernel.variant_path.resolve()))
+
+    def fail_if_called(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
+        raise AssertionError("rejection from a receipt is final, no re-verification")
+
+    monkeypatch.setattr(verify_module, "verify_variant", fail_if_called)
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator(_RejectPolicy()).validate_kernel(kernel=kernel)
+
+    assert "Metadata signature verification failed" in caplog.text
+
+
+def test_signature_validator_reverifies_on_receipt_mismatch(
+    receipt_dir, test_certificate, make_metadata, monkeypatch, caplog
+):
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
+    # The receipt is stored under this kernel's key, but describes another kernel.
+    _seed_receipt(kernel, test_certificate, path="/somewhere/else")
+
+    verified: list[Path] = []
+
+    def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
+        verified.append(variant_path)
+        return VerificationResult.Success()
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert "Verification receipt does not match kernel" in caplog.text
+    assert verified == [kernel.variant_path]
+
+
+def test_signature_validator_verify_always_bypasses_cache(
+    receipt_dir, test_certificate, make_metadata, monkeypatch, caplog
+):
+    monkeypatch.setenv("KERNELS_VERIFY", "always")
+    kernel = LocalKernel(Path("test-variant"), make_metadata("cuda", None))
+    _seed_receipt(kernel, test_certificate, path=str(kernel.variant_path.resolve()))
+
+    verified: list[Path] = []
+
+    def fake_verify_variant(variant_path: Path, policy: VerificationPolicy | None = None) -> VerificationResult.Any:
+        verified.append(variant_path)
+        return VerificationResult.Success()
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
+    with caplog.at_level(logging.INFO, logger="kernels.validate"):
+        SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert verified == [kernel.variant_path]
+    assert f"Kernel successfully verified: {kernel.variant_path}" in caplog.text
 
 
 def test_kernel_validator_checks_entire_dependency_tree(make_metadata):
@@ -292,8 +396,8 @@ def test_kernel_validator_checks_entire_dependency_tree(make_metadata):
     validated: list[tuple[str, Path]] = []
 
     class RecordingValidator:
-        def validate_kernel(self, *, metadata: Metadata, variant: str, variant_path: Path):
-            validated.append((variant, variant_path))
+        def validate_kernel(self, *, kernel: LocalKernel):
+            validated.append((kernel.variant_str, kernel.variant_path))
 
     validator: KernelValidator = RecordingValidator()
     tree.validate_kernel(validator)

@@ -1,8 +1,13 @@
 import importlib.util
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 
 from kernels._data import Metadata
 from kernels.backends import _get_torch_privateuse_backend_name
@@ -61,6 +66,24 @@ def device():
         return "tpu"
 
     return "cpu"
+
+
+@pytest.fixture
+def test_certificate() -> x509.Certificate:
+    """A self-signed certificate for verification cache tests."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "kernels-test")])
+    now = datetime.now(timezone.utc)
+    return (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
 
 
 @pytest.fixture

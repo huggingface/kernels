@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from kernels_data import (
+from kernels._data import (
     KernelDependency,
     KernelLock,
     KernelLocks,

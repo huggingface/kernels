@@ -1,6 +1,6 @@
 import pytest
 
-from kernels_data import Backend, Build, KernelDependency, KernelVersion
+from kernels._data import Backend, Build, KernelDependency, KernelVersion
 
 
 def _write_build_toml(path, backends):
@@ -42,17 +42,11 @@ def test_build_all_kernel_depends(tmp_path):
 
     build = Build.open(tmp_path)
     assert build.all_kernel_depends(Backend.CUDA) == [
-        KernelDependency(
-            repo_id="kernels-community/activation", version=KernelVersion.Version(1)
-        ),
-        KernelDependency(
-            repo_id="kernels-community/cuda-helper", version=KernelVersion.Version(2)
-        ),
+        KernelDependency(repo_id="kernels-community/activation", version=KernelVersion.Version(1)),
+        KernelDependency(repo_id="kernels-community/cuda-helper", version=KernelVersion.Version(2)),
     ]
     assert build.all_kernel_depends(Backend.CPU) == [
-        KernelDependency(
-            repo_id="kernels-community/activation", version=KernelVersion.Version(1)
-        )
+        KernelDependency(repo_id="kernels-community/activation", version=KernelVersion.Version(1))
     ]
 
 

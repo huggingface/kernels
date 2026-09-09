@@ -1,6 +1,6 @@
 [project]
 name = "kernels"
-version = "0.17.0.dev0"
+version = "0.17.0.dev1"
 description = "Download compute kernels"
 authors = [
   { name = "Daniel de Kok", email = "daniel@huggingface.co" },
@@ -11,7 +11,6 @@ readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
   "huggingface-hub>=1.10.0",
-  "kernels-data>=0.14.0.dev1",
   "packaging>=20.0",
   "pyyaml>=6",
   "sigstore>=4,<5",
@@ -21,8 +20,8 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
 
 [dependency-groups]
 dev = [
@@ -66,8 +65,11 @@ kernels = "kernels.cli:main"
 [project.entry-points."egg_info.writers"]
 "kernels.lock" = "kernels.lockfile:write_egg_lockfile"
 
-[tool.setuptools.package-data]
-kernels = ["python_depends.json"]
+[tool.maturin]
+module-name = "kernels._data"
+python-source = "src"
+bindings = 'pyo3'
+features = ["pyo3/extension-module"]
 
 [tool.ruff]
 # If the version is changed, apply the change in the Nix overlay

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from kernels_data import DigestViolation
 from sigstore.verify import policy
 
 from kernels import install_kernel
+from kernels._data import DigestViolation
 from kernels._versions import select_revision_or_version
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS

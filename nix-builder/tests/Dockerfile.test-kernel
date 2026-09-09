@@ -14,7 +14,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# Install uv and Rust toolchain (Rust is needed to build kernels-data from source).
+# Install uv and Rust toolchain (Rust is needed to build kernels from source, which
+# bundles a maturin/pyo3 extension module).
 RUN dnf install -y --allowerasing curl && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
@@ -62,11 +63,10 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
 RUN uv add "apache-tvm-ffi~=0.1.9" numpy pytest
 
 # Copy kernels-data and kernels source to install from source.
-COPY kernels-data ./kernels-data-src
+COPY kernels-data ./kernels-data
 COPY kernels ./kernels-src
 
-# Install kernels-data (Rust/maturin package) and kernels from source.
-RUN uv add ./kernels-data-src/bindings/python
+# Install kernels (Rust/maturin package) from source.
 RUN uv add ./kernels-src
 
 # Copy kernels and tests

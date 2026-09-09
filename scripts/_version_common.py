@@ -19,7 +19,7 @@ PYPROJECT_FILES = [PRIMARY_PYPROJECT]
 
 CARGO_FILES = [
     REPO_ROOT / "kernels-data" / "Cargo.toml",
-    REPO_ROOT / "kernels-data" / "bindings" / "python" / "Cargo.toml",
+    REPO_ROOT / "kernels" / "Cargo.toml",
     REPO_ROOT / "kernel-builder" / "Cargo.toml",
     REPO_ROOT / "kernel-abi-check" / "Cargo.toml",
 ]

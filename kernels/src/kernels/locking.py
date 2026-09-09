@@ -5,13 +5,13 @@ from pathlib import Path
 from types import ModuleType
 
 from huggingface_hub.hf_api import HfApi
-from kernels_data import (
+
+from kernels._data import (
     KernelDependency,
     KernelLock,
     KernelLocks,
     Metadata,
 )
-
 from kernels._versions import resolve_kernel_version
 from kernels.compat import tomllib
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code

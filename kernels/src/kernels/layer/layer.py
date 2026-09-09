@@ -9,8 +9,8 @@ from types import MethodType, ModuleType
 from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from huggingface_hub import constants
-from kernels_data import KernelDependency, KernelLocks
 
+from kernels._data import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version

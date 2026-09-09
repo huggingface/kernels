@@ -11,6 +11,8 @@
 #  - concurrency block added (cancel-in-progress only for PRs, never on tag/main)
 #  - free-threaded 3.13t build steps removed: not supported by maturin
 #    anymore.
+#  - publish-to-testpypi gated on `github.event_name != 'pull_request'`, so
+#    PR runs (same-repo or forked) only build and never publish.
 name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
 
 on:
@@ -281,6 +283,7 @@ jobs:
 
   publish-to-testpypi:
     name: Publish Python 🐍 distribution 📦 to TestPyPI
+    if: github.event_name != 'pull_request'
     needs:
       - linux
       - musllinux

@@ -13,6 +13,9 @@
 #    anymore.
 #  - publish-to-testpypi gated on `github.event_name != 'pull_request'`, so
 #    PR runs (same-repo or forked) only build and never publish.
+#  - persist-credentials: false on all build jobs' checkout steps, since they run
+#    on pull_request (including fork PRs) and build untrusted code via
+#    build.rs/proc-macros.
 name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
 
 on:
@@ -55,6 +58,8 @@ jobs:
             target: ppc64le
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.8
@@ -93,6 +98,8 @@ jobs:
             target: armv7
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.8
@@ -132,6 +139,8 @@ jobs:
             python_arch: arm64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.13
@@ -171,6 +180,8 @@ jobs:
             target: aarch64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: 3.8
@@ -199,6 +210,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build sdist
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:

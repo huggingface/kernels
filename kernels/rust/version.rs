@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
-use kernels_data::version::Version;
+use kernels_common::version::Version;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 #[pyclass(name = "Version", frozen, eq, ord, hash)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyVersion {
-    // We are storing this as a `Box<[usize]>` to allow storing kernels-data
+    // We are storing this as a `Box<[usize]>` to allow storing kernels-common
     // `Version` in directly in `PyVersion` as well.
     inner: Box<[usize]>,
 }

@@ -1070,7 +1070,7 @@ dependencies = [
  "indicatif",
  "itertools 0.13.0",
  "kernel-abi-check",
- "kernels-data",
+ "kernels-common",
  "minijinja",
  "minijinja-embed",
  "object",
@@ -1550,7 +1550,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kernels-data"
+name = "kernels-common"
 version = "0.17.0-dev1"
 dependencies = [
  "base64",
@@ -1574,7 +1574,7 @@ dependencies = [
 name = "kernels-python"
 version = "0.17.0-dev1"
 dependencies = [
- "kernels-data",
+ "kernels-common",
  "pyo3",
  "serde_json",
 ]

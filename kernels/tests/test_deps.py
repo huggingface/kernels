@@ -5,7 +5,7 @@ from types import ModuleType
 
 import pytest
 
-from kernels._data import KernelDependency, KernelVersion, Metadata
+from kernels._rust import KernelDependency, KernelVersion, Metadata
 from kernels.deps import get_kernel_dep, resolve_kernel_tree, use_kernel_deps
 from kernels.resolver import LocalKernel
 

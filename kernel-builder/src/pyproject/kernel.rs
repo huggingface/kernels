@@ -2,7 +2,7 @@ use std::io::Write;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Build, Kernel};
+use kernels_common::config::{Build, Kernel};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;

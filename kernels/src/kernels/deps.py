@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from huggingface_hub.hf_api import HfApi
 
-from kernels._data import KernelDependency, KernelVersion
+from kernels._rust import KernelDependency, KernelVersion
 from kernels.hf_hub import RepoInfo
 from kernels.importer import _import_from_path
 from kernels.resolver import (

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Backend, Build, General, Torch};
-use kernels_data::metadata::Provenance;
+use kernels_common::config::{Backend, Build, General, Torch};
+use kernels_common::metadata::Provenance;
 use minijinja::context;
 
 use crate::pyproject::common::{

@@ -12,7 +12,7 @@ use minijinja::{context, Environment};
 
 use crate::hf;
 use crate::pyproject::FileSet;
-use kernels_data::config::Backend;
+use kernels_common::config::Backend;
 
 fn to_camel_case(s: &str) -> String {
     let mut result = String::with_capacity(s.len());

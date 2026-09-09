@@ -10,7 +10,7 @@ on:
       - "kernels/src/**"
       - "kernels/rust/**"
       - "nix-builder/**"
-      - "kernels-data/**"
+      - "kernels-common/**"
       - ".github/workflows/test_e2e.yaml"
   workflow_dispatch:
 

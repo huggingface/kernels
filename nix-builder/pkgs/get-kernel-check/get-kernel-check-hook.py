@@ -5,7 +5,7 @@ from kernels.hf_hub import _get_hf_api
 from kernels.load import get_kernel_with_resolver
 from kernels.resolver import KernelPathsResolver, RepoPathsResolver, SequentialResolver
 from kernels.validate import AllValidator, default_metadata_validators
-from kernels._data import KernelDependency, KernelPaths, KernelVersion
+from kernels._rust import KernelDependency, KernelPaths, KernelVersion
 
 out = os.getenv("out")
 if not out:

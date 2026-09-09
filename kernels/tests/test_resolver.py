@@ -7,7 +7,7 @@ import pytest
 from huggingface_hub.hf_api import GitRefInfo
 
 import kernels.resolver as resolver_module
-from kernels._data import (
+from kernels._rust import (
     KernelDependency,
     KernelLock,
     KernelLocks,

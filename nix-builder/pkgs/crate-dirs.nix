@@ -9,6 +9,6 @@ toSource {
     (fileFilter sourceFiles ../../kernel-abi-check)
     (fileFilter sourceFiles ../../kernel-builder)
     (fileFilter sourceFiles ../../kernels)
-    (fileFilter sourceFiles ../../kernels-data)
+    (fileFilter sourceFiles ../../kernels-common)
   ];
 }

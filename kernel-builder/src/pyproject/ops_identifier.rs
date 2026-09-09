@@ -3,8 +3,8 @@ use std::str::FromStr;
 
 use eyre::{Result, WrapErr};
 use git2::Repository;
-use kernels_data::config::Backend;
-use kernels_data::git::{GitStatus, Oid};
+use kernels_common::config::Backend;
+use kernels_common::git::{GitStatus, Oid};
 use rand::Rng;
 
 pub fn random_identifier() -> String {

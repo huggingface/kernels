@@ -4,9 +4,9 @@ use std::str::FromStr;
 use eyre::Result;
 use itertools::Itertools;
 
-use kernels_data::config::{Backend, Build};
-use kernels_data::git::{GitStatus, Oid};
-use kernels_data::metadata::{KernelBuilderVersion, Metadata, Provenance};
+use kernels_common::config::{Backend, Build};
+use kernels_common::git::{GitStatus, Oid};
+use kernels_common::metadata::{KernelBuilderVersion, Metadata, Provenance};
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;

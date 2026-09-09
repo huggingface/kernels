@@ -5,9 +5,9 @@ use std::{
 };
 
 use eyre::{bail, Result};
-use kernels_data::config::{Build, Framework};
-use kernels_data::git::{GitStatus, Oid};
-use kernels_data::metadata::Provenance;
+use kernels_common::config::{Build, Framework};
+use kernels_common::git::{GitStatus, Oid};
+use kernels_common::metadata::Provenance;
 use minijinja::Environment;
 
 use crate::{

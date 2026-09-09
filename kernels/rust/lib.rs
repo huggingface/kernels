@@ -4,10 +4,10 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use kernels_data::config::{Backend, KernelDependency, KernelName, KernelVersion};
-use kernels_data::digest::{Digest, DigestAlgorithm, DigestViolation};
-use kernels_data::git::{GitStatus, Oid};
-use kernels_data::metadata::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
+use kernels_common::config::{Backend, KernelDependency, KernelName, KernelVersion};
+use kernels_common::digest::{Digest, DigestAlgorithm, DigestViolation};
+use kernels_common::git::{GitStatus, Oid};
+use kernels_common::metadata::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -658,7 +658,7 @@ impl PyDigestViolation {
 }
 
 pyo3::create_exception!(
-    _data,
+    _rust,
     DigestValidationError,
     PyException,
     "Raised by `Digest.validate` when the actual digest does not match the \
@@ -750,7 +750,7 @@ impl PyDigest {
     }
 }
 
-#[pyo3::pymodule(name = "_data")]
+#[pyo3::pymodule(name = "_rust")]
 fn data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBackend>()?;
     m.add_class::<PyBackendInfo>()?;

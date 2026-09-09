@@ -55,4 +55,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Validate python_depends.json is up-to-date
-        run: diff kernels-data/src/python_dependencies.json kernels/src/kernels/python_depends.json
+        run: diff kernels-common/src/python_dependencies.json kernels/src/kernels/python_depends.json

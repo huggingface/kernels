@@ -1,4 +1,4 @@
-from kernels._data import KernelDependency, KernelVersion
+from kernels._rust import KernelDependency, KernelVersion
 from kernels.compat import tomllib
 from kernels.hf_hub import _get_hf_api
 from kernels.locking import extract_dependency_locks

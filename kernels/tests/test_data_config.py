@@ -1,6 +1,6 @@
 import pytest
 
-from kernels._data import Backend, Build, KernelDependency, KernelVersion
+from kernels._rust import Backend, Build, KernelDependency, KernelVersion
 
 
 def _write_build_toml(path, backends):

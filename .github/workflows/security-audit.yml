@@ -97,7 +97,7 @@ jobs:
           * `kernel-builder`: this is the main user interface for building and uploading kernels,
             though it also generates CMake/pyproject files which are used by the NIx builder.
           * `kernels`: Python package that can download and load kernels from Hugging Face Hub.
-          * `kernels-data`: data structures shared by `kernel-builder` and `kernels`.
+          * `kernels-common`: data structures shared by `kernel-builder` and `kernels`.
           * `nix-builder`: Nix code that drives kernel building, also contains Nix derivations for
              some dependencies.
 

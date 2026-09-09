@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from kernels._data import (
+from kernels._rust import (
     Backend,
     KernelDependency,
     KernelName,

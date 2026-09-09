@@ -1,6 +1,6 @@
 import pytest
 
-from kernels._data import Digest, DigestAlgorithm, DigestValidationError, DigestViolation
+from kernels._rust import Digest, DigestAlgorithm, DigestValidationError, DigestViolation
 
 
 def test_hash_variant_hashes_file_with_sha256(tmp_path):

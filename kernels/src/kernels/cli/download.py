@@ -1,6 +1,6 @@
 import sys
 
-from kernels._data import KernelLocks
+from kernels._rust import KernelLocks
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS, resolve_hub_kernel
 

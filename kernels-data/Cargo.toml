@@ -7,10 +7,16 @@ homepage = "https://github.com/huggingface/kernels"
 license = "Apache-2.0"
 repository = "https://github.com/huggingface/kernels"
 
+[features]
+# Forwarded so that consumers needing a blocking client (e.g. the CLI) can
+# get one from `HFKernelsClientBuilder`.
+blocking = ["hf-hub/blocking"]
+
 [dependencies]
 base64 = "0.22"
 digest = "0.11"
 eyre = "0.6.12"
+hf-hub = { version = "1.1.0", git = "https://github.com/huggingface/hf-hub", rev = "8b00e9eab4a27a614e414692d71791d8e33f7149" }
 itertools = "0.13"
 monostate = "0.1"
 regex = "1"
@@ -18,10 +24,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde-value = "0.7"
 sha2 = "0.11"
+tempfile = "3"
 thiserror = "1"
 toml = "0.8"
 url = { version = "2", features = ["serde"] }
 walkdir = "2"
-
-[dev-dependencies]
-tempfile = "3"
+# Pinned to the same major version that the `sigstore` crate (0.14) depends
+# on, so that `Certificate` unifies across the two when verification is
+# ported. Note that `sigstore` still wants sha2/digest 0.10 against our 0.11,
+# so the hashing stack will be duplicated; that is tolerable because only
+# bytes cross the sigstore boundary, never digest types.
+x509-cert = "0.2"

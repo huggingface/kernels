@@ -1,19 +1,13 @@
 use eyre::{Context, Result};
 use hf_hub::{HFClientSync, HFRepositorySync, RepoType};
+use kernels_data::hf::HFKernelsClientBuilder;
 
 /// Build a sync HF API client.
-pub fn api() -> Result<hf_hub::HFClientSync> {
-    let mut builder = hf_hub::HFClient::builder();
-
-    if let Ok(endpoint) = std::env::var("HF_ENDPOINT") {
-        builder = builder.endpoint(endpoint);
-    }
-
-    if let Ok(token) = std::env::var("HF_TOKEN") {
-        builder = builder.token(token);
-    }
-
-    builder
+///
+/// Endpoint, token, and cache directory are resolved from the environment the
+/// way `huggingface_hub` resolves them; see [`HFKernelsClientBuilder`].
+pub fn api() -> Result<HFClientSync> {
+    HFKernelsClientBuilder::new()
         .build_sync()
         .context("Cannot create Hugging Face API client")
 }

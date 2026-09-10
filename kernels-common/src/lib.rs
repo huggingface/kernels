@@ -4,4 +4,6 @@ pub mod git;
 pub mod hf;
 pub mod lock;
 pub mod metadata;
+pub mod signing;
+pub mod variants;
 pub mod version;

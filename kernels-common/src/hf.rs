@@ -175,7 +175,7 @@ fn hf_hub_cache() -> Option<PathBuf> {
 }
 
 /// The kernels cache directory.
-fn kernels_cache() -> Option<PathBuf> {
+pub(crate) fn kernels_cache() -> Option<PathBuf> {
     resolve_kernels_cache(env_path("KERNELS_CACHE"), hf_hub_cache())
 }
 

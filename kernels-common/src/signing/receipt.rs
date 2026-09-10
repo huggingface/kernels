@@ -552,4 +552,26 @@ mod tests {
         let parsed: VerificationReceipt = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.location(), receipt.location());
     }
+
+    #[test]
+    fn unknown_receipt_fields_are_ignored() {
+        let dir = TempDir::new().unwrap();
+        let store = ReceiptStore::from_path(dir.path());
+        let location = hub_location();
+
+        fs::write(
+            dir.path().join(location.receipt_key()),
+            format!(
+                r#"{{"location":{{"type":"remote_kernel","repo_id":"kernels-test/signatures","revision":"{}","variant":"torch30-cxx11-cu128-x86_64-linux","from_the_future":[1,2,3]}},"verified_at":"2026-09-10T13:42:47Z"}}"#,
+                "a".repeat(40)
+            ),
+        )
+        .unwrap();
+
+        let loaded = store
+            .load(&location)
+            .expect("receipt should load")
+            .expect("receipt should exist");
+        assert_eq!(loaded.location(), &location);
+    }
 }

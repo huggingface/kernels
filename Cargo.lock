@@ -1556,6 +1556,7 @@ dependencies = [
  "base64",
  "digest",
  "eyre",
+ "hf-hub",
  "itertools 0.13.0",
  "monostate",
  "regex",

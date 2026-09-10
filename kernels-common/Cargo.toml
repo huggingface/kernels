@@ -24,6 +24,4 @@ thiserror = "1"
 toml = "0.8"
 url = { version = "2", features = ["serde"] }
 walkdir = "2"
-# Set to the version that sigstore requires.
-x509-cert = "0.2"
 

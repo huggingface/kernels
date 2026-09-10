@@ -23,9 +23,9 @@ jobs:
       - name: Cargo fmt (kernel-abi-check)
         run: |
           ( cd kernel-abi-check && cargo fmt --all -- --check )
-      - name: Cargo fmt (kernels-data)
+      - name: Cargo fmt (kernels-common)
         run: |
-          ( cd kernels-data && cargo fmt --all -- --check )
+          ( cd kernels-common && cargo fmt --all -- --check )
           ( cd kernels && cargo fmt --all -- --check )
       - name: Cargo fmt (kernel-builder)
         run: ( cd kernel-builder && cargo fmt --all -- --check )
@@ -50,9 +50,9 @@ jobs:
       - name: Clippy (kernel-abi-check)
         run: |
           ( cd kernel-abi-check && cargo clippy -- -D warnings )
-      - name: Clippy (kernels-data)
+      - name: Clippy (kernels-common)
         run: |
-          ( cd kernels-data && cargo clippy -- -D warnings )
+          ( cd kernels-common && cargo clippy -- -D warnings )
           ( cd kernels && cargo clippy -- -D warnings )
       - name: Clippy (kernel-builder)
         run: ( cd kernel-builder && cargo clippy -- -D warnings )
@@ -74,7 +74,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
       - name: Test (kernel-abi-check)
         run: cargo test -p kernel-abi-check
-      - name: Test (kernels-data)
-        run: cargo test -p kernels-data
+      - name: Test (kernels-common)
+        run: cargo test -p kernels-common
       - name: Test (kernel-builder)
         run: cargo test -p hf-kernel-builder

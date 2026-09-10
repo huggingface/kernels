@@ -1,6 +1,6 @@
 import pytest
 
-from kernels._data import Version
+from kernels._rust import Version
 
 
 def test_version_parse():

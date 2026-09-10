@@ -3,6 +3,6 @@ members = [
     "kernel-abi-check",
     "kernel-builder",
     "kernels",
-    "kernels-data",
+    "kernels-common",
 ]
 resolver = "2"

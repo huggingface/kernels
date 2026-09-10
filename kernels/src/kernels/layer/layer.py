@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Callable, Protocol, Type
 
 from huggingface_hub import constants
 
-from kernels._data import KernelDependency, KernelLocks
+from kernels._rust import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
 from .._versions import select_revision_or_version

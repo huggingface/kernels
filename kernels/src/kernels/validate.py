@@ -4,7 +4,7 @@ from typing import Protocol
 
 from packaging.version import InvalidVersion, parse
 
-from kernels._data import Metadata, Version
+from kernels._rust import Metadata, Version
 from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
 from kernels.python_deps import validate_dependencies

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from huggingface_hub.dataclasses import strict
 
-from kernels._data import Metadata
+from kernels._rust import Metadata
 from kernels.backends import Backend, _backend
 
 

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use kernels_data::config::{Build, General};
+use kernels_common::config::{Build, General};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 

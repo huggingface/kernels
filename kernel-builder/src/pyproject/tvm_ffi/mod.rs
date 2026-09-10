@@ -2,8 +2,8 @@ use std::io::Write;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Backend, Build, General, TvmFfi};
-use kernels_data::metadata::Provenance;
+use kernels_common::config::{Backend, Build, General, TvmFfi};
+use kernels_common::metadata::Provenance;
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::{

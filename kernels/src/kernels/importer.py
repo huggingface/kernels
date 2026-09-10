@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from kernels._data import Metadata
+from kernels._rust import Metadata
 from kernels.hf_hub import RepoInfo
 
 

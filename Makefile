@@ -5,7 +5,7 @@ export check_dirs := kernels/src kernels/tests
 
 all: kernels/src/kernels/python_depends.json
 
-kernels/src/kernels/python_depends.json: kernels-data/src/python_dependencies.json
+kernels/src/kernels/python_depends.json: kernels-common/src/python_dependencies.json
 	cp $< $@
 
 style:

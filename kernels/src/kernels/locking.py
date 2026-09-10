@@ -6,7 +6,7 @@ from types import ModuleType
 
 from huggingface_hub.hf_api import HfApi
 
-from kernels._data import (
+from kernels._rust import (
     KernelDependency,
     KernelLock,
     KernelLocks,

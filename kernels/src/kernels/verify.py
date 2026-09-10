@@ -8,7 +8,7 @@ from sigstore.models import Bundle, InvalidBundle
 from sigstore.verify import Verifier, policy
 from sigstore.verify.policy import VerificationPolicy
 
-from kernels._data import Digest, DigestValidationError, DigestViolation, Metadata
+from kernels._rust import Digest, DigestValidationError, DigestViolation, Metadata
 
 
 class GitHubWorkflowPolicy(VerificationPolicy):

@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
-use kernels_data::config::{v5, Build, BuildCompat};
-use kernels_data::git::Oid;
+use kernels_common::config::{v5, Build, BuildCompat};
+use kernels_common::git::Oid;
 
 mod card;
 mod check_abi;

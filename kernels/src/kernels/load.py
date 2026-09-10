@@ -5,7 +5,7 @@ from types import ModuleType
 
 from huggingface_hub import HfApi, constants
 
-from kernels._data import KernelDependency, KernelVersion
+from kernels._rust import KernelDependency, KernelVersion
 from kernels._versions import revision_or_version
 from kernels.deps import resolve_kernel_tree
 from kernels.hf_hub import _get_hf_api

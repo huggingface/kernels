@@ -15,7 +15,7 @@ from pathlib import Path
 
 from huggingface_hub.hf_api import HfApi
 from kernels.locking import extract_dependency_locks
-from kernels._data import Build, KernelLocks, NixKernelLock, NixKernelLocks
+from kernels._rust import Build, KernelLocks, NixKernelLock, NixKernelLocks
 
 
 def nix_hash(repo_id: str, revision: str) -> str:

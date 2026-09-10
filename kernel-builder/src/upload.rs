@@ -13,8 +13,8 @@ use hf_hub::{
     HFError, HFRepositorySync, RepoType, RepoTypeKernel, RepoTypeModel,
 };
 use indicatif::{ProgressBar, ProgressStyle};
-use kernels_data::config::Build;
-use kernels_data::metadata::Metadata;
+use kernels_common::config::Build;
+use kernels_common::metadata::Metadata;
 use serde::Serialize;
 use walkdir::WalkDir;
 

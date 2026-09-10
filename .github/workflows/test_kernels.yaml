@@ -65,7 +65,7 @@ jobs:
 
       - name: Check type stubs match runtime
         working-directory: ./kernels
-        run: uv run python -m mypy.stubtest kernels._data
+        run: uv run python -m mypy.stubtest kernels._rust
 
       - name: Run tests
         working-directory: ./kernels

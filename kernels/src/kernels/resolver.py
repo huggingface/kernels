@@ -5,7 +5,7 @@ from typing import Protocol, runtime_checkable
 from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
 
-from kernels._data import KernelDependency, KernelLocks, KernelPaths, Metadata
+from kernels._rust import KernelDependency, KernelLocks, KernelPaths, Metadata
 from kernels._versions import _get_available_versions, resolve_kernel_version
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.variants import (

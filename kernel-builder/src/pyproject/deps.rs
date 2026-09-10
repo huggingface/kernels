@@ -4,7 +4,7 @@ use std::io::Write;
 use eyre::{Context, Result};
 use minijinja::{context, Environment};
 
-use kernels_data::config::{Build, Dependency};
+use kernels_common::config::{Build, Dependency};
 
 pub fn render_deps(env: &Environment, build: &Build, write: &mut impl Write) -> Result<()> {
     // Collect all dependencies.

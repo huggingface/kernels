@@ -2,7 +2,7 @@ import importlib.metadata
 
 __version__ = importlib.metadata.version("kernels")
 
-from kernels._data import Metadata
+from kernels._rust import Metadata
 from kernels._windows import _add_additional_dll_paths
 from kernels.benchmark import Benchmark
 from kernels.deps import get_kernel_dep

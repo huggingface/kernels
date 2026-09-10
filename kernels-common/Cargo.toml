@@ -1,8 +1,8 @@
 [package]
-name = "kernels-data"
+name = "kernels-common"
 version = "0.17.0-dev1"
 edition = "2024"
-description = "Kernels data structures"
+description = "Code shared by kernel-builder and kernels"
 homepage = "https://github.com/huggingface/kernels"
 license = "Apache-2.0"
 repository = "https://github.com/huggingface/kernels"

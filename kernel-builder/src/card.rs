@@ -5,7 +5,7 @@ use std::{
 };
 
 use eyre::{bail, Context, Result};
-use kernels_data::config::Build;
+use kernels_common::config::Build;
 use minijinja::{context, Environment};
 use rustpython_parser::{ast, Parse};
 

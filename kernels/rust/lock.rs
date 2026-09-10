@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use kernels_data::git::Oid;
-use kernels_data::lock::{KernelLock, KernelLocks, KernelPaths, NixKernelLock, NixKernelLocks};
+use kernels_common::git::Oid;
+use kernels_common::lock::{KernelLock, KernelLocks, KernelPaths, NixKernelLock, NixKernelLocks};
 use pyo3::Bound as PyBound;
 use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;

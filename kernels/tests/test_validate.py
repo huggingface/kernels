@@ -8,7 +8,7 @@ import torch
 
 import kernels
 import kernels.validate as validate_module
-from kernels._data import Metadata, Version
+from kernels._rust import Metadata, Version
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel
 from kernels.validate import (

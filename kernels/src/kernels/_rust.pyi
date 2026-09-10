@@ -1,4 +1,4 @@
-"""Type stubs for the `kernels._data` module."""
+"""Type stubs for the `kernels._rust` module."""
 
 import os
 from collections.abc import Iterator

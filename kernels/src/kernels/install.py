@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from kernels._data import KernelDependency
+from kernels._rust import KernelDependency
 from kernels._versions import revision_or_version
 from kernels.deps import resolve_kernel_tree
 from kernels.hf_hub import CACHE_DIR, _get_hf_api

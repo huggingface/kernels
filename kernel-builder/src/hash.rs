@@ -5,8 +5,8 @@ use std::{
 };
 
 use eyre::{Context, Result};
-use kernels_data::digest::{Digest, DigestAlgorithm};
-use kernels_data::metadata::Metadata;
+use kernels_common::digest::{Digest, DigestAlgorithm};
+use kernels_common::metadata::Metadata;
 
 use crate::util::{check_or_infer_kernel_dir, discover_variants};
 

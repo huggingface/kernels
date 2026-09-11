@@ -14,7 +14,7 @@ use crate::variants::variant_files;
 pub const CACHE_FORMAT_VERSION: &str = "v1";
 
 /// Receipt of a successful kernel verification.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct VerificationReceipt {
     /// The kernel location the receipt applies to.
     location: KernelLocation,
@@ -32,7 +32,7 @@ impl VerificationReceipt {
 }
 
 /// Kernel location.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum KernelLocation {
     LocalKernel {

@@ -1567,6 +1567,7 @@ dependencies = [
 name = "kernels-python"
 version = "0.17.0-dev1"
 dependencies = [
+ "eyre",
  "kernels-common",
  "pyo3",
  "serde_json",

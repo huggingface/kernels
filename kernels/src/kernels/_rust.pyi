@@ -27,6 +27,10 @@ __all__ = [
     "Digest",
     "DigestViolation",
     "DigestValidationError",
+    "KernelLocation",
+    "VerificationReceipt",
+    "ReceiptStore",
+    "ReceiptError",
     "Version",
     "__version__",
 ]
@@ -284,6 +288,89 @@ class DigestValidationError(Exception):
     def violations(self) -> list[DigestViolation]:
         """The individual digest violations."""
         ...
+
+@final
+class KernelLocation:
+    """The location of a kernel that a verification receipt applies to."""
+    @staticmethod
+    def local(variant_path: os.PathLike[str] | str) -> "KernelLocation":
+        """The location of a kernel variant in a local directory.
+
+        Fingerprints the variant's files, so that the location changes when
+        the kernel is rebuilt or re-signed.
+
+        Args:
+            variant_path: Path to the variant directory.
+
+        Raises:
+            OSError: If the variant directory cannot be walked or stat'ed.
+        """
+        ...
+
+    @staticmethod
+    def remote(repo_id: str, revision: str, variant: str) -> "KernelLocation":
+        """The location of a kernel variant in a Hub repository.
+
+        Args:
+            repo_id: Repository the kernel was downloaded from.
+            revision: Resolved commit, rather than a branch or tag, so that
+                the location changes when the repository is updated.
+            variant: Build variant of the kernel.
+        """
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class VerificationReceipt:
+    """Receipt of a successful kernel verification.
+
+    A receipt states that a kernel has already been verified. If the kernel
+    location changed, the receipt's hash will not match anymore."""
+
+    def __new__(cls, location: KernelLocation) -> "VerificationReceipt": ...
+    @property
+    def location(self) -> KernelLocation:
+        """The kernel location the verification applies to."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class ReceiptStore:
+    """Store of kernel verification receipts."""
+
+    @staticmethod
+    def default() -> Optional["ReceiptStore"]:
+        """The receipt store in the kernels cache.
+
+        Returns `None` when the cache directory cannot be determined.
+        """
+        ...
+
+    @staticmethod
+    def from_path(path: os.PathLike[str] | str) -> "ReceiptStore":
+        """A receipt store in the given directory."""
+        ...
+
+    def load(self, location: KernelLocation) -> Optional[VerificationReceipt]:
+        """The receipt for `location`, or `None` when the kernel has not been verified yet.
+
+        Raises:
+            ReceiptError: If a receipt exists but cannot be used.
+        """
+        ...
+
+    def store(self, receipt: VerificationReceipt) -> None:
+        """Store `receipt`, replacing any existing receipt for its location.
+
+        Raises:
+            ReceiptError: If the receipt cannot be written.
+        """
+        ...
+
+class ReceiptError(Exception):
+    """Raised by `ReceiptStore` when a receipt cannot be read, written, or interpreted."""
 
 class KernelVersion:
     """A kernel version: either a numeric version or a git revision string."""

@@ -14,10 +14,12 @@ use pyo3::prelude::*;
 
 mod config;
 mod lock;
+mod signing;
 mod version;
 
 use config::{PyBuild, PyGeneral};
 use lock::{PyKernelLock, PyKernelLocks, PyKernelPaths, PyNixKernelLock, PyNixKernelLocks};
+use signing::{PyKernelLocation, PyReceiptStore, PyVerificationReceipt, ReceiptError};
 use version::PyVersion;
 
 /// A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`.
@@ -772,10 +774,14 @@ fn data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDigestAlgorithm>()?;
     m.add_class::<PyDigest>()?;
     m.add_class::<PyDigestViolation>()?;
+    m.add_class::<PyKernelLocation>()?;
+    m.add_class::<PyVerificationReceipt>()?;
+    m.add_class::<PyReceiptStore>()?;
     m.add(
         "DigestValidationError",
         m.py().get_type::<DigestValidationError>(),
     )?;
+    m.add("ReceiptError", m.py().get_type::<ReceiptError>())?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())

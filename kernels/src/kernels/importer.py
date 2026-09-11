@@ -15,10 +15,8 @@ class LoadedKernel:
 
     - `metadata` (`Metadata`): kernel metadata.
     - `module` (`ModuleType`): the imported kernel module.
-    - `repo_info` (`kernels.hf_hub.RepoInfo | None`): populated only for
-      kernels loaded via `get_kernel`. Loaders that work from a local path
-      (`get_local_kernel`) or a lockfile (`get_locked_kernel`, `load_kernel`)
-      leave this as `None`.
+    - `repo_info` (`kernels.hf_hub.RepoInfo | None`): populated whenever the
+      Hub repository the kernel came from is known.
 
     The metadata includes the following properties that describe a kernel:
 

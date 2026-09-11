@@ -226,7 +226,16 @@ def resolve_hub_cache_kernel(
         raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
-    location = LocalKernel(variant_path=variant_path, metadata=metadata)
+    location = LocalKernel(
+        variant_path=variant_path,
+        metadata=metadata,
+        origin=RemoteKernel(
+            repo_id=repo_id,
+            revision=revision,
+            metadata=metadata,
+            variant=variant,
+        ),
+    )
 
     return location
 

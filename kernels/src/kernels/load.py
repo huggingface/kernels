@@ -24,9 +24,12 @@ from kernels.resolver import (
     SequentialResolver,
 )
 from kernels.validate import (
-    AllValidator,
+    AllKernelValidator,
+    AllMetadataValidator,
     ArchValidator,
+    KernelValidator,
     MetadataValidator,
+    default_kernel_validators,
     default_metadata_validators,
 )
 
@@ -61,6 +64,7 @@ def get_kernel_with_resolver(
     backend: str | None,
     kernel: KernelDependency,
     resolver: Resolver | None,
+    kernel_validator: KernelValidator,
     metadata_validator: MetadataValidator,
 ) -> ModuleType:
     """
@@ -76,8 +80,10 @@ def get_kernel_with_resolver(
             The kernel to load.
         resolver (`Resolver`, *optional*):
             The resolver used to resolve the kernel and its (transitive) dependencies.
+        kernel_validator (`KernelValidator`):
+            The validator to apply to the kernels in the kernel dependency tree.
         metadata_validator (`MetadataValidator`):
-            The validator to apply to the resolved kernel dependency tree.
+            The validator to apply to the metadata in the kernel dependency tree.
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -90,6 +96,7 @@ def get_kernel_with_resolver(
     )
     tree.validate_metadata(metadata_validator)
     tree_only_local = tree.install(api=api)
+    tree_only_local.validate_kernel(kernel_validator)
     return tree_only_local.load()
 
 
@@ -170,7 +177,8 @@ def get_kernel(
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
         resolver=SequentialResolver(resolvers=resolvers),
-        metadata_validator=AllValidator(validators=validators),
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
+        metadata_validator=AllMetadataValidator(validators=validators),
     )
 
 
@@ -223,7 +231,8 @@ def get_local_kernel(
         # We don't have a name for the kernel, so let's just use the path.
         kernel=KernelDependency(repo_id=str(repo_path), version=KernelVersion.Version(0)),
         resolver=SequentialResolver(resolvers),
-        metadata_validator=AllValidator(validators=default_metadata_validators()),
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
+        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
     )
 
 
@@ -339,7 +348,8 @@ def load_kernel(
         backend=backend,
         kernel=kernel_dep,
         resolver=resolver,
-        metadata_validator=AllValidator(validators=default_metadata_validators()),
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
+        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
     )
 
 
@@ -380,5 +390,6 @@ def get_locked_kernel(
         backend=None,
         kernel=kernel_dep,
         resolver=resolver,
-        metadata_validator=AllValidator(validators=default_metadata_validators()),
+        kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
+        metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
     )

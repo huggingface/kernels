@@ -24,7 +24,7 @@ from ..locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
-from ..validate import AllValidator, default_metadata_validators
+from ..validate import AllKernelValidator, AllMetadataValidator, default_kernel_validators, default_metadata_validators
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
@@ -254,7 +254,8 @@ class LockedLayerRepository:
             backend=None,
             kernel=self.kernel_dep,
             resolver=resolver,
-            metadata_validator=AllValidator(validators=default_metadata_validators()),
+            kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
+            metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
         )
         return _get_kernel_layer(self, kernel)
 

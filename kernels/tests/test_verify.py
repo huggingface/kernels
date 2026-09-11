@@ -1,17 +1,55 @@
+import logging
 from pathlib import Path
 
+import pytest
 from sigstore.verify import policy
 
+import kernels.verify as verify_module
 from kernels import install_kernel
-from kernels._rust import DigestViolation
+from kernels._rust import DigestViolation, KernelLocation, ReceiptStore
 from kernels._versions import select_revision_or_version
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
 from kernels.verify import VerificationResult, verify_variant
 
-TEST_POLICIES: list[policy.VerificationPolicy] = [
-    policy.Identity(identity="me@danieldk.eu", issuer="https://github.com/login/oauth")
-]
+TEST_POLICY: policy.VerificationPolicy = policy.Identity(
+    identity="me@danieldk.eu", issuer="https://github.com/login/oauth"
+)
+
+OTHER_POLICY: policy.VerificationPolicy = policy.Identity(
+    identity="nobody@example.com", issuer="https://github.com/login/oauth"
+)
+
+
+@pytest.fixture
+def receipt_store(tmp_path, monkeypatch):
+    """An isolated receipt store, so that tests do not share verifications."""
+    receipt_dir = tmp_path / "receipts"
+    store = ReceiptStore.from_path(receipt_dir)
+    monkeypatch.setattr(verify_module, "_open_receipt_store", lambda: store)
+    return store
+
+
+@pytest.fixture
+def signed_kernel():
+    """A correctly signed kernel, with the location that identifies it."""
+    repo_id = "kernels-test/signatures"
+    revision = select_revision_or_version(repo_id, revision=None, version=1, local_files_only=False)
+    variant_path = install_kernel(repo_id, revision=revision)
+    return variant_path, KernelLocation.remote(repo_id, revision, variant_path.name)
+
+
+def _no_hashing(monkeypatch):
+    """Make rehashing the variant fail, so that only cache hits can succeed."""
+
+    class ExplodingDigest:
+        @staticmethod
+        def hash_variant(*args, **kwargs):
+            raise AssertionError("the variant was rehashed, so this was not a cache hit")
+
+    # Patch the name in `kernels.verify`: `Digest` is an extension type, whose
+    # attributes cannot be set.
+    monkeypatch.setattr(verify_module, "Digest", ExplodingDigest)
 
 
 def test_correctly_signed_kernel_passes_with_default_policy():
@@ -26,7 +64,7 @@ def test_correctly_signed_kernel_passes():
     assert (
         verify_variant(
             variant_path,
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.Success()
     )
@@ -37,7 +75,7 @@ def test_invalid_digest_fails():
 
     match verify_variant(
         variant_path,
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.DigestVerificationFailure(violations=violations):
             assert len(violations) == 1
@@ -75,7 +113,7 @@ def test_invalid_metadata_fails():
     match verify_variant(
         # No CUDA dependency, we are only checking metadata.
         variant_paths / "torch-cuda",
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.MetadataInvalid(reason=reason):
             assert "Cannot parse metadata" in reason
@@ -88,7 +126,7 @@ def test_missing_digest_fails():
     assert (
         verify_variant(
             variant_path,
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.DigestMissing()
     )
@@ -124,7 +162,7 @@ def test_missing_metadata_fails():
         verify_variant(
             # No CUDA dependency, we are only checking metadata.
             variant_paths / "torch-cuda",
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.MetadataMissing()
     )
@@ -135,7 +173,7 @@ def test_unsigned_kernel_fails():
     assert (
         verify_variant(
             variant_path,
-            policies=TEST_POLICIES,
+            policy=TEST_POLICY,
         )
         == VerificationResult.SignatureBundleMissing()
     )
@@ -145,7 +183,7 @@ def test_broken_signature_bundle_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-broken")
     match verify_variant(
         variant_path,
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.SignatureBundleInvalid(reason=_):
             pass
@@ -157,9 +195,62 @@ def test_invalid_signature_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-invalid")
     match verify_variant(
         variant_path,
-        policies=TEST_POLICIES,
+        policy=TEST_POLICY,
     ):
         case VerificationResult.SignatureVerificationFailure(reason=_):
             pass
         case other:
             raise RuntimeError(f"Expected SignatureVerificationFailure, was: {other}")
+
+
+def test_verification_is_cached(receipt_store, signed_kernel, monkeypatch):
+    variant_path, location = signed_kernel
+
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+    assert receipt_store.load(location) is not None
+
+    # The second verification must be served from the receipt, without
+    # rehashing the variant.
+    _no_hashing(monkeypatch)
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+
+def test_verification_is_not_cached_without_location(receipt_store, signed_kernel, monkeypatch):
+    variant_path, _ = signed_kernel
+
+    assert verify_variant(variant_path, policy=TEST_POLICY) == VerificationResult.Success()
+
+    # Nothing was recorded, so a second verification does the full work.
+    _no_hashing(monkeypatch)
+    with pytest.raises(AssertionError, match="was rehashed"):
+        verify_variant(variant_path, policy=TEST_POLICY)
+
+
+def test_cached_verification_still_enforces_policy(receipt_store, signed_kernel, monkeypatch):
+    variant_path, location = signed_kernel
+
+    # Verify under a policy that accepts this kernel, so a receipt is stored.
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+    # The receipt says the kernel was verified, but not *under which policy*,
+    # so a policy that does not accept this signer must still reject it.
+    _no_hashing(monkeypatch)
+    match verify_variant(variant_path, policy=OTHER_POLICY, location=location):
+        case VerificationResult.SignatureVerificationFailure():
+            pass
+        case other:
+            raise RuntimeError(f"Expected SignatureVerificationFailure, was: {other}")
+
+
+def test_unusable_receipt_falls_back_to_verification(receipt_store, signed_kernel, tmp_path, caplog):
+    variant_path, location = signed_kernel
+
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+    (receipt_path,) = list((tmp_path / "receipts").iterdir())
+    receipt_path.write_text("not a receipt")
+
+    with caplog.at_level(logging.WARNING, logger="kernels.verify"):
+        assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+    assert "unusable kernel verification receipt" in caplog.text

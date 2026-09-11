@@ -8,16 +8,20 @@ import torch
 
 import kernels
 import kernels.validate as validate_module
-from kernels._rust import Metadata, Version
+import kernels.verify as verify_module
+from kernels._rust import KernelLocation, Metadata, Version
 from kernels.deps import DepTreeNode
-from kernels.resolver import LocalKernel
+from kernels.resolver import LocalKernel, RemoteKernel
 from kernels.validate import (
     ArchValidator,
     DirtyValidator,
     MinverValidator,
+    SignatureValidator,
     _installed_version,
     default_metadata_validators,
 )
+from kernels.variants import parse_variant
+from kernels.verify import VerificationResult
 
 CLEAN_PROVENANCE = {
     "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
@@ -207,3 +211,101 @@ def test_issue_707_fa3_on_b200(fake_cuda_device, make_metadata):
     metadata = make_metadata("cuda", ["8.0", "9.0a"])
     with pytest.raises(RuntimeError, match="does not support the current device"):
         ArchValidator().validate_metadata(metadata=metadata, variant="test-variant")
+
+
+_SIGNED_REPO_ID = "kernels-test/signatures"
+_SIGNED_REVISION = "a" * 40
+
+
+def _hub_kernel(tmp_path, metadata) -> LocalKernel:
+    variant_path = tmp_path / "torch-cuda"
+    return LocalKernel(
+        variant_path=variant_path,
+        metadata=metadata,
+        origin=RemoteKernel(
+            repo_id=_SIGNED_REPO_ID,
+            revision=_SIGNED_REVISION,
+            metadata=metadata,
+            variant=parse_variant("torch-cuda"),
+        ),
+    )
+
+
+@pytest.fixture
+def recorded_verifications(monkeypatch):
+    """Record `verify_variant` calls and control the result it returns."""
+    calls = []
+    results = []
+
+    def fake_verify_variant(variant_path, *, policy=None, location=None):
+        calls.append({"variant_path": variant_path, "policy": policy, "location": location})
+        return results.pop(0) if results else VerificationResult.Success()
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
+    return calls, results
+
+
+def test_signature_validator_skips_local_kernels(tmp_path, make_metadata, recorded_verifications):
+    calls, _ = recorded_verifications
+    kernel = LocalKernel(variant_path=tmp_path / "torch-cuda", metadata=make_metadata("cuda", None))
+
+    SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert calls == []
+
+
+def test_signature_validator_identifies_kernel_by_origin(tmp_path, make_metadata, recorded_verifications):
+    calls, _ = recorded_verifications
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    SignatureValidator().validate_kernel(kernel=kernel)
+
+    (call,) = calls
+    assert call["variant_path"] == kernel.variant_path
+    assert call["location"] == KernelLocation.remote(_SIGNED_REPO_ID, _SIGNED_REVISION, "torch-cuda")
+
+
+def test_signature_validator_passes_policy(tmp_path, make_metadata, recorded_verifications):
+    calls, _ = recorded_verifications
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+    sentinel = object()
+
+    SignatureValidator(policy=sentinel).validate_kernel(kernel=kernel)
+
+    (call,) = calls
+    assert call["policy"] is sentinel
+
+
+def test_signature_validator_is_quiet_on_success(tmp_path, make_metadata, recorded_verifications, caplog):
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert caplog.text == ""
+
+
+@pytest.mark.parametrize(
+    "result,expected",
+    [
+        (VerificationResult.SignatureBundleMissing(), "is not signed"),
+        (VerificationResult.SignatureBundleInvalid(reason="bad bundle"), "invalid signature bundle"),
+        (VerificationResult.SignatureVerificationFailure(reason="bad signature"), "against its signature"),
+        (VerificationResult.MetadataInvalid(reason="bad metadata"), "invalid metadata"),
+        (VerificationResult.MetadataMissing(), "does not record a digest"),
+        (VerificationResult.DigestMissing(), "does not record a digest"),
+        (VerificationResult.DigestVerificationFailure(violations=[]), "may have been modified"),
+    ],
+)
+def test_signature_validator_warns_but_does_not_raise(
+    tmp_path, make_metadata, recorded_verifications, caplog, result, expected
+):
+    _, results = recorded_verifications
+    results.append(result)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert expected in caplog.text
+    assert "test-kernel" in caplog.text

@@ -39,6 +39,21 @@ def signed_kernel():
     return variant_path, KernelLocation.remote(repo_id, revision, variant_path.name)
 
 
+def _verify_uncached(variant_path: Path, **kwargs) -> VerificationResult.Any:
+    """Verify a variant without reading or writing the receipt cache.
+
+    Used by the tests that exercise verification itself rather than caching,
+    both to keep them away from the real receipt store and because a location
+    is required but unused when caching is off.
+    """
+    return verify_variant(
+        variant_path,
+        location=KernelLocation.remote("kernels-test/signatures", "0" * 40, variant_path.name),
+        cache=False,
+        **kwargs,
+    )
+
+
 def _no_hashing(monkeypatch):
     """Make rehashing the variant fail, so that only cache hits can succeed."""
 
@@ -55,28 +70,19 @@ def _no_hashing(monkeypatch):
 def test_correctly_signed_kernel_passes_with_default_policy():
     revision = select_revision_or_version("kernels-community/relu", revision=None, version=1, local_files_only=False)
     variant_path = install_kernel("kernels-community/relu", revision=revision)
-    assert verify_variant(variant_path) == VerificationResult.Success()
+    assert _verify_uncached(variant_path) == VerificationResult.Success()
 
 
 def test_correctly_signed_kernel_passes():
     revision = select_revision_or_version("kernels-test/signatures", revision=None, version=1, local_files_only=False)
     variant_path = install_kernel("kernels-test/signatures", revision=revision)
-    assert (
-        verify_variant(
-            variant_path,
-            policy=TEST_POLICY,
-        )
-        == VerificationResult.Success()
-    )
+    assert _verify_uncached(variant_path, policy=TEST_POLICY) == VerificationResult.Success()
 
 
 def test_invalid_digest_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="invalid-digest")
 
-    match verify_variant(
-        variant_path,
-        policy=TEST_POLICY,
-    ):
+    match _verify_uncached(variant_path, policy=TEST_POLICY):
         case VerificationResult.DigestVerificationFailure(violations=violations):
             assert len(violations) == 1
             assert isinstance(violations[0], DigestViolation.HashMismatch)
@@ -110,7 +116,7 @@ def test_invalid_metadata_fails():
         / "build"
     )
 
-    match verify_variant(
+    match _verify_uncached(
         # No CUDA dependency, we are only checking metadata.
         variant_paths / "torch-cuda",
         policy=TEST_POLICY,
@@ -123,13 +129,7 @@ def test_invalid_metadata_fails():
 
 def test_missing_digest_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="missing-digest")
-    assert (
-        verify_variant(
-            variant_path,
-            policy=TEST_POLICY,
-        )
-        == VerificationResult.DigestMissing()
-    )
+    assert _verify_uncached(variant_path, policy=TEST_POLICY) == VerificationResult.DigestMissing()
 
 
 def test_missing_metadata_fails():
@@ -159,7 +159,7 @@ def test_missing_metadata_fails():
     )
 
     assert (
-        verify_variant(
+        _verify_uncached(
             # No CUDA dependency, we are only checking metadata.
             variant_paths / "torch-cuda",
             policy=TEST_POLICY,
@@ -170,21 +170,12 @@ def test_missing_metadata_fails():
 
 def test_unsigned_kernel_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-missing")
-    assert (
-        verify_variant(
-            variant_path,
-            policy=TEST_POLICY,
-        )
-        == VerificationResult.SignatureBundleMissing()
-    )
+    assert _verify_uncached(variant_path, policy=TEST_POLICY) == VerificationResult.SignatureBundleMissing()
 
 
 def test_broken_signature_bundle_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-broken")
-    match verify_variant(
-        variant_path,
-        policy=TEST_POLICY,
-    ):
+    match _verify_uncached(variant_path, policy=TEST_POLICY):
         case VerificationResult.SignatureBundleInvalid(reason=_):
             pass
         case other:
@@ -193,10 +184,7 @@ def test_broken_signature_bundle_fails():
 
 def test_invalid_signature_fails():
     variant_path = install_kernel("kernels-test/signatures", revision="signature-invalid")
-    match verify_variant(
-        variant_path,
-        policy=TEST_POLICY,
-    ):
+    match _verify_uncached(variant_path, policy=TEST_POLICY):
         case VerificationResult.SignatureVerificationFailure(reason=_):
             pass
         case other:
@@ -215,15 +203,23 @@ def test_verification_is_cached(receipt_store, signed_kernel, monkeypatch):
     assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
 
 
-def test_verification_is_not_cached_without_location(receipt_store, signed_kernel, monkeypatch):
-    variant_path, _ = signed_kernel
+def test_verification_is_not_cached_with_cache_off(receipt_store, signed_kernel, monkeypatch):
+    variant_path, location = signed_kernel
 
-    assert verify_variant(variant_path, policy=TEST_POLICY) == VerificationResult.Success()
+    result = verify_variant(variant_path, policy=TEST_POLICY, location=location, cache=False)
+    assert result == VerificationResult.Success()
 
-    # Nothing was recorded, so a second verification does the full work.
+    # Nothing was recorded, ...
+    assert receipt_store.load(location) is None
+
+    # ... and a verification with caching off does the full work even when a
+    # receipt does exist.
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+    assert receipt_store.load(location) is not None
+
     _no_hashing(monkeypatch)
     with pytest.raises(AssertionError, match="was rehashed"):
-        verify_variant(variant_path, policy=TEST_POLICY)
+        verify_variant(variant_path, policy=TEST_POLICY, location=location, cache=False)
 
 
 def test_cached_verification_still_enforces_policy(receipt_store, signed_kernel, monkeypatch):

@@ -8,6 +8,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import assert_never
 
+from kernels._rust import KernelLocation
 from kernels._versions import select_revision_or_version
 from kernels.install import install_kernel, install_kernel_all_variants
 from kernels.variants import get_variants_local
@@ -32,8 +33,14 @@ def verify_signature(args: argparse.Namespace) -> None:
     failed = False
 
     for kernel_path in kernel_paths:
-        result = verify_variant(kernel_path)
         variant_str = kernel_path.name
+
+        result = verify_variant(
+            kernel_path,
+            location=KernelLocation.remote(args.repo_id, revision, variant_str),
+            # Always fully verify the kernel in this subcommand.
+            cache=False,
+        )
 
         match result:
             case VerificationResult.SignatureBundleMissing():

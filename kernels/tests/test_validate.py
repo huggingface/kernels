@@ -237,8 +237,8 @@ def recorded_verifications(monkeypatch):
     calls = []
     results = []
 
-    def fake_verify_variant(variant_path, *, policy=None, location=None):
-        calls.append({"variant_path": variant_path, "policy": policy, "location": location})
+    def fake_verify_variant(variant_path, *, location, policy=None, cache=True):
+        calls.append({"variant_path": variant_path, "policy": policy, "location": location, "cache": cache})
         return results.pop(0) if results else VerificationResult.Success()
 
     monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
@@ -263,6 +263,8 @@ def test_signature_validator_identifies_kernel_by_origin(tmp_path, make_metadata
     (call,) = calls
     assert call["variant_path"] == kernel.variant_path
     assert call["location"] == KernelLocation.remote(_SIGNED_REPO_ID, _SIGNED_REVISION, "torch-cuda")
+    # Loading a kernel must reuse a previous verification.
+    assert call["cache"] is True
 
 
 def test_signature_validator_passes_policy(tmp_path, make_metadata, recorded_verifications):

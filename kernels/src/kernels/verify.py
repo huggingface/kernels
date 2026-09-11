@@ -194,8 +194,9 @@ def _has_receipt(store: ReceiptStore, location: KernelLocation) -> bool:
 def verify_variant(
     variant_path: Path,
     *,
+    location: KernelLocation,
     policy: VerificationPolicy | None = None,
-    location: KernelLocation | None = None,
+    cache: bool = True,
 ) -> VerificationResult.Any:
     """
     Verify a kernel variant.
@@ -208,17 +209,17 @@ def verify_variant(
     Args:
         variant_path (`Path`):
             Kernel variant path.
+        location (`KernelLocation`):
+            Identity of the kernel, used to cache the verification.
         policy (`VerificationPolicy`, *optional*):
             Verification policy that should be used while verifying the
             kernel. A default policy that accepts kernels signed by a curated
             set of trusted kernel developers is used if this argument is set
             to `None`.
-        location (`KernelLocation`, *optional*):
-            Identity of the kernel, used to cache the verification. Hashing
-            the variant is expensive, so a successful verification is recorded
-            and reused for as long as the location is unchanged. When this is
-            `None` the kernel is always verified in full and nothing is
-            cached.
+        cache (`bool`):
+            Whether to use the receipt cache to lookup or store kernel
+            verifications. Disabling cache use can be useful to validate
+            the integrity of a kernel downloaded from the hub.
     """
     verify_policy = DEFAULT_POLICY if policy is None else policy
 
@@ -236,9 +237,9 @@ def verify_variant(
     if not metadata_path.is_file():
         return VerificationResult.MetadataMissing()
 
-    receipt_store = None if location is None else _open_receipt_store()
+    receipt_store = _open_receipt_store() if cache else None
 
-    if location is not None and receipt_store is not None and _has_receipt(receipt_store, location):
+    if receipt_store is not None and _has_receipt(receipt_store, location):
         # The receipt attests that this kernel metadata was verified
         # using the signature and the kernel data during the digest
         # in the metadata. However, it may have been verified with a
@@ -284,7 +285,7 @@ def verify_variant(
     except DigestValidationError as e:
         return VerificationResult.DigestVerificationFailure(violations=e.violations)
 
-    if location is not None and receipt_store is not None:
+    if receipt_store is not None:
         try:
             receipt_store.store(VerificationReceipt(location))
         except ReceiptError as e:

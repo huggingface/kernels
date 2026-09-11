@@ -62,12 +62,16 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
 # Add additional dependencies.
 RUN uv add "apache-tvm-ffi~=0.1.9" numpy pytest
 
-# Copy kernels-common and kernels source to install from source.
-COPY kernels-common ./kernels-common
-COPY kernels ./kernels-src
+# Copy the Cargo workspace root plus the members needed to build the
+# `kernels` Python package, preserving their relative layout.
+COPY Cargo.toml Cargo.lock ./kernels-workspace/
+COPY kernel-abi-check ./kernels-workspace/kernel-abi-check
+COPY kernel-builder ./kernels-workspace/kernel-builder
+COPY kernels-common ./kernels-workspace/kernels-common
+COPY kernels ./kernels-workspace/kernels
 
 # Install kernels (Rust/maturin package) from source.
-RUN uv add ./kernels-src
+RUN uv add ./kernels-workspace/kernels
 
 # Copy kernels and tests
 COPY relu-kernel ./relu-kernel

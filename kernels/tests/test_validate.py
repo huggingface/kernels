@@ -288,20 +288,18 @@ def test_signature_validator_is_quiet_on_success(tmp_path, make_metadata, record
 
 
 @pytest.mark.parametrize(
-    "result,expected",
+    "result",
     [
-        (VerificationResult.SignatureBundleMissing(), "is not signed"),
-        (VerificationResult.SignatureBundleInvalid(reason="bad bundle"), "invalid signature bundle"),
-        (VerificationResult.SignatureVerificationFailure(reason="bad signature"), "against its signature"),
-        (VerificationResult.MetadataInvalid(reason="bad metadata"), "invalid metadata"),
-        (VerificationResult.MetadataMissing(), "does not record a digest"),
-        (VerificationResult.DigestMissing(), "does not record a digest"),
-        (VerificationResult.DigestVerificationFailure(violations=[]), "may have been modified"),
+        VerificationResult.SignatureBundleMissing(),
+        VerificationResult.SignatureBundleInvalid(reason="bad bundle"),
+        VerificationResult.SignatureVerificationFailure(reason="bad signature"),
+        VerificationResult.MetadataInvalid(reason="bad metadata"),
+        VerificationResult.MetadataMissing(),
+        VerificationResult.DigestMissing(),
+        VerificationResult.DigestVerificationFailure(violations=[]),
     ],
 )
-def test_signature_validator_warns_but_does_not_raise(
-    tmp_path, make_metadata, recorded_verifications, caplog, result, expected
-):
+def test_signature_validator_warns_but_does_not_raise(tmp_path, make_metadata, recorded_verifications, caplog, result):
     _, results = recorded_verifications
     results.append(result)
     kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
@@ -309,5 +307,7 @@ def test_signature_validator_warns_but_does_not_raise(
     with caplog.at_level(logging.WARNING, logger="kernels.validate"):
         SignatureValidator().validate_kernel(kernel=kernel)
 
-    assert expected in caplog.text
+    # The message belongs to the result. The validator only says which kernel
+    # it applies to, so the wording is asserted where it is defined.
+    assert str(result) in caplog.text
     assert "test-kernel" in caplog.text

@@ -184,39 +184,9 @@ class SignatureValidator:
 
         match result:
             case VerificationResult.Success():
-                logger.debug(f"{kernel_str} has a valid signature.")
-            case VerificationResult.SignatureBundleMissing():
-                logger.warning(
-                    f"{kernel_str} is not signed, so its integrity cannot be verified.",
-                    stacklevel=3,
-                )
-            case VerificationResult.SignatureBundleInvalid(reason=reason):
-                logger.warning(
-                    f"{kernel_str} has an invalid signature bundle, so its integrity cannot be verified:\n{reason}",
-                    stacklevel=3,
-                )
-            case VerificationResult.SignatureVerificationFailure(reason=reason):
-                logger.warning(
-                    f"{kernel_str} could not be verified against its signature:\n{reason}",
-                    stacklevel=3,
-                )
-            case VerificationResult.DigestVerificationFailure(violations=violations):
-                violations_str = "\n".join(str(violation) for violation in violations)
-                logger.warning(
-                    f"{kernel_str} does not match the digest it was signed with, so its "
-                    f"files may have been modified:\n{violations_str}",
-                    stacklevel=3,
-                )
-            case VerificationResult.MetadataInvalid(reason=reason):
-                logger.warning(
-                    f"{kernel_str} has invalid metadata, so its integrity cannot be verified:\n{reason}",
-                    stacklevel=3,
-                )
-            case VerificationResult.MetadataMissing() | VerificationResult.DigestMissing():
-                logger.warning(
-                    f"{kernel_str} does not record a digest, so its integrity cannot be verified.",
-                    stacklevel=3,
-                )
+                logger.debug(f"{kernel_str}: {result}")
+            case VerificationResult.Failure():
+                logger.warning(f"{kernel_str}: {result}", stacklevel=3)
             case _ as unreachable:
                 assert_never(unreachable)
 

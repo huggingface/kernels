@@ -1,4 +1,5 @@
 import logging
+from dataclasses import is_dataclass
 from pathlib import Path
 
 import pytest
@@ -250,3 +251,63 @@ def test_unusable_receipt_falls_back_to_verification(receipt_store, signed_kerne
         assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
 
     assert "unusable kernel verification receipt" in caplog.text
+
+
+ALL_RESULTS = [
+    VerificationResult.Success(),
+    VerificationResult.SignatureBundleMissing(),
+    VerificationResult.SignatureBundleInvalid(reason="bad bundle"),
+    VerificationResult.SignatureVerificationFailure(reason="bad signature"),
+    VerificationResult.MetadataMissing(),
+    VerificationResult.MetadataInvalid(reason="bad metadata"),
+    VerificationResult.DigestMissing(),
+    VerificationResult.DigestVerificationFailure(violations=[DigestViolation.MissingFile("kernel.py")]),
+]
+
+
+def test_all_results_are_covered():
+    """`ALL_RESULTS` must cover every variant.
+
+    Without this, adding a variant would silently skip the tests below, which
+    is exactly when they are needed.
+    """
+    variants = {
+        name for name, member in vars(VerificationResult).items() if isinstance(member, type) and is_dataclass(member)
+    }
+    assert {type(result).__name__ for result in ALL_RESULTS} == variants
+
+
+@pytest.mark.parametrize("result", ALL_RESULTS, ids=lambda result: type(result).__name__)
+def test_every_result_describes_itself(result):
+    message = str(result)
+    assert message
+    # Prose, rather than the dataclass repr that `str` falls back to.
+    assert message != repr(result)
+    assert not message.startswith(type(result).__name__)
+
+
+@pytest.mark.parametrize("result", ALL_RESULTS, ids=lambda result: type(result).__name__)
+def test_only_success_is_not_a_failure(result):
+    is_success = isinstance(result, VerificationResult.Success)
+    assert isinstance(result, VerificationResult.Failure) != is_success
+
+
+def test_result_messages_include_their_detail():
+    assert "bang" in str(VerificationResult.SignatureBundleInvalid(reason="bang"))
+    assert "bang" in str(VerificationResult.MetadataInvalid(reason="bang"))
+    assert "bang" in str(VerificationResult.SignatureVerificationFailure(reason="bang"))
+
+    violations = [DigestViolation.MissingFile("kernel.py"), DigestViolation.UnknownFile("extra.so")]
+    message = str(VerificationResult.DigestVerificationFailure(violations=violations))
+    for violation in violations:
+        assert str(violation) in message
+
+
+def test_failure_must_describe_itself():
+    """The base class makes a message mandatory for new failures."""
+
+    class Undescribed(VerificationResult.Failure):
+        pass
+
+    with pytest.raises(TypeError, match="abstract"):
+        Undescribed()  # type: ignore[abstract]

@@ -1,3 +1,4 @@
+import abc
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -82,9 +83,15 @@ Accepts kernels signed by a curated set of trusted kernel developers.
 
 
 class VerificationResult:
+    class Failure(abc.ABC):
+        """A kernel build variant that could not be verified."""
+
+        @abc.abstractmethod
+        def __str__(self) -> str: ...
+
     @final
     @dataclass
-    class DigestVerificationFailure:
+    class DigestVerificationFailure(Failure):
         """
         Verification failed because there were digest violations.
 
@@ -93,59 +100,78 @@ class VerificationResult:
 
         violations: list[DigestViolation]
 
+        def __str__(self) -> str:
+            violations = "\n".join(str(violation) for violation in self.violations)
+            return (
+                "the files do not match the digest they were signed with, so they "
+                f"may have been modified:\n{violations}"
+            )
+
     @final
     @dataclass
-    class MetadataInvalid:
+    class MetadataInvalid(Failure):
         """
         The kernel metadata could not be parsed.
         """
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"the metadata is invalid, so its integrity cannot be verified:\n{self.reason}"
+
     @final
     @dataclass
-    class SignatureBundleInvalid:
+    class SignatureBundleInvalid(Failure):
         """
         The signature bundle could not be parsed.
         """
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"the signature bundle is invalid, so its integrity cannot be verified:\n{self.reason}"
+
     @final
     @dataclass
-    class SignatureVerificationFailure:
+    class SignatureVerificationFailure(Failure):
         """
         Verification failed because the signature was not valid.
         """
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"the metadata could not be verified against its signature:\n{self.reason}"
+
     @final
     @dataclass
-    class DigestMissing:
+    class DigestMissing(Failure):
         """
         Verification failed because the metadata did not have a digest.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "the metadata does not record a digest, so its integrity cannot be verified"
 
     @final
     @dataclass
-    class MetadataMissing:
+    class MetadataMissing(Failure):
         """
         Verification failed because the kernel did not have metadata.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "the metadata is missing, so its integrity cannot be verified"
 
     @final
     @dataclass
-    class SignatureBundleMissing:
+    class SignatureBundleMissing(Failure):
         """
         Verification failed because the kernel metadata was not signed.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "not signed, so its integrity cannot be verified"
 
     @final
     @dataclass
@@ -154,7 +180,8 @@ class VerificationResult:
         Verification was successful.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "the metadata is correctly signed"
 
     Any: TypeAlias = (
         DigestMissing

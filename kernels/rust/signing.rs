@@ -111,13 +111,15 @@ pub(crate) struct PyReceiptStore {
 
 #[pymethods]
 impl PyReceiptStore {
-    /// The receipt store in the kernels cache.
+    /// The receipt store inside the kernels cache.
     ///
-    /// Returns `None` when the cache directory cannot be determined, in
-    /// which case verifications cannot be cached.
+    /// Raises `ReceiptError` when the cache directory cannot be determined,
+    /// in which case verifications cannot be cached.
     #[staticmethod]
-    fn default() -> Option<Self> {
-        ReceiptStore::new().map(|inner| PyReceiptStore { inner })
+    fn in_kernels_cache() -> PyResult<Self> {
+        ReceiptStore::in_kernels_cache()
+            .map(|inner| PyReceiptStore { inner })
+            .map_err(|err| ReceiptError::new_err(format!("{:#}", eyre::Report::new(err))))
     }
 
     /// A receipt store in the given directory.
@@ -130,6 +132,8 @@ impl PyReceiptStore {
 
     /// The receipt for `location`, or `None` when the kernel has not been
     /// verified yet.
+    ///
+    /// Raises `ReceiptError` if a receipt exists but cannot be used.
     fn load(&self, location: &PyKernelLocation) -> PyResult<Option<PyVerificationReceipt>> {
         self.inner
             .load(&location.inner)
@@ -138,6 +142,8 @@ impl PyReceiptStore {
     }
 
     /// Store `receipt`, replacing any existing receipt for its location.
+    ///
+    /// Raises `ReceiptError` if the receipt cannot be written.
     fn store(&self, receipt: &PyVerificationReceipt) -> PyResult<()> {
         self.inner
             .store(&receipt.inner)

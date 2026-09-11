@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use thiserror::Error;
 
-use crate::hf::kernels_cache;
+use crate::hf::{UnknownCacheDir, kernels_cache};
 use crate::variants::variant_files;
 
 /// Version of the on-disk receipt format.
@@ -109,9 +109,9 @@ pub struct ReceiptStore {
 }
 
 impl ReceiptStore {
-    /// The receipt store at the default location in the kernel cache.
-    pub fn new() -> Option<Self> {
-        Some(Self::from_path(default_dir()?))
+    /// The receipt store inside the kernels cache.
+    pub fn in_kernels_cache() -> Result<Self, ReceiptStoreError> {
+        Ok(Self::from_path(default_dir()?))
     }
 
     /// A receipt store in the given directory.
@@ -209,15 +209,17 @@ pub enum ReceiptStoreError {
         #[source]
         source: io::Error,
     },
+
+    /// The receipt store location could not be determined.
+    #[error(transparent)]
+    UnknownCacheDir(#[from] UnknownCacheDir),
 }
 
 /// The default receipt cache directory, inside the kernel cache.
-fn default_dir() -> Option<PathBuf> {
-    Some(
-        kernels_cache()?
-            .join(".verified-kernel")
-            .join(CACHE_FORMAT_VERSION),
-    )
+fn default_dir() -> Result<PathBuf, UnknownCacheDir> {
+    Ok(kernels_cache()?
+        .join(".verified-kernel")
+        .join(CACHE_FORMAT_VERSION))
 }
 
 /// Length-prefixed string hash.

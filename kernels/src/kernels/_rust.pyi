@@ -341,10 +341,14 @@ class ReceiptStore:
     """Store of kernel verification receipts."""
 
     @staticmethod
-    def default() -> Optional["ReceiptStore"]:
-        """The receipt store in the kernels cache.
+    def in_kernels_cache() -> "ReceiptStore":
+        """The receipt store inside the kernels cache.
 
-        Returns `None` when the cache directory cannot be determined.
+        The cache location is resolved from the environment, falling back to
+        the Hub cache and then the user's home directory.
+
+        Raises:
+            ReceiptError: If the cache directory cannot be determined.
         """
         ...
 

@@ -71,15 +71,24 @@ fn expand_tilde_with_home(path: PathBuf, home: Option<PathBuf>) -> PathBuf {
     home.join(rest)
 }
 
+/// The kernel cache directory could not be determined.
+///
+/// This happens when none of `KERNELS_CACHE`, `HF_HUB_CACHE`,
+/// `HUGGINGFACE_HUB_CACHE`, `HF_HOME`, and `XDG_CACHE_HOME` are set and the
+/// user's home directory cannot be resolved.
+#[derive(Clone, Copy, Debug, Error)]
+#[error(
+    "cannot determine the kernel cache directory, set `KERNELS_CACHE`, `HF_HUB_CACHE`, or `HF_HOME`"
+)]
+pub struct UnknownCacheDir;
+
 /// Error building a Hub client.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum HFKernelsClientError {
-    /// The kernel cache directory could not be detepmined.
-    #[error(
-        "cannot determine the kernel cache directory, set `KERNELS_CACHE`, `HF_HUB_CACHE`, or `HF_HOME`"
-    )]
-    UnknownCacheDir,
+    /// The kernel cache directory could not be determined.
+    #[error(transparent)]
+    UnknownCacheDir(#[from] UnknownCacheDir),
 
     /// The underlying `hf-hub` client could not be constructed.
     #[error("cannot create Hugging Face Hub client")]
@@ -138,7 +147,7 @@ impl HFKernelsClientBuilder {
     fn hf_client_builder(self) -> Result<hf_hub::HFClientBuilder, HFKernelsClientError> {
         let cache_dir = match self.cache_dir {
             Some(cache_dir) => cache_dir,
-            None => kernels_cache().ok_or(HFKernelsClientError::UnknownCacheDir)?,
+            None => kernels_cache()?,
         };
 
         let mut builder = HFClient::builder()
@@ -175,8 +184,8 @@ fn hf_hub_cache() -> Option<PathBuf> {
 }
 
 /// The kernels cache directory.
-pub(crate) fn kernels_cache() -> Option<PathBuf> {
-    resolve_kernels_cache(env_path("KERNELS_CACHE"), hf_hub_cache())
+pub(crate) fn kernels_cache() -> Result<PathBuf, UnknownCacheDir> {
+    resolve_kernels_cache(env_path("KERNELS_CACHE"), hf_hub_cache()).ok_or(UnknownCacheDir)
 }
 
 fn resolve_hf_home(

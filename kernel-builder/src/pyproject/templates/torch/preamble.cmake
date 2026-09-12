@@ -155,6 +155,13 @@ if(GPU_LANG STREQUAL "CUDA")
     list(APPEND GPU_FLAGS "--threads=${NVCC_THREADS}")
   endif()
 
+  # CCCL shipped with CUDA 13+ hard-errors when nvcc uses MSVC's traditional
+  # preprocessor as host preprocessor. Tell cl.exe to use the standard
+  # conforming one instead.
+  if(MSVC)
+    list(APPEND GPU_FLAGS "-Xcompiler=/Zc:preprocessor")
+  endif()
+
   # TODO: deprecate one of these settings.
   add_compile_definitions(USE_CUDA=1)
   add_compile_definitions(CUDA_KERNEL)

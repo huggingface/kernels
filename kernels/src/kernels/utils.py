@@ -24,6 +24,7 @@ from kernels.backends import _backend, _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
 from kernels.deps import validate_dependencies
 from kernels.lockfile import KernelLock, VariantLock
+from kernels.minver import _warn_if_below_minver
 from kernels.status import resolve_status
 from kernels.variants import (
     Decision,
@@ -210,6 +211,7 @@ def _import_from_path(variant_path: Path, repo_info: RepoInfo | None = None) -> 
         return loaded_kernel.module
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
+    _warn_if_below_minver(metadata, variant_path)
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"

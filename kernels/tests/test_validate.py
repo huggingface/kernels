@@ -8,9 +8,10 @@ import torch
 
 import kernels
 import kernels.validate as validate_module
-from kernels._rust import Metadata, Version
+import kernels.verify as verify_module
+from kernels._rust import Metadata, Oid, Version
 from kernels.deps import DepTreeNode
-from kernels.resolver import LocalKernel
+from kernels.resolver import LocalKernel, RemoteKernel
 from kernels.validate import (
     ArchValidator,
     DirtyValidator,
@@ -18,6 +19,8 @@ from kernels.validate import (
     _installed_version,
     default_metadata_validators,
 )
+from kernels.variants import parse_variant
+from kernels.verify import VerificationResult
 
 CLEAN_PROVENANCE = {
     "kernel-builder": {"version": "0.1.0", "commit": "a" * 40, "dirty": False},
@@ -207,3 +210,35 @@ def test_issue_707_fa3_on_b200(fake_cuda_device, make_metadata):
     metadata = make_metadata("cuda", ["8.0", "9.0a"])
     with pytest.raises(RuntimeError, match="does not support the current device"):
         ArchValidator().validate_metadata(metadata=metadata, variant="test-variant")
+
+
+_SIGNED_REPO_ID = "kernels-test/signatures"
+_SIGNED_REVISION = Oid.from_str("a" * 40)
+
+
+def _hub_kernel(tmp_path, metadata) -> LocalKernel:
+    variant_path = tmp_path / "torch-cuda"
+    return LocalKernel(
+        variant_path=variant_path,
+        metadata=metadata,
+        origin=RemoteKernel(
+            repo_id=_SIGNED_REPO_ID,
+            revision=_SIGNED_REVISION,
+            metadata=metadata,
+            variant=parse_variant("torch-cuda"),
+        ),
+    )
+
+
+@pytest.fixture
+def recorded_verifications(monkeypatch):
+    """Record `verify_variant` calls and control the result it returns."""
+    calls = []
+    results = []
+
+    def fake_verify_variant(variant_path, *, location, policy=None, cache=True):
+        calls.append({"variant_path": variant_path, "policy": policy, "location": location, "cache": cache})
+        return results.pop(0) if results else VerificationResult.Success()
+
+    monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
+    return calls, results

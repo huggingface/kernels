@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use kernels_common::git::Oid;
 use kernels_common::lock::{KernelLock, KernelLocks, KernelPaths, NixKernelLock, NixKernelLocks};
@@ -9,11 +8,7 @@ use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 
 use crate::PyKernelDependency;
-
-/// Parse a git object id, mapping a parse failure to a Python `ValueError`.
-fn parse_oid(s: &str) -> PyResult<Oid> {
-    Oid::from_str(s).map_err(|err| PyValueError::new_err(err.to_string()))
-}
+use crate::git::{PyOid, parse_oid};
 
 /// A locked kernel revision.
 #[pyclass(name = "KernelLock", frozen, eq, hash)]
@@ -48,8 +43,8 @@ impl PyKernelLock {
     }
 
     #[getter]
-    fn commit(&self) -> &str {
-        self.commit.as_str()
+    fn commit(&self) -> PyOid {
+        self.commit.clone().into()
     }
 
     /// Parse a `KernelLock` from a JSON string.
@@ -247,8 +242,8 @@ impl PyNixKernelLock {
     }
 
     #[getter]
-    fn commit(&self) -> &str {
-        self.commit.as_str()
+    fn commit(&self) -> PyOid {
+        self.commit.clone().into()
     }
 
     #[getter]

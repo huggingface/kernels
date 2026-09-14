@@ -92,7 +92,7 @@ def install_kernel_all_variants(
                     allow_patterns="build/*",
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                     cache_dir=CACHE_DIR,
-                    revision=lock.commit,
+                    revision=str(lock.commit),
                 )
             )
         )

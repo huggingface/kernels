@@ -696,6 +696,7 @@ def test_layer_repository_forwards_user_agent(monkeypatch, user_agent):
             "kernels-test/silu-and-mul",
             {
                 "revision": "main",
+                "version": None,
                 "trust_remote_code": False,
                 "user_agent": user_agent,
             },

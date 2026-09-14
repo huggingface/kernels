@@ -49,7 +49,7 @@ def _sample_nix_locks():
 
 def test_kernel_lock_commit():
     lock = KernelLock(COMMIT_RELU)
-    assert lock.commit == COMMIT_RELU
+    assert str(lock.commit) == COMMIT_RELU
 
 
 def test_kernel_lock_invalid_commit():
@@ -141,7 +141,7 @@ def test_kernel_locks_from_json_rejects_invalid():
 
 def test_nix_kernel_lock_construction():
     lock = NixKernelLock(COMMIT_RELU, SRI_HASH)
-    assert lock.commit == COMMIT_RELU
+    assert str(lock.commit) == COMMIT_RELU
     assert lock.hash == SRI_HASH
 
     with pytest.raises(ValueError):

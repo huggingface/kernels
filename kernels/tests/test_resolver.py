@@ -15,6 +15,7 @@ from kernels._rust import (
     KernelPaths,
     KernelVersion,
     Metadata,
+    Oid,
 )
 from kernels._versions import resolve_version_spec_as_ref
 from kernels.hf_hub import _get_hf_api
@@ -241,18 +242,18 @@ def test_hub_resolver_resolves_remote_kernel(api):
 
     assert isinstance(location, RemoteKernel)
     assert location.repo_id == "kernels-community/relu"
-    assert re.fullmatch(r"[0-9a-f]{40}", location.revision)
+    assert re.fullmatch(r"[0-9a-f]{40}", str(location.revision))
     assert location.metadata.name == KernelName("relu")
 
 
-def test_hub_resolver_revision_passthrough(api):
+def test_hub_resolver_resolves_revision_to_commit(api):
     location = HubResolver(trust_remote_code=False).resolve(
         api=api,
         backend="cpu",
         kernel=KernelDependency(repo_id="kernels-community/relu", version=KernelVersion.Revision("v1")),
     )
 
-    assert location.revision == "v1"
+    assert location.revision == Oid.from_str(str(location.revision))
 
 
 def test_hub_resolver_blocks_untrusted_org(api):
@@ -426,7 +427,7 @@ def test_locked_hub_resolver_resolves_locked_revision(api, relu_locks):
     )
 
     assert isinstance(location, RemoteKernel)
-    assert location.revision == commit
+    assert str(location.revision) == commit
 
 
 def test_locked_hub_resolver_requires_lock(api, relu_locks):
@@ -462,7 +463,7 @@ def test_locked_revision_returns_commit():
     dep = _dep("test/kernel", version=1)
     locks = KernelLocks({dep: KernelLock(commit="a" * 40)})
 
-    assert _locked_revision(locks, dep) == "a" * 40
+    assert _locked_revision(locks, dep) == Oid.from_str("a" * 40)
 
 
 def test_locked_revision_requires_lock():

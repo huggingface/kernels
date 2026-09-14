@@ -25,6 +25,7 @@
           allOutputs buildSet.torch
           ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
           ++ allOutputs kernel-builder
+          ++ allOutputs kernel-port
           ++ allOutputs python3.pkgs.einops
           ++ allOutputs python3.pkgs.jax
           ++ allOutputs python3.pkgs.jax-tvm-ffi

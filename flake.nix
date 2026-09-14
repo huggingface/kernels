@@ -223,7 +223,7 @@
         formatter = pkgs.nixfmt-tree;
 
         packages = rec {
-          inherit (buildSet.pkgs) kernel-builder;
+          inherit (buildSet.pkgs) kernel-builder kernel-port;
           inherit (buildSet.pkgs.python3.pkgs) kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''

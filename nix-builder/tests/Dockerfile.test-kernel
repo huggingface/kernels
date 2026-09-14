@@ -67,6 +67,7 @@ RUN uv add "apache-tvm-ffi~=0.1.9" numpy pytest
 COPY Cargo.toml Cargo.lock ./kernels-workspace/
 COPY kernel-abi-check ./kernels-workspace/kernel-abi-check
 COPY kernel-builder ./kernels-workspace/kernel-builder
+COPY kernel-port ./kernels-workspace/kernel-port
 COPY kernels-common ./kernels-workspace/kernels-common
 COPY kernels ./kernels-workspace/kernels
 

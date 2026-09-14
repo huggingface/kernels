@@ -55,16 +55,16 @@ def lock_kernel_tree(
         trust_remote_code=False,
     )
 
-    revision = resolve_kernel_version(kernel, local_files_only=False)
+    revision = resolve_kernel_version(kernel.repo_id, kernel.version, local_files_only=False)
 
-    for variant in get_variants(api, repo_id=kernel.repo_id, revision=revision):
+    for variant in get_variants(api, repo_id=kernel.repo_id, revision=str(revision)):
         metadata_path = Path(
             api.hf_hub_download(
                 kernel.repo_id,
                 repo_type="kernel",
                 filename=f"build/{variant.variant_str}/metadata.json",
                 cache_dir=CACHE_DIR,
-                revision=revision,
+                revision=str(revision),
                 local_files_only=False,
             )
         )
@@ -77,7 +77,7 @@ def lock_kernel_tree(
     seen.remove(kernel)
 
     kernel_locks[kernel] = KernelLock(
-        commit=revision,
+        commit=str(revision),
     )
 
     return kernel_locks

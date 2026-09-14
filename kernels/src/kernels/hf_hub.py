@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from huggingface_hub import HfApi, constants
 
+from kernels._rust import Oid
 from kernels._system import glibc_version
 from kernels.backends import _select_backend
 from kernels.compat import has_torch, has_tvm_ffi
@@ -87,11 +88,11 @@ class RepoInfo:
     The following fields are available:
 
     - `repo_id` (`str`): the Hub repository containing the kernel.
-    - `revision` (`str`): the specific revision of the kernel.
+    - `revision` (`Oid`): the commit of the kernel.
     """
 
     repo_id: str
-    revision: str
+    revision: Oid
 
 
 def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_code: bool | list[str]) -> None:

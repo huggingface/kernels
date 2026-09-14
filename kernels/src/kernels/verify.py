@@ -1,3 +1,5 @@
+import abc
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias, final
@@ -8,7 +10,15 @@ from sigstore.models import Bundle, InvalidBundle
 from sigstore.verify import Verifier, policy
 from sigstore.verify.policy import VerificationPolicy
 
-from kernels._rust import Digest, DigestValidationError, DigestViolation, Metadata
+from kernels._rust import (
+    Digest,
+    DigestValidationError,
+    DigestViolation,
+    KernelLocation,
+    Metadata,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubWorkflowPolicy(VerificationPolicy):
@@ -47,30 +57,38 @@ class GitHubWorkflowPolicy(VerificationPolicy):
         return policy.AllOf(policies).verify(cert)
 
 
+DEFAULT_POLICY: VerificationPolicy = policy.AnyOf(
+    [
+        GitHubWorkflowPolicy(
+            repo_id="huggingface/kernels-community",
+            signer_uris=[
+                "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
+                "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",
+                "https://github.com/huggingface/kernels-community/.github/workflows/build-windows.yaml@refs/heads/main",
+                # This workflow was used to sign existing builds, around Torch 2.10-2.12. Can be removed once these
+                # Torch versions are ancient.
+                "https://github.com/huggingface/kernels-community/.github/workflows/sign-old-builds.yaml@refs/heads/main",
+            ],
+        ),
+    ]
+)
 """
-Default policies for the kernels package.
+Default verification policy for the kernels package.
 
-This is a curated set of trusted kernel developers.
+Accepts kernels signed by a curated set of trusted kernel developers.
 """
-DEFAULT_POLICIES: list[VerificationPolicy] = [
-    GitHubWorkflowPolicy(
-        repo_id="huggingface/kernels-community",
-        signer_uris=[
-            "https://github.com/huggingface/kernels-community/.github/workflows/build.yaml@refs/heads/main",
-            "https://github.com/huggingface/kernels-community/.github/workflows/build-mac.yaml@refs/heads/main",
-            "https://github.com/huggingface/kernels-community/.github/workflows/build-windows.yaml@refs/heads/main",
-            # This workflow was used to sign existing builds, around Torch 2.10-2.12. Can be removed once these
-            # Torch versions are ancient.
-            "https://github.com/huggingface/kernels-community/.github/workflows/sign-old-builds.yaml@refs/heads/main",
-        ],
-    ),
-]
 
 
 class VerificationResult:
+    class Failure(abc.ABC):
+        """A kernel build variant that could not be verified."""
+
+        @abc.abstractmethod
+        def __str__(self) -> str: ...
+
     @final
     @dataclass
-    class DigestVerificationFailure:
+    class DigestVerificationFailure(Failure):
         """
         Verification failed because there were digest violations.
 
@@ -79,59 +97,78 @@ class VerificationResult:
 
         violations: list[DigestViolation]
 
+        def __str__(self) -> str:
+            violations = "\n".join(str(violation) for violation in self.violations)
+            return (
+                "the files do not match the digest they were signed with, so they "
+                f"may have been modified:\n{violations}"
+            )
+
     @final
     @dataclass
-    class MetadataInvalid:
+    class MetadataInvalid(Failure):
         """
         The kernel metadata could not be parsed.
         """
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"the metadata is invalid, so its integrity cannot be verified:\n{self.reason}"
+
     @final
     @dataclass
-    class SignatureBundleInvalid:
+    class SignatureBundleInvalid(Failure):
         """
         The signature bundle could not be parsed.
         """
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"the signature bundle is invalid, so its integrity cannot be verified:\n{self.reason}"
+
     @final
     @dataclass
-    class SignatureVerificationFailure:
+    class SignatureVerificationFailure(Failure):
         """
         Verification failed because the signature was not valid.
         """
 
         reason: str
 
+        def __str__(self) -> str:
+            return f"the metadata could not be verified against its signature:\n{self.reason}"
+
     @final
     @dataclass
-    class DigestMissing:
+    class DigestMissing(Failure):
         """
         Verification failed because the metadata did not have a digest.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "the metadata does not record a digest, so its integrity cannot be verified"
 
     @final
     @dataclass
-    class MetadataMissing:
+    class MetadataMissing(Failure):
         """
         Verification failed because the kernel did not have metadata.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "the metadata is missing, so its integrity cannot be verified"
 
     @final
     @dataclass
-    class SignatureBundleMissing:
+    class SignatureBundleMissing(Failure):
         """
         Verification failed because the kernel metadata was not signed.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "not signed, so its integrity cannot be verified"
 
     @final
     @dataclass
@@ -140,7 +177,8 @@ class VerificationResult:
         Verification was successful.
         """
 
-        pass
+        def __str__(self) -> str:
+            return "the metadata is correctly signed"
 
     Any: TypeAlias = (
         DigestMissing
@@ -154,26 +192,37 @@ class VerificationResult:
     )
 
 
-def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None = None) -> VerificationResult.Any:
+def verify_variant(
+    variant_path: Path,
+    *,
+    location: KernelLocation,
+    policy: VerificationPolicy | None = None,
+    cache: bool = True,
+) -> VerificationResult.Any:
     """
     Verify a kernel variant.
 
-    The kernel variant at the given path is verified using a set of policies.
-    This validates that the metadata was signed using a key that is compliant
-    with the given policies and that the kernel hashes match the digest in the
-    kernel metadata.
+    The kernel variant at the given path is verified using a policy. This
+    validates that the metadata was signed using a key that is compliant with
+    the given policy and that the kernel hashes match the digest in the kernel
+    metadata.
 
     Args:
         variant_path (`Path`):
             Kernel variant path.
-        policies (`list[VerificationPolicy]`, *optional*):
-            List of verification policies that should be used while verifying
-            the kernel. A default set of policies that accepts kernels signed
-            by a curated set of trusted kernel developers is used if this
-            argument is set to `None`.
+        location (`KernelLocation`):
+            Identity of the kernel, used to cache the verification.
+        policy (`VerificationPolicy`, *optional*):
+            Verification policy that should be used while verifying the
+            kernel. A default policy that accepts kernels signed by a curated
+            set of trusted kernel developers is used if this argument is set
+            to `None`.
+        cache (`bool`):
+            Whether to use the receipt cache to lookup or store kernel
+            verifications. Disabling cache use can be useful to validate
+            the integrity of a kernel downloaded from the hub.
     """
-    if policies is None:
-        policies = DEFAULT_POLICIES
+    verify_policy = DEFAULT_POLICY if policy is None else policy
 
     bundle_path = variant_path / "metadata.json.sigstore"
     if not bundle_path.is_file():
@@ -190,7 +239,6 @@ def verify_variant(variant_path: Path, policies: list[VerificationPolicy] | None
         return VerificationResult.MetadataMissing()
 
     verifier = Verifier.production()
-    verify_policy = policy.AnyOf(policies)
 
     metadata_bytes = metadata_path.read_bytes()
 

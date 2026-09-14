@@ -32,7 +32,7 @@ def download_kernels(args):
                     allow_patterns="build/*",
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                     cache_dir=CACHE_DIR,
-                    revision=lock.commit,
+                    revision=str(lock.commit),
                 )
             else:
                 location = resolve_hub_kernel(dep.repo_id, api=api, backend=None, revision=lock.commit)

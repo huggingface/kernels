@@ -12,7 +12,7 @@ from huggingface_hub.dataclasses import strict
 from huggingface_hub.hf_api import RepoFolder
 from packaging.version import Version, parse
 
-from kernels._versions import select_revision_or_version
+from kernels._versions import resolve_revision_or_version
 from kernels.backends import (
     CANN,
     CUDA,
@@ -599,7 +599,7 @@ def get_kernel_variants(
     """
     from kernels.hf_hub import _get_hf_api
 
-    revision = select_revision_or_version(
+    commit = resolve_revision_or_version(
         repo_id,
         revision=revision,
         version=version,
@@ -607,7 +607,7 @@ def get_kernel_variants(
     )
 
     api = _get_hf_api()
-    variants = get_variants(api, repo_id=repo_id, revision=revision)
+    variants = get_variants(api, repo_id=repo_id, revision=str(commit))
     _, trace = resolve_variants(variants, backend)
     return trace
 

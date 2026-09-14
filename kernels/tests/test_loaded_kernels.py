@@ -58,7 +58,7 @@ def test_get_kernel_registers_loaded_kernel(fresh_registry):
     assert entry.metadata.name.python_name == _PACKAGE_NAME
     assert entry.repo_info is not None
     assert entry.repo_info.repo_id == _REPO_ID
-    assert isinstance(entry.repo_info.revision, str) and entry.repo_info.revision
+    assert str(entry.repo_info.revision)
 
 
 def test_repeated_get_kernel_is_cached(fresh_registry):

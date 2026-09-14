@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import inspect
 import logging
 from inspect import Parameter, Signature
@@ -13,7 +12,6 @@ from huggingface_hub import constants
 from kernels._rust import KernelDependency, KernelLocks
 from kernels.resolver import LockedHubCacheResolver, LockedHubResolver
 
-from .._versions import select_revision_or_version
 from ..hf_hub import _get_hf_api
 from ..load import (
     get_kernel,
@@ -103,19 +101,11 @@ class LayerRepository:
         self._revision = revision
         self._version = version
 
-    @functools.lru_cache()
-    def _resolve_revision(self) -> str:
-        return select_revision_or_version(
-            repo_id=self._repo_id,
-            revision=self._revision,
-            version=self._version,
-            local_files_only=constants.HF_HUB_OFFLINE,
-        )
-
     def load(self) -> Type["nn.Module"]:
         kernel = get_kernel(
             self._repo_id,
-            revision=self._resolve_revision(),
+            revision=self._revision,
+            version=self._version,
             trust_remote_code=self._trust_remote_code,
             user_agent=self._user_agent,
         )
@@ -144,8 +134,11 @@ class LayerRepository:
             )
         )
 
+    def _revision_str(self) -> str:
+        return self._revision if self._revision is not None else f"version {self._version}"
+
     def __str__(self) -> str:
-        return f"`{self._repo_id}` (revision: {self._resolve_revision()}), layer `{self.layer_name}`"
+        return f"`{self._repo_id}` (revision: {self._revision_str()}), layer `{self.layer_name}`"
 
 
 class LocalLayerRepository:

@@ -5,7 +5,7 @@ from typing import Protocol, runtime_checkable
 from huggingface_hub.errors import LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
 
-from kernels._rust import KernelDependency, KernelLocks, KernelPaths, Metadata
+from kernels._rust import KernelDependency, KernelLocks, KernelPaths, Metadata, Oid
 from kernels._versions import _get_available_versions, resolve_kernel_version
 from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
 from kernels.variants import (
@@ -50,7 +50,7 @@ class RemoteKernel:
     """A kernel that can be loaded from a remote path."""
 
     repo_id: str
-    revision: str
+    revision: Oid
     metadata: Metadata
     variant: Variant
 
@@ -69,7 +69,7 @@ class RemoteKernel:
                     allow_patterns=allow_patterns,
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                     cache_dir=CACHE_DIR,
-                    revision=self.revision,
+                    revision=str(self.revision),
                     local_files_only=False,
                 )
             )
@@ -114,12 +114,12 @@ def resolve_hub_kernel(
     *,
     api: HfApi,
     backend: str | None,
-    revision: str,
+    revision: Oid,
 ) -> RemoteKernel:
     variants = get_variants(
         api,
         repo_id=repo_id,
-        revision=revision,
+        revision=str(revision),
     )
     variant, trace = resolve_variant(variants, backend)
     if variant is None:
@@ -139,7 +139,7 @@ def resolve_hub_kernel(
             repo_type="kernel",
             filename=f"build/{variant.variant_str}/metadata.json",
             cache_dir=CACHE_DIR,
-            revision=revision,
+            revision=str(revision),
             local_files_only=False,
         )
     )
@@ -186,7 +186,7 @@ def resolve_hub_cache_kernel(
     api: HfApi,
     repo_id: str,
     *,
-    revision: str,
+    revision: Oid,
     backend: str | None,
 ) -> LocalKernel:
     """Resolve a kernel variant path from the local Hugging Face cache only.
@@ -202,7 +202,7 @@ def resolve_hub_cache_kernel(
                     repo_type="kernel",
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
                     cache_dir=CACHE_DIR,
-                    revision=revision,
+                    revision=str(revision),
                     local_files_only=True,
                 )
             )
@@ -226,7 +226,16 @@ def resolve_hub_cache_kernel(
         raise FileNotFoundError(f"Variant path does not exist: `{variant_path}`")
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
-    location = LocalKernel(variant_path=variant_path, metadata=metadata)
+    location = LocalKernel(
+        variant_path=variant_path,
+        metadata=metadata,
+        origin=RemoteKernel(
+            repo_id=repo_id,
+            revision=revision,
+            metadata=metadata,
+            variant=variant,
+        ),
+    )
 
     return location
 
@@ -278,7 +287,7 @@ class HubResolver:
         )
 
         # Resolve the revision that we need.
-        revision = resolve_kernel_version(kernel, local_files_only=False)
+        revision = resolve_kernel_version(kernel.repo_id, kernel.version, local_files_only=False)
 
         # Get the kernel metadata for the revision.
         return resolve_hub_kernel(kernel.repo_id, api=api, revision=revision, backend=backend)
@@ -301,7 +310,7 @@ class HubCacheResolver:
         )
 
         # Resolve the revision that we need.
-        revision = resolve_kernel_version(kernel, local_files_only=True)
+        revision = resolve_kernel_version(kernel.repo_id, kernel.version, local_files_only=True)
 
         # Get the kernel metadata for the revision.
         return resolve_hub_cache_kernel(
@@ -312,7 +321,7 @@ class HubCacheResolver:
         )
 
 
-def _locked_revision(kernel_locks: KernelLocks, kernel: KernelDependency) -> str:
+def _locked_revision(kernel_locks: KernelLocks, kernel: KernelDependency) -> Oid:
     kernel_lock = kernel_locks.get(kernel, None)
     if kernel_lock is None:
         raise ValueError(

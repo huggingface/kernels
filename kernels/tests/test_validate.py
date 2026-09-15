@@ -9,13 +9,14 @@ import torch
 import kernels
 import kernels.validate as validate_module
 import kernels.verify as verify_module
-from kernels._rust import Metadata, Oid, Version
+from kernels._rust import KernelLocation, Metadata, Oid, Version
 from kernels.deps import DepTreeNode
 from kernels.resolver import LocalKernel, RemoteKernel
 from kernels.validate import (
     ArchValidator,
     DirtyValidator,
     MinverValidator,
+    SignatureValidator,
     _installed_version,
     default_metadata_validators,
 )
@@ -242,3 +243,71 @@ def recorded_verifications(monkeypatch):
 
     monkeypatch.setattr(verify_module, "verify_variant", fake_verify_variant)
     return calls, results
+
+
+def test_signature_validator_skips_local_kernels(tmp_path, make_metadata, recorded_verifications):
+    calls, _ = recorded_verifications
+    kernel = LocalKernel(variant_path=tmp_path / "torch-cuda", metadata=make_metadata("cuda", None))
+
+    SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert calls == []
+
+
+def test_signature_validator_identifies_kernel_by_origin(tmp_path, make_metadata, recorded_verifications):
+    calls, _ = recorded_verifications
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    SignatureValidator().validate_kernel(kernel=kernel)
+
+    (call,) = calls
+    assert call["variant_path"] == kernel.variant_path
+    assert call["location"] == KernelLocation.remote(_SIGNED_REPO_ID, _SIGNED_REVISION, "torch-cuda")
+    # Loading a kernel must reuse a previous verification.
+    assert call["cache"] is True
+
+
+def test_signature_validator_passes_policy(tmp_path, make_metadata, recorded_verifications):
+    calls, _ = recorded_verifications
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+    sentinel = object()
+
+    SignatureValidator(policy=sentinel).validate_kernel(kernel=kernel)
+
+    (call,) = calls
+    assert call["policy"] is sentinel
+
+
+def test_signature_validator_is_quiet_on_success(tmp_path, make_metadata, recorded_verifications, caplog):
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator().validate_kernel(kernel=kernel)
+
+    assert caplog.text == ""
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        VerificationResult.SignatureBundleMissing(),
+        VerificationResult.SignatureBundleInvalid(reason="bad bundle"),
+        VerificationResult.SignatureVerificationFailure(reason="bad signature"),
+        VerificationResult.MetadataInvalid(reason="bad metadata"),
+        VerificationResult.MetadataMissing(),
+        VerificationResult.DigestMissing(),
+        VerificationResult.DigestVerificationFailure(violations=[]),
+    ],
+)
+def test_signature_validator_warns_but_does_not_raise(tmp_path, make_metadata, recorded_verifications, caplog, result):
+    _, results = recorded_verifications
+    results.append(result)
+    kernel = _hub_kernel(tmp_path, make_metadata("cuda", None))
+
+    with caplog.at_level(logging.WARNING, logger="kernels.validate"):
+        SignatureValidator().validate_kernel(kernel=kernel)
+
+    # The message belongs to the result. The validator only says which kernel
+    # it applies to, so the wording is asserted where it is defined.
+    assert str(result) in caplog.text
+    assert "test-kernel" in caplog.text

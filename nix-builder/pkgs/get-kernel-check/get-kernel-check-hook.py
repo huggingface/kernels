@@ -4,7 +4,11 @@ from pathlib import Path
 from kernels.hf_hub import _get_hf_api
 from kernels.load import get_kernel_with_resolver
 from kernels.resolver import KernelPathsResolver, RepoPathsResolver, SequentialResolver
-from kernels.validate import AllValidator, default_metadata_validators
+from kernels.validate import (
+    AllKernelValidator,
+    AllMetadataValidator,
+    default_metadata_validators,
+)
 from kernels._rust import KernelDependency, KernelPaths, KernelVersion
 
 out = os.getenv("out")
@@ -46,5 +50,6 @@ get_kernel_with_resolver(
     backend=None,
     kernel=kernel,
     resolver=SequentialResolver(resolvers=resolvers),
-    metadata_validator=AllValidator(validators=default_metadata_validators()),
+    kernel_validator=AllKernelValidator(validators=[]),
+    metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
 )

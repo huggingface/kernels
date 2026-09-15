@@ -9,7 +9,7 @@ import kernels.verify as verify_module
 from kernels import install_kernel
 from kernels._rust import DigestViolation, KernelLocation, Oid, ReceiptStore
 from kernels._versions import resolve_revision_or_version
-from kernels.hf_hub import CACHE_DIR, _get_hf_api
+from kernels.hf_hub import _get_cache_dir, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
 from kernels.verify import VerificationResult, verify_variant
 
@@ -109,7 +109,7 @@ def test_invalid_metadata_fails():
                     repo_type="kernel",
                     allow_patterns="build/*",
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
-                    cache_dir=CACHE_DIR,
+                    cache_dir=_get_cache_dir(),
                     revision=str(revision),
                 )
             )
@@ -151,7 +151,7 @@ def test_missing_metadata_fails():
                     repo_type="kernel",
                     allow_patterns="build/*",
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
-                    cache_dir=CACHE_DIR,
+                    cache_dir=_get_cache_dir(),
                     revision=str(revision),
                 )
             )

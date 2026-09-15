@@ -13,7 +13,7 @@ from kernels.resolver import (
     RemoteKernel,
     Resolver,
 )
-from kernels.validate import MetadataValidator
+from kernels.validate import KernelValidator, MetadataValidator
 
 # Default state is `None`, to signal that we are not in a kernel
 # loading context.
@@ -67,6 +67,12 @@ class DepTreeNode(Generic[T]):
         )
 
         return _import_from_path(self.location.variant_path, repo_info=repo_info, deps=deps)
+
+    def validate_kernel(self: "DepTreeNode[LocalKernel]", validator: KernelValidator):
+        validator.validate_kernel(kernel=self.location)
+
+        for node in self.deps.values():
+            node.validate_kernel(validator)
 
     def validate_metadata(
         self: "DepTreeNode[LocalKernel | RemoteKernel]",

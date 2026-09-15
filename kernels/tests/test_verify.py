@@ -1,3 +1,4 @@
+import logging
 from dataclasses import is_dataclass
 from pathlib import Path
 
@@ -6,7 +7,7 @@ from sigstore.verify import policy
 
 import kernels.verify as verify_module
 from kernels import install_kernel
-from kernels._rust import DigestViolation, KernelLocation, Oid
+from kernels._rust import DigestViolation, KernelLocation, Oid, ReceiptStore
 from kernels._versions import resolve_revision_or_version
 from kernels.hf_hub import CACHE_DIR, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
@@ -19,6 +20,15 @@ TEST_POLICY: policy.VerificationPolicy = policy.Identity(
 OTHER_POLICY: policy.VerificationPolicy = policy.Identity(
     identity="nobody@example.com", issuer="https://github.com/login/oauth"
 )
+
+
+@pytest.fixture
+def receipt_store(tmp_path, monkeypatch):
+    """An isolated receipt store, so that tests do not share verifications."""
+    receipt_dir = tmp_path / "receipts"
+    store = ReceiptStore.from_path(receipt_dir)
+    monkeypatch.setattr(verify_module, "_open_receipt_store", lambda: store)
+    return store
 
 
 @pytest.fixture
@@ -180,6 +190,67 @@ def test_invalid_signature_fails():
             pass
         case other:
             raise RuntimeError(f"Expected SignatureVerificationFailure, was: {other}")
+
+
+def test_verification_is_cached(receipt_store, signed_kernel, monkeypatch):
+    variant_path, location = signed_kernel
+
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+    assert receipt_store.load(location) is not None
+
+    # The second verification must be served from the receipt, without
+    # rehashing the variant.
+    _no_hashing(monkeypatch)
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+
+def test_verification_is_not_cached_with_cache_off(receipt_store, signed_kernel, monkeypatch):
+    variant_path, location = signed_kernel
+
+    result = verify_variant(variant_path, policy=TEST_POLICY, location=location, cache=False)
+    assert result == VerificationResult.Success()
+
+    # Nothing was recorded, ...
+    assert receipt_store.load(location) is None
+
+    # ... and a verification with caching off does the full work even when a
+    # receipt does exist.
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+    assert receipt_store.load(location) is not None
+
+    _no_hashing(monkeypatch)
+    with pytest.raises(AssertionError, match="was rehashed"):
+        verify_variant(variant_path, policy=TEST_POLICY, location=location, cache=False)
+
+
+def test_cached_verification_still_enforces_policy(receipt_store, signed_kernel, monkeypatch):
+    variant_path, location = signed_kernel
+
+    # Verify under a policy that accepts this kernel, so a receipt is stored.
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+    # The receipt says the kernel was verified, but not *under which policy*,
+    # so a policy that does not accept this signer must still reject it.
+    _no_hashing(monkeypatch)
+    match verify_variant(variant_path, policy=OTHER_POLICY, location=location):
+        case VerificationResult.SignatureVerificationFailure():
+            pass
+        case other:
+            raise RuntimeError(f"Expected SignatureVerificationFailure, was: {other}")
+
+
+def test_unusable_receipt_falls_back_to_verification(receipt_store, signed_kernel, tmp_path, caplog):
+    variant_path, location = signed_kernel
+
+    assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+    (receipt_path,) = list((tmp_path / "receipts").iterdir())
+    receipt_path.write_text("not a receipt")
+
+    with caplog.at_level(logging.WARNING, logger="kernels.verify"):
+        assert verify_variant(variant_path, policy=TEST_POLICY, location=location) == VerificationResult.Success()
+
+    assert "unusable kernel verification receipt" in caplog.text
 
 
 ALL_RESULTS = [

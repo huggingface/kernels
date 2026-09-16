@@ -1,6 +1,6 @@
 [package]
 name = "kernels-common"
-version = "0.17.1-dev0"
+version = "0.17.1"
 edition = "2024"
 description = "Code shared by kernel-builder and kernels"
 homepage = "https://github.com/huggingface/kernels"

@@ -8,9 +8,7 @@ def test_egg_info_writer_entry_point_is_importable():
     `egg_info` run in an environment where `kernels` is installed, including
     builds of unrelated packages. If it points at a module that is not shipped,
     every such build fails with `ModuleNotFoundError`."""
-    entry_points = [
-        ep for ep in distribution("kernels").entry_points if ep.group == "egg_info.writers"
-    ]
+    entry_points = [ep for ep in distribution("kernels").entry_points if ep.group == "egg_info.writers"]
     assert entry_points, "no egg_info.writers entry point registered"
 
     for ep in entry_points:

@@ -8,8 +8,8 @@ let
   versions = {
     "3.7.0" = {
       x86_64-linux = {
-        url = "https://download-r2.pytorch.org/whl/triton_rocm-3.7.0-cp313-cp313-linux_x86_64.whl";
-        hash = "sha256-js2p7DwGVwRKAjLcx8V0AcJb/+5Dpm4lHuI3tMcqSGk=";
+        url = "https://download-r2.pytorch.org/whl/triton_rocm-3.7.0-cp314-cp314-linux_x86_64.whl";
+        hash = "sha256-DyWfmBMQyEEfPHzX0LvtBagFUMO+dX5tnadDdGsBbmc=";
       };
     };
   };

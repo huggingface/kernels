@@ -151,11 +151,11 @@ let
   torch-tpu =
     let
       abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
-      version = "0.1.1.dev20260707090224";
+      version = "0.1.1.dev20260916100444";
     in
     requireFile {
       name = "torch_tpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
-      hash = "sha256-eCjwoX0UKd/L/IccxXn88p0GdyQjFdPl2Er1luZz4H0="; # cp313
+      hash = "sha256-A8Rw9/QkMCjj9jfb4s+/d04/m/xH5L9rJDa0+giessM=";
       message = ''
         torch_tpu is served from a gated Google Artifact Registry and
         cannot be fetched by a pure Nix build. Fetch and register it with:

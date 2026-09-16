@@ -8,13 +8,13 @@
 #
 # Usage:
 #   GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token) \
-#     scripts/helpers/prefetch-tpu-wheel.sh libtpu 0.0.43 [cp313]
+#     scripts/helpers/prefetch-tpu-wheel.sh libtpu 0.0.43 [cp314]
 #   GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token) \
-#     scripts/helpers/prefetch-tpu-wheel.sh torch_tpu 0.1.1.dev20260707090224 [cp313]
+#     scripts/helpers/prefetch-tpu-wheel.sh torch_tpu 0.1.1.dev20260707090224 [cp314]
 #
 # Prints a `hash = "sha256-...";` line to paste into the matching
 # default.nix when bumping a version. The third argument is the
-# CPython ABI tag (default cp313, matching the nixpkgs default python
+# CPython ABI tag (default cp314, matching the nixpkgs default python
 # used by the builder).
 #
 # Requires `gcloud auth login` once, plus nix (with the `nix-command`
@@ -23,7 +23,7 @@ set -euo pipefail
 
 pkg="${1:?usage: $0 <libtpu|torch_tpu> <version> [abi]}"
 version="${2:?usage: $0 <libtpu|torch_tpu> <version> [abi]}"
-abi="${3:-cp313}"
+abi="${3:-cp314}"
 : "${GCLOUD_ACCESS_TOKEN:?set GCLOUD_ACCESS_TOKEN to \$(gcloud auth print-access-token)}"
 
 registry_pkg="${pkg//_/-}"

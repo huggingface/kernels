@@ -64,6 +64,9 @@ applyOverrides {
           buildFlags = null;
           cmakeFlags = [ "-DSUITESPARSE_ENABLE_PROJECTS=cholmod" ];
           outputs = [ "out" ];
+          # `postInstall` relies on other outputs than `out`. Since we do not
+          # need the `postInstall` changes, just skip it.
+          postInstall = null;
         }))
       ];
     };

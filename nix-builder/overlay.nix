@@ -131,12 +131,12 @@ final: prev:
         );
 
         hf-xet = python-super.hf-xet.overridePythonAttrs (prevAttrs: rec {
-          version = "1.4.3";
+          version = "1.6.0";
           src = final.fetchFromGitHub {
             owner = "huggingface";
             repo = "xet-core";
             tag = "v${version}";
-            hash = "sha256-zAliMR2d2j6ynHQmAljQ8XgDyjuPxNawI1bZks5aRgs=";
+            hash = "sha256-SP6Z8iIkrt3FVXxXYdvjeiIAfcrVlfCPQq6C36DfhEM=";
           };
           cargoDeps = final.rustPlatform.fetchCargoVendor {
             inherit (prevAttrs)
@@ -147,7 +147,7 @@ final: prev:
               version
               src
               ;
-            hash = "sha256-TOgBT0l7TvJamVdIAdAUFRWs8AMRRY+Ydoh6e+3dEp0=";
+            hash = "sha256-pvtq9mKlmwaqAq281Lin/UgVGcRe2SEvyzCa+xWSwVQ=";
           };
         });
 

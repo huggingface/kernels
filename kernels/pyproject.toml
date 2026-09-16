@@ -63,7 +63,7 @@ docs = [
 kernels = "kernels.cli:main"
 
 [project.entry-points."egg_info.writers"]
-"kernels.lock" = "kernels.lockfile:write_egg_lockfile"
+"kernels.lock" = "kernels.locking:write_egg_lockfile"
 
 [tool.maturin]
 module-name = "kernels._rust"

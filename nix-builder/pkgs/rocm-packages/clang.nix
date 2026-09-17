@@ -87,6 +87,12 @@
 
     echo "" > $out/nix-support/add-hardening.sh
 
+    # nixpkgs cc-wrappers unconditionally inject "-mtls-dialect=gnu2" for
+    # clang >= 19.1 on x86_64. This flag is only valid for host-side compile,
+    # so remove it.
+    substituteInPlace $out/nix-support/add-local-cc-cflags-before.sh \
+      --replace-fail "'-mtls-dialect=gnu2'" ""
+
     # The cc wrapper puts absolute paths to the libstdc++ headers here.
     # However, absolute paths put them before the ROCm wrappers. This
     # cause compilation errors in downstream dependencies because e.g.

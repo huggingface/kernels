@@ -83,6 +83,7 @@ final: prev:
           triton_3_7_0
           triton_3_7_1
           triton_3_8_0
+          triton_3_8_0-nightly
           ;
         inherit (triton-rocm) triton-rocm_3_7_0;
         inherit (triton-xpu)
@@ -239,6 +240,15 @@ final: prev:
           triton-rocm = triton-rocm_3_7_0;
           triton-xpu = triton-xpu_3_8_0;
           xpuPackages = final.xpuPackages_2026_1_0;
+        };
+
+        # Nightly for CUDA 13.4 development work.
+        torch-bin_2_15 = mkTorch {
+          version = "2.15";
+          triton-cuda = triton_3_8_0-nightly;
+          triton-rocm = null;
+          triton-xpu = null;
+          xpuPackages = null;
         };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {

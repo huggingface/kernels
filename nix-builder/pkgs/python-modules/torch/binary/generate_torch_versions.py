@@ -153,6 +153,7 @@ def main():
     for entry in torch_versions:
         torch_version = entry.get("torchVersion")
         torch_testing = entry.get("torchTesting")
+        torch_nightly = entry.get("torchNightly")
         cuda_version = entry.get("cudaVersion")
         rocm_version = entry.get("rocmVersion")
         xpu_version = entry.get("xpuVersion")
@@ -163,6 +164,13 @@ def main():
         if not torch_version:
             print(f"Skipping entry without torchVersion: {entry}", file=sys.stderr)
             continue
+
+        if torch_testing is not None and torch_nightly is not None:
+            print(
+                f"Error: entry has both torchTesting and torchNightly set: {entry}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         v = Version(torch_version)
         version_key = f"{v.major}.{v.minor}"
@@ -223,7 +231,17 @@ def main():
                     )
                     continue
 
-            if torch_testing is not None:
+            if torch_nightly is not None:
+                url = generate_pytorch_url(
+                    torch_version,
+                    framework_version,
+                    framework_type,
+                    PYTHON_VERSION,
+                    system,
+                    testing=False,
+                    nightly_version=torch_nightly,
+                )
+            elif torch_testing is not None:
                 url = generate_pytorch_rc_hf_url(
                     torch_version,
                     framework_version,

@@ -121,18 +121,6 @@
     ];
     bundleBuild = true;
   }
-  # Since 13.4 is a prerelease, not yet available on:
-  # https://developer.download.nvidia.com/compute/cuda/redist/
-  #{
-  #  torchVersion = "2.14";
-  #  cudaVersion = "13.4";
-  #  systems = [
-  #    "x86_64-linux"
-  #    "aarch64-linux"
-  #  ];
-  #  bundleBuild = true;
-  #  tvmFfiVersion = "0.1";
-  #}
   {
     torchVersion = "2.14";
     metal = true;
@@ -156,5 +144,15 @@
     xpuVersion = "2026.1.0";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+  }
+
+  # For CUDA 13.4 development work.
+  {
+    torchVersion = "2.15";
+    cudaVersion = "13.4";
+    systems = [
+      "x86_64-linux"
+    ];
+    bundleBuild = false;
   }
 ]

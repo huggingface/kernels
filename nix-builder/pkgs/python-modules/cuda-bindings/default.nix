@@ -38,6 +38,7 @@ let
       "13.0" = cuda_13;
       "13.1" = cuda_13;
       "13.2" = cuda_13;
+      "13.4" = cuda_13;
     };
 
   versionHash =

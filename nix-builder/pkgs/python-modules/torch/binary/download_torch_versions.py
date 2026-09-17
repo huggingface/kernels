@@ -33,7 +33,7 @@ def download_wheel(url: str, target_dir: str) -> None:
 
     try:
         urllib.request.urlretrieve(url, target_path)
-        print(f"    ✓ Downloaded successfully")
+        print("    ✓ Downloaded successfully")
     except Exception as e:
         print(f"    ✗ Error downloading: {e}", file=sys.stderr)
         if os.path.exists(target_path):
@@ -77,6 +77,7 @@ def main():
     for entry in torch_versions:
         torch_version = entry.get("torchVersion")
         torch_testing = entry.get("torchTesting")
+        torch_nightly = entry.get("torchNightly")
         cuda_version = entry.get("cudaVersion")
         rocm_version = entry.get("rocmVersion")
         xpu_version = entry.get("xpuVersion")
@@ -87,6 +88,13 @@ def main():
         if not torch_version:
             print(f"Skipping entry without torchVersion: {entry}", file=sys.stderr)
             continue
+
+        if torch_testing is not None and torch_nightly is not None:
+            print(
+                f"Error: entry has both torchTesting and torchNightly set: {entry}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         if args.torch_version and torch_version != args.torch_version:
             continue
@@ -130,6 +138,7 @@ def main():
                 PYTHON_VERSION,
                 system,
                 testing=torch_testing is not None,
+                nightly_version=torch_nightly,
             )
 
             filename = url.split("/")[-1]

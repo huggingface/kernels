@@ -36,6 +36,12 @@ let
         hash = "sha256-9NoIqNpk/evM/u16gz5HPPt8Zw9YWi/h+vjUm+qz4b0=";
       };
     };
+    "3.8.0-nightly" = {
+      x86_64-linux = {
+        url = "https://download-r2.pytorch.org/whl/nightly/triton-3.8.0%2Bgitc01b6774-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-QVRSf6iJiAPuPEQ8YRNTl9zRnqrmrxmbfx27mwIkixQ=";
+      };
+    };
   };
   generic = callPackage ./generic.nix { };
   versionAttr = lib.replaceStrings [ "." ] [ "_" ];

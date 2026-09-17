@@ -85,5 +85,12 @@
     "torchVersion": "2.14.0",
     "xpuVersion": "2026.1.0",
     "systems": ["x86_64-linux"]
+  },
+
+  {
+    "torchVersion": "2.15.0",
+    "cudaVersion": "13.4",
+    "systems": ["x86_64-linux"],
+    "torchNightly": "20260917"
   }
 ]

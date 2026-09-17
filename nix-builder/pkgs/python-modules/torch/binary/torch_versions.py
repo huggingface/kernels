@@ -46,24 +46,28 @@ def generate_pytorch_url(
     python_version: str,
     system: str,
     testing: bool = False,
+    nightly_version: str = None,
 ) -> str:
     """Generate PyTorch wheel download URL."""
     platform = system_to_platform(system, framework_type, torch_version)
+    version_prefix = (
+        f"{torch_version}.dev{nightly_version}" if nightly_version else torch_version
+    )
 
     if "darwin" in system:
         framework_dir = "cpu"
-        version_part = torch_version
+        version_part = version_prefix
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     elif framework_type == "cpu":
         framework_dir = "cpu"
-        version_part = f"{torch_version}%2Bcpu"
+        version_part = f"{version_prefix}%2Bcpu"
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     elif framework_type == "xpu":
         framework = "xpu"
         framework_dir = framework
-        version_part = f"{torch_version}%2B{framework}"
+        version_part = f"{version_prefix}%2B{framework}"
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     else:
@@ -75,12 +79,17 @@ def generate_pytorch_url(
             raise ValueError(f"Unsupported framework type: {framework_type}")
 
         framework_dir = framework
-        version_part = f"{torch_version}%2B{framework}"
+        version_part = f"{version_prefix}%2B{framework}"
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
 
-    test_prefix = "test/" if testing else ""
-    return f"https://download.pytorch.org/whl/{test_prefix}{framework_dir}/{wheel_name}"
+    if nightly_version:
+        path_prefix = "nightly/"
+    elif testing:
+        path_prefix = "test/"
+    else:
+        path_prefix = ""
+    return f"https://download.pytorch.org/whl/{path_prefix}{framework_dir}/{wheel_name}"
 
 
 def generate_pytorch_rc_hf_url(

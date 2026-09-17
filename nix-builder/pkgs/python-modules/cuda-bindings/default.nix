@@ -19,15 +19,15 @@ let
       cuda_12 = {
         version = "12.9.5";
         hash = {
-          x86_64-linux = "sha256-2jdFj4xQdNWQQN7dvQBUYMDPcNHvkN19LIFuRoYDjoc=";
-          aarch64-linux = "sha256-4G0nKyUUnhqDtEb/Pb789vgvZoZcSejZ23VoO7z/C18=";
+          x86_64-linux = "sha256-QNx5yMv2Y+JNJgeyqXl4fg1oQLYkpNpIzVMDrLhIKtI=";
+          aarch64-linux = "sha256-OzqJ/M1swexTWpQLQyQ3YVN65XPZd8PNGOOPhB4fioY=";
         };
       };
       cuda_13 = {
         version = "13.2.0";
         hash = {
-          x86_64-linux = "sha256-fcoNoFPTtMxIae/0nGHAPzxduqC81xIxejWNW48/OF0=";
-          aarch64-linux = "sha256-ZinKLfb3lbeEdSQJvK7b0ip6ZRt0tWoWXrwMncvVBNA=";
+          x86_64-linux = "sha256-9K+fPhvmA/oS1a1s/KeETJ0jC++peStavffdeZecNiY=";
+          aarch64-linux = "sha256-pkZLMPRmktbH9l1KDgRQ2B3SneOvwbtRVlOXPQHCzW4=";
         };
       };
     in

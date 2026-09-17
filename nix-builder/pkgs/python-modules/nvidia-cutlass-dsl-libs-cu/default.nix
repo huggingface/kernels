@@ -24,10 +24,10 @@ let
   format = "wheel";
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
   hashes = {
-    cp313-x86_64-linux-cu12 = "sha256-JQS1vbLwIQpqG8kjrO/peQBjZmlLc/FFijyFca7zt2U=";
-    cp313-aarch64-linux-cu12 = "sha256-F9nVvbj1MCZtyEJCNqgFI+4qmAfoUqJMIglkOKEt870=";
-    cp313-x86_64-linux-cu13 = "sha256-famVhPTw1JjKcKZHAiqylcpUoglJRBGBzQwyiVhNqKM=";
-    cp313-aarch64-linux-cu13 = "sha256-gTcFEd/Z4cCNojAs8UD0reyJ31BOw0iiOwiqAXRyDsM=";
+    cp314-x86_64-linux-cu12 = "sha256-Avifeb/8ofZw3D4Z5SOPEggFFjDrTr2DVxzKqjTn6kU=";
+    cp314-aarch64-linux-cu12 = "sha256-yE7F1PRbY0q+FrLxEcU1L9IexmXruSnkAxiD3PE10xE=";
+    cp314-x86_64-linux-cu13 = "sha256-iPWAJ6JUrD5rlZLq82Ely27Pd61OQCaEeAQSVUbsSxA=";
+    cp314-aarch64-linux-cu13 = "sha256-q7bO5j0gI4v4/349rBJTS16LxF1CVic9l5OYrrF6Rr0=";
   };
   hash =
     hashes."${pyShortVersion}-${stdenv.system}-cu${cudaMajor}"

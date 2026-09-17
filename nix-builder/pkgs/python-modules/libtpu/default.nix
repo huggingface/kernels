@@ -31,18 +31,18 @@
 let
   # The wheel ships per-CPython-ABI builds (cp311..cp314); pick the tag
   # matching the python this package set is built for. The hash below is
-  # for cp313 (the nixpkgs default python); if either moves, recompute
+  # for cp314 (the nixpkgs default python); if either moves, recompute
   # via the prefetch script above.
   abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
 in
 buildPythonPackage rec {
   pname = "libtpu";
-  version = "0.0.44.1";
+  version = "0.0.48";
   format = "wheel";
 
   src = requireFile {
     name = "libtpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
-    hash = "sha256-qd34JzD0TpphtqLj67/HqYgVg/bXT3gF6E+pYQyaCsA="; # cp313
+    hash = "sha256-QD0G/ssztiQYMmd/gwI/IXlYnwyZ4lwRocEf/7V7NBY=";
     message = ''
       libtpu is served from a gated Google Artifact Registry and cannot
       be fetched by a pure Nix build. Fetch and register it with:

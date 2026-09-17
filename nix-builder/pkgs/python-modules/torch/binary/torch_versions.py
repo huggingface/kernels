@@ -4,7 +4,7 @@ Shared utilities for working with PyTorch versions and wheel URLs.
 
 from packaging.version import Version
 
-PYTHON_VERSION = "cp313"
+PYTHON_VERSION = "cp314"
 
 
 def cuda_version_to_framework(cuda_version: str) -> str:

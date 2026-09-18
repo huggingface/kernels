@@ -73,11 +73,10 @@ def _get_hf_api(user_agent: str | dict | None = None) -> HfApi:
 
 
 def _get_cache_dir() -> str | None:
-    """Returns the kernels cache directory."""
+    """The kernels cache directory, or `None` to use the Hub's default.
+
+    This re-reads the envvar on every call, so that we can mock it in tests."""
     return os.environ.get("KERNELS_CACHE", None)
-
-
-CACHE_DIR: str | None = _get_cache_dir()
 
 
 @dataclass(frozen=True)

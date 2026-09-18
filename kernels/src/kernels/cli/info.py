@@ -7,7 +7,7 @@ from huggingface_hub import constants
 
 from kernels._rust import Metadata
 from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
-from kernels.hf_hub import CACHE_DIR, _get_hf_api
+from kernels.hf_hub import _get_cache_dir, _get_hf_api
 from kernels.variants import (
     ArchVariant,
     Variant,
@@ -75,7 +75,7 @@ def _hub_kernel_info(
             repo_id,
             repo_type="kernel",
             filename=f"build/{variants[0].variant_str}/metadata.json",
-            cache_dir=CACHE_DIR,
+            cache_dir=_get_cache_dir(),
             revision=revision,
         )
         metadata = Metadata.read_from_file(metadata_path)

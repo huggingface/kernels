@@ -16,6 +16,9 @@ from kernels._rust import (
     DigestViolation,
     KernelLocation,
     Metadata,
+    ReceiptError,
+    ReceiptStore,
+    VerificationReceipt,
 )
 
 logger = logging.getLogger(__name__)
@@ -192,6 +195,29 @@ class VerificationResult:
     )
 
 
+def _open_receipt_store() -> ReceiptStore | None:
+    """The receipt store, or `None` when verifications cannot be cached."""
+    try:
+        return ReceiptStore.in_kernels_cache()
+    except ReceiptError as e:
+        logger.warning(f"Cannot cache kernel verifications: {e}")
+        return None
+
+
+def _has_receipt(store: ReceiptStore, location: KernelLocation) -> bool:
+    """Whether the kernel at `location` was verified before.
+
+    An unusable receipt counts as a cache miss: the kernel is then verified in
+    full, which overwrites the receipt. A broken cache must never make a kernel
+    fail to verify.
+    """
+    try:
+        return store.load(location) is not None
+    except ReceiptError as e:
+        logger.warning(f"Ignoring unusable kernel verification receipt: {e}")
+        return False
+
+
 def verify_variant(
     variant_path: Path,
     *,
@@ -238,6 +264,21 @@ def verify_variant(
     if not metadata_path.is_file():
         return VerificationResult.MetadataMissing()
 
+    receipt_store = _open_receipt_store() if cache else None
+
+    if receipt_store is not None and _has_receipt(receipt_store, location):
+        # The receipt attests that this kernel metadata was verified
+        # using the signature and the kernel data during the digest
+        # in the metadata. However, it may have been verified with a
+        # different policy, so we have to check certificate in the
+        # bundle against the currently required policy.
+        try:
+            verify_policy.verify(signature_bundle.signing_certificate)
+        except VerificationError as e:
+            return VerificationResult.SignatureVerificationFailure(reason=str(e))
+
+        return VerificationResult.Success()
+
     verifier = Verifier.production()
 
     metadata_bytes = metadata_path.read_bytes()
@@ -270,5 +311,11 @@ def verify_variant(
         metadata.digest.validate(current_digest)
     except DigestValidationError as e:
         return VerificationResult.DigestVerificationFailure(violations=e.violations)
+
+    if receipt_store is not None:
+        try:
+            receipt_store.store(VerificationReceipt(location))
+        except ReceiptError as e:
+            logger.warning(f"Cannot store kernel verification receipt: {e}")
 
     return VerificationResult.Success()

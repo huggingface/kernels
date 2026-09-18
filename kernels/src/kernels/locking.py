@@ -14,7 +14,7 @@ from kernels._rust import (
 )
 from kernels._versions import resolve_kernel_version
 from kernels.compat import tomllib
-from kernels.hf_hub import CACHE_DIR, _check_trust_remote_code
+from kernels.hf_hub import _check_trust_remote_code, _get_cache_dir
 from kernels.variants import get_variants
 
 
@@ -63,7 +63,7 @@ def lock_kernel_tree(
                 kernel.repo_id,
                 repo_type="kernel",
                 filename=f"build/{variant.variant_str}/metadata.json",
-                cache_dir=CACHE_DIR,
+                cache_dir=_get_cache_dir(),
                 revision=str(revision),
                 local_files_only=False,
             )

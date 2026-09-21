@@ -559,7 +559,7 @@ BlockSparseTensors = flash_attn4.block_sparsity.BlockSparseTensors
 ```
 
 This pattern should be avoided. Instead, create a separate private
-module named `_private_for testing` and include the modules needed in the tests inside it. Then
+module named `_private_for_testing` and include the modules needed in the tests inside it. Then
 expose that private module from the public API surface. So, the
 `__init__.py` would look like so:
 

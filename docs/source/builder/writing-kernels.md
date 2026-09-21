@@ -545,7 +545,7 @@ $ nix run .#ciTests.torch210-cxx11-cpu-x86_64-linux
 When running the tests on a non-NixOS systems, make sure that
 [the CUDA driver library can be found](https://danieldk.eu/Software/Nix/Nix-CUDA-on-non-NixOS-systems#solutions).
 
-### Misc
+### Tests that need access to internal APIs
 
 If the tests need to access a module, not exposed in the public API
 surface, do not use `importlib`. For example:
@@ -559,7 +559,7 @@ BlockSparseTensors = flash_attn4.block_sparsity.BlockSparseTensors
 ```
 
 This pattern should be avoided. Instead, create a separate private
-module and include the modules needed in the tests inside it. Then
+module named `_private_for testing` and include the modules needed in the tests inside it. Then
 expose that private module from the public API surface. So, the
 `__init__.py` would look like so:
 

@@ -310,9 +310,10 @@ replaced by the new build:
   - Torch stable ABI kernels, as long as the CUDA versions that get built
     overlap with the current build variants.
 
-Note that even for noarch Python-only kernels, we need a version bump
-where arguments are removed from the public API or change the default
-for an argument present in the public API.
+In the following cases no version bump is required for these types of kernels:
+
+- Adding new functions/methods/classes.
+- Adding new arguments with default values to a function/method/constructor, as long as the default values do not change previous behavior.
 
 ## Native Python module
 

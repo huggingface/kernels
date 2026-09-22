@@ -298,8 +298,8 @@ fail on the build variants that were not rebuilt.
 
 ### Exceptions
 
-A version bump is not needed when every existing build variant is
-replaced by the new build:
+For the following types of kernels, some API changes do not require
+bumping the version:
 
 - Python-only (noarch) kernels, e.g. `torch-cuda`. All build variants get
   updated, so this issue does not exist.

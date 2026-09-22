@@ -153,14 +153,18 @@ def test_recording_a_ref_stays_inside_the_refs_directory(tmp_path, monkeypatch):
 def test_a_downloaded_revision_resolves_offline(tmp_path, monkeypatch):
     monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
 
-    install_kernel("kernels-community/relu", revision="v1", backend="cpu")
+    expected = install_kernel("kernels-community/relu", revision="v1", backend="cpu")
 
-    assert install_kernel("kernels-community/relu", revision="v1", backend="cpu", local_files_only=True)
+    path = install_kernel("kernels-community/relu", revision="v1", backend="cpu", local_files_only=True)
+
+    assert path == expected
 
 
 def test_a_downloaded_version_resolves_offline(tmp_path, monkeypatch):
     monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
 
-    install_kernel("kernels-community/relu", version=1, backend="cpu")
+    expected = install_kernel("kernels-community/relu", version=1, backend="cpu")
 
-    assert install_kernel("kernels-community/relu", version=1, backend="cpu", local_files_only=True)
+    path = install_kernel("kernels-community/relu", version=1, backend="cpu", local_files_only=True)
+
+    assert path == expected

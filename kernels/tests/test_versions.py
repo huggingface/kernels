@@ -1,7 +1,11 @@
+from pathlib import Path
+
 import pytest
 from huggingface_hub.file_download import repo_folder_name
 
+import kernels._versions as versions
 import kernels.hf_hub as hf_hub
+from kernels import install_kernel
 from kernels._rust import KernelVersion, Oid
 from kernels._versions import _resolve_ref
 
@@ -12,7 +16,7 @@ COMMIT = "d649efb56fb249ac8f7a57fa1866728ad0c60e52"
 @pytest.fixture
 def cached_refs(tmp_path, monkeypatch):
     """A cache containing a single ref, so offline resolution is hermetic."""
-    monkeypatch.setattr(hf_hub, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
     refs = tmp_path / repo_folder_name(repo_id=REPO_ID, repo_type="kernel") / "refs"
     refs.mkdir(parents=True)
     (refs / "main").write_text(COMMIT)
@@ -79,7 +83,6 @@ def test_a_version_needs_no_ref_resolution(monkeypatch):
     Guards against reintroducing a resolution step that would suggest a
     version can name something other than a commit.
     """
-    import kernels._versions as versions
 
     def fail(*args, **kwargs):
         raise AssertionError("a version was resolved as if it were a ref")
@@ -93,3 +96,75 @@ def test_a_version_needs_no_ref_resolution(monkeypatch):
     )
 
     assert revision == Oid.from_str(str(revision))
+
+
+# Kernels are fetched by commit, so snapshot downloads do not create a ref.
+# This is not a problem during normal usage, but breaks offline use if the
+# kernel is resolved by version or non-commit ref. For this reason, we create
+# a ref when resolving a name. The tests below ensure that this behavior is
+# correct.
+
+
+def _refs_of(cache_dir: Path, repo_id: str = REPO_ID) -> list[str]:
+    refs = cache_dir / repo_folder_name(repo_id=repo_id, repo_type="kernel") / "refs"
+    return sorted(p.name for p in refs.iterdir()) if refs.is_dir() else []
+
+
+@pytest.mark.parametrize("version", [KernelVersion.Revision("v1"), KernelVersion.Version(1)])
+def test_resolution_records_the_ref(tmp_path, monkeypatch, version):
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
+
+    commit = versions.resolve_kernel_version("kernels-community/relu", version, local_files_only=False)
+
+    assert _refs_of(tmp_path, "kernels-community/relu") == ["v1"]
+
+    # Written verbatim, since huggingface_hub does not strip the file.
+    ref_path = tmp_path / repo_folder_name(repo_id="kernels-community/relu", repo_type="kernel") / "refs" / "v1"
+    assert ref_path.read_text() == str(commit)
+
+
+def test_resolving_a_commit_records_nothing(tmp_path, monkeypatch):
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
+
+    versions.resolve_kernel_version(REPO_ID, KernelVersion.Revision(COMMIT), local_files_only=False)
+
+    assert _refs_of(tmp_path) == []
+
+
+def test_recording_a_ref_tolerates_an_unwritable_cache(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path / "not-a-directory"))
+    (tmp_path / "not-a-directory").write_text("")
+
+    with caplog.at_level("WARNING", logger="kernels._versions"):
+        versions._record_ref_in_cache(REPO_ID, "v1", COMMIT)
+
+    assert "Could not record revision" in caplog.text
+
+
+def test_recording_a_ref_stays_inside_the_refs_directory(tmp_path, monkeypatch):
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
+
+    versions._record_ref_in_cache(REPO_ID, "../../../escaped", COMMIT)
+
+    assert not (tmp_path.parent.parent.parent / "escaped").exists()
+    assert not (tmp_path / "escaped").exists()
+
+
+def test_a_downloaded_revision_resolves_offline(tmp_path, monkeypatch):
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
+
+    expected = install_kernel("kernels-community/relu", revision="v1", backend="cpu")
+
+    path = install_kernel("kernels-community/relu", revision="v1", backend="cpu", local_files_only=True)
+
+    assert path == expected
+
+
+def test_a_downloaded_version_resolves_offline(tmp_path, monkeypatch):
+    monkeypatch.setenv("KERNELS_CACHE", str(tmp_path))
+
+    expected = install_kernel("kernels-community/relu", version=1, backend="cpu")
+
+    path = install_kernel("kernels-community/relu", version=1, backend="cpu", local_files_only=True)
+
+    assert path == expected

@@ -1,7 +1,7 @@
 import sys
 
 from kernels._rust import KernelLocks
-from kernels.hf_hub import CACHE_DIR, _get_hf_api
+from kernels.hf_hub import _get_cache_dir, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS, resolve_hub_kernel
 
 
@@ -31,7 +31,7 @@ def download_kernels(args):
                     repo_type="kernel",
                     allow_patterns="build/*",
                     ignore_patterns=_BYTECODE_IGNORE_PATTERNS,
-                    cache_dir=CACHE_DIR,
+                    cache_dir=_get_cache_dir(),
                     revision=str(lock.commit),
                 )
             else:

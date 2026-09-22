@@ -1,4 +1,6 @@
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 from huggingface_hub import constants
@@ -6,16 +8,14 @@ from huggingface_hub.file_download import repo_folder_name
 from huggingface_hub.hf_api import GitRefInfo
 
 from kernels._rust import KernelVersion, Oid
+from kernels.hf_hub import _get_cache_dir
 
 logger = logging.getLogger(__name__)
 
 
 def _cached_refs_dir(repo_id: str) -> Path:
     """The cache directory that holds the refs of a kernel repository."""
-    # Lazy import so that we can mock it in tests.
-    from kernels.hf_hub import CACHE_DIR
-
-    cache_dir = CACHE_DIR or constants.HF_HUB_CACHE
+    cache_dir = _get_cache_dir() or constants.HF_HUB_CACHE
     return Path(cache_dir) / repo_folder_name(repo_id=repo_id, repo_type="kernel") / "refs"
 
 
@@ -131,6 +131,47 @@ def _resolve_ref_from_cache(repo_id: str, ref: str) -> str | None:
         return None
 
 
+def _record_ref_in_cache(repo_id: str, ref: str, commit: str) -> None:
+    """Record that `ref` points at `commit` in the local Hugging Face cache.
+
+    Errors are ignored: not being able to write to the cache must never make
+    a kernel fail to load.
+    """
+    if ref == commit:
+        return
+
+    refs_dir = _cached_refs_dir(repo_id)
+    ref_path = refs_dir / ref
+
+    # Extra guard against path-travesal attacks (in addition to _resolve_ref_from_cache).
+    try:
+        ref_path.resolve().relative_to(refs_dir.resolve())
+    except (OSError, ValueError):
+        return
+
+    try:
+        if ref_path.is_file() and ref_path.read_text() == commit:
+            return
+
+        ref_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write automically to avoid races. Place in the cache directory, since
+        # os.replace() is not atomic between filesystems.
+        fd, tmp_name = tempfile.mkstemp(dir=ref_path.parent, prefix=f".{ref_path.name}.")
+        try:
+            with os.fdopen(fd, "w") as tmp_file:
+                tmp_file.write(commit)
+            os.replace(tmp_name, ref_path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+    except OSError as e:
+        logger.warning("Could not record revision '%s' of '%s' in the cache: %s", ref, repo_id, e)
+
+
 def _resolve_ref(repo_id: str, ref: str, *, local_files_only: bool) -> Oid:
     """Resolve a branch, tag, or commit to the commit it points at.
 
@@ -168,12 +209,30 @@ def resolve_kernel_version(repo_id: str, version: KernelVersion, *, local_files_
     full Git commit SHA.
     """
     if isinstance(version, KernelVersion.Version):
-        ref = resolve_version_spec_as_ref(repo_id, version.version, local_files_only=local_files_only)
-        return Oid.from_str(ref.target_commit)
+        # `name` rather than `ref`: the cache names its refs `v1`, not
+        # `refs/heads/v1`.
+        version_ref = resolve_version_spec_as_ref(repo_id, version.version, local_files_only=local_files_only)
+        ref, commit = version_ref.name, Oid.from_str(version_ref.target_commit)
     elif isinstance(version, KernelVersion.Revision):
-        return _resolve_ref(repo_id, version.revision, local_files_only=local_files_only)
+        ref, commit = version.revision, _resolve_ref(repo_id, version.revision, local_files_only=local_files_only)
     else:
         raise ValueError(f"Invalid version type: {version}")
+
+    if not local_files_only:
+        # Kernels are fetched by commit, since we need the commit hash for receipt
+        # validation, etc. However, that means that snapshot downloads do not create
+        # refs in the cache. This causes a kernel fetched by version/ref not to be
+        # found in offline mode. To work around this problem, create a ref ourselves.
+        #
+        # Note that this can create the situation where the ref exists, but no
+        # snapshot or an incomplete snapshot. However, this is fine for
+        # huggingface_hub, since it also writes the ref before downloading the
+        # snapshot:
+        #
+        # https://github.com/huggingface/huggingface_hub/blob/5a9cdda63f231a1b57a05eab88dc4357c790ba87/src/huggingface_hub/_snapshot_download.py#L426
+        _record_ref_in_cache(repo_id, ref, str(commit))
+
+    return commit
 
 
 def resolve_revision_or_version(

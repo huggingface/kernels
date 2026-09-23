@@ -1,0 +1,37 @@
+recipe \
+	version=1
+
+prune \
+	keep="upstream_relu/**"
+
+move \
+	from="upstream_relu" \
+	to="torch-ext/relu_triton"
+
+convert_import \
+	in="torch-ext/relu_triton/**" \
+	prefix="upstream_relu" \
+	changes=1
+
+remap_module \
+	in="torch-ext/relu_triton/**" \
+	from="upstream_relu" \
+	to="relu_triton" \
+	changes=1
+
+relativize_imports \
+	in="torch-ext/relu_triton/**" \
+	package_root="torch-ext/relu_triton" \
+	changes=1
+
+ensure_init \
+	under="torch-ext/relu_triton" \
+	changes=1
+
+manifest \
+	name="relu-triton" \
+	version=1 \
+	edition=5 \
+	license="Apache-2.0" \
+	backends="cuda,rocm,xpu" \
+	noarch=#true

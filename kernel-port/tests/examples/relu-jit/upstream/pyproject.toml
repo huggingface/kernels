@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kernel-port-relu-jit"
+version = "0.0.0"
+dependencies = ["torch", "triton"]
+
+[tool.setuptools.packages.find]
+include = ["upstream_relu*"]

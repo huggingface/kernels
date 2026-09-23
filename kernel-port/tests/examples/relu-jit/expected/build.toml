@@ -1,0 +1,14 @@
+[general]
+name = "relu-triton"
+version = 1
+license = "Apache-2.0"
+edition = 5
+backends = [
+    "cuda",
+    "rocm",
+    "xpu",
+]
+
+[torch-noarch]
+
+[kernel]

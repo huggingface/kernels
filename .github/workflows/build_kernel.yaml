@@ -14,8 +14,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   build:
+    permissions:
+      contents: read
     name: Build kernels (${{ matrix.arch }})
     strategy:
       matrix:
@@ -67,6 +71,8 @@ jobs:
             silu-and-mul-kernel
 
   test:
+    permissions:
+      contents: read
     name: Test kernels (UBI ${{ matrix.ubi_version }})
     needs: build
     strategy:

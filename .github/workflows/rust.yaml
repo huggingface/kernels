@@ -11,8 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   fmt:
+    permissions:
+      contents: read
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
@@ -31,6 +35,8 @@ jobs:
         run: ( cd kernel-builder && cargo fmt --all -- --check )
 
   clippy:
+    permissions:
+      contents: read
     name: Clippy
     runs-on: ubuntu-latest
     steps:
@@ -58,6 +64,8 @@ jobs:
         run: ( cd kernel-builder && cargo clippy -- -D warnings )
 
   test:
+    permissions:
+      contents: read
     name: Test
     runs-on: ubuntu-latest
     steps:

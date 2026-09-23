@@ -1,0 +1,18 @@
+[general]
+name = "relu"
+version = 1
+license = "Apache-2.0"
+edition = 5
+backends = ["cpu"]
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+]
+
+[kernel.relu_cpu]
+backend = "cpu"
+depends = ["torch"]
+src = [
+    "relu_cpu/relu.cpp",
+]

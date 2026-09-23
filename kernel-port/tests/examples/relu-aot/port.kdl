@@ -1,0 +1,56 @@
+recipe \
+	version=1
+
+prune \
+	keep="csrc/**,upstream_relu/**"
+
+move \
+	from="csrc" \
+	to="relu_cpu"
+
+move \
+	from="upstream_relu" \
+	to="torch-ext/relu"
+
+replace \
+	in="torch-ext/relu/functional.py" \
+	find="from upstream_relu import _C" \
+	with="from ._ops import ops" \
+	count=1
+
+replace \
+	in="torch-ext/relu/functional.py" \
+	find="_C.relu(" \
+	with="ops.relu(" \
+	count=1
+
+remap_module \
+	in="torch-ext/relu/**" \
+	from="upstream_relu" \
+	to="relu" \
+	changes=1
+
+relativize_imports \
+	in="torch-ext/relu/**" \
+	package_root="torch-ext/relu" \
+	changes=1
+
+overlay \
+	from="overlay"
+
+expect \
+	in="relu_cpu/*.cpp" \
+	files=1
+
+kernel \
+	name="relu_cpu" \
+	backend="cpu" \
+	src="relu_cpu/*.cpp"
+
+manifest \
+	name="relu" \
+	version=1 \
+	edition=5 \
+	license="Apache-2.0" \
+	backends="cpu" \
+	torch_src="torch-ext/*.cpp"

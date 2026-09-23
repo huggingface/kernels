@@ -15,6 +15,9 @@ serde_json = "1.0"
 sha2 = "0.11.0"
 similar = "3.2.0"
 
+[dev-dependencies]
+tempfile = "3"
+
 # Clippy runs at pedantic, plus two nursery lints worth the churn.
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

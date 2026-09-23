@@ -35,11 +35,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: read
+
+permissions: {}
 
 jobs:
   linux:
+    permissions:
+      contents: read
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -84,6 +86,8 @@ jobs:
           path: dist
 
   musllinux:
+    permissions:
+      contents: read
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -124,6 +128,8 @@ jobs:
           path: dist
 
   windows:
+    permissions:
+      contents: read
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -170,6 +176,8 @@ jobs:
           path: dist
 
   macos:
+    permissions:
+      contents: read
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -207,6 +215,8 @@ jobs:
           path: dist
 
   sdist:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

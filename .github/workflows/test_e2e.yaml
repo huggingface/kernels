@@ -25,8 +25,12 @@ env:
   E2E_REPO_NAME: kernels-e2e-${{ github.run_id }}-${{ github.run_attempt }}
   E2E_PKG_NAME: kernels_e2e_${{ github.run_id }}_${{ github.run_attempt }}
 
+permissions: {}
+
 jobs:
   init-build-upload:
+    permissions:
+      contents: read
     name: Init, build, and upload kernel
     runs-on:
       group: aws-highmemory-32-plus-nix
@@ -109,6 +113,8 @@ jobs:
           nix run $GITHUB_WORKSPACE#kernel-builder -- upload /tmp/${{ env.E2E_REPO_NAME }} --repo-type model
 
   download-and-test:
+    permissions:
+      contents: read
     name: Download and test kernel via get_kernel
     needs: init-build-upload
     runs-on:
@@ -153,6 +159,7 @@ jobs:
           "
 
   cleanup:
+    permissions: {}
     name: Clean up test repos
     needs: [init-build-upload, download-and-test]
     if: always()

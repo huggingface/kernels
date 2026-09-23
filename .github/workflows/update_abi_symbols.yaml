@@ -10,11 +10,13 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+
+permissions: {}
 
 jobs:
   update:
+    permissions:
+      contents: read
     name: Refresh vendored ABI symbol files
     runs-on: ubuntu-latest
     steps:

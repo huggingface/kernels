@@ -26,6 +26,11 @@ final: prev:
 
   nvtx = final.callPackage ./pkgs/nvtx { };
 
+  # pandoc is used by a lot of packages to convert docs. However, evaluating
+  # pandoc evaluates a lot of pacakges in the Haskell package set. Avoid this
+  # by grabbing a binary for pandoc instead.
+  pandoc = final.callPackage ./pkgs/pandoc-bin { };
+
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };
 
   rewrite-nix-paths-macho = final.callPackage ./pkgs/rewrite-nix-paths-macho { };

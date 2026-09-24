@@ -1,4 +1,6 @@
 import importlib
+import importlib.machinery
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,6 +64,39 @@ def get_loaded_kernels() -> list[LoadedKernel]:
     return list(_loaded_kernels.values())
 
 
+class _SourceOnlyLoader(importlib.machinery.SourceFileLoader):
+    """
+    Source loader that always compiles from the `.py` file.
+
+    Bytecode is excluded from the kernel digest, since the interpreter
+    writes it after the first import. So bytecode cannot be trusted and
+    should never be executed in place of the verified source.
+    """
+
+    def get_code(self, fullname):
+        source_path = self.get_filename(fullname)
+        return self.source_to_code(self.get_data(source_path), source_path)
+
+    def set_data(self, path, data, *, _mode=0o666):
+        # Do not write bytecode that is never read.
+        pass
+
+
+def _register_source_only_finders(module_dir: Path):
+    """
+    Register finders for every directory in the kernel module, so that
+    submodules are also loaded from source. Sourceless `.pyc` files are
+    not importable at all.
+    """
+    loaders = [
+        (importlib.machinery.ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES),
+        (_SourceOnlyLoader, importlib.machinery.SOURCE_SUFFIXES),
+    ]
+    for root, dirs, _ in os.walk(module_dir):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        sys.path_importer_cache[root] = importlib.machinery.FileFinder(root, *loaders)
+
+
 def _import_from_path(
     variant_path: Path,
     deps: dict[str, ModuleType],
@@ -79,7 +114,10 @@ def _import_from_path(
     if not file_path.exists():
         raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
 
-    spec = importlib.util.spec_from_file_location(metadata.id, file_path)
+    _register_source_only_finders(file_path.parent)
+    spec = importlib.util.spec_from_file_location(
+        metadata.id, file_path, loader=_SourceOnlyLoader(metadata.id, str(file_path))
+    )
     if spec is None:
         raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)

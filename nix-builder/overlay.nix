@@ -22,9 +22,23 @@ final: prev:
 
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
+  # The same Cargo.lock is used by kernel-builder and the kernels Python
+  # package. Evaluate Cargo.lock only once and use it in both packages.
+  kernelsCargoDeps = final.rustPlatform.importCargoLock {
+    lockFile = ../Cargo.lock;
+    outputHashes = {
+      "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
+    };
+  };
+
   lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
   nvtx = final.callPackage ./pkgs/nvtx { };
+
+  # pandoc is used by a lot of packages to convert docs. However, evaluating
+  # pandoc evaluates a lot of pacakges in the Haskell package set. Avoid this
+  # by grabbing a binary for pandoc instead.
+  pandoc = final.callPackage ./pkgs/pandoc-bin { };
 
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };
 

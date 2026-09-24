@@ -5,6 +5,7 @@
   pkg-config,
   libgit2,
   openssl,
+  kernelsCargoDeps,
 
   # Git provenance (`{ sha, dirty }`, or `null` for a non-git source) of the
   # `kernel-builder` flake. It is burned into the binary at build time and
@@ -67,12 +68,7 @@ rustPlatform.buildRustPackage (
         inherit lib sourceFiles;
       };
 
-    cargoLock = {
-      lockFile = ../../../Cargo.lock;
-      outputHashes = {
-        "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
-      };
-    };
+    cargoDeps = kernelsCargoDeps;
 
     cargoBuildFlags = cargoFlags;
     cargoTestFlags = cargoFlags;

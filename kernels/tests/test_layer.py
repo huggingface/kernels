@@ -12,6 +12,7 @@ from torch.nn import functional as F
 from kernels import (
     CUDAProperties,
     Device,
+    Fallback,
     FuncRepository,
     LayerRepository,
     LocalLayerRepository,
@@ -425,7 +426,7 @@ def test_layer_fallback_works():
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
-def test_missing_kernel_build_falls_back(monkeypatch):
+def test_missing_kernel_build_falls_back(monkeypatch, caplog):
     repo = LayerRepository(
         repo_id="kernels-test/no-compatible-build",
         layer_name="SiluAndMul",
@@ -439,10 +440,16 @@ def test_missing_kernel_build_falls_back(monkeypatch):
     layer = SiluAndMulWithKernel()
     mapping = {"SiluAndMul": {"cuda": repo}}
 
-    with use_kernel_mapping(mapping, inherit_mapping=False):
-        kernelize(layer, device="cuda", mode=Mode.INFERENCE)
+    with (
+        use_kernel_mapping(mapping, inherit_mapping=False),
+        caplog.at_level(logging.INFO, logger="kernels.layer.layer"),
+    ):
+        kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=Fallback.ALL)
+    assert "No compatible kernel build for layer `SiluAndMul` on cuda" in caplog.text
 
     with use_kernel_mapping(mapping, inherit_mapping=False):
+        with pytest.raises(FileNotFoundError, match="Cannot find a build variant"):
+            kernelize(layer, device="cuda", mode=Mode.INFERENCE)
         with pytest.raises(FileNotFoundError, match="Cannot find a build variant"):
             kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
 

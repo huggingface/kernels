@@ -26,7 +26,7 @@ from ..validate import AllKernelValidator, AllMetadataValidator, default_kernel_
 from .device import Device
 from .globals import _DISABLE_KERNEL_MAPPING, _KERNEL_MAPPING
 from .mode import Mode
-from .repos import RepositoryProtocol, _select_repository
+from .repos import KernelLayerSelectorProtocol, RepositoryProtocol, _select_repository
 
 if TYPE_CHECKING:
     from torch import nn
@@ -484,27 +484,32 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
         _replace_forward(module, module_class)
         return
 
-    # Get kernel options for the device
-    property_repos = kernel.get(device_type.type)
+    if isinstance(kernel, KernelLayerSelectorProtocol):
+        repo_with_mode = kernel(module, device_type=device_type, mode=mode)
+    else:
+        # Get kernel options for the device
+        property_repos = kernel.get(device_type.type)
 
-    if property_repos is None:
-        if not use_fallback:
-            raise ValueError(f"No layer mapping for `{layer_name}` with device type `{device_type}`")
-        _replace_forward(module, module_class)
-        return
+        if property_repos is None:
+            if not use_fallback:
+                raise ValueError(f"No layer mapping for `{layer_name}` with device type `{device_type}`")
+            _replace_forward(module, module_class)
+            return
 
-    repos = property_repos.repos
+        repos = property_repos.repos
 
-    if repos is None:
-        if not use_fallback:
-            raise ValueError(f"No layer mapping for `{layer_name}` device `{device_type}` with the right properties")
-        _replace_forward(module, module_class)
-        return
+        if repos is None:
+            if not use_fallback:
+                raise ValueError(
+                    f"No layer mapping for `{layer_name}` device `{device_type}` with the right properties"
+                )
+            _replace_forward(module, module_class)
+            return
 
-    repo_with_mode = _select_repository(
-        repos,
-        mode=mode,
-    )
+        repo_with_mode = _select_repository(
+            repos,
+            mode=mode,
+        )
 
     if repo_with_mode is None:
         if not use_fallback:

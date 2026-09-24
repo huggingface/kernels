@@ -28,6 +28,7 @@ from kernels.layer import (
     use_kernel_mapping,
     use_kernelized_func,
 )
+from kernels.layer.repos import KernelLayerSelectorProtocol
 from kernels.load import (
     get_kernel,
     get_local_kernel,
@@ -50,6 +51,7 @@ __all__ = [
     "Device",
     "ROCMProperties",
     "FuncRepository",
+    "KernelLayerSelectorProtocol",
     "LayerRepository",
     "LoadedKernel",
     "LocalFuncRepository",

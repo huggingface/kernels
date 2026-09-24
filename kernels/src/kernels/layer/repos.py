@@ -1,7 +1,7 @@
 import sys
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import TYPE_CHECKING, Protocol, Type
+from typing import TYPE_CHECKING, Protocol, Type, runtime_checkable
 
 from ._interval_tree import IntervalTree
 from .device import CUDAProperties, Device, ROCMProperties
@@ -264,6 +264,42 @@ def _select_repository(
             return (repositories[fallback_mode], fallback_mode)
 
     return None
+
+
+@runtime_checkable
+class KernelLayerSelectorProtocol(Protocol):
+    """
+    Callable that selects the kernel repository for a layer at kernelization time.
+
+    A selector can be used in a kernel mapping instead of the per-device dictionary. [`kernelize`] calls
+    the selector for every module with the mapped layer name, so the selector can base its decision on
+    the module instance itself, the device type, and the kernelization mode.
+
+    Selectors should be stateless and must not hold references to modules; the selection should only depend
+    on the `module`, `device_type`, and `mode` arguments.
+
+    An example can be found in the documentation of [`use_kernel_mapping`].
+    """
+
+    def __call__(
+        self, module: "nn.Module", *, device_type: Device, mode: Mode
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        """
+        Select the kernel repository for a module.
+
+        Args:
+            module (`nn.Module`):
+                The module that is being kernelized.
+            device_type ([`Device`]):
+                The device that kernels are loaded for.
+            mode ([`Mode`]):
+                The mode that the module is kernelized for.
+
+        Returns:
+            `tuple[RepositoryProtocol, Mode] | None`: The repository and the mode that it supports, or `None`
+            when no kernel should be used for the module.
+        """
+        ...
 
 
 @lru_cache

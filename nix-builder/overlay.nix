@@ -22,6 +22,15 @@ final: prev:
 
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
+  # The same Cargo.lock is used by kernel-builder and the kernels Python
+  # package. Evaluate Cargo.lock only once and use it in both packages.
+  kernelsCargoDeps = final.rustPlatform.importCargoLock {
+    lockFile = ../Cargo.lock;
+    outputHashes = {
+      "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
+    };
+  };
+
   lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
   nvtx = final.callPackage ./pkgs/nvtx { };

@@ -2,6 +2,7 @@
   lib,
   buildPythonPackage,
   rustPlatform,
+  kernelsCargoDeps,
 
   huggingface-hub,
   pyyaml,
@@ -41,12 +42,7 @@ buildPythonPackage {
       inherit lib sourceFiles;
     };
 
-  cargoDeps = rustPlatform.importCargoLock {
-    lockFile = ../../../../Cargo.lock;
-    outputHashes = {
-      "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
-    };
-  };
+  cargoDeps = kernelsCargoDeps;
 
   maturinBuildFlags = cargoFlags;
 

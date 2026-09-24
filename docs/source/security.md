@@ -57,6 +57,20 @@ activation = get_kernel(
 )
 ```
 
+If your library loads kernels on behalf of its users, it is worth
+considering to let the user control downloading of kernels from untrusted
+publishers using a flag. For example:
+
+```python
+TRUST_REMOTE_KERNELS = os.environ.get("MYLIB_TRUST_REMOTE_KERNELS", "0") == "1"
+
+activation = get_kernel(
+    "someorg/activation",
+    version=1,
+    trust_remote_code=["someorg/activation"] if TRUST_REMOTE_KERNELS else False
+)
+```
+
 ### kernels-community
 
 The [kernels-community](https://huggingface.co/kernels-community/kernels)

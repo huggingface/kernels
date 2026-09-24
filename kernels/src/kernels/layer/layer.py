@@ -43,9 +43,9 @@ class Fallback(Flag):
     - `NO_DEVICE`: The layer has no mapping for the requested device type.
     - `NO_COMPATIBLE_PROPERTIES`: No mapping matches the device properties.
     - `NO_COMPATIBLE_MODE`: No repository or loaded kernel supports the requested mode.
-    - `COMPATIBLE_BUILD_NOT_FOUND`: The selected repository has no build for this environment.
-    - `DEFAULT`: Fall back for missing mappings, properties, or mode; raise for a missing build.
-    - `ALL`: Fall back in every case above, including a missing build.
+    - `CANNOT_LOAD`: Kernel loading fails.
+    - `DEFAULT`: Fall back for missing mappings, properties, or mode; raise on a loading error.
+    - `ALL`: Fall back in every case above, including missing files during loading.
     """
 
     NONE = 0
@@ -53,10 +53,10 @@ class Fallback(Flag):
     NO_DEVICE = auto()
     NO_COMPATIBLE_PROPERTIES = auto()
     NO_COMPATIBLE_MODE = auto()
-    COMPATIBLE_BUILD_NOT_FOUND = auto()
+    CANNOT_LOAD = auto()
 
     DEFAULT = NO_LAYER | NO_DEVICE | NO_COMPATIBLE_PROPERTIES | NO_COMPATIBLE_MODE
-    ALL = DEFAULT | COMPATIBLE_BUILD_NOT_FOUND
+    ALL = DEFAULT | CANNOT_LOAD
 
 
 class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
@@ -545,10 +545,10 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     try:
         layer = _get_layer_memoize(repo, module_class)
     except FileNotFoundError:
-        if Fallback.COMPATIBLE_BUILD_NOT_FOUND not in use_fallback:
+        if Fallback.CANNOT_LOAD not in use_fallback:
             raise
         logger.info(
-            "No compatible kernel build for layer `%s` on %s; using the original forward.",
+            "Kernel for layer `%s` on %s could not be loaded; using the original forward.",
             layer_name,
             device_type.type,
         )

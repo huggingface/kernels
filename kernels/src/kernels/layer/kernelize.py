@@ -200,7 +200,7 @@ def kernelize(
         use_fallback (`bool | Fallback`, *optional*, defaults to `True`):
             Cases in which to use the original forward method. `True` is equivalent to `Fallback.DEFAULT`: it allows
             fallback when no compatible mapping or mode exists. `False` is equivalent to `Fallback.NONE` and raises
-            instead. `Fallback.ALL` also falls back when a selected kernel repository has no compatible build.
+            instead. `Fallback.ALL` also falls back when kernel loading fails.
 
     Returns:
         `nn.Module`: The kernelized model with optimized kernel implementations.

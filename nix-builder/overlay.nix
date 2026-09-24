@@ -10,6 +10,8 @@ final: prev:
   # Local packages/hooks.
   kernel-builder = final.callPackage ./pkgs/kernel-builder { inherit builderProvenance; };
 
+  kernel-port = final.callPackage ./pkgs/kernel-port { };
+
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
 
   fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };

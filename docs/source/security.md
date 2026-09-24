@@ -16,6 +16,10 @@ We do not aim to address the following attack vectors:
   attacker could do anything at this point, including tampering with the
   software that loads the kernel.
 
+This document discusses the security measures that `kernels` implements
+to address the first two attack vectors. Improving kernel security is an
+ongoing effort, and we welcome feedback and contributions.
+
 ## Malicious kernel developers
 
 Protection against malicious kernel developers starts with common sense

@@ -94,7 +94,8 @@ hashes of:
 - The revision of kernel-builder that the kernel was built with.
 - The revision of the kernel source itself.
 
-For example:
+This information is stored in the build variant's `metadata.json`. For
+example:
 
 ```json
 "provenance": {
@@ -109,6 +110,8 @@ For example:
   }
 }
 ```
+
+For a full example, see the [flash-attn3 kernel](https://huggingface.co/kernels/kernels-community/flash-attn3/blob/v2/build/torch-stable-abi29-cu126-x86_64-linux/metadata.json).
 
 This provenance information can be used to rebuild the kernel at the exact
 same revisions of the kernel and the builder, and a binary diff between the

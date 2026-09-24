@@ -152,8 +152,8 @@ kernels of a project.
 
 An attacker can circumvent the lock by trying to craft a commit
 that collides with the SHA-1 hash. However, this is currently hard,
-since the Hub uses a Git implementation with SHA-1 collision detection
-([sha1dc](https://github.com/cr-marcstevens/sha1collisiondetection)).
+since the Hugging Face Hub platform uses a Git implementation with
+SHA-1 collision detection ([sha1dc](https://github.com/cr-marcstevens/sha1collisiondetection)).
 
 ### Code signing
 

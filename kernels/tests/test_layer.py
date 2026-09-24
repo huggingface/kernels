@@ -425,6 +425,28 @@ def test_layer_fallback_works():
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
 
 
+def test_missing_kernel_build_falls_back(monkeypatch):
+    repo = LayerRepository(
+        repo_id="kernels-test/no-compatible-build",
+        layer_name="SiluAndMul",
+        version=1,
+    )
+
+    def unavailable_build():
+        raise FileNotFoundError("Cannot find a build variant for this system")
+
+    monkeypatch.setattr(repo, "load", unavailable_build)
+    layer = SiluAndMulWithKernel()
+    mapping = {"SiluAndMul": {"cuda": repo}}
+
+    with use_kernel_mapping(mapping, inherit_mapping=False):
+        kernelize(layer, device="cuda", mode=Mode.INFERENCE)
+
+    with use_kernel_mapping(mapping, inherit_mapping=False):
+        with pytest.raises(FileNotFoundError, match="Cannot find a build variant"):
+            kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+
 def test_kernel_condition_skips_kernelization(caplog):
     @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: False)
     class SiluAndMulConditionSkipped(SiluAndMul):

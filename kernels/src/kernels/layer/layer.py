@@ -517,7 +517,13 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     logging.info(f"Using function/layer from repo {repo}")
     logging.debug(f"kernelize mode: {mode}, repo mode: {repo_mode}")
 
-    layer = _get_layer_memoize(repo, module_class)
+    try:
+        layer = _get_layer_memoize(repo, module_class)
+    except FileNotFoundError:
+        if not use_fallback:
+            raise
+        _replace_forward(module, module_class)
+        return
 
     # Ideally we would do validation on the mapping where we check that
     # e.g. if a repo class is registered for TRAINING | TORCH_COMPILE,

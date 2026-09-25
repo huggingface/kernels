@@ -19,6 +19,8 @@
       title: Projects using kernels
     - local: migration
       title: Migrate from older versions
+    - local: security
+      title: Kernels security
     - local: faq
       title: FAQ
   title: Use kernels
@@ -68,7 +70,7 @@
     - local: cli-skills
       title: Install agent skills
   title: kernel-builder CLI
-- sections: 
+- sections:
     - local: builder/triton-autotune
       title: Ship Triton autotune configurations
   title: Advanced practices

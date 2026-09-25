@@ -1,9 +1,7 @@
 # Kernels security
 
-## Introduction
 
-Since `kernels` downloads and loads code from the internet, security is
-important. We aim to address the following attack vectors:
+`kernels` downloads and loads remote code, so you need clear trust boundaries. We aim to address the following attack vectors:
 
 - A kernel developer ships malicious code inside a kernel.
 - The Hub credentials of a kernel developer are compromised and an
@@ -22,15 +20,13 @@ ongoing effort, and we welcome feedback and contributions.
 
 ## Malicious kernel developers
 
-Protection against malicious kernel developers starts with common sense
-on the part of a `kernels` user. When you use a kernel, ask two questions:
+As a `kernels` user, ask two trust questions before you load a kernel:
 
 - Do I trust the developer?
 - Do I trust the developer to properly secure their infrastructure and
   credentials?
 
-To avoid accidentally loading an insecure kernel, we have added some
-safeguards to `kernels`. These will be discussed in the next sections.
+kernels also blocks accidental loads from publishers you have not opted into, such as from trusted publishers, the [kernels-community](https://huggingface.co/kernels-community), and kernel provenance.
 
 ### Trusted publishers
 
@@ -49,9 +45,7 @@ The set of trusted publishers is intentionally very small and generally
 only contains organizations that have years of experience in developing
 kernels and maintaining secure build infrastructure.
 
-Of course, one might want to use a kernel from a developer that is not
-a trusted publisher. In that case, you can add the kernel repository to
-the `trust_remote_code` argument of the `get_kernel` call:
+Pass `trust_remote_code=True` to allow any publisher, or pass a list of repo IDs to allow only those repose (plus trusted publishers). The default is `False` to always block unknown publishers.
 
 ```python
 activation = get_kernel(
@@ -61,9 +55,7 @@ activation = get_kernel(
 )
 ```
 
-If your library loads kernels on behalf of its users, it is worth
-considering to let the user control downloading of kernels from untrusted
-publishers using a flag. For example:
+If your library loads kernels on behalf of its users, expose a flag so they can control untrusted publishers. For example:
 
 ```python
 TRUST_REMOTE_KERNELS = os.environ.get("MYLIB_TRUST_REMOTE_KERNELS", "0") == "1"
@@ -90,10 +82,7 @@ provides good kernel coverage out of the box.
 
 ### Kernel provenance
 
-Trust can also (partially) come from the ability to show that the compiled
-artifact was derived from the source. To this end, each kernel built with
-`kernel-builder` includes provenance information, including the Git commit
-hashes of:
+You can also check that a build came from the claimed source. Every kernel built with kernel-builder records provenance in the build variant's `metadata.json`, including the Git commits of:
 
 - The revision of kernel-builder that the kernel was built with.
 - The revision of the kernel source itself.
@@ -118,37 +107,28 @@ example:
 For a full example, see the [flash-attn3 kernel](https://huggingface.co/kernels/kernels-community/flash-attn3/blob/v2/build/torch-stable-abi29-cu126-x86_64-linux/metadata.json).
 
 This provenance information can be used to rebuild the kernel at the exact
-same revisions of the kernel and the builder, and a binary diff between the
+same revisions of the kernel and the builder. A binary diff between the
 remote build and your local build can help reveal any tampering.
 
 Kernel builds are largely reproducible because kernels are built using Nix
-inside a sandbox. `kernel-builder` has the whole world pinned down to the
-exact build definition (and thus version) of the GCC compiler, the C library,
-etc. You can find these pins inside the `flake.lock` file of the
+inside a sandbox. `kernel-builder` pins the full toolchain (compiler, C library, etc.) in `flake.lock`. You can find these pins in the
 [kernels](https://github.com/huggingface/kernels) repository.
 
 ## Kernel compromises
 
-### Introduction
 
 Even if you trust a kernel developer, their credentials might be
 compromised. An attacker could use the credentials to upload a malicious
-version of a kernel. We offer two protections against these attack vectors:
+version of a kernel.`kernels` offer two protections against these attack vectors:
 
 - Kernel locking
 - Code signing
 
-We will discuss these in more detail below.
 
 ### Kernel locking
 
 Kernel locking records the Git commit hash of a kernel in a `kernels.lock`
-file. After the kernel is locked, it can be loaded using the lock file,
-which will only ever load the version with the locked commit hash. If an
-attacker compromises a kernel Hub repository and pushes a new, malicious
-version of the kernel, it won't be used since the kernel is locked at an
-older version. See [Lock kernel versions](locking.md) for how to lock the
-kernels of a project.
+file. After the kernel is locked, load it with `get_locked_kernel` (downloads if needed) or `load_kernel (requires a pre-downloaded kernel and errors if it is missing). Either path only loads the locked commit. If an attacker compromises a kernel Hub repository and pushes a new, malicious version, it will not be used. See [Lock kernel versions](./locking) for how to lock the kernels of a project.
 
 An attacker can circumvent the lock by trying to craft a commit
 that collides with the SHA-1 hash. However, this is currently hard,
@@ -157,10 +137,11 @@ SHA-1 collision detection ([sha1dc](https://github.com/cr-marcstevens/sha1collis
 
 ### Code signing
 
-We have also introduced support for code signing using cosign. This works
-as follows. First, the builder computes the SHA-256 digest of each file
-in the kernel and stores it in the kernel metadata (`metadata.json`).
-For example:
+`kernels` can verify kernels with cosign. 
+
+On load, `kernels` checks that the files match signed digests in `metadata.json`. Signing uses cosign with short-lived keys, and the signature is recorded in a [ledger](https://docs.sigstore.dev/logging/overview/). That combination makes leaked CI signing keys much harder to reuse.
+
+The builder computes the SHA-256 digest of each file in the kernel and stores it in `metadata.json`:
 
 ```json
 "digest": {
@@ -187,14 +168,12 @@ Aside from the main signature, cosign also records information about how
 the signature was made, such as the OIDC issuer, the source repository, and
 the workflow path/branch.
 
-Signature verification is currently being rolled out in `kernels` and performs
+Signature verification performs
 the following steps:
 
-- The signature is verified against the given policy. The default policy
-  in `kernels` only accepts kernels that were signed from several trusted
-  repositories/workflows.
-- The authenticity of `metadata.json` is verified using the signature.
-- The digests in `metadata.json` are used to verify the kernel files.
+- Verify the signature against the given policy. The default policy only accepts kernels signed by workflows in the `huggingface/kernel-community` GitHub repository.
+- Verify the authenticity of `metadata.json` using the signature.
+- Use the digests in `metadata.json` to verify the kernel files.
 
 At this time, a signature verification error will only result in a warning.
 Moreover, signature verification is only performed when the `sigstore` Python
@@ -216,7 +195,7 @@ skipped. The signing certificate is still checked against the policy, since
 the receipt could have been written by a verification with a different
 policy.
 
-Receipts are stored by kernel identity: the name of a receipt file is a hash
+Receipts are stored by kernel identity. The name of a receipt file is a hash
 of:
 
 - The repo ID

@@ -40,6 +40,26 @@ it preserves the original model graph. It is also reversible, since
 even though the `forward` of a layer _instance_ might be replaced,
 the corresponding class still has the original `forward`.
 
+## Caching and offline usage
+
+### How do I configure a custom directory for the kernel cache?
+
+Set the `KERNELS_CACHE` environment variable in your shell or script:
+
+```bash
+export KERNELS_CACHE=/path/to/my/kernel_cache
+```
+
+`KERNELS_CACHE` takes precedence over `HF_HUB_CACHE` and `HF_HOME`. See [Environment variables](env.md#kernels_cache) for full resolution details and internal directory layout.
+
+### How can I run kernels in an air-gapped or offline environment?
+
+1. On a machine with network access, download the kernels into your cache directory using [`kernels download`](cli-download.md) or [`~kernels.get_kernel`].
+2. Copy the cache directory to your offline target environment and point `KERNELS_CACHE` (or `HF_HUB_CACHE`) to that path.
+3. Enable offline mode by exporting `export HF_HUB_OFFLINE=1` or passing `local_files_only=True` when calling [`~kernels.get_kernel`].
+
+Because `kernels` records resolved version refs (such as `v1`) in the cache upon download, version-based resolution continues to work offline without network requests.
+
 ## Misc
 
 ### How can I disable kernel reporting in the user-agent?
@@ -49,3 +69,4 @@ This only includes the `kernels` version, `torch` version, and the build
 information for the kernel being requested.
 
 You can disable this by setting `export HF_HUB_DISABLE_TELEMETRY=yes`.
+

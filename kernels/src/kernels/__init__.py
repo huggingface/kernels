@@ -12,6 +12,7 @@ from kernels.install import install_kernel
 from kernels.layer import (
     CUDAProperties,
     Device,
+    Fallback,
     FuncRepository,
     LayerRepository,
     LocalFuncRepository,
@@ -48,6 +49,7 @@ __all__ = [
     "Benchmark",
     "CUDAProperties",
     "Device",
+    "Fallback",
     "ROCMProperties",
     "FuncRepository",
     "LayerRepository",

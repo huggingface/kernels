@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+from enum import Flag, auto
 from inspect import Parameter, Signature
 from pathlib import Path
 from types import MethodType, ModuleType
@@ -32,6 +33,30 @@ if TYPE_CHECKING:
     from torch import nn
 
 logger = logging.getLogger(__name__)
+
+
+class Fallback(Flag):
+    """Cases in which kernelization may keep the original layer forward.
+
+    - `NONE`: Raise instead of falling back.
+    - `NO_LAYER`: No kernel mapping exists for the layer.
+    - `NO_DEVICE`: The layer has no mapping for the requested device type.
+    - `NO_COMPATIBLE_PROPERTIES`: No mapping matches the device properties.
+    - `NO_COMPATIBLE_MODE`: No repository or loaded kernel supports the requested mode.
+    - `CANNOT_LOAD`: Kernel loading fails.
+    - `DEFAULT`: Fall back for missing mappings, properties, or mode; raise on a loading error.
+    - `ALL`: Fall back in every case above, including missing files during loading.
+    """
+
+    NONE = 0
+    NO_LAYER = auto()
+    NO_DEVICE = auto()
+    NO_COMPATIBLE_PROPERTIES = auto()
+    NO_COMPATIBLE_MODE = auto()
+    CANNOT_LOAD = auto()
+
+    DEFAULT = NO_LAYER | NO_DEVICE | NO_COMPATIBLE_PROPERTIES | NO_COMPATIBLE_MODE
+    ALL = DEFAULT | CANNOT_LOAD
 
 
 class LayerRepositoryProtocol(RepositoryProtocol, Protocol):
@@ -462,7 +487,7 @@ def use_kernelized_func(*args: Callable):
     return decorator
 
 
-def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use_fallback):
+def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use_fallback: Fallback):
     module_class = type(module)
     layer_name = module_class.kernel_layer_name  # type: ignore[attr-defined]
 
@@ -479,7 +504,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
             f"Check if the layer name matches one of the kernels in the mapping or add the kernel "
             f"you want to use to the mapping. Defaulting to original forward implementation."
         )
-        if not use_fallback:
+        if Fallback.NO_LAYER not in use_fallback:
             raise ValueError(f"No layer mapping for `{layer_name}`")
         _replace_forward(module, module_class)
         return
@@ -488,7 +513,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     property_repos = kernel.get(device_type.type)
 
     if property_repos is None:
-        if not use_fallback:
+        if Fallback.NO_DEVICE not in use_fallback:
             raise ValueError(f"No layer mapping for `{layer_name}` with device type `{device_type}`")
         _replace_forward(module, module_class)
         return
@@ -496,7 +521,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     repos = property_repos.repos
 
     if repos is None:
-        if not use_fallback:
+        if Fallback.NO_COMPATIBLE_PROPERTIES not in use_fallback:
             raise ValueError(f"No layer mapping for `{layer_name}` device `{device_type}` with the right properties")
         _replace_forward(module, module_class)
         return
@@ -507,7 +532,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     )
 
     if repo_with_mode is None:
-        if not use_fallback:
+        if Fallback.NO_COMPATIBLE_MODE not in use_fallback:
             raise ValueError(f"No repository for `{layer_name}` for configuration mode={mode}")
         _replace_forward(module, module_class)
         return
@@ -517,7 +542,18 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
     logging.info(f"Using function/layer from repo {repo}")
     logging.debug(f"kernelize mode: {mode}, repo mode: {repo_mode}")
 
-    layer = _get_layer_memoize(repo, module_class)
+    try:
+        layer = _get_layer_memoize(repo, module_class)
+    except FileNotFoundError:
+        if Fallback.CANNOT_LOAD not in use_fallback:
+            raise
+        logger.info(
+            "Kernel for layer `%s` on %s could not be loaded; using the original forward.",
+            layer_name,
+            device_type.type,
+        )
+        _replace_forward(module, module_class)
+        return
 
     # Ideally we would do validation on the mapping where we check that
     # e.g. if a repo class is registered for TRAINING | TORCH_COMPILE,
@@ -590,7 +626,7 @@ def _conditionally_replace_forward(
     module: "nn.Module",
     layer: Type["nn.Module"],
     mode: Mode,
-    use_fallback: bool,
+    use_fallback: Fallback,
 ):
     module_class = type(module)
 
@@ -603,7 +639,7 @@ def _conditionally_replace_forward(
     needs_fallback_for_backward = Mode.TRAINING in mode and not getattr(layer, "has_backward", True)
 
     if needs_fallback_for_compile or needs_fallback_for_backward:
-        if use_fallback:
+        if Fallback.NO_COMPATIBLE_MODE in use_fallback:
             if needs_fallback_for_compile:
                 logging.info("Layer does not support torch.compile, using fallback")
             if needs_fallback_for_backward:

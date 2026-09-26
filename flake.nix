@@ -161,8 +161,6 @@
             ];
             buildInputs = [
               black
-              # For testing CUDA version detection in kernels.
-              cudaPackages.cuda_cudart
               isort
               mypy
               pre-commit
@@ -190,7 +188,9 @@
               types-requests
               types-tabulate
               venvShellHook
-            ]);
+            ])
+            # For testing CUDA version detection in kernels.
+            ++ lib.optional (lib.meta.availableOn stdenv.hostPlatform cudaPackages.cuda_cudart) cudaPackages.cuda_cudart;
 
             RUST_SRC_PATH = "${rust}/lib/rustlib/src/rust/library";
 

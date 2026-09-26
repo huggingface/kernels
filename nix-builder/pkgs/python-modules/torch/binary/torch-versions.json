@@ -1,8 +1,26 @@
 [
   {
+    "torchVersion": "2.10.0",
+    "metal": true,
+    "systems": ["aarch64-darwin"]
+  },
+
+  {
     "torchVersion": "2.11.0",
     "cpu": true,
     "systems": ["x86_64-linux"]
+  },
+
+  {
+    "torchVersion": "2.11.0",
+    "metal": true,
+    "systems": ["aarch64-darwin"]
+  },
+
+  {
+    "torchVersion": "2.12.0",
+    "metal": true,
+    "systems": ["aarch64-darwin"]
   },
 
   {

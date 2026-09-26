@@ -12,6 +12,9 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## Metal aarch64-darwin
 
+- `torch210-metal-aarch64-darwin`
+- `torch211-metal-aarch64-darwin`
+- `torch212-metal-aarch64-darwin`
 - `torch213-metal-aarch64-darwin`
 - `torch214-metal-aarch64-darwin`
 

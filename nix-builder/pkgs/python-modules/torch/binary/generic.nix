@@ -299,6 +299,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pythonRelaxWheelDeps = [
     "cuda-bindings"
     "pyzes"
+    "setuptools"
     "sympy"
   ];
 

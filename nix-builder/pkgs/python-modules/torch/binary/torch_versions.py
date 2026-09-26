@@ -26,9 +26,12 @@ def system_to_platform(system: str, framework_type: str, torch_version: str) -> 
         return xpu_platform_map.get(system, system)
 
     if system == "aarch64-darwin":
+        # The cp314 wheels for Torch 2.10 target macOS 14, 2.11 went back
+        # to macOS 11, and 2.12+ target macOS 14 again.
+        v = Version(torch_version)
         return (
             "macosx_14_0_arm64"
-            if Version(torch_version) >= Version("2.12")
+            if v >= Version("2.12") or (v.major, v.minor) == (2, 10)
             else "macosx_11_0_arm64"
         )
 

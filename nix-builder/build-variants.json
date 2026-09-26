@@ -5,6 +5,9 @@
       "torch214-cpu-aarch64-darwin"
     ],
     "metal": [
+      "torch210-metal-aarch64-darwin",
+      "torch211-metal-aarch64-darwin",
+      "torch212-metal-aarch64-darwin",
       "torch213-metal-aarch64-darwin",
       "torch214-metal-aarch64-darwin"
     ]

@@ -215,6 +215,15 @@ final: prev:
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
 
+        opentelemetry-instrumentation-requests =
+          python-super.opentelemetry-instrumentation-requests.overrideAttrs
+            (
+              _: prevAttrs: {
+                # Fails on Darwin builder, already tested in nixpkgs.
+                dontUsePytestCheck = true;
+              }
+            );
+
         pyzes = callPackage ./pkgs/python-modules/pyzes { };
 
         scipy = python-super.scipy.overrideAttrs (

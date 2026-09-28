@@ -25,6 +25,7 @@ message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 include(CheckCXXCompilerFlag)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/rust.cmake)
 
 if(NOT DEFINED GPU_LANG)
     if(ICX_COMPILER OR ICPX_COMPILER)

@@ -2,7 +2,7 @@ use std::io::Write;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
-use kernels_common::config::{Build, Kernel};
+use kernels_common::config::{Build, Kernel, Language};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;
@@ -34,9 +34,10 @@ fn render_kernel_component(
         .join("\n");
 
     match kernel {
-        Kernel::Cpu { .. } => {
-            render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
-        }
+        Kernel::Cpu { .. } => match kernel.language() {
+            Language::Rust => render_kernel_component_rust(env, kernel_name, kernel, write)?,
+            Language::Cpp => render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?,
+        },
         Kernel::Cuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
@@ -50,6 +51,28 @@ fn render_kernel_component(
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
     }
+
+    Ok(())
+}
+
+fn render_kernel_component_rust(
+    env: &Environment,
+    kernel_name: &str,
+    kernel: &Kernel,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("kernel-component/rust-cpu.cmake")
+        .wrap_err("Cannot get kernel template")?
+        .render_captured_to(
+            context! {
+                manifest_path => kernel.cargo_manifest(),
+                name => kernel_name,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render kernel template")?;
+
+    write.write_all(b"\n")?;
 
     Ok(())
 }

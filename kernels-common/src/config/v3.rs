@@ -302,6 +302,7 @@ impl From<Kernel> for super::Kernel {
             } => super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                language: None,
                 include,
                 src,
             },

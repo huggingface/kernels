@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelDependency, KernelName};
+use super::{Dependency, GitUrl, KernelDependency, KernelName, Language};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -139,7 +139,7 @@ pub struct TorchNoarch {
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
-    pub src: Vec<PathBuf>,
+    pub src: Option<Vec<PathBuf>>,
     pub cxx_flags: Option<Vec<String>>,
 }
 
@@ -150,6 +150,7 @@ pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        language: Option<Language>,
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
@@ -325,7 +326,7 @@ impl From<TvmFfi> for super::TvmFfi {
         Self {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
-            src: tvm_ffi.src,
+            src: tvm_ffi.src.unwrap_or_default(),
             cxx_flags: tvm_ffi.cxx_flags,
         }
     }
@@ -352,11 +353,13 @@ impl From<Kernel> for super::Kernel {
             Kernel::Cpu {
                 cxx_flags,
                 depends,
+                language,
                 include,
                 src,
             } => super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                language,
                 include,
                 src,
             },
@@ -542,7 +545,8 @@ impl From<super::TvmFfi> for TvmFfi {
         Self {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
-            src: tvm_ffi.src,
+            // Keep an omitted `src` omitted rather than writing `src = []`.
+            src: Some(tvm_ffi.src).filter(|src| !src.is_empty()),
             cxx_flags: tvm_ffi.cxx_flags,
         }
     }
@@ -569,11 +573,13 @@ impl From<super::Kernel> for Kernel {
             super::Kernel::Cpu {
                 cxx_flags,
                 depends,
+                language,
                 include,
                 src,
             } => Kernel::Cpu {
                 cxx_flags,
                 depends,
+                language,
                 include,
                 src,
             },

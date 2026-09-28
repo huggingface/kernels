@@ -137,6 +137,18 @@ rec {
         ) kernelConfig.toml.kernel
       );
       kernelDeps = pkgs.fetchKernelDeps src;
+      buildTvmFfiExtension =
+        args:
+        let
+          ext = extension.mkTvmFfiExtension args;
+        in
+        if kernelConfig.hasRustKernels buildConfig.backend then
+          extension.mkRustExtension {
+            extension = ext;
+            inherit src;
+          }
+        else
+          ext;
       pythonDeps = (kernelConfig.toml.general.python-depends or [ ]);
       backendPythonDeps =
         lib.attrByPath [ buildConfig.backend "python-depends" ] [ ]
@@ -160,7 +172,7 @@ rec {
         variant = variants.kernelVariant kernelConfig;
       }
     else if kernelConfig.isTvmFfi then
-      extension.mkTvmFfiExtension {
+      buildTvmFfiExtension {
         inherit
           buildConfig
           doGetKernelCheck

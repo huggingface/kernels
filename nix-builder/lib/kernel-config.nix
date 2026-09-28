@@ -29,6 +29,12 @@ in
 {
   inherit toml;
 
+  hasRustKernels =
+    backend:
+    lib.any (kernel: kernel.backend == backend && (kernel.language or "cpp") == "rust") (
+      lib.attrValues (toml.kernel or { })
+    );
+
   # Is the kernel a Torch kernel.
   isTorch = toml ? torch;
 

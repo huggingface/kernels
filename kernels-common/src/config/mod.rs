@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use eyre::Result;
+use eyre::{Result, bail};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -53,7 +53,35 @@ pub struct Build {
 impl Build {
     pub fn open(kernel_dir: impl AsRef<Path>) -> Result<Build> {
         let build_compat = parse::parse_and_validate(kernel_dir)?;
-        Ok(build_compat.into())
+        let build: Build = build_compat.into();
+        build.validate()?;
+        Ok(build)
+    }
+
+    /// Reject combinations that parse but cannot be built, so that every
+    /// consumer of a `Build` can assume they hold.
+    fn validate(&self) -> Result<()> {
+        let rust_kernels = self
+            .kernels
+            .iter()
+            .filter(|(_, k)| k.language() == Language::Rust);
+
+        for (name, kernel) in rust_kernels {
+            if !matches!(self.framework, Framework::TvmFfi(_)) {
+                bail!("Rust kernel `{name}` requires a `[tvm-ffi]` framework");
+            }
+            if kernel.cxx_flags().is_some() {
+                bail!("Rust kernel `{name}`: `cxx-flags` does not apply to `language = \"rust\"`");
+            }
+            if kernel.include().is_some() {
+                bail!("Rust kernel `{name}`: `include` does not apply to `language = \"rust\"`");
+            }
+            if kernel.cargo_manifest().is_none() {
+                bail!("Rust kernel `{name}`: `src` must include Cargo.toml");
+            }
+        }
+
+        Ok(())
     }
 
     pub fn is_noarch(&self) -> bool {
@@ -346,6 +374,7 @@ pub enum Kernel {
     Cpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
+        language: Option<Language>,
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
@@ -379,6 +408,13 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub enum Language {
+    Cpp,
+    Rust,
 }
 
 impl Kernel {
@@ -416,6 +452,20 @@ impl Kernel {
             Kernel::Metal { .. } => Backend::Metal,
             Kernel::Rocm { .. } => Backend::Rocm,
             Kernel::Xpu { .. } => Backend::Xpu,
+        }
+    }
+
+    pub fn cargo_manifest(&self) -> Option<&str> {
+        self.src()
+            .iter()
+            .map(String::as_str)
+            .find(|path| *path == "Cargo.toml" || path.ends_with("/Cargo.toml"))
+    }
+
+    pub fn language(&self) -> Language {
+        match self {
+            Kernel::Cpu { language, .. } => language.unwrap_or(Language::Cpp),
+            _ => Language::Cpp,
         }
     }
 
@@ -590,5 +640,56 @@ mod tests {
 
         let err = toml::from_str::<v5::Build>(toml).unwrap_err().to_string();
         assert!(err.contains("unknown field `minver`"), "{err}");
+    }
+
+    #[test]
+    fn v5_rust_cpu_round_trip() {
+        let config = r#"
+            [general]
+            name = "rust-cpu"
+            version = 1
+            edition = 5
+            license = "Apache-2.0"
+            backends = ["cpu"]
+
+            [tvm-ffi]
+
+            [kernel.cpu_kernel]
+            backend = "cpu"
+            language = "rust"
+            depends = []
+            src = ["cpu/Cargo.toml"]
+        "#;
+
+        let parsed: v5::Build = toml::from_str(config).unwrap();
+        let serialized = toml::to_string(&parsed).unwrap();
+        // An omitted `src` must not come back as `src = []`.
+        assert!(!serialized.contains("src = []"), "{serialized}");
+        let build: Build = toml::from_str::<v5::Build>(&serialized).unwrap().into();
+
+        assert_eq!(build.kernels["cpu_kernel"].language(), Language::Rust);
+    }
+
+    #[test]
+    fn v5_missing_dsl_defaults_to_cpp() {
+        let config = r#"
+            [general]
+            name = "cpp-default"
+            version = 1
+            edition = 5
+            license = "Apache-2.0"
+            backends = ["cpu"]
+
+            [tvm-ffi]
+
+            [kernel.cpp_kernel]
+            backend = "cpu"
+            depends = []
+            src = ["kernel.cpp"]
+        "#;
+
+        let build: Build = toml::from_str::<v5::Build>(config).unwrap().into();
+
+        assert_eq!(build.kernels["cpp_kernel"].language(), Language::Cpp);
     }
 }

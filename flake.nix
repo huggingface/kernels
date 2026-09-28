@@ -231,7 +231,7 @@
             builtins.filter (buildSet: buildSet.buildConfig.bundleBuild or false) buildSets
           );
 
-          forCacheNonBundle = mkForCache (
+          forCacheNonBundle = mkForCache pkgs (
             builtins.filter (buildSet: !(buildSet.buildConfig.bundleBuild or false)) buildSets
           );
 

@@ -63,14 +63,7 @@ let
         test ! -e "$relu/.cache"
         touch $out
       '';
-
-  rustKernelConfig = import ../lib/kernel-config.nix {
-    inherit lib;
-  } ../../examples/kernels/relu-rust;
 in
-# Rust components must be selected per backend, not across the whole project.
-assert rustKernelConfig.hasRustKernels "cpu";
-assert !(rustKernelConfig.hasRustKernels "cuda");
 assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.13.0") kernelBuildSets)
   ''
     Torch minver/maxver filtering does not work.

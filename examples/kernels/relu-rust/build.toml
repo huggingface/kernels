@@ -14,4 +14,4 @@ repo-id = "kernels-test/relu-rust"
 backend = "cpu"
 language = "rust"
 depends = []
-src = ["relu-rs/Cargo.toml", "relu-rs/src/lib.rs", "Cargo.toml", "Cargo.lock"]
+src = ["relu-rs/Cargo.toml", "relu-rs/src/lib.rs", "Cargo.toml"]

@@ -34,12 +34,12 @@ pub fn create_pyproject_file_set(
     env.set_trim_blocks(true);
     minijinja_embed::load_templates!(&mut env);
 
-    let file_set = match &build.framework {
-        Framework::TvmFfi(_) => tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?,
-        _ if build.is_noarch() => {
-            torch::write_torch_ext_noarch(&env, &build, kernel_id, provenance)?
-        }
-        _ => torch::write_torch_ext(&env, &build, kernel_id, provenance)?,
+    let file_set = if matches!(build.framework, Framework::TvmFfi(_)) {
+        tvm_ffi::write_tvm_ffi_ext(&env, &build, kernel_id, provenance)?
+    } else if build.is_noarch() {
+        torch::write_torch_ext_noarch(&env, &build, kernel_id, provenance)?
+    } else {
+        torch::write_torch_ext(&env, &build, kernel_id, provenance)?
     };
 
     Ok(file_set)

@@ -94,8 +94,6 @@ in
     stdenv = effectiveStdenv;
   };
 
-  mkRustExtension = callPackage ./arch-rust.nix { };
-
   mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
 
   resolveCppDeps = (

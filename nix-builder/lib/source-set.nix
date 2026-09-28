@@ -21,6 +21,7 @@ let
   torchExtPath = path + "/torch-ext";
   tvmFfiExtPath = path + "/tvm-ffi-ext";
   lockSet = fileset.maybeMissing (path + "/kernels.lock");
+  cargoLockSet = fileset.maybeMissing (path + "/Cargo.lock");
   pySrcSet =
     let
       path =
@@ -50,6 +51,7 @@ fileset.toSource {
   fileset = fileset.unions [
     kernelsSrc
     lockSet
+    cargoLockSet
     srcSet
     pySrcSet
     pyTestsSet

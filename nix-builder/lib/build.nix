@@ -125,6 +125,7 @@ rec {
           kernelDeps = lib.unique (lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends) kernels));
         in
         extension.resolveCppDeps kernelDeps;
+      hasRustKernels = lib.any (kernel: (kernel.language or "cpp") == "rust") (lib.attrValues kernels);
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;
@@ -137,18 +138,6 @@ rec {
         ) kernelConfig.toml.kernel
       );
       kernelDeps = pkgs.fetchKernelDeps src;
-      buildTvmFfiExtension =
-        args:
-        let
-          ext = extension.mkTvmFfiExtension args;
-        in
-        if kernelConfig.hasRustKernels buildConfig.backend then
-          extension.mkRustExtension {
-            extension = ext;
-            inherit src;
-          }
-        else
-          ext;
       pythonDeps = (kernelConfig.toml.general.python-depends or [ ]);
       backendPythonDeps =
         lib.attrByPath [ buildConfig.backend "python-depends" ] [ ]
@@ -172,7 +161,7 @@ rec {
         variant = variants.kernelVariant kernelConfig;
       }
     else if kernelConfig.isTvmFfi then
-      buildTvmFfiExtension {
+      extension.mkTvmFfiExtension {
         inherit
           buildConfig
           doGetKernelCheck
@@ -187,6 +176,7 @@ rec {
           kernelProvenance
           ;
 
+        cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
         kernelName = kernelConfig.name;
         doAbiCheck = true;
         variant = variants.kernelVariant kernelConfig;

@@ -46,8 +46,8 @@ displays a corresponding badge in the UI.
 A kernel repository on the Hub must contain a `build` directory. This
 directory contains build variants of a kernel in the form of directories
 following the template
-`<framework><version>-cxx<abiver>-<cu><cudaver>-<arch>-<os>`.
-For example `build/torch26-cxx98-cu118-x86_64-linux`.
+`<framework><version>-<cu><cudaver>-<arch>-<os>`.
+For example `build/torch214-cu130-x86_64-linux`.
 
 The kernel is in the build variant directory and must contain a
 `__init__.py` file. For compatibility with older versions of the

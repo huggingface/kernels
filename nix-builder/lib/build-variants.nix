@@ -32,7 +32,7 @@ rec {
     else if version.system == "aarch64-darwin" then
       "torch${flattenVersion version.torchVersion}-${computeString version}-${version.system}"
     else
-      "torch${flattenVersion version.torchVersion}-cxx11-${computeString version}-${version.system}";
+      "torch${flattenVersion version.torchVersion}-${computeString version}-${version.system}";
 
   # Build variants included in bundle builds.
   buildVariants =

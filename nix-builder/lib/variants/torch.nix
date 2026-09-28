@@ -24,7 +24,7 @@ let
     if buildConfig.system == "aarch64-darwin" then
       "${torchString}-${computeString}-${buildConfig.system}"
     else
-      "${torchString}-cxx11-${computeString}-${buildConfig.system}";
+      "${torchString}-${computeString}-${buildConfig.system}";
 in
 {
   arch = archString;

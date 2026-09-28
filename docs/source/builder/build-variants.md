@@ -17,43 +17,43 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU aarch64-linux
 
-- `torch213-cxx11-cpu-aarch64-linux`
-- `torch214-cxx11-cpu-aarch64-linux`
+- `torch213-cpu-aarch64-linux`
+- `torch214-cpu-aarch64-linux`
 
 ## CUDA aarch64-linux
 
-- `torch213-cxx11-cu126-aarch64-linux`
-- `torch213-cxx11-cu130-aarch64-linux`
-- `torch213-cxx11-cu132-aarch64-linux`
-- `torch214-cxx11-cu126-aarch64-linux`
-- `torch214-cxx11-cu130-aarch64-linux`
-- `torch214-cxx11-cu132-aarch64-linux`
+- `torch213-cu126-aarch64-linux`
+- `torch213-cu130-aarch64-linux`
+- `torch213-cu132-aarch64-linux`
+- `torch214-cu126-aarch64-linux`
+- `torch214-cu130-aarch64-linux`
+- `torch214-cu132-aarch64-linux`
 
 ## CPU x86_64-linux
 
-- `torch213-cxx11-cpu-x86_64-linux`
-- `torch214-cxx11-cpu-x86_64-linux`
+- `torch213-cpu-x86_64-linux`
+- `torch214-cpu-x86_64-linux`
 
 ## CUDA x86_64-linux
 
-- `torch213-cxx11-cu126-x86_64-linux`
-- `torch213-cxx11-cu130-x86_64-linux`
-- `torch213-cxx11-cu132-x86_64-linux`
-- `torch214-cxx11-cu126-x86_64-linux`
-- `torch214-cxx11-cu130-x86_64-linux`
-- `torch214-cxx11-cu132-x86_64-linux`
+- `torch213-cu126-x86_64-linux`
+- `torch213-cu130-x86_64-linux`
+- `torch213-cu132-x86_64-linux`
+- `torch214-cu126-x86_64-linux`
+- `torch214-cu130-x86_64-linux`
+- `torch214-cu132-x86_64-linux`
 
 ## ROCm x86_64-linux
 
-- `torch213-cxx11-rocm71-x86_64-linux`
-- `torch213-cxx11-rocm72-x86_64-linux`
-- `torch214-cxx11-rocm714-x86_64-linux`
-- `torch214-cxx11-rocm72-x86_64-linux`
+- `torch213-rocm71-x86_64-linux`
+- `torch213-rocm72-x86_64-linux`
+- `torch214-rocm714-x86_64-linux`
+- `torch214-rocm72-x86_64-linux`
 
 ## XPU x86_64-linux
 
-- `torch213-cxx11-xpu20260-x86_64-linux`
-- `torch214-cxx11-xpu20261-x86_64-linux`
+- `torch213-xpu20260-x86_64-linux`
+- `torch214-xpu20261-x86_64-linux`
 
 ## Python-only kernels
 

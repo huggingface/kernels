@@ -43,3 +43,24 @@ jobs:
 
       - name: Build the outputs to be cached.
         run: nix build -L .#forCache
+
+  build-darwin:
+    permissions:
+      contents: read
+    name: Update Nix builder cache (aarch64-darwin)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+        with:
+          extra-conf: |
+            sandbox = relaxed
+      - uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
+        with:
+          name: huggingface
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Nix info
+        run: nix-shell -p nix-info --run "nix-info -m"
+
+      - name: Build the outputs to be cached.
+        run: nix build -L .#forCache

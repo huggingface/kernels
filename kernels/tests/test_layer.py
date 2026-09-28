@@ -1,7 +1,8 @@
+import functools
 import logging
 import sys
 from contextlib import nullcontext
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 import torch
@@ -28,6 +29,7 @@ from kernels.layer.layer import (
     _KERNEL_MAPPING,
     _validate_layer,
 )
+from kernels.layer.repos import RepositoryProtocol
 
 
 @pytest.fixture
@@ -1385,3 +1387,324 @@ def test_local_overrides_layer(monkeypatch, local_kernel_path):
             f"kernels-test/silu-and-mul={str(local_kernel_path)}:kernels-test/non-existing2=/non/existing",
         )
         kernelize(model, device="cuda", mode=Mode.INFERENCE)
+
+
+class _SelectorTestRepo:
+    """Repository that loads a local layer class, so that selector tests do not need the Hub."""
+
+    def __init__(self, layer):
+        self.layer = layer
+
+    def load(self):
+        return self.layer
+
+    def __repr__(self):
+        return f"_SelectorTestRepo({self.layer.__name__})"
+
+
+class _ReLUSelectorKernel(nn.Module):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.relu(input)
+
+
+class _ReLUSelectorKernelNoBackward(nn.Module):
+    has_backward = False
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return F.relu(input)
+
+
+def test_selector_registered_as_is():
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    mapping_before = _KERNEL_MAPPING.get()
+
+    with use_kernel_mapping({}, inherit_mapping=False):
+        register_kernel_mapping({"ReLU": selector})
+        assert _KERNEL_MAPPING.get()["ReLU"] is selector
+
+    with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+        assert _KERNEL_MAPPING.get()["ReLU"] is selector
+
+    assert _KERNEL_MAPPING.get() is mapping_before
+
+
+def test_selector_receives_arguments(device):
+    repo = _SelectorTestRepo(_ReLUSelectorKernel)
+    calls = []
+
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        calls.append((module, device_type, mode))
+        return repo, Mode.FALLBACK
+
+    relu = ReLUWithKernel().to(device)
+    with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+        kernelize(relu, device=device, mode=Mode.INFERENCE)
+
+    assert len(calls) == 1
+    module, device_type, mode = calls[0]
+    assert module is relu
+    assert isinstance(device_type, Device)
+    assert device_type.type == device
+    assert mode == Mode.INFERENCE
+
+
+def test_selector_kernel_is_used(device):
+    repo = _SelectorTestRepo(_ReLUSelectorKernel)
+
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return repo, Mode.FALLBACK
+
+    relu = ReLUWithKernel().to(device)
+    with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+        kernelize(relu, device=device, mode=Mode.INFERENCE)
+
+    X = torch.randn(10, 32, device=device)
+    Y = relu(X)
+    assert relu.n_calls == 0
+    torch.testing.assert_close(Y, F.relu(X))
+
+
+def test_selector_per_instance(device):
+    repo = _SelectorTestRepo(_ReLUSelectorKernel)
+
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return (repo, Mode.FALLBACK) if getattr(module, "use_kernel", False) else None
+
+    with_kernel = ReLUWithKernel().to(device)
+    with_kernel.use_kernel = True
+    without_kernel = ReLUWithKernel().to(device)
+    model = nn.Sequential(with_kernel, without_kernel)
+
+    with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+        kernelize(model, device=device, mode=Mode.INFERENCE)
+
+    model(torch.randn(10, 32, device=device))
+    assert with_kernel.n_calls == 0
+    assert without_kernel.n_calls == 1
+
+
+def test_selector_returns_none(device):
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    relu = ReLUWithKernel().to(device)
+    with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+        kernelize(relu, device=device, mode=Mode.INFERENCE)
+
+        with pytest.raises(ValueError, match="No repository for `ReLU`"):
+            kernelize(relu, device=device, mode=Mode.INFERENCE, use_fallback=False)
+
+    relu(torch.randn(10, 32, device=device))
+    assert relu.n_calls == 1
+
+
+def test_selector_mode_validation(device):
+    repo = _SelectorTestRepo(_ReLUSelectorKernelNoBackward)
+
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return repo, Mode.TRAINING
+
+    relu = ReLUWithKernel().to(device)
+    with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+        with pytest.raises(ValueError, match="does not support backward"):
+            kernelize(relu, device=device, mode=Mode.TRAINING)
+
+
+def test_selector_and_dict_override_each_other():
+    cpu_repo = _SelectorTestRepo(_ReLUSelectorKernel)
+    mps_repo = _SelectorTestRepo(_ReLUSelectorKernel)
+
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    with use_kernel_mapping({"ReLU": {"cpu": cpu_repo}}, inherit_mapping=False):
+        register_kernel_mapping({"ReLU": selector})
+        assert _KERNEL_MAPPING.get()["ReLU"] is selector
+
+        register_kernel_mapping({"ReLU": {"mps": mps_repo}})
+        device_repos = _KERNEL_MAPPING.get()["ReLU"]
+        assert isinstance(device_repos, dict)
+        # Device entries from before the selector was registered must not come back.
+        assert set(device_repos.keys()) == {"mps"}
+        assert device_repos["mps"].repos[Mode.FALLBACK] is mps_repo
+
+        # Registering another dict merges with the existing device entries.
+        register_kernel_mapping({"ReLU": {"cpu": cpu_repo}})
+        assert set(_KERNEL_MAPPING.get()["ReLU"].keys()) == {"cpu", "mps"}
+
+
+def test_selector_nested_contexts():
+    repo = _SelectorTestRepo(_ReLUSelectorKernel)
+
+    def outer_selector(
+        module: nn.Module, *, device_type: Device, mode: Mode
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    def inner_selector(
+        module: nn.Module, *, device_type: Device, mode: Mode
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    with use_kernel_mapping({"ReLU": outer_selector}, inherit_mapping=False):
+        with use_kernel_mapping({"SiluAndMul": {"cpu": repo}}):
+            assert _KERNEL_MAPPING.get()["ReLU"] is outer_selector
+
+        with use_kernel_mapping({"ReLU": inner_selector}):
+            assert _KERNEL_MAPPING.get()["ReLU"] is inner_selector
+
+        assert _KERNEL_MAPPING.get()["ReLU"] is outer_selector
+
+        with use_kernel_mapping({"SiluAndMul": {"cpu": repo}}, inherit_mapping=False):
+            assert "ReLU" not in _KERNEL_MAPPING.get()
+
+        assert _KERNEL_MAPPING.get()["ReLU"] is outer_selector
+
+
+def test_selector_callable_instance(device):
+    class Selector:
+        def __init__(self, repo: _SelectorTestRepo):
+            self.repo = repo
+
+        def __call__(
+            self, module: nn.Module, *, device_type: Device, mode: Mode
+        ) -> tuple[RepositoryProtocol, Mode] | None:
+            return self.repo, Mode.FALLBACK
+
+    relu = ReLUWithKernel().to(device)
+    with use_kernel_mapping({"ReLU": Selector(_SelectorTestRepo(_ReLUSelectorKernel))}, inherit_mapping=False):
+        # Entering an inheriting context deep-copies the mapping, including
+        # callable selector instances. The copied selector must still work.
+        with use_kernel_mapping({}):
+            kernelize(relu, device=device, mode=Mode.INFERENCE)
+
+    relu(torch.randn(10, 32, device=device))
+    assert relu.n_calls == 0
+
+
+@pytest.mark.parametrize(
+    "value",
+    [_SelectorTestRepo(_ReLUSelectorKernel), _ReLUSelectorKernel, 42],
+    ids=["bare-repo", "class", "int"],
+)
+def test_invalid_mapping_value_rejected(value):
+    def selector(module: nn.Module, *, device_type: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    match = "must be a dict of device-specific kernels or a kernel selector"
+    mapping_before = _KERNEL_MAPPING.get()
+
+    with pytest.raises(TypeError, match=match):
+        with use_kernel_mapping({"ReLU": value}):
+            pass
+    assert _KERNEL_MAPPING.get() is mapping_before
+
+    with use_kernel_mapping({}, inherit_mapping=False):
+        # Valid entries must not be registered when another entry is invalid.
+        with pytest.raises(TypeError, match=match):
+            register_kernel_mapping({"SiluAndMul": selector, "ReLU": value})
+        assert _KERNEL_MAPPING.get() == {}
+
+
+def _selector_missing_mode(module: nn.Module, *, device_type: Device) -> tuple[RepositoryProtocol, Mode] | None:
+    return None
+
+
+def _selector_wrong_name(module: nn.Module, *, device: Device, mode: Mode) -> tuple[RepositoryProtocol, Mode] | None:
+    return None
+
+
+def _selector_keyword_only_module(
+    *, module: nn.Module, device_type: Device, mode: Mode
+) -> tuple[RepositoryProtocol, Mode] | None:
+    return None
+
+
+def _selector_positional_only_device_type(
+    module: nn.Module, device_type: Device, /, mode: Mode
+) -> tuple[RepositoryProtocol, Mode] | None:
+    return None
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [
+        _selector_missing_mode,
+        _selector_wrong_name,
+        _selector_keyword_only_module,
+        _selector_positional_only_device_type,
+    ],
+)
+def test_selector_invalid_signature_rejected(selector):
+    with use_kernel_mapping({}, inherit_mapping=False):
+        with pytest.raises(TypeError, match=r"must accept `\(module, \*, device_type, mode\)`"):
+            register_kernel_mapping({"ReLU": selector})
+        assert "ReLU" not in _KERNEL_MAPPING.get()
+
+
+class _SelectorWithInvalidSignature:
+    __signature__ = "not a signature"
+
+    def __call__(
+        self, module: nn.Module, *, device_type: Device, mode: Mode
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+
+@pytest.mark.parametrize(
+    "selector",
+    [max, _SelectorWithInvalidSignature()],
+    ids=["builtin-without-signature", "invalid-signature"],
+)
+def test_selector_uninspectable_signature_rejected(selector):
+    with use_kernel_mapping({}, inherit_mapping=False):
+        with pytest.raises(TypeError, match="Cannot inspect the signature of the kernel selector for `ReLU`"):
+            register_kernel_mapping({"ReLU": selector})
+        assert "ReLU" not in _KERNEL_MAPPING.get()
+
+
+def test_selector_flexible_signatures_accepted():
+    def with_kwargs(module: nn.Module, **kwargs: object) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    def with_extra_default(
+        module: nn.Module, *, device_type: Device, mode: Mode, verbose: bool = False
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    def positional_or_keyword(
+        module: nn.Module, device_type: Device, mode: Mode
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    class Selector:
+        def __call__(
+            self, module: nn.Module, *, device_type: Device, mode: Mode
+        ) -> tuple[RepositoryProtocol, Mode] | None:
+            return None
+
+    def with_prefix(
+        prefix: str, module: nn.Module, *, device_type: Device, mode: Mode
+    ) -> tuple[RepositoryProtocol, Mode] | None:
+        return None
+
+    selectors = [
+        with_kwargs,
+        with_extra_default,
+        positional_or_keyword,
+        Selector(),
+        functools.partial(with_prefix, "relu"),
+    ]
+
+    for selector in selectors:
+        with use_kernel_mapping({"ReLU": selector}, inherit_mapping=False):
+            assert _KERNEL_MAPPING.get()["ReLU"] is selector
+
+
+def test_mapping_accepts_non_dict_mapping():
+    repo = _SelectorTestRepo(_ReLUSelectorKernel)
+
+    with use_kernel_mapping({"ReLU": MappingProxyType({"cpu": repo})}, inherit_mapping=False):
+        assert _KERNEL_MAPPING.get()["ReLU"]["cpu"].repos[Mode.FALLBACK] is repo

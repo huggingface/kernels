@@ -75,3 +75,7 @@
 ### LockedLayerRepository
 
 [[autodoc]] kernels.LockedLayerRepository
+
+### KernelLayerSelectorProtocol
+
+[[autodoc]] kernels.KernelLayerSelectorProtocol

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import inspect
 import logging
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ from .device import Device
 from .globals import _KERNEL_MAPPING
 from .layer import kernelize_layer
 from .mode import Mode
-from .repos import DeviceRepos, RepositoryProtocol
+from .repos import DeviceRepos, KernelLayerSelectorProtocol, RepositoryProtocol
 
 if TYPE_CHECKING:
     import torch
@@ -23,7 +25,8 @@ def use_kernel_mapping(
         dict[
             Device | str,
             RepositoryProtocol | dict[Mode, RepositoryProtocol],
-        ],
+        ]
+        | KernelLayerSelectorProtocol,
     ],
     *,
     inherit_mapping: bool = True,
@@ -35,8 +38,9 @@ def use_kernel_mapping(
     kernel configurations for different parts of your code.
 
     Args:
-        mapping (`dict[str, dict[Union[Device, str], Union[LayerRepositoryProtocol, dict[Mode, LayerRepositoryProtocol]]]]`):
-            The kernel mapping to apply. Maps layer names to device-specific kernel configurations.
+        mapping (`dict[str, Union[dict[Union[Device, str], Union[RepositoryProtocol, dict[Mode, RepositoryProtocol]]], KernelLayerSelectorProtocol]]`):
+            The kernel mapping to apply. Maps layer names to device-specific kernel configurations, or to a
+            [`KernelLayerSelectorProtocol`] callable that selects the kernel for each module.
         inherit_mapping (`bool`, *optional*, defaults to `True`):
             When `True`, the current mapping will be extended by `mapping` inside the context. When `False`,
             only `mapping` is used inside the context.
@@ -79,6 +83,20 @@ def use_kernel_mapping(
             model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
 
         # Outside the context, original mappings are restored
+
+        # Use a selector that chooses the kernel per module
+        def select_silu_and_mul(module, *, device_type, mode):
+            if device_type.type != "cuda":
+                return None
+            repo = LayerRepository(
+                repo_id="kernels-community/activation",
+                layer_name="SiluAndMul",
+                version=1,
+            )
+            return repo, Mode.FALLBACK
+
+        with use_kernel_mapping({"SiluAndMul": select_silu_and_mul}):
+            model = kernelize(model, mode=Mode.TRAINING | Mode.TORCH_COMPILE, device="cuda")
         ```
     """
 
@@ -89,7 +107,12 @@ def use_kernel_mapping(
                 self.token = _KERNEL_MAPPING.set(deepcopy(_KERNEL_MAPPING.get()))
             else:
                 self.token = _KERNEL_MAPPING.set({})
-            register_kernel_mapping(mapping)
+            try:
+                register_kernel_mapping(mapping)
+            except BaseException:
+                # __exit__ is not called when __enter__ raises.
+                _KERNEL_MAPPING.reset(self.token)
+                raise
 
         def __exit__(self, exc_type, exc_value, traceback):
             _KERNEL_MAPPING.reset(self.token)
@@ -103,7 +126,8 @@ def register_kernel_mapping(
         dict[
             Device | str,
             RepositoryProtocol | dict[Mode, RepositoryProtocol],
-        ],
+        ]
+        | KernelLayerSelectorProtocol,
     ],
     inherit_mapping: bool = True,
 ):
@@ -114,9 +138,11 @@ def register_kernel_mapping(
     depending on the device and mode. This should be used in conjunction with [`kernelize`].
 
     Args:
-        mapping (`dict[str, dict[Union[Device, str], Union[RepositoryProtocol, dict[Mode, RepositoryProtocol]]]]`):
+        mapping (`dict[str, Union[dict[Union[Device, str], Union[RepositoryProtocol, dict[Mode, RepositoryProtocol]]], KernelLayerSelectorProtocol]]`):
             The kernel mapping to register globally. Maps layer names to device-specific kernels.
-            The mapping can specify different kernels for different modes (training, inference, etc.).
+            The mapping can specify different kernels for different modes (training, inference, etc.),
+            or map a layer name to a [`KernelLayerSelectorProtocol`] callable that selects the kernel for
+            each module.
         inherit_mapping (`bool`, *optional*, defaults to `True`):
             When `True`, the current mapping will be extended by `mapping`. When `False`, the existing mappings
             are erased before adding `mapping`.
@@ -155,24 +181,80 @@ def register_kernel_mapping(
             }
         }
         register_kernel_mapping(advanced_mapping)
+
+        # Mapping with a selector that chooses the kernel per module
+        def select_rms_norm(module, *, device_type, mode):
+            if device_type.type != "cuda":
+                return None
+            repo = LayerRepository(
+                repo_id="kernels-community/layer_norm",
+                layer_name="LlamaRMSNorm",
+                version=1,
+            )
+            return repo, Mode.FALLBACK
+
+        register_kernel_mapping({"LlamaRMSNorm": select_rms_norm})
         ```
     """
+    # Validate the new mapping first, to avoid that the mapping is in an
+    # inconsistent state after a failure.
+    for layer_name, value in mapping.items():
+        _validate_mapping_value(layer_name, value)
+
     if not inherit_mapping:
         _KERNEL_MAPPING.set({})
 
     # Merge with existing mappings.
     for new_kernel, new_device_repos in mapping.items():
-        device_repo = _KERNEL_MAPPING.get().setdefault(new_kernel, {})
-        for new_device, new_repo in new_device_repos.items():
-            device = Device(type=new_device) if isinstance(new_device, str) else new_device
+        if not isinstance(new_device_repos, Mapping):
+            # Validated to be a kernel selector.
+            _KERNEL_MAPPING.get()[new_kernel] = new_device_repos
+        else:
+            device_repo = _KERNEL_MAPPING.get().get(new_kernel, None)
+            if not isinstance(device_repo, dict):
+                device_repo = {}
+                _KERNEL_MAPPING.get()[new_kernel] = device_repo
+            for new_device, new_repo in new_device_repos.items():
+                device = Device(type=new_device) if isinstance(new_device, str) else new_device
 
-            if isinstance(new_repo, dict):
-                kernel_options = new_repo
-            else:
-                kernel_options = {Mode.FALLBACK: new_repo}
+                if isinstance(new_repo, dict):
+                    kernel_options = new_repo
+                else:
+                    kernel_options = {Mode.FALLBACK: new_repo}
 
-            feature_repos = device_repo.setdefault(device.type, DeviceRepos.create_repo(device))
-            feature_repos.insert(device, kernel_options)
+                feature_repos = device_repo.setdefault(device.type, DeviceRepos.create_repo(device))
+                feature_repos.insert(device, kernel_options)
+
+
+def _validate_mapping_value(layer_name: str, value: object) -> None:
+    if isinstance(value, Mapping):
+        return
+
+    # If we don't have a mapping, it must be a kernel selector. A kernel
+    # selector must comply with the protocol and also not be a class type.
+    if not isinstance(value, KernelLayerSelectorProtocol) or isinstance(value, type):
+        raise TypeError(
+            f"Kernel mapping for `{layer_name}` must be a dict of device-specific kernels "
+            f"or a kernel selector, got `{type(value).__name__}`"
+        )
+
+    # The protocol check only verifies that the right methods exist, not their
+    # signatures. So check that the selector has a valid signature.
+    try:
+        signature = inspect.signature(value)
+    except (TypeError, ValueError) as e:
+        raise TypeError(
+            f"Cannot inspect the signature of the kernel selector for `{layer_name}`, "
+            f"wrap it in a Python function that accepts `(module, *, device_type, mode)`: {e}"
+        ) from None
+
+    try:
+        signature.bind(None, device_type=None, mode=None)
+    except TypeError as e:
+        raise TypeError(
+            f"Kernel selector for `{layer_name}` must accept `(module, *, device_type, mode)`, "
+            f"but has signature `{signature}`: {e}"
+        ) from None
 
 
 def kernelize(

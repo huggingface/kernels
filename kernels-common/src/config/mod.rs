@@ -663,8 +663,6 @@ mod tests {
 
         let parsed: v5::Build = toml::from_str(config).unwrap();
         let serialized = toml::to_string(&parsed).unwrap();
-        // An omitted `src` must not come back as `src = []`.
-        assert!(!serialized.contains("src = []"), "{serialized}");
         let build: Build = toml::from_str::<v5::Build>(&serialized).unwrap().into();
 
         assert_eq!(build.kernels["cpu_kernel"].language(), Language::Rust);

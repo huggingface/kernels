@@ -139,7 +139,11 @@ pub struct TorchNoarch {
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
-    pub src: Option<Vec<PathBuf>>,
+
+    // Rust-only kernels have no C++ binding code, so `src` may be omitted.
+    #[serde(default)]
+    pub src: Vec<PathBuf>,
+
     pub cxx_flags: Option<Vec<String>>,
 }
 
@@ -326,7 +330,7 @@ impl From<TvmFfi> for super::TvmFfi {
         Self {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
-            src: tvm_ffi.src.unwrap_or_default(),
+            src: tvm_ffi.src,
             cxx_flags: tvm_ffi.cxx_flags,
         }
     }
@@ -545,8 +549,7 @@ impl From<super::TvmFfi> for TvmFfi {
         Self {
             include: tvm_ffi.include,
             pyext: tvm_ffi.pyext,
-            // Keep an omitted `src` omitted rather than writing `src = []`.
-            src: Some(tvm_ffi.src).filter(|src| !src.is_empty()),
+            src: tvm_ffi.src,
             cxx_flags: tvm_ffi.cxx_flags,
         }
     }

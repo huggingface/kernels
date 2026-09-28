@@ -1,10 +1,35 @@
 {
+  "2.10": {
+    "aarch64-darwin": {
+      "cpu": {
+        "url": "https://download.pytorch.org/whl/cpu/torch-2.10.0-cp314-cp314-macosx_14_0_arm64.whl",
+        "hash": "sha256-yIsRKf1OFPD4gpY8ZygxXKrjXS9HN00X7e7R7cdpdJc=",
+        "version": "2.10.0"
+      }
+    }
+  },
   "2.11": {
     "x86_64-linux": {
       "cpu": {
         "url": "https://download.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl",
         "hash": "sha256-+EgeqQiOTluBF4p1qr27ZYvehjm8GhX9XY+TCryWZzU=",
         "version": "2.11.0"
+      }
+    },
+    "aarch64-darwin": {
+      "cpu": {
+        "url": "https://download.pytorch.org/whl/cpu/torch-2.11.0-cp314-cp314-macosx_11_0_arm64.whl",
+        "hash": "sha256-ByoNbkhl6LDcDb/m6+1o+uI1EkIig17wPlgU1BTYwBI=",
+        "version": "2.11.0"
+      }
+    }
+  },
+  "2.12": {
+    "aarch64-darwin": {
+      "cpu": {
+        "url": "https://download.pytorch.org/whl/cpu/torch-2.12.0-cp314-cp314-macosx_14_0_arm64.whl",
+        "hash": "sha256-99+uSlGRl9+gUOmNjjY3ig+1iZYlqHXCtURFAFouQE4=",
+        "version": "2.12.0"
       }
     }
   },

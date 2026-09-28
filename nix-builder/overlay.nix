@@ -225,6 +225,14 @@ final: prev:
           }
         );
 
+        torch-bin_2_10 = mkTorch {
+          version = "2.10";
+          triton-cuda = null;
+          triton-rocm = null;
+          triton-xpu = null;
+          xpuPackages = null;
+        };
+
         # Maintain a minimal version for TPU support.
         torch-bin_2_11 = mkTorch {
           version = "2.11";

@@ -253,6 +253,11 @@ stdenv.mkDerivation (prevAttrs: {
   // lib.optionalAttrs xpuSupport {
     MKLROOT = oneapi-torch-dev;
     SYCL_ROOT = oneapi-torch-dev;
+  }
+  // lib.optionalAttrs stdenv.hostPlatform.isDarwin {
+    # Without LANG set, libintl queries CoreFoundation for the preferred
+    # languages, which intermittendly segfaults the build sandbox.
+    LANG = "C";
   };
 
   # If we use the default setup, CMAKE_CUDA_HOST_COMPILER gets set to nixpkgs g++.

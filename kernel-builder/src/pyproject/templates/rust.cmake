@@ -5,8 +5,12 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
         message(FATAL_ERROR "rust_kernel_component: NAME and MANIFEST_PATH are required")
     endif()
 
+    if(NOT CARGO_EXECUTABLE)
+        message(FATAL_ERROR "Kernel component `${KERNEL_NAME}` is written in Rust, "
+            "but `cargo` was not found. Install a Rust toolchain or set CARGO_EXECUTABLE.")
+    endif()
+
     string(REPLACE "-" "_" _LIB_NAME ${KERNEL_NAME})
-    find_program(CARGO_EXECUTABLE cargo REQUIRED)
 
     set(_CARGO_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME})
     set(_STATICLIB ${_CARGO_TARGET_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}${_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
@@ -59,8 +63,8 @@ function(_restrict_rust_exports TARGET)
         file(WRITE ${_EXPORTS} "{ global: __tvm_ffi_*; local: *; };\n")
         set(_FLAG "--version-script=${_EXPORTS}")
     else()
-        message(WARNING "Rust kernel symbols are not restricted on this platform")
-        return()
+        message(FATAL_ERROR "Rust kernels are not supported on this platform "
+            "(cannot restrict exported symbols to the tvm-ffi entry points)")
     endif()
 
     target_link_options(${TARGET} PRIVATE "LINKER:${_FLAG}")

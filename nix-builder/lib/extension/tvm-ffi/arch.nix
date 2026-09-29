@@ -148,16 +148,10 @@ stdenv.mkDerivation (prevAttrs: {
 
   framework = "tvm-ffi";
 
-  # Nix omits null attributes from the derivation, so builds without Rust
-  # kernels are unaffected.
-  cargoDeps =
-    if rustSupport then
-      rustPlatform.importCargoLock {
-        lockFile = cargoLock;
-        allowBuiltinFetchGit = true;
-      }
-    else
-      null;
+  ${if rustSupport then "cargoDeps" else null} = rustPlatform.importCargoLock {
+    lockFile = cargoLock;
+    allowBuiltinFetchGit = true;
+  };
 
   # We run kernel-builder here rather than patchPhase or preConfigure,
   # so that external users of `src` get the source tree with the files

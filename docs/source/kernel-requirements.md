@@ -89,11 +89,7 @@ metadata. Currently the following top-level keys are supported:
   list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
 - `upstream` (`str | list[str]`, optional): Git-compatible URLs (passable to
   `git clone`) of the original repositories where the kernel source code comes
-  from. The builder writes a string for one repository and a list for multiple
-  repositories; an empty list is omitted. Multiple upstreams require `kernels`
-  0.18.0 or newer. Python exposes the full list as `Metadata.upstream` (empty
-  when unspecified). This property now returns a list instead of a string or
-  `None`, including when reading legacy single-string metadata.
+  from.
 - `source` (`str`, optional): Git-compatible URL (passable to `git clone`)
   of the kernel-builder formatted source repository (must contain `build.toml`
   and `flake.nix`).

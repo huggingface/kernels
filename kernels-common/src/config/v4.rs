@@ -35,12 +35,7 @@ pub struct General {
 
     pub license: String,
 
-    #[serde(
-        default,
-        with = "super::upstream",
-        skip_serializing_if = "Vec::is_empty"
-    )]
-    pub upstream: Vec<GitUrl>,
+    pub upstream: Option<GitUrl>,
 
     pub source: Option<GitUrl>,
 
@@ -202,7 +197,7 @@ impl From<General> for super::General {
             name: general.name,
             version: general.version,
             license: general.license,
-            upstream: general.upstream,
+            upstream: general.upstream.into_iter().collect(),
             source: general.source,
             backends: general.backends.into_iter().map(Into::into).collect(),
             cuda: general.cuda.map(Into::into),

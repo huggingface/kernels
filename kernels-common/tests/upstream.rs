@@ -71,14 +71,17 @@ fn build_upstreams_round_trip_through_metadata_and_current_config() {
 #[test]
 fn legacy_build_upstream_survives_migration() {
     for framework in ["", "[torch-noarch]"] {
-        for urls in [vec![FIRST], vec![FIRST, SECOND]] {
-            let field = if urls.len() == 1 {
-                format!("upstream = {FIRST:?}")
-            } else {
-                format!("upstream = {urls:?}")
-            };
+        for (field, expected) in [
+            (String::new(), vec![]),
+            (format!("upstream = {FIRST:?}"), vec![FIRST]),
+        ] {
             let input = config("", &field).replace("[torch-noarch]", framework);
             let compat: BuildCompat = toml::from_str(&input).unwrap();
+            if framework.is_empty() {
+                assert!(matches!(&compat, BuildCompat::V3(_)));
+            } else {
+                assert!(matches!(&compat, BuildCompat::V4(_)));
+            }
             let build: Build = compat.try_into().unwrap();
             let current: CurrentConfig = build.into();
             assert_eq!(
@@ -88,8 +91,19 @@ fn legacy_build_upstream_survives_migration() {
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>(),
-                urls
+                expected
             );
+        }
+    }
+}
+
+#[test]
+fn legacy_build_rejects_upstream_lists() {
+    for framework in ["", "[torch-noarch]"] {
+        for urls in [vec![], vec![FIRST], vec![FIRST, SECOND]] {
+            let input =
+                config("", &format!("upstream = {urls:?}")).replace("[torch-noarch]", framework);
+            assert!(toml::from_str::<BuildCompat>(&input).is_err());
         }
     }
 }

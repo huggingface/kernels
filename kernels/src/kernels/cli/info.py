@@ -148,7 +148,7 @@ def _print_human(info: dict):
     print(f"Minimum kernels version: {value(info.get('kernels_minver'))}")
     print(f"License: {value(info.get('license'))}")
     upstream = info.get("upstream")
-    print(f"Upstream: {', '.join(upstream) if upstream else '-'}")
+    print(f"Upstream: {', '.join(upstream) if upstream is not None and len(upstream) > 0 else '-'}")
     print(f"Source: {value(info.get('source'))}")
     python_depends = info.get("python_depends")
     print(f"Python dependencies: {', '.join(python_depends) if python_depends else '-'}")

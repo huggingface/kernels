@@ -226,15 +226,23 @@ def test_kernel_dependency_is_immutable():
 
 
 @pytest.mark.parametrize(
-    "upstream",
+    ("upstream", "expected"),
     [
-        None,
-        [],
-        ["https://github.com/example/first"],
-        ["https://github.com/example/first", "https://github.com/example/second"],
+        (None, []),
+        ([], []),
+        pytest.param(
+            "https://github.com/example/first",
+            ["https://github.com/example/first"],
+            id="legacy-string",
+        ),
+        (["https://github.com/example/first"], ["https://github.com/example/first"]),
+        (
+            ["https://github.com/example/first", "https://github.com/example/second"],
+            ["https://github.com/example/first", "https://github.com/example/second"],
+        ),
     ],
 )
-def test_metadata_upstreams(upstream):
+def test_metadata_upstreams(upstream, expected):
     m = Metadata.from_bytes(
         json.dumps(
             {
@@ -248,4 +256,4 @@ def test_metadata_upstreams(upstream):
             }
         ).encode()
     )
-    assert m.upstream == (upstream or [])
+    assert m.upstream == expected

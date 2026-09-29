@@ -1,5 +1,5 @@
 # Generate a standardized build variant name following the pattern:
-# torch<VERSION>-[cxx11-]<COMPUTE>-<ARCH>-<OS>
+# torch<VERSION>-<COMPUTE>-<ARCH>-<OS>
 # or, when compiled against the Torch stable ABI:
 # torch-stable-abi<VERSION>-<COMPUTE>-<ARCH>-<OS>
 #
@@ -13,9 +13,9 @@
 #   TORCH_STABLE_ABI - Stable ABI version the extension was compiled against (e.g., "2.11");
 #                      when set, TORCH_VERSION is ignored and the prefix becomes
 #                      torch-stable-abi<VERSION> (e.g., "2.11" -> "torch-stable-abi211")
-# Example output: torch27-cxx11-cu124-x86_64-linux (Linux)
-#                 torch27-cu124-x86_64-windows (Windows)
-#                 torch27-metal-aarch64-darwin (macOS)
+# Example output: torch214-cu124-x86_64-linux (Linux)
+#                 torch214-cu124-x86_64-windows (Windows)
+#                 torch214-metal-aarch64-darwin (macOS)
 #                 torch-stable-abi211-cu124-x86_64-linux (Linux, stable ABI)
 #
 function(generate_build_name OUT_BUILD_NAME TORCH_VERSION COMPUTE_FRAMEWORK COMPUTE_VERSION)
@@ -117,12 +117,7 @@ function(generate_build_name OUT_BUILD_NAME TORCH_VERSION COMPUTE_FRAMEWORK COMP
     set(ARCH_OS_STRING "${CPU_ARCH}-${OS_NAME}")
 
     # Assemble the final build name
-    # For non-stable-ABI Linux builds, include cxx11 ABI indicator for compatibility
-    if(NOT ARG_TORCH_STABLE_ABI AND ARCH_OS_STRING MATCHES "-linux$")
-        set(BUILD_NAME "${TORCH_PREFIX}-cxx11-${COMPUTE_STRING}-${ARCH_OS_STRING}")
-    else()
-        set(BUILD_NAME "${TORCH_PREFIX}-${COMPUTE_STRING}-${ARCH_OS_STRING}")
-    endif()
+    set(BUILD_NAME "${TORCH_PREFIX}-${COMPUTE_STRING}-${ARCH_OS_STRING}")
 
     set(${OUT_BUILD_NAME} "${BUILD_NAME}" PARENT_SCOPE)
     message(STATUS "Generated build name: ${BUILD_NAME}")
@@ -136,7 +131,7 @@ endfunction()
 # Arguments:
 #   TARGET_NAME - Name of the target to create the install rule for
 #   PACKAGE_NAME - Python package name (e.g., "activation")
-#   BUILD_VARIANT_NAME - Build variant name (e.g., "torch271-cxx11-cu124-x86_64-linux")
+#   BUILD_VARIANT_NAME - Build variant name (e.g., "torch214-cu124-x86_64-linux")
 #   INSTALL_PREFIX - Base installation directory (defaults to CMAKE_INSTALL_PREFIX)
 #   GPU_ARCHS - List of GPU architectures that were compiled
 #               (optional; when provided for CUDA/ROCm, metadata.json will include
@@ -234,7 +229,7 @@ endfunction()
 # Arguments:
 #   TARGET_NAME - Name of the target to create the install rule for
 #   PACKAGE_NAME - Python package name (e.g., "activation")
-#   BUILD_VARIANT_NAME - Build variant name (e.g., "torch271-cxx11-cu124-x86_64-linux")
+#   BUILD_VARIANT_NAME - Build variant name (e.g., "torch214-cu124-x86_64-linux")
 #   GPU_ARCHS - List of GPU architectures that were compiled
 #               (optional; when provided for CUDA/ROCm, metadata.json will include
 #               a "backend" key with the type and arch list)

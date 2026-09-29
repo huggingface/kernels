@@ -539,7 +539,7 @@ ROCm, XPU, Metal, CPU. If you would like to the tests for a specific build
 variant, you can use `nix run .#ciTests.<variant>`. For instance:
 
 ```bash
-$ nix run .#ciTests.torch210-cxx11-cpu-x86_64-linux
+$ nix run .#ciTests.torch210-cpu-x86_64-linux
 ```
 
 When running the tests on a non-NixOS systems, make sure that

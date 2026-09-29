@@ -103,6 +103,8 @@ final: prev:
           ;
         inherit (triton-rocm) triton-rocm_3_7_0;
         inherit (triton-xpu)
+          triton-xpu_3_6_0
+          triton-xpu_3_7_0
           triton-xpu_3_7_1
           triton-xpu_3_7_2
           triton-xpu_3_8_0
@@ -238,8 +240,8 @@ final: prev:
           version = "2.10";
           triton-cuda = null;
           triton-rocm = null;
-          triton-xpu = null;
-          xpuPackages = null;
+          triton-xpu = triton-xpu_3_6_0;
+          xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         # Maintain a minimal version for TPU support.
@@ -247,8 +249,8 @@ final: prev:
           version = "2.11";
           triton-cuda = null;
           triton-rocm = null;
-          triton-xpu = null;
-          xpuPackages = null;
+          triton-xpu = triton-xpu_3_7_0;
+          xpuPackages = final.xpuPackages_2025_3_2;
         };
 
         torch-bin_2_12 = mkTorch {

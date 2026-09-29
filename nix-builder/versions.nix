@@ -6,6 +6,12 @@
     bundleBuild = true;
   }
   {
+    torchVersion = "2.10";
+    xpuVersion = "2025.3.1";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
     torchVersion = "2.11";
     cpu = true;
     systems = [
@@ -17,6 +23,12 @@
     torchVersion = "2.11";
     metal = true;
     systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
+    xpuVersion = "2025.3.2";
+    systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
   {
@@ -33,6 +45,12 @@
     torchVersion = "2.12";
     metal = true;
     systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.12";
+    xpuVersion = "2025.3.2";
+    systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
 

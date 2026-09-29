@@ -6,6 +6,13 @@
         "hash": "sha256-yIsRKf1OFPD4gpY8ZygxXKrjXS9HN00X7e7R7cdpdJc=",
         "version": "2.10.0"
       }
+    },
+    "x86_64-linux": {
+      "xpu": {
+        "url": "https://download.pytorch.org/whl/xpu/torch-2.10.0%2Bxpu-cp314-cp314-linux_x86_64.whl",
+        "hash": "sha256-NJN2IhJKNBK+qpizLyYcHLVnZGEwcv/DQ/TaGzQg7X8=",
+        "version": "2.10.0"
+      }
     }
   },
   "2.11": {
@@ -13,6 +20,11 @@
       "cpu": {
         "url": "https://download.pytorch.org/whl/cpu/torch-2.11.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl",
         "hash": "sha256-+EgeqQiOTluBF4p1qr27ZYvehjm8GhX9XY+TCryWZzU=",
+        "version": "2.11.0"
+      },
+      "xpu": {
+        "url": "https://download.pytorch.org/whl/xpu/torch-2.11.0%2Bxpu-cp314-cp314-linux_x86_64.whl",
+        "hash": "sha256-9j+b6Gd+E4oquM6pYA4F1Db3AFvgEmr3Clj3s/cYnnM=",
         "version": "2.11.0"
       }
     },
@@ -29,6 +41,13 @@
       "cpu": {
         "url": "https://download.pytorch.org/whl/cpu/torch-2.12.0-cp314-cp314-macosx_14_0_arm64.whl",
         "hash": "sha256-99+uSlGRl9+gUOmNjjY3ig+1iZYlqHXCtURFAFouQE4=",
+        "version": "2.12.0"
+      }
+    },
+    "x86_64-linux": {
+      "xpu": {
+        "url": "https://download.pytorch.org/whl/xpu/torch-2.12.0%2Bxpu-cp314-cp314-linux_x86_64.whl",
+        "hash": "sha256-CAXv6u5uWyIA13Bx3WxS1lUg+VsD5H9S9oPmL0jmIuY=",
         "version": "2.12.0"
       }
     }

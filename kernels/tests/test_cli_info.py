@@ -32,7 +32,16 @@ def test_info_hub_rejects_revision_and_version():
         print_kernel_info("kernels-community/activation", revision="main", version=1)
 
 
-def test_info_local(tmp_path, capsys):
+@pytest.mark.parametrize(
+    "upstream",
+    [
+        None,
+        [],
+        "https://github.com/example/activation",
+        ["https://github.com/example/activation", "https://github.com/example/other"],
+    ],
+)
+def test_info_local(tmp_path, capsys, upstream):
     variant_dir = tmp_path / "build" / "torch28-cxx11-cu128-x86_64-linux"
     variant_dir.mkdir(parents=True)
     (variant_dir / "metadata.json").write_text(
@@ -42,7 +51,7 @@ def test_info_local(tmp_path, capsys):
                 "name": "activation",
                 "version": 1,
                 "license": "Apache-2.0",
-                "upstream": "https://github.com/example/activation",
+                "upstream": upstream,
                 "python-depends": ["torch"],
                 "backend": {"type": "cuda"},
             }
@@ -55,10 +64,17 @@ def test_info_local(tmp_path, capsys):
     assert info["name"] == "activation"
     assert info["version"] == 1
     assert info["license"] == "Apache-2.0"
-    assert info["upstream"] == "https://github.com/example/activation"
+    upstreams = [upstream] if isinstance(upstream, str) else (upstream or [])
+    assert info["upstream"] == upstreams
+    assert "upstreams" not in info
     assert info["source"] is None
     assert info["python_depends"] == ["torch"]
     assert info["backends"] == ["cuda"]
+
+    print_kernel_info(str(tmp_path))
+    out = capsys.readouterr().out
+    expected = ", ".join(upstreams) if upstreams else "-"
+    assert f"Upstream: {expected}\n" in out
 
 
 def test_info_local_rejects_revision(tmp_path):

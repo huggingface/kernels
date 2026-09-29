@@ -521,7 +521,7 @@ Record one `[kernel.<name>]` section for the manifest. It writes no files; the `
 
 ```kdl
 manifest name="<id>" backends="<b>[,<b>...]" torch_src="<glob>[,<glob>...]"
-    [version=N] [edition=N] [license="..."] [upstream="..."]
+    [version=N] [edition=N] [license="..."] [upstream="<url>[,<url>...]"]
     [repo_id="org/name"] [hub_branch="..."] [python_depends="..."]
     [cuda_minver="..."] [cuda_maxver="..."] [cuda_python_depends="..."]
     [torch_pyext="py,pyi,..."] [torch_include="<dir>,..."]
@@ -531,6 +531,9 @@ manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
 ```
 
 Generate `build.toml` from the `kernel` sections recorded before it, plus the `[general]` and `[torch]` settings given here. The manifest is always generated, never overlaid: if it needs a field this op cannot emit, extend the op.
+
+`upstream` accepts one URL or a comma-separated list of upstream repository URLs.
+A single URL is written as a string; multiple URLs are written as a TOML array.
 
 `torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
 

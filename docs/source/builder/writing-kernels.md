@@ -203,8 +203,14 @@ The following sections enumerate all supported options for `build.toml`.
   `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
-- `upstream`: Git-compatible URL (passable to `git clone`) of the original
-  upstream repository where the kernel source code comes from.
+- `upstream`: list of Git-compatible URLs (passable to `git clone`) of the original
+  repositories where the kernel source code comes from. A single URL string is
+  also accepted for compatibility. For example:
+  `upstream = ["https://github.com/org/repo-a", "https://github.com/org/repo-b"]`.
+  The `upstream` card template variable is always a list. Templates can iterate
+  over it or use `{{ upstream | join(", ") }}` to credit every repository.
+  Existing templates that interpolate `{{ upstream }}` directly should use one
+  of these forms when regenerated.
 - `source`: Git-compatible URL (passable to `git clone`) of the kernel-builder
   formatted source repository. This repository must contain a `build.toml` and
   `flake.nix` so that it can be pulled and built with the kernel builder.

@@ -59,6 +59,11 @@ Python dependencies: -
 Backends: cuda, metal
 ```
 
+The `Upstream` line lists every upstream repository, separated by commas, or
+`-` if none is specified. JSON output includes an `upstream` array (empty
+when unspecified), including when reading legacy single-string metadata.
+The field is omitted when metadata is unavailable.
+
 ## See Also
 
 - [kernels versions](cli-versions.md) - List available versions of a kernel

@@ -11,7 +11,7 @@ pub struct Manifest {
     version: Option<String>,
     license: Option<String>,
     edition: Option<String>,
-    upstream: Option<String>,
+    upstream: Vec<String>,
     backends: Vec<String>,
     repo_id: Option<String>,
     hub_branch: Option<String>,
@@ -105,7 +105,7 @@ impl Manifest {
             version,
             license: args.take_opt("license"),
             edition,
-            upstream: args.take_opt("upstream"),
+            upstream: comma_list(&args.take_opt("upstream").unwrap_or_default()),
             backends,
             repo_id: args.take_opt("repo_id"),
             hub_branch: args.take_opt("hub_branch"),
@@ -153,8 +153,10 @@ impl Manifest {
         if let Some(edition) = &self.edition {
             toml.push_str(&format!("edition = {edition}\n"));
         }
-        if let Some(upstream) = &self.upstream {
-            toml.push_str(&format!("upstream = {upstream:?}\n"));
+        match self.upstream.as_slice() {
+            [] => {}
+            [upstream] => toml.push_str(&format!("upstream = {upstream:?}\n")),
+            upstreams => toml.push_str(&Self::toml_list("upstream", upstreams)),
         }
         toml.push_str(&Self::toml_list("backends", &self.backends));
         if !self.python_depends.is_empty() {

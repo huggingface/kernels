@@ -668,6 +668,23 @@ fn manifest_upstream_field() {
 }
 
 #[test]
+fn manifest_multiple_upstreams() {
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    run_recipe(
+        &mut ws,
+        r#"manifest name="cv-utils" version=1 license="MIT" edition=5 upstream="https://github.com/ronghanghu/torch_generic_nms,https://github.com/ronghanghu/cc_torch" backends="cpu" noarch=#true
+"#,
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.contains(concat!(
+        "upstream = [\n",
+        "    \"https://github.com/ronghanghu/torch_generic_nms\",\n",
+        "    \"https://github.com/ronghanghu/cc_torch\",\n",
+        "]\n",
+    )));
+}
+
+#[test]
 fn manifest_general_cuda_table() {
     let mut ws = Workspace::from_files(BTreeMap::new());
     run_recipe(

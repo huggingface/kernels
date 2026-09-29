@@ -399,7 +399,7 @@ struct PyMetadata {
     version: usize,
     kernels_minver: Option<PyVersion>,
     license: String,
-    upstream: Option<String>,
+    upstream: Vec<String>,
     source: Option<String>,
     python_depends: Vec<String>,
     kernel_depends: Vec<PyKernelDependency>,
@@ -416,7 +416,7 @@ impl From<Metadata> for PyMetadata {
             version: m.version,
             kernels_minver: m.kernels_minver.map(Into::into),
             license: m.license,
-            upstream: m.upstream.map(|u| u.as_url().to_string()),
+            upstream: m.upstream.iter().map(|u| u.as_url().to_string()).collect(),
             source: m.source.map(|u| u.as_url().to_string()),
             python_depends: m.python_depends,
             kernel_depends: m.kernel_depends.into_iter().map(Into::into).collect(),
@@ -481,9 +481,10 @@ impl PyMetadata {
         &self.license
     }
 
+    /// All upstream repositories, in declaration order.
     #[getter]
-    fn upstream(&self) -> Option<&str> {
-        self.upstream.as_deref()
+    fn upstream(&self) -> &[String] {
+        &self.upstream
     }
 
     #[getter]

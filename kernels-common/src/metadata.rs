@@ -99,8 +99,12 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kernels_minver: Option<Version<3>>,
     pub license: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub upstream: Option<GitUrl>,
+    #[serde(
+        default,
+        with = "crate::config::upstream",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub upstream: Vec<GitUrl>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<GitUrl>,
     pub python_depends: Vec<String>,
@@ -211,7 +215,7 @@ mod tests {
                 name: KernelName::new("test-kernel").unwrap(),
                 version: 1,
                 license: "apache-2.0".to_string(),
-                upstream: None,
+                upstream: vec![],
                 source: None,
                 backends: vec![Backend::Cuda, Backend::Rocm, Backend::Cpu],
                 hub: None,
@@ -268,7 +272,7 @@ mod tests {
                 name: KernelName::new("test-kernel").unwrap(),
                 version: 1,
                 license: "apache-2.0".to_string(),
-                upstream: None,
+                upstream: vec![],
                 source: None,
                 backends: vec![Backend::Cuda],
                 hub: None,
@@ -458,7 +462,7 @@ mod tests {
         assert_eq!(metadata.id, "_einops_cpu_d45adda");
         assert_eq!(metadata.version, 1);
         assert_eq!(metadata.license, "MIT");
-        assert!(metadata.upstream.is_some());
+        assert_eq!(metadata.upstream.len(), 1);
         assert!(metadata.source.is_none());
         assert!(metadata.python_depends.is_empty());
         assert!(metadata.kernel_depends.is_empty());

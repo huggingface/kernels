@@ -95,7 +95,7 @@ def test_metadata_load_full(tmp_path):
     assert m.version == 1
     assert m.kernels_minver == Version.from_str("0.17.0")
     assert m.license == "Apache-2.0"
-    assert m.upstream == "https://github.com/example/kernel"
+    assert m.upstream == ["https://github.com/example/kernel"]
     assert m.source == "https://github.com/example/kernel-builder"
     assert m.python_depends == ["torch"]
     assert m.backend.backend_type == Backend.CUDA
@@ -120,7 +120,7 @@ def test_metadata_load_minimal(tmp_path):
     assert m.version == 1
     assert m.kernels_minver is None
     assert m.license == "Apache-2.0"
-    assert m.upstream is None
+    assert m.upstream == []
     assert m.source is None
     assert m.python_depends == []
     assert m.backend.backend_type == Backend.CPU
@@ -223,3 +223,29 @@ def test_kernel_dependency_is_immutable():
         dep.repo_id = "other/repo"
     with pytest.raises(AttributeError):
         dep.version = KernelVersion.Version(2)
+
+
+@pytest.mark.parametrize(
+    "upstream",
+    [
+        None,
+        [],
+        ["https://github.com/example/first"],
+        ["https://github.com/example/first", "https://github.com/example/second"],
+    ],
+)
+def test_metadata_upstreams(upstream):
+    m = Metadata.from_bytes(
+        json.dumps(
+            {
+                "id": "test",
+                "name": "test",
+                "version": 1,
+                "license": "MIT",
+                "python-depends": [],
+                "backend": {"type": "cpu"},
+                "upstream": upstream,
+            }
+        ).encode()
+    )
+    assert m.upstream == (upstream or [])

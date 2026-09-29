@@ -55,6 +55,10 @@ No benchmark available yet.
 
 ## Source code
 
-Source code of this kernel originally comes from {{ upstream }} and it was repurposed for compatibility with `kernels`.
+The original source code for this kernel comes from:
+
+{% for url in upstream %}
+- {{ url }}
+{% endfor %}
 {% endif %}
 

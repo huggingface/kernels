@@ -16,6 +16,7 @@ mod compat;
 pub use compat::BuildCompat;
 
 mod git_url;
+pub(crate) mod upstream;
 pub use git_url::GitUrl;
 
 mod kernel_deps;
@@ -43,6 +44,9 @@ const KERNELS_VERSION_BASELINE: Version<3> = Version::new([0, 14, 0]);
 
 /// First `kernels` version that can resolve kernel dependencies.
 const KERNELS_VERSION_KERNEL_DEPENDS: Version<3> = Version::new([0, 17, 0]);
+
+/// First `kernels` version that can read multiple upstream repositories.
+const KERNELS_VERSION_MULTIPLE_UPSTREAMS: Version<3> = Version::new([0, 18, 0]);
 
 pub struct Build {
     pub general: General,
@@ -81,6 +85,10 @@ impl Build {
         // older versions would fail to import the kernel.
         if !self.general.all_kernel_depends(backend).is_empty() {
             required = required.max(KERNELS_VERSION_KERNEL_DEPENDS);
+        }
+
+        if self.general.upstream.len() > 1 {
+            required = required.max(KERNELS_VERSION_MULTIPLE_UPSTREAMS);
         }
 
         required
@@ -136,8 +144,8 @@ pub struct General {
     /// Hugging Face Hub license identifier.
     pub license: String,
 
-    /// Original upstream repository for the kernel code.
-    pub upstream: Option<GitUrl>,
+    /// Original upstream repositories for the kernel code.
+    pub upstream: Vec<GitUrl>,
 
     /// Kernel-builder formatted source repository (must contain build.toml and flake.nix).
     pub source: Option<GitUrl>,
@@ -529,7 +537,7 @@ mod tests {
             name: KernelName::new("test-kernel").unwrap(),
             version: 1,
             license: "apache-2.0".to_string(),
-            upstream: None,
+            upstream: vec![],
             source: None,
             backends: vec![Backend::Tpu],
             hub: None,

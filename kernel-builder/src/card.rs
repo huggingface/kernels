@@ -137,7 +137,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
             functions => functions,
             layers => layers,
             has_benchmark => has_benchmark,
-            upstream => build.general.upstream.as_ref().map(|u| u.as_url().to_string()),
+            upstream => build.general.upstream.iter().map(|u| u.as_url().to_string()).collect::<Vec<_>>(),
             source => build.general.source.as_ref().map(|u| u.as_url().to_string()),
             license => build.general.license.to_lowercase(),
         })
@@ -168,6 +168,55 @@ pub fn fill_card(kernel_dir: Option<PathBuf>, output: Option<PathBuf>) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_render_card_upstreams() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(
+            temp.path().join("CARD.md"),
+            Environment::new()
+                .render_str(include_str!("init/templates/CARD.md"), context! {})
+                .unwrap(),
+        )
+        .unwrap();
+        let urls = [
+            "https://github.com/ronghanghu/torch_generic_nms",
+            "https://github.com/ronghanghu/cc_torch",
+        ];
+        for upstream in [
+            "".to_owned(),
+            format!("upstream = {:?}", urls[0]),
+            format!("upstream = {urls:?}"),
+        ] {
+            fs::write(
+                temp.path().join("build.toml"),
+                format!(
+                    r#"
+[general]
+name = "cv-utils"
+version = 1
+edition = 5
+license = "MIT"
+backends = ["cpu"]
+{upstream}
+[general.hub]
+repo-id = "kernels-community/cv-utils"
+[torch-noarch]
+"#
+                ),
+            )
+            .unwrap();
+            let build = Build::open(temp.path()).unwrap();
+            let card = render_card(&build, temp.path()).unwrap();
+            assert_eq!(
+                card.contains("## Upstream"),
+                !build.general.upstream.is_empty()
+            );
+            for url in &build.general.upstream {
+                assert!(card.contains(&format!("- {url}\n")), "{card}");
+            }
+        }
+    }
 
     #[test]
     fn test_extract_functions() {

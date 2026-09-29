@@ -48,7 +48,12 @@ pub struct General {
 
     pub license: String,
 
-    pub upstream: Option<GitUrl>,
+    #[serde(
+        default,
+        with = "super::upstream",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub upstream: Vec<GitUrl>,
 
     pub source: Option<GitUrl>,
 

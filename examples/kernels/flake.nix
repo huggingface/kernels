@@ -38,14 +38,13 @@
         {
           name = "cpp20-symbols-kernel";
           path = ./cpp20-symbols;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
         }
         # This test should check the capabilities of the oldest supported CUDA.
         {
           name = "relu-kernel";
           path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
           checkCudaCapabilities = [
             "7.0"
             "7.2"
@@ -62,8 +61,7 @@
           name = "relu-kernel-cu13";
           path = ./relu;
           drv =
-            sys: out:
-            out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cuda13Version}-${sys}"};
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cuda13Version}-${sys}"};
           checkCudaCapabilities = [
             "7.5"
             "8.0"
@@ -82,8 +80,7 @@
           # Check arch intersection. 5.0 is dropped because it is not supported.
           name = "relu-archs-subset";
           path = ./relu-archs-subset;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
           checkCudaCapabilities = [
             "7.5"
             "8.0"
@@ -110,13 +107,12 @@
         {
           name = "relu-kernel-cpu";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-tvm-ffi-kernel";
@@ -127,8 +123,7 @@
         {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "silu-and-mul-kernel";
@@ -155,14 +150,12 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of capabilities" ];
         }
@@ -223,16 +216,14 @@
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of architectures" ];
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
           checkRocmArchs = [
             "gfx906"
             "gfx908"
@@ -254,8 +245,7 @@
           # Check arch intersection. gfx940 is dropped because it is not supported.
           name = "relu-archs-subset";
           path = ./relu-archs-subset;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
           checkRocmArchs = [
             "gfx90a"
             "gfx942"
@@ -265,8 +255,7 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
         }
       ];
 
@@ -313,8 +302,7 @@
         {
           name = "relu-kernel";
           path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";
@@ -331,14 +319,12 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
         }
       ];
 
@@ -365,7 +351,7 @@
           drv =
             sys: _out:
             let
-              variant = "torch${torchVersion}-cxx11-cpu-${sys}";
+              variant = "torch${torchVersion}-cpu-${sys}";
               conflictsFlake = mkKernelOutputs { path = ./symbol-conflicts; };
               conflicts2Flake = mkKernelOutputs { path = ./symbol-conflicts2; };
               conflicts = conflictsFlake.packages.${sys}.redistributable.${variant};

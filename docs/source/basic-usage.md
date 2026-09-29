@@ -108,9 +108,9 @@ instead — `kernels` will then never load an incompatible kernel at all.
 ## Inspecting Loaded Kernels
 
 [`~kernels.get_loaded_kernels`] returns a snapshot of every kernel that has been loaded
-into the current process. Each entry is a [`~kernels.LoadedKernel`] namedtuple with the
-imported `module`, the `package_name`, and `repo_infos` (repo id, resolved
-revision, and the backend argument that was passed).
+into the current process. Each entry is a [`~kernels.LoadedKernel`] dataclass with
+the kernel's `metadata`, the imported `module`, and optional `repo_info`
+(repository ID and resolved revision).
 
 ```python
 from kernels import get_kernel, get_loaded_kernels
@@ -118,12 +118,16 @@ from kernels import get_kernel, get_loaded_kernels
 get_kernel("kernels-community/activation", version=1)
 
 for loaded in get_loaded_kernels():
-    print(loaded.package_name, loaded.repo_infos)
+    print(loaded.metadata.name, loaded.repo_info)
+    for url in loaded.metadata.upstream:
+        print(url)
 ```
 
-`repo_infos` is populated only for kernels loaded with [`~kernels.get_kernel`]. Kernels
-loaded from a local path ([`~kernels.get_local_kernel`]) or via a lockfile
-([`~kernels.get_locked_kernel`], [`~kernels.load_kernel`]) have `repo_infos=None`.
+`repo_info` is populated when the kernel's Hub repository is known; otherwise it
+is `None`, as for kernels loaded directly from a local path.
+`metadata.upstream` is a list of original upstream repository URLs, empty when
+none is specified. See the [migration guide](migration.md#018) for the change
+from a single URL to a list in `kernels` 0.18.
 
 Browse through different kernels compatible with `kernels` from [here](https://huggingface.co/kernels).
 

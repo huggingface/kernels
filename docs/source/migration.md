@@ -186,3 +186,36 @@ class FastSiluAndMul(nn.Module):
 ```
 
 For more information, see the [layer documentation](layers.md).
+
+## 0.18
+
+### Upstream repositories are returned as a list
+
+The `upstream` property of kernel metadata now returns `list[str]` instead of
+`str | None`. This is a breaking API change for code that reads
+`loaded.metadata.upstream` from the [`~kernels.LoadedKernel`] entries returned by
+[`~kernels.get_loaded_kernels`].
+
+A kernel with one upstream repository returns `[url]`; one with no upstream
+returns `[]`. Iterate over the list to handle kernels with multiple upstreams:
+
+```python
+from kernels import get_loaded_kernels
+
+# Old:
+for loaded in get_loaded_kernels():
+    if loaded.metadata.upstream is not None:
+        print(loaded.metadata.upstream)
+
+# New:
+for loaded in get_loaded_kernels():
+    for url in loaded.metadata.upstream:
+        print(url)
+```
+
+Replace `upstream is None` checks with `not upstream` to detect an absent
+upstream. Code that processes a URL string should now process each URL in the
+list.
+
+Existing metadata files with a single URL string, `null`, or no `upstream` field
+still load successfully.

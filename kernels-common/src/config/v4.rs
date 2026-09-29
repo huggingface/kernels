@@ -321,10 +321,8 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             } => super::Kernel::Cpu {
-                cxx_flags,
                 depends,
-                language: None,
-                include,
+                language: super::CpuLanguage::Cpp { cxx_flags, include },
                 src,
             },
             Kernel::Cuda {

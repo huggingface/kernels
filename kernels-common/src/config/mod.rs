@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use eyre::{Result, bail};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -53,35 +53,7 @@ pub struct Build {
 impl Build {
     pub fn open(kernel_dir: impl AsRef<Path>) -> Result<Build> {
         let build_compat = parse::parse_and_validate(kernel_dir)?;
-        let build: Build = build_compat.into();
-        build.validate()?;
-        Ok(build)
-    }
-
-    /// Reject combinations that parse but cannot be built, so that every
-    /// consumer of a `Build` can assume they hold.
-    fn validate(&self) -> Result<()> {
-        let rust_kernels = self
-            .kernels
-            .iter()
-            .filter(|(_, k)| k.language() == Language::Rust);
-
-        for (name, kernel) in rust_kernels {
-            if !matches!(self.framework, Framework::TvmFfi(_)) {
-                bail!("Rust kernel `{name}` requires a `[tvm-ffi]` framework");
-            }
-            if kernel.cxx_flags().is_some() {
-                bail!("Rust kernel `{name}`: `cxx-flags` does not apply to `language = \"rust\"`");
-            }
-            if kernel.include().is_some() {
-                bail!("Rust kernel `{name}`: `include` does not apply to `language = \"rust\"`");
-            }
-            if kernel.cargo_manifest().is_none() {
-                bail!("Rust kernel `{name}`: `src` must include Cargo.toml");
-            }
-        }
-
-        Ok(())
+        Ok(build_compat.try_into()?)
     }
 
     pub fn is_noarch(&self) -> bool {
@@ -372,10 +344,8 @@ impl TvmFfi {
 
 pub enum Kernel {
     Cpu {
-        cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
-        language: Option<Language>,
-        include: Option<Vec<String>>,
+        language: CpuLanguage,
         src: Vec<String>,
     },
     Cuda {
@@ -417,24 +387,73 @@ pub enum Language {
     Rust,
 }
 
+/// The language of a CPU kernel, with the options that only apply to it.
+pub enum CpuLanguage {
+    Cpp {
+        cxx_flags: Option<Vec<String>>,
+        include: Option<Vec<String>>,
+    },
+    Rust {
+        /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
+        cargo_manifest: String,
+    },
+}
+
+impl CpuLanguage {
+    /// Build the language options from the flat per-kernel fields of the
+    /// configuration file, rejecting fields that do not apply to the language.
+    pub(crate) fn from_fields(
+        language: Option<Language>,
+        cxx_flags: Option<Vec<String>>,
+        include: Option<Vec<String>>,
+        src: &[String],
+    ) -> Result<Self, String> {
+        match language.unwrap_or(Language::Cpp) {
+            Language::Cpp => Ok(CpuLanguage::Cpp { cxx_flags, include }),
+            Language::Rust => {
+                if cxx_flags.is_some() {
+                    return Err("`cxx-flags` does not apply to `language = \"rust\"`".into());
+                }
+                if include.is_some() {
+                    return Err("`include` does not apply to `language = \"rust\"`".into());
+                }
+                let cargo_manifest = src
+                    .iter()
+                    .find(|path| *path == "Cargo.toml" || path.ends_with("/Cargo.toml"))
+                    .ok_or("`src` must include Cargo.toml")?
+                    .clone();
+                Ok(CpuLanguage::Rust { cargo_manifest })
+            }
+        }
+    }
+}
+
 impl Kernel {
     pub fn cxx_flags(&self) -> Option<&[String]> {
         match self {
-            Kernel::Cpu { cxx_flags, .. }
+            Kernel::Cpu {
+                language: CpuLanguage::Cpp { cxx_flags, .. },
+                ..
+            }
             | Kernel::Cuda { cxx_flags, .. }
             | Kernel::Metal { cxx_flags, .. }
             | Kernel::Rocm { cxx_flags, .. }
             | Kernel::Xpu { cxx_flags, .. } => cxx_flags.as_deref(),
+            Kernel::Cpu { .. } => None,
         }
     }
 
     pub fn include(&self) -> Option<&[String]> {
         match self {
-            Kernel::Cpu { include, .. }
+            Kernel::Cpu {
+                language: CpuLanguage::Cpp { include, .. },
+                ..
+            }
             | Kernel::Cuda { include, .. }
             | Kernel::Metal { include, .. }
             | Kernel::Rocm { include, .. }
             | Kernel::Xpu { include, .. } => include.as_deref(),
+            Kernel::Cpu { .. } => None,
         }
     }
 
@@ -455,16 +474,12 @@ impl Kernel {
         }
     }
 
-    pub fn cargo_manifest(&self) -> Option<&str> {
-        self.src()
-            .iter()
-            .map(String::as_str)
-            .find(|path| *path == "Cargo.toml" || path.ends_with("/Cargo.toml"))
-    }
-
     pub fn language(&self) -> Language {
         match self {
-            Kernel::Cpu { language, .. } => language.unwrap_or(Language::Cpp),
+            Kernel::Cpu {
+                language: CpuLanguage::Rust { .. },
+                ..
+            } => Language::Rust,
             _ => Language::Cpp,
         }
     }
@@ -568,6 +583,8 @@ impl FromStr for Backend {
 pub enum ConfigError {
     #[error("Cannot migrate configuration: {reason:?}")]
     Migration { reason: String },
+    #[error("Kernel `{name}`: {reason}")]
+    InvalidKernel { name: String, reason: String },
 }
 
 #[cfg(test)]
@@ -663,31 +680,61 @@ mod tests {
 
         let parsed: v5::Build = toml::from_str(config).unwrap();
         let serialized = toml::to_string(&parsed).unwrap();
-        let build: Build = toml::from_str::<v5::Build>(&serialized).unwrap().into();
+        let build = Build::try_from(toml::from_str::<v5::Build>(&serialized).unwrap()).unwrap();
 
         assert_eq!(build.kernels["cpu_kernel"].language(), Language::Rust);
     }
 
     #[test]
-    fn v5_missing_dsl_defaults_to_cpp() {
-        let config = r#"
-            [general]
-            name = "cpp-default"
-            version = 1
-            edition = 5
-            license = "Apache-2.0"
-            backends = ["cpu"]
+    fn v5_rust_kernel_rejects_invalid_config() {
+        let cases = [
+            (
+                "[tvm-ffi]",
+                "Cargo.toml",
+                r#"cxx-flags = ["-O3"]"#,
+                "`cxx-flags` does not apply",
+            ),
+            (
+                "[tvm-ffi]",
+                "Cargo.toml",
+                r#"include = ["."]"#,
+                "`include` does not apply",
+            ),
+            ("[tvm-ffi]", "lib.rs", "", "`src` must include Cargo.toml"),
+            (
+                "[torch]\nsrc = []",
+                "Cargo.toml",
+                "",
+                "require a `[tvm-ffi]` framework",
+            ),
+        ];
 
-            [tvm-ffi]
+        for (framework, src, extra, expected) in cases {
+            let config = format!(
+                r#"
+                [general]
+                name = "rust-cpu"
+                version = 1
+                edition = 5
+                license = "Apache-2.0"
+                backends = ["cpu"]
 
-            [kernel.cpp_kernel]
-            backend = "cpu"
-            depends = []
-            src = ["kernel.cpp"]
-        "#;
+                {framework}
 
-        let build: Build = toml::from_str::<v5::Build>(config).unwrap().into();
+                [kernel.cpu_kernel]
+                backend = "cpu"
+                language = "rust"
+                depends = []
+                src = ["{src}"]
+                {extra}
+            "#
+            );
 
-        assert_eq!(build.kernels["cpp_kernel"].language(), Language::Cpp);
+            let build: v5::Build = toml::from_str(&config).unwrap();
+            let err = Build::try_from(build)
+                .err()
+                .expect("conversion should fail");
+            assert!(err.to_string().contains(expected), "{err}");
+        }
     }
 }

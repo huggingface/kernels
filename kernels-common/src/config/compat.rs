@@ -80,7 +80,7 @@ impl TryFrom<BuildCompat> for Build {
         match compat {
             BuildCompat::V3(v3_build) => v3_build.try_into(),
             BuildCompat::V4(v4_build) => Ok(v4_build.into()),
-            BuildCompat::V5(v5_build) => Ok(v5_build.into()),
+            BuildCompat::V5(v5_build) => v5_build.try_into(),
         }
     }
 }

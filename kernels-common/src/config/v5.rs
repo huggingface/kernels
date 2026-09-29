@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelDependency, KernelName, Language};
+use super::{ConfigError, CpuLanguage, Dependency, GitUrl, KernelDependency, KernelName, Language};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -207,19 +207,29 @@ pub enum Backend {
     Xpu,
 }
 
-impl From<Build> for super::Build {
-    fn from(build: Build) -> Self {
+impl TryFrom<Build> for super::Build {
+    type Error = ConfigError;
+
+    fn try_from(build: Build) -> Result<Self, Self::Error> {
+        let tvm_ffi = matches!(build.framework, Framework::TvmFfi(_));
         let kernels: HashMap<String, super::Kernel> = build
             .kernels
             .into_iter()
-            .map(|(k, v)| (k, v.into()))
-            .collect();
+            .map(|(name, kernel)| match super::Kernel::try_from(kernel) {
+                Ok(kernel) if kernel.language() == Language::Rust && !tvm_ffi => {
+                    let reason = "Rust kernels require a `[tvm-ffi]` framework".into();
+                    Err(ConfigError::InvalidKernel { name, reason })
+                }
+                Ok(kernel) => Ok((name, kernel)),
+                Err(reason) => Err(ConfigError::InvalidKernel { name, reason }),
+            })
+            .collect::<Result<_, _>>()?;
 
-        Self {
+        Ok(Self {
             general: build.general.into(),
             framework: build.framework.into(),
             kernels,
-        }
+        })
     }
 }
 
@@ -351,9 +361,11 @@ impl From<Backend> for super::Backend {
     }
 }
 
-impl From<Kernel> for super::Kernel {
-    fn from(kernel: Kernel) -> Self {
-        match kernel {
+impl TryFrom<Kernel> for super::Kernel {
+    type Error = String;
+
+    fn try_from(kernel: Kernel) -> Result<Self, Self::Error> {
+        Ok(match kernel {
             Kernel::Cpu {
                 cxx_flags,
                 depends,
@@ -361,10 +373,8 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             } => super::Kernel::Cpu {
-                cxx_flags,
+                language: CpuLanguage::from_fields(language, cxx_flags, include, &src)?,
                 depends,
-                language,
-                include,
                 src,
             },
             Kernel::Cuda {
@@ -423,7 +433,7 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             },
-        }
+        })
     }
 }
 
@@ -574,18 +584,22 @@ impl From<super::Kernel> for Kernel {
     fn from(kernel: super::Kernel) -> Self {
         match kernel {
             super::Kernel::Cpu {
-                cxx_flags,
                 depends,
                 language,
-                include,
                 src,
-            } => Kernel::Cpu {
-                cxx_flags,
-                depends,
-                language,
-                include,
-                src,
-            },
+            } => {
+                let (language, cxx_flags, include) = match language {
+                    CpuLanguage::Cpp { cxx_flags, include } => (None, cxx_flags, include),
+                    CpuLanguage::Rust { .. } => (Some(Language::Rust), None, None),
+                };
+                Kernel::Cpu {
+                    cxx_flags,
+                    depends,
+                    language,
+                    include,
+                    src,
+                }
+            }
             super::Kernel::Cuda {
                 cuda_capabilities,
                 cuda_flags,

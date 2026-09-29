@@ -12,8 +12,8 @@ from torch.nn import functional as F
 from kernels import (
     CUDAProperties,
     Device,
-    Fallback,
     FuncRepository,
+    KernelizeFallback,
     LayerRepository,
     LocalLayerRepository,
     Mode,
@@ -444,7 +444,7 @@ def test_missing_kernel_build_falls_back(monkeypatch, caplog):
         use_kernel_mapping(mapping, inherit_mapping=False),
         caplog.at_level(logging.INFO, logger="kernels.layer.layer"),
     ):
-        kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=Fallback.ALL)
+        kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=KernelizeFallback.ALL)
     assert "Kernel for layer `SiluAndMul` on cuda could not be loaded" in caplog.text
 
     with use_kernel_mapping(mapping, inherit_mapping=False):

@@ -11,7 +11,7 @@ from .kernelize import (
     use_kernel_mapping,
 )
 from .layer import (
-    Fallback,
+    KernelizeFallback,
     LayerRepository,
     LocalLayerRepository,
     LockedLayerRepository,
@@ -24,7 +24,7 @@ from .mode import Mode
 __all__ = [
     "CUDAProperties",
     "Device",
-    "Fallback",
+    "KernelizeFallback",
     "ROCMProperties",
     "FuncRepository",
     "LayerRepository",

@@ -10,7 +10,7 @@ pub struct Manifest {
     name: String,
     version: Option<String>,
     license: Option<String>,
-    edition: Option<String>,
+    edition: Option<u64>,
     upstream: Vec<String>,
     backends: Vec<String>,
     repo_id: Option<String>,
@@ -47,10 +47,16 @@ impl Manifest {
             v.parse::<u64>()
                 .with_context(|| format!("version must be an integer, got {v:?}"))?;
         }
-        let edition = args.take_opt("edition");
-        if let Some(e) = &edition {
-            e.parse::<u64>()
-                .with_context(|| format!("edition must be an integer, got {e:?}"))?;
+        let edition = args
+            .take_opt("edition")
+            .map(|e| {
+                e.parse::<u64>()
+                    .with_context(|| format!("edition must be an integer, got {e:?}"))
+            })
+            .transpose()?;
+        let upstream = comma_list(&args.take_opt("upstream").unwrap_or_default());
+        if upstream.len() > 1 && edition.unwrap_or(0) < 6 {
+            bail!("multiple upstream repositories require edition 6 or later");
         }
         let noarch = match args.take_opt("noarch").as_deref() {
             None => false,
@@ -105,7 +111,7 @@ impl Manifest {
             version,
             license: args.take_opt("license"),
             edition,
-            upstream: comma_list(&args.take_opt("upstream").unwrap_or_default()),
+            upstream,
             backends,
             repo_id: args.take_opt("repo_id"),
             hub_branch: args.take_opt("hub_branch"),
@@ -155,7 +161,9 @@ impl Manifest {
         }
         match self.upstream.as_slice() {
             [] => {}
-            [upstream] => toml.push_str(&format!("upstream = {upstream:?}\n")),
+            [upstream] if self.edition.unwrap_or(0) < 6 => {
+                toml.push_str(&format!("upstream = {upstream:?}\n"));
+            }
             upstreams => toml.push_str(&Self::toml_list("upstream", upstreams)),
         }
         toml.push_str(&Self::toml_list("backends", &self.backends));

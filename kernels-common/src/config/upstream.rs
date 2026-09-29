@@ -1,4 +1,4 @@
-//! Compatibility encoding for upstream repositories in build and metadata files.
+//! Compatibility encoding for upstream repositories in metadata files.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

@@ -36,6 +36,11 @@ fn test_init_creates_expected_files() {
     assert!(dir.join("my_kernel_metal").exists());
     assert!(!dir.join("my_kernel_cpu").exists());
     assert!(!dir.join("my_kernel_xpu").exists());
+
+    let config: toml::Value =
+        toml::from_str(&fs::read_to_string(dir.join("build.toml")).unwrap()).unwrap();
+    assert_eq!(config["general"]["edition"].as_integer(), Some(6));
+    kernels_common::config::Build::open(&dir).unwrap();
 }
 
 #[test]

@@ -185,7 +185,7 @@ mod tests {
         ];
         for upstream in [
             "".to_owned(),
-            format!("upstream = {:?}", urls[0]),
+            format!("upstream = [{:?}]", urls[0]),
             format!("upstream = {urls:?}"),
         ] {
             fs::write(
@@ -195,7 +195,7 @@ mod tests {
 [general]
 name = "cv-utils"
 version = 1
-edition = 5
+edition = 6
 license = "MIT"
 backends = ["cpu"]
 {upstream}

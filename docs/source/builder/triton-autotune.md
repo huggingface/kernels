@@ -37,7 +37,7 @@ files are picked up from the kenel's Python source directory, so add `json` to t
 [general]
 name = "gemm-triton-autotune"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = ["cuda", "rocm", "xpu"]
 

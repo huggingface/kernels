@@ -4,16 +4,23 @@ use std::path::Path;
 
 use eyre::{Context, Result, bail};
 
-use super::{Build, BuildCompat, CurrentConfig};
+use super::{Build, BuildCompat, CURRENT_EDITION, CurrentConfig};
 
 pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<CurrentConfig> {
-    // Only v4 is auto-upgraded to v5 on load; older editions must be migrated
+    // v4 and v5 are auto-upgraded on load; older editions must be migrated
     // explicitly with `update-build`.
     match parse_and_validate_compat(kernel_dir)? {
-        BuildCompat::V5(build) => Ok(build),
+        BuildCompat::V6(build) => Ok(build),
+        BuildCompat::V5(build) => {
+            eprintln!(
+                "⚠️  build.toml uses edition 5; upgrading to edition {CURRENT_EDITION} in memory. \
+                 Run `kernel-builder update-build` to persist the upgrade."
+            );
+            Ok(Build::from(build).into())
+        }
         BuildCompat::V4(build) => {
             eprintln!(
-                "⚠️  build.toml uses the legacy v4 format; upgrading to edition 5 in memory. \
+                "⚠️  build.toml uses the legacy v4 format; upgrading to edition {CURRENT_EDITION} in memory. \
                  Run `kernel-builder update-build` to persist the upgrade."
             );
             Ok(Build::from(build).into())

@@ -30,13 +30,14 @@ mod parse;
 pub mod v3;
 pub mod v4;
 pub mod v5;
+pub mod v6;
 
 use itertools::Itertools;
 
 use crate::version::Version;
 
-pub type CurrentConfig = v5::Build;
-pub const CURRENT_EDITION: usize = 5;
+pub type CurrentConfig = v6::Build;
+pub const CURRENT_EDITION: usize = 6;
 
 /// Baseline `kernels` version that can load kernels built with the current
 /// metadata format.

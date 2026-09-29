@@ -6,7 +6,7 @@ use serde_value::Value;
 
 use crate::config::ConfigError;
 
-use super::{Build, v3, v4, v5};
+use super::{Build, v3, v4, v5, v6};
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -14,6 +14,7 @@ pub enum BuildCompat {
     V3(v3::Build),
     V4(v4::Build),
     V5(v5::Build),
+    V6(v6::Build),
 }
 
 impl BuildCompat {
@@ -48,6 +49,10 @@ impl<'de> Deserialize<'de> for BuildCompat {
 
         match edition {
             // Configs with editions
+            Some(6) => v6::Build::deserialize(value)
+                .map(BuildCompat::V6)
+                .map_err(de::Error::custom),
+
             Some(5) => v5::Build::deserialize(value)
                 .map(BuildCompat::V5)
                 .map_err(de::Error::custom),
@@ -81,6 +86,7 @@ impl TryFrom<BuildCompat> for Build {
             BuildCompat::V3(v3_build) => v3_build.try_into(),
             BuildCompat::V4(v4_build) => Ok(v4_build.into()),
             BuildCompat::V5(v5_build) => Ok(v5_build.into()),
+            BuildCompat::V6(v6_build) => Ok(v6_build.into()),
         }
     }
 }

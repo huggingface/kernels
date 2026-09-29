@@ -668,11 +668,39 @@ fn manifest_upstream_field() {
 }
 
 #[test]
+fn manifest_edition_six_single_upstream_is_a_list() {
+    let mut ws = Workspace::from_files(BTreeMap::new());
+    run_recipe(
+        &mut ws,
+        "manifest name=\"einops\" version=1 license=\"MIT\" edition=6 upstream=\"https://github.com/arogozhnikov/einops.git\" backends=\"cpu\" noarch=#true\n",
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.contains("upstream = [\"https://github.com/arogozhnikov/einops.git\"]"));
+}
+
+#[test]
+fn manifest_legacy_editions_reject_multiple_upstreams() {
+    for edition in ["", "edition=5"] {
+        let mut ws = Workspace::from_files(BTreeMap::new());
+        let err = run_recipe_err(
+            &mut ws,
+            &format!(
+                "manifest name=\"k\" version=1 license=\"MIT\" {edition} upstream=\"https://github.com/org/a,https://github.com/org/b\" backends=\"cpu\" noarch=#true\n"
+            ),
+        );
+        assert!(
+            err.contains("multiple upstream repositories require edition 6"),
+            "{err}"
+        );
+    }
+}
+
+#[test]
 fn manifest_multiple_upstreams() {
     let mut ws = Workspace::from_files(BTreeMap::new());
     run_recipe(
         &mut ws,
-        r#"manifest name="cv-utils" version=1 license="MIT" edition=5 upstream="https://github.com/ronghanghu/torch_generic_nms,https://github.com/ronghanghu/cc_torch" backends="cpu" noarch=#true
+        r#"manifest name="cv-utils" version=1 license="MIT" edition=6 upstream="https://github.com/ronghanghu/torch_generic_nms,https://github.com/ronghanghu/cc_torch" backends="cpu" noarch=#true
 "#,
     );
     let toml = ws.get_text("build.toml").unwrap();

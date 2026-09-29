@@ -167,7 +167,7 @@ backends = [
 ]
 name = "mykernel"
 version = 1
-edition = 5
+edition = 6
 
 [general.hub]
 repo-id = "myorg/mykernel"
@@ -199,13 +199,13 @@ The following sections enumerate all supported options for `build.toml`.
   by the `kernel-builder upload` command to upload the kernel to a version
   branch named `v<version>`.
 - `edition` (required): the `build.toml` format edition. The current
-  edition is `5`. Older `build.toml` files can be migrated with
+  edition is `6`. Older `build.toml` files can be migrated with
   `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
 - `upstream`: list of Git-compatible URLs (passable to `git clone`) of the original
-  repositories where the kernel source code comes from. A single URL string is
-  also accepted for compatibility. For example:
+  repositories where the kernel source code comes from. Editions before 6 use a
+  single URL string; `kernel-builder update-build` converts it to a list. For example:
   `upstream = ["https://github.com/org/repo-a", "https://github.com/org/repo-b"]`.
 - `source`: Git-compatible URL (passable to `git clone`) of the kernel-builder
   formatted source repository. This repository must contain a `build.toml` and

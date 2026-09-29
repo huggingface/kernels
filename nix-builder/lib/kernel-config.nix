@@ -40,6 +40,14 @@ in
   # Does the given backend use the torch stable ABI.
   isTorchStableAbiForBackend = backend: torchStableAbiVersionForBackend backend != null;
 
+  # The given Torch version can build for this kernel's ABI version.
+  torchCoversStableAbi =
+    backend: torchVersion:
+    let
+      stableAbiVersion = torchStableAbiVersionForBackend backend;
+    in
+    stableAbiVersion != null && lib.versionAtLeast torchVersion stableAbiVersion;
+
   # Kernel backends.
   backends =
     let

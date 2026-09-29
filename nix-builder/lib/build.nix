@@ -88,8 +88,14 @@ rec {
         in
         builtins.attrValues newestPerGroup;
 
+      # Split up build sets into two:
+      #
+      # - Right: build sets with Torch versions that can build for the
+      #          kernels requested stable ABI version.
+      # - Wrong: all other build sets.
       byStableAbi = lib.partition (
-        buildSet: kernelConfig.isTorchStableAbiForBackend buildSet.buildConfig.backend
+        buildSet:
+        kernelConfig.torchCoversStableAbi buildSet.buildConfig.backend buildSet.buildConfig.torchVersion
       ) (buildSetsWithinBounds buildSets);
     in
     deduplicateForStableAbi byStableAbi.right ++ byStableAbi.wrong;
@@ -180,6 +186,16 @@ rec {
         variant = variants.kernelVariant kernelConfig;
       }
     else
+      let
+        torchStableAbiVersion' = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
+        torchStableAbiVersion =
+          if
+            torchStableAbiVersion' != null && lib.versionAtLeast buildConfig.torchVersion torchStableAbiVersion'
+          then
+            torchStableAbiVersion'
+          else
+            null;
+      in
       extension.mkTorchExtension {
         inherit
           buildConfig
@@ -195,7 +211,7 @@ rec {
           kernelProvenance
           ;
 
-        torchStableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
+        inherit torchStableAbiVersion;
 
         kernelName = kernelConfig.name;
         doAbiCheck = true;

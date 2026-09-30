@@ -14,7 +14,7 @@ if(ICX_COMPILER OR ICPX_COMPILER)
   endif()
 endif()
 
-project({{name}} LANGUAGES CXX)
+project({{python_name}} LANGUAGES CXX)
 
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
 

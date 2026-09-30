@@ -78,19 +78,17 @@ set(_STABLE_ABI_VERSION_{{ entry.backend }} "{{ entry.version }}")
 {% endfor %}
 set(_STABLE_ABI_VERSION "${_STABLE_ABI_VERSION_${BACKEND}}")
 
-if(_STABLE_ABI_VERSION)
-  if (TORCH_VERSION VERSION_LESS ${_STABLE_ABI_VERSION})
-    message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
-      "version ${_STABLE_ABI_VERSION}. Cannot build with stable ABI targeting a newer version of Torch.")
-  endif()
-
+if(_STABLE_ABI_VERSION AND TORCH_VERSION VERSION_GREATER_EQUAL ${_STABLE_ABI_VERSION})
+  message("Building for the Torch stable ABI. ABI version: ${_STABLE_ABI_VERSION}, Torch version: ${TORCH_VERSION}")
   # From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
   string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "${_STABLE_ABI_VERSION}")
   list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
   list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
   math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
-
   add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
+else()
+  message("Not building for the Torch stable ABI. ABI version: ${_STABLE_ABI_VERSION}, Torch version: ${TORCH_VERSION}")
+  unset(_STABLE_ABI_VERSION)
 endif()
 {% endif %}
 

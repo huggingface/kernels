@@ -55,6 +55,9 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## XPU x86_64-linux
 
+- `torch210-xpu20253-x86_64-linux`
+- `torch211-xpu20253-x86_64-linux`
+- `torch212-xpu20253-x86_64-linux`
 - `torch213-xpu20260-x86_64-linux`
 - `torch214-xpu20261-x86_64-linux`
 

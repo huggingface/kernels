@@ -93,6 +93,10 @@ rec {
       # - Right: build sets with Torch versions that can build for the
       #          kernels requested stable ABI version.
       # - Wrong: all other build sets.
+      #
+      # For instance, if stable-abi = 2.13 for XPU, then all Torch >= 2.13
+      # build sets will be in `right` and all Torch < 2.13 build sets will
+      # be in `wrong`.
       byStableAbi = lib.partition (
         buildSet:
         kernelConfig.torchCoversStableAbi buildSet.buildConfig.backend buildSet.buildConfig.torchVersion

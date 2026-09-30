@@ -13,12 +13,23 @@ on:
       - "kernels-common/**"
       - ".github/workflows/test_e2e.yaml"
   workflow_dispatch:
+    inputs:
+      torch_version:
+        description: "Torch version (major.minor)"
+        default: "2.14"
+      cuda_version:
+        description: "CUDA version (major.minor)"
+        default: "13.2"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
+  # Torch/CUDA combination used throughout this workflow (kernel build variant
+  # and the Torch wheel installed for testing). Change the defaults here.
+  TORCH_VERSION: ${{ inputs.torch_version || '2.14' }}
+  CUDA_VERSION: ${{ inputs.cuda_version || '13.2' }}
   HF_ENDPOINT: https://hub-ci.huggingface.co
   HF_TOKEN: ${{ secrets.HF_HUB_CI_TOKEN }}
   E2E_REPO_ID: __DUMMY_KERNELS_USER__/kernels-e2e-${{ github.run_id }}-${{ github.run_attempt }}
@@ -85,11 +96,17 @@ jobs:
           git config --global user.name "Botty McBotface"
           git init && git add . && git commit -m "e2e test"
 
-      - name: Determine latest variant
+      - name: Determine variant
         id: variant
         run: |
           cd /tmp/${{ env.E2E_REPO_NAME }}
-          VARIANT=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants . | tail -1)
+          VARIANT="torch${TORCH_VERSION//./}-cu${CUDA_VERSION//./}-x86_64-linux"
+          VALID_VARIANTS=$(nix run $GITHUB_WORKSPACE#kernel-builder -- list-variants .)
+          if ! grep -qxF "$VARIANT" <<< "$VALID_VARIANTS"; then
+            echo "::error::Variant $VARIANT (Torch $TORCH_VERSION, CUDA $CUDA_VERSION) is not supported. Valid variants:"
+            echo "$VALID_VARIANTS"
+            exit 1
+          fi
           echo "name=$VARIANT" >> $GITHUB_OUTPUT
           echo "Building variant: $VARIANT"
 
@@ -135,12 +152,16 @@ jobs:
       - name: Install Python deps
         working-directory: ./kernels
         run: |
-          VARIANT="${{ needs.init-build-upload.outputs.variant }}"
-          CUDA_TAG=$(echo "$VARIANT" | grep -oP 'cu\d+')
-          echo "Installing torch matching variant $VARIANT (CUDA tag: $CUDA_TAG)"
+          CUDA_TAG="cu${CUDA_VERSION//./}"
+          echo "Installing torch ${TORCH_VERSION} for CUDA ${CUDA_VERSION} (${CUDA_TAG})"
           uv sync --all-extras --dev
-          uv pip install --upgrade torch --index-url https://download.pytorch.org/whl/$CUDA_TAG
-          uv run --no-sync python -c "import torch; print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')"
+          uv pip install "torch==${TORCH_VERSION}.*" --index-url https://download.pytorch.org/whl/$CUDA_TAG
+          uv run --no-sync python -c "
+          import os, torch
+          print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')
+          assert torch.__version__.startswith(os.environ['TORCH_VERSION'] + '.'), torch.__version__
+          assert torch.version.cuda == os.environ['CUDA_VERSION'], torch.version.cuda
+          "
 
       - name: Test get_kernel download and usage
         working-directory: ./kernels

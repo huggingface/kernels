@@ -187,12 +187,9 @@ rec {
       }
     else
       let
-        torchStableAbiVersion' = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
         torchStableAbiVersion =
-          if
-            torchStableAbiVersion' != null && lib.versionAtLeast buildConfig.torchVersion torchStableAbiVersion'
-          then
-            torchStableAbiVersion'
+          if kernelConfig.torchCoversStableAbi buildConfig.backend buildConfig.torchVersion then
+            kernelConfig.torchStableAbiVersionForBackend buildConfig.backend
           else
             null;
       in

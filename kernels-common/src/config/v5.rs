@@ -4,7 +4,10 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{ConfigError, CpuLanguage, Dependency, GitUrl, KernelDependency, KernelName, Language};
+use super::{
+    ConfigError, CppCpu, CppCuda, CppMetal, CppRocm, CppXpu, GitUrl, KernelDependency, KernelName,
+    Language, RustCpu,
+};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -147,51 +150,114 @@ pub struct TvmFfi {
     pub cxx_flags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case", tag = "backend")]
-pub enum Kernel {
-    #[serde(rename_all = "kebab-case")]
-    Cpu {
-        cxx_flags: Option<Vec<String>>,
-        depends: Vec<Dependency>,
-        language: Option<Language>,
-        include: Option<Vec<String>>,
-        src: Vec<String>,
-    },
-    #[serde(rename_all = "kebab-case")]
-    Cuda {
-        cuda_capabilities: Option<Vec<String>>,
-        cuda_flags: Option<Vec<String>>,
-        cuda_minver: Option<Version<2>>,
-        cxx_flags: Option<Vec<String>>,
-        depends: Vec<Dependency>,
-        include: Option<Vec<String>>,
-        src: Vec<String>,
-    },
-    #[serde(rename_all = "kebab-case")]
-    Metal {
-        cxx_flags: Option<Vec<String>>,
-        depends: Vec<Dependency>,
-        include: Option<Vec<String>>,
-        src: Vec<String>,
-    },
-    #[serde(rename_all = "kebab-case")]
-    Rocm {
-        cxx_flags: Option<Vec<String>>,
-        depends: Vec<Dependency>,
-        rocm_archs: Option<Vec<String>>,
-        hip_flags: Option<Vec<String>>,
-        include: Option<Vec<String>>,
-        src: Vec<String>,
-    },
-    #[serde(rename_all = "kebab-case")]
-    Xpu {
-        cxx_flags: Option<Vec<String>>,
-        depends: Vec<Dependency>,
-        sycl_flags: Option<Vec<String>>,
-        include: Option<Vec<String>>,
-        src: Vec<String>,
-    },
+/// A kernel table. The `backend` key and the optional `language` key (default
+/// `cpp`) select the kernel type, the remaining keys are its options.
+#[derive(Debug, Deserialize)]
+#[serde(try_from = "KernelRepr")]
+pub struct Kernel(pub super::Kernel);
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct KernelRepr {
+    backend: Backend,
+    #[serde(default)]
+    language: Language,
+    #[serde(flatten)]
+    rest: toml::Table,
+}
+
+impl TryFrom<KernelRepr> for Kernel {
+    type Error = String;
+
+    fn try_from(repr: KernelRepr) -> Result<Self, Self::Error> {
+        let KernelRepr {
+            backend,
+            language,
+            rest,
+        } = repr;
+        let backend = super::Backend::from(backend);
+        let rest = toml::Value::Table(rest);
+
+        // The supported (backend, language) pairs.
+        let kernel = match (backend, language) {
+            (super::Backend::Cpu, Language::Cpp) => {
+                CppCpu::deserialize(rest).map(super::Kernel::CppCpu)
+            }
+            (super::Backend::Cpu, Language::Rust) => {
+                RustCpu::deserialize(rest).map(super::Kernel::RustCpu)
+            }
+            (super::Backend::Cuda, Language::Cpp) => {
+                CppCuda::deserialize(rest).map(super::Kernel::CppCuda)
+            }
+            (super::Backend::Metal, Language::Cpp) => {
+                CppMetal::deserialize(rest).map(super::Kernel::CppMetal)
+            }
+            (super::Backend::Rocm, Language::Cpp) => {
+                CppRocm::deserialize(rest).map(super::Kernel::CppRocm)
+            }
+            (super::Backend::Xpu, Language::Cpp) => {
+                CppXpu::deserialize(rest).map(super::Kernel::CppXpu)
+            }
+            (_, Language::Cpp) => {
+                return Err(format!("the `{backend}` backend does not support kernels"));
+            }
+            _ => {
+                return Err(format!(
+                    "`language = \"{language}\"` is not supported for the `{backend}` backend"
+                ));
+            }
+        };
+
+        kernel
+            .map(Kernel)
+            .map_err(|err| format!("in `{language}` kernel for `{backend}`: {}", err.message()))
+    }
+}
+
+/// Serialization counterpart of [`KernelRepr`]. `language` is omitted for
+/// C++ kernels, since it is the default.
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct KernelOut<'a> {
+    backend: Backend,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<Language>,
+    #[serde(flatten)]
+    rest: KernelFields<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum KernelFields<'a> {
+    CppCpu(&'a CppCpu),
+    RustCpu(&'a RustCpu),
+    CppCuda(&'a CppCuda),
+    CppMetal(&'a CppMetal),
+    CppRocm(&'a CppRocm),
+    CppXpu(&'a CppXpu),
+}
+
+impl Serialize for Kernel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let rest = match &self.0 {
+            super::Kernel::CppCpu(kernel) => KernelFields::CppCpu(kernel),
+            super::Kernel::RustCpu(kernel) => KernelFields::RustCpu(kernel),
+            super::Kernel::CppCuda(kernel) => KernelFields::CppCuda(kernel),
+            super::Kernel::CppMetal(kernel) => KernelFields::CppMetal(kernel),
+            super::Kernel::CppRocm(kernel) => KernelFields::CppRocm(kernel),
+            super::Kernel::CppXpu(kernel) => KernelFields::CppXpu(kernel),
+        };
+        let language = self.0.language();
+        KernelOut {
+            backend: self.0.backend().into(),
+            language: (language != Language::Cpp).then_some(language),
+            rest,
+        }
+        .serialize(serializer)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -215,13 +281,12 @@ impl TryFrom<Build> for super::Build {
         let kernels: HashMap<String, super::Kernel> = build
             .kernels
             .into_iter()
-            .map(|(name, kernel)| match super::Kernel::try_from(kernel) {
-                Ok(kernel) if kernel.language() == Language::Rust && !tvm_ffi => {
+            .map(|(name, Kernel(kernel))| {
+                if kernel.language() == Language::Rust && !tvm_ffi {
                     let reason = "Rust kernels require a `[tvm-ffi]` framework".into();
-                    Err(ConfigError::InvalidKernel { name, reason })
+                    return Err(ConfigError::InvalidKernel { name, reason });
                 }
-                Ok(kernel) => Ok((name, kernel)),
-                Err(reason) => Err(ConfigError::InvalidKernel { name, reason }),
+                Ok((name, kernel))
             })
             .collect::<Result<_, _>>()?;
 
@@ -358,82 +423,6 @@ impl From<Backend> for super::Backend {
             Backend::Tpu => super::Backend::Tpu,
             Backend::Xpu => super::Backend::Xpu,
         }
-    }
-}
-
-impl TryFrom<Kernel> for super::Kernel {
-    type Error = String;
-
-    fn try_from(kernel: Kernel) -> Result<Self, Self::Error> {
-        Ok(match kernel {
-            Kernel::Cpu {
-                cxx_flags,
-                depends,
-                language,
-                include,
-                src,
-            } => super::Kernel::Cpu {
-                language: CpuLanguage::from_fields(language, cxx_flags, include, &src)?,
-                depends,
-                src,
-            },
-            Kernel::Cuda {
-                cuda_capabilities,
-                cuda_flags,
-                cuda_minver,
-                cxx_flags,
-                depends,
-                include,
-                src,
-            } => super::Kernel::Cuda {
-                cuda_capabilities,
-                cuda_flags,
-                cuda_minver,
-                cxx_flags,
-                depends,
-                include,
-                src,
-            },
-            Kernel::Metal {
-                cxx_flags,
-                depends,
-                include,
-                src,
-            } => super::Kernel::Metal {
-                cxx_flags,
-                depends,
-                include,
-                src,
-            },
-            Kernel::Rocm {
-                cxx_flags,
-                depends,
-                rocm_archs,
-                hip_flags,
-                include,
-                src,
-            } => super::Kernel::Rocm {
-                cxx_flags,
-                depends,
-                rocm_archs,
-                hip_flags,
-                include,
-                src,
-            },
-            Kernel::Xpu {
-                cxx_flags,
-                depends,
-                sycl_flags,
-                include,
-                src,
-            } => super::Kernel::Xpu {
-                cxx_flags,
-                depends,
-                sycl_flags,
-                include,
-                src,
-            },
-        })
     }
 }
 
@@ -582,80 +571,6 @@ impl From<super::Backend> for Backend {
 
 impl From<super::Kernel> for Kernel {
     fn from(kernel: super::Kernel) -> Self {
-        match kernel {
-            super::Kernel::Cpu {
-                depends,
-                language,
-                src,
-            } => {
-                let (language, cxx_flags, include) = match language {
-                    CpuLanguage::Cpp { cxx_flags, include } => (None, cxx_flags, include),
-                    CpuLanguage::Rust { .. } => (Some(Language::Rust), None, None),
-                };
-                Kernel::Cpu {
-                    cxx_flags,
-                    depends,
-                    language,
-                    include,
-                    src,
-                }
-            }
-            super::Kernel::Cuda {
-                cuda_capabilities,
-                cuda_flags,
-                cuda_minver,
-                cxx_flags,
-                depends,
-                include,
-                src,
-            } => Kernel::Cuda {
-                cuda_capabilities,
-                cuda_flags,
-                cuda_minver,
-                cxx_flags,
-                depends,
-                include,
-                src,
-            },
-            super::Kernel::Metal {
-                cxx_flags,
-                depends,
-                include,
-                src,
-            } => Kernel::Metal {
-                cxx_flags,
-                depends,
-                include,
-                src,
-            },
-            super::Kernel::Rocm {
-                cxx_flags,
-                depends,
-                rocm_archs,
-                hip_flags,
-                include,
-                src,
-            } => Kernel::Rocm {
-                cxx_flags,
-                depends,
-                rocm_archs,
-                hip_flags,
-                include,
-                src,
-            },
-            super::Kernel::Xpu {
-                cxx_flags,
-                depends,
-                sycl_flags,
-                include,
-                src,
-            } => Kernel::Xpu {
-                cxx_flags,
-                depends,
-                sycl_flags,
-                include,
-                src,
-            },
-        }
+        Kernel(kernel)
     }
 }

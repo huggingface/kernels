@@ -2,7 +2,7 @@ use std::io::Write;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
-use kernels_common::config::{Build, CpuLanguage, Kernel};
+use kernels_common::config::{Build, CppCpu, CppCuda, CppMetal, CppRocm, CppXpu, Kernel};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;
@@ -34,26 +34,20 @@ fn render_kernel_component(
         .join("\n");
 
     match kernel {
-        Kernel::Cpu { language, .. } => match language {
-            CpuLanguage::Rust { cargo_manifest } => {
-                render_kernel_component_rust(env, kernel_name, cargo_manifest, write)?
-            }
-            CpuLanguage::Cpp { .. } => {
-                render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
-            }
-        },
-        Kernel::Cuda { .. } => {
-            render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
+        Kernel::CppCpu(cpu) => render_kernel_component_cpu(env, kernel_name, cpu, sources, write)?,
+        Kernel::RustCpu(rust) => {
+            render_kernel_component_rust(env, kernel_name, &rust.cargo_manifest, write)?
         }
-        Kernel::Rocm { .. } => {
-            render_kernel_component_hip(env, kernel_name, kernel, sources, write)?
+        Kernel::CppCuda(cuda) => {
+            render_kernel_component_cuda(env, kernel_name, cuda, sources, write)?
         }
-        Kernel::Metal { .. } => {
-            render_kernel_component_metal(env, kernel_name, kernel, sources, write)?
+        Kernel::CppRocm(rocm) => {
+            render_kernel_component_hip(env, kernel_name, rocm, sources, write)?
         }
-        Kernel::Xpu { .. } => {
-            render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
+        Kernel::CppMetal(metal) => {
+            render_kernel_component_metal(env, kernel_name, metal, sources, write)?
         }
+        Kernel::CppXpu(xpu) => render_kernel_component_xpu(env, kernel_name, xpu, sources, write)?,
     }
 
     Ok(())
@@ -84,7 +78,7 @@ fn render_kernel_component_rust(
 fn render_kernel_component_cpu(
     env: &Environment,
     kernel_name: &str,
-    kernel: &Kernel,
+    kernel: &CppCpu,
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
@@ -92,8 +86,8 @@ fn render_kernel_component_cpu(
         .wrap_err("Cannot get kernel template")?
         .render_captured_to(
             context! {
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
+                cxx_flags => kernel.cxx_flags.as_ref().map(|flags| flags.join(";")),
+                includes => kernel.include.as_deref().map(prefix_and_join_includes),
                 kernel_name => kernel_name,
                 sources => sources,
             },
@@ -109,34 +103,20 @@ fn render_kernel_component_cpu(
 fn render_kernel_component_cuda(
     env: &Environment,
     kernel_name: &str,
-    kernel: &Kernel,
+    kernel: &CppCuda,
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
-    let (cuda_capabilities, cuda_flags, cuda_minver) = match kernel {
-        Kernel::Cuda {
-            cuda_capabilities,
-            cuda_flags,
-            cuda_minver,
-            ..
-        } => (
-            cuda_capabilities.as_deref(),
-            cuda_flags.as_deref(),
-            cuda_minver.as_ref(),
-        ),
-        _ => unreachable!("Unsupported kernel type for CUDA rendering"),
-    };
-
     env.get_template("kernel-component/cuda.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_captured_to(
             context! {
                 name => kernel_name,
-                cuda_capabilities => cuda_capabilities,
-                cuda_flags => cuda_flags.map(|flags| flags.join(";")),
-                cuda_minver => cuda_minver.map(ToString::to_string),
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
+                cuda_capabilities => kernel.cuda_capabilities.as_deref(),
+                cuda_flags => kernel.cuda_flags.as_ref().map(|flags| flags.join(";")),
+                cuda_minver => kernel.cuda_minver.as_ref().map(ToString::to_string),
+                cxx_flags => kernel.cxx_flags.as_ref().map(|flags| flags.join(";")),
+                includes => kernel.include.as_deref().map(prefix_and_join_includes),
                 kernel_name => kernel_name,
                 sources => sources,
             },
@@ -152,27 +132,18 @@ fn render_kernel_component_cuda(
 fn render_kernel_component_hip(
     env: &Environment,
     kernel_name: &str,
-    kernel: &Kernel,
+    kernel: &CppRocm,
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
-    let (rocm_archs, hip_flags) = match kernel {
-        Kernel::Rocm {
-            rocm_archs,
-            hip_flags,
-            ..
-        } => (rocm_archs.as_deref(), hip_flags.as_deref()),
-        _ => unreachable!("Unsupported kernel type for ROCm rendering"),
-    };
-
     env.get_template("kernel-component/hip.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_captured_to(
             context! {
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                rocm_archs => rocm_archs,
-                hip_flags => hip_flags.map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
+                cxx_flags => kernel.cxx_flags.as_ref().map(|flags| flags.join(";")),
+                rocm_archs => kernel.rocm_archs.as_deref(),
+                hip_flags => kernel.hip_flags.as_ref().map(|flags| flags.join(";")),
+                includes => kernel.include.as_deref().map(prefix_and_join_includes),
                 name => kernel_name,
                 sources => sources,
             },
@@ -188,7 +159,7 @@ fn render_kernel_component_hip(
 fn render_kernel_component_metal(
     env: &Environment,
     kernel_name: &str,
-    kernel: &Kernel,
+    kernel: &CppMetal,
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
@@ -196,8 +167,8 @@ fn render_kernel_component_metal(
         .wrap_err("Cannot get kernel template")?
         .render_captured_to(
             context! {
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
+                cxx_flags => kernel.cxx_flags.as_ref().map(|flags| flags.join(";")),
+                includes => kernel.include.as_deref().map(prefix_and_join_includes),
                 kernel_name => kernel_name,
                 sources => sources,
             },
@@ -213,22 +184,17 @@ fn render_kernel_component_metal(
 fn render_kernel_component_xpu(
     env: &Environment,
     kernel_name: &str,
-    kernel: &Kernel,
+    kernel: &CppXpu,
     sources: String,
     write: &mut impl Write,
 ) -> Result<()> {
-    let sycl_flags = match kernel {
-        Kernel::Xpu { sycl_flags, .. } => sycl_flags.as_deref(),
-        _ => unreachable!("Unsupported kernel type for XPU rendering"),
-    };
-
     env.get_template("kernel-component/xpu.cmake")
         .wrap_err("Cannot get kernel template")?
         .render_captured_to(
             context! {
-                cxx_flags => kernel.cxx_flags().map(|flags| flags.join(";")),
-                sycl_flags => sycl_flags.map(|flags| flags.join(";")),
-                includes => kernel.include().map(prefix_and_join_includes),
+                cxx_flags => kernel.cxx_flags.as_ref().map(|flags| flags.join(";")),
+                sycl_flags => kernel.sycl_flags.as_ref().map(|flags| flags.join(";")),
+                includes => kernel.include.as_deref().map(prefix_and_join_includes),
                 kernel_name => kernel_name,
                 sources => sources,
             },

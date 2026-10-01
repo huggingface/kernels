@@ -299,11 +299,12 @@ impl From<Kernel> for super::Kernel {
                 depends,
                 include,
                 src,
-            } => super::Kernel::Cpu {
+            } => super::Kernel::CppCpu(super::CppCpu {
+                cxx_flags,
                 depends,
-                language: super::CpuLanguage::Cpp { cxx_flags, include },
+                include,
                 src,
-            },
+            }),
             Kernel::Cuda {
                 cuda_capabilities,
                 cuda_flags,
@@ -312,7 +313,7 @@ impl From<Kernel> for super::Kernel {
                 depends,
                 include,
                 src,
-            } => super::Kernel::Cuda {
+            } => super::Kernel::CppCuda(super::CppCuda {
                 cuda_capabilities,
                 cuda_flags,
                 cuda_minver,
@@ -320,18 +321,18 @@ impl From<Kernel> for super::Kernel {
                 depends,
                 include,
                 src,
-            },
+            }),
             Kernel::Metal {
                 cxx_flags,
                 depends,
                 include,
                 src,
-            } => super::Kernel::Metal {
+            } => super::Kernel::CppMetal(super::CppMetal {
                 cxx_flags,
                 depends,
                 include,
                 src,
-            },
+            }),
             Kernel::Rocm {
                 cxx_flags,
                 depends,
@@ -339,27 +340,27 @@ impl From<Kernel> for super::Kernel {
                 hip_flags,
                 include,
                 src,
-            } => super::Kernel::Rocm {
+            } => super::Kernel::CppRocm(super::CppRocm {
                 cxx_flags,
                 depends,
                 rocm_archs,
                 hip_flags,
                 include,
                 src,
-            },
+            }),
             Kernel::Xpu {
                 cxx_flags,
                 depends,
                 sycl_flags,
                 include,
                 src,
-            } => super::Kernel::Xpu {
+            } => super::Kernel::CppXpu(super::CppXpu {
                 cxx_flags,
                 depends,
                 sycl_flags,
                 include,
                 src,
-            },
+            }),
         }
     }
 }

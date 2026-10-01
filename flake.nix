@@ -202,6 +202,10 @@
               pre-commit install
             '';
 
+            shellHook = ''
+              maturin develop --manifest-path kernels/Cargo.toml --skip-install
+            '';
+
           }
         ) buildSetsByBackend;
       in

@@ -35,6 +35,9 @@ final: prev:
 
   lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
+  # Make the source for a package from our cargo workspace.
+  mkKernelsRustSrc = final.callPackage ./pkgs/mk-kernels-rust-src { };
+
   nvtx = final.callPackage ./pkgs/nvtx { };
 
   # pandoc is used by a lot of packages to convert docs. However, evaluating

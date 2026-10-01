@@ -152,7 +152,9 @@
           in
           mkShell {
             nativeBuildInputs = [
-              kernel-builder
+              # Avoid rebuilding kernel-builder in the dev shell when the tree
+              # becomes dirty. We don't care about provenance during development.
+              (kernel-builder.override { builderProvenance = null; })
               nodejs # For hf-doc-builder.
               pinact
               pkg-config
@@ -200,6 +202,10 @@
               unset SOURCE_DATE_EPOCH
               ( cd kernels && maturin develop )
               pre-commit install
+            '';
+
+            shellHook = ''
+              maturin develop --manifest-path kernels/Cargo.toml --skip-install
             '';
 
           }

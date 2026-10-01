@@ -39,8 +39,8 @@ def print_kernel_variants(
                 sys.exit(1)
             selected_versions = [version]
         elif not versions:
-            print(f"Repository does not support kernel versions: {repo_id}")
-            return
+            print(f"Repository does not support kernel versions: {repo_id}", file=sys.stderr)
+            sys.exit(1)
         else:
             selected_versions = sorted(versions) if all_versions else [max(versions)]
         revisions = [(f"Version {v}", versions[v].ref) for v in selected_versions]

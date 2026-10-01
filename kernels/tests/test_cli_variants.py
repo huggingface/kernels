@@ -112,6 +112,16 @@ def test_no_build_variants(monkeypatch, hub, capsys):
     assert capsys.readouterr().out == "Version 2:\n\nNo build variants found.\n"
 
 
+def test_no_versions(monkeypatch, hub, capsys):
+    hub[1].return_value = {}
+    with pytest.raises(SystemExit) as exc:
+        run_cli(monkeypatch, "variants", REPO_ID)
+    assert exc.value.code == 1
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == f"Repository does not support kernel versions: {REPO_ID}\n"
+
+
 def test_missing_version(monkeypatch, hub, capsys):
     with pytest.raises(SystemExit) as exc:
         run_cli(monkeypatch, "variants", REPO_ID, "--version", "3")

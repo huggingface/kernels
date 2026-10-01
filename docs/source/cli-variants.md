@@ -15,7 +15,7 @@ kernels variants <repo_id> [--all-versions | --version VERSION | --revision REVI
 | --- | --- |
 | `--all-versions` | Show variants and decisions for every available version, in ascending version order. |
 | `--only-compatible` | Only show variants compatible with the current system, including the preferred variant. Can be combined with any version or revision selector. |
-| `--version VERSION` | Show variants for a specific integer kernel version, including version `0`. |
+| `--version VERSION` | Show variants for a specific integer kernel version, including version `0`, or use `latest` for the highest available version. |
 | `--revision REVISION` | Show variants for a specific branch, tag, or commit, including repositories without numbered versions. |
 
 `--all-versions`, `--version`, and `--revision` are mutually exclusive.
@@ -29,6 +29,12 @@ List variants and compatibility decisions for the latest version:
 
 ```bash
 kernels variants kernels-community/activation
+```
+
+You can also select the latest version explicitly:
+
+```bash
+kernels variants kernels-community/activation --version latest
 ```
 
 List variants for every version (the previous `kernels versions` behavior):

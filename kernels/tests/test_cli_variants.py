@@ -47,9 +47,10 @@ def run_cli(monkeypatch, *args):
     main()
 
 
-def test_latest_version(monkeypatch, hub, capsys):
+@pytest.mark.parametrize("selection", [[], ["--version", "latest"]])
+def test_latest_version(monkeypatch, hub, capsys, selection):
     api, available_versions, get_variants = hub
-    run_cli(monkeypatch, "variants", REPO_ID)
+    run_cli(monkeypatch, "variants", REPO_ID, *selection)
     output = capsys.readouterr()
     assert output.err == ""
     assert "Version 2:" in output.out
@@ -86,7 +87,9 @@ def test_specific_revision(monkeypatch, hub, capsys, revision):
     get_variants.assert_called_once_with(api, repo_id=REPO_ID, revision=revision)
 
 
-@pytest.mark.parametrize("selection", [[], ["--all-versions"], ["--version", "2"], ["--revision", "main"]])
+@pytest.mark.parametrize(
+    "selection", [[], ["--all-versions"], ["--version", "2"], ["--version", "latest"], ["--revision", "main"]]
+)
 def test_only_compatible(monkeypatch, hub, capsys, selection):
     run_cli(monkeypatch, "variants", REPO_ID, "--only-compatible", *selection)
     output = capsys.readouterr().out
@@ -123,7 +126,9 @@ def test_missing_version(monkeypatch, hub, capsys):
     "selection",
     [
         ["--version", "2", "--revision", "main"],
+        ["--version", "latest", "--revision", "main"],
         ["--all-versions", "--version", "2"],
+        ["--all-versions", "--version", "latest"],
         ["--all-versions", "--revision", "main"],
         ["--version", "invalid"],
     ],

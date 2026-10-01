@@ -1,4 +1,5 @@
 import sys
+from typing import Literal
 
 from huggingface_hub import constants
 
@@ -17,7 +18,7 @@ def print_kernel_variants(
     *,
     all_versions: bool = False,
     only_compatible: bool = False,
-    version: int | None = None,
+    version: int | Literal["latest"] | None = None,
     revision: str | None = None,
 ):
     """Print build variants and compatibility decisions for selected versions."""
@@ -29,7 +30,7 @@ def print_kernel_variants(
         revisions = [(f"Revision {revision}", revision)]
     else:
         versions = _get_available_versions(repo_id, local_files_only=constants.HF_HUB_OFFLINE)
-        if version is not None:
+        if version is not None and version != "latest":
             if version not in versions:
                 print(
                     f"Version {version} not found, available versions: {', '.join(str(v) for v in sorted(versions))}",

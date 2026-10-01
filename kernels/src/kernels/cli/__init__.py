@@ -1,6 +1,7 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Literal
 
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
@@ -62,7 +63,9 @@ def main():
         action="store_true",
         help="Show variants for all versions (default: latest version only)",
     )
-    variants_selection.add_argument("--version", type=int, help="Show variants for a specific kernel version")
+    variants_selection.add_argument(
+        "--version", type=_variant_version, help="Show variants for an integer kernel version or 'latest'"
+    )
     variants_selection.add_argument("--revision", type=str, help="Show variants for a branch, tag, or commit")
     variants_parser.add_argument(
         "--only-compatible", action="store_true", help="Only show variants compatible with the current system"
@@ -139,6 +142,15 @@ def main():
 
     args = parser.parse_args()
     args.func(args)
+
+
+def _variant_version(value: str) -> int | Literal["latest"]:
+    if value == "latest":
+        return "latest"
+    try:
+        return int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("version must be an integer or 'latest'") from None
 
 
 def kernel_info(args):

@@ -1,5 +1,5 @@
 {
-  lib,
+  mkKernelsRustSrc,
   rustPlatform,
 }:
 
@@ -14,39 +14,11 @@ rustPlatform.buildRustPackage {
   inherit version;
   pname = "kernel-port";
 
-  src =
-    let
-      sourceFiles =
-        file:
-        file.name == "Cargo.toml"
-        || file.name == "Cargo.lock"
-        || file.name == "flake.nix"
-        || file.name == "manylinux-policy.json"
-        || file.name == "pyproject.toml"
-        || file.name == "pyproject_universal.toml"
-        || file.name == "python_dependencies.json"
-        || file.name == "shim_function_versions.txt"
-        || file.name == "stable_abi.toml"
-        || file.name == ".gitattributes"
-        || file.name == ".gitignore"
-        || (builtins.any file.hasExt [
-          "cmake"
-          "cpp"
-          "cu"
-          "h"
-          "in"
-          "kdl"
-          "md"
-          "metal"
-          "mm"
-          "py"
-          "rs"
-          "toml"
-        ]);
-    in
-    import ../crate-dirs.nix {
-      inherit lib sourceFiles;
-    };
+  src = mkKernelsRustSrc {
+    crates = [ "kernel-port" ];
+    # The tests run in the check phase.
+    tests = [ "kernel-port" ];
+  };
 
   cargoLock = {
     lockFile = ../../../Cargo.lock;

@@ -41,8 +41,10 @@ def print_kernel_variants(
         elif not versions:
             print(f"Repository does not support kernel versions: {repo_id}", file=sys.stderr)
             sys.exit(1)
-        else:
-            selected_versions = sorted(versions) if all_versions else [max(versions)]
+        elif all_versions:
+            selected_versions = sorted(versions)
+        elif version == "latest" or version is None:
+            selected_versions = [max(versions)]
         revisions = [(f"Version {v}", versions[v].ref) for v in selected_versions]
 
     api = _get_hf_api()

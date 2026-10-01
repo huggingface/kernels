@@ -23,7 +23,7 @@ def print_kernel_variants(
 ):
     """Print build variants and compatibility decisions for selected versions."""
     if sum((all_versions, version is not None, revision is not None)) > 1:
-        print("Only one of --all-versions, --version, or --revision can be specified", file=sys.stderr)
+        print("Only one of `all_versions`, `version`, or `revision` can be specified", file=sys.stderr)
         sys.exit(1)
 
     if revision is not None:

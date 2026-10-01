@@ -3,6 +3,7 @@
   buildPythonPackage,
   rustPlatform,
   kernelsCargoDeps,
+  mkKernelsRustSrc,
 
   huggingface-hub,
   pyyaml,
@@ -24,23 +25,13 @@ buildPythonPackage {
   inherit version;
   format = "pyproject";
 
-  src =
-    let
-      sourceFiles =
-        file:
-        file.name == "README.md"
-        || file.name == "Cargo.toml"
-        || file.name == "Cargo.lock"
-        || file.hasExt "rs"
-        || file.hasExt "pyi"
-        || file.hasExt "lock"
-        || file.hasExt "json"
-        || file.hasExt "toml"
-        || file.hasExt "py";
-    in
-    import ../../crate-dirs.nix {
-      inherit lib sourceFiles;
-    };
+  src = mkKernelsRustSrc {
+    crates = [ "kernels" ];
+    extraFiles = [
+      "kernels/README.md"
+      "kernels/pyproject.toml"
+    ];
+  };
 
   cargoDeps = kernelsCargoDeps;
 

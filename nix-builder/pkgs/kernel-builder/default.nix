@@ -6,6 +6,7 @@
   libgit2,
   openssl,
   kernelsCargoDeps,
+  mkKernelsRustSrc,
 
   # Git provenance (`{ sha, dirty }`, or `null` for a non-git source) of the
   # `kernel-builder` flake. It is burned into the binary at build time and
@@ -35,46 +36,17 @@ rustPlatform.buildRustPackage (
     inherit version;
     pname = "kernel-builder";
 
-    src =
-      let
-        sourceFiles =
-          file:
-          file.name == "Cargo.toml"
-          || file.name == "Cargo.lock"
-          || file.name == "flake.nix"
-          || file.name == "manylinux-policy.json"
-          || file.name == "pyproject.toml"
-          || file.name == "pyproject_universal.toml"
-          || file.name == "python_dependencies.json"
-          || file.name == "shim_function_versions.txt"
-          || file.name == "stable_abi.toml"
-          || file.name == ".gitattributes"
-          || file.name == ".gitignore"
-          || (builtins.any file.hasExt [
-            "cmake"
-            "cpp"
-            "cu"
-            "h"
-            "in"
-            "md"
-            "metal"
-            "mm"
-            "py"
-            "rs"
-            "toml"
-          ]);
-      in
-      import ../crate-dirs.nix {
-        inherit lib sourceFiles;
-      };
+    src = mkKernelsRustSrc {
+      crates = [ "kernel-builder" ];
+    };
 
     cargoDeps = kernelsCargoDeps;
 
     cargoBuildFlags = cargoFlags;
-    cargoTestFlags = cargoFlags;
 
-    # e2e tests look for binary at target/debug/ which doesn't exist in nix
-    doCheck = false;
+    # Only run the unit tests in `src/` (`--bins`). e2e tests in `tests/`
+    # (which do not work in the build sandbox) are not run.
+    cargoTestFlags = cargoFlags ++ [ "--bins" ];
 
     nativeBuildInputs = [
       installShellFiles

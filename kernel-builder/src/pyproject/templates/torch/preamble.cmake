@@ -78,7 +78,7 @@ set(_STABLE_ABI_VERSION_{{ entry.backend }} "{{ entry.version }}")
 {% endfor %}
 set(_STABLE_ABI_VERSION "${_STABLE_ABI_VERSION_${BACKEND}}")
 
-if(_STABLE_ABI_VERSION AND TORCH_VERSION VERSION_GREATER_EQUAL ${_STABLE_ABI_VERSION})
+if(_STABLE_ABI_VERSION AND TORCH_VERSION VERSION_GREATER_EQUAL "${_STABLE_ABI_VERSION}")
   message("Building for the Torch stable ABI. ABI version: ${_STABLE_ABI_VERSION}, Torch version: ${TORCH_VERSION}")
   # From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
   string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "${_STABLE_ABI_VERSION}")

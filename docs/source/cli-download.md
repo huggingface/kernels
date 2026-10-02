@@ -47,4 +47,4 @@ Your project directory must contain a `kernels.lock` file. Generate one using [`
 ## See Also
 
 - [kernels lock](cli-lock.md) - Generate the lock file
-- [kernels versions](cli-versions.md) - View available kernel versions
+- [kernels variants](cli-variants.md) - View kernel variants and compatibility decisions

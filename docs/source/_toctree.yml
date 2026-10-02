@@ -35,8 +35,10 @@
       title: Overview
     - local: cli-info
       title: kernels info
+    - local: cli-variants
+      title: kernels variants
     - local: cli-versions
-      title: kernels versions
+      title: kernels versions (deprecated)
     - local: cli-lock
       title: kernels lock
     - local: cli-download

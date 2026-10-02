@@ -11,5 +11,5 @@ The `kernels` CLI provides commands for managing compute kernels.
 | [info](cli-info.md)                         | Describe a kernel                  |
 | [lock](cli-lock.md)                         | Lock kernel revisions              |
 | [verify-signature](cli-verify-signature.md) | Verify a kernel signature          |
-| [versions](cli-versions.md)                 | Show kernel versions               |
+| [variants](cli-variants.md)                 | Show variants and compatibility               |
 

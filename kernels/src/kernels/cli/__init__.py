@@ -1,10 +1,12 @@
 import argparse
 import sys
 from pathlib import Path
+from typing import Literal
 
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
 from kernels.cli.lock import lock_kernels
+from kernels.cli.variants import print_kernel_variants
 from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
 
@@ -53,7 +55,24 @@ def main():
     )
     info_parser.set_defaults(func=kernel_info)
 
-    versions_parser = subparsers.add_parser("versions", help="Show kernel versions")
+    variants_parser = subparsers.add_parser("variants", help="Show kernel build variants and compatibility decisions")
+    variants_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    variants_selection = variants_parser.add_mutually_exclusive_group()
+    variants_selection.add_argument(
+        "--all-versions",
+        action="store_true",
+        help="Show variants for all versions (default: latest version only)",
+    )
+    variants_selection.add_argument(
+        "--version", type=_variant_version, help="Show variants for an integer kernel version or 'latest'"
+    )
+    variants_selection.add_argument("--revision", type=str, help="Show variants for a branch, tag, or commit")
+    variants_parser.add_argument(
+        "--only-compatible", action="store_true", help="Only show variants compatible with the current system"
+    )
+    variants_parser.set_defaults(func=kernel_variants)
+
+    versions_parser = subparsers.add_parser("versions", help="Deprecated: use `kernels variants --all-versions`")
     versions_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
     versions_parser.set_defaults(func=kernel_versions)
 
@@ -125,6 +144,15 @@ def main():
     args.func(args)
 
 
+def _variant_version(value: str) -> int | Literal["latest"]:
+    if value == "latest":
+        return "latest"
+    try:
+        return int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("version must be an integer or 'latest'") from None
+
+
 def kernel_info(args):
     print_kernel_info(
         args.kernel,
@@ -136,6 +164,16 @@ def kernel_info(args):
 
 def kernel_versions(args):
     print_kernel_versions(args.repo_id)
+
+
+def kernel_variants(args):
+    print_kernel_variants(
+        args.repo_id,
+        all_versions=args.all_versions,
+        only_compatible=args.only_compatible,
+        version=args.version,
+        revision=args.revision,
+    )
 
 
 def _check_moved(_args):

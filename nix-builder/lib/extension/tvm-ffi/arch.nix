@@ -10,6 +10,7 @@
 
   # Native build inputs
   kernel-builder,
+  cargo,
   cmake,
   cmakeNvccThreadsHook,
   cuda_nvcc,
@@ -20,6 +21,8 @@
   python3,
   remove-bytecode-hook,
   rewrite-nix-paths-macho,
+  rustc,
+  rustPlatform,
   torch-ops-check,
   writeScriptBin,
 
@@ -52,6 +55,10 @@
 
   # Extra dependencies (such as CUTLASS).
   extraDeps ? [ ],
+
+  # Path to the `Cargo.lock` of the kernel's Rust crates, or `null` when
+  # the build has no Rust kernels.
+  cargoLock ? null,
 
   nvccThreads,
 
@@ -122,6 +129,8 @@ let
 
   metalSupport = buildConfig.metal or false;
 
+  rustSupport = cargoLock != null;
+
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
 in
@@ -138,6 +147,11 @@ stdenv.mkDerivation (prevAttrs: {
     ;
 
   framework = "tvm-ffi";
+
+  ${if rustSupport then "cargoDeps" else null} = rustPlatform.importCargoLock {
+    lockFile = cargoLock;
+    allowBuiltinFetchGit = true;
+  };
 
   # We run kernel-builder here rather than patchPhase or preConfigure,
   # so that external users of `src` get the source tree with the files
@@ -199,6 +213,11 @@ stdenv.mkDerivation (prevAttrs: {
   ])
   ++ lib.optionals stdenv.hostPlatform.isDarwin [
     rewrite-nix-paths-macho
+  ]
+  ++ lib.optionals rustSupport [
+    rustPlatform.cargoSetupHook
+    cargo
+    rustc
   ];
 
   buildInputs = [

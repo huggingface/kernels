@@ -21,6 +21,7 @@ let
   torchExtPath = path + "/torch-ext";
   tvmFfiExtPath = path + "/tvm-ffi-ext";
   lockSet = fileset.maybeMissing (path + "/kernels.lock");
+  cargoLockSet = fileset.maybeMissing (path + "/Cargo.lock");
   pySrcSet =
     let
       path =
@@ -40,8 +41,10 @@ let
       fileset.fileFilter pyFilter (path + "/tests")
     else
       fileset.empty;
+  # Rust kernels also need their Cargo manifest.
+  kernelSrc = kernel: kernel.src ++ lib.optional (kernel ? cargo-manifest) kernel.cargo-manifest;
   kernelsSrc = fileset.unions (
-    lib.flatten (lib.mapAttrsToList (name: buildConfig: map (nameToPath path) buildConfig.src) kernels)
+    lib.flatten (lib.mapAttrsToList (name: kernel: map (nameToPath path) (kernelSrc kernel)) kernels)
   );
   srcSet = fileset.unions (map (nameToPath path) extSrc);
 in
@@ -50,6 +53,7 @@ fileset.toSource {
   fileset = fileset.unions [
     kernelsSrc
     lockSet
+    cargoLockSet
     srcSet
     pySrcSet
     pyTestsSet

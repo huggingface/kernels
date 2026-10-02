@@ -239,7 +239,13 @@ impl Manifest {
                 }
                 for k in &facts.kernels {
                     toml.push_str(&format!("\n[kernel.{}]\n", k.name));
-                    toml.push_str(&format!("backend = {:?}\n", k.backend));
+                    // TODO: update when supporting non-C++ backends
+                    // Edition 6 tags kernels with their language and backend.
+                    if self.edition.as_deref().and_then(|e| e.parse::<u32>().ok()) >= Some(6) {
+                        toml.push_str(&format!("language = \"cpp-{}\"\n", k.backend));
+                    } else {
+                        toml.push_str(&format!("backend = {:?}\n", k.backend));
+                    }
                     if !k.cxx_flags.is_empty() {
                         toml.push_str("cxx-flags = [\n");
                         for f in &k.cxx_flags {

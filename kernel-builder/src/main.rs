@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
-use kernels_common::config::{v5, Build, BuildCompat};
+use kernels_common::config::{v6, Build, BuildCompat};
 use kernels_common::git::Oid;
 
 mod card;
@@ -475,15 +475,15 @@ fn update_build(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let build_compat = BuildCompat::open(&kernel_dir)?;
 
-    if matches!(build_compat, BuildCompat::V5(_)) {
+    if matches!(build_compat, BuildCompat::V6(_)) {
         return Ok(());
     }
 
     let build: Build = build_compat
         .try_into()
         .context("Cannot update build configuration")?;
-    let v5_build: v5::Build = build.into();
-    let pretty_toml = toml::to_string_pretty(&v5_build)?;
+    let v6_build: v6::Build = build.into();
+    let pretty_toml = toml::to_string_pretty(&v6_build)?;
 
     let build_toml = kernel_dir.join("build.toml");
     let mut writer =

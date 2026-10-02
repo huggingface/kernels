@@ -1,7 +1,7 @@
 [general]
 name = "cpp20-symbols"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = ["cpu"]
 
@@ -15,6 +15,6 @@ src = [
 ]
 
 [kernel.cpp20_symbols_cpu]
-backend = "cpu"
+language = "cpp-cpu"
 depends = ["torch"]
 src = ["cpu/cpu.cpp"]

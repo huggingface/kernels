@@ -167,7 +167,7 @@ backends = [
 ]
 name = "mykernel"
 version = 1
-edition = 5
+edition = 6
 
 [general.hub]
 repo-id = "myorg/mykernel"
@@ -179,7 +179,7 @@ src = [
 ]
 
 [kernel.mykernel]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 src = ["mykernel_cuda/mykernel.cu"]
 # If the kernel is only supported on specific capabilities, set the
@@ -199,7 +199,7 @@ The following sections enumerate all supported options for `build.toml`.
   by the `kernel-builder upload` command to upload the kernel to a version
   branch named `v<version>`.
 - `edition` (required): the `build.toml` format edition. The current
-  edition is `5`. Older `build.toml` files can be migrated with
+  edition is `6`. Older `build.toml` files can be migrated with
   `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
@@ -316,8 +316,9 @@ for an example with multiple kernel sections.
 
 The following options can be set for a kernel:
 
-- `backend` (required): the compute backend of the kernel. The currently
-  supported backends are `cpu`, `cuda`, `metal`, `rocm`, and `xpu`.
+- `language` (required): the language and compute backend of the kernel,
+  as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, and `cpp-xpu`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
   are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).

@@ -1,7 +1,7 @@
 [general]
 name = "cutlass-gemm"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cuda",
@@ -18,7 +18,7 @@ src = [
 ]
 
 [kernel.gemm_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = [
     "torch",
     "sycl_tla",
@@ -26,7 +26,7 @@ depends = [
 src = ["gemm_sycl.cpp"]
 
 [kernel.gemm]
-backend = "cuda"
+language = "cpp-cuda"
 depends = [
     "torch",
     "cutlass_3_6",

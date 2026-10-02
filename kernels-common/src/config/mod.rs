@@ -29,13 +29,14 @@ mod parse;
 pub mod v3;
 pub mod v4;
 pub mod v5;
+pub mod v6;
 
 use itertools::Itertools;
 
 use crate::version::Version;
 
-pub type CurrentConfig = v5::Build;
-pub const CURRENT_EDITION: usize = 5;
+pub type CurrentConfig = v6::Build;
+pub const CURRENT_EDITION: usize = 6;
 
 /// Baseline `kernels` version that can load kernels built with the current
 /// metadata format.
@@ -590,5 +591,56 @@ mod tests {
 
         let err = toml::from_str::<v5::Build>(toml).unwrap_err().to_string();
         assert!(err.contains("unknown field `minver`"), "{err}");
+    }
+
+    #[test]
+    fn v6_cpp_cuda_round_trip() {
+        let config = r#"
+            [general]
+            name = "relu"
+            version = 1
+            edition = 6
+            license = "Apache-2.0"
+            backends = ["cuda"]
+
+            [torch]
+            src = []
+
+            [kernel.relu]
+            language = "cpp-cuda"
+            depends = ["torch"]
+            src = ["relu_cuda/relu.cu"]
+            cuda-flags = ["-O3"]
+        "#;
+
+        let parsed: v6::Build = toml::from_str(config).unwrap();
+        let serialized = toml::to_string(&parsed).unwrap();
+        let build = Build::from(toml::from_str::<v6::Build>(&serialized).unwrap());
+
+        assert_eq!(build.kernels["relu"].backend(), Backend::Cuda);
+    }
+
+    #[test]
+    fn v6_kernel_rejects_options_of_other_backends() {
+        let config = r#"
+            [general]
+            name = "relu"
+            version = 1
+            edition = 6
+            license = "Apache-2.0"
+            backends = ["cpu"]
+
+            [torch]
+            src = []
+
+            [kernel.relu]
+            language = "cpp-cpu"
+            depends = ["torch"]
+            src = []
+            cuda-flags = ["-O3"]
+        "#;
+
+        let err = toml::from_str::<v6::Build>(config).unwrap_err().to_string();
+        assert!(err.contains("unknown field `cuda-flags`"), "{err}");
     }
 }

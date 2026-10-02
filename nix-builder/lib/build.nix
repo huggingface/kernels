@@ -127,7 +127,7 @@ rec {
     }:
     let
       inherit (lib) fileset;
-      kernels = lib.filterAttrs (_: kernel: buildConfig.backend == kernel.backend) (
+      kernels = lib.filterAttrs (_: kernel: buildConfig.backend == kernelConfig.kernelBackend kernel) (
         kernelConfig.toml.kernel or { }
       );
       extraDeps =

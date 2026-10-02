@@ -704,6 +704,17 @@ def _create_func_module(func: Callable) -> Type["nn.Module"]:
         def forward(self, *args, **kwargs):
             return func(*args, **kwargs)
 
+        def __copy__(self):
+            return self
+
+        def __deepcopy__(self, memo):
+            # Mark as already copied so repeated references reuse it
+            memo[id(self)] = self
+            return self
+
+        def __reduce__(self):
+            return func.__name__
+
     # Use function signature with args prepended by self to support
     # module validation.
     func_sig = inspect.signature(func)
@@ -713,5 +724,7 @@ def _create_func_module(func: Callable) -> Type["nn.Module"]:
         parameters=new_args,
         return_annotation=func_sig.return_annotation,
     )
+    # pickle needs to resolve by its original function's module, also see `__reduce__`
+    Func.__module__ = func.__module__
 
     return Func

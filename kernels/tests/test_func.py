@@ -1,4 +1,6 @@
+import copy
 import logging
+import pickle
 from pathlib import Path
 
 import pytest
@@ -40,6 +42,21 @@ def test_decorator():
 
     assert type(identity).kernel_layer_name == "identity_func"
     assert isinstance(identity, nn.Module)
+
+
+@pytest.mark.parametrize("copy_fn", [copy.copy, copy.deepcopy])
+def test_kernel_func_copy_preserves_singleton(copy_fn):
+    assert copy_fn(surprise_me) is surprise_me
+
+    model = copy_fn(SurpriseMe())
+    assert model._kernel_funcs["surprise_me"] is surprise_me
+
+
+def test_kernel_func_pickle_preserves_singleton():
+    assert pickle.loads(pickle.dumps(surprise_me)) is surprise_me
+
+    model = pickle.loads(pickle.dumps(SurpriseMe()))
+    assert model._kernel_funcs["surprise_me"] is surprise_me
 
 
 def test_deprecated_decorator():

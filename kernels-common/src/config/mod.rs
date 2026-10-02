@@ -344,13 +344,13 @@ impl TvmFfi {
 }
 
 pub enum Kernel {
-    Cpu {
+    CppCpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
-    Cuda {
+    CppCuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
         cuda_minver: Option<Version<2>>,
@@ -359,13 +359,13 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
-    Metal {
+    CppMetal {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
-    Rocm {
+    CppRocm {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         rocm_archs: Option<Vec<String>>,
@@ -373,7 +373,7 @@ pub enum Kernel {
         include: Option<Vec<String>>,
         src: Vec<String>,
     },
-    Xpu {
+    CppXpu {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         sycl_flags: Option<Vec<String>>,
@@ -385,60 +385,77 @@ pub enum Kernel {
 impl Kernel {
     pub fn cxx_flags(&self) -> Option<&[String]> {
         match self {
-            Kernel::Cpu { cxx_flags, .. }
-            | Kernel::Cuda { cxx_flags, .. }
-            | Kernel::Metal { cxx_flags, .. }
-            | Kernel::Rocm { cxx_flags, .. }
-            | Kernel::Xpu { cxx_flags, .. } => cxx_flags.as_deref(),
+            Kernel::CppCpu { cxx_flags, .. }
+            | Kernel::CppCuda { cxx_flags, .. }
+            | Kernel::CppMetal { cxx_flags, .. }
+            | Kernel::CppRocm { cxx_flags, .. }
+            | Kernel::CppXpu { cxx_flags, .. } => cxx_flags.as_deref(),
         }
     }
 
     pub fn include(&self) -> Option<&[String]> {
         match self {
-            Kernel::Cpu { include, .. }
-            | Kernel::Cuda { include, .. }
-            | Kernel::Metal { include, .. }
-            | Kernel::Rocm { include, .. }
-            | Kernel::Xpu { include, .. } => include.as_deref(),
+            Kernel::CppCpu { include, .. }
+            | Kernel::CppCuda { include, .. }
+            | Kernel::CppMetal { include, .. }
+            | Kernel::CppRocm { include, .. }
+            | Kernel::CppXpu { include, .. } => include.as_deref(),
         }
     }
 
     pub fn sycl_flags(&self) -> Option<&[String]> {
         match self {
-            Kernel::Xpu { sycl_flags, .. } => sycl_flags.as_deref(),
+            Kernel::CppXpu { sycl_flags, .. } => sycl_flags.as_deref(),
             _ => None,
         }
     }
 
     pub fn backend(&self) -> Backend {
         match self {
-            Kernel::Cpu { .. } => Backend::Cpu,
-            Kernel::Cuda { .. } => Backend::Cuda,
-            Kernel::Metal { .. } => Backend::Metal,
-            Kernel::Rocm { .. } => Backend::Rocm,
-            Kernel::Xpu { .. } => Backend::Xpu,
+            Kernel::CppCpu { .. } => Backend::Cpu,
+            Kernel::CppCuda { .. } => Backend::Cuda,
+            Kernel::CppMetal { .. } => Backend::Metal,
+            Kernel::CppRocm { .. } => Backend::Rocm,
+            Kernel::CppXpu { .. } => Backend::Xpu,
+        }
+    }
+
+    pub fn language(&self) -> Language {
+        match self {
+            Kernel::CppCpu { .. }
+            | Kernel::CppCuda { .. }
+            | Kernel::CppMetal { .. }
+            | Kernel::CppRocm { .. }
+            | Kernel::CppXpu { .. } => Language::Cpp,
         }
     }
 
     pub fn depends(&self) -> &[Dependency] {
         match self {
-            Kernel::Cpu { depends, .. }
-            | Kernel::Cuda { depends, .. }
-            | Kernel::Metal { depends, .. }
-            | Kernel::Rocm { depends, .. }
-            | Kernel::Xpu { depends, .. } => depends,
+            Kernel::CppCpu { depends, .. }
+            | Kernel::CppCuda { depends, .. }
+            | Kernel::CppMetal { depends, .. }
+            | Kernel::CppRocm { depends, .. }
+            | Kernel::CppXpu { depends, .. } => depends,
         }
     }
 
     pub fn src(&self) -> &[String] {
         match self {
-            Kernel::Cpu { src, .. }
-            | Kernel::Cuda { src, .. }
-            | Kernel::Metal { src, .. }
-            | Kernel::Rocm { src, .. }
-            | Kernel::Xpu { src, .. } => src,
+            Kernel::CppCpu { src, .. }
+            | Kernel::CppCuda { src, .. }
+            | Kernel::CppMetal { src, .. }
+            | Kernel::CppRocm { src, .. }
+            | Kernel::CppXpu { src, .. } => src,
         }
     }
+}
+
+/// Source language of a kernel.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub enum Language {
+    Cpp,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -618,6 +635,37 @@ mod tests {
         let build = Build::from(toml::from_str::<v6::Build>(&serialized).unwrap());
 
         assert_eq!(build.kernels["relu"].backend(), Backend::Cuda);
+        assert_eq!(build.kernels["relu"].language(), Language::Cpp);
+    }
+
+    #[test]
+    fn v5_upgrades_to_v6_cpp_language() {
+        let config = r#"
+            [general]
+            name = "relu"
+            version = 1
+            edition = 5
+            license = "Apache-2.0"
+            backends = ["cuda"]
+
+            [torch]
+            src = []
+
+            [kernel.relu]
+            backend = "cuda"
+            depends = ["torch"]
+            src = ["relu_cuda/relu.cu"]
+            cxx-flags = ["-O2"]
+        "#;
+
+        let build = Build::from(toml::from_str::<v5::Build>(config).unwrap());
+        assert_eq!(build.kernels["relu"].language(), Language::Cpp);
+
+        let v6_build: v6::Build = build.into();
+        let serialized = toml::to_string_pretty(&v6_build).unwrap();
+        assert!(serialized.contains("edition = 6"), "{serialized}");
+        assert!(serialized.contains("language = \"cpp-cuda\""), "{serialized}");
+        assert!(!serialized.contains("backend = "), "{serialized}");
     }
 
     #[test]

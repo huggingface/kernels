@@ -215,7 +215,7 @@ impl From<Kernel> for super::Kernel {
                 depends,
                 include,
                 src,
-            } => super::Kernel::Cpu {
+            } => super::Kernel::CppCpu {
                 cxx_flags,
                 depends,
                 include,
@@ -229,7 +229,7 @@ impl From<Kernel> for super::Kernel {
                 depends,
                 include,
                 src,
-            } => super::Kernel::Cuda {
+            } => super::Kernel::CppCuda {
                 cuda_capabilities,
                 cuda_flags,
                 cuda_minver,
@@ -243,7 +243,7 @@ impl From<Kernel> for super::Kernel {
                 depends,
                 include,
                 src,
-            } => super::Kernel::Metal {
+            } => super::Kernel::CppMetal {
                 cxx_flags,
                 depends,
                 include,
@@ -256,7 +256,7 @@ impl From<Kernel> for super::Kernel {
                 hip_flags,
                 include,
                 src,
-            } => super::Kernel::Rocm {
+            } => super::Kernel::CppRocm {
                 cxx_flags,
                 depends,
                 rocm_archs,
@@ -270,7 +270,7 @@ impl From<Kernel> for super::Kernel {
                 sycl_flags,
                 include,
                 src,
-            } => super::Kernel::Xpu {
+            } => super::Kernel::CppXpu {
                 cxx_flags,
                 depends,
                 sycl_flags,

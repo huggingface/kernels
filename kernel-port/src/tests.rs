@@ -574,6 +574,21 @@ fn manifest_edition_stable_abi_and_multi_glob_src() {
 }
 
 #[test]
+fn manifest_edition_6_tags_kernel_language() {
+    let mut ws = Workspace::from_files(BTreeMap::from([
+        ("k/a.cu".into(), b"x".to_vec()),
+        ("torch-ext/a.cpp".into(), b"x".to_vec()),
+    ]));
+    run_recipe(
+        &mut ws,
+        "kernel name=\"k\" backend=\"cuda\" src=\"k/*.cu\"\nmanifest name=\"k\" version=1 license=\"MIT\" edition=6 backends=\"cuda\" torch_src=\"torch-ext/*.cpp\"\n",
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(toml.contains("[kernel.k]\nlanguage = \"cpp-cuda\"\n"));
+    assert!(!toml.contains("backend = "));
+}
+
+#[test]
 fn manifest_scalar_stable_abi() {
     let mut ws = Workspace::from_files(BTreeMap::from([
         ("k/a.cu".into(), b"x".to_vec()),

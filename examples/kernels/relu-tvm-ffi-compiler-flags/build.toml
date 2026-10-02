@@ -1,7 +1,7 @@
 [general]
 name = "relu-tvm-ffi-compiler-flags"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cpu",
@@ -17,7 +17,7 @@ src = ["tvm-ffi-ext/tvm_ffi_binding.cpp"]
 cxx-flags = ["-DCANARY_IN_THE_KERNEL"]
 
 [kernel.relu_cuda]
-backend = "cuda"
+language = "cpp-cuda"
 depends = []
 cuda-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 src = [
@@ -26,7 +26,7 @@ src = [
 ]
 
 [kernel.relu_cpu]
-backend = "cpu"
+language = "cpp-cpu"
 depends = []
 cxx-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 src = [
@@ -35,7 +35,7 @@ src = [
 ]
 
 [kernel.relu_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = ["torch"]
 sycl-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 src = [

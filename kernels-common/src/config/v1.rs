@@ -135,7 +135,7 @@ fn convert_kernels(v1_kernels: HashMap<String, Kernel>) -> Result<HashMap<String
 
             kernels.insert(
                 format!("{name}_rocm"),
-                super::Kernel::Rocm {
+                super::Kernel::CppRocm {
                     cxx_flags: None,
                     rocm_archs: kernel.rocm_archs,
                     hip_flags: None,
@@ -148,7 +148,7 @@ fn convert_kernels(v1_kernels: HashMap<String, Kernel>) -> Result<HashMap<String
 
         kernels.insert(
             name,
-            super::Kernel::Cuda {
+            super::Kernel::CppCuda {
                 cuda_capabilities: kernel.cuda_capabilities,
                 cuda_flags: None,
                 cuda_minver: None,

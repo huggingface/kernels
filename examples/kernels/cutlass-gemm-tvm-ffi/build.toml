@@ -1,7 +1,7 @@
 [general]
 name = "cutlass-gemm-tvm-ffi"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cuda",
@@ -15,7 +15,7 @@ repo-id = "kernels-test/cutlass-gemm-tvm-ffi"
 src = ["tvm-ffi-ext/tvm_ffi_binding.cpp"]
 
 [kernel.gemm]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["cutlass_3_6"]
 src = [
     "gemm.cu",
@@ -23,7 +23,7 @@ src = [
 ]
 
 [kernel.gemm_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = ["sycl_tla"]
 src = [
     "gemm_sycl.cpp",

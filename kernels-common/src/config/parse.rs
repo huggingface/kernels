@@ -7,15 +7,17 @@ use eyre::{Context, Result, bail};
 use super::{Build, BuildCompat, CurrentConfig};
 
 pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<CurrentConfig> {
-    // Only v4 is auto-upgraded to v5 on load; older editions must be migrated
-    // explicitly with `update-build`.
+    // v4 and v5 are upgraded to v6 in memory so that kernel-builder commands keep
+    // working, but the Nix builder only accepts v6, so warn to run `update-build`.
+    // Older editions must be migrated explicitly with `update-build`.
     match parse_and_validate_compat(kernel_dir)? {
-        BuildCompat::V5(build) => Ok(build),
+        BuildCompat::V6(build) => Ok(build),
+        BuildCompat::V5(build) => {
+            warn_in_memory_upgrade("edition 5");
+            Ok(Build::from(build).into())
+        }
         BuildCompat::V4(build) => {
-            eprintln!(
-                "⚠️  build.toml uses the legacy v4 format; upgrading to edition 5 in memory. \
-                 Run `kernel-builder update-build` to persist the upgrade."
-            );
+            warn_in_memory_upgrade("legacy v4");
             Ok(Build::from(build).into())
         }
         BuildCompat::V3(_) => bail!(
@@ -23,6 +25,14 @@ pub(crate) fn parse_and_validate(kernel_dir: impl AsRef<Path>) -> Result<Current
              `kernel-builder update-build`"
         ),
     }
+}
+
+fn warn_in_memory_upgrade(format: &str) {
+    eprintln!(
+        "⚠️  build.toml uses the {format} format; upgrading to edition 6 in memory. \
+         Run `kernel-builder update-build` to persist the upgrade, the Nix builder \
+         requires edition 6."
+    );
 }
 
 pub(crate) fn parse_and_validate_compat(kernel_dir: impl AsRef<Path>) -> Result<BuildCompat> {

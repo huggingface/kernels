@@ -5,7 +5,7 @@ backends = [
   "cpu",
 ]
 version = 1
-edition = 5
+edition = 6
 
 [general.hub]
 repo-id = "kernels-test/symbol-conflicts2"
@@ -17,6 +17,6 @@ src = [
 ]
 
 [kernel.conflicts_cpu]
-backend = "cpu"
+language = "cpp-cpu"
 depends = ["torch"]
 src = ["conflicts_cpu/conflicts_cpu.cpp"]

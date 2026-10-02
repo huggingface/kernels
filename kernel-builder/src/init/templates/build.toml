@@ -7,7 +7,7 @@ backends = [
 {% endfor %}
 ]
 version = 1
-edition = 5
+edition = 6
 
 [general.hub]
 repo-id = "{{ repo_id }}"
@@ -20,14 +20,14 @@ src = [
 {% if has_cuda %}
 
 [kernel.{{ kernel_name_normalized }}]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 src = ["{{ kernel_name_normalized }}_cuda/{{ kernel_name_normalized }}.cu"]
 {% endif %}
 {% if has_metal %}
 
 [kernel.{{ kernel_name_normalized }}_metal]
-backend = "metal"
+language = "cpp-metal"
 depends = ["torch"]
 src = [
   "{{ kernel_name_normalized }}_metal/{{ kernel_name_normalized }}.mm",
@@ -37,7 +37,7 @@ src = [
 {% if has_rocm %}
 
 [kernel.{{ kernel_name_normalized }}_rocm]
-backend = "rocm"
+language = "cpp-rocm"
 depends = ["torch"]
 rocm-archs = [
   "gfx906",
@@ -55,14 +55,14 @@ src = ["{{ kernel_name_normalized }}_cuda/{{ kernel_name_normalized }}.cu"]
 {% if has_xpu %}
 
 [kernel.{{ kernel_name_normalized }}_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = ["torch"]
 src = ["{{ kernel_name_normalized }}_xpu/{{ kernel_name_normalized }}.cpp"]
 {% endif %}
 {% if has_cpu %}
 
 [kernel.{{ kernel_name_normalized }}_cpu]
-backend = "cpu"
+language = "cpp-cpu"
 depends = ["torch"]
 src = ["{{ kernel_name_normalized }}_cpu/{{ kernel_name_normalized }}_cpu.cpp"]
 {% endif %}

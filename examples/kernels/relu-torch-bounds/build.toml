@@ -1,7 +1,7 @@
 [general]
 name = "relu"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cuda",
@@ -20,12 +20,12 @@ src = [
 ]
 
 [kernel.relu]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 src = ["relu_cuda/relu.cu"]
 
 [kernel.relu_rocm]
-backend = "rocm"
+language = "cpp-rocm"
 depends = ["torch"]
 rocm-archs = [
     "gfx906",

@@ -34,19 +34,19 @@ fn render_kernel_component(
         .join("\n");
 
     match kernel {
-        Kernel::Cpu { .. } => {
+        Kernel::CppCpu { .. } => {
             render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Cuda { .. } => {
+        Kernel::CppCuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Rocm { .. } => {
+        Kernel::CppRocm { .. } => {
             render_kernel_component_hip(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Metal { .. } => {
+        Kernel::CppMetal { .. } => {
             render_kernel_component_metal(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Xpu { .. } => {
+        Kernel::CppXpu { .. } => {
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
     }
@@ -87,7 +87,7 @@ fn render_kernel_component_cuda(
     write: &mut impl Write,
 ) -> Result<()> {
     let (cuda_capabilities, cuda_flags, cuda_minver) = match kernel {
-        Kernel::Cuda {
+        Kernel::CppCuda {
             cuda_capabilities,
             cuda_flags,
             cuda_minver,
@@ -130,7 +130,7 @@ fn render_kernel_component_hip(
     write: &mut impl Write,
 ) -> Result<()> {
     let (rocm_archs, hip_flags) = match kernel {
-        Kernel::Rocm {
+        Kernel::CppRocm {
             rocm_archs,
             hip_flags,
             ..
@@ -191,7 +191,7 @@ fn render_kernel_component_xpu(
     write: &mut impl Write,
 ) -> Result<()> {
     let sycl_flags = match kernel {
-        Kernel::Xpu { sycl_flags, .. } => sycl_flags.as_deref(),
+        Kernel::CppXpu { sycl_flags, .. } => sycl_flags.as_deref(),
         _ => unreachable!("Unsupported kernel type for XPU rendering"),
     };
 

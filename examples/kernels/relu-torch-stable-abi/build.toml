@@ -1,7 +1,7 @@
 [general]
 name = "relu-torch-stable-abi"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cpu",
@@ -28,7 +28,7 @@ rocm = "2.11"
 xpu = "2.11"
 
 [kernel.relu_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = ["torch"]
 src = ["relu_xpu/relu.cpp"]
 
@@ -46,7 +46,7 @@ src = ["relu_xpu/relu.cpp"]
 #]
 
 [kernel.relu_rocm]
-backend = "rocm"
+language = "cpp-rocm"
 depends = ["torch"]
 rocm-archs = [
     "gfx906",
@@ -62,11 +62,11 @@ rocm-archs = [
 src = ["relu_cuda/relu.cu"]
 
 [kernel.relu_cpu]
-backend = "cpu"
+language = "cpp-cpu"
 depends = ["torch"]
 src = ["relu_cpu/relu_cpu.cpp"]
 
 [kernel.relu]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 src = ["relu_cuda/relu.cu"]

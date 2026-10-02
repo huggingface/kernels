@@ -664,7 +664,10 @@ mod tests {
         let v6_build: v6::Build = build.into();
         let serialized = toml::to_string_pretty(&v6_build).unwrap();
         assert!(serialized.contains("edition = 6"), "{serialized}");
-        assert!(serialized.contains("language = \"cpp-cuda\""), "{serialized}");
+        assert!(
+            serialized.contains("language = \"cpp-cuda\""),
+            "{serialized}"
+        );
         assert!(!serialized.contains("backend = "), "{serialized}");
     }
 

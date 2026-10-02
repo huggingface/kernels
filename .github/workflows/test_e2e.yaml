@@ -82,7 +82,7 @@ jobs:
           test -f example.py
           grep -q 'name = "${{ env.E2E_REPO_NAME }}"' build.toml
           grep -q 'repo-id = "${{ env.E2E_REPO_ID }}"' build.toml
-          grep -q 'backend = "cuda"' build.toml
+          grep -q 'language = "cpp-cuda"' build.toml
 
       - name: Patch flake.nix to use local nix-builder
         run: |

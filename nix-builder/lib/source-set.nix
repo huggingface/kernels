@@ -22,6 +22,7 @@ let
   tvmFfiExtPath = path + "/tvm-ffi-ext";
   lockSet = fileset.maybeMissing (path + "/kernels.lock");
   cargoLockSet = fileset.maybeMissing (path + "/Cargo.lock");
+  rustGitHashesSet = fileset.maybeMissing (path + "/rust-git-hashes.json");
   pySrcSet =
     let
       path =
@@ -54,6 +55,7 @@ fileset.toSource {
     kernelsSrc
     lockSet
     cargoLockSet
+    rustGitHashesSet
     srcSet
     pySrcSet
     pyTestsSet

@@ -71,7 +71,7 @@ dependencies = [
 [[package]]
 name = "tvm-ffi"
 version = "0.1.0-alpha.0"
-source = "git+https://github.com/apache/tvm-ffi.git?rev=2af558e255ff2f398095835ae18e6457635b0262#2af558e255ff2f398095835ae18e6457635b0262"
+source = "git+https://github.com/apache/tvm-ffi.git?tag=v0.1.14-post1#e251c6abee7a111c6467f84d854be512e33e2db0"
 dependencies = [
  "paste",
  "tvm-ffi-macros",
@@ -81,7 +81,7 @@ dependencies = [
 [[package]]
 name = "tvm-ffi-macros"
 version = "0.1.0-alpha.0"
-source = "git+https://github.com/apache/tvm-ffi.git?rev=2af558e255ff2f398095835ae18e6457635b0262#2af558e255ff2f398095835ae18e6457635b0262"
+source = "git+https://github.com/apache/tvm-ffi.git?tag=v0.1.14-post1#e251c6abee7a111c6467f84d854be512e33e2db0"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -92,7 +92,7 @@ dependencies = [
 [[package]]
 name = "tvm-ffi-sys"
 version = "0.1.0-alpha.0"
-source = "git+https://github.com/apache/tvm-ffi.git?rev=2af558e255ff2f398095835ae18e6457635b0262#2af558e255ff2f398095835ae18e6457635b0262"
+source = "git+https://github.com/apache/tvm-ffi.git?tag=v0.1.14-post1#e251c6abee7a111c6467f84d854be512e33e2db0"
 
 [[package]]
 name = "unicode-ident"

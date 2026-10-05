@@ -364,6 +364,19 @@ Rust kernels are built with Cargo and require the `tvm-ffi` framework.
 
 - `cargo-manifest` (required): path of the crate's `Cargo.toml`.
 
+Place `Cargo.lock` at the kernel project root. If it contains Git dependencies,
+generate their fixed-output Nix hashes from that directory:
+
+```bash
+nix run .#hash-rust
+```
+
+This command is available for Rust kernels, reads `Cargo.lock` from the current
+directory, and writes `rust-git-hashes.json` there. Track both files
+in Git so Nix can include them in the build. Rerun the command whenever Git
+dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
+`Cargo.lock` and do not require this file.
+
 ## Torch bindings
 
 ### Defining bindings

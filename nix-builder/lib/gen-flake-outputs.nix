@@ -46,6 +46,10 @@ let
 
   kernelConfig = (import ./kernel-config.nix { inherit lib; }) path;
 
+  hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
+    lib.attrValues (kernelConfig.toml.kernel or { })
+  );
+
   buildConfigBackend =
     buildConfig:
     if buildConfig.cpu or false then
@@ -325,5 +329,8 @@ in
       archVariants = lib.unique (
         map (buildSet: buildSet.variants.kernelArchVariant kernelConfig) applicableBuildSets
       );
+    }
+    // lib.optionalAttrs hasRustKernels {
+      inherit (pkgs) hash-rust;
     };
 }

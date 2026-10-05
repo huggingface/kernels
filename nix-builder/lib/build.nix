@@ -189,6 +189,11 @@ rec {
           ;
 
         cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
+        rustGitHashes =
+          if hasRustKernels && builtins.pathExists (src + "/rust-git-hashes.json") then
+            builtins.fromJSON (builtins.readFile (src + "/rust-git-hashes.json"))
+          else
+            { };
         kernelName = kernelConfig.name;
         doAbiCheck = true;
         variant = variants.kernelVariant kernelConfig;

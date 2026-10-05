@@ -60,6 +60,9 @@
   # the build has no Rust kernels.
   cargoLock ? null,
 
+  # Fixed-output hashes for Git dependencies in Cargo.lock.
+  rustGitHashes ? { },
+
   nvccThreads,
 
   # Dependencies on other kernels. Path to a JSON file that maps
@@ -147,11 +150,6 @@ stdenv.mkDerivation (prevAttrs: {
     ;
 
   framework = "tvm-ffi";
-
-  ${if rustSupport then "cargoDeps" else null} = rustPlatform.importCargoLock {
-    lockFile = cargoLock;
-    allowBuiltinFetchGit = true;
-  };
 
   # We run kernel-builder here rather than patchPhase or preConfigure,
   # so that external users of `src` get the source tree with the files
@@ -339,5 +337,10 @@ stdenv.mkDerivation (prevAttrs: {
     inherit dependencies;
     inherit (python3.pkgs.tvm-ffi) variant;
     archVariant = python3.pkgs.tvm-ffi.variant;
+  };
+} // lib.optionalAttrs rustSupport {
+  cargoDeps = rustPlatform.importCargoLock {
+    lockFile = cargoLock;
+    outputHashes = rustGitHashes;
   };
 })

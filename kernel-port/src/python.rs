@@ -716,27 +716,32 @@ fn import_alias_binding<'a>(path: &str, alias: &'a ImportAlias<'_>) -> Result<&'
     Ok(parts[0])
 }
 
-fn kernel_module_expr(helper: &str, suffix: &[&str]) -> String {
-    if suffix.is_empty() {
-        format!("{helper}()")
-    } else {
-        let suffix = serde_json::to_string(&suffix.join(".")).unwrap();
-        format!("{helper}({suffix})")
-    }
-}
-
 fn append_original_semicolon(text: &mut String, semicolon: Option<&libcst_native::Semicolon<'_>>) {
     if let Some(semicolon) = semicolon {
         text.push_str(&render(semicolon));
     }
 }
 
+// Stands in for an import that only re-bound the kernel module; the line that
+// holds it is removed once every rewrite has been spliced.
+const DROPPED_IMPORT: &str = "\u{0}kernel-port-dropped-import\u{0}";
+
+fn kernel_attr(binding: &str, parts: &[&str]) -> String {
+    let mut text = binding.to_string();
+    for part in parts {
+        text.push('.');
+        text.push_str(part);
+    }
+    text
+}
+
+// The `(name, value)` assignments that replace `from pkg.sub import a, b as c`.
 fn kernelize_from_import(
     path: &str,
     import: &ImportFrom<'_>,
     package: &str,
-    helper: &str,
-) -> Result<Option<String>> {
+    binding: &str,
+) -> Result<Option<Vec<(String, String)>>> {
     if !import.relative.is_empty() {
         return Ok(None);
     }
@@ -758,9 +763,8 @@ fn kernelize_from_import(
             target.join(".")
         );
     };
-    let module = kernel_module_expr(helper, &target[1..]);
-    let mut bindings = Vec::with_capacity(aliases.len());
-    let mut values = Vec::with_capacity(aliases.len());
+    let module = kernel_attr(binding, &target[1..]);
+    let mut assignments = Vec::with_capacity(aliases.len());
     for alias in aliases {
         let Some(imported) = flatten(&alias.name) else {
             bail!("{path}: unsupported imported name");
@@ -768,22 +772,21 @@ fn kernelize_from_import(
         if imported.len() != 1 {
             bail!("{path}: unsupported imported name {}", imported.join("."));
         }
-        let binding = import_alias_binding(path, alias)?;
-        let imported = serde_json::to_string(imported[0]).unwrap();
-        bindings.push(binding);
-        values.push(format!("getattr({module}, {imported})"));
+        let name = import_alias_binding(path, alias)?;
+        assignments.push((name.to_string(), format!("{module}.{}", imported[0])));
     }
-    let mut replacement = format!("{} = {}", bindings.join(", "), values.join(", "));
-    append_original_semicolon(&mut replacement, import.semicolon.as_ref());
-    Ok(Some(replacement))
+    Ok(Some(assignments))
 }
 
+// The assignment that replaces `import pkg`, `import pkg.sub` or
+// `import pkg.sub as x`. None is needed when the import only bound the kernel
+// module itself, which the binding preamble already did; it is then dropped.
 fn kernelize_plain_import(
     path: &str,
     import: &Import<'_>,
     package: &str,
-    helper: &str,
-) -> Result<Option<String>> {
+    binding: &str,
+) -> Result<Option<Vec<(String, String)>>> {
     let matching: Vec<_> = import
         .names
         .iter()
@@ -799,21 +802,18 @@ fn kernelize_plain_import(
     }
     let alias = matching[0];
     let target = flatten(&alias.name).unwrap();
-    let binding = import_alias_binding(path, alias)?;
-    let root = kernel_module_expr(helper, &[]);
-    let mut replacement = if target.len() == 1 {
-        format!("{binding} = {root}")
+    let name = import_alias_binding(path, alias)?;
+    // `import pkg.sub` binds `pkg`; the kernel module already stands in for
+    // it, and `pkg.sub` resolves as an attribute wherever it is used.
+    let value = if alias.asname.is_some() {
+        kernel_attr(binding, &target[1..])
     } else {
-        let module = kernel_module_expr(helper, &target[1..]);
-        if alias.asname.is_some() {
-            format!("{binding} = {module}")
-        } else {
-            // `import pkg.sub` binds pkg and also loads pkg.sub.
-            format!("{binding} = {root}; {module}")
-        }
+        binding.to_string()
     };
-    append_original_semicolon(&mut replacement, import.semicolon.as_ref());
-    Ok(Some(replacement))
+    if name == value {
+        return Ok(Some(Vec::new()));
+    }
+    Ok(Some(vec![(name.to_string(), value)]))
 }
 
 fn is_module_docstring(statement: &Statement<'_>) -> bool {
@@ -840,20 +840,13 @@ fn is_future_import(statement: &Statement<'_>) -> bool {
         && import.module.as_ref().and_then(flatten).as_deref() == Some(["__future__"].as_slice())
 }
 
-fn insert_kernel_helper(
-    path: &str,
-    src: &str,
-    helper: &str,
-    kernel: &str,
-    version: usize,
-) -> Result<String> {
-    let owned = parsed_module(path, src)?;
-    let module = owned.borrow_dependent();
+// Offset just past the module docstring and `__future__` imports: the earliest
+// point at which a statement may be inserted.
+fn after_module_preamble(path: &str, module: &Module<'_>, src: &str) -> Result<usize> {
     let mut body_index = usize::from(module.body.first().is_some_and(is_module_docstring));
     while module.body.get(body_index).is_some_and(is_future_import) {
         body_index += 1;
     }
-
     let mut state = CodegenState {
         default_newline: module.default_newline,
         default_indent: module.default_indent,
@@ -865,80 +858,188 @@ fn insert_kernel_helper(
     for statement in &module.body[..body_index] {
         statement.codegen(&mut state);
     }
-    let insert_at = state.tokens.len();
     if !src.starts_with(&state.tokens) {
-        bail!("{path}: could not locate the kernel import helper insertion point");
+        bail!("{path}: could not locate the kernel import insertion point");
     }
-
-    let newline = module.default_newline;
-    let indent = module.default_indent;
-    let kernel = serde_json::to_string(kernel).unwrap();
-    let mut helper_source = String::new();
-    if insert_at > 0 && !state.tokens.ends_with(['\n', '\r']) {
-        helper_source.push_str(newline);
-    }
-    let cached_root = format!("{helper}_root");
-    helper_source.push_str(&format!("{cached_root} = None{newline}"));
-    helper_source.push_str(&format!("def {helper}(module=\"\"):{newline}"));
-    helper_source.push_str(&format!("{indent}global {cached_root}{newline}"));
-    helper_source.push_str(&format!("{indent}if {cached_root} is None:{newline}"));
-    helper_source.push_str(&format!(
-        "{indent}{indent}{cached_root} = __import__(\"kernels\").get_kernel({kernel}, version={version}){newline}"
-    ));
-    helper_source.push_str(&format!("{indent}root = {cached_root}{newline}"));
-    helper_source.push_str(&format!("{indent}if not module:{newline}"));
-    helper_source.push_str(&format!("{indent}{indent}return root{newline}"));
-    helper_source.push_str(&format!(
-        "{indent}return __import__(\"importlib\").import_module(root.__name__ + \".\" + module){newline}{newline}"
-    ));
-
-    let mut result = src.to_string();
-    result.insert_str(insert_at, &helper_source);
-    check_parses(path, &result)?;
-    Ok(result)
+    Ok(state.tokens.len())
 }
 
+fn line_start(src: &str, pos: usize) -> usize {
+    src[..pos].rfind('\n').map_or(0, |i| i + 1)
+}
+
+fn remove_dropped_imports(path: &str, src: &str) -> Result<String> {
+    let mut out = String::with_capacity(src.len());
+    for line in src.split_inclusive('\n') {
+        if line.trim() != DROPPED_IMPORT {
+            out.push_str(line);
+        }
+    }
+    if out.contains(DROPPED_IMPORT) {
+        bail!(
+            "{path}: an `import` of the kernelized package shares its line with other statements; split it before kernelize_imports"
+        );
+    }
+    Ok(out)
+}
+
+// Imports that open a line at module scope. These are rewritten one
+// assignment per name; everywhere else (function bodies, `if x: import ...`,
+// after a `;`) a single statement is kept, so the rewrite cannot change scoping.
+fn line_opening_imports(module: &Module<'_>) -> Vec<*const ()> {
+    let mut found = Vec::new();
+    for statement in &module.body {
+        if let Statement::Simple(line) = statement {
+            match line.body.first() {
+                Some(SmallStatement::ImportFrom(import)) => {
+                    found.push(std::ptr::from_ref(import).cast::<()>());
+                }
+                Some(SmallStatement::Import(import)) => {
+                    found.push(std::ptr::from_ref(import).cast::<()>());
+                }
+                _ => {}
+            }
+        }
+    }
+    found
+}
+
+// `separator` splits the assignments one per line; without it they stay one
+// tuple assignment.
+fn render_assignments(
+    assignments: &[(String, String)],
+    separator: Option<String>,
+    semicolon: Option<&libcst_native::Semicolon<'_>>,
+) -> String {
+    let mut text = if assignments.is_empty() {
+        DROPPED_IMPORT.to_string()
+    } else if let Some(separator) = separator {
+        assignments
+            .iter()
+            .map(|(name, value)| format!("{name} = {value}"))
+            .collect::<Vec<_>>()
+            .join(&separator)
+    } else {
+        let names: Vec<_> = assignments.iter().map(|(name, _)| name.as_str()).collect();
+        let values: Vec<_> = assignments
+            .iter()
+            .map(|(_, value)| value.as_str())
+            .collect();
+        format!("{} = {}", names.join(", "), values.join(", "))
+    };
+    append_original_semicolon(&mut text, semicolon);
+    text
+}
+
+// The binding goes right before the first rewritten import when that one runs
+// at module scope, and at the top of the module otherwise.
+fn binding_insert_point(
+    path: &str,
+    module: &Module<'_>,
+    src: &str,
+    rewrites: &[Rewrite],
+) -> Result<usize> {
+    let first = rewrites
+        .iter()
+        .flat_map(|r| statement_occurrences(src, &r.old))
+        .min()
+        .unwrap();
+    let start = line_start(src, first);
+    if src[start..first].starts_with([' ', '\t']) {
+        after_module_preamble(path, module, src)
+    } else {
+        Ok(start)
+    }
+}
+
+// Rewrite imports of `package` into attribute access on one module-level
+// `binding = kernels.get_kernel(...)`, the form hand-written kernel tests use.
+// The binding is introduced just before the first import it replaces, so that
+// code above it, and therefore its behaviour, is unchanged.
 pub fn kernelize_imports_source(
     path: &str,
     src: &str,
     package: &str,
+    binding: &str,
     kernel: &str,
     version: usize,
 ) -> Result<Option<(String, usize)>> {
-    let parsed_package: DottedPath = package.parse()?;
-    if parsed_package.parts().len() != 1 {
-        bail!("kernelized package must be one top-level Python name, got {package:?}");
+    for (what, name) in [("package", package), ("binding", binding)] {
+        let parsed: DottedPath = name.parse()?;
+        if parsed.parts().len() != 1 {
+            bail!("kernelized {what} must be one Python name, got {name:?}");
+        }
+    }
+    if binding == "kernels" {
+        bail!("binding must not be `kernels`; that name is taken by the kernels import");
     }
     if kernel.is_empty() {
         bail!("kernel must not be empty");
     }
 
-    let helper_base = format!("__kernel_port_{package}");
-    let mut helper = helper_base.clone();
-    let mut suffix = 2;
-    while src.contains(&helper) {
-        helper = format!("{helper_base}_{suffix}");
-        suffix += 1;
-    }
-
     let owned = parsed_module(path, src)?;
     let module = owned.borrow_dependent();
+
+    let own_line = line_opening_imports(module);
+    let starts_line = |node: *const ()| own_line.contains(&node);
+    let newline = module.default_newline;
     let imports = module_imports(module);
-    let mut rewrites = Vec::new();
+    let mut rewrites: Vec<Rewrite> = Vec::new();
+
+    // Rewrites are spliced by statement text, so every copy of an import gets
+    // the same replacement. A copy that cannot be split (nested, or sharing a
+    // line) keeps all copies of that text as one tuple assignment.
+    let mut from_rewrites = Vec::new();
     for (import, indents) in imports.from_imports {
-        if let Some(new) = kernelize_from_import(path, import, package, &helper)? {
-            add_rewrite(&mut rewrites, render_indented(import, &indents), new);
+        if let Some(assignments) = kernelize_from_import(path, import, package, binding)? {
+            let split = starts_line(std::ptr::from_ref(import).cast())
+                .then(|| format!("{newline}{}", indents.concat()));
+            let old = render_indented(import, &indents);
+            let semicolon = import.semicolon.as_ref();
+            from_rewrites.push((
+                old,
+                render_assignments(&assignments, split.clone(), semicolon),
+                split.is_some(),
+                render_assignments(&assignments, None, semicolon),
+            ));
         }
+    }
+    for (old, split_new, split, tuple_new) in &from_rewrites {
+        let all_split = from_rewrites.iter().all(|(o, _, s, _)| o != old || *s);
+        let new = if *split && all_split {
+            split_new
+        } else {
+            tuple_new
+        };
+        add_rewrite(&mut rewrites, old.clone(), new.clone());
     }
     for (import, indents) in imports.plain_imports {
-        if let Some(new) = kernelize_plain_import(path, import, package, &helper)? {
+        if let Some(assignments) = kernelize_plain_import(path, import, package, binding)? {
+            if assignments.is_empty() && import.semicolon.is_some() {
+                bail!(
+                    "{path}: an `import` of {package:?} shares its line with other statements; split it before kernelize_imports"
+                );
+            }
+            let new = render_assignments(&assignments, None, import.semicolon.as_ref());
             add_rewrite(&mut rewrites, render_indented(import, &indents), new);
         }
     }
-    let Some((result, count)) = finish_rewrites(path, src, rewrites, "kernelized")? else {
+    if rewrites.is_empty() {
         return Ok(None);
-    };
-    let result = insert_kernel_helper(path, &result, &helper, kernel, version)?;
+    }
+
+    let insert_at = binding_insert_point(path, module, src, &rewrites)?;
+    let kernel = serde_json::to_string(kernel).unwrap();
+    let preamble = format!(
+        "import kernels{newline}{binding} = kernels.get_kernel({kernel}, version={version}){newline}"
+    );
+
+    let count = rewrites.iter().map(|r| r.nodes).sum();
+    let mut result = splice(path, &src[insert_at..], rewrites)?;
+    result.insert_str(0, &preamble);
+    result.insert_str(0, &src[..insert_at]);
+    let result = remove_dropped_imports(path, &result)?;
+    check_parses(path, &result)?;
     let remaining = absolute_self_imports(path, &result, package)?;
     if !remaining.is_empty() {
         bail!(
@@ -947,6 +1048,102 @@ pub fn kernelize_imports_source(
         );
     }
     Ok(Some((result, count)))
+}
+
+fn codegen_len<'a>(module: &Module<'a>, nodes: &[impl Codegen<'a>]) -> usize {
+    let mut state = CodegenState {
+        default_newline: module.default_newline,
+        default_indent: module.default_indent,
+        ..Default::default()
+    };
+    for node in nodes {
+        node.codegen(&mut state);
+    }
+    state.tokens.len()
+}
+
+pub fn validate_marker(marker: &str) -> Result<()> {
+    let parsed: DottedPath = marker.parse()?;
+    if parsed.parts().len() != 1 {
+        bail!("marker must be one Python name, got {marker:?}");
+    }
+    Ok(())
+}
+
+// Decorate every module-level `test*` function and `Test*` class with
+// `@pytest.mark.<marker>`, above any decorators it already has. Tests that
+// already carry the marker are left alone.
+pub fn mark_tests_source(path: &str, src: &str, marker: &str) -> Result<Option<(String, usize)>> {
+    validate_marker(marker)?;
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
+
+    let imports_pytest = module.body.iter().any(|statement| {
+        let Statement::Simple(line) = statement else {
+            return false;
+        };
+        line.body.iter().any(|small| {
+            let SmallStatement::Import(import) = small else {
+                return false;
+            };
+            import.names.iter().any(|alias| {
+                alias.asname.is_none()
+                    && flatten(&alias.name).as_deref() == Some(["pytest"].as_slice())
+            })
+        })
+    });
+
+    let wanted = format!("pytest.mark.{marker}");
+    let mut state = CodegenState {
+        default_newline: module.default_newline,
+        default_indent: module.default_indent,
+        ..Default::default()
+    };
+    for header in &module.header {
+        header.codegen(&mut state);
+    }
+    let mut offsets = Vec::new();
+    for statement in &module.body {
+        let start = state.tokens.len();
+        statement.codegen(&mut state);
+        let Statement::Compound(compound) = statement else {
+            continue;
+        };
+        let (leading, decorators) = match compound {
+            CompoundStatement::FunctionDef(f) if f.name.value.starts_with("test") => {
+                (&f.leading_lines, &f.decorators)
+            }
+            CompoundStatement::ClassDef(c) if c.name.value.starts_with("Test") => {
+                (&c.leading_lines, &c.decorators)
+            }
+            _ => continue,
+        };
+        if decorators.iter().any(|d| render(&d.decorator) == wanted) {
+            continue;
+        }
+        let mut offset = start + codegen_len(module, leading);
+        if let Some(first) = decorators.first() {
+            offset += codegen_len(module, &first.leading_lines);
+        }
+        offsets.push(offset);
+    }
+    if !src.starts_with(&state.tokens) {
+        bail!("{path}: could not locate the module's test definitions");
+    }
+    if offsets.is_empty() {
+        return Ok(None);
+    }
+    if !imports_pytest {
+        bail!("{path}: marking tests needs a module-level `import pytest`");
+    }
+
+    let line = format!("@{wanted}{}", module.default_newline);
+    let mut result = src.to_string();
+    for offset in offsets.iter().rev() {
+        result.insert_str(*offset, &line);
+    }
+    check_parses(path, &result)?;
+    Ok(Some((result, offsets.len())))
 }
 
 pub fn absolute_self_imports(path: &str, src: &str, package: &str) -> Result<Vec<String>> {

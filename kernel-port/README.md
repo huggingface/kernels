@@ -85,6 +85,7 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`relativize_imports`](#relativize_imports) | Rewrite absolute intra-package imports to minimal-dot relative form |
 | [`kernelize_imports`](#kernelize_imports) | Resolve imports of a package through a Hub kernel |
 | [`ensure_import`](#ensure_import) | Ensure a module has an explicit top-level `from` import |
+| [`mark_tests`](#mark_tests) | Add a pytest marker to every module-level test |
 | [`ensure_init`](#ensure_init) | Add an empty `__init__.py` to any package dir missing one |
 | [`kernel`](#kernel) | Record one `[kernel.<name>]` section for the manifest |
 | [`manifest`](#manifest) | Generate `build.toml` from the recorded kernel sections (or noarch mode) |
@@ -407,47 +408,56 @@ from .ops import hello
 
 ```kdl
 kernelize_imports in="<glob>" package="<top-level-name>" \
-    kernel="<org/name>" version=N [changes=N]
+    kernel="<org/name>" version=N [binding="<name>"] [changes=N]
 ```
 
-Resolve static imports rooted at `package` through `kernels.get_kernel`. The
-rewrite preserves the name each import binds and stays at the original lexical
-location, including inside functions and conditionals. Submodules are loaded
-with `importlib` using the kernel module's generated runtime name, rather than
-assuming the submodule is already exposed as an attribute.
+Resolve static imports rooted at `package` through `kernels.get_kernel`, in the
+form hand-written kernel tests use: one module-level
+`binding = kernels.get_kernel(...)` (`binding` defaults to `package`) and plain
+attribute access on it at each original import location. No helper is
+generated and nothing is imported through `importlib`, so tests exercise only
+what the kernel module exposes.
 
 ```sh
-kernel-port -e 'kernelize_imports in="tests/**" package="pkg" kernel="org/pkg" version=1 changes=2' \
-    --file $'tests/test_x.py=import pkg\nfrom pkg.layers import Layer as L\n'
+kernel-port -e 'kernelize_imports in="tests/**" package="pkg" kernel="org/pkg" version=1 changes=3' \
+    --file $'tests/test_x.py=import pytest\nimport pkg\nfrom pkg.layers import Layer as L, Block\n\ndef test_a():\n    from pkg import ops\n'
 ```
-
-The result includes one lazy helper per changed file and concise bindings at
-each original import location:
 
 ```python
-__kernel_port_pkg_root = None
-def __kernel_port_pkg(module=""):
-    global __kernel_port_pkg_root
-    if __kernel_port_pkg_root is None:
-        __kernel_port_pkg_root = __import__("kernels").get_kernel("org/pkg", version=1)
-    root = __kernel_port_pkg_root
-    if not module:
-        return root
-    return __import__("importlib").import_module(root.__name__ + "." + module)
+import pytest
+import kernels
+pkg = kernels.get_kernel("org/pkg", version=1)
+L = pkg.layers.Layer
+Block = pkg.layers.Block
 
-pkg = __kernel_port_pkg()
-L = getattr(__kernel_port_pkg("layers"), "Layer")
+def test_a():
+    ops = pkg.ops
 ```
 
-The helper name is made collision-free against the input file, and it does not
-load the kernel until an original import location calls it. It then caches that
-root once per changed file. After rewriting, the op parses the result again and
-verifies that no matching static import remains.
+- The binding is introduced right before the first rewritten import when that
+  import runs at module scope, and after the module docstring and `__future__`
+  imports otherwise.
+- An import that opens a line at module scope becomes one assignment per name.
+  Anywhere else (a function body, `if x: from pkg import a`, after a `;`) it
+  stays one statement, a tuple assignment, so scoping cannot change. If the
+  same import text also occurs in such a place, every copy uses the tuple form.
+- `import pkg` and `import pkg.sub` only bind `pkg`, which the binding already
+  is, so they are dropped. With a different `binding` they become
+  `pkg = <binding>`.
+- A submodule is reached as an attribute, so it must be loaded by the kernel
+  package itself (by its `__init__.py`, or by code that already ran). If the
+  tests need one that nothing loads, import it from a `_private_for_testing`
+  module that `__init__.py` imports; otherwise the rewritten line raises
+  `AttributeError`.
 
-Wildcard imports, parenthesized imports, and mixed multi-name `import`
-statements are rejected rather than approximated. Split those statements with
-a reviewed `replace` first. Dynamic imports through `__import__` or
-`importlib.import_module` are outside this static operation's scope.
+After rewriting, the op parses the result again and verifies that no matching
+static import remains.
+
+Wildcard imports, parenthesized imports, mixed multi-name `import`
+statements, and `import pkg` sharing a line with other statements are
+rejected rather than approximated. Split those statements with a reviewed `replace` first. Dynamic
+imports through `__import__` or `importlib.import_module` are outside this
+static operation's scope.
 
 #### `ensure_import`
 
@@ -501,6 +511,40 @@ A torch-ext/pkg/sub/__init__.py
 ```
 
 Fails when: nothing exists under `under`.
+
+#### `mark_tests`
+
+```kdl
+mark_tests in="<glob>" marker="<name>" [changes=N]
+```
+
+Decorate every module-level `test*` function and `Test*` class with
+`@pytest.mark.<marker>`, above any decorators it already has. This is how
+kernels-community selects the `kernels_ci` subset. Tests that already carry the
+marker are skipped; `changes` pins the number of tests marked, so a new
+upstream test cannot join the CI subset unreviewed.
+
+```sh
+kernel-port -e 'mark_tests in="tests/test_*.py" marker="kernels_ci" changes=2' \
+    --file $'tests/test_x.py=import pytest\n\n\ndef test_a():\n    pass\n\n\n@pytest.mark.parametrize("x", [1])\ndef test_b(x):\n    pass\n'
+```
+
+```python
+import pytest
+
+
+@pytest.mark.kernels_ci
+def test_a():
+    pass
+
+
+@pytest.mark.kernels_ci
+@pytest.mark.parametrize("x", [1])
+def test_b(x):
+    pass
+```
+
+Fails when: a file that has tests to mark has no module-level `import pytest`.
 
 ### Generating the manifest
 

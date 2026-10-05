@@ -5,6 +5,7 @@ from typing import Literal
 
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
+from kernels.cli.inspect import print_kernel_api
 from kernels.cli.lock import lock_kernels
 from kernels.cli.variants import print_kernel_variants
 from kernels.cli.verify_signature import verify_signature
@@ -54,6 +55,22 @@ def main():
         help="Print the kernel information as JSON",
     )
     info_parser.set_defaults(func=kernel_info)
+
+    inspect_parser = subparsers.add_parser("inspect", help="Show a kernel's functions and layers")
+    inspect_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    inspect_selection = inspect_parser.add_mutually_exclusive_group(required=True)
+    inspect_selection.add_argument(
+        "--revision",
+        type=str,
+        help="The kernel revision (branch, tag, or commit). Cannot be used together with --version.",
+    )
+    inspect_selection.add_argument("--version", type=int, help="The kernel version")
+    inspect_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the functions and layers as JSON",
+    )
+    inspect_parser.set_defaults(func=kernel_inspect)
 
     variants_parser = subparsers.add_parser("variants", help="Show kernel build variants and compatibility decisions")
     variants_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
@@ -156,6 +173,15 @@ def _variant_version(value: str) -> int | Literal["latest"]:
 def kernel_info(args):
     print_kernel_info(
         args.kernel,
+        revision=args.revision,
+        version=args.version,
+        json_output=args.json,
+    )
+
+
+def kernel_inspect(args):
+    print_kernel_api(
+        args.repo_id,
         revision=args.revision,
         version=args.version,
         json_output=args.json,

@@ -25,6 +25,11 @@ message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 include(CheckCXXCompilerFlag)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/rust.cmake)
+
+# Not REQUIRED: only kernels with Rust components need cargo, and
+# rust_kernel_component errors out if it is missing.
+find_program(CARGO_EXECUTABLE cargo)
 
 if(NOT DEFINED GPU_LANG)
     if(ICX_COMPILER OR ICPX_COMPILER)

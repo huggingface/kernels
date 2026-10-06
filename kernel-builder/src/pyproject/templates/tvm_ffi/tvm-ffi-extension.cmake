@@ -1,6 +1,8 @@
 # Avoid 'lib' prefix for the extension.
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
+rust_extension_sources(SRC)
+
 add_library(${OPS_NAME} SHARED ${SRC})
 target_compile_definitions(${OPS_NAME} PRIVATE
   "-DTVM_FFI_EXTENSION_NAME=${OPS_NAME}")
@@ -14,6 +16,8 @@ if(CXX_HAS_NO_GNU_UNIQUE)
   target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique>)
   target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:GPU_LANGUAGE>:-fno-gnu-unique>)
 endif()
+
+target_link_rust_kernels(${OPS_NAME})
 
 if(GPU_LANG STREQUAL "SYCL")
     target_link_options(${OPS_NAME} PRIVATE ${sycl_link_flags})

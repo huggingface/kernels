@@ -135,6 +135,9 @@ rec {
           kernelDeps = lib.unique (lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends) kernels));
         in
         extension.resolveCppDeps kernelDeps;
+      hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
+        lib.attrValues kernels
+      );
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;
@@ -185,6 +188,12 @@ rec {
           kernelProvenance
           ;
 
+        cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
+        rustGitHashes =
+          if hasRustKernels && builtins.pathExists (src + "/rust-git-hashes.json") then
+            builtins.fromJSON (builtins.readFile (src + "/rust-git-hashes.json"))
+          else
+            { };
         kernelName = kernelConfig.name;
         doAbiCheck = true;
         variant = variants.kernelVariant kernelConfig;

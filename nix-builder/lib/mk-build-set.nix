@@ -170,18 +170,9 @@ in
   mkBuildSet =
     pkgs:
     buildConfig@{
-      backend,
-      cpu ? false,
-      cudaVersion ? null,
-      ptxasVersion ? cudaVersion,
-      metal ? false,
-      rocmVersion ? null,
-      tpu ? false,
-      xpuVersion ? null,
       torchVersion,
-      system,
       bundleBuild ? false,
-      tvmFfiVersion ? null,
+      ...
     }:
     let
       python3 = pkgs.python3.override {

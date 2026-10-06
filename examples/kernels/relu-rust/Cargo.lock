@@ -70,8 +70,9 @@ dependencies = [
 
 [[package]]
 name = "tvm-ffi"
-version = "0.1.0-alpha.0"
-source = "git+https://github.com/apache/tvm-ffi.git?tag=v0.1.14-post1#e251c6abee7a111c6467f84d854be512e33e2db0"
+version = "0.1.14-post1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2573e03b4bc46bfb606b2801c7a94d332b7640acbe5936a0c64935d664ff9875"
 dependencies = [
  "paste",
  "tvm-ffi-macros",
@@ -80,8 +81,9 @@ dependencies = [
 
 [[package]]
 name = "tvm-ffi-macros"
-version = "0.1.0-alpha.0"
-source = "git+https://github.com/apache/tvm-ffi.git?tag=v0.1.14-post1#e251c6abee7a111c6467f84d854be512e33e2db0"
+version = "0.1.14-post1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c0f660be122ead0def43f986c9ec4aa635bb9e285820adbc449b8230426933f"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -91,8 +93,9 @@ dependencies = [
 
 [[package]]
 name = "tvm-ffi-sys"
-version = "0.1.0-alpha.0"
-source = "git+https://github.com/apache/tvm-ffi.git?tag=v0.1.14-post1#e251c6abee7a111c6467f84d854be512e33e2db0"
+version = "0.1.14-post1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0b29bc4a713c7e86bcb98e1655832058c272eb336f8d62cece8344cb2666ee2"
 
 [[package]]
 name = "unicode-ident"

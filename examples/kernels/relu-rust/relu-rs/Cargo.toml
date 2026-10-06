@@ -9,5 +9,4 @@ publish = false
 name = "relu_rust"
 
 [dependencies]
-# TODO: prefer using crate when published - pinning the release so moving to the crate should be frictionless.
-tvm-ffi = { git = "https://github.com/apache/tvm-ffi.git", tag = "v0.1.14-post1" }
+tvm-ffi = "=0.1.14-post1"

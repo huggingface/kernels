@@ -25,12 +25,12 @@ This fetches version `1` of the kernel `kernels-community/activation`.
 Kernels are versioned using a major version number. Using `version=1` will
 get the latest kernel build from the `v1` branch.
 
-You can check whether kernel was downloaded using the following command:
+Check whether a kernel was downloaded with the following command:
+
 ```bash
 uvx hf cache ls
 ```
 
-If everything worked you will have the kernel in the cache list.
 ```
 ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS
 ----------------------------------- ---- -------------- -------------- ----

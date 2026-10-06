@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from kernels.cli.describe import print_kernel_description
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
 from kernels.cli.lock import lock_kernels
@@ -31,6 +32,15 @@ def main():
         help="Download all build variants of the kernel",
     )
     download_parser.set_defaults(func=download_kernels)
+
+    describe_parser = subparsers.add_parser("describe", help="Show the public functions and layers of a kernel")
+    describe_parser.add_argument("kernel", help="The kernel repo ID or a local path to a kernel")
+    describe_selection = describe_parser.add_mutually_exclusive_group()
+    describe_selection.add_argument(
+        "--version", type=_variant_version, help="The kernel version or 'latest' (default: latest version)"
+    )
+    describe_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit)")
+    describe_parser.set_defaults(func=kernel_describe)
 
     info_parser = subparsers.add_parser("info", help="Describe a kernel")
     info_parser.add_argument(
@@ -160,6 +170,10 @@ def kernel_info(args):
         version=args.version,
         json_output=args.json,
     )
+
+
+def kernel_describe(args):
+    print_kernel_description(args.kernel, revision=args.revision, version=args.version)
 
 
 def kernel_versions(args):

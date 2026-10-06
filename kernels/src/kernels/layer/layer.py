@@ -660,8 +660,9 @@ def _validate_layer(*, check_cls, cls, repo: RepositoryProtocol):
 
     # ... or predefined member variables.
     torch_module_members = {name for name, _ in inspect.getmembers(nn.Module)}
+    func_module_members = {"__copy__", "__deepcopy__"}  # Separate overrides needed for `Func`
     cls_members = {name for name, _ in inspect.getmembers(cls)}
-    difference = cls_members - torch_module_members
+    difference = cls_members - torch_module_members - func_module_members
     # verify if : difference ⊄ {"can_torch_compile", "has_backward"}
     if not difference <= {"can_torch_compile", "has_backward"}:
         raise TypeError(f"{repo} must not contain additional members compared to `{check_cls.__name__}`.")

@@ -1,3 +1,4 @@
+import json
 import sys
 from unittest.mock import Mock, call
 
@@ -116,6 +117,30 @@ def test_hub_revision(monkeypatch, hub, capsys, revision):
     assert f"Revision: {revision}" in capsys.readouterr().out
     hub[1].assert_not_called()
     hub[2].assert_called_once_with(hub[0], repo_id=REPO_ID, revision=revision)
+
+
+@pytest.mark.parametrize("local", [False, True])
+def test_json(monkeypatch, hub, capsys, local):
+    path = hub[3] / "build" / VARIANT
+    run_cli(monkeypatch, path if local else REPO_ID, "--json")
+    output = capsys.readouterr()
+    assert output.err == ""
+    expected = {"path": str(path)} if local else {"repo_id": REPO_ID, "revision": "v2"}
+    assert json.loads(output.out) == {
+        **expected,
+        "functions": ["public", "async_public"],
+        "layers": [
+            {"name": "Trainable", "has_backward": True, "can_torch_compile": False},
+            {"name": "Inference", "has_backward": False, "can_torch_compile": True},
+            {"name": "Unknown", "has_backward": None, "can_torch_compile": None},
+        ],
+    }
+
+
+def test_json_no_exports(monkeypatch, tmp_path, capsys):
+    write_file(tmp_path, "__init__.py", "__all__ = []")
+    run_cli(monkeypatch, tmp_path, "--json")
+    assert json.loads(capsys.readouterr().out) == {"path": str(tmp_path), "functions": [], "layers": []}
 
 
 @pytest.mark.parametrize("selection", [["--version", "3"], []])

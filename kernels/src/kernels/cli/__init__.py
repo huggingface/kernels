@@ -40,6 +40,7 @@ def main():
         "--version", type=_variant_version, help="The kernel version or 'latest' (default: latest version)"
     )
     describe_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit)")
+    describe_parser.add_argument("--json", action="store_true", help="Print the kernel description as JSON")
     describe_parser.set_defaults(func=kernel_describe)
 
     info_parser = subparsers.add_parser("info", help="Describe a kernel")
@@ -173,7 +174,7 @@ def kernel_info(args):
 
 
 def kernel_describe(args):
-    print_kernel_description(args.kernel, revision=args.revision, version=args.version)
+    print_kernel_description(args.kernel, revision=args.revision, version=args.version, json_output=args.json)
 
 
 def kernel_versions(args):

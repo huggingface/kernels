@@ -16,8 +16,9 @@ Options:
 
 - `--version <version>`: select an integer kernel version or `latest` (the default).
 - `--revision <revision>`: select a branch, tag, or commit instead of a version.
+- `--json`: print the description as JSON for machine-readable output.
 
-These options are mutually exclusive and apply only to Hub repositories. The
+`--version` and `--revision` are mutually exclusive and apply only to Hub repositories. The
 latest numbered version is selected by default, or `main` for an unversioned
 repository.
 
@@ -30,6 +31,7 @@ kernels describe kernels-community/activation
 kernels describe kernels-community/activation --version 1
 kernels describe kernels-community/activation --revision main
 kernels describe ./my-kernel
+kernels describe kernels-community/activation --json
 ```
 
 ## Export conventions
@@ -55,6 +57,21 @@ Functions:
 Layers:
   Gelu  has_backward=True  can_torch_compile=True
 ```
+
+With `--json`, the same description is:
+
+```json
+{
+  "repo_id": "example/activation",
+  "revision": "v1",
+  "functions": ["gelu"],
+  "layers": [
+    {"name": "Gelu", "has_backward": true, "can_torch_compile": true}
+  ]
+}
+```
+
+Local kernels include `path` instead of `repo_id` and `revision`.
 
 Use [kernels info](cli-info.md) for metadata such as the license, dependencies,
 and supported backends, and [kernels variants](cli-variants.md) for build variants

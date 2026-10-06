@@ -1,9 +1,10 @@
 """Describe kernel exports by reading Python source, without executing it."""
 
 import ast
+import json
 import sys
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Any, Literal
 
 from huggingface_hub import constants
 from huggingface_hub.errors import HfHubHTTPError, RemoteEntryNotFoundError
@@ -22,6 +23,7 @@ def print_kernel_description(
     *,
     version: int | Literal["latest"] | None = None,
     revision: str | None = None,
+    json_output: bool = False,
 ):
     """Print the functions and layers explicitly exported by a kernel."""
     try:
@@ -33,7 +35,7 @@ def print_kernel_description(
             if version is not None or revision is not None:
                 raise ValueError("revision and version cannot be used with a local path")
             source = _local_source(path)
-            heading = f"Path: {path}"
+            info: dict[str, Any] = {"path": str(path)}
         else:
             if revision is None:
                 versions = _get_available_versions(kernel, local_files_only=constants.HF_HUB_OFFLINE)
@@ -46,7 +48,7 @@ def print_kernel_description(
                 else:
                     revision = versions[max(versions)].name if versions else "main"
             source = _hub_source(kernel, revision)
-            heading = f"Repository: {kernel}\nRevision: {revision}"
+            info = {"repo_id": kernel, "revision": revision}
 
         functions = source.exports("__init__.py", (ast.FunctionDef, ast.AsyncFunctionDef))
         layers_file = source.module_file("layers")
@@ -55,25 +57,43 @@ def print_kernel_description(
         print(f"Cannot describe {kernel}: {error}", file=sys.stderr)
         sys.exit(1)
 
-    print(heading)
+    info["functions"] = [name for name, _, _ in functions]
+    info["layers"] = []
+    for name, node, _ in layers:
+        flags = _assignments(node.body)
+        layer: dict[str, Any] = {"name": name}
+        for flag in ("has_backward", "can_torch_compile"):
+            value = flags.get(flag)
+            layer[flag] = value.value if isinstance(value, ast.Constant) and isinstance(value.value, bool) else None
+        info["layers"].append(layer)
+
+    if json_output:
+        print(json.dumps(info, indent=2))
+    else:
+        _print_human(info)
+
+
+def _print_human(info: dict):
+    if "repo_id" in info:
+        print(f"Repository: {info['repo_id']}")
+        print(f"Revision: {info['revision']}")
+    else:
+        print(f"Path: {info['path']}")
+
     print("\nFunctions:")
-    for name, _, _ in functions:
+    for name in info["functions"]:
         print(f"  {name}")
-    if not functions:
+    if not info["functions"]:
         print("  No functions declared in __all__.")
 
     print("\nLayers:")
-    for name, node, _ in layers:
-        flags = _assignments(node.body)
+    for layer in info["layers"]:
         capabilities = []
         for flag in ("has_backward", "can_torch_compile"):
-            value = flags.get(flag)
-            rendered = (
-                str(value.value) if isinstance(value, ast.Constant) and isinstance(value.value, bool) else "unknown"
-            )
+            rendered = "unknown" if layer[flag] is None else str(layer[flag])
             capabilities.append(f"{flag}={rendered}")
-        print(f"  {name}  {'  '.join(capabilities)}")
-    if not layers:
+        print(f"  {layer['name']}  {'  '.join(capabilities)}")
+    if not info["layers"]:
         print("  No layers declared in __all__.")
 
 

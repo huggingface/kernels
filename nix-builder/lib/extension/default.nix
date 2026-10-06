@@ -13,6 +13,7 @@
   writeScriptBin,
   xpuPackages,
 
+  python3,
   torch,
 }:
 
@@ -78,6 +79,7 @@ in
       cuda_nvcc
       oneapi-torch-dev
       onednn-xpu
+      python3
       torch
       ;
     stdenv = effectiveStdenv;
@@ -89,12 +91,13 @@ in
       cuda_nvcc
       oneapi-torch-dev
       onednn-xpu
+      python3
       torch
       ;
     stdenv = effectiveStdenv;
   };
 
-  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
+  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit python3 torch; };
 
   resolveCppDeps = (
     import ../cpp-deps.nix {

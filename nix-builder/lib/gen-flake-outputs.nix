@@ -123,14 +123,12 @@ let
   bestVariant = bestBuildSet.variants.kernelArchVariant kernelConfig;
   # We need a package set for some outputs (e.g. kernels and build-and-upload),
   # even when there is no applicable build set.
-  pkgs =
+  fallbackBuildSet =
     let
       sorted = lib.sort configCompare (addSortOrder buildSets);
     in
-    if sorted == [ ] then
-      throw "No build set is available for this system"
-    else
-      (builtins.head sorted).pkgs;
+    if sorted == [ ] then throw "No build set is available for this system" else builtins.head sorted;
+  inherit (fallbackBuildSet) pkgs python3;
   headOrEmpty = l: if l == [ ] then [ ] else [ (builtins.head l) ];
 in
 {
@@ -290,7 +288,7 @@ in
       ci-test = ciTests.${bestVariant};
 
       kernels =
-        pkgs.python3.withPackages (
+        python3.withPackages (
           ps: with ps; [
             kernels
           ]
@@ -304,7 +302,13 @@ in
       pkgs = builtins.listToAttrs (
         map (buildSet: {
           name = buildSet.variants.kernelVariant kernelConfig;
-          value = buildSet.pkgs;
+          # `buildSet.pkgs` can be shared between multiple build sets and does
+          # therefore not contain Torch. We override the Python packages with the
+          # buildset-specific packages.
+          value = buildSet.pkgs // {
+            inherit (buildSet) python3;
+            python3Packages = buildSet.python3.pkgs;
+          };
         }) applicableBuildSets
       );
 

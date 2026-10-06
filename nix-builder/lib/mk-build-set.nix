@@ -14,15 +14,11 @@ let
 
   flattenVersion = version: lib.replaceStrings [ "." ] [ "_" ] (lib.versions.pad 2 version);
 
-  overlayForTorchVersion = torchVersion: sourceBuild: self: super: {
+  overlayForTorchVersion = torchVersion: self: super: {
     pythonPackagesExtensions = super.pythonPackagesExtensions ++ [
       (
         python-self: python-super: with python-self; {
-          torch =
-            if sourceBuild then
-              throw "Torch versions with `sourceBuild = true` are not supported anymore"
-            else
-              python-self."torch-bin_${flattenVersion torchVersion}";
+          torch = python-self."torch-bin_${flattenVersion torchVersion}";
         }
       )
     ];
@@ -116,7 +112,6 @@ buildConfig@{
   torchVersion,
   system,
   bundleBuild ? false,
-  sourceBuild ? false,
   tvmFfiVersion ? null,
 }:
 let
@@ -145,7 +140,7 @@ let
       rust-overlay.overlays.default
     ]
     ++ backendOverlay
-    ++ [ (overlayForTorchVersion torchVersion sourceBuild) ];
+    ++ [ (overlayForTorchVersion torchVersion) ];
   };
 
   torch = pkgs.python3.pkgs.torch;

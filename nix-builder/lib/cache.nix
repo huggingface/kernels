@@ -17,6 +17,8 @@
         buildSet:
         with buildSet.pkgs;
         let
+          # Use the Python set from the build set, which has Torch overrides, etc.
+          inherit (buildSet) python3;
           isLinux = stdenv.hostPlatform.isLinux;
           cudaSupport = config.cudaSupport;
           xpuSupport = config.xpuSupport or false;

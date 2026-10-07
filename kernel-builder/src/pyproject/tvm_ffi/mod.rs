@@ -16,6 +16,7 @@ use crate::pyproject::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
+static CMAKE_RUST: &str = include_str!("../templates/rust.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 static DETECT_CUDA_CAPABILITY_PY: &str =
@@ -24,6 +25,7 @@ static DETECT_CUDA_CAPABILITY_PY: &str =
 fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
+    write_cmake_file(file_set, "rust.cmake", CMAKE_RUST.as_bytes());
     write_cmake_file(
         file_set,
         "build-variants.cmake",

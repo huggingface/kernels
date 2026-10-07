@@ -96,9 +96,7 @@ let
     (import ../../python-deps.nix {
       inherit
         lib
-        pkgs
-        stdenv
-        torch
+        python3
         ;
     })
     resolvePythonDeps

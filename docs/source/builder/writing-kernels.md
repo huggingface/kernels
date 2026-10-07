@@ -318,7 +318,7 @@ The following options can be set for a kernel:
 
 - `language` (required): the language and compute backend of the kernel,
   as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
-  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, and `cpp-xpu`.
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, and `rust-cpu`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
   are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
@@ -356,6 +356,26 @@ are available:
 
 - `cxx-flags`: a list of additional flags to be passed to the C++
   compiler.
+
+#### rust-cpu
+
+Rust kernels are built with Cargo and require the `tvm-ffi` framework.
+`include` and `cxx-flags` do not apply to them.
+
+- `cargo-manifest` (required): path of the crate's `Cargo.toml`.
+
+Place `Cargo.lock` at the kernel project root. If it contains Git dependencies,
+generate their fixed-output Nix hashes from that directory:
+
+```bash
+nix run .#hash-rust
+```
+
+This command is available for Rust kernels, reads `Cargo.lock` from the current
+directory, and writes `rust-git-hashes.json` there. Track both files
+in Git so Nix can include them in the build. Rerun the command whenever Git
+dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
+`Cargo.lock` and do not require this file.
 
 ## Torch bindings
 

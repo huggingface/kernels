@@ -11,6 +11,7 @@ let
     buildToml;
 
   # Edition 6 tags kernels with `language = "<language>-<backend>"`.
+  kernelLanguage = kernel: lib.head (lib.splitString "-" kernel.language);
   kernelBackend = kernel: lib.last (lib.splitString "-" kernel.language);
 
   toml = validate (readToml (path + "/build.toml"));
@@ -26,7 +27,7 @@ let
     if builtins.isString stableAbi then stableAbi else stableAbi.${backend} or null;
 in
 {
-  inherit kernelBackend toml;
+  inherit kernelBackend kernelLanguage toml;
 
   # Is the kernel a Torch kernel.
   isTorch = toml ? torch;

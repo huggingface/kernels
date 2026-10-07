@@ -22,6 +22,8 @@ final: prev:
 
   hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };
 
+  hash-rust = final.callPackage ./pkgs/hash-rust { };
+
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
   # The same Cargo.lock is used by kernel-builder and the kernels Python

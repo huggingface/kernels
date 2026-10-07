@@ -143,6 +143,8 @@
           backend: buildSet:
           with (builtins.head buildSet).pkgs;
           let
+            # Use the Python set from the build set, which has Torch overrides, etc.
+            inherit (builtins.head buildSet) python3;
             rust = rust-bin.stable.latest.default.override {
               extensions = [
                 "rust-analyzer"
@@ -227,7 +229,7 @@
 
         packages = rec {
           inherit (buildSet.pkgs) kernel-builder kernel-port;
-          inherit (buildSet.pkgs.python3.pkgs) kernels;
+          inherit (buildSet.python3.pkgs) kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
             ${kernel-builder}/bin/kernel-builder update-build ''${1:-build.toml}

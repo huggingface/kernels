@@ -356,6 +356,26 @@
       # CPU kernels to build in CI.
       ciCpuKernels = [
         {
+          name = "relu-rust-kernel";
+          path = ./relu-rust;
+          drv =
+            sys: out:
+            let
+              variant = "tvm-ffi${tvmFfiVersion}-cpu-${sys}";
+              extension = out.packages.${sys}.redistributable.${variant};
+              ciTest = out.packages.${sys}.ciTests.${variant};
+              kernelPkgs = out.packages.${sys}.pkgs.${variant};
+            in
+            kernelPkgs.runCommand "relu-rust-kernel-test"
+              {
+                nativeBuildInputs = [ ciTest ];
+              }
+              ''
+                ${ciTest}/bin/ci-test
+                ln -s ${extension} $out
+              '';
+        }
+        {
           # This test only requires a CPU, so let's run the test directly during the build.
           name = "symbol-conflicts-pytest";
           path = ./symbol-conflicts2;

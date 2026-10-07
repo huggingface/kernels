@@ -5,7 +5,11 @@
   # Every `buildSets` argument is a list of build sets. Each build set is
   # a attrset of the form
   #
-  #     { pkgs = <nixpkgs>, torch = <torch drv> }
+  #     { pkgs = <nixpkgs>, python3 = <python>, torch = <torch drv> }
+  #
+  # `pkgs` can be shared between build sets with different Torch versions
+  # and does not provide Torch. The `torch` or `python3.pkgs` attributes
+  # must be used instead.
   #
   # The Torch derivation is built as-is. So e.g. the ABI version should
   # already be set.
@@ -113,6 +117,7 @@ rec {
       buildConfig,
       extension,
       pkgs,
+      python3,
       torch,
       bundleBuild,
       variants,
@@ -135,6 +140,9 @@ rec {
           kernelDeps = lib.unique (lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends) kernels));
         in
         extension.resolveCppDeps kernelDeps;
+      hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
+        lib.attrValues kernels
+      );
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;
@@ -185,6 +193,12 @@ rec {
           kernelProvenance
           ;
 
+        cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
+        rustGitHashes =
+          if hasRustKernels && builtins.pathExists (src + "/rust-git-hashes.json") then
+            builtins.fromJSON (builtins.readFile (src + "/rust-git-hashes.json"))
+          else
+            { };
         kernelName = kernelConfig.name;
         doAbiCheck = true;
         variant = variants.kernelVariant kernelConfig;
@@ -328,10 +342,10 @@ rec {
         {
           name = buildSet.variants.kernelArchVariant kernelConfig;
           value = mkShell {
-            nativeBuildInputs = with pkgs; pythonNativeCheckInputs python3.pkgs;
+            nativeBuildInputs = pythonNativeCheckInputs buildSet.python3.pkgs;
 
-            buildInputs = with pkgs; [
-              (python3.withPackages (
+            buildInputs = [
+              (buildSet.python3.withPackages (
                 ps:
                 with ps;
                 extension.dependencies
@@ -394,19 +408,17 @@ rec {
               kernelProvenance
               ;
           };
-          testPython =
-            with pkgs;
-            python3.withPackages (
-              ps:
-              with ps;
-              extension.dependencies
-              ++ [
-                buildSet.torch
-                kernels
-                pytest
-              ]
-              ++ pythonCheckInputs ps
-            );
+          testPython = buildSet.python3.withPackages (
+            ps:
+            with ps;
+            extension.dependencies
+            ++ [
+              buildSet.torch
+              kernels
+              pytest
+            ]
+            ++ pythonCheckInputs ps
+          );
         in
         {
           name = buildSet.variants.kernelArchVariant kernelConfig;
@@ -457,7 +469,7 @@ rec {
             kernelProvenance = null;
           };
           python = (
-            pkgs.python3.withPackages (
+            buildSet.python3.withPackages (
               ps:
               with ps;
               extension.dependencies
@@ -486,7 +498,7 @@ rec {
               [
                 kernel-builder
               ]
-              ++ (pythonNativeCheckInputs python3.pkgs);
+              ++ (pythonNativeCheckInputs buildSet.python3.pkgs);
             buildInputs = [ python ];
             inputsFrom = [ extension ];
             env = lib.optionalAttrs rocmSupport {

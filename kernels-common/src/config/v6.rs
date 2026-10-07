@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use monostate::MustBe;
 use serde::{Deserialize, Serialize};
 
-use super::{Dependency, GitUrl, KernelDependency, KernelName};
+use super::{ConfigError, Dependency, GitUrl, KernelDependency, KernelName};
 use crate::version::Version;
 
 // `monostate` validates the edition on read but provides no `Serialize` impl for it.
@@ -139,7 +139,11 @@ pub struct TorchNoarch {
 pub struct TvmFfi {
     pub include: Option<Vec<String>>,
     pub pyext: Option<Vec<String>>,
+
+    // Rust-only kernels have no C++ binding code, so `src` may be omitted.
+    #[serde(default)]
     pub src: Vec<PathBuf>,
+
     pub cxx_flags: Option<Vec<String>>,
 }
 
@@ -153,6 +157,13 @@ pub enum Kernel {
         cxx_flags: Option<Vec<String>>,
         depends: Vec<Dependency>,
         include: Option<Vec<String>>,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    RustCpu {
+        /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
+        cargo_manifest: String,
+        depends: Vec<Dependency>,
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
@@ -204,19 +215,28 @@ pub enum Backend {
     Xpu,
 }
 
-impl From<Build> for super::Build {
-    fn from(build: Build) -> Self {
+impl TryFrom<Build> for super::Build {
+    type Error = ConfigError;
+
+    fn try_from(build: Build) -> Result<Self, Self::Error> {
+        let tvm_ffi = matches!(build.framework, Framework::TvmFfi(_));
         let kernels: HashMap<String, super::Kernel> = build
             .kernels
             .into_iter()
-            .map(|(k, v)| (k, v.into()))
-            .collect();
+            .map(|(name, kernel)| match kernel {
+                Kernel::RustCpu { .. } if !tvm_ffi => Err(ConfigError::InvalidKernel {
+                    name,
+                    reason: "Rust kernels require a `[tvm-ffi]` framework".into(),
+                }),
+                kernel => Ok((name, kernel.into())),
+            })
+            .collect::<Result<_, _>>()?;
 
-        Self {
+        Ok(Self {
             general: build.general.into(),
             framework: build.framework.into(),
             kernels,
-        }
+        })
     }
 }
 
@@ -360,6 +380,15 @@ impl From<Kernel> for super::Kernel {
                 cxx_flags,
                 depends,
                 include,
+                src,
+            },
+            Kernel::RustCpu {
+                cargo_manifest,
+                depends,
+                src,
+            } => super::Kernel::RustCpu {
+                cargo_manifest,
+                depends,
                 src,
             },
             Kernel::CppCuda {
@@ -577,6 +606,15 @@ impl From<super::Kernel> for Kernel {
                 cxx_flags,
                 depends,
                 include,
+                src,
+            },
+            super::Kernel::RustCpu {
+                cargo_manifest,
+                depends,
+                src,
+            } => Kernel::RustCpu {
+                cargo_manifest,
+                depends,
                 src,
             },
             super::Kernel::CppCuda {

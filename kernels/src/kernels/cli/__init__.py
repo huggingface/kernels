@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from kernels.cli.describe import print_kernel_description
+from kernels.cli.describe_api import print_kernel_description
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
 from kernels.cli.lock import lock_kernels
@@ -33,15 +33,17 @@ def main():
     )
     download_parser.set_defaults(func=download_kernels)
 
-    describe_parser = subparsers.add_parser("describe", help="Show the public functions and layers of a kernel")
-    describe_parser.add_argument("kernel", help="The kernel repo ID or a local path to a kernel")
-    describe_selection = describe_parser.add_mutually_exclusive_group()
-    describe_selection.add_argument(
+    describe_api_parser = subparsers.add_parser(
+        "describe-api", help="Show the public functions and layers of a kernel"
+    )
+    describe_api_parser.add_argument("kernel", help="The kernel repo ID or a local path to a kernel")
+    describe_api_selection = describe_api_parser.add_mutually_exclusive_group()
+    describe_api_selection.add_argument(
         "--version", type=_variant_version, help="The kernel version or 'latest' (default: latest version)"
     )
-    describe_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit)")
-    describe_parser.add_argument("--json", action="store_true", help="Print the kernel description as JSON")
-    describe_parser.set_defaults(func=kernel_describe)
+    describe_api_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit)")
+    describe_api_parser.add_argument("--json", action="store_true", help="Print the kernel description as JSON")
+    describe_api_parser.set_defaults(func=kernel_describe_api)
 
     info_parser = subparsers.add_parser("info", help="Describe a kernel")
     info_parser.add_argument(
@@ -176,7 +178,7 @@ def kernel_info(args):
     )
 
 
-def kernel_describe(args):
+def kernel_describe_api(args):
     print_kernel_description(args.kernel, revision=args.revision, version=args.version, json_output=args.json)
 
 

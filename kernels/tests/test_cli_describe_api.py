@@ -7,7 +7,7 @@ import pytest
 from huggingface_hub.errors import RemoteEntryNotFoundError
 from huggingface_hub.hf_api import GitRefInfo
 
-from kernels.cli import describe as describe_cli
+from kernels.cli import describe_api as describe_api_cli
 from kernels.cli import main
 from kernels.variants import parse_variant
 
@@ -49,7 +49,7 @@ def write_file(root, filename, content):
 
 
 def run_cli(monkeypatch, *args):
-    monkeypatch.setattr(sys, "argv", ["kernels", "describe", *map(str, args)])
+    monkeypatch.setattr(sys, "argv", ["kernels", "describe-api", *map(str, args)])
     main()
 
 
@@ -72,9 +72,9 @@ def hub(monkeypatch, tmp_path):
     # A strict API mock makes any snapshot/binary download fail the test.
     api = Mock(spec=["hf_hub_download"])
     api.hf_hub_download.side_effect = download
-    monkeypatch.setattr(describe_cli, "_get_hf_api", lambda: api)
-    monkeypatch.setattr(describe_cli, "_get_available_versions", available)
-    monkeypatch.setattr(describe_cli, "get_variants", variants)
+    monkeypatch.setattr(describe_api_cli, "_get_hf_api", lambda: api)
+    monkeypatch.setattr(describe_api_cli, "_get_available_versions", available)
+    monkeypatch.setattr(describe_api_cli, "get_variants", variants)
     return api, available, variants, tmp_path
 
 
@@ -96,7 +96,7 @@ def test_hub_versions(monkeypatch, hub, capsys, selection):
     assert output.err == ""
     assert output.out.startswith(f"Repository: {REPO_ID}\nRevision: {revision}\n")
     assert_api_output(output.out)
-    available.assert_called_once_with(REPO_ID, local_files_only=describe_cli.constants.HF_HUB_OFFLINE)
+    available.assert_called_once_with(REPO_ID, local_files_only=describe_api_cli.constants.HF_HUB_OFFLINE)
     variants.assert_called_once_with(api, repo_id=REPO_ID, revision=revision)
     assert api.hf_hub_download.call_args_list == [
         call(
@@ -104,8 +104,8 @@ def test_hub_versions(monkeypatch, hub, capsys, selection):
             repo_type="kernel",
             filename=f"build/{VARIANT}/{filename}",
             revision=revision,
-            cache_dir=describe_cli._get_cache_dir(),
-            local_files_only=describe_cli.constants.HF_HUB_OFFLINE,
+            cache_dir=describe_api_cli._get_cache_dir(),
+            local_files_only=describe_api_cli.constants.HF_HUB_OFFLINE,
         )
         for filename in ("__init__.py", "layers/__init__.py", "layers.py")
     ]
@@ -191,7 +191,7 @@ def test_local(monkeypatch, tmp_path, capsys, layout, layers_file):
     write_file(package, "__init__.py", INIT)
     write_file(package, layers_file, LAYERS)
     api = Mock(side_effect=AssertionError("Local inspection must not contact the Hub"))
-    monkeypatch.setattr(describe_cli, "_get_hf_api", api)
+    monkeypatch.setattr(describe_api_cli, "_get_hf_api", api)
     run_cli(monkeypatch, tmp_path)
     output = capsys.readouterr()
     assert output.err == ""
@@ -276,5 +276,5 @@ def test_hub_fetches_only_reexport_source(monkeypatch, hub, capsys):
 
 def test_direct_call_rejects_conflicting_selection():
     with pytest.raises(SystemExit) as error:
-        describe_cli.print_kernel_description(REPO_ID, version=1, revision="main")
+        describe_api_cli.print_kernel_description(REPO_ID, version=1, revision="main")
     assert error.value.code == 1

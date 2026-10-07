@@ -1,6 +1,6 @@
-# kernels describe
+# kernels describe-api
 
-Use `kernels describe` to list a kernel's public functions and layers without
+Use `kernels describe-api` to list a kernel's public functions and layers without
 loading the kernel or installing its dependencies. For Hub kernels, the command
 downloads only the Python source needed to inspect the API, plus `metadata.json`
 when needed to locate an older build's package. It does not download compiled
@@ -9,7 +9,7 @@ libraries or a repository snapshot.
 ## Usage
 
 ```bash
-kernels describe <repo_id_or_path>
+kernels describe-api <repo_id_or_path>
 ```
 
 Options:
@@ -27,11 +27,11 @@ An existing local directory is treated as a kernel.
 ## Examples
 
 ```bash
-kernels describe kernels-community/activation
-kernels describe kernels-community/activation --version 1
-kernels describe kernels-community/activation --revision main
-kernels describe ./my-kernel
-kernels describe kernels-community/activation --json
+kernels describe-api kernels-community/activation
+kernels describe-api kernels-community/activation --version 1
+kernels describe-api kernels-community/activation --revision main
+kernels describe-api ./my-kernel
+kernels describe-api kernels-community/activation --json
 ```
 
 ## Export conventions

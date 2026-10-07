@@ -6,6 +6,7 @@ use libcst_native::{
     ImportAlias, ImportFrom, ImportNames, Module, NameOrAttribute, OrElse, SmallStatement,
     Statement, Suite,
 };
+use std::collections::BTreeSet;
 
 #[derive(Debug)]
 pub struct DottedPath(Vec<String>);
@@ -1072,8 +1073,15 @@ pub fn validate_marker(marker: &str) -> Result<()> {
 
 // Decorate every module-level `test*` function and `Test*` class with
 // `@pytest.mark.<marker>`, above any decorators it already has. Tests that
-// already carry the marker are left alone.
-pub fn mark_tests_source(path: &str, src: &str, marker: &str) -> Result<Option<(String, usize)>> {
+// already carry the marker, and tests named in `exclude`, are left alone; the
+// excluded names found are added to `excluded`.
+pub fn mark_tests_source(
+    path: &str,
+    src: &str,
+    marker: &str,
+    exclude: &BTreeSet<String>,
+    excluded: &mut BTreeSet<String>,
+) -> Result<Option<(String, usize)>> {
     validate_marker(marker)?;
     let owned = parsed_module(path, src)?;
     let module = owned.borrow_dependent();
@@ -1109,15 +1117,19 @@ pub fn mark_tests_source(path: &str, src: &str, marker: &str) -> Result<Option<(
         let Statement::Compound(compound) = statement else {
             continue;
         };
-        let (leading, decorators) = match compound {
+        let (name, leading, decorators) = match compound {
             CompoundStatement::FunctionDef(f) if f.name.value.starts_with("test") => {
-                (&f.leading_lines, &f.decorators)
+                (f.name.value, &f.leading_lines, &f.decorators)
             }
             CompoundStatement::ClassDef(c) if c.name.value.starts_with("Test") => {
-                (&c.leading_lines, &c.decorators)
+                (c.name.value, &c.leading_lines, &c.decorators)
             }
             _ => continue,
         };
+        if exclude.contains(name) {
+            excluded.insert(name.to_string());
+            continue;
+        }
         if decorators.iter().any(|d| render(&d.decorator) == wanted) {
             continue;
         }

@@ -1,5 +1,5 @@
 use crate::{ops, python, recipe, workspace::Workspace};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 #[test]
@@ -457,9 +457,15 @@ fn mark_tests_decorates_tests_above_existing_decorators() {
         "    def test_e(self):\n",
         "        pass\n",
     );
-    let (out, n) = python::mark_tests_source("tests/test_x.py", src, "kernels_ci")
-        .unwrap()
-        .unwrap();
+    let (out, n) = python::mark_tests_source(
+        "tests/test_x.py",
+        src,
+        "kernels_ci",
+        &BTreeSet::new(),
+        &mut BTreeSet::new(),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(n, 3);
     assert!(out.contains("# comment\n@pytest.mark.kernels_ci\ndef test_a():\n    def test_nested"));
     assert!(out.contains(
@@ -472,11 +478,47 @@ fn mark_tests_decorates_tests_above_existing_decorators() {
 
 #[test]
 fn mark_tests_requires_pytest_import() {
-    let err =
-        python::mark_tests_source("tests/test_x.py", "def test_a():\n    pass\n", "kernels_ci")
-            .unwrap_err()
-            .to_string();
+    let err = python::mark_tests_source(
+        "tests/test_x.py",
+        "def test_a():\n    pass\n",
+        "kernels_ci",
+        &BTreeSet::new(),
+        &mut BTreeSet::new(),
+    )
+    .unwrap_err()
+    .to_string();
     assert!(err.contains("import pytest"), "{err}");
+}
+
+#[test]
+fn mark_tests_exclude_leaves_named_tests_unmarked() {
+    let src = "import pytest\n\ndef test_a():\n    pass\n\nclass TestB:\n    pass\n";
+    let mut ws = Workspace::from_files(BTreeMap::from([
+        ("tests/test_x.py".into(), src.as_bytes().to_vec()),
+        ("tests/test_y.py".into(), src.as_bytes().to_vec()),
+    ]));
+    run_recipe(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" exclude=\"TestB\" changes=2\n",
+    );
+    for path in ["tests/test_x.py", "tests/test_y.py"] {
+        let out = ws.get_text(path).unwrap();
+        assert!(out.contains("@pytest.mark.kernels_ci\ndef test_a"), "{out}");
+        assert!(out.contains("\n\nclass TestB"), "{out}");
+    }
+}
+
+#[test]
+fn mark_tests_exclude_rejects_stale_names() {
+    let mut ws = Workspace::from_files(BTreeMap::from([(
+        "tests/test_x.py".into(),
+        b"import pytest\n\ndef test_a():\n    pass\n".to_vec(),
+    )]));
+    let err = run_recipe_err(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" exclude=\"test_gone\"\n",
+    );
+    assert!(err.contains("test_gone"), "{err}");
 }
 
 #[test]

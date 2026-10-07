@@ -85,7 +85,7 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`relativize_imports`](#relativize_imports) | Rewrite absolute intra-package imports to minimal-dot relative form |
 | [`kernelize_imports`](#kernelize_imports) | Resolve imports of a package through a Hub kernel |
 | [`ensure_import`](#ensure_import) | Ensure a module has an explicit top-level `from` import |
-| [`mark_tests`](#mark_tests) | Add a pytest marker to every module-level test |
+| [`mark_tests`](#mark_tests) | Add a pytest marker (e.g. a CI subset) to every module-level test |
 | [`ensure_init`](#ensure_init) | Add an empty `__init__.py` to any package dir missing one |
 | [`kernel`](#kernel) | Record one `[kernel.<name>]` section for the manifest |
 | [`manifest`](#manifest) | Generate `build.toml` from the recorded kernel sections (or noarch mode) |
@@ -515,14 +515,14 @@ Fails when: nothing exists under `under`.
 #### `mark_tests`
 
 ```kdl
-mark_tests in="<glob>" marker="<name>" [changes=N]
+mark_tests in="<glob>" marker="<name>" [exclude="<test>,..."] [changes=N]
 ```
 
 Decorate every module-level `test*` function and `Test*` class with
-`@pytest.mark.<marker>`, above any decorators it already has. This is how
-kernels-community selects the `kernels_ci` subset. Tests that already carry the
-marker are skipped; `changes` pins the number of tests marked, so a new
-upstream test cannot join the CI subset unreviewed.
+`@pytest.mark.<marker>`, above any existing decorators. Meant for the tests CI
+should run (e.g. `kernels_ci`); narrow `in` or name tests in `exclude` to leave
+others out. Already-marked tests are left alone; `changes` pins the count, so
+new upstream tests aren't marked unreviewed.
 
 ```sh
 kernel-port -e 'mark_tests in="tests/test_*.py" marker="kernels_ci" changes=2' \
@@ -544,7 +544,7 @@ def test_b(x):
     pass
 ```
 
-Fails when: a file that has tests to mark has no module-level `import pytest`.
+Fails when: a file that has tests to mark has no module-level `import pytest`, or an `exclude` name matches no test.
 
 ### Generating the manifest
 

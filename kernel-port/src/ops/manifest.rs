@@ -147,7 +147,7 @@ impl Manifest {
         if let Some(version) = &self.version {
             toml.push_str(&format!("version = {version}\n"));
         }
-        // Same key order as kernel-builder and the kernels-community build.toml files.
+        // Same key order as the kernels-common config schema.
         if let Some(edition) = &self.edition {
             toml.push_str(&format!("edition = {edition}\n"));
         }

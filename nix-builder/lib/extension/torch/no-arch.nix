@@ -17,6 +17,7 @@
   writeText,
 
   torch,
+  withTorch,
 }:
 
 {
@@ -66,6 +67,7 @@ let
       inherit
         lib
         python3
+        withTorch
         ;
     })
     resolvePythonDeps
@@ -112,6 +114,7 @@ stdenv.mkDerivation (prevAttrs: {
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override {
       python3 = python3.withPackages (_: dependencies);
+      kernels = withTorch python3.pkgs.kernels;
     })
   ];
 

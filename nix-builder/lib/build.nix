@@ -5,11 +5,19 @@
   # Every `buildSets` argument is a list of build sets. Each build set is
   # a attrset of the form
   #
-  #     { pkgs = <nixpkgs>, python3 = <python>, torch = <torch drv> }
+  #     {
+  #       pkgs = <nixpkgs>;
+  #       python3 = <python>;
+  #       torch = <torch drv>;
+  #       withTorch = <pkg -> pkg>;
+  #     }
   #
   # `pkgs` can be shared between build sets with different Torch versions
-  # and does not provide Torch. The `torch` or `python3.pkgs` attributes
-  # must be used instead.
+  # and does not provide Torch. Use `torch` and `withTorch` for packages
+  # from `pkgs.python3.pkgs` that depend on Torch. Avoid `python3` when
+  # possible, it uses an overlay that is unique to the build set, so
+  # using it increases eval time significantly when using/evaluating
+  # multiple buildsets.
   #
   # The Torch derivation is built as-is. So e.g. the ABI version should
   # already be set.
@@ -119,6 +127,7 @@ rec {
       pkgs,
       python3,
       torch,
+      withTorch,
       bundleBuild,
       variants,
     }:
@@ -347,12 +356,15 @@ rec {
             buildInputs = [
               (buildSet.python3.withPackages (
                 ps:
-                with ps;
+                with pkgs.python3.pkgs;
                 extension.dependencies
+                # More expensive override is needed, since we cannot expect
+                # the kernel developer to use `withTorch`. The same applies
+                # to `pythonCheckInputs` below.
                 ++ pythonCheckInputs ps
                 ++ [
                   buildSet.torch
-                  kernels
+                  (buildSet.withTorch kernels)
                   pytest
                 ]
                 ++ pythonCheckInputs ps
@@ -410,11 +422,11 @@ rec {
           };
           testPython = buildSet.python3.withPackages (
             ps:
-            with ps;
+            with pkgs.python3.pkgs;
             extension.dependencies
             ++ [
               buildSet.torch
-              kernels
+              (buildSet.withTorch kernels)
               pytest
             ]
             ++ pythonCheckInputs ps
@@ -471,12 +483,12 @@ rec {
           python = (
             buildSet.python3.withPackages (
               ps:
-              with ps;
+              with pkgs.python3.pkgs;
               extension.dependencies
               ++ pythonCheckInputs ps
               ++ [
                 buildSet.torch
-                kernels
+                (buildSet.withTorch kernels)
                 ninja
                 pip
                 pytest

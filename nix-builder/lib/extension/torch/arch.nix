@@ -34,6 +34,7 @@
   oneapi-torch-dev,
   onednn-xpu,
   torch,
+  withTorch,
 }:
 
 {
@@ -97,6 +98,7 @@ let
       inherit
         lib
         python3
+        withTorch
         ;
     })
     resolvePythonDeps
@@ -182,7 +184,10 @@ stdenv.mkDerivation (prevAttrs: {
     torch-ops-check
   ]
   ++ lib.optionals doGetKernelCheck [
-    (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
+    (get-kernel-check.override {
+      python3 = python3.withPackages (ps: dependencies);
+      kernels = withTorch python3.pkgs.kernels;
+    })
   ]
   ++ lib.optionals cudaSupport [
     cmakeNvccThreadsHook

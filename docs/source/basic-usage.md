@@ -25,13 +25,11 @@ This fetches version `1` of the kernel `kernels-community/activation`.
 Kernels are versioned using a major version number. Using `version=1` will
 get the latest kernel build from the `v1` branch.
 
-Check whether a kernel was downloaded with the following command:
+You can check whether a kernel was downloaded with `hf cache ls`:
 
 ```bash
-uvx hf cache ls
-```
-
-```
+# pip install hf
+$ hf cache ls
 ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS
 ----------------------------------- ---- -------------- -------------- ----
 kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago     

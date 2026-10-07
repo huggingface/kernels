@@ -46,6 +46,70 @@ let
         touch $out
       '';
 
+  # These are tests to verify that the validation function for entries
+  # from `versions.nix` works correctly.
+  torchVersionUtilsTestFailures =
+    let
+      inherit (import ./torch-version-utils.nix { inherit lib; })
+        flattenSystems
+        validateTorchVersion
+        ;
+      throws = expr: !(builtins.tryEval (builtins.deepSeq expr expr)).success;
+      validVersion = {
+        torchVersion = "2.13";
+        cudaVersion = "13.0";
+        systems = [
+          "x86_64-linux"
+          "aarch64-linux"
+        ];
+        bundleBuild = true;
+      };
+    in
+    lib.runTests {
+      testValidateValid = {
+        expr = validateTorchVersion validVersion;
+        expected = validVersion;
+      };
+      testValidateMissingTorchVersion = {
+        expr = throws (validateTorchVersion (builtins.removeAttrs validVersion [ "torchVersion" ]));
+        expected = true;
+      };
+      testValidateMissingSystems = {
+        expr = throws (validateTorchVersion (builtins.removeAttrs validVersion [ "systems" ]));
+        expected = true;
+      };
+      testValidateUnknownAttr = {
+        expr = throws (validateTorchVersion (validVersion // { cudaVerison = "13.0"; }));
+        expected = true;
+      };
+      testFlattenSystems = {
+        expr = flattenSystems [ validVersion ];
+        expected = [
+          {
+            torchVersion = "2.13";
+            cudaVersion = "13.0";
+            system = "x86_64-linux";
+            bundleBuild = true;
+          }
+          {
+            torchVersion = "2.13";
+            cudaVersion = "13.0";
+            system = "aarch64-linux";
+            bundleBuild = true;
+          }
+        ];
+      };
+      testFlattenSystemsValidates = {
+        expr = throws (flattenSystems [ (validVersion // { cudaVerison = "13.0"; }) ]);
+        expected = true;
+      };
+      # While at it, let's also validate `versions.nix`.
+      testDefaultVersionsValid = {
+        expr = throws (flattenSystems (import ../versions.nix));
+        expected = false;
+      };
+    };
+
   fetchFromHuggingFaceCheck =
     runCommand "fetch-from-huggingface-check"
       {
@@ -68,6 +132,9 @@ assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.13.0"
   ''
     Torch minver/maxver filtering does not work.
   '';
+assert lib.assertMsg (torchVersionUtilsTestFailures == [ ]) ''
+  torch-version-utils tests failed: ${builtins.toJSON torchVersionUtilsTestFailures}
+'';
 runCommand "builder-nix-checks"
   {
     buildInputs = [

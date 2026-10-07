@@ -1,3 +1,4 @@
+import json
 import sys
 from typing import Literal
 
@@ -20,14 +21,16 @@ def print_kernel_variants(
     only_compatible: bool = False,
     version: int | Literal["latest"] | None = None,
     revision: str | None = None,
+    json_output: bool = False,
 ):
     """Print build variants and compatibility decisions for selected versions."""
     if sum((all_versions, version is not None, revision is not None)) > 1:
         print("Only one of `all_versions`, `version`, or `revision` can be specified", file=sys.stderr)
         sys.exit(1)
 
+    revisions: list[tuple[int | None, str]]
     if revision is not None:
-        revisions = [(f"Revision {revision}", revision)]
+        revisions = [(None, revision)]
     else:
         versions = _get_available_versions(repo_id, local_files_only=constants.HF_HUB_OFFLINE)
         if version is not None and version != "latest":
@@ -45,15 +48,38 @@ def print_kernel_variants(
             selected_versions = sorted(versions)
         elif version == "latest" or version is None:
             selected_versions = [max(versions)]
-        revisions = [(f"Version {v}", versions[v].ref) for v in selected_versions]
+        revisions = [(v, versions[v].ref) for v in selected_versions]
 
     api = _get_hf_api()
-    for label, ref in revisions:
+    results = []
+    for selected_version, ref in revisions:
         variants = get_variants(api, repo_id=repo_id, revision=ref)
-        _, status = resolve_variants(variants, None)
+        resolved, status = resolve_variants(variants, None)
         if only_compatible:
             status = [decision for decision in status if isinstance(decision, VariantAccepted)]
+        if json_output:
+            preferred = resolved[0] if resolved else None
+            results.append(
+                {
+                    "version": selected_version,
+                    "revision": ref,
+                    "variants": [
+                        {
+                            "variant": decision.variant.variant_str,
+                            "compatible": isinstance(decision, VariantAccepted),
+                            "preferred": decision.variant == preferred,
+                            "reason": None if isinstance(decision, VariantAccepted) else decision.reason,
+                        }
+                        for decision in status
+                    ],
+                }
+            )
+            continue
+        label = f"Version {selected_version}" if selected_version is not None else f"Revision {ref}"
         output = variants_trace_str(status)
         if not output:
             output = "No compatible variants found." if only_compatible else "No build variants found."
         print(f"{label}:\n\n{output}")
+
+    if json_output:
+        print(json.dumps({"repo_id": repo_id, "revisions": results}, indent=2))

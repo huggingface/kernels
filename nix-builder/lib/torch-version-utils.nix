@@ -9,12 +9,46 @@ let
 
 in
 rec {
+  # Validate that a Torch version entry from `versions.nix` has all required
+  # attributes and no unknown attributes. Returns the entry if it is valid.
+  validateTorchVersion =
+    version:
+    let
+      required = [
+        "systems"
+        "torchVersion"
+      ];
+      optional = [
+        "bundleBuild"
+        "cpu"
+        "cudaVersion"
+        "metal"
+        "ptxasVersion"
+        "rocmVersion"
+        "tpu"
+        "tvmFfiVersion"
+        "xpuVersion"
+      ];
+      missingAttrs = lib.filter (attr: !(version ? ${attr})) required;
+      unknownAttrs = lib.subtractLists (required ++ optional) (builtins.attrNames version);
+      context = builtins.toJSON version;
+    in
+    lib.throwIf (missingAttrs != [ ])
+      "Torch version is missing required attribute(s) ${lib.concatStringsSep ", " missingAttrs}: ${context}"
+      (
+        lib.throwIf (unknownAttrs != [ ])
+          "Torch version has unknown attribute(s) ${lib.concatStringsSep ", " unknownAttrs}: ${context}"
+          version
+      );
+
   # Expand { systems = [ a b ]; .. } to [ { system = a; ..} { system = b; .. } ]
-  flattenSystems = lib.foldl' (
-    acc: version:
-    acc
-    ++ map (system: (builtins.removeAttrs version [ "systems" ]) // { inherit system; }) version.systems
-  ) [ ];
+  flattenSystems =
+    versions:
+    lib.foldl' (
+      acc: version:
+      acc
+      ++ map (system: (builtins.removeAttrs version [ "systems" ]) // { inherit system; }) version.systems
+    ) [ ] (map validateTorchVersion versions);
 
   backend =
     version:

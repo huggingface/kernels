@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from functools import partial
@@ -112,19 +113,88 @@ def test_no_build_variants(monkeypatch, hub, capsys):
     assert capsys.readouterr().out == "Version 2:\n\nNo build variants found.\n"
 
 
-def test_no_versions(monkeypatch, hub, capsys):
+@pytest.mark.parametrize(
+    "selection, expected_versions",
+    [
+        ([], [2]),
+        (["--version", "latest"], [2]),
+        (["--version", "0"], [0]),
+        (["--all-versions"], [0, 1, 2]),
+        (["--revision", "main"], [None]),
+    ],
+)
+@pytest.mark.parametrize("only_compatible", [False, True])
+def test_json(monkeypatch, hub, capsys, selection, expected_versions, only_compatible):
+    api, available_versions, get_variants = hub
+    filtering = ["--only-compatible"] if only_compatible else []
+    run_cli(monkeypatch, "variants", REPO_ID, "--json", *selection, *filtering)
+    output = capsys.readouterr()
+    assert output.err == ""
+    expected_variants = [
+        {"variant": PREFERRED, "compatible": True, "preferred": True, "reason": None},
+        {"variant": COMPATIBLE, "compatible": True, "preferred": False, "reason": None},
+    ]
+    if not only_compatible:
+        expected_variants.append(
+            {
+                "variant": INCOMPATIBLE,
+                "compatible": False,
+                "preferred": False,
+                "reason": "CPU (aarch64) does not match system CPU (x86_64)",
+            }
+        )
+    expected_refs = [f"refs/heads/v{v}" if v is not None else "main" for v in expected_versions]
+    assert json.loads(output.out) == {
+        "repo_id": REPO_ID,
+        "revisions": [
+            {"version": v, "revision": ref, "variants": expected_variants}
+            for v, ref in zip(expected_versions, expected_refs)
+        ],
+    }
+    assert get_variants.call_args_list == [call(api, repo_id=REPO_ID, revision=ref) for ref in expected_refs]
+    if expected_versions == [None]:
+        available_versions.assert_not_called()
+
+
+@pytest.mark.parametrize("variants", [[], [INCOMPATIBLE]])
+@pytest.mark.parametrize("only_compatible", [False, True])
+def test_json_no_compatible_variants(monkeypatch, hub, capsys, variants, only_compatible):
+    hub[2].return_value = [parse_variant(v) for v in variants]
+    filtering = ["--only-compatible"] if only_compatible else []
+    run_cli(monkeypatch, "variants", REPO_ID, "--json", *filtering)
+    result = json.loads(capsys.readouterr().out)
+    assert len(result["revisions"]) == 1
+    revision = result["revisions"][0]
+    assert revision["version"] == 2
+    if only_compatible or not variants:
+        assert revision["variants"] == []
+    else:
+        assert revision["variants"] == [
+            {
+                "variant": INCOMPATIBLE,
+                "compatible": False,
+                "preferred": False,
+                "reason": "CPU (aarch64) does not match system CPU (x86_64)",
+            }
+        ]
+    assert hub[2].call_count == 1
+
+
+@pytest.mark.parametrize("json_args", [[], ["--json"]])
+def test_no_versions(monkeypatch, hub, capsys, json_args):
     hub[1].return_value = {}
     with pytest.raises(SystemExit) as exc:
-        run_cli(monkeypatch, "variants", REPO_ID)
+        run_cli(monkeypatch, "variants", REPO_ID, *json_args)
     assert exc.value.code == 1
     output = capsys.readouterr()
     assert output.out == ""
     assert output.err == f"Repository does not support kernel versions: {REPO_ID}\n"
 
 
-def test_missing_version(monkeypatch, hub, capsys):
+@pytest.mark.parametrize("json_args", [[], ["--json"]])
+def test_missing_version(monkeypatch, hub, capsys, json_args):
     with pytest.raises(SystemExit) as exc:
-        run_cli(monkeypatch, "variants", REPO_ID, "--version", "3")
+        run_cli(monkeypatch, "variants", REPO_ID, "--version", "3", *json_args)
     assert exc.value.code == 1
     output = capsys.readouterr()
     assert output.out == ""

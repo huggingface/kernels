@@ -37,6 +37,9 @@ fn render_kernel_component(
         Kernel::CppCpu { .. } => {
             render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
         }
+        Kernel::RustCpu { cargo_manifest, .. } => {
+            render_kernel_component_rust(env, kernel_name, cargo_manifest, write)?
+        }
         Kernel::CppCuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
@@ -50,6 +53,28 @@ fn render_kernel_component(
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
     }
+
+    Ok(())
+}
+
+fn render_kernel_component_rust(
+    env: &Environment,
+    kernel_name: &str,
+    cargo_manifest: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("kernel-component/rust-cpu.cmake")
+        .wrap_err("Cannot get kernel template")?
+        .render_captured_to(
+            context! {
+                manifest_path => cargo_manifest,
+                name => kernel_name,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render kernel template")?;
+
+    write.write_all(b"\n")?;
 
     Ok(())
 }

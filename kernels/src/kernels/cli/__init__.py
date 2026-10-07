@@ -81,6 +81,9 @@ def main():
     variants_parser.add_argument(
         "--only-compatible", action="store_true", help="Only show variants compatible with the current system"
     )
+    variants_parser.add_argument(
+        "--json", action="store_true", help="Print build variants and compatibility decisions as JSON"
+    )
     variants_parser.set_defaults(func=kernel_variants)
 
     versions_parser = subparsers.add_parser("versions", help="Deprecated: use `kernels variants --all-versions`")
@@ -188,6 +191,7 @@ def kernel_variants(args):
         only_compatible=args.only_compatible,
         version=args.version,
         revision=args.revision,
+        json_output=args.json,
     )
 
 

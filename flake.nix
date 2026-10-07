@@ -172,6 +172,7 @@
               ruff
             ]
             ++ (with python3.pkgs; [
+              ast-serialize
               docutils
               huggingface-hub
               jax
@@ -182,6 +183,7 @@
               openssl.dev
               pytest
               pytest-benchmark
+              pytest-cov
               pyyaml
               sigstore
               tabulate
@@ -206,7 +208,7 @@
               pre-commit install
             '';
 
-            shellHook = ''
+            postShellHook = ''
               maturin develop --manifest-path kernels/Cargo.toml --skip-install
             '';
 

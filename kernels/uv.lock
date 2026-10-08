@@ -1516,7 +1516,7 @@ requires-dist = [
     { name = "einops", marker = "extra == 'curated'" },
     { name = "einops", marker = "extra == 'curated-xpu'" },
     { name = "hf-doc-builder", marker = "extra == 'docs'" },
-    { name = "huggingface-hub", specifier = ">=1.10.0" },
+    { name = "huggingface-hub", specifier = ">=1.31.0" },
     { name = "matplotlib", marker = "extra == 'benchmark'", specifier = ">=3.7.0" },
     { name = "numpy", marker = "extra == 'benchmark'", specifier = ">=2.0.2" },
     { name = "nvidia-cutlass-dsl", marker = "extra == 'curated'" },

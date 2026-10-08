@@ -122,20 +122,12 @@ final: prev:
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.11.0";
+          version = "1.32.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
-            hash = "sha256-Ffs3E8f5zf97gIqU/ZFmT2YasUJ5a7SMnNlJPo0WYng=";
+            hash = "sha256-7XCkVJir6GA533wvTl91dd5SS+kI04QOj4KNVSXq/Wo=";
           };
-          dependencies =
-            (prevAttrs.dependencies or [ ])
-            ++ (with python-self; [
-              hf-xet
-              httpx
-              shellingham
-              typer
-            ]);
           # Skip tests since they require network access.
           doCheck = false;
         });

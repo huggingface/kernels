@@ -35,8 +35,6 @@
       title: Overview
     - local: cli-info
       title: kernels info
-    - local: cli-describe-api
-      title: kernels describe-api
     - local: cli-variants
       title: kernels variants
     - local: cli-versions

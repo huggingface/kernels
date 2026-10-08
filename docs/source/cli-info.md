@@ -5,7 +5,6 @@ It prints the kernel metadata (name, version, license, upstream/source
 repositories, Python dependencies, and supported backends). To list the
 build variants of a kernel and their compatibility with the current system,
 use [kernels variants](cli-variants.md).
-To list its public functions and layers, use [kernels describe-api](cli-describe-api.md).
 
 ## Usage
 

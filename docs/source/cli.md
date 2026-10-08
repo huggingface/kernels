@@ -7,9 +7,9 @@ The `kernels` CLI provides commands for managing compute kernels.
 | Command                                     | Description                        |
 | ------------------------------------------- | ---------------------------------- |
 | [benchmark](cli-benchmark.md)               | Run benchmark results for a kernel |
-| [describe-api](cli-describe-api.md)                 | List public functions and layers   |
 | [download](cli-download.md)                 | Download a kernel                  |
 | [info](cli-info.md)                         | Describe a kernel                  |
 | [lock](cli-lock.md)                         | Lock kernel revisions              |
 | [verify-signature](cli-verify-signature.md) | Verify a kernel signature          |
 | [variants](cli-variants.md)                 | Show variants and compatibility               |
+

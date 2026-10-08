@@ -105,6 +105,9 @@ let
       inherit
         lib
         python3
+        # Kernel Python dependencies may require Torch, so we need to ensure
+        # that a Torch is used that is compatible with the backend this kernel
+        # is built for.
         overrideTorch
         ;
     })

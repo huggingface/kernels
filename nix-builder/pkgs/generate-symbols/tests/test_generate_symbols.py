@@ -1,15 +1,9 @@
-import importlib.util
+import importlib
 import json
-from pathlib import Path
 from types import ModuleType
 
+import generate_symbols as generator
 import pytest
-
-# The generator is a standalone script, so load it by its file path.
-SCRIPT = Path(__file__).with_name("generate_symbols.py")
-SPEC = importlib.util.spec_from_file_location("generate_symbols", SCRIPT)
-generator = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(generator)
 
 
 @pytest.fixture

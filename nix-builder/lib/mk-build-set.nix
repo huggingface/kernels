@@ -175,16 +175,25 @@ in
       ...
     }:
     let
+      torch = pkgs.python3.pkgs."torch-bin_${flattenVersion torchVersion}";
+
+      # Override the `torch` argument of a package if present.
+      withTorch =
+        pkg: if (lib.functionArgs pkg.override) ? torch then pkg.override { inherit torch; } else pkg;
+
+      # python3 is not shared between build sets, so requires build
+      # set-specific evaluation. For this reason, it is best to avoid
+      # python3.pkgs unless the full set is needed. For derivations
+      # that need the build set-specific Torch, use `torch` or
+      # `withTorch`.
       python3 = pkgs.python3.override {
         self = python3;
         packageOverrides = python-self: python-super: {
-          torch = python-self."torch-bin_${flattenVersion torchVersion}";
+          inherit torch;
         };
       };
 
-      torch = python3.pkgs.torch;
-
-      extension = pkgs.callPackage ./extension { inherit python3 torch; };
+      extension = pkgs.callPackage ./extension { inherit torch withTorch; };
 
       variants = import ./variants {
         inherit lib buildConfig;
@@ -197,6 +206,7 @@ in
         pkgs
         python3
         torch
+        withTorch
         bundleBuild
         variants
         ;

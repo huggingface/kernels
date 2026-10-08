@@ -1,6 +1,7 @@
 {
   lib,
   python3,
+  withTorch,
 }:
 
 let
@@ -8,7 +9,7 @@ let
     let
       depsJson = builtins.fromJSON (builtins.readFile ../../kernels-common/src/python_dependencies.json);
       # Map the Nix package names to actual Nix packages.
-      updatePackage = _name: dep: dep // { nix = map (pkg: python3.pkgs.${pkg}) dep.nix; };
+      updatePackage = _name: dep: dep // { nix = map (pkg: withTorch python3.pkgs.${pkg}) dep.nix; };
       updateBackend = _backend: backendDeps: lib.mapAttrs updatePackage backendDeps;
     in
     depsJson

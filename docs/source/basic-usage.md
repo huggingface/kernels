@@ -25,6 +25,16 @@ This fetches version `1` of the kernel `kernels-community/activation`.
 Kernels are versioned using a major version number. Using `version=1` will
 get the latest kernel build from the `v1` branch.
 
+You can check whether a kernel was downloaded with `hf cache ls`:
+
+```bash
+# pip install hf
+$ hf cache ls
+ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS
+----------------------------------- ---- -------------- -------------- ----
+kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago     
+```
+
 Kernels within a version branch must never break the API or remove builds
 for older PyTorch versions. This ensures that your code will continue to work.
 
@@ -118,7 +128,7 @@ from kernels import get_kernel, get_loaded_kernels
 get_kernel("kernels-community/activation", version=1)
 
 for loaded in get_loaded_kernels():
-    print(loaded.package_name, loaded.repo_infos)
+    print(loaded.metadata.name, loaded.repo_infos)
 ```
 
 `repo_infos` is populated only for kernels loaded with [`~kernels.get_kernel`]. Kernels

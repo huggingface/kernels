@@ -17,8 +17,7 @@
         buildSet:
         with buildSet.pkgs;
         let
-          # Use the Python set from the build set, which has Torch overrides, etc.
-          inherit (buildSet) python3;
+          inherit (buildSet) withTorch;
           isLinux = stdenv.hostPlatform.isLinux;
           cudaSupport = config.cudaSupport;
           xpuSupport = config.xpuSupport or false;
@@ -28,10 +27,10 @@
           ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
           ++ allOutputs kernel-builder
           ++ allOutputs kernel-port
-          ++ allOutputs python3.pkgs.einops
+          ++ allOutputs (withTorch python3.pkgs.einops)
           ++ allOutputs python3.pkgs.jax
           ++ allOutputs python3.pkgs.jax-tvm-ffi
-          ++ allOutputs python3.pkgs.kernels
+          ++ allOutputs (withTorch python3.pkgs.kernels)
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ allOutputs ruff
           ++ lib.optionals (isLinux && cudaSupport) (allOutputs manylinux_2_28.cudaBackendStdenv)

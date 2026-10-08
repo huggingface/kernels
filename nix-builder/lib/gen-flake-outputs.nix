@@ -132,7 +132,7 @@ let
       sorted = lib.sort configCompare (addSortOrder buildSets);
     in
     if sorted == [ ] then throw "No build set is available for this system" else builtins.head sorted;
-  inherit (fallbackBuildSet) pkgs python3;
+  inherit (fallbackBuildSet) pkgs withTorch;
   headOrEmpty = l: if l == [ ] then [ ] else [ (builtins.head l) ];
 in
 {
@@ -292,11 +292,9 @@ in
       ci-test = ciTests.${bestVariant};
 
       kernels =
-        python3.withPackages (
-          ps: with ps; [
-            kernels
-          ]
-        )
+        pkgs.python3.withPackages (ps: [
+          (withTorch ps.kernels)
+        ])
         // {
           meta.mainProgram = "kernels";
         };

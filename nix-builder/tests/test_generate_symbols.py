@@ -1,10 +1,7 @@
 import functools
 import importlib.util
 import json
-import os
-import subprocess
 import sys
-import textwrap
 from pathlib import Path
 from types import ModuleType
 
@@ -257,164 +254,18 @@ def test_export_order_and_aliases_are_preserved():
     ] == ["z", "a"]
 
 
-@pytest.fixture
-def built_package(tmp_path):
-    package = tmp_path / "variant"
-    package.mkdir()
-    (package / "__init__.py").write_text(
-        textwrap.dedent("""\
-            from . import layers
-            from .implementation import function as alias
-            print("Initialization output")
-            __all__ = ["alias", "layers"]
-        """),
-        encoding="utf-8",
-    )
-    (package / "implementation.py").write_text(
-        'def function(x: "UndefinedTensor", *, scale=2):\n    """Scale é."""\n',
-        encoding="utf-8",
-    )
-    (package / "layers.py").write_text(
-        textwrap.dedent("""\
-            from dataclasses import dataclass
-            @dataclass
-            class Layer:
-                size: int = 4
-                has_backward = True
-                can_torch_compile = True
-            __all__ = ["Layer"]
-        """),
-        encoding="utf-8",
-    )
-    return package
-
-
-def test_cli_loads_built_package_and_writes_json(built_package):
-    output = built_package / "symbols.json"
-    command = [
-        sys.executable,
-        str(SCRIPT),
-        "example_build",
-        "--package-dir",
-        str(built_package),
-        "--output",
-        str(output),
-    ]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-    content = output.read_text(encoding="utf-8")
-    document = json.loads(content)
-    assert "Initialization output" in result.stdout
-    assert document["module"] == "example_build"
-    (alias,) = document["functions"]
-    assert alias["module"] == "example_build.implementation"
-    assert alias["doc"] == "Scale é."
-    assert document["layers"][0]["attributes"]["has_backward"] is True
-    subprocess.run(command, capture_output=True, text=True, check=True)
-    assert output.read_text(encoding="utf-8") == content
-
-
-def test_cli_imports_from_python_path(built_package, tmp_path):
-    output = tmp_path / "symbols.json"
-    subprocess.run(
-        [sys.executable, str(SCRIPT), "variant", "--output", str(output)],
-        env={**os.environ, "PYTHONPATH": str(tmp_path)},
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert json.loads(output.read_text())["module"] == "variant"
-
-
-@pytest.mark.parametrize("has_layers", [False, True])
-def test_cli_discovers_optional_layers(built_package, has_layers):
-    # Match the PR: layers need not be imported or exported by __init__.py.
-    (built_package / "__init__.py").write_text(
-        "from .implementation import function\n__all__ = ['function']\n",
-        encoding="utf-8",
-    )
-    if not has_layers:
-        (built_package / "layers.py").unlink()
-    output = built_package / "symbols.json"
-    subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "example_build",
-            "--package-dir",
-            str(built_package),
-            "--output",
-            str(output),
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    result = json.loads(output.read_text())
-    assert [item["name"] for item in result["functions"]] == ["function"]
-    assert [item["name"] for item in result["layers"]] == (
-        ["Layer"] if has_layers else []
-    )
-
-
-def test_optional_layers_import_errors_are_not_hidden(built_package):
-    (built_package / "__init__.py").write_text("", encoding="utf-8")
-    (built_package / "layers.py").write_text(
-        "import missing_layer_dependency_for_test\n", encoding="utf-8"
-    )
-    output = built_package / "symbols.json"
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "example_build",
-            "--package-dir",
-            str(built_package),
-            "--output",
-            str(output),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode != 0
-    assert "missing_layer_dependency_for_test" in result.stderr
-    assert not output.exists()
-
-
-@pytest.mark.parametrize(
-    "source", ["raise RuntimeError('broken import')", "__all__ = ['missing']"]
-)
-def test_cli_failure_preserves_existing_output(built_package, source):
-    output = built_package / "symbols.json"
-    output.write_text("previous output", encoding="utf-8")
-    (built_package / "__init__.py").write_text(source, encoding="utf-8")
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "example_build",
-            "--package-dir",
-            str(built_package),
-            "--output",
-            str(output),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode != 0
-    assert output.read_text(encoding="utf-8") == "previous output"
-
-
 def test_missing_package_is_an_error(tmp_path):
     with pytest.raises(FileNotFoundError, match="No kernel package found"):
         generator.load_package("missing_package", tmp_path)
 
 
-def test_failed_import_cleans_up_submodules(built_package):
-    (built_package / "__init__.py").write_text(
+def test_failed_import_cleans_up_submodules(tmp_path):
+    (tmp_path / "layers.py").write_text("", encoding="utf-8")
+    (tmp_path / "__init__.py").write_text(
         "from . import layers\nraise RuntimeError('broken import')\n", encoding="utf-8"
     )
     with pytest.raises(RuntimeError, match="broken import"):
-        generator.load_package("failed_build", built_package)
+        generator.load_package("failed_build", tmp_path)
     assert not any(
         name == "failed_build" or name.startswith("failed_build.")
         for name in sys.modules

@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError, dataclass
 from pathlib import Path
 
 import pytest
+from huggingface_hub.errors import IncompleteSnapshotError
 from huggingface_hub.hf_api import GitRefInfo
 
 import kernels.resolver as resolver_module
@@ -33,6 +34,7 @@ from kernels.resolver import (
     Resolver,
     SequentialResolver,
     _locked_revision,
+    resolve_hub_cache_kernel,
     resolve_hub_kernel,
 )
 from kernels.variants import parse_variant
@@ -416,6 +418,33 @@ def test_hub_cache_resolver_uncached_repo(api):
                 repo_id="kernels-test/this-repo-should-not-exist",
                 version=KernelVersion.Revision("0" * 40),
             ),
+        )
+
+
+class _IncompleteSnapshotApi:
+    """API stub whose offline `snapshot_download` reports an incomplete snapshot."""
+
+    def __init__(self, snapshot_path: Path):
+        self.snapshot_path = snapshot_path
+
+    def snapshot_download(self, *args, **kwargs):
+        raise IncompleteSnapshotError("incomplete snapshot", snapshot_path=str(self.snapshot_path))
+
+
+def test_resolve_hub_cache_kernel_uses_incomplete_snapshot(tmp_path):
+    # huggingface-hub now raises `IncompleteSnapshotError` when the cached
+    # snapshot was incomplete. However, this is nearly always the case for
+    # us, because we only download the variant that we need. Check that
+    # the resolver accepts the incomplete snapshot and fails on the missing
+    # variant.
+    (tmp_path / "build").mkdir()
+
+    with pytest.raises(FileNotFoundError, match="Cannot find a build variant"):
+        resolve_hub_cache_kernel(
+            _IncompleteSnapshotApi(tmp_path),  # type: ignore[arg-type]
+            "test/kernel",
+            revision=Oid.from_str("0" * 40),
+            backend="cpu",
         )
 
 

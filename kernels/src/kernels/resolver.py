@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from huggingface_hub.errors import LocalEntryNotFoundError
+from huggingface_hub.errors import IncompleteSnapshotError, LocalEntryNotFoundError
 from huggingface_hub.hf_api import HfApi
 
 from kernels._rust import KernelDependency, KernelLocks, KernelPaths, Metadata, Oid
@@ -207,6 +207,11 @@ def resolve_hub_cache_kernel(
                 )
             )
         )
+    except IncompleteSnapshotError as e:
+        # This exception is raised when the snapshot is incomplete. However,
+        # for us that's nearly always the case, since we ownly download the
+        # build variant required for the system. Variants are reported below.
+        repo_path = Path(e.snapshot_path)
     except LocalEntryNotFoundError as e:
         raise FileNotFoundError(
             f"Cannot find a local snapshot for {repo_id} (revision: {revision}). "

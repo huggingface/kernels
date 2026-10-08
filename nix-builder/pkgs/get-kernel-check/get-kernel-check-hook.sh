@@ -50,6 +50,14 @@ _getKernelCheckHook() {
       prootCmd="@proot@ -b ${fakeSys}:/sys"
   fi
 
+  # Avoid adding an empty entry to the library path, which the dynamic
+  # linker interprets as the current directory.
+  local libraryPath="${LD_LIBRARY_PATH-}"
+  if [[ -n "@libraryPath@" ]]; then
+    libraryPath="@libraryPath@${libraryPath:+:${libraryPath}}"
+  fi
+
+  LD_LIBRARY_PATH="${libraryPath}" \
   PYTHONPATH="@kernels@" \
     ${prootCmd} \
       @python3@ @pyhook@

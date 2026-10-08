@@ -14,7 +14,7 @@
   xpuPackages,
 
   torch,
-  withTorch,
+  overrideTorch,
 }:
 
 let
@@ -80,7 +80,7 @@ in
       oneapi-torch-dev
       onednn-xpu
       torch
-      withTorch
+      overrideTorch
       ;
     stdenv = effectiveStdenv;
   };
@@ -92,12 +92,12 @@ in
       oneapi-torch-dev
       onednn-xpu
       torch
-      withTorch
+      overrideTorch
       ;
     stdenv = effectiveStdenv;
   };
 
-  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch withTorch; };
+  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch overrideTorch; };
 
   resolveCppDeps = (
     import ../cpp-deps.nix {

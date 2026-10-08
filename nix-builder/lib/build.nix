@@ -9,11 +9,11 @@
   #       pkgs = <nixpkgs>;
   #       python3 = <python>;
   #       torch = <torch drv>;
-  #       withTorch = <pkg -> pkg>;
+  #       overrideTorch = <pkg -> pkg>;
   #     }
   #
   # `pkgs` can be shared between build sets with different Torch versions
-  # and does not provide Torch. Use `torch` and `withTorch` for packages
+  # and does not provide Torch. Use `torch` and `overrideTorch` for packages
   # from `pkgs.python3.pkgs` that depend on Torch. Avoid `python3` when
   # possible, it uses an overlay that is unique to the build set, so
   # using it increases eval time significantly when using/evaluating
@@ -127,7 +127,7 @@ rec {
       pkgs,
       python3,
       torch,
-      withTorch,
+      overrideTorch,
       bundleBuild,
       variants,
     }:
@@ -359,12 +359,12 @@ rec {
                 with pkgs.python3.pkgs;
                 extension.dependencies
                 # More expensive override is needed, since we cannot expect
-                # the kernel developer to use `withTorch`. The same applies
+                # the kernel developer to use `overrideTorch`. The same applies
                 # to `pythonCheckInputs` below.
                 ++ pythonCheckInputs ps
                 ++ [
                   buildSet.torch
-                  (buildSet.withTorch kernels)
+                  (buildSet.overrideTorch kernels)
                   pytest
                 ]
                 ++ pythonCheckInputs ps
@@ -426,7 +426,7 @@ rec {
             extension.dependencies
             ++ [
               buildSet.torch
-              (buildSet.withTorch kernels)
+              (buildSet.overrideTorch kernels)
               pytest
             ]
             ++ pythonCheckInputs ps
@@ -488,7 +488,7 @@ rec {
               ++ pythonCheckInputs ps
               ++ [
                 buildSet.torch
-                (buildSet.withTorch kernels)
+                (buildSet.overrideTorch kernels)
                 ninja
                 pip
                 pytest

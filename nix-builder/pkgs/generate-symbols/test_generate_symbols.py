@@ -111,9 +111,15 @@ def test_functions_in_layers_are_not_layers(kernel):
     assert [layer["name"] for layer in result["layers"]] == ["ReLU"]
 
 
-def test_layers_are_optional(kernel):
+def test_layers_are_optional(kernel, monkeypatch):
     del kernel.layers
     kernel.__all__ = ["relu"]
+    kernel.__path__ = []  # Model a package without an exposed layers module.
+
+    def unexpected_import(name):
+        pytest.fail(f"Inspection should not import {name}")
+
+    monkeypatch.setattr(importlib, "import_module", unexpected_import)
 
     result = generator.generate_symbols(kernel)
 

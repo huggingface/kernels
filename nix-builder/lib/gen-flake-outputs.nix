@@ -132,7 +132,7 @@ let
       sorted = lib.sort configCompare (addSortOrder buildSets);
     in
     if sorted == [ ] then throw "No build set is available for this system" else builtins.head sorted;
-  inherit (fallbackBuildSet) pkgs withTorch;
+  inherit (fallbackBuildSet) pkgs overrideTorch;
   headOrEmpty = l: if l == [ ] then [ ] else [ (builtins.head l) ];
 in
 {
@@ -293,7 +293,7 @@ in
 
       kernels =
         pkgs.python3.withPackages (ps: [
-          (withTorch ps.kernels)
+          (overrideTorch ps.kernels)
         ])
         // {
           meta.mainProgram = "kernels";

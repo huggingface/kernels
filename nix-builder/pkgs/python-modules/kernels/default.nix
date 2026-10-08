@@ -10,6 +10,8 @@
   sigstore,
   tomlkit,
   torch,
+
+  withTorch ? true,
 }:
 
 let
@@ -47,6 +49,8 @@ buildPythonPackage {
     pyyaml
     sigstore
     tomlkit
+  ]
+  ++ lib.optionals withTorch [
     torch
   ];
 

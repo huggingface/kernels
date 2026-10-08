@@ -7,7 +7,6 @@ The inspection itself does not call exported functions or instantiate classes.
 """
 
 import argparse
-import importlib
 import inspect
 import json
 from collections.abc import Callable
@@ -100,22 +99,9 @@ def describe_exports(
 
 
 def generate_symbols(module: ModuleType) -> dict[str, Any]:
-    """Describe top-level functions and optional layers, each scoped by __all__.
-
-    As in describe-api, layers need not appear in the package's __all__.
-    Only Python functions (including async functions) and layer classes are
-    included; other exported modules, data, and callable objects are ignored.
-    """
+    """Describe top-level functions and optional layers, each scoped by __all__."""
     functions = describe_exports(module, inspect.isfunction)
     layers = getattr(module, "layers", None)
-    if layers is None and hasattr(module, "__path__"):
-        # The package need not import its optional layers submodule itself.
-        layers_name = f"{module.__name__}.layers"
-        try:
-            layers = importlib.import_module(layers_name)
-        except ModuleNotFoundError as error:
-            if error.name != layers_name:
-                raise
     return {
         "schema_version": 1,
         "module": module.__name__,

@@ -106,12 +106,14 @@
     rocmVersion = "7.1";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.13";
     rocmVersion = "7.2";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.13";
@@ -175,6 +177,7 @@
     rocmVersion = "7.14";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
   {
     torchVersion = "2.14";

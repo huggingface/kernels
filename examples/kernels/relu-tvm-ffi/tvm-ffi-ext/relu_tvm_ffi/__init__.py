@@ -12,6 +12,8 @@ def relu(x, out) -> tvm_ffi.Tensor:
         ops.relu_cpu(out_t, x_t)
     elif device.type == "cuda":
         ops.relu_cuda(out_t, x_t)
+    elif device.type == "rocm":
+        ops.relu_rocm(out_t, x_t)
     elif device.type == "x_tpu":
         ops.relu_x_tpu(out_t, x)
     else:
@@ -23,6 +25,7 @@ def relu(x, out) -> tvm_ffi.Tensor:
 if has_jax:
     ops_func = (
         getattr(ops, "relu_cuda", None)
+        or getattr(ops, "relu_rocm", None)
         or getattr(ops, "relu_xpu", None)
         or getattr(ops, "relu_cpu", None)
     )
@@ -52,7 +55,7 @@ def relu_jax(x):
     )(x)
 
 
-from . import layers
-
+# Must be imported after `relu` is defined, `layers` imports it.
+from . import layers  # noqa: E402
 
 __all__ = ["layers", "relu", "relu_jax"]

@@ -171,6 +171,8 @@ final: prev:
           };
         });
 
+        hipify-torch = python-self.callPackage ./pkgs/python-modules/hipify-torch { };
+
         helion = python-super.helion.overrideAttrs (
           _: prevAttrs: {
             # nixpkgs marks Helion as broken without CUDA, but it also

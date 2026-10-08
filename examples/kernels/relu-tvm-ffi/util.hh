@@ -1,7 +1,12 @@
 #include <tvm/ffi/tvm_ffi.h>
 
+#ifdef USE_ROCM
+#define CHECK_CUDA(x) \
+  TVM_FFI_CHECK((x).device().device_type == kDLROCM, ValueError) << #x " must be a ROCm tensor"
+#else
 #define CHECK_CUDA(x) \
   TVM_FFI_CHECK((x).device().device_type == kDLCUDA, ValueError) << #x " must be a CUDA tensor"
+#endif
 #define CHECK_CONTIGUOUS(x) \
   TVM_FFI_CHECK((x).IsContiguous(), ValueError) << #x " must be contiguous"
 #define CHECK_INPUT(x)   \

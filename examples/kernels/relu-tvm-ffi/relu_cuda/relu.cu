@@ -1,9 +1,30 @@
 #include <cmath>
 #include <tvm/ffi/tvm_ffi.h>
-#include <tvm/ffi/extra/cuda/device_guard.h>
 #include <tvm/ffi/extra/c_env_api.h>
 
 #include "../util.hh"
+
+#ifdef USE_ROCM
+// tvm-ffi does not provide a device guard for ROCm.
+class DeviceGuard {
+public:
+  explicit DeviceGuard(int device_id) {
+    TVM_FFI_CHECK(hipGetDevice(&prev_device_id_) == hipSuccess, RuntimeError)
+        << "Cannot get current device";
+    if (prev_device_id_ != device_id) {
+      TVM_FFI_CHECK(hipSetDevice(device_id) == hipSuccess, RuntimeError)
+          << "Cannot set device";
+    }
+  }
+  ~DeviceGuard() { (void)hipSetDevice(prev_device_id_); }
+
+private:
+  int prev_device_id_;
+};
+#else
+#include <tvm/ffi/extra/cuda/device_guard.h>
+using DeviceGuard = tvm::ffi::CUDADeviceGuard;
+#endif
 
 __global__ void relu_kernel(float *__restrict__ out,
                             float const *__restrict__ input, const int d) {
@@ -28,7 +49,7 @@ void relu_cuda(ffi::TensorView out, ffi::TensorView const input) {
     return;
   }
 
-  ffi::CUDADeviceGuard guard(input.device().device_id);
+  DeviceGuard guard(input.device().device_id);
   cudaStream_t stream = static_cast<cudaStream_t>(
       TVMFFIEnvGetStream(input.device().device_type, input.device().device_id));
 

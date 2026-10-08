@@ -274,6 +274,12 @@
           path = ./relu-compiler-flags;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
         }
+        {
+          name = "relu-tvm-ffi-kernel";
+          path = ./relu-tvm-ffi;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${rocmVersion}-${sys}"};
+        }
       ];
 
       mkKernelOutputs =

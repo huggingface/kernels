@@ -33,7 +33,7 @@ src = [
 
 [kernel.relu_xpu]
 language = "cpp-xpu"
-depends = ["torch"]
+depends = []
 src = [
     "relu_xpu/relu.cpp",
     "util.hh",

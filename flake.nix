@@ -230,7 +230,7 @@
 
         packages = rec {
           inherit (buildSet.pkgs) kernel-builder kernel-port;
-          kernels = buildSet.withTorch buildSet.pkgs.python3.pkgs.kernels;
+          kernels = buildSet.overrideTorch buildSet.pkgs.python3.pkgs.kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
             ${kernel-builder}/bin/kernel-builder update-build ''${1:-build.toml}

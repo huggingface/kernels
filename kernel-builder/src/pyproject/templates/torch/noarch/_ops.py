@@ -4,11 +4,8 @@ def get_backend() -> str:
     """Detect the backend by inspecting torch."""
     import torch
 
-    if hasattr(torch.backends, "tpu"):
-        # torch_tpu sets torch.backends.tpu when it is imported (via
-        # torch's device-backend autoload), regardless of whether TPU
-        # hardware is present — analogous to torch.version.cuda being
-        # set on CUDA builds without a GPU.
+    acc = torch.accelerator.current_accelerator() if hasattr(torch, "accelerator") else None
+    if acc is not None and acc.type == "tpu":
         return "tpu"
     elif hasattr(torch, "neuron"):
         # Needs to be sorted before specific Torch builds, since Neuron

@@ -1,11 +1,15 @@
 import importlib
+import logging
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-from kernels._rust import Metadata
+from kernels._rust import DigestValidationError, Metadata
 from kernels.hf_hub import RepoInfo
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,14 @@ class LoadedKernel:
 
 _loaded_kernels: dict[Path, LoadedKernel] = {}
 
+# Metadata of loaded kernels by their ids.
+_loaded_kernel_metadata: dict[str, Metadata] = {}
+
+# Serializes kernel imports, so that a kernel is executed only once and other
+# threads never see a partially initialized kernel module. Reentrant, so that a
+# kernel that loads another kernel while it is imported does not deadlock.
+_import_lock = threading.RLock()
+
 
 def get_loaded_kernels() -> list[LoadedKernel]:
     """
@@ -62,15 +74,81 @@ def get_loaded_kernels() -> list[LoadedKernel]:
     return list(_loaded_kernels.values())
 
 
+def _check_same_build(variant_path: Path, metadata: Metadata) -> None:
+    """Check that the kernel at `variant_path` is the same build as the loaded
+    kernel with the same id.
+
+    If there are two different kernels with the same kernel id, one (or both)
+    of the kernels violates the unique kernel id requirement.
+
+    Raises `RuntimeError` when the builds differ.
+    """
+    reference_metadata = _loaded_kernel_metadata.get(metadata.id)
+    assert reference_metadata is not None, (
+        f"Kernel '{metadata.id}' is in `sys.modules`, but its metadata was not recorded"
+    )
+
+    reference_digest = reference_metadata.digest
+    digest = metadata.digest
+
+    if reference_digest is None and digest is None:
+        logger.debug(
+            f"Cannot compare kernel '{metadata.id}' at `{variant_path}` with the loaded build: neither has a digest"
+        )
+        return
+
+    conflict = (
+        f"Kernel '{metadata.name}' at `{variant_path}` has the same id '{metadata.id}' as a kernel "
+        "that is already loaded, but it is a different build"
+    )
+    hint = "Was the kernel modified without rebuilding it with `kernel-builder`?"
+
+    if reference_digest is None:
+        raise RuntimeError(f"{conflict}: this build has a digest, but the loaded build does not. {hint}")
+    if digest is None:
+        raise RuntimeError(f"{conflict}: the loaded build has a digest, but this build does not. {hint}")
+
+    try:
+        reference_digest.validate(digest)
+    except DigestValidationError as e:
+        violations = "\n".join(str(violation) for violation in e.violations)
+        raise RuntimeError(f"{conflict}. {hint}\nDifferences with the loaded build:\n{violations}") from e
+
+
 def _import_from_path(
     variant_path: Path,
     deps: dict[str, ModuleType],
     repo_info: RepoInfo | None = None,
 ) -> ModuleType:
-    if (loaded_kernel := _loaded_kernels.get(variant_path)) is not None:
-        return loaded_kernel.module
-
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
+
+    with _import_lock:
+        # Kernel ids are unique per build: if this build was already imported
+        # reuse it instead of executing it again.
+        if (module := sys.modules.get(metadata.id)) is None:
+            module = _import_from_path_uncached(variant_path, metadata, deps, repo_info)
+        else:
+            logger.debug(f"Kernel already loaded, skipping: {metadata.id}")
+            _check_same_build(variant_path, metadata)
+
+        _loaded_kernels[variant_path] = LoadedKernel(
+            metadata=metadata,
+            module=module,
+            repo_info=repo_info,
+        )
+        return module
+
+
+def _import_from_path_uncached(
+    variant_path: Path,
+    metadata: Metadata,
+    deps: dict[str, ModuleType],
+    repo_info: RepoInfo | None,
+) -> ModuleType:
+    """Import the kernel at `variant_path`, without reusing an imported kernel with the same id.
+
+    Must be called with `_import_lock` held.
+    """
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"
@@ -102,9 +180,5 @@ def _import_from_path(
             e.add_note(f"while importing kernel '{metadata.name}', variant '{variant_path.name}' {origin}")
         raise
 
-    _loaded_kernels[variant_path] = LoadedKernel(
-        metadata=metadata,
-        module=module,
-        repo_info=repo_info,
-    )
+    _loaded_kernel_metadata[metadata.id] = metadata
     return module

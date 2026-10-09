@@ -10,6 +10,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import assert_never
 
+from kernels import digest
 from kernels._rust import KernelLocation, Metadata, Version
 from kernels.archs import _check_arch_incompatibility
 from kernels.backends import _backend
@@ -157,6 +158,10 @@ class SignatureValidator:
     Only kernels with a known Hub origin are verified, since local kernels
     are typically for development and not signed.
 
+    This only verifies the authenticity of the kernel metadata. Use
+    [`DigestValidator`] to verify that the kernel file hashes match the
+    metadata.
+
     Verification issues are currently reported as warnings. However, an
     exception will be raised in future versions."""
 
@@ -170,7 +175,7 @@ class SignatureValidator:
             return
 
         # sigstore is still an optional dependency, so import lazily.
-        from kernels.verify import VerificationResult, verify_variant
+        from kernels.verify import SignatureVerificationResult, verify_signature
 
         location = KernelLocation.remote(
             kernel.origin.repo_id,
@@ -178,22 +183,59 @@ class SignatureValidator:
             kernel.variant_str,
         )
 
-        result = verify_variant(kernel.variant_path, policy=self.policy, location=location)
+        result = verify_signature(kernel.variant_path, policy=self.policy, location=location)
 
         kernel_str = f"Kernel '{kernel.metadata.name}' variant '{kernel.variant_str}'"
 
         match result:
-            case VerificationResult.Success():
+            case SignatureVerificationResult.Success():
                 logger.debug(f"{kernel_str}: {result}")
-            case VerificationResult.Failure():
+            case SignatureVerificationResult.Failure():
                 logger.warning(f"{kernel_str}: {result}", stacklevel=3)
+            case _ as unreachable:
+                assert_never(unreachable)
+
+
+@dataclass
+class DigestValidator:
+    """Verify that the files of a kernel build variant match the digest in its metadata.
+
+    Kernels with a known Hub origin are only hashed once, later loads use the
+    verification receipt. Local kernels are hashed on every load, since their
+    files may change.
+
+    Raises an exception when the files do not match the digest. A kernel without
+    a digest is loaded with a warning, since its integrity cannot be verified."""
+
+    def validate_kernel(self, *, kernel: "LocalKernel") -> None:
+        location = (
+            KernelLocation.remote(
+                kernel.origin.repo_id,
+                kernel.origin.revision,
+                kernel.variant_str,
+            )
+            if kernel.origin is not None
+            else None
+        )
+
+        result = digest.verify_digest(kernel.variant_path, metadata=kernel.metadata, location=location)
+
+        kernel_str = f"Kernel '{kernel.metadata.name}' variant '{kernel.variant_str}'"
+
+        match result:
+            case digest.DigestVerificationResult.Success():
+                logger.debug(f"{kernel_str}: {result}")
+            case digest.DigestVerificationResult.DigestMissing():
+                logger.warning(f"{kernel_str}: {result}", stacklevel=3)
+            case digest.DigestVerificationResult.DigestVerificationFailure():
+                raise RuntimeError(f"{kernel_str}: {result}")
             case _ as unreachable:
                 assert_never(unreachable)
 
 
 def default_kernel_validators() -> list[KernelValidator]:
     """The kernel validators that are applied to every kernel dependency tree."""
-    return [SignatureValidator()]
+    return [SignatureValidator(), DigestValidator()]
 
 
 @dataclass
@@ -218,4 +260,8 @@ if TYPE_CHECKING:
         MinverValidator(),
         AllMetadataValidator([]),
     )
-    _kernel_validator: tuple[KernelValidator, ...] = (SignatureValidator(), AllKernelValidator([]))
+    _kernel_validator: tuple[KernelValidator, ...] = (
+        SignatureValidator(),
+        DigestValidator(),
+        AllKernelValidator([]),
+    )

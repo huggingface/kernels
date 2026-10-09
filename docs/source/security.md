@@ -151,10 +151,11 @@ platform uses a Git implementation with SHA-1 collision detection
 
 `kernels` can verify kernels with cosign.
 
-On load, `kernels` checks that the files match signed digests in
-`metadata.json`. Signing uses cosign with short-lived keys, and the signature is
-recorded in a [ledger](https://docs.sigstore.dev/logging/overview/). That
-combination makes leaked CI signing keys much harder to reuse.
+On load, `kernels` checks that the files match the digests in `metadata.json`
+and that `metadata.json` is signed. Signing uses cosign with short-lived keys,
+and the signature is recorded in a
+[ledger](https://docs.sigstore.dev/logging/overview/). That combination makes
+leaked CI signing keys much harder to reuse.
 
 The builder computes the SHA-256 digest of each file in the kernel and stores it
 in `metadata.json`:
@@ -175,31 +176,44 @@ Aside from the main signature, cosign also records information about how the
 signature was made, such as the OIDC issuer, the source repository, and the
 workflow path/branch.
 
-Signature verification performs the following steps:
+Kernels are verified using two separate checks.
+
+Digest verification uses the file hashes in `metadata.json` to verify the
+integrity of kernel files. It is performed for both remote and local
+kernels. If the files do not match the digest, an exception is raised.
+
+Digest verification only checks the integrity of the files according to
+the metadata. Signature verification checks the authenticity of the metadata
+itself:
 
 - Verify the signature against the given policy. The default policy only accepts
   kernels signed by workflows in the `huggingface/kernels-community` GitHub
   repository.
 - Verify the authenticity of `metadata.json` using the signature.
-- Use the digests in `metadata.json` to verify the kernel files.
 
+Signature verification is only performed for kernels downloaded from the Hub.
 At this time, a signature verification error will only result in a warning.
 Moreover, signature verification is only performed when the `sigstore` Python
 package is installed. However, we will make signature verification mandatory in
 the future.
 
-The same steps can be performed on demand with the
+Both checks can be performed on demand with the
 [`kernels verify-signature`](cli-verify-signature.md) command.
 
-#### Signature verification receipts
+#### Verification receipts
 
-To avoid the high cost of signature verification, a kernel is only verified in
-full once. The first time a kernel is loaded, we perform all the steps above.
-Upon successful verification, we write a receipt file to the kernels cache.
+To avoid the high cost of verification, a kernel from the Hub is only verified
+in full once. Upon successful verification, we write a receipt file to the
+kernels cache. Signature and digest verification each have their own receipts,
+stored in `.verified-kernels/signature` and `.verified-kernels/digest`.
 
-When a receipt is found on a later load, the signature and digest checks are
-skipped. The signing certificate is still checked against the policy, since the
+When a digest receipt is found on a later load, the kernel files are not hashed
+again. When a signature receipt is found, the signature is not verified again.
+However, the signing certificate is still checked against the policy, since the
 receipt could have been written by a verification with a different policy.
+
+Local kernels do not get receipts, since their files may change. They are
+hashed on every load.
 
 Receipts are stored by kernel identity. The name of a receipt file is a hash of:
 

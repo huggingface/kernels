@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use kernels_common::signing::receipt::{KernelLocation, ReceiptStore, VerificationReceipt};
+use kernels_common::signing::receipt::{
+    DigestReceipt, DigestReceiptStore, KernelLocation, Receipt, ReceiptStoreError,
+    SignatureReceipt, SignatureReceiptStore,
+};
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
@@ -10,13 +13,17 @@ pyo3::create_exception!(
     _rust,
     ReceiptError,
     PyException,
-    "Raised by `ReceiptStore` when a receipt cannot be read, written, or \
-     interpreted.\n\n\
-     A missing receipt is not an error: `ReceiptStore.load` returns `None` \
-     for it. Since a receipt is only a cache of a previous verification, \
-     callers can treat this exception as a cache miss and re-verify, at the \
-     cost of not noticing a cache that is persistently broken."
+    "Raised by `SignatureReceiptStore` and `DigestReceiptStore` when a \
+     receipt cannot be read, written, or interpreted.\n\n\
+     A missing receipt is not an error: `load` returns `None` for it. Since \
+     a receipt is only a cache of a previous verification, callers can treat \
+     this exception as a cache miss and re-verify, at the cost of not \
+     noticing a cache that is persistently broken."
 );
+
+fn receipt_error(err: ReceiptStoreError) -> PyErr {
+    ReceiptError::new_err(format!("{:#}", eyre::Report::new(err)))
+}
 
 /// The location of a kernel that a verification applies to.
 #[pyclass(name = "KernelLocation", frozen, eq, hash)]
@@ -55,24 +62,24 @@ impl PyKernelLocation {
     }
 }
 
-/// Receipt of a successful kernel verification.
-#[pyclass(name = "VerificationReceipt", frozen, eq, hash)]
+/// Receipt of a successful signature verification of a kernel.
+#[pyclass(name = "SignatureReceipt", frozen, eq, hash)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct PyVerificationReceipt {
-    inner: VerificationReceipt,
+pub(crate) struct PySignatureReceipt {
+    inner: SignatureReceipt,
 }
 
-impl From<VerificationReceipt> for PyVerificationReceipt {
-    fn from(inner: VerificationReceipt) -> Self {
+impl From<SignatureReceipt> for PySignatureReceipt {
+    fn from(inner: SignatureReceipt) -> Self {
         Self { inner }
     }
 }
 
 #[pymethods]
-impl PyVerificationReceipt {
+impl PySignatureReceipt {
     #[new]
     fn new(location: &PyKernelLocation) -> Self {
-        VerificationReceipt::new(location.inner.clone()).into()
+        SignatureReceipt::new(location.inner.clone()).into()
     }
 
     #[getter]
@@ -81,58 +88,130 @@ impl PyVerificationReceipt {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "VerificationReceipt(location={})",
-            self.location().__repr__()
-        )
+        format!("SignatureReceipt(location={})", self.location().__repr__())
     }
 }
 
-/// Store of kernel verification receipts.
-#[pyclass(name = "ReceiptStore", frozen)]
+/// Store of kernel signature verification receipts.
+#[pyclass(name = "SignatureReceiptStore", frozen)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyReceiptStore {
-    inner: ReceiptStore,
+pub(crate) struct PySignatureReceiptStore {
+    inner: SignatureReceiptStore,
 }
 
 #[pymethods]
-impl PyReceiptStore {
-    /// The receipt store inside the kernels cache.
+impl PySignatureReceiptStore {
+    /// The signature receipt store inside the kernels cache.
     ///
     /// Raises `ReceiptError` when the cache directory cannot be determined,
     /// in which case verifications cannot be cached.
     #[staticmethod]
     fn in_kernels_cache() -> PyResult<Self> {
-        ReceiptStore::in_kernels_cache()
-            .map(|inner| PyReceiptStore { inner })
-            .map_err(|err| ReceiptError::new_err(format!("{:#}", eyre::Report::new(err))))
+        SignatureReceiptStore::in_kernels_cache()
+            .map(|inner| PySignatureReceiptStore { inner })
+            .map_err(receipt_error)
     }
 
-    /// A receipt store in the given directory.
+    /// A signature receipt store in the given directory.
     #[staticmethod]
     fn from_path(path: PathBuf) -> Self {
-        PyReceiptStore {
-            inner: ReceiptStore::from_path(path),
+        PySignatureReceiptStore {
+            inner: SignatureReceiptStore::from_path(path),
         }
     }
 
-    /// The receipt for `location`, or `None` when the kernel has not been
-    /// verified yet.
+    /// The receipt for `location`, or `None` when the kernel signature has
+    /// not been verified yet.
     ///
     /// Raises `ReceiptError` if a receipt exists but cannot be used.
-    fn load(&self, location: &PyKernelLocation) -> PyResult<Option<PyVerificationReceipt>> {
+    fn load(&self, location: &PyKernelLocation) -> PyResult<Option<PySignatureReceipt>> {
         self.inner
             .load(&location.inner)
             .map(|receipt| receipt.map(Into::into))
-            .map_err(|err| ReceiptError::new_err(format!("{:#}", eyre::Report::new(err))))
+            .map_err(receipt_error)
     }
 
     /// Store `receipt`, replacing any existing receipt for its location.
     ///
     /// Raises `ReceiptError` if the receipt cannot be written.
-    fn store(&self, receipt: &PyVerificationReceipt) -> PyResult<()> {
+    fn store(&self, receipt: &PySignatureReceipt) -> PyResult<()> {
+        self.inner.store(&receipt.inner).map_err(receipt_error)
+    }
+}
+
+/// Receipt of a successful digest verification of a kernel.
+#[pyclass(name = "DigestReceipt", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct PyDigestReceipt {
+    inner: DigestReceipt,
+}
+
+impl From<DigestReceipt> for PyDigestReceipt {
+    fn from(inner: DigestReceipt) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl PyDigestReceipt {
+    #[new]
+    fn new(location: &PyKernelLocation) -> Self {
+        DigestReceipt::new(location.inner.clone()).into()
+    }
+
+    #[getter]
+    fn location(&self) -> PyKernelLocation {
+        self.inner.location().clone().into()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DigestReceipt(location={})", self.location().__repr__())
+    }
+}
+
+/// Store of kernel digest verification receipts.
+#[pyclass(name = "DigestReceiptStore", frozen)]
+#[derive(Clone, Debug)]
+pub(crate) struct PyDigestReceiptStore {
+    inner: DigestReceiptStore,
+}
+
+#[pymethods]
+impl PyDigestReceiptStore {
+    /// The digest receipt store inside the kernels cache.
+    ///
+    /// Raises `ReceiptError` when the cache directory cannot be determined,
+    /// in which case verifications cannot be cached.
+    #[staticmethod]
+    fn in_kernels_cache() -> PyResult<Self> {
+        DigestReceiptStore::in_kernels_cache()
+            .map(|inner| PyDigestReceiptStore { inner })
+            .map_err(receipt_error)
+    }
+
+    /// A digest receipt store in the given directory.
+    #[staticmethod]
+    fn from_path(path: PathBuf) -> Self {
+        PyDigestReceiptStore {
+            inner: DigestReceiptStore::from_path(path),
+        }
+    }
+
+    /// The receipt for `location`, or `None` when the kernel digest has not
+    /// been verified yet.
+    ///
+    /// Raises `ReceiptError` if a receipt exists but cannot be used.
+    fn load(&self, location: &PyKernelLocation) -> PyResult<Option<PyDigestReceipt>> {
         self.inner
-            .store(&receipt.inner)
-            .map_err(|err| ReceiptError::new_err(format!("{:#}", eyre::Report::new(err))))
+            .load(&location.inner)
+            .map(|receipt| receipt.map(Into::into))
+            .map_err(receipt_error)
+    }
+
+    /// Store `receipt`, replacing any existing receipt for its location.
+    ///
+    /// Raises `ReceiptError` if the receipt cannot be written.
+    fn store(&self, receipt: &PyDigestReceipt) -> PyResult<()> {
+        self.inner.store(&receipt.inner).map_err(receipt_error)
     }
 }

@@ -8,11 +8,13 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import assert_never
 
-from kernels._rust import KernelLocation
+from kernels._rust import KernelLocation, Metadata
 from kernels._versions import resolve_revision_or_version
+from kernels.digest import DigestVerificationResult, verify_digest
 from kernels.install import install_kernel, install_kernel_all_variants
 from kernels.variants import get_variants_local
-from kernels.verify import VerificationResult, verify_variant
+from kernels.verify import SignatureVerificationResult
+from kernels.verify import verify_signature as verify_variant_signature
 
 
 def verify_signature(args: argparse.Namespace) -> None:
@@ -34,23 +36,39 @@ def verify_signature(args: argparse.Namespace) -> None:
 
     for kernel_path in kernel_paths:
         variant_str = kernel_path.name
+        location = KernelLocation.remote(args.repo_id, revision, variant_str)
 
-        result = verify_variant(
+        signature_result = verify_variant_signature(
             kernel_path,
-            location=KernelLocation.remote(args.repo_id, revision, variant_str),
+            location=location,
             # Always fully verify the kernel in this subcommand.
             cache=False,
         )
 
-        match result:
-            case VerificationResult.SignatureBundleMissing() if args.filter_unsigned:
+        match signature_result:
+            case SignatureVerificationResult.SignatureBundleMissing() if args.filter_unsigned:
+                continue
+            case SignatureVerificationResult.MetadataMissing() if args.filter_no_digest:
+                continue
+            case SignatureVerificationResult.Success():
                 pass
-            case VerificationResult.MetadataMissing() | VerificationResult.DigestMissing() if args.filter_no_digest:
+            case SignatureVerificationResult.Failure():
+                print(f"❌ {variant_str}: {signature_result}")
+                failed = True
+                continue
+            case _ as unreachable:
+                assert_never(unreachable)
+
+        metadata = Metadata.read_from_file(kernel_path / "metadata.json")
+        digest_result = verify_digest(kernel_path, metadata=metadata, location=location, cache=False)
+
+        match digest_result:
+            case DigestVerificationResult.DigestMissing() if args.filter_no_digest:
                 pass
-            case VerificationResult.Success():
-                print(f"✅ {variant_str}: {result}")
-            case VerificationResult.Failure():
-                print(f"❌ {variant_str}: {result}")
+            case DigestVerificationResult.Success():
+                print(f"✅ {variant_str}: {signature_result} and {digest_result}")
+            case DigestVerificationResult.Failure():
+                print(f"❌ {variant_str}: {digest_result}")
                 failed = True
             case _ as unreachable:
                 assert_never(unreachable)

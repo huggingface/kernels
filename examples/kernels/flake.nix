@@ -21,6 +21,12 @@
       torchVersion = "213";
       tvmFfiVersion = "01";
 
+      # Expected public symbols of the relu example kernels.
+      reluSymbols = {
+        functions = [ "relu" ];
+        layers = [ "ReLU" ];
+      };
+
       # All example kernels to build in CI.
       #
       # - name: name in the output path
@@ -34,6 +40,9 @@
       # - checkCudaCapabilities: optional list of CUDA capabilities (e.g. "9.0").
       #        When set, the kernel dylib must contain exactly this set of
       #        capabilities.
+      # - checkSymbols: optional attrset `{ functions = [ ... ]; layers = [ ... ]; }`.
+      #        When set, every build variant must contain a symbols.json with
+      #        exactly these public function and layer names.
       ciKernels = [
         {
           name = "cpp20-symbols-kernel";
@@ -45,6 +54,7 @@
           name = "relu-kernel";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          checkSymbols = reluSymbols;
           checkCudaCapabilities = [
             "7.0"
             "7.2"
@@ -97,6 +107,13 @@
           path = ./relu-tvm-ffi;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+          checkSymbols = {
+            functions = [
+              "relu"
+              "relu_jax"
+            ];
+            layers = [ ];
+          };
         }
         {
           name = "relu-tvm-ffi-compiler-flags-kernel";
@@ -293,6 +310,7 @@
           name = "relu-triton-kernel";
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
+          checkSymbols = reluSymbols;
         }
         {
           name = "gemm-triton-autotune-kernel";
@@ -303,12 +321,20 @@
           name = "relu-kernel";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
+          checkSymbols = reluSymbols;
         }
         {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${xpuVersion}-${sys}"};
+          checkSymbols = {
+            functions = [
+              "relu"
+              "relu_jax"
+            ];
+            layers = [ ];
+          };
         }
         {
           name = "relu-tvm-ffi-compiler-flags-kernel";
@@ -345,6 +371,7 @@
           name = "relu-kernel";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-metal-${sys}"};
+          checkSymbols = reluSymbols;
         }
         {
           name = "relu-metal-cpp-kernel";
@@ -456,6 +483,41 @@
                 ln -s ${drv} $out
               '';
 
+          # Check that every build variant in the output of `drv` contains a
+          # symbols.json with exactly the expected public function and layer
+          # names. On success, the output is a symlink to `drv`.
+          checkSymbols =
+            drv: expected:
+            pkgs.runCommand "${drv.name}-check-symbols"
+              {
+                nativeBuildInputs = [ pkgs.jq ];
+                expected = builtins.toJSON expected;
+                passAsFile = [ "expected" ];
+              }
+              ''
+                variants=$(find ${drv}/ -mindepth 2 -maxdepth 2 -name metadata.json)
+                if [ -z "$variants" ]; then
+                  echo "no build variants found in ${drv}" >&2
+                  exit 1
+                fi
+
+                jq -S . "$expectedPath" > expected
+                for metadata in $variants; do
+                  symbols="$(dirname "$metadata")/symbols.json"
+                  if [ ! -f "$symbols" ]; then
+                    echo "missing $symbols" >&2
+                    exit 1
+                  fi
+                  jq -S '{functions: [.functions[].name], layers: [.layers[].name]}' "$symbols" > actual
+                  if ! diff -u expected actual; then
+                    echo "unexpected symbols in $symbols" >&2
+                    exit 1
+                  fi
+                done
+
+                ln -s ${drv} $out
+              '';
+
           checkRocmArchs =
             drv: expectedArchs:
             checkKernelArchs drv expectedArchs
@@ -484,18 +546,23 @@
               drv =
                 let
                   baseDrv = kernel.drv system kernel.outputs;
+                  archsDrv =
+                    if kernel ? checkRocmArchs then
+                      checkRocmArchs baseDrv kernel.checkRocmArchs
+                    else if kernel ? checkCudaCapabilities then
+                      checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
+                    else
+                      baseDrv;
                 in
                 if kernel.assertFail or false then
                   pkgs.testers.testBuildFailure' {
                     drv = baseDrv;
                     expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
                   }
-                else if kernel ? checkRocmArchs then
-                  checkRocmArchs baseDrv kernel.checkRocmArchs
-                else if kernel ? checkCudaCapabilities then
-                  checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
+                else if kernel ? checkSymbols then
+                  checkSymbols archsDrv kernel.checkSymbols
                 else
-                  baseDrv;
+                  archsDrv;
             }) kernelOutputsList;
 
           mkCiBuild =

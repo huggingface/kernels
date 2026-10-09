@@ -79,13 +79,15 @@ def _import_from_path(
     if not file_path.exists():
         raise FileNotFoundError(f"No kernel module found at: `{variant_path}`")
 
-    spec = importlib.util.spec_from_file_location(metadata.id, file_path)
+    # Hub revisions can share a build ID but must have separate Python submodules.
+    import_name = f"{metadata.id}_{repo_info.revision}" if repo_info is not None else metadata.id
+    spec = importlib.util.spec_from_file_location(import_name, file_path)
     if spec is None:
         raise ImportError(f"Cannot load spec for {module_name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
     if module is None:
         raise ImportError(f"Cannot load module {module_name} from spec")
-    sys.modules[metadata.id] = module
+    sys.modules[import_name] = module
 
     # Avoid an import cycle.
     from kernels.deps import use_kernel_deps
@@ -96,7 +98,7 @@ def _import_from_path(
     except Exception as e:
         # Remove the partially initialized module, so that a retry
         # imports from scratch.
-        sys.modules.pop(metadata.id, None)
+        sys.modules.pop(import_name, None)
         if hasattr(e, "add_note"):
             origin = f"({repo_info.repo_id}, revision: {repo_info.revision})" if repo_info else ""
             e.add_note(f"while importing kernel '{metadata.name}', variant '{variant_path.name}' {origin}")

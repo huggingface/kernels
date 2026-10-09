@@ -3,7 +3,20 @@ set(CMAKE_SHARED_LIBRARY_PREFIX "")
 
 rust_extension_sources(SRC)
 
+# Add hipify preprocessing step when building with HIP/ROCm.
+if(GPU_LANG STREQUAL "HIP")
+  hipify_sources_target(SRC ${OPS_NAME} "${SRC}")
+endif()
+
 add_library(${OPS_NAME} SHARED ${SRC})
+
+if(GPU_LANG STREQUAL "HIP")
+  # Make this target dependent on the hipify preprocessor step.
+  add_dependencies(${OPS_NAME} hipify${OPS_NAME})
+
+  # Clear target architectures, we are passing arch flags per source file.
+  set_property(TARGET ${OPS_NAME} PROPERTY HIP_ARCHITECTURES off)
+endif()
 target_compile_definitions(${OPS_NAME} PRIVATE
   "-DTVM_FFI_EXTENSION_NAME=${OPS_NAME}")
 tvm_ffi_configure_target(${OPS_NAME})

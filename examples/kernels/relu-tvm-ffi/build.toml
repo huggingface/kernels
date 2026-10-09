@@ -6,6 +6,7 @@ license = "Apache-2.0"
 backends = [
     "cpu",
     "cuda",
+    "rocm",
     "xpu",
 ]
 
@@ -17,6 +18,14 @@ src = ["tvm-ffi-ext/tvm_ffi_binding.cpp"]
 
 [kernel.relu_cuda]
 language = "cpp-cuda"
+depends = []
+src = [
+    "relu_cuda/relu.cu",
+    "util.hh",
+]
+
+[kernel.relu_rocm]
+language = "cpp-rocm"
 depends = []
 src = [
     "relu_cuda/relu.cu",

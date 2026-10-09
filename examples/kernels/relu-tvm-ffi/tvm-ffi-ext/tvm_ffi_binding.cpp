@@ -10,6 +10,12 @@ void relu_cuda(tvm::ffi::TensorView out, tvm::ffi::TensorView const input);
 TVM_FFI_DLL_EXPORT_TYPED_FUNC(relu_cuda, relu_cuda);
 #endif
 
+#ifdef ROCM_KERNEL
+// The ROCm kernel is the hipified CUDA kernel.
+void relu_cuda(tvm::ffi::TensorView out, tvm::ffi::TensorView const input);
+TVM_FFI_DLL_EXPORT_TYPED_FUNC(relu_rocm, relu_cuda);
+#endif
+
 #ifdef XPU_KERNEL
 void relu_xpu(tvm::ffi::TensorView out, tvm::ffi::TensorView const input);
 TVM_FFI_DLL_EXPORT_TYPED_FUNC(relu_xpu, relu_xpu);

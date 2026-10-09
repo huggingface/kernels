@@ -138,7 +138,7 @@ let
   rustSupport = cargoLock != null;
 
   # rpaths are stripped from kernels to make them portable, but that
-  # also means that in a Nix environment the CUDA/oneAPI dependencies
+  # also means that in a Nix environment the CUDA/ROCm/oneAPI dependencies
   # cannot be located anymore, so pass them to hooks that load the kernel.
   libraryPath = lib.makeLibraryPath (
     map lib.getLib (
@@ -151,6 +151,7 @@ let
           libcusparse
         ]
       )
+      ++ lib.optionals rocmSupport [ clr ]
       ++ lib.optionals xpuSupport (
         with xpuPackages;
         [
@@ -321,10 +322,13 @@ stdenv.mkDerivation (
       (lib.cmakeBool "BUILD_ALL_SUPPORTED_ARCHS" true)
       (lib.cmakeFeature "Python_EXECUTABLE" "${
         python3.withPackages (
-          ps: with ps; [
+          ps:
+          with ps;
+          [
             tvm-ffi
             typing-extensions
           ]
+          ++ lib.optionals rocmSupport [ hipify-torch ]
         )
       }/bin/python")
       # Fix: file RPATH_CHANGE could not write new RPATH, we are rewriting
@@ -340,6 +344,7 @@ stdenv.mkDerivation (
       # the symlink-joined ROCm toolkit.
       (lib.cmakeFeature "CMAKE_HIP_COMPILER_ROCM_ROOT" "${clr}")
       (lib.cmakeFeature "HIP_ROOT_DIR" "${clr}")
+      (lib.cmakeFeature "GPU_LANG" "HIP")
     ]
     ++ lib.optionals metalSupport [
       # Use host compiler for Metal. Not included in the redistributable SDK.

@@ -73,9 +73,10 @@ must be available for that combination.
 The build variant directory must contain a `metadata.json` file with kernel
 metadata. Currently the following top-level keys are supported:
 
-- `id` (`str`, required): a unique identifier for the kernel. This
-  identifier must also be a valid Python module name. If the kernel
-  registers Torch ops, they must be registered as `torch.ops.<id>`
+- `id` (`str`, required): an identifier that **must** be unique to
+  the kernel build and build variant. This identifier must also be a valid
+  Python module name. If the kernel registers Torch ops, they must be
+  registered as `torch.ops.<id>`
 - `name` (`str`, required): then name of the kernel. Replacing dashes
   by underscores should result in the module name of the kernel.
 - `version` (`int`, required): the kernel version number.

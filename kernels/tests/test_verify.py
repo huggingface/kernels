@@ -7,7 +7,7 @@ from sigstore.verify import policy
 
 import kernels.verify as verify_module
 from kernels import install_kernel
-from kernels._rust import DigestViolation, KernelLocation, Oid, ReceiptStore
+from kernels._rust import DigestViolation, KernelLocation, Oid, SignatureReceiptStore
 from kernels._versions import resolve_revision_or_version
 from kernels.hf_hub import _get_cache_dir, _get_hf_api
 from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
@@ -26,7 +26,7 @@ OTHER_POLICY: policy.VerificationPolicy = policy.Identity(
 def receipt_store(tmp_path, monkeypatch):
     """An isolated receipt store, so that tests do not share verifications."""
     receipt_dir = tmp_path / "receipts"
-    store = ReceiptStore.from_path(receipt_dir)
+    store = SignatureReceiptStore.from_path(receipt_dir)
     monkeypatch.setattr(verify_module, "_open_receipt_store", lambda: store)
     return store
 

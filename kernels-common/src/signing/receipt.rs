@@ -1,7 +1,9 @@
 use std::fs;
 use std::io::{self, Write as _};
-use std::path::PathBuf;
+use std::marker::PhantomData;
+use std::path::{Path, PathBuf};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -9,23 +11,55 @@ use thiserror::Error;
 use crate::git::Oid;
 use crate::hf::{UnknownCacheDir, kernels_cache};
 
-/// Version of the on-disk receipt format.
-pub const CACHE_FORMAT_VERSION: &str = "v1";
+/// Directory in the kernels cache that holds all receipt stores.
+const RECEIPTS_DIR: &str = ".verified-kernels";
 
-/// Receipt of a successful kernel verification.
+/// Version of the on-disk signature receipt format.
+pub const SIGNATURE_RECEIPT_FORMAT_VERSION: &str = "v1";
+
+/// Version of the on-disk digest receipt format.
+pub const DIGEST_RECEIPT_FORMAT_VERSION: &str = "v1";
+
+/// Receipt of a successful verification of a kernel.
+pub trait Receipt: Serialize + DeserializeOwned {
+    /// The kernel location the verification applies to.
+    fn location(&self) -> &KernelLocation;
+}
+
+/// Receipt of a successful signature verification of a kernel.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct VerificationReceipt {
+pub struct SignatureReceipt {
     /// The kernel location the receipt applies to.
     location: KernelLocation,
 }
 
-impl VerificationReceipt {
+impl SignatureReceipt {
     pub fn new(location: KernelLocation) -> Self {
-        VerificationReceipt { location }
+        SignatureReceipt { location }
     }
+}
 
-    /// The kernel location the verification applies to.
-    pub fn location(&self) -> &KernelLocation {
+impl Receipt for SignatureReceipt {
+    fn location(&self) -> &KernelLocation {
+        &self.location
+    }
+}
+
+/// Receipt of a successful digest verification of a kernel.
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct DigestReceipt {
+    /// The kernel location the receipt applies to.
+    location: KernelLocation,
+}
+
+impl DigestReceipt {
+    pub fn new(location: KernelLocation) -> Self {
+        DigestReceipt { location }
+    }
+}
+
+impl Receipt for DigestReceipt {
+    fn location(&self) -> &KernelLocation {
         &self.location
     }
 }
@@ -74,28 +108,61 @@ impl KernelLocation {
     }
 }
 
-/// Storage for verification receipts.
+/// Storage for verification receipts of type `R`.
 ///
 /// Receipts are stored as JSON files in a cache directory, named by their
 /// receipt key.
 #[derive(Clone, Debug)]
-pub struct ReceiptStore {
+pub struct ReceiptStore<R> {
     dir: PathBuf,
+    receipt: PhantomData<R>,
 }
 
-impl ReceiptStore {
-    /// The receipt store inside the kernels cache.
-    pub fn in_kernels_cache() -> Result<Self, ReceiptStoreError> {
-        let default_dir = kernels_cache()?
-            .join(".verified-kernels")
-            .join(CACHE_FORMAT_VERSION);
+/// Store for signature verification receipts.
+pub type SignatureReceiptStore = ReceiptStore<SignatureReceipt>;
 
-        Ok(Self::from_path(default_dir))
+/// Store for digest verification receipts.
+pub type DigestReceiptStore = ReceiptStore<DigestReceipt>;
+
+impl SignatureReceiptStore {
+    /// The signature receipt store inside the kernels cache.
+    pub fn in_kernels_cache() -> Result<Self, ReceiptStoreError> {
+        Ok(Self::in_cache_dir(&kernels_cache()?))
     }
 
+    fn in_cache_dir(cache_dir: &Path) -> Self {
+        Self::from_path(
+            cache_dir
+                .join(RECEIPTS_DIR)
+                .join("signature")
+                .join(SIGNATURE_RECEIPT_FORMAT_VERSION),
+        )
+    }
+}
+
+impl DigestReceiptStore {
+    /// The digest receipt store inside the kernels cache.
+    pub fn in_kernels_cache() -> Result<Self, ReceiptStoreError> {
+        Ok(Self::in_cache_dir(&kernels_cache()?))
+    }
+
+    fn in_cache_dir(cache_dir: &Path) -> Self {
+        Self::from_path(
+            cache_dir
+                .join(RECEIPTS_DIR)
+                .join("digest")
+                .join(DIGEST_RECEIPT_FORMAT_VERSION),
+        )
+    }
+}
+
+impl<R: Receipt> ReceiptStore<R> {
     /// A receipt store in the given directory.
     pub fn from_path(dir: impl Into<PathBuf>) -> Self {
-        ReceiptStore { dir: dir.into() }
+        ReceiptStore {
+            dir: dir.into(),
+            receipt: PhantomData,
+        }
     }
 
     /// Load the receipt for the given kernel location.
@@ -103,26 +170,23 @@ impl ReceiptStore {
     /// Returns `Ok(None)` when no receipt exists for the location, and an
     /// error when a receipt exists but cannot be read, is corrupt, or
     /// describes a different kernel.
-    pub fn load(
-        &self,
-        location: &KernelLocation,
-    ) -> Result<Option<VerificationReceipt>, ReceiptStoreError> {
+    pub fn load(&self, location: &KernelLocation) -> Result<Option<R>, ReceiptStoreError> {
         let path = self.dir.join(location.receipt_key());
         let data = match fs::read(&path) {
             Ok(data) => data,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(source) => return Err(ReceiptStoreError::Read { path, source }),
         };
-        let receipt: VerificationReceipt =
+        let receipt: R =
             serde_json::from_slice(&data).map_err(|source| ReceiptStoreError::Corrupt {
                 path: path.clone(),
                 source,
             })?;
 
-        if receipt.location != *location {
+        if receipt.location() != location {
             return Err(ReceiptStoreError::LocationMismatch {
                 path,
-                found: Box::new(receipt.location),
+                found: Box::new(receipt.location().clone()),
             });
         }
 
@@ -130,8 +194,8 @@ impl ReceiptStore {
     }
 
     /// Store a receipt.
-    pub fn store(&self, receipt: &VerificationReceipt) -> Result<(), ReceiptStoreError> {
-        let path = self.dir.join(receipt.location.receipt_key());
+    pub fn store(&self, receipt: &R) -> Result<(), ReceiptStoreError> {
+        let path = self.dir.join(receipt.location().receipt_key());
         let write_err = |source: io::Error| ReceiptStoreError::Write {
             path: path.clone(),
             source,
@@ -214,6 +278,8 @@ fn hex_encode(bytes: &[u8]) -> String {
 mod tests {
     use std::str::FromStr;
 
+    use std::fmt::Debug;
+
     use super::*;
     use tempfile::TempDir;
 
@@ -265,11 +331,16 @@ mod tests {
     }
 
     #[test]
-    fn receipt_roundtrip() -> io::Result<()> {
-        let dir = TempDir::new()?;
-        let store = ReceiptStore::from_path(dir.path());
+    fn receipt_roundtrip() {
+        check_receipt_roundtrip(SignatureReceipt::new);
+        check_receipt_roundtrip(DigestReceipt::new);
+    }
+
+    fn check_receipt_roundtrip<R: Receipt + Debug + PartialEq>(new: fn(KernelLocation) -> R) {
+        let dir = TempDir::new().unwrap();
+        let store = ReceiptStore::<R>::from_path(dir.path());
         let location = hub_location();
-        let receipt = VerificationReceipt::new(location.clone());
+        let receipt = new(location.clone());
 
         store.store(&receipt).expect("receipt should store");
         let loaded = store
@@ -277,14 +348,18 @@ mod tests {
             .expect("receipt should load")
             .expect("receipt should exist");
 
-        assert_eq!(loaded.location(), receipt.location());
-        Ok(())
+        assert_eq!(loaded, receipt);
     }
 
     #[test]
     fn load_receipt_missing_or_corrupt() {
+        check_load_receipt_missing_or_corrupt::<SignatureReceipt>();
+        check_load_receipt_missing_or_corrupt::<DigestReceipt>();
+    }
+
+    fn check_load_receipt_missing_or_corrupt<R: Receipt + Debug>() {
         let dir = TempDir::new().unwrap();
-        let store = ReceiptStore::from_path(dir.path());
+        let store = ReceiptStore::<R>::from_path(dir.path());
         let location = hub_location();
         let key = location.receipt_key();
 
@@ -323,8 +398,15 @@ mod tests {
 
     #[test]
     fn load_receipt_rejects_transplanted_receipt() {
+        check_load_receipt_rejects_transplanted_receipt(SignatureReceipt::new);
+        check_load_receipt_rejects_transplanted_receipt(DigestReceipt::new);
+    }
+
+    fn check_load_receipt_rejects_transplanted_receipt<R: Receipt + Debug>(
+        new: fn(KernelLocation) -> R,
+    ) {
         let dir = TempDir::new().unwrap();
-        let store = ReceiptStore::from_path(dir.path());
+        let store = ReceiptStore::<R>::from_path(dir.path());
 
         let signed = hub_location();
         let unsigned = KernelLocation::remote(
@@ -334,7 +416,7 @@ mod tests {
         );
 
         store
-            .store(&VerificationReceipt::new(signed.clone()))
+            .store(&new(signed.clone()))
             .expect("receipt should store");
 
         // Transplant the receipt onto the other revision's key.
@@ -357,21 +439,49 @@ mod tests {
 
     #[test]
     fn store_receipt_fails_when_cache_not_writable() {
+        check_store_receipt_fails_when_cache_not_writable(SignatureReceipt::new);
+        check_store_receipt_fails_when_cache_not_writable(DigestReceipt::new);
+    }
+
+    fn check_store_receipt_fails_when_cache_not_writable<R: Receipt>(new: fn(KernelLocation) -> R) {
         let dir = TempDir::new().unwrap();
         let receipt_dir = dir.path().join("receipts");
         // A regular file where the receipt directory should be.
         fs::write(&receipt_dir, "not a directory").unwrap();
 
-        let receipt = VerificationReceipt::new(hub_location());
+        let receipt = new(hub_location());
         assert!(matches!(
-            ReceiptStore::from_path(&receipt_dir).store(&receipt),
+            ReceiptStore::<R>::from_path(&receipt_dir).store(&receipt),
             Err(ReceiptStoreError::Write { .. })
         ));
     }
 
     #[test]
+    fn stores_use_separate_directories_in_cache() {
+        let cache_dir = Path::new("/cache");
+
+        assert_eq!(
+            SignatureReceiptStore::in_cache_dir(cache_dir).dir,
+            Path::new("/cache/.verified-kernels/signature/v1")
+        );
+        assert_eq!(
+            DigestReceiptStore::in_cache_dir(cache_dir).dir,
+            Path::new("/cache/.verified-kernels/digest/v1")
+        );
+    }
+
+    /// The on-disk format must not change by accident. Changing it requires
+    /// bumping the format version of the store.
+    #[test]
     fn receipt_json_format_is_stable() {
-        let receipt = VerificationReceipt::new(hub_location());
+        check_receipt_json_format_is_stable(SignatureReceipt::new);
+        check_receipt_json_format_is_stable(DigestReceipt::new);
+    }
+
+    fn check_receipt_json_format_is_stable<R: Receipt + Debug + PartialEq>(
+        new: fn(KernelLocation) -> R,
+    ) {
+        let receipt = new(hub_location());
 
         let json = serde_json::to_string(&receipt).unwrap();
         let expected = format!(
@@ -381,14 +491,19 @@ mod tests {
         assert_eq!(json, expected);
 
         // The pinned format must roundtrip.
-        let parsed: VerificationReceipt = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.location(), receipt.location());
+        let parsed: R = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, receipt);
     }
 
     #[test]
     fn unknown_receipt_fields_are_ignored() {
+        check_unknown_receipt_fields_are_ignored::<SignatureReceipt>();
+        check_unknown_receipt_fields_are_ignored::<DigestReceipt>();
+    }
+
+    fn check_unknown_receipt_fields_are_ignored<R: Receipt + Debug>() {
         let dir = TempDir::new().unwrap();
-        let store = ReceiptStore::from_path(dir.path());
+        let store = ReceiptStore::<R>::from_path(dir.path());
         let location = hub_location();
 
         fs::write(

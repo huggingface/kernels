@@ -11,6 +11,8 @@
   buildSets,
   fetchFromHuggingFace,
   genKernelFlakeOutputs,
+  generate-symbols,
+  kernel-symbols-check,
 }:
 
 let
@@ -141,6 +143,8 @@ runCommand "builder-nix-checks"
       archIntersectionCheck
       badRegistrationCheck
       fetchFromHuggingFaceCheck
+      generate-symbols
+      kernel-symbols-check
     ];
   }
   ''

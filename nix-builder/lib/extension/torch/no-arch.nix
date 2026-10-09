@@ -23,7 +23,7 @@
 {
   buildConfig,
 
-  # Whether to run get-kernel-check.
+  # Whether to import the built kernel and generate symbols.json.
   doGetKernelCheck ? true,
 
   # Whether to check the kernel after build.

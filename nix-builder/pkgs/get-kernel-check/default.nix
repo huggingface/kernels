@@ -18,12 +18,16 @@
 
 let
   useFakeSys = config.tpuSupport or false;
+  generate-symbols = python3.pkgs.generate-symbols.override { inherit kernels; };
 in
 makeSetupHook {
   name = "get-kernel-check-hook";
   substitutions = {
     python3 = "${python3}/bin/python";
-    kernels = "${python3.pkgs.makePythonPath [ kernels ]}";
+    kernels = "${python3.pkgs.makePythonPath [
+      kernels
+      generate-symbols
+    ]}";
     inherit libraryPath;
     proot = lib.optionalString useFakeSys "${proot}/bin/proot";
     pyhook = ./get-kernel-check-hook.py;

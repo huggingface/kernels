@@ -1,6 +1,9 @@
+import json
 import os
 from pathlib import Path
 
+from generate_symbols import generate_symbols
+from kernels._rust import KernelDependency, KernelPaths, KernelVersion
 from kernels.hf_hub import _get_hf_api
 from kernels.load import get_kernel_with_resolver
 from kernels.resolver import KernelPathsResolver, RepoPathsResolver, SequentialResolver
@@ -9,7 +12,6 @@ from kernels.validate import (
     AllMetadataValidator,
     default_metadata_validators,
 )
-from kernels._rust import KernelDependency, KernelPaths, KernelVersion
 
 out = os.getenv("out")
 if not out:
@@ -45,7 +47,7 @@ resolvers = [
     KernelPathsResolver(kernel_paths=kernel_paths),
 ]
 
-get_kernel_with_resolver(
+module = get_kernel_with_resolver(
     api=_get_hf_api(),
     backend=None,
     kernel=kernel,
@@ -53,3 +55,9 @@ get_kernel_with_resolver(
     kernel_validator=AllKernelValidator(validators=[]),
     metadata_validator=AllMetadataValidator(validators=default_metadata_validators()),
 )
+
+# Reuse the module loaded with the build's local dependency resolver.
+# The hash hook runs later, so symbols.json is included in the variant digest.
+print(f"Writing kernel symbols to {variant_path / 'symbols.json'}")
+symbols = json.dumps(generate_symbols(module), indent=2, ensure_ascii=False) + "\n"
+(variant_path / "symbols.json").write_text(symbols, encoding="utf-8")

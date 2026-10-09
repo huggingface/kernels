@@ -210,6 +210,10 @@ final: prev:
 
         kernels = callPackage ./pkgs/python-modules/kernels { };
 
+        generate-symbols = callPackage ./pkgs/generate-symbols {
+          kernels = kernels.override { withTorch = false; };
+        };
+
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };

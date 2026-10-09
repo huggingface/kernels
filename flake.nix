@@ -95,7 +95,8 @@
             # one exceptional case: packaging a third-party kernel (where you
             # want to stay close to upstream) where importing the kernel will
             # fail in a GPU-less sandbox. Even in that case, it's better to lazily
-            # load the part with this functionality.
+            # load the part with this functionality. Disabling this also skips
+            # symbols.json generation, which requires importing the kernel.
             doGetKernelCheck ? true,
             pythonCheckInputs ? pkgs: [ ],
             pythonNativeCheckInputs ? pkgs: [ ],
@@ -220,6 +221,13 @@
           inherit (buildSet.pkgs) fetchFromHuggingFace;
           inherit (self.lib) genKernelFlakeOutputs;
           build = buildPerSystem.${system};
+          generate-symbols = checks.generate-symbols;
+          kernel-symbols-check = checks.kernel-symbols;
+        };
+
+        checks.generate-symbols = packages.generate-symbols;
+        checks.kernel-symbols = buildSet.pkgs.callPackage ./nix-builder/pkgs/get-kernel-check/test.nix {
+          inherit (buildSet) python3;
         };
 
         devShells = devShellByBackend // {
@@ -231,6 +239,7 @@
         packages = rec {
           inherit (buildSet.pkgs) kernel-builder kernel-port;
           kernels = buildSet.overrideTorch buildSet.pkgs.python3.pkgs.kernels;
+          inherit (buildSet.pkgs.python3.pkgs) generate-symbols;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
             ${kernel-builder}/bin/kernel-builder update-build ''${1:-build.toml}

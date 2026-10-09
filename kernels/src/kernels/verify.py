@@ -17,8 +17,8 @@ from kernels._rust import (
     KernelLocation,
     Metadata,
     ReceiptError,
-    ReceiptStore,
-    VerificationReceipt,
+    SignatureReceipt,
+    SignatureReceiptStore,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,16 +195,16 @@ class VerificationResult:
     )
 
 
-def _open_receipt_store() -> ReceiptStore | None:
+def _open_receipt_store() -> SignatureReceiptStore | None:
     """The receipt store, or `None` when verifications cannot be cached."""
     try:
-        return ReceiptStore.in_kernels_cache()
+        return SignatureReceiptStore.in_kernels_cache()
     except ReceiptError as e:
         logger.warning(f"Cannot cache kernel verifications: {e}")
         return None
 
 
-def _has_receipt(store: ReceiptStore, location: KernelLocation) -> bool:
+def _has_receipt(store: SignatureReceiptStore, location: KernelLocation) -> bool:
     """Whether the kernel at `location` was verified before.
 
     An unusable receipt counts as a cache miss: the kernel is then verified in
@@ -314,7 +314,7 @@ def verify_variant(
 
     if receipt_store is not None:
         try:
-            receipt_store.store(VerificationReceipt(location))
+            receipt_store.store(SignatureReceipt(location))
         except ReceiptError as e:
             logger.warning(f"Cannot store kernel verification receipt: {e}")
 

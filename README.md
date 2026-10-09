@@ -65,6 +65,24 @@ print(y)
 
 Browse available kernels at [huggingface.co/kernels](https://huggingface.co/kernels).
 
+## 🎯 Hardware Support
+
+The `kernel-builder` component of the project supports a number of hardware in
+different tiers:
+
+| Hardware   | Kernels Support | Kernel-Builder Support | Kernels Validated in CI | Tier |
+| ---------- | --------------- | ---------------------- | ----------------------- | ---- |
+| CUDA       | ✓               | ✓                      | ✓                       | 1    |
+| CPU        | ✓               | ✓                      | ✓                       | 1    |
+| ROCm       | ✓               | ✓                      | ✗                       | 2    |
+| XPU        | ✓               | ✓                      | ✗                       | 2    |
+| Metal      | ✓               | ✓                      | ✗                       | 2    |
+| TPU        | ✓               | ✓                      | ✗                       | 2    |
+| Huawei NPU | ✓               | ✗                      | ✗                       | 3    |
+| Neuron     | ✓               | x                      | x                       | 3    |
+
+**Warning:** Neuron and TPU support are experimental and packages are not public yet.
+
 ## 📚 Documentation
 
 Read the [documentation of kernels and kernel-builder](https://huggingface.co/docs/kernels/).

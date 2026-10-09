@@ -71,6 +71,17 @@ def _import_from_path(
         return loaded_kernel.module
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
+
+    # Kernel ids are unique per build: if this build was already imported
+    # reuse it instead of executing it again.
+    if (module := sys.modules.get(metadata.id)) is not None:
+        _loaded_kernels[variant_path] = LoadedKernel(
+            metadata=metadata,
+            module=module,
+            repo_info=repo_info,
+        )
+        return module
+
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"

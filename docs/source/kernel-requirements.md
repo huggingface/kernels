@@ -486,6 +486,16 @@ __all__ = [
 > [versioning guarantees](#versioning) apply to, so be sure to export
 > every function, class, and `layers` module you want to expose.
 
+The same applies to the `layers` module itself: only the layers listed in
+the `__all__` of `layers` are part of the public API. For example:
+
+```python
+class SiluAndMul(nn.Module):
+    # ...
+
+__all__ = ["SiluAndMul"]
+```
+
 ## Python requirements
 
 - Python code must be compatible with Python 3.9 and later.

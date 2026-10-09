@@ -8,6 +8,7 @@
   stdenv,
 
   kernel-builder,
+  generate-symbols-hook,
   get-kernel-check,
   hash-kernel-hook,
   kernel-layout-check,
@@ -113,6 +114,10 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override {
+      python3 = python3.withPackages (_: dependencies);
+      kernels = overrideTorch python3.pkgs.kernels;
+    })
+    (generate-symbols-hook.override {
       python3 = python3.withPackages (_: dependencies);
       kernels = overrideTorch python3.pkgs.kernels;
     })

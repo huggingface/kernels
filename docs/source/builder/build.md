@@ -274,3 +274,7 @@ this check enabled, as it is one of the checks that validates that a kernel
 is compliant. This option is primarily intended for kernels with
 `triton.autotune` decorators, which can fail because there is no GPU available
 in the build sandbox.
+
+Generating a kernel's public API symbols (`symbols.json`) also requires
+importing the kernel. So, when the `get_kernel` check is disabled, the build
+variants will not contain a `symbols.json` file.

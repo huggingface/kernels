@@ -10,5 +10,6 @@ try:
             relu(x, out)
             return out
 
+    __all__ = ["ReLU"]
 except ImportError:
-    pass
+    __all__ = []

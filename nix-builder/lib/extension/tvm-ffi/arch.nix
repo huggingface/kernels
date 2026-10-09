@@ -14,6 +14,7 @@
   cmake,
   cmakeNvccThreadsHook,
   cuda_nvcc,
+  generate-symbols-hook,
   get-kernel-check,
   hash-kernel-hook,
   kernel-layout-check,
@@ -136,6 +137,30 @@ let
 
   rustSupport = cargoLock != null;
 
+  # rpaths are stripped from kernels to make them portable, but that
+  # also means that in a Nix environment the CUDA/oneAPI dependencies
+  # cannot be located anymore, so pass them to hooks that load the kernel.
+  libraryPath = lib.makeLibraryPath (
+    map lib.getLib (
+      lib.optionals cudaSupport (
+        with cudaPackages;
+        [
+          cuda_cudart
+          libcublas
+          libcusolver
+          libcusparse
+        ]
+      )
+      ++ lib.optionals xpuSupport (
+        with xpuPackages;
+        [
+          intel-oneapi-compiler-dpcpp-cpp-runtime
+          intel-oneapi-compiler-shared-runtime
+        ]
+      )
+    )
+  );
+
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
 in
@@ -203,29 +228,12 @@ stdenv.mkDerivation (
       (get-kernel-check.override {
         python3 = python3.withPackages (ps: dependencies);
         kernels = python3.pkgs.kernels.override { withTorch = false; };
-        # rpaths are stripped from kernels to make them portable, but that
-        # also means that in a Nix environment the CUDA/oneAPI dependencies
-        # cannot be located anymore, so pass them to get-kernel-check.
-        libraryPath = lib.makeLibraryPath (
-          map lib.getLib (
-            lib.optionals cudaSupport (
-              with cudaPackages;
-              [
-                cuda_cudart
-                libcublas
-                libcusolver
-                libcusparse
-              ]
-            )
-            ++ lib.optionals xpuSupport (
-              with xpuPackages;
-              [
-                intel-oneapi-compiler-dpcpp-cpp-runtime
-                intel-oneapi-compiler-shared-runtime
-              ]
-            )
-          )
-        );
+        inherit libraryPath;
+      })
+      (generate-symbols-hook.override {
+        python3 = python3.withPackages (ps: dependencies);
+        kernels = python3.pkgs.kernels.override { withTorch = false; };
+        inherit libraryPath;
       })
     ]
     ++ lib.optionals cudaSupport [

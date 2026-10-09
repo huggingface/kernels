@@ -18,6 +18,10 @@ final: prev:
 
   fetchKernelDeps = final.callPackage ./pkgs/fetch-kernel-deps { };
 
+  generate-symbols = final.python3.pkgs.callPackage ./pkgs/generate-symbols { };
+
+  generate-symbols-hook = final.callPackage ./pkgs/generate-symbols/hook.nix { };
+
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
   hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };

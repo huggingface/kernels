@@ -229,3 +229,30 @@ def test_result_can_be_written_as_json(kernel):
     assert result["schema_version"] == 1
     assert result["module"] == "example"
     assert json.loads(json.dumps(result)) == result
+
+
+def test_kernel_deps_selects_path_based_loading(kernel, monkeypatch, tmp_path):
+    calls = []
+
+    def load_kernel_with_paths(kernel_dir, kernel_deps, *, backend=None):
+        calls.append((kernel_dir, kernel_deps, backend))
+        return kernel
+
+    monkeypatch.setattr(generator, "load_kernel_with_paths", load_kernel_with_paths)
+    output = tmp_path / "symbols.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "generate-symbols",
+            "--kernel-deps",
+            str(tmp_path / "deps.json"),
+            "--output",
+            str(output),
+            str(tmp_path / "variant"),
+        ],
+    )
+
+    generator.main()
+
+    assert calls == [(tmp_path / "variant", tmp_path / "deps.json", None)]
+    assert json.loads(output.read_text()) == generator.generate_symbols(kernel)

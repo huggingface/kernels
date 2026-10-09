@@ -11,15 +11,13 @@ from sigstore.verify import Verifier, policy
 from sigstore.verify.policy import VerificationPolicy
 
 from kernels._rust import (
-    Digest,
-    DigestValidationError,
-    DigestViolation,
     KernelLocation,
     Metadata,
     ReceiptError,
     SignatureReceipt,
     SignatureReceiptStore,
 )
+from kernels.digest import _has_receipt
 
 logger = logging.getLogger(__name__)
 
@@ -82,30 +80,12 @@ Accepts kernels signed by a curated set of trusted kernel developers.
 """
 
 
-class VerificationResult:
+class SignatureVerificationResult:
     class Failure(abc.ABC):
-        """A kernel build variant that could not be verified."""
+        """A kernel build variant whose signature could not be verified."""
 
         @abc.abstractmethod
         def __str__(self) -> str: ...
-
-    @final
-    @dataclass
-    class DigestVerificationFailure(Failure):
-        """
-        Verification failed because there were digest violations.
-
-        The violations are provided through the `violations` field.
-        """
-
-        violations: list[DigestViolation]
-
-        def __str__(self) -> str:
-            violations = "\n".join(str(violation) for violation in self.violations)
-            return (
-                "the files do not match the digest they were signed with, so they "
-                f"may have been modified:\n{violations}"
-            )
 
     @final
     @dataclass
@@ -145,16 +125,6 @@ class VerificationResult:
 
     @final
     @dataclass
-    class DigestMissing(Failure):
-        """
-        Verification failed because the metadata did not have a digest.
-        """
-
-        def __str__(self) -> str:
-            return "the metadata does not record a digest, so its integrity cannot be verified"
-
-    @final
-    @dataclass
     class MetadataMissing(Failure):
         """
         Verification failed because the kernel did not have metadata.
@@ -184,9 +154,7 @@ class VerificationResult:
             return "the metadata is correctly signed"
 
     Any: TypeAlias = (
-        DigestMissing
-        | DigestVerificationFailure
-        | MetadataInvalid
+        MetadataInvalid
         | MetadataMissing
         | SignatureBundleInvalid
         | SignatureBundleMissing
@@ -195,43 +163,31 @@ class VerificationResult:
     )
 
 
-def _open_receipt_store() -> SignatureReceiptStore | None:
-    """The receipt store, or `None` when verifications cannot be cached."""
+def _open_signature_receipt_store() -> SignatureReceiptStore | None:
+    """The signature receipt store, or `None` when verifications cannot be cached."""
     try:
         return SignatureReceiptStore.in_kernels_cache()
     except ReceiptError as e:
-        logger.warning(f"Cannot cache kernel verifications: {e}")
+        logger.warning(f"Cannot cache kernel signature verifications: {e}")
         return None
 
 
-def _has_receipt(store: SignatureReceiptStore, location: KernelLocation) -> bool:
-    """Whether the kernel at `location` was verified before.
-
-    An unusable receipt counts as a cache miss: the kernel is then verified in
-    full, which overwrites the receipt. A broken cache must never make a kernel
-    fail to verify.
-    """
-    try:
-        return store.load(location) is not None
-    except ReceiptError as e:
-        logger.warning(f"Ignoring unusable kernel verification receipt: {e}")
-        return False
-
-
-def verify_variant(
+def verify_signature(
     variant_path: Path,
     *,
     location: KernelLocation,
     policy: VerificationPolicy | None = None,
     cache: bool = True,
-) -> VerificationResult.Any:
+) -> SignatureVerificationResult.Any:
     """
-    Verify a kernel variant.
+    Verify the signature of a kernel variant.
 
     The kernel variant at the given path is verified using a policy. This
     validates that the metadata was signed using a key that is compliant with
-    the given policy and that the kernel hashes match the digest in the kernel
-    metadata.
+    the given policy.
+
+    This does not check that the files of the kernel match the digest in the
+    metadata, use `kernels.digest.verify_digest` for that.
 
     Args:
         variant_path (`Path`):
@@ -252,32 +208,31 @@ def verify_variant(
 
     bundle_path = variant_path / "metadata.json.sigstore"
     if not bundle_path.is_file():
-        return VerificationResult.SignatureBundleMissing()
+        return SignatureVerificationResult.SignatureBundleMissing()
 
     try:
         signature_bundle = Bundle.from_json(bundle_path.read_bytes())
     except InvalidBundle as e:
-        return VerificationResult.SignatureBundleInvalid(reason=str(e))
+        return SignatureVerificationResult.SignatureBundleInvalid(reason=str(e))
 
     metadata_path = variant_path / "metadata.json"
 
     if not metadata_path.is_file():
-        return VerificationResult.MetadataMissing()
+        return SignatureVerificationResult.MetadataMissing()
 
-    receipt_store = _open_receipt_store() if cache else None
+    receipt_store = _open_signature_receipt_store() if cache else None
 
     if receipt_store is not None and _has_receipt(receipt_store, location):
-        # The receipt attests that this kernel metadata was verified
-        # using the signature and the kernel data during the digest
-        # in the metadata. However, it may have been verified with a
-        # different policy, so we have to check certificate in the
-        # bundle against the currently required policy.
+        # The receipt attests that this kernel metadata was verified using
+        # the signature. However, it may have been verified with a different
+        # policy, so we have to check certificate in the bundle against the
+        # currently required policy.
         try:
             verify_policy.verify(signature_bundle.signing_certificate)
         except VerificationError as e:
-            return VerificationResult.SignatureVerificationFailure(reason=str(e))
+            return SignatureVerificationResult.SignatureVerificationFailure(reason=str(e))
 
-        return VerificationResult.Success()
+        return SignatureVerificationResult.Success()
 
     verifier = Verifier.production()
 
@@ -292,30 +247,17 @@ def verify_variant(
             verify_policy,
         )
     except VerificationError as e:
-        return VerificationResult.SignatureVerificationFailure(reason=str(e))
+        return SignatureVerificationResult.SignatureVerificationFailure(reason=str(e))
 
     try:
-        metadata = Metadata.from_bytes(metadata_bytes)
+        Metadata.from_bytes(metadata_bytes)
     except (OSError, ValueError) as e:
-        return VerificationResult.MetadataInvalid(reason=str(e))
-
-    if metadata.digest is None:
-        return VerificationResult.DigestMissing()
-
-    hash = metadata.digest.algorithm
-
-    # Rehash and check that the hashes match up. The validation is delegated to
-    # the (Rust) `Digest.validate`, which raises with each individual violation.
-    current_digest = Digest.hash_variant(hash, variant_path)
-    try:
-        metadata.digest.validate(current_digest)
-    except DigestValidationError as e:
-        return VerificationResult.DigestVerificationFailure(violations=e.violations)
+        return SignatureVerificationResult.MetadataInvalid(reason=str(e))
 
     if receipt_store is not None:
         try:
             receipt_store.store(SignatureReceipt(location))
         except ReceiptError as e:
-            logger.warning(f"Cannot store kernel verification receipt: {e}")
+            logger.warning(f"Cannot store kernel signature verification receipt: {e}")
 
-    return VerificationResult.Success()
+    return SignatureVerificationResult.Success()

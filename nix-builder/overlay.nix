@@ -110,7 +110,12 @@ final: prev:
           triton_3_8_0
           triton_3_8_0-nightly
           ;
-        inherit (triton-rocm) triton-rocm_3_7_0;
+        inherit (triton-rocm)
+          triton-rocm_3_7_0
+          triton-rocm_3_7_1
+          triton-rocm_3_8_0
+          triton-rocm_3_9_0
+          ;
         inherit (triton-xpu)
           triton-xpu_3_6_0
           triton-xpu_3_7_0

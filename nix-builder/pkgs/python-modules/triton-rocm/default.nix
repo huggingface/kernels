@@ -12,6 +12,24 @@ let
         hash = "sha256-DyWfmBMQyEEfPHzX0LvtBagFUMO+dX5tnadDdGsBbmc=";
       };
     };
+    "3.7.1" = {
+      x86_64-linux = {
+        url = "https://download.pytorch.org/whl/triton_rocm-3.7.1-cp314-cp314-linux_x86_64.whl";
+        hash = "sha256-kWWwQuNe3RIB9eV5+mB0p4MoCxNyh/R+TNzYUMRjOlQ=";
+      };
+    };
+    "3.8.0" = {
+      x86_64-linux = {
+        url = "https://download.pytorch.org/whl/triton_rocm-3.8.0-cp314-cp314-linux_x86_64.whl";
+        hash = "sha256-uyeJBwRNLXGyZNTrogX76h343PBR03tLNENacElx2ZU=";
+      };
+    };
+    "3.9.0" = {
+      x86_64-linux = {
+        url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton_rocm-3.9.0-cp312-abi3-linux_x86_64.whl";
+        hash = "sha256-PN2kG6Y4PcO3B/jbaBbxfGz5fXYOiulH0fAS9Z98T5A=";
+      };
+    };
   };
   generic = callPackage ./generic.nix { };
   versionAttr = lib.replaceStrings [ "." ] [ "_" ];

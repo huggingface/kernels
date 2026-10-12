@@ -128,6 +128,8 @@ final: prev:
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };
 
+        cupti-python = python-self.callPackage ./pkgs/python-modules/cupti-python { };
+
         # Starting with the CUDA 12.8 version, cuda-python is a metapackage
         # that pulls in relevant dependencies. For CUDA 12.6 it is just
         # cuda-bindings.

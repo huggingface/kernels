@@ -158,9 +158,17 @@ function (hipify_sources_target OUT_SRCS NAME ORIG_SRCS)
     list(APPEND HIP_SRCS "${CMAKE_CURRENT_BINARY_DIR}/${SRC}")
   endforeach()
 
+  if(Python3_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+  elseif(Python_EXECUTABLE)
+    set(_PYTHON_EXECUTABLE "${Python_EXECUTABLE}")
+  else()
+    message(FATAL_ERROR "No Python executable found. Set Python3_EXECUTABLE or Python_EXECUTABLE.")
+  endif()
+
   add_custom_target(
     hipify${NAME}
-    COMMAND "${Python3_EXECUTABLE}" ${CMAKE_SOURCE_DIR}/cmake/hipify.py -p ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${SRCS}
+    COMMAND "${_PYTHON_EXECUTABLE}" ${CMAKE_SOURCE_DIR}/cmake/hipify.py -p ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${SRCS}
     DEPENDS ${CMAKE_SOURCE_DIR}/cmake/hipify.py ${SRCS}
     BYPRODUCTS ${HIP_SRCS}
     COMMENT "Running hipify on ${NAME} extension source files.")

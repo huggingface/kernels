@@ -1,5 +1,5 @@
 use crate::{ops, python, recipe, workspace::Workspace};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 #[test]
@@ -278,49 +278,132 @@ fn ensure_import_recipe_pins_changes() {
     );
 }
 
+fn kernelize(src: &str, binding: &str) -> String {
+    python::kernelize_imports_source(
+        "tests/test_x.py",
+        src,
+        "einops",
+        binding,
+        "kernels-community/einops",
+        1,
+    )
+    .unwrap()
+    .unwrap()
+    .0
+}
+
 #[test]
-fn kernelize_imports_preserves_bindings_and_scope() {
+fn kernelize_imports_binds_the_kernel_once_and_uses_attributes() {
     let src = concat!(
         "import os\n",
         "import einops\n",
-        "import einops as eo\n",
         "import einops.layers\n",
+        "import einops as eo\n",
         "import einops.layers.torch as torch_layers\n",
-        "from einops import rearrange, reduce as red  # public API\n",
+        "from einops.parsing import ParsedExpression, _ellipsis as ell  # parsing\n",
+        "from . import helpers\n",
         "def load():\n",
         "    from einops.layers.torch import Rearrange as R, Reduce\n",
-        "    return R, Reduce\n",
+        "    from einops import array_api as AA\n",
+        "    import einops\n",
+        "    return R, Reduce, AA\n",
+        "class TestX:\n",
+        "    def test_m(self):\n",
+        "        from einops import rearrange\n",
+        "        return rearrange\n",
     );
     let (out, n) = python::kernelize_imports_source(
         "tests/test_x.py",
         src,
+        "einops",
         "einops",
         "kernels-community/einops",
         1,
     )
     .unwrap()
     .unwrap();
-    assert_eq!(n, 6);
-    assert!(
-        out.starts_with(
-            "__kernel_port_einops_root = None\ndef __kernel_port_einops(module=\"\"):\n"
+    assert_eq!(n, 9);
+    assert_eq!(
+        out,
+        concat!(
+            "import os\n",
+            "import kernels\n",
+            "einops = kernels.get_kernel(\"kernels-community/einops\", version=1)\n",
+            "eo = einops\n",
+            "torch_layers = einops.layers.torch\n",
+            "ParsedExpression = einops.parsing.ParsedExpression\n",
+            "ell = einops.parsing._ellipsis  # parsing\n",
+            "from . import helpers\n",
+            "def load():\n",
+            "    R, Reduce = einops.layers.torch.Rearrange, einops.layers.torch.Reduce\n",
+            "    AA = einops.array_api\n",
+            "    return R, Reduce, AA\n",
+            "class TestX:\n",
+            "    def test_m(self):\n",
+            "        rearrange = einops.rearrange\n",
+            "        return rearrange\n",
         )
     );
-    assert!(out.contains(
-        "root = __import__(\"kernels\").get_kernel(\"kernels-community/einops\", version=1)"
-    ));
-    assert!(out.contains("\nimport os\neinops = __kernel_port_einops()\n"));
-    assert!(out.contains("eo = __kernel_port_einops()"));
-    assert!(out.contains("einops = __kernel_port_einops(); __kernel_port_einops(\"layers\")"));
-    assert!(out.contains("torch_layers = __kernel_port_einops(\"layers.torch\")"));
-    assert!(out.contains("rearrange, red = getattr("));
-    assert!(out.contains("    R, Reduce = getattr("));
-    assert!(out.contains("  # public API\n"));
+    assert!(!out.contains("importlib"));
     assert!(
         python::absolute_self_imports("tests/test_x.py", &out, "einops")
             .unwrap()
             .is_empty()
     );
+}
+
+#[test]
+fn kernelize_imports_custom_binding_rebinds_the_package_name() {
+    let out = kernelize(
+        "\"\"\"docs\"\"\"\nimport os\nfrom einops import _backends\nimport einops\n",
+        "_einops",
+    );
+    assert_eq!(
+        out,
+        concat!(
+            "\"\"\"docs\"\"\"\nimport os\n",
+            "import kernels\n",
+            "_einops = kernels.get_kernel(\"kernels-community/einops\", version=1)\n",
+            "_backends = _einops._backends\n",
+            "einops = _einops\n",
+        )
+    );
+}
+
+#[test]
+fn kernelize_imports_binds_at_the_top_when_only_nested_imports_exist() {
+    let out = kernelize(
+        "\"\"\"docs\"\"\"\nfrom __future__ import annotations\nimport os\ndef f():\n    from einops import rearrange\n",
+        "einops",
+    );
+    assert_eq!(
+        out,
+        concat!(
+            "\"\"\"docs\"\"\"\nfrom __future__ import annotations\n",
+            "import kernels\n",
+            "einops = kernels.get_kernel(\"kernels-community/einops\", version=1)\n",
+            "import os\ndef f():\n    rearrange = einops.rearrange\n",
+        )
+    );
+}
+
+#[test]
+fn kernelize_imports_keeps_one_statement_when_sharing_a_line() {
+    let out = kernelize(
+        "import os; from einops import a, b\nif x: from einops import c, d\n",
+        "einops",
+    );
+    assert!(out.contains("import os; a, b = einops.a, einops.b\n"));
+    assert!(out.contains("if x: c, d = einops.c, einops.d\n"));
+}
+
+#[test]
+fn kernelize_imports_uses_one_form_for_repeated_import_text() {
+    let out = kernelize(
+        "from einops import a, b\nfrom einops import c\ndef f():\n    from einops import a, b\n    from einops import c\n",
+        "einops",
+    );
+    assert!(out.contains("version=1)\na, b = einops.a, einops.b\nc = einops.c\ndef f():\n    a, b = einops.a, einops.b\n    c = einops.c\n"));
 }
 
 #[test]
@@ -332,10 +415,12 @@ fn kernelize_imports_rejects_unsafe_static_forms() {
             "parenthesized import",
         ),
         ("import os, einops\n", "multi-name import"),
+        ("import einops; import os\n", "shares its line"),
     ] {
         let err = python::kernelize_imports_source(
             "tests/test_x.py",
             src,
+            "einops",
             "einops",
             "kernels-community/einops",
             1,
@@ -347,26 +432,93 @@ fn kernelize_imports_rejects_unsafe_static_forms() {
 }
 
 #[test]
-fn kernelize_imports_places_a_collision_free_helper_after_future_imports() {
+fn mark_tests_decorates_tests_above_existing_decorators() {
     let src = concat!(
-        "\"\"\"module docs\"\"\"\n",
-        "from __future__ import annotations\n",
-        "__kernel_port_einops = \"upstream name\"\n",
-        "from einops import rearrange\n",
+        "from doctest import testmod\n",
+        "import pytest\n",
+        "\n",
+        "def helper():\n",
+        "    pass\n",
+        "\n",
+        "# comment\n",
+        "def test_a():\n",
+        "    def test_nested():\n",
+        "        pass\n",
+        "\n",
+        "@pytest.mark.parametrize(\"x\", [1])\n",
+        "async def test_b(x):\n",
+        "    pass\n",
+        "\n",
+        "@pytest.mark.kernels_ci\n",
+        "def test_c():\n",
+        "    pass\n",
+        "\n",
+        "class TestD:\n",
+        "    def test_e(self):\n",
+        "        pass\n",
     );
-    let (out, _) = python::kernelize_imports_source(
+    let (out, n) = python::mark_tests_source(
         "tests/test_x.py",
         src,
-        "einops",
-        "kernels-community/einops",
-        1,
+        "kernels_ci",
+        &BTreeSet::new(),
+        &mut BTreeSet::new(),
     )
     .unwrap()
     .unwrap();
-    assert!(out.starts_with(
-        "\"\"\"module docs\"\"\"\nfrom __future__ import annotations\n__kernel_port_einops_2_root = None\ndef __kernel_port_einops_2(module=\"\"):\n"
+    assert_eq!(n, 3);
+    assert!(out.contains("# comment\n@pytest.mark.kernels_ci\ndef test_a():\n    def test_nested"));
+    assert!(out.contains(
+        "\n@pytest.mark.kernels_ci\n@pytest.mark.parametrize(\"x\", [1])\nasync def test_b"
     ));
-    assert!(out.contains("rearrange = getattr(__kernel_port_einops_2(), \"rearrange\")"));
+    assert!(out.contains("\n\n@pytest.mark.kernels_ci\ndef test_c"));
+    assert!(out.contains("\n@pytest.mark.kernels_ci\nclass TestD:\n    def test_e"));
+    assert!(out.starts_with("from doctest import testmod\n"));
+}
+
+#[test]
+fn mark_tests_requires_pytest_import() {
+    let err = python::mark_tests_source(
+        "tests/test_x.py",
+        "def test_a():\n    pass\n",
+        "kernels_ci",
+        &BTreeSet::new(),
+        &mut BTreeSet::new(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("import pytest"), "{err}");
+}
+
+#[test]
+fn mark_tests_exclude_leaves_named_tests_unmarked() {
+    let src = "import pytest\n\ndef test_a():\n    pass\n\nclass TestB:\n    pass\n";
+    let mut ws = Workspace::from_files(BTreeMap::from([
+        ("tests/test_x.py".into(), src.as_bytes().to_vec()),
+        ("tests/test_y.py".into(), src.as_bytes().to_vec()),
+    ]));
+    run_recipe(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" exclude=\"TestB\" changes=2\n",
+    );
+    for path in ["tests/test_x.py", "tests/test_y.py"] {
+        let out = ws.get_text(path).unwrap();
+        assert!(out.contains("@pytest.mark.kernels_ci\ndef test_a"), "{out}");
+        assert!(out.contains("\n\nclass TestB"), "{out}");
+    }
+}
+
+#[test]
+fn mark_tests_exclude_rejects_stale_names() {
+    let mut ws = Workspace::from_files(BTreeMap::from([(
+        "tests/test_x.py".into(),
+        b"import pytest\n\ndef test_a():\n    pass\n".to_vec(),
+    )]));
+    let err = run_recipe_err(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" exclude=\"test_gone\"\n",
+    );
+    assert!(err.contains("test_gone"), "{err}");
 }
 
 #[test]
@@ -566,7 +718,7 @@ fn manifest_edition_stable_abi_and_multi_glob_src() {
         "kernel name=\"k\" backend=\"cuda\" src=\"k/*.cu,k/*.h\"\nmanifest name=\"k\" version=1 license=\"MIT\" edition=5 backends=\"cuda\" torch_src=\"torch-ext/*.cpp,torch-ext/*.h\" stable_abi=\"cuda=2.10,rocm=2.10\"\n",
     );
     let toml = ws.get_text("build.toml").unwrap();
-    assert!(toml.contains("license = \"MIT\"\nedition = 5\nbackends = [\"cuda\"]"));
+    assert!(toml.contains("edition = 5\nlicense = \"MIT\"\nbackends = [\"cuda\"]"));
     assert!(toml.contains("[torch.stable-abi]\ncuda = \"2.10\"\nrocm = \"2.10\"\n"));
     assert!(toml.contains("[torch]\nsrc = [\n    \"torch-ext/b.cpp\",\n    \"torch-ext/b.h\",\n]"));
     assert!(toml.contains("src = [\n    \"k/a.cu\",\n    \"k/b.h\",\n]"));
@@ -678,7 +830,7 @@ fn manifest_upstream_field() {
     );
     let toml = ws.get_text("build.toml").unwrap();
     assert!(toml.contains(
-        "license = \"MIT\"\nedition = 5\nupstream = \"https://github.com/arogozhnikov/einops.git\"\nbackends = ["
+        "edition = 5\nlicense = \"MIT\"\nupstream = \"https://github.com/arogozhnikov/einops.git\"\nbackends = ["
     ));
 }
 

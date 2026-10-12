@@ -112,6 +112,58 @@ def generate_symbols(module: ModuleType) -> dict[str, Any]:
     }
 
 
+def load_kernel_with_paths(
+    kernel_dir: Path, kernel_deps: Path, *, backend: str | None = None
+) -> ModuleType:
+    """Load a kernel, resolving its kernel dependencies from local paths.
+
+    This is used in the Nix build sandbox, since there is no network access to
+    download dependencies.
+    """
+    from kernels._rust import KernelDependency, KernelPaths, KernelVersion
+    from kernels.hf_hub import _get_hf_api
+    from kernels.load import get_kernel_with_resolver
+    from kernels.resolver import (
+        KernelPathsResolver,
+        RepoPathsResolver,
+        SequentialResolver,
+    )
+    from kernels.validate import (
+        AllKernelValidator,
+        AllMetadataValidator,
+        default_metadata_validators,
+    )
+
+    kernel_paths = KernelPaths.from_json(kernel_deps.read_text(encoding="utf-8"))
+    repo_id = str(kernel_dir)
+    resolvers = [
+        RepoPathsResolver(local_kernels={repo_id: kernel_dir}),
+        KernelPathsResolver(kernel_paths=kernel_paths),
+    ]
+
+    return get_kernel_with_resolver(
+        api=_get_hf_api(),
+        backend=backend,
+        kernel=KernelDependency(repo_id=repo_id, version=KernelVersion.Version(0)),
+        resolver=SequentialResolver(resolvers=resolvers),
+        kernel_validator=AllKernelValidator(validators=[]),
+        metadata_validator=AllMetadataValidator(
+            validators=default_metadata_validators()
+        ),
+    )
+
+
+def load_kernel(
+    kernel_dir: Path, *, backend: str | None = None, kernel_deps: Path | None = None
+) -> ModuleType:
+    if kernel_deps is not None:
+        return load_kernel_with_paths(kernel_dir, kernel_deps, backend=backend)
+
+    from kernels import get_local_kernel
+
+    return get_local_kernel(kernel_dir, backend=backend)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -123,13 +175,18 @@ def main() -> None:
         "--backend", help="Backend to select when loading a local kernel repository"
     )
     parser.add_argument(
+        "--kernel-deps",
+        type=Path,
+        help=("JSON file mapping kernel dependencies to local paths."),
+    )
+    parser.add_argument(
         "--output", type=Path, required=True, help="Destination symbols.json"
     )
     args = parser.parse_args()
 
-    from kernels import get_local_kernel
-
-    module = get_local_kernel(args.kernel_dir, backend=args.backend)
+    module = load_kernel(
+        args.kernel_dir, backend=args.backend, kernel_deps=args.kernel_deps
+    )
     # Finish inspection and serialization before touching an existing output file.
     content = json.dumps(generate_symbols(module), indent=2, ensure_ascii=False) + "\n"
     args.output.write_text(content, encoding="utf-8")

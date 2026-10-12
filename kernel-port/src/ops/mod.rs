@@ -7,6 +7,7 @@ mod git;
 mod kernel;
 mod kernelize_imports;
 mod manifest;
+mod mark_tests;
 mod r#move;
 mod overlay;
 mod prune;
@@ -25,6 +26,7 @@ pub use expect::Expect;
 pub use kernel::Kernel;
 pub use kernelize_imports::KernelizeImports;
 pub use manifest::Manifest;
+pub use mark_tests::MarkTests;
 pub use r#move::Move;
 pub use overlay::Overlay;
 pub use prune::Prune;
@@ -138,6 +140,19 @@ fn apply_rewrite(
     pattern: &Pattern,
     changes: Option<usize>,
     verb: &str,
+    rewrite: impl FnMut(&str, &str) -> Result<Option<(String, usize)>>,
+) -> Result<String> {
+    apply_rewrite_of(ws, pattern, changes, verb, "import", rewrite)
+}
+
+// `apply_rewrite` for statements other than imports; `noun` names what
+// `rewrite` counts.
+fn apply_rewrite_of(
+    ws: &mut Workspace,
+    pattern: &Pattern,
+    changes: Option<usize>,
+    verb: &str,
+    noun: &str,
     mut rewrite: impl FnMut(&str, &str) -> Result<Option<(String, usize)>>,
 ) -> Result<String> {
     let files = ws.glob(pattern);
@@ -156,10 +171,10 @@ fn apply_rewrite(
             n_imports += count;
         }
     }
-    // The pin counts rewritten imports, not files, so a new upstream file
+    // The pin counts rewritten statements, not files, so a new upstream file
     // cannot be rewritten without moving it.
     check_changes_pin(changes, n_imports)?;
-    Ok(format!("{verb} {n_imports} import(s) in {n_files} file(s)"))
+    Ok(format!("{verb} {n_imports} {noun}(s) in {n_files} file(s)"))
 }
 
 fn copy_tree(
@@ -280,6 +295,7 @@ pub enum Op {
     Kernel(Kernel),
     KernelizeImports(KernelizeImports),
     Manifest(Manifest),
+    MarkTests(MarkTests),
     RelativizeImports(RelativizeImports),
     RemapModule(RemapModule),
     ConvertImport(ConvertImport),
@@ -302,6 +318,7 @@ pub fn build(inv: &Invocation, recipe_dir: &Path) -> Result<Op> {
         "kernel" => Op::Kernel(Kernel::build(&mut args)?),
         "kernelize_imports" => Op::KernelizeImports(KernelizeImports::build(&mut args)?),
         "manifest" => Op::Manifest(Manifest::build(&mut args)?),
+        "mark_tests" => Op::MarkTests(MarkTests::build(&mut args)?),
         "relativize_imports" => Op::RelativizeImports(RelativizeImports::build(&mut args)?),
         "remap_module" => Op::RemapModule(RemapModule::build(&mut args)?),
         "convert_import" => Op::ConvertImport(ConvertImport::build(&mut args)?),
@@ -328,6 +345,7 @@ impl Op {
             Self::Kernel(op) => op.apply(ws, facts),
             Self::KernelizeImports(op) => op.apply(ws),
             Self::Manifest(op) => op.apply(ws, facts),
+            Self::MarkTests(op) => op.apply(ws),
             Self::RelativizeImports(op) => op.apply(ws),
             Self::RemapModule(op) => op.apply(ws),
             Self::ConvertImport(op) => op.apply(ws),

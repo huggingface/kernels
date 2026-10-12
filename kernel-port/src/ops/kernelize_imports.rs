@@ -8,6 +8,7 @@ use anyhow::{Result, bail};
 pub struct KernelizeImports {
     pattern: Pattern,
     package: String,
+    binding: String,
     kernel: String,
     version: usize,
     changes: Option<usize>,
@@ -24,9 +25,11 @@ impl KernelizeImports {
         if kernel.is_empty() {
             bail!("kernel must not be empty");
         }
+        let binding = args.take_opt("binding").unwrap_or_else(|| package.clone());
         Ok(Self {
             pattern: args.take("in")?.parse()?,
             package,
+            binding,
             kernel,
             version: args.take_usize("version")?,
             changes: args.take_usize_opt("changes")?,
@@ -44,6 +47,7 @@ impl KernelizeImports {
                     path,
                     src,
                     &self.package,
+                    &self.binding,
                     &self.kernel,
                     self.version,
                 )

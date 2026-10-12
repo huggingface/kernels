@@ -9,3 +9,6 @@ class ReLU(nn.Module):
         out = torch.empty_like(x)
         ops.relu(out, x)
         return out
+
+
+__all__ = ["ReLU"]

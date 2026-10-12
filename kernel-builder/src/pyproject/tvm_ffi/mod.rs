@@ -18,6 +18,7 @@ static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-var
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_RUST: &str = include_str!("../templates/rust.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static HIPIFY: &str = include_str!("../templates/tvm_ffi/hipify.py");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 static DETECT_CUDA_CAPABILITY_PY: &str =
     include_str!("../templates/tvm_ffi/cuda/detect-cuda-capability.py");
@@ -33,6 +34,7 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
     );
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
     write_add_build_metadata_py(file_set);
+    write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(
         file_set,
         "cuda/detect-cuda-capability.py",

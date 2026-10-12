@@ -25,8 +25,7 @@ let
     (callPackage ./joins.nix { })
     # Add aotriton
     (final: prev: {
-      inherit (final.callPackage ../aotriton { })
-        aotriton_0_11_1
+      inherit (final.callPackage ../aotriton { rocmPackages = final; })
         aotriton_0_11_2
         aotriton_0_12
         aotriton_0_13

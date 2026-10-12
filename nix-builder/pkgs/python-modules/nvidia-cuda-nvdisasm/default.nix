@@ -45,8 +45,10 @@ buildPythonPackage rec {
   };
 
   nativeBuildInputs = [
-    autoAddDriverRunpath
+    # autoAddDriverRunpath must come after autoPatchelfHook, because
+    # autoPatchelf rewrites the runpath and would drop the driver path.
     autoPatchelfHook
+    autoAddDriverRunpath
     pythonWheelDepsCheckHook
   ];
 

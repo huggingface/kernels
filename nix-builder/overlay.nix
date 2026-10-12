@@ -108,7 +108,7 @@ final: prev:
           triton_3_7_0
           triton_3_7_1
           triton_3_8_0
-          triton_3_8_0-nightly
+          triton_3_9_0
           ;
         inherit (triton-rocm)
           triton-rocm_3_7_0
@@ -122,6 +122,7 @@ final: prev:
           triton-xpu_3_7_1
           triton-xpu_3_7_2
           triton-xpu_3_8_0
+          triton-xpu_3_9_0
           ;
 
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
@@ -274,7 +275,7 @@ final: prev:
         torch-bin_2_13 = mkTorch {
           version = "2.13";
           triton-cuda = triton_3_7_1;
-          triton-rocm = triton-rocm_3_7_0;
+          triton-rocm = triton-rocm_3_7_1;
           triton-xpu = triton-xpu_3_7_2;
           xpuPackages = final.xpuPackages_2026_0_0;
         };
@@ -282,18 +283,17 @@ final: prev:
         torch-bin_2_14 = mkTorch {
           version = "2.14";
           triton-cuda = triton_3_8_0;
-          triton-rocm = triton-rocm_3_7_0;
+          triton-rocm = triton-rocm_3_8_0;
           triton-xpu = triton-xpu_3_8_0;
           xpuPackages = final.xpuPackages_2026_1_0;
         };
 
-        # Nightly for CUDA 13.4 development work.
         torch-bin_2_15 = mkTorch {
           version = "2.15";
-          triton-cuda = triton_3_8_0-nightly;
-          triton-rocm = null;
-          triton-xpu = null;
-          xpuPackages = null;
+          triton-cuda = triton_3_9_0;
+          triton-rocm = triton-rocm_3_9_0;
+          triton-xpu = triton-xpu_3_9_0;
+          xpuPackages = final.xpuPackages_2026_1_2;
         };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {

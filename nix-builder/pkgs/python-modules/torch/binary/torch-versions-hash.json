@@ -190,9 +190,68 @@
   },
   "2.15": {
     "x86_64-linux": {
+      "cpu": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcpu-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-ccfR027iL67S4QImAMBz3nq4GxMcQML92FTMU1+eMlQ=",
+        "version": "2.15.0"
+      },
+      "cu130": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcu130-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-HVajzRduiOsnn8TcD/UXOZ/N6jZfluSngz+Eicwj7bQ=",
+        "version": "2.15.0"
+      },
       "cu134": {
-        "url": "https://download.pytorch.org/whl/nightly/cu134/torch-2.15.0.dev20260917%2Bcu134-cp314-cp314-manylinux_2_28_x86_64.whl",
-        "hash": "sha256-ZhghtENSCM9UQ0J/lI+H8WjUH/ABo9HTxT1q/cWE8co=",
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcu134-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-5dYGV7nt1nNlnkvvQa239XTmMkSJv1ej16ZEhztZIwA=",
+        "version": "2.15.0"
+      },
+      "cu132": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcu132-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-ZvMSOsOiXvPsZys8yW1/KO6hvWCCHO12tn7FV7fbUr4=",
+        "version": "2.15.0"
+      },
+      "xpu": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bxpu-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-UauujCMCQFMS+EHw7HFOURjg0s9W3RPSdhRwnGErQMw=",
+        "version": "2.15.0"
+      },
+      "rocm100": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Brocm10.0-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-CZsiabaC1soLrXZqORaEv2FAPYJMCQ5P2HIoR9GyjIs=",
+        "version": "2.15.0"
+      },
+      "rocm714": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Brocm7.14-cp314-cp314-manylinux_2_28_x86_64.whl",
+        "hash": "sha256-/Vdsj1DgJvYNyJETM6DYl3j5/RaHAOUclavCXgvP5No=",
+        "version": "2.15.0"
+      }
+    },
+    "aarch64-linux": {
+      "cpu": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcpu-cp314-cp314-manylinux_2_28_aarch64.whl",
+        "hash": "sha256-Egmzbm4g1+f/3eSIYWQqwEzo4JmfkTR813RupstkQ/A=",
+        "version": "2.15.0"
+      },
+      "cu130": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcu130-cp314-cp314-manylinux_2_28_aarch64.whl",
+        "hash": "sha256-fpeAs7lXuETKdC0zZ8SwgwIi6Sa2KyWaCjooPF/iEac=",
+        "version": "2.15.0"
+      },
+      "cu132": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcu132-cp314-cp314-manylinux_2_28_aarch64.whl",
+        "hash": "sha256-lvrvljbmj0yG6i7YDNpnDy6NwkoopNV4Mili3/32hY4=",
+        "version": "2.15.0"
+      },
+      "cu134": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0%2Bcu134-cp314-cp314-manylinux_2_28_aarch64.whl",
+        "hash": "sha256-P2VQ8PZqiAPLLys+jMLAEykeuOwh+GW7sEnOtf6Xxj4=",
+        "version": "2.15.0"
+      }
+    },
+    "aarch64-darwin": {
+      "cpu": {
+        "url": "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/torch-2.15.0-cp314-cp314-macosx_14_0_arm64.whl",
+        "hash": "sha256-Urr8QufoD4rygzHFMFJMRl5BYgA7dVeDFK3omhfZeDQ=",
         "version": "2.15.0"
       }
     }

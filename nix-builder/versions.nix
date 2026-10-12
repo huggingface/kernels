@@ -186,13 +186,68 @@
     bundleBuild = true;
   }
 
-  # For CUDA 13.4 development work.
+  {
+    torchVersion = "2.15";
+    cpu = true;
+    systems = [
+      "aarch64-darwin"
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.15";
+    cudaVersion = "13.0";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.15";
+    cudaVersion = "13.2";
+    systems = [
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
   {
     torchVersion = "2.15";
     cudaVersion = "13.4";
     systems = [
       "x86_64-linux"
+      "aarch64-linux"
     ];
-    bundleBuild = false;
+    bundleBuild = true;
+    tvmFfiVersion = "0.1";
+  }
+  {
+    torchVersion = "2.15";
+    metal = true;
+    systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.15";
+    rocmVersion = "7.14";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.15";
+    rocmVersion = "10.0";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+    tvmFfiVersion = "0.1";
+  }
+  {
+    torchVersion = "2.15";
+    xpuVersion = "2026.1.2";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+    tvmFfiVersion = "0.1";
   }
 ]

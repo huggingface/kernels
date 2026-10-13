@@ -33,6 +33,7 @@
 
   # Python dependencies
   cuda-bindings,
+  cupti-python,
   filelock,
   frozendict,
   fsspec,
@@ -76,10 +77,13 @@ let
     else
       triton;
 
+  # For the required version see:
+  # https://github.com/pytorch/pytorch/blob/v2.15.0-rc3/cmake/External/aotriton.cmake#L13
   aotritonVersions = with rocmPackages; {
     "2.12" = aotriton_0_11_2;
     "2.13" = aotriton_0_12;
     "2.14" = aotriton_0_13;
+    "2.15" = aotriton_0_14_2;
   };
 
   aotriton =
@@ -263,8 +267,8 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         intel-pti
       ]
     )
-    # Torch on aarch64-linux vendors libgfortran, which requires zlib.
-    ++ lib.optionals (stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isAarch64) [ zlib ];
+    # Torch vendors libgfortran, which requires zlib.
+    ++ lib.optionals stdenv.hostPlatform.isLinux [ zlib ];
 
   dependencies = [
     filelock
@@ -292,6 +296,16 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   ++ lib.optionals (cudaSupport && versionAtLeast version "2.10") [
     cuda-bindings
   ]
+  ++
+    lib.optionals
+      (
+        cudaSupport
+        && versionAtLeast version "2.15"
+        && versionAtLeast cudaPackages.cudaMajorMinorVersion "13.4"
+      )
+      [
+        cupti-python
+      ]
   ++ lib.optionals (xpuSupport && versionAtLeast version "2.13") [
     pyzes
   ];
@@ -345,9 +359,6 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     )
     ++ lib.optionals rocmSupport [
       "rocm"
-      # Ours is called 'triton'. Remove this once we build ROCm Triton from
-      # a binary wheel.
-      "triton-rocm"
     ]
     ++ lib.optionals xpuSupport [
       "intel-cmplr-lib-rt"

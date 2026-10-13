@@ -52,6 +52,24 @@ let
   format = "wheel";
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
 
+  cudaMajor = lib.versions.major cudaPackages.cudaMajorMinorVersion;
+
+  # The extension modules load CUDA libraries at runtime through
+  # cuda-pathfinder, add dependencies so that they can be loaded
+  # and lacated through rpath.
+  linkedLibraries = {
+    "_bindings/cynvrtc" = "libnvrtc.so.${cudaMajor}";
+    "_internal/cufile" = "libcufile.so.0";
+    "_internal/nvjitlink" = "libnvJitLink.so.${cudaMajor}";
+    "_internal/nvvm" = "libnvvm.so.4";
+  }
+  // lib.optionalAttrs (cudaMajor == "12") {
+    "_internal/_nvml" = "libnvidia-ml.so.1";
+  }
+  // lib.optionalAttrs (cudaMajor != "12") {
+    "_internal/nvfatbin" = "libnvfatbin.so.${cudaMajor}";
+    "_internal/nvml" = "libnvidia-ml.so.1";
+  };
 in
 buildPythonPackage {
   inherit format;
@@ -68,10 +86,39 @@ buildPythonPackage {
   };
 
   nativeBuildInputs = [
-    autoAddDriverRunpath
+    # autoAddDriverRunpath must come after autoPatchelfHook, because
+    # autoPatchelf rewrites the runpath and would drop the driver path.
     autoPatchelfHook
+    autoAddDriverRunpath
     pythonWheelDepsCheckHook
   ];
+
+  buildInputs = map lib.getLib (
+    with cudaPackages;
+    [
+      cuda_nvrtc
+      libcufile
+      libnvjitlink
+    ]
+    ++ lib.optionals (cudaMajor != "12") [ libnvfatbin ]
+  );
+
+  # libnvidia-ml is part of the driver, found through the driver runpath.
+  autoPatchelfIgnoreMissingDeps = [ "libnvidia-ml.so.1" ];
+
+  postInstall = ''
+    ${lib.concatStrings (
+      lib.mapAttrsToList (module: soname: ''
+        patchelf --add-needed ${soname} \
+          $out/${python.sitePackages}/cuda/bindings/${module}.*.so
+      '') linkedLibraries
+    )}
+  '';
+
+  # libnvvm is in a subdirectory of cuda_nvcc.
+  preFixup = ''
+    addAutoPatchelfSearchPath --no-recurse ${lib.getLib cudaPackages.cuda_nvcc}/nvvm/lib
+  '';
 
   dependencies = [ cuda-pathfinder ];
 

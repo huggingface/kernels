@@ -131,4 +131,4 @@ def generate_pytorch_rc_hf_url(
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
 
-    return f"https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/{torch_version}/{testing_release}/{wheel_name}"
+    return f"https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/{torch_version}/{testing_release}/{wheel_name}"

@@ -35,4 +35,10 @@ in
     url = "https://download.pytorch.org/whl/triton_xpu-3.8.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
     hash = "sha256-r8W70Ter/+iBD4uLfcZU/zdJe7KLspPT/qag5PH7qwk=";
   };
+
+  triton-xpu_3_9_0 = generic {
+    version = "3.9.0";
+    url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton_xpu-3.9.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+    hash = "sha256-nz+10HitF8bj3GHu9zabQ1isP4fWtWnSps5et3OkPMg=";
+  };
 }

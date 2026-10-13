@@ -36,10 +36,14 @@ let
         hash = "sha256-9NoIqNpk/evM/u16gz5HPPt8Zw9YWi/h+vjUm+qz4b0=";
       };
     };
-    "3.8.0-nightly" = {
+    "3.9.0" = {
       x86_64-linux = {
-        url = "https://download-r2.pytorch.org/whl/nightly/triton-3.8.0%2Bgitc01b6774-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
-        hash = "sha256-QVRSf6iJiAPuPEQ8YRNTl9zRnqrmrxmbfx27mwIkixQ=";
+        url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton-3.9.0-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-MZtpln1qLD8tdGH+hsZMJNSoNfok33gQLoAm8PBRtWk=";
+      };
+      aarch64-linux = {
+        url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton-3.9.0-cp312-abi3-linux_aarch64.whl";
+        hash = "sha256-Vax66MKJ6ZHXKl+ylIGHpPsy/Bu4JurO8TIROe7J53I=";
       };
     };
   };

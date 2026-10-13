@@ -56,8 +56,8 @@ def verify_signature(args: argparse.Namespace) -> None:
                 print(f"❌ {variant_str}: {signature_result}")
                 failed = True
                 continue
-            case _ as unreachable:
-                assert_never(unreachable)
+            case _ as unreachable_signature:
+                assert_never(unreachable_signature)
 
         metadata = Metadata.read_from_file(kernel_path / "metadata.json")
         digest_result = verify_digest(kernel_path, metadata=metadata, location=location, cache=False)
@@ -70,8 +70,8 @@ def verify_signature(args: argparse.Namespace) -> None:
             case DigestVerificationResult.Failure():
                 print(f"❌ {variant_str}: {digest_result}")
                 failed = True
-            case _ as unreachable:
-                assert_never(unreachable)
+            case _ as unreachable_digest:
+                assert_never(unreachable_digest)
 
     if failed:
         sys.exit(1)

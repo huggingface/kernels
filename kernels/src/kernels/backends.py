@@ -228,7 +228,12 @@ def _backend() -> Backend:
             cuda_version = Version(torch.version.cuda)
             return CUDA(version=cuda_version)
         elif torch.version.hip is not None:
-            rocm_version = Version(torch.version.hip.split("-")[0])
+            # Note: the ROCm version does not always match the HIP version
+            # (e.g. ROCm 10.0 uses HIP 7.15). So, we should use
+            # `torch.version.rocm`. However, this attribute is only available
+            # since Torch 2.10, so use `torch.version.hip` as a fallback.
+            rocm = getattr(torch.version, "rocm", None) or torch.version.hip
+            rocm_version = Version(rocm.split("-")[0])
             return ROCm(version=rocm_version)
         elif torch.backends.mps.is_available():
             return Metal()

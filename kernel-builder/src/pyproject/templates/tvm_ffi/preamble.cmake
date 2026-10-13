@@ -129,7 +129,12 @@ elseif(GPU_LANG STREQUAL "HIP")
   enable_language(HIP)
 
   find_package(hip REQUIRED)
-  set(ROCM_VERSION "${hip_VERSION_MAJOR}.${hip_VERSION_MINOR}")
+  find_package(rocm-core CONFIG QUIET)
+  if(rocm-core_FOUND)
+    set(ROCM_VERSION "${rocm-core_VERSION_MAJOR}.${rocm-core_VERSION_MINOR}")
+  else()
+    set(ROCM_VERSION "${hip_VERSION_MAJOR}.${hip_VERSION_MINOR}")
+  endif()
   message(STATUS "Found ROCm version: ${ROCM_VERSION}")
 
   set(ROCM_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201")

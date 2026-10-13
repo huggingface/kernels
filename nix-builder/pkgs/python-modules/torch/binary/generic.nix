@@ -107,6 +107,9 @@ let
           amdrocm-rand
           amdrocm-rccl
         ]
+        ++ lib.optionals (versionAtLeast version "2.15") [
+          amdrocm-amdsmi
+        ]
       else
         [
           aotriton

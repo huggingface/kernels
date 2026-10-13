@@ -1,5 +1,9 @@
 # Use layers
 
+> [!NOTE]
+> If you want to understand the concepts of kernel layers more interactively
+> here is a [cookbook just for that purpose](https://colab.research.google.com/github/huggingface/kernels/blob/main/examples/cookbook/use_layers.ipynb)
+
 A kernel can provide layers in addition to kernel functions. A layer from
 the Hub can replace the `forward` method of an existing layer for a certain
 device type. This makes it possible to provide more performant kernels for

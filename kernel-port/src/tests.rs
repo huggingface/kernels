@@ -191,6 +191,66 @@ fn remap_does_not_touch_other_prefixes() {
 }
 
 #[test]
+fn remap_aliased_plain_imports() {
+    let src = "import interface as si, os\n";
+    let from: python::DottedPath = "interface".parse().unwrap();
+    let to: python::DottedPath = "msa.interface".parse().unwrap();
+    let err = python::remap_source("f.py", src, &from, &to)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("shares a statement"), "{err}");
+
+    let src = "import interface as si\nimport interface.sub  as  s;\nimport other as o\n";
+    let (out, n) = python::remap_source("f.py", src, &from, &to)
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 2);
+    assert_eq!(
+        out,
+        "import msa.interface as si\nimport msa.interface.sub  as  s;\nimport other as o\n"
+    );
+
+    // Without an alias the import binds `interface`; remapping would rebind it.
+    let err = python::remap_source("f.py", "import interface\n", &from, &to)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("binds `interface`"), "{err}");
+}
+
+#[test]
+fn convert_unaliased_import_rewrites_its_uses() {
+    let prefix: python::DottedPath = "quack".parse().unwrap();
+    let src = "import quack.activation\nfrom quack.copy_utils import c\n\n\ndef f(x):\n    # quack.activation.relu\n    return quack.activation.relu(x) + quack.activation.gelu(x)\n";
+    let (out, n) = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 1);
+    // Only exact attribute chains are rewritten; comments are left alone.
+    assert!(out.starts_with("from quack import activation\nfrom quack.copy_utils import c\n"));
+    assert!(out.contains("# quack.activation.relu\n    return activation.relu(x)"));
+
+    let src = "import quack.activation\n\nx = quack.activation.relu\n";
+    let (out, _) = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap()
+        .unwrap();
+    assert_eq!(out, "from quack import activation\n\nx = activation.relu\n");
+
+    // Another use of the package binding would be left dangling.
+    let src = "import quack.activation\n\nx = quack.activation.relu\ny = quack.other\n";
+    let err = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("1 use(s) of `quack`"), "{err}");
+
+    // The leaf name must not already be in use.
+    let src = "import quack.activation\n\ndef f(activation):\n    return quack.activation.relu(activation)\n";
+    let err = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("already uses"), "{err}");
+}
+
+#[test]
 fn splice_refuses_string_literal_duplicates() {
     let src = "from pkg.a import b\ns = \"from pkg.a import b\"\n";
     assert!(python::relativize_source("f.py", src, &["pkg"]).is_err());
@@ -461,7 +521,7 @@ fn mark_tests_decorates_tests_above_existing_decorators() {
         "tests/test_x.py",
         src,
         "kernels_ci",
-        &BTreeSet::new(),
+        &python::TestSelection::Exclude(BTreeSet::new()),
         &mut BTreeSet::new(),
     )
     .unwrap()
@@ -482,7 +542,7 @@ fn mark_tests_requires_pytest_import() {
         "tests/test_x.py",
         "def test_a():\n    pass\n",
         "kernels_ci",
-        &BTreeSet::new(),
+        &python::TestSelection::Exclude(BTreeSet::new()),
         &mut BTreeSet::new(),
     )
     .unwrap_err()
@@ -519,6 +579,37 @@ fn mark_tests_exclude_rejects_stale_names() {
         "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" exclude=\"test_gone\"\n",
     );
     assert!(err.contains("test_gone"), "{err}");
+}
+
+#[test]
+fn mark_tests_only_marks_named_tests() {
+    let src = "import pytest\n\ndef test_a():\n    pass\n\ndef test_b():\n    pass\n";
+    let mut ws = ws_of(&[("tests/test_x.py", src)]);
+    run_recipe(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" only=\"test_b\" changes=1\n",
+    );
+    assert_eq!(
+        ws.get_text("tests/test_x.py").unwrap(),
+        "import pytest\n\ndef test_a():\n    pass\n\n@pytest.mark.kernels_ci\ndef test_b():\n    pass\n"
+    );
+
+    let mut ws = ws_of(&[("tests/test_x.py", src)]);
+    let err = run_recipe_err(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" only=\"test_gone\"\n",
+    );
+    assert!(
+        err.contains("only names no test") && err.contains("test_gone"),
+        "{err}"
+    );
+
+    let mut ws = ws_of(&[("tests/test_x.py", src)]);
+    let err = run_recipe_err(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"m\" only=\"test_a\" exclude=\"test_b\"\n",
+    );
+    assert!(err.contains("mutually exclusive"), "{err}");
 }
 
 #[test]
@@ -1138,5 +1229,163 @@ fn rewrite_identifier_hole_can_be_continued_by_text() {
     assert_eq!(
         out,
         "from . import ops as fp4attn_cuda\nfrom . import ops as fp4quant_cuda\nimport torch\n"
+    );
+}
+
+#[test]
+fn extension_converts_a_pybind_module() {
+    // The shape of SageAttention3: pybind modules used as objects from Python.
+    let mut ws = ws_of(&[
+        (
+            "k/api.cu",
+            "#include <torch/python.h>\n#include <ATen/ATen.h>\n\nvoid fwd();\n\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n    m.def(\"fwd\", &fwd, \"Forward\");\n}\n",
+        ),
+        (
+            "torch-ext/pkg/api.py",
+            "\"\"\"Doc.\"\"\"\nimport torch\nimport attn_cuda\n\n\ndef f(x):\n    # attn_cuda is the extension\n    return attn_cuda.fwd(x)\n",
+        ),
+    ]);
+    run_recipe(
+        &mut ws,
+        "extension sources=\"k/*.cu\" modules=\"attn_cuda\" changes=3\n",
+    );
+    assert_eq!(
+        ws.get_text("k/api.cu").unwrap(),
+        "#include <torch/all.h>\n#include <ATen/ATen.h>\n\nvoid fwd();\n"
+    );
+    assert_eq!(
+        ws.get_text("torch-ext/pkg/api.py").unwrap(),
+        "\"\"\"Doc.\"\"\"\nimport torch\nfrom ._ops import ops as attn_cuda\n\n\ndef f(x):\n    # attn_cuda is the extension\n    return attn_cuda.fwd(x)\n"
+    );
+}
+
+#[test]
+fn extension_namespaces_torch_library_ops() {
+    // The shape of Flash Attention 3: TORCH_LIBRARY with a fixed namespace,
+    // loaded for its side effect and called through torch.ops.
+    let mut ws = ws_of(&[
+        (
+            "csrc/api.cpp",
+            "void f();\n\nSTABLE_TORCH_LIBRARY(fa3, m) {\n    m.def(\"fwd(Tensor q) -> Tensor\");\n}\n\nSTABLE_TORCH_LIBRARY_IMPL(fa3, CUDA, m) {\n    m.impl(\"fwd\", &f);\n}\n",
+        ),
+        (
+            "torch-ext/fa/sub/iface.py",
+            "import os\nfrom typing import (\n    Optional,\n)\n\nimport fa3._C # Registers operators with PyTorch\n\ngpu = torch.ops.fa3\n\n@torch.library.custom_op(\"fa3::_fwd\", mutates_args=())\ndef _fwd(q):\n    warn(\"fa3::_fwd (from fa3._C) not found\")\n",
+        ),
+    ]);
+    run_recipe(
+        &mut ws,
+        "extension sources=\"csrc/*.cpp\" namespace=\"fa3\" modules=\"fa3._C\" changes=5\n",
+    );
+    assert_eq!(
+        ws.get_text("csrc/api.cpp").unwrap(),
+        "void f();\n\n#include \"../torch-ext/registration.h\"\n\nSTABLE_TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, m) {\n    m.def(\"fwd(Tensor q) -> Tensor\");\n}\n\nSTABLE_TORCH_LIBRARY_IMPL_EXPAND(TORCH_EXTENSION_NAME, CUDA, m) {\n    m.impl(\"fwd\", &f);\n}\n"
+    );
+    // Strings that merely mention the namespace are left alone.
+    assert_eq!(
+        ws.get_text("torch-ext/fa/sub/iface.py").unwrap(),
+        "import os\nfrom typing import (\n    Optional,\n)\n\nfrom .. import _ops # Registers operators with PyTorch\nfrom .._ops import add_op_namespace_prefix, ops\n\ngpu = ops\n\n@torch.library.custom_op(add_op_namespace_prefix(\"_fwd\"), mutates_args=())\ndef _fwd(q):\n    warn(\"fa3::_fwd (from fa3._C) not found\")\n"
+    );
+}
+
+#[test]
+fn extension_refuses_what_it_cannot_convert() {
+    let mut ws = ws_of(&[(
+        "k/a.cu",
+        "py::dict f();\nPYBIND11_MODULE(X, m) {\n  m.def(\"f\", &f);\n}\n",
+    )]);
+    let err = run_recipe_err(&mut ws, "extension sources=\"k/*.cu\" changes=1\n");
+    assert!(err.contains("still uses pybind11"), "{err}");
+
+    let mut ws = ws_of(&[("torch-ext/p/a.py", "from attn_cuda import fwd\n")]);
+    let err = run_recipe_err(&mut ws, "extension modules=\"attn_cuda\" changes=0\n");
+    assert!(err.contains("is not supported"), "{err}");
+
+    let mut ws = ws_of(&[("k/a.cu", "PYBIND11_MODULE(X, m) {\n}\n")]);
+    let err = run_recipe_err(&mut ws, "extension sources=\"k/*.cu\" changes=2\n");
+    assert!(
+        err.contains("expected exactly 2 change(s) but made 1 (1 pybind module(s) removed)"),
+        "{err}"
+    );
+}
+
+#[test]
+fn extension_side_effect_import_ignores_unrelated_names() {
+    // Another package's module that happens to share the extension's name is
+    // not a use of the extension.
+    let mut ws = ws_of(&[(
+        "torch-ext/fa/iface.py",
+        "try:\n    import fa3._C\nexcept ImportError:\n    from aiter.ops import fa3 as gpu\n",
+    )]);
+    run_recipe(&mut ws, "extension modules=\"fa3._C\" changes=1\n");
+    assert_eq!(
+        ws.get_text("torch-ext/fa/iface.py").unwrap(),
+        "try:\n    from . import _ops\nexcept ImportError:\n    from aiter.ops import fa3 as gpu\n"
+    );
+}
+
+#[test]
+fn extension_replaces_a_jit_build() {
+    // The shape of MSA's helpers: torch.utils.cpp_extension.load at import time.
+    let src = concat!(
+        "\"\"\"JIT-loaded extension.\"\"\"\n",
+        "\n",
+        "from __future__ import annotations\n",
+        "\n",
+        "import os\n",
+        "\n",
+        "import torch\n",
+        "from torch.utils.cpp_extension import load\n",
+        "\n",
+        "_THIS_DIR = os.path.dirname(os.path.abspath(__file__))\n",
+        "_SRC = os.path.join(_THIS_DIR, \"k.cu\")\n",
+        "\n",
+        "_extra_cflags = [\"-O3\"]\n",
+        "_extra_cuda_cflags = [\n",
+        "    \"-O3\",\n",
+        "    \"-arch=sm_100\",\n",
+        "]\n",
+        "\n",
+        "_ext = load(\n",
+        "    name=\"k_ext\",\n",
+        "    sources=[_SRC],\n",
+        "    extra_cflags=_extra_cflags,\n",
+        "    extra_cuda_cflags=_extra_cuda_cflags,\n",
+        ")\n",
+        "\n",
+        "_UNRELATED = 1\n",
+        "\n",
+        "\n",
+        "def run(x: torch.Tensor) -> None:\n",
+        "    _ext.run(x)\n",
+    );
+    let mut ws = ws_of(&[("torch-ext/pkg/sub/k/__init__.py", src)]);
+    run_recipe(&mut ws, "extension modules=\"k_ext\" changes=7\n");
+    assert_eq!(
+        ws.get_text("torch-ext/pkg/sub/k/__init__.py").unwrap(),
+        concat!(
+            "\"\"\"JIT-loaded extension.\"\"\"\n",
+            "\n",
+            "from __future__ import annotations\n",
+            "\n",
+            "import torch\n",
+            "\n",
+            "from ..._ops import ops as _ext\n",
+            "\n",
+            "_UNRELATED = 1\n",
+            "\n",
+            "\n",
+            "def run(x: torch.Tensor) -> None:\n",
+            "    _ext.run(x)\n",
+        )
+    );
+
+    // A setting still used elsewhere is kept, and so is what it uses.
+    let src = "import os\nfrom torch.utils import cpp_extension\n\nD = os.path.dirname(__file__)\n_ext = cpp_extension.load(\"k_ext\", sources=[os.path.join(D, \"k.cu\")])\nprint(D)\n";
+    let mut ws = ws_of(&[("torch-ext/pkg/k.py", src)]);
+    run_recipe(&mut ws, "extension modules=\"k_ext\" changes=2\n");
+    assert_eq!(
+        ws.get_text("torch-ext/pkg/k.py").unwrap(),
+        "import os\n\nD = os.path.dirname(__file__)\nfrom ._ops import ops as _ext\nprint(D)\n"
     );
 }

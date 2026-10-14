@@ -562,13 +562,10 @@ fn splice(path: &str, src: &str, rewrites: Vec<Rewrite>) -> Result<String> {
     Ok(out)
 }
 
-fn rewrite_from_imports(
-    path: &str,
-    src: &str,
+fn from_import_rewrites(
+    module: &Module<'_>,
     plan: impl Fn(&[&str]) -> Option<(usize, String)>,
-) -> Result<Option<(String, usize)>> {
-    let owned = parsed_module(path, src)?;
-    let module = owned.borrow_dependent();
+) -> Vec<Rewrite> {
     let mut rewrites: Vec<Rewrite> = Vec::new();
     for (import, indents) in module_imports(module).from_imports {
         if !import.relative.is_empty() {
@@ -586,6 +583,16 @@ fn rewrite_from_imports(
             render_with_module(import, dots, &new_module, &indents),
         );
     }
+    rewrites
+}
+
+fn rewrite_from_imports(
+    path: &str,
+    src: &str,
+    plan: impl Fn(&[&str]) -> Option<(usize, String)>,
+) -> Result<Option<(String, usize)>> {
+    let owned = parsed_module(path, src)?;
+    let rewrites = from_import_rewrites(owned.borrow_dependent(), plan);
     finish_rewrites(path, src, rewrites, "rewritten")
 }
 
@@ -623,6 +630,9 @@ pub fn relativize_source_from_root(
     })
 }
 
+// Remaps `from <from>... import` and `import <from>... as name`. A plain
+// `import <from>...` without an alias binds the top-level package, so moving
+// it would change what the module's code refers to; that is an error.
 pub fn remap_source(
     path: &str,
     src: &str,
@@ -630,7 +640,7 @@ pub fn remap_source(
     to_prefix: &DottedPath,
 ) -> Result<Option<(String, usize)>> {
     let from = from_prefix.parts();
-    rewrite_from_imports(path, src, |target| {
+    let remap = |target: &[&str]| -> Option<String> {
         if target.len() < from.len() || target[..from.len()] != *from {
             return None;
         }
@@ -640,19 +650,63 @@ pub fn remap_source(
                 .iter()
                 .map(std::string::ToString::to_string),
         );
-        Some((0, new.join(".")))
-    })
+        Some(new.join("."))
+    };
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
+    let mut rewrites = from_import_rewrites(module, |target| Some((0, remap(target)?)));
+    for (import, indents) in module_imports(module).plain_imports {
+        let matching: Vec<_> = import
+            .names
+            .iter()
+            .filter_map(|alias| Some((alias, remap(&flatten(&alias.name)?)?)))
+            .collect();
+        let Some((alias, new_name)) = matching.first() else {
+            continue;
+        };
+        let old_name = flatten(&alias.name).unwrap().join(".");
+        if import.names.len() > 1 {
+            bail!(
+                "{path}: `import {old_name}` shares a statement with other imports; split it first"
+            );
+        }
+        if alias.asname.is_none() {
+            bail!(
+                "{path}: `import {old_name}` binds `{}`, which remapping would change; \
+                 import it with an alias or a from-import",
+                old_name.split('.').next().unwrap()
+            );
+        }
+        let mut new = String::from("import");
+        new.push_str(&render_indented(&import.whitespace_after_import, &indents));
+        new.push_str(new_name);
+        if let Some(asname) = &alias.asname {
+            new.push_str(&render_indented(asname, &indents));
+        }
+        if let Some(semi) = &import.semicolon {
+            new.push_str(&render_indented(semi, &indents));
+        }
+        add_rewrite(&mut rewrites, render_indented(import, &indents), new);
+    }
+    finish_rewrites(path, src, rewrites, "rewritten")
 }
 
+// `import a.b.c as x` becomes `from a.b import c as x`. Without an alias,
+// `import a.b.c` binds `a`, so it is converted only when every use of `a` in
+// the module is an attribute access through `a.b.c`; those become accesses
+// through `c`.
 pub fn convert_imports_source(
     path: &str,
     src: &str,
     prefix: &DottedPath,
 ) -> Result<Option<(String, usize)>> {
+    use crate::rewrite::{Lang, name_uses, rewrite_attribute_chain};
     let prefix = prefix.parts();
     let owned = parsed_module(path, src)?;
     let module = owned.borrow_dependent();
     let mut rewrites: Vec<Rewrite> = Vec::new();
+    // (dotted module, the name it is now bound to) for unaliased imports.
+    let mut chains: Vec<(String, String)> = Vec::new();
     for (import, indents) in module_imports(module).plain_imports {
         let matching: Vec<_> = import
             .names
@@ -668,7 +722,7 @@ pub fn convert_imports_source(
         if import.names.len() > 1 {
             bail!(
                 "{path}: multi-name import statement mentions the prefix; split it \
-                 with a replace before convert_import"
+                 with a rewrite before convert_import"
             );
         }
         let alias = matching[0];
@@ -676,32 +730,70 @@ pub fn convert_imports_source(
         if target.len() < 2 {
             bail!(
                 "{path}: `import {}` cannot be converted to a from-import; handle it \
-                 with a replace",
+                 with a rewrite",
                 target.join(".")
             );
         }
-        let Some(asname) = &alias.asname else {
-            bail!(
-                "{path}: `import {}` without an alias binds the top-level package; \
-                 handle it with a replace",
-                target.join(".")
-            );
-        };
-        let libcst_native::AssignTargetExpression::Name(alias_name) = &asname.name else {
-            bail!("{path}: unsupported import alias form");
-        };
+        let leaf = target[target.len() - 1];
         let mut new = format!(
-            "from {} import {} as {}",
+            "from {} import {}",
             target[..target.len() - 1].join("."),
-            target[target.len() - 1],
-            alias_name.value
+            leaf
         );
+        if let Some(asname) = &alias.asname {
+            let libcst_native::AssignTargetExpression::Name(alias_name) = &asname.name else {
+                bail!("{path}: unsupported import alias form");
+            };
+            new.push_str(&format!(" as {}", alias_name.value));
+        } else {
+            if name_uses(src, Lang::Python, leaf) > 0 {
+                bail!(
+                    "{path}: `import {}` would bind `{leaf}`, which the module already uses",
+                    target.join(".")
+                );
+            }
+            chains.push((target.join("."), leaf.to_string()));
+        }
         if let Some(semi) = &import.semicolon {
             new.push_str(&render(semi));
         }
         add_rewrite(&mut rewrites, render_indented(import, &indents), new);
     }
-    finish_rewrites(path, src, rewrites, "converted")
+    if rewrites.is_empty() {
+        return Ok(None);
+    }
+    let count = rewrites.iter().map(|r| r.nodes).sum();
+    let mut result = splice(path, src, rewrites)?;
+    for (chain, leaf) in &chains {
+        result = rewrite_attribute_chain(&result, Lang::Python, chain, leaf).0;
+    }
+    let tops: BTreeSet<&str> = chains
+        .iter()
+        .map(|(chain, _)| chain.split('.').next().unwrap())
+        .collect();
+    for top in tops {
+        // Imports name the package without using the binding.
+        let mut code = result.clone();
+        let owned = module_of(path, &result)?;
+        let imports = module_imports(owned.borrow_dependent());
+        for (import, _) in &imports.from_imports {
+            code = code.replace(&render(*import), "");
+        }
+        for (import, _) in &imports.plain_imports {
+            code = code.replace(&render(*import), "");
+        }
+        let left = name_uses(&code, Lang::Python, top);
+        if left > 0 {
+            bail!(
+                "{path}: {left} use(s) of `{top}` are not through a converted import; \
+                 converting it would leave them unbound"
+            );
+        }
+    }
+    if let Err(e) = cached_module(&result) {
+        bail!("{path}: converted output no longer parses: {e}");
+    }
+    Ok(Some((result, count)))
 }
 
 fn import_alias_binding<'a>(path: &str, alias: &'a ImportAlias<'_>) -> Result<&'a str> {
@@ -1071,16 +1163,32 @@ pub fn validate_marker(marker: &str) -> Result<()> {
     Ok(())
 }
 
-// Decorate every module-level `test*` function and `Test*` class with
-// `@pytest.mark.<marker>`, above any decorators it already has. Tests that
-// already carry the marker, and tests named in `exclude`, are left alone; the
-// excluded names found are added to `excluded`.
+// Which module-level tests `mark_tests_source` decorates.
+pub enum TestSelection {
+    // Every test except the named ones.
+    Exclude(BTreeSet<String>),
+    // Only the named tests.
+    Only(BTreeSet<String>),
+}
+
+impl TestSelection {
+    pub fn names(&self) -> &BTreeSet<String> {
+        match self {
+            Self::Exclude(names) | Self::Only(names) => names,
+        }
+    }
+}
+
+// Decorate the selected module-level `test*` functions and `Test*` classes
+// with `@pytest.mark.<marker>`, above any decorators they already have. Tests
+// that already carry the marker are left alone. Selection names found in the
+// module are added to `named`.
 pub fn mark_tests_source(
     path: &str,
     src: &str,
     marker: &str,
-    exclude: &BTreeSet<String>,
-    excluded: &mut BTreeSet<String>,
+    select: &TestSelection,
+    named: &mut BTreeSet<String>,
 ) -> Result<Option<(String, usize)>> {
     validate_marker(marker)?;
     let owned = parsed_module(path, src)?;
@@ -1126,8 +1234,11 @@ pub fn mark_tests_source(
             }
             _ => continue,
         };
-        if exclude.contains(name) {
-            excluded.insert(name.to_string());
+        let listed = select.names().contains(name);
+        if listed {
+            named.insert(name.to_string());
+        }
+        if listed == matches!(select, TestSelection::Exclude(_)) {
             continue;
         }
         if decorators.iter().any(|d| render(&d.decorator) == wanted) {
@@ -1198,4 +1309,174 @@ pub fn check_parses(path: &str, src: &str) -> Result<()> {
         bail!("verify: {path} does not parse as Python: {e}");
     }
     Ok(())
+}
+
+// The callables that JIT-build a C++ extension with torch.utils.cpp_extension.
+const JIT_LOADS: &[&[&str]] = &[
+    &["load"],
+    &["cpp_extension", "load"],
+    &["torch", "utils", "cpp_extension", "load"],
+];
+
+fn string_value(expr: &Expression<'_>) -> Option<String> {
+    let Expression::SimpleString(s) = expr else {
+        return None;
+    };
+    let v = s.value;
+    let q = v.chars().next()?;
+    if !matches!(q, '"' | '\'') || v.len() < 2 || !v.ends_with(q) {
+        return None;
+    }
+    Some(v[1..v.len() - 1].to_string())
+}
+
+// `var = load(name="<name>", ...)` at module level: the bound variable.
+fn jit_load_target<'a>(small: &SmallStatement<'a>, name: &str) -> Option<&'a str> {
+    let SmallStatement::Assign(assign) = small else {
+        return None;
+    };
+    let [target] = assign.targets.as_slice() else {
+        return None;
+    };
+    let AssignTargetExpression::Name(var) = &target.target else {
+        return None;
+    };
+    let Expression::Call(call) = &assign.value else {
+        return None;
+    };
+    let func = flatten_expr(&call.func)?;
+    if !JIT_LOADS.contains(&func.as_slice()) {
+        return None;
+    }
+    let named = call
+        .args
+        .iter()
+        .find(|a| a.keyword.as_ref().is_some_and(|k| k.value == "name"))
+        .or_else(|| call.args.first().filter(|a| a.keyword.is_none()))?;
+    (string_value(&named.value)? == name).then_some(var.value)
+}
+
+// The one name a module-level statement binds, when it binds exactly one.
+fn single_binding(small: &SmallStatement<'_>) -> Option<String> {
+    match small {
+        SmallStatement::Assign(assign) => {
+            let [target] = assign.targets.as_slice() else {
+                return None;
+            };
+            let AssignTargetExpression::Name(name) = &target.target else {
+                return None;
+            };
+            Some(name.value.to_string())
+        }
+        SmallStatement::Import(import) => {
+            let [alias] = import.names.as_slice() else {
+                return None;
+            };
+            import_alias_binding("", alias).ok().map(str::to_string)
+        }
+        SmallStatement::ImportFrom(import) => {
+            let ImportNames::Aliases(names) = &import.names else {
+                return None;
+            };
+            let [alias] = names.as_slice() else {
+                return None;
+            };
+            import_alias_binding("", alias).ok().map(str::to_string)
+        }
+        _ => None,
+    }
+}
+
+// Remove `stmt`, which starts at byte `at` and is alone on its lines. A blank
+// line on both sides collapses into one.
+fn remove_statement(text: &mut String, at: usize, stmt: &str) {
+    let start = line_start(text, at);
+    let mut end = at + stmt.len();
+    end = text[end..].find('\n').map_or(text.len(), |i| end + i + 1);
+    text.replace_range(start..end, "");
+    if text[..start].ends_with("\n\n") && text[start..].starts_with('\n') {
+        text.remove(start);
+    }
+}
+
+/// Replace module-level `var = torch.utils.cpp_extension.load(name="<name>",
+/// ...)` JIT builds with `import_line` (which must bind `var`, given as
+/// `{var}` in it), then remove the module-level statements that only fed
+/// the build: its source paths, flags, and the `load` import. Returns the
+/// new text, the number of builds replaced and the number of statements
+/// removed.
+pub fn replace_jit_loads(
+    path: &str,
+    src: &str,
+    name: &str,
+    import_line: &str,
+) -> Result<Option<(String, usize, usize)>> {
+    use crate::rewrite::{Lang, free_names, name_uses};
+    let owned = parsed_module(path, src)?;
+    let module = owned.borrow_dependent();
+    let mut loads = Vec::new();
+    for statement in &module.body {
+        let Statement::Simple(line) = statement else {
+            continue;
+        };
+        for small in &line.body {
+            if let Some(var) = jit_load_target(small, name) {
+                if line.body.len() > 1 {
+                    bail!("{path}: the JIT build of {name} shares a line with other statements");
+                }
+                loads.push((render(small), var.to_string()));
+            }
+        }
+    }
+    if loads.is_empty() {
+        return Ok(None);
+    }
+    let mut text = src.to_string();
+    let mut feeding = BTreeSet::new();
+    for (stmt, var) in &loads {
+        let [at] = statement_occurrences(&text, stmt)[..] else {
+            bail!("{path}: cannot locate the JIT build of {name} in the text");
+        };
+        feeding.extend(free_names(stmt, Lang::Python));
+        text.replace_range(at..at + stmt.len(), &import_line.replace("{var}", var));
+    }
+    // The variables are bound again, by the replacement imports.
+    for (_, var) in &loads {
+        feeding.remove(var);
+    }
+
+    // Drop what only the build used, until nothing more is unused.
+    let mut removed = 0;
+    loop {
+        let owned = module_of(path, &text)?;
+        let module = owned.borrow_dependent();
+        let dead = module.body.iter().find_map(|statement| {
+            let Statement::Simple(line) = statement else {
+                return None;
+            };
+            let [small] = line.body.as_slice() else {
+                return None;
+            };
+            let bound = single_binding(small)?;
+            if !feeding.contains(&bound) {
+                return None;
+            }
+            let stmt = render(small);
+            (name_uses(&text, Lang::Python, &bound) == name_uses(&stmt, Lang::Python, &bound))
+                .then_some(stmt)
+        });
+        let Some(stmt) = dead else {
+            break;
+        };
+        let [at] = statement_occurrences(&text, &stmt)[..] else {
+            bail!("{path}: cannot locate {stmt:?} in the text");
+        };
+        feeding.extend(free_names(&stmt, Lang::Python));
+        remove_statement(&mut text, at, &stmt);
+        removed += 1;
+    }
+    if let Err(e) = cached_module(&text) {
+        bail!("{path}: JIT build replacement no longer parses: {e}");
+    }
+    Ok(Some((text, loads.len(), removed)))
 }

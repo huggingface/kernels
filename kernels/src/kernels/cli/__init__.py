@@ -62,6 +62,11 @@ def main():
     api_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit; Hub only)")
     api_selection.add_argument("--version", type=int, help="The kernel version (default: latest version; Hub only)")
     describe_api_parser.add_argument("--json", action="store_true", help="Print the full symbol information as JSON")
+    describe_api_parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Allow kernels from untrusted publishers (Hub only; disabled by default)",
+    )
     describe_api_parser.set_defaults(func=kernel_api)
 
     variants_parser = subparsers.add_parser("variants", help="Show kernel build variants and compatibility decisions")
@@ -180,6 +185,7 @@ def kernel_api(args):
         revision=args.revision,
         version=args.version,
         json_output=args.json,
+        trust_remote_code=args.trust_remote_code,
     )
 
 

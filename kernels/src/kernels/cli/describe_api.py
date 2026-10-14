@@ -1,15 +1,15 @@
 import json
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import constants
+from huggingface_hub import HfApi, constants
 from huggingface_hub.errors import RemoteEntryNotFoundError
 
-from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
-from kernels.hf_hub import _get_cache_dir, _get_hf_api
-from kernels.variants import Variant, get_variants, get_variants_local, resolve_variant, variants_trace_str
+from kernels._rust import KernelDependency
+from kernels._versions import _get_available_versions, revision_or_version
+from kernels.hf_hub import _get_hf_api
+from kernels.resolver import HubCacheResolver, HubResolver, LocalKernel, RemoteKernel, resolve_local_kernel
 
 
 def print_kernel_api(
@@ -18,8 +18,9 @@ def print_kernel_api(
     revision: str | None = None,
     version: int | None = None,
     json_output: bool = False,
+    trust_remote_code: bool = False,
 ):
-    """Describe saved public symbols without downloading or importing kernel code."""
+    """Describe saved public symbols without importing kernel code."""
     try:
         if revision is not None and version is not None:
             raise ValueError("Only one of `revision` or `version` can be specified")
@@ -33,7 +34,9 @@ def print_kernel_api(
         else:
             if path.exists() or path.is_absolute() or kernel.startswith(("./", "../", "~")):
                 raise ValueError(f"Not a local kernel directory: {kernel}")
-            symbols_path, revision, variant = _hub_symbols(kernel, revision=revision, version=version)
+            symbols_path, revision, variant = _hub_symbols(
+                kernel, revision=revision, version=version, trust_remote_code=trust_remote_code
+            )
             source = {"repo_id": kernel, "revision": revision, "variant": variant}
 
         info = {**_read_symbols(symbols_path), **source}
@@ -47,70 +50,54 @@ def print_kernel_api(
         _print_human(info)
 
 
-def _find_variant_symbols(
-    variants: list[Variant], get_path: Callable[[str], Path | None], *, location: str
-) -> tuple[Path, str]:
-    variant, trace = resolve_variant(variants)
-    if variant is None:
-        raise ValueError(f"Cannot find a build variant for this system in {location}:\n\n{variants_trace_str(trace)}")
-
-    location = f"{location} (variant: {variant.variant_str})"
-    symbols_path = get_path(f"{variant.variant_str}/symbols.json")
-    if symbols_path is not None:
-        return symbols_path, variant.variant_str
+def _symbols_path(kernel: LocalKernel | RemoteKernel, *, api: HfApi, location: str) -> Path:
+    try:
+        symbols_path = kernel.get_file("symbols.json", api=api)
+    except RemoteEntryNotFoundError:
+        pass
+    else:
+        if symbols_path.is_file():
+            return symbols_path
     raise ValueError(
-        f"No symbols.json found in {location}. "
+        f"No symbols.json found in {location} (variant: {kernel.variant_str}). "
         "Rebuild the kernel with a recent kernel-builder and the get_kernel check enabled."
     )
 
 
 def _local_symbols(path: Path) -> tuple[Path, str]:
-    if (path / "symbols.json").is_file():
-        return path / "symbols.json", path.name
-
-    build_path = path / "build" if (path / "build").is_dir() else path
-
-    def get_path(filename: str) -> Path | None:
-        symbols_path = build_path / filename
-        return symbols_path if symbols_path.is_file() else None
-
-    return _find_variant_symbols(get_variants_local(build_path), get_path, location=str(path))
+    kernel = resolve_local_kernel(path, backend=None)
+    return _symbols_path(kernel, api=_get_hf_api(), location=str(path)), kernel.variant_str
 
 
-def _hub_symbols(repo_id: str, *, revision: str | None, version: int | None) -> tuple[Path, str, str]:
-    if version is not None:
-        revision = resolve_version_spec_as_ref(repo_id, version, local_files_only=constants.HF_HUB_OFFLINE).name
-    elif revision is None:
+def _hub_symbols(
+    repo_id: str, *, revision: str | None, version: int | None, trust_remote_code: bool
+) -> tuple[Path, str, str]:
+    if revision is None and version is None:
         versions = _get_available_versions(repo_id, local_files_only=constants.HF_HUB_OFFLINE)
-        version = max(versions, default=None)
-        revision = versions[version].name if version is not None else "main"
+        if not versions:
+            raise ValueError(f"No numbered versions found for {repo_id}. Specify --revision explicitly.")
+        version = max(versions)
+
+    dependency = KernelDependency(repo_id=repo_id, version=revision_or_version(revision=revision, version=version))
+    revision = f"v{version}" if version is not None else revision
+    assert revision is not None
 
     location = f"{repo_id} (revision: {revision})"
     if version is not None:
         location = f"{repo_id} (version: {version}, revision: {revision})"
 
     api = _get_hf_api()
+    resolver = (
+        HubCacheResolver(trust_remote_code=trust_remote_code)
+        if constants.HF_HUB_OFFLINE
+        else HubResolver(trust_remote_code=trust_remote_code)
+    )
     try:
-        variants = get_variants(api, repo_id=repo_id, revision=revision)
-    except RemoteEntryNotFoundError:
-        variants = []
+        kernel = resolver.resolve(api=api, backend=None, kernel=dependency)
+    except (OSError, ValueError) as error:
+        raise ValueError(f"Cannot resolve {location}: {error}") from error
 
-    def get_path(filename: str) -> Path | None:
-        try:
-            symbols_path = api.hf_hub_download(
-                repo_id,
-                repo_type="kernel",
-                filename=f"build/{filename}",
-                revision=revision,
-                cache_dir=_get_cache_dir(),
-                local_files_only=constants.HF_HUB_OFFLINE,
-            )
-        except RemoteEntryNotFoundError:
-            return None
-        return Path(symbols_path)
-
-    symbols_path, variant = _find_variant_symbols(variants, get_path, location=location)
-    return symbols_path, revision, variant
+    return _symbols_path(kernel, api=api, location=location), revision, kernel.variant_str
 
 
 def _read_symbols(path: Path) -> dict[str, Any]:

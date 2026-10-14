@@ -251,9 +251,44 @@ fn convert_unaliased_import_rewrites_its_uses() {
 }
 
 #[test]
-fn splice_refuses_string_literal_duplicates() {
-    let src = "from pkg.a import b\ns = \"from pkg.a import b\"\n";
-    assert!(python::relativize_source("f.py", src, &["pkg"]).is_err());
+fn splice_skips_imports_in_strings_and_comments() {
+    let src = "from pkg.a import b\ns = \"from pkg.a import b\"\n# from pkg.a import b\n";
+    let (out, n) = python::relativize_source("f.py", src, &["pkg"])
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(
+        out,
+        "from .a import b\ns = \"from pkg.a import b\"\n# from pkg.a import b\n"
+    );
+
+    // The einops case: a test that embeds the package import in a script.
+    let src = "import einops\n\nsrc = \"\"\"\nimport einops\nprint(einops)\n\"\"\"\n\ndef test_x():\n    import einops\n    assert einops.rearrange\n";
+    let (out, n) = python::kernelize_imports_source(
+        "t.py",
+        src,
+        "einops",
+        "einops",
+        "kernels-community/einops",
+        1,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(n, 2);
+    assert_eq!(
+        out,
+        "import kernels\neinops = kernels.get_kernel(\"kernels-community/einops\", version=1)\n\nsrc = \"\"\"\nimport einops\nprint(einops)\n\"\"\"\n\ndef test_x():\n    assert einops.rearrange\n"
+    );
+}
+
+#[test]
+fn splice_does_not_match_inside_a_from_import() {
+    // `import b` is a substring of `from a import b`, but not a statement there.
+    let src = "from pkg import b\nimport b\n";
+    let (out, n) = python::relativize_source("f.py", src, &["pkg"])
+        .unwrap()
+        .unwrap();
+    assert_eq!((out.as_str(), n), ("from . import b\nimport b\n", 1));
 }
 
 #[test]
@@ -1444,4 +1479,150 @@ fn kernel_and_torch_src_follow_includes() {
         "{toml}"
     );
     assert!(!toml.contains("unused.h"), "{toml}");
+}
+
+#[test]
+fn verify_rejects_unresolved_relative_imports() {
+    let ok = [
+        (
+            "torch-ext/pkg/__init__.py",
+            "from ._ops import ops\nfrom .sub import a\nfrom . import sub\n",
+        ),
+        (
+            "torch-ext/pkg/sub/__init__.py",
+            "from ..vend.copy import f\nfrom .. import vend\n",
+        ),
+        ("torch-ext/pkg/vend/copy.py", "from . import copy\n"),
+        ("tests/test_a.py", "from .helpers import h\n"),
+        ("tests/helpers.py", ""),
+    ];
+    let pipeline = |ws: &mut Workspace| {
+        let parsed = recipe::parse("expect in=\"**\" files=5\n").unwrap();
+        crate::run_pipeline_with(
+            ws,
+            &parsed.ops,
+            Path::new("."),
+            Path::new("."),
+            BTreeMap::new(),
+            &mut |_, _| {},
+        )
+        .map(|_| ())
+    };
+    let mut ws = ws_of(&ok);
+    pipeline(&mut ws).unwrap();
+
+    // A pruned module and a namespace package without the named submodule.
+    let mut files = ok.to_vec();
+    files[2] = (
+        "torch-ext/pkg/vend/copy.py",
+        "from ..vend.utils import g\nfrom . import rounding\n",
+    );
+    let mut ws = ws_of(&files);
+    let err = format!("{:#}", pipeline(&mut ws).unwrap_err());
+    assert!(
+        err.contains("torch-ext/pkg/vend/copy.py: from ..vend.utils import g"),
+        "{err}"
+    );
+    assert!(
+        err.contains("torch-ext/pkg/vend/copy.py: from . import rounding"),
+        "{err}"
+    );
+    assert!(!err.contains("_ops"), "{err}");
+}
+
+#[test]
+fn verify_checks_declared_signatures() {
+    let upstream = "#include <x>\nstd::tuple<at::Tensor, at::Tensor>\nmha_fwd(at::Tensor q,   // (b, s, h, d)\n        // TODO\n        std::optional<const at::Tensor> &sinks_ // (h)\n        ) {\n    run_mha_fwd(params);\n    auto r = mha_fwd(q, sinks);\n    return mha_fwd(q, sinks);\n}\n";
+    // Names and defaults may differ between a declaration and its definition.
+    let decl = "#pragma once\nstd::tuple<at::Tensor, at::Tensor> mha_fwd(\n    at::Tensor query,\n    std::optional<const at::Tensor>& sinks = std::nullopt);\n";
+    let pipeline = |ws: &mut Workspace| {
+        let parsed = recipe::parse("expect in=\"**\" files=2\n").unwrap();
+        crate::run_pipeline_with(
+            ws,
+            &parsed.ops,
+            Path::new("."),
+            Path::new("."),
+            BTreeMap::new(),
+            &mut |_, _| {},
+        )
+        .map(|_| ())
+    };
+    let mut ws = ws_of(&[("csrc/api.cpp", upstream), ("torch-ext/b.h", decl)]);
+    pipeline(&mut ws).unwrap();
+
+    let changed = upstream.replace(
+        "&sinks_ // (h)\n",
+        "&sinks_, // (h)\n        bool only_qv\n",
+    );
+    let mut ws = ws_of(&[("csrc/api.cpp", changed.as_str()), ("torch-ext/b.h", decl)]);
+    let err = format!("{:#}", pipeline(&mut ws).unwrap_err());
+    assert!(
+        err.contains("torch-ext/b.h: mha_fwd(at::Tensor query,std::optional<const at::Tensor>&sinks=std::nullopt)")
+            && err.contains(
+                "defined in csrc/api.cpp: mha_fwd(at::Tensor q,std::optional<const at::Tensor>&sinks_,bool only_qv)"
+            )
+            && err.contains("parameter 3: declared nothing, defined `bool`"),
+        "{err}"
+    );
+
+    // A declaration nothing in the port defines.
+    let mut ws = ws_of(&[
+        ("csrc/api.cpp", "int other() { return 0; }\n"),
+        ("torch-ext/b.h", decl),
+    ]);
+    let err = format!("{:#}", pipeline(&mut ws).unwrap_err());
+    assert!(err.contains("has no definition in the port"), "{err}");
+
+    // An overload set passes when one definition matches.
+    let overloads = format!("{upstream}void mha_fwd(int x) {{}}\n");
+    let mut ws = ws_of(&[
+        ("csrc/api.cpp", overloads.as_str()),
+        ("torch-ext/b.h", decl),
+    ]);
+    pipeline(&mut ws).unwrap();
+}
+
+#[test]
+fn signature_types_drop_names_and_defaults() {
+    let sig = |params: &str| crate::rewrite::Signature {
+        name: "f".into(),
+        params: params.into(),
+        definition: false,
+    };
+    assert_eq!(
+        sig(
+            "torch::Tensor const&w,bool is_int4,int64_t n=3,std::map<int, int>m,unsigned int,float"
+        )
+        .types(),
+        [
+            "torch::Tensor const&",
+            "bool",
+            "int64_t",
+            "std::map<int, int>",
+            "unsigned int",
+            "float"
+        ]
+    );
+}
+
+#[test]
+fn expect_blob_pins_an_upstream_file() {
+    // `printf 'hello\n' | git hash-object --stdin`
+    let id = "ce013625030ba8dba906f756967f9e9ca394464a";
+    assert_eq!(crate::ops::expect::git_blob_id(b"hello\n"), id);
+    let recipe = format!("expect in=\"csrc/*.cu\" blob=\"{id}\"\n");
+    let mut ws = ws_of(&[("csrc/a.cu", "hello\n")]);
+    run_recipe(&mut ws, &recipe);
+
+    let mut ws = ws_of(&[("csrc/a.cu", "hello!\n")]);
+    let err = run_recipe_err(&mut ws, &recipe);
+    assert!(
+        err.contains("csrc/a.cu is no longer the upstream file")
+            && err.contains(&format!("`git diff {id} ")),
+        "{err}"
+    );
+
+    let mut ws = ws_of(&[("csrc/a.cu", "hello\n"), ("csrc/b.cu", "hello\n")]);
+    let err = run_recipe_err(&mut ws, &recipe);
+    assert!(err.contains("match exactly one file, found 2"), "{err}");
 }

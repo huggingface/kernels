@@ -2,7 +2,7 @@ mod convert_import;
 mod delete;
 mod ensure_import;
 mod ensure_init;
-mod expect;
+pub(crate) mod expect;
 mod extension;
 mod git;
 mod kernel;

@@ -1,3 +1,4 @@
+pub(crate) mod cpp;
 pub mod ops;
 pub(crate) mod python;
 pub mod recipe;

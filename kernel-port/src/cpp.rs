@@ -143,3 +143,79 @@ pub(crate) fn fix_includes(
     }
     (updates, count)
 }
+
+/// Every `#include` target in `text`, with whether it is quoted.
+fn includes(text: &str) -> Vec<(&str, bool)> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let rest = line.trim_start_matches([' ', '\t']);
+        let Some(r) = rest.strip_prefix('#') else {
+            continue;
+        };
+        let Some(r) = r.trim_start_matches([' ', '\t']).strip_prefix("include") else {
+            continue;
+        };
+        let r = r.trim_start_matches([' ', '\t']);
+        let (close, quoted) = match r.as_bytes().first() {
+            Some(b'"') => ('"', true),
+            Some(b'<') => ('>', false),
+            _ => continue,
+        };
+        if let Some(end) = r[1..].find(close) {
+            out.push((&r[1..=end], quoted));
+        }
+    }
+    out
+}
+
+// `dir`/`include`, normalized; None when it climbs above the root.
+fn join(dir: &str, include: &str) -> Option<String> {
+    let mut parts: Vec<&str> = dir
+        .split('/')
+        .filter(|s| !s.is_empty() && *s != ".")
+        .collect();
+    for seg in include.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            s => parts.push(s),
+        }
+    }
+    Some(parts.join("/"))
+}
+
+/// The files reachable from `roots` through `#include`s, roots included. A
+/// quoted include is looked up next to the including file and then in
+/// `include_dirs`, an angle-bracket include only in `include_dirs`, the way
+/// a compiler searches them. Includes that name no file in `files` (system
+/// and dependency headers) are skipped. Conditional compilation is not
+/// evaluated, so this can only over-approximate.
+pub(crate) fn include_closure<'a>(
+    files: &BTreeMap<String, Vec<u8>>,
+    roots: impl IntoIterator<Item = &'a String>,
+    include_dirs: &[String],
+) -> std::collections::BTreeSet<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack: Vec<String> = roots.into_iter().cloned().collect();
+    while let Some(path) = stack.pop() {
+        if !seen.insert(path.clone()) || !is_source(&path) {
+            continue;
+        }
+        let Some(text) = files.get(&path).and_then(|b| std::str::from_utf8(b).ok()) else {
+            continue;
+        };
+        for (include, quoted) in includes(text) {
+            let local = quoted.then(|| join(dir_of(&path), include)).flatten();
+            let found = local
+                .into_iter()
+                .chain(include_dirs.iter().filter_map(|d| join(d, include)))
+                .find(|p| files.contains_key(p));
+            if let Some(found) = found {
+                stack.push(found);
+            }
+        }
+    }
+    seen
+}

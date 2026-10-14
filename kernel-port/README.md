@@ -632,12 +632,19 @@ extension sources="csrc/build_k2q_csr.cu" modules="sparse_build_k2q_csr_ext" cha
 kernel name="<id>" backend="<cuda|rocm|cpu|metal|xpu|...>" src="<glob>[,<glob>...]"
     [include="<dir>,..."] [depends="torch,..."] [capabilities="8.0,9.0"]
     [cxx_flags="..."] [cuda_flags="..."] [cuda_minver="12.8"]
-    [rocm_archs="gfx942,..."] [repeat_src="<path>,..."]
+    [rocm_archs="gfx942,..."] [repeat_src="<path>,..."] [follow_includes=#true]
 ```
 
 Record one `[kernel.<name>]` section for the manifest. It writes no files; the `manifest` op emits everything recorded before it. One `kernel` per backend, and the `src` globs are resolved when the op runs, so a source file added upstream inside an already-matched directory is picked up (and one added outside it is not - that is what `expect ... files=N` is for).
 
 `depends` defaults to `torch`. `repeat_src` lists paths that must be compiled twice, and each must already be selected by `src`.
+
+With `follow_includes=#true`, `src` only needs to name the compilation units: every file they reach through `#include`s is added. A quoted include is looked up next to the including file and then in the `include` directories, an angle-bracket include only in the `include` directories, the way the compiler searches them; includes that name no file in the tree (system and dependency headers) are skipped. Conditional compilation is not evaluated, so the result can only include too much, never too little. This keeps hand-written header lists from drifting: a header upstream starts including is picked up, and one it stops including is dropped.
+
+```kdl
+kernel name="fa_sm90" backend="cuda" src="hopper/instantiations/*_sm90.cu" \
+    include="hopper" follow_includes=#true capabilities="9.0a"
+```
 
 #### `manifest`
 
@@ -646,7 +653,7 @@ manifest name="<id>" backends="<b>[,<b>...]" torch_src="<glob>[,<glob>...]"
     [version=N] [edition=N] [license="..."] [upstream="..."]
     [repo_id="org/name"] [hub_branch="..."] [python_depends="..."]
     [cuda_minver="..."] [cuda_maxver="..."] [cuda_python_depends="..."]
-    [torch_pyext="py,pyi,..."] [torch_include="<dir>,..."]
+    [torch_pyext="py,pyi,..."] [torch_include="<dir>,..."] [torch_follow_includes=#true]
     [stable_abi="cuda=2.11,..."] [stable_abi_version="2.11"]
 
 manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
@@ -654,7 +661,7 @@ manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
 
 Generate `build.toml` from the `kernel` sections recorded before it, plus the `[general]` and `[torch]` settings given here. The manifest is always generated, never overlaid: if it needs a field this op cannot emit, extend the op.
 
-`torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
+`torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `torch_follow_includes=#true` adds the files they `#include`, as `follow_includes` does for a `kernel`. `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
 
 ```sh
 kernel-port --file 'hello-kernel/k.cu=// kernel' --file 'torch-ext/binding.cpp=// binding' \

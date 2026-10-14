@@ -189,6 +189,16 @@ impl Workspace {
         crate::cpp::fix_includes(&self.files, before, moves)
     }
 
+    /// The files reachable from `roots` through `#include`s; see
+    /// `cpp::include_closure`.
+    pub fn include_closure<'a>(
+        &self,
+        roots: impl IntoIterator<Item = &'a String>,
+        include_dirs: &[String],
+    ) -> std::collections::BTreeSet<String> {
+        crate::cpp::include_closure(&self.files, roots, include_dirs)
+    }
+
     pub fn changes(&self) -> ChangeSet {
         let mut added = Vec::new();
         let mut modified = Vec::new();

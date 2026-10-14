@@ -1389,3 +1389,59 @@ fn extension_replaces_a_jit_build() {
         "import os\n\nD = os.path.dirname(__file__)\nfrom ._ops import ops as _ext\nprint(D)\n"
     );
 }
+
+#[test]
+fn kernel_and_torch_src_follow_includes() {
+    let mut ws = ws_of(&[
+        // Quoted: next to the includer first, then the include directories.
+        (
+            "k/inst/a.cu",
+            "#include \"launch.h\"\n#include \"local.h\"\n#include <cutlass/cutlass.h>\n",
+        ),
+        ("k/inst/local.h", "#pragma once\n"),
+        (
+            "k/launch.h",
+            "#include <util/shared.h>\n#include \"../common.h\"\n",
+        ),
+        ("k/unused.h", ""),
+        ("common.h", ""),
+        // Angle brackets: only the include directories.
+        ("util/shared.h", "#  include \"deep.hpp\"\n"),
+        ("util/deep.hpp", ""),
+        ("torch-ext/binding.cpp", "#include \"../k/launch.h\"\n"),
+    ]);
+    run_recipe(
+        &mut ws,
+        concat!(
+            "kernel name=\"k\" backend=\"cuda\" src=\"k/inst/*.cu\" include=\"k,.\" follow_includes=#true\n",
+            "manifest name=\"k\" backends=\"cuda\" torch_src=\"torch-ext/*.cpp\" torch_include=\".\" torch_follow_includes=#true\n",
+        ),
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(
+        toml.contains(concat!(
+            "src = [\n",
+            "    \"common.h\",\n",
+            "    \"k/inst/a.cu\",\n",
+            "    \"k/inst/local.h\",\n",
+            "    \"k/launch.h\",\n",
+            "    \"util/deep.hpp\",\n",
+            "    \"util/shared.h\",\n",
+            "]"
+        )),
+        "{toml}"
+    );
+    assert!(
+        toml.contains(concat!(
+            "src = [\n",
+            "    \"common.h\",\n",
+            "    \"k/launch.h\",\n",
+            "    \"torch-ext/binding.cpp\",\n",
+            "    \"util/deep.hpp\",\n",
+            "    \"util/shared.h\",\n",
+            "]"
+        )),
+        "{toml}"
+    );
+    assert!(!toml.contains("unused.h"), "{toml}");
+}

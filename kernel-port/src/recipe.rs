@@ -47,6 +47,17 @@ impl Args<'_> {
         }
     }
 
+    pub fn take_bool(&mut self, key: &str) -> Result<bool> {
+        match self.map.remove(key).as_deref() {
+            None | Some("false") => Ok(false),
+            Some("true") => Ok(true),
+            Some(other) => bail!(
+                "argument {key} of op {:?} must be #true or #false, got {other:?}",
+                self.op
+            ),
+        }
+    }
+
     pub fn finish(self) -> Result<()> {
         if let Some(key) = self.map.keys().next() {
             bail!("op {:?} does not take an argument named {key:?}", self.op);

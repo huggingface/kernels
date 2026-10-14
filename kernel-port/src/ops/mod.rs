@@ -14,6 +14,7 @@ mod prune;
 mod relativize_imports;
 mod remap_module;
 mod replace;
+mod rewrite;
 mod source;
 mod strip_suffix;
 mod vendor;
@@ -33,6 +34,7 @@ pub use prune::Prune;
 pub use relativize_imports::RelativizeImports;
 pub use remap_module::RemapModule;
 pub use replace::Replace;
+pub use rewrite::Rewrite;
 pub use source::Source;
 pub use strip_suffix::StripSuffix;
 pub use vendor::Vendor;
@@ -288,6 +290,7 @@ pub enum Op {
     Delete(Delete),
     Move(Move),
     Replace(Replace),
+    Rewrite(Rewrite),
     StripSuffix(StripSuffix),
     Expect(Expect),
     Overlay(Overlay),
@@ -311,6 +314,7 @@ pub fn build(inv: &Invocation, recipe_dir: &Path) -> Result<Op> {
         "delete" => Op::Delete(Delete::build(&mut args)?),
         "move" => Op::Move(Move::build(&mut args)?),
         "replace" => Op::Replace(Replace::build(&mut args)?),
+        "rewrite" => Op::Rewrite(Rewrite::build(&mut args)?),
         "strip_suffix" => Op::StripSuffix(StripSuffix::build(&mut args)?),
         "expect" => Op::Expect(Expect::build(&mut args)?),
         "overlay" => Op::Overlay(Overlay::build(&mut args, recipe_dir)?),
@@ -338,6 +342,7 @@ impl Op {
             Self::Delete(op) => op.apply(ws),
             Self::Move(op) => op.apply(ws, facts),
             Self::Replace(op) => op.apply(ws),
+            Self::Rewrite(op) => op.apply(ws),
             Self::StripSuffix(op) => op.apply(ws),
             Self::Expect(op) => op.apply(ws),
             Self::Overlay(op) => op.apply(ws),

@@ -2,6 +2,7 @@ pub(crate) mod cpp;
 pub mod ops;
 pub(crate) mod python;
 pub mod recipe;
+pub(crate) mod rewrite;
 #[cfg(test)]
 mod tests;
 pub mod workspace;

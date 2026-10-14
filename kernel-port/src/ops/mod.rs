@@ -3,6 +3,7 @@ mod delete;
 mod ensure_import;
 mod ensure_init;
 mod expect;
+mod extension;
 mod git;
 mod kernel;
 mod kernelize_imports;
@@ -24,6 +25,7 @@ pub use delete::Delete;
 pub use ensure_import::EnsureImport;
 pub use ensure_init::EnsureInit;
 pub use expect::Expect;
+pub use extension::Extension;
 pub use kernel::Kernel;
 pub use kernelize_imports::KernelizeImports;
 pub use manifest::Manifest;
@@ -293,6 +295,7 @@ pub enum Op {
     Rewrite(Rewrite),
     StripSuffix(StripSuffix),
     Expect(Expect),
+    Extension(Extension),
     Overlay(Overlay),
     Prune(Prune),
     Kernel(Kernel),
@@ -317,6 +320,7 @@ pub fn build(inv: &Invocation, recipe_dir: &Path) -> Result<Op> {
         "rewrite" => Op::Rewrite(Rewrite::build(&mut args)?),
         "strip_suffix" => Op::StripSuffix(StripSuffix::build(&mut args)?),
         "expect" => Op::Expect(Expect::build(&mut args)?),
+        "extension" => Op::Extension(Extension::build(&mut args)?),
         "overlay" => Op::Overlay(Overlay::build(&mut args, recipe_dir)?),
         "prune" => Op::Prune(Prune::build(&mut args)?),
         "kernel" => Op::Kernel(Kernel::build(&mut args)?),
@@ -345,6 +349,7 @@ impl Op {
             Self::Rewrite(op) => op.apply(ws),
             Self::StripSuffix(op) => op.apply(ws),
             Self::Expect(op) => op.apply(ws),
+            Self::Extension(op) => op.apply(ws),
             Self::Overlay(op) => op.apply(ws),
             Self::Prune(op) => op.apply(ws),
             Self::Kernel(op) => op.apply(ws, facts),

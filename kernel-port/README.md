@@ -88,6 +88,7 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`ensure_import`](#ensure_import) | Ensure a module has an explicit top-level `from` import |
 | [`mark_tests`](#mark_tests) | Add a pytest marker (e.g. a CI subset) to every module-level test |
 | [`ensure_init`](#ensure_init) | Add an empty `__init__.py` to any package dir missing one |
+| [`extension`](#extension) | Convert an upstream native extension (pybind module, fixed Torch op namespace) to kernel-builder's, from a declaration of what it is |
 | [`kernel`](#kernel) | Record one `[kernel.<name>]` section for the manifest |
 | [`manifest`](#manifest) | Generate `build.toml` from the recorded kernel sections (or noarch mode) |
 
@@ -388,6 +389,8 @@ convert_import in="<glob>" prefix="<dotted.path>" [changes=N]
 
 Rewrite `import a.b.c as x` into `from a.b import c as x`, for modules under `prefix`. The `from` form is what the later ops can relativize; the `import` form cannot be made relative at all.
 
+An unaliased `import a.b.c` binds `a` and is used as `a.b.c.attr`; it becomes `from a.b import c`, and those uses become `c.attr`. That is refused when the module uses `a` any other way, or already uses the name `c`.
+
 ```sh
 kernel-port -e 'convert_import in="**/*.py" prefix="pkg" changes=1' \
     --file $'m.py=import pkg.ops as ops\nimport os'
@@ -410,7 +413,7 @@ import os
 remap_module in="<glob>" from="<dotted.path>" to="<dotted.path>" [changes=N]
 ```
 
-Move a module prefix onto a new namespace. Prefix matching is boundary-aware, so `from="pkg.utils"` does not touch `pkg.utils_extra`.
+Move a module prefix onto a new namespace, in `from` imports and in aliased `import pkg.mod as m` imports. Prefix matching is boundary-aware, so `from="pkg.utils"` does not touch `pkg.utils_extra`. An unaliased `import pkg.mod` binds `pkg`, so remapping it would change what the code refers to; it is an error.
 
 ```sh
 kernel-port -e 'remap_module in="**/*.py" from="pkg" to="torch_ext.pkg" changes=2' \
@@ -560,13 +563,13 @@ Fails when: nothing exists under `under`.
 #### `mark_tests`
 
 ```kdl
-mark_tests in="<glob>" marker="<name>" [exclude="<test>,..."] [changes=N]
+mark_tests in="<glob>" marker="<name>" [exclude="<test>,..." | only="<test>,..."] [changes=N]
 ```
 
 Decorate every module-level `test*` function and `Test*` class with
 `@pytest.mark.<marker>`, above any existing decorators. Meant for the tests CI
-should run (e.g. `kernels_ci`); narrow `in` or name tests in `exclude` to leave
-others out. Already-marked tests are left alone; `changes` pins the count, so
+should run (e.g. `kernels_ci`); narrow `in`, name tests in `exclude` to leave
+them out, or name the only tests to mark in `only`. Already-marked tests are left alone; `changes` pins the count, so
 new upstream tests aren't marked unreviewed.
 
 ```sh
@@ -589,9 +592,39 @@ def test_b(x):
     pass
 ```
 
-Fails when: a file that has tests to mark has no module-level `import pytest`, or an `exclude` name matches no test.
+Fails when: a file that has tests to mark has no module-level `import pytest`, an `exclude` or `only` name matches no test, or both are given.
 
 ### Generating the manifest
+
+#### `extension`
+
+```kdl
+extension [sources="<glob>"] [namespace="<ns>"] [modules="<module>,..."] \
+    [python="<glob>"] changes=N
+```
+
+Declare what the upstream's native extension is, and derive the conversion every kernel-builder port of it needs, instead of spelling the edits out per recipe.
+
+In the C++ `sources`:
+
+- `PYBIND11_MODULE` blocks and pybind11 includes are removed; ops are registered through `TORCH_LIBRARY` in the kernel's bindings instead.
+- `torch/extension.h` and `torch/python.h` become `torch/all.h` (or are dropped if it is already included).
+- With `namespace`, `[STABLE_]TORCH_LIBRARY[_IMPL|_FRAGMENT](<ns>, ...)` become their `_EXPAND(TORCH_EXTENSION_NAME, ...)` forms, so the ops register under the kernel-unique namespace, and `registration.h` is included relative to the file.
+
+In the Python package (`python`, default `torch-ext/**/*.py`):
+
+- `import <module>` for each of `modules` is redirected to the kernel's ops: `from ._ops import ops as <module>` when the module is used as an object (`attn_cuda.fwd(...)`), or `from . import _ops` when it is only imported to register ops.
+- A module built at import time instead, `<var> = torch.utils.cpp_extension.load(name="<module>", ...)` at module level, becomes `from ._ops import ops as <var>`. The module-level statements that only fed the build (source paths, compiler flags, the `load` import) are removed with it.
+- With `namespace`, `torch.ops.<ns>` becomes `ops`, and `"<ns>::name"` op names (as passed to `torch.library.custom_op`, `register_fake` and friends) become `add_op_namespace_prefix("name")`. The `._ops` import is added after the module's leading imports.
+
+`changes` pins the total number of edits; the run reports them by kind. Anything it cannot convert is an error rather than left behind: pybind11 still in use after the conversion (a binding that is more than a module of `m.def` calls), a `from <module> import ...`, a dotted module used as an object, or an op schema string that still names the namespace.
+
+```kdl
+extension sources="csrc/*.cu" modules="fp4attn_cuda,fp4quant_cuda" changes=6
+extension sources="hopper/flash_api_stable.cpp" namespace="flash_attn_3" \
+    modules="flash_attn_3._C" changes=9
+extension sources="csrc/build_k2q_csr.cu" modules="sparse_build_k2q_csr_ext" changes=9
+```
 
 #### `kernel`
 

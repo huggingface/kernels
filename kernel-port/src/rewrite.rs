@@ -525,3 +525,113 @@ fn next_unit(src: &[u8], lx: &Lexed, q: usize, limit: Option<usize>) -> Option<u
         _ => Some(q + 1),
     }
 }
+
+/// Attribute accesses through `name` in code (`name.attr`): whole word,
+/// outside strings and comments, and not itself an attribute (`x.name.attr`).
+pub(crate) fn attribute_uses(text: &str, lang: Lang, name: &str) -> usize {
+    let src = text.as_bytes();
+    let lx = lex(src, lang);
+    let pat = name.as_bytes();
+    let mut n = 0;
+    let mut i = 0;
+    while let Some(off) = src[i..].windows(pat.len()).position(|w| w == pat) {
+        let s = i + off;
+        let e = s + pat.len();
+        let before_ok = s == 0 || !(is_ident(src[s - 1]) || src[s - 1] == b'.');
+        let rest = &src[e..];
+        let ws = rest
+            .iter()
+            .take_while(|b| **b == b' ' || **b == b'\t')
+            .count();
+        if before_ok && rest.get(ws) == Some(&b'.') && lx.atom_at[s].is_none() {
+            n += 1;
+        }
+        i = s + 1;
+    }
+    n
+}
+
+// Whole-word occurrences of `name` in code that are not themselves attributes
+// (`x.name`), as (start, end) byte ranges.
+fn free_occurrences(src: &[u8], lx: &Lexed, name: &str) -> Vec<(usize, usize)> {
+    let pat = name.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while let Some(off) = src[i..].windows(pat.len()).position(|w| w == pat) {
+        let s = i + off;
+        let e = s + pat.len();
+        let before_ok = s == 0 || !(is_ident(src[s - 1]) || src[s - 1] == b'.');
+        let after_ok = e == src.len() || !is_ident(src[e]);
+        if before_ok && after_ok && lx.atom_at[s].is_none() {
+            out.push((s, e));
+        }
+        i = s + 1;
+    }
+    out
+}
+
+/// Uses of `name` as a free name in code: whole word, outside strings and
+/// comments, and not an attribute of something else.
+pub(crate) fn name_uses(text: &str, lang: Lang, name: &str) -> usize {
+    let src = text.as_bytes();
+    free_occurrences(src, &lex(src, lang), name).len()
+}
+
+/// Replace attribute accesses through the dotted `chain` (`a.b.c.attr`) with
+/// accesses through `with` (`with.attr`). `chain` must start as a free name
+/// and be followed by an attribute access; whitespace inside it is not
+/// matched. Returns the new text and the number of replacements.
+pub(crate) fn rewrite_attribute_chain(
+    text: &str,
+    lang: Lang,
+    chain: &str,
+    with: &str,
+) -> (String, usize) {
+    let src = text.as_bytes();
+    let lx = lex(src, lang);
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    let mut n = 0;
+    for (s, _) in free_occurrences(src, &lx, chain.split('.').next().unwrap_or(chain)) {
+        let e = s + chain.len();
+        if s < last || !text[s..].starts_with(chain) || (e < src.len() && is_ident(src[e])) {
+            continue;
+        }
+        let ws = src[e..]
+            .iter()
+            .take_while(|b| **b == b' ' || **b == b'\t')
+            .count();
+        if src.get(e + ws) != Some(&b'.') {
+            continue;
+        }
+        out.push_str(&text[last..s]);
+        out.push_str(with);
+        last = e;
+        n += 1;
+    }
+    out.push_str(&text[last..]);
+    (out, n)
+}
+
+/// The identifiers used as free names in code: outside strings and comments,
+/// and not attributes of something else.
+pub(crate) fn free_names(text: &str, lang: Lang) -> std::collections::BTreeSet<String> {
+    let src = text.as_bytes();
+    let lx = lex(src, lang);
+    let mut out = std::collections::BTreeSet::new();
+    let mut i = 0;
+    while i < src.len() {
+        if lx.atom_at[i].is_some() || !is_ident(src[i]) {
+            i += 1;
+            continue;
+        }
+        let s = i;
+        while i < src.len() && is_ident(src[i]) {
+            i += 1;
+        }
+        if !src[s].is_ascii_digit() && (s == 0 || src[s - 1] != b'.') {
+            out.insert(text[s..i].to_string());
+        }
+    }
+    out
+}

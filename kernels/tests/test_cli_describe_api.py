@@ -1,5 +1,6 @@
 import json
 import sys
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -7,11 +8,28 @@ import httpx
 import pytest
 from huggingface_hub.errors import RemoteEntryNotFoundError
 from huggingface_hub.hf_api import GitRefInfo
+from packaging.version import Version
 
+from kernels.backends import CUDA
 from kernels.cli import describe_api, main
-from kernels.variants import parse_variant
+from kernels.variants import _resolve_variant_for_system, parse_variant
 
 REPO_ID = "kernels-community/example"
+PREFERRED = "torch210-cu128-x86_64-linux"
+
+
+@pytest.fixture(autouse=True)
+def cuda_system(monkeypatch):
+    resolve = partial(
+        _resolve_variant_for_system,
+        selected_backend=CUDA(Version("12.8")),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.10"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+    monkeypatch.setattr("kernels.variants.resolve_variants", lambda variants, backend: resolve(variants=variants))
 
 
 @pytest.fixture
@@ -110,6 +128,47 @@ def test_json_preserves_symbol_data(monkeypatch, local_kernel, symbols, capsys):
     assert json.loads(capsys.readouterr().out) == {**symbols, "path": str(local_kernel), "variant": "torch-cuda"}
 
 
+@pytest.mark.parametrize("source", ["local", "hub"])
+@pytest.mark.parametrize(
+    "variant_names, expected",
+    [
+        (["torch-cpu", "torch-cuda"], "torch-cuda"),
+        (
+            ["torch-cuda", "torch210-cu128-aarch64-linux", "torch29-cu128-x86_64-linux", PREFERRED],
+            PREFERRED,
+        ),
+        (["torch-cuda", "torch210-cu126-x86_64-linux", PREFERRED], PREFERRED),
+    ],
+)
+def test_selects_system_variant(monkeypatch, local_kernel, hub, symbols, capsys, source, variant_names, expected):
+    for name in variant_names:
+        variant_path = local_kernel / "build" / name
+        variant_path.mkdir(exist_ok=True)
+        (variant_path / "symbols.json").write_text(json.dumps({**symbols, "module": name}))
+        (variant_path / "__init__.py").write_text("raise RuntimeError('Kernel code must not be imported')")
+
+    api, variants = hub
+    variants.return_value = [parse_variant(name) for name in variant_names]
+    api.hf_hub_download.side_effect = lambda repo_id, filename, **kwargs: str(local_kernel / filename)
+    run_cli(monkeypatch, str(local_kernel) if source == "local" else REPO_ID, "--json")
+    info = json.loads(capsys.readouterr().out)
+    assert info["variant"] == expected
+    assert info["module"] == expected
+    if source == "hub":
+        api.hf_hub_download.assert_called_once()
+        assert api.hf_hub_download.call_args.kwargs["filename"] == f"build/{expected}/symbols.json"
+    else:
+        api.hf_hub_download.assert_not_called()
+
+
+def test_explicit_local_variant(monkeypatch, tmp_path, symbols, capsys):
+    variant_path = tmp_path / "torch-cpu"
+    variant_path.mkdir()
+    (variant_path / "symbols.json").write_text(json.dumps(symbols))
+    run_cli(monkeypatch, str(variant_path), "--json")
+    assert json.loads(capsys.readouterr().out)["variant"] == "torch-cpu"
+
+
 @pytest.mark.parametrize("selection, revision", [([], "v10"), (["--version", "0"], "v0"), (["--version", "2"], "v2")])
 def test_hub_version_selection(monkeypatch, hub, symbols, local_kernel, capsys, selection, revision):
     api, variants = hub
@@ -170,27 +229,27 @@ def test_hub_missing_symbols_does_not_try_another_variant(
     monkeypatch, hub, capsys, missing_entry, selection, revision, context
 ):
     api, variants = hub
-    variants.return_value = [parse_variant("torch-xpu"), parse_variant("torch-cuda")]
+    variants.return_value = [parse_variant("torch-cuda"), parse_variant(PREFERRED)]
     api.hf_hub_download.side_effect = [missing_entry, api.hf_hub_download.return_value]
     with pytest.raises(SystemExit, match="1"):
         run_cli(monkeypatch, REPO_ID, *selection)
     output = capsys.readouterr()
     assert output.out == ""
-    assert output.err.startswith(f"Error: No symbols.json found in {REPO_ID} ({context}) (variant: torch-cuda).")
+    assert output.err.startswith(f"Error: No symbols.json found in {REPO_ID} ({context}) (variant: {PREFERRED}).")
     api.hf_hub_download.assert_called_once()
-    assert api.hf_hub_download.call_args.kwargs["filename"] == "build/torch-cuda/symbols.json"
+    assert api.hf_hub_download.call_args.kwargs["filename"] == f"build/{PREFERRED}/symbols.json"
     assert api.hf_hub_download.call_args.kwargs["revision"] == revision
 
 
 @pytest.mark.parametrize("suffix", ["", "build"])
 def test_local_missing_symbols_does_not_try_another_variant(monkeypatch, local_kernel, capsys, suffix):
-    (local_kernel / "build" / "torch-cpu").mkdir()
+    (local_kernel / "build" / PREFERRED).mkdir()
     with pytest.raises(SystemExit, match="1"):
         run_cli(monkeypatch, str(local_kernel / suffix))
     output = capsys.readouterr()
     assert output.out == ""
     assert "No symbols.json found" in output.err
-    assert "variant: torch-cpu" in output.err
+    assert f"variant: {PREFERRED}" in output.err
 
 
 def test_hub_errors_are_not_treated_as_missing_symbols(monkeypatch, hub, capsys):
@@ -214,9 +273,29 @@ def test_mutually_exclusive_options(monkeypatch, capsys):
 
 
 def test_missing_local_symbols(monkeypatch, tmp_path, capsys):
+    (tmp_path / "build" / "torch-cuda").mkdir(parents=True)
     with pytest.raises(SystemExit, match="1"):
         run_cli(monkeypatch, str(tmp_path))
     assert "No symbols.json found" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("source", ["local", "hub", "hub-missing-build"])
+def test_no_build_variants(monkeypatch, tmp_path, hub, missing_entry, capsys, source):
+    api, variants = hub
+    if source == "hub-missing-build":
+        variants.side_effect = missing_entry
+    else:
+        variants.return_value = []
+    path = tmp_path / "empty"
+    path.mkdir()
+    with pytest.raises(SystemExit, match="1"):
+        run_cli(monkeypatch, str(path) if source == "local" else REPO_ID)
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "Cannot find a build variant for this system" in output.err
+    api.hf_hub_download.assert_not_called()
+    if source != "local":
+        assert f"{REPO_ID} (version: 10, revision: v10)" in output.err
 
 
 def test_missing_local_directory(monkeypatch, tmp_path, capsys):

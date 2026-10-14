@@ -9,7 +9,7 @@ from huggingface_hub.errors import RemoteEntryNotFoundError
 
 from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
 from kernels.hf_hub import _get_cache_dir, _get_hf_api
-from kernels.variants import Variant, get_variants, get_variants_local
+from kernels.variants import Variant, get_variants, get_variants_local, resolve_variant, variants_trace_str
 
 
 def print_kernel_api(
@@ -50,12 +50,14 @@ def print_kernel_api(
 def _find_variant_symbols(
     variants: list[Variant], get_path: Callable[[str], Path | None], *, location: str
 ) -> tuple[Path, str]:
-    variant = min((v.variant_str for v in variants), default=None)
-    if variant is not None:
-        location = f"{location} (variant: {variant})"
-        symbols_path = get_path(f"{variant}/symbols.json")
-        if symbols_path is not None:
-            return symbols_path, variant
+    variant, trace = resolve_variant(variants)
+    if variant is None:
+        raise ValueError(f"Cannot find a build variant for this system in {location}:\n\n{variants_trace_str(trace)}")
+
+    location = f"{location} (variant: {variant.variant_str})"
+    symbols_path = get_path(f"{variant.variant_str}/symbols.json")
+    if symbols_path is not None:
+        return symbols_path, variant.variant_str
     raise ValueError(
         f"No symbols.json found in {location}. "
         "Rebuild the kernel with a recent kernel-builder and the get_kernel check enabled."

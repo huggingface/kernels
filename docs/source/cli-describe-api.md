@@ -2,8 +2,7 @@
 
 Use `kernels describe-api` to list a kernel's public functions and layers from
 the `symbols.json` generated at build time. It reads the symbol file without
-importing the kernel or downloading its code, so a compatible GPU and the
-kernel's dependencies are not required.
+importing the kernel or downloading its code.
 
 ## Usage
 
@@ -24,9 +23,6 @@ Options:
 - `--json`: print the full symbol data, including signatures, docstrings, layer
   attributes, and the selected source and variant, as JSON.
 
-The command selects the first build variant in alphabetical order. If its
-`symbols.json` is missing, it exits with an error; it does not try another
-variant or version.
 
 ## Examples
 

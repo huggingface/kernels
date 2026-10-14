@@ -61,13 +61,17 @@ class Inner(nn.Module):
 # To check nested modules
 @use_kernelized_func(surprise_me)
 class Outer(nn.Module):
-    def __init__(self):
+    def __init__(self, num_inner=1):
         super().__init__()
-        self.inner = Inner()
+        self.inner = nn.ModuleList([Inner() for _ in range(num_inner)])
 
     def forward(self, x):
-        # The second call also verifies that Inner restored the outer context.
-        return surprise_me(self.inner(surprise_me(x)))
+        x = surprise_me(x)
+        for inner in self.inner:
+            x = inner(x)
+
+        # Also verifies that Inner restored the outer context
+        return surprise_me(x)
 
 
 def test_decorator():
@@ -292,7 +296,8 @@ def test_kernel_func_nested_dispatch(compile):
     model = Outer()
 
     _bind_forward(model._kernel_funcs["surprise_me"], AddOne.forward)
-    _bind_forward(model.inner._kernel_funcs["double_me"], TimesThree.forward)
+    for inner in model.inner:
+        _bind_forward(inner._kernel_funcs["double_me"], TimesThree.forward)
 
     if compile:
         # We only need to know whether it's safe around get/set so the backend is not relevant
@@ -302,3 +307,20 @@ def test_kernel_func_nested_dispatch(compile):
 
     # Outer (+1) -> Inner (*3) -> Outer (+1): 1 -> 2 -> 6 -> 7
     torch.testing.assert_close(model(x), torch.tensor(7.0))
+
+
+@pytest.mark.parametrize(("num_inner", "expected"), [(1, 7.0), (2, 19.0)])
+def test_kernel_func_nested_compile_context(monkeypatch, num_inner, expected):
+    model = Outer(num_inner)
+
+    _bind_forward(model._kernel_funcs["surprise_me"], AddOne.forward)
+    for inner in model.inner:
+        _bind_forward(inner._kernel_funcs["double_me"], TimesThree.forward)
+
+    # Mimic different compiled boundaries
+    compiling = iter([True, True, False])
+    monkeypatch.setattr(torch.compiler, "is_compiling", lambda: next(compiling))
+
+    # Same as in `test_kernel_func_nested_dispatch` (just *3 once or twice)
+    x = torch.tensor(1.0)
+    torch.testing.assert_close(model(x), torch.tensor(expected))

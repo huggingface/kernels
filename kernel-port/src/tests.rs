@@ -905,3 +905,114 @@ fn strip_suffix_is_fully_pinned() {
     );
     assert_eq!(ws.get_text("a.h").unwrap(), "a\n");
 }
+
+fn ws_of(files: &[(&str, &str)]) -> Workspace {
+    Workspace::from_files(
+        files
+            .iter()
+            .map(|(p, c)| ((*p).to_string(), c.as_bytes().to_vec()))
+            .collect(),
+    )
+}
+
+#[test]
+fn move_glob_renames_and_fixes_includes() {
+    let mut ws = ws_of(&[
+        ("k/a_sm90.cu", "a"),
+        ("k/b_sm90.cu", "b"),
+        (
+            "k/all.cu",
+            "#include \"a_sm90.cu\"\n#  include \"b_sm90.cu\" // b\n#include <a_sm90.cu>\n",
+        ),
+        ("k/other.cu", "int x; // \"a_sm90.cu\"\n"),
+    ]);
+    run_recipe(
+        &mut ws,
+        "move from=\"k/*_sm90.cu\" to=\"{dir}/{stem}.cuh\" files=2 refs=2\n",
+    );
+    assert_eq!(
+        ws.paths(),
+        vec!["k/a_sm90.cuh", "k/all.cu", "k/b_sm90.cuh", "k/other.cu"]
+    );
+    // Angle-bracket includes and text outside directives are left alone.
+    assert_eq!(
+        ws.get_text("k/all.cu").unwrap(),
+        "#include \"a_sm90.cuh\"\n#  include \"b_sm90.cuh\" // b\n#include <a_sm90.cu>\n"
+    );
+    assert_eq!(
+        ws.get_text("k/other.cu").unwrap(),
+        "int x; // \"a_sm90.cu\"\n"
+    );
+}
+
+#[test]
+fn move_fixes_includes_of_a_moved_includer() {
+    let mut ws = ws_of(&[
+        (
+            "csrc/api.cu",
+            "#include \"../common/util.h\"\n#include \"local.h\"\n",
+        ),
+        ("csrc/local.h", ""),
+        ("common/util.h", ""),
+    ]);
+    run_recipe(
+        &mut ws,
+        "move from=\"csrc/api.cu\" to=\"kernel/src/api.cu\" refs=2\n",
+    );
+    assert_eq!(
+        ws.get_text("kernel/src/api.cu").unwrap(),
+        "#include \"../../common/util.h\"\n#include \"../../csrc/local.h\"\n"
+    );
+
+    // Moving a directory together keeps its internal includes as they are.
+    let mut ws = ws_of(&[
+        ("csrc/api.cu", "#include \"local.h\"\n"),
+        ("csrc/local.h", ""),
+    ]);
+    run_recipe(&mut ws, "move from=\"csrc\" to=\"kernel\"\n");
+    assert_eq!(
+        ws.get_text("kernel/api.cu").unwrap(),
+        "#include \"local.h\"\n"
+    );
+}
+
+#[test]
+fn move_include_rewrites_are_pinned() {
+    let files = [("k/a.cu", "a"), ("k/all.cu", "#include \"a.cu\"\n")];
+    let mut ws = ws_of(&files);
+    let err = run_recipe_err(&mut ws, "move from=\"k/a.cu\" to=\"k/a.cuh\"\n");
+    assert!(err.contains("pin that with refs=1"), "{err}");
+
+    let mut ws = ws_of(&files);
+    let err = run_recipe_err(&mut ws, "move from=\"k/a.cu\" to=\"k/a.cuh\" refs=2\n");
+    assert!(err.contains("expected exactly 2 rewritten"), "{err}");
+}
+
+#[test]
+fn move_glob_is_fully_pinned() {
+    let files = [("k/a.cu", "a"), ("k/b.cu", "b"), ("k/b.cuh", "existing")];
+    let mut ws = ws_of(&files[..2]);
+    let err = run_recipe_err(
+        &mut ws,
+        "move from=\"k/*.cu\" to=\"{dir}/{stem}.cuh\" files=3\n",
+    );
+    assert!(err.contains("expected exactly 3 file(s)"), "{err}");
+
+    let mut ws = ws_of(&files);
+    let err = run_recipe_err(
+        &mut ws,
+        "move from=\"k/*.cu\" to=\"{dir}/{stem}.cuh\" files=2\n",
+    );
+    assert!(err.contains("already exists"), "{err}");
+    // Nothing is renamed when any destination clashes.
+    assert!(ws.paths().contains(&"k/a.cu".to_string()));
+
+    for bad in [
+        "move from=\"k/*.cu\" to=\"k/x.cuh\" files=2\n",
+        "move from=\"k/*.cu\" to=\"{dir}/{stem}.cuh\"\n",
+        "move from=\"k/a.cu\" to=\"k/a.cuh\" files=1\n",
+    ] {
+        let parsed = recipe::parse(bad).unwrap();
+        assert!(ops::build(&parsed.ops[0], Path::new(".")).is_err(), "{bad}");
+    }
+}

@@ -75,7 +75,7 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`vendor`](#vendor) | Verify a second pinned upstream (given via `--vendor`) and copy a subtree from it |
 | [`prune`](#prune) | Delete everything except the given globs |
 | [`delete`](#delete) | Delete files matching a glob (must match something) |
-| [`move`](#move) | Rename a file or directory |
+| [`move`](#move) | Rename a file, a directory, or every file matching a glob, keeping `#include`s pointing at moved files |
 | [`overlay`](#overlay) | Copy checked-in files (bindings, flake, docs) over the workspace |
 | [`replace`](#replace) | Exact-text find/replace with an optional occurrence `count` |
 | [`strip_suffix`](#strip_suffix) | Remove one literal suffix from every matched file, with a pinned `files=N` |
@@ -222,26 +222,31 @@ Fails when: the glob matches nothing.
 #### `move`
 
 ```kdl
-move from="<path>" to="<path>"
+move from="<path>" to="<path>" [refs=N]
+move from="<glob>" to="<template>" files=N [refs=N]
 ```
 
-Rename a file, or a whole directory if `from` names one. Moves are recorded, so `--diff` can show a moved file's content change as `old path -> new path` instead of a delete plus an add.
+Rename a file, or a whole directory if `from` names one. With a glob, every matching file is renamed through a template built from `{dir}`, `{name}`, `{stem}` and `{ext}` of its path; `files` pins how many match, so an upstream that adds or removes one fails the run. Moves are recorded, so `--diff` can show a moved file's content change as `old path -> new path` instead of a delete plus an add.
+
+A move never breaks a quoted `#include`. Each one in a C, C++ or CUDA source is resolved the way a compiler resolves it first, against the including file's directory; if the file it named moved, or the including file itself moved, the include is rewritten to the new relative location. Angle-bracket includes and includes that resolve to no file are left alone. Any rewrite must be pinned with `refs`, so a move cannot silently edit sources.
 
 ```sh
-kernel-port -e 'move from="csrc" to="hello-kernel"' \
-    --file 'csrc/k.cu=// kernel' --file 'csrc/k.h=// header'
+kernel-port -e 'move from="k/*_sm90.cu" to="{dir}/{stem}.cuh" files=2 refs=2' \
+    --file 'k/a_sm90.cu=// a' --file 'k/b_sm90.cu=// b' \
+    --file $'k/all.cu=#include "a_sm90.cu"\n#include "b_sm90.cu"\n'
 ```
 
 ```
-[line   1] move                moved 2 file(s) to "hello-kernel"
-A hello-kernel/k.cu
-A hello-kernel/k.h
-D csrc/k.cu
-D csrc/k.h
+[line   1] move                moved 2 file(s) matching "k/*_sm90.cu" to "{dir}/{stem}.cuh", rewrote 2 #include(s)
+A k/a_sm90.cuh
+A k/b_sm90.cuh
+M k/all.cu
+D k/a_sm90.cu
+D k/b_sm90.cu
 ...
 ```
 
-Fails when: `from` matches no file or directory, or a destination path already exists.
+Fails when: `from` matches no file or directory, a glob's match count is not `files`, a destination already exists (checked before anything is renamed), or rewritten includes are not pinned by `refs`.
 
 #### `overlay`
 

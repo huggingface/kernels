@@ -29,6 +29,8 @@
       title: Kernels
     - local: api/layers
       title: Layers
+    - local: api/cookbook
+      title: Cookbook
   title: Python API
 - sections:
     - local: cli

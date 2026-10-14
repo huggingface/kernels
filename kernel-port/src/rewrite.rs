@@ -635,3 +635,195 @@ pub(crate) fn free_names(text: &str, lang: Lang) -> std::collections::BTreeSet<S
     }
     out
 }
+
+/// A C-family function's name and parameter list, with comments dropped and
+/// whitespace normalized, and whether it is a definition (a body follows)
+/// rather than a declaration.
+pub(crate) struct Signature {
+    pub name: String,
+    pub params: String,
+    pub definition: bool,
+}
+
+impl Signature {
+    /// The parameter types, which is what must agree between a declaration
+    /// and its definition: parameter names and default arguments may differ.
+    pub fn types(&self) -> Vec<String> {
+        split_top_level(&self.params)
+            .into_iter()
+            .map(|param| {
+                let param = split_default(param).trim();
+                let start = param
+                    .rfind(|c: char| !(c.is_ascii() && is_ident(c as u8)))
+                    .map_or(0, |i| i + 1);
+                let (ty, name) = param.split_at(start);
+                let ty = ty.trim_end();
+                if ty.is_empty()
+                    || name.is_empty()
+                    || name.as_bytes()[0].is_ascii_digit()
+                    || C_TYPE_WORDS.contains(&name)
+                    || ty.ends_with("::")
+                {
+                    param.to_string()
+                } else {
+                    ty.to_string()
+                }
+            })
+            .collect()
+    }
+}
+
+// Words that end a type, so a parameter ending in one is unnamed.
+const C_TYPE_WORDS: &[&str] = &[
+    "bool", "char", "short", "int", "long", "float", "double", "void", "signed", "unsigned",
+    "const", "volatile", "auto",
+];
+
+// Split at commas outside brackets.
+fn split_top_level(params: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (i, c) in params.char_indices() {
+        match c {
+            '(' | '[' | '{' | '<' => depth += 1,
+            ')' | ']' | '}' | '>' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&params[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    if !params[start..].trim().is_empty() {
+        out.push(&params[start..]);
+    }
+    out
+}
+
+// A parameter without its default argument.
+fn split_default(param: &str) -> &str {
+    let mut depth = 0i32;
+    for (i, c) in param.char_indices() {
+        match c {
+            '(' | '[' | '{' | '<' => depth += 1,
+            ')' | ']' | '}' | '>' => depth -= 1,
+            '=' if depth == 0 => return &param[..i],
+            _ => {}
+        }
+    }
+    param
+}
+
+const NOT_FUNCTIONS: &[&str] = &[
+    "if", "for", "while", "switch", "return", "sizeof", "catch", "decltype", "alignas",
+];
+
+/// Function declarations and definitions in C-family `text`: an unqualified
+/// identifier preceded by a type (not by `=`, `return`, `.`, `::`, ...) and
+/// followed by a parameter list and then `{` or `;`. Calls are skipped.
+pub(crate) fn function_signatures(text: &str) -> Vec<Signature> {
+    let src = text.as_bytes();
+    let lx = lex(src, Lang::CFamily);
+    let skip_ws = |mut i: usize| {
+        while i < src.len()
+            && (src[i].is_ascii_whitespace()
+                || lx.atom_at[i].is_some_and(|a| is_comment(src, &lx.atoms[a])))
+        {
+            i += 1;
+        }
+        i
+    };
+    let mut out = Vec::new();
+    let mut e = 0;
+    while e < src.len() {
+        if lx.atom_at[e].is_some() || !is_ident(src[e]) {
+            e += 1;
+            continue;
+        }
+        let s = e;
+        while e < src.len() && is_ident(src[e]) {
+            e += 1;
+        }
+        let name = &text[s..e];
+        if src[s].is_ascii_digit() || (s > 0 && src[s - 1] == b'.') || NOT_FUNCTIONS.contains(&name)
+        {
+            continue;
+        }
+        let open = skip_ws(e);
+        if src.get(open) != Some(&b'(') {
+            continue;
+        }
+        let Some(&close) = lx.close_of.get(&open) else {
+            continue;
+        };
+        let definition = match src.get(skip_ws(close)) {
+            Some(b'{') => true,
+            Some(b';') => false,
+            _ => continue,
+        };
+        // A type ends right before the name; a call follows an operator or keyword.
+        let before = text[..s].trim_end();
+        let typed = before
+            .bytes()
+            .last()
+            .is_some_and(|b| is_ident(b) || matches!(b, b'>' | b'*' | b'&'))
+            && !before.ends_with("return")
+            && !before.ends_with("::");
+        if !typed {
+            continue;
+        }
+        let mut params = String::new();
+        let mut i = open + 1;
+        while i < close - 1 {
+            if let Some(a) = lx.atom_at[i] {
+                let atom = lx.atoms[a];
+                if is_comment(src, &atom) {
+                    params.push(' ');
+                } else {
+                    params.push_str(&text[atom.start..atom.end]);
+                }
+                i = atom.end;
+                continue;
+            }
+            params.push(char::from(src[i]));
+            i += 1;
+        }
+        out.push(Signature {
+            name: name.to_string(),
+            params: normalize_tokens(&params),
+            definition,
+        });
+    }
+    out
+}
+
+fn is_comment(src: &[u8], atom: &Atom) -> bool {
+    src[atom.start..].starts_with(b"//") || src[atom.start..].starts_with(b"/*")
+}
+
+// Collapse whitespace, keeping one space only between two identifier
+// characters, so `T &x` and `T& x` compare equal.
+fn normalize_tokens(s: &str) -> String {
+    let mut out = String::new();
+    let mut pending_space = false;
+    for c in s.chars() {
+        if c.is_whitespace() {
+            pending_space = true;
+            continue;
+        }
+        if pending_space
+            && out
+                .chars()
+                .last()
+                .is_some_and(|p| is_ident(p as u8) && p.is_ascii())
+            && c.is_ascii()
+            && is_ident(c as u8)
+        {
+            out.push(' ');
+        }
+        pending_space = false;
+        out.push(c);
+    }
+    out
+}

@@ -100,6 +100,8 @@ On top of whatever the recipe says:
 - Every op is built before the first one runs, so an argument typo or a bad glob anywhere fails the recipe before anything is mutated.
 - After the last op, every added or modified Python file must still parse.
 - No absolute in-package import may remain under `torch-ext`. The Hub loads a kernel under a build-variant directory name, so only relative intra-package imports resolve at run time.
+- Every relative import must name a module in the output (`torch-ext/<package>/_ops` excepted; the build generates it). Upstream starting to import a module the recipe prunes otherwise only fails when the kernel is imported.
+- Every function declared in a C, C++ or CUDA file under `torch-ext` must have a definition in the output with the same parameter types; names and default arguments may differ. A binding written locally against upstream entry points then fails the port when upstream changes a signature, instead of failing at link time. The error shows both parameter lists and the first parameter that differs.
 - `--out` runs write a `port-provenance.json`: recipe hash, runner version, pinned sources, output tree hash. All deterministic, so the file reproduces byte-for-byte.
 
 ## Versioning
@@ -361,9 +363,10 @@ Fails when: the file count is not `files`, or any matched file does not end with
 ```kdl
 expect in="<glob>" find="<text>" count=N
 expect in="<glob>" files=N
+expect in="<path>" blob="<git blob id>"
 ```
 
-A guard that changes nothing. The first form asserts an exact text occurs exactly `count` times across the matched files - `count=0` asserts absence. The second asserts the glob matches exactly `N` files.
+A guard that changes nothing. The first form asserts an exact text occurs exactly `count` times across the matched files - `count=0` asserts absence. The second asserts the glob matches exactly `N` files. The third asserts that the one matched file has exactly this content, as a git blob id (`git ls-tree <commit> <path>` or `git hash-object <file>`). Use it for every upstream file an overlay copy was made from, placed before any op edits it: a text guard only notices changes to the lines it names, while a blob pin notices any change, and its error prints the `git diff <old-blob> <new-blob>` that shows what to carry into the overlay copy.
 
 Reach for it to state an invariant the rest of the recipe depends on but does not itself enforce: that no absolute import survived, that the upstream source list is still the size you reviewed. Guards hold regardless of which op was supposed to do the work, so they keep holding when the recipe is edited.
 
@@ -375,7 +378,7 @@ kernel-port -e 'expect in="**/*.cu" files=3' --file 'a.cu=x' --file 'sub/b.cu=y'
 error: recipe line 1: expect: expected "**/*.cu" to match exactly 3 file(s), found 2 - the upstream file set drifted; update the port definition (a.cu, sub/b.cu)
 ```
 
-Fails when: the count or file count does not match. `find` and `files` are mutually exclusive.
+Fails when: the count or file count does not match, or the definition's parameters differ from the declaration's (or either is not found exactly once). `find`, `files` and `function` are mutually exclusive.
 
 ### Rewriting Python imports
 

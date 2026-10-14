@@ -501,7 +501,7 @@ pub fn ensure_import_source(
 fn finish_rewrites(
     path: &str,
     src: &str,
-    rewrites: Vec<Rewrite>,
+    rewrites: &[Rewrite],
     what: &str,
 ) -> Result<Option<(String, usize)>> {
     if rewrites.is_empty() {
@@ -515,9 +515,43 @@ fn finish_rewrites(
     Ok(Some((result, count)))
 }
 
+// Byte offsets of the name tokens in `text` that begin a statement: first
+// on a logical line, or right after `;` or a compound statement's `:`. Every
+// statement this module splices starts with one (`from`, `import`, or an
+// assignment target); text in strings and comments, and the `import` inside
+// `from a import b`, never does.
+fn statement_starts(path: &str, text: &str) -> Result<BTreeSet<usize>> {
+    use libcst_native::tokenizer::TokType;
+    let (bom, body) = match text.strip_prefix('\u{feff}') {
+        Some(rest) => (text.len() - rest.len(), rest),
+        None => (0, text),
+    };
+    let tokens = libcst_native::tokenize(body)
+        .map_err(|e| anyhow::anyhow!("{path}: cannot tokenize: {e}"))?;
+    let mut starts = BTreeSet::new();
+    let mut at_start = true;
+    for token in &tokens {
+        if token.r#type == TokType::Name && at_start {
+            starts.insert(bom + token.start_pos.byte_idx());
+        }
+        at_start = match token.r#type {
+            TokType::Newline | TokType::Indent | TokType::Dedent => true,
+            TokType::Op => matches!(token.string, ";" | ":"),
+            _ => false,
+        };
+    }
+    Ok(starts)
+}
+
+// Where `needle`, a statement as libcst renders it, occurs as code in `text`.
 // Boundary-aware, so `from pkg.utils import x` does not match inside
-// `from pkg.utils_extra import x`.
-fn statement_occurrences(text: &str, needle: &str) -> Vec<usize> {
+// `from pkg.utils_extra import x`, and only occurrences that start a statement
+// count, so the same text in a string or comment does not.
+fn statement_occurrences(path: &str, text: &str, needle: &str) -> Result<Vec<usize>> {
+    Ok(occurrences_at(text, needle, &statement_starts(path, text)?))
+}
+
+fn occurrences_at(text: &str, needle: &str, starts: &BTreeSet<usize>) -> Vec<usize> {
     let is_ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
     let bytes = text.as_bytes();
     let mut positions = Vec::new();
@@ -532,7 +566,7 @@ fn statement_occurrences(text: &str, needle: &str) -> Vec<usize> {
                 && bytes[end] != b'.'
                 && bytes[end] != b','
                 && !suffix.starts_with(" as "));
-        if before_ok && after_ok {
+        if before_ok && after_ok && starts.contains(&pos) {
             positions.push(pos);
         }
         start = pos + 1;
@@ -541,23 +575,38 @@ fn statement_occurrences(text: &str, needle: &str) -> Vec<usize> {
 }
 
 // Rewrites are spliced into the text. Regenerating the module through libcst
-// would reformat everything the rewrite did not touch.
-fn splice(path: &str, src: &str, rewrites: Vec<Rewrite>) -> Result<String> {
-    let mut out = src.to_string();
+// would reformat everything the rewrite did not touch. Every rewrite is
+// located in the original text, so the count of code occurrences must equal
+// the count of import nodes that render to it.
+fn splice(path: &str, src: &str, rewrites: &[Rewrite]) -> Result<String> {
+    let starts = statement_starts(path, src)?;
+    let mut edits = Vec::new();
     for rw in rewrites {
-        let positions = statement_occurrences(&out, &rw.old);
+        let positions = occurrences_at(src, &rw.old, &starts);
         if positions.len() != rw.nodes {
             bail!(
-                "{path}: statement {:?} occurs {} time(s) in the text but \
+                "{path}: statement {:?} occurs {} time(s) as code but \
                  {} time(s) as an import node; refusing to splice",
                 rw.old,
                 positions.len(),
                 rw.nodes
             );
         }
-        for pos in positions.into_iter().rev() {
-            out.replace_range(pos..pos + rw.old.len(), &rw.new);
+        edits.extend(positions.into_iter().map(|pos| (pos, rw)));
+    }
+    edits.sort_by_key(|(pos, _)| *pos);
+    for pair in edits.windows(2) {
+        let ((a, rw), (b, _)) = (pair[0], pair[1]);
+        if a + rw.old.len() > b {
+            bail!(
+                "{path}: import statements {:?} overlap in the text; refusing to splice",
+                rw.old
+            );
         }
+    }
+    let mut out = src.to_string();
+    for (pos, rw) in edits.into_iter().rev() {
+        out.replace_range(pos..pos + rw.old.len(), &rw.new);
     }
     Ok(out)
 }
@@ -593,7 +642,7 @@ fn rewrite_from_imports(
 ) -> Result<Option<(String, usize)>> {
     let owned = parsed_module(path, src)?;
     let rewrites = from_import_rewrites(owned.borrow_dependent(), plan);
-    finish_rewrites(path, src, rewrites, "rewritten")
+    finish_rewrites(path, src, &rewrites, "rewritten")
 }
 
 pub fn relativize_source(
@@ -688,7 +737,7 @@ pub fn remap_source(
         }
         add_rewrite(&mut rewrites, render_indented(import, &indents), new);
     }
-    finish_rewrites(path, src, rewrites, "rewritten")
+    finish_rewrites(path, src, &rewrites, "rewritten")
 }
 
 // `import a.b.c as x` becomes `from a.b import c as x`. Without an alias,
@@ -763,7 +812,7 @@ pub fn convert_imports_source(
         return Ok(None);
     }
     let count = rewrites.iter().map(|r| r.nodes).sum();
-    let mut result = splice(path, src, rewrites)?;
+    let mut result = splice(path, src, &rewrites)?;
     for (chain, leaf) in &chains {
         result = rewrite_attribute_chain(&result, Lang::Python, chain, leaf).0;
     }
@@ -1032,9 +1081,10 @@ fn binding_insert_point(
     src: &str,
     rewrites: &[Rewrite],
 ) -> Result<usize> {
+    let starts = statement_starts(path, src)?;
     let first = rewrites
         .iter()
-        .flat_map(|r| statement_occurrences(src, &r.old))
+        .flat_map(|r| occurrences_at(src, &r.old, &starts))
         .min()
         .unwrap();
     let start = line_start(src, first);
@@ -1128,9 +1178,9 @@ pub fn kernelize_imports_source(
     );
 
     let count = rewrites.iter().map(|r| r.nodes).sum();
-    let mut result = splice(path, &src[insert_at..], rewrites)?;
-    result.insert_str(0, &preamble);
-    result.insert_str(0, &src[..insert_at]);
+    // Every rewritten import lies after the insertion point.
+    let mut result = splice(path, src, &rewrites)?;
+    result.insert_str(insert_at, &preamble);
     let result = remove_dropped_imports(path, &result)?;
     check_parses(path, &result)?;
     let remaining = absolute_self_imports(path, &result, package)?;
@@ -1434,7 +1484,7 @@ pub fn replace_jit_loads(
     let mut text = src.to_string();
     let mut feeding = BTreeSet::new();
     for (stmt, var) in &loads {
-        let [at] = statement_occurrences(&text, stmt)[..] else {
+        let [at] = statement_occurrences(path, &text, stmt)?[..] else {
             bail!("{path}: cannot locate the JIT build of {name} in the text");
         };
         feeding.extend(free_names(stmt, Lang::Python));
@@ -1468,7 +1518,7 @@ pub fn replace_jit_loads(
         let Some(stmt) = dead else {
             break;
         };
-        let [at] = statement_occurrences(&text, &stmt)[..] else {
+        let [at] = statement_occurrences(path, &text, &stmt)?[..] else {
             bail!("{path}: cannot locate {stmt:?} in the text");
         };
         feeding.extend(free_names(&stmt, Lang::Python));
@@ -1479,4 +1529,45 @@ pub fn replace_jit_loads(
         bail!("{path}: JIT build replacement no longer parses: {e}");
     }
     Ok(Some((text, loads.len(), removed)))
+}
+
+/// A relative `from` import: its leading dots, the dotted module after them
+/// (empty for `from . import x`), and the imported names (empty for `*`).
+pub struct RelativeImport {
+    pub dots: usize,
+    pub module: Vec<String>,
+    pub names: Vec<String>,
+}
+
+pub fn relative_imports(path: &str, src: &str) -> Result<Vec<RelativeImport>> {
+    let owned = module_of(path, src)?;
+    let imports = module_imports(owned.borrow_dependent());
+    let mut out = Vec::new();
+    for (import, _) in imports.from_imports {
+        if import.relative.is_empty() {
+            continue;
+        }
+        let module = import
+            .module
+            .as_ref()
+            .and_then(flatten)
+            .unwrap_or_default()
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let names = match &import.names {
+            ImportNames::Star(_) => Vec::new(),
+            ImportNames::Aliases(aliases) => aliases
+                .iter()
+                .filter_map(|a| flatten(&a.name))
+                .map(|parts| parts.join("."))
+                .collect(),
+        };
+        out.push(RelativeImport {
+            dots: import.relative.len(),
+            module,
+            names,
+        });
+    }
+    Ok(out)
 }

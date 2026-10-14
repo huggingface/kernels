@@ -271,6 +271,27 @@ fn glob_union(ws: &Workspace, globs: &[Pattern], what: &str) -> Result<Vec<Strin
     Ok(union.into_iter().collect())
 }
 
+// The files a src list selects; with `follow_includes`, also every file they
+// reach through #includes, searched for in `include` (relative to the root).
+fn source_files(
+    ws: &Workspace,
+    globs: &[Pattern],
+    what: &str,
+    include: &[String],
+    follow_includes: bool,
+) -> Result<Vec<String>> {
+    let src = glob_union(ws, globs, what)?;
+    if !follow_includes {
+        return Ok(src);
+    }
+    let dirs: Vec<String> = include
+        .iter()
+        .map(|d| d.trim_matches('/').trim_start_matches("./").to_string())
+        .map(|d| if d == "." { String::new() } else { d })
+        .collect();
+    Ok(ws.include_closure(&src, &dirs).into_iter().collect())
+}
+
 // An include directory is named, not globbed, so a typo would otherwise
 // surface at build time rather than here.
 fn check_include_dir(ws: &Workspace, dir: &str) -> Result<()> {

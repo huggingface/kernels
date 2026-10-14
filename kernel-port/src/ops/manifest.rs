@@ -1,4 +1,4 @@
-use super::{Facts, check_include_dir, comma_list, glob_list, glob_union, toml_str_list};
+use super::{Facts, check_include_dir, comma_list, glob_list, source_files, toml_str_list};
 use crate::recipe::Args;
 use crate::workspace::{Pattern, Workspace};
 use anyhow::{Context, Result, bail};
@@ -31,6 +31,7 @@ enum ManifestKind {
         torch_src: Vec<Pattern>,
         pyext: Vec<String>,
         include: Vec<String>,
+        follow_includes: bool,
         stable_abi_version: Option<String>,
         stable_abi: Vec<(String, String)>,
     },
@@ -70,6 +71,9 @@ impl Manifest {
             if args.take_opt("torch_include").is_some() {
                 bail!("torch_include does not apply when noarch=true");
             }
+            if args.take_opt("torch_follow_includes").is_some() {
+                bail!("torch_follow_includes does not apply when noarch=true");
+            }
             ManifestKind::Noarch {
                 pyext: comma_list(&args.take_opt("noarch_pyext").unwrap_or_default()),
             }
@@ -96,6 +100,7 @@ impl Manifest {
                 torch_src: glob_list(&args.take("torch_src")?, "torch_src")?,
                 pyext,
                 include: comma_list(&args.take_opt("torch_include").unwrap_or_default()),
+                follow_includes: args.take_bool("torch_follow_includes")?,
                 stable_abi_version,
                 stable_abi,
             }
@@ -210,10 +215,12 @@ impl Manifest {
                 torch_src,
                 pyext,
                 include,
+                follow_includes,
                 stable_abi_version,
                 stable_abi,
             } => {
-                let torch_files = glob_union(ws, torch_src, "torch_src")?;
+                let torch_files =
+                    source_files(ws, torch_src, "torch_src", include, *follow_includes)?;
                 if facts.kernels.is_empty() {
                     bail!("no kernel sections declared; add `kernel` statements before manifest");
                 }

@@ -1,8 +1,7 @@
 # Use layers
 
 > [!NOTE]
-> If you want to understand the concepts of kernel layers more interactively
-> here is a [cookbook just for that purpose](https://colab.research.google.com/github/huggingface/kernels/blob/main/examples/cookbook/use_layers.ipynb)
+> Open the [Kernelize your model with ease](https://colab.research.google.com/github/huggingface/kernels/blob/main/examples/cookbook/use_layers.ipynb) notebook to build a kernel, replace a layer definition, and use a kernel layer with functions.
 
 A kernel can provide layers in addition to kernel functions. A layer from
 the Hub can replace the `forward` method of an existing layer for a certain

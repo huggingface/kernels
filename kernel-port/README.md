@@ -77,6 +77,7 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`delete`](#delete) | Delete files matching a glob (must match something) |
 | [`move`](#move) | Rename a file, a directory, or every file matching a glob, keeping `#include`s pointing at moved files |
 | [`overlay`](#overlay) | Copy checked-in files (bindings, flake, docs) over the workspace |
+| [`rewrite`](#rewrite) | Structural find/replace with holes: cannot match inside strings, comments or identifiers; pinned `changes=N` |
 | [`replace`](#replace) | Exact-text find/replace with an optional occurrence `count` |
 | [`strip_suffix`](#strip_suffix) | Remove one literal suffix from every matched file, with a pinned `files=N` |
 | [`expect`](#expect) | Guard: assert an exact text occurs `count` times (0 asserts absence), or that a glob matches `files=N` |
@@ -265,6 +266,45 @@ overlay from="overlay"
 Fails when: the directory does not exist or contains no files.
 
 ### Editing text
+
+#### `rewrite`
+
+```kdl
+rewrite in="<glob>" pattern="<template>" with="<template>" changes=N
+```
+
+Structural find and replace for source code, in the style of [Comby](https://comby.dev). Prefer it to `replace` for any `.py`, C, C++ or CUDA file: it matches what the code says, not what its bytes happen to contain.
+
+- Each matched file is lexed by its extension (Python, or the C family) just enough to know where strings, comments and brackets are.
+- A match cannot start or end inside a string or comment, so a pattern never hits text that merely mentions a name.
+- A match cannot start or end in the middle of an identifier: `_quant_type` does not match inside `ft_quant_type`.
+- `:[name]` is a hole: the shortest balanced text that lets the rest of the pattern match. It skips whole strings and comments, never crosses an unmatched closing bracket, and a hole that starts inside a string stops at its closing quote. `:[[name]]` matches exactly one identifier. A hole used twice must match the same text.
+- Whitespace in the pattern matches any run of whitespace, including none, so formatting differences do not matter.
+- `with` is the replacement; it may use the pattern's holes.
+- `changes` is mandatory and counts matches across all files.
+
+```sh
+kernel-port -e 'rewrite in="**/*.cu" pattern="PYBIND11_MODULE(:[args]) {:[body]}" with="" changes=1' \
+    --file $'a.cu=int f();\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n  m.def("f", &f, "a } brace");\n}\n'
+```
+
+```
+[line   1] rewrite             rewrote 1 match(es) in 1 file(s)
+M a.cu
+
+FILE: a.cu
+int f();
+
+
+```
+
+```kdl
+// Holes inside call arguments, and an identifier hole.
+rewrite in="tests/*.py" pattern="numpy.in1d(:[args])" with="numpy.isin(:[args])" changes=1
+rewrite in="csrc/api.cu" pattern="c10::optional<:[t]> &:[[name]]" with="std::optional<:[t]> :[name]" changes=1
+```
+
+Fails when: the glob matches no files, the total match count is not `changes`, the pattern starts or ends with a `:[hole]` or has two holes in a row (anchor it with text instead), or `with` uses a hole the pattern does not define.
 
 #### `replace`
 

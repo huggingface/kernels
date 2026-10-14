@@ -1016,3 +1016,127 @@ fn move_glob_is_fully_pinned() {
         assert!(ops::build(&parsed.ops[0], Path::new(".")).is_err(), "{bad}");
     }
 }
+
+fn rewrite_one(path: &str, src: &str, recipe: &str) -> String {
+    let mut ws = ws_of(&[(path, src)]);
+    run_recipe(&mut ws, recipe);
+    ws.get_text(path).unwrap().to_string()
+}
+
+#[test]
+fn rewrite_respects_identifier_boundaries() {
+    // Plain replace of `_quant_type` also hit `ft_quant_type`.
+    let out = rewrite_one(
+        "a.cu",
+        "f(_quant_type, ft_quant_type, _quant_type_x);\n",
+        "rewrite in=\"a.cu\" pattern=\"_quant_type\" with=\"qt\" changes=1\n",
+    );
+    assert_eq!(out, "f(qt, ft_quant_type, _quant_type_x);\n");
+}
+
+#[test]
+fn rewrite_skips_strings_and_comments() {
+    // Plain replace of `_cuda` also hit `klist_from_cuda`; text in strings and
+    // comments must not match either.
+    let src = "import fp4attn_cuda\n# fp4attn_cuda is the extension\nx = \"fp4attn_cuda\"\ny = klist_from_cuda\n";
+    let out = rewrite_one(
+        "api.py",
+        src,
+        "rewrite in=\"api.py\" pattern=\"import fp4attn_cuda\" with=\"from . import ops as fp4attn_cuda\" changes=1\n",
+    );
+    assert_eq!(
+        out,
+        "from . import ops as fp4attn_cuda\n# fp4attn_cuda is the extension\nx = \"fp4attn_cuda\"\ny = klist_from_cuda\n"
+    );
+}
+
+#[test]
+fn rewrite_holes_cover_balanced_text() {
+    let src = "int f() { return 1; }\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n  m.def(\"f\", &f, \"a } brace\");\n  { nested(); }\n}\nint g;\n";
+    let out = rewrite_one(
+        "a.cu",
+        src,
+        "rewrite in=\"a.cu\" pattern=\"PYBIND11_MODULE(:[args]) {:[body]}\" with=\"\" changes=1\n",
+    );
+    assert_eq!(out, "int f() { return 1; }\n\nint g;\n");
+
+    // Nested calls inside a hole, and whitespace that differs from the pattern.
+    let out = rewrite_one(
+        "t.py",
+        "assert numpy.in1d( grad.view(-1), [0, 1] ).all()\n",
+        "rewrite in=\"t.py\" pattern=\"numpy.in1d(:[args])\" with=\"numpy.isin(:[args])\" changes=1\n",
+    );
+    assert_eq!(out, "assert numpy.isin( grad.view(-1), [0, 1] ).all()\n");
+
+    let out = rewrite_one(
+        "a.cu",
+        "void f(c10::optional<at::Tensor>   &out_, int k);\n",
+        "rewrite in=\"a.cu\" pattern=\"c10::optional<:[t]> &:[[name]]\" with=\"std::optional<:[t]> :[name]\" changes=1\n",
+    );
+    assert_eq!(out, "void f(std::optional<at::Tensor> out_, int k);\n");
+}
+
+#[test]
+fn rewrite_hole_inside_a_string_stops_at_its_end() {
+    let src = "s = parse(\"flash_attn_3::fwd(Tensor q, \"\n    \"Tensor k) -> Tensor\")\nop(\"flash_attn_3::bwd\")\n";
+    let out = rewrite_one(
+        "t.py",
+        src,
+        "rewrite in=\"t.py\" pattern=\"\\\"flash_attn_3:::[rest]\\\"\" with=\"add_op_namespace_prefix(\\\"\\\") + \\\":[rest]\\\"\" changes=2\n",
+    );
+    assert_eq!(
+        out,
+        "s = parse(add_op_namespace_prefix(\"\") + \"fwd(Tensor q, \"\n    \"Tensor k) -> Tensor\")\nop(add_op_namespace_prefix(\"\") + \"bwd\")\n"
+    );
+}
+
+#[test]
+fn rewrite_is_pinned_and_rejects_vague_patterns() {
+    let mut ws = ws_of(&[("a.py", "x = 1\nx = 2\n")]);
+    let err = run_recipe_err(
+        &mut ws,
+        "rewrite in=\"a.py\" pattern=\"x = \" with=\"y = \" changes=1\n",
+    );
+    assert!(
+        err.contains("expected exactly 1 match(es) but found 2"),
+        "{err}"
+    );
+    assert_eq!(ws.get_text("a.py").unwrap(), "x = 1\nx = 2\n");
+
+    for bad in [
+        // The pin is mandatory.
+        "rewrite in=\"a.py\" pattern=\"x\" with=\"y\"\n",
+        // Patterns must be anchored by text.
+        "rewrite in=\"a.py\" pattern=\":[a]\" with=\"y\" changes=1\n",
+        "rewrite in=\"a.py\" pattern=\":[a] = 1\" with=\"y\" changes=1\n",
+        "rewrite in=\"a.py\" pattern=\"f(:[a]:[b])\" with=\"y\" changes=1\n",
+        // `with` can only use holes the pattern binds.
+        "rewrite in=\"a.py\" pattern=\"f(:[a])\" with=\":[b]\" changes=1\n",
+    ] {
+        let parsed = recipe::parse(bad).unwrap();
+        assert!(ops::build(&parsed.ops[0], Path::new(".")).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn rewrite_whitespace_matches_inside_comments() {
+    let out = rewrite_one(
+        "i.py",
+        "    import ext._C # Registers operators with PyTorch\n",
+        "rewrite in=\"i.py\" pattern=\"import ext._C # Registers operators with PyTorch\" with=\"pass\" changes=1\n",
+    );
+    assert_eq!(out, "    pass\n");
+}
+
+#[test]
+fn rewrite_identifier_hole_can_be_continued_by_text() {
+    let out = rewrite_one(
+        "api.py",
+        "import fp4attn_cuda\nimport fp4quant_cuda\nimport torch\n",
+        "rewrite in=\"api.py\" pattern=\"import :[[stem]]_cuda\" with=\"from . import ops as :[stem]_cuda\" changes=2\n",
+    );
+    assert_eq!(
+        out,
+        "from . import ops as fp4attn_cuda\nfrom . import ops as fp4quant_cuda\nimport torch\n"
+    );
+}

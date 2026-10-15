@@ -15,8 +15,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Install uv and Rust toolchain (Rust is needed to build kernels from source, which
-# bundles a maturin/pyo3 extension module).
-RUN dnf install -y --allowerasing curl && \
+# bundles a maturin/pyo3 extension module). We disable the CUDA repo, because we
+# don't need it for curl and it reduces the chance of transient errors when
+# installing.
+RUN dnf install -y --allowerasing --disablerepo=cuda curl && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     dnf clean all

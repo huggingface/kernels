@@ -21,7 +21,10 @@ mod version;
 use config::{PyBuild, PyGeneral};
 use git::PyOid;
 use lock::{PyKernelLock, PyKernelLocks, PyKernelPaths, PyNixKernelLock, PyNixKernelLocks};
-use signing::{PyKernelLocation, PyReceiptStore, PyVerificationReceipt, ReceiptError};
+use signing::{
+    PyDigestReceipt, PyDigestReceiptStore, PyKernelLocation, PySignatureReceipt,
+    PySignatureReceiptStore, ReceiptError,
+};
 use version::PyVersion;
 
 /// A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`.
@@ -778,8 +781,10 @@ fn data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDigest>()?;
     m.add_class::<PyDigestViolation>()?;
     m.add_class::<PyKernelLocation>()?;
-    m.add_class::<PyVerificationReceipt>()?;
-    m.add_class::<PyReceiptStore>()?;
+    m.add_class::<PySignatureReceipt>()?;
+    m.add_class::<PySignatureReceiptStore>()?;
+    m.add_class::<PyDigestReceipt>()?;
+    m.add_class::<PyDigestReceiptStore>()?;
     m.add(
         "DigestValidationError",
         m.py().get_type::<DigestValidationError>(),

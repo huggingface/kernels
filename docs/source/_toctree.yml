@@ -29,6 +29,8 @@
       title: Kernels
     - local: api/layers
       title: Layers
+    - local: use_layers
+      title: Kernelize a model
   title: Python API
 - sections:
     - local: cli

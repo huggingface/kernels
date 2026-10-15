@@ -440,7 +440,7 @@ class CompileableContextVar:
     def set(self, value):
         import torch
 
-        if torch.compiler.is_compiling():
+        if self.uses_global_var or torch.compiler.is_compiling():
             previous = self.global_var
             self.global_var = value
             self.uses_global_var = True

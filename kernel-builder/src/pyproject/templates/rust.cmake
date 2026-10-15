@@ -1,5 +1,5 @@
 function(rust_kernel_component LIBS_VAR TARGETS_VAR)
-    cmake_parse_arguments(KERNEL "" "NAME;MANIFEST_PATH" "" ${ARGN})
+    cmake_parse_arguments(KERNEL "" "NAME;MANIFEST_PATH;DEVICE_MANIFEST;PTX_DIR" "CUDA_CAPABILITIES" ${ARGN})
 
     if(NOT KERNEL_NAME OR NOT KERNEL_MANIFEST_PATH)
         message(FATAL_ERROR "rust_kernel_component: NAME and MANIFEST_PATH are required")
@@ -8,6 +8,62 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
     if(NOT CARGO_EXECUTABLE)
         message(FATAL_ERROR "Kernel component `${KERNEL_NAME}` is written in Rust, "
             "but `cargo` was not found. Install a Rust toolchain or set CARGO_EXECUTABLE.")
+    endif()
+
+    if(GPU_LANG STREQUAL "CUDA")
+        if(KERNEL_CUDA_CAPABILITIES)
+            cuda_archs_intersection(_KERNEL_ARCHS "${KERNEL_CUDA_CAPABILITIES}" "${CUDA_ARCHS}")
+            if(NOT _KERNEL_ARCHS)
+                message(FATAL_ERROR "Rust kernel: ${KERNEL_NAME}, empty set of capabilities after intersection (kernel: ${KERNEL_CUDA_CAPABILITIES}, supported: ${CUDA_ARCHS})")
+            endif()
+        else()
+            set(_KERNEL_ARCHS "${CUDA_KERNEL_ARCHS}")
+        endif()
+        message(STATUS "Rust kernel: ${KERNEL_NAME}, capabilities: ${_KERNEL_ARCHS}")
+
+        accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
+        set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
+    endif()
+
+    set(_RUST_KERNEL_DEPENDS)
+
+    if(KERNEL_DEVICE_MANIFEST)
+        # Build cuda-oxide device code before the host crate embeds its PTX.
+        if(NOT DEFINED ENV{CUDA_OXIDE_BACKEND} OR "$ENV{CUDA_OXIDE_BACKEND}" STREQUAL "")
+            message(FATAL_ERROR "rust_kernel_component: DEVICE_MANIFEST requires CUDA_OXIDE_BACKEND")
+        endif()
+        if(NOT KERNEL_PTX_DIR)
+            set(KERNEL_PTX_DIR kernels-ptx)
+        endif()
+
+        get_filename_component(_DEVICE_MANIFEST ${KERNEL_DEVICE_MANIFEST} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+        get_filename_component(_PTX_DIR ${KERNEL_PTX_DIR} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+        set(_DEVICE_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME}-device)
+        set(_DEVICE_ENV)
+
+        if(_KERNEL_ARCHS)
+            list(SORT _KERNEL_ARCHS COMPARE NATURAL)
+            # PTX JITs forward, so target the lowest supported arch.
+            list(GET _KERNEL_ARCHS 0 _OXIDE_ARCH)
+            string(REPLACE "+PTX" "" _OXIDE_ARCH "${_OXIDE_ARCH}")
+            string(REPLACE "." "" _OXIDE_ARCH "${_OXIDE_ARCH}")
+            list(APPEND _DEVICE_ENV "CUDA_OXIDE_TARGET=sm_${_OXIDE_ARCH}")
+        endif()
+
+        add_custom_target(${KERNEL_NAME}_oxide_device_build ALL
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${_PTX_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env
+                "CUDA_OXIDE_PTX_DIR=${_PTX_DIR}"
+                "RUSTFLAGS=-Zcodegen-backend=$ENV{CUDA_OXIDE_BACKEND} -Copt-level=3 -Cdebug-assertions=off -Zmir-enable-passes=-JumpThreading -Csymbol-mangling-version=v0"
+                ${_DEVICE_ENV}
+                ${CARGO_EXECUTABLE} build --release --locked
+                    --manifest-path ${_DEVICE_MANIFEST}
+                    --target-dir ${_DEVICE_TARGET_DIR}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMENT "Building Rust CUDA device kernel ${KERNEL_NAME}"
+            VERBATIM
+        )
+        list(APPEND _RUST_KERNEL_DEPENDS ${KERNEL_NAME}_oxide_device_build)
     endif()
 
     string(REPLACE "-" "_" _LIB_NAME ${KERNEL_NAME})
@@ -21,9 +77,12 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
 
     add_custom_target(${KERNEL_NAME}_cargo_build ALL
         COMMAND ${CMAKE_COMMAND} -E env "PATH=${_PYTHON_BIN_DIR}:$ENV{PATH}"
+            "KERNEL_BUILDER_GPU_LANG=${GPU_LANG}"
+            "KERNEL_BUILDER_CUDA_ARCHS=${_KERNEL_ARCHS}"
             ${CARGO_EXECUTABLE} rustc --release --locked --lib --crate-type staticlib
             --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH}
             --target-dir ${_CARGO_TARGET_DIR}
+        DEPENDS ${_RUST_KERNEL_DEPENDS}
         BYPRODUCTS ${_STATICLIB}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Building Rust kernel ${KERNEL_NAME} with cargo"
@@ -82,5 +141,10 @@ function(target_link_rust_kernels TARGET)
         "$<LINK_LIBRARY:WHOLE_ARCHIVE,${RUST_KERNEL_LIBS}>"
         Threads::Threads
         ${CMAKE_DL_LIBS})
+    # Cargo's native-library link directives do not propagate out of a staticlib.
+    if(GPU_LANG STREQUAL "CUDA")
+        find_package(CUDAToolkit REQUIRED)
+        target_link_libraries(${TARGET} PRIVATE CUDA::cuda_driver)
+    endif()
     _restrict_rust_exports(${TARGET})
 endfunction()

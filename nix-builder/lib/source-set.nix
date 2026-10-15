@@ -43,7 +43,11 @@ let
     else
       fileset.empty;
   # Rust kernels also need their Cargo manifest.
-  kernelSrc = kernel: kernel.src ++ lib.optional (kernel ? cargo-manifest) kernel.cargo-manifest;
+  kernelSrc =
+    kernel:
+    kernel.src
+    ++ lib.optional (kernel ? cargo-manifest) kernel.cargo-manifest
+    ++ lib.optional (kernel ? device-manifest) kernel.device-manifest;
   kernelsSrc = fileset.unions (
     lib.flatten (lib.mapAttrsToList (name: kernel: map (nameToPath path) (kernelSrc kernel)) kernels)
   );
@@ -55,6 +59,7 @@ fileset.toSource {
     kernelsSrc
     lockSet
     cargoLockSet
+    (fileset.maybeMissing (path + "/rust-toolchain.toml"))
     rustGitHashesSet
     srcSet
     pySrcSet

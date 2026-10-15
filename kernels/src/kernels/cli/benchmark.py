@@ -403,7 +403,8 @@ def collect_machine_info() -> MachineInfo:
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
             if hasattr(torch.version, "hip") and torch.version.hip:
-                backend_type = f"ROCm {torch.version.hip}"
+                rocm_version = getattr(torch.version, "rocm", None) or torch.version.hip
+                backend_type = f"ROCm {rocm_version}"
             else:
                 backend_type = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
         elif backend_name == "xpu":

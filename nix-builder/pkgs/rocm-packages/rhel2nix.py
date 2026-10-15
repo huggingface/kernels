@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Set
 from urllib.parse import urljoin
 from urllib.request import urlopen
 
-BASEURL = "https://repo.amd.com/rocm/packages-multi-arch/rhel{rhel_version}/{arch}/"
+BASEURL = "https://stable.repo.amd.com/rocm/core/packages/rhel{rhel_version}/{arch}/"
 
 RHEL_VERSIONS = ["8", "9"]
 ARCHES = ["x86_64"]
@@ -182,7 +182,7 @@ def __main__():
     )
 
     # Select the packages that belong to the requested ROCm version. The
-    # multi-arch repo serves several versions from one URL.
+    # repo serves several versions from one URL.
     packages = {}
     available_versions = set()
     for pkg in package_info(rhel_version=args.rhel_version, arch=args.arch):

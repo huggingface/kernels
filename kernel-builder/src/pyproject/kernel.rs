@@ -40,6 +40,26 @@ fn render_kernel_component(
         Kernel::RustCpu { cargo_manifest, .. } => {
             render_kernel_component_rust(env, kernel_name, cargo_manifest, write)?
         }
+        Kernel::RustCuda {
+            cargo_manifest,
+            device_manifest,
+            ptx_dir,
+            cuda_capabilities,
+            ..
+        } => {
+            env.get_template("kernel-component/rust-cuda.cmake")?
+                .render_captured_to(
+                    context! {
+                        name => kernel_name,
+                        manifest_path => cargo_manifest,
+                        device_manifest => device_manifest,
+                        ptx_dir => ptx_dir,
+                        cuda_capabilities => cuda_capabilities,
+                    },
+                    &mut *write,
+                )?;
+            write.write_all(b"\n")?;
+        }
         Kernel::CppCuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
@@ -237,4 +257,62 @@ fn render_kernel_component_xpu(
     write.write_all(b"\n")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rust_components_render_for_their_backend() {
+        let mut env = Environment::new();
+        minijinja_embed::load_templates!(&mut env);
+        for (kernel, backend, device) in [
+            (
+                Kernel::RustCpu {
+                    cargo_manifest: "host/Cargo.toml".into(),
+                    depends: vec![],
+                    src: vec![],
+                },
+                "CPU",
+                false,
+            ),
+            (
+                Kernel::RustCuda {
+                    cargo_manifest: "host/Cargo.toml".into(),
+                    device_manifest: Some("device/Cargo.toml".into()),
+                    ptx_dir: Some("ptx".into()),
+                    cuda_capabilities: Some(vec!["8.0".into(), "9.0".into()]),
+                    depends: vec![],
+                    src: vec![],
+                },
+                "CUDA",
+                true,
+            ),
+            (
+                Kernel::RustCuda {
+                    cargo_manifest: "host/Cargo.toml".into(),
+                    device_manifest: None,
+                    ptx_dir: None,
+                    cuda_capabilities: None,
+                    depends: vec![],
+                    src: vec![],
+                },
+                "CUDA",
+                false,
+            ),
+        ] {
+            let mut rendered = vec![];
+            render_kernel_component(&env, "example", &kernel, &mut rendered).unwrap();
+            let rendered = String::from_utf8(rendered).unwrap();
+            assert!(rendered.contains(&format!("if(GPU_LANG STREQUAL \"{backend}\")")));
+            assert!(rendered.contains("MANIFEST_PATH \"host/Cargo.toml\""));
+            assert_eq!(rendered.contains("DEVICE_MANIFEST"), device);
+            if device {
+                assert!(rendered.contains("DEVICE_MANIFEST \"device/Cargo.toml\""));
+                assert!(rendered.contains("PTX_DIR \"ptx\""));
+                assert!(rendered.contains("CUDA_CAPABILITIES 8.0 9.0"));
+            }
+        }
+    }
 }

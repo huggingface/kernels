@@ -19,6 +19,10 @@ let
     path = ../../examples/kernels/relu-torch-bounds;
   };
 
+  # The Torch version that `relu-torch-bounds` is bounded to (minver/maxver).
+  expectedTorchVersion = "2.13.0";
+  kernelBuildSetTorchVersions = lib.unique (map (buildSet: buildSet.torch.version) kernelBuildSets);
+
   badRegistrationCheck = testers.testBuildFailure' {
     drv =
       (genKernelFlakeOutputs {
@@ -128,9 +132,13 @@ let
         touch $out
       '';
 in
-assert lib.assertMsg (builtins.all (buildSet: buildSet.torch.version == "2.13.0") kernelBuildSets)
+assert lib.assertMsg (kernelBuildSets != [ ]) ''
+  Torch minver/maxver filtering does not work: expected build sets with Torch ${expectedTorchVersion}, got no build sets.
+'';
+assert lib.assertMsg
+  (builtins.all (buildSet: buildSet.torch.version == expectedTorchVersion) kernelBuildSets)
   ''
-    Torch minver/maxver filtering does not work.
+    Torch minver/maxver filtering does not work: expected only build sets with Torch ${expectedTorchVersion}, got: ${lib.concatStringsSep ", " kernelBuildSetTorchVersions}
   '';
 assert lib.assertMsg (torchVersionUtilsTestFailures == [ ]) ''
   torch-version-utils tests failed: ${builtins.toJSON torchVersionUtilsTestFailures}

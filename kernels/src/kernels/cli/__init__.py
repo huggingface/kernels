@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
+from kernels.cli.describe_api import print_kernel_api
 from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
 from kernels.cli.lock import lock_kernels
@@ -54,6 +55,19 @@ def main():
         help="Print the kernel information as JSON",
     )
     info_parser.set_defaults(func=kernel_info)
+
+    describe_api_parser = subparsers.add_parser("describe-api", help="List a kernel's public functions and layers")
+    describe_api_parser.add_argument("kernel", help="The kernel repo ID or a local kernel directory")
+    api_selection = describe_api_parser.add_mutually_exclusive_group()
+    api_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit; Hub only)")
+    api_selection.add_argument("--version", type=int, help="The kernel version (default: latest version; Hub only)")
+    describe_api_parser.add_argument("--json", action="store_true", help="Print the full symbol information as JSON")
+    describe_api_parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Allow kernels from untrusted publishers (Hub only; disabled by default)",
+    )
+    describe_api_parser.set_defaults(func=kernel_api)
 
     variants_parser = subparsers.add_parser("variants", help="Show kernel build variants and compatibility decisions")
     variants_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
@@ -162,6 +176,16 @@ def kernel_info(args):
         revision=args.revision,
         version=args.version,
         json_output=args.json,
+    )
+
+
+def kernel_api(args):
+    print_kernel_api(
+        args.kernel,
+        revision=args.revision,
+        version=args.version,
+        json_output=args.json,
+        trust_remote_code=args.trust_remote_code,
     )
 
 

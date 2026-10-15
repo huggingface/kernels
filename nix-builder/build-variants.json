@@ -21,6 +21,15 @@
       "torch215-cpu-aarch64-linux"
     ],
     "cuda": [
+      "torch210-cu126-aarch64-linux",
+      "torch210-cu128-aarch64-linux",
+      "torch210-cu130-aarch64-linux",
+      "torch211-cu126-aarch64-linux",
+      "torch211-cu128-aarch64-linux",
+      "torch211-cu130-aarch64-linux",
+      "torch212-cu126-aarch64-linux",
+      "torch212-cu130-aarch64-linux",
+      "torch212-cu132-aarch64-linux",
       "torch213-cu126-aarch64-linux",
       "torch213-cu130-aarch64-linux",
       "torch213-cu132-aarch64-linux",
@@ -39,6 +48,15 @@
       "torch215-cpu-x86_64-linux"
     ],
     "cuda": [
+      "torch210-cu126-x86_64-linux",
+      "torch210-cu128-x86_64-linux",
+      "torch210-cu130-x86_64-linux",
+      "torch211-cu126-x86_64-linux",
+      "torch211-cu128-x86_64-linux",
+      "torch211-cu130-x86_64-linux",
+      "torch212-cu126-x86_64-linux",
+      "torch212-cu130-x86_64-linux",
+      "torch212-cu132-x86_64-linux",
       "torch213-cu126-x86_64-linux",
       "torch213-cu130-x86_64-linux",
       "torch213-cu132-x86_64-linux",

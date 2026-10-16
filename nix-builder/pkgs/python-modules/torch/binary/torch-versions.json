@@ -1,6 +1,21 @@
 [
   {
     "torchVersion": "2.10.0",
+    "cudaVersion": "12.6",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.10.0",
+    "cudaVersion": "12.8",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.10.0",
+    "cudaVersion": "13.0",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.10.0",
     "metal": true,
     "systems": ["aarch64-darwin"]
   },
@@ -10,6 +25,21 @@
     "systems": ["x86_64-linux"]
   },
 
+  {
+    "torchVersion": "2.11.0",
+    "cudaVersion": "12.6",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.11.0",
+    "cudaVersion": "12.8",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.11.0",
+    "cudaVersion": "13.0",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
   {
     "torchVersion": "2.11.0",
     "cpu": true,
@@ -27,6 +57,21 @@
     "systems": ["x86_64-linux"]
   },
 
+  {
+    "torchVersion": "2.12.0",
+    "cudaVersion": "12.6",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.12.0",
+    "cudaVersion": "13.0",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
+  {
+    "torchVersion": "2.12.0",
+    "cudaVersion": "13.2",
+    "systems": ["x86_64-linux", "aarch64-linux"]
+  },
   {
     "torchVersion": "2.12.0",
     "metal": true,

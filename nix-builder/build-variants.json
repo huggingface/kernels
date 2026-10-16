@@ -68,6 +68,12 @@
       "torch215-cu134-x86_64-linux"
     ],
     "rocm": [
+      "torch210-rocm70-x86_64-linux",
+      "torch210-rocm71-x86_64-linux",
+      "torch211-rocm71-x86_64-linux",
+      "torch211-rocm72-x86_64-linux",
+      "torch212-rocm71-x86_64-linux",
+      "torch212-rocm72-x86_64-linux",
       "torch213-rocm71-x86_64-linux",
       "torch213-rocm72-x86_64-linux",
       "torch214-rocm714-x86_64-linux",

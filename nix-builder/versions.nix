@@ -34,6 +34,19 @@
   }
   {
     torchVersion = "2.10";
+    rocmVersion = "7.0";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+    tvmFfiVersion = "0.1";
+  }
+  {
+    torchVersion = "2.10";
+    rocmVersion = "7.1";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.10";
     xpuVersion = "2025.3.1";
     systems = [ "x86_64-linux" ];
     bundleBuild = true;
@@ -78,6 +91,18 @@
     torchVersion = "2.11";
     metal = true;
     systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
+    rocmVersion = "7.1";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.11";
+    rocmVersion = "7.2";
+    systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
   {
@@ -127,6 +152,18 @@
     torchVersion = "2.12";
     metal = true;
     systems = [ "aarch64-darwin" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.12";
+    rocmVersion = "7.1";
+    systems = [ "x86_64-linux" ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.12";
+    rocmVersion = "7.2";
+    systems = [ "x86_64-linux" ];
     bundleBuild = true;
   }
   {

@@ -76,6 +76,12 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## ROCm x86_64-linux
 
+- `torch210-rocm70-x86_64-linux`
+- `torch210-rocm71-x86_64-linux`
+- `torch211-rocm71-x86_64-linux`
+- `torch211-rocm72-x86_64-linux`
+- `torch212-rocm71-x86_64-linux`
+- `torch212-rocm72-x86_64-linux`
 - `torch213-rocm71-x86_64-linux`
 - `torch213-rocm72-x86_64-linux`
 - `torch214-rocm714-x86_64-linux`

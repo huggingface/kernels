@@ -6,6 +6,12 @@
 
 let
   versions = {
+    "3.6.0" = {
+      x86_64-linux = {
+        url = "https://download.pytorch.org/whl/triton_rocm-3.6.0-cp314-cp314-linux_x86_64.whl";
+        hash = "sha256-935tqCKop24JegYeYaf++K4KM+i2mJSYc24W7RIPxvg=";
+      };
+    };
     "3.7.0" = {
       x86_64-linux = {
         url = "https://download-r2.pytorch.org/whl/triton_rocm-3.7.0-cp314-cp314-linux_x86_64.whl";

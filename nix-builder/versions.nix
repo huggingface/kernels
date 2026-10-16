@@ -1,6 +1,16 @@
 [
   {
     torchVersion = "2.10";
+    cpu = true;
+    systems = [
+      "aarch64-darwin"
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
+  {
+    torchVersion = "2.10";
     cudaVersion = "12.6";
     systems = [
       "x86_64-linux"
@@ -83,9 +93,11 @@
     torchVersion = "2.11";
     cpu = true;
     systems = [
+      "aarch64-darwin"
       "x86_64-linux"
+      "aarch64-linux"
     ];
-    bundleBuild = false;
+    bundleBuild = true;
   }
   {
     torchVersion = "2.11";
@@ -121,6 +133,16 @@
     bundleBuild = false;
   }
 
+  {
+    torchVersion = "2.12";
+    cpu = true;
+    systems = [
+      "aarch64-darwin"
+      "x86_64-linux"
+      "aarch64-linux"
+    ];
+    bundleBuild = true;
+  }
   {
     torchVersion = "2.12";
     cudaVersion = "12.6";

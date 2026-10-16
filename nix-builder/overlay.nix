@@ -257,7 +257,6 @@ final: prev:
           xpuPackages = final.xpuPackages_2025_3_1;
         };
 
-        # Maintain a minimal version for TPU support.
         torch-bin_2_11 = mkTorch {
           version = "2.11";
           triton-cuda = triton_3_6_0;

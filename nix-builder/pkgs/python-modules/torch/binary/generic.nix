@@ -80,6 +80,8 @@ let
   # For the required version see:
   # https://github.com/pytorch/pytorch/blob/v2.15.0-rc3/cmake/External/aotriton.cmake#L13
   aotritonVersions = with rocmPackages; {
+    "2.10" = aotriton_0_11_1;
+    "2.11" = aotriton_0_11_2;
     "2.12" = aotriton_0_11_2;
     "2.13" = aotriton_0_12;
     "2.14" = aotriton_0_13;

@@ -7,6 +7,9 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU aarch64-darwin
 
+- `torch210-cpu-aarch64-darwin`
+- `torch211-cpu-aarch64-darwin`
+- `torch212-cpu-aarch64-darwin`
 - `torch213-cpu-aarch64-darwin`
 - `torch214-cpu-aarch64-darwin`
 - `torch215-cpu-aarch64-darwin`
@@ -22,6 +25,9 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU aarch64-linux
 
+- `torch210-cpu-aarch64-linux`
+- `torch211-cpu-aarch64-linux`
+- `torch212-cpu-aarch64-linux`
 - `torch213-cpu-aarch64-linux`
 - `torch214-cpu-aarch64-linux`
 - `torch215-cpu-aarch64-linux`
@@ -49,6 +55,9 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU x86_64-linux
 
+- `torch210-cpu-x86_64-linux`
+- `torch211-cpu-x86_64-linux`
+- `torch212-cpu-x86_64-linux`
 - `torch213-cpu-x86_64-linux`
 - `torch214-cpu-x86_64-linux`
 - `torch215-cpu-x86_64-linux`
@@ -76,6 +85,12 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## ROCm x86_64-linux
 
+- `torch210-rocm70-x86_64-linux`
+- `torch210-rocm71-x86_64-linux`
+- `torch211-rocm71-x86_64-linux`
+- `torch211-rocm72-x86_64-linux`
+- `torch212-rocm71-x86_64-linux`
+- `torch212-rocm72-x86_64-linux`
 - `torch213-rocm71-x86_64-linux`
 - `torch213-rocm72-x86_64-linux`
 - `torch214-rocm714-x86_64-linux`

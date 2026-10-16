@@ -286,6 +286,17 @@
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${rocmVersion}-${sys}"};
         }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${rocmVersion}-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-${rocmVersion}-${sys}"};
+        }
       ];
 
       mkKernelOutputs =

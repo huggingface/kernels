@@ -1,4 +1,5 @@
 import importlib
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,6 +7,8 @@ from types import ModuleType
 
 from kernels._rust import Metadata
 from kernels.hf_hub import RepoInfo
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,18 @@ def _import_from_path(
         return loaded_kernel.module
 
     metadata = Metadata.read_from_file(variant_path / "metadata.json")
+
+    # Kernel ids are unique per build: if this build was already imported
+    # reuse it instead of executing it again.
+    if (module := sys.modules.get(metadata.id)) is not None:
+        logging.debug(f"Kernel already loaded, skipping: {metadata.id}")
+        _loaded_kernels[variant_path] = LoadedKernel(
+            metadata=metadata,
+            module=module,
+            repo_info=repo_info,
+        )
+        return module
+
     module_name = metadata.name.python_name
 
     file_path = variant_path / "__init__.py"

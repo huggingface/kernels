@@ -6,6 +6,16 @@
 
 let
   versions = {
+    "3.6.0" = {
+      x86_64-linux = {
+        url = "https://download.pytorch.org/whl/triton-3.6.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-ttgAvaZm675+whRuP16yce6H+PrHJAEdx/Jd7pv7X38=";
+      };
+      aarch64-linux = {
+        url = "https://download.pytorch.org/whl/triton-3.6.0-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl";
+        hash = "sha256-IO0vdw9yF7iplMupnnysN+e+c1o5kTRJkLgKtP6pZMQ=";
+      };
+    };
     "3.7.0" = {
       x86_64-linux = {
         url = "https://download.pytorch.org/whl/triton-3.7.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";

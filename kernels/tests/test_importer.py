@@ -12,6 +12,9 @@ _EXEC_LOG_MODULE = "_kernels_test_exec_log"
 _COUNTING_ID = "counting_1_cuda"
 _REBUILT_ID = "counting_2_cuda"
 
+_EXEC_LOG_MODULE = "_kernels_test_exec_log"
+_COUNTING_ID = "counting_1_cuda"
+
 
 def _write_variant(tmp_path):
     variant_dir = tmp_path / "build" / "torch28-cxx11-cu128-x86_64-linux"

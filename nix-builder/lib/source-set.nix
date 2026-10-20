@@ -55,7 +55,6 @@ fileset.toSource {
     kernelsSrc
     lockSet
     cargoLockSet
-    (fileset.maybeMissing (path + "/rust-toolchain.toml"))
     rustGitHashesSet
     srcSet
     pySrcSet

@@ -65,13 +65,12 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
 
         accumulate_gpu_archs(_ALL_GPU_ARCHS "${ALL_GPU_ARCHS}" "${_KERNEL_ARCHS}")
         set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
-    endif()
 
-    set(_HOST_ENV)
-    if(GPU_LANG STREQUAL "CUDA")
         _cuda_oxide_device_manifests(_DEVICE_MANIFESTS
             ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH})
     endif()
+
+    set(_HOST_ENV)
 
     if(_DEVICE_MANIFESTS)
         # Build cuda-oxide device code before the host crate embeds its PTX.
@@ -126,8 +125,6 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
 
     add_custom_target(${KERNEL_NAME}_cargo_build ALL
         COMMAND ${CMAKE_COMMAND} -E env "PATH=${_PYTHON_BIN_DIR}:$ENV{PATH}"
-            "KERNEL_BUILDER_GPU_LANG=${GPU_LANG}"
-            "KERNEL_BUILDER_CUDA_ARCHS=${_KERNEL_ARCHS}"
             ${_HOST_ENV}
             ${CARGO_EXECUTABLE} rustc --release --locked --lib --crate-type staticlib
             --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH}

@@ -34,6 +34,8 @@
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ allOutputs ruff
           ++ lib.optionals (isLinux && cudaSupport) (allOutputs manylinux_2_28.cudaBackendStdenv)
+          ++ lib.optionals (isLinux && cudaSupport) (allOutputs cuda-oxide.toolchain)
+          ++ lib.optionals (isLinux && cudaSupport) (allOutputs cuda-oxide.backend)
           ++ lib.optionals (isLinux && !config.cudaSupport) (allOutputs manylinux_2_28.stdenv)
           # Only works on recent CUDAs.
           ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (

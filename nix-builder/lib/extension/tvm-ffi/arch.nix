@@ -13,6 +13,7 @@
   cargo,
   cmake,
   cmakeNvccThreadsHook,
+  cuda-oxide,
   cuda_nvcc,
   generate-symbols-hook,
   get-kernel-check,
@@ -136,8 +137,6 @@ let
   metalSupport = buildConfig.metal or false;
 
   rustSupport = cargoLock != null;
-  # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
-  rustCuda = import ./rust-cuda.nix { inherit pkgs; };
 
   # rpaths are stripped from kernels to make them portable, but that
   # also means that in a Nix environment the CUDA/ROCm/oneAPI dependencies
@@ -260,7 +259,8 @@ stdenv.mkDerivation (
       cargo
       rustc
     ]
-    ++ lib.optionals (rustSupport && cudaSupport) [ rustCuda.toolchain ];
+    # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
+    ++ lib.optionals (rustSupport && cudaSupport) [ cuda-oxide.toolchain ];
 
     buildInputs = [
       python3.pkgs.tvm-ffi
@@ -340,18 +340,12 @@ stdenv.mkDerivation (
       # rpaths anyway.
       (lib.cmakeBool "CMAKE_SKIP_RPATH" true)
     ]
-    # Rust toolchains can propagate a newer compiler onto PATH. Link with the
-    # selected stdenv so redistributable kernels retain their glibc baseline.
-    ++ lib.optionals rustSupport [
-      (lib.cmakeFeature "CMAKE_C_COMPILER" "${stdenv.cc}/bin/cc")
-      (lib.cmakeFeature "CMAKE_CXX_COMPILER" "${stdenv.cc}/bin/c++")
-    ]
     ++ lib.optionals cudaSupport [
       (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
       (lib.cmakeFeature "GPU_LANG" "CUDA")
     ]
     ++ lib.optionals (rustSupport && cudaSupport) [
-      (lib.cmakeFeature "CUDA_OXIDE_BACKEND" "${rustCuda.backend}/lib/librustc_codegen_cuda.so")
+      (lib.cmakeFeature "CUDA_OXIDE_BACKEND" "${cuda-oxide.backend}/lib/librustc_codegen_cuda.so")
     ]
     ++ lib.optionals rocmSupport [
       # Ensure sure that we use HIP from our CLR override and not HIP from

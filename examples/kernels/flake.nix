@@ -102,6 +102,12 @@
           path = ./relu-torch-stable-abi;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
         }
+        {
+          # Exercise the shim with Torch 2.11 headers, which lack index_select.
+          name = "index-select-torch-stable-abi-kernel";
+          path = ./index-select-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi210-cu128-${sys}"};
+        }
         # Check that we can also build the non-stable ABI version preceding the stable ABI version.
         {
           name = "relu-torch-stable-abi-kernel";

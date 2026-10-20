@@ -34,6 +34,8 @@ pub enum Dependency {
     #[serde(rename = "metal-cpp")]
     MetalCpp,
     Torch,
+    #[serde(rename = "torch-stable-abi-shim")]
+    TorchStableAbiShim,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -101,4 +103,17 @@ pub enum DependencyError {
     Dependency { backend: String, dependency: String },
     #[error("Unknown dependency: `{dependency:?}`")]
     GeneralDependency { dependency: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Dependency;
+
+    #[test]
+    fn torch_stable_abi_shim_round_trips() {
+        let json = r#""torch-stable-abi-shim""#;
+        let dependency: Dependency = serde_json::from_str(json).unwrap();
+        assert_eq!(dependency, Dependency::TorchStableAbiShim);
+        assert_eq!(serde_json::to_string(&dependency).unwrap(), json);
+    }
 }

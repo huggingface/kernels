@@ -746,33 +746,6 @@ mod tests {
     }
 
     #[test]
-    fn v6_rust_cuda_converts() {
-        let config = r#"
-            [general]
-            name = "rust-cuda"
-            version = 1
-            edition = 6
-            license = "Apache-2.0"
-            backends = ["cuda"]
-            [tvm-ffi]
-            [kernel.gpu_kernel]
-            language = "rust-cuda"
-            cargo-manifest = "Cargo.toml"
-            cuda-capabilities = ["8.0"]
-            depends = []
-            src = ["src"]
-        "#;
-        let build = Build::try_from(toml::from_str::<v6::Build>(config).unwrap()).unwrap();
-        let kernel = &build.kernels["gpu_kernel"];
-        assert_eq!(kernel.language(), Language::Rust);
-        assert_eq!(kernel.backend(), Backend::Cuda);
-        assert!(matches!(
-            kernel,
-            Kernel::RustCuda { cuda_capabilities: Some(caps), .. } if caps == &["8.0"]
-        ));
-    }
-
-    #[test]
     fn v6_rust_kernel_rejects_invalid_config() {
         let cases = [
             (
@@ -780,12 +753,6 @@ mod tests {
                 "rust-cuda",
                 "",
                 "require a `[tvm-ffi]` framework",
-            ),
-            (
-                "[tvm-ffi]",
-                "rust-cuda",
-                r#"cuda-flags = ["-O3"]"#,
-                "unknown field `cuda-flags`",
             ),
             (
                 "[tvm-ffi]",

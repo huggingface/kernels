@@ -1,5 +1,47 @@
+# cuda-oxide interop: device crates are declared by the host crate in
+# `[[package.metadata.cuda-oxide.device-crates]]`, as `cargo oxide` reads them.
+function(_cuda_oxide_device_manifests OUT_VAR MANIFEST)
+    execute_process(
+        COMMAND ${CARGO_EXECUTABLE} metadata --format-version 1 --no-deps --offline
+            --manifest-path ${MANIFEST}
+        OUTPUT_VARIABLE _JSON
+        ERROR_VARIABLE _ERROR
+        RESULT_VARIABLE _RESULT)
+    if(NOT _RESULT EQUAL 0)
+        message(FATAL_ERROR "cargo metadata failed for ${MANIFEST}: ${_ERROR}")
+    endif()
+
+    file(REAL_PATH ${MANIFEST} _MANIFEST)
+    set(_MANIFESTS)
+    string(JSON _N_PACKAGES LENGTH "${_JSON}" packages)
+    math(EXPR _LAST_PACKAGE "${_N_PACKAGES} - 1")
+    foreach(_I RANGE ${_LAST_PACKAGE})
+        string(JSON _PACKAGE_MANIFEST GET "${_JSON}" packages ${_I} manifest_path)
+        file(REAL_PATH ${_PACKAGE_MANIFEST} _PACKAGE_MANIFEST)
+        if(NOT _PACKAGE_MANIFEST STREQUAL _MANIFEST)
+            continue()
+        endif()
+
+        string(JSON _CRATES ERROR_VARIABLE _NO_CRATES
+            GET "${_JSON}" packages ${_I} metadata cuda-oxide device-crates)
+        if(_NO_CRATES)
+            break()
+        endif()
+        get_filename_component(_PACKAGE_DIR ${_PACKAGE_MANIFEST} DIRECTORY)
+        string(JSON _N_CRATES LENGTH "${_CRATES}")
+        math(EXPR _LAST_CRATE "${_N_CRATES} - 1")
+        foreach(_J RANGE ${_LAST_CRATE})
+            string(JSON _CRATE_MANIFEST GET "${_CRATES}" ${_J} manifest-path)
+            get_filename_component(_CRATE_MANIFEST ${_CRATE_MANIFEST} ABSOLUTE BASE_DIR ${_PACKAGE_DIR})
+            list(APPEND _MANIFESTS ${_CRATE_MANIFEST})
+        endforeach()
+    endforeach()
+
+    set(${OUT_VAR} ${_MANIFESTS} PARENT_SCOPE)
+endfunction()
+
 function(rust_kernel_component LIBS_VAR TARGETS_VAR)
-    cmake_parse_arguments(KERNEL "" "NAME;MANIFEST_PATH;DEVICE_MANIFEST;PTX_DIR" "CUDA_CAPABILITIES" ${ARGN})
+    cmake_parse_arguments(KERNEL "" "NAME;MANIFEST_PATH" "CUDA_CAPABILITIES" ${ARGN})
 
     if(NOT KERNEL_NAME OR NOT KERNEL_MANIFEST_PATH)
         message(FATAL_ERROR "rust_kernel_component: NAME and MANIFEST_PATH are required")
@@ -25,20 +67,20 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
         set(ALL_GPU_ARCHS ${_ALL_GPU_ARCHS} PARENT_SCOPE)
     endif()
 
-    set(_RUST_KERNEL_DEPENDS)
+    set(_HOST_ENV)
+    if(GPU_LANG STREQUAL "CUDA")
+        _cuda_oxide_device_manifests(_DEVICE_MANIFESTS
+            ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH})
+    endif()
 
-    if(KERNEL_DEVICE_MANIFEST)
+    if(_DEVICE_MANIFESTS)
         # Build cuda-oxide device code before the host crate embeds its PTX.
-        if(NOT DEFINED ENV{CUDA_OXIDE_BACKEND} OR "$ENV{CUDA_OXIDE_BACKEND}" STREQUAL "")
-            message(FATAL_ERROR "rust_kernel_component: DEVICE_MANIFEST requires CUDA_OXIDE_BACKEND")
-        endif()
-        if(NOT KERNEL_PTX_DIR)
-            set(KERNEL_PTX_DIR kernels-ptx)
+        if(NOT CUDA_OXIDE_BACKEND)
+            message(FATAL_ERROR "rust_kernel_component: cuda-oxide device crates require CUDA_OXIDE_BACKEND")
         endif()
 
-        get_filename_component(_DEVICE_MANIFEST ${KERNEL_DEVICE_MANIFEST} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-        get_filename_component(_PTX_DIR ${KERNEL_PTX_DIR} ABSOLUTE BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
         set(_DEVICE_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME}-device)
+        set(_PTX_DIR ${_DEVICE_TARGET_DIR}/ptx)
         set(_DEVICE_ENV)
 
         if(_KERNEL_ARCHS)
@@ -50,20 +92,27 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
             list(APPEND _DEVICE_ENV "CUDA_OXIDE_TARGET=sm_${_OXIDE_ARCH}")
         endif()
 
+        set(_DEVICE_COMMANDS)
+        foreach(_DEVICE_MANIFEST ${_DEVICE_MANIFESTS})
+            # Flags match what `cargo oxide build` passes to the codegen backend.
+            list(APPEND _DEVICE_COMMANDS
+                COMMAND ${CMAKE_COMMAND} -E env
+                    "CUDA_OXIDE_PTX_DIR=${_PTX_DIR}"
+                    "RUSTFLAGS=-Zcodegen-backend=${CUDA_OXIDE_BACKEND} -Copt-level=3 -Cdebug-assertions=off -Zmir-enable-passes=-JumpThreading -Csymbol-mangling-version=v0"
+                    ${_DEVICE_ENV}
+                    ${CARGO_EXECUTABLE} build --release --locked
+                        --manifest-path ${_DEVICE_MANIFEST}
+                        --target-dir ${_DEVICE_TARGET_DIR})
+        endforeach()
+
         add_custom_target(${KERNEL_NAME}_oxide_device_build ALL
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_PTX_DIR}
-            COMMAND ${CMAKE_COMMAND} -E env
-                "CUDA_OXIDE_PTX_DIR=${_PTX_DIR}"
-                "RUSTFLAGS=-Zcodegen-backend=$ENV{CUDA_OXIDE_BACKEND} -Copt-level=3 -Cdebug-assertions=off -Zmir-enable-passes=-JumpThreading -Csymbol-mangling-version=v0"
-                ${_DEVICE_ENV}
-                ${CARGO_EXECUTABLE} build --release --locked
-                    --manifest-path ${_DEVICE_MANIFEST}
-                    --target-dir ${_DEVICE_TARGET_DIR}
+            ${_DEVICE_COMMANDS}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Building Rust CUDA device kernel ${KERNEL_NAME}"
             VERBATIM
         )
-        list(APPEND _RUST_KERNEL_DEPENDS ${KERNEL_NAME}_oxide_device_build)
+        list(APPEND _HOST_ENV "KERNEL_BUILDER_PTX_DIR=${_PTX_DIR}")
     endif()
 
     string(REPLACE "-" "_" _LIB_NAME ${KERNEL_NAME})
@@ -79,15 +128,18 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
         COMMAND ${CMAKE_COMMAND} -E env "PATH=${_PYTHON_BIN_DIR}:$ENV{PATH}"
             "KERNEL_BUILDER_GPU_LANG=${GPU_LANG}"
             "KERNEL_BUILDER_CUDA_ARCHS=${_KERNEL_ARCHS}"
+            ${_HOST_ENV}
             ${CARGO_EXECUTABLE} rustc --release --locked --lib --crate-type staticlib
             --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH}
             --target-dir ${_CARGO_TARGET_DIR}
-        DEPENDS ${_RUST_KERNEL_DEPENDS}
         BYPRODUCTS ${_STATICLIB}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Building Rust kernel ${KERNEL_NAME} with cargo"
         VERBATIM
     )
+    if(_DEVICE_MANIFESTS)
+        add_dependencies(${KERNEL_NAME}_cargo_build ${KERNEL_NAME}_oxide_device_build)
+    endif()
 
     add_library(${KERNEL_NAME}_rust STATIC IMPORTED GLOBAL)
     set_target_properties(${KERNEL_NAME}_rust PROPERTIES IMPORTED_LOCATION ${_STATICLIB})
@@ -141,10 +193,5 @@ function(target_link_rust_kernels TARGET)
         "$<LINK_LIBRARY:WHOLE_ARCHIVE,${RUST_KERNEL_LIBS}>"
         Threads::Threads
         ${CMAKE_DL_LIBS})
-    # Cargo's native-library link directives do not propagate out of a staticlib.
-    if(GPU_LANG STREQUAL "CUDA")
-        find_package(CUDAToolkit REQUIRED)
-        target_link_libraries(${TARGET} PRIVATE CUDA::cuda_driver)
-    endif()
     _restrict_rust_exports(${TARGET})
 endfunction()

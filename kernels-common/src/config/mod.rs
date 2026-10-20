@@ -356,11 +356,10 @@ pub enum Kernel {
         depends: Vec<Dependency>,
         src: Vec<String>,
     },
-
     RustCuda {
+        /// Path of the host crate's `Cargo.toml`, relative to the kernel directory.
+        /// cuda-oxide device crates are read from its `[package.metadata.cuda-oxide]`.
         cargo_manifest: String,
-        device_manifest: Option<String>,
-        ptx_dir: Option<String>,
         cuda_capabilities: Option<Vec<String>>,
         depends: Vec<Dependency>,
         src: Vec<String>,
@@ -747,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn v6_rust_cuda_round_trip() {
+    fn v6_rust_cuda_converts() {
         let config = r#"
             [general]
             name = "rust-cuda"
@@ -758,36 +757,19 @@ mod tests {
             [tvm-ffi]
             [kernel.gpu_kernel]
             language = "rust-cuda"
-            cargo-manifest = "host/Cargo.toml"
-            device-manifest = "device/Cargo.toml"
-            ptx-dir = "ptx"
+            cargo-manifest = "Cargo.toml"
             cuda-capabilities = ["8.0"]
             depends = []
-            src = ["host/src", "device/src"]
+            src = ["src"]
         "#;
         let build = Build::try_from(toml::from_str::<v6::Build>(config).unwrap()).unwrap();
-        assert_eq!(build.kernels["gpu_kernel"].language(), Language::Rust);
-        assert_eq!(build.kernels["gpu_kernel"].backend(), Backend::Cuda);
-        let serialized = toml::to_string(&v6::Build::from(build)).unwrap();
-        let reparsed: v6::Build = toml::from_str(&serialized).unwrap();
-        match &reparsed.kernels["gpu_kernel"] {
-            v6::Kernel::RustCuda {
-                cargo_manifest,
-                device_manifest,
-                ptx_dir,
-                cuda_capabilities,
-                ..
-            } => {
-                assert_eq!(cargo_manifest, "host/Cargo.toml");
-                assert_eq!(device_manifest.as_deref(), Some("device/Cargo.toml"));
-                assert_eq!(ptx_dir.as_deref(), Some("ptx"));
-                assert_eq!(
-                    cuda_capabilities.as_deref(),
-                    Some(["8.0".to_string()].as_slice())
-                );
-            }
-            _ => panic!("expected Rust CUDA kernel"),
-        }
+        let kernel = &build.kernels["gpu_kernel"];
+        assert_eq!(kernel.language(), Language::Rust);
+        assert_eq!(kernel.backend(), Backend::Cuda);
+        assert!(matches!(
+            kernel,
+            Kernel::RustCuda { cuda_capabilities: Some(caps), .. } if caps == &["8.0"]
+        ));
     }
 
     #[test]

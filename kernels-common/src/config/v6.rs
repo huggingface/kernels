@@ -166,12 +166,9 @@ pub enum Kernel {
         depends: Vec<Dependency>,
         src: Vec<String>,
     },
-
     #[serde(rename_all = "kebab-case")]
     RustCuda {
         cargo_manifest: String,
-        device_manifest: Option<String>,
-        ptx_dir: Option<String>,
         cuda_capabilities: Option<Vec<String>>,
         depends: Vec<Dependency>,
         src: Vec<String>,
@@ -394,18 +391,13 @@ impl From<Kernel> for super::Kernel {
                 include,
                 src,
             },
-
             Kernel::RustCuda {
                 cargo_manifest,
-                device_manifest,
-                ptx_dir,
                 cuda_capabilities,
                 depends,
                 src,
             } => super::Kernel::RustCuda {
                 cargo_manifest,
-                device_manifest,
-                ptx_dir,
                 cuda_capabilities,
                 depends,
                 src,
@@ -645,18 +637,13 @@ impl From<super::Kernel> for Kernel {
                 depends,
                 src,
             },
-
             super::Kernel::RustCuda {
                 cargo_manifest,
-                device_manifest,
-                ptx_dir,
                 cuda_capabilities,
                 depends,
                 src,
             } => Kernel::RustCuda {
                 cargo_manifest,
-                device_manifest,
-                ptx_dir,
                 cuda_capabilities,
                 depends,
                 src,

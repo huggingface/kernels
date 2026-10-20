@@ -62,9 +62,6 @@
   # the build has no Rust kernels.
   cargoLock ? null,
 
-  # Compile CUDA device crates with cuda-oxide and its matching rustc.
-  rustCudaDevice ? false,
-
   # Fixed-output hashes for Git dependencies in Cargo.lock.
   rustGitHashes ? { },
 
@@ -139,45 +136,33 @@ let
   metalSupport = buildConfig.metal or false;
 
   rustSupport = cargoLock != null;
-  rustCuda = import ./rust-cuda.nix {
-    inherit
-      pkgs
-      lib
-      stdenv
-      cudaPackages
-      ;
-  };
+  # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
+  rustCuda = import ./rust-cuda.nix { inherit pkgs; };
 
   # rpaths are stripped from kernels to make them portable, but that
   # also means that in a Nix environment the CUDA/ROCm/oneAPI dependencies
   # cannot be located anymore, so pass them to hooks that load the kernel.
-  libraryPath =
-    lib.makeLibraryPath (
-      map lib.getLib (
-        lib.optionals cudaSupport (
-          with cudaPackages;
-          [
-            cuda_cudart
-            libcublas
-            libcusolver
-            libcusparse
-          ]
-        )
-        ++ lib.optionals rocmSupport [ clr ]
-        ++ lib.optionals xpuSupport (
-          with xpuPackages;
-          [
-            intel-oneapi-compiler-dpcpp-cpp-runtime
-            intel-oneapi-compiler-shared-runtime
-          ]
-        )
+  libraryPath = lib.makeLibraryPath (
+    map lib.getLib (
+      lib.optionals cudaSupport (
+        with cudaPackages;
+        [
+          cuda_cudart
+          libcublas
+          libcusolver
+          libcusparse
+        ]
+      )
+      ++ lib.optionals rocmSupport [ clr ]
+      ++ lib.optionals xpuSupport (
+        with xpuPackages;
+        [
+          intel-oneapi-compiler-dpcpp-cpp-runtime
+          intel-oneapi-compiler-shared-runtime
+        ]
       )
     )
-    +
-      lib.optionalString (rustSupport && cudaSupport)
-        # Import checks run without a GPU driver in the build sandbox. The stub is
-        # only used by the check hooks, never bundled in the redistributable kernel.
-        ":${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs";
+  );
 
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
@@ -271,11 +256,11 @@ stdenv.mkDerivation (
     ++ lib.optionals rustSupport [
       rustPlatform.cargoSetupHook
     ]
-    ++ lib.optionals (rustSupport && !rustCudaDevice) [
+    ++ lib.optionals (rustSupport && !cudaSupport) [
       cargo
       rustc
     ]
-    ++ lib.optionals rustCudaDevice [ rustCuda.toolchain ];
+    ++ lib.optionals (rustSupport && cudaSupport) [ rustCuda.toolchain ];
 
     buildInputs = [
       python3.pkgs.tvm-ffi
@@ -325,10 +310,6 @@ stdenv.mkDerivation (
     // lib.optionalAttrs cudaSupport {
       CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
     }
-    // lib.optionalAttrs (rustSupport && cudaSupport) rustCuda.env
-    // lib.optionalAttrs rustCudaDevice {
-      CUDA_OXIDE_BACKEND = "${rustCuda.backend}/lib/librustc_codegen_cuda.so";
-    }
     // lib.optionalAttrs xpuSupport {
       MKLROOT = oneapi-torch-dev;
       SYCL_ROOT = oneapi-torch-dev;
@@ -368,6 +349,9 @@ stdenv.mkDerivation (
     ++ lib.optionals cudaSupport [
       (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
       (lib.cmakeFeature "GPU_LANG" "CUDA")
+    ]
+    ++ lib.optionals (rustSupport && cudaSupport) [
+      (lib.cmakeFeature "CUDA_OXIDE_BACKEND" "${rustCuda.backend}/lib/librustc_codegen_cuda.so")
     ]
     ++ lib.optionals rocmSupport [
       # Ensure sure that we use HIP from our CLR override and not HIP from

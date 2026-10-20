@@ -1,10 +1,5 @@
 # cuda-oxide is a rustc codegen plugin and must use its matching Rust toolchain.
-{
-  pkgs,
-  lib,
-  stdenv,
-  cudaPackages,
-}:
+{ pkgs }:
 let
   src = pkgs.fetchFromGitHub {
     owner = "NVIDIA";
@@ -34,27 +29,7 @@ let
     ];
     doCheck = false;
   };
-  cudaHome = pkgs.symlinkJoin {
-    name = "cuda-home";
-    paths = with cudaPackages; [
-      (lib.getDev cuda_cudart)
-      (lib.getLib cuda_cudart)
-      (lib.getDev cccl)
-      (lib.getOutput "include" libcurand)
-      cuda_crt
-    ];
-  };
 in
 {
   inherit toolchain backend;
-  env = {
-    CUDA_HOME = cudaHome;
-    CUDA_TOOLKIT_PATH = cudaHome;
-    LIBRARY_PATH = "${lib.getOutput "stubs" cudaPackages.cuda_cudart}/lib/stubs";
-    LIBCLANG_PATH = "${lib.getLib pkgs.libclang}/lib";
-    BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " [
-      "-isystem ${lib.getLib pkgs.libclang}/lib/clang/${lib.versions.major pkgs.libclang.version}/include"
-      "-isystem ${lib.getDev stdenv.cc.libc}/include"
-    ];
-  };
 }

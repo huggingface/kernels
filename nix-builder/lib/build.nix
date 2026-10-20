@@ -202,9 +202,6 @@ rec {
           kernelProvenance
           ;
 
-        rustCudaDevice = lib.any (kernel: kernel.language == "rust-cuda" && kernel ? device-manifest) (
-          lib.attrValues kernels
-        );
         cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
         rustGitHashes =
           if hasRustKernels && builtins.pathExists (src + "/rust-git-hashes.json") then

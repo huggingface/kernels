@@ -42,8 +42,6 @@ fn render_kernel_component(
         }
         Kernel::RustCuda {
             cargo_manifest,
-            device_manifest,
-            ptx_dir,
             cuda_capabilities,
             ..
         } => {
@@ -52,8 +50,6 @@ fn render_kernel_component(
                     context! {
                         name => kernel_name,
                         manifest_path => cargo_manifest,
-                        device_manifest => device_manifest,
-                        ptx_dir => ptx_dir,
                         cuda_capabilities => cuda_capabilities,
                     },
                     &mut *write,
@@ -267,7 +263,7 @@ mod tests {
     fn rust_components_render_for_their_backend() {
         let mut env = Environment::new();
         minijinja_embed::load_templates!(&mut env);
-        for (kernel, backend, device) in [
+        for (kernel, backend, capabilities) in [
             (
                 Kernel::RustCpu {
                     cargo_manifest: "host/Cargo.toml".into(),
@@ -275,31 +271,17 @@ mod tests {
                     src: vec![],
                 },
                 "CPU",
-                false,
+                None,
             ),
             (
                 Kernel::RustCuda {
                     cargo_manifest: "host/Cargo.toml".into(),
-                    device_manifest: Some("device/Cargo.toml".into()),
-                    ptx_dir: Some("ptx".into()),
                     cuda_capabilities: Some(vec!["8.0".into(), "9.0".into()]),
                     depends: vec![],
                     src: vec![],
                 },
                 "CUDA",
-                true,
-            ),
-            (
-                Kernel::RustCuda {
-                    cargo_manifest: "host/Cargo.toml".into(),
-                    device_manifest: None,
-                    ptx_dir: None,
-                    cuda_capabilities: None,
-                    depends: vec![],
-                    src: vec![],
-                },
-                "CUDA",
-                false,
+                Some("CUDA_CAPABILITIES 8.0 9.0"),
             ),
         ] {
             let mut rendered = vec![];
@@ -307,11 +289,12 @@ mod tests {
             let rendered = String::from_utf8(rendered).unwrap();
             assert!(rendered.contains(&format!("if(GPU_LANG STREQUAL \"{backend}\")")));
             assert!(rendered.contains("MANIFEST_PATH \"host/Cargo.toml\""));
-            assert_eq!(rendered.contains("DEVICE_MANIFEST"), device);
-            if device {
-                assert!(rendered.contains("DEVICE_MANIFEST \"device/Cargo.toml\""));
-                assert!(rendered.contains("PTX_DIR \"ptx\""));
-                assert!(rendered.contains("CUDA_CAPABILITIES 8.0 9.0"));
+            assert_eq!(
+                rendered.contains("CUDA_CAPABILITIES"),
+                capabilities.is_some()
+            );
+            if let Some(capabilities) = capabilities {
+                assert!(rendered.contains(capabilities));
             }
         }
     }

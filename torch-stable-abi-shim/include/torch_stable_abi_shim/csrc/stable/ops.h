@@ -900,7 +900,7 @@ inline torch::stable::Tensor to(
     torch::stable::Device device,
     bool non_blocking = false,
     bool copy = false) {
-  return to(
+  return torch_stable_abi_shim::to(
       self,
       std::nullopt,
       std::nullopt,

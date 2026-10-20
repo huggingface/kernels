@@ -1,0 +1,23 @@
+[general]
+name = "relu-rust-cuda"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "kernels-test/relu-rust-cuda"
+
+[tvm-ffi]
+
+[kernel.relu_rust_cuda]
+language = "rust-cuda"
+cargo-manifest = "relu-rs/Cargo.toml"
+cuda-capabilities = ["8.0"]
+depends = []
+src = [
+  "Cargo.toml",
+  "relu-rs/src/lib.rs",
+  "relu-device/Cargo.toml",
+  "relu-device/src/main.rs",
+]

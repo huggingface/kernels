@@ -1,0 +1,19 @@
+[package]
+name = "relu-rs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# Kernel-builder compiles these with cuda-oxide before this crate and passes
+# the PTX directory as `KERNEL_BUILDER_PTX_DIR`.
+[[package.metadata.cuda-oxide.device-crates]]
+manifest-path = "../relu-device/Cargo.toml"
+
+[lib]
+name = "relu_rust_cuda"
+
+[dependencies]
+cudarc = { version = "0.19.9", default-features = false, features = ["std", "driver", "dynamic-loading", "cuda-12060"] }
+tvm-ffi = "=0.1.14-post1"
+tvm-ffi-sys = "=0.1.14-post1"

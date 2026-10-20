@@ -1,0 +1,3 @@
+[workspace]
+members = ["relu-rs", "relu-device"]
+resolver = "2"

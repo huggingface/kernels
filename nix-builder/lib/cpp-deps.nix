@@ -34,6 +34,9 @@ let
     "torch" = [
       torch
     ];
+    "torch-stable-abi-shim" = [
+      pkgs.torch-stable-abi-shim
+    ];
     "sycl_tla" = [
       (torch.xpuPackages.sycl-tla.override { inherit stdenv; })
     ];

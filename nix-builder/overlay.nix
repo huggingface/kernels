@@ -59,6 +59,8 @@ final: prev:
 
   torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
 
+  torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };
+
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
       version = "0.15.10";

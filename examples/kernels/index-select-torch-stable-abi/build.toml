@@ -1,0 +1,23 @@
+[general]
+name = "index-select-torch-stable-abi"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = ["cuda"]
+
+[general.hub]
+repo-id = "kernels-test/index-select-torch-stable-abi"
+
+[torch]
+src = [
+    "torch-ext/torch_binding.cpp",
+    "torch-ext/torch_binding.h",
+]
+
+[torch.stable-abi]
+cuda = "2.10"
+
+[kernel.index_select]
+language = "cpp-cuda"
+depends = ["torch", "torch-stable-abi-shim"]
+src = ["index_select_cuda/index_select.cu"]

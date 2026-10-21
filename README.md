@@ -81,8 +81,8 @@ different tiers:
 | Huawei NPU | ✓               | ✗                      | ✗                       | 3    |
 | Neuron     | ✓               | x                      | x                       | 3    |
 
-**Warning:** Neuron support is experimental and packages are not public yet.
-TPU support is is experimental.
+> [!WARNING] 
+> Neuron support is experimental and packages are not public yet. TPU support is is experimental.
 
 ## 📚 Documentation
 

@@ -90,6 +90,9 @@
       "torch215-rocm100-x86_64-linux",
       "torch215-rocm714-x86_64-linux"
     ],
+    "tpu": [
+      "torch-tpu"
+    ],
     "xpu": [
       "torch210-xpu20253-x86_64-linux",
       "torch211-xpu20253-x86_64-linux",

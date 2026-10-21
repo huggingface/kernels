@@ -394,6 +394,15 @@
         }
       ];
 
+      # TPU kernels to build in CI.
+      ciTpuKernels = [
+        {
+          name = "relu-tpu-kernel";
+          path = ./relu-tpu;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-tpu;
+        }
+      ];
+
       # Metal kernels to build in CI.
       ciMetalKernels = [
         {
@@ -477,6 +486,7 @@
       ];
 
       ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
+      ciTpuKernelOutputs = mkKernelOutputs' ciTpuKernels;
       ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
       ciCpuKernelOutputs = mkKernelOutputs' ciCpuKernels;
     in
@@ -617,6 +627,7 @@
           ci-build-cuda = mkCiBuild "ci-kernels-cuda" ciKernelOutputs;
           ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
           ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
+          ci-build-tpu = mkCiBuild "ci-kernels-tpu" ciTpuKernelOutputs;
           ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
           ci-build-cpu = mkCiBuild "ci-kernels-cpu" ciCpuKernelOutputs;
         in
@@ -626,6 +637,7 @@
               ci-build-cuda
               ci-build-rocm
               ci-build-xpu
+              ci-build-tpu
               ci-build-metal
               ci-build-cpu
               ;

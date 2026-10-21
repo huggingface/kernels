@@ -127,10 +127,7 @@
     torchVersion = "2.11";
     tpu = true;
     systems = [ "x86_64-linux" ];
-    # Excluded from the shared build cache: torch_tpu's autoPatchelfHook
-    # step produces an output that is itself a modified copy of Google's
-    # gated libtpu/torch_tpu wheels, so it can't be published publicly.
-    bundleBuild = false;
+    bundleBuild = true;
   }
 
   {

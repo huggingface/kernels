@@ -9,6 +9,7 @@ from kernels.deps import get_kernel_dep
 from kernels.hf_hub import RepoInfo
 from kernels.importer import LoadedKernel, get_loaded_kernels
 from kernels.install import install_kernel
+from kernels.jit import JITBuildError, JITOptions
 from kernels.layer import (
     CUDAProperties,
     Device,
@@ -54,6 +55,8 @@ __all__ = [
     "FuncRepository",
     "LayerRepository",
     "LoadedKernel",
+    "JITBuildError",
+    "JITOptions",
     "LocalFuncRepository",
     "LocalLayerRepository",
     "LockedFuncRepository",

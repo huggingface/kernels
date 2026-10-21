@@ -9,6 +9,7 @@ from kernels._rust import KernelDependency, KernelVersion
 from kernels._versions import revision_or_version
 from kernels.deps import resolve_kernel_tree
 from kernels.hf_hub import _get_hf_api
+from kernels.jit import FallbackResolver, JITOptions, JITResolver
 from kernels.locking import (
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
@@ -109,6 +110,7 @@ def get_kernel(
     user_agent: str | dict | None = None,
     trust_remote_code: bool | list[str] = False,
     check_arch: bool = True,
+    jit: bool | JITOptions = False,
 ) -> ModuleType:
     """
     Load a kernel from the kernel hub.
@@ -140,6 +142,12 @@ def get_kernel(
             support more architectures than they declare (e.g. through a
             Triton fallback), `check_arch=False` skips the check for such
             kernels.
+        jit (`bool | JITOptions`, *optional*, defaults to `False`):
+            If a compatible prebuilt variant is unavailable, compile the kernel
+            from source against the installed Torch. This is CPU-only and
+            opt-in. Pass `JITOptions` to select an explicit source repository
+            or source subdirectory. The build is cached under
+            `$KERNELS_JIT_CACHE` (or the Hugging Face cache directory).
 
     Returns:
         `ModuleType`: The imported kernel module.
@@ -172,11 +180,24 @@ def get_kernel(
     if check_arch:
         validators.append(ArchValidator())
 
+    resolver: Resolver = SequentialResolver(resolvers=resolvers)
+    if jit is not False and jit is not None:
+        if isinstance(jit, JITOptions):
+            jit_options = jit
+        elif jit is True:
+            jit_options = JITOptions()
+        else:
+            raise TypeError("`jit` must be a bool or JITOptions instance.")
+        resolver = FallbackResolver(
+            primary=resolver,
+            fallback=JITResolver(jit_options, trust_remote_code=trust_remote_code),
+        )
+
     return get_kernel_with_resolver(
         api=api,
         backend=backend,
         kernel=KernelDependency(repo_id=repo_id, version=kernel_version),
-        resolver=SequentialResolver(resolvers=resolvers),
+        resolver=resolver,
         kernel_validator=AllKernelValidator(validators=default_kernel_validators()),
         metadata_validator=AllMetadataValidator(validators=validators),
     )

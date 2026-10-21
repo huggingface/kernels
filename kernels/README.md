@@ -45,6 +45,26 @@ print(y)
 You can [search for kernels](https://huggingface.co/models?other=kernels) on
 the Hub.
 
+## CPU JIT fallback
+
+If a kernel has no prebuilt variant for the installed Torch, CPU kernels can be
+compiled locally from a pinned source revision:
+
+```python
+from kernels import get_kernel
+
+gptq = get_kernel(
+    "kernels-community/quantization-gptq",
+    version=1,
+    backend="cpu",
+    jit=True,
+)
+```
+
+JIT builds are opt-in, require `kernel-builder`, CMake, Ninja, and a C++17
+compiler, and are cached under `$KERNELS_JIT_CACHE` (or the Hugging Face cache).
+The loader still prefers a compatible prebuilt variant when one exists.
+
 ## 📚 Documentation
 
 Read the [documentation of kernels](https://huggingface.co/docs/kernels/).

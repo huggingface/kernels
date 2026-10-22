@@ -1,0 +1,16 @@
+// Links the fatbin of the Rust kernel component @NAME@ into the extension.
+//
+// The image goes in nvcc's `.nv_fatbin` section, so cuobjdump finds the SASS.
+// Unlike nvcc's fatbins it is not registered with the CUDA runtime: the crate
+// loads it itself with `cuModuleLoadData`.
+__asm__(
+    ".section .nv_fatbin, \"a\"\n"
+    ".balign 16\n"
+    ".globl KERNEL_BUILDER_CUDA_FATBIN\n"
+    ".hidden KERNEL_BUILDER_CUDA_FATBIN\n"
+    "KERNEL_BUILDER_CUDA_FATBIN:\n"
+    ".incbin \"@FATBIN@\"\n"
+    ".globl KERNEL_BUILDER_CUDA_FATBIN_END\n"
+    ".hidden KERNEL_BUILDER_CUDA_FATBIN_END\n"
+    "KERNEL_BUILDER_CUDA_FATBIN_END:\n"
+    ".previous\n");

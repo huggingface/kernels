@@ -379,23 +379,20 @@ dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
 
 #### rust-cuda (experimental, and subject to change)
 
-Rust CUDA kernels use [cuda-oxide](https://github.com/NVIDIA/cuda-rust) and
-take the same options as `rust-cpu`, plus:
+Rust CUDA kernels are built with
+[cuda-oxide](https://github.com/NVIDIA/cuda-rust) and take the same options as
+`rust-cpu`, plus:
 
-- `cuda-capabilities` (optional): same as for `cpp-cuda`. PTX is generated for the lowest supported capability, so set this when kernels use newer instructions.
+- `cuda-capabilities` (optional): same as for `cuda`. The kernels are compiled
+  to SASS for each capability, so nothing is JIT-compiled at load time.
 
-`cargo-manifest` points to the host crate. It lists its device crates, which must be in the same Cargo workspace, in its metadata:
-
-```toml
-[[package.metadata.cuda-oxide.device-crates]]
-manifest-path = "../relu-device/Cargo.toml"
-```
-
-The device crates are built first and the host crate finds their PTX in `KERNEL_BUILDER_PTX_DIR`. 
-
-Use the cuda-rust revision pinned in
-[`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix).
-See [`relu-rust-cuda`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda)
+The kernels and their host code are a single crate. Load the kernels with the
+`kernels-cuda` crate instead of the generated `load`, which fails to link.
+An extension can have only one `rust-cuda` component. Use the cuda-rust
+revision pinned in
+[`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix)
+and see
+[`relu-rust-cuda`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda)
 for an example.
 
 ## Torch bindings

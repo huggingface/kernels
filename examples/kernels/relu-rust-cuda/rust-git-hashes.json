@@ -1,5 +1,15 @@
 {
-  "cuda-device-0.2.1": "sha256-KxIPPzDBKeHyknrpRg1ekNliEcc44yBWUtSmrGnApOo=",
-  "cuda-macros-0.2.1": "sha256-KxIPPzDBKeHyknrpRg1ekNliEcc44yBWUtSmrGnApOo=",
-  "reserved-oxide-symbols-0.2.1": "sha256-KxIPPzDBKeHyknrpRg1ekNliEcc44yBWUtSmrGnApOo="
+  "cuda-artifact-finalizer-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "cuda-bindings-0.4.0": "sha256-ZfLWDaBRaZVrPFYUui9GhbL0z38DcJqfECDm/rvpJq8=",
+  "cuda-core-0.4.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "cuda-core-derive-0.4.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "cuda-device-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "cuda-host-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "cuda-macros-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "cuda-target-spec-0.1.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "libnvvm-sys-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "nvjitlink-sys-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "oxide-tile-export-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "ptx-parse-0.1.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
+  "reserved-oxide-symbols-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg="
 }

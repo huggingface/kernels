@@ -217,6 +217,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "kernels-cuda"
 version = "0.1.0"
+source = "git+https://github.com/huggingface/kernels.git?rev=ae983e7ce660d4ed3a1142d6b9a540b7576be47d#ae983e7ce660d4ed3a1142d6b9a540b7576be47d"
 dependencies = [
  "cuda-core",
  "half",

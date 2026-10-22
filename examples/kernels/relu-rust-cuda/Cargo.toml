@@ -17,9 +17,7 @@ cuda-core = { git = "https://github.com/drbh/cuda-oxide.git", rev = "d9d4e379e9a
 cuda-device = { git = "https://github.com/drbh/cuda-oxide.git", rev = "d9d4e379e9a80d1ce7c681d88a086aacec95ba23" }
 cuda-host = { git = "https://github.com/drbh/cuda-oxide.git", rev = "d9d4e379e9a80d1ce7c681d88a086aacec95ba23" }
 tvm-ffi = "=0.1.14-post1"
-# TODO: a git dependency on huggingface/kernels once the crate is pushed; the
-# Nix build only sees this directory.
-kernels-cuda = { path = "../../../kernels-cuda" }
+kernels-cuda = { git = "https://github.com/huggingface/kernels.git", rev = "ae983e7ce660d4ed3a1142d6b9a540b7576be47d" }
 
 # Checked-in bindings: the build needs no CUDA headers or libclang.
 [patch."https://github.com/drbh/cuda-oxide.git"]

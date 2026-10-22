@@ -61,28 +61,6 @@ final: prev:
 
   torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };
 
-  # Temporary: update the CA bundle to NSS 3.131.1, which removes the
-  # compromised eMudhra intermediates' roots. Remove once nixpkgs ships
-  # cacert >= 3.131.1 in our channel.
-  # https://emudhra.we-have-a-problem.com/
-  cacert = prev.cacert.overrideAttrs (
-    finalAttrs: _: {
-      version = "3.131.1";
-      src = prev.fetchurl {
-        urls =
-          let
-            file = "lib/ckfw/builtins/certdata.txt";
-            tag = "NSS_${prev.lib.replaceStrings [ "." ] [ "_" ] finalAttrs.version}_RTM";
-          in
-          [
-            "https://hg-edge.mozilla.org/projects/nss/raw-file/${tag}/${file}"
-            "https://raw.githubusercontent.com/nss-dev/nss/refs/tags/${tag}/${file}"
-          ];
-        hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
-      };
-    }
-  );
-
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
       version = "0.15.10";

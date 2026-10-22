@@ -383,8 +383,11 @@ Rust CUDA kernels are built with
 [cuda-oxide](https://github.com/NVIDIA/cuda-rust) and take the same options as
 `rust-cpu`, plus:
 
-- `cuda-capabilities` (optional): same as for `cuda`. The kernels are compiled
-  to SASS for each capability, so nothing is JIT-compiled at load time.
+- `cuda-capabilities` (optional): same as for `cuda`. Like with `nvcc`, the
+  kernels are compiled once per capability, to SASS, so nothing is JIT-compiled
+  at load time. Each pass sets `cfg(cuda_arch = "XX")` for its capability and
+  every lower one, so `#[cfg(cuda_arch = "90")]` works like
+  `__CUDA_ARCH__ >= 900`.
 
 The kernels and their host code are a single crate. Load the kernels with the
 `kernels-cuda` crate instead of the generated `load`, which fails to link.

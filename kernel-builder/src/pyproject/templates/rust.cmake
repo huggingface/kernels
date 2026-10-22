@@ -49,16 +49,17 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
             message(FATAL_ERROR "rust_kernel_component: Rust CUDA kernels require objcopy")
         endif()
 
-        list(SORT _KERNEL_ARCHS COMPARE NATURAL)
-        # ptxas compiles PTX for newer archs too, so target the lowest one.
-        list(GET _KERNEL_ARCHS 0 _OXIDE_ARCH)
-        string(REPLACE "+PTX" "" _OXIDE_ARCH "${_OXIDE_ARCH}")
-        string(REPLACE "." "" _OXIDE_ARCH "${_OXIDE_ARCH}")
+        set(_SMS)
+        set(_PTX_SMS)
+        foreach(_ARCH IN LISTS _KERNEL_ARCHS)
+            _rust_cuda_sm(_SM ${_ARCH})
+            list(APPEND _SMS ${_SM})
+            if(_ARCH MATCHES "\\+PTX$")
+                list(APPEND _PTX_SMS ${_SM})
+            endif()
+        endforeach()
         # Flags match what `cargo oxide build` passes to the codegen backend.
-        list(APPEND _CARGO_ENV
-            "CUDA_OXIDE_TARGET=sm_${_OXIDE_ARCH}"
-            "CUDA_OXIDE_PTX_DIR=${CMAKE_BINARY_DIR}/cargo/${KERNEL_NAME}/ptx"
-            "RUSTFLAGS=-Zcodegen-backend=${CUDA_OXIDE_BACKEND} -Copt-level=3 -Cdebug-assertions=off -Zmir-enable-passes=-JumpThreading -Csymbol-mangling-version=v0")
+        set(_RUSTFLAGS "-Zcodegen-backend=${CUDA_OXIDE_BACKEND} -Copt-level=3 -Cdebug-assertions=off -Zmir-enable-passes=-JumpThreading -Csymbol-mangling-version=v0 --check-cfg=cfg(cuda_arch,values(any()))")
     endif()
 
     string(REPLACE "-" "_" _LIB_NAME ${KERNEL_NAME})
@@ -68,9 +69,35 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
     set(_LINKED_STATICLIB ${_STATICLIB})
     set(_BYPRODUCTS ${_STATICLIB})
 
+    # tvm-ffi-sys's build script shells out to `tvm-ffi-config`, a console script
+    # the apache-tvm-ffi wheel installs beside the interpreter.
+    get_filename_component(_PYTHON_BIN_DIR ${Python_EXECUTABLE} DIRECTORY)
+    set(_CARGO_COMMAND ${CMAKE_COMMAND} -E env "PATH=${_PYTHON_BIN_DIR}:$ENV{PATH}")
+    set(_CARGO_ARGS rustc --release --locked --lib --crate-type staticlib
+        --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH})
+
     if(GPU_LANG STREQUAL "CUDA")
-        set(_PTX ${_CARGO_TARGET_DIR}/ptx/${_LIB_NAME}.ptx)
-        list(APPEND _BYPRODUCTS ${_PTX})
+        # Like nvcc's `-gencode`, compile the device code once per capability,
+        # with `cuda_arch` set for it and every lower capability, so kernels can
+        # branch on it like on `__CUDA_ARCH__`. The first pass also builds the
+        # host code we link.
+        set(_COMMANDS)
+        set(_PTXS)
+        foreach(_SM IN LISTS _SMS)
+            if(NOT _COMMANDS)
+                set(_PASS_DIR ${_CARGO_TARGET_DIR})
+            else()
+                set(_PASS_DIR ${_CARGO_TARGET_DIR}/sm_${_SM})
+            endif()
+            _rust_cuda_cfgs(_CFGS ${_SM})
+            list(APPEND _COMMANDS COMMAND ${_CARGO_COMMAND}
+                "CUDA_OXIDE_TARGET=sm_${_SM}"
+                "CUDA_OXIDE_PTX_DIR=${_PASS_DIR}/ptx"
+                "RUSTFLAGS=${_RUSTFLAGS} ${_CFGS}"
+                ${CARGO_EXECUTABLE} ${_CARGO_ARGS} --target-dir ${_PASS_DIR})
+            list(APPEND _PTXS ${_PASS_DIR}/ptx/${_LIB_NAME}.ptx)
+        endforeach()
+        list(APPEND _BYPRODUCTS ${_PTXS})
         # The backend also embeds the PTX in the crate's `.oxart` sections. The
         # extension loads the fatbin instead, so drop the PTX from what we link.
         set(_LINKED_STATICLIB ${_CARGO_TARGET_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${_LIB_NAME}_sass${CMAKE_STATIC_LIBRARY_SUFFIX})
@@ -78,18 +105,13 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
         # Keeping the date lets a no-op cargo build skip the relink.
         set(_STRIP_PTX COMMAND ${CMAKE_OBJCOPY} --preserve-dates --remove-section=.oxart
             ${_STATICLIB} ${_LINKED_STATICLIB})
+    else()
+        set(_COMMANDS COMMAND ${_CARGO_COMMAND}
+            ${CARGO_EXECUTABLE} ${_CARGO_ARGS} --target-dir ${_CARGO_TARGET_DIR})
     endif()
 
-    # tvm-ffi-sys's build script shells out to `tvm-ffi-config`, a console script
-    # the apache-tvm-ffi wheel installs beside the interpreter.
-    get_filename_component(_PYTHON_BIN_DIR ${Python_EXECUTABLE} DIRECTORY)
-
     add_custom_target(${KERNEL_NAME}_cargo_build ALL
-        COMMAND ${CMAKE_COMMAND} -E env "PATH=${_PYTHON_BIN_DIR}:$ENV{PATH}"
-            ${_CARGO_ENV}
-            ${CARGO_EXECUTABLE} rustc --release --locked --lib --crate-type staticlib
-            --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL_MANIFEST_PATH}
-            --target-dir ${_CARGO_TARGET_DIR}
+        ${_COMMANDS}
         ${_STRIP_PTX}
         BYPRODUCTS ${_BYPRODUCTS}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -101,44 +123,70 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
     set_target_properties(${KERNEL_NAME}_rust PROPERTIES IMPORTED_LOCATION ${_LINKED_STATICLIB})
 
     if(GPU_LANG STREQUAL "CUDA")
-        _rust_cuda_fatbin(${KERNEL_NAME} ${_PTX} ${_OXIDE_ARCH} "${_KERNEL_ARCHS}")
+        _rust_cuda_fatbin(${KERNEL_NAME} "${_SMS}" "${_PTXS}" "${_PTX_SMS}")
     endif()
 
     set(${LIBS_VAR} ${${LIBS_VAR}} ${KERNEL_NAME}_rust PARENT_SCOPE)
     set(${TARGETS_VAR} ${${TARGETS_VAR}} ${KERNEL_NAME}_cargo_build PARENT_SCOPE)
 endfunction()
 
-# Compiles the crate's PTX to SASS for every capability, so nothing is
-# JIT-compiled on the user's machine. `target_link_rust_kernels` links the
-# fatbin between `KERNEL_BUILDER_CUDA_FATBIN` and `KERNEL_BUILDER_CUDA_FATBIN_END`.
-function(_rust_cuda_fatbin NAME PTX PTX_ARCH ARCHS)
-    get_filename_component(_DIR ${PTX} DIRECTORY)
+# The capability as in `sm_XX`.
+function(_rust_cuda_sm OUT ARCH)
+    string(REPLACE "+PTX" "" _SM "${ARCH}")
+    string(REPLACE "." "" _SM "${_SM}")
+    set(${OUT} ${_SM} PARENT_SCOPE)
+endfunction()
+
+# `cuda_arch` cfgs for one pass: every capability in CUDA_ARCHS up to SM, so a
+# cfg means "this capability or newer", plus SM itself when it is arch-specific.
+function(_rust_cuda_cfgs OUT SM)
+    string(REGEX REPLACE "[a-z]+$" "" _NUM ${SM})
+    set(_KNOWN)
+    foreach(_ARCH IN LISTS CUDA_ARCHS)
+        _rust_cuda_sm(_KNOWN_SM ${_ARCH})
+        string(REGEX REPLACE "[a-z]+$" "" _KNOWN_SM ${_KNOWN_SM})
+        list(APPEND _KNOWN ${_KNOWN_SM})
+    endforeach()
+    list(REMOVE_DUPLICATES _KNOWN)
+    set(_CFGS)
+    foreach(_KNOWN_SM IN LISTS _KNOWN)
+        if(_KNOWN_SM LESS_EQUAL _NUM)
+            list(APPEND _CFGS "--cfg=cuda_arch=\"${_KNOWN_SM}\"")
+        endif()
+    endforeach()
+    if(NOT SM STREQUAL _NUM)
+        list(APPEND _CFGS "--cfg=cuda_arch=\"${SM}\"")
+    endif()
+    list(JOIN _CFGS " " _CFGS)
+    set(${OUT} "${_CFGS}" PARENT_SCOPE)
+endfunction()
+
+# Compiles each pass's PTX to SASS, so nothing is JIT-compiled on the user's
+# machine. `target_link_rust_kernels` links the fatbin between
+# `KERNEL_BUILDER_CUDA_FATBIN` and `KERNEL_BUILDER_CUDA_FATBIN_END`.
+function(_rust_cuda_fatbin NAME SMS PTXS PTX_SMS)
+    list(GET PTXS 0 _FIRST_PTX)
+    get_filename_component(_DIR ${_FIRST_PTX} DIRECTORY)
     set(_CUBINS)
     set(_IMAGES)
-    foreach(_ARCH IN LISTS ARCHS)
-        string(REPLACE "+PTX" "" _SM "${_ARCH}")
-        string(REPLACE "." "" _SM "${_SM}")
+    foreach(_SM _PTX IN ZIP_LISTS SMS PTXS)
         set(_CUBIN ${_DIR}/${NAME}.sm_${_SM}.cubin)
         add_custom_command(OUTPUT ${_CUBIN}
-            COMMAND ${CUDA_PTXAS_EXECUTABLE} -arch=sm_${_SM} ${PTX} -o ${_CUBIN}
-            DEPENDS ${PTX}
+            COMMAND ${CUDA_PTXAS_EXECUTABLE} -arch=sm_${_SM} ${_PTX} -o ${_CUBIN}
+            DEPENDS ${_PTX}
             COMMENT "Compiling Rust kernel ${NAME} for sm_${_SM}"
             VERBATIM)
         list(APPEND _CUBINS ${_CUBIN})
         list(APPEND _IMAGES "--image3=kind=elf,sm=${_SM},file=${_CUBIN}")
-        if(_ARCH MATCHES "\\+PTX$")
-            set(_KEEP_PTX ON)
+        if(_SM IN_LIST PTX_SMS)
+            list(APPEND _IMAGES "--image3=kind=ptx,sm=${_SM},file=${_PTX}")
         endif()
     endforeach()
-    if(_KEEP_PTX)
-        # The PTX targets the lowest arch, so it JITs on any newer GPU.
-        list(APPEND _IMAGES "--image3=kind=ptx,sm=${PTX_ARCH},file=${PTX}")
-    endif()
 
     set(_FATBIN ${_DIR}/${NAME}.fatbin)
     add_custom_command(OUTPUT ${_FATBIN}
         COMMAND ${CUDA_FATBINARY_EXECUTABLE} --create=${_FATBIN} ${_IMAGES}
-        DEPENDS ${_CUBINS} ${PTX}
+        DEPENDS ${_CUBINS} ${PTXS}
         COMMENT "Creating fatbin for Rust kernel ${NAME}"
         VERBATIM)
 

@@ -6,6 +6,8 @@
   symlinkJoin,
   buildPythonPackage,
   fetchFromGitHub,
+
+  fetchPypi,
   fetchurl,
   requireFile,
 
@@ -45,6 +47,7 @@
   numpy,
   portpicker,
   pyyaml,
+  pyzmq,
   pyzes,
   requests,
   setuptools,
@@ -80,6 +83,8 @@ let
   # For the required version see:
   # https://github.com/pytorch/pytorch/blob/v2.15.0-rc3/cmake/External/aotriton.cmake#L13
   aotritonVersions = with rocmPackages; {
+    "2.10" = aotriton_0_11_1;
+    "2.11" = aotriton_0_11_2;
     "2.12" = aotriton_0_11_2;
     "2.13" = aotriton_0_12;
     "2.14" = aotriton_0_13;
@@ -106,6 +111,9 @@ let
           amdrocm-profiler-base
           amdrocm-rand
           amdrocm-rccl
+        ]
+        ++ lib.optionals (versionAtLeast version "2.15") [
+          amdrocm-amdsmi
         ]
       else
         [
@@ -152,23 +160,22 @@ let
   };
 
   # Once we require multiple versions, factor this out.
+  # The hash is for the cp314 wheel (the nixpkgs default python).
   torch-tpu =
     let
       abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
-      version = "0.1.1.dev20260916100444";
     in
-    requireFile {
-      name = "torch_tpu-${version}-${abi}-${abi}-manylinux_2_31_x86_64.whl";
-      hash = "sha256-A8Rw9/QkMCjj9jfb4s+/d04/m/xH5L9rJDa0+giessM=";
-      message = ''
-        torch_tpu is served from a gated Google Artifact Registry and
-        cannot be fetched by a pure Nix build. Fetch and register it with:
-
-          GCLOUD_ACCESS_TOKEN=$(gcloud auth print-access-token) \
-            nix-builder/scripts/helpers/prefetch-tpu-wheel.sh torch_tpu ${version} ${abi}
-      '';
+    fetchPypi {
+      format = "wheel";
+      # Wheel file names use an underscore.
+      pname = "torch_tpu";
+      version = "0.2.0";
+      dist = abi;
+      python = abi;
+      inherit abi;
+      platform = "manylinux_2_31_x86_64";
+      hash = "sha256-xdqU1lQfQchadDw0En1s2huCAqHafZR6OlLFE00Z3ak=";
     };
-
 in
 buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pname = "torch";
@@ -288,6 +295,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     frozendict
     immutabledict
     portpicker
+    pyzmq
     tensorboard
   ]
   ++ lib.optionals tritonSupport [

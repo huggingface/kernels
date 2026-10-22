@@ -40,6 +40,10 @@ class LocalKernel:
     def variant_str(self) -> str:
         return self.variant_path.name
 
+    def get_file(self, filename: str, *, api: HfApi) -> Path:
+        """Return the local path of a file in this build variant."""
+        return self.variant_path / filename
+
     def install(self, *, api: HfApi) -> "LocalKernel":
         # Local kernels are already installed, so we just return self.
         return self
@@ -57,6 +61,19 @@ class RemoteKernel:
     @property
     def variant_str(self) -> str:
         return self.variant.variant_str
+
+    def get_file(self, filename: str, *, api: HfApi) -> Path:
+        """Download one file from this variant at the resolved commit."""
+        return Path(
+            api.hf_hub_download(
+                self.repo_id,
+                repo_type="kernel",
+                filename=f"build/{self.variant_str}/{filename}",
+                cache_dir=_get_cache_dir(),
+                revision=str(self.revision),
+                local_files_only=False,
+            )
+        )
 
     def install(self, *, api: HfApi) -> LocalKernel:
         allow_patterns = [f"build/{self.variant.variant_str}/*"]

@@ -103,6 +103,18 @@
           drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
         }
         {
+          # Exercise the shim with Torch 2.11 headers, which lack index_select.
+          name = "index-select-torch-stable-abi-kernel";
+          path = ./index-select-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi210-cu128-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-${cudaVersion}-${sys}"};
+        }
+        {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
           drv =
@@ -280,6 +292,17 @@
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${rocmVersion}-${sys}"};
         }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${rocmVersion}-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-${rocmVersion}-${sys}"};
+        }
       ];
 
       mkKernelOutputs =
@@ -371,6 +394,15 @@
         }
       ];
 
+      # TPU kernels to build in CI.
+      ciTpuKernels = [
+        {
+          name = "relu-tpu-kernel";
+          path = ./relu-tpu;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-tpu;
+        }
+      ];
+
       # Metal kernels to build in CI.
       ciMetalKernels = [
         {
@@ -440,9 +472,21 @@
                 touch $out
               '';
         }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-cpu-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-cpu-${sys}"};
+        }
       ];
 
       ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
+      ciTpuKernelOutputs = mkKernelOutputs' ciTpuKernels;
       ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
       ciCpuKernelOutputs = mkKernelOutputs' ciCpuKernels;
     in
@@ -583,6 +627,7 @@
           ci-build-cuda = mkCiBuild "ci-kernels-cuda" ciKernelOutputs;
           ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
           ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
+          ci-build-tpu = mkCiBuild "ci-kernels-tpu" ciTpuKernelOutputs;
           ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
           ci-build-cpu = mkCiBuild "ci-kernels-cpu" ciCpuKernelOutputs;
         in
@@ -592,6 +637,7 @@
               ci-build-cuda
               ci-build-rocm
               ci-build-xpu
+              ci-build-tpu
               ci-build-metal
               ci-build-cpu
               ;

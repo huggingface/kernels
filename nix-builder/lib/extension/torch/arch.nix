@@ -123,6 +123,8 @@ let
 
   metalSupport = buildConfig.metal or false;
 
+  cpuSupport = buildConfig.cpu or false;
+
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
 in
@@ -281,17 +283,26 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ lib.optionals cudaSupport [
     (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
+    (lib.cmakeFeature "GPU_LANG" "CUDA")
   ]
   ++ lib.optionals rocmSupport [
     # Ensure sure that we use HIP from our CLR override and not HIP from
     # the symlink-joined ROCm toolkit.
     (lib.cmakeFeature "CMAKE_HIP_COMPILER_ROCM_ROOT" "${clr}")
     (lib.cmakeFeature "HIP_ROOT_DIR" "${clr}")
+    (lib.cmakeFeature "GPU_LANG" "HIP")
   ]
   ++ lib.optionals metalSupport [
     # Use host compiler for Metal. Not included in the redistributable SDK.
     # Re-enable when the issue mentioned in preConfigure is solved.
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
+    (lib.cmakeFeature "GPU_LANG" "METAL")
+  ]
+  ++ lib.optionals xpuSupport [
+    (lib.cmakeFeature "GPU_LANG" "SYCL")
+  ]
+  ++ lib.optionals cpuSupport [
+    (lib.cmakeFeature "GPU_LANG" "CPU")
   ];
 
   postInstall = ''

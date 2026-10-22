@@ -59,6 +59,8 @@ final: prev:
 
   torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
 
+  torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };
+
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
       version = "0.15.10";
@@ -105,12 +107,14 @@ final: prev:
       in
       {
         inherit (triton)
+          triton_3_6_0
           triton_3_7_0
           triton_3_7_1
           triton_3_8_0
           triton_3_9_0
           ;
         inherit (triton-rocm)
+          triton-rocm_3_6_0
           triton-rocm_3_7_0
           triton-rocm_3_7_1
           triton-rocm_3_8_0
@@ -249,17 +253,16 @@ final: prev:
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
-          triton-cuda = null;
-          triton-rocm = null;
+          triton-cuda = triton_3_6_0;
+          triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_6_0;
           xpuPackages = final.xpuPackages_2025_3_1;
         };
 
-        # Maintain a minimal version for TPU support.
         torch-bin_2_11 = mkTorch {
           version = "2.11";
-          triton-cuda = null;
-          triton-rocm = null;
+          triton-cuda = triton_3_6_0;
+          triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_7_0;
           xpuPackages = final.xpuPackages_2025_3_2;
         };

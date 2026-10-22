@@ -720,9 +720,7 @@ def _replace_forward(module: "nn.Module", layer: Type["nn.Module"]):
 
     # keep compile-time implementation in sync with the selected forward
     if hasattr(module, "_kernel_compile_fn"):
-        module._kernel_compile_fn = (
-            None if layer.forward is type(module).forward else layer.forward
-        )
+        module._kernel_compile_fn = None if layer.forward is type(module).forward else layer.forward
 
 
 def _validate_layer_has_mode(

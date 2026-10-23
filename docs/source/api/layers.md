@@ -34,6 +34,10 @@
 
 [[autodoc]] kernels.kernelize
 
+### get_kernelized_layers
+
+[[autodoc]] kernels.get_kernelized_layers
+
 ## Classes
 
 ### Device
@@ -51,6 +55,18 @@
 ### Mode
 
 [[autodoc]] kernels.Mode
+
+### KernelizedLayers
+
+[[autodoc]] kernels.KernelizedLayers
+
+### KernelizedLayer
+
+[[autodoc]] kernels.KernelizedLayer
+
+### KernelizedFunc
+
+[[autodoc]] kernels.KernelizedFunc
 
 ### FuncRepository
 

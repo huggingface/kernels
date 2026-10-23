@@ -15,11 +15,15 @@ from ..load import (
     get_local_kernel,
 )
 from ..locking import (
+    _get_locked_kernel_revision,
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
 from ..validate import AllKernelValidator, AllMetadataValidator, default_kernel_validators, default_metadata_validators
-from .layer import _create_func_module, use_kernel_forward_from_hub
+from .layer import (
+    _create_func_module,
+    use_kernel_forward_from_hub,
+)
 from .repos import RepositoryProtocol
 
 if TYPE_CHECKING:
@@ -360,6 +364,24 @@ class LockedFuncRepository:
     def __str__(self) -> str:
         commit = self.kernel_locks[self.kernel_dep].commit
         return f"`{self._repo_id}` (revision: {commit}), function `{self.func_name}`"
+
+    def __getstate__(self):
+        # `kernel_locks` is a Rust object that does not support pickling. So,
+        # serialize it through JSON. `kernel_dep` is derived from it.
+        return {
+            "repo_id": self._repo_id,
+            "lockfile": self._lockfile,
+            "func_name": self.func_name,
+            "trust_remote_code": self._trust_remote_code,
+            "kernel_locks": self.kernel_locks.to_json(),
+        }
+
+    def __setstate__(self, state: dict):
+        self._repo_id = state["repo_id"]
+        self._lockfile = state["lockfile"]
+        self.func_name = state["func_name"]
+        self._trust_remote_code = state["trust_remote_code"]
+        self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
 
 
 def _get_kernel_func(repo: FuncRepositoryProtocol, kernel: ModuleType) -> Type["nn.Module"]:

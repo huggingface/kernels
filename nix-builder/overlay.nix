@@ -337,6 +337,21 @@ final: prev:
 }
 // (import ./pkgs/cutlass { pkgs = final; })
 // (
+  # libnvshmem builds are very slow. Use binraries instead.
+  let
+    inherit (prev) lib;
+    isCudaPackageSet = name: builtins.match "cudaPackages_[0-9]+_[0-9]+" name != null;
+  in
+  lib.mapAttrs (
+    _: cudaPackages:
+    cudaPackages.overrideScope (
+      finalScope: _: {
+        libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
+      }
+    )
+  ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)
+)
+// (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
     readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));

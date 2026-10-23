@@ -139,8 +139,9 @@ enum Commands {
         repo_type: RepoTypeArg,
 
         /// Open a pull request with the changes rather than committing them
-        /// directly (does not require write access to the repository). An open
-        /// pull request of an earlier upload by the same user is updated instead.
+        /// directly (does not require write access to the repository). The
+        /// target branch must already exist. An open pull request of an earlier
+        /// upload by the same user is updated instead.
         #[arg(long)]
         create_pr: bool,
 

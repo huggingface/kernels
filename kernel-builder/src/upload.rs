@@ -529,14 +529,13 @@ fn is_upload_pr_title(title: &str) -> bool {
     title.starts_with(UPLOAD_COMMIT_MESSAGE)
 }
 
-/// Whether the pull request can be updated by an upload to `branch`. A pull
-/// request with conflicts is skipped: further commits cannot resolve them.
-fn is_reusable_upload_pr(details: &DiscussionDetails, branch: &str) -> bool {
-    details
-        .changes
-        .as_ref()
-        .is_some_and(|changes| changes.base == format!("refs/heads/{branch}"))
-        && details.files_with_conflicts.is_empty()
+/// The branch among `branches` that the pull request targets, if any.
+fn upload_pr_target<'a>(details: &DiscussionDetails, branches: &[&'a str]) -> Option<&'a str> {
+    let base = details.changes.as_ref()?.base.as_str();
+    branches
+        .iter()
+        .copied()
+        .find(|branch| base == format!("refs/heads/{branch}"))
 }
 
 /// Find the open upload pull request of the current user for each of
@@ -613,13 +612,26 @@ fn try_find_open_upload_prs<T: RepoType>(
             let url = Url::parse(&format!("{discussions_url}/{}", pr.num))?;
             let details: DiscussionDetails = serde_json::from_str(&get(url)?)
                 .wrap_err_with(|| format!("Cannot parse pull request #{}", pr.num))?;
-            let Some(branch) = branches.iter().find(|branch| {
-                !prs.contains_key(**branch) && is_reusable_upload_pr(&details, branch)
-            }) else {
+            let Some(branch) = upload_pr_target(&details, branches) else {
                 continue;
             };
+            if prs.contains_key(branch) {
+                continue;
+            }
+            // Further commits cannot resolve conflicts, so a conflicting pull
+            // request is left alone. An older open one for the branch is used
+            // instead, or a new one is opened. The conflicting pull request
+            // has to be closed by hand once the replacement is merged.
+            if !details.files_with_conflicts.is_empty() {
+                eprintln!(
+                    "Warning: not updating pull request #{} for `{branch}`, it has merge                      conflicts in {}",
+                    pr.num,
+                    details.files_with_conflicts.join(", ")
+                );
+                continue;
+            }
             prs.insert(
-                (*branch).to_owned(),
+                branch.to_owned(),
                 OpenUploadPr {
                     git_ref: format!("refs/pr/{}", pr.num),
                     url: format!(
@@ -988,25 +1000,31 @@ mod tests {
     }
 
     #[test]
-    fn test_is_reusable_upload_pr() {
+    fn test_upload_pr_target() {
         let details = |json| serde_json::from_value::<DiscussionDetails>(json).unwrap();
 
         let open = details(serde_json::json!({
             "changes": { "base": "refs/heads/v1" },
             "filesWithConflicts": []
         }));
-        assert!(is_reusable_upload_pr(&open, "v1"));
-        assert!(!is_reusable_upload_pr(&open, "main"));
+        assert_eq!(upload_pr_target(&open, &["main", "v1"]), Some("v1"));
+        assert_eq!(upload_pr_target(&open, &["main"]), None);
+        assert!(open.files_with_conflicts.is_empty());
 
+        // Conflicts are reported on the details, the target is unaffected.
         let conflicting = details(serde_json::json!({
             "changes": { "base": "refs/heads/v1" },
             "filesWithConflicts": ["build/torch-cuda/metadata.json.sigstore"]
         }));
-        assert!(!is_reusable_upload_pr(&conflicting, "v1"));
+        assert_eq!(upload_pr_target(&conflicting, &["main", "v1"]), Some("v1"));
+        assert_eq!(
+            conflicting.files_with_conflicts,
+            ["build/torch-cuda/metadata.json.sigstore"]
+        );
 
         // A discussion that is not a pull request has no changes.
         let discussion = details(serde_json::json!({}));
-        assert!(!is_reusable_upload_pr(&discussion, "v1"));
+        assert_eq!(upload_pr_target(&discussion, &["main", "v1"]), None);
     }
 
     #[test]

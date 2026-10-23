@@ -229,11 +229,6 @@ one against the `v<version>` branch for the build artifacts and
 benchmarks. The pull request URLs are printed after the upload, so that
 the repository maintainers can be pointed to them for review.
 
-If you already have an open upload pull request against a branch (for
-example from an earlier upload of another build variant), the upload adds
-its commits to that pull request rather than opening a new one. Pull
-requests with merge conflicts are not reused.
-
 > [!NOTE]
 > A pull request can only target an existing branch. If the `v<version>`
 > branch does not exist yet and you do not have write access to create

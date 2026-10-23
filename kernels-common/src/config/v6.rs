@@ -167,6 +167,13 @@ pub enum Kernel {
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
+    RustCuda {
+        cargo_manifest: String,
+        cuda_capabilities: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
     CppCuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
@@ -224,10 +231,12 @@ impl TryFrom<Build> for super::Build {
             .kernels
             .into_iter()
             .map(|(name, kernel)| match kernel {
-                Kernel::RustCpu { .. } if !tvm_ffi => Err(ConfigError::InvalidKernel {
-                    name,
-                    reason: "Rust kernels require a `[tvm-ffi]` framework".into(),
-                }),
+                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } if !tvm_ffi => {
+                    Err(ConfigError::InvalidKernel {
+                        name,
+                        reason: "Rust kernels require a `[tvm-ffi]` framework".into(),
+                    })
+                }
                 kernel => Ok((name, kernel.into())),
             })
             .collect::<Result<_, _>>()?;
@@ -380,6 +389,17 @@ impl From<Kernel> for super::Kernel {
                 cxx_flags,
                 depends,
                 include,
+                src,
+            },
+            Kernel::RustCuda {
+                cargo_manifest,
+                cuda_capabilities,
+                depends,
+                src,
+            } => super::Kernel::RustCuda {
+                cargo_manifest,
+                cuda_capabilities,
+                depends,
                 src,
             },
             Kernel::RustCpu {
@@ -614,6 +634,17 @@ impl From<super::Kernel> for Kernel {
                 src,
             } => Kernel::RustCpu {
                 cargo_manifest,
+                depends,
+                src,
+            },
+            super::Kernel::RustCuda {
+                cargo_manifest,
+                cuda_capabilities,
+                depends,
+                src,
+            } => Kernel::RustCuda {
+                cargo_manifest,
+                cuda_capabilities,
                 depends,
                 src,
             },

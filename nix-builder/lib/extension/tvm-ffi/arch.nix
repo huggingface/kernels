@@ -13,6 +13,7 @@
   cargo,
   cmake,
   cmakeNvccThreadsHook,
+  cuda-oxide,
   cuda_nvcc,
   generate-symbols-hook,
   get-kernel-check,
@@ -253,9 +254,13 @@ stdenv.mkDerivation (
     ]
     ++ lib.optionals rustSupport [
       rustPlatform.cargoSetupHook
+    ]
+    ++ lib.optionals (rustSupport && !cudaSupport) [
       cargo
       rustc
-    ];
+    ]
+    # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
+    ++ lib.optionals (rustSupport && cudaSupport) [ cuda-oxide.toolchain ];
 
     buildInputs = [
       python3.pkgs.tvm-ffi
@@ -338,6 +343,9 @@ stdenv.mkDerivation (
     ++ lib.optionals cudaSupport [
       (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
       (lib.cmakeFeature "GPU_LANG" "CUDA")
+    ]
+    ++ lib.optionals (rustSupport && cudaSupport) [
+      (lib.cmakeFeature "CUDA_OXIDE_BACKEND" "${cuda-oxide.backend}/lib/librustc_codegen_cuda.so")
     ]
     ++ lib.optionals rocmSupport [
       # Ensure sure that we use HIP from our CLR override and not HIP from

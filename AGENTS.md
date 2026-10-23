@@ -44,7 +44,13 @@ Always check this before using `uv` or installing packages with `pip`.
 ## Nix flake structure
 
 This project is heavily driven by the use of Nix and the Nix flakes are fairly
-complex. This section gives some more details on how Nix is used.
+complex. This section gives some more details on how Nix is used. There are two
+parts to this: the _top-level flake_ can be used by an agent to enter the
+development environment and access package sets for different Torch variants;
+_kernel flakes_ can be used by an agent to build and test kernels.
+
+When testing Nix changes, always test evaluation with `nix eval` first, since it
+is much cheaper than a full build.
 
 ### Top-level flake
 

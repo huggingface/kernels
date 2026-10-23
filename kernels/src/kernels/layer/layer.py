@@ -24,6 +24,7 @@ from ..load import (
     get_local_kernel,
 )
 from ..locking import (
+    _get_locked_kernel_revision,
     get_caller_locked_kernel_revision,
     get_locked_kernel_revision,
 )
@@ -307,6 +308,24 @@ class LockedLayerRepository:
     def __str__(self) -> str:
         commit = self.kernel_locks[self.kernel_dep].commit
         return f"`{self._repo_id}` (revision: {commit}), layer `{self.layer_name}`)"
+
+    def __getstate__(self):
+        # `kernel_locks` is a Rust object that does not support pickling. So,
+        # serialize it through JSON. `kernel_dep` is derived from it.
+        return {
+            "repo_id": self._repo_id,
+            "lockfile": self._lockfile,
+            "layer_name": self.layer_name,
+            "trust_remote_code": self._trust_remote_code,
+            "kernel_locks": self.kernel_locks.to_json(),
+        }
+
+    def __setstate__(self, state: dict):
+        self._repo_id = state["repo_id"]
+        self._lockfile = state["lockfile"]
+        self.layer_name = state["layer_name"]
+        self._trust_remote_code = state["trust_remote_code"]
+        self.kernel_locks, self.kernel_dep = _get_locked_kernel_revision(state["repo_id"], state["kernel_locks"])
 
 
 def replace_kernel_forward_from_hub(cls, layer_name: str, condition: Callable[["nn.Module"], bool] | None = None):
@@ -626,6 +645,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
         module=module,
         layer=layer,
         mode=mode,
+        repo=repo,
         use_fallback=use_fallback,
     )
 
@@ -688,6 +708,7 @@ def _conditionally_replace_forward(
     module: "nn.Module",
     layer: Type["nn.Module"],
     mode: Mode,
+    repo: RepositoryProtocol,
     use_fallback: KernelizeFallback,
 ):
     module_class = type(module)
@@ -710,11 +731,22 @@ def _conditionally_replace_forward(
         else:
             raise ValueError(f"Available kernel does not support mode: {mode}")
     else:
-        _replace_forward(module, layer)
+        _replace_forward(module, layer, repo=repo)
 
 
-def _replace_forward(module: "nn.Module", layer: Type["nn.Module"]):
+def _replace_forward(
+    module: "nn.Module",
+    layer: Type["nn.Module"],
+    *,
+    repo: RepositoryProtocol | None = None,
+):
     module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
+
+    if repo is None:
+        # No repository, typically when reverting to the original forward.
+        module.__dict__.pop("_kernel_repo", None)
+    else:
+        module.__dict__["_kernel_repo"] = repo
 
 
 def _validate_layer_has_mode(

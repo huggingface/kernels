@@ -523,6 +523,8 @@ def use_kernelized_func(*args: Callable):
                 assert name is not None
 
                 hidden_kernels[name] = type(fn)()
+                # dynamo specializes on the implementation
+                hidden_kernels[name]._kernel_compile_fn = None
 
         @functools.wraps(orig_forward)
         def new_forward(self, *args, **kwargs):
@@ -716,6 +718,10 @@ def _conditionally_replace_forward(
 def _replace_forward(module: "nn.Module", layer: Type["nn.Module"]):
     module.forward = MethodType(layer.forward, module)  # type: ignore[method-assign]
 
+    # keep compile-time implementation in sync with the selected forward
+    if hasattr(module, "_kernel_compile_fn"):
+        module._kernel_compile_fn = None if layer.forward is type(module).forward else layer.forward
+
 
 def _validate_layer_has_mode(
     *,
@@ -765,6 +771,7 @@ def _rebuild_kernel_func(module_name: str, func_name: str):
 
 
 def _create_func_module(func: Callable) -> Type["nn.Module"]:
+    import torch
     from torch import nn
 
     class Func(nn.Module):
@@ -776,7 +783,12 @@ def _create_func_module(func: Callable) -> Type["nn.Module"]:
             # Dispatch global calls to the active model's private wrapper
             if (active_kernel_funcs := _ACTIVE_KERNEL_FUNCS.get()) is not None:
                 if (kernel_func := active_kernel_funcs.get(id(self))) is not None:
-                    return kernel_func(*args, **kwargs)
+                    if torch.compiler.is_compiling():
+                        # avoid guards on individual wrapper identities (== recompile each time)
+                        if (compile_func := kernel_func._kernel_compile_fn) is not None:
+                            return compile_func(self, *args, **kwargs)
+                    else:
+                        return kernel_func(*args, **kwargs)
 
             return func(*args, **kwargs)
 

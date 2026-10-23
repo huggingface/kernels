@@ -55,18 +55,19 @@ including Rust, Python and Torch.
 Kernels can be built with many different Torch variants (frameworks + backend
 versions). These Torch variants are also available from the top-level flake as
 `nix build .#torch.<torch_variant>`. Each variant is built using a nixpkgs with
-its own list of overlays (see `mk-build-set.nix`). The package set can be
-accessed through `.#torch.<torch_variant>.pkgs.pkgs`. One should be slightly
-more careful with `.#torch.<torch_variant>.pkgs`. Even though this is the Python
-package set, `.#torch.<torch_variant>.pkgs.torch` cannot be used. The package
-sets are shared between multiple Torch variants for efficiency; therefore we
-always set the active Torch using `overrideTorch` (also see `mk-build-set.nix`).
+its own list of overlays (see `nix-builder/lib/mk-build-set.nix`). The package
+set can be accessed through `.#torch.<torch_variant>.pkgs.pkgs`. One should be
+slightly more careful with `.#torch.<torch_variant>.pkgs`. Even though this is
+the Python package set, `.#torch.<torch_variant>.pkgs.torch` cannot be used. The
+package sets are shared between multiple Torch variants for efficiency;
+therefore we always set the active Torch using `overrideTorch` (also see
+`mk-build-set.nix`).
 
 ### Kernel flakes
 
-Kernels call `genKernelFlakeOutputs` from `gen-flake-outputs.nix` through the
-top-level flake to create their flake outputs (see e.g.
-`examples/kernels/relu/flake.nix`).
+Kernels call `genKernelFlakeOutputs` from
+`nix-builder/lib/gen-flake-outputs.nix` through the top-level flake to create
+their flake outputs (see e.g. `examples/kernels/relu/flake.nix`).
 
 By default, a kernel flake builds a bundle of kernels for all (supported)
 variants. When working on a single backend, it is more efficient to build a

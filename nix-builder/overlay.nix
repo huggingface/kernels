@@ -39,6 +39,9 @@ final: prev:
     };
   };
 
+  # cuda-oxide toolchain and codegen backend for Rust CUDA kernels.
+  cuda-oxide = final.callPackage ./pkgs/cuda-oxide { };
+
   lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
 
   # Make the source for a package from our cargo workspace.

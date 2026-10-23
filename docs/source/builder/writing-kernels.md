@@ -318,7 +318,7 @@ The following options can be set for a kernel:
 
 - `language` (required): the language and compute backend of the kernel,
   as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
-  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, and `rust-cpu`.
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, `rust-cpu`, and `rust-cuda`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
   are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
@@ -376,6 +376,27 @@ directory, and writes `rust-git-hashes.json` there. Track both files
 in Git so Nix can include them in the build. Rerun the command whenever Git
 dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
 `Cargo.lock` and do not require this file.
+
+#### rust-cuda (experimental, and subject to change)
+
+Rust CUDA kernels use [cuda-oxide](https://github.com/NVIDIA/cuda-rust) and
+take the same options as `rust-cpu`, plus:
+
+- `cuda-capabilities` (optional): same as for `cpp-cuda`. PTX is generated for the lowest supported capability, so set this when kernels use newer instructions.
+
+`cargo-manifest` points to the host crate. It lists its device crates, which must be in the same Cargo workspace, in its metadata:
+
+```toml
+[[package.metadata.cuda-oxide.device-crates]]
+manifest-path = "../relu-device/Cargo.toml"
+```
+
+The device crates are built first and the host crate finds their PTX in `KERNEL_BUILDER_PTX_DIR`. 
+
+Use the cuda-rust revision pinned in
+[`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix).
+See [`relu-rust-cuda`](https://github.com/huggingface/kernels/tree/main/examples/kernels/relu-rust-cuda)
+for an example.
 
 ## Torch bindings
 

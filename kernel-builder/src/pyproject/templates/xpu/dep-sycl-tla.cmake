@@ -5,8 +5,9 @@ find_package(SyclTla)
 if(DPCPP_VERSION STREQUAL "2025.3")
   set(SYCL_TLA_REVISION "v0.8" CACHE STRING "sycl-tla revision to use")
 elseif(DPCPP_VERSION STREQUAL "2026.0" OR DPCPP_VERSION STREQUAL "2026.1")
-  # v0.9.2 == the rev pinned in nix-builder; v0.9.1 has no cri kernel support.
-  set(SYCL_TLA_REVISION "v0.9.2" CACHE STRING "sycl-tla revision to use")
+  # v0.9.1 has no cri kernel support. v0.9.2 has a flash-attention forward
+  # regression (up to 8x slower than v0.8 on BMG) that is fixed in v0.9.3.
+  set(SYCL_TLA_REVISION "v0.9.3" CACHE STRING "sycl-tla revision to use")
 else()
   message(FATAL_ERROR "Unknown DPCPP_VERSION: ${DPCPP_VERSION}")
 endif()

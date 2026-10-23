@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 from huggingface_hub import CachedRepoInfo, constants, scan_cache_dir
 from huggingface_hub.utils import CacheNotFound, tabulate
@@ -9,7 +10,13 @@ from kernels.hf_hub import _get_cache_dir
 from kernels.variants import get_variants_local
 
 
-def print_cached_kernels(*, cache_dir: Path | None = None, json_output: bool = False) -> None:
+def print_cached_kernels(
+    *,
+    cache_dir: Path | None = None,
+    json_output: bool = False,
+    show_warnings: bool = False,
+    no_truncate: bool = False,
+) -> None:
     """List cached kernel repositories and all their cached build variants."""
     cache_dir = Path(cache_dir or _get_cache_dir() or constants.HF_HUB_CACHE).expanduser().resolve()
     try:
@@ -21,10 +28,8 @@ def print_cached_kernels(*, cache_dir: Path | None = None, json_output: bool = F
         sys.exit(1)
 
     repos = []
-    rows: list[list[str | int]] = []
+    rows: list[list[str]] = []
     if cache is not None:
-        for warning in cache.warnings:
-            print(f"Warning: {warning}", file=sys.stderr)
         for repo in sorted(cache.repos, key=lambda repo: repo.repo_id):
             if repo.repo_type != "kernel":
                 continue
@@ -56,7 +61,25 @@ def print_cached_kernels(*, cache_dir: Path | None = None, json_output: bool = F
     elif not rows:
         print(f"No cached kernels found in {cache_dir}.")
     else:
-        print(tabulate(rows, headers=["ID", "SIZE", "LAST_ACCESSED", "LAST_MODIFIED", "REFS", "VARIANTS"]))
+        # Use the same terminal-width handling as `hf cache ls`.
+        from huggingface_hub.cli._output import _truncate_columns
+
+        headers = ["ID", "SIZE", "LAST_ACCESSED", "LAST_MODIFIED", "REFS", "VARIANTS"]
+        truncated = _truncate_columns(headers, rows, no_truncate=no_truncate)
+        print(tabulate(cast(list[list[str | int]], rows), headers=headers, alignments={"SIZE": "right"}))
+        if truncated:
+            print("Hint: Use `--no-truncate` or `--json` to display full values.", file=sys.stderr)
+
+    if cache is not None and cache.warnings:
+        if show_warnings:
+            for warning in cache.warnings:
+                print(f"Warning: {str(warning).rstrip('.')}. Repo ignored.", file=sys.stderr)
+        else:
+            print(
+                f"Warning: Found {len(cache.warnings)} cache inconsistencies. "
+                "Re-run with `--show-warnings` to display them.",
+                file=sys.stderr,
+            )
 
 
 def _cached_variants(repo: CachedRepoInfo) -> list[str]:

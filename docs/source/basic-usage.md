@@ -32,13 +32,17 @@ You can check which kernels and build variants are cached with
 kernels cache ls
 ```
 
-Example output (the sizes, timestamps, refs, and variants depend on your cache):
+Example output (the values depend on your cache):
 
 ```text
 ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS VARIANTS
 ----------------------------------- ---- -------------- -------------- ---- --------------------------------
 kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago v1   torch28-cxx11-cu128-x86_64-linux
 ```
+
+Each row includes variants from all cached revisions of that repository.
+Use `kernels cache ls --no-truncate` or `--json` to see full values when the
+table is shortened to fit your terminal.
 
 Kernels within a version branch must never break the API or remove builds
 for older PyTorch versions. This ensures that your code will continue to work.

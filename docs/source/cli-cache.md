@@ -7,19 +7,23 @@ The command runs locally and does not download or load kernel code.
 ## Usage
 
 ```bash
-kernels cache ls [--cache-dir PATH] [--json]
+kernels cache ls [--cache-dir PATH] [--json] [--no-truncate] [--show-warnings]
 ```
 
 | Option | Description |
 | --- | --- |
 | `--cache-dir PATH` | Inspect a specific cache directory. |
 | `--json` | Print cached kernel information as JSON. |
+| `--no-truncate` | Display full table values regardless of terminal width. |
+| `--show-warnings` | Show individual cache inconsistencies instead of a short summary. |
 
 By default, the command uses the same cache as `get_kernel`: `KERNELS_CACHE`
 when set, otherwise the Hugging Face Hub cache configured by `HF_HUB_CACHE`
 or `HF_HOME`. An explicit `--cache-dir` takes precedence over these settings.
 
 ## Output
+
+Example output in a wide terminal:
 
 ```text
 ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS VARIANTS
@@ -32,6 +36,13 @@ in the repository's cached snapshots. Repeated variant names appear once.
 Variants are included regardless of compatibility with the current environment.
 Only recognized build directories with cached files are listed; empty build
 directories are excluded. If there are no cached variants, the column shows `-`.
+
+Every cached revision contributes to the repository's row, including detached
+snapshots without refs. `REFS` lists all locally cached branches and tags.
+
+Like `hf cache ls`, the table shortens long values to fit the terminal width.
+Use `--no-truncate` or `--json` to see all values in full. Cache inconsistencies
+produce a short summary by default; use `--show-warnings` to see their details.
 
 ## JSON output
 

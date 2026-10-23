@@ -33,6 +33,7 @@ def cache_dir(tmp_path, monkeypatch):
     path.mkdir()
     monkeypatch.delenv("KERNELS_CACHE", raising=False)
     monkeypatch.setattr(cache_cli.constants, "HF_HUB_CACHE", str(path))
+    monkeypatch.setenv("COLUMNS", "240")
     return path
 
 
@@ -74,6 +75,7 @@ def test_cache_ls_json_combines_variants_from_all_downloaded_versions(cache_dir,
     # Multiple refs can point to the same snapshot, including slash-containing refs.
     make_snapshot(cache_dir, refs=["v1", "main", "releases/v1"], variants=[CUDA_126, CUDA_128], symlinks=symlinks)
     make_snapshot(cache_dir, commit="b" * 40, refs=["v0"], variants=[CUDA_129], symlinks=symlinks)
+    # A detached snapshot contributes variants even though it has no cached ref.
     make_snapshot(cache_dir, commit="c" * 40, variants=[CUDA_128, "torch-cuda"], symlinks=symlinks)
     make_snapshot(cache_dir, repo_id="other/kernel", variants=[CUDA_128], symlinks=symlinks)
     make_snapshot(cache_dir, repo_id="other/model", repo_type="model", variants=[CUDA_128], symlinks=symlinks)
@@ -117,6 +119,42 @@ def test_cache_ls_shows_one_row_per_kernel_with_all_cached_variants(cache_dir, m
     assert hub_repo.last_modified_str in lines[0]
     assert ", ".join(["torch-cpu", CUDA_126, CUDA_128, CUDA_129]) in lines[0]
     assert lines[0].count(CUDA_128) == 1
+
+
+@pytest.mark.parametrize("columns", [80, 120])
+def test_cache_ls_fits_long_variant_lists_in_the_terminal(cache_dir, monkeypatch, capsys, columns):
+    make_snapshot(cache_dir, refs=["main", "v1"], variants=[CUDA_126, CUDA_128, CUDA_129, "torch-cuda"])
+    make_snapshot(cache_dir, repo_id="other/kernel", variants=["torch-cpu"])
+    monkeypatch.setenv("COLUMNS", str(columns))
+    run_cli(monkeypatch)
+    output = capsys.readouterr()
+    lines = output.out.splitlines()
+    assert len(lines) == 4  # Header, separator, and one row per repository.
+    assert all(len(line) <= columns for line in lines)
+    assert "..." in output.out
+    assert "--no-truncate" in output.err
+    assert "--json" in output.err
+    # Every column starts at the same position in the header and data rows.
+    separators = lines[1].split()
+    start = 0
+    for column in separators:
+        end = start + len(column)
+        assert all(line[start:end].strip() for line in lines)
+        if end < len(lines[1]):
+            assert all(line[end] == " " for line in lines)
+        start = end + 1
+
+
+@pytest.mark.parametrize("output_args", [["--no-truncate"], ["--json"]], ids=["full-table", "json"])
+def test_cache_ls_can_show_full_values_in_a_narrow_terminal(cache_dir, monkeypatch, capsys, output_args):
+    variants = [CUDA_126, CUDA_128, CUDA_129]
+    make_snapshot(cache_dir, variants=variants)
+    monkeypatch.setenv("COLUMNS", "80")
+    run_cli(monkeypatch, *output_args)
+    output = capsys.readouterr()
+    assert output.err == ""
+    assert REPO_ID in output.out
+    assert all(variant in output.out for variant in variants)
 
 
 @pytest.mark.parametrize(
@@ -248,17 +286,33 @@ def test_cache_ls_reports_when_no_kernels_have_been_downloaded(cache_dir, monkey
         assert not cache_dir.exists()
 
 
-def test_cache_ls_keeps_working_when_one_cached_kernel_is_corrupt(cache_dir, monkeypatch, capsys):
+@pytest.mark.parametrize("output_args", [[], ["--json"]], ids=["table", "json"])
+@pytest.mark.parametrize("show_warnings", [False, True], ids=["warning-summary", "warning-details"])
+def test_cache_ls_keeps_working_when_one_cached_kernel_is_corrupt(
+    cache_dir, monkeypatch, capsys, output_args, show_warnings
+):
     make_snapshot(cache_dir, variants=[CUDA_128])
     broken = make_snapshot(cache_dir, repo_id="test/broken", variants=[CUDA_128])
     (broken / "README.md").resolve().unlink()
-    run_cli(monkeypatch, "--json")
+    run_cli(monkeypatch, *output_args, *(["--show-warnings"] if show_warnings else []))
     output = capsys.readouterr()
     assert "Warning:" in output.err
-    assert "broken" in output.err
-    repos = json.loads(output.out)["repos"]
-    assert [repo["repo_id"] for repo in repos] == [REPO_ID]
-    assert repos[0]["variants"] == [CUDA_128]
+    if show_warnings:
+        assert "broken" in output.err
+        assert "Repo ignored." in output.err
+    else:
+        assert len(output.err.splitlines()) == 1
+        assert "Found 1 cache inconsistencies" in output.err
+        assert "--show-warnings" in output.err
+        assert "broken" not in output.err
+    if output_args:
+        repos = json.loads(output.out)["repos"]
+        assert [repo["repo_id"] for repo in repos] == [REPO_ID]
+        assert repos[0]["variants"] == [CUDA_128]
+    else:
+        assert REPO_ID in output.out
+        assert CUDA_128 in output.out
+        assert "test/broken" not in output.out
 
 
 def test_cache_ls_rejects_a_file_passed_as_cache_dir(tmp_path, monkeypatch, capsys):

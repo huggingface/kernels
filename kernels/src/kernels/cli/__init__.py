@@ -22,6 +22,10 @@ def main():
     cache_ls_parser = cache_subparsers.add_parser("ls", help="List cached kernels and their build variants")
     cache_ls_parser.add_argument("--cache-dir", type=Path, help="Inspect a specific cache directory")
     cache_ls_parser.add_argument("--json", action="store_true", help="Print cached kernel information as JSON")
+    cache_ls_parser.add_argument("--show-warnings", action="store_true", help="Show details of cache inconsistencies")
+    cache_ls_parser.add_argument(
+        "--no-truncate", action="store_true", help="Display full values regardless of terminal width"
+    )
     cache_ls_parser.set_defaults(func=kernel_cache_ls)
 
     check_parser = subparsers.add_parser("check", help="Check a kernel for compliance")
@@ -188,7 +192,12 @@ def kernel_info(args):
 
 
 def kernel_cache_ls(args):
-    print_cached_kernels(cache_dir=args.cache_dir, json_output=args.json)
+    print_cached_kernels(
+        cache_dir=args.cache_dir,
+        json_output=args.json,
+        show_warnings=args.show_warnings,
+        no_truncate=args.no_truncate,
+    )
 
 
 def kernel_api(args):

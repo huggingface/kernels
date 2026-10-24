@@ -15,7 +15,8 @@ use hf_hub::{
 use indicatif::{ProgressBar, ProgressStyle};
 use kernels_common::config::Build;
 use kernels_common::metadata::Metadata;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use url::Url;
 use walkdir::WalkDir;
 
 use crate::{
@@ -40,6 +41,9 @@ impl ProgressHandler for IndicatifProgress {
 
 const MAIN_BRANCH: &str = "main";
 const BUILD_COMMIT_BATCH_SIZE: usize = 1_000;
+
+/// Message of upload commits, and so the title of the pull requests they open.
+const UPLOAD_COMMIT_MESSAGE: &str = "Uploaded using `kernel-builder`";
 
 const KERNELS_COMMUNITY_URL: &str =
     "https://huggingface.co/spaces/kernels-community/README/discussions/new";
@@ -95,7 +99,8 @@ pub struct UploadArgs {
     pub repo_type: RepoTypeArg,
 
     /// Open a pull request with the changes rather than committing them
-    /// directly (does not require write access to the repository).
+    /// directly (does not require write access to the repository). An open
+    /// pull request of an earlier upload by the same user is updated instead.
     #[arg(long)]
     pub create_pr: bool,
 
@@ -120,6 +125,9 @@ enum UploadStatus {
 struct PullRequest {
     branch: String,
     url: String,
+    /// Whether an open pull request of an earlier upload was updated rather
+    /// than a new one opened.
+    updated: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -261,8 +269,25 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         if is_new_version_branch { " (new)" } else { "" }
     );
 
-    let main_existing_files = list_repo_files(&repo, MAIN_BRANCH);
-    let version_existing_files = list_repo_files(&repo, &branch);
+    // With --create-pr, update the open pull request of an earlier upload
+    // rather than opening a sibling one. Uploads from different CI jobs (or
+    // re-runs) all branch from the same base commit, so sibling pull requests
+    // conflict as soon as one of them is merged.
+    let open_prs = if args.create_pr {
+        find_open_upload_prs::<T>(&repo_id, &[MAIN_BRANCH, &branch])
+    } else {
+        BTreeMap::new()
+    };
+    let revision_of = |branch: &str| {
+        open_prs
+            .get(branch)
+            .map_or_else(|| branch.to_owned(), |pr| pr.git_ref.clone())
+    };
+
+    // Diff against the pull request when updating one, since it may already
+    // differ from the branch it targets.
+    let main_existing_files = list_repo_files(&repo, &revision_of(MAIN_BRANCH));
+    let version_existing_files = list_repo_files(&repo, &revision_of(&branch));
 
     let operations_by_branch = collect_commit_ops(
         &kernel_dir,
@@ -304,18 +329,27 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         };
 
         // With --create-pr, the first batch opens a pull request against the
-        // branch; follow-up batches are pushed to the pull request ref so that
-        // one upload always results in a single pull request per branch.
-        let mut pr_revision: Option<String> = None;
+        // branch (unless an open upload pull request is updated instead);
+        // follow-up batches are pushed to the pull request ref so that one
+        // upload always results in a single pull request per branch.
+        let open_pr = open_prs.get(branch);
+        let mut pr_revision: Option<String> = open_pr.map(|pr| pr.git_ref.clone());
+        if let Some(pr) = open_pr {
+            pull_requests.push(PullRequest {
+                branch: branch.clone(),
+                url: pr.url.clone(),
+                updated: true,
+            });
+        }
 
         for (batch_index, chunk) in operations.chunks(BUILD_COMMIT_BATCH_SIZE).enumerate() {
             let commit_message = if batch_count > 1 {
                 format!(
-                    "Uploaded using `kernel-builder` (batch {}/{batch_count}).",
+                    "{UPLOAD_COMMIT_MESSAGE} (batch {}/{batch_count}).",
                     batch_index + 1
                 )
             } else {
-                "Uploaded using `kernel-builder`.".to_owned()
+                format!("{UPLOAD_COMMIT_MESSAGE}.")
             };
 
             let open_pr = args.create_pr && pr_revision.is_none();
@@ -340,11 +374,14 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
                 pull_requests.push(PullRequest {
                     branch: branch.clone(),
                     url: pr_url,
+                    updated: false,
                 });
             }
         }
 
-        progress.finish_with_message(if args.create_pr {
+        progress.finish_with_message(if open_pr.is_some() {
+            format!("Updated pull request against `{branch}`")
+        } else if args.create_pr {
             format!("Opened pull request against `{branch}`")
         } else {
             format!("Uploaded to `{branch}`")
@@ -385,7 +422,11 @@ fn run_upload_typed<T: RepoType>(args: UploadArgs) -> Result<()> {
         UploadStatus::NoChanges => eprintln!("No changes to upload."),
         UploadStatus::PullRequestCreated => {
             for pr in &outcome.pull_requests {
-                println!("Pull request created: {}", pr.url);
+                if pr.updated {
+                    println!("Pull request updated: {}", pr.url);
+                } else {
+                    println!("Pull request created: {}", pr.url);
+                }
             }
         }
         UploadStatus::Uploaded => {
@@ -448,6 +489,169 @@ fn resolve_pr<T: RepoType>(
         .ok_or_else(|| eyre!("Malformed pull-request ref `{}`", pr.git_ref))?;
 
     Ok((pr.git_ref.clone(), pr_url_for(num)))
+}
+
+/// An open pull request of an earlier upload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OpenUploadPr {
+    git_ref: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DiscussionPage {
+    discussions: Vec<DiscussionSummary>,
+    count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct DiscussionSummary {
+    num: u64,
+    title: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscussionDetails {
+    changes: Option<PullRequestChanges>,
+    #[serde(default)]
+    files_with_conflicts: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PullRequestChanges {
+    base: String,
+}
+
+/// Whether a pull request was opened by an upload (its title is the message
+/// of its first commit).
+fn is_upload_pr_title(title: &str) -> bool {
+    title.starts_with(UPLOAD_COMMIT_MESSAGE)
+}
+
+/// The branch among `branches` that the pull request targets, if any.
+fn upload_pr_target<'a>(details: &DiscussionDetails, branches: &[&'a str]) -> Option<&'a str> {
+    let base = details.changes.as_ref()?.base.as_str();
+    branches
+        .iter()
+        .copied()
+        .find(|branch| base == format!("refs/heads/{branch}"))
+}
+
+/// Find the open upload pull request of the current user for each of
+/// `branches`, keyed by branch.
+///
+/// Failing to look them up is not fatal: the upload then opens new pull
+/// requests, as it would without any open ones.
+fn find_open_upload_prs<T: RepoType>(
+    repo_id: &str,
+    branches: &[&str],
+) -> BTreeMap<String, OpenUploadPr> {
+    let prs = hf::whoami_username()
+        .and_then(|author| try_find_open_upload_prs::<T>(repo_id, branches, &author));
+    match prs {
+        Ok(prs) => prs,
+        Err(err) => {
+            eprintln!("Warning: cannot look up open pull requests, opening new ones: {err:#}");
+            BTreeMap::new()
+        }
+    }
+}
+
+fn try_find_open_upload_prs<T: RepoType>(
+    repo_id: &str,
+    branches: &[&str],
+    author: &str,
+) -> Result<BTreeMap<String, OpenUploadPr>> {
+    let endpoint = kernels_common::hf::hub_endpoint();
+    let discussions_url = format!(
+        "{}/api/{}/{repo_id}/discussions",
+        endpoint.trim_end_matches('/'),
+        T::default().plural()
+    );
+
+    let client = reqwest::blocking::Client::new();
+    let get = |url: Url| -> Result<String> {
+        let mut request = client.get(url.clone());
+        if let Some(token) = kernels_common::hf::hub_token() {
+            request = request.bearer_auth(token);
+        }
+        request
+            .send()
+            .and_then(|response| response.error_for_status())
+            .and_then(|response| response.text())
+            .wrap_err_with(|| format!("Cannot fetch `{url}`"))
+    };
+
+    // Discussions are listed newest first, so the most recent upload pull
+    // request of each branch wins.
+    let mut prs = BTreeMap::new();
+    let mut seen = 0;
+    for page in 0.. {
+        let url = Url::parse_with_params(
+            &discussions_url,
+            [
+                ("type", "pull_request"),
+                ("status", "open"),
+                ("author", author),
+                ("p", &page.to_string()),
+            ],
+        )?;
+        let page: DiscussionPage =
+            serde_json::from_str(&get(url)?).wrap_err("Cannot parse the list of pull requests")?;
+        if page.discussions.is_empty() {
+            break;
+        }
+        seen += page.discussions.len();
+
+        for pr in page
+            .discussions
+            .iter()
+            .filter(|pr| is_upload_pr_title(&pr.title))
+        {
+            let url = Url::parse(&format!("{discussions_url}/{}", pr.num))?;
+            let details: DiscussionDetails = serde_json::from_str(&get(url)?)
+                .wrap_err_with(|| format!("Cannot parse pull request #{}", pr.num))?;
+            let Some(branch) = upload_pr_target(&details, branches) else {
+                continue;
+            };
+            if prs.contains_key(branch) {
+                continue;
+            }
+            // Further commits cannot resolve conflicts, so a conflicting pull
+            // request is left alone. An older open one for the branch is used
+            // instead, or a new one is opened. The conflicting pull request
+            // has to be closed by hand once the replacement is merged.
+            if !details.files_with_conflicts.is_empty() {
+                eprintln!(
+                    "Warning: not updating pull request #{} for `{branch}`, it has merge                      conflicts in {}",
+                    pr.num,
+                    details.files_with_conflicts.join(", ")
+                );
+                continue;
+            }
+            prs.insert(
+                branch.to_owned(),
+                OpenUploadPr {
+                    git_ref: format!("refs/pr/{}", pr.num),
+                    url: format!(
+                        "https://hf.co/{}{repo_id}/discussions/{}",
+                        T::default().url_prefix(),
+                        pr.num
+                    ),
+                },
+            );
+            if branches.iter().all(|branch| prs.contains_key(*branch)) {
+                return Ok(prs);
+            }
+        }
+
+        if seen >= page.count {
+            break;
+        }
+    }
+
+    Ok(prs)
 }
 
 /// List the paths of all files at `revision`, or an empty set if the listing
@@ -749,10 +953,12 @@ mod tests {
                 PullRequest {
                     branch: MAIN_BRANCH.to_owned(),
                     url: "https://hf.co/kernels/user/my-kernel/discussions/1".to_owned(),
+                    updated: true,
                 },
                 PullRequest {
                     branch: "v3".to_owned(),
                     url: "https://hf.co/kernels/user/my-kernel/discussions/2".to_owned(),
+                    updated: false,
                 },
             ],
         };
@@ -771,15 +977,54 @@ mod tests {
                 "pull_requests": [
                     {
                         "branch": "main",
-                        "url": "https://hf.co/kernels/user/my-kernel/discussions/1"
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/1",
+                        "updated": true
                     },
                     {
                         "branch": "v3",
-                        "url": "https://hf.co/kernels/user/my-kernel/discussions/2"
+                        "url": "https://hf.co/kernels/user/my-kernel/discussions/2",
+                        "updated": false
                     }
                 ]
             })
         );
+    }
+
+    #[test]
+    fn test_is_upload_pr_title() {
+        assert!(is_upload_pr_title("Uploaded using `kernel-builder`."));
+        assert!(is_upload_pr_title(
+            "Uploaded using `kernel-builder` (batch 1/3)."
+        ));
+        assert!(!is_upload_pr_title("Fix repo references in README"));
+    }
+
+    #[test]
+    fn test_upload_pr_target() {
+        let details = |json| serde_json::from_value::<DiscussionDetails>(json).unwrap();
+
+        let open = details(serde_json::json!({
+            "changes": { "base": "refs/heads/v1" },
+            "filesWithConflicts": []
+        }));
+        assert_eq!(upload_pr_target(&open, &["main", "v1"]), Some("v1"));
+        assert_eq!(upload_pr_target(&open, &["main"]), None);
+        assert!(open.files_with_conflicts.is_empty());
+
+        // Conflicts are reported on the details, the target is unaffected.
+        let conflicting = details(serde_json::json!({
+            "changes": { "base": "refs/heads/v1" },
+            "filesWithConflicts": ["build/torch-cuda/metadata.json.sigstore"]
+        }));
+        assert_eq!(upload_pr_target(&conflicting, &["main", "v1"]), Some("v1"));
+        assert_eq!(
+            conflicting.files_with_conflicts,
+            ["build/torch-cuda/metadata.json.sigstore"]
+        );
+
+        // A discussion that is not a pull request has no changes.
+        let discussion = details(serde_json::json!({}));
+        assert_eq!(upload_pr_target(&discussion, &["main", "v1"]), None);
     }
 
     #[test]

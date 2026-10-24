@@ -61,27 +61,19 @@ final: prev:
 
   torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };
 
-  # Temporary: update the CA bundle to NSS 3.131.1, which removes the
-  # compromised eMudhra intermediates' roots. Remove once nixpkgs ships
-  # cacert >= 3.131.1 in our channel.
-  # https://emudhra.we-have-a-problem.com/
-  cacert = prev.cacert.overrideAttrs (
-    finalAttrs: _: {
-      version = "3.131.1";
-      src = prev.fetchurl {
-        urls =
-          let
-            file = "lib/ckfw/builtins/certdata.txt";
-            tag = "NSS_${prev.lib.replaceStrings [ "." ] [ "_" ] finalAttrs.version}_RTM";
-          in
-          [
-            "https://hg-edge.mozilla.org/projects/nss/raw-file/${tag}/${file}"
-            "https://raw.githubusercontent.com/nss-dev/nss/refs/tags/${tag}/${file}"
-          ];
-        hash = "sha256-PsK00kDcEsdH6vRQBh24SvdXxIO72jAvninOtdcL5RA=";
+  # Temporary: revert patchelf 0.15.2 -> 0.19.2 (NixOS/nixpkgs#569010), which
+  # causes segfaults (e.g. cc1plus) in binaries patched by autoPatchelfHook.
+  # Remove once nixpkgs ships a fixed patchelf. Can possibly be removed once
+  # https://github.com/NixOS/patchelf/pull/672 propagates to the channels.
+  patchelf-old =
+    (prev.patchelf.override (old: {
+      fetchurl =
+        args: old.fetchurl (args // { hash = "sha256-F3RfVkFZyOIo/EEtplogSLhGxLa0Igt3y/IkFuAvLXw="; });
+    })).overrideAttrs
+      {
+        version = "0.15.2";
+        __intentionallyOverridingVersion = true;
       };
-    }
-  );
 
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
@@ -344,6 +336,21 @@ final: prev:
   xpuPackages = final.xpuPackages_2025_3_2;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
+// (
+  # libnvshmem builds are very slow. Use binraries instead.
+  let
+    inherit (prev) lib;
+    isCudaPackageSet = name: builtins.match "cudaPackages_[0-9]+_[0-9]+" name != null;
+  in
+  lib.mapAttrs (
+    _: cudaPackages:
+    cudaPackages.overrideScope (
+      finalScope: _: {
+        libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
+      }
+    )
+  ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)
+)
 // (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];

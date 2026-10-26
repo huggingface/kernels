@@ -263,6 +263,8 @@ def kernelize(
     if isinstance(use_fallback, bool):
         use_fallback = KernelizeFallback.DEFAULT if use_fallback else KernelizeFallback.NONE
 
+    device_index = None if device is None or isinstance(device, str) else device.index
+
     for _, module in model.named_modules():
         module_class = type(module)
 
@@ -273,6 +275,7 @@ def kernelize(
                 mode=mode,
                 device_type=device_type,
                 use_fallback=use_fallback,
+                device_index=device_index,
             )
 
         if hasattr(module_class, "kernel_layer_name"):
@@ -285,7 +288,13 @@ def kernelize(
                 )
                 continue
 
-            kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
+            kernelize_layer(
+                module,
+                mode=mode,
+                device_type=device_type,
+                use_fallback=use_fallback,
+                device_index=device_index,
+            )
 
     return model
 

@@ -567,7 +567,14 @@ def use_kernelized_func(*args: Callable):
     return decorator
 
 
-def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use_fallback: KernelizeFallback):
+def kernelize_layer(
+    module: "nn.Module",
+    *,
+    mode: Mode,
+    device_type: Device,
+    use_fallback: KernelizeFallback,
+    device_index: int | None = None,
+):
     module_class = type(module)
     layer_name = module_class.kernel_layer_name  # type: ignore[attr-defined]
 
@@ -598,7 +605,7 @@ def kernelize_layer(module: "nn.Module", *, mode: Mode, device_type: Device, use
         _replace_forward(module, module_class)
         return
 
-    repos = property_repos.repos
+    repos = property_repos.repos_for_device(device_index)
 
     if repos is None:
         if KernelizeFallback.NO_COMPATIBLE_PROPERTIES not in use_fallback:

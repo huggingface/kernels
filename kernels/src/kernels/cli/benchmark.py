@@ -474,7 +474,6 @@ def run_benchmark_class(
 
     kernel_sha = get_kernel_sha_from_build_name(kernel)
     backend_name = _backend().name
-
     # Map backend names to torch device names
     device_map = {
         "rocm": "cuda",
@@ -482,7 +481,7 @@ def run_benchmark_class(
         "cann": "npu",
     }
     device = device_map.get(backend_name, backend_name)
-    print(f"  Running {benchmark_cls.__name__} on {device} (backend: {backend_name})", file=sys.stderr)
+    print(f"  Running {benchmark_cls.__name__} on {device}", file=sys.stderr)
 
     for method_name in benchmark_methods:
         workload_name = method_name.replace("benchmark_", "")

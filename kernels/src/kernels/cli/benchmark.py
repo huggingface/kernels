@@ -463,15 +463,13 @@ def run_benchmark_class(
     # Load kernel once for all workloads
     from kernels import get_kernel, get_local_kernel
 
-    # Detect the backend
-    backend_name = _backend().name
-
     if is_local:
-        kernel = get_local_kernel(Path(repo_id), backend=backend_name)
+        kernel = get_local_kernel(Path(repo_id))
     else:
-        kernel = get_kernel(repo_id, revision=revision, backend=backend_name)
+        kernel = get_kernel(repo_id, revision=revision)
 
     kernel_sha = get_kernel_sha_from_build_name(kernel)
+    backend_name = _backend().name
 
     # Map backend names to torch device names
     device_map = {

@@ -35,12 +35,17 @@ kernels cache ls
 Example output (the values depend on your cache):
 
 ```text
-ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  REFS VARIANTS
------------------------------------ ---- -------------- -------------- ---- --------------------------------
-kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago v1   torch28-cxx11-cu128-x86_64-linux
+ID                                  SIZE LAST_ACCESSED  LAST_MODIFIED  VERSION VARIANTS
+----------------------------------- ---- -------------- -------------- ------- --------------------------------
+kernel/kernels-community/activation 2.5M 45 minutes ago 45 minutes ago v1      torch28-cxx11-cu126-x86_64-linux
+                                                                               torch28-cxx11-cu128-x86_64-linux
+                                                                               torch28-cxx11-cu129-x86_64-linux
+kernel/kernels-community/activation 2.6M 23 minutes ago 23 minutes ago v2      torch28-cxx11-cu126-x86_64-linux
+                                                                               torch28-cxx11-cu128-x86_64-linux
+                                                                               torch28-cxx11-cu129-x86_64-linux
 ```
 
-Each row includes variants from all cached revisions of that repository.
+Each version has its own row, with its cached variants listed on separate lines.
 Use `kernels cache ls --no-truncate` or `--json` to see full values when the
 table is shortened to fit your terminal.
 

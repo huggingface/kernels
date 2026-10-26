@@ -20,6 +20,9 @@ CUDA_129 = "torch28-cxx11-cu129-x86_64-linux"
 
 @pytest.fixture(autouse=True)
 def offline(monkeypatch):
+    # Hub's CLI formatter initializes agent detection, which can refresh a registry.
+    monkeypatch.setattr(cache_cli.constants, "HF_HUB_OFFLINE", True)
+
     def fail(*args, **kwargs):
         pytest.fail("Cache listing must not make network requests")
 
@@ -38,7 +41,7 @@ def cache_dir(tmp_path, monkeypatch):
 
 
 def make_snapshot(
-    cache_dir, *, repo_id=REPO_ID, commit=COMMIT, refs=(), variants=(), repo_type="kernel", symlinks=True
+    cache_dir, *, repo_id=REPO_ID, commit=COMMIT, refs=("v1",), variants=(), repo_type="kernel", symlinks=True
 ):
     repo = cache_dir / f"{repo_type}s--{repo_id.replace('/', '--')}"
     snapshot = repo / "snapshots" / commit
@@ -71,12 +74,12 @@ def run_cli(monkeypatch, *args):
 
 
 @pytest.mark.parametrize("symlinks", [False, True], ids=["copied-files", "symlinked-files"])
-def test_cache_ls_json_combines_variants_from_all_downloaded_versions(cache_dir, monkeypatch, capsys, symlinks):
+def test_cache_ls_json_keeps_variants_separate_for_each_cached_version(cache_dir, monkeypatch, capsys, symlinks):
     # Multiple refs can point to the same snapshot, including slash-containing refs.
     make_snapshot(cache_dir, refs=["v1", "main", "releases/v1"], variants=[CUDA_126, CUDA_128], symlinks=symlinks)
     make_snapshot(cache_dir, commit="b" * 40, refs=["v0"], variants=[CUDA_129], symlinks=symlinks)
-    # A detached snapshot contributes variants even though it has no cached ref.
-    make_snapshot(cache_dir, commit="c" * 40, variants=[CUDA_128, "torch-cuda"], symlinks=symlinks)
+    # Detached snapshots are not listed as kernel versions.
+    make_snapshot(cache_dir, commit="c" * 40, refs=(), variants=[CUDA_128, "torch-cuda"], symlinks=symlinks)
     make_snapshot(cache_dir, repo_id="other/kernel", variants=[CUDA_128], symlinks=symlinks)
     make_snapshot(cache_dir, repo_id="other/model", repo_type="model", variants=[CUDA_128], symlinks=symlinks)
     make_snapshot(cache_dir, repo_id="other/dataset", repo_type="dataset", symlinks=symlinks)
@@ -88,9 +91,12 @@ def test_cache_ls_json_combines_variants_from_all_downloaded_versions(cache_dir,
     assert result["cache_dir"] == str(cache_dir)
     assert [repo["repo_id"] for repo in result["repos"]] == [REPO_ID, "other/kernel"]
     repo = result["repos"][0]
-    assert set(repo) == {"repo_id", "size_on_disk", "last_accessed", "last_modified", "refs", "variants"}
-    assert repo["refs"] == ["main", "releases/v1", "v0", "v1"]
-    assert repo["variants"] == ["torch-cuda", CUDA_126, CUDA_128, CUDA_129]
+    assert set(repo) == {"repo_id", "size_on_disk", "last_accessed", "last_modified", "versions"}
+    versions = repo["versions"]
+    assert [entry["version"] for entry in versions] == ["v0", "v1"]
+    assert [entry["variants"] for entry in versions] == [[CUDA_129], [CUDA_126, CUDA_128]]
+    assert all("ref" not in entry for entry in versions)
+    assert "torch-cuda" not in output.out
     assert COMMIT not in output.out
     # Shared blobs are only counted once, including across variants and revisions.
     unique_size = len(b"Kernel description{}raise AssertionError('Do not import cached kernel code')")
@@ -99,37 +105,72 @@ def test_cache_ls_json_combines_variants_from_all_downloaded_versions(cache_dir,
     )
 
 
-def test_cache_ls_shows_one_row_per_kernel_with_all_cached_variants(cache_dir, monkeypatch, capsys):
-    make_snapshot(cache_dir, refs=["v1"], variants=[CUDA_126, CUDA_128, CUDA_129])
-    make_snapshot(cache_dir, commit="b" * 40, refs=["v0"], variants=[CUDA_128, "torch-cpu"])
+def test_cache_ls_shows_each_version_with_its_variants_on_separate_lines(cache_dir, monkeypatch, capsys):
+    make_snapshot(cache_dir, refs=["v1"], variants=[CUDA_126, CUDA_128, CUDA_129], symlinks=False)
+    make_snapshot(cache_dir, commit="b" * 40, refs=["v0"], variants=[CUDA_128, "torch-cpu"], symlinks=False)
     hub_repo = next(iter(scan_cache_dir(cache_dir).repos))
     run_cli(monkeypatch)
     output = capsys.readouterr()
     assert output.err == ""
-    assert output.out.splitlines()[0].split() == ["ID", "SIZE", "LAST_ACCESSED", "LAST_MODIFIED", "REFS", "VARIANTS"]
+    assert output.out.splitlines()[0].split() == [
+        "ID",
+        "SIZE",
+        "LAST_ACCESSED",
+        "LAST_MODIFIED",
+        "VERSION",
+        "VARIANTS",
+    ]
     assert "REVISION" not in output.out
     assert "SELECTED" not in output.out
     assert COMMIT not in output.out
-    lines = [line for line in output.out.splitlines() if REPO_ID in line]
-    assert len(lines) == 1
-    assert f"kernel/{REPO_ID}" in lines[0]
-    assert "v0, v1" in lines[0]
-    assert hub_repo.size_on_disk_str in lines[0]
-    assert hub_repo.last_accessed_str in lines[0]
-    assert hub_repo.last_modified_str in lines[0]
-    assert ", ".join(["torch-cpu", CUDA_126, CUDA_128, CUDA_129]) in lines[0]
-    assert lines[0].count(CUDA_128) == 1
+    lines = output.out.splitlines()
+    assert len(lines) == 7  # Header, separator, two variants for v0, and three for v1.
+    version_start = lines[0].index("VERSION")
+    variants_start = lines[0].index("VARIANTS")
+    for version, block, expected in [
+        (0, lines[2:4], ["torch-cpu", CUDA_128]),
+        (1, lines[4:], [CUDA_126, CUDA_128, CUDA_129]),
+    ]:
+        assert f"kernel/{REPO_ID}" in block[0]
+        assert hub_repo.refs[f"v{version}"].size_on_disk_str in block[0]
+        assert hub_repo.refs[f"v{version}"].last_modified_str in block[0]
+        assert block[0][version_start:variants_start].strip() == f"v{version}"
+        assert [line[variants_start:].strip() for line in block] == expected
+        assert all(not line[:variants_start].strip() for line in block[1:])
+    # A build cached for both versions must be shown under both versions.
+    assert output.out.count(CUDA_128) == 2
+
+
+def test_cache_ls_sorts_version_numbers_and_excludes_other_refs(cache_dir, monkeypatch, capsys):
+    for version in [10, 2, 0]:
+        make_snapshot(cache_dir, commit=f"{version:040x}", refs=[f"v{version}"], variants=[CUDA_128])
+    make_snapshot(cache_dir, refs=["main", "release/preview", "v1.0"], variants=["torch-cuda"])
+    make_snapshot(cache_dir, commit="f" * 40, refs=(), variants=["torch-cpu"])
+
+    run_cli(monkeypatch)
+    output = capsys.readouterr()
+    assert output.err == ""
+    lines = output.out.splitlines()
+    start, end = lines[0].index("VERSION"), lines[0].index("VARIANTS")
+    assert [line[start:end].strip() for line in lines[2:]] == ["v0", "v2", "v10"]
+    assert "torch-cuda" not in output.out
+    assert "torch-cpu" not in output.out
 
 
 @pytest.mark.parametrize("columns", [80, 120])
 def test_cache_ls_fits_long_variant_lists_in_the_terminal(cache_dir, monkeypatch, capsys, columns):
-    make_snapshot(cache_dir, refs=["main", "v1"], variants=[CUDA_126, CUDA_128, CUDA_129, "torch-cuda"])
+    make_snapshot(
+        cache_dir,
+        repo_id="kernels-community/activation-with-a-long-kernel-name",
+        refs=["v1", "v2"],
+        variants=[CUDA_126, CUDA_128, CUDA_129, "torch-cuda"],
+    )
     make_snapshot(cache_dir, repo_id="other/kernel", variants=["torch-cpu"])
     monkeypatch.setenv("COLUMNS", str(columns))
     run_cli(monkeypatch)
     output = capsys.readouterr()
     lines = output.out.splitlines()
-    assert len(lines) == 4  # Header, separator, and one row per repository.
+    assert len(lines) == 11  # Header, separator, four variants for each of two versions, and another kernel.
     assert all(len(line) <= columns for line in lines)
     assert "..." in output.out
     assert "--no-truncate" in output.err
@@ -137,9 +178,13 @@ def test_cache_ls_fits_long_variant_lists_in_the_terminal(cache_dir, monkeypatch
     # Every column starts at the same position in the header and data rows.
     separators = lines[1].split()
     start = 0
-    for column in separators:
+    for column_index, column in enumerate(separators):
         end = start + len(column)
-        assert all(line[start:end].strip() for line in lines)
+        # Continuation lines leave all metadata columns empty.
+        if column_index == 5:
+            assert all(line[start:end].strip() for line in lines)
+        else:
+            assert all(line[start:end].strip() for line in lines if line[: len(separators[0])].strip())
         if end < len(lines[1]):
             assert all(line[end] == " " for line in lines)
         start = end + 1
@@ -184,20 +229,23 @@ def test_cache_ls_lists_jit_kernels_without_loading_them(cache_dir, monkeypatch,
     repos = json.loads(output.out)["repos"]
     assert len(repos) == 1
     assert repos[0]["repo_id"] == repo_id
-    assert repos[0]["refs"] == ["v1"]
-    assert repos[0]["variants"] == variants
+    assert len(repos[0]["versions"]) == 1
+    assert repos[0]["versions"][0]["version"] == "v1"
+    assert repos[0]["versions"][0]["variants"] == variants
 
     run_cli(monkeypatch)
     output = capsys.readouterr()
     assert output.err == ""
     lines = [line for line in output.out.splitlines() if repo_id in line]
     assert len(lines) == 1
-    assert ", ".join(variants) in lines[0]
+    table = output.out.splitlines()
+    variants_start = table[0].index("VARIANTS")
+    assert [line[variants_start:].strip() for line in table[2:]] == variants
 
 
-def test_cache_ls_shows_latest_access_and_modification_times(cache_dir, monkeypatch, capsys):
-    first = make_snapshot(cache_dir, variants=[CUDA_126], symlinks=False)
-    second = make_snapshot(cache_dir, commit="b" * 40, variants=[CUDA_128], symlinks=False)
+def test_cache_ls_reports_size_and_timestamps_for_each_version(cache_dir, monkeypatch, capsys):
+    first = make_snapshot(cache_dir, refs=["v1"], variants=[CUDA_126], symlinks=False)
+    second = make_snapshot(cache_dir, commit="b" * 40, refs=["v2"], variants=[CUDA_128, CUDA_129], symlinks=False)
     for snapshot, atime, mtime in [(first, 1_700_000_200, 1_700_000_000), (second, 1_700_000_100, 1_700_000_300)]:
         for file in snapshot.rglob("*"):
             if file.is_file():
@@ -206,6 +254,11 @@ def test_cache_ls_shows_latest_access_and_modification_times(cache_dir, monkeypa
     repo = json.loads(capsys.readouterr().out)["repos"][0]
     assert repo["last_accessed"] == 1_700_000_200
     assert repo["last_modified"] == 1_700_000_300
+    assert [entry["last_accessed"] for entry in repo["versions"]] == [1_700_000_200, 1_700_000_100]
+    assert [entry["last_modified"] for entry in repo["versions"]] == [1_700_000_000, 1_700_000_300]
+    assert [entry["size_on_disk"] for entry in repo["versions"]] == [
+        sum(file.stat().st_size for file in snapshot.rglob("*") if file.is_file()) for snapshot in [first, second]
+    ]
 
 
 def test_cache_ls_ignores_build_directories_without_downloaded_files(cache_dir, monkeypatch, capsys):
@@ -215,7 +268,7 @@ def test_cache_ls_ignores_build_directories_without_downloaded_files(cache_dir, 
     (snapshot / "build" / "not-a-variant.txt").write_text("build notes")
     run_cli(monkeypatch, "--json")
     repo = json.loads(capsys.readouterr().out)["repos"][0]
-    assert repo["variants"] == [CUDA_126]
+    assert repo["versions"][0]["variants"] == [CUDA_126]
 
 
 @pytest.mark.parametrize(
@@ -225,7 +278,7 @@ def test_cache_ls_shows_a_dash_when_no_recognized_variants_are_cached(cache_dir,
     make_snapshot(cache_dir, variants=variants)
     run_cli(monkeypatch, "--json")
     repo = json.loads(capsys.readouterr().out)["repos"][0]
-    assert repo["variants"] == []
+    assert repo["versions"][0]["variants"] == []
     run_cli(monkeypatch)
     output = capsys.readouterr().out
     line = next(line for line in output.splitlines() if REPO_ID in line)
@@ -272,14 +325,18 @@ def test_cache_ls_uses_hugging_face_cache_environment_variables(tmp_path, env_va
     assert [repo["repo_id"] for repo in info["repos"]] == [REPO_ID]
 
 
-@pytest.mark.parametrize("state", ["empty", "missing", "models-only"])
-def test_cache_ls_reports_when_no_kernels_have_been_downloaded(cache_dir, monkeypatch, capsys, state):
+@pytest.mark.parametrize("state", ["empty", "missing", "models-only", "unversioned-kernel", "detached-kernel"])
+def test_cache_ls_reports_when_no_kernel_versions_are_cached(cache_dir, monkeypatch, capsys, state):
     if state == "missing":
         cache_dir.rmdir()
     elif state == "models-only":
         make_snapshot(cache_dir, repo_type="model")
+    elif state == "unversioned-kernel":
+        make_snapshot(cache_dir, refs=["main"])
+    elif state == "detached-kernel":
+        make_snapshot(cache_dir, refs=())
     run_cli(monkeypatch)
-    assert "No cached kernels found" in capsys.readouterr().out
+    assert "No cached kernel versions found" in capsys.readouterr().out
     run_cli(monkeypatch, "--json")
     assert json.loads(capsys.readouterr().out) == {"cache_dir": str(cache_dir), "repos": []}
     if state == "missing":
@@ -308,7 +365,7 @@ def test_cache_ls_keeps_working_when_one_cached_kernel_is_corrupt(
     if output_args:
         repos = json.loads(output.out)["repos"]
         assert [repo["repo_id"] for repo in repos] == [REPO_ID]
-        assert repos[0]["variants"] == [CUDA_128]
+        assert repos[0]["versions"][0]["variants"] == [CUDA_128]
     else:
         assert REPO_ID in output.out
         assert CUDA_128 in output.out

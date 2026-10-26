@@ -19,7 +19,7 @@ def main():
 
     cache_parser = subparsers.add_parser("cache", help="Inspect cached kernels")
     cache_subparsers = cache_parser.add_subparsers(required=True)
-    cache_ls_parser = cache_subparsers.add_parser("ls", help="List cached kernels and their build variants")
+    cache_ls_parser = cache_subparsers.add_parser("ls", help="List cached kernel versions and their build variants")
     cache_ls_parser.add_argument("--cache-dir", type=Path, help="Inspect a specific cache directory")
     cache_ls_parser.add_argument("--json", action="store_true", help="Print cached kernel information as JSON")
     cache_ls_parser.add_argument("--show-warnings", action="store_true", help="Show details of cache inconsistencies")

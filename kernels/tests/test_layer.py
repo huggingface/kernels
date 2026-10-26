@@ -376,8 +376,8 @@ def test_rocm_kernel_mapping(device):
         # Verify the repository is correctly stored
         rocm_repos = mapping["SiluAndMul"]["rocm"]
         assert rocm_repos is not None
-        assert rocm_repos.repos[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
-        assert rocm_repos.repos[Mode.FALLBACK].layer_name == "SiluAndMul"
+        assert rocm_repos.repos_for_device()[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
+        assert rocm_repos.repos_for_device()[Mode.FALLBACK].layer_name == "SiluAndMul"
 
 
 @pytest.mark.cuda_only
@@ -670,7 +670,7 @@ def test_mapping_contexts():
                 "TestKernel",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -681,14 +681,17 @@ def test_mapping_contexts():
             "LigerRMSNorm",
             "TestKernel",
         }
-        assert _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
+        assert (
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
+            == "kernels-test/silu-and-mul"
+        )
 
         with use_kernel_mapping(extra_mapping2, inherit_mapping=False):
             assert set(_KERNEL_MAPPING.get().keys()) == {
                 "SiluAndMul",
             }
             assert (
-                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id
+                _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
                 == "kernels-community/non-existing"
             )
 
@@ -699,7 +702,10 @@ def test_mapping_contexts():
             "LigerRMSNorm",
             "TestKernel",
         }
-        assert _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos[Mode.FALLBACK]._repo_id == "kernels-test/silu-and-mul"
+        assert (
+            _KERNEL_MAPPING.get()["SiluAndMul"]["cuda"].repos_for_device()[Mode.FALLBACK]._repo_id
+            == "kernels-test/silu-and-mul"
+        )
 
     assert set(_KERNEL_MAPPING.get().keys()) == {
         "SiluAndMul",
@@ -1511,6 +1517,66 @@ def test_get_kernelized_layers_func(stub_kernel):
     assert get_kernelized_layers(model) == KernelizedLayers(
         funcs={("0", "StubFunc"): KernelizedFunc(model[0]._kernel_funcs["StubFunc"], repo)}
     )
+
+
+@pytest.fixture
+def heterogeneous_gpus(monkeypatch):
+    """Pretend that device 0 has capability 7.5, device 1 has 9.0, and the current device is 0."""
+    state = {"current": 0}
+    capabilities = {0: (7, 5), 1: (9, 0)}
+
+    def get_device_capability(device=None):
+        return capabilities[state["current"] if device is None else device]
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", get_device_capability)
+    return state
+
+
+def _capability_mapping(repo_sm75: LayerRepository, repo_sm90: LayerRepository):
+    return {
+        "StubLayer": {
+            Device(type="cuda", properties=CUDAProperties(min_capability=70, max_capability=79)): repo_sm75,
+            Device(type="cuda", properties=CUDAProperties(min_capability=90, max_capability=99)): repo_sm90,
+        }
+    }
+
+
+def test_capability_is_not_cached(heterogeneous_gpus):
+    repo_sm75 = LayerRepository(repo_id="kernels-test/sm75", layer_name="StubLayer", version=1)
+    repo_sm90 = LayerRepository(repo_id="kernels-test/sm90", layer_name="StubLayer", version=1)
+
+    with use_kernel_mapping(_capability_mapping(repo_sm75, repo_sm90), inherit_mapping=False):
+        cuda_repos = _KERNEL_MAPPING.get()["StubLayer"]["cuda"]
+
+        assert cuda_repos.repos_for_device()[Mode.FALLBACK] == repo_sm75
+        heterogeneous_gpus["current"] = 1
+        assert cuda_repos.repos_for_device()[Mode.FALLBACK] == repo_sm90
+
+        # An explicit device index takes precedence over the current device.
+        assert cuda_repos.repos_for_device(0)[Mode.FALLBACK] == repo_sm75
+        assert cuda_repos.repos_for_device(1)[Mode.FALLBACK] == repo_sm90
+
+
+def test_kernelize_device_index(stub_kernel, heterogeneous_gpus):
+    repo_sm75 = LayerRepository(repo_id="kernels-test/sm75", layer_name="StubLayer", version=1)
+    repo_sm90 = LayerRepository(repo_id="kernels-test/sm90", layer_name="StubLayer", version=1)
+    mapping = _capability_mapping(repo_sm75, repo_sm90)
+
+    # Without an index, the current device is used.
+    for current, expected in ((0, repo_sm75), (1, repo_sm90)):
+        heterogeneous_gpus["current"] = current
+        model = nn.Sequential(StubLayer())
+        with use_kernel_mapping(mapping, inherit_mapping=False):
+            kernelize(model, mode=Mode.INFERENCE, device="cuda")
+        assert model[0]._kernel_repo == expected
+
+    # An explicit index takes precedence over the current device.
+    heterogeneous_gpus["current"] = 0
+    for index, expected in ((0, repo_sm75), (1, repo_sm90)):
+        model = nn.Sequential(StubLayer())
+        with use_kernel_mapping(mapping, inherit_mapping=False):
+            kernelize(model, mode=Mode.INFERENCE, device=torch.device("cuda", index))
+        assert model[0]._kernel_repo == expected
 
 
 def test_locked_repositories_are_picklable():

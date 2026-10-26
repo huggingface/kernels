@@ -429,3 +429,21 @@ with use_kernel_mapping(
 ):
     kernelize(model, mode=Mode.INFERENCE)
 ```
+
+## Inspecting a kernelized model
+
+To check which layers are currently using a kernel, use
+[`~kernels.get_kernelized_layers`]. It returns a [`~kernels.KernelizedLayers`]
+object that contains a dict `layers` with kernelized layers and a dict
+`funcs` with kernelized functions. Each entry holds the kernelized module
+and the repository that its kernel was retrieved from:
+
+```python
+from kernels import get_kernelized_layers
+
+kernelized = get_kernelized_layers(model)
+kernelized.layers
+# {'layers.0.mlp.act_fn': KernelizedLayer(module=..., repo=LayerRepository(...))}
+kernelized.funcs
+# {('layers.0.attn', 'apply_rotary_pos_emb'): KernelizedFunc(module=..., repo=FuncRepository(...))}
+```

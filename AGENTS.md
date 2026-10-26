@@ -91,3 +91,12 @@ Kernel flakes provide two types of development shells:
   or `.#testShells.<variant>`.
 
 CI tests can be run with `nix run .#ci-test` or `nix run .#ciTests.<variant>`.
+
+## Developer-specific instructions
+
+Before any other action, try to read `AGENTS.local.md` in the repository root
+(next to this file). Do this by reading that exact path, not by searching for
+it: the file is a local file that is typically not tracked by git, so search
+tools may not find it. Only conclude that the file does not exist if reading
+the path fails. If it exists, follow the instructions in it. Say in your first
+message whether you read one.

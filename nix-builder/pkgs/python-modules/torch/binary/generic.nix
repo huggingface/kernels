@@ -21,6 +21,7 @@
   # Native build inputs
   autoAddDriverRunpath,
   autoPatchelfHook,
+  patchelf-old,
   python,
   pythonKernelImportsCheckHook,
   pythonRelaxWheelDepsHook,
@@ -211,6 +212,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     pythonWheelDepsCheckHook
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [
+    patchelf-old
     autoPatchelfHook
   ]
   ++ lib.optionals cudaSupport [

@@ -29,8 +29,10 @@ __all__ = [
     "DigestViolation",
     "DigestValidationError",
     "KernelLocation",
-    "VerificationReceipt",
-    "ReceiptStore",
+    "SignatureReceipt",
+    "SignatureReceiptStore",
+    "DigestReceipt",
+    "DigestReceiptStore",
     "ReceiptError",
     "Version",
     "__version__",
@@ -331,13 +333,13 @@ class KernelLocation:
     def __repr__(self) -> str: ...
 
 @final
-class VerificationReceipt:
-    """Receipt of a successful kernel verification.
+class SignatureReceipt:
+    """Receipt of a successful signature verification of a kernel.
 
-    A receipt states that a kernel has already been verified. If the kernel
-    location changed, the receipt's hash will not match anymore."""
+    A receipt states that a kernel's signature has already been verified. If
+    the kernel location changed, the receipt's hash will not match anymore."""
 
-    def __new__(cls, location: KernelLocation) -> "VerificationReceipt": ...
+    def __new__(cls, location: KernelLocation) -> "SignatureReceipt": ...
     @property
     def location(self) -> KernelLocation:
         """The kernel location the verification applies to."""
@@ -346,12 +348,12 @@ class VerificationReceipt:
     def __repr__(self) -> str: ...
 
 @final
-class ReceiptStore:
-    """Store of kernel verification receipts."""
+class SignatureReceiptStore:
+    """Store of kernel signature verification receipts."""
 
     @staticmethod
-    def in_kernels_cache() -> "ReceiptStore":
-        """The receipt store inside the kernels cache.
+    def in_kernels_cache() -> "SignatureReceiptStore":
+        """The signature receipt store inside the kernels cache.
 
         The cache location is resolved from the environment, falling back to
         the Hub cache and then the user's home directory.
@@ -362,19 +364,72 @@ class ReceiptStore:
         ...
 
     @staticmethod
-    def from_path(path: os.PathLike[str] | str) -> "ReceiptStore":
-        """A receipt store in the given directory."""
+    def from_path(path: os.PathLike[str] | str) -> "SignatureReceiptStore":
+        """A signature receipt store in the given directory."""
         ...
 
-    def load(self, location: KernelLocation) -> Optional[VerificationReceipt]:
-        """The receipt for `location`, or `None` when the kernel has not been verified yet.
+    def load(self, location: KernelLocation) -> Optional[SignatureReceipt]:
+        """The receipt for `location`, or `None` when the kernel signature has not been verified yet.
 
         Raises:
             ReceiptError: If a receipt exists but cannot be used.
         """
         ...
 
-    def store(self, receipt: VerificationReceipt) -> None:
+    def store(self, receipt: SignatureReceipt) -> None:
+        """Store `receipt`, replacing any existing receipt for its location.
+
+        Raises:
+            ReceiptError: If the receipt cannot be written.
+        """
+        ...
+
+@final
+class DigestReceipt:
+    """Receipt of a successful digest verification of a kernel.
+
+    A receipt states that a kernel's files have already been verified against
+    the digest in its metadata. If the kernel location changed, the receipt's
+    hash will not match anymore."""
+
+    def __new__(cls, location: KernelLocation) -> "DigestReceipt": ...
+    @property
+    def location(self) -> KernelLocation:
+        """The kernel location the verification applies to."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+@final
+class DigestReceiptStore:
+    """Store of kernel digest verification receipts."""
+
+    @staticmethod
+    def in_kernels_cache() -> "DigestReceiptStore":
+        """The digest receipt store inside the kernels cache.
+
+        The cache location is resolved from the environment, falling back to
+        the Hub cache and then the user's home directory.
+
+        Raises:
+            ReceiptError: If the cache directory cannot be determined.
+        """
+        ...
+
+    @staticmethod
+    def from_path(path: os.PathLike[str] | str) -> "DigestReceiptStore":
+        """A digest receipt store in the given directory."""
+        ...
+
+    def load(self, location: KernelLocation) -> Optional[DigestReceipt]:
+        """The receipt for `location`, or `None` when the kernel digest has not been verified yet.
+
+        Raises:
+            ReceiptError: If a receipt exists but cannot be used.
+        """
+        ...
+
+    def store(self, receipt: DigestReceipt) -> None:
         """Store `receipt`, replacing any existing receipt for its location.
 
         Raises:
@@ -383,7 +438,7 @@ class ReceiptStore:
         ...
 
 class ReceiptError(Exception):
-    """Raised by `ReceiptStore` when a receipt cannot be read, written, or interpreted."""
+    """Raised by `SignatureReceiptStore` and `DigestReceiptStore` when a receipt cannot be read, written, or interpreted."""
 
 class KernelVersion:
     """A kernel version: either a numeric version or a git revision string."""

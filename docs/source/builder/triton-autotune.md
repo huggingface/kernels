@@ -18,12 +18,12 @@ current GPU and shape and falls back to sensible defaults when there is no
 matching configuration.
 
 This is how, for example, the vLLM fused MoE kernel ships on the Hub: the
-[`RedHatAI/moe`](https://huggingface.co/RedHatAI/moe/tree/main/torch-ext/moe/configs)
+[`RedHatAI/moe`](https://huggingface.co/kernels/RedHatAI/moe/tree/main/torch-ext/moe/configs)
 repository contains a `configs` directory with tuned configurations for many
 GPUs. This page walks through a small, complete example of the same pattern:
-the [`gemm-triton-autotune`](https://github.com/huggingface/kernels/tree/main/examples/kernels/gemm-triton-autotune)
+the [`gemm-triton-autotune`](https://github.com/huggingface/kernels/tree/d0ed138c0e5132e810e6fbbbc2a5c6981a9c7649/examples/kernels/gemm-triton-autotune)
 example kernel, a Triton GEMM published as
-[`kernels-test/gemm-triton-autotune`](https://huggingface.co/kernels-test/gemm-triton-autotune).
+[`kernels-test/gemm-triton-autotune`](https://huggingface.co/kernels/kernels-test/gemm-triton-autotune).
 
 ## Shipping data files with a kernel
 
@@ -127,7 +127,7 @@ def get_config(M: int, N: int, K: int) -> Dict[str, int]:
 
 The configuration is then passed to the Triton kernel as its `constexpr`
 and launch parameters (see
-[`gemm.py`](https://github.com/huggingface/kernels/blob/main/examples/kernels/gemm-triton-autotune/torch-ext/gemm_triton_autotune/gemm.py)
+[`gemm.py`](https://github.com/huggingface/kernels/blob/d0ed138c0e5132e810e6fbbbc2a5c6981a9c7649/examples/kernels/gemm-triton-autotune/torch-ext/gemm_triton_autotune/gemm.py)
 in the example):
 
 ```python
@@ -146,7 +146,7 @@ The autotuner itself is ordinary benchmarking code: for each `M`, benchmark
 every candidate configuration with `triton.testing.do_bench` and keep the
 fastest. The example ships the tuner as part of the kernel (the `tune_gemm`
 function in
-[`tuning.py`](https://github.com/huggingface/kernels/blob/main/examples/kernels/gemm-triton-autotune/torch-ext/gemm_triton_autotune/tuning.py)),
+[`tuning.py`](https://github.com/huggingface/kernels/blob/d0ed138c0e5132e810e6fbbbc2a5c6981a9c7649/examples/kernels/gemm-triton-autotune/torch-ext/gemm_triton_autotune/tuning.py)),
 so users can also generate configurations for GPUs that the kernel author
 did not tune. Candidates that do not fit the device (Triton raises
 `OutOfResources`) are skipped.

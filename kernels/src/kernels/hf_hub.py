@@ -127,12 +127,12 @@ def _check_trust_remote_code(repo_id: str, local_files_only: bool, trust_remote_
 
     try:
         info = _get_hf_api().get_organization_overview(publisher)
-    except Exception:
+    except Exception as e:
         raise ValueError(
             f"Kernel repository '{repo_id}' could not verify publisher trust status. "
             "Set trust_remote_code=True or add the repository ID to the trust_remote_code allowlist "
             "to allow loading kernels from untrusted sources."
-        )
+        ) from e
 
     if getattr(info, "trustedKernelPublisher", False):
         return

@@ -155,7 +155,8 @@ jobs:
           CUDA_TAG="cu${CUDA_VERSION//./}"
           echo "Installing torch ${TORCH_VERSION} for CUDA ${CUDA_VERSION} (${CUDA_TAG})"
           uv sync --all-extras --dev
-          uv pip install "torch==${TORCH_VERSION}.*" --index-url https://download.pytorch.org/whl/$CUDA_TAG
+          # The Torch installed by uv sync may satisfy the version but use a different CUDA build.
+          uv pip install --reinstall-package torch "torch==${TORCH_VERSION}.*" --index-url https://download.pytorch.org/whl/$CUDA_TAG
           uv run --no-sync python -c "
           import os, torch
           print(f'torch={torch.__version__}, cuda={torch.version.cuda}, cxx11_abi={torch.compiled_with_cxx11_abi()}')

@@ -6,18 +6,24 @@
   symlinkJoin,
   buildPythonPackage,
   fetchFromGitHub,
+
+  fetchPypi,
   fetchurl,
+  requireFile,
 
   cudaSupport ? config.cudaSupport,
   metalSupport ? config.metalSupport,
   rocmSupport ? config.rocmSupport,
+  tpuSupport ? (config.tpuSupport or false),
   tritonSupport ? (!stdenv.hostPlatform.isDarwin),
   xpuSupport ? (config.xpuSupport or false),
 
   # Native build inputs
   autoAddDriverRunpath,
   autoPatchelfHook,
+  patchelf-old,
   python,
+  pythonKernelImportsCheckHook,
   pythonRelaxWheelDepsHook,
   pythonWheelDepsCheckHook,
 
@@ -30,16 +36,24 @@
 
   # Python dependencies
   cuda-bindings,
+  cupti-python,
   filelock,
+  frozendict,
   fsspec,
+  immutabledict,
+  jax,
   jinja2,
+  libtpu,
   networkx,
   numpy,
+  portpicker,
   pyyaml,
+  pyzmq,
   pyzes,
   requests,
   setuptools,
   sympy,
+  tensorboard,
   triton,
   triton-cuda,
   triton-rocm,
@@ -53,6 +67,8 @@
   effectiveStdenv ? if cudaSupport then cudaPackages.backendStdenv else stdenv,
 }:
 let
+  inherit (lib) versionAtLeast;
+
   torchMajorMinor = lib.versions.majorMinor version;
 
   effectiveTriton =
@@ -65,10 +81,15 @@ let
     else
       triton;
 
+  # For the required version see:
+  # https://github.com/pytorch/pytorch/blob/v2.15.0-rc3/cmake/External/aotriton.cmake#L13
   aotritonVersions = with rocmPackages; {
+    "2.10" = aotriton_0_11_1;
     "2.11" = aotriton_0_11_2;
     "2.12" = aotriton_0_11_2;
     "2.13" = aotriton_0_12;
+    "2.14" = aotriton_0_13;
+    "2.15" = aotriton_0_14_2;
   };
 
   aotriton =
@@ -80,36 +101,52 @@ let
 
     paths =
       with rocmPackages;
-      [
-        aotriton
-        clr
-        comgr
-        hipblas
-        hipblas-common-devel
-        hipblaslt
-        hipfft
-        hipify-clang
-        hiprand
-        hipsolver
-        hipsparse
-        hipsparselt
-        hsa-rocr
-        miopen-hip
-        rccl
-        rocblas
-        rocm-core
-        rocm-device-libs
-        rocm-hip-runtime
-        rocm-smi-lib
-        rocminfo
-        rocrand
-        rocsolver
-        rocsparse
-        roctracer
-      ]
-      ++ lib.optionals (lib.versionAtLeast version "2.12") [
-        rocprofiler-sdk
-      ];
+      if rocmPackages.theRock then
+        [
+          aotriton
+          clr
+          amdrocm-blas
+          amdrocm-dnn
+          amdrocm-fft
+          amdrocm-hipfile
+          amdrocm-profiler-base
+          amdrocm-rand
+          amdrocm-rccl
+        ]
+        ++ lib.optionals (versionAtLeast version "2.15") [
+          amdrocm-amdsmi
+        ]
+      else
+        [
+          aotriton
+          clr
+          comgr
+          hipblas
+          hipblas-common-devel
+          hipblaslt
+          hipfft
+          hipify-clang
+          hiprand
+          hipsolver
+          hipsparse
+          hipsparselt
+          hsa-rocr
+          miopen-hip
+          rccl
+          rocblas
+          rocm-core
+          rocm-device-libs
+          rocm-hip-runtime
+          rocm-smi-lib
+          rocminfo
+          rocrand
+          rocsolver
+          rocsparse
+          roctracer
+        ]
+        ++ lib.optionals (versionAtLeast version "2.12") [
+          rocprofiler-sdk
+        ];
 
     postBuild = ''
       # Fix `setuptools` not being found
@@ -123,6 +160,23 @@ let
     '';
   };
 
+  # Once we require multiple versions, factor this out.
+  # The hash is for the cp314 wheel (the nixpkgs default python).
+  torch-tpu =
+    let
+      abi = "cp${lib.versions.major python.version}${lib.versions.minor python.version}";
+    in
+    fetchPypi {
+      format = "wheel";
+      # Wheel file names use an underscore.
+      pname = "torch_tpu";
+      version = "0.2.0";
+      dist = abi;
+      python = abi;
+      inherit abi;
+      platform = "manylinux_2_31_x86_64";
+      hash = "sha256-xdqU1lQfQchadDw0En1s2huCAqHafZR6OlLFE00Z3ak=";
+    };
 in
 buildPythonPackage.override { stdenv = effectiveStdenv; } {
   pname = "torch";
@@ -140,14 +194,25 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     inherit url hash;
   };
 
+  # If we are building for TPU, merge torch-tpu into the output path.
+  # Note that we cannot simply depend on torch-tpu, because torch-tpu
+  # itself depends on torch. The wheel unpacking hook does not seemt
+  # to support `srcs`, so we'll just copy over the wheel on TPU.
+  preUnpack = lib.optionals tpuSupport ''
+    mkdir -p dist
+    cp "${torch-tpu}" "dist/$(stripHash "${torch-tpu}")"
+  '';
+
   # We use our own pythonWheelDepsHook.
   dontCheckRuntimeDeps = true;
 
   nativeBuildInputs = [
+    pythonKernelImportsCheckHook
     pythonRelaxWheelDepsHook
     pythonWheelDepsCheckHook
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [
+    patchelf-old
     autoPatchelfHook
   ]
   ++ lib.optionals cudaSupport [
@@ -191,12 +256,12 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         ))
       ]
     )
-    ++ lib.optionals (cudaSupport && lib.versionAtLeast version "2.9") [
+    ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [
       cudaPackages.libnvshmem
     ]
-    ++ lib.optionals rocmSupport ([
+    ++ lib.optionals rocmSupport [
       rocmtoolkit_joined
-    ])
+    ]
     ++ lib.optionals xpuSupport (
       with xpuPackages;
       [
@@ -211,8 +276,8 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         intel-pti
       ]
     )
-    # Torch on aarch64-linux vendors libgfortran, which requires zlib.
-    ++ lib.optionals (stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isAarch64) [ zlib ];
+    # Torch vendors libgfortran, which requires zlib.
+    ++ lib.optionals stdenv.hostPlatform.isLinux [ zlib ];
 
   dependencies = [
     filelock
@@ -226,19 +291,39 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
     sympy
     typing-extensions
   ]
+  ++ lib.optionals tpuSupport [
+    libtpu
+    jax
+    frozendict
+    immutabledict
+    portpicker
+    pyzmq
+    tensorboard
+  ]
   ++ lib.optionals tritonSupport [
     effectiveTriton
   ]
-  ++ lib.optionals (cudaSupport && lib.versionAtLeast version "2.10") [
+  ++ lib.optionals (cudaSupport && versionAtLeast version "2.10") [
     cuda-bindings
   ]
-  ++ lib.optionals (xpuSupport && lib.versionAtLeast version "2.13") [
+  ++
+    lib.optionals
+      (
+        cudaSupport
+        && versionAtLeast version "2.15"
+        && versionAtLeast cudaPackages.cudaMajorMinorVersion "13.4"
+      )
+      [
+        cupti-python
+      ]
+  ++ lib.optionals (xpuSupport && versionAtLeast version "2.13") [
     pyzes
   ];
 
   pythonRelaxWheelDeps = [
     "cuda-bindings"
     "pyzes"
+    "setuptools"
     "sympy"
   ];
 
@@ -283,9 +368,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
       )
     )
     ++ lib.optionals rocmSupport [
-      # Ours is called 'triton'. Remove this once we build ROCm Triton from
-      # a binary wheel.
-      "triton-rocm"
+      "rocm"
     ]
     ++ lib.optionals xpuSupport [
       "intel-cmplr-lib-rt"
@@ -359,7 +442,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
   # We need to add this rpath after postFixup (otherwise it might be ordered
   # before autoPatchelfHook), but before the import check to ensure that the
   # rpath is used during the import check.
-  preInstallCheck = lib.optionalString (rocmSupport && torchMajorMinor == "2.13") ''
+  preInstallCheck = lib.optionalString (rocmSupport && versionAtLeast torchMajorMinor "2.13") ''
     # libtorch_shmem dynamically loads libnuma. For added fun, if libnuma
     # cannot be found, it exit()s inside a constructor, calling an atexit()
     # hook, which then proceeds to deadlock.
@@ -368,7 +451,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
 
   dontStrip = true;
 
-  pythonImportsCheck = [ "torch" ];
+  pythonKernelImportsCheck = if tpuSupport then [ "torch_tpu" ] else [ "torch" ];
 
   passthru = {
     inherit

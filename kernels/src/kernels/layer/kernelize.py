@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
 from .device import Device
 from .globals import _KERNEL_MAPPING
-from .layer import kernelize_layer
+from .layer import KernelizeFallback, kernelize_layer
 from .mode import Mode
 from .repos import DeviceRepos, RepositoryProtocol
 
 if TYPE_CHECKING:
     import torch
     from torch import nn
+
+logger = logging.getLogger(__name__)
 
 
 def use_kernel_mapping(
@@ -177,7 +180,7 @@ def kernelize(
     *,
     mode: Mode,
     device: str | "torch.device" | None = None,
-    use_fallback: bool = True,
+    use_fallback: bool | KernelizeFallback = True,
 ):
     """
     Replace layer forward methods with optimized kernel implementations.
@@ -192,11 +195,12 @@ def kernelize(
             `Mode.TRAINING | Mode.TORCH_COMPILE` kernelizes the model for training with
             `torch.compile`.
         device (`Union[str, torch.device]`, *optional*):
-            The device type to load kernels for. Supported device types are: "cuda", "mps", "npu", "rocm", "xpu".
+            The device type to load kernels for. Supported device types are: "cuda", "mps", "npu", "rocm", "tpu", "xpu".
             The device type will be inferred from the model parameters when not provided.
-        use_fallback (`bool`, *optional*, defaults to `True`):
-            Whether to use the original forward method of modules when no compatible kernel could be found.
-            If set to `False`, an exception will be raised in such cases.
+        use_fallback (`bool | KernelizeFallback`, *optional*, defaults to `True`):
+            Cases in which to use the original forward method. `True` is equivalent to `KernelizeFallback.DEFAULT`: it allows
+            fallback when no compatible mapping or mode exists. `False` is equivalent to `KernelizeFallback.NONE` and raises
+            instead. `KernelizeFallback.ALL` also falls back when kernel loading fails.
 
     Returns:
         `nn.Module`: The kernelized model with optimized kernel implementations.
@@ -256,6 +260,9 @@ def kernelize(
 
     assert isinstance(device_type, Device)
 
+    if isinstance(use_fallback, bool):
+        use_fallback = KernelizeFallback.DEFAULT if use_fallback else KernelizeFallback.NONE
+
     for _, module in model.named_modules():
         module_class = type(module)
 
@@ -269,6 +276,15 @@ def kernelize(
             )
 
         if hasattr(module_class, "kernel_layer_name"):
+            cond = getattr(module_class, "kernel_condition", None)
+            if cond and not cond(module):
+                logger.info(
+                    "Skipping kernelization for `%s` using `%s` due to kernel_condition.",
+                    module_class.__name__,
+                    module_class.kernel_layer_name,
+                )
+                continue
+
             kernelize_layer(module, mode=mode, device_type=device_type, use_fallback=use_fallback)
 
     return model
@@ -276,7 +292,7 @@ def kernelize(
 
 def _validate_device_type(device_type: str) -> None:
     """Validate that the device type is supported."""
-    supported_devices = {"cpu", "cuda", "mps", "neuron", "npu", "rocm", "xpu"}
+    supported_devices = {"cpu", "cuda", "mps", "neuron", "npu", "rocm", "tpu", "xpu"}
     if device_type not in supported_devices:
         raise ValueError(
             f"Unsupported device type '{device_type}'. Supported device types are: {', '.join(sorted(supported_devices))}"

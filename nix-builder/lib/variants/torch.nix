@@ -13,6 +13,8 @@ let
       "metal"
     else if buildConfig.backend == "rocm" then
       "rocm${flattenVersion (lib.versions.majorMinor buildConfig.rocmVersion)}"
+    else if buildConfig.backend == "tpu" then
+      "tpu"
     else if buildConfig.backend == "xpu" then
       "xpu${flattenVersion (lib.versions.majorMinor buildConfig.xpuVersion)}"
     else
@@ -22,7 +24,7 @@ let
     if buildConfig.system == "aarch64-darwin" then
       "${torchString}-${computeString}-${buildConfig.system}"
     else
-      "${torchString}-cxx11-${computeString}-${buildConfig.system}";
+      "${torchString}-${computeString}-${buildConfig.system}";
 in
 {
   arch = archString;
@@ -34,7 +36,9 @@ in
       archVariant = kernelConfig.kernelBackends.${buildConfig.backend};
       stableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
     in
-    if archVariant && stableAbiVersion != null then
+    if
+      archVariant && kernelConfig.torchCoversStableAbi buildConfig.backend buildConfig.torchVersion
+    then
       "torch-stable-abi${flattenVersion (lib.versions.majorMinor stableAbiVersion)}-${computeString}-${buildConfig.system}"
     else if archVariant then
       archString

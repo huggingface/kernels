@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::{fs::File, io::BufReader};
 
 use eyre::{Context, Result};
-use kernels_data::metadata::Metadata;
+use kernels_common::metadata::Metadata;
 
 use crate::util::{check_or_infer_kernel_dir, discover_variants};
 

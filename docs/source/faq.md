@@ -48,4 +48,4 @@ By default, we collect telemetry when a call to [`~kernels.get_kernel`] is made.
 This only includes the `kernels` version, `torch` version, and the build
 information for the kernel being requested.
 
-You can disable this by setting `export DISABLE_TELEMETRY=yes`.
+You can disable this by setting `export HF_HUB_DISABLE_TELEMETRY=yes`.

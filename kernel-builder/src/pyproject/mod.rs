@@ -5,13 +5,14 @@ use std::{
 };
 
 use eyre::{bail, Result};
-use kernels_data::config::{Build, Framework};
-use kernels_data::metadata::{GitHash, Provenance};
+use kernels_common::config::{Build, Framework};
+use kernels_common::git::{GitStatus, Oid};
+use kernels_common::metadata::Provenance;
 use minijinja::Environment;
 
 use crate::{
     pyproject::ops_identifier::KernelIdentifier,
-    util::{check_or_infer_kernel_dir, check_or_infer_target_dir, parse_build},
+    util::{check_or_infer_kernel_dir, check_or_infer_target_dir},
 };
 
 pub(crate) mod common;
@@ -49,12 +50,12 @@ pub fn create_pyproject(
     target_dir: Option<PathBuf>,
     force: bool,
     unique_id: Option<String>,
-    kernel_sha: Option<String>,
+    kernel_sha: Option<Oid>,
     kernel_dirty: bool,
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-    let build = parse_build(&kernel_dir)?;
+    let build = Build::open(&kernel_dir)?;
 
     // Assemble build provenance. Prefer an explicitly provided kernel git
     // provenance (e.g. passed by Nix builds, where the source tree has no
@@ -62,11 +63,11 @@ pub fn create_pyproject(
     // `kernel-builder` provenance is always the one baked into this binary at
     // compile time.
     let kernel = kernel_sha
-        .map(|sha| GitHash {
-            sha,
+        .map(|commit| GitStatus {
+            commit,
             dirty: kernel_dirty,
         })
-        .or_else(|| ops_identifier::git_hash(&kernel_dir));
+        .or_else(|| ops_identifier::git_status(&kernel_dir));
     let provenance = Provenance {
         kernel_builder: common::kernel_builder_version(),
         kernel,
@@ -88,7 +89,7 @@ pub fn clean_pyproject(
 ) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
     let target_dir = check_or_infer_target_dir(&kernel_dir, target_dir)?;
-    let build = parse_build(&kernel_dir)?;
+    let build = Build::open(&kernel_dir)?;
     // Provenance is irrelevant when computing the set of files to clean.
     let kernel_id = KernelIdentifier::new(&kernel_dir, build.general.name.python_name(), unique_id);
 

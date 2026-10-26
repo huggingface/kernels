@@ -1,23 +1,32 @@
 import argparse
-import dataclasses
-import json
 import sys
 from pathlib import Path
+from typing import Literal
 
+from kernels.cli.cache import print_cached_kernels
+from kernels.cli.describe_api import print_kernel_api
+from kernels.cli.download import download_kernels
 from kernels.cli.info import print_kernel_info
+from kernels.cli.lock import lock_kernels
+from kernels.cli.variants import print_kernel_variants
 from kernels.cli.verify_signature import verify_signature
 from kernels.cli.versions import print_kernel_versions
-from kernels.compat import tomllib
-from kernels.lockfile import KernelLock, get_kernel_locks
-from kernels.utils import (
-    install_kernel,
-    install_kernel_all_variants,
-)
 
 
 def main():
     parser = argparse.ArgumentParser(prog="kernel", description="Manage compute kernels")
     subparsers = parser.add_subparsers(required=True)
+
+    cache_parser = subparsers.add_parser("cache", help="Inspect cached kernels")
+    cache_subparsers = cache_parser.add_subparsers(required=True)
+    cache_ls_parser = cache_subparsers.add_parser("ls", help="List cached kernel versions and their build variants")
+    cache_ls_parser.add_argument("--cache-dir", type=Path, help="Inspect a specific cache directory")
+    cache_ls_parser.add_argument("--json", action="store_true", help="Print cached kernel information as JSON")
+    cache_ls_parser.add_argument("--show-warnings", action="store_true", help="Show details of cache inconsistencies")
+    cache_ls_parser.add_argument(
+        "--no-truncate", action="store_true", help="Display full values regardless of terminal width"
+    )
+    cache_ls_parser.set_defaults(func=kernel_cache_ls)
 
     check_parser = subparsers.add_parser("check", help="Check a kernel for compliance")
     check_parser.add_argument("repo_id", type=str, nargs="?")
@@ -59,7 +68,40 @@ def main():
     )
     info_parser.set_defaults(func=kernel_info)
 
-    versions_parser = subparsers.add_parser("versions", help="Show kernel versions")
+    describe_api_parser = subparsers.add_parser("describe-api", help="List a kernel's public functions and layers")
+    describe_api_parser.add_argument("kernel", help="The kernel repo ID or a local kernel directory")
+    api_selection = describe_api_parser.add_mutually_exclusive_group()
+    api_selection.add_argument("--revision", help="The kernel revision (branch, tag, or commit; Hub only)")
+    api_selection.add_argument("--version", type=int, help="The kernel version (default: latest version; Hub only)")
+    describe_api_parser.add_argument("--json", action="store_true", help="Print the full symbol information as JSON")
+    describe_api_parser.add_argument(
+        "--trust-remote-code",
+        action="store_true",
+        help="Allow kernels from untrusted publishers (Hub only; disabled by default)",
+    )
+    describe_api_parser.set_defaults(func=kernel_api)
+
+    variants_parser = subparsers.add_parser("variants", help="Show kernel build variants and compatibility decisions")
+    variants_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
+    variants_selection = variants_parser.add_mutually_exclusive_group()
+    variants_selection.add_argument(
+        "--all-versions",
+        action="store_true",
+        help="Show variants for all versions (default: latest version only)",
+    )
+    variants_selection.add_argument(
+        "--version", type=_variant_version, help="Show variants for an integer kernel version or 'latest'"
+    )
+    variants_selection.add_argument("--revision", type=str, help="Show variants for a branch, tag, or commit")
+    variants_parser.add_argument(
+        "--only-compatible", action="store_true", help="Only show variants compatible with the current system"
+    )
+    variants_parser.add_argument(
+        "--json", action="store_true", help="Print build variants and compatibility decisions as JSON"
+    )
+    variants_parser.set_defaults(func=kernel_variants)
+
+    versions_parser = subparsers.add_parser("versions", help="Deprecated: use `kernels variants --all-versions`")
     versions_parser.add_argument("repo_id", type=str, help="The kernel repo ID")
     versions_parser.set_defaults(func=kernel_versions)
 
@@ -131,43 +173,13 @@ def main():
     args.func(args)
 
 
-def download_kernels(args):
-    lock_path = args.project_dir / "kernels.lock"
-
-    if not lock_path.exists():
-        print(f"No kernels.lock file found in: {args.project_dir}", file=sys.stderr)
-        sys.exit(1)
-
-    with open(args.project_dir / "kernels.lock", "r") as f:
-        lock_json = json.load(f)
-
-    all_successful = True
-
-    for kernel_lock_json in lock_json:
-        kernel_lock = KernelLock.from_json(kernel_lock_json)
-        print(
-            f"Downloading `{kernel_lock.repo_id}` with SHA: {kernel_lock.sha}",
-            file=sys.stderr,
-        )
-        if args.all_variants:
-            install_kernel_all_variants(
-                kernel_lock.repo_id,
-                revision=kernel_lock.sha,
-                variant_locks=kernel_lock.variants,
-            )
-        else:
-            try:
-                install_kernel(
-                    kernel_lock.repo_id,
-                    revision=kernel_lock.sha,
-                    variant_locks=kernel_lock.variants,
-                )
-            except FileNotFoundError as e:
-                print(e, file=sys.stderr)
-                all_successful = False
-
-    if not all_successful:
-        sys.exit(1)
+def _variant_version(value: str) -> int | Literal["latest"]:
+    if value == "latest":
+        return "latest"
+    try:
+        return int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("version must be an integer or 'latest'") from None
 
 
 def kernel_info(args):
@@ -179,29 +191,38 @@ def kernel_info(args):
     )
 
 
+def kernel_cache_ls(args):
+    print_cached_kernels(
+        cache_dir=args.cache_dir,
+        json_output=args.json,
+        show_warnings=args.show_warnings,
+        no_truncate=args.no_truncate,
+    )
+
+
+def kernel_api(args):
+    print_kernel_api(
+        args.kernel,
+        revision=args.revision,
+        version=args.version,
+        json_output=args.json,
+        trust_remote_code=args.trust_remote_code,
+    )
+
+
 def kernel_versions(args):
     print_kernel_versions(args.repo_id)
 
 
-def lock_kernels(args):
-    with open(args.project_dir / "pyproject.toml", "rb") as f:
-        data = tomllib.load(f)
-
-    kernel_versions = data.get("tool", {}).get("kernels", {}).get("dependencies", None)
-
-    all_locks = []
-    for kernel, version in kernel_versions.items():
-        all_locks.append(get_kernel_locks(kernel, version))
-
-    with open(args.project_dir / "kernels.lock", "w") as f:
-        json.dump(all_locks, f, cls=_JSONEncoder, indent=2)
-
-
-class _JSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
-            return dataclasses.asdict(o)
-        return super().default(o)
+def kernel_variants(args):
+    print_kernel_variants(
+        args.repo_id,
+        all_versions=args.all_versions,
+        only_compatible=args.only_compatible,
+        version=args.version,
+        revision=args.revision,
+        json_output=args.json,
+    )
 
 
 def _check_moved(_args):

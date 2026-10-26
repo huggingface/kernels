@@ -1,0 +1,796 @@
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::PathBuf;
+use std::str::FromStr;
+
+use kernels_common::config::{Backend, KernelDependency, KernelName, KernelVersion};
+use kernels_common::digest::{Digest, DigestAlgorithm, DigestViolation};
+use kernels_common::git::{GitStatus, Oid};
+use kernels_common::metadata::{BackendInfo, KernelBuilderVersion, Metadata, Provenance};
+use pyo3::Bound as PyBound;
+use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError, PyValueError};
+use pyo3::prelude::*;
+
+mod config;
+mod git;
+mod lock;
+mod signing;
+mod version;
+
+use config::{PyBuild, PyGeneral};
+use git::PyOid;
+use lock::{PyKernelLock, PyKernelLocks, PyKernelPaths, PyNixKernelLock, PyNixKernelLocks};
+use signing::{
+    PyDigestReceipt, PyDigestReceiptStore, PyKernelLocation, PySignatureReceipt,
+    PySignatureReceiptStore, ReceiptError,
+};
+use version::PyVersion;
+
+/// A validated kernel name matching `^[a-z][-a-z0-9]*[a-z0-9]$`.
+#[pyclass(name = "KernelName", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct PyKernelName {
+    inner: KernelName,
+}
+
+#[pymethods]
+impl PyKernelName {
+    #[new]
+    fn new(name: String) -> PyResult<Self> {
+        KernelName::new(name)
+            .map(|inner| Self { inner })
+            .map_err(|err| PyValueError::new_err(err.to_string()))
+    }
+
+    fn __str__(&self) -> String {
+        self.inner.to_string()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("KernelName('{}')", self.inner)
+    }
+
+    /// The kernel name with dashes replaced by underscores, suitable for
+    /// use as a Python identifier.
+    #[getter]
+    fn python_name(&self) -> String {
+        self.inner.python_name()
+    }
+}
+
+/// Kernel backend (hardware target).
+#[pyclass(name = "Backend", eq, frozen, hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum PyBackend {
+    #[pyo3(name = "CANN")]
+    Cann,
+    #[pyo3(name = "CPU")]
+    Cpu,
+    #[pyo3(name = "CUDA")]
+    Cuda,
+    #[pyo3(name = "Metal")]
+    Metal,
+    #[pyo3(name = "Neuron")]
+    Neuron,
+    #[pyo3(name = "ROCm")]
+    Rocm,
+    #[pyo3(name = "TPU")]
+    Tpu,
+    #[pyo3(name = "XPU")]
+    Xpu,
+}
+
+impl From<Backend> for PyBackend {
+    fn from(b: Backend) -> Self {
+        match b {
+            Backend::Cann => PyBackend::Cann,
+            Backend::Cpu => PyBackend::Cpu,
+            Backend::Cuda => PyBackend::Cuda,
+            Backend::Metal => PyBackend::Metal,
+            Backend::Neuron => PyBackend::Neuron,
+            Backend::Rocm => PyBackend::Rocm,
+            Backend::Tpu => PyBackend::Tpu,
+            Backend::Xpu => PyBackend::Xpu,
+        }
+    }
+}
+
+impl From<PyBackend> for Backend {
+    fn from(b: PyBackend) -> Self {
+        match b {
+            PyBackend::Cann => Backend::Cann,
+            PyBackend::Cpu => Backend::Cpu,
+            PyBackend::Cuda => Backend::Cuda,
+            PyBackend::Metal => Backend::Metal,
+            PyBackend::Neuron => Backend::Neuron,
+            PyBackend::Rocm => Backend::Rocm,
+            PyBackend::Tpu => Backend::Tpu,
+            PyBackend::Xpu => Backend::Xpu,
+        }
+    }
+}
+
+#[pymethods]
+impl PyBackend {
+    /// Parse a backend name (`"cann"`, `"cpu"`, `"cuda"`, `"metal"`,
+    /// `"neuron"`, `"rocm"`, `"tpu"`, `"xpu"`).
+    #[staticmethod]
+    #[pyo3(name = "from_str")]
+    fn py_from_str(s: &str) -> PyResult<Self> {
+        Backend::from_str(s)
+            .map(Into::into)
+            .map_err(PyValueError::new_err)
+    }
+
+    fn __str__(&self) -> &'static str {
+        Backend::from(*self).as_str()
+    }
+
+    fn __repr__(&self) -> String {
+        let variant = match self {
+            PyBackend::Cann => "CANN",
+            PyBackend::Cpu => "CPU",
+            PyBackend::Cuda => "CUDA",
+            PyBackend::Metal => "Metal",
+            PyBackend::Neuron => "Neuron",
+            PyBackend::Rocm => "ROCm",
+            PyBackend::Tpu => "TPU",
+            PyBackend::Xpu => "XPU",
+        };
+        format!("Backend.{variant}")
+    }
+}
+
+/// Backend information
+#[pyclass(name = "BackendInfo", frozen)]
+#[derive(Clone, Debug)]
+struct PyBackendInfo {
+    backend_type: PyBackend,
+    archs: Option<Vec<String>>,
+}
+
+impl From<BackendInfo> for PyBackendInfo {
+    fn from(backend_info: BackendInfo) -> Self {
+        Self {
+            backend_type: backend_info.backend_type.into(),
+            archs: backend_info.archs,
+        }
+    }
+}
+
+#[pymethods]
+impl PyBackendInfo {
+    fn __repr__(&self) -> String {
+        format!(
+            "BackendInfo(backend_type={}, archs={:?})",
+            self.backend_type.__repr__(),
+            self.archs
+        )
+    }
+
+    #[getter]
+    fn backend_type(&self) -> PyBackend {
+        self.backend_type
+    }
+
+    #[getter]
+    fn archs(&self) -> Option<&[String]> {
+        self.archs.as_deref()
+    }
+}
+
+#[pyclass(name = "GitStatus", frozen)]
+#[derive(Clone, Debug)]
+struct PyGitStatus {
+    commit: Oid,
+    dirty: bool,
+}
+
+impl From<GitStatus> for PyGitStatus {
+    fn from(status: GitStatus) -> Self {
+        Self {
+            commit: status.commit,
+            dirty: status.dirty,
+        }
+    }
+}
+
+#[pymethods]
+impl PyGitStatus {
+    #[getter]
+    fn commit(&self) -> PyOid {
+        self.commit.clone().into()
+    }
+
+    #[getter]
+    fn dirty(&self) -> bool {
+        self.dirty
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "GitStatus(commit={:?}, dirty={})",
+            self.commit.as_str(),
+            self.dirty
+        )
+    }
+}
+
+#[pyclass(name = "KernelBuilderVersion", frozen)]
+#[derive(Clone, Debug)]
+struct PyKernelBuilderVersion {
+    version: String,
+    git: Option<PyGitStatus>,
+}
+
+impl From<KernelBuilderVersion> for PyKernelBuilderVersion {
+    fn from(kb: KernelBuilderVersion) -> Self {
+        Self {
+            version: kb.version,
+            git: kb.git.map(Into::into),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelBuilderVersion {
+    #[getter]
+    fn version(&self) -> &str {
+        &self.version
+    }
+
+    /// Git state of the `kernel-builder` source, when known.
+    #[getter]
+    fn git(&self) -> Option<PyGitStatus> {
+        self.git.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "KernelBuilderVersion(version={:?}, git={})",
+            self.version,
+            self.git
+                .as_ref()
+                .map_or("None".to_string(), |g| g.__repr__())
+        )
+    }
+}
+
+#[pyclass(name = "Provenance", frozen)]
+#[derive(Clone, Debug)]
+struct PyProvenance {
+    kernel_builder: PyKernelBuilderVersion,
+    kernel: Option<PyGitStatus>,
+}
+
+impl From<Provenance> for PyProvenance {
+    fn from(b: Provenance) -> Self {
+        Self {
+            kernel_builder: b.kernel_builder.into(),
+            kernel: b.kernel.map(Into::into),
+        }
+    }
+}
+
+#[pymethods]
+impl PyProvenance {
+    #[getter]
+    fn kernel_builder(&self) -> PyKernelBuilderVersion {
+        self.kernel_builder.clone()
+    }
+
+    #[getter]
+    fn kernel(&self) -> Option<PyGitStatus> {
+        self.kernel.clone()
+    }
+
+    /// Whether either the `kernel-builder` or the kernel source was dirty.
+    #[getter]
+    fn dirty(&self) -> bool {
+        self.kernel_builder.git.as_ref().is_some_and(|g| g.dirty)
+            || self.kernel.as_ref().is_some_and(|k| k.dirty)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Provenance(kernel_builder={}, kernel={})",
+            self.kernel_builder.__repr__(),
+            self.kernel
+                .as_ref()
+                .map_or("None".to_string(), |k| k.__repr__())
+        )
+    }
+}
+
+/// A kernel version: either a numeric version or a git revision string.
+#[pyclass(name = "KernelVersion", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+enum PyKernelVersion {
+    Version { version: usize },
+    Revision { revision: String },
+}
+
+impl From<KernelVersion> for PyKernelVersion {
+    fn from(v: KernelVersion) -> Self {
+        match v {
+            KernelVersion::Version(n) => Self::Version { version: n },
+            KernelVersion::Revision(s) => Self::Revision { revision: s },
+        }
+    }
+}
+
+impl From<PyKernelVersion> for KernelVersion {
+    fn from(v: PyKernelVersion) -> Self {
+        match v {
+            PyKernelVersion::Version { version } => Self::Version(version),
+            PyKernelVersion::Revision { revision } => Self::Revision(revision),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelVersion {
+    fn __repr__(&self) -> String {
+        match self {
+            Self::Version { version } => format!("KernelVersion.Version(version={version})"),
+            Self::Revision { revision } => {
+                format!("KernelVersion.Revision(revision={revision:?})")
+            }
+        }
+    }
+}
+
+/// A dependency on another kernel.
+#[pyclass(name = "KernelDependency", frozen, eq, hash)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct PyKernelDependency {
+    repo_id: String,
+    version: PyKernelVersion,
+}
+
+impl From<KernelDependency> for PyKernelDependency {
+    fn from(d: KernelDependency) -> Self {
+        Self {
+            repo_id: d.repo_id,
+            version: d.version.into(),
+        }
+    }
+}
+
+impl From<PyKernelDependency> for KernelDependency {
+    fn from(d: PyKernelDependency) -> Self {
+        Self {
+            repo_id: d.repo_id,
+            version: d.version.into(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyKernelDependency {
+    #[new]
+    fn new(repo_id: String, version: PyKernelVersion) -> Self {
+        Self { repo_id, version }
+    }
+
+    #[getter]
+    fn repo_id(&self) -> &str {
+        &self.repo_id
+    }
+
+    #[getter]
+    fn version(&self) -> PyKernelVersion {
+        self.version.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "KernelDependency(repo_id={:?}, version={})",
+            self.repo_id,
+            self.version.__repr__()
+        )
+    }
+}
+
+/// Parsed `metadata.json` for a kernel build variant.
+#[pyclass(name = "Metadata", frozen)]
+#[derive(Clone, Debug)]
+struct PyMetadata {
+    id: String,
+    name: PyKernelName,
+    version: usize,
+    kernels_minver: Option<PyVersion>,
+    license: String,
+    upstream: Option<String>,
+    source: Option<String>,
+    python_depends: Vec<String>,
+    kernel_depends: Vec<PyKernelDependency>,
+    backend: PyBackendInfo,
+    digest: Option<PyDigest>,
+    provenance: Option<PyProvenance>,
+}
+
+impl From<Metadata> for PyMetadata {
+    fn from(m: Metadata) -> Self {
+        Self {
+            id: m.id,
+            name: PyKernelName { inner: m.name },
+            version: m.version,
+            kernels_minver: m.kernels_minver.map(Into::into),
+            license: m.license,
+            upstream: m.upstream.map(|u| u.as_url().to_string()),
+            source: m.source.map(|u| u.as_url().to_string()),
+            python_depends: m.python_depends,
+            kernel_depends: m.kernel_depends.into_iter().map(Into::into).collect(),
+            backend: m.backend.into(),
+            digest: m.digest.map(Into::into),
+            provenance: m.provenance.map(Into::into),
+        }
+    }
+}
+
+#[pymethods]
+impl PyMetadata {
+    /// Parse `metadata.json` at the given path.
+    ///
+    /// Raises `ValueError` on any I/O or parse error.
+    #[staticmethod]
+    fn read_from_file(metadata_path: PathBuf) -> PyResult<Self> {
+        let f = File::open(&metadata_path).map_err(|err| {
+            PyOSError::new_err(format!("Failed to open `{metadata_path:?}`: {err:#}"))
+        })?;
+        Metadata::from_reader(BufReader::new(f))
+            .map(Into::into)
+            .map_err(|err| {
+                PyValueError::new_err(format!(
+                    "Cannot parse metadata from `{metadata_path:?}`: {err:#}"
+                ))
+            })
+    }
+
+    /// Parse `metadata.json` from JSON in a byte array.
+    ///
+    /// Raises `ValueError` on any parse error.
+    #[staticmethod]
+    fn from_bytes(bytes: &[u8]) -> PyResult<Self> {
+        Metadata::from_bytes(bytes)
+            .map(Into::into)
+            .map_err(|err| PyValueError::new_err(format!("Cannot parse metadata: {err:#}")))
+    }
+
+    #[getter]
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    #[getter]
+    fn name(&self) -> PyKernelName {
+        self.name.clone()
+    }
+
+    #[getter]
+    fn version(&self) -> usize {
+        self.version
+    }
+
+    #[getter]
+    fn kernels_minver(&self) -> Option<PyVersion> {
+        self.kernels_minver.clone()
+    }
+
+    #[getter]
+    fn license(&self) -> &str {
+        &self.license
+    }
+
+    #[getter]
+    fn upstream(&self) -> Option<&str> {
+        self.upstream.as_deref()
+    }
+
+    #[getter]
+    fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+
+    #[getter]
+    fn python_depends(&self) -> &[String] {
+        &self.python_depends
+    }
+
+    #[getter]
+    fn kernel_depends(&self) -> Vec<PyKernelDependency> {
+        self.kernel_depends.clone()
+    }
+
+    #[getter]
+    fn backend(&self) -> PyBackendInfo {
+        self.backend.clone()
+    }
+
+    #[getter]
+    fn digest(&self) -> Option<PyDigest> {
+        self.digest.clone()
+    }
+
+    #[getter]
+    fn provenance(&self) -> Option<PyProvenance> {
+        self.provenance.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Metadata(id={}, name={:?}, version={:?}, kernels_minver={:?}, license={:?}, upstream={:?}, source={:?}, python_depends={:?}, kernel_depends={:?}, backend={}, digest={}, provenance={})",
+            self.id,
+            self.name,
+            self.version,
+            self.kernels_minver,
+            self.license,
+            self.upstream,
+            self.source,
+            self.python_depends,
+            self.kernel_depends,
+            self.backend.__repr__(),
+            self.digest
+                .as_ref()
+                .map_or("None".to_string(), |sd| sd.__repr__()),
+            self.provenance
+                .as_ref()
+                .map_or("None".to_string(), |bi| bi.__repr__())
+        )
+    }
+}
+
+/// A violation of a digest when validated against a reference digest.
+///
+/// This tagged union covers the types of violations. Each violation can be
+/// converted to a string using ``str(violation)``.
+#[pyclass(name = "DigestViolation")]
+#[derive(Clone)]
+enum PyDigestViolation {
+    MissingFile {
+        path: String,
+    },
+    UnknownFile {
+        path: String,
+    },
+    HashMismatch {
+        path: String,
+        expected: String,
+        got: String,
+    },
+    AlgorithmMismatch {
+        expected: PyDigestAlgorithm,
+        got: PyDigestAlgorithm,
+    },
+}
+
+/// Digest algorithm.
+#[pyclass(name = "DigestAlgorithm", frozen, eq, hash)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum PyDigestAlgorithm {
+    #[pyo3(name = "SHA256")]
+    Sha256,
+    #[pyo3(name = "SHA512")]
+    Sha512,
+}
+
+impl From<DigestAlgorithm> for PyDigestAlgorithm {
+    fn from(a: DigestAlgorithm) -> Self {
+        match a {
+            DigestAlgorithm::SHA256 => Self::Sha256,
+            DigestAlgorithm::SHA512 => Self::Sha512,
+        }
+    }
+}
+
+impl From<PyDigestAlgorithm> for DigestAlgorithm {
+    fn from(a: PyDigestAlgorithm) -> Self {
+        match a {
+            PyDigestAlgorithm::Sha256 => DigestAlgorithm::SHA256,
+            PyDigestAlgorithm::Sha512 => DigestAlgorithm::SHA512,
+        }
+    }
+}
+
+#[pymethods]
+impl PyDigestAlgorithm {
+    fn __str__(&self) -> &'static str {
+        match self {
+            Self::Sha256 => "sha256",
+            Self::Sha512 => "sha512",
+        }
+    }
+
+    fn __repr__(&self) -> &'static str {
+        match self {
+            Self::Sha256 => "DigestAlgorithm.SHA256",
+            Self::Sha512 => "DigestAlgorithm.SHA512",
+        }
+    }
+}
+
+impl From<DigestViolation> for PyDigestViolation {
+    fn from(v: DigestViolation) -> Self {
+        match v {
+            DigestViolation::MissingFile { path } => Self::MissingFile { path },
+            DigestViolation::UnknownFile { path } => Self::UnknownFile { path },
+            DigestViolation::HashMismatch {
+                path,
+                expected,
+                got,
+            } => Self::HashMismatch {
+                path,
+                expected,
+                got,
+            },
+            DigestViolation::AlgorithmMismatch { expected, got } => Self::AlgorithmMismatch {
+                expected: expected.into(),
+                got: got.into(),
+            },
+        }
+    }
+}
+
+impl From<PyDigestViolation> for DigestViolation {
+    fn from(v: PyDigestViolation) -> Self {
+        match v {
+            PyDigestViolation::MissingFile { path } => Self::MissingFile { path },
+            PyDigestViolation::UnknownFile { path } => Self::UnknownFile { path },
+            PyDigestViolation::HashMismatch {
+                path,
+                expected,
+                got,
+            } => Self::HashMismatch {
+                path,
+                expected,
+                got,
+            },
+            PyDigestViolation::AlgorithmMismatch { expected, got } => Self::AlgorithmMismatch {
+                expected: expected.into(),
+                got: got.into(),
+            },
+        }
+    }
+}
+
+#[pymethods]
+impl PyDigestViolation {
+    // Delegate to the core `Display` impl so the message formatting lives in a
+    // single place.
+    fn __str__(&self) -> String {
+        DigestViolation::from(self.clone()).to_string()
+    }
+}
+
+pyo3::create_exception!(
+    _rust,
+    DigestValidationError,
+    PyException,
+    "Raised by `Digest.validate` when the actual digest does not match the \
+     reference digest.\n\n\
+     The string representation lists every violation. The individual violations \
+     are also available as a list of `DigestViolation` via the `violations` \
+     attribute."
+);
+
+/// Digest for a kernel build variant.
+#[pyclass(name = "Digest", frozen)]
+#[derive(Clone, Debug)]
+struct PyDigest {
+    inner: Digest,
+}
+
+impl From<Digest> for PyDigest {
+    fn from(inner: Digest) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl PyDigest {
+    /// Hash the files in `variant_path` using `algorithm`.
+    #[staticmethod]
+    fn hash_variant(algorithm: PyDigestAlgorithm, variant_path: PathBuf) -> PyResult<PyDigest> {
+        match Digest::hash_variant(algorithm.into(), &variant_path) {
+            Ok(digest) => Ok(digest.into()),
+            Err(err) => {
+                let msg = format!(
+                    "Failed to hash variant `{}`: {err:#}",
+                    variant_path.display()
+                );
+                let is_io = err
+                    .chain()
+                    .any(|e| e.downcast_ref::<std::io::Error>().is_some());
+                if is_io {
+                    Err(PyOSError::new_err(msg))
+                } else {
+                    Err(PyRuntimeError::new_err(msg))
+                }
+            }
+        }
+    }
+
+    /// Validate `other` against this digest.
+    ///
+    /// Raises `DigestValidationError` if the digests do not match.
+    fn validate(&self, py: Python<'_>, other: &PyDigest) -> PyResult<()> {
+        match self.inner.validate(&other.inner) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                let violations = err
+                    .violations()
+                    .iter()
+                    .cloned()
+                    .map(PyDigestViolation::from)
+                    .collect::<Vec<_>>();
+
+                // Build the exception instance with the rendered message as its
+                // single argument (so `str(exc)` lists every violation), and
+                // expose the structured violations via a `violations` attribute.
+                let instance = py
+                    .get_type::<DigestValidationError>()
+                    .call1((err.to_string(),))?;
+                instance.setattr("violations", violations)?;
+                Err(PyErr::from_value(instance))
+            }
+        }
+    }
+
+    #[getter]
+    fn algorithm(&self) -> PyDigestAlgorithm {
+        self.inner.algorithm().into()
+    }
+
+    #[getter]
+    fn files(&self) -> BTreeMap<String, String> {
+        self.inner.files().clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Digest(algorithm={}, files={:?})",
+            self.algorithm().__repr__(),
+            self.inner.files()
+        )
+    }
+}
+
+#[pyo3::pymodule(name = "_rust")]
+fn data_py(m: &PyBound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PyBackend>()?;
+    m.add_class::<PyBackendInfo>()?;
+    m.add_class::<PyProvenance>()?;
+    m.add_class::<PyGitStatus>()?;
+    m.add_class::<PyKernelBuilderVersion>()?;
+    m.add_class::<PyKernelName>()?;
+    m.add_class::<PyOid>()?;
+    m.add_class::<PyKernelVersion>()?;
+    m.add_class::<PyKernelDependency>()?;
+    m.add_class::<PyKernelLock>()?;
+    m.add_class::<PyKernelLocks>()?;
+    m.add_class::<PyNixKernelLock>()?;
+    m.add_class::<PyNixKernelLocks>()?;
+    m.add_class::<PyKernelPaths>()?;
+    m.add_class::<PyGeneral>()?;
+    m.add_class::<PyBuild>()?;
+    m.add_class::<PyMetadata>()?;
+    m.add_class::<PyVersion>()?;
+    m.add_class::<PyDigestAlgorithm>()?;
+    m.add_class::<PyDigest>()?;
+    m.add_class::<PyDigestViolation>()?;
+    m.add_class::<PyKernelLocation>()?;
+    m.add_class::<PySignatureReceipt>()?;
+    m.add_class::<PySignatureReceiptStore>()?;
+    m.add_class::<PyDigestReceipt>()?;
+    m.add_class::<PyDigestReceiptStore>()?;
+    m.add(
+        "DigestValidationError",
+        m.py().get_type::<DigestValidationError>(),
+    )?;
+    m.add("ReceiptError", m.py().get_type::<ReceiptError>())?;
+
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    Ok(())
+}

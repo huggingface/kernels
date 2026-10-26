@@ -29,24 +29,23 @@ jobs:
       max-parallel: 4
       matrix:
         python-version: ["3.10", "3.14"]
-        torch-version: ["2.11.0", "2.12.0"]
+        torch-version: ["2.13.0", "2.14.0"]
 
     env:
       UV_PYTHON_PREFERENCE: only-managed
-      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.12.0' }}
+      CHECK_COVERAGE: ${{ matrix.python-version == '3.10' && matrix.torch-version == '2.13.0' }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Override kernels-data source to local bindings
-        working-directory: ./kernels
-        run: uv add ../kernels-data/bindings/python --no-sync
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
 
       - name: Override the Torch version
         working-directory: ./kernels
@@ -63,6 +62,10 @@ jobs:
       - name: Check typing
         working-directory: ./kernels
         run: uv run mypy src/kernels
+
+      - name: Check type stubs match runtime
+        working-directory: ./kernels
+        run: uv run python -m mypy.stubtest kernels._rust
 
       - name: Run tests
         working-directory: ./kernels
@@ -84,7 +87,7 @@ jobs:
           HF_HUB_DOWNLOAD_TIMEOUT: 60
         run: |
           uv pip install einops nvidia-cutlass-dsl
-          uv run pytest tests/test_deps.py
+          uv run pytest tests/test_python_deps.py
 
       - name: Import check without torch
         working-directory: ./kernels

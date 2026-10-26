@@ -10,6 +10,16 @@ _getKernelCheckHook() {
     exit 1
   fi
 
+  if [ -z ${kernelDeps+x} ]; then
+    echo "kernelDeps must be set in derivation"
+    exit 1
+  fi
+
+  if [ -z ${variant+x} ]; then
+    echo "variant must be set in derivation"
+    exit 1
+  fi
+
   echo "Check whether the kernel can be loaded with get-kernel: ${moduleName}"
 
   # We strip the full library paths from the extension. Unfortunately,
@@ -21,12 +31,36 @@ _getKernelCheckHook() {
     export DYLD_LIBRARY_PATH="${TORCH_DIR}/lib:${DYLD_LIBRARY_PATH}"
   fi
 
-  # Some kernels want to write stuff (especially when they use Triton).
   HOME=$(mktemp -d -t test.XXXXXX) || exit 1
   trap "rm -rf '$HOME'" EXIT
 
+  # Prepare fake /sys for tcmalloc. Without this path, tcmalloc will crash:
+  #
+  # https://github.com/google/tcmalloc/issues/245
+  #
+  # tcmalloc is used by the TPU libraries.
+  local prootCmd=""
+  if [[ -n "@useFakeSys@" ]]; then
+      echo "Faking /sys for tcmalloc"
+      local fakeSys
+      fakeSys="$(mktemp -d)"
+      trap 'rm -rf -- "${fakeSys}"' EXIT
+      mkdir -p "${fakeSys}/devices/system/cpu"
+      echo "0-1" > "${fakeSys}/devices/system/cpu/possible"
+      prootCmd="@proot@ -b ${fakeSys}:/sys"
+  fi
+
+  # Avoid adding an empty entry to the library path, which the dynamic
+  # linker interprets as the current directory.
+  local libraryPath="${LD_LIBRARY_PATH-}"
+  if [[ -n "@libraryPath@" ]]; then
+    libraryPath="@libraryPath@${libraryPath:+:${libraryPath}}"
+  fi
+
+  LD_LIBRARY_PATH="${libraryPath}" \
   PYTHONPATH="@kernels@" \
-    @python3@ -c "from pathlib import Path; import kernels; kernels.get_local_kernel(Path('${out}'))"
+    ${prootCmd} \
+      @python3@ @pyhook@
 }
 
 postInstallCheckHooks+=(_getKernelCheckHook)

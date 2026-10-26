@@ -3,13 +3,12 @@ use std::path::PathBuf;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Backend, Build, General, Torch};
-use kernels_data::metadata::Provenance;
+use kernels_common::config::{Backend, Build, General, Torch};
+use kernels_common::metadata::Provenance;
 use minijinja::context;
 
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
-    write_metadata,
+    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_metadata,
 };
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
@@ -291,8 +290,6 @@ pub fn write_torch_ext(
     )?;
 
     write_setup_py(env, &build.general, torch_ext, kernel_id, &mut file_set)?;
-
-    write_compat_py(&mut file_set)?;
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 

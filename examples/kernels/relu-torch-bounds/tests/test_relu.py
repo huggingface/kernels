@@ -1,11 +1,14 @@
 import platform
 
+import kernels
+import pytest
 import torch
 import torch.nn.functional as F
 
-import relu
+relu = kernels.get_kernel("kernels-test/relu-torch-bounds", version=1)
 
 
+@pytest.mark.kernels_ci
 def test_relu():
     if platform.system() == "Darwin":
         device = torch.device("mps")

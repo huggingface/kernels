@@ -18,7 +18,7 @@ maintain an older `model`-type kernel repository.
 
 `kernels` only loads kernels from a curated set of trusted publishers by
 default. Loading from any other publisher raises an error unless the caller
-opts in with `trust_remote_code=True`:
+opts in with `trust_remote_code=True` or explicitly allowlists the repository:
 
 ```python
 # Trusted publisher: works without opt-in.
@@ -26,7 +26,17 @@ get_kernel("kernels-community/activation", version=1)
 
 # Untrusted publisher: must opt in explicitly.
 get_kernel("some-other-org/my-kernel", version=1, trust_remote_code=True)
+
+# Allow only specific repositories from untrusted publishers.
+get_kernel(
+    "some-other-org/my-kernel",
+    version=1,
+    trust_remote_code=["some-other-org/my-kernel"],
+)
 ```
+
+The repository IDs in the allowlist must match exactly. Other repositories
+from the same publisher remain subject to the default trust check.
 
 The Hub also exposes a `trustedKernelPublisher` flag on the kernel API and
 displays a corresponding badge in the UI.
@@ -36,8 +46,8 @@ displays a corresponding badge in the UI.
 A kernel repository on the Hub must contain a `build` directory. This
 directory contains build variants of a kernel in the form of directories
 following the template
-`<framework><version>-cxx<abiver>-<cu><cudaver>-<arch>-<os>`.
-For example `build/torch26-cxx98-cu118-x86_64-linux`.
+`<framework><version>-<cu><cudaver>-<arch>-<os>`.
+For example `build/torch214-cu130-x86_64-linux`.
 
 The kernel is in the build variant directory and must contain a
 `__init__.py` file. For compatibility with older versions of the
@@ -63,12 +73,19 @@ must be available for that combination.
 The build variant directory must contain a `metadata.json` file with kernel
 metadata. Currently the following top-level keys are supported:
 
-- `id` (`str`, required): a unique identifier for the kernel. This
-  identifier must also be a valid Python module name. If the kernel
-  registers Torch ops, they must be registered as `torch.ops.<id>`
+- `id` (`str`, required): an identifier that **must** be unique to
+  the kernel build and build variant. This identifier must also be a valid
+  Python module name. If the kernel registers Torch ops, they must be
+  registered as `torch.ops.<id>`
 - `name` (`str`, required): then name of the kernel. Replacing dashes
   by underscores should result in the module name of the kernel.
 - `version` (`int`, required): the kernel version number.
+- `kernels-minver` (`str`, optional): the minimum version of the `kernels`
+  Python library required to load the kernel (e.g. `"0.17.0"`). This key is
+  determined by the kernel builder from the features that the kernel uses,
+  it is not set by kernel authors. The `kernels` library raises an error when
+  loading a kernel that requires a newer version than the one that is
+  installed.
 - `license` (`str`, required): the kernel license in. Refer to the
   list of [supported license identifiers](https://huggingface.co/docs/hub/repositories-licenses).
 - `upstream` (`str`, optional): Git-compatible URL (passable to `git clone`)
@@ -84,12 +101,15 @@ metadata. Currently the following top-level keys are supported:
 - `provenance` (`dict`, optional): provenance of the build, used to flag
   non-reproducible (dirty) builds. It contains two optional sub-objects:
   - `kernel-builder`: the `kernel-builder` that produced the build, with its
-    `version` (`str`), the `sha` (`str`) of the `kernel-builder` source it was
-    built from (when known), and a `dirty` (`bool`) flag that is `true` when
+    `version` (`str`), the `commit` (`str`) of the `kernel-builder` source it
+    was built from (when known), and a `dirty` (`bool`) flag that is `true` when
     `kernel-builder` was built from a source tree with uncommitted changes.
-  - `kernel`: the kernel source that was built, with its commit `sha` (`str`)
+  - `kernel`: the kernel source that was built, with its `commit` (`str`)
     and a `dirty` (`bool`) flag that is `true` when the kernel source had
     uncommitted changes.
+
+  A `commit` is the object identifier of the Git commit: the hexadecimal
+  encoding of its SHA-1 or SHA-256 hash.
 
   When either `dirty` flag is set, the kernel was built from uncommitted
   sources and cannot be reliably reproduced.
@@ -100,10 +120,10 @@ metadata. Currently the following top-level keys are supported:
   > builds are not flagged as dirty. Local `create-pyproject` runs only
   > consider changes to tracked files.
 
-  > **Note:** The kernel `sha`/`dirty` are captured at the moment
-  > `create-pyproject` runs, so they describe the source tree as it was *then*.
+  > **Note:** The kernel `commit`/`dirty` are captured at the moment
+  > `create-pyproject` runs, so they describe the source tree as it was _then_.
   > Running `create-pyproject` and committing afterwards is bad practice: the
-  > recorded provenance keeps pointing at the pre-commit state (a stale `sha`,
+  > recorded provenance keeps pointing at the pre-commit state (a stale `commit`,
   > and `dirty: true` if the tree was dirty) even though the committed source
   > differs. Generate the metadata from the final, committed source instead.
 
@@ -149,7 +169,7 @@ The `backend` specifies a dictionary of the following form:
 ```
 
 The backend `type` must be one of `cann`, `cpu`, `cuda`, `metal`, `neuron`,
-`rocm`, or `xpu`. For CUDA and ROCm, the supported architectures must
+`rocm`, `tpu`, or `xpu`. For CUDA and ROCm, the supported architectures must
 be specified in the `archs` field.
 
 ### Python dependencies
@@ -226,6 +246,12 @@ In both cases, build variants that are not updated must be removed from
 the new version's branch.
 
 > [!IMPORTANT]
+> The second case covers *additions* as well: adding a function, layer, or
+> any other public symbol also requires a version bump, not just API
+> changes or removals. It also covers extensions that do not change the
+> API surface at all, see [below](#extensions-without-api-changes).
+
+> [!IMPORTANT]
 > The *kernel API* covered by these versioning guarantees is only the
 > public API: the symbols listed in the `__all__` of the kernel's
 > top-level `__init__.py`. Anything not in `__all__` (e.g. internal
@@ -238,6 +264,57 @@ the new version's branch.
 > alpha or beta stage and are not recommended for production use (e.g.
 > because the API is still changing regularly or there are still too
 > many issues).
+
+### Rule of thumb
+
+> The human test is: does this PR change anything such that code may work
+> with the builds that would be the output of this PR, but not older
+> builds?
+
+If the answer is yes, the version needs to be bumped, unless one of the
+[exceptions](#exceptions) applies.
+
+### Why additions need a version bump
+
+Suppose that a kernel exposes a single function `a` and that there are
+already builds for Torch 2.9 up to Torch 2.13. Now a function `b` is
+added. Since `kernel-builder` only builds for the last two Torch
+versions, only the Torch 2.12 and 2.13 variants will contain `b`.
+
+If the version is not bumped, downstream software (e.g. Transformers)
+will start using `b` and then fail on Torch 2.9 to 2.11 with a nasty
+exception that the function cannot be found. If the version *is* bumped
+(and the stale variants are removed from the new version's branch),
+`kernels` will instead tell the user that there is no build variant for
+their current system, which is a far clearer error.
+
+### Extensions without API changes
+
+The same reasoning applies to extensions that leave the API surface
+untouched. For example, the function signatures could be the same, but if
+a kernel internally first only covered tensors of `float16` and then adds
+support for tensors of `bfloat16`, that is also a change that warrants a
+bump. Downstream software that passes `bfloat16` tensors would otherwise
+fail on the build variants that were not rebuilt.
+
+### Exceptions
+
+For the following types of kernels, some API changes do not require
+bumping the version:
+
+- Python-only (noarch) kernels, e.g. `torch-cuda`. All build variants get
+  updated, so this issue does not exist.
+- AoT-compiled kernels where a build replaces all variants. This is the
+  case for:
+  - Very new kernels that only have builds for the latest two Torch
+    versions.
+  - Torch stable ABI kernels, as long as the CUDA versions that get built
+    overlap with the current build variants.
+
+In the following cases no version bump is required for these types of kernels:
+
+- Adding new functions/methods/classes.
+- Adding new arguments with default values to a function/method/constructor, as long as the default values do not change previous behavior.
 
 ## Native Python module
 
@@ -408,6 +485,16 @@ __all__ = [
 > API. This is the surface that consumers can rely on and that the
 > [versioning guarantees](#versioning) apply to, so be sure to export
 > every function, class, and `layers` module you want to expose.
+
+The same applies to the `layers` module itself: only the layers listed in
+the `__all__` of `layers` are part of the public API. For example:
+
+```python
+class SiluAndMul(nn.Module):
+    # ...
+
+__all__ = ["SiluAndMul"]
+```
 
 ## Python requirements
 

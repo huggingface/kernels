@@ -42,6 +42,13 @@
 .PARAMETER BuildConfig
     CMake build configuration (Debug or Release, defaults to Release)
 
+.PARAMETER TargetArch
+    Target CPU architecture for the build: x64 or ARM64 (defaults to the host
+    architecture). Use ARM64 together with -Backend cuda to build the CUDA
+    backend for Windows on Arm (requires a CUDA toolkit with Windows ARM64
+    support, e.g. CUDA 13.0+). Cross-compiling from an x64 host uses the
+    Visual Studio ARM64 toolchain (vcvarsall x64_arm64).
+
 .PARAMETER ArchList
     GPU architectures to build for (backend-agnostic).
     For CUDA: e.g., "7.5 8.6" or "Turing Ampere"
@@ -74,6 +81,9 @@
 
 .EXAMPLE
     .\builder.ps1 -SourceFolder ./examples/relu -Backend cuda -ArchList "7.5 8.6" -Build
+
+.EXAMPLE
+    .\builder.ps1 -SourceFolder ./examples/relu -Backend cuda -TargetArch ARM64 -ArchList "12.0" -Build
 
 .EXAMPLE
     .\builder.ps1 -SourceFolder ./examples/relu -Backend rocm -ArchList "gfx906;gfx908" -Build
@@ -119,6 +129,10 @@ param(
     [Parameter(ParameterSetName = 'Generate')]
     [ValidateSet('Debug', 'Release')]
     [string]$BuildConfig = 'Release',
+
+    [Parameter(ParameterSetName = 'Generate')]
+    [ValidateSet('x64', 'ARM64')]
+    [string]$TargetArch,
 
     [Parameter(ParameterSetName = 'Generate')]
     [string]$ArchList,
@@ -248,6 +262,9 @@ function Initialize-VSEnvironment {
     .SYNOPSIS
         Initializes Visual Studio build environment for MSBuild/CMake
     #>
+    param(
+        [string]$TargetArch = 'x64'
+    )
 
     Write-Status "Initializing Visual Studio environment..." -Type Info
 
@@ -280,11 +297,15 @@ function Initialize-VSEnvironment {
     # Execute vcvarsall and capture environment variables
     $tempFile = [System.IO.Path]::GetTempFileName()
 
-    # Detect platform architecture
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-    $vcvarsArch = if ($arch -eq 'Arm64') { 'arm64' } else { 'x64' }
+    # Detect host architecture and combine with the requested target
+    # architecture. vcvarsall expects e.g. 'x64' (native x64), 'arm64'
+    # (native ARM64), 'x64_arm64' (x64 host -> ARM64 target cross-compile),
+    # or 'arm64_x64' (ARM64 host -> x64 target cross-compile).
+    $hostArch = if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
+    $targetArch = $TargetArch.ToLower()
+    $vcvarsArch = if ($hostArch -eq $targetArch) { $targetArch } else { "${hostArch}_${targetArch}" }
 
-    Write-Status "Initializing VS environment for $vcvarsArch architecture" -Type Info
+    Write-Status "Initializing VS environment for $vcvarsArch (host: $hostArch, target: $targetArch)" -Type Info
 
     # Run vcvarsall.bat and export environment to temp file
     cmd /c "`"$vcvarsPath`" $vcvarsArch && set > `"$tempFile`""
@@ -310,7 +331,8 @@ function Get-CMakeConfigureArgs {
     param(
         [bool]$ShouldInstall,
         [string]$InstallPrefix,
-        [string]$Backend
+        [string]$Backend,
+        [string]$TargetArch = 'x64'
     )
 
     # For XPU backend, use Ninja generator with Intel compilers
@@ -332,12 +354,9 @@ function Get-CMakeConfigureArgs {
         }
     } else {
         # Use Visual Studio generator for other backends
-        $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-        $vsArch = if ($arch -eq 'Arm64') { 'ARM64' } else { 'x64' }
+        Write-Status "Target architecture: $TargetArch, using Visual Studio platform: $TargetArch" -Type Info
 
-        Write-Status "Detected platform: $arch, using Visual Studio architecture: $vsArch" -Type Info
-
-        $kwargs = @("..", "-G", "Visual Studio 17 2022", "-A", $vsArch)
+        $kwargs = @("..", "-G", "Visual Studio 17 2022", "-A", $TargetArch)
     }
 
     # Build for all supported GPU archs, not just the detected arch.
@@ -397,14 +416,16 @@ function Invoke-CMakeBuild {
         [bool]$RunLocalInstall = $false,
         [bool]$RunKernelsInstall = $false,
         [string]$InstallPrefix = $null,
-        [string]$Backend = $null
+        [string]$Backend = $null,
+        [string]$TargetArch = 'x64'
     )
 
     Write-Status "Building project with CMake..." -Type Info
     Write-Status "Configuration: $BuildConfig" -Type Info
+    Write-Status "Target architecture: $TargetArch" -Type Info
 
     # Ensure VS environment is initialized (needed for Ninja and MSVC)
-    Initialize-VSEnvironment
+    Initialize-VSEnvironment -TargetArch $TargetArch
 
     # Create build directory
     $buildDir = Join-Path $SourcePath "build"
@@ -417,7 +438,7 @@ function Invoke-CMakeBuild {
     Write-Status "Configuring CMake project..." -Type Info
     Push-Location $buildDir
     try {
-        $configureArgs = Get-CMakeConfigureArgs -ShouldInstall ($RunKernelsInstall -or $RunLocalInstall) -InstallPrefix $InstallPrefix -Backend $Backend
+        $configureArgs = Get-CMakeConfigureArgs -ShouldInstall ($RunKernelsInstall -or $RunLocalInstall) -InstallPrefix $InstallPrefix -Backend $Backend -TargetArch $TargetArch
 
         cmake @configureArgs
 
@@ -573,6 +594,19 @@ try {
 
     Write-Status "Generation completed successfully!" -Type Success
 
+    # Resolve effective target architecture (defaults to host architecture)
+    $resolvedTargetArch = $TargetArch
+    if (!$resolvedTargetArch) {
+        $resolvedTargetArch = if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'Arm64') { 'ARM64' } else { 'x64' }
+    }
+
+    # Windows on Arm support in CUDA requires a recent toolkit
+    if ($resolvedTargetArch -eq 'ARM64' -and $Backend -and $Backend.ToLower() -eq 'cuda') {
+        Write-Status "Targeting Windows ARM64 with CUDA backend - requires a CUDA toolkit with Windows ARM64 support (CUDA 13.0+)" -Type Info
+    } elseif ($resolvedTargetArch -eq 'ARM64' -and $Build -and (!$Backend -or $Backend.ToLower() -ne 'cuda')) {
+        Write-Status "ARM64 target requested for non-CUDA backend; proceeding, but only the CUDA backend officially supports Windows ARM64" -Type Warning
+    }
+
     # Build if requested (skip if no CMakeLists.txt exists, e.g., universal backend)
     if ($Build) {
         $buildPath = if ($TargetFolder) { $TargetFolder } else { $SourceFolder }
@@ -587,7 +621,8 @@ try {
                 -RunLocalInstall $LocalInstall.IsPresent `
                 -RunKernelsInstall $KernelsInstall.IsPresent `
                 -InstallPrefix $InstallPrefix `
-                -Backend $Backend
+                -Backend $Backend `
+                -TargetArch $resolvedTargetArch
         }
     }
 

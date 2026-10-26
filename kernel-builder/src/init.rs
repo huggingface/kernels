@@ -12,7 +12,7 @@ use minijinja::{context, Environment};
 
 use crate::hf;
 use crate::pyproject::FileSet;
-use kernels_data::config::Backend;
+use kernels_common::config::Backend;
 
 fn to_camel_case(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
@@ -44,7 +44,7 @@ pub struct InitArgs {
     #[arg(long, value_name = "OWNER/REPO")]
     pub name: Option<RepoInfo>,
 
-    /// Backends to enable (`all`, `cpu`, `cuda`, `metal`, `neuron`, `rocm`, `xpu`).
+    /// Backends to enable (`all`, `cpu`, `cuda`, `metal`, `rocm`, `xpu`).
     #[arg(long, num_args = 1.., default_values_t = default_init_backends())]
     pub backends: Vec<BackendSelection>,
 

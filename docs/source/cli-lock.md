@@ -75,4 +75,4 @@ The generated lock file contains:
 ## See Also
 
 - [kernels download](cli-download.md) - Download locked kernels
-- [kernels versions](cli-versions.md) - View available kernel versions
+- [kernels variants](cli-variants.md) - View kernel variants and compatibility decisions

@@ -1,5 +1,8 @@
 # Use layers
 
+> [!NOTE]
+> Open the [Kernelize your model with ease](https://colab.research.google.com/github/huggingface/kernels/blob/main/examples/cookbook/use_layers.ipynb) notebook to build a kernel, replace a layer definition, and use a kernel layer with functions.
+
 A kernel can provide layers in addition to kernel functions. A layer from
 the Hub can replace the `forward` method of an existing layer for a certain
 device type. This makes it possible to provide more performant kernels for
@@ -26,6 +29,23 @@ class SiluAndMul(nn.Module):
 The decorator does not change the behavior of the class -- it annotates
 the class with the given name (here `SiluAndMul`). The [`~kernels.kernelize`] function
 described below uses this name to look up kernels for the layer.
+
+Sometimes you only want to kernelize a layer depending on some state inside
+that layer. For instance, an MLP layer could support multiple activations, but
+a kernel that you want to register only supports one particular activation. In
+such cases, you can add a condition to a `use_kernel_forward_from_hub` decorator.
+The layer will then only be kernelized when the condition holds. The condition
+must be a callable that takes the instantiated layer and returns a `bool`. For
+example:
+
+```python
+@use_kernel_forward_from_hub(
+    "SwiGLUMLP",
+    condition=lambda module: module.config.hidden_act == "silu",
+)
+class MyMLP(nn.Module):
+    ...
+```
 
 ### External layers
 
@@ -212,6 +232,24 @@ with use_kernel_mapping(kernel_layer_mapping):
 This ensures that the mapping is not active anymore outside the
 `with`-scope.
 
+### Attributing Hub requests
+
+Libraries and applications can identify the Hub requests made while loading a
+layer by passing optional user-agent metadata to [`~kernels.LayerRepository`]:
+
+```python
+layer_repo = LayerRepository(
+    repo_id="kernels-community/activation",
+    layer_name="SiluAndMul",
+    version=1,
+    user_agent={"my-library": "1.0.0"},
+)
+```
+
+`user_agent` accepts either a string or a dictionary. If it is omitted, no
+application-specific metadata is added. Setting `HF_HUB_DISABLE_TELEMETRY=1`
+disables user-agent telemetry, including metadata supplied this way.
+
 If the layer is stateless (it does not use member variables in its forward _or_ it was
 originally a function that was converted into a kernel layer with
 [`~kernels.use_kernel_func_from_hub`]), it can also be mapped to a kernel function:
@@ -390,4 +428,22 @@ with use_kernel_mapping(
     inherit_mapping=False,
 ):
     kernelize(model, mode=Mode.INFERENCE)
+```
+
+## Inspecting a kernelized model
+
+To check which layers are currently using a kernel, use
+[`~kernels.get_kernelized_layers`]. It returns a [`~kernels.KernelizedLayers`]
+object that contains a dict `layers` with kernelized layers and a dict
+`funcs` with kernelized functions. Each entry holds the kernelized module
+and the repository that its kernel was retrieved from:
+
+```python
+from kernels import get_kernelized_layers
+
+kernelized = get_kernelized_layers(model)
+kernelized.layers
+# {'layers.0.mlp.act_fn': KernelizedLayer(module=..., repo=LayerRepository(...))}
+kernelized.funcs
+# {('layers.0.attn', 'apply_rotary_pos_emb'): KernelizedFunc(module=..., repo=FuncRepository(...))}
 ```

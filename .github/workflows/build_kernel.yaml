@@ -14,8 +14,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   build:
+    permissions:
+      contents: read
     name: Build kernels (${{ matrix.arch }})
     strategy:
       matrix:
@@ -27,8 +31,8 @@ jobs:
     runs-on:
       group: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
         with:
           extra-conf: |
             max-jobs = 8
@@ -57,16 +61,18 @@ jobs:
             cpp20-symbols-kernel
             cutlass-gemm-kernel
             cutlass-gemm-tvm-ffi-kernel
-            extra-data
             relu-kernel
             relu-torch-stable-abi-kernel
             relu-tvm-ffi-kernel
             relu-kernel-cpu
             relu-backprop-compile-kernel
             relu-triton-kernel
+            gemm-triton-autotune-kernel
             silu-and-mul-kernel
 
   test:
+    permissions:
+      contents: read
     name: Test kernels (UBI ${{ matrix.ubi_version }})
     needs: build
     strategy:
@@ -75,7 +81,7 @@ jobs:
     runs-on:
       group: aws-g6-12xlarge-plus
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download kernel artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

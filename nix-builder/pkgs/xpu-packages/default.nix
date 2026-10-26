@@ -1,41 +1,33 @@
 {
-  lib,
+  # Needs to be from the `final` set to get all overrides.
   callPackage,
-  newScope,
-  pkgs,
-}:
 
-{
-  packageMetadata,
+  # Needs to be from the `prev` set. `lib` functions are used to create
+  # the set structure, so using lib from `final` will lead to an infinite
+  # recursion.
+  lib,
 }:
 
 let
-  inherit (lib.fixedPoints) extends composeManyExtensions;
+  flattenVersion = lib.replaceStrings [ "." ] [ "_" ];
+  mkPackages = callPackage ./mk-packages.nix { };
+  manifests =
+    lib.mapAttrs'
+      (
+        fileName: type:
+        let
+          version = lib.removeSuffix ".json" fileName;
+        in
+        {
+          name = version;
+          value = lib.importJSON (./manifests/${fileName});
+        }
+      )
 
-  fixedPoint = final: {
-    inherit lib packageMetadata;
-  };
-  composed = lib.composeManyExtensions [
-    # Hooks
-    (import ./hooks.nix)
-    # Base package set.
-    (import ./components.nix)
-    # Overrides (adding dependencies, etc.)
-    (import ./overrides.nix)
-    # Packages that are joins of other packages.
-    (final: prev: {
-      oneapi-torch-dev = final.callPackage ./oneapi-torch-dev.nix { };
-    })
+      (builtins.readDir ./manifests);
 
-    (final: prev: {
-      onednn-xpu = final.callPackage ./onednn-xpu.nix { };
-    })
-    (final: prev: {
-      ocloc = final.callPackage ./ocloc.nix { };
-    })
-    (final: prev: {
-      sycl-tla = final.callPackage ./sycl-tla.nix { };
-    })
-  ];
 in
-lib.makeScope newScope (lib.extends composed fixedPoint)
+lib.mapAttrs' (version: manifest: {
+  name = "xpuPackages_${flattenVersion version}";
+  value = mkPackages manifest;
+}) manifests

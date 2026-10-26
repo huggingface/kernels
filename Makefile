@@ -1,11 +1,11 @@
 .PHONY: style kernel-builder-cli-docs quality bump-dev bump-dev-dry-run bump-dev-major bump-dev-major-dry-run bump-release bump-release-dry-run bump-major bump-major-dry-run pin-actions
 
 
-export check_dirs := kernels/src kernels/tests kernels-data/bindings/python
+export check_dirs := kernels/src kernels/tests
 
-all: src/kernels/python_depends.json
+all: kernels/src/kernels/python_depends.json
 
-kernels/src/kernels/python_depends.json: kernels-data/src/python_dependencies.json
+kernels/src/kernels/python_depends.json: kernels-common/src/python_dependencies.json
 	cp $< $@
 
 style:

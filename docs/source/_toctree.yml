@@ -19,6 +19,8 @@
       title: Projects using kernels
     - local: migration
       title: Migrate from older versions
+    - local: security
+      title: Kernels security
     - local: faq
       title: FAQ
   title: Use kernels
@@ -31,10 +33,16 @@
 - sections:
     - local: cli
       title: Overview
+    - local: cli-cache
+      title: kernels cache ls
     - local: cli-info
       title: kernels info
+    - local: cli-describe-api
+      title: kernels describe-api
+    - local: cli-variants
+      title: kernels variants
     - local: cli-versions
-      title: kernels versions
+      title: kernels versions (deprecated)
     - local: cli-lock
       title: kernels lock
     - local: cli-download
@@ -68,6 +76,10 @@
     - local: cli-skills
       title: Install agent skills
   title: kernel-builder CLI
+- sections:
+    - local: builder/triton-autotune
+      title: Ship Triton autotune configurations
+  title: Advanced practices
 - sections:
     - local: kernel-requirements
       title: Kernel requirements

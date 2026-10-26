@@ -46,6 +46,10 @@ let
 
   kernelConfig = (import ./kernel-config.nix { inherit lib; }) path;
 
+  hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
+    lib.attrValues (kernelConfig.toml.kernel or { })
+  );
+
   buildConfigBackend =
     buildConfig:
     if buildConfig.cpu or false then
@@ -58,6 +62,8 @@ let
       "xpu"
     else if buildConfig.metal or false then
       "metal"
+    else if buildConfig.tpu or false then
+      "tpu"
     else
       throw "Cannot determine framework for build set";
 
@@ -121,14 +127,12 @@ let
   bestVariant = bestBuildSet.variants.kernelArchVariant kernelConfig;
   # We need a package set for some outputs (e.g. kernels and build-and-upload),
   # even when there is no applicable build set.
-  pkgs =
+  fallbackBuildSet =
     let
       sorted = lib.sort configCompare (addSortOrder buildSets);
     in
-    if sorted == [ ] then
-      throw "No build set is available for this system"
-    else
-      (builtins.head sorted).pkgs;
+    if sorted == [ ] then throw "No build set is available for this system" else builtins.head sorted;
+  inherit (fallbackBuildSet) pkgs overrideTorch;
   headOrEmpty = l: if l == [ ] then [ ] else [ (builtins.head l) ];
 in
 {
@@ -239,6 +243,15 @@ in
           ${uploadStr}
         '';
 
+      lock-kernel-deps = writeScriptBin "lock-kernel-deps" ''
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        kernel_dir="''${1:-.}"
+
+        ${pkgs.lock-kernel-deps}/bin/lock-kernel-deps "$kernel_dir" -o "$kernel_dir/kernels.lock"
+      '';
+
       ci =
         let
           setsWithFramework =
@@ -249,6 +262,7 @@ in
             ++ (headOrEmpty (setsWithFramework "cuda"))
             ++ (headOrEmpty (setsWithFramework "metal"))
             ++ (headOrEmpty (setsWithFramework "rocm"))
+            ++ (headOrEmpty (setsWithFramework "tpu"))
             ++ (headOrEmpty (setsWithFramework "xpu"));
         in
         build.mkExtensionBundle {
@@ -278,14 +292,27 @@ in
       ci-test = ciTests.${bestVariant};
 
       kernels =
-        pkgs.python3.withPackages (
-          ps: with ps; [
-            kernels
-          ]
-        )
+        pkgs.python3.withPackages (ps: [
+          (overrideTorch ps.kernels)
+        ])
         // {
           meta.mainProgram = "kernels";
         };
+
+      # Package set by build variant, makes them easily available for tests,
+      # ad-hoc shells, etc.
+      pkgs = builtins.listToAttrs (
+        map (buildSet: {
+          name = buildSet.variants.kernelVariant kernelConfig;
+          # `buildSet.pkgs` can be shared between multiple build sets and does
+          # therefore not contain Torch. We override the Python packages with the
+          # buildset-specific packages.
+          value = buildSet.pkgs // {
+            inherit (buildSet) python3;
+            python3Packages = buildSet.python3.pkgs;
+          };
+        }) applicableBuildSets
+      );
 
       redistributable = build.mkDistTorchExtensions {
         inherit path doGetKernelCheck kernelProvenance;
@@ -304,5 +331,8 @@ in
       archVariants = lib.unique (
         map (buildSet: buildSet.variants.kernelArchVariant kernelConfig) applicableBuildSets
       );
+    }
+    // lib.optionalAttrs hasRustKernels {
+      inherit (pkgs) hash-rust;
     };
 }

@@ -1,8 +1,11 @@
+import kernels
 import pytest
 import torch
 import torch.nn.functional as F
 
-import relu_torch_stable_abi
+relu_torch_stable_abi = kernels.get_kernel(
+    "kernels-test/relu-torch-stable-abi", version=1
+)
 
 
 @pytest.mark.kernels_ci

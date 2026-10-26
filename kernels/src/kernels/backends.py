@@ -1,7 +1,7 @@
 import ctypes
 import ctypes.util
+import logging
 import re
-import warnings
 from dataclasses import dataclass
 from typing import ClassVar, Optional, Protocol, runtime_checkable
 
@@ -9,6 +9,8 @@ from huggingface_hub.dataclasses import strict
 from packaging.version import Version
 
 from kernels.compat import has_torch
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -149,6 +151,24 @@ class ROCm:
         return ROCm(version=Version(f"{m.group(1)}.{m.group(2)}"))
 
 
+@strict
+@dataclass(unsafe_hash=True)
+class TPU:
+    @property
+    def name(self) -> str:
+        return "tpu"
+
+    @property
+    def variant_str(self) -> str:
+        return "tpu"
+
+    @staticmethod
+    def parse(s: str) -> "TPU":
+        if s != "tpu":
+            raise ValueError(f"Invalid TPU variant string: {s!r}")
+        return TPU()
+
+
 @dataclass(unsafe_hash=True)
 class XPU:
     _VARIANT_REGEX: ClassVar[re.Pattern] = re.compile(r"xpu(\d+)(\d+)")
@@ -179,6 +199,8 @@ def parse_backend(s: str) -> Backend:
         return Metal.parse(s)
     elif s == "neuron":
         return Neuron.parse(s)
+    elif s == "tpu":
+        return TPU.parse(s)
     elif s.startswith("cu"):
         return CUDA.parse(s)
     elif s.startswith("rocm"):
@@ -195,7 +217,10 @@ def _backend() -> Backend:
     if has_torch:
         import torch
 
-        if hasattr(torch, "neuron"):
+        acc = torch.accelerator.current_accelerator() if hasattr(torch, "accelerator") else None
+        if acc is not None and acc.type == "tpu":
+            return TPU()
+        elif hasattr(torch, "neuron"):
             # Needs to be sorted before specific Torch builds, since Neuron
             # extension can be loaded into e.g. CUDA Torch builds.
             return Neuron()
@@ -203,7 +228,12 @@ def _backend() -> Backend:
             cuda_version = Version(torch.version.cuda)
             return CUDA(version=cuda_version)
         elif torch.version.hip is not None:
-            rocm_version = Version(torch.version.hip.split("-")[0])
+            # Note: the ROCm version does not always match the HIP version
+            # (e.g. ROCm 10.0 uses HIP 7.15). So, we should use
+            # `torch.version.rocm`. However, this attribute is only available
+            # since Torch 2.10, so use `torch.version.hip` as a fallback.
+            rocm = getattr(torch.version, "rocm", None) or torch.version.hip
+            rocm_version = Version(rocm.split("-")[0])
             return ROCm(version=rocm_version)
         elif torch.backends.mps.is_available():
             return Metal()
@@ -265,7 +295,7 @@ def _get_cuda() -> Optional[CUDA]:
     runtime_version = ctypes.c_int(0)
     result = libcudart.cudaRuntimeGetVersion(ctypes.byref(runtime_version))
     if result != 0:
-        warnings.warn("System has CUDA runtime library, but cannot get runtime version.")
+        logger.warning("System has CUDA runtime library, but cannot get runtime version.")
         return None
 
     # cudaRuntimeGetVersion encodes the version as (major * 1000 + minor * 10).

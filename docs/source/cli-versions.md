@@ -1,5 +1,11 @@
 # kernels versions
 
+> [!CAUTION]
+> `kernels versions` is deprecated and will be removed in kernels 0.20.
+> Use [kernels variants](cli-variants.md) instead.
+> To preserve the existing behavior of listing all versions, use
+> `kernels variants <repo_id> --all-versions`.
+
 Use `kernels versions` to list all available versions of a kernel on the Hub
 and marks compatible versions.
 

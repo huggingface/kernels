@@ -1,43 +1,56 @@
 {
   lib,
   buildPythonPackage,
-  setuptools,
+  rustPlatform,
+  kernelsCargoDeps,
+  mkKernelsRustSrc,
 
   huggingface-hub,
-  kernels-data,
   pyyaml,
   sigstore,
   tomlkit,
   torch,
+
+  withTorch ? true,
 }:
 
 let
   version =
     (builtins.fromTOML (builtins.readFile ../../../../kernels/pyproject.toml)).project.version;
+  cargoFlags = [
+    "-m"
+    "kernels/Cargo.toml"
+  ];
 in
 buildPythonPackage {
   pname = "kernels";
   inherit version;
-  pyproject = true;
+  format = "pyproject";
 
-  src =
-    let
-      sourceFiles =
-        file: file.hasExt "lock" || file.hasExt "json" || file.hasExt "toml" || file.hasExt "py";
-    in
-    lib.fileset.toSource {
-      root = ../../../../kernels;
-      fileset = lib.fileset.fileFilter sourceFiles ../../../../kernels;
-    };
+  src = mkKernelsRustSrc {
+    crates = [ "kernels" ];
+    extraFiles = [
+      "kernels/README.md"
+      "kernels/pyproject.toml"
+    ];
+  };
 
-  build-system = [ setuptools ];
+  cargoDeps = kernelsCargoDeps;
+
+  maturinBuildFlags = cargoFlags;
+
+  build-system = [
+    rustPlatform.cargoSetupHook
+    rustPlatform.maturinBuildHook
+  ];
 
   dependencies = [
     huggingface-hub
-    kernels-data
     pyyaml
     sigstore
     tomlkit
+  ]
+  ++ lib.optionals withTorch [
     torch
   ];
 

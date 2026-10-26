@@ -1,24 +1,17 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use eyre::Result;
 use itertools::Itertools;
 
-use kernels_data::config::{Backend, Build};
-use kernels_data::metadata::{GitHash, KernelBuilderVersion, Metadata, Provenance};
+use kernels_common::config::{Backend, Build};
+use kernels_common::git::{GitStatus, Oid};
+use kernels_common::metadata::{KernelBuilderVersion, Metadata, Provenance};
 
 use crate::pyproject::ops_identifier::KernelIdentifier;
 use crate::pyproject::FileSet;
 
-static COMPAT_PY: &str = include_str!("templates/compat.py");
 static ADD_BUILD_METADATA_PY: &str = include_str!("templates/torch/add_build_metadata.py");
-
-pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
-    let mut path = PathBuf::new();
-    path.push("compat.py");
-    file_set.entry(path).extend_from_slice(COMPAT_PY.as_bytes());
-
-    Ok(())
-}
 
 /// `kernel-builder` provenance baked in at compile time.
 ///
@@ -26,10 +19,12 @@ pub fn write_compat_py(file_set: &mut FileSet) -> Result<()> {
 /// build sandboxes without a `.git` (e.g. Nix), the derivation supplies it via
 /// `built`'s `BUILT_OVERRIDE_hf_kernel_builder_GIT_*` environment variables.
 pub(crate) fn kernel_builder_version() -> KernelBuilderVersion {
-    let git = crate::built_info::GIT_COMMIT_HASH.map(|sha| GitHash {
-        sha: sha.to_owned(),
-        dirty: crate::built_info::GIT_DIRTY.unwrap_or(false),
-    });
+    let git = crate::built_info::GIT_COMMIT_HASH
+        .and_then(|sha| Oid::from_str(sha).ok())
+        .map(|commit| GitStatus {
+            commit,
+            dirty: crate::built_info::GIT_DIRTY.unwrap_or(false),
+        });
     KernelBuilderVersion {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         git,

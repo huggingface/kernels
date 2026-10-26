@@ -17,17 +17,20 @@
         buildSet:
         with buildSet.pkgs;
         let
+          inherit (buildSet) overrideTorch;
           isLinux = stdenv.hostPlatform.isLinux;
           cudaSupport = config.cudaSupport;
+          xpuSupport = config.xpuSupport or false;
         in
         (
           allOutputs buildSet.torch
           ++ lib.concatMap allOutputs buildSet.extension.extraBuildDeps
           ++ allOutputs kernel-builder
-          ++ allOutputs python3.pkgs.einops
+          ++ allOutputs kernel-port
+          ++ allOutputs (overrideTorch python3.pkgs.einops)
           ++ allOutputs python3.pkgs.jax
           ++ allOutputs python3.pkgs.jax-tvm-ffi
-          ++ allOutputs python3.pkgs.kernels
+          ++ allOutputs (overrideTorch python3.pkgs.kernels)
           ++ allOutputs python3.pkgs.tvm-ffi
           ++ allOutputs ruff
           ++ lib.optionals (isLinux && cudaSupport) (allOutputs manylinux_2_28.cudaBackendStdenv)
@@ -35,6 +38,9 @@
           # Only works on recent CUDAs.
           ++ lib.optionals (!python3.pkgs.nvidia-cutlass-dsl.meta.broken) (
             allOutputs python3.pkgs.nvidia-cutlass-dsl
+          )
+          ++ lib.optionals xpuSupport (
+            allOutputs (buildSet.torch.xpuPackages.sycl-tla.override { inherit (manylinux_2_28) stdenv; })
           )
         );
       buildSetLinkFarm = buildSet: pkgs.linkFarm buildSet.variants.torch.arch (buildSetOutputs buildSet);

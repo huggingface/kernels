@@ -3,9 +3,7 @@
   wrapCCWith,
   bintools,
   glibc,
-  hip-devel,
   llvm,
-  rocm-device-libs,
   rsync,
 }:
 
@@ -31,17 +29,29 @@
       chmod -R u+w $out
 
       clang_version=`$out/bin/clang --version | grep -E -o "clang version [0-9]+" | cut -d ' ' -f3`
-      ln -s $out/lib/* $out/lib/clang/$clang_version/lib
-      ln -sf $out/include/* $out/lib/clang/$clang_version/include
 
-      substituteInPlace $out/bin/rocm.cfg \
-        --replace-fail "<CFGDIR>/../../.." "<CFGDIR>/.."
+      # Symlink $out/lib entries into the clang lib directory. However,
+      # some directories might already exists. In that case, do not override
+      # them but symlink entries within the directory.
+      resourceLib=$out/lib/clang/$clang_version/lib
+      for entry in $out/lib/*; do
+        name=$(basename "$entry")
+        if [ -d "$entry" ] && [ -d "$resourceLib/$name" ]; then
+          for f in "$entry"/*; do
+            ln -s "$f" "$resourceLib/$name/$(basename "$f")"
+          done
+        else
+          ln -s "$entry" "$resourceLib/$name"
+        fi
+      done
+
+      ln -sf $out/include/* $out/lib/clang/$clang_version/include
 
       # We need to set the version to signal to clang that we want to
       # include HIP/CUDA compatibility headers.
       chmod -R +w $out/share
       mkdir -p $out/share/hip
-      cp ${hip-devel}/share/hip/version $out/share/hip
+      cp ${llvm}/share/hip/version $out/share/hip
 
       runHook postInstall
     '';
@@ -64,7 +74,7 @@
   nixSupport.cc-cflags = [
     "-resource-dir=$out/resource-root"
     "-fuse-ld=lld"
-    "--rocm-device-lib-path=${rocm-device-libs}/amdgcn/bitcode"
+    "--rocm-device-lib-path=${llvm}/amdgcn/bitcode"
     "-rtlib=compiler-rt"
     "-unwindlib=libunwind"
     "-Wno-unused-command-line-argument"

@@ -1,0 +1,12 @@
+[package]
+name = "relu-rs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "relu_rust"
+
+[dependencies]
+tvm-ffi = "=0.1.14-post1"

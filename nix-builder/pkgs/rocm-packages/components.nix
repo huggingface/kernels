@@ -8,4 +8,4 @@ prev.lib.mapAttrs (
     inherit (metadata) components deps version;
     rocmPackages = final;
   }
-) prev.packageMetadata
+) prev.manifest

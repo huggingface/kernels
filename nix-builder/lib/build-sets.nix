@@ -26,19 +26,42 @@ let
     in
     builtins.map (buildConfig: buildConfig // { backend = backend buildConfig; }) systemBuildConfigs;
 
-  mkBuildSet = import ./mk-build-set.nix {
-    inherit
-      nixpkgs
-      rust-overlay
-      builderProvenance
-      ;
-  };
+  inherit
+    (import ./mk-build-set.nix {
+      inherit
+        nixpkgs
+        rust-overlay
+        builderProvenance
+        ;
+    })
+    pkgsKey
+    mkPkgs
+    mkBuildSet
+    ;
 
 in
 rec {
   mkBuildSets =
     torchVersions: systems:
-    lib.concatMap (system: builtins.map mkBuildSet (buildConfigs torchVersions system)) systems;
+    let
+      configs = lib.concatMap (buildConfigs torchVersions) systems;
+      # Multiple builsets can share the same nixpkgs instance, for example:
+      #
+      # - All Torch CPU buildsets.
+      # - All Torch buildsets using CUDA n.m (e.g. 13.0).
+      # - All Torch buildsets using ROCm n.m. (e.g. 7.2).
+      #
+      # So we instantiate the nixpkgs only once for each such category to avoid
+      # evaluation nixpkgs more than necessary. Note that due to lazy eval,
+      # we won't install nixpkgs more than once for the same key.
+      pkgsByKey = builtins.listToAttrs (
+        map (buildConfig: {
+          name = pkgsKey buildConfig;
+          value = mkPkgs buildConfig;
+        }) configs
+      );
+    in
+    map (buildConfig: mkBuildSet pkgsByKey.${pkgsKey buildConfig} buildConfig) configs;
 
   # Partition into an attrset { <system> = [ <buildset> ...]; ... }.
   partitionBuildSetsBySystem = lib.foldl (

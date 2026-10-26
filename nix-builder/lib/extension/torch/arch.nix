@@ -13,6 +13,7 @@
   cmake,
   cmakeNvccThreadsHook,
   cuda_nvcc,
+  generate-symbols-hook,
   get-kernel-check,
   hash-kernel-hook,
   kernel-layout-check,
@@ -34,6 +35,7 @@
   oneapi-torch-dev,
   onednn-xpu,
   torch,
+  overrideTorch,
 }:
 
 {
@@ -55,6 +57,10 @@
 
   nvccThreads,
 
+  # Dependencies on other kernels. Path to a JSON file that maps
+  # kernel dependencies to output paths.
+  kernelDeps,
+
   # A stringly-typed list of Python dependencies. Ideally we'd take a
   # list of derivations, but we also need to write the dependencies to
   # the output.
@@ -67,6 +73,9 @@
 
   # The Torch stable ABI version to check for.
   torchStableAbiVersion ? null,
+
+  # The variant that the build is expected to produce.
+  variant,
 
   # Revision to bake into the ops name.
   rev,
@@ -86,12 +95,11 @@ assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
   inherit
-    (import ../../deps.nix {
+    (import ../../python-deps.nix {
       inherit
         lib
-        pkgs
-        stdenv
-        torch
+        python3
+        overrideTorch
         ;
     })
     resolvePythonDeps
@@ -115,6 +123,8 @@ let
 
   metalSupport = buildConfig.metal or false;
 
+  cpuSupport = buildConfig.cpu or false;
+
   provenanceFlags = import ../provenance-flags.nix { inherit lib kernelProvenance; };
 
 in
@@ -125,6 +135,7 @@ stdenv.mkDerivation (prevAttrs: {
   inherit
     doAbiCheck
     doKernelBuildCheck
+    kernelDeps
     moduleName
     nvccThreads
     ;
@@ -176,7 +187,14 @@ stdenv.mkDerivation (prevAttrs: {
     torch-ops-check
   ]
   ++ lib.optionals doGetKernelCheck [
-    (get-kernel-check.override { python3 = python3.withPackages (ps: dependencies); })
+    (get-kernel-check.override {
+      python3 = python3.withPackages (ps: dependencies);
+      kernels = overrideTorch python3.pkgs.kernels;
+    })
+    (generate-symbols-hook.override {
+      python3 = python3.withPackages (ps: dependencies);
+      kernels = overrideTorch python3.pkgs.kernels;
+    })
   ]
   ++ lib.optionals cudaSupport [
     cmakeNvccThreadsHook
@@ -212,14 +230,20 @@ stdenv.mkDerivation (prevAttrs: {
   )
   ++ lib.optionals rocmSupport (
     with rocmPackages;
-    [
-      hipcub-devel
-      hipsparselt
-      rocprim-devel
-      rocthrust-devel
-      rocshmem-devel
-      rocwmma-devel
-    ]
+    if theRock then
+      [
+        amdrocm-ccl-devel
+        amdrocm-hipblas-common-devel
+      ]
+    else
+      [
+        hipcub-devel
+        hipsparselt
+        rocprim-devel
+        rocthrust-devel
+        rocshmem-devel
+        rocwmma-devel
+      ]
   )
   ++ lib.optionals xpuSupport ([
     oneapi-torch-dev
@@ -230,14 +254,21 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ extraDeps;
 
-  env =
-    lib.optionalAttrs cudaSupport {
-      CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
-    }
-    // lib.optionalAttrs xpuSupport {
-      MKLROOT = oneapi-torch-dev;
-      SYCL_ROOT = oneapi-torch-dev;
-    };
+  env = {
+    inherit variant;
+  }
+  // lib.optionalAttrs cudaSupport {
+    CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
+  }
+  // lib.optionalAttrs xpuSupport {
+    MKLROOT = oneapi-torch-dev;
+    SYCL_ROOT = oneapi-torch-dev;
+  }
+  // lib.optionalAttrs stdenv.hostPlatform.isDarwin {
+    # Without LANG set, libintl queries CoreFoundation for the preferred
+    # languages, which intermittendly segfaults the build sandbox.
+    LANG = "C";
+  };
 
   # If we use the default setup, CMAKE_CUDA_HOST_COMPILER gets set to nixpkgs g++.
   dontSetupCUDAToolkitCompilers = true;
@@ -252,17 +283,26 @@ stdenv.mkDerivation (prevAttrs: {
   ]
   ++ lib.optionals cudaSupport [
     (lib.cmakeFeature "CMAKE_CUDA_HOST_COMPILER" "${stdenv.cc}/bin/g++")
+    (lib.cmakeFeature "GPU_LANG" "CUDA")
   ]
   ++ lib.optionals rocmSupport [
     # Ensure sure that we use HIP from our CLR override and not HIP from
     # the symlink-joined ROCm toolkit.
     (lib.cmakeFeature "CMAKE_HIP_COMPILER_ROCM_ROOT" "${clr}")
     (lib.cmakeFeature "HIP_ROOT_DIR" "${clr}")
+    (lib.cmakeFeature "GPU_LANG" "HIP")
   ]
   ++ lib.optionals metalSupport [
     # Use host compiler for Metal. Not included in the redistributable SDK.
     # Re-enable when the issue mentioned in preConfigure is solved.
     #(lib.cmakeFeature "METAL_COMPILER" "${xcrunHost}/bin/xcrunHost")
+    (lib.cmakeFeature "GPU_LANG" "METAL")
+  ]
+  ++ lib.optionals xpuSupport [
+    (lib.cmakeFeature "GPU_LANG" "SYCL")
+  ]
+  ++ lib.optionals cpuSupport [
+    (lib.cmakeFeature "GPU_LANG" "CPU")
   ];
 
   postInstall = ''

@@ -14,6 +14,7 @@
   xpuPackages,
 
   torch,
+  overrideTorch,
 }:
 
 let
@@ -55,16 +56,21 @@ in
       onednn-xpu
     ]
     ++ lib.optionals rocmSupport (
-      [
-        clr
-      ]
-      ++ (with rocmPackages; [
-        hipcub-devel
-        hipsparselt
-        rocprim-devel
-        rocthrust-devel
-        rocwmma-devel
-      ])
+      with rocmPackages;
+      if theRock then
+        [
+          amdrocm-ccl-devel
+          amdrocm-hipblas-common-devel
+        ]
+      else
+        [
+          hipcub-devel
+          hipsparselt
+          rocprim-devel
+          rocthrust-devel
+          rocshmem-devel
+          rocwmma-devel
+        ]
     );
 
   mkTvmFfiExtension = callPackage ./tvm-ffi/arch.nix {
@@ -74,6 +80,7 @@ in
       oneapi-torch-dev
       onednn-xpu
       torch
+      overrideTorch
       ;
     stdenv = effectiveStdenv;
   };
@@ -85,19 +92,19 @@ in
       oneapi-torch-dev
       onednn-xpu
       torch
+      overrideTorch
       ;
     stdenv = effectiveStdenv;
   };
 
-  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch; };
+  mkTorchNoArchExtension = callPackage ./torch/no-arch.nix { inherit torch overrideTorch; };
 
-  inherit
-    (import ../deps.nix {
+  resolveCppDeps = (
+    import ../cpp-deps.nix {
       inherit lib pkgs torch;
       stdenv = effectiveStdenv;
-    })
-    resolveCppDeps
-    ;
+    }
+  );
 
   stdenv = effectiveStdenv;
 }

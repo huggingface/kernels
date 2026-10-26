@@ -5,7 +5,19 @@
   # Every `buildSets` argument is a list of build sets. Each build set is
   # a attrset of the form
   #
-  #     { pkgs = <nixpkgs>, torch = <torch drv> }
+  #     {
+  #       pkgs = <nixpkgs>;
+  #       python3 = <python>;
+  #       torch = <torch drv>;
+  #       overrideTorch = <pkg -> pkg>;
+  #     }
+  #
+  # `pkgs` can be shared between build sets with different Torch versions
+  # and does not provide Torch. Use `torch` and `overrideTorch` for packages
+  # from `pkgs.python3.pkgs` that depend on Torch. Avoid `python3` when
+  # possible, it uses an overlay that is unique to the build set, so
+  # using it increases eval time significantly when using/evaluating
+  # multiple buildsets.
   #
   # The Torch derivation is built as-is. So e.g. the ABI version should
   # already be set.
@@ -88,8 +100,18 @@ rec {
         in
         builtins.attrValues newestPerGroup;
 
+      # Split up build sets into two:
+      #
+      # - Right: build sets with Torch versions that can build for the
+      #          kernels requested stable ABI version.
+      # - Wrong: all other build sets.
+      #
+      # For instance, if stable-abi = 2.13 for XPU, then all Torch >= 2.13
+      # build sets will be in `right` and all Torch < 2.13 build sets will
+      # be in `wrong`.
       byStableAbi = lib.partition (
-        buildSet: kernelConfig.isTorchStableAbiForBackend buildSet.buildConfig.backend
+        buildSet:
+        kernelConfig.torchCoversStableAbi buildSet.buildConfig.backend buildSet.buildConfig.torchVersion
       ) (buildSetsWithinBounds buildSets);
     in
     deduplicateForStableAbi byStableAbi.right ++ byStableAbi.wrong;
@@ -103,7 +125,9 @@ rec {
       buildConfig,
       extension,
       pkgs,
+      python3,
       torch,
+      overrideTorch,
       bundleBuild,
       variants,
     }:
@@ -117,7 +141,7 @@ rec {
     }:
     let
       inherit (lib) fileset;
-      kernels = lib.filterAttrs (_: kernel: buildConfig.backend == kernel.backend) (
+      kernels = lib.filterAttrs (_: kernel: buildConfig.backend == kernelConfig.kernelBackend kernel) (
         kernelConfig.toml.kernel or { }
       );
       extraDeps =
@@ -125,6 +149,9 @@ rec {
           kernelDeps = lib.unique (lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends) kernels));
         in
         extension.resolveCppDeps kernelDeps;
+      hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
+        lib.attrValues kernels
+      );
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;
@@ -136,6 +163,7 @@ rec {
           _: kernel: builtins.length (kernel.cuda-capabilities or supportedCudaCapabilities)
         ) kernelConfig.toml.kernel
       );
+      kernelDeps = pkgs.fetchKernelDeps src;
       pythonDeps = (kernelConfig.toml.general.python-depends or [ ]);
       backendPythonDeps =
         lib.attrByPath [ buildConfig.backend "python-depends" ] [ ]
@@ -150,11 +178,13 @@ rec {
           src
           rev
           doGetKernelCheck
+          kernelDeps
           pythonDeps
           backendPythonDeps
           kernelProvenance
           ;
         kernelName = kernelConfig.name;
+        variant = variants.kernelVariant kernelConfig;
       }
     else if kernelConfig.isTvmFfi then
       extension.mkTvmFfiExtension {
@@ -166,15 +196,30 @@ rec {
           src
           stripRPath
           rev
+          kernelDeps
           pythonDeps
           backendPythonDeps
           kernelProvenance
           ;
 
+        cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
+        rustGitHashes =
+          if hasRustKernels && builtins.pathExists (src + "/rust-git-hashes.json") then
+            builtins.fromJSON (builtins.readFile (src + "/rust-git-hashes.json"))
+          else
+            { };
         kernelName = kernelConfig.name;
         doAbiCheck = true;
+        variant = variants.kernelVariant kernelConfig;
       }
     else
+      let
+        torchStableAbiVersion =
+          if kernelConfig.torchCoversStableAbi buildConfig.backend buildConfig.torchVersion then
+            kernelConfig.torchStableAbiVersionForBackend buildConfig.backend
+          else
+            null;
+      in
       extension.mkTorchExtension {
         inherit
           buildConfig
@@ -184,15 +229,17 @@ rec {
           src
           stripRPath
           rev
+          kernelDeps
           pythonDeps
           backendPythonDeps
           kernelProvenance
           ;
 
-        torchStableAbiVersion = kernelConfig.torchStableAbiVersionForBackend buildConfig.backend;
+        inherit torchStableAbiVersion;
 
         kernelName = kernelConfig.name;
         doAbiCheck = true;
+        variant = variants.kernelVariant kernelConfig;
       };
 
   # Build multiple Torch extensions.
@@ -304,17 +351,20 @@ rec {
         {
           name = buildSet.variants.kernelArchVariant kernelConfig;
           value = mkShell {
-            nativeBuildInputs = with pkgs; pythonNativeCheckInputs python3.pkgs;
+            nativeBuildInputs = pythonNativeCheckInputs buildSet.python3.pkgs;
 
-            buildInputs = with pkgs; [
-              (python3.withPackages (
+            buildInputs = [
+              (buildSet.python3.withPackages (
                 ps:
-                with ps;
+                with pkgs.python3.pkgs;
                 extension.dependencies
+                # More expensive override is needed, since we cannot expect
+                # the kernel developer to use `overrideTorch`. The same applies
+                # to `pythonCheckInputs` below.
                 ++ pythonCheckInputs ps
                 ++ [
                   buildSet.torch
-                  kernels
+                  (buildSet.overrideTorch kernels)
                   pytest
                 ]
                 ++ pythonCheckInputs ps
@@ -353,6 +403,7 @@ rec {
     }:
     let
       kernelConfig = readKernelConfig path;
+      repoId = lib.attrByPath [ "hub" "repo-id" ] null kernelConfig.toml.general;
       runnerForBuildSet =
         { path, rev }:
         buildSet:
@@ -369,18 +420,17 @@ rec {
               kernelProvenance
               ;
           };
-          testPython =
-            with pkgs;
-            python3.withPackages (
-              ps:
-              with ps;
-              extension.dependencies
-              ++ [
-                buildSet.torch
-                pytest
-              ]
-              ++ pythonCheckInputs ps
-            );
+          testPython = buildSet.python3.withPackages (
+            ps:
+            with pkgs.python3.pkgs;
+            extension.dependencies
+            ++ [
+              buildSet.torch
+              (buildSet.overrideTorch kernels)
+              pytest
+            ]
+            ++ pythonCheckInputs ps
+          );
         in
         {
           name = buildSet.variants.kernelArchVariant kernelConfig;
@@ -390,6 +440,9 @@ rec {
               if [ -d ${extension.src}/tests ]; then
                 unset LD_LIBRARY_PATH
                 export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
+                ${lib.optionalString (repoId != null) ''
+                  export LOCAL_KERNELS="${repoId}=${extension}"
+                ''}
                 # Accept exit code 5: no tests are selected
                 ${testPython}/bin/python3 -m pytest ${extension.src}/tests -m kernels_ci -p no:cacheprovider || test $? -eq 5
               fi
@@ -428,14 +481,14 @@ rec {
             kernelProvenance = null;
           };
           python = (
-            pkgs.python3.withPackages (
+            buildSet.python3.withPackages (
               ps:
-              with ps;
+              with pkgs.python3.pkgs;
               extension.dependencies
               ++ pythonCheckInputs ps
               ++ [
                 buildSet.torch
-                kernels
+                (buildSet.overrideTorch kernels)
                 ninja
                 pip
                 pytest
@@ -457,7 +510,7 @@ rec {
               [
                 kernel-builder
               ]
-              ++ (pythonNativeCheckInputs python3.pkgs);
+              ++ (pythonNativeCheckInputs buildSet.python3.pkgs);
             buildInputs = [ python ];
             inputsFrom = [ extension ];
             env = lib.optionalAttrs rocmSupport {

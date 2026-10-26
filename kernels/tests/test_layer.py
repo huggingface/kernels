@@ -1,5 +1,10 @@
+import copy
+import logging
+import pickle
 import sys
 from contextlib import nullcontext
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -11,20 +16,29 @@ from kernels import (
     CUDAProperties,
     Device,
     FuncRepository,
+    KernelizedFunc,
+    KernelizedLayer,
+    KernelizedLayers,
+    KernelizeFallback,
     LayerRepository,
     LocalLayerRepository,
+    LockedFuncRepository,
+    LockedLayerRepository,
     Mode,
+    get_kernelized_layers,
     kernelize,
     register_kernel_mapping,
     use_kernel_forward_from_hub,
     use_kernel_mapping,
+    use_kernelized_func,
+)
+from kernels._rust import KernelDependency, KernelLock, KernelLocks, KernelVersion
+from kernels.install import (
+    install_kernel,
 )
 from kernels.layer.layer import (
     _KERNEL_MAPPING,
     _validate_layer,
-)
-from kernels.utils import (
-    install_kernel,
 )
 
 
@@ -255,6 +269,47 @@ def test_hub_forward_neuron():
     assert smol.relu.n_calls == 1
 
 
+@pytest.mark.tpu_only
+def test_hub_forward_tpu():
+    torch.manual_seed(0)
+
+    mapping = {"ReLU": {"tpu": LayerRepository(repo_id="kernels-test/relu-tpu", version=1, layer_name="ReLU")}}
+
+    relu = ReLU()
+    X = torch.randn((16, 16), device="tpu")
+    Y = relu(X)
+
+    with use_kernel_mapping(mapping):
+        relu_with_kernel = kernelize(ReLUWithKernel(), device="tpu", mode=Mode.INFERENCE)
+    Y_kernel = relu_with_kernel(X)
+
+    torch.testing.assert_close(Y_kernel, Y)
+
+    assert relu.n_calls == 1
+    assert relu_with_kernel.n_calls == 0
+
+    # Check that the device type can be determined automatically.
+    class SMOL(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(16, 16)
+            self.relu = ReLUWithKernel()
+
+        def forward(self, x):
+            return self.relu(self.linear(x))
+
+    smol = SMOL().to("tpu")
+
+    Y = smol(X)
+
+    with use_kernel_mapping(mapping):
+        smol = kernelize(smol, mode=Mode.INFERENCE)
+    Y_kernel = smol(X)
+
+    torch.testing.assert_close(Y, Y_kernel)
+    assert smol.relu.n_calls == 1
+
+
 @pytest.mark.rocm_only
 def test_hub_forward_rocm():
     torch.manual_seed(0)
@@ -380,6 +435,112 @@ def test_layer_fallback_works():
     # Check that we don't raise an exception for a non-existing kernel.
     silu_and_mul = SiluAndMulWithKernelFallback()
     kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
+
+
+def test_missing_kernel_build_falls_back(monkeypatch, caplog):
+    repo = LayerRepository(
+        repo_id="kernels-test/no-compatible-build",
+        layer_name="SiluAndMul",
+        version=1,
+    )
+
+    def unavailable_build():
+        raise FileNotFoundError("Cannot find a build variant for this system")
+
+    monkeypatch.setattr(repo, "load", unavailable_build)
+    layer = SiluAndMulWithKernel()
+    mapping = {"SiluAndMul": {"cuda": repo}}
+
+    with (
+        use_kernel_mapping(mapping, inherit_mapping=False),
+        caplog.at_level(logging.INFO, logger="kernels.layer.layer"),
+    ):
+        kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=KernelizeFallback.ALL)
+    assert "Kernel for layer `SiluAndMul` on cuda could not be loaded" in caplog.text
+
+    with use_kernel_mapping(mapping, inherit_mapping=False):
+        with pytest.raises(FileNotFoundError, match="Cannot find a build variant"):
+            kernelize(layer, device="cuda", mode=Mode.INFERENCE)
+        with pytest.raises(FileNotFoundError, match="Cannot find a build variant"):
+            kernelize(layer, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+
+def test_kernel_condition_skips_kernelization(caplog):
+    @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: False)
+    class SiluAndMulConditionSkipped(SiluAndMul):
+        pass
+
+    silu_and_mul = SiluAndMulConditionSkipped()
+
+    with caplog.at_level(logging.INFO, logger="kernels.layer.kernelize"):
+        kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+    assert (
+        "Skipping kernelization for `SiluAndMulConditionSkipped` using `SiluAndMulNonExisting` due to kernel_condition."
+        in caplog.text
+    )
+
+    # The forward was not replaced...
+    assert "forward" not in silu_and_mul.__dict__
+
+    # ... and the original implementation is still used.
+    X = torch.randn(32, 64)
+    silu_and_mul(X)
+    assert silu_and_mul.n_calls == 1
+
+
+def test_kernel_condition_holds():
+    @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: True)
+    class SiluAndMulConditionHolds(SiluAndMul):
+        pass
+
+    silu_and_mul = SiluAndMulConditionHolds()
+
+    # The condition holds, so kernelization is attempted and fails because
+    # there is no kernel mapping for the layer.
+    with pytest.raises(ValueError, match="No layer mapping for `SiluAndMulNonExisting`"):
+        kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+
+def test_kernel_condition_receives_module_instance():
+    received = []
+
+    @use_kernel_forward_from_hub(
+        "SiluAndMulNonExisting",
+        condition=lambda module: received.append(module) or False,
+    )
+    class SiluAndMulConditionArg(SiluAndMul):
+        pass
+
+    silu_and_mul = SiluAndMulConditionArg()
+    # No mapping, but uses fallback.
+    kernelize(silu_and_mul, device="cuda", mode=Mode.INFERENCE)
+
+    assert received == [silu_and_mul]
+
+
+def test_kernel_condition_per_instance():
+    @use_kernel_forward_from_hub("SiluAndMulNonExisting", condition=lambda module: module.allow_kernel)
+    class SiluAndMulConditional(SiluAndMul):
+        def __init__(self, allow_kernel: bool):
+            super().__init__()
+            self.allow_kernel = allow_kernel
+
+    skipped = SiluAndMulConditional(allow_kernel=False)
+    attempted = SiluAndMulConditional(allow_kernel=True)
+
+    # Only the instance for which the condition holds is kernelized.
+    kernelize(skipped, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+    with pytest.raises(ValueError, match="No layer mapping for `SiluAndMulNonExisting`"):
+        kernelize(attempted, device="cuda", mode=Mode.INFERENCE, use_fallback=False)
+
+
+def test_kernel_condition_defaults_to_true():
+    # Without an explicit condition, kernelization is never skipped. Accessing
+    # the condition through an instance must not bind it as a method.
+    silu_and_mul = SiluAndMulWithKernel()
+    assert SiluAndMulWithKernel.kernel_condition(silu_and_mul)
+    assert silu_and_mul.kernel_condition(silu_and_mul)
 
 
 def test_local_layer_repo(device):
@@ -553,6 +714,63 @@ def test_layer_repository_requires_version_or_revision():
         LayerRepository(repo_id="kernels-test/silu-and-mul", layer_name="SiluAndMul")
 
 
+@pytest.mark.parametrize("user_agent", [None, "transformers/5.0.0", {"transformers": "5.0.0"}])
+def test_layer_repository_forwards_user_agent(monkeypatch, user_agent):
+    calls = []
+
+    def get_kernel(repo_id, **kwargs):
+        calls.append((repo_id, kwargs))
+        return SimpleNamespace(layers=SimpleNamespace(SiluAndMul=SiluAndMul))
+
+    monkeypatch.setattr("kernels.layer.layer.get_kernel", get_kernel)
+    repo = LayerRepository(
+        repo_id="kernels-test/silu-and-mul",
+        layer_name="SiluAndMul",
+        revision="main",
+        user_agent=user_agent,
+    )
+
+    assert repo.load() is SiluAndMul
+    assert calls == [
+        (
+            "kernels-test/silu-and-mul",
+            {
+                "revision": "main",
+                "version": None,
+                "trust_remote_code": False,
+                "user_agent": user_agent,
+            },
+        )
+    ]
+
+
+def test_layer_repository_with_trust_remote_code_allowlist_is_hashable():
+    allowlist = ["untrusted-org/allowed-kernel"]
+    repo = LayerRepository(
+        repo_id="untrusted-org/allowed-kernel",
+        layer_name="SiluAndMul",
+        revision="main",
+        trust_remote_code=allowlist,
+    )
+
+    original_hash = hash(repo)
+    allowlist.append("untrusted-org/another-kernel")
+
+    assert hash(repo) == original_hash
+
+
+def test_layer_repository_trust_remote_code_allowlist_blocks_unlisted():
+    repo = LayerRepository(
+        repo_id="kernels-test-untrusted/not-a-trused-org-kernel",
+        layer_name="SiluAndMul",
+        revision="main",
+        trust_remote_code=["kernels-test-untrusted/ci-test-kernel"],
+    )
+
+    with pytest.raises(ValueError, match=r"not from a trusted publisher"):
+        repo.load()
+
+
 def test_validate_kernel_layer():
     class BadLayer(nn.Module):
         def __init__(self, *args, **kwargs):
@@ -560,7 +778,11 @@ def test_validate_kernel_layer():
             self.foo = 42
 
     def stub_repo(layer):
-        return LayerRepository(repo_id="kernels-test/nonexisting", layer_name=layer.__name__, revision="main")
+        return LayerRepository(
+            repo_id="kernels-test/nonexisting",
+            layer_name=layer.__name__,
+            revision="main",
+        )
 
     with pytest.raises(
         TypeError,
@@ -1203,3 +1425,151 @@ def test_local_overrides_layer(monkeypatch, local_kernel_path):
             f"kernels-test/silu-and-mul={str(local_kernel_path)}:kernels-test/non-existing2=/non/existing",
         )
         kernelize(model, device="cuda", mode=Mode.INFERENCE)
+
+
+class _KernelizedStub(nn.Module):
+    can_torch_compile = True
+    has_backward = True
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return input + 1
+
+
+@use_kernel_forward_from_hub("StubLayer")
+class StubLayer(nn.Module):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return input
+
+
+@use_kernel_forward_from_hub("StubFunc")
+def stub_func(input: torch.Tensor) -> torch.Tensor:
+    return input
+
+
+@use_kernelized_func(stub_func)
+class ModelUsingStubFunc(nn.Module):
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return stub_func(input)
+
+
+@pytest.fixture
+def stub_kernel(monkeypatch):
+    """Replace kernel loading by a stub layer, so that the tests run offline."""
+
+    def _get_layer_memoize(repo, module_class):
+        return _KernelizedStub
+
+    monkeypatch.setattr("kernels.layer.layer._get_layer_memoize", _get_layer_memoize)
+
+
+def _stub_repo(layer_name: str) -> LayerRepository:
+    return LayerRepository(repo_id="kernels-test/stub", layer_name=layer_name, version=1)
+
+
+def test_get_kernelized_layers(stub_kernel):
+    model = nn.Sequential(nn.Linear(4, 4), StubLayer(), nn.Sequential(StubLayer()))
+    repo = _stub_repo("StubLayer")
+
+    with use_kernel_mapping({"StubLayer": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    assert get_kernelized_layers(model) == KernelizedLayers(
+        layers={"1": KernelizedLayer(model[1], repo), "2.0": KernelizedLayer(model[2][0], repo)}
+    )
+
+
+def test_get_kernelized_layers_fallback(stub_kernel):
+    model = nn.Sequential(StubLayer())
+
+    # No mapping for the CPU, so the layer falls back to its original forward.
+    with use_kernel_mapping({"StubLayer": {"cuda": _stub_repo("StubLayer")}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    assert get_kernelized_layers(model) == KernelizedLayers()
+
+
+def test_get_kernelized_layers_cleared_on_rekernelize(stub_kernel):
+    repo = _stub_repo("StubLayer")
+    model = nn.Sequential(StubLayer())
+
+    with use_kernel_mapping({"StubLayer": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+    assert get_kernelized_layers(model) == KernelizedLayers(layers={"0": KernelizedLayer(model[0], repo)})
+
+    with use_kernel_mapping({}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+    assert get_kernelized_layers(model) == KernelizedLayers()
+
+
+def test_get_kernelized_layers_func(stub_kernel):
+    repo = _stub_repo("StubFunc")
+    model = nn.Sequential(ModelUsingStubFunc())
+
+    with use_kernel_mapping({"StubFunc": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    assert get_kernelized_layers(model) == KernelizedLayers(
+        funcs={("0", "StubFunc"): KernelizedFunc(model[0]._kernel_funcs["StubFunc"], repo)}
+    )
+
+
+def test_locked_repositories_are_picklable():
+    lockfile = Path(__file__).parent / "layer_locking" / "kernels.lock"
+    layer_repo = LockedLayerRepository("kernels-test/versions", layer_name="Version", lockfile=lockfile)
+    func_repo = LockedFuncRepository("kernels-test/versions", func_name="version", lockfile=lockfile)
+
+    for repo in (layer_repo, func_repo):
+        for restore in (copy.deepcopy, lambda repo: pickle.loads(pickle.dumps(repo))):
+            restored = restore(repo)
+            assert restored == repo
+            assert str(restored) == str(repo)
+
+
+def test_locked_repository_restores_rust_objects(tmp_path):
+    target = KernelDependency("kernels-test/target", KernelVersion.Version(3))
+    other_version = KernelDependency("kernels-test/other", KernelVersion.Version(1))
+    other_revision = KernelDependency("kernels-test/revision", KernelVersion.Revision("main"))
+    locks = KernelLocks(
+        {
+            other_version: KernelLock("a" * 40),
+            target: KernelLock("b" * 40),
+            other_revision: KernelLock("c" * 40),
+        }
+    )
+    lockfile = tmp_path / "kernels.lock"
+    lockfile.write_text(locks.to_json())
+
+    repo = LockedLayerRepository("kernels-test/target", layer_name="Layer", lockfile=lockfile)
+    restored = pickle.loads(pickle.dumps(repo))
+
+    assert restored.kernel_dep == target
+    assert restored.kernel_locks == locks
+    assert restored.kernel_locks[target] == KernelLock("b" * 40)
+
+
+def test_get_kernelized_layers_locked_repo_serialization(stub_kernel):
+    repo = LockedLayerRepository(
+        "kernels-test/versions",
+        layer_name="Version",
+        lockfile=Path(__file__).parent / "layer_locking" / "kernels.lock",
+    )
+    model = nn.Sequential(StubLayer())
+
+    with use_kernel_mapping({"StubLayer": {"cpu": repo}}, inherit_mapping=False):
+        model = kernelize(model, mode=Mode.INFERENCE, device="cpu")
+
+    for restore in (copy.deepcopy, lambda model: pickle.loads(pickle.dumps(model))):
+        restored = restore(model)
+        assert get_kernelized_layers(restored) == KernelizedLayers(layers={"0": KernelizedLayer(restored[0], repo)})
+
+    # The restored model must still report the original repository type.
+    assert isinstance(get_kernelized_layers(pickle.loads(pickle.dumps(model))).layers["0"].repo, LockedLayerRepository)
+
+
+@pytest.mark.cuda_only
+def test_get_kernelized_layers_hub():
+    model = kernelize(SiluAndMulWithKernel(), device="cuda", mode=Mode.INFERENCE)
+
+    assert get_kernelized_layers(model) == KernelizedLayers(
+        layers={"": KernelizedLayer(model, kernel_layer_mapping["SiluAndMul"][Device(type="cuda")])},
+    )

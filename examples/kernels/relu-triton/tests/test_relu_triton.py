@@ -1,7 +1,9 @@
+import kernels
 import pytest
-import relu_triton
 import torch
 import torch.nn.functional as F
+
+relu_triton = kernels.get_kernel("kernels-test/relu-triton", version=1)
 
 
 @pytest.mark.kernels_ci

@@ -13,6 +13,10 @@
   cudaPackages,
   cuda-python,
   numpy,
+  nvidia-cuda-nvdisasm,
+  nvidia-cutlass-dsl-libs-core,
+  nvidia-cutlass-dsl-libs-cu,
+  protobuf6,
   typing-extensions,
 }:
 
@@ -20,10 +24,10 @@ let
   format = "wheel";
   pyShortVersion = "cp" + builtins.replaceStrings [ "." ] [ "" ] python.pythonVersion;
   hashes = {
-    cp313-x86_64-linux-cu12 = "sha256-jliwFtpbsJvR2AnQwCVDPts2snmt+80QfpY2GyFL2Lw=";
-    cp313-aarch64-linux-cu12 = "sha256-kKTYAqA5Y/o26yh/vJtAoTdFkPx+jMG5Zz3uiHL3VxM=";
-    cp313-x86_64-linux-cu13 = "sha256-VUt3UGnQk/MIlJpliAv5yb/Uix9LL9Dg2Xqi9gjm7qE=";
-    cp313-aarch64-linux-cu13 = "sha256-8rghZxrdLmmhN35/2H5iYZldsoGy+OUW3a4v1remwdA=";
+    cp314-x86_64-linux-cu12 = "sha256-J0Yf9SM4KAtsAkdfh4USc7WhHDh9nao4M3YiWj92fMI=";
+    cp314-aarch64-linux-cu12 = "sha256-loFa+YsZuARYAv2LClPV4Zfg07zkLHA44oYa98hIP10=";
+    cp314-x86_64-linux-cu13 = "sha256-J0Yf9SM4KAtsAkdfh4USc7WhHDh9nao4M3YiWj92fMI=";
+    cp314-aarch64-linux-cu13 = "sha256-loFa+YsZuARYAv2LClPV4Zfg07zkLHA44oYa98hIP10=";
   };
   hash =
     hashes."${pyShortVersion}-${stdenv.system}-cu${cudaPackages.cudaMajorVersion}"
@@ -32,15 +36,11 @@ let
 in
 buildPythonPackage rec {
   pname = "nvidia-cutlass-dsl-libs";
-  version = "4.5.0";
+  version = "4.6.1";
   inherit format;
 
   src = fetchPypi {
-    pname =
-      if cudaPackages.cudaAtLeast "13.0" then
-        "nvidia_cutlass_dsl_libs_cu13"
-      else
-        "nvidia_cutlass_dsl_libs_base";
+    pname = "nvidia_cutlass_dsl_libs_base";
     python = pyShortVersion;
     abi = pyShortVersion;
     dist = pyShortVersion;
@@ -49,8 +49,10 @@ buildPythonPackage rec {
   };
 
   nativeBuildInputs = [
-    autoAddDriverRunpath
+    # autoAddDriverRunpath must come after autoPatchelfHook, because
+    # autoPatchelf rewrites the runpath and would drop the driver path.
     autoPatchelfHook
+    autoAddDriverRunpath
     pythonRelaxWheelDepsHook
     pythonWheelDepsCheckHook
   ];
@@ -58,6 +60,10 @@ buildPythonPackage rec {
   dependencies = [
     cuda-python
     numpy
+    nvidia-cuda-nvdisasm
+    nvidia-cutlass-dsl-libs-core
+    nvidia-cutlass-dsl-libs-cu
+    protobuf6
     typing-extensions
   ];
 

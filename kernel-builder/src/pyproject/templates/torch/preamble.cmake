@@ -14,7 +14,7 @@ if(ICX_COMPILER OR ICPX_COMPILER)
   endif()
 endif()
 
-project({{name}} LANGUAGES CXX)
+project({{python_name}} LANGUAGES CXX)
 
 install(CODE "set(CMAKE_INSTALL_LOCAL_ONLY TRUE)" ALL_COMPONENTS)
 
@@ -22,12 +22,13 @@ include(FetchContent)
 file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
 message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
-set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201")
+set(HIP_SUPPORTED_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201")
 
 # Make Torch CMake machinery happy. Whatever we use does not matter, since
 # we set the arches per-file later anyway.
 set(ENV{PYTORCH_ROCM_ARCH} "${HIP_SUPPORTED_ARCHS}")
 
+include(CheckCXXCompilerFlag)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/get_gpu_lang.cmake)
@@ -77,19 +78,17 @@ set(_STABLE_ABI_VERSION_{{ entry.backend }} "{{ entry.version }}")
 {% endfor %}
 set(_STABLE_ABI_VERSION "${_STABLE_ABI_VERSION_${BACKEND}}")
 
-if(_STABLE_ABI_VERSION)
-  if (TORCH_VERSION VERSION_LESS ${_STABLE_ABI_VERSION})
-    message(FATAL_ERROR "Torch version ${TORCH_VERSION} is less than the stable ABI "
-      "version ${_STABLE_ABI_VERSION}. Cannot build with stable ABI targeting a newer version of Torch.")
-  endif()
-
+if(_STABLE_ABI_VERSION AND TORCH_VERSION VERSION_GREATER_EQUAL "${_STABLE_ABI_VERSION}")
+  message("Building for the Torch stable ABI. ABI version: ${_STABLE_ABI_VERSION}, Torch version: ${TORCH_VERSION}")
   # From the Torch docs: TORCH_TARGET_VERSION (((0ULL + major) << 56) | ((0ULL + minor) << 48))
   string(REPLACE "." ";" _STABLE_ABI_VERSION_LIST "${_STABLE_ABI_VERSION}")
   list(GET _STABLE_ABI_VERSION_LIST 0 _STABLE_ABI_MAJOR)
   list(GET _STABLE_ABI_VERSION_LIST 1 _STABLE_ABI_MINOR)
   math(EXPR _STABLE_ABI_HEX "(${_STABLE_ABI_MAJOR} << 56) | (${_STABLE_ABI_MINOR} << 48)" OUTPUT_FORMAT HEXADECIMAL)
-
   add_compile_definitions(-DTORCH_TARGET_VERSION=${_STABLE_ABI_HEX})
+else()
+  message("Not building for the Torch stable ABI. ABI version: ${_STABLE_ABI_VERSION}, Torch version: ${TORCH_VERSION}")
+  unset(_STABLE_ABI_VERSION)
 endif()
 {% endif %}
 
@@ -97,7 +96,10 @@ option(BUILD_ALL_SUPPORTED_ARCHS "Build all supported architectures" off)
 
 if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
- set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0;12.1+PTX")
+ set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.3;11.0;12.0;12.1+PTX")
+elseif(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
+   CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9)
+ set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;10.3;12.0;12.1+PTX")
 elseif(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
    CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
  set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;12.0+PTX")
@@ -130,7 +132,7 @@ if(GPU_LANG STREQUAL "CUDA")
   clear_gencode_flags()
 
   # Get the capabilities without +PTX suffixes, so that we can use them as
-  # the target archs in the loose intersection with a kernel's capabilities.
+  # the target archs in the intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
   message(STATUS "CUDA base archs used for intersection with kernel archs: ${CUDA_ARCHS}")
 
@@ -204,8 +206,55 @@ elseif(GPU_LANG STREQUAL "SYCL")
   endif()
 
 
-  set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
-  set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  # --- SYCL fat-binary flags ------------------------------------------------
+  # One .so carries an AOT image per GPU in SYCL_AOT_DEVICES plus a spir64 JIT
+  # fallback; the runtime picks the matching image at load time.
+  # These variables are the single source of truth: a dependency may change them
+  # and call xpu_compose_sycl_flags() again to rebuild the flags.
+  set(SYCL_OFFLOAD_TARGETS "spir64_gen,spir64")
+  set(SYCL_AOT_DEVICES "pvc,xe-lpg,ats-m150")
+  set(SYCL_AOT_BACKEND_OPTIONS " -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required")
+  set(SYCL_SPIRV_EXT "")
+
+  # Rebuild sycl_flags (compile) and sycl_link_flags (link) from the variables
+  # above. A macro so it runs in the including scope and can be re-invoked.
+  #
+  # -foffload-fp32-prec-* keeps fp32 division and sqrt IEEE correctly rounded,
+  # matching PyTorch; both the compile and the link step need them.
+  macro(xpu_compose_sycl_flags)
+    set(sycl_flags
+      "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    set(sycl_link_flags
+      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    # Backend options reach one target each: spir64_gen takes -device, the
+    # intel_gpu_* aliases imply theirs. SHELL: stops CMake from deduplicating
+    # the identical -options and silently dropping all but the first target.
+    string(REPLACE "," ";" _sycl_aot_targets "${SYCL_OFFLOAD_TARGETS}")
+    foreach(_tgt IN LISTS _sycl_aot_targets)
+      if(_tgt STREQUAL "spir64_gen")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=spir64_gen \"-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      elseif(_tgt MATCHES "^intel_gpu_")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=${_tgt} \"-options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      endif()
+    endforeach()
+
+    # SYCL_SPIRV_EXT must be a COMPLETE list (translator replaces, not merges).
+    # A custom -spirv-ext only reaches an image whose triple matches the exact
+    # fsycl-targets alias, so emit one -Xspirv-translator=<alias> per target.
+    if(SYCL_SPIRV_EXT)
+      string(REPLACE "," ";" _sycl_ext_targets "${SYCL_OFFLOAD_TARGETS}")
+      foreach(_tgt IN LISTS _sycl_ext_targets)
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xspirv-translator=${_tgt} -spirv-ext=${SYCL_SPIRV_EXT}")
+      endforeach()
+    endif()
+  endmacro()
+
+  xpu_compose_sycl_flags()
   set(GPU_FLAGS "${sycl_flags}")
 
 
@@ -230,7 +279,7 @@ endif()
 if(GPU_LANG STREQUAL "CUDA")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "cuda" "${CUDA_VERSION}" ${_STABLE_ABI_ARG})
 elseif(GPU_LANG STREQUAL "HIP")
-  run_python(ROCM_VERSION "import torch.version; print(torch.version.hip.split('.')[0] + '.' + torch.version.hip.split('.')[1])" "Failed to get ROCm version")
+  run_python(ROCM_VERSION "import torch.version; v = getattr(torch.version, 'rocm', None) or torch.version.hip; print(v.split('.')[0] + '.' + v.split('.')[1])" "Failed to get ROCm version")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "rocm" "${ROCM_VERSION}" ${_STABLE_ABI_ARG})
 elseif(GPU_LANG STREQUAL "SYCL")
   generate_build_name(BUILD_VARIANT_NAME "${TORCH_VERSION}" "xpu" "${DPCPP_VERSION}" ${_STABLE_ABI_ARG})

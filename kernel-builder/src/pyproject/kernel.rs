@@ -2,7 +2,7 @@ use std::io::Write;
 
 use eyre::{Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Build, Kernel};
+use kernels_common::config::{Build, Kernel};
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::prefix_and_join_includes;
@@ -34,22 +34,47 @@ fn render_kernel_component(
         .join("\n");
 
     match kernel {
-        Kernel::Cpu { .. } => {
+        Kernel::CppCpu { .. } => {
             render_kernel_component_cpu(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Cuda { .. } => {
+        Kernel::RustCpu { cargo_manifest, .. } => {
+            render_kernel_component_rust(env, kernel_name, cargo_manifest, write)?
+        }
+        Kernel::CppCuda { .. } => {
             render_kernel_component_cuda(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Rocm { .. } => {
+        Kernel::CppRocm { .. } => {
             render_kernel_component_hip(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Metal { .. } => {
+        Kernel::CppMetal { .. } => {
             render_kernel_component_metal(env, kernel_name, kernel, sources, write)?
         }
-        Kernel::Xpu { .. } => {
+        Kernel::CppXpu { .. } => {
             render_kernel_component_xpu(env, kernel_name, kernel, sources, write)?
         }
     }
+
+    Ok(())
+}
+
+fn render_kernel_component_rust(
+    env: &Environment,
+    kernel_name: &str,
+    cargo_manifest: &str,
+    write: &mut impl Write,
+) -> Result<()> {
+    env.get_template("kernel-component/rust-cpu.cmake")
+        .wrap_err("Cannot get kernel template")?
+        .render_captured_to(
+            context! {
+                manifest_path => cargo_manifest,
+                name => kernel_name,
+            },
+            &mut *write,
+        )
+        .wrap_err("Cannot render kernel template")?;
+
+    write.write_all(b"\n")?;
 
     Ok(())
 }
@@ -87,7 +112,7 @@ fn render_kernel_component_cuda(
     write: &mut impl Write,
 ) -> Result<()> {
     let (cuda_capabilities, cuda_flags, cuda_minver) = match kernel {
-        Kernel::Cuda {
+        Kernel::CppCuda {
             cuda_capabilities,
             cuda_flags,
             cuda_minver,
@@ -130,7 +155,7 @@ fn render_kernel_component_hip(
     write: &mut impl Write,
 ) -> Result<()> {
     let (rocm_archs, hip_flags) = match kernel {
-        Kernel::Rocm {
+        Kernel::CppRocm {
             rocm_archs,
             hip_flags,
             ..
@@ -191,7 +216,7 @@ fn render_kernel_component_xpu(
     write: &mut impl Write,
 ) -> Result<()> {
     let sycl_flags = match kernel {
-        Kernel::Xpu { sycl_flags, .. } => sycl_flags.as_deref(),
+        Kernel::CppXpu { sycl_flags, .. } => sycl_flags.as_deref(),
         _ => unreachable!("Unsupported kernel type for XPU rendering"),
     };
 

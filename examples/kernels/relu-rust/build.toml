@@ -1,0 +1,17 @@
+[general]
+name = "relu-rust"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = ["cpu"]
+
+[general.hub]
+repo-id = "kernels-test/relu-rust"
+
+[tvm-ffi]
+
+[kernel.relu_rust]
+language = "rust-cpu"
+cargo-manifest = "relu-rs/Cargo.toml"
+depends = []
+src = ["relu-rs/src/lib.rs", "Cargo.toml"]

@@ -81,11 +81,6 @@ class BuildKernel(build):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, dest)
 
-        # Copy compat module.
-        module_dir: Path = variant_dir / module_name
-        module_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(project_root / "compat.py", module_dir / "__init__.py")
-
         # Copy metadata.
         metadata_file: Path = project_root / f"metadata-{backend}.json"
         if not metadata_file.exists():

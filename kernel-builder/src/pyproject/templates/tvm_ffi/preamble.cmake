@@ -22,8 +22,14 @@ include(FetchContent)
 file(MAKE_DIRECTORY ${FETCHCONTENT_BASE_DIR}) # Ensure the directory exists
 message(STATUS "FetchContent base directory: ${FETCHCONTENT_BASE_DIR}")
 
+include(CheckCXXCompilerFlag)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/kernel.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/rust.cmake)
+
+# Not REQUIRED: only kernels with Rust components need cargo, and
+# rust_kernel_component errors out if it is missing.
+find_program(CARGO_EXECUTABLE cargo)
 
 if(NOT DEFINED GPU_LANG)
     if(ICX_COMPILER OR ICPX_COMPILER)
@@ -34,7 +40,12 @@ if(NOT DEFINED GPU_LANG)
         if(CMAKE_CUDA_COMPILER)
             set(DETECTED_GPU_LANG "CUDA")
         else()
-            set(DETECTED_GPU_LANG "CPU")
+            check_language(HIP)
+            if(CMAKE_HIP_COMPILER)
+                set(DETECTED_GPU_LANG "HIP")
+            else()
+                set(DETECTED_GPU_LANG "CPU")
+            endif()
         endif()
     endif()
 
@@ -76,7 +87,10 @@ if(GPU_LANG STREQUAL "CUDA")
 
   if(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
       CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
-    set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0;12.1+PTX")
+    set(CUDA_DEFAULT_KERNEL_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.3;11.0;12.0;12.1+PTX")
+  elseif(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
+      CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9)
+    set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;10.3;12.0;12.1+PTX")
   elseif(DEFINED CMAKE_CUDA_COMPILER_VERSION AND
       CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
     set(CUDA_DEFAULT_KERNEL_ARCHS "7.0;7.2;7.5;8.0;8.6;8.7;8.9;9.0;10.0;10.1;12.0+PTX")
@@ -88,7 +102,7 @@ if(GPU_LANG STREQUAL "CUDA")
   set(CMAKE_CUDA_ARCHITECTURES OFF)
 
   # Get the capabilities without +PTX suffixes, so that we can use them as
-  # the target archs in the loose intersection with a kernel's capabilities.
+  # the target archs in the intersection with a kernel's capabilities.
   cuda_remove_ptx_suffixes(CUDA_ARCHS "${CUDA_DEFAULT_KERNEL_ARCHS}")
   message(STATUS "CUDA base archs used for intersection with kernel archs: ${CUDA_ARCHS}")
 
@@ -111,6 +125,23 @@ if(GPU_LANG STREQUAL "CUDA")
   endif()
 
   add_compile_definitions(CUDA_KERNEL)
+elseif(GPU_LANG STREQUAL "HIP")
+  enable_language(HIP)
+
+  find_package(hip REQUIRED)
+  find_package(rocm-core CONFIG QUIET)
+  if(rocm-core_FOUND)
+    set(ROCM_VERSION "${rocm-core_VERSION_MAJOR}.${rocm-core_VERSION_MINOR}")
+  else()
+    set(ROCM_VERSION "${hip_VERSION_MAJOR}.${hip_VERSION_MINOR}")
+  endif()
+  message(STATUS "Found ROCm version: ${ROCM_VERSION}")
+
+  set(ROCM_ARCHS "gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1103;gfx1150;gfx1151;gfx1200;gfx1201")
+  message(STATUS "ROCm supported target architectures: ${ROCM_ARCHS}")
+
+  add_compile_definitions(USE_ROCM=1)
+  add_compile_definitions(ROCM_KERNEL)
 elseif(GPU_LANG STREQUAL "CPU")
   add_compile_definitions(CPU_KERNEL)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
@@ -135,8 +166,56 @@ elseif(GPU_LANG STREQUAL "SYCL")
     message(STATUS "Using Intel SYCL C++ compiler: ${ICPX_COMPILER} and C compiler: ${ICX_COMPILER} Version: ${DPCPP_VERSION}")
   endif()
 
-  set(sycl_link_flags "-Wl,-z,noexecstack;-fsycl;--offload-compress;-fsycl-targets=spir64_gen,spir64;-Xs;-device pvc,xe-lpg,ats-m150 -options ' -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required';")
-  set(sycl_flags "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=spir64_gen,spir64;")
+  # --- SYCL fat-binary flags ------------------------------------------------
+  # One .so carries an AOT image per GPU in SYCL_AOT_DEVICES plus a spir64 JIT
+  # fallback; the runtime picks the matching image at load time.
+  # These variables are the single source of truth: a dependency may change them
+  # and call xpu_compose_sycl_flags() again to rebuild the flags.
+  set(SYCL_OFFLOAD_TARGETS "spir64_gen,spir64")
+  set(SYCL_AOT_DEVICES "pvc,xe-lpg,ats-m150")
+  set(SYCL_AOT_BACKEND_OPTIONS " -cl-intel-enable-auto-large-GRF-mode -cl-poison-unsupported-fp64-kernels -cl-intel-greater-than-4GB-buffer-required")
+  set(SYCL_SPIRV_EXT "")
+
+  # Rebuild sycl_flags (compile) and sycl_link_flags (link) from the variables
+  # above. A macro so it runs in the including scope and can be re-invoked.
+  #
+  # -foffload-fp32-prec-* keeps fp32 division and sqrt IEEE correctly rounded,
+  # matching PyTorch; both the compile and the link step need them.
+  macro(xpu_compose_sycl_flags)
+    set(sycl_flags
+      "-fPIC;-fsycl;-fhonor-nans;-fhonor-infinities;-fno-associative-math;-fno-approx-func;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fno-sycl-instrument-device-code;--offload-compress;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    # spir64_gen bakes the per-device AOT images; -device selects the GPUs.
+    set(sycl_link_flags
+      "-Wl,-z,noexecstack;-fsycl;--offload-compress;-foffload-fp32-prec-div;-foffload-fp32-prec-sqrt;-fsycl-targets=${SYCL_OFFLOAD_TARGETS}")
+
+    # Backend options reach one target each: spir64_gen takes -device, the
+    # intel_gpu_* aliases imply theirs. SHELL: stops CMake from deduplicating
+    # the identical -options and silently dropping all but the first target.
+    string(REPLACE "," ";" _sycl_aot_targets "${SYCL_OFFLOAD_TARGETS}")
+    foreach(_tgt IN LISTS _sycl_aot_targets)
+      if(_tgt STREQUAL "spir64_gen")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=spir64_gen \"-device ${SYCL_AOT_DEVICES} -options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      elseif(_tgt MATCHES "^intel_gpu_")
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xsycl-target-backend=${_tgt} \"-options '${SYCL_AOT_BACKEND_OPTIONS}'\"")
+      endif()
+    endforeach()
+
+    # SYCL_SPIRV_EXT must be a COMPLETE list (translator replaces, not merges).
+    # A custom -spirv-ext only reaches an image whose triple matches the exact
+    # fsycl-targets alias, so emit one -Xspirv-translator=<alias> per target.
+    if(SYCL_SPIRV_EXT)
+      string(REPLACE "," ";" _sycl_ext_targets "${SYCL_OFFLOAD_TARGETS}")
+      foreach(_tgt IN LISTS _sycl_ext_targets)
+        string(APPEND sycl_link_flags
+          ";SHELL:-Xspirv-translator=${_tgt} -spirv-ext=${SYCL_SPIRV_EXT}")
+      endforeach()
+    endif()
+  endmacro()
+
+  xpu_compose_sycl_flags()
   set(GPU_FLAGS "${sycl_flags}")
 
   add_compile_definitions(XPU_KERNEL)

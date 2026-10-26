@@ -1,4 +1,4 @@
-import warnings
+import logging
 from dataclasses import dataclass
 from typing import Union
 
@@ -8,6 +8,8 @@ from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import EntryNotFoundError
 
 from kernels.compat import tomllib
+
+logger = logging.getLogger(__name__)
 
 
 @strict
@@ -71,11 +73,7 @@ def resolve_status(api: HfApi, repo_id: str, revision: str) -> tuple[str, str]:
 
     # In the case of a redirect, return the destination repo and revision
     if isinstance(status, Redirect):
-        warnings.warn(
-            f"'{repo_id}' redirected to '{status.destination}'",
-            UserWarning,
-            stacklevel=2,
-        )
+        logger.warning(f"'{repo_id}' redirected to '{status.destination}'", stacklevel=2)
         return status.destination, status.revision
 
     return repo_id, revision

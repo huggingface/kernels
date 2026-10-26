@@ -10,15 +10,46 @@ final: prev:
   # Local packages/hooks.
   kernel-builder = final.callPackage ./pkgs/kernel-builder { inherit builderProvenance; };
 
+  kernel-port = final.callPackage ./pkgs/kernel-port { };
+
   cmakeNvccThreadsHook = final.callPackage ./pkgs/cmake-nvcc-threads-hook { };
+
+  fetchFromHuggingFace = final.callPackage ./pkgs/fetch-from-huggingface { };
+
+  fetchKernelDeps = final.callPackage ./pkgs/fetch-kernel-deps { };
+
+  generate-symbols = final.python3.pkgs.callPackage ./pkgs/generate-symbols { };
+
+  generate-symbols-hook = final.callPackage ./pkgs/generate-symbols/hook.nix { };
 
   get-kernel-check = final.callPackage ./pkgs/get-kernel-check { };
 
   hash-kernel-hook = final.callPackage ./pkgs/hash-kernel-hook { };
 
+  hash-rust = final.callPackage ./pkgs/hash-rust { };
+
   kernel-layout-check = final.callPackage ./pkgs/kernel-layout-check { };
 
+  # The same Cargo.lock is used by kernel-builder and the kernels Python
+  # package. Evaluate Cargo.lock only once and use it in both packages.
+  kernelsCargoDeps = final.rustPlatform.importCargoLock {
+    lockFile = ../Cargo.lock;
+    outputHashes = {
+      "hf-hub-1.1.0" = "sha256-wClUTCmphrO4QM+IYwYrNxyvDp8qBGAPdP+Wca8TgRA=";
+    };
+  };
+
+  lock-kernel-deps = final.callPackage ./pkgs/lock-kernel-deps { };
+
+  # Make the source for a package from our cargo workspace.
+  mkKernelsRustSrc = final.callPackage ./pkgs/mk-kernels-rust-src { };
+
   nvtx = final.callPackage ./pkgs/nvtx { };
+
+  # pandoc is used by a lot of packages to convert docs. However, evaluating
+  # pandoc evaluates a lot of pacakges in the Haskell package set. Avoid this
+  # by grabbing a binary for pandoc instead.
+  pandoc = final.callPackage ./pkgs/pandoc-bin { };
 
   metal-cpp = final.callPackage ./pkgs/metal-cpp { };
 
@@ -27,6 +58,22 @@ final: prev:
   remove-bytecode-hook = final.callPackage ./pkgs/remove-bytecode-hook { };
 
   torch-ops-check = final.callPackage ./pkgs/torch-ops-check { };
+
+  torch-stable-abi-shim = final.callPackage ./pkgs/torch-stable-abi-shim { };
+
+  # Temporary: revert patchelf 0.15.2 -> 0.19.2 (NixOS/nixpkgs#569010), which
+  # causes segfaults (e.g. cc1plus) in binaries patched by autoPatchelfHook.
+  # Remove once nixpkgs ships a fixed patchelf. Can possibly be removed once
+  # https://github.com/NixOS/patchelf/pull/672 propagates to the channels.
+  patchelf-old =
+    (prev.patchelf.override (old: {
+      fetchurl =
+        args: old.fetchurl (args // { hash = "sha256-F3RfVkFZyOIo/EEtplogSLhGxLa0Igt3y/IkFuAvLXw="; });
+    })).overrideAttrs
+      {
+        version = "0.15.2";
+        __intentionallyOverridingVersion = true;
+      };
 
   ruff = prev.ruff.overrideAttrs (
     finalAttrs: prevAttrs: {
@@ -74,22 +121,33 @@ final: prev:
       in
       {
         inherit (triton)
-          triton_3_5_0
           triton_3_6_0
           triton_3_7_0
           triton_3_7_1
+          triton_3_8_0
+          triton_3_9_0
           ;
-        inherit (triton-rocm) triton-rocm_3_6_0 triton-rocm_3_7_0;
+        inherit (triton-rocm)
+          triton-rocm_3_6_0
+          triton-rocm_3_7_0
+          triton-rocm_3_7_1
+          triton-rocm_3_8_0
+          triton-rocm_3_9_0
+          ;
         inherit (triton-xpu)
           triton-xpu_3_6_0
           triton-xpu_3_7_0
           triton-xpu_3_7_1
           triton-xpu_3_7_2
+          triton-xpu_3_8_0
+          triton-xpu_3_9_0
           ;
 
         cuda-bindings = python-self.callPackage ./pkgs/python-modules/cuda-bindings { };
 
         cuda-pathfinder = python-self.callPackage ./pkgs/python-modules/cuda-pathfinder { };
+
+        cupti-python = python-self.callPackage ./pkgs/python-modules/cupti-python { };
 
         # Starting with the CUDA 12.8 version, cuda-python is a metapackage
         # that pulls in relevant dependencies. For CUDA 12.6 it is just
@@ -101,20 +159,12 @@ final: prev:
             python-self.callPackage ./pkgs/python-modules/cuda-python { };
 
         huggingface-hub = python-super.huggingface-hub.overridePythonAttrs (prevAttrs: rec {
-          version = "1.11.0";
+          version = "1.32.0";
           src = python-super.fetchPypi {
             pname = "huggingface_hub";
             inherit version;
-            hash = "sha256-Ffs3E8f5zf97gIqU/ZFmT2YasUJ5a7SMnNlJPo0WYng=";
+            hash = "sha256-7XCkVJir6GA533wvTl91dd5SS+kI04QOj4KNVSXq/Wo=";
           };
-          dependencies =
-            (prevAttrs.dependencies or [ ])
-            ++ (with python-self; [
-              hf-xet
-              httpx
-              shellingham
-              typer
-            ]);
           # Skip tests since they require network access.
           doCheck = false;
         });
@@ -127,12 +177,12 @@ final: prev:
         );
 
         hf-xet = python-super.hf-xet.overridePythonAttrs (prevAttrs: rec {
-          version = "1.4.3";
+          version = "1.6.0";
           src = final.fetchFromGitHub {
             owner = "huggingface";
             repo = "xet-core";
             tag = "v${version}";
-            hash = "sha256-zAliMR2d2j6ynHQmAljQ8XgDyjuPxNawI1bZks5aRgs=";
+            hash = "sha256-SP6Z8iIkrt3FVXxXYdvjeiIAfcrVlfCPQq6C36DfhEM=";
           };
           cargoDeps = final.rustPlatform.fetchCargoVendor {
             inherit (prevAttrs)
@@ -143,9 +193,11 @@ final: prev:
               version
               src
               ;
-            hash = "sha256-TOgBT0l7TvJamVdIAdAUFRWs8AMRRY+Ydoh6e+3dEp0=";
+            hash = "sha256-pvtq9mKlmwaqAq281Lin/UgVGcRe2SEvyzCa+xWSwVQ=";
           };
         });
+
+        hipify-torch = python-self.callPackage ./pkgs/python-modules/hipify-torch { };
 
         helion = python-super.helion.overrideAttrs (
           _: prevAttrs: {
@@ -165,6 +217,8 @@ final: prev:
 
         jax-tvm-ffi = python-self.callPackage ./pkgs/python-modules/jax-tvm-ffi { };
 
+        libtpu = python-self.callPackage ./pkgs/python-modules/libtpu { };
+
         jupyter-server = python-super.jupyter-server.overrideAttrs (
           _: prevAttrs: {
             # Gets stuck sometimes, already tested in nixpkgs.
@@ -172,17 +226,34 @@ final: prev:
           }
         );
 
+        nvidia-cuda-nvdisasm = python-self.callPackage ./pkgs/python-modules/nvidia-cuda-nvdisasm { };
+
         nvidia-cutlass-dsl = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl { };
 
         nvidia-cutlass-dsl-libs = python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs { };
 
-        kernels = callPackage ./pkgs/python-modules/kernels { };
+        nvidia-cutlass-dsl-libs-core =
+          python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs-core
+            { };
 
-        kernels-data = callPackage ./pkgs/python-modules/kernels-data { };
+        nvidia-cutlass-dsl-libs-cu =
+          python-self.callPackage ./pkgs/python-modules/nvidia-cutlass-dsl-libs-cu
+            { };
+
+        kernels = callPackage ./pkgs/python-modules/kernels { };
 
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
+
+        opentelemetry-instrumentation-requests =
+          python-super.opentelemetry-instrumentation-requests.overrideAttrs
+            (
+              _: prevAttrs: {
+                # Fails on Darwin builder, already tested in nixpkgs.
+                dontUsePytestCheck = true;
+              }
+            );
 
         pyzes = callPackage ./pkgs/python-modules/pyzes { };
 
@@ -194,14 +265,12 @@ final: prev:
           }
         );
 
-        # Remove once sglang moves to a newer Torch version.
-        torch-bin_2_9 = mkTorch {
-          version = "2.9";
-          triton-cuda = triton_3_5_0;
-          triton-rocm = null;
-          triton-xpu = null;
-          # Not supported anymore.
-          xpuPackages = null;
+        torch-bin_2_10 = mkTorch {
+          version = "2.10";
+          triton-cuda = triton_3_6_0;
+          triton-rocm = triton-rocm_3_6_0;
+          triton-xpu = triton-xpu_3_6_0;
+          xpuPackages = final.xpuPackages_2025_3_1;
         };
 
         torch-bin_2_11 = mkTorch {
@@ -223,9 +292,25 @@ final: prev:
         torch-bin_2_13 = mkTorch {
           version = "2.13";
           triton-cuda = triton_3_7_1;
-          triton-rocm = triton-rocm_3_7_0;
+          triton-rocm = triton-rocm_3_7_1;
           triton-xpu = triton-xpu_3_7_2;
           xpuPackages = final.xpuPackages_2026_0_0;
+        };
+
+        torch-bin_2_14 = mkTorch {
+          version = "2.14";
+          triton-cuda = triton_3_8_0;
+          triton-rocm = triton-rocm_3_8_0;
+          triton-xpu = triton-xpu_3_8_0;
+          xpuPackages = final.xpuPackages_2026_1_0;
+        };
+
+        torch-bin_2_15 = mkTorch {
+          version = "2.15";
+          triton-cuda = triton_3_9_0;
+          triton-rocm = triton-rocm_3_9_0;
+          triton-xpu = triton-xpu_3_9_0;
+          xpuPackages = final.xpuPackages_2026_1_2;
         };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {
@@ -248,9 +333,24 @@ final: prev:
     (import ./pkgs/python-modules/hooks)
   ];
 
-  xpuPackages = final.xpuPackages_2025_3_1;
+  xpuPackages = final.xpuPackages_2025_3_2;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
+// (
+  # libnvshmem builds are very slow. Use binraries instead.
+  let
+    inherit (prev) lib;
+    isCudaPackageSet = name: builtins.match "cudaPackages_[0-9]+_[0-9]+" name != null;
+  in
+  lib.mapAttrs (
+    _: cudaPackages:
+    cudaPackages.overrideScope (
+      finalScope: _: {
+        libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
+      }
+    )
+  ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)
+)
 // (
   let
     flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
@@ -269,43 +369,15 @@ final: prev:
     }) versions
   )
 )
-// (
-  let
-    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
-    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
-    versions = [
-      "7.0.2"
-      "7.1.1"
-      "7.2.1"
-    ];
-    newRocmPackages = final.callPackage ./pkgs/rocm-packages { };
-  in
-  builtins.listToAttrs (
-    map (version: {
-      name = "rocmPackages_${flattenVersion (prev.lib.versions.majorMinor version)}";
-      value = newRocmPackages {
-        packageMetadata = readPackageMetadata ./pkgs/rocm-packages/rocm-${version}-metadata.json;
-      };
-    }) versions
-  )
-)
-// (
-  let
-    flattenVersion = prev.lib.strings.replaceStrings [ "." ] [ "_" ];
-    readPackageMetadata = path: (builtins.fromJSON (builtins.readFile path));
-    xpuVersions = [
-      "2025.3.1"
-      "2025.3.2"
-      "2026.0.0"
-    ];
-    newXpuPackages = final.callPackage ./pkgs/xpu-packages { };
-  in
-  builtins.listToAttrs (
-    map (version: {
-      name = "xpuPackages_${flattenVersion version}";
-      value = newXpuPackages {
-        packageMetadata = readPackageMetadata ./pkgs/xpu-packages/intel-deep-learning-${version}.json;
-      };
-    }) xpuVersions
-  )
-)
+// (import ./pkgs/rocm-packages {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})
+// (import ./pkgs/rocm-packages-old {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})
+// (import ./pkgs/xpu-packages {
+  inherit (final) callPackage;
+  inherit (prev) lib;
+})

@@ -15,10 +15,17 @@
       inherit (kernel-builder.inputs.nixpkgs) lib;
 
       cudaVersion = "cu126";
+      cuda13Version = "cu132";
       rocmVersion = "rocm71";
-      xpuVersion = "xpu20253";
-      torchVersion = "211";
+      xpuVersion = "xpu20260";
+      torchVersion = "213";
       tvmFfiVersion = "01";
+
+      # Expected public symbols of the relu example kernels.
+      reluSymbols = {
+        functions = [ "relu" ];
+        layers = [ "ReLU" ];
+      };
 
       # All example kernels to build in CI.
       #
@@ -33,17 +40,21 @@
       # - checkCudaCapabilities: optional list of CUDA capabilities (e.g. "9.0").
       #        When set, the kernel dylib must contain exactly this set of
       #        capabilities.
+      # - checkSymbols: optional attrset `{ functions = [ ... ]; layers = [ ... ]; }`.
+      #        When set, every build variant must contain a symbols.json with
+      #        exactly these public function and layer names.
       ciKernels = [
         {
           name = "cpp20-symbols-kernel";
           path = ./cpp20-symbols;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
         }
+        # This test should check the capabilities of the oldest supported CUDA.
         {
           name = "relu-kernel";
           path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
+          checkSymbols = reluSymbols;
           checkCudaCapabilities = [
             "7.0"
             "7.2"
@@ -55,12 +66,31 @@
             "9.0"
           ];
         }
+        # This test should check the capabilities of the latest supported CUDA.
+        {
+          name = "relu-kernel-cu13";
+          path = ./relu;
+          drv =
+            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cuda13Version}-${sys}"};
+          checkCudaCapabilities = [
+            "7.5"
+            "8.0"
+            "8.6"
+            "8.7"
+            "8.9"
+            "9.0"
+            "10.0"
+            "10.3"
+            "11.0"
+            "12.0"
+            "12.1"
+          ];
+        }
         {
           # Check arch intersection. 5.0 is dropped because it is not supported.
           name = "relu-archs-subset";
           path = ./relu-archs-subset;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
           checkCudaCapabilities = [
             "7.5"
             "8.0"
@@ -70,15 +100,32 @@
         {
           name = "relu-torch-stable-abi-kernel";
           path = ./relu-torch-stable-abi;
-          drv =
-            sys: out:
-            out.packages.${sys}.redistributable.${"torch-stable-abi${torchVersion}-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${cudaVersion}-${sys}"};
+        }
+        {
+          # Exercise the shim with Torch 2.11 headers, which lack index_select.
+          name = "index-select-torch-stable-abi-kernel";
+          path = ./index-select-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi210-cu128-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+          checkSymbols = {
+            functions = [
+              "relu"
+              "relu_jax"
+            ];
+            layers = [ ];
+          };
         }
         {
           name = "relu-tvm-ffi-compiler-flags-kernel";
@@ -87,21 +134,14 @@
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
         }
         {
-          name = "extra-data";
-          path = ./extra-data;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
-        }
-        {
           name = "relu-kernel-cpu";
           path = ./relu;
-          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-cpu-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cpu-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-tvm-ffi-kernel";
@@ -112,8 +152,7 @@
         {
           name = "relu-backprop-compile-kernel";
           path = ./relu-backprop-compile;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "silu-and-mul-kernel";
@@ -127,8 +166,8 @@
           drv = sys: out: out.packages.${sys}.default;
           torchVersions = _defaultVersions: [
             {
-              torchVersion = "2.11";
-              cudaVersion = "12.8";
+              torchVersion = "2.13";
+              cudaVersion = "12.6";
               systems = [
                 "x86_64-linux"
                 "aarch64-linux"
@@ -140,14 +179,12 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
         }
         {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${cudaVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${cudaVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of capabilities" ];
         }
@@ -181,6 +218,16 @@
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
         }
+        {
+          name = "gemm-triton-autotune-kernel";
+          path = ./gemm-triton-autotune;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
+        }
+        {
+          name = "kernel-deps-kernel";
+          path = ./kernel-deps;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
+        }
       ];
 
       # ROCm kernels to build in CI.
@@ -191,18 +238,21 @@
           drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
         }
         {
+          name = "gemm-triton-autotune-kernel";
+          path = ./gemm-triton-autotune;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
+        }
+        {
           name = "relu-invalid-capability";
           path = ./relu-invalid-capability;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
           assertFail = true;
           assertFailLogs = [ "empty set of architectures" ];
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
           checkRocmArchs = [
             "gfx906"
             "gfx908"
@@ -212,6 +262,10 @@
             "gfx1030"
             "gfx1100"
             "gfx1101"
+            "gfx1102"
+            "gfx1103"
+            "gfx1150"
+            "gfx1151"
             "gfx1200"
             "gfx1201"
           ];
@@ -220,8 +274,7 @@
           # Check arch intersection. gfx940 is dropped because it is not supported.
           name = "relu-archs-subset";
           path = ./relu-archs-subset;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
           checkRocmArchs = [
             "gfx90a"
             "gfx942"
@@ -231,8 +284,24 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${rocmVersion}-${sys}"};
+        }
+        {
+          name = "relu-tvm-ffi-kernel";
+          path = ./relu-tvm-ffi;
           drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${rocmVersion}-${sys}"};
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${rocmVersion}-${sys}"};
+        }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${rocmVersion}-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-${rocmVersion}-${sys}"};
         }
       ];
 
@@ -270,18 +339,31 @@
           name = "relu-triton-kernel";
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
+          checkSymbols = reluSymbols;
+        }
+        {
+          name = "gemm-triton-autotune-kernel";
+          path = ./gemm-triton-autotune;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
         }
         {
           name = "relu-kernel";
           path = ./relu;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
+          checkSymbols = reluSymbols;
         }
         {
           name = "relu-tvm-ffi-kernel";
           path = ./relu-tvm-ffi;
           drv =
             sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${xpuVersion}-${sys}"};
+          checkSymbols = {
+            functions = [
+              "relu"
+              "relu_jax"
+            ];
+            layers = [ ];
+          };
         }
         {
           name = "relu-tvm-ffi-compiler-flags-kernel";
@@ -292,14 +374,32 @@
         {
           name = "relu-compiler-flags";
           path = ./relu-compiler-flags;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
         }
         {
           name = "cutlass-gemm-kernel";
           path = ./cutlass-gemm;
-          drv =
-            sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-cxx11-${xpuVersion}-${sys}"};
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-${xpuVersion}-${sys}"};
+        }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-${xpuVersion}-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-xpu20253-${sys}"};
+        }
+      ];
+
+      # TPU kernels to build in CI.
+      ciTpuKernels = [
+        {
+          name = "relu-tpu-kernel";
+          path = ./relu-tpu;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-tpu;
         }
       ];
 
@@ -309,6 +409,7 @@
           name = "relu-kernel";
           path = ./relu;
           drv = sys: out: out.packages.${sys}.redistributable.${"torch${torchVersion}-metal-${sys}"};
+          checkSymbols = reluSymbols;
         }
         {
           name = "relu-metal-cpp-kernel";
@@ -317,8 +418,77 @@
         }
       ];
 
+      # CPU kernels to build in CI.
+      ciCpuKernels = [
+        {
+          name = "relu-rust-kernel";
+          path = ./relu-rust;
+          drv =
+            sys: out:
+            let
+              variant = "tvm-ffi${tvmFfiVersion}-cpu-${sys}";
+              extension = out.packages.${sys}.redistributable.${variant};
+              ciTest = out.packages.${sys}.ciTests.${variant};
+              kernelPkgs = out.packages.${sys}.pkgs.${variant};
+            in
+            kernelPkgs.runCommand "relu-rust-kernel-test"
+              {
+                nativeBuildInputs = [ ciTest ];
+              }
+              ''
+                ${ciTest}/bin/ci-test
+                ln -s ${extension} $out
+              '';
+        }
+        {
+          # This test only requires a CPU, so let's run the test directly during the build.
+          name = "symbol-conflicts-pytest";
+          path = ./symbol-conflicts2;
+          drv =
+            sys: _out:
+            let
+              variant = "torch${torchVersion}-cpu-${sys}";
+              conflictsFlake = mkKernelOutputs { path = ./symbol-conflicts; };
+              conflicts2Flake = mkKernelOutputs { path = ./symbol-conflicts2; };
+              conflicts = conflictsFlake.packages.${sys}.redistributable.${variant};
+              conflicts2 = conflicts2Flake.packages.${sys}.redistributable.${variant};
+              kernelPkgs = conflictsFlake.packages.${sys}.pkgs.${variant};
+              testPython = kernelPkgs.python3.withPackages (
+                ps: with ps; [
+                  torch
+                  pytest
+                  kernels
+                ]
+              );
+            in
+            kernelPkgs.runCommand "symbol-conflicts-pytest"
+              {
+                nativeBuildInputs = [ testPython ];
+              }
+              ''
+                export HOME=$TMPDIR
+                export LOCAL_KERNELS="kernels-test/symbol-conflicts=${conflicts}:kernels-test/symbol-conflicts2=${conflicts2}"
+                python -m pytest ${conflicts2.src}/tests -m kernels_ci -p no:cacheprovider
+                touch $out
+              '';
+        }
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch-stable-abi211-cpu-${sys}"};
+        }
+        # Check that we can also build the non-stable ABI version preceding the stable ABI version.
+        {
+          name = "relu-torch-stable-abi-kernel";
+          path = ./relu-torch-stable-abi;
+          drv = sys: out: out.packages.${sys}.redistributable.${"torch210-cpu-${sys}"};
+        }
+      ];
+
       ciXpuKernelOutputs = mkKernelOutputs' ciXpuKernels;
+      ciTpuKernelOutputs = mkKernelOutputs' ciTpuKernels;
       ciMetalKernelOutputs = mkKernelOutputs' ciMetalKernels;
+      ciCpuKernelOutputs = mkKernelOutputs' ciCpuKernels;
     in
     flake-utils.lib.eachSystem
       [
@@ -363,6 +533,41 @@
                 ln -s ${drv} $out
               '';
 
+          # Check that every build variant in the output of `drv` contains a
+          # symbols.json with exactly the expected public function and layer
+          # names. On success, the output is a symlink to `drv`.
+          checkSymbols =
+            drv: expected:
+            pkgs.runCommand "${drv.name}-check-symbols"
+              {
+                nativeBuildInputs = [ pkgs.jq ];
+                expected = builtins.toJSON expected;
+                passAsFile = [ "expected" ];
+              }
+              ''
+                variants=$(find ${drv}/ -mindepth 2 -maxdepth 2 -name metadata.json)
+                if [ -z "$variants" ]; then
+                  echo "no build variants found in ${drv}" >&2
+                  exit 1
+                fi
+
+                jq -S . "$expectedPath" > expected
+                for metadata in $variants; do
+                  symbols="$(dirname "$metadata")/symbols.json"
+                  if [ ! -f "$symbols" ]; then
+                    echo "missing $symbols" >&2
+                    exit 1
+                  fi
+                  jq -S '{functions: [.functions[].name], layers: [.layers[].name]}' "$symbols" > actual
+                  if ! diff -u expected actual; then
+                    echo "unexpected symbols in $symbols" >&2
+                    exit 1
+                  fi
+                done
+
+                ln -s ${drv} $out
+              '';
+
           checkRocmArchs =
             drv: expectedArchs:
             checkKernelArchs drv expectedArchs
@@ -391,18 +596,23 @@
               drv =
                 let
                   baseDrv = kernel.drv system kernel.outputs;
+                  archsDrv =
+                    if kernel ? checkRocmArchs then
+                      checkRocmArchs baseDrv kernel.checkRocmArchs
+                    else if kernel ? checkCudaCapabilities then
+                      checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
+                    else
+                      baseDrv;
                 in
                 if kernel.assertFail or false then
                   pkgs.testers.testBuildFailure' {
                     drv = baseDrv;
                     expectedBuilderLogEntries = kernel.assertFailLogs or [ ];
                   }
-                else if kernel ? checkRocmArchs then
-                  checkRocmArchs baseDrv kernel.checkRocmArchs
-                else if kernel ? checkCudaCapabilities then
-                  checkCudaCapabilities baseDrv kernel.checkCudaCapabilities
+                else if kernel ? checkSymbols then
+                  checkSymbols archsDrv kernel.checkSymbols
                 else
-                  baseDrv;
+                  archsDrv;
             }) kernelOutputsList;
 
           mkCiBuild =
@@ -417,7 +627,9 @@
           ci-build-cuda = mkCiBuild "ci-kernels-cuda" ciKernelOutputs;
           ci-build-rocm = mkCiBuild "ci-kernels-rocm" ciRocmKernelOutputs;
           ci-build-xpu = mkCiBuild "ci-kernels-xpu" ciXpuKernelOutputs;
+          ci-build-tpu = mkCiBuild "ci-kernels-tpu" ciTpuKernelOutputs;
           ci-build-metal = mkCiBuild "ci-kernels-metal" ciMetalKernelOutputs;
+          ci-build-cpu = mkCiBuild "ci-kernels-cpu" ciCpuKernelOutputs;
         in
         {
           packages = {
@@ -425,7 +637,9 @@
               ci-build-cuda
               ci-build-rocm
               ci-build-xpu
+              ci-build-tpu
               ci-build-metal
+              ci-build-cpu
               ;
             default = ci-build-cuda;
           };

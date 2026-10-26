@@ -7,6 +7,7 @@ else:
     import tomli as tomllib
 
 
+has_sigstore = importlib.util.find_spec("sigstore") is not None
 has_torch = importlib.util.find_spec("torch") is not None
 has_tvm_ffi = importlib.util.find_spec("tvm_ffi") is not None
 

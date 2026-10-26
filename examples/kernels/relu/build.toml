@@ -1,7 +1,7 @@
 [general]
 name = "relu"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cpu",
@@ -21,12 +21,12 @@ src = [
 ]
 
 [kernel.relu_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = ["torch"]
 src = ["relu_xpu/relu.cpp"]
 
 [kernel.relu_metal]
-backend = "metal"
+language = "cpp-metal"
 depends = ["torch"]
 src = [
     "relu_metal/relu.mm",
@@ -35,16 +35,16 @@ src = [
 ]
 
 [kernel.relu_rocm]
-backend = "rocm"
+language = "cpp-rocm"
 depends = ["torch"]
 src = ["relu_cuda/relu.cu"]
 
 [kernel.relu_cpu]
-backend = "cpu"
+language = "cpp-cpu"
 depends = ["torch"]
 src = ["relu_cpu/relu_cpu.cpp"]
 
 [kernel.relu]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 src = ["relu_cuda/relu.cu"]

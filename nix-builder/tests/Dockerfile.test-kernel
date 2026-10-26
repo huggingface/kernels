@@ -3,7 +3,7 @@ ARG PYTHON_VERSION=3.10
 # Test with the oldest CUDA version supported by the latest PyTorch.
 ARG CUDA_VERSION=12.6.0
 ARG UBI_VERSION=8
-ARG TORCH_VERSION=2.11.0
+ARG TORCH_VERSION=2.13.0
 
 FROM nvidia/cuda:${CUDA_VERSION}-devel-ubi${UBI_VERSION} as base
 
@@ -14,9 +14,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# Install uv.
-RUN dnf install -y --allowerasing curl && \
+# Install uv and Rust toolchain (Rust is needed to build kernels from source, which
+# bundles a maturin/pyo3 extension module). We disable the CUDA repo, because we
+# don't need it for curl and it reduces the chance of transient errors when
+# installing.
+RUN dnf install -y --allowerasing --disablerepo=cuda curl && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     dnf clean all
 
 # Set working directory
@@ -60,6 +64,18 @@ RUN CUDA_MAJOR_MINOR=$(echo ${CUDA_VERSION} | cut -d'.' -f1,2) && \
 # Add additional dependencies.
 RUN uv add "apache-tvm-ffi~=0.1.9" numpy pytest
 
+# Copy the Cargo workspace root plus the members needed to build the
+# `kernels` Python package, preserving their relative layout.
+COPY Cargo.toml Cargo.lock ./kernels-workspace/
+COPY kernel-abi-check ./kernels-workspace/kernel-abi-check
+COPY kernel-builder ./kernels-workspace/kernel-builder
+COPY kernel-port ./kernels-workspace/kernel-port
+COPY kernels-common ./kernels-workspace/kernels-common
+COPY kernels ./kernels-workspace/kernels
+
+# Install kernels (Rust/maturin package) from source.
+RUN uv add ./kernels-workspace/kernels
+
 # Copy kernels and tests
 COPY relu-kernel ./relu-kernel
 COPY relu-torch-stable-abi-kernel ./relu-torch-stable-abi-kernel
@@ -68,16 +84,16 @@ COPY relu-kernel-cpu ./relu-kernel-cpu
 COPY cutlass-gemm-kernel ./cutlass-gemm-kernel
 COPY cutlass-gemm-tvm-ffi-kernel ./cutlass-gemm-tvm-ffi-kernel
 COPY relu-triton-kernel ./relu-triton-kernel
+COPY gemm-triton-autotune-kernel ./gemm-triton-autotune-kernel
 COPY silu-and-mul-kernel ./silu-and-mul-kernel
-COPY extra-data ./extra-data
 COPY cpp20-symbols-kernel ./cpp20-symbols-kernel
-COPY examples/kernels/extra-data/tests ./extra_data_tests
 COPY examples/kernels/relu/tests ./relu_tests
 COPY examples/kernels/relu-tvm-ffi/tests ./relu_tvm_ffi_tests
 COPY examples/kernels/cutlass-gemm/tests ./cutlass_gemm_tests
 COPY examples/kernels/cutlass-gemm-tvm-ffi/tests ./cutlass_gemm_tvm_ffi_tests
 COPY examples/kernels/cpp20-symbols/tests ./cpp20_symbols_tests
 COPY examples/kernels/relu-triton/tests ./relu_triton_tests
+COPY examples/kernels/gemm-triton-autotune/tests ./gemm_triton_autotune_tests
 
 # Run tests
 ADD nix-builder/tests/run-tests.sh ./run-tests.sh

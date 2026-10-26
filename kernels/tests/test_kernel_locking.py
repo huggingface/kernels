@@ -15,6 +15,7 @@ from kernels import (
     use_kernel_mapping,
 )
 from kernels.cli import download_kernels
+from kernels.load import get_locked_kernel
 
 
 # Mock download arguments class.
@@ -35,6 +36,14 @@ def test_load_locked():
     # Also validates that hashing works correctly.
     download_kernels(DownloadArgs(all_variants=False, project_dir=project_dir))
     load_kernel("kernels-community/relu", lockfile=project_dir / "kernels.lock")
+
+
+@pytest.mark.cuda_only
+def test_get_locked_kernel():
+    project_dir = Path(__file__).parent / "kernel_locking"
+    # Also validates that hashing works correctly.
+    get_locked_kernel("kernels-community/relu", lockfile=project_dir / "kernels.lock")
+    get_locked_kernel("kernels-test/kernel-deps", lockfile=project_dir / "kernels.lock")
 
 
 def test_layer_locked(device):

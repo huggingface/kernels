@@ -8,8 +8,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   build:
+    permissions:
+      contents: read
     name: Update Nix builder cache (${{ matrix.arch }})
     strategy:
       matrix:
@@ -21,8 +25,8 @@ jobs:
     runs-on:
       group: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
         with:
           extra-conf: |
             max-jobs = 8
@@ -39,3 +43,30 @@ jobs:
 
       - name: Build the outputs to be cached.
         run: nix build -L .#forCache
+
+      - name: Build the development shell to be cached.
+        run: nix build -L .#devShells.${{ matrix.arch }}.default
+
+  build-darwin:
+    permissions:
+      contents: read
+    name: Update Nix builder cache (aarch64-darwin)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+        with:
+          extra-conf: |
+            sandbox = relaxed
+      - uses: cachix/cachix-action@1eb2ef646ac0255473d23a5907ad7b04ce94065c # v17
+        with:
+          name: huggingface
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+      - name: Nix info
+        run: nix-shell -p nix-info --run "nix-info -m"
+
+      - name: Build the outputs to be cached.
+        run: nix build -L .#forCache
+
+      - name: Build the development shell to be cached.
+        run: nix build -L .#devShells.aarch64-darwin.default

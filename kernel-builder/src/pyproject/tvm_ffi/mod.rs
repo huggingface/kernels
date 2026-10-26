@@ -2,13 +2,12 @@ use std::io::Write;
 
 use eyre::{bail, Context, Result};
 use itertools::Itertools;
-use kernels_data::config::{Backend, Build, General, TvmFfi};
-use kernels_data::metadata::Provenance;
+use kernels_common::config::{Backend, Build, General, TvmFfi};
+use kernels_common::metadata::Provenance;
 use minijinja::{context, Environment};
 
 use crate::pyproject::common::{
-    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_compat_py,
-    write_metadata,
+    prefix_and_join_includes, write_add_build_metadata_py, write_cmake_file, write_metadata,
 };
 use crate::pyproject::deps::render_deps;
 use crate::pyproject::kernel::render_kernel_components;
@@ -17,7 +16,9 @@ use crate::pyproject::FileSet;
 
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
+static CMAKE_RUST: &str = include_str!("../templates/rust.cmake");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
+static HIPIFY: &str = include_str!("../templates/tvm_ffi/hipify.py");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
 static DETECT_CUDA_CAPABILITY_PY: &str =
     include_str!("../templates/tvm_ffi/cuda/detect-cuda-capability.py");
@@ -25,6 +26,7 @@ static DETECT_CUDA_CAPABILITY_PY: &str =
 fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
+    write_cmake_file(file_set, "rust.cmake", CMAKE_RUST.as_bytes());
     write_cmake_file(
         file_set,
         "build-variants.cmake",
@@ -32,6 +34,7 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
     );
     write_cmake_file(file_set, "_ops.py.in", OPS_PY_IN.as_bytes());
     write_add_build_metadata_py(file_set);
+    write_cmake_file(file_set, "hipify.py", HIPIFY.as_bytes());
     write_cmake_file(
         file_set,
         "cuda/detect-cuda-capability.py",
@@ -62,8 +65,6 @@ pub fn write_tvm_ffi_ext(
     )?;
 
     write_setup_py(env, &build.general, tvm_ffi_ext, kernel_id, &mut file_set)?;
-
-    write_compat_py(&mut file_set)?;
 
     write_pyproject_toml(env, &build.general, &mut file_set)?;
 

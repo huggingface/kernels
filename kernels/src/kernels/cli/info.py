@@ -3,10 +3,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from kernels_data import Metadata
+from huggingface_hub import constants
 
+from kernels._rust import Metadata
 from kernels._versions import _get_available_versions, resolve_version_spec_as_ref
-from kernels.utils import CACHE_DIR, _get_hf_api
+from kernels.hf_hub import _get_cache_dir, _get_hf_api
 from kernels.variants import (
     ArchVariant,
     Variant,
@@ -26,7 +27,10 @@ def print_kernel_info(
     path = Path(kernel)
     if path.is_dir():
         if revision is not None or version is not None:
-            print("--revision and --version cannot be used with a local path", file=sys.stderr)
+            print(
+                "--revision and --version cannot be used with a local path",
+                file=sys.stderr,
+            )
             sys.exit(1)
         info = _local_kernel_info(path)
     else:
@@ -49,15 +53,18 @@ def _hub_kernel_info(
         sys.exit(1)
 
     if version is not None:
-        revision = resolve_version_spec_as_ref(repo_id, version).name
+        revision = resolve_version_spec_as_ref(repo_id, version, local_files_only=constants.HF_HUB_OFFLINE).name
     elif revision is None:
-        versions = _get_available_versions(repo_id)
+        versions = _get_available_versions(repo_id, local_files_only=constants.HF_HUB_OFFLINE)
         revision = versions[max(versions.keys())].name if versions else "main"
 
     api = _get_hf_api()
     variants = get_variants(api, repo_id=repo_id, revision=revision)
     if not variants:
-        print(f"No build variants found in {repo_id} (revision: {revision})", file=sys.stderr)
+        print(
+            f"No build variants found in {repo_id} (revision: {revision})",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # The metadata fields that describe the kernel (rather than a specific
@@ -68,7 +75,7 @@ def _hub_kernel_info(
             repo_id,
             repo_type="kernel",
             filename=f"build/{variants[0].variant_str}/metadata.json",
-            cache_dir=CACHE_DIR,
+            cache_dir=_get_cache_dir(),
             revision=revision,
         )
         metadata = Metadata.read_from_file(metadata_path)
@@ -113,6 +120,7 @@ def _metadata_info(metadata: Metadata | None, variants: list[Variant]) -> dict:
             {
                 "name": str(metadata.name),
                 "version": metadata.version,
+                "kernels_minver": (str(metadata.kernels_minver) if metadata.kernels_minver is not None else None),
                 "license": metadata.license,
                 "upstream": metadata.upstream,
                 "source": metadata.source,
@@ -137,6 +145,7 @@ def _print_human(info: dict):
 
     print(f"Name: {value(info.get('name'))}")
     print(f"Version: {value(info.get('version'))}")
+    print(f"Minimum kernels version: {value(info.get('kernels_minver'))}")
     print(f"License: {value(info.get('license'))}")
     print(f"Upstream: {value(info.get('upstream'))}")
     print(f"Source: {value(info.get('source'))}")

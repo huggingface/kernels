@@ -6,7 +6,7 @@
 }:
 final: prev:
 let
-  llvm = final.rocm-llvm;
+  llvm = final.amdrocm-runtime;
   bintools-unwrapped = final.callPackage ./bintools-unwrapped.nix {
     inherit llvm;
   };

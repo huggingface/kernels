@@ -1,5 +1,9 @@
 # Write kernels
 
+> [!TIP]
+> Refer to the [kernel requirements' page](../kernel-requirements.md) to
+> get an idea of what is expected from the kernel structure and content.
+
 ## Introduction
 
 The Kernel Hub allows Python libraries and applications to load compute
@@ -163,7 +167,7 @@ backends = [
 ]
 name = "mykernel"
 version = 1
-edition = 5
+edition = 6
 
 [general.hub]
 repo-id = "myorg/mykernel"
@@ -175,7 +179,7 @@ src = [
 ]
 
 [kernel.mykernel]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 src = ["mykernel_cuda/mykernel.cu"]
 # If the kernel is only supported on specific capabilities, set the
@@ -195,7 +199,7 @@ The following sections enumerate all supported options for `build.toml`.
   by the `kernel-builder upload` command to upload the kernel to a version
   branch named `v<version>`.
 - `edition` (required): the `build.toml` format edition. The current
-  edition is `5`. Older `build.toml` files can be migrated with
+  edition is `6`. Older `build.toml` files can be migrated with
   `kernel-builder update-build`.
 - `backends` (required): a list of supported backends. Must be one or
   more of `cpu`, `cuda`, `metal`, `rocm`, or `xpu`.
@@ -243,7 +247,9 @@ following options:
 
 - `src` (required): a list of source files and headers.
 - `pyext` (optional): the list of extensions for Python files. Default:
-  `["py", "pyi"]`.
+  `["py", "pyi"]`. Additional extensions can be listed to ship data files
+  with the kernel, such as `json` for
+  [Triton autotune configurations](triton-autotune.md).
 - `include` (optional): include directories relative to the project root.
   Default: `[]`.
 - `maxver` (optional): only build for this Torch version and earlier. Use cautiously, since this option produces
@@ -293,7 +299,9 @@ the supported archs. These are then exported to `metadata.json` for consumption
 by e.g. the Hugging Face Hub.
 
 - `pyext` (optional): the list of extensions for Python files. Default:
-  `["py", "pyi"]`.
+  `["py", "pyi"]`. Additional extensions can be listed to ship data files
+  with the kernel, such as `json` for
+  [Triton autotune configurations](triton-autotune.md).
 - `cuda-capabilities` (optional): a list of CUDA compute capabilities the
   kernel supports (e.g. `["9.0", "10.0"]`).
 - `rocm-archs` (optional): a list of ROCm architectures the kernel supports
@@ -308,11 +316,12 @@ for an example with multiple kernel sections.
 
 The following options can be set for a kernel:
 
-- `backend` (required): the compute backend of the kernel. The currently
-  supported backends are `cpu`, `cuda`, `metal`, `rocm`, and `xpu`.
+- `language` (required): the language and compute backend of the kernel,
+  as `<language>-<backend>`. The currently supported values are `cpp-cpu`,
+  `cpp-cuda`, `cpp-metal`, `cpp-rocm`, `cpp-xpu`, and `rust-cpu`.
   **The `cpu` backend is currently experimental and might still change.**
 - `depends` (required): a list of dependencies. The supported dependencies
-  are listed in [`deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/deps.nix).
+  are listed in [`cpp-deps.nix`](https://github.com/huggingface/kernels/blob/main/builder/lib/cpp-deps.nix).
 - `src` (required): a list of source files and headers.
 - `include` (optional): include directories relative to the project root.
   Default: `[]`.
@@ -347,6 +356,26 @@ are available:
 
 - `cxx-flags`: a list of additional flags to be passed to the C++
   compiler.
+
+#### rust-cpu
+
+Rust kernels are built with Cargo and require the `tvm-ffi` framework.
+`include` and `cxx-flags` do not apply to them.
+
+- `cargo-manifest` (required): path of the crate's `Cargo.toml`.
+
+Place `Cargo.lock` at the kernel project root. If it contains Git dependencies,
+generate their fixed-output Nix hashes from that directory:
+
+```bash
+nix run .#hash-rust
+```
+
+This command is available for Rust kernels, reads `Cargo.lock` from the current
+directory, and writes `rust-git-hashes.json` there. Track both files
+in Git so Nix can include them in the build. Rerun the command whenever Git
+dependencies in `Cargo.lock` change. Registry dependencies use the checksums in
+`Cargo.lock` and do not require this file.
 
 ## Torch bindings
 
@@ -531,11 +560,40 @@ ROCm, XPU, Metal, CPU. If you would like to the tests for a specific build
 variant, you can use `nix run .#ciTests.<variant>`. For instance:
 
 ```bash
-$ nix run .#ciTests.torch210-cxx11-cpu-x86_64-linux
+$ nix run .#ciTests.torch210-cpu-x86_64-linux
 ```
 
 When running the tests on a non-NixOS systems, make sure that
 [the CUDA driver library can be found](https://danieldk.eu/Software/Nix/Nix-CUDA-on-non-NixOS-systems#solutions).
+
+### Tests that need access to internal APIs
+
+If the tests need to access a module, not exposed in the public API
+surface, do not use `importlib`. For example:
+
+```py
+...
+
+importlib.import_module(f"{flash_attn4.__name__}.compute_block_sparsity")
+BlockSparsityKernel = flash_attn4.compute_block_sparsity.BlockSparsityKernel
+BlockSparseTensors = flash_attn4.block_sparsity.BlockSparseTensors
+```
+
+This pattern should be avoided. Instead, create a separate private
+module named `_private_for_testing` and include the modules needed in the tests inside it. Then
+expose that private module from the public API surface. So, the
+`__init__.py` would look like so:
+
+```py
+from . import _private_for_tesing
+
+__all__ = [
+    "_private_for_testing",
+    ...
+]
+```
+
+Where `_private_for_testing` would contain the modules needed for tests.
 
 ## Kernel docs
 

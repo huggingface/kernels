@@ -10,10 +10,7 @@
 
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    # Temporarily pin this commit to fix ucx issues:
-    # https://github.com/NixOS/nixpkgs/pull/538738
-    nixpkgs.url = "github:NixOS/nixpkgs/ec1a11210589d294f0ac99d3290a27e6c73dfa1d";
-    #nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
     flake-compat.url = "github:edolstra/flake-compat";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
@@ -146,6 +143,7 @@
           backend: buildSet:
           with (builtins.head buildSet).pkgs;
           let
+            inherit (builtins.head buildSet) torch;
             rust = rust-bin.stable.latest.default.override {
               extensions = [
                 "rust-analyzer"
@@ -155,7 +153,9 @@
           in
           mkShell {
             nativeBuildInputs = [
-              kernel-builder
+              # Avoid rebuilding kernel-builder in the dev shell when the tree
+              # becomes dirty. We don't care about provenance during development.
+              (kernel-builder.override { builderProvenance = null; })
               nodejs # For hf-doc-builder.
               pinact
               pkg-config
@@ -164,8 +164,6 @@
             ];
             buildInputs = [
               black
-              # For testing CUDA version detection in kernels.
-              cudaPackages.cuda_cudart
               isort
               mypy
               pre-commit
@@ -173,16 +171,18 @@
               ruff
             ]
             ++ (with python3.pkgs; [
+              ast-serialize
               docutils
               huggingface-hub
               jax
               jax-tvm-ffi
-              kernels-data
               matplotlib
+              maturin
               mktestdocs
               openssl.dev
               pytest
               pytest-benchmark
+              pytest-cov
               pyyaml
               sigstore
               tabulate
@@ -193,7 +193,9 @@
               types-requests
               types-tabulate
               venvShellHook
-            ]);
+            ])
+            # For testing CUDA version detection in kernels.
+            ++ lib.optional (lib.meta.availableOn stdenv.hostPlatform cudaPackages.cuda_cudart) cudaPackages.cuda_cudart;
 
             RUST_SRC_PATH = "${rust}/lib/rustlib/src/rust/library";
 
@@ -201,8 +203,12 @@
 
             postVenvCreation = ''
               unset SOURCE_DATE_EPOCH
-              ( python -m pip install --no-build-isolation --no-dependencies -e kernels )
+              ( cd kernels && maturin develop )
               pre-commit install
+            '';
+
+            postShellHook = ''
+              maturin develop --manifest-path kernels/Cargo.toml --skip-install
             '';
 
           }
@@ -211,6 +217,7 @@
       rec {
         checks.default = pkgs.callPackage ./nix-builder/lib/checks.nix {
           inherit buildSets self;
+          inherit (buildSet.pkgs) fetchFromHuggingFace;
           inherit (self.lib) genKernelFlakeOutputs;
           build = buildPerSystem.${system};
         };
@@ -222,8 +229,8 @@
         formatter = pkgs.nixfmt-tree;
 
         packages = rec {
-          inherit (buildSet.pkgs) kernel-builder;
-          inherit (buildSet.pkgs.python3.pkgs) kernels;
+          inherit (buildSet.pkgs) kernel-builder kernel-port;
+          kernels = buildSet.overrideTorch buildSet.pkgs.python3.pkgs.kernels;
 
           update-build = pkgs.writeShellScriptBin "update-build" ''
             ${kernel-builder}/bin/kernel-builder update-build ''${1:-build.toml}
@@ -233,7 +240,7 @@
             builtins.filter (buildSet: buildSet.buildConfig.bundleBuild or false) buildSets
           );
 
-          forCacheNonBundle = mkForCache (
+          forCacheNonBundle = mkForCache pkgs (
             builtins.filter (buildSet: !(buildSet.buildConfig.bundleBuild or false)) buildSets
           );
 

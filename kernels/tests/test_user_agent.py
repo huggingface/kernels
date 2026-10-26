@@ -1,6 +1,15 @@
 import platform
 
-from kernels.utils import _get_hf_api, _platform
+import pytest
+from huggingface_hub import constants
+from huggingface_hub.utils import build_hf_headers
+
+from kernels.hf_hub import _get_hf_api, _platform
+
+
+@pytest.fixture(autouse=True)
+def telemetry_enabled(monkeypatch):
+    monkeypatch.setattr(constants, "HF_HUB_DISABLE_TELEMETRY", False)
 
 
 def test_user_agent_contains_core_fields():
@@ -37,7 +46,7 @@ def test_user_agent_telemetry_disabled(monkeypatch):
 
     monkeypatch.setattr(constants, "HF_HUB_DISABLE_TELEMETRY", True)
     api = _get_hf_api(user_agent="should-not-appear")
-    assert api.user_agent == ""
+    assert api.user_agent is None
 
 
 def test_user_agent_includes_torch():
@@ -69,6 +78,24 @@ def test_platform_format():
     parts = plat.split("-")
     assert len(parts) == 2
     assert parts[1] in ("linux", "darwin", "windows")
+
+
+@pytest.mark.parametrize("disable_telemetry", [False, True])
+def test_http_user_agent_header_is_well_formed(monkeypatch, disable_telemetry):
+    # Ensure that the user agent string is well-formed, both with and wthout
+    # telemetry enabled.
+    monkeypatch.setattr(constants, "HF_HUB_DISABLE_TELEMETRY", disable_telemetry)
+
+    api = _get_hf_api()
+    header = build_hf_headers(
+        library_name=api.library_name,
+        library_version=api.library_version,
+        user_agent=api.user_agent,
+    )["user-agent"]
+
+    assert header == header.strip(), f"header has surrounding whitespace: {header!r}"
+    for segment in header.split(";"):
+        assert segment.strip() != "", f"empty segment found in header: {header!r}"
 
 
 def test_user_agent_no_leading_or_empty_segment():

@@ -1,0 +1,2086 @@
+{
+  "amdrocm": {
+    "deps": [
+      "amdrocm-amdsmi",
+      "amdrocm-blas",
+      "amdrocm-ccl-devel",
+      "amdrocm-ck",
+      "amdrocm-debugger",
+      "amdrocm-decode",
+      "amdrocm-dnn",
+      "amdrocm-fft",
+      "amdrocm-hipblas-common-devel",
+      "amdrocm-hipfile",
+      "amdrocm-hipify",
+      "amdrocm-jpeg",
+      "amdrocm-math-common",
+      "amdrocm-opencl",
+      "amdrocm-rand",
+      "amdrocm-rccl",
+      "amdrocm-rocshmem",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm7.14",
+        "sha256": "b9e40043df7f2983746e4e6d9abfc7478794acb645ea7b4820d656ff0a2d5d58",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1010",
+        "sha256": "790cd1a0ae0ed98ef52a441e23c3ab0c74646e47f7c6ab238eaf3a98dea08fc6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1011",
+        "sha256": "400ee02d2c078092176ae63225a73d3622f89f7ea5fcfc472666b4e4d1126688",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1012",
+        "sha256": "73f1ea4bba675ae62c84b2e917093ca05297cd3534ae6b0fc00769d9501b4dc2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1030",
+        "sha256": "c39e819f0b1f9757dbc190a80a02a748b28e1de0f338652a1eeedfdba8efbe4d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1031",
+        "sha256": "396555168d417620310e64b2a597b7b0831f4abd97552220ef1832b7a02be9fc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1032",
+        "sha256": "40be15dc3987f3b387c760b6dc8029a66f2955387811e26cb5a4b640d0f694b5",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1033",
+        "sha256": "13771336b1e0f07287a9533a9a3023fcbdcb13473ac16f9a0635a2d1cbf7cbf8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1034",
+        "sha256": "9acddc715da82865fa14f8e4f7c67d09d88525bee408a768be679c3b581df9a1",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1035",
+        "sha256": "d9aebb3893ae00efb835e363476f7778ac2cb4990d59b26355921174bb17e626",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1036",
+        "sha256": "2eec1c2106fd9970a79f5f00bd63cbaa58e8e0dbf3cce814e533eb92e5532625",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1100",
+        "sha256": "8e895223d88f5235930d45137409276920ebbd6c30ed09566add16238738b185",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1101",
+        "sha256": "1cccc89b6629e86312fb2d1c49a89ae7045585d1567b1c845cdeba849f19734f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1102",
+        "sha256": "8f4e8ee5d178641dd6f6885eb726f1c7a03a797d7bce45173698539c5198ee0a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1103",
+        "sha256": "a9581ac017ba472bc98a894761d020c765620f36995027aa6f8340eb403efa70",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1150",
+        "sha256": "01d81701fb5b5b97d68c9a6eea537930d4b364621d82d8b33831e58e39c73029",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1151",
+        "sha256": "0f32adfe89d4a45060ef9685122c7fb6b27b8f38b79d0ce91acdcbc0c1d364d8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1152",
+        "sha256": "223462fe42508d4371f38f937680a20ebcc253a76e4671cc22e00427fee26ad8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1153",
+        "sha256": "657a69244ed3d3563601b5f744e576b6b255e0c272c1207f7c8cd5cd9b7bf091",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1200",
+        "sha256": "5f125f7ef452565bb9231c9fcf860df50a82f38dc566e2542cfd974d4aeff868",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1201",
+        "sha256": "f52b73829f6a6a451e2469caa5831d111e0b6d2f529b9d2f11662edc340e58da",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx1250",
+        "sha256": "5bb2ad1b3fa26afd1175afa0cd818faeaf9ce6c2c7379fbcc4c0ee40f3d7c6f6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx908",
+        "sha256": "79d3bdf5902787c8cc27cd6bbe0c63d19f7a7838e4081b33dea231833129f9e2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx90a",
+        "sha256": "b2b1870229adb19bee0854c65f02f4b1925a39f9a92a56c8085fc625410a3476",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx942",
+        "sha256": "140227be3261e2690f8f135f6ac683e7425fbb485563a437a97f1896b873a274",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm7.14-gfx950",
+        "sha256": "fb59aa756e44fb140bb854954a7e8e4c101f3f16817b59c713d57e425223b0de",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-amdsmi": {
+    "deps": [
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-amdsmi7.14",
+        "sha256": "2e4793e100738488b66960137e5136548568240e86e862cb36e24572e66d933b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-amdsmi7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-blas": {
+    "deps": [
+      "amdrocm-math-common",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-blas-devel7.14",
+        "sha256": "8710c5ba2c629f4eb04ca227cb922ad69abb3a836f24854f0be8f9813a9c9774",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas-host7.14",
+        "sha256": "9ee3dc9c1eebbc2ff9350865efc47b55c2018ad9edf85ef7b6546a4d69af2b95",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14",
+        "sha256": "07f9195bae6c04b68ad3046cd376eb980e38112ee5d908ddbf8312a8fb130b37",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1010",
+        "sha256": "7a98deb1a7f3bce0739be05f030d82137b283d8140654ac8fb87424a713f97da",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1011",
+        "sha256": "06db663f26ea72a93f78236ed2cae4e39162fb01a0fb6888d9592ebb5e62b277",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1012",
+        "sha256": "d8e3fa6cc8fdf03c13d402852171a2a6461623e5f75bfa7584db6970beedffeb",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1030",
+        "sha256": "e561ced041936df9d0bf52dcd443c0b6f95af4ad379937372544dde262524bdb",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1031",
+        "sha256": "01b755cd60fee3fa8cb42bff11719e76aa12136c8cf56bfd12bab551cd165d89",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1032",
+        "sha256": "7d4a386c837467fa3261c4f574c75dc1689ab800433bb9c223b0d8160f23071d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1033",
+        "sha256": "b7d28a976be537c95cc903bc2019ed227334ffb2a25f5397b8abccc598a7f806",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1034",
+        "sha256": "fd7ba671b83ae598352357bbeaf5430820b29981e96d686102a9b1b2c8b53923",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1035",
+        "sha256": "5482b9c2383834cef788ef14c1aaca420cc2b561b41a5e3e95b72c800abeae8e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1036",
+        "sha256": "7b608f37dad3c27bda0df0eeb5c839ae958ca0ece7950ad3c16e4f036f55cb4d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1100",
+        "sha256": "8d8aabfb17c701967f530dd9b5d4d66ee3274f82d27f8e746ebabea74dea9c28",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1101",
+        "sha256": "0795907de275b0686c32548f64ffeec0638aa8e0b082ae89ff920fd035e80ace",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1102",
+        "sha256": "24fd87c0740db6baf11fc83d92a42785b3f8e6b4b496303ebdc1427529d8c08b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1103",
+        "sha256": "1bb277398d83ad0b4d17467e3774136a62868fc04b4d0bfb3bd1be354db35d66",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1150",
+        "sha256": "ea7f680c444f40e363f960eba5687f0d1d1a9991af5d40a8ea322d657b909c7d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1151",
+        "sha256": "122287c8a19a2edc15b65404b66396b1b5c83f4d3099ab3c1dcf73a4730e494d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1152",
+        "sha256": "b4a792800c3d63138bee514393edb2a41d83fe27e3d9863545457ced1b919a9a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1153",
+        "sha256": "28105d3b5ec7d7e24c1e71e15b5c704e4fabbd3f4b1c59b19528172ab7d1ca0e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1200",
+        "sha256": "ca06066a22f58ab52413467806d8c6147aae25a72ad4cba6fee2a52740a11fa2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1201",
+        "sha256": "9567d4003a9d0d1f1451cd52eb089cb588aa6cbf8dd671952988f261ecedda17",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx1250",
+        "sha256": "5693a56b0609728cf7e33f200105b8a6260f4eb07b238e3c76c5fafe60f7c320",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx908",
+        "sha256": "b6b07dffc6fec337f6050de1f1698973e668630cca1f65da7c8f5606f53c21aa",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx90a",
+        "sha256": "d640e179de6fc3eb1fdcdfc2b35839ec025f4b9803eb15af748d5cea72fbfb1d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx942",
+        "sha256": "f2063f025441e743d7eeae0ee5fbac3a34347d937af6e607cb6f63babf17b7d3",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-blas7.14-gfx950",
+        "sha256": "08abedc5553d2665915edb1ef06f6bbce087f0da1971d6a84d963c0cd9343188",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-blas7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver-devel7.14",
+        "sha256": "23603ae622e525f2855dd5e63023a4912de087e8bddc7454bc64f8e39c386544",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver-host7.14",
+        "sha256": "d1c20b68314e350d7f840b57150dcd97fb24cb7bd5a6383393d255988ecc3a02",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14",
+        "sha256": "3b36de49fb575ce722cfe229c46e89ba0e1c21d43844eff4d1f437983027bb16",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1010",
+        "sha256": "6dc1177e14267f765bd03999ffc20540a9ca901bf5ada8c4f62fa182bc2d5231",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1011",
+        "sha256": "a0dc68a4d038fba899106fea4f5160e3426b310f59ccc8b1b48ce1119f06a7bc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1012",
+        "sha256": "8063c67982c65ff32b54f7d48f2cc97abaa7513b85b46e30d05355781f0d72f5",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1030",
+        "sha256": "094f503885b91f24049c5121b6e583830d0098605b66c5f0ab1af61bdb94ea6e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1031",
+        "sha256": "cc37831ca84892e21408428f9660886a1a8c748658efbb340b036242fa9e88d8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1032",
+        "sha256": "bcc33b41af84a6df08c618cc30288c3bbdb6c64bf04bd2af37e490c8110ccf31",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1033",
+        "sha256": "fd2306460b4cbd50998207cef8d7d776601af0eb5fd454e342a94fe3101936f6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1034",
+        "sha256": "03fb23f2629d1e966697a3fbb04c10730a6fd5c6d79e40fdd0fe92531e274f25",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1035",
+        "sha256": "84dd58a44781fa2df177bb72a3aa455314b1c927c71d1540dae6debeb3b69981",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1036",
+        "sha256": "b8bb024d3ff95607e2cba3d76a5b43dd357a01bf9f758454d6f31018e4c272c0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1100",
+        "sha256": "d3df6fd5e7060edc0378ecf0a59ecdf8df168519892da2ec80d27f1fe0260e51",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1101",
+        "sha256": "c4b366453afa25db22ad694989836c39e0ba6705260a794a2189120bd343b871",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1102",
+        "sha256": "ee6fde9961ca9895c8a8e2ecd2d0850c103a8e69a81509fc92811a185e7e9783",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1103",
+        "sha256": "7d33582ca3771ce6862c02589e35e1190509db77efe0831a42367aecb79be937",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1150",
+        "sha256": "eaf2c0db6230b79b47b8ccb5fca71c63f028181987cad078e64d6eeb528d3c49",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1151",
+        "sha256": "48cf6e0811afa6b24b64711aef8cd20fd39f1bb4cbf7df6937873d277530a435",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1152",
+        "sha256": "7144bcf604f9d0b990c57d23b9f3823313aa85c24a2668f6b03f8fa689cea050",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1153",
+        "sha256": "4771d30c4168bb1f507fc5cd6c1a8a0f5156c4e380ff124f09c6d3fbd1c5d837",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1200",
+        "sha256": "0cdb287cfcbf37bc9afa92b64621d1d61a68843328b8ba0eb4bd0eeabcc06b19",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1201",
+        "sha256": "be4f600f5356fff73fe80bdb62fb7c8f5f6e47bfaa66696818433360532e6efc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx1250",
+        "sha256": "81e7bca556baf546d6f81afd624a9b7db4bf4bce79a43a709dfce4121fdf6f37",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx908",
+        "sha256": "8ab6e689744831c330c787ef752de5815cb14e813429ff0253a7721978a24b03",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx90a",
+        "sha256": "c4121243d287da0370fb02cdcf0686a22fcea97c791144fc714982a7531f10d2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx942",
+        "sha256": "8e063ec1f021460711cc8ec71a1e11b069d410607042992973c4c1c4f5df649c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-solver7.14-gfx950",
+        "sha256": "8e4912610f7ffdbc8942b5457de6ae12d0bfe6a1d1bb5b780bc89030e8daee31",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-solver7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse-devel7.14",
+        "sha256": "10e9bfb3d1aebf4a5e8f90dd5f9a4f3b99f21905a45720a73a7de484a7a6b448",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse-host7.14",
+        "sha256": "db69b2c2abbe64107a1c7bb6a75f84673f09012c7a73c9b237a3183ad9d3ca20",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14",
+        "sha256": "70470bd275e6ca23057e24478ad8b30e3b694824ad7d670a1992a1702098dfa6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1010",
+        "sha256": "7c24632edfe665d94a8ea3179e8d7f905cf77168ba6903ce7cbab02275bf09ee",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1011",
+        "sha256": "2ce9230af091f8acb7f1166142ae6a7fed6ab801be02530a6c330a4f06e0df53",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1012",
+        "sha256": "9b83c1e160cb33085708049ae983c7aa7b7a22f396c9047569fdcb584b6a5f2a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1030",
+        "sha256": "262ed847105a1de581e79ee6c33034e90bcfcdb4ec09f31b7c87333ca76a253e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1031",
+        "sha256": "4d2719ce816d4159310b2c5452f8e1716e2228c5418ddffbcb8451ee8c2f6a8c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1032",
+        "sha256": "4192306bac549667a2dbf58f48027f4fd4724970aeea572ba5117ddcdf3cfa21",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1033",
+        "sha256": "16207544fe55855489c1ef63672263933ed3576e9cd4f0a4ad931ad3712df1f3",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1034",
+        "sha256": "2613c2bea5e3ac90b9f95b105f098e99a5264c8bae8163e560225bfd6997e536",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1035",
+        "sha256": "361b9404ef0ea91bba1f3f0f07a88e9748813b3b2b7ee996e6da7bf526e40ad2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1036",
+        "sha256": "3c6f4adc523cd4bd7c20de418020cd8d08e2b0704438ea7693c12e84dae3fb6f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1100",
+        "sha256": "ec08cdb747e4e7f96a4a67dbce55e738830a463d1c9039994e5c8236c574a6ce",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1101",
+        "sha256": "5d69de4dd65ac32e7b0930c60207f144c88b6e4f5ee890aedbe9619899747b0b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1102",
+        "sha256": "55485736a21ecddc7dfaf765fe5feba7917498bab4abe6d481de82d383037ec3",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1103",
+        "sha256": "193dc8a6040d096bbfaabc367e2b38723e4488f279a5d531c8280a5aa5eb93b0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1150",
+        "sha256": "5c5129e77f43135b1782954cbd269a0835652c2215ff1268dde6f87f9f37c26f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1151",
+        "sha256": "49aa91b32a7d25e1f6aa66711d2cdf0f1bb956f78d52e73c04cbf79526768eb3",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1152",
+        "sha256": "3bbe6043a2eaa63601399158f8a828de5d1cdc1e53c4b01c4d578180567a6656",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1153",
+        "sha256": "a7f11da8ee1810440e2d4e38eed82c729accfd8a12022d96cd18ca0716aabd76",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1200",
+        "sha256": "d11eaae859464a1a20b1b7b1425482e7c86b982e38b3c59a986a5737a313a54f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1201",
+        "sha256": "511b79c7408082717e78a098d6212cc6deae5401405fc3efe1c9b26b2a9d367d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx1250",
+        "sha256": "8648e596ad6776a1e6ae1e3b8e0b50cd5938f8020f276bbab4db801ba41f1a08",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx908",
+        "sha256": "c961e75784511f4f96d6180ccb73b9b450d39b11a97b37c95b35704062f320fe",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx90a",
+        "sha256": "b88b5ea3f4fe757473cb8b2d527f4bf8289be256e05119a8f8cc0062f3da37ed",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx942",
+        "sha256": "57c5f0d6a0d37cf442e272a6d25ed9f1f26d4d5b41cf95e7aefe29174a105174",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-sparse7.14-gfx950",
+        "sha256": "4ee58bced67acf582701c6ef84cbf73eaa3e25585f74fbf40cb04b69d74578e0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sparse7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-ccl-devel": {
+    "deps": [],
+    "components": [
+      {
+        "name": "amdrocm-ccl-devel7.14",
+        "sha256": "4268fdc1f0ff9fe53c8bf2e8a392e86868d8255d7e77c396928805f0ca751c71",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-ccl-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-ck": {
+    "deps": [],
+    "components": [
+      {
+        "name": "amdrocm-ck7.14",
+        "sha256": "17eb40e61ff1651fd5ccc1da3d96d1c6db4405079021a3541a77884e932c3fd6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-ck7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-debugger": {
+    "deps": [
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-debugger7.14",
+        "sha256": "97bc2026f9cf57dae483e17224c9a3f8993c5817c9fa41171442b17475216c74",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-debugger7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-decode": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-decode-devel7.14",
+        "sha256": "482c5785fd9b76aa12da6a7a1ec2048529390514620d3f7eb211a42dd71fe574",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-decode-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-decode7.14",
+        "sha256": "5f1ec58448d8b96051ddeb54ac18ef5d0092f5ee9b02c0802872c8a5d868ee4d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-decode7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-developer-tools": {
+    "deps": [
+      "amdrocm-amdsmi",
+      "amdrocm-emulation",
+      "amdrocm-profiler",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-developer-tools7.14",
+        "sha256": "05086f26d9331c54e46f6ec66f36eaa2d81520e36dafb2c7773d36e9f44c3587",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-developer-tools7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-dnn": {
+    "deps": [
+      "amdrocm-blas",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-dnn-devel7.14",
+        "sha256": "be6f1cddb00fab529ff0bdda34ec206fe72fbc5a075188d48f170ec284876a69",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn-host7.14",
+        "sha256": "2603c1c9f710a0cf7f628db8087005a7bc39b88e4ee2554aab7e0bb9532b1934",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14",
+        "sha256": "3a7612d8b404e97fa6e6b5acecd4f2e90550a0553638030c2eb846cba6c71e5a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1010",
+        "sha256": "bf6a57709c779c30d3b35b035eae6e81a0dcb2687c79cd816ce4858bbd81ac81",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1011",
+        "sha256": "82464a54a69c6b634ce599f5b23b7254829fdd22d9a51c88b874dc542753b967",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1012",
+        "sha256": "3dd38fa0e6d8634bd424b45678797c945be53fec973e0751813408e7d675a9ba",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1030",
+        "sha256": "e1b8267324ae6412db5f6755654c2416f09e75edce61fc5cd8495f9b80a3b751",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1031",
+        "sha256": "fa3fa3e6cfba429b8ab1a61f48faa9f2c7f28a403d80b38e045424245e5e8c4d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1032",
+        "sha256": "8b1feabc957bd76f0eebc2d153695b7009198f52c3b581b0e73f1a55dfdd6665",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1033",
+        "sha256": "8fae11a0a247328f4d94174e1a2a87bc4f8b13910ab7ee38879e26adf4731c86",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1034",
+        "sha256": "8b049bfcc2b349acd69da4aea2fdf684f9c041fa36c9fd9d9a5d00c8afd8a15b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1035",
+        "sha256": "218238e3891c603cc5c1b09ce29fc7a23d2d804709d8fa7b9aa8796b4d7d43f7",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1036",
+        "sha256": "ce51510dda13af039098776e568bfd1a3e6473126957b56918f439c573cd4dc7",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1100",
+        "sha256": "bc5602912520d4060b2dc9ce0643866f93c82a4eb9789c56d78680908d781021",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1101",
+        "sha256": "c5f659fad8d961a9dd14a20dbe181eff85b600e7c81cd86664784e9529da87f6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1102",
+        "sha256": "58fe5ef7b121348fb02f4a897ef61009ab04ff2e18d975a4be7138deafa1ccde",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1103",
+        "sha256": "c4cbfd357a10395d83cf7293480d574323cf4e9e185fac2dc0467e513e6e474c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1150",
+        "sha256": "a1863365cbcf85f71ac59204d9e7f57d0fe3f346f141bd9a2c73fca48094ef96",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1151",
+        "sha256": "88a09222b0e1f326de7b5e0edb28fab9d4eceb4fc84a9d569f90de4dda55c38e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1152",
+        "sha256": "f52528cd0dc6918b68c0965404e2d59bfc05add4996f7c00077fb7da2c674643",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1153",
+        "sha256": "3d6ca1507adb6bc9438d6f50b7fdd913d41e0cf8221abdf69000d6f54de1414a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1200",
+        "sha256": "bee0b8e78945623465c23b536583c4b0db010fd0ede8534289761a2b231bc40a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1201",
+        "sha256": "7b4c4dd5b03d491710fe53d000cc57888cffe10494cf4d5e3d7aa72cd8f01412",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx1250",
+        "sha256": "83fc3ed7207c765e4351c3d5ba66c853e9f0a68aff31ace0e2b9465b5b9cf9ba",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx908",
+        "sha256": "1edce086ffc0b1121ddaf2f877ecfcbc9845c610c88abc89758d51a919806fdf",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx90a",
+        "sha256": "92c95421d03d71f957f37323f32fb3f859b7ef1bf2d11a508e240305508e5b52",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx942",
+        "sha256": "a58ab450942bca594ede5d6875683d1fa3660a1e8347a96452688dd780cd4719",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-dnn7.14-gfx950",
+        "sha256": "0f94eeea51a5353176373fdb8c85afc0702aac1ae5117c578de500c97efad017",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-dnn7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-emulation": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-emulation7.14",
+        "sha256": "22284a6286127219179d2a17dd5a8dda438d2fe92bcc635b6ef1ed7d87d93508",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-emulation7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-fft": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-fft-devel7.14",
+        "sha256": "84d7bca350cea80f8e973af9422fd366d2f78d161d363552771cb4e82decb937",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft-host7.14",
+        "sha256": "d809eae0a38d735ebf4cf443c497f74801bdbfe6d57accd9a7e2dd40457f00cc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14",
+        "sha256": "119f86e67720f7e96eee413d048f70beaec34014805e3f8224e8252744b01b1f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1010",
+        "sha256": "7ace6a2c74ebb15d1724a3af7fc58a5f5dd3c08fc9c61a3d100f993fd7bb2bce",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1011",
+        "sha256": "fbb955164f943c0de4b1bf4152746b9a6120b02375a99cb2c0098dd4d53b0b03",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1012",
+        "sha256": "4767ab43ec85dfe9607a49ef2832bc4e87d2c3085f997b89453d1e669075e3d1",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1030",
+        "sha256": "f0cb2c9a67affcd76b24c5f947705ce9075aadfa847f9fb1375d8298226150ba",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1031",
+        "sha256": "4f511f4b4040318b0d7543b44bd95eb7cf26222cf742208c38c93ca138ae4b11",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1032",
+        "sha256": "5047f9515677f1de7c1b63bc561dbabebc44a84d828ca674584cf78609ca86a7",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1033",
+        "sha256": "28e5dc08356a722e05b224008d3011197f6102bf2f1c154f5f735f74b4ac47f4",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1034",
+        "sha256": "df17238b0850ea4a783a3d7626c97280554e3eaf8d85423619bb4fc17888b95d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1035",
+        "sha256": "091b9face467e738d8492f049f9317dabc886a9bead9e773cdde62612d5d9b15",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1036",
+        "sha256": "8f39a281ce7708319bf407fd44de98d95f84141b0c76ac22b9f183ebcbb50499",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1100",
+        "sha256": "38cdeba72abe1f6db17c6608a2a05e623bb1d2e79b7d87a4548e7b0594a03644",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1101",
+        "sha256": "245b80be32336c0c53ec2147af1fbde7e4f73b1894d527c8a9d34067b594e116",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1102",
+        "sha256": "3ddbae875b7f83da361f7dc23219bb8f14649f71994d1ce8c4704c8e28493a34",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1103",
+        "sha256": "d6ff6595e42ea4a34d21b8d3e0a820ca2bebf268dfe5a116eb9e9f0aeb85067d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1150",
+        "sha256": "8848eccfe0d684995b5d3a90d0290330773094c2e9321a37690b8dc2385f44b5",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1151",
+        "sha256": "b241fa645e00933128e06cda3508eebaaba55a6b6fd4f2d04cd28c4e09598c81",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1152",
+        "sha256": "061443c2885a806a6d3384b252297c14f7d8a22cc5a8e937efa9d5bf33399a2b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1153",
+        "sha256": "8103847db93d0d7b454d67f6939e7df7f0e1c85fd48a5b74ce7e41bbaf531ea2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1200",
+        "sha256": "b212809271c46daf8cb69d05ba23ddfa0eaafaf75f9b5d8f20c6f92599ba95dc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1201",
+        "sha256": "eab3ef1c13b6bf71f2ab7524028a7a78bf3eab344aceba3f47a5263177d67a37",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx1250",
+        "sha256": "d9cc576a1b7d38cb5c2c996583a0a09e5f103f866b4ae6f481f1fafc48750c63",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx908",
+        "sha256": "07f106e596d59146dd0c9ed3eeb39225c3297d119c1dc888bae96235df8185a0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx90a",
+        "sha256": "57aeb270b79350a198e1775d9866a2241d83b5b792d91d0725d0c501074f1935",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx942",
+        "sha256": "150bf29b59b633d34de086123665915747ee1ebbb84d17899cff89448dd6ca4d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-fft7.14-gfx950",
+        "sha256": "0cecc6a8d4b63ee00da2490a7d8b4716013d0370f25b051edecc22ba1d8b0d19",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-fft7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-hipblas-common-devel": {
+    "deps": [],
+    "components": [
+      {
+        "name": "amdrocm-hipblas-common-devel7.14",
+        "sha256": "4047cd473534150b19cd8c583287d1c11921e68e205f3eb625031485658a72c2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hipblas-common-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-hipfile": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-hipfile-devel7.14",
+        "sha256": "3fc80fb75985006c98e51e1151356c6807cbea48f19d15fb413b43d209af7d86",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hipfile-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hipfile7.14",
+        "sha256": "d8ec6e80fbe26081657849f84bd62be1302384ebca2b2ca5fa547499e8e4db5f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hipfile7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-hipify": {
+    "deps": [],
+    "components": [
+      {
+        "name": "amdrocm-hipify7.14",
+        "sha256": "c65ecef6279927032a0a9b7c76aa6a043421521dbc8b0edc98618385fdb31050",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hipify7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-hiptensor": {
+    "deps": [
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-hiptensor-devel7.14",
+        "sha256": "d8a2ab5e6d63398dfdb7df11e560c271d713fd0dca92718259313492b6640c59",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor-host7.14",
+        "sha256": "74fdc635e50b767056404097db044ddea0abbcc0272e83000971531eac289297",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14",
+        "sha256": "aa99652a3df4288468bffbfa9d842492d57a1e1043bd7c60e884bfe71b919306",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1010",
+        "sha256": "da51f164b690ea6303e96cf84e8d04e67c490b76e80551f5ab091061deb1f625",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1011",
+        "sha256": "ca92b1f400ca718202f7ae6d3e76ff84fd039a6fc2ca8b19de5fe84ffbec710e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1012",
+        "sha256": "6a9204a5daa4d2de56d709d6f776160c66f43cbee4a418ea4553a5beb248e3e8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1030",
+        "sha256": "0bca33c9840909f5a70d4e1a3c052468e0b05ad174b91ad1c988ca5af90c2720",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1031",
+        "sha256": "501c72c29230da3a8f50780aa5b780808d507540ba819ea2c3519778a7e405d5",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1032",
+        "sha256": "91cf621e1a94048f5eaeb8376a5c46f10833a538f56430ace1ebc434029cdb8c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1033",
+        "sha256": "352af53a31d505f152bd00dac162362f5250a8f7f1cc8dc108515b26593c3186",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1034",
+        "sha256": "b796fe9dbc033c381a63804b5031fe2a912fbf0a6bb11ed67790001cf6b7060e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1035",
+        "sha256": "e2c6b70c24315e34153cc3b677c792708af44780acc1c417ec62f2416c204abe",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1036",
+        "sha256": "9251f8f77ebf7946d42d0b69698777531e3a4bc4cf68918ccbd8fc5035a515b1",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1100",
+        "sha256": "5ee9705794d17f394f87f591eee737118b9cf154878137cc6804d0e4cf128c31",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1101",
+        "sha256": "b696217f9b6bc7a6828df270e7ccc53a897b1d746f0e1c9685eea9e29b830961",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1102",
+        "sha256": "de977f56fe0e05f5d54ae44e9484c866bc4cd93848c40f84062e32955547ffa5",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1103",
+        "sha256": "4c262ad92585c700a0f6841ee820a7d7a4fd707d4846cd40e6ad5220f74a0133",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1150",
+        "sha256": "b5d423ffd5e5553cd16b086e02be3fc51ba037f96e0b182ec10d7c3bf6bb73d8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1151",
+        "sha256": "8bcf37440d304909fe74f329d14e075977d469b0114538e5d901d1d35952a1cf",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1152",
+        "sha256": "194e67cddd6157c183b568dbd1e8895e9c1de8d24e1486706a5bf9e173b40af4",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1153",
+        "sha256": "61d93b8530a8f54dbcc42c5bafede3373adcdcc19ebd9622b4188b262bd26744",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1200",
+        "sha256": "c79e6b4df75b24373d6f066e9fe65a99e70f80cb6fe0ad82ea23a7caa7d14725",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1201",
+        "sha256": "da322747059703a522dc3c2f278476d124165536cca92ea3d8690856bce1ff97",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx1250",
+        "sha256": "ed22a5ebdc99b39de0bfd7faa52cd2a08ddcc7ae8a8ad6d271c1ae967706ecde",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx908",
+        "sha256": "3ad19e33dd42026cc898a8f8c26f4d6e88a87bad37f2f332ffe504ec541c382e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx90a",
+        "sha256": "51a984cf124c3b9f2da4a663b930ecac5aac290fcdf927c0fc4cd2fee7dfb0f8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx942",
+        "sha256": "2d42795c6473bbc7325430baca482f767fbbbf3acfacff905c0db77c871468ee",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-hiptensor7.14-gfx950",
+        "sha256": "640b41e3983588ebeb5643280120181a8d8562010776baa0e9e73b3e9d69d9e2",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-hiptensor7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-jpeg": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-jpeg-devel7.14",
+        "sha256": "26b59bcfe04763e7c67fce91f7de4ae2ed4f33c342ad14d0636690faad424980",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-jpeg-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-jpeg7.14",
+        "sha256": "7b3424900a9d591490a2ee5ba6f76cc367db8d48ede90c1369ee1225d12f1edc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-jpeg7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-math-common": {
+    "deps": [],
+    "components": [
+      {
+        "name": "amdrocm-math-common7.14",
+        "sha256": "d3bdbd3132d82fddb5b9a4d379f6ded905ae6f3d81c17f8da0da641ebe440dbb",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-math-common7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-opencl": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-opencl-devel7.14",
+        "sha256": "722168087c1449edee349eb31190f2de9e08abca5ad5f655fde87aaba950a693",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-opencl-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-opencl7.14",
+        "sha256": "b7c3fc56cea3c6b240b6e646f761537c22261c6eab11592d6721d1a73022029c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-opencl7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-profiler": {
+    "deps": [
+      "amdrocm-amdsmi",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-profiler7.14",
+        "sha256": "da04641d201ceb1258703347a12f0a17c25a7ec5fe999a4b0f00f3c3bb9b211a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-profiler7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-profiler-base": {
+    "deps": [
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-profiler-base7.14",
+        "sha256": "d1f83df763e5676c8210a1ab3df64cf0dae110cc769a72a17a5d9bfa80190fb7",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-profiler-base7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-rand": {
+    "deps": [
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-rand-devel7.14",
+        "sha256": "0c4e33e0bf3532a6fe5a823bfd12216b75efa81bd2b90e36c5bad968e408919b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand-host7.14",
+        "sha256": "7970d593ede318dfe5f17072ad5cfa2a809b47b2059263780e646cb5ee5ea715",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14",
+        "sha256": "5f2643fac1eb489710833aeec514ce3e2f31d9a6b1e3d3cc6c4765c48d8e4bec",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1010",
+        "sha256": "0f6fbcc922e47956e2a22ebba56b5597c69b42ebe59be9352774c2bd85e3bf37",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1011",
+        "sha256": "d9e7d38e8a9f04e398cc32e93fa7e68a23598fd48e380981faf54e086c4a6f3f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1012",
+        "sha256": "2bd8be964cb54249f7f0b236ba929696a33802f6e0a2a6af0d60e9b3fdd5b756",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1030",
+        "sha256": "4ea57280d31e8d2302d8c1e543bb18928e3b63cef68d014663a34b26ac21a535",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1031",
+        "sha256": "8ada5a65754376d43e6c1d5574cd03481206c30651338125b030bcad4d4c36b4",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1032",
+        "sha256": "5879d58bf581a09c7f306236d64438f90fea390d45e6a1f5e76185924751e195",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1033",
+        "sha256": "59e9d41fd4c5aefbdb0f6383aa39681f81cd8d547072adc96a079474d722c90d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1034",
+        "sha256": "4510d85420d0db25535807672e50f02ecaba70aa6b736416f10f2378603a36ca",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1035",
+        "sha256": "578f5cbcaff39359895739144f47e14d81dc45d84626231b492e3aa703e9ed51",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1036",
+        "sha256": "29ef2dc0796e577f4003a60ac0912b4a782db4d5d9f059edf2d071bcd3696b4d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1100",
+        "sha256": "b8e10ad246c3f14c838a908bd2cef207e2a9321643d1df512d3b409d633a097a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1101",
+        "sha256": "2e36b7342c342f1c11e316c870e147ad135e4cee76ab9dd1cc0364fd36fa511f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1102",
+        "sha256": "889f2db084a1367a36873524c3bdc3434eb5ccf0d8f5b89b9d35effd10c1c71f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1103",
+        "sha256": "9073c722cbabd617c6899e1b49e2282ed75732ff0d691a9194e3208b068e9f1f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1150",
+        "sha256": "1fa53404d9910960fd1172e594cd0915cf9d8b52127c6cadebe31cc6caeb1995",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1151",
+        "sha256": "75526588b07181bf36e4eaa8df61bb1d01d2db93e1987890b4f4f158cc9446f1",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1152",
+        "sha256": "c8a380823e688e11a0ca5aa374286bf1ca23c9a69581470fdd7ec415d8a86e9c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1153",
+        "sha256": "3278f52b0a2129cb4ad8234b73497eded645f8b8ff6fa9c173c08fe6606b6519",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1200",
+        "sha256": "c46ddcc27bcfd68f0533a59ebaae4c62134c752a3cd39561de58503365263b11",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1201",
+        "sha256": "5ea91771de9cabe35092c286a587d0a0e19e75c853e9349d1ee1b1efd6ef82c8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx1250",
+        "sha256": "fe033ad7a1798e0de493bd08aba05936e51e738ad6773959316ed9ba57f6ed21",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx908",
+        "sha256": "a46326451238315b61a1c4c9ebdd5e5d9b77eea3a70fcb2a6bdf1b820f3d353d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx90a",
+        "sha256": "8e04d5a3a3603e8f2f77e74360cb44f36c22d54786e806b4733e6f90db84c869",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx942",
+        "sha256": "aed5adb66e4a72d5be8e1ee41737cf0bc07f3fe6d92f5c5955b1a58fe1f4e852",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rand7.14-gfx950",
+        "sha256": "b3dbb77b6d4682599f51205d0fdc56bcedfa01afc37dd80b53775809dd5245c0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rand7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-rccl": {
+    "deps": [
+      "amdrocm-amdsmi",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-rccl-devel7.14",
+        "sha256": "4c79a40c09f45ce7c5e45de12e21150e6c86102093d2590269ead277dabc86fb",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl-host7.14",
+        "sha256": "c33843bff32ce422a151c41af94b5549007cdfcb1b08cbb391678efc11c01d84",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14",
+        "sha256": "4ce36a4ba16956302510c908e02809d66f8d9692ae74615d53078d00c414466b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1010",
+        "sha256": "2091c420671883cebe0a59df4af56d622cf2caaba41e57a551d8ca0e4b2025b0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1011",
+        "sha256": "d1ce48d55ed1e4da9e57d2ae43113a4ebb341c560622429e97a0852574987d6a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1012",
+        "sha256": "615096b8fe760c7e46c1c74c6cfaaae28364dc34d073baf1946382cdedee0beb",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1030",
+        "sha256": "d13024336359e49f6b8c82a53b72d4cc61d7045438913012d28595b135042e74",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1031",
+        "sha256": "6de4611ce132b89008123a6452c23c14670c5a9f1117e0c88a4fcb65152cf032",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1032",
+        "sha256": "47d973670dbde4ffd5658ea06f0310e9284cd6b3cccf98a644804a153d99fc8a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1033",
+        "sha256": "6327d3218c0459a6f14b4b350c76924323e78cb32bb922558a8dffc9337b5846",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1034",
+        "sha256": "748ae37a6e1d9e414330f83509735f43a5ad473e1b132b00d846e66de7d86436",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1035",
+        "sha256": "c798eb8498c1073154025a2823eae66c5afdb3c2fe668193aa049f93568ba8b9",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1036",
+        "sha256": "80ffc670fe5feefc3764e067831edd6a9b073aaa9b0d44f603eeb75a8a9a144d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1100",
+        "sha256": "35e9df288bc3964302c053adc87acb63d20cbb11cdf5f24e99a2bd823ac0c1cd",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1101",
+        "sha256": "48f899dab7ce1fd5e3061e0c44ca4c863f2fb3e93b4a673548ec3c086d17ee82",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1102",
+        "sha256": "83a288eb74870c6c9fa0c1ec248b454bdefa11141893b90e99bc1b1ed5209433",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1103",
+        "sha256": "6b84431ab3e87f73c9bdec2f6b461ab90d120227a76d7833f976aa328cb95dcd",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1150",
+        "sha256": "627a9fc93ed1469f24fdfd54f6fc0a21b4bc77abdad13080e5c9db8a033a37f8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1151",
+        "sha256": "d0b67c9a4c03792ed1a30b48554f6059ba8ebba600e090c29c94392397a7822a",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1152",
+        "sha256": "d5adc654f8195e941e74fce91839f48bf1233af920466f2caf2735c269dc444e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1153",
+        "sha256": "011e561fb799dc77da95cbd507c7fa3c010dbaa0798b2f060811d38af5467a11",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1200",
+        "sha256": "2d0ee884af056e15ed7b565cd30b4926871e962967a83186c7d30cc66ae6eb1b",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1201",
+        "sha256": "7b5bd58ec71b8f8ff3491b6111e7ed3e86874f9f4caae153acc601b77c20a313",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx1250",
+        "sha256": "85af48432bd9b80945b2c255222e9d4330a50e43ec2a9d79daa432b628e78573",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx908",
+        "sha256": "899d8f83e1bbac06f0f685286ec4a0cd581c508423c7bec3ed32f653ec841218",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx90a",
+        "sha256": "fce90da5032f28cd76861f4203116e2787cf7360fd929d7315e0fd8b7811283c",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx942",
+        "sha256": "c03512fa70681c27d3e007fb8d50e0f1730a6692b878be36969006cb4a30c15e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rccl7.14-gfx950",
+        "sha256": "23e81964f338be3bb65baf8c9cb9c01ae711f8a1adfeb33ba02419097c4ec0e5",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rccl7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-rdc": {
+    "deps": [
+      "amdrocm-amdsmi",
+      "amdrocm-profiler-base",
+      "amdrocm-runtime",
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-rdc7.14",
+        "sha256": "b0b75cdcc7fa1c7d7243970dd37b6e6e7c679e8ebeb2d51ffc869afacb8684b1",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rdc7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-rocalution": {
+    "deps": [
+      "amdrocm-blas",
+      "amdrocm-rand",
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-rocalution-devel7.14",
+        "sha256": "40bccb4afc6c556ab693d058d9bbbe84251ed67580159fff717a2e322c34b5e0",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution-host7.14",
+        "sha256": "6ab1606075dca13f2aa3b67675838673b944b4c7f401142ccbf99171042920e9",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution-host7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14",
+        "sha256": "7d96b527a5dbdb6266054afc89a05bc6bb5719bdac17ea6fc40d1ba9f5b0e162",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1010",
+        "sha256": "03fc92720879c80103d535e376aebe0259a5270c0aa2cdfbbe6aa8c5cb1b951d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1010-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1011",
+        "sha256": "b8e52b336e1309613fbb3a280f63f12f9aa81c11683a313917a04c76dcc95b33",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1011-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1012",
+        "sha256": "3ca423f25d08f334d5c32f8d614b928bab7c69bfc77f9be7582afbebf83f4dd4",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1012-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1030",
+        "sha256": "5080eb55327eb1c56d71ec683da1d2596216348bd21a355ded55fb7adf7ac05d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1030-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1031",
+        "sha256": "bbcdd9f1f3ec55ea6d85653ce39cdd3e853f4984e8767b4a30a05d185b53db40",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1031-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1032",
+        "sha256": "42cb84bb88ca38ae40a4d6925ca90304777eb16f161a261451744ed0c16f878f",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1032-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1033",
+        "sha256": "9bce5b46f780eb89b628aa5c8dc6f7210d34dd45529f6c6a9df554eb270986bd",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1033-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1034",
+        "sha256": "7d703ff5c91acb928ad5bacdf242bcef3c5138848ff9d9fd52ff6815a358c5cf",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1034-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1035",
+        "sha256": "fe7ccb3f6898b356a5ad1af91af4f0a2da25743a0a422b9cc040be4e1d9a7718",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1035-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1036",
+        "sha256": "1386c393ea472ddb01b13af9c35a5c6367e92539f5f68e0e7ab95a35000075eb",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1036-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1100",
+        "sha256": "c5678389fddd1431c0086a453408719b0f95ef61ab4198fd6bef1e11ada3ccdd",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1100-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1101",
+        "sha256": "df00712d45748e533628195cbc49489d6612edadefb03379b2647b0b54952d7e",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1101-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1102",
+        "sha256": "5a53114db872dfb0a029f45b39bfad0baaaa4beb0d9401869fef8947d678e1fa",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1102-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1103",
+        "sha256": "912ff94b33318ecf602167a24cc1cb84f5c884cd3d66ac91f8b716f80d224732",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1103-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1150",
+        "sha256": "d7f6846dbc567a7ba9b0f3325c3c4006c8b5fe1123118192a3d18450c65987bf",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1150-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1151",
+        "sha256": "5db8bda3395d034eca6ea28a4e9e2c4ae60c05f5b87791375c9f18ea93523494",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1151-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1152",
+        "sha256": "6b238394c86fa1ede1cc9d1b7088c547d12bfe4b6f44978bd4a0a29f287591f3",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1152-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1153",
+        "sha256": "46f3f533764d6d9531cf1cb24e7a7024eb3a4fb78b6d252478d284e3f792c8e4",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1153-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1200",
+        "sha256": "bc39b825cd4475dc82d613e7334e7135c4fd41851c6d9338a9aaf8ab53a8d345",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1200-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1201",
+        "sha256": "0c8e14be99dbe72ff3991d0d501bbd1121b71705d32e6c87ec11a07982533137",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1201-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx1250",
+        "sha256": "018d1712a25ebdc42b69ea0e702538180032a9560f81d00db6307bd7ea1180e6",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx1250-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx908",
+        "sha256": "6cf036137071f56426580da9019140f813fbb0612b2a6cd84e3719cc9c57cc54",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx908-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx90a",
+        "sha256": "4f709dc19a9d55ee02d1a46ae203b55fff32caabd8378c3b23a62d118f683e36",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx90a-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx942",
+        "sha256": "4f5928c437aa8bf31f7609bc1060ea4d7efd911083954cb3e0c1dd9c6ee62743",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx942-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocalution7.14-gfx950",
+        "sha256": "0f38403b7162c3c372bbbedbf1603b0023d61ba1e953312871a5ae9d0721aa52",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocalution7.14-gfx950-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-rocshmem": {
+    "deps": [
+      "amdrocm-runtime"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-rocshmem-devel7.14",
+        "sha256": "400c44b0295f792064376424aaf7b36b2e872985b30a4f33ba31f7818d229587",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocshmem-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-rocshmem7.14",
+        "sha256": "bce14bc786aa942f23ba88bb8106ba5ce9f1ba8d0efc7ff203162084051924e9",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-rocshmem7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-runtime": {
+    "deps": [
+      "amdrocm-sysdeps"
+    ],
+    "components": [
+      {
+        "name": "amdrocm-base7.14",
+        "sha256": "a76d3a4415d7f5b6d68e87e73e2fccdb1af471011ab39a767bbf49188f09e0cc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-base7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-llvm-devel7.14",
+        "sha256": "cc5ab2b6a36f5dd3812a2b7dda537374130dfd87ad6c6f8585d402adda7520cc",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-llvm-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-llvm7.14",
+        "sha256": "692efce1cab5c235b412ef6eead3baf40bc1f027b8f61179bf11388dc3c5d331",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-llvm7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-runtime-devel7.14",
+        "sha256": "527a6cb6bb0035fc94437d33af737b07ec101ffa079b3b841cc66ed58b642d1d",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-runtime-devel7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      },
+      {
+        "name": "amdrocm-runtime7.14",
+        "sha256": "633695e126535029f740a8dbfb6822e3435e380863b6b6e7470f4e22cf238eb8",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-runtime7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  },
+  "amdrocm-sysdeps": {
+    "deps": [],
+    "components": [
+      {
+        "name": "amdrocm-sysdeps7.14",
+        "sha256": "6756d5452ce657b484e29216ea21d356b863700097bff53a55d33f374edcd608",
+        "url": "https://repo.amd.com/rocm/packages-multi-arch/rhel8/x86_64/amdrocm-sysdeps7.14-7.14.1-0.x86_64.rpm",
+        "version": "7.14.1"
+      }
+    ],
+    "version": "7.14.1"
+  }
+}

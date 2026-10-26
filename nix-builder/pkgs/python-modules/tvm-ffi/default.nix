@@ -9,6 +9,7 @@
   python,
   scikit-build-core,
   setuptools-scm,
+  typing-extensions,
 }:
 
 buildPythonPackage rec {
@@ -30,6 +31,10 @@ buildPythonPackage rec {
     ninja
     scikit-build-core
     setuptools-scm
+  ];
+
+  dependencies = [
+    typing-extensions
   ];
 
   dontUseCmakeConfigure = true;

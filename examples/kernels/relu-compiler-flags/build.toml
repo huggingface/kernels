@@ -1,7 +1,7 @@
 [general]
 name = "relu-compiler-flags"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cuda",
@@ -20,19 +20,19 @@ src = [
 cxx-flags = ["-DCANARY_IN_THE_KERNEL"]
 
 [kernel.activation_xpu]
-backend = "xpu"
+language = "cpp-xpu"
 depends = ["torch"]
 sycl-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 src = ["relu_xpu/relu.cpp"]
 
 [kernel.activation]
-backend = "cuda"
+language = "cpp-cuda"
 cuda-flags = ["-DWHO_AM_I_IF_NOT_THE_CANARY"]
 depends = ["torch"]
 src = ["relu_cuda/relu.cu"]
 
 [kernel.activation_rocm]
-backend = "rocm"
+language = "cpp-rocm"
 depends = ["torch"]
 rocm-archs = [
     "gfx906",

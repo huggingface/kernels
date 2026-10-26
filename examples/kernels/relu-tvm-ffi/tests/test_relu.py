@@ -1,8 +1,9 @@
+import kernels
 import pytest
 import torch
 import torch.nn.functional as F
 
-import relu_tvm_ffi
+relu_tvm_ffi = kernels.get_kernel("kernels-test/relu-tvm-ffi", version=1)
 
 
 @pytest.mark.kernels_ci
@@ -38,6 +39,7 @@ def test_relu_layer(device):
     torch.testing.assert_close(F.relu(x), layer(x))
 
 
+@pytest.mark.kernels_ci
 def test_numpy(device):
     if device.type not in ["cpu"]:
         pytest.skip("skipping NumPy test on non-CPU device")
@@ -61,6 +63,7 @@ def test_numpy(device):
         np.testing.assert_allclose(out, out_check)
 
 
+@pytest.mark.kernels_ci
 @pytest.mark.jax_only
 def test_relu_jax(device):
     import jax

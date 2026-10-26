@@ -1,7 +1,7 @@
 [general]
 name = "relu-invalid-capability"
 version = 1
-edition = 5
+edition = 6
 license = "Apache-2.0"
 backends = [
     "cpu",
@@ -21,13 +21,13 @@ src = [
 ]
 
 [kernel.relu_rocm]
-backend = "rocm"
+language = "cpp-rocm"
 depends = ["torch"]
 rocm-archs = [ "gfx99999" ]
 src = ["relu_cuda/relu.cu"]
 
 [kernel.relu]
-backend = "cuda"
+language = "cpp-cuda"
 depends = ["torch"]
 cuda-capabilities = [ "99999.0" ]
 src = ["relu_cuda/relu.cu"]

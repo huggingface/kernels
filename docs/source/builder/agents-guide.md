@@ -97,7 +97,7 @@ version = 1
 src = ["torch-ext/torch_binding.cpp"]
 
 [kernel.rmsnorm]
-backend = "cuda"
+language = "cpp-cuda"
 src = ["kernel_src/rmsnorm.cu"]
 depends = ["torch"]
 cuda-capabilities = ["9.0"]  # H100

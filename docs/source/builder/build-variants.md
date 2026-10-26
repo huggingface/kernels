@@ -7,66 +7,109 @@ available. This list will be updated as new PyTorch versions are released.
 
 ## CPU aarch64-darwin
 
+- `torch210-cpu-aarch64-darwin`
 - `torch211-cpu-aarch64-darwin`
 - `torch212-cpu-aarch64-darwin`
 - `torch213-cpu-aarch64-darwin`
+- `torch214-cpu-aarch64-darwin`
+- `torch215-cpu-aarch64-darwin`
 
 ## Metal aarch64-darwin
 
+- `torch210-metal-aarch64-darwin`
 - `torch211-metal-aarch64-darwin`
 - `torch212-metal-aarch64-darwin`
 - `torch213-metal-aarch64-darwin`
+- `torch214-metal-aarch64-darwin`
+- `torch215-metal-aarch64-darwin`
 
 ## CPU aarch64-linux
 
-- `torch211-cxx11-cpu-aarch64-linux`
-- `torch212-cxx11-cpu-aarch64-linux`
-- `torch213-cxx11-cpu-aarch64-linux`
+- `torch210-cpu-aarch64-linux`
+- `torch211-cpu-aarch64-linux`
+- `torch212-cpu-aarch64-linux`
+- `torch213-cpu-aarch64-linux`
+- `torch214-cpu-aarch64-linux`
+- `torch215-cpu-aarch64-linux`
 
 ## CUDA aarch64-linux
 
-- `torch211-cxx11-cu126-aarch64-linux`
-- `torch211-cxx11-cu128-aarch64-linux`
-- `torch211-cxx11-cu130-aarch64-linux`
-- `torch212-cxx11-cu126-aarch64-linux`
-- `torch212-cxx11-cu130-aarch64-linux`
-- `torch212-cxx11-cu132-aarch64-linux`
-- `torch213-cxx11-cu126-aarch64-linux`
-- `torch213-cxx11-cu130-aarch64-linux`
-- `torch213-cxx11-cu132-aarch64-linux`
+- `torch210-cu126-aarch64-linux`
+- `torch210-cu128-aarch64-linux`
+- `torch210-cu130-aarch64-linux`
+- `torch211-cu126-aarch64-linux`
+- `torch211-cu128-aarch64-linux`
+- `torch211-cu130-aarch64-linux`
+- `torch212-cu126-aarch64-linux`
+- `torch212-cu130-aarch64-linux`
+- `torch212-cu132-aarch64-linux`
+- `torch213-cu126-aarch64-linux`
+- `torch213-cu130-aarch64-linux`
+- `torch213-cu132-aarch64-linux`
+- `torch214-cu126-aarch64-linux`
+- `torch214-cu130-aarch64-linux`
+- `torch214-cu132-aarch64-linux`
+- `torch215-cu130-aarch64-linux`
+- `torch215-cu132-aarch64-linux`
+- `torch215-cu134-aarch64-linux`
 
 ## CPU x86_64-linux
 
-- `torch211-cxx11-cpu-x86_64-linux`
-- `torch212-cxx11-cpu-x86_64-linux`
-- `torch213-cxx11-cpu-x86_64-linux`
+- `torch210-cpu-x86_64-linux`
+- `torch211-cpu-x86_64-linux`
+- `torch212-cpu-x86_64-linux`
+- `torch213-cpu-x86_64-linux`
+- `torch214-cpu-x86_64-linux`
+- `torch215-cpu-x86_64-linux`
 
 ## CUDA x86_64-linux
 
-- `torch211-cxx11-cu126-x86_64-linux`
-- `torch211-cxx11-cu128-x86_64-linux`
-- `torch211-cxx11-cu130-x86_64-linux`
-- `torch212-cxx11-cu126-x86_64-linux`
-- `torch212-cxx11-cu130-x86_64-linux`
-- `torch212-cxx11-cu132-x86_64-linux`
-- `torch213-cxx11-cu126-x86_64-linux`
-- `torch213-cxx11-cu130-x86_64-linux`
-- `torch213-cxx11-cu132-x86_64-linux`
+- `torch210-cu126-x86_64-linux`
+- `torch210-cu128-x86_64-linux`
+- `torch210-cu130-x86_64-linux`
+- `torch211-cu126-x86_64-linux`
+- `torch211-cu128-x86_64-linux`
+- `torch211-cu130-x86_64-linux`
+- `torch212-cu126-x86_64-linux`
+- `torch212-cu130-x86_64-linux`
+- `torch212-cu132-x86_64-linux`
+- `torch213-cu126-x86_64-linux`
+- `torch213-cu130-x86_64-linux`
+- `torch213-cu132-x86_64-linux`
+- `torch214-cu126-x86_64-linux`
+- `torch214-cu130-x86_64-linux`
+- `torch214-cu132-x86_64-linux`
+- `torch215-cu130-x86_64-linux`
+- `torch215-cu132-x86_64-linux`
+- `torch215-cu134-x86_64-linux`
 
 ## ROCm x86_64-linux
 
-- `torch211-cxx11-rocm71-x86_64-linux`
-- `torch211-cxx11-rocm72-x86_64-linux`
-- `torch212-cxx11-rocm71-x86_64-linux`
-- `torch212-cxx11-rocm72-x86_64-linux`
-- `torch213-cxx11-rocm71-x86_64-linux`
-- `torch213-cxx11-rocm72-x86_64-linux`
+- `torch210-rocm70-x86_64-linux`
+- `torch210-rocm71-x86_64-linux`
+- `torch211-rocm71-x86_64-linux`
+- `torch211-rocm72-x86_64-linux`
+- `torch212-rocm71-x86_64-linux`
+- `torch212-rocm72-x86_64-linux`
+- `torch213-rocm71-x86_64-linux`
+- `torch213-rocm72-x86_64-linux`
+- `torch214-rocm714-x86_64-linux`
+- `torch214-rocm72-x86_64-linux`
+- `torch215-rocm100-x86_64-linux`
+- `torch215-rocm714-x86_64-linux`
+
+## TPU x86_64-linux
+
+- `torch-tpu`
 
 ## XPU x86_64-linux
 
-- `torch211-cxx11-xpu20253-x86_64-linux`
-- `torch212-cxx11-xpu20253-x86_64-linux`
-- `torch213-cxx11-xpu20260-x86_64-linux`
+- `torch210-xpu20253-x86_64-linux`
+- `torch211-xpu20253-x86_64-linux`
+- `torch212-xpu20253-x86_64-linux`
+- `torch213-xpu20260-x86_64-linux`
+- `torch214-xpu20261-x86_64-linux`
+- `torch215-xpu20261-x86_64-linux`
 
 ## Python-only kernels
 
@@ -77,4 +120,5 @@ one or more of the following variants:
 - `torch-cuda`
 - `torch-metal`
 - `torch-rocm`
+- `torch-tpu`
 - `torch-xpu`

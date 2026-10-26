@@ -1,10 +1,11 @@
 import platform
 
+import kernels
 import pytest
 import torch
 
 
-from relu_tvm_ffi._ops import has_jax
+relu_tvm_ffi = kernels.get_kernel("kernels-test/relu-tvm-ffi", version=1)
 
 
 @pytest.fixture(scope="session")
@@ -20,5 +21,5 @@ def device() -> torch.device:
 
 
 def pytest_runtest_setup(item):
-    if "jax_only" in item.keywords and not has_jax:
+    if "jax_only" in item.keywords and not relu_tvm_ffi.has_jax:
         pytest.skip("skipping JAX-only test on host without JAX")

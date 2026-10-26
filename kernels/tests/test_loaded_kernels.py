@@ -3,7 +3,8 @@ from dataclasses import fields
 import pytest
 
 from kernels import get_kernel, get_loaded_kernels, get_local_kernel, install_kernel
-from kernels.utils import LoadedKernel, RepoInfo, _loaded_kernels
+from kernels.hf_hub import RepoInfo
+from kernels.importer import LoadedKernel, _loaded_kernels
 
 _REPO_ID = "kernels-community/relu"
 _PACKAGE_NAME = "relu"
@@ -57,7 +58,7 @@ def test_get_kernel_registers_loaded_kernel(fresh_registry):
     assert entry.metadata.name.python_name == _PACKAGE_NAME
     assert entry.repo_info is not None
     assert entry.repo_info.repo_id == _REPO_ID
-    assert isinstance(entry.repo_info.revision, str) and entry.repo_info.revision
+    assert str(entry.repo_info.revision)
 
 
 def test_repeated_get_kernel_is_cached(fresh_registry):

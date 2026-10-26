@@ -14,6 +14,15 @@ define_gpu_extension_target(
   USE_SABI 3
   WITH_SOABI)
 
+# Avoid that definitions of template static data members and static local
+# variables in inline functions collide. Leads to subtle bugs between kernels
+# that happen to have clashes.
+check_cxx_compiler_flag("-fno-gnu-unique" CXX_HAS_NO_GNU_UNIQUE)
+if(CXX_HAS_NO_GNU_UNIQUE)
+  target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-gnu-unique>)
+  target_compile_options(${OPS_NAME} PRIVATE $<$<COMPILE_LANGUAGE:GPU_LANGUAGE>:-fno-gnu-unique>)
+endif()
+
 if(GPU_LANG STREQUAL "SYCL")
     target_link_options(${OPS_NAME} PRIVATE ${sycl_link_flags})
     target_link_libraries(${OPS_NAME} PRIVATE dnnl)

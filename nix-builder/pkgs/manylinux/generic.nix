@@ -6,6 +6,7 @@
 
   autoPatchelfHook,
   fakeroot,
+  patchelf-old,
 
   manylinuxPackages,
 
@@ -31,6 +32,7 @@ stdenvNoCC.mkDerivation (
     inherit pname version srcs;
 
     nativeBuildInputs = [
+      patchelf-old
       autoPatchelfHook
       fakeroot
       rpmextract

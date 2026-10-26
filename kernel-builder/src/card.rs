@@ -5,12 +5,11 @@ use std::{
 };
 
 use eyre::{bail, Context, Result};
+use kernels_common::config::Build;
 use minijinja::{context, Environment};
 use rustpython_parser::{ast, Parse};
 
-use kernels_data::config::Build;
-
-use crate::util::{check_or_infer_kernel_dir, parse_build};
+use crate::util::check_or_infer_kernel_dir;
 
 fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let init_path = ["torch-ext", "tvm-ffi-ext"]
@@ -47,6 +46,9 @@ fn extract_all(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
                             }
                             None
                         })
+                        // Private exports should not appear in generated cards,
+                        // even when they are explicitly listed in __all__.
+                        .filter(|name| !name.starts_with('_'))
                         .collect();
 
                     if !names.is_empty() {
@@ -93,7 +95,9 @@ fn extract_layers(kernel_dir: &Path, module_name: &str) -> Option<Vec<String>> {
     let classes: Vec<String> = stmts
         .into_iter()
         .filter_map(|stmt| match stmt {
-            ast::Stmt::ClassDef(class_def) => Some(class_def.name.to_string()),
+            ast::Stmt::ClassDef(class_def) if !class_def.name.starts_with('_') => {
+                Some(class_def.name.to_string())
+            }
             _ => None,
         })
         .collect();
@@ -147,7 +151,7 @@ fn render_card(build: &Build, kernel_dir: &Path) -> Result<String> {
 
 pub fn fill_card(kernel_dir: Option<PathBuf>, output: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let build = parse_build(&kernel_dir)?;
+    let build = Build::open(&kernel_dir)?;
     let content = render_card(&build, &kernel_dir)?;
 
     match output {
@@ -220,6 +224,34 @@ mod tests {
     fn test_extract_functions_missing() {
         let temp_dir = tempfile::tempdir().unwrap();
         assert_eq!(extract_functions(temp_dir.path(), "missing"), None);
+    }
+
+    #[test]
+    fn test_extract_functions_excludes_private_exports() {
+        for ext_dir in ["torch-ext", "tvm-ffi-ext"] {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let kernel_dir = temp_dir.path();
+            let module_dir = kernel_dir.join(ext_dir).join("test_module");
+            fs::create_dir_all(&module_dir).unwrap();
+            fs::write(
+                module_dir.join("__init__.py"),
+                r#"__all__ = ["_internal", "func_a", "__private", "layers", "func_b"]"#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                extract_functions(kernel_dir, "test_module"),
+                Some(vec!["func_a".to_owned(), "func_b".to_owned()])
+            );
+
+            fs::write(
+                module_dir.join("__init__.py"),
+                r#"__all__ = ["_internal", "__private"]"#,
+            )
+            .unwrap();
+
+            assert_eq!(extract_functions(kernel_dir, "test_module"), None);
+        }
     }
 
     #[test]
@@ -341,6 +373,32 @@ class Softmax(nn.Module):
         fs::write(layers_dir.join("__init__.py"), r#"class ReLU: pass"#).unwrap();
 
         assert_eq!(extract_layers(kernel_dir, "test_module"), None);
+    }
+
+    #[test]
+    fn test_extract_layers_excludes_private_classes() {
+        for layers_file in ["layers.py", "layers/__init__.py"] {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let kernel_dir = temp_dir.path();
+            let module_dir = kernel_dir.join("torch-ext").join("test_module");
+            let layers_path = module_dir.join(layers_file);
+            fs::create_dir_all(layers_path.parent().unwrap()).unwrap();
+            fs::write(module_dir.join("__init__.py"), r#"__all__ = ["layers"]"#).unwrap();
+            fs::write(
+                &layers_path,
+                "class _BaseLayer: pass\nclass ReLU(_BaseLayer): pass\nclass __Private: pass\n",
+            )
+            .unwrap();
+
+            assert_eq!(
+                extract_layers(kernel_dir, "test_module"),
+                Some(vec!["ReLU".to_owned()])
+            );
+
+            fs::write(&layers_path, "class _BaseLayer: pass\n").unwrap();
+
+            assert_eq!(extract_layers(kernel_dir, "test_module"), None);
+        }
     }
 
     #[test]

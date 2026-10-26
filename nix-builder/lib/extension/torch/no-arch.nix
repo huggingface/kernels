@@ -8,6 +8,7 @@
   stdenv,
 
   kernel-builder,
+  generate-symbols-hook,
   get-kernel-check,
   hash-kernel-hook,
   kernel-layout-check,
@@ -17,6 +18,7 @@
   writeText,
 
   torch,
+  overrideTorch,
 }:
 
 {
@@ -35,12 +37,19 @@
 
   src,
 
+  # Dependencies on other kernels. Path to a JSON file that maps
+  # kernel dependencies to output paths.
+  kernelDeps,
+
   # A stringly-typed list of Python dependencies. Ideally we'd take a
   # list of derivations, but we also need to write the dependencies to
   # the output.
   pythonDeps,
 
   backendPythonDeps,
+
+  # The variant that the build is expected to produce.
+  variant,
 
   # Git provenance (`{ sha; dirty; }`, or `null`) of the kernel source, recorded
   # in the build metadata.
@@ -55,12 +64,11 @@ assert (buildConfig.metal or false) -> stdenv.hostPlatform.isDarwin;
 
 let
   inherit
-    (import ../../deps.nix {
+    (import ../../python-deps.nix {
       inherit
         lib
-        pkgs
-        stdenv
-        torch
+        python3
+        overrideTorch
         ;
     })
     resolvePythonDeps
@@ -78,7 +86,7 @@ in
 stdenv.mkDerivation (prevAttrs: {
   name = "${kernelName}-torch-ext";
 
-  inherit doKernelBuildCheck moduleName;
+  inherit doKernelBuildCheck kernelDeps moduleName;
 
   src = pkgs.runCommand "source" { } ''
     mkdir -p $out
@@ -88,6 +96,10 @@ stdenv.mkDerivation (prevAttrs: {
   '';
 
   framework = "torch";
+
+  env = {
+    inherit variant;
+  };
 
   # Add Torch as a dependency, so that devshells for universal kernels
   # also get torch as a build input.
@@ -103,6 +115,11 @@ stdenv.mkDerivation (prevAttrs: {
   ++ lib.optionals doGetKernelCheck [
     (get-kernel-check.override {
       python3 = python3.withPackages (_: dependencies);
+      kernels = overrideTorch python3.pkgs.kernels;
+    })
+    (generate-symbols-hook.override {
+      python3 = python3.withPackages (_: dependencies);
+      kernels = overrideTorch python3.pkgs.kernels;
     })
   ];
 

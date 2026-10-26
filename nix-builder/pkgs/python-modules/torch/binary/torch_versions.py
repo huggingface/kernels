@@ -4,7 +4,7 @@ Shared utilities for working with PyTorch versions and wheel URLs.
 
 from packaging.version import Version
 
-PYTHON_VERSION = "cp313"
+PYTHON_VERSION = "cp314"
 
 
 def cuda_version_to_framework(cuda_version: str) -> str:
@@ -26,9 +26,12 @@ def system_to_platform(system: str, framework_type: str, torch_version: str) -> 
         return xpu_platform_map.get(system, system)
 
     if system == "aarch64-darwin":
+        # The cp314 wheels for Torch 2.10 target macOS 14, 2.11 went back
+        # to macOS 11, and 2.12+ target macOS 14 again.
+        v = Version(torch_version)
         return (
             "macosx_14_0_arm64"
-            if Version(torch_version) >= Version("2.12")
+            if v >= Version("2.12") or (v.major, v.minor) == (2, 10)
             else "macosx_11_0_arm64"
         )
 
@@ -46,24 +49,28 @@ def generate_pytorch_url(
     python_version: str,
     system: str,
     testing: bool = False,
+    nightly_version: str = None,
 ) -> str:
     """Generate PyTorch wheel download URL."""
     platform = system_to_platform(system, framework_type, torch_version)
+    version_prefix = (
+        f"{torch_version}.dev{nightly_version}" if nightly_version else torch_version
+    )
 
     if "darwin" in system:
         framework_dir = "cpu"
-        version_part = torch_version
+        version_part = version_prefix
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     elif framework_type == "cpu":
         framework_dir = "cpu"
-        version_part = f"{torch_version}%2Bcpu"
+        version_part = f"{version_prefix}%2Bcpu"
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     elif framework_type == "xpu":
         framework = "xpu"
         framework_dir = framework
-        version_part = f"{torch_version}%2B{framework}"
+        version_part = f"{version_prefix}%2B{framework}"
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
     else:
@@ -75,12 +82,17 @@ def generate_pytorch_url(
             raise ValueError(f"Unsupported framework type: {framework_type}")
 
         framework_dir = framework
-        version_part = f"{torch_version}%2B{framework}"
+        version_part = f"{version_prefix}%2B{framework}"
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
 
-    test_prefix = "test/" if testing else ""
-    return f"https://download.pytorch.org/whl/{test_prefix}{framework_dir}/{wheel_name}"
+    if nightly_version:
+        path_prefix = "nightly/"
+    elif testing:
+        path_prefix = "test/"
+    else:
+        path_prefix = ""
+    return f"https://download.pytorch.org/whl/{path_prefix}{framework_dir}/{wheel_name}"
 
 
 def generate_pytorch_rc_hf_url(
@@ -119,4 +131,4 @@ def generate_pytorch_rc_hf_url(
         abi_tag = python_version
         wheel_name = f"torch-{version_part}-{python_version}-{abi_tag}-{platform}.whl"
 
-    return f"https://huggingface.co/buckets/danieldk/pytorch-rc/resolve/{torch_version}/{testing_release}/{wheel_name}"
+    return f"https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/{torch_version}/{testing_release}/{wheel_name}"

@@ -1,13 +1,13 @@
 import hashlib
 import importlib.util
 import json
+import logging
 import os
 import platform
 import random
 import subprocess
 import sys
 import time
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,8 +20,11 @@ from huggingface_hub.utils import (
     hf_raise_for_status,
 )
 
+from kernels.backends import _backend
 from kernels.benchmark import Benchmark
-from kernels.utils import _backend, _get_hf_api
+from kernels.hf_hub import _get_hf_api
+
+logger = logging.getLogger(__name__)
 
 MISSING_DEPS: list[str] = []
 
@@ -400,7 +403,8 @@ def collect_machine_info() -> MachineInfo:
             gpu = torch.cuda.get_device_name(0)
             # ROCm uses the CUDA API but has torch.version.hip
             if hasattr(torch.version, "hip") and torch.version.hip:
-                backend_type = f"ROCm {torch.version.hip}"
+                rocm_version = getattr(torch.version, "rocm", None) or torch.version.hip
+                backend_type = f"ROCm {rocm_version}"
             else:
                 backend_type = f"CUDA {torch.version.cuda}" if torch.version.cuda else "CUDA"
         elif backend_name == "xpu":
@@ -709,7 +713,7 @@ def run_benchmark(
 
     if is_local:
         if repo_id.count("/") == 1 and not repo_id.startswith(("./", "../")):
-            warnings.warn(
+            logger.warning(
                 f"'{repo_id}' exists locally but looks like a repo_id. Use './{repo_id}' to be explicit.",
                 stacklevel=2,
             )

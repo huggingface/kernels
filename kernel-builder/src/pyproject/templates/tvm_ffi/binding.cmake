@@ -1,3 +1,4 @@
+{% if src %}
 set(TVM_FFI_{{name}}_SRC
   {{ src|join(' ') }}
 )
@@ -18,3 +19,4 @@ set_property(
 {% endif %}
 
 list(APPEND SRC {{'"${TVM_FFI_' + name + '_SRC}"'}})
+{% endif %}

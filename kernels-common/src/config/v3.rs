@@ -1,0 +1,366 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use super::{Dependency, GitUrl, KernelName};
+use crate::{config::ConfigError, version::Version};
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Build {
+    pub general: General,
+
+    // NOTE: In v3, the absense of a framework section means torch-noarch.
+    //       However, this won't work if we have support for other noarch
+    //       frameworks in the future, so in v4, we probably have to make
+    //       a torch-noarch framework variant.
+    #[serde(flatten)]
+    pub framework: Option<Framework>,
+
+    #[serde(rename = "kernel", default)]
+    pub kernels: HashMap<String, Kernel>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Framework {
+    Torch(Torch),
+    TvmFfi(TvmFfi),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct General {
+    pub name: KernelName,
+
+    pub version: Option<usize>,
+
+    pub license: Option<String>,
+
+    pub upstream: Option<GitUrl>,
+
+    pub backends: Vec<Backend>,
+
+    pub cuda: Option<CudaGeneral>,
+
+    pub hub: Option<Hub>,
+
+    pub neuron: Option<NeuronGeneral>,
+
+    pub python_depends: Option<Vec<String>>,
+
+    pub xpu: Option<XpuGeneral>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct CudaGeneral {
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
+    pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct NeuronGeneral {
+    pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct XpuGeneral {
+    pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Hub {
+    pub repo_id: Option<String>,
+    pub branch: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Torch {
+    pub include: Option<Vec<String>>,
+    pub minver: Option<Version<2>>,
+    pub maxver: Option<Version<2>>,
+    pub pyext: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub src: Vec<PathBuf>,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TvmFfi {
+    pub include: Option<Vec<String>>,
+    pub pyext: Option<Vec<String>>,
+    pub src: Vec<PathBuf>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case", tag = "backend")]
+pub enum Kernel {
+    #[serde(rename_all = "kebab-case")]
+    Cpu {
+        cxx_flags: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        include: Option<Vec<String>>,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Cuda {
+        cuda_capabilities: Option<Vec<String>>,
+        cuda_flags: Option<Vec<String>>,
+        cuda_minver: Option<Version<2>>,
+        cxx_flags: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        include: Option<Vec<String>>,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Metal {
+        cxx_flags: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        include: Option<Vec<String>>,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Rocm {
+        cxx_flags: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        rocm_archs: Option<Vec<String>>,
+        hip_flags: Option<Vec<String>>,
+        include: Option<Vec<String>>,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Xpu {
+        cxx_flags: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        sycl_flags: Option<Vec<String>>,
+        include: Option<Vec<String>>,
+        src: Vec<String>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub enum Backend {
+    Cann,
+    Cpu,
+    Cuda,
+    Metal,
+    Neuron,
+    Rocm,
+    Tpu,
+    Xpu,
+}
+
+impl TryFrom<Build> for super::Build {
+    type Error = ConfigError;
+
+    fn try_from(build: Build) -> Result<Self, Self::Error> {
+        let kernels: HashMap<String, super::Kernel> = build
+            .kernels
+            .into_iter()
+            .map(|(k, v)| (k, v.into()))
+            .collect();
+
+        let framework = match build.framework {
+            Some(Framework::Torch(torch)) => super::Framework::Torch(torch.into()),
+            Some(Framework::TvmFfi(tvm_ffi)) => super::Framework::TvmFfi(tvm_ffi.into()),
+            None => super::Framework::TorchNoarch(super::TorchNoarch {
+                pyext: None,
+                cuda_capabilities: None,
+                rocm_archs: None,
+            }),
+        };
+
+        Ok(Self {
+            general: build.general.try_into()?,
+            framework,
+            kernels,
+        })
+    }
+}
+
+impl TryFrom<General> for super::General {
+    type Error = ConfigError;
+
+    fn try_from(general: General) -> Result<Self, Self::Error> {
+        let license = general.license.ok_or_else(|| ConfigError::Migration {
+            reason: "The `license` key is required in the `general` section".to_string(),
+        })?;
+
+        Ok(Self {
+            name: general.name,
+            version: general.version.unwrap_or(1),
+            license,
+            upstream: general.upstream,
+            source: None,
+            backends: general.backends.into_iter().map(Into::into).collect(),
+            cuda: general.cuda.map(Into::into),
+            hub: general.hub.map(Into::into),
+            kernel_depends: None,
+            neuron: general.neuron.map(Into::into),
+            python_depends: general.python_depends,
+            tpu: None,
+            xpu: general.xpu.map(Into::into),
+        })
+    }
+}
+
+impl From<CudaGeneral> for super::CudaGeneral {
+    fn from(cuda: CudaGeneral) -> Self {
+        Self {
+            minver: cuda.minver,
+            maxver: cuda.maxver,
+            kernel_depends: None,
+            python_depends: cuda.python_depends,
+        }
+    }
+}
+
+impl From<NeuronGeneral> for super::NeuronGeneral {
+    fn from(neuron: NeuronGeneral) -> Self {
+        Self {
+            kernel_depends: None,
+            python_depends: neuron.python_depends,
+        }
+    }
+}
+
+impl From<XpuGeneral> for super::XpuGeneral {
+    fn from(xpu: XpuGeneral) -> Self {
+        Self {
+            kernel_depends: None,
+            python_depends: xpu.python_depends,
+        }
+    }
+}
+
+impl From<Hub> for super::Hub {
+    fn from(hub: Hub) -> Self {
+        Self {
+            repo_id: hub.repo_id,
+            branch: hub.branch,
+        }
+    }
+}
+
+impl From<Torch> for super::Torch {
+    fn from(torch: Torch) -> Self {
+        Self {
+            include: torch.include,
+            minver: torch.minver,
+            maxver: torch.maxver,
+            pyext: torch.pyext,
+            src: torch.src,
+            stable_abi: None,
+            cxx_flags: None,
+        }
+    }
+}
+
+impl From<TvmFfi> for super::TvmFfi {
+    fn from(tvm_ffi: TvmFfi) -> Self {
+        Self {
+            include: tvm_ffi.include,
+            pyext: tvm_ffi.pyext,
+            src: tvm_ffi.src,
+            cxx_flags: None,
+        }
+    }
+}
+
+impl From<Backend> for super::Backend {
+    fn from(backend: Backend) -> Self {
+        match backend {
+            Backend::Cann => super::Backend::Cann,
+            Backend::Cpu => super::Backend::Cpu,
+            Backend::Cuda => super::Backend::Cuda,
+            Backend::Metal => super::Backend::Metal,
+            Backend::Neuron => super::Backend::Neuron,
+            Backend::Rocm => super::Backend::Rocm,
+            Backend::Tpu => super::Backend::Tpu,
+            Backend::Xpu => super::Backend::Xpu,
+        }
+    }
+}
+
+impl From<Kernel> for super::Kernel {
+    fn from(kernel: Kernel) -> Self {
+        match kernel {
+            Kernel::Cpu {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            } => super::Kernel::CppCpu {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            },
+            Kernel::Cuda {
+                cuda_capabilities,
+                cuda_flags,
+                cuda_minver,
+                cxx_flags,
+                depends,
+                include,
+                src,
+            } => super::Kernel::CppCuda {
+                cuda_capabilities,
+                cuda_flags,
+                cuda_minver,
+                cxx_flags,
+                depends,
+                include,
+                src,
+            },
+            Kernel::Metal {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            } => super::Kernel::CppMetal {
+                cxx_flags,
+                depends,
+                include,
+                src,
+            },
+            Kernel::Rocm {
+                cxx_flags,
+                depends,
+                rocm_archs,
+                hip_flags,
+                include,
+                src,
+            } => super::Kernel::CppRocm {
+                cxx_flags,
+                depends,
+                rocm_archs,
+                hip_flags,
+                include,
+                src,
+            },
+            Kernel::Xpu {
+                cxx_flags,
+                depends,
+                sycl_flags,
+                include,
+                src,
+            } => super::Kernel::CppXpu {
+                cxx_flags,
+                depends,
+                sycl_flags,
+                include,
+                src,
+            },
+        }
+    }
+}

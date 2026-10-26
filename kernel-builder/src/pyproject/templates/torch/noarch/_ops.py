@@ -4,7 +4,10 @@ def get_backend() -> str:
     """Detect the backend by inspecting torch."""
     import torch
 
-    if hasattr(torch, "neuron"):
+    acc = torch.accelerator.current_accelerator() if hasattr(torch, "accelerator") else None
+    if acc is not None and acc.type == "tpu":
+        return "tpu"
+    elif hasattr(torch, "neuron"):
         # Needs to be sorted before specific Torch builds, since Neuron
         # extension can be loaded into e.g. CUDA Torch builds.
         return "neuron"

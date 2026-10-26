@@ -2,13 +2,15 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-mod card;
-mod check_abi;
-use check_abi::{run_check_abi, CheckAbiArgs};
-
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use eyre::{Context, Result};
+use kernels_common::config::{v6, Build, BuildCompat};
+use kernels_common::git::Oid;
+
+mod card;
+mod check_abi;
+use check_abi::{run_check_abi, CheckAbiArgs};
 
 mod completions;
 use completions::print_completions;
@@ -36,19 +38,15 @@ use upload::{run_upload, RepoTypeArg, UploadArgs};
 mod pyproject;
 use pyproject::{clean_pyproject, create_pyproject};
 
-use kernels_data::config::{v5, Build, BuildCompat};
-
 mod nix;
 
 mod skills;
 
 mod util;
-use util::{check_or_infer_kernel_dir, parse_and_validate};
+use util::check_or_infer_kernel_dir;
 
 mod validate_builds;
 use validate_builds::check_builds;
-
-use crate::util::parse_and_validate_compat;
 
 /// Build-time metadata gathered by the [`built`](https://crates.io/crates/built)
 /// crate (see `build.rs`), including the `kernel-builder` git provenance that is
@@ -195,7 +193,7 @@ enum Commands {
         /// metadata. When absent, it is detected from the kernel's git
         /// repository (used by Nix builds where the source has no `.git`).
         #[arg(long)]
-        kernel_sha: Option<String>,
+        kernel_sha: Option<Oid>,
 
         /// Mark the kernel source as having uncommitted changes in the build
         /// metadata. Only meaningful together with `--kernel-sha`.
@@ -469,23 +467,23 @@ fn main() -> Result<()> {
 
 fn check_config(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    parse_and_validate(kernel_dir)?;
+    Build::open(kernel_dir)?;
     Ok(())
 }
 
 fn update_build(kernel_dir: Option<PathBuf>) -> Result<()> {
     let kernel_dir = check_or_infer_kernel_dir(kernel_dir)?;
-    let build_compat: BuildCompat = parse_and_validate_compat(&kernel_dir)?;
+    let build_compat = BuildCompat::open(&kernel_dir)?;
 
-    if matches!(build_compat, BuildCompat::V5(_)) {
+    if matches!(build_compat, BuildCompat::V6(_)) {
         return Ok(());
     }
 
     let build: Build = build_compat
         .try_into()
         .context("Cannot update build configuration")?;
-    let v5_build: v5::Build = build.into();
-    let pretty_toml = toml::to_string_pretty(&v5_build)?;
+    let v6_build: v6::Build = build.into();
+    let pretty_toml = toml::to_string_pretty(&v6_build)?;
 
     let build_toml = kernel_dir.join("build.toml");
     let mut writer =

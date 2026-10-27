@@ -373,6 +373,18 @@ def use_kernel_forward_from_hub(layer_name: str, condition: Callable[["nn.Module
     used as if it was a function. Note that a decorated function is only visible to
     [`~kernels.kernelize`] if it is attached to a module using [`~kernels.use_kernelized_func`].
 
+    <Tip warning>
+
+    Decorating functions is mainly intended for compatibility cases, such as in
+    `transformers`, where a function cannot be converted into a module. If you
+    control the model code, prefer converting the function to an `nn.Module` and
+    decorating that class with [`~kernels.use_kernel_forward_from_hub`]. In the
+    parent module's `__init__`, assign an instance of the decorated class to an
+    attribute, such as `self.activation = MyActivation()`. PyTorch then registers
+    it as a submodule, making it part of the model graph.
+
+    </Tip>
+
     Args:
         layer_name (`str`):
             The name of the layer to use for kernel lookup in registered mappings.
@@ -483,6 +495,18 @@ def use_kernelized_func(*args: Callable):
     This decorator attaches the target function within the module as a plain
     attribute (not as a submodule). This makes the function visible to
     [`~kernels.kernelize`].
+
+    <Tip warning>
+
+    This decorator is mainly intended for compatibility cases, such as in
+    `transformers`, where a function cannot be converted into a module. If you
+    control the model code, prefer converting the function to an `nn.Module` and
+    decorating that class with [`~kernels.use_kernel_forward_from_hub`]. In the
+    parent module's `__init__`, assign an instance of the decorated class to an
+    attribute, such as `self.activation = MyActivation()`. PyTorch then registers
+    it as a submodule, making it part of the model graph.
+
+    </Tip>
 
     Args:
         *args (`Callable`):

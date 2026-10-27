@@ -107,8 +107,12 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
         # extension loads the fatbin instead, so drop the PTX from what we link.
         set(_LINKED_STATICLIB ${_CARGO_TARGET_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}${_LIB_NAME}_sass${CMAKE_STATIC_LIBRARY_SUFFIX})
         list(APPEND _BYPRODUCTS ${_LINKED_STATICLIB})
+        # The launchers keep the host copies of the kernels alive, so their calls
+        # into libdevice (`__nv_*`, linked into the device code only) stay
+        # unresolved. The host copies never run: weaken those references.
         # Keeping the date lets a no-op cargo build skip the relink.
         set(_STRIP_PTX COMMAND ${CMAKE_OBJCOPY} --preserve-dates --remove-section=.oxart
+            --wildcard --weaken-symbol=__nv_*
             ${_STATICLIB} ${_LINKED_STATICLIB})
     else()
         set(_COMMANDS COMMAND ${_CARGO_COMMAND}

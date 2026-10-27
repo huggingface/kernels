@@ -65,10 +65,19 @@ compatible with layers from the hub.
 
 ### Using a function as a layer
 
-Sometimes it can be useful to make a function extensible, for example
-because the function cannot be replaced by a layer. In such cases, you
-can use the [`~kernels.use_kernel_forward_from_hub`] decorator on a
-function:
+
+> [!WARNING]
+> Decorating functions is mainly intended for compatibility cases, such as in
+`transformers`, where a function cannot be converted into a module. If you
+control the model code, prefer converting the function to an `nn.Module` and
+decorating that class with [`~kernels.use_kernel_forward_from_hub`], as shown
+in [Using a decorator](#using-a-decorator). In the parent module's `__init__`,
+assign an instance of the decorated class to an attribute, such as
+`self.activation = SiluAndMul()`. PyTorch then registers it as a submodule,
+making it part of the model graph.
+
+When a function cannot be replaced by a layer, you can use the
+[`~kernels.use_kernel_forward_from_hub`] decorator on the function:
 
 ```python
 @use_kernel_forward_from_hub("silu_and_mul")

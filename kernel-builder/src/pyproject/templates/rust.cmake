@@ -45,6 +45,10 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
         get_filename_component(_CUDA_BIN_DIR "${CMAKE_CUDA_COMPILER}" DIRECTORY)
         find_program(CUDA_PTXAS_EXECUTABLE ptxas HINTS ${_CUDA_BIN_DIR} REQUIRED)
         find_program(CUDA_FATBINARY_EXECUTABLE fatbinary HINTS ${_CUDA_BIN_DIR} REQUIRED)
+        # Without libdevice, cuda-oxide silently emits NVVM IR instead of PTX
+        # for kernels that call `__nv_*` functions (e.g. `__nv_expf`).
+        find_file(CUDA_LIBDEVICE libdevice.10.bc
+            HINTS ${_CUDA_BIN_DIR}/../nvvm/libdevice NO_DEFAULT_PATH REQUIRED)
         if(NOT CMAKE_OBJCOPY)
             message(FATAL_ERROR "rust_kernel_component: Rust CUDA kernels require objcopy")
         endif()
@@ -93,6 +97,7 @@ function(rust_kernel_component LIBS_VAR TARGETS_VAR)
             list(APPEND _COMMANDS COMMAND ${_CARGO_COMMAND}
                 "CUDA_OXIDE_TARGET=sm_${_SM}"
                 "CUDA_OXIDE_PTX_DIR=${_PASS_DIR}/ptx"
+                "CUDA_OXIDE_LIBDEVICE=${CUDA_LIBDEVICE}"
                 "RUSTFLAGS=${_RUSTFLAGS} ${_CFGS}"
                 ${CARGO_EXECUTABLE} ${_CARGO_ARGS} --target-dir ${_PASS_DIR})
             list(APPEND _PTXS ${_PASS_DIR}/ptx/${_LIB_NAME}.ptx)

@@ -219,11 +219,6 @@
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
         }
         {
-          name = "gemm-triton-autotune-kernel";
-          path = ./gemm-triton-autotune;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
-        }
-        {
           name = "kernel-deps-kernel";
           path = ./kernel-deps;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
@@ -235,11 +230,6 @@
         {
           name = "relu-triton-kernel";
           path = ./relu-triton;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
-        }
-        {
-          name = "gemm-triton-autotune-kernel";
-          path = ./gemm-triton-autotune;
           drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
         }
         {
@@ -340,11 +330,6 @@
           path = ./relu-triton;
           drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
           checkSymbols = reluSymbols;
-        }
-        {
-          name = "gemm-triton-autotune-kernel";
-          path = ./gemm-triton-autotune;
-          drv = sys: out: out.packages.${sys}.redistributable.torch-xpu;
         }
         {
           name = "relu-kernel";

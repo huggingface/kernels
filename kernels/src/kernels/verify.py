@@ -71,6 +71,12 @@ DEFAULT_POLICY: VerificationPolicy = policy.AnyOf(
                 "https://github.com/huggingface/kernels-community/.github/workflows/sign-old-builds.yaml@refs/heads/main",
             ],
         ),
+        GitHubWorkflowPolicy(
+            repo_id="huggingface/kernels-community-rs",
+            signer_uris=[
+                "https://github.com/huggingface/kernels-community-rs/.github/workflows/build.yaml@refs/heads/main",
+            ],
+        ),
     ]
 )
 """

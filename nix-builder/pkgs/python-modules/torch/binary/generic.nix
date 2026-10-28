@@ -406,7 +406,8 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
       # This keeps the outputs lean and requires downstream to specify
       # dependencies.
       rm -rf $out/${python.sitePackages}/torch/lib/{libamd*,libaotriton*,libdrm*,libelf*,libgomp*,libhip*,libhsa*,libMIOpen*,libnuma*,librccl*,libroc*,libtinfo*}.so*
-      rm -rf $out/${python.sitePackages}/torch/lib/{rocblas,hipblaslt,hipsparselt}
+      rm -rf $out/${python.sitePackages}/torch/lib/{rocblas,hipblaslt,hipsparselt,aotriton.images}
+      rm -rf $out/${python.sitePackages}/torch/share/miopen
     '';
 
   autoPatchelfIgnoreMissingDeps = lib.optionals stdenv.hostPlatform.isLinux [

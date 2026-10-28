@@ -49,7 +49,6 @@ available. This list will be updated as new PyTorch versions are released.
 - `torch214-cu126-aarch64-linux`
 - `torch214-cu130-aarch64-linux`
 - `torch214-cu132-aarch64-linux`
-- `torch215-cu130-aarch64-linux`
 - `torch215-cu132-aarch64-linux`
 - `torch215-cu134-aarch64-linux`
 
@@ -79,7 +78,6 @@ available. This list will be updated as new PyTorch versions are released.
 - `torch214-cu126-x86_64-linux`
 - `torch214-cu130-x86_64-linux`
 - `torch214-cu132-x86_64-linux`
-- `torch215-cu130-x86_64-linux`
 - `torch215-cu132-x86_64-linux`
 - `torch215-cu134-x86_64-linux`
 

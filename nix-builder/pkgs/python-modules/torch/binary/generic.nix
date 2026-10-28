@@ -82,7 +82,7 @@ let
       triton;
 
   # For the required version see:
-  # https://github.com/pytorch/pytorch/blob/v2.15.0-rc3/cmake/External/aotriton.cmake#L13
+  # https://github.com/pytorch/pytorch/blob/v2.15.0/cmake/External/aotriton.cmake#L13
   aotritonVersions = with rocmPackages; {
     "2.10" = aotriton_0_11_1;
     "2.11" = aotriton_0_11_2;

@@ -48,12 +48,12 @@ let
     };
     "3.9.0" = {
       x86_64-linux = {
-        url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton-3.9.0-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
-        hash = "sha256-MZtpln1qLD8tdGH+hsZMJNSoNfok33gQLoAm8PBRtWk=";
+        url = "https://download.pytorch.org/whl/triton-3.9.0-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+        hash = "sha256-XlKrTi8dZPCsSUyapyNpe3k/gakcTK5MNmCMoLxCZ78=";
       };
       aarch64-linux = {
-        url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton-3.9.0-cp312-abi3-linux_aarch64.whl";
-        hash = "sha256-Vax66MKJ6ZHXKl+ylIGHpPsy/Bu4JurO8TIROe7J53I=";
+        url = "https://download.pytorch.org/whl/triton-3.9.0-cp312-abi3-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl";
+        hash = "sha256-VUL0MoRy/YJ9ux7EOHM2TCiUaCzD9dHHSmQ3YpAOJD4=";
       };
     };
   };

@@ -255,6 +255,18 @@ impl Extension {
         for module in &self.modules {
             let top = module.split('.').next().unwrap();
             let import = format!("import {module}");
+            // A package-relative import (`from . import _C`) of an extension
+            // built inside the upstream package. `import {module}` also matches
+            // its tail, so these are rewritten first. Each dot run is literal,
+            // so a match cannot reach back to an earlier `from`.
+            let relative: Vec<String> = if module.contains('.') {
+                Vec::new()
+            } else {
+                [".", "..", "..."]
+                    .iter()
+                    .map(|dots| format!("from {dots} {import}"))
+                    .collect()
+            };
             let (_, imports) = Rule::new(&import, &import)?.apply(&text, lang);
             if imports == 0 {
                 let (_, from_imports) =
@@ -278,7 +290,10 @@ impl Extension {
             // An attribute access through the module, outside its own imports,
             // means it is used as an object rather than only imported for its
             // side effect of registering ops.
-            let (without_imports, _) = Rule::new(&import, "")?.apply(&text, lang);
+            let mut without_imports = text.clone();
+            for pattern in relative.iter().chain([&import]) {
+                (without_imports, _) = Rule::new(pattern, "")?.apply(&without_imports, lang);
+            }
             let used = attribute_uses(&without_imports, lang, top) > 0;
             let with = if used {
                 if module.contains('.') {
@@ -290,9 +305,11 @@ impl Extension {
             } else {
                 format!("from {package_dots} import _ops")
             };
-            let (new, n) = Rule::new(&import, &with)?.apply(&text, lang);
-            text = new;
-            tally.add("extension import(s) redirected", n);
+            for pattern in relative.iter().chain([&import]) {
+                let (new, n) = Rule::new(pattern, &with)?.apply(&text, lang);
+                text = new;
+                tally.add("extension import(s) redirected", n);
+            }
         }
 
         if let Some(ns) = &self.namespace {

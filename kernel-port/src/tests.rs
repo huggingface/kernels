@@ -1324,6 +1324,35 @@ fn extension_namespaces_torch_library_ops() {
 }
 
 #[test]
+fn extension_redirects_package_relative_imports() {
+    // The shape of torch-ms-deform-attn: a setuptools extension built inside
+    // the package and imported relatively, once for its side effect and once
+    // as an object.
+    let mut ws = ws_of(&[
+        (
+            "torch-ext/msda/_registrations.py",
+            "import torch\n\nfrom . import _C  # noqa: F401 - loads registrations\n\nforward = _native_op(\"msda::forward\")\n",
+        ),
+        (
+            "torch-ext/msda/sub/api.py",
+            "from typing import Optional\nfrom .. import _C\n\n\ndef f(x):\n    return _C.fwd(x)\n",
+        ),
+    ]);
+    run_recipe(
+        &mut ws,
+        "extension namespace=\"msda\" modules=\"_C\" changes=3\n",
+    );
+    assert_eq!(
+        ws.get_text("torch-ext/msda/_registrations.py").unwrap(),
+        "import torch\n\nfrom . import _ops  # noqa: F401 - loads registrations\nfrom ._ops import add_op_namespace_prefix\n\nforward = _native_op(add_op_namespace_prefix(\"forward\"))\n"
+    );
+    assert_eq!(
+        ws.get_text("torch-ext/msda/sub/api.py").unwrap(),
+        "from typing import Optional\nfrom .._ops import ops as _C\n\n\ndef f(x):\n    return _C.fwd(x)\n"
+    );
+}
+
+#[test]
 fn extension_refuses_what_it_cannot_convert() {
     let mut ws = ws_of(&[(
         "k/a.cu",

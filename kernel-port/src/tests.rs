@@ -191,9 +191,104 @@ fn remap_does_not_touch_other_prefixes() {
 }
 
 #[test]
-fn splice_refuses_string_literal_duplicates() {
-    let src = "from pkg.a import b\ns = \"from pkg.a import b\"\n";
-    assert!(python::relativize_source("f.py", src, &["pkg"]).is_err());
+fn remap_aliased_plain_imports() {
+    let src = "import interface as si, os\n";
+    let from: python::DottedPath = "interface".parse().unwrap();
+    let to: python::DottedPath = "msa.interface".parse().unwrap();
+    let err = python::remap_source("f.py", src, &from, &to)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("shares a statement"), "{err}");
+
+    let src = "import interface as si\nimport interface.sub  as  s;\nimport other as o\n";
+    let (out, n) = python::remap_source("f.py", src, &from, &to)
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 2);
+    assert_eq!(
+        out,
+        "import msa.interface as si\nimport msa.interface.sub  as  s;\nimport other as o\n"
+    );
+
+    // Without an alias the import binds `interface`; remapping would rebind it.
+    let err = python::remap_source("f.py", "import interface\n", &from, &to)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("binds `interface`"), "{err}");
+}
+
+#[test]
+fn convert_unaliased_import_rewrites_its_uses() {
+    let prefix: python::DottedPath = "quack".parse().unwrap();
+    let src = "import quack.activation\nfrom quack.copy_utils import c\n\n\ndef f(x):\n    # quack.activation.relu\n    return quack.activation.relu(x) + quack.activation.gelu(x)\n";
+    let (out, n) = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 1);
+    // Only exact attribute chains are rewritten; comments are left alone.
+    assert!(out.starts_with("from quack import activation\nfrom quack.copy_utils import c\n"));
+    assert!(out.contains("# quack.activation.relu\n    return activation.relu(x)"));
+
+    let src = "import quack.activation\n\nx = quack.activation.relu\n";
+    let (out, _) = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap()
+        .unwrap();
+    assert_eq!(out, "from quack import activation\n\nx = activation.relu\n");
+
+    // Another use of the package binding would be left dangling.
+    let src = "import quack.activation\n\nx = quack.activation.relu\ny = quack.other\n";
+    let err = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("1 use(s) of `quack`"), "{err}");
+
+    // The leaf name must not already be in use.
+    let src = "import quack.activation\n\ndef f(activation):\n    return quack.activation.relu(activation)\n";
+    let err = python::convert_imports_source("f.py", src, &prefix)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("already uses"), "{err}");
+}
+
+#[test]
+fn splice_skips_imports_in_strings_and_comments() {
+    let src = "from pkg.a import b\ns = \"from pkg.a import b\"\n# from pkg.a import b\n";
+    let (out, n) = python::relativize_source("f.py", src, &["pkg"])
+        .unwrap()
+        .unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(
+        out,
+        "from .a import b\ns = \"from pkg.a import b\"\n# from pkg.a import b\n"
+    );
+
+    // The einops case: a test that embeds the package import in a script.
+    let src = "import einops\n\nsrc = \"\"\"\nimport einops\nprint(einops)\n\"\"\"\n\ndef test_x():\n    import einops\n    assert einops.rearrange\n";
+    let (out, n) = python::kernelize_imports_source(
+        "t.py",
+        src,
+        "einops",
+        "einops",
+        "kernels-community/einops",
+        1,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(n, 2);
+    assert_eq!(
+        out,
+        "import kernels\neinops = kernels.get_kernel(\"kernels-community/einops\", version=1)\n\nsrc = \"\"\"\nimport einops\nprint(einops)\n\"\"\"\n\ndef test_x():\n    assert einops.rearrange\n"
+    );
+}
+
+#[test]
+fn splice_does_not_match_inside_a_from_import() {
+    // `import b` is a substring of `from a import b`, but not a statement there.
+    let src = "from pkg import b\nimport b\n";
+    let (out, n) = python::relativize_source("f.py", src, &["pkg"])
+        .unwrap()
+        .unwrap();
+    assert_eq!((out.as_str(), n), ("from . import b\nimport b\n", 1));
 }
 
 #[test]
@@ -461,7 +556,7 @@ fn mark_tests_decorates_tests_above_existing_decorators() {
         "tests/test_x.py",
         src,
         "kernels_ci",
-        &BTreeSet::new(),
+        &python::TestSelection::Exclude(BTreeSet::new()),
         &mut BTreeSet::new(),
     )
     .unwrap()
@@ -482,7 +577,7 @@ fn mark_tests_requires_pytest_import() {
         "tests/test_x.py",
         "def test_a():\n    pass\n",
         "kernels_ci",
-        &BTreeSet::new(),
+        &python::TestSelection::Exclude(BTreeSet::new()),
         &mut BTreeSet::new(),
     )
     .unwrap_err()
@@ -519,6 +614,37 @@ fn mark_tests_exclude_rejects_stale_names() {
         "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" exclude=\"test_gone\"\n",
     );
     assert!(err.contains("test_gone"), "{err}");
+}
+
+#[test]
+fn mark_tests_only_marks_named_tests() {
+    let src = "import pytest\n\ndef test_a():\n    pass\n\ndef test_b():\n    pass\n";
+    let mut ws = ws_of(&[("tests/test_x.py", src)]);
+    run_recipe(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" only=\"test_b\" changes=1\n",
+    );
+    assert_eq!(
+        ws.get_text("tests/test_x.py").unwrap(),
+        "import pytest\n\ndef test_a():\n    pass\n\n@pytest.mark.kernels_ci\ndef test_b():\n    pass\n"
+    );
+
+    let mut ws = ws_of(&[("tests/test_x.py", src)]);
+    let err = run_recipe_err(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"kernels_ci\" only=\"test_gone\"\n",
+    );
+    assert!(
+        err.contains("only names no test") && err.contains("test_gone"),
+        "{err}"
+    );
+
+    let mut ws = ws_of(&[("tests/test_x.py", src)]);
+    let err = run_recipe_err(
+        &mut ws,
+        "mark_tests in=\"tests/*.py\" marker=\"m\" only=\"test_a\" exclude=\"test_b\"\n",
+    );
+    assert!(err.contains("mutually exclusive"), "{err}");
 }
 
 #[test]
@@ -904,4 +1030,628 @@ fn strip_suffix_is_fully_pinned() {
             .contains("does not end with pinned suffix")
     );
     assert_eq!(ws.get_text("a.h").unwrap(), "a\n");
+}
+
+fn ws_of(files: &[(&str, &str)]) -> Workspace {
+    Workspace::from_files(
+        files
+            .iter()
+            .map(|(p, c)| ((*p).to_string(), c.as_bytes().to_vec()))
+            .collect(),
+    )
+}
+
+#[test]
+fn move_glob_renames_and_fixes_includes() {
+    let mut ws = ws_of(&[
+        ("k/a_sm90.cu", "a"),
+        ("k/b_sm90.cu", "b"),
+        (
+            "k/all.cu",
+            "#include \"a_sm90.cu\"\n#  include \"b_sm90.cu\" // b\n#include <a_sm90.cu>\n",
+        ),
+        ("k/other.cu", "int x; // \"a_sm90.cu\"\n"),
+    ]);
+    run_recipe(
+        &mut ws,
+        "move from=\"k/*_sm90.cu\" to=\"{dir}/{stem}.cuh\" files=2 refs=2\n",
+    );
+    assert_eq!(
+        ws.paths(),
+        vec!["k/a_sm90.cuh", "k/all.cu", "k/b_sm90.cuh", "k/other.cu"]
+    );
+    // Angle-bracket includes and text outside directives are left alone.
+    assert_eq!(
+        ws.get_text("k/all.cu").unwrap(),
+        "#include \"a_sm90.cuh\"\n#  include \"b_sm90.cuh\" // b\n#include <a_sm90.cu>\n"
+    );
+    assert_eq!(
+        ws.get_text("k/other.cu").unwrap(),
+        "int x; // \"a_sm90.cu\"\n"
+    );
+}
+
+#[test]
+fn move_fixes_includes_of_a_moved_includer() {
+    let mut ws = ws_of(&[
+        (
+            "csrc/api.cu",
+            "#include \"../common/util.h\"\n#include \"local.h\"\n",
+        ),
+        ("csrc/local.h", ""),
+        ("common/util.h", ""),
+    ]);
+    run_recipe(
+        &mut ws,
+        "move from=\"csrc/api.cu\" to=\"kernel/src/api.cu\" refs=2\n",
+    );
+    assert_eq!(
+        ws.get_text("kernel/src/api.cu").unwrap(),
+        "#include \"../../common/util.h\"\n#include \"../../csrc/local.h\"\n"
+    );
+
+    // Moving a directory together keeps its internal includes as they are.
+    let mut ws = ws_of(&[
+        ("csrc/api.cu", "#include \"local.h\"\n"),
+        ("csrc/local.h", ""),
+    ]);
+    run_recipe(&mut ws, "move from=\"csrc\" to=\"kernel\"\n");
+    assert_eq!(
+        ws.get_text("kernel/api.cu").unwrap(),
+        "#include \"local.h\"\n"
+    );
+}
+
+#[test]
+fn move_include_rewrites_are_pinned() {
+    let files = [("k/a.cu", "a"), ("k/all.cu", "#include \"a.cu\"\n")];
+    let mut ws = ws_of(&files);
+    let err = run_recipe_err(&mut ws, "move from=\"k/a.cu\" to=\"k/a.cuh\"\n");
+    assert!(err.contains("pin that with refs=1"), "{err}");
+
+    let mut ws = ws_of(&files);
+    let err = run_recipe_err(&mut ws, "move from=\"k/a.cu\" to=\"k/a.cuh\" refs=2\n");
+    assert!(err.contains("expected exactly 2 rewritten"), "{err}");
+}
+
+#[test]
+fn move_glob_is_fully_pinned() {
+    let files = [("k/a.cu", "a"), ("k/b.cu", "b"), ("k/b.cuh", "existing")];
+    let mut ws = ws_of(&files[..2]);
+    let err = run_recipe_err(
+        &mut ws,
+        "move from=\"k/*.cu\" to=\"{dir}/{stem}.cuh\" files=3\n",
+    );
+    assert!(err.contains("expected exactly 3 file(s)"), "{err}");
+
+    let mut ws = ws_of(&files);
+    let err = run_recipe_err(
+        &mut ws,
+        "move from=\"k/*.cu\" to=\"{dir}/{stem}.cuh\" files=2\n",
+    );
+    assert!(err.contains("already exists"), "{err}");
+    // Nothing is renamed when any destination clashes.
+    assert!(ws.paths().contains(&"k/a.cu".to_string()));
+
+    for bad in [
+        "move from=\"k/*.cu\" to=\"k/x.cuh\" files=2\n",
+        "move from=\"k/*.cu\" to=\"{dir}/{stem}.cuh\"\n",
+        "move from=\"k/a.cu\" to=\"k/a.cuh\" files=1\n",
+    ] {
+        let parsed = recipe::parse(bad).unwrap();
+        assert!(ops::build(&parsed.ops[0], Path::new(".")).is_err(), "{bad}");
+    }
+}
+
+fn rewrite_one(path: &str, src: &str, recipe: &str) -> String {
+    let mut ws = ws_of(&[(path, src)]);
+    run_recipe(&mut ws, recipe);
+    ws.get_text(path).unwrap().to_string()
+}
+
+#[test]
+fn rewrite_respects_identifier_boundaries() {
+    // Plain replace of `_quant_type` also hit `ft_quant_type`.
+    let out = rewrite_one(
+        "a.cu",
+        "f(_quant_type, ft_quant_type, _quant_type_x);\n",
+        "rewrite in=\"a.cu\" pattern=\"_quant_type\" with=\"qt\" changes=1\n",
+    );
+    assert_eq!(out, "f(qt, ft_quant_type, _quant_type_x);\n");
+}
+
+#[test]
+fn rewrite_skips_strings_and_comments() {
+    // Plain replace of `_cuda` also hit `klist_from_cuda`; text in strings and
+    // comments must not match either.
+    let src = "import fp4attn_cuda\n# fp4attn_cuda is the extension\nx = \"fp4attn_cuda\"\ny = klist_from_cuda\n";
+    let out = rewrite_one(
+        "api.py",
+        src,
+        "rewrite in=\"api.py\" pattern=\"import fp4attn_cuda\" with=\"from . import ops as fp4attn_cuda\" changes=1\n",
+    );
+    assert_eq!(
+        out,
+        "from . import ops as fp4attn_cuda\n# fp4attn_cuda is the extension\nx = \"fp4attn_cuda\"\ny = klist_from_cuda\n"
+    );
+}
+
+#[test]
+fn rewrite_holes_cover_balanced_text() {
+    let src = "int f() { return 1; }\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n  m.def(\"f\", &f, \"a } brace\");\n  { nested(); }\n}\nint g;\n";
+    let out = rewrite_one(
+        "a.cu",
+        src,
+        "rewrite in=\"a.cu\" pattern=\"PYBIND11_MODULE(:[args]) {:[body]}\" with=\"\" changes=1\n",
+    );
+    assert_eq!(out, "int f() { return 1; }\n\nint g;\n");
+
+    // Nested calls inside a hole, and whitespace that differs from the pattern.
+    let out = rewrite_one(
+        "t.py",
+        "assert numpy.in1d( grad.view(-1), [0, 1] ).all()\n",
+        "rewrite in=\"t.py\" pattern=\"numpy.in1d(:[args])\" with=\"numpy.isin(:[args])\" changes=1\n",
+    );
+    assert_eq!(out, "assert numpy.isin( grad.view(-1), [0, 1] ).all()\n");
+
+    let out = rewrite_one(
+        "a.cu",
+        "void f(c10::optional<at::Tensor>   &out_, int k);\n",
+        "rewrite in=\"a.cu\" pattern=\"c10::optional<:[t]> &:[[name]]\" with=\"std::optional<:[t]> :[name]\" changes=1\n",
+    );
+    assert_eq!(out, "void f(std::optional<at::Tensor> out_, int k);\n");
+}
+
+#[test]
+fn rewrite_hole_inside_a_string_stops_at_its_end() {
+    let src = "s = parse(\"flash_attn_3::fwd(Tensor q, \"\n    \"Tensor k) -> Tensor\")\nop(\"flash_attn_3::bwd\")\n";
+    let out = rewrite_one(
+        "t.py",
+        src,
+        "rewrite in=\"t.py\" pattern=\"\\\"flash_attn_3:::[rest]\\\"\" with=\"add_op_namespace_prefix(\\\"\\\") + \\\":[rest]\\\"\" changes=2\n",
+    );
+    assert_eq!(
+        out,
+        "s = parse(add_op_namespace_prefix(\"\") + \"fwd(Tensor q, \"\n    \"Tensor k) -> Tensor\")\nop(add_op_namespace_prefix(\"\") + \"bwd\")\n"
+    );
+}
+
+#[test]
+fn rewrite_is_pinned_and_rejects_vague_patterns() {
+    let mut ws = ws_of(&[("a.py", "x = 1\nx = 2\n")]);
+    let err = run_recipe_err(
+        &mut ws,
+        "rewrite in=\"a.py\" pattern=\"x = \" with=\"y = \" changes=1\n",
+    );
+    assert!(
+        err.contains("expected exactly 1 match(es) but found 2"),
+        "{err}"
+    );
+    assert_eq!(ws.get_text("a.py").unwrap(), "x = 1\nx = 2\n");
+
+    for bad in [
+        // The pin is mandatory.
+        "rewrite in=\"a.py\" pattern=\"x\" with=\"y\"\n",
+        // Patterns must be anchored by text.
+        "rewrite in=\"a.py\" pattern=\":[a]\" with=\"y\" changes=1\n",
+        "rewrite in=\"a.py\" pattern=\":[a] = 1\" with=\"y\" changes=1\n",
+        "rewrite in=\"a.py\" pattern=\"f(:[a]:[b])\" with=\"y\" changes=1\n",
+        // `with` can only use holes the pattern binds.
+        "rewrite in=\"a.py\" pattern=\"f(:[a])\" with=\":[b]\" changes=1\n",
+    ] {
+        let parsed = recipe::parse(bad).unwrap();
+        assert!(ops::build(&parsed.ops[0], Path::new(".")).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn rewrite_whitespace_matches_inside_comments() {
+    let out = rewrite_one(
+        "i.py",
+        "    import ext._C # Registers operators with PyTorch\n",
+        "rewrite in=\"i.py\" pattern=\"import ext._C # Registers operators with PyTorch\" with=\"pass\" changes=1\n",
+    );
+    assert_eq!(out, "    pass\n");
+}
+
+#[test]
+fn rewrite_identifier_hole_can_be_continued_by_text() {
+    let out = rewrite_one(
+        "api.py",
+        "import fp4attn_cuda\nimport fp4quant_cuda\nimport torch\n",
+        "rewrite in=\"api.py\" pattern=\"import :[[stem]]_cuda\" with=\"from . import ops as :[stem]_cuda\" changes=2\n",
+    );
+    assert_eq!(
+        out,
+        "from . import ops as fp4attn_cuda\nfrom . import ops as fp4quant_cuda\nimport torch\n"
+    );
+}
+
+#[test]
+fn extension_converts_a_pybind_module() {
+    // The shape of SageAttention3: pybind modules used as objects from Python.
+    let mut ws = ws_of(&[
+        (
+            "k/api.cu",
+            "#include <torch/python.h>\n#include <ATen/ATen.h>\n\nvoid fwd();\n\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n    m.def(\"fwd\", &fwd, \"Forward\");\n}\n",
+        ),
+        (
+            "torch-ext/pkg/api.py",
+            "\"\"\"Doc.\"\"\"\nimport torch\nimport attn_cuda\n\n\ndef f(x):\n    # attn_cuda is the extension\n    return attn_cuda.fwd(x)\n",
+        ),
+    ]);
+    run_recipe(
+        &mut ws,
+        "extension sources=\"k/*.cu\" modules=\"attn_cuda\" changes=3\n",
+    );
+    assert_eq!(
+        ws.get_text("k/api.cu").unwrap(),
+        "#include <torch/all.h>\n#include <ATen/ATen.h>\n\nvoid fwd();\n"
+    );
+    assert_eq!(
+        ws.get_text("torch-ext/pkg/api.py").unwrap(),
+        "\"\"\"Doc.\"\"\"\nimport torch\nfrom ._ops import ops as attn_cuda\n\n\ndef f(x):\n    # attn_cuda is the extension\n    return attn_cuda.fwd(x)\n"
+    );
+}
+
+#[test]
+fn extension_namespaces_torch_library_ops() {
+    // The shape of Flash Attention 3: TORCH_LIBRARY with a fixed namespace,
+    // loaded for its side effect and called through torch.ops.
+    let mut ws = ws_of(&[
+        (
+            "csrc/api.cpp",
+            "void f();\n\nSTABLE_TORCH_LIBRARY(fa3, m) {\n    m.def(\"fwd(Tensor q) -> Tensor\");\n}\n\nSTABLE_TORCH_LIBRARY_IMPL(fa3, CUDA, m) {\n    m.impl(\"fwd\", &f);\n}\n",
+        ),
+        (
+            "torch-ext/fa/sub/iface.py",
+            "import os\nfrom typing import (\n    Optional,\n)\n\nimport fa3._C # Registers operators with PyTorch\n\ngpu = torch.ops.fa3\n\n@torch.library.custom_op(\"fa3::_fwd\", mutates_args=())\ndef _fwd(q):\n    warn(\"fa3::_fwd (from fa3._C) not found\")\n",
+        ),
+    ]);
+    run_recipe(
+        &mut ws,
+        "extension sources=\"csrc/*.cpp\" namespace=\"fa3\" modules=\"fa3._C\" changes=5\n",
+    );
+    assert_eq!(
+        ws.get_text("csrc/api.cpp").unwrap(),
+        "void f();\n\n#include \"../torch-ext/registration.h\"\n\nSTABLE_TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, m) {\n    m.def(\"fwd(Tensor q) -> Tensor\");\n}\n\nSTABLE_TORCH_LIBRARY_IMPL_EXPAND(TORCH_EXTENSION_NAME, CUDA, m) {\n    m.impl(\"fwd\", &f);\n}\n"
+    );
+    // Strings that merely mention the namespace are left alone.
+    assert_eq!(
+        ws.get_text("torch-ext/fa/sub/iface.py").unwrap(),
+        "import os\nfrom typing import (\n    Optional,\n)\n\nfrom .. import _ops # Registers operators with PyTorch\nfrom .._ops import add_op_namespace_prefix, ops\n\ngpu = ops\n\n@torch.library.custom_op(add_op_namespace_prefix(\"_fwd\"), mutates_args=())\ndef _fwd(q):\n    warn(\"fa3::_fwd (from fa3._C) not found\")\n"
+    );
+}
+
+#[test]
+fn extension_redirects_package_relative_imports() {
+    // The shape of torch-ms-deform-attn: a setuptools extension built inside
+    // the package and imported relatively, once for its side effect and once
+    // as an object.
+    let mut ws = ws_of(&[
+        (
+            "torch-ext/msda/_registrations.py",
+            "import torch\n\nfrom . import _C  # noqa: F401 - loads registrations\n\nforward = _native_op(\"msda::forward\")\n",
+        ),
+        (
+            "torch-ext/msda/sub/api.py",
+            "from typing import Optional\nfrom .. import _C\n\n\ndef f(x):\n    return _C.fwd(x)\n",
+        ),
+    ]);
+    run_recipe(
+        &mut ws,
+        "extension namespace=\"msda\" modules=\"_C\" changes=3\n",
+    );
+    assert_eq!(
+        ws.get_text("torch-ext/msda/_registrations.py").unwrap(),
+        "import torch\n\nfrom . import _ops  # noqa: F401 - loads registrations\nfrom ._ops import add_op_namespace_prefix\n\nforward = _native_op(add_op_namespace_prefix(\"forward\"))\n"
+    );
+    assert_eq!(
+        ws.get_text("torch-ext/msda/sub/api.py").unwrap(),
+        "from typing import Optional\nfrom .._ops import ops as _C\n\n\ndef f(x):\n    return _C.fwd(x)\n"
+    );
+}
+
+#[test]
+fn extension_refuses_what_it_cannot_convert() {
+    let mut ws = ws_of(&[(
+        "k/a.cu",
+        "py::dict f();\nPYBIND11_MODULE(X, m) {\n  m.def(\"f\", &f);\n}\n",
+    )]);
+    let err = run_recipe_err(&mut ws, "extension sources=\"k/*.cu\" changes=1\n");
+    assert!(err.contains("still uses pybind11"), "{err}");
+
+    let mut ws = ws_of(&[("torch-ext/p/a.py", "from attn_cuda import fwd\n")]);
+    let err = run_recipe_err(&mut ws, "extension modules=\"attn_cuda\" changes=0\n");
+    assert!(err.contains("is not supported"), "{err}");
+
+    let mut ws = ws_of(&[("k/a.cu", "PYBIND11_MODULE(X, m) {\n}\n")]);
+    let err = run_recipe_err(&mut ws, "extension sources=\"k/*.cu\" changes=2\n");
+    assert!(
+        err.contains("expected exactly 2 change(s) but made 1 (1 pybind module(s) removed)"),
+        "{err}"
+    );
+}
+
+#[test]
+fn extension_side_effect_import_ignores_unrelated_names() {
+    // Another package's module that happens to share the extension's name is
+    // not a use of the extension.
+    let mut ws = ws_of(&[(
+        "torch-ext/fa/iface.py",
+        "try:\n    import fa3._C\nexcept ImportError:\n    from aiter.ops import fa3 as gpu\n",
+    )]);
+    run_recipe(&mut ws, "extension modules=\"fa3._C\" changes=1\n");
+    assert_eq!(
+        ws.get_text("torch-ext/fa/iface.py").unwrap(),
+        "try:\n    from . import _ops\nexcept ImportError:\n    from aiter.ops import fa3 as gpu\n"
+    );
+}
+
+#[test]
+fn extension_replaces_a_jit_build() {
+    // The shape of MSA's helpers: torch.utils.cpp_extension.load at import time.
+    let src = concat!(
+        "\"\"\"JIT-loaded extension.\"\"\"\n",
+        "\n",
+        "from __future__ import annotations\n",
+        "\n",
+        "import os\n",
+        "\n",
+        "import torch\n",
+        "from torch.utils.cpp_extension import load\n",
+        "\n",
+        "_THIS_DIR = os.path.dirname(os.path.abspath(__file__))\n",
+        "_SRC = os.path.join(_THIS_DIR, \"k.cu\")\n",
+        "\n",
+        "_extra_cflags = [\"-O3\"]\n",
+        "_extra_cuda_cflags = [\n",
+        "    \"-O3\",\n",
+        "    \"-arch=sm_100\",\n",
+        "]\n",
+        "\n",
+        "_ext = load(\n",
+        "    name=\"k_ext\",\n",
+        "    sources=[_SRC],\n",
+        "    extra_cflags=_extra_cflags,\n",
+        "    extra_cuda_cflags=_extra_cuda_cflags,\n",
+        ")\n",
+        "\n",
+        "_UNRELATED = 1\n",
+        "\n",
+        "\n",
+        "def run(x: torch.Tensor) -> None:\n",
+        "    _ext.run(x)\n",
+    );
+    let mut ws = ws_of(&[("torch-ext/pkg/sub/k/__init__.py", src)]);
+    run_recipe(&mut ws, "extension modules=\"k_ext\" changes=7\n");
+    assert_eq!(
+        ws.get_text("torch-ext/pkg/sub/k/__init__.py").unwrap(),
+        concat!(
+            "\"\"\"JIT-loaded extension.\"\"\"\n",
+            "\n",
+            "from __future__ import annotations\n",
+            "\n",
+            "import torch\n",
+            "\n",
+            "from ..._ops import ops as _ext\n",
+            "\n",
+            "_UNRELATED = 1\n",
+            "\n",
+            "\n",
+            "def run(x: torch.Tensor) -> None:\n",
+            "    _ext.run(x)\n",
+        )
+    );
+
+    // A setting still used elsewhere is kept, and so is what it uses.
+    let src = "import os\nfrom torch.utils import cpp_extension\n\nD = os.path.dirname(__file__)\n_ext = cpp_extension.load(\"k_ext\", sources=[os.path.join(D, \"k.cu\")])\nprint(D)\n";
+    let mut ws = ws_of(&[("torch-ext/pkg/k.py", src)]);
+    run_recipe(&mut ws, "extension modules=\"k_ext\" changes=2\n");
+    assert_eq!(
+        ws.get_text("torch-ext/pkg/k.py").unwrap(),
+        "import os\n\nD = os.path.dirname(__file__)\nfrom ._ops import ops as _ext\nprint(D)\n"
+    );
+}
+
+#[test]
+fn kernel_and_torch_src_follow_includes() {
+    let mut ws = ws_of(&[
+        // Quoted: next to the includer first, then the include directories.
+        (
+            "k/inst/a.cu",
+            "#include \"launch.h\"\n#include \"local.h\"\n#include <cutlass/cutlass.h>\n",
+        ),
+        ("k/inst/local.h", "#pragma once\n"),
+        (
+            "k/launch.h",
+            "#include <util/shared.h>\n#include \"../common.h\"\n",
+        ),
+        ("k/unused.h", ""),
+        ("common.h", ""),
+        // Angle brackets: only the include directories.
+        ("util/shared.h", "#  include \"deep.hpp\"\n"),
+        ("util/deep.hpp", ""),
+        ("torch-ext/binding.cpp", "#include \"../k/launch.h\"\n"),
+    ]);
+    run_recipe(
+        &mut ws,
+        concat!(
+            "kernel name=\"k\" backend=\"cuda\" src=\"k/inst/*.cu\" include=\"k,.\" follow_includes=#true\n",
+            "manifest name=\"k\" backends=\"cuda\" torch_src=\"torch-ext/*.cpp\" torch_include=\".\" torch_follow_includes=#true\n",
+        ),
+    );
+    let toml = ws.get_text("build.toml").unwrap();
+    assert!(
+        toml.contains(concat!(
+            "src = [\n",
+            "    \"common.h\",\n",
+            "    \"k/inst/a.cu\",\n",
+            "    \"k/inst/local.h\",\n",
+            "    \"k/launch.h\",\n",
+            "    \"util/deep.hpp\",\n",
+            "    \"util/shared.h\",\n",
+            "]"
+        )),
+        "{toml}"
+    );
+    assert!(
+        toml.contains(concat!(
+            "src = [\n",
+            "    \"common.h\",\n",
+            "    \"k/launch.h\",\n",
+            "    \"torch-ext/binding.cpp\",\n",
+            "    \"util/deep.hpp\",\n",
+            "    \"util/shared.h\",\n",
+            "]"
+        )),
+        "{toml}"
+    );
+    assert!(!toml.contains("unused.h"), "{toml}");
+}
+
+#[test]
+fn verify_rejects_unresolved_relative_imports() {
+    let ok = [
+        (
+            "torch-ext/pkg/__init__.py",
+            "from ._ops import ops\nfrom .sub import a\nfrom . import sub\n",
+        ),
+        (
+            "torch-ext/pkg/sub/__init__.py",
+            "from ..vend.copy import f\nfrom .. import vend\n",
+        ),
+        ("torch-ext/pkg/vend/copy.py", "from . import copy\n"),
+        ("tests/test_a.py", "from .helpers import h\n"),
+        ("tests/helpers.py", ""),
+    ];
+    let pipeline = |ws: &mut Workspace| {
+        let parsed = recipe::parse("expect in=\"**\" files=5\n").unwrap();
+        crate::run_pipeline_with(
+            ws,
+            &parsed.ops,
+            Path::new("."),
+            Path::new("."),
+            BTreeMap::new(),
+            &mut |_, _| {},
+        )
+        .map(|_| ())
+    };
+    let mut ws = ws_of(&ok);
+    pipeline(&mut ws).unwrap();
+
+    // A pruned module and a namespace package without the named submodule.
+    let mut files = ok.to_vec();
+    files[2] = (
+        "torch-ext/pkg/vend/copy.py",
+        "from ..vend.utils import g\nfrom . import rounding\n",
+    );
+    let mut ws = ws_of(&files);
+    let err = format!("{:#}", pipeline(&mut ws).unwrap_err());
+    assert!(
+        err.contains("torch-ext/pkg/vend/copy.py: from ..vend.utils import g"),
+        "{err}"
+    );
+    assert!(
+        err.contains("torch-ext/pkg/vend/copy.py: from . import rounding"),
+        "{err}"
+    );
+    assert!(!err.contains("_ops"), "{err}");
+}
+
+#[test]
+fn verify_checks_declared_signatures() {
+    let upstream = "#include <x>\nstd::tuple<at::Tensor, at::Tensor>\nmha_fwd(at::Tensor q,   // (b, s, h, d)\n        // TODO\n        std::optional<const at::Tensor> &sinks_ // (h)\n        ) {\n    run_mha_fwd(params);\n    auto r = mha_fwd(q, sinks);\n    return mha_fwd(q, sinks);\n}\n";
+    // Names and defaults may differ between a declaration and its definition.
+    let decl = "#pragma once\nstd::tuple<at::Tensor, at::Tensor> mha_fwd(\n    at::Tensor query,\n    std::optional<const at::Tensor>& sinks = std::nullopt);\n";
+    let pipeline = |ws: &mut Workspace| {
+        let parsed = recipe::parse("expect in=\"**\" files=2\n").unwrap();
+        crate::run_pipeline_with(
+            ws,
+            &parsed.ops,
+            Path::new("."),
+            Path::new("."),
+            BTreeMap::new(),
+            &mut |_, _| {},
+        )
+        .map(|_| ())
+    };
+    let mut ws = ws_of(&[("csrc/api.cpp", upstream), ("torch-ext/b.h", decl)]);
+    pipeline(&mut ws).unwrap();
+
+    let changed = upstream.replace(
+        "&sinks_ // (h)\n",
+        "&sinks_, // (h)\n        bool only_qv\n",
+    );
+    let mut ws = ws_of(&[("csrc/api.cpp", changed.as_str()), ("torch-ext/b.h", decl)]);
+    let err = format!("{:#}", pipeline(&mut ws).unwrap_err());
+    assert!(
+        err.contains("torch-ext/b.h: mha_fwd(at::Tensor query,std::optional<const at::Tensor>&sinks=std::nullopt)")
+            && err.contains(
+                "defined in csrc/api.cpp: mha_fwd(at::Tensor q,std::optional<const at::Tensor>&sinks_,bool only_qv)"
+            )
+            && err.contains("parameter 3: declared nothing, defined `bool`"),
+        "{err}"
+    );
+
+    // A declaration nothing in the port defines.
+    let mut ws = ws_of(&[
+        ("csrc/api.cpp", "int other() { return 0; }\n"),
+        ("torch-ext/b.h", decl),
+    ]);
+    let err = format!("{:#}", pipeline(&mut ws).unwrap_err());
+    assert!(err.contains("has no definition in the port"), "{err}");
+
+    // An overload set passes when one definition matches.
+    let overloads = format!("{upstream}void mha_fwd(int x) {{}}\n");
+    let mut ws = ws_of(&[
+        ("csrc/api.cpp", overloads.as_str()),
+        ("torch-ext/b.h", decl),
+    ]);
+    pipeline(&mut ws).unwrap();
+}
+
+#[test]
+fn signature_types_drop_names_and_defaults() {
+    let sig = |params: &str| crate::rewrite::Signature {
+        name: "f".into(),
+        params: params.into(),
+        definition: false,
+    };
+    assert_eq!(
+        sig(
+            "torch::Tensor const&w,bool is_int4,int64_t n=3,std::map<int, int>m,unsigned int,float"
+        )
+        .types(),
+        [
+            "torch::Tensor const&",
+            "bool",
+            "int64_t",
+            "std::map<int, int>",
+            "unsigned int",
+            "float"
+        ]
+    );
+}
+
+#[test]
+fn expect_blob_pins_an_upstream_file() {
+    // `printf 'hello\n' | git hash-object --stdin`
+    let id = "ce013625030ba8dba906f756967f9e9ca394464a";
+    assert_eq!(crate::ops::expect::git_blob_id(b"hello\n"), id);
+    let recipe = format!("expect in=\"csrc/*.cu\" blob=\"{id}\"\n");
+    let mut ws = ws_of(&[("csrc/a.cu", "hello\n")]);
+    run_recipe(&mut ws, &recipe);
+
+    let mut ws = ws_of(&[("csrc/a.cu", "hello!\n")]);
+    let err = run_recipe_err(&mut ws, &recipe);
+    assert!(
+        err.contains("csrc/a.cu is no longer the upstream file")
+            && err.contains(&format!("`git diff {id} ")),
+        "{err}"
+    );
+
+    let mut ws = ws_of(&[("csrc/a.cu", "hello\n"), ("csrc/b.cu", "hello\n")]);
+    let err = run_recipe_err(&mut ws, &recipe);
+    assert!(err.contains("match exactly one file, found 2"), "{err}");
 }

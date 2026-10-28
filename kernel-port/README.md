@@ -75,8 +75,9 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`vendor`](#vendor) | Verify a second pinned upstream (given via `--vendor`) and copy a subtree from it |
 | [`prune`](#prune) | Delete everything except the given globs |
 | [`delete`](#delete) | Delete files matching a glob (must match something) |
-| [`move`](#move) | Rename a file or directory |
+| [`move`](#move) | Rename a file, a directory, or every file matching a glob, keeping `#include`s pointing at moved files |
 | [`overlay`](#overlay) | Copy checked-in files (bindings, flake, docs) over the workspace |
+| [`rewrite`](#rewrite) | Structural find/replace with holes: cannot match inside strings, comments or identifiers; pinned `changes=N` |
 | [`replace`](#replace) | Exact-text find/replace with an optional occurrence `count` |
 | [`strip_suffix`](#strip_suffix) | Remove one literal suffix from every matched file, with a pinned `files=N` |
 | [`expect`](#expect) | Guard: assert an exact text occurs `count` times (0 asserts absence), or that a glob matches `files=N` |
@@ -87,6 +88,7 @@ Each op links to its entry in the [cookbook](#cookbook) below, which gives the f
 | [`ensure_import`](#ensure_import) | Ensure a module has an explicit top-level `from` import |
 | [`mark_tests`](#mark_tests) | Add a pytest marker (e.g. a CI subset) to every module-level test |
 | [`ensure_init`](#ensure_init) | Add an empty `__init__.py` to any package dir missing one |
+| [`extension`](#extension) | Convert an upstream native extension (pybind module, fixed Torch op namespace) to kernel-builder's, from a declaration of what it is |
 | [`kernel`](#kernel) | Record one `[kernel.<name>]` section for the manifest |
 | [`manifest`](#manifest) | Generate `build.toml` from the recorded kernel sections (or noarch mode) |
 
@@ -98,6 +100,8 @@ On top of whatever the recipe says:
 - Every op is built before the first one runs, so an argument typo or a bad glob anywhere fails the recipe before anything is mutated.
 - After the last op, every added or modified Python file must still parse.
 - No absolute in-package import may remain under `torch-ext`. The Hub loads a kernel under a build-variant directory name, so only relative intra-package imports resolve at run time.
+- Every relative import must name a module in the output (`torch-ext/<package>/_ops` excepted; the build generates it). Upstream starting to import a module the recipe prunes otherwise only fails when the kernel is imported.
+- Every function declared in a C, C++ or CUDA file under `torch-ext` must have a definition in the output with the same parameter types; names and default arguments may differ. A binding written locally against upstream entry points then fails the port when upstream changes a signature, instead of failing at link time. The error shows both parameter lists and the first parameter that differs.
 - `--out` runs write a `port-provenance.json`: recipe hash, runner version, pinned sources, output tree hash. All deterministic, so the file reproduces byte-for-byte.
 
 ## Versioning
@@ -222,26 +226,31 @@ Fails when: the glob matches nothing.
 #### `move`
 
 ```kdl
-move from="<path>" to="<path>"
+move from="<path>" to="<path>" [refs=N]
+move from="<glob>" to="<template>" files=N [refs=N]
 ```
 
-Rename a file, or a whole directory if `from` names one. Moves are recorded, so `--diff` can show a moved file's content change as `old path -> new path` instead of a delete plus an add.
+Rename a file, or a whole directory if `from` names one. With a glob, every matching file is renamed through a template built from `{dir}`, `{name}`, `{stem}` and `{ext}` of its path; `files` pins how many match, so an upstream that adds or removes one fails the run. Moves are recorded, so `--diff` can show a moved file's content change as `old path -> new path` instead of a delete plus an add.
+
+A move never breaks a quoted `#include`. Each one in a C, C++ or CUDA source is resolved the way a compiler resolves it first, against the including file's directory; if the file it named moved, or the including file itself moved, the include is rewritten to the new relative location. Angle-bracket includes and includes that resolve to no file are left alone. Any rewrite must be pinned with `refs`, so a move cannot silently edit sources.
 
 ```sh
-kernel-port -e 'move from="csrc" to="hello-kernel"' \
-    --file 'csrc/k.cu=// kernel' --file 'csrc/k.h=// header'
+kernel-port -e 'move from="k/*_sm90.cu" to="{dir}/{stem}.cuh" files=2 refs=2' \
+    --file 'k/a_sm90.cu=// a' --file 'k/b_sm90.cu=// b' \
+    --file $'k/all.cu=#include "a_sm90.cu"\n#include "b_sm90.cu"\n'
 ```
 
 ```
-[line   1] move                moved 2 file(s) to "hello-kernel"
-A hello-kernel/k.cu
-A hello-kernel/k.h
-D csrc/k.cu
-D csrc/k.h
+[line   1] move                moved 2 file(s) matching "k/*_sm90.cu" to "{dir}/{stem}.cuh", rewrote 2 #include(s)
+A k/a_sm90.cuh
+A k/b_sm90.cuh
+M k/all.cu
+D k/a_sm90.cu
+D k/b_sm90.cu
 ...
 ```
 
-Fails when: `from` matches no file or directory, or a destination path already exists.
+Fails when: `from` matches no file or directory, a glob's match count is not `files`, a destination already exists (checked before anything is renamed), or rewritten includes are not pinned by `refs`.
 
 #### `overlay`
 
@@ -260,6 +269,45 @@ overlay from="overlay"
 Fails when: the directory does not exist or contains no files.
 
 ### Editing text
+
+#### `rewrite`
+
+```kdl
+rewrite in="<glob>" pattern="<template>" with="<template>" changes=N
+```
+
+Structural find and replace for source code, in the style of [Comby](https://comby.dev). Prefer it to `replace` for any `.py`, C, C++ or CUDA file: it matches what the code says, not what its bytes happen to contain.
+
+- Each matched file is lexed by its extension (Python, or the C family) just enough to know where strings, comments and brackets are.
+- A match cannot start or end inside a string or comment, so a pattern never hits text that merely mentions a name.
+- A match cannot start or end in the middle of an identifier: `_quant_type` does not match inside `ft_quant_type`.
+- `:[name]` is a hole: the shortest balanced text that lets the rest of the pattern match. It skips whole strings and comments, never crosses an unmatched closing bracket, and a hole that starts inside a string stops at its closing quote. `:[[name]]` matches exactly one identifier. A hole used twice must match the same text.
+- Whitespace in the pattern matches any run of whitespace, including none, so formatting differences do not matter.
+- `with` is the replacement; it may use the pattern's holes.
+- `changes` is mandatory and counts matches across all files.
+
+```sh
+kernel-port -e 'rewrite in="**/*.cu" pattern="PYBIND11_MODULE(:[args]) {:[body]}" with="" changes=1' \
+    --file $'a.cu=int f();\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n  m.def("f", &f, "a } brace");\n}\n'
+```
+
+```
+[line   1] rewrite             rewrote 1 match(es) in 1 file(s)
+M a.cu
+
+FILE: a.cu
+int f();
+
+
+```
+
+```kdl
+// Holes inside call arguments, and an identifier hole.
+rewrite in="tests/*.py" pattern="numpy.in1d(:[args])" with="numpy.isin(:[args])" changes=1
+rewrite in="csrc/api.cu" pattern="c10::optional<:[t]> &:[[name]]" with="std::optional<:[t]> :[name]" changes=1
+```
+
+Fails when: the glob matches no files, the total match count is not `changes`, the pattern starts or ends with a `:[hole]` or has two holes in a row (anchor it with text instead), or `with` uses a hole the pattern does not define.
 
 #### `replace`
 
@@ -315,9 +363,10 @@ Fails when: the file count is not `files`, or any matched file does not end with
 ```kdl
 expect in="<glob>" find="<text>" count=N
 expect in="<glob>" files=N
+expect in="<path>" blob="<git blob id>"
 ```
 
-A guard that changes nothing. The first form asserts an exact text occurs exactly `count` times across the matched files - `count=0` asserts absence. The second asserts the glob matches exactly `N` files.
+A guard that changes nothing. The first form asserts an exact text occurs exactly `count` times across the matched files - `count=0` asserts absence. The second asserts the glob matches exactly `N` files. The third asserts that the one matched file has exactly this content, as a git blob id (`git ls-tree <commit> <path>` or `git hash-object <file>`). Use it for every upstream file an overlay copy was made from, placed before any op edits it: a text guard only notices changes to the lines it names, while a blob pin notices any change, and its error prints the `git diff <old-blob> <new-blob>` that shows what to carry into the overlay copy.
 
 Reach for it to state an invariant the rest of the recipe depends on but does not itself enforce: that no absolute import survived, that the upstream source list is still the size you reviewed. Guards hold regardless of which op was supposed to do the work, so they keep holding when the recipe is edited.
 
@@ -329,7 +378,7 @@ kernel-port -e 'expect in="**/*.cu" files=3' --file 'a.cu=x' --file 'sub/b.cu=y'
 error: recipe line 1: expect: expected "**/*.cu" to match exactly 3 file(s), found 2 - the upstream file set drifted; update the port definition (a.cu, sub/b.cu)
 ```
 
-Fails when: the count or file count does not match. `find` and `files` are mutually exclusive.
+Fails when: the count or file count does not match, or the definition's parameters differ from the declaration's (or either is not found exactly once). `find`, `files` and `function` are mutually exclusive.
 
 ### Rewriting Python imports
 
@@ -342,6 +391,8 @@ convert_import in="<glob>" prefix="<dotted.path>" [changes=N]
 ```
 
 Rewrite `import a.b.c as x` into `from a.b import c as x`, for modules under `prefix`. The `from` form is what the later ops can relativize; the `import` form cannot be made relative at all.
+
+An unaliased `import a.b.c` binds `a` and is used as `a.b.c.attr`; it becomes `from a.b import c`, and those uses become `c.attr`. That is refused when the module uses `a` any other way, or already uses the name `c`.
 
 ```sh
 kernel-port -e 'convert_import in="**/*.py" prefix="pkg" changes=1' \
@@ -365,7 +416,7 @@ import os
 remap_module in="<glob>" from="<dotted.path>" to="<dotted.path>" [changes=N]
 ```
 
-Move a module prefix onto a new namespace. Prefix matching is boundary-aware, so `from="pkg.utils"` does not touch `pkg.utils_extra`.
+Move a module prefix onto a new namespace, in `from` imports and in aliased `import pkg.mod as m` imports. Prefix matching is boundary-aware, so `from="pkg.utils"` does not touch `pkg.utils_extra`. An unaliased `import pkg.mod` binds `pkg`, so remapping it would change what the code refers to; it is an error.
 
 ```sh
 kernel-port -e 'remap_module in="**/*.py" from="pkg" to="torch_ext.pkg" changes=2' \
@@ -515,13 +566,13 @@ Fails when: nothing exists under `under`.
 #### `mark_tests`
 
 ```kdl
-mark_tests in="<glob>" marker="<name>" [exclude="<test>,..."] [changes=N]
+mark_tests in="<glob>" marker="<name>" [exclude="<test>,..." | only="<test>,..."] [changes=N]
 ```
 
 Decorate every module-level `test*` function and `Test*` class with
 `@pytest.mark.<marker>`, above any existing decorators. Meant for the tests CI
-should run (e.g. `kernels_ci`); narrow `in` or name tests in `exclude` to leave
-others out. Already-marked tests are left alone; `changes` pins the count, so
+should run (e.g. `kernels_ci`); narrow `in`, name tests in `exclude` to leave
+them out, or name the only tests to mark in `only`. Already-marked tests are left alone; `changes` pins the count, so
 new upstream tests aren't marked unreviewed.
 
 ```sh
@@ -544,9 +595,39 @@ def test_b(x):
     pass
 ```
 
-Fails when: a file that has tests to mark has no module-level `import pytest`, or an `exclude` name matches no test.
+Fails when: a file that has tests to mark has no module-level `import pytest`, an `exclude` or `only` name matches no test, or both are given.
 
 ### Generating the manifest
+
+#### `extension`
+
+```kdl
+extension [sources="<glob>"] [namespace="<ns>"] [modules="<module>,..."] \
+    [python="<glob>"] changes=N
+```
+
+Declare what the upstream's native extension is, and derive the conversion every kernel-builder port of it needs, instead of spelling the edits out per recipe.
+
+In the C++ `sources`:
+
+- `PYBIND11_MODULE` blocks and pybind11 includes are removed; ops are registered through `TORCH_LIBRARY` in the kernel's bindings instead.
+- `torch/extension.h` and `torch/python.h` become `torch/all.h` (or are dropped if it is already included).
+- With `namespace`, `[STABLE_]TORCH_LIBRARY[_IMPL|_FRAGMENT](<ns>, ...)` become their `_EXPAND(TORCH_EXTENSION_NAME, ...)` forms, so the ops register under the kernel-unique namespace, and `registration.h` is included relative to the file.
+
+In the Python package (`python`, default `torch-ext/**/*.py`):
+
+- `import <module>` for each of `modules` is redirected to the kernel's ops: `from ._ops import ops as <module>` when the module is used as an object (`attn_cuda.fwd(...)`), or `from . import _ops` when it is only imported to register ops.
+- A module built at import time instead, `<var> = torch.utils.cpp_extension.load(name="<module>", ...)` at module level, becomes `from ._ops import ops as <var>`. The module-level statements that only fed the build (source paths, compiler flags, the `load` import) are removed with it.
+- With `namespace`, `torch.ops.<ns>` becomes `ops`, and `"<ns>::name"` op names (as passed to `torch.library.custom_op`, `register_fake` and friends) become `add_op_namespace_prefix("name")`. The `._ops` import is added after the module's leading imports.
+
+`changes` pins the total number of edits; the run reports them by kind. Anything it cannot convert is an error rather than left behind: pybind11 still in use after the conversion (a binding that is more than a module of `m.def` calls), a `from <module> import ...`, a dotted module used as an object, or an op schema string that still names the namespace.
+
+```kdl
+extension sources="csrc/*.cu" modules="fp4attn_cuda,fp4quant_cuda" changes=6
+extension sources="hopper/flash_api_stable.cpp" namespace="flash_attn_3" \
+    modules="flash_attn_3._C" changes=9
+extension sources="csrc/build_k2q_csr.cu" modules="sparse_build_k2q_csr_ext" changes=9
+```
 
 #### `kernel`
 
@@ -554,12 +635,19 @@ Fails when: a file that has tests to mark has no module-level `import pytest`, o
 kernel name="<id>" backend="<cuda|rocm|cpu|metal|xpu|...>" src="<glob>[,<glob>...]"
     [include="<dir>,..."] [depends="torch,..."] [capabilities="8.0,9.0"]
     [cxx_flags="..."] [cuda_flags="..."] [cuda_minver="12.8"]
-    [rocm_archs="gfx942,..."] [repeat_src="<path>,..."]
+    [rocm_archs="gfx942,..."] [repeat_src="<path>,..."] [follow_includes=#true]
 ```
 
 Record one `[kernel.<name>]` section for the manifest. It writes no files; the `manifest` op emits everything recorded before it. One `kernel` per backend, and the `src` globs are resolved when the op runs, so a source file added upstream inside an already-matched directory is picked up (and one added outside it is not - that is what `expect ... files=N` is for).
 
 `depends` defaults to `torch`. `repeat_src` lists paths that must be compiled twice, and each must already be selected by `src`.
+
+With `follow_includes=#true`, `src` only needs to name the compilation units: every file they reach through `#include`s is added. A quoted include is looked up next to the including file and then in the `include` directories, an angle-bracket include only in the `include` directories, the way the compiler searches them; includes that name no file in the tree (system and dependency headers) are skipped. Conditional compilation is not evaluated, so the result can only include too much, never too little. This keeps hand-written header lists from drifting: a header upstream starts including is picked up, and one it stops including is dropped.
+
+```kdl
+kernel name="fa_sm90" backend="cuda" src="hopper/instantiations/*_sm90.cu" \
+    include="hopper" follow_includes=#true capabilities="9.0a"
+```
 
 #### `manifest`
 
@@ -568,7 +656,7 @@ manifest name="<id>" backends="<b>[,<b>...]" torch_src="<glob>[,<glob>...]"
     [version=N] [edition=N] [license="..."] [upstream="..."]
     [repo_id="org/name"] [hub_branch="..."] [python_depends="..."]
     [cuda_minver="..."] [cuda_maxver="..."] [cuda_python_depends="..."]
-    [torch_pyext="py,pyi,..."] [torch_include="<dir>,..."]
+    [torch_pyext="py,pyi,..."] [torch_include="<dir>,..."] [torch_follow_includes=#true]
     [stable_abi="cuda=2.11,..."] [stable_abi_version="2.11"]
 
 manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
@@ -576,7 +664,7 @@ manifest name="<id>" backends="..." noarch=#true [noarch_pyext="..."]
 
 Generate `build.toml` from the `kernel` sections recorded before it, plus the `[general]` and `[torch]` settings given here. The manifest is always generated, never overlaid: if it needs a field this op cannot emit, extend the op.
 
-`torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
+`torch_src` selects the binding sources; `torch_include` adds include directories for them (which is how a binding can `#include` a header from the kernel directory instead of restating its declarations). `torch_follow_includes=#true` adds the files they `#include`, as `follow_includes` does for a `kernel`. `noarch=#true` switches to a `[torch-noarch]` manifest and rejects the torch-only arguments.
 
 ```sh
 kernel-port --file 'hello-kernel/k.cu=// kernel' --file 'torch-ext/binding.cpp=// binding' \

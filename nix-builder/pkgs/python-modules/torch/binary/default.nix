@@ -13,6 +13,7 @@
 }:
 
 {
+  nccl,
   triton-cuda,
   triton-rocm,
   triton-xpu,
@@ -42,6 +43,7 @@ let
 in
 callPackage ./generic.nix {
   inherit
+    nccl
     triton-cuda
     triton-rocm
     triton-xpu

@@ -118,6 +118,11 @@ final: prev:
         triton = callPackage ./pkgs/python-modules/triton { };
         triton-rocm = callPackage ./pkgs/python-modules/triton-rocm { };
         triton-xpu = callPackage ./pkgs/python-modules/triton-xpu { };
+
+        byCudaMajor =
+          packages:
+          packages."cuda${final.cudaPackages.cudaMajorVersion}"
+            or (throw "No package available for CUDA ${final.cudaPackages.cudaMajorVersion}");
       in
       {
         inherit (triton)
@@ -267,6 +272,10 @@ final: prev:
 
         torch-bin_2_10 = mkTorch {
           version = "2.10";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_27_5;
+            cuda13 = final.nccl_2_28_9;
+          };
           triton-cuda = triton_3_6_0;
           triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_6_0;
@@ -275,6 +284,10 @@ final: prev:
 
         torch-bin_2_11 = mkTorch {
           version = "2.11";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_28_9;
+            cuda13 = final.nccl_2_28_9;
+          };
           triton-cuda = triton_3_6_0;
           triton-rocm = triton-rocm_3_6_0;
           triton-xpu = triton-xpu_3_7_0;
@@ -283,6 +296,10 @@ final: prev:
 
         torch-bin_2_12 = mkTorch {
           version = "2.12";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_29_3;
+            cuda13 = final.nccl_2_29_7;
+          };
           triton-cuda = triton_3_7_0;
           triton-rocm = triton-rocm_3_7_0;
           triton-xpu = triton-xpu_3_7_1;
@@ -291,6 +308,10 @@ final: prev:
 
         torch-bin_2_13 = mkTorch {
           version = "2.13";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_29_3;
+            cuda13 = final.nccl_2_29_7;
+          };
           triton-cuda = triton_3_7_1;
           triton-rocm = triton-rocm_3_7_1;
           triton-xpu = triton-xpu_3_7_2;
@@ -299,6 +320,10 @@ final: prev:
 
         torch-bin_2_14 = mkTorch {
           version = "2.14";
+          nccl = byCudaMajor {
+            cuda12 = final.nccl_2_29_3;
+            cuda13 = final.nccl_2_30_7;
+          };
           triton-cuda = triton_3_8_0;
           triton-rocm = triton-rocm_3_8_0;
           triton-xpu = triton-xpu_3_8_0;
@@ -307,6 +332,9 @@ final: prev:
 
         torch-bin_2_15 = mkTorch {
           version = "2.15";
+          nccl = byCudaMajor {
+            cuda13 = final.nccl_2_30_7;
+          };
           triton-cuda = triton_3_9_0;
           triton-rocm = triton-rocm_3_9_0;
           triton-xpu = triton-xpu_3_9_0;
@@ -336,6 +364,7 @@ final: prev:
   xpuPackages = final.xpuPackages_2025_3_2;
 }
 // (import ./pkgs/cutlass { pkgs = final; })
+// (import ./pkgs/nccl { inherit (final) callPackage; })
 // (
   # libnvshmem builds are very slow. Use binraries instead.
   let
@@ -345,11 +374,9 @@ final: prev:
   lib.mapAttrs (
     _: cudaPackages:
     cudaPackages.overrideScope (
-      finalScope: _:
-      {
+      finalScope: _: {
         libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
       }
-      // (import ./pkgs/nccl { inherit (finalScope) callPackage; })
     )
   ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)
 )

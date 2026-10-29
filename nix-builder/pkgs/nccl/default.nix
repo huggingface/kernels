@@ -1,10 +1,12 @@
 { callPackage }:
 
 let
-  builder = callPackage ./generic.nix { };
+  mkNccl = callPackage ./generic.nix { };
 in
 {
-  nccl_2_27_5 = builder {
+  inherit mkNccl;
+
+  nccl_2_27_5 = mkNccl {
     version = "2.27.5";
     wheels = {
       x86_64-linux.cuda12 = {
@@ -18,7 +20,7 @@ in
     };
   };
 
-  nccl_2_28_9 = builder {
+  nccl_2_28_9 = mkNccl {
     version = "2.28.9";
     wheels = {
       x86_64-linux.cuda12 = {
@@ -40,7 +42,7 @@ in
     };
   };
 
-  nccl_2_29_3 = builder {
+  nccl_2_29_3 = mkNccl {
     version = "2.29.3";
     wheels = {
       x86_64-linux.cuda12 = {
@@ -54,7 +56,7 @@ in
     };
   };
 
-  nccl_2_29_7 = builder {
+  nccl_2_29_7 = mkNccl {
     version = "2.29.7";
     wheels = {
       x86_64-linux.cuda13 = {
@@ -68,7 +70,7 @@ in
     };
   };
 
-  nccl_2_30_7 = builder {
+  nccl_2_30_7 = mkNccl {
     version = "2.30.7";
     wheels = {
       x86_64-linux.cuda13 = {

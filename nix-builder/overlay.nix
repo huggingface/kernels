@@ -347,6 +347,7 @@ final: prev:
     cudaPackages.overrideScope (
       finalScope: _: {
         libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
+        nccl = finalScope.callPackage ./pkgs/nccl { };
       }
     )
   ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)

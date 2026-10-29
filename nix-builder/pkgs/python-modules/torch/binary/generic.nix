@@ -5,7 +5,6 @@
   stdenv,
   symlinkJoin,
   buildPythonPackage,
-  fetchFromGitHub,
 
   fetchPypi,
   fetchurl,
@@ -95,6 +94,25 @@ let
   aotriton =
     aotritonVersions.${torchMajorMinor}
       or (throw "aotriton version is not specified Torch ${torchMajorMinor}");
+
+  # Required NCCL versions (for validation).
+  ncclMinVersions = {
+    "2.10" = "2.28.9";
+    "2.11" = "2.28.9";
+    "2.12" = "2.29.7";
+    "2.13" = "2.29.7";
+    "2.14" = "2.30.7";
+    "2.15" = "2.30.7";
+  };
+
+  ncclMinVersion =
+    ncclMinVersions.${torchMajorMinor}
+      or (throw "Minimum NCCL version is not specified for Torch ${torchMajorMinor}");
+
+  checkedNccl =
+    assert lib.assertMsg (versionAtLeast cudaPackages.nccl.version ncclMinVersion)
+      "Torch ${version} requires NCCL ${ncclMinVersion} or newer, but NCCL ${cudaPackages.nccl.version} was provided";
+    cudaPackages.nccl;
 
   rocmtoolkit_joined = symlinkJoin {
     name = "rocm-merged";
@@ -239,21 +257,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         libcusolver
         libcusparse
         libcusparse_lt
-        # NCCL in nixpkgs is too old.
-        (nccl.overrideAttrs (
-          finalAttrs: prevAttrs: {
-            version = "2.30.4-1";
-            src = fetchFromGitHub {
-              owner = "NVIDIA";
-              repo = "nccl";
-              tag = "v${finalAttrs.version}";
-              hash = "sha256-rgOZTJ8iSYHXzk9lyUElvbw8IysauPJJZyQxhhRZNz4=";
-            };
-            postPatch = prevAttrs.postPatch + ''
-              patchShebangs ./src/misc/generate_git_version.py
-            '';
-          }
-        ))
+        checkedNccl
       ]
     )
     ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [

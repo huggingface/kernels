@@ -129,6 +129,7 @@ in
   # Construct the nixpkgs package set for the given backend versions. The
   # package set does not depend on the Torch version.
   mkPkgs =
+    extraOverlays:
     {
       backend,
       system,
@@ -163,6 +164,7 @@ in
         rust-overlay.overlays.default
       ]
       ++ backendOverlay
+      ++ extraOverlays
       ++ [ noTorchOverlay ];
     };
 

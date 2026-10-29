@@ -95,24 +95,39 @@ let
     aotritonVersions.${torchMajorMinor}
       or (throw "aotriton version is not specified Torch ${torchMajorMinor}");
 
-  # Required NCCL versions (for validation).
-  ncclMinVersions = {
-    "2.10" = "2.28.9";
-    "2.11" = "2.28.9";
-    "2.12" = "2.29.7";
-    "2.13" = "2.29.7";
-    "2.14" = "2.30.7";
-    "2.15" = "2.30.7";
+  ncclVersions = {
+    "2.10" = {
+      cuda12 = "2.27.5";
+      cuda13 = "2.28.9";
+    };
+    "2.11" = {
+      cuda12 = "2.28.9";
+      cuda13 = "2.28.9";
+    };
+    "2.12" = {
+      cuda12 = "2.29.3";
+      cuda13 = "2.29.7";
+    };
+    "2.13" = {
+      cuda12 = "2.29.3";
+      cuda13 = "2.29.7";
+    };
+    "2.14" = {
+      cuda12 = "2.29.3";
+      cuda13 = "2.30.7";
+    };
+    "2.15" = {
+      cuda13 = "2.30.7";
+    };
   };
 
-  ncclMinVersion =
-    ncclMinVersions.${torchMajorMinor}
-      or (throw "Minimum NCCL version is not specified for Torch ${torchMajorMinor}");
-
-  checkedNccl =
-    assert lib.assertMsg (versionAtLeast cudaPackages.nccl.version ncclMinVersion)
-      "Torch ${version} requires NCCL ${ncclMinVersion} or newer, but NCCL ${cudaPackages.nccl.version} was provided";
-    cudaPackages.nccl;
+  torchNccl =
+    let
+      ncclVersion =
+        ncclVersions.${torchMajorMinor}."cuda${cudaPackages.cudaMajorVersion}"
+          or (throw "NCCL version is not specified for Torch ${torchMajorMinor} and CUDA ${cudaPackages.cudaMajorVersion}");
+    in
+    cudaPackages."nccl_${lib.replaceStrings [ "." ] [ "_" ] ncclVersion}";
 
   rocmtoolkit_joined = symlinkJoin {
     name = "rocm-merged";
@@ -257,7 +272,7 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         libcusolver
         libcusparse
         libcusparse_lt
-        checkedNccl
+        torchNccl
       ]
     )
     ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [

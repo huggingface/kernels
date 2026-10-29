@@ -345,10 +345,11 @@ final: prev:
   lib.mapAttrs (
     _: cudaPackages:
     cudaPackages.overrideScope (
-      finalScope: _: {
+      finalScope: _:
+      {
         libnvshmem = finalScope.callPackage ./pkgs/libnvshmem { };
-        nccl = finalScope.callPackage ./pkgs/nccl { };
       }
+      // (import ./pkgs/nccl { inherit (finalScope) callPackage; })
     )
   ) (lib.filterAttrs (name: _: isCudaPackageSet name) prev)
 )

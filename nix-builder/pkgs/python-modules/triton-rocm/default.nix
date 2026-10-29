@@ -32,8 +32,8 @@ let
     };
     "3.9.0" = {
       x86_64-linux = {
-        url = "https://huggingface.co/buckets/kernels-community/pytorch-rc/resolve/2.15.0/rc3/triton_rocm-3.9.0-cp312-abi3-linux_x86_64.whl";
-        hash = "sha256-PN2kG6Y4PcO3B/jbaBbxfGz5fXYOiulH0fAS9Z98T5A=";
+        url = "https://download.pytorch.org/whl/triton_rocm-3.9.0-cp312-abi3-linux_x86_64.whl";
+        hash = "sha256-lOTCKOqQpNbHntxQY4Mpk9zrNdgiAtHIkejsjiv1Q8M=";
       };
     };
   };

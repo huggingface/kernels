@@ -50,7 +50,11 @@
         x86_64-linux
       ];
 
-      torchVersions' = import ./nix-builder/versions.nix;
+      inherit (import ./nix-builder/lib/torch-version-utils.nix { inherit (nixpkgs) lib; })
+        flattenSystems
+        ;
+
+      torchVersions' = flattenSystems (import ./nix-builder/versions.nix);
 
       defaultBuildSets = mkBuildSets [ ] torchVersions' systems;
       defaultBuildSetsPerSystem = partitionBuildSetsBySystem defaultBuildSets;
@@ -108,7 +112,7 @@
           }:
           assert
             (builtins.isFunction torchVersions)
-            || abort "`torchVersions` must be a function taking one argument (the default version set)";
+            || abort "`torchVersions` must be a function taking one argument (the default version set, flattened to one entry per system)";
           let
             buildSets = mkBuildSets overlays (torchVersions torchVersions') systems;
             buildSetsPerSystem = partitionBuildSetsBySystem buildSets;

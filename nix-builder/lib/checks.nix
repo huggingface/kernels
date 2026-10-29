@@ -103,6 +103,43 @@ let
           }
         ];
       };
+      testFlattenSystemsPtxasVersion = {
+        expr = flattenSystems [ (validVersion // { ptxasVersion = "13.4"; }) ];
+        expected = [
+          {
+            torchVersion = "2.13";
+            cudaVersion = "13.0";
+            ptxasVersion = "13.4";
+            system = "x86_64-linux";
+            bundleBuild = true;
+          }
+          {
+            torchVersion = "2.13";
+            cudaVersion = "13.0";
+            ptxasVersion = "13.4";
+            system = "aarch64-linux";
+            bundleBuild = true;
+          }
+        ];
+      };
+      testFlattenSystemsPtxasVersionPerSystem = {
+        expr = flattenSystems [ (validVersion // { ptxasVersion.aarch64-linux = "13.4"; }) ];
+        expected = [
+          {
+            torchVersion = "2.13";
+            cudaVersion = "13.0";
+            system = "x86_64-linux";
+            bundleBuild = true;
+          }
+          {
+            torchVersion = "2.13";
+            cudaVersion = "13.0";
+            ptxasVersion = "13.4";
+            system = "aarch64-linux";
+            bundleBuild = true;
+          }
+        ];
+      };
       testFlattenSystemsValidates = {
         expr = throws (flattenSystems [ (validVersion // { cudaVerison = "13.0"; }) ]);
         expected = true;

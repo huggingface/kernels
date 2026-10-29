@@ -41,13 +41,37 @@ rec {
           version
       );
 
+  # `ptxasVersion` is either a version string that applies to all systems,
+  # or an attrset { <system> = <version>; } to override ptxas only on some
+  # systems. Resolve it for a single system; `null` means: use the ptxas
+  # from `cudaVersion`.
+  ptxasVersionForSystem =
+    version: system:
+    let
+      ptxasVersion = version.ptxasVersion or null;
+    in
+    if builtins.isAttrs ptxasVersion then ptxasVersion.${system} or null else ptxasVersion;
+
   # Expand { systems = [ a b ]; .. } to [ { system = a; ..} { system = b; .. } ]
   flattenSystems =
     versions:
     lib.foldl' (
       acc: version:
       acc
-      ++ map (system: (builtins.removeAttrs version [ "systems" ]) // { inherit system; }) version.systems
+      ++ map (
+        system:
+        let
+          ptxasVersion = ptxasVersionForSystem version system;
+        in
+        (builtins.removeAttrs version [
+          "systems"
+          "ptxasVersion"
+        ])
+        // {
+          inherit system;
+        }
+        // lib.optionalAttrs (ptxasVersion != null) { inherit ptxasVersion; }
+      ) version.systems
     ) [ ] (map validateTorchVersion versions);
 
   backend =

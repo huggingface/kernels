@@ -30,6 +30,8 @@
   {
     torchVersion = "2.10";
     cudaVersion = "13.0";
+    # ptxas 13.0 segfaults on aarch64 compiling large sm90 kernels (flash-attn3).
+    ptxasVersion.aarch64-linux = "13.4";
     systems = [
       "x86_64-linux"
       "aarch64-linux"
@@ -83,6 +85,8 @@
   {
     torchVersion = "2.11";
     cudaVersion = "13.0";
+    # ptxas 13.0 segfaults on aarch64 compiling large sm90 kernels (flash-attn3).
+    ptxasVersion.aarch64-linux = "13.4";
     systems = [
       "x86_64-linux"
       "aarch64-linux"
@@ -152,6 +156,8 @@
   {
     torchVersion = "2.12";
     cudaVersion = "13.0";
+    # ptxas 13.0 segfaults on aarch64 compiling large sm90 kernels (flash-attn3).
+    ptxasVersion.aarch64-linux = "13.4";
     systems = [
       "x86_64-linux"
       "aarch64-linux"
@@ -216,6 +222,8 @@
   {
     torchVersion = "2.13";
     cudaVersion = "13.0";
+    # ptxas 13.0 segfaults on aarch64 compiling large sm90 kernels (flash-attn3).
+    ptxasVersion.aarch64-linux = "13.4";
     systems = [
       "x86_64-linux"
       "aarch64-linux"
@@ -283,6 +291,8 @@
   {
     torchVersion = "2.14";
     cudaVersion = "13.0";
+    # ptxas 13.0 segfaults on aarch64 compiling large sm90 kernels (flash-attn3).
+    ptxasVersion.aarch64-linux = "13.4";
     systems = [
       "x86_64-linux"
       "aarch64-linux"

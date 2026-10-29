@@ -39,11 +39,14 @@ let
           self: super: {
             cuda_nvcc = super.cuda_nvcc.overrideAttrs (prevAttrs: {
               # Do this before the original postInstall, so that subsequent
-              # postInstall steps are applied.
+              # postInstall steps are applied. Since CUDA 13, nvvm is not
+              # part of cuda_nvcc anymore, but a separate libnvvm package.
               postInstall = ''
                 cp ${ptxasPackages.cuda_nvcc.src}/bin/ptxas $out/bin/ptxas
                 cp ${ptxasPackages.cuda_nvcc.src}/bin/nvlink $out/bin/nvlink
-                cp ${ptxasPackages.cuda_nvcc.src}/nvvm/bin/* $out/nvvm/bin/
+                if [ -d ${ptxasPackages.cuda_nvcc.src}/nvvm/bin ]; then
+                  cp ${ptxasPackages.cuda_nvcc.src}/nvvm/bin/* $out/nvvm/bin/
+                fi
               ''
               + prevAttrs.postInstall or "";
             });

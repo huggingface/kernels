@@ -6,6 +6,7 @@
 
   # Native build inputs
   autoPatchelfHook,
+  markForCudatoolkitRootHook,
   unzip,
 
   # Build inputs
@@ -57,6 +58,7 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = [
     autoPatchelfHook
+    markForCudatoolkitRootHook
     unzip
   ];
 

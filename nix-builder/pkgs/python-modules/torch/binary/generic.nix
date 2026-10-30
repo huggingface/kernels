@@ -5,7 +5,6 @@
   stdenv,
   symlinkJoin,
   buildPythonPackage,
-  fetchFromGitHub,
 
   fetchPypi,
   fetchurl,
@@ -29,6 +28,7 @@
 
   # Build inputs
   cudaPackages,
+  nccl,
   numactl,
   rocmPackages,
   xpuPackages,
@@ -239,23 +239,9 @@ buildPythonPackage.override { stdenv = effectiveStdenv; } {
         libcusolver
         libcusparse
         libcusparse_lt
-        # NCCL in nixpkgs is too old.
-        (nccl.overrideAttrs (
-          finalAttrs: prevAttrs: {
-            version = "2.30.4-1";
-            src = fetchFromGitHub {
-              owner = "NVIDIA";
-              repo = "nccl";
-              tag = "v${finalAttrs.version}";
-              hash = "sha256-rgOZTJ8iSYHXzk9lyUElvbw8IysauPJJZyQxhhRZNz4=";
-            };
-            postPatch = prevAttrs.postPatch + ''
-              patchShebangs ./src/misc/generate_git_version.py
-            '';
-          }
-        ))
       ]
     )
+    ++ lib.optionals cudaSupport [ nccl ]
     ++ lib.optionals (cudaSupport && versionAtLeast version "2.9") [
       cudaPackages.libnvshmem
     ]

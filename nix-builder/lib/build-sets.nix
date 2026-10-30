@@ -42,7 +42,7 @@ let
 in
 rec {
   mkBuildSets =
-    torchVersions: systems:
+    extraOverlays: torchVersions: systems:
     let
       configs = lib.concatMap (buildConfigs torchVersions) systems;
       # Multiple builsets can share the same nixpkgs instance, for example:
@@ -57,7 +57,7 @@ rec {
       pkgsByKey = builtins.listToAttrs (
         map (buildConfig: {
           name = pkgsKey buildConfig;
-          value = mkPkgs buildConfig;
+          value = mkPkgs extraOverlays buildConfig;
         }) configs
       );
     in

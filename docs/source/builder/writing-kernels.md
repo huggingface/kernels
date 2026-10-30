@@ -209,8 +209,8 @@ The following sections enumerate all supported options for `build.toml`.
   formatted source repository. This repository must contain a `build.toml` and
   `flake.nix` so that it can be pulled and built with the kernel builder.
 - `python-depends` (**experimental**): a list of additional Python dependencies
-  that the kernel requires. The only supported dependencies are `einops`,
-  `helion`, and `nvidia-cutlass-dsl`.
+  that the kernel requires for all backends. The supported dependencies are
+  listed in the [kernel requirements](../kernel-requirements.md#allowed-dependencies).
 
 ### `general.hub`
 
@@ -229,6 +229,14 @@ The following sections enumerate all supported options for `build.toml`.
   build variants that are [required for compliant kernels](../kernel-requirements.md).
   This option is provided for kernels that require functionality only
   provided by newer CUDA toolkits.
+- `python-depends` (**experimental**): a list of additional Python dependencies
+  that the kernel requires when built for CUDA, e.g. `nvidia-cutlass-dsl` or
+  `uccl`.
+
+### `general.rocm`
+
+- `python-depends` (**experimental**): a list of additional Python dependencies
+  that the kernel requires when built for ROCm, e.g. `uccl`.
 
 ### Framework sections
 

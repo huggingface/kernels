@@ -150,6 +150,7 @@ pub struct General {
 
     pub cuda: Option<CudaGeneral>,
     pub neuron: Option<NeuronGeneral>,
+    pub rocm: Option<RocmGeneral>,
     pub tpu: Option<TpuGeneral>,
     pub xpu: Option<XpuGeneral>,
 }
@@ -182,6 +183,10 @@ impl General {
                 .cuda
                 .as_ref()
                 .and_then(|cuda| cuda.python_depends.as_ref()),
+            Backend::Rocm => self
+                .rocm
+                .as_ref()
+                .and_then(|rocm| rocm.python_depends.as_ref()),
             Backend::Tpu => self
                 .tpu
                 .as_ref()
@@ -248,6 +253,10 @@ pub struct XpuGeneral {
 
 pub struct NeuronGeneral {
     pub kernel_depends: Option<Vec<KernelDependency>>,
+    pub python_depends: Option<Vec<String>>,
+}
+
+pub struct RocmGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -574,9 +583,24 @@ mod tests {
                 python_depends: Some(vec!["nvidia-cutlass-dsl".to_string()]),
             }),
             neuron: None,
+            rocm: Some(RocmGeneral {
+                python_depends: Some(vec!["uccl".to_string()]),
+            }),
             tpu: None,
             xpu: None,
         }
+    }
+
+    #[test]
+    fn backend_python_depends_resolves_rocm() {
+        let general = general_with_cuda_deps();
+        let deps = general
+            .backend_python_depends(Backend::Rocm)
+            .map(|dep| dep.map(|(name, _)| name.to_string()))
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
+
+        assert_eq!(deps, vec!["uccl".to_string()]);
     }
 
     #[test]
@@ -650,6 +674,55 @@ mod tests {
 
         assert_eq!(build.kernels["relu"].backend(), Backend::Cuda);
         assert_eq!(build.kernels["relu"].language(), Language::Cpp);
+    }
+
+    #[test]
+    fn v6_rocm_python_depends_round_trip() {
+        let config = r#"
+            [general]
+            name = "python-deps"
+            version = 1
+            edition = 6
+            license = "Apache-2.0"
+            backends = ["cuda", "rocm"]
+
+            [general.cuda]
+            python-depends = ["nvidia-cutlass-dsl"]
+
+            [general.rocm]
+            python-depends = ["uccl"]
+
+            [torch-noarch]
+        "#;
+
+        let parsed: v6::Build = toml::from_str(config).unwrap();
+        let serialized = toml::to_string(&parsed).unwrap();
+        let build = Build::try_from(toml::from_str::<v6::Build>(&serialized).unwrap()).unwrap();
+
+        let rocm_deps = build.general.all_python_depends(Backend::Rocm).unwrap();
+        assert_eq!(rocm_deps, vec!["uccl".to_string()]);
+        let cuda_deps = build.general.all_python_depends(Backend::Cuda).unwrap();
+        assert_eq!(cuda_deps, vec!["nvidia-cutlass-dsl".to_string()]);
+    }
+
+    #[test]
+    fn v5_rejects_rocm_general() {
+        let config = r#"
+            [general]
+            name = "python-deps"
+            version = 1
+            edition = 5
+            license = "Apache-2.0"
+            backends = ["rocm"]
+
+            [general.rocm]
+            python-depends = ["uccl"]
+
+            [torch-noarch]
+        "#;
+
+        let err = toml::from_str::<v5::Build>(config).unwrap_err().to_string();
+        assert!(err.contains("unknown field `rocm`"), "{err}");
     }
 
     #[test]

@@ -1,0 +1,26 @@
+[general]
+name = "python-deps"
+version = 1
+edition = 6
+license = "Apache-2.0"
+backends = [
+    "cuda",
+    "rocm",
+]
+
+[general.hub]
+repo-id = "kernels-test/python-deps"
+
+# This kernel does not do anything useful, it is used to test that Python
+# dependencies are resolved by the builder (with the Torch of the build
+# set) and are validated by `kernels`. Add dependencies below to test them.
+#
+# Backend-independent dependencies go in `[general] python-depends`.
+
+[general.cuda]
+python-depends = ["uccl"]
+
+[general.rocm]
+python-depends = ["uccl"]
+
+[torch-noarch]

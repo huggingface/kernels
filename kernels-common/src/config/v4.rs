@@ -205,6 +205,7 @@ impl From<General> for super::General {
             kernel_depends: None,
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            rocm: None,
             tpu: None,
             xpu: general.xpu.map(Into::into),
         }

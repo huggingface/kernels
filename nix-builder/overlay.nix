@@ -356,6 +356,8 @@ final: prev:
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };
+
+        uccl = callPackage ./pkgs/python-modules/uccl { };
       }
     )
     (import ./pkgs/python-modules/hooks)

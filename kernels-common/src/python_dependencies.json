@@ -19,6 +19,10 @@
       "nvidia-cutlass-dsl": {
         "nix": ["nvidia-cutlass-dsl"],
         "python": [{ "pkg": "nvidia-cutlass-dsl", "import": "cutlass" }]
+      },
+      "uccl": {
+        "nix": ["uccl"],
+        "python": [{ "pkg": "uccl", "import": "uccl" }]
       }
     },
     "metal": {},
@@ -28,7 +32,12 @@
         "python": [{ "pkg": "nki", "import": "nki" }]
       }
     },
-    "rocm": {},
+    "rocm": {
+      "uccl": {
+        "nix": ["uccl"],
+        "python": [{ "pkg": "uccl", "import": "uccl" }]
+      }
+    },
     "xpu": {
       "onednn": {
         "nix": [],

@@ -229,6 +229,12 @@
           path = ./kernel-deps;
           drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
         }
+        # Check that Python dependencies are resolved and validated.
+        {
+          name = "python-deps-kernel";
+          path = ./python-deps;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-cuda;
+        }
         # NCCL is a Torch dependency, so its headers must be available to
         # kernels and kernels that use NCCL must link against it. NCCL differs
         # per CUDA major version, so check CUDA 12 and CUDA 13.
@@ -259,6 +265,12 @@
         {
           name = "relu-triton-kernel";
           path = ./relu-triton;
+          drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
+        }
+        # Check that Python dependencies are resolved and validated.
+        {
+          name = "python-deps-kernel";
+          path = ./python-deps;
           drv = sys: out: out.packages.${sys}.redistributable.torch-rocm;
         }
         {

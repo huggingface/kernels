@@ -64,6 +64,8 @@ pub struct General {
 
     pub python_depends: Option<Vec<String>>,
 
+    pub rocm: Option<RocmGeneral>,
+
     pub tpu: Option<TpuGeneral>,
 
     pub xpu: Option<XpuGeneral>,
@@ -82,6 +84,12 @@ pub struct CudaGeneral {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NeuronGeneral {
     pub kernel_depends: Option<Vec<KernelDependency>>,
+    pub python_depends: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct RocmGeneral {
     pub python_depends: Option<Vec<String>>,
 }
 
@@ -254,6 +262,7 @@ impl From<General> for super::General {
             kernel_depends: general.kernel_depends,
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            rocm: general.rocm.map(Into::into),
             tpu: general.tpu.map(Into::into),
             xpu: general.xpu.map(Into::into),
         }
@@ -288,6 +297,14 @@ impl From<NeuronGeneral> for super::NeuronGeneral {
         Self {
             kernel_depends: neuron.kernel_depends,
             python_depends: neuron.python_depends,
+        }
+    }
+}
+
+impl From<RocmGeneral> for super::RocmGeneral {
+    fn from(rocm: RocmGeneral) -> Self {
+        Self {
+            python_depends: rocm.python_depends,
         }
     }
 }
@@ -480,6 +497,7 @@ impl From<super::General> for General {
             kernel_depends: general.kernel_depends,
             neuron: general.neuron.map(Into::into),
             python_depends: general.python_depends,
+            rocm: general.rocm.map(Into::into),
             tpu: general.tpu.map(Into::into),
             xpu: general.xpu.map(Into::into),
         }
@@ -514,6 +532,14 @@ impl From<super::NeuronGeneral> for NeuronGeneral {
         Self {
             kernel_depends: neuron.kernel_depends,
             python_depends: neuron.python_depends,
+        }
+    }
+}
+
+impl From<super::RocmGeneral> for RocmGeneral {
+    fn from(rocm: super::RocmGeneral) -> Self {
+        Self {
+            python_depends: rocm.python_depends,
         }
     }
 }

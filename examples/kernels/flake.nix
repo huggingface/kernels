@@ -174,10 +174,13 @@
             {
               torchVersion = "2.13";
               cudaVersion = "12.6";
-              systems = [
-                "x86_64-linux"
-                "aarch64-linux"
-              ];
+              system = "x86_64-linux";
+              bundleBuild = true;
+            }
+            {
+              torchVersion = "2.13";
+              cudaVersion = "12.6";
+              system = "aarch64-linux";
               bundleBuild = true;
             }
           ];

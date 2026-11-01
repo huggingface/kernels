@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 use base64::prelude::{BASE64_STANDARD, Engine as _};
@@ -110,11 +111,20 @@ impl Digest {
 
             let path = entry.path();
 
-            // Read and hash contents.
-            let contents = fs::read(path)
-                .wrap_err_with(|| format!("Cannot read `{}` for hashing", path.display()))?;
+            // Stream files so large shared libraries do not need to fit in memory.
+            let mut file = fs::File::open(path)
+                .wrap_err_with(|| format!("Cannot open `{}` for hashing", path.display()))?;
             let mut hasher: Box<dyn DynDigest> = digest_algorithm.into();
-            hasher.update(&contents);
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let count = file
+                    .read(&mut buffer)
+                    .wrap_err_with(|| format!("Cannot read `{}` for hashing", path.display()))?;
+                if count == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..count]);
+            }
 
             let relative_path = path.strip_prefix(variant_path).wrap_err_with(|| {
                 format!("Cannot strip prefix from `{}` for hashing", path.display())
@@ -234,6 +244,41 @@ mod tests {
                 "MJ7MSJwS1utMxA9QyQLytNDtd+5RGnx6m808qG1M2G+YndNbxf9JlnDaNCVbRbDP2DDoH2Bdz33FVC6TrpzXbw=="
             )
         );
+        Ok(())
+    }
+
+    #[test]
+    fn hash_variant_streams_large_file_without_changing_digest() -> Result<()> {
+        use std::io::Write;
+
+        let dir = TempDir::new()?;
+        let path = dir.path().join("large.so");
+        let mut file = fs::File::create(&path)?;
+        let chunk = [0x5a_u8; 64 * 1024];
+        let mut sha256 = Sha256::new();
+        let mut sha512 = Sha512::new();
+
+        for _ in 0..256 {
+            file.write_all(&chunk)?;
+            digest::Digest::update(&mut sha256, chunk);
+            digest::Digest::update(&mut sha512, chunk);
+        }
+        drop(file);
+
+        for (algorithm, expected) in [
+            (
+                DigestAlgorithm::SHA256,
+                BASE64_STANDARD.encode(sha256.finalize()),
+            ),
+            (
+                DigestAlgorithm::SHA512,
+                BASE64_STANDARD.encode(sha512.finalize()),
+            ),
+        ] {
+            let digest = Digest::hash_variant(algorithm, dir.path())?;
+            assert_eq!(digest.files().get("large.so"), Some(&expected));
+        }
+
         Ok(())
     }
 

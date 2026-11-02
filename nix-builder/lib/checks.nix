@@ -56,6 +56,7 @@ let
     let
       inherit (import ./torch-version-utils.nix { inherit lib; })
         flattenSystems
+        validateFlatTorchVersion
         validateTorchVersion
         ;
       throws = expr: !(builtins.tryEval (builtins.deepSeq expr expr)).success;
@@ -66,6 +67,12 @@ let
           "x86_64-linux"
           "aarch64-linux"
         ];
+        bundleBuild = true;
+      };
+      flatVersion = {
+        torchVersion = "2.13";
+        cudaVersion = "13.0";
+        system = "x86_64-linux";
         bundleBuild = true;
       };
     in
@@ -84,6 +91,22 @@ let
       };
       testValidateUnknownAttr = {
         expr = throws (validateTorchVersion (validVersion // { cudaVerison = "13.0"; }));
+        expected = true;
+      };
+      testValidateFlatValid = {
+        expr = validateFlatTorchVersion flatVersion;
+        expected = flatVersion;
+      };
+      testValidateFlatRejectsSystems = {
+        expr = throws (validateFlatTorchVersion validVersion);
+        expected = true;
+      };
+      testValidateFlatMissingSystem = {
+        expr = throws (validateFlatTorchVersion (builtins.removeAttrs flatVersion [ "system" ]));
+        expected = true;
+      };
+      testValidateRejectsSystem = {
+        expr = throws (validateTorchVersion flatVersion);
         expected = true;
       };
       testFlattenSystems = {

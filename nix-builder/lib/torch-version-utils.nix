@@ -9,13 +9,14 @@ let
 
 in
 rec {
-  # Validate that a Torch version entry from `versions.nix` has all required
-  # attributes and no unknown attributes. Returns the entry if it is valid.
-  validateTorchVersion =
-    version:
+  # Validate that a Torch version entry from `versions.nix` or its
+  # system-flattened version has all required attributes and no
+  # unknown attributes. Returns the entry if it is valid.
+  validateTorchVersion' =
+    systemAttr: version:
     let
       required = [
-        "systems"
+        systemAttr
         "torchVersion"
       ];
       optional = [
@@ -40,6 +41,12 @@ rec {
           "Torch version has unknown attribute(s) ${lib.concatStringsSep ", " unknownAttrs}: ${context}"
           version
       );
+
+  # Validate a nested Torch version entry (with `systems`).
+  validateTorchVersion = validateTorchVersion' "systems";
+
+  # Validate a flattened Torch version entry (with `system`).
+  validateFlatTorchVersion = validateTorchVersion' "system";
 
   # Expand { systems = [ a b ]; .. } to [ { system = a; ..} { system = b; .. } ]
   flattenSystems =

@@ -474,6 +474,20 @@ def _check_variants(
                         )
                     )
                     continue
+            # Same for ROCm: given a system ROCm version of x.y, only ROCm
+            # versions x.z, where z <= y qualify.
+            elif isinstance(selected_backend, ROCm) and isinstance(v.arch.backend, ROCm):
+                if (
+                    v.arch.backend.version.major != selected_backend.version.major
+                    or v.arch.backend.version.minor > selected_backend.version.minor
+                ):
+                    result.append(
+                        VariantRejected(
+                            variant=v,
+                            reason=f"ROCm version ({v.arch.backend.version}) is not compatible with system ROCm version ({selected_backend.version})",
+                        )
+                    )
+                    continue
             elif v.arch.backend.variant_str != selected_backend.variant_str:
                 result.append(
                     VariantRejected(

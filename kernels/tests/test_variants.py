@@ -265,6 +265,42 @@ def test_resolve_rocm(linux_abi):
     assert {vs.variant for vs in trace} == set(variants)
 
 
+ROCM_VARIANTS = [
+    parse_variant(f"torch215-cxx11-{rocm}-x86_64-linux") for rocm in ["rocm72", "rocm100", "rocm101", "rocm102"]
+]
+
+
+def _resolve_rocm(rocm_version: str):
+    return _resolve_variant_for_system(
+        variants=ROCM_VARIANTS,
+        selected_backend=ROCm(Version(rocm_version)),
+        cpu="x86_64",
+        os="linux",
+        torch_version=Version("2.15"),
+        torch_cxx11_abi=True,
+        tvm_ffi_version=None,
+    )
+
+
+def test_resolve_rocm_best_older_minor():
+    # Newest minor that is not newer than the system, same major only.
+    result, _ = _resolve_rocm("10.1")
+    assert [v.variant_str for v in result] == [
+        "torch215-cxx11-rocm101-x86_64-linux",
+        "torch215-cxx11-rocm100-x86_64-linux",
+    ]
+
+
+def test_resolve_rocm_no_different_major():
+    result, _ = _resolve_rocm("7.2")
+    assert [v.variant_str for v in result] == ["torch215-cxx11-rocm72-x86_64-linux"]
+
+
+def test_resolve_rocm_no_newer_minor():
+    result, _ = _resolve_rocm("10.0")
+    assert [v.variant_str for v in result] == ["torch215-cxx11-rocm100-x86_64-linux"]
+
+
 def test_resolve_cpu_linux(linux_abi):
     variants = _resolve_variants(linux_abi)
     result, trace = _resolve_variant_for_system(

@@ -72,7 +72,7 @@ dependencies = [
 [[package]]
 name = "cuda-bindings"
 version = "0.4.0"
-source = "git+https://github.com/drbh/cuda-bindings-prebuilt.git?rev=f129e807d9a8ea32e7572369e91689c00c52570f#f129e807d9a8ea32e7572369e91689c00c52570f"
+source = "git+https://github.com/huggingface/cuda-bindings-prebuilt.git?rev=f129e807d9a8ea32e7572369e91689c00c52570f#f129e807d9a8ea32e7572369e91689c00c52570f"
 dependencies = [
  "libloading",
 ]

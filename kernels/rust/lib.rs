@@ -60,7 +60,7 @@ impl PyKernelName {
 }
 
 /// Kernel backend (hardware target).
-#[pyclass(name = "Backend", eq, frozen, hash)]
+#[pyclass(name = "Backend", eq, frozen, hash, from_py_object)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum PyBackend {
     #[pyo3(name = "CANN")]
@@ -304,7 +304,7 @@ impl PyProvenance {
 }
 
 /// A kernel version: either a numeric version or a git revision string.
-#[pyclass(name = "KernelVersion", frozen, eq, hash)]
+#[pyclass(name = "KernelVersion", frozen, eq, hash, from_py_object)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum PyKernelVersion {
     Version { version: usize },
@@ -342,7 +342,7 @@ impl PyKernelVersion {
 }
 
 /// A dependency on another kernel.
-#[pyclass(name = "KernelDependency", frozen, eq, hash)]
+#[pyclass(name = "KernelDependency", frozen, eq, hash, from_py_object)]
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct PyKernelDependency {
     repo_id: String,
@@ -567,7 +567,7 @@ enum PyDigestViolation {
 }
 
 /// Digest algorithm.
-#[pyclass(name = "DigestAlgorithm", frozen, eq, hash)]
+#[pyclass(name = "DigestAlgorithm", frozen, eq, hash, from_py_object)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum PyDigestAlgorithm {
     #[pyo3(name = "SHA256")]

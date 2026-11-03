@@ -389,8 +389,6 @@ Rust CUDA kernels are built with
   every lower one, so `#[cfg(cuda_arch = "90")]` works like
   `__CUDA_ARCH__ >= 900`.
 
-The kernels and their host code are a single crate. Load the kernels with the
-`kernels-cuda` crate instead of the generated `load`, which fails to link.
 An extension can have only one `rust-cuda` component. Use the cuda-rust
 revision pinned in
 [`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix)

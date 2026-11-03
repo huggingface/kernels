@@ -271,6 +271,7 @@ fn splice_skips_imports_in_strings_and_comments() {
         "einops",
         "kernels-community/einops",
         1,
+        true,
     )
     .unwrap()
     .unwrap();
@@ -381,6 +382,7 @@ fn kernelize(src: &str, binding: &str) -> String {
         binding,
         "kernels-community/einops",
         1,
+        true,
     )
     .unwrap()
     .unwrap()
@@ -414,6 +416,7 @@ fn kernelize_imports_binds_the_kernel_once_and_uses_attributes() {
         "einops",
         "kernels-community/einops",
         1,
+        true,
     )
     .unwrap()
     .unwrap();
@@ -502,12 +505,52 @@ fn kernelize_imports_uses_one_form_for_repeated_import_text() {
 }
 
 #[test]
+fn kernelize_imports_rewrites_parenthesized_imports() {
+    let out = kernelize(
+        concat!(
+            "from einops import (\n    rearrange,\n    reduce as red,\n)\n",
+            "def f():\n    from einops.layers import (\n        Rearrange,\n        Reduce,\n    )\n",
+        ),
+        "einops",
+    );
+    assert_eq!(
+        out,
+        concat!(
+            "import kernels\n",
+            "einops = kernels.get_kernel(\"kernels-community/einops\", version=1)\n",
+            "rearrange = einops.rearrange\n",
+            "red = einops.reduce\n",
+            "def f():\n",
+            "    Rearrange, Reduce = einops.layers.Rearrange, einops.layers.Reduce\n",
+        )
+    );
+}
+
+#[test]
+fn kernelize_imports_can_skip_the_arch_check() {
+    let (out, _) = python::kernelize_imports_source(
+        "tests/test_x.py",
+        "from einops import rearrange\n",
+        "einops",
+        "einops",
+        "kernels-community/einops",
+        1,
+        false,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(out.contains(
+        "einops = kernels.get_kernel(\"kernels-community/einops\", version=1, check_arch=False)\n"
+    ));
+}
+
+#[test]
 fn kernelize_imports_rejects_unsafe_static_forms() {
     for (src, message) in [
         ("from einops import *\n", "wildcard import"),
         (
-            "from einops import (rearrange, reduce)\n",
-            "parenthesized import",
+            "from einops import (\n    rearrange,  # keep\n    reduce,\n)\n",
+            "contains a comment",
         ),
         ("import os, einops\n", "multi-name import"),
         ("import einops; import os\n", "shares its line"),
@@ -519,6 +562,7 @@ fn kernelize_imports_rejects_unsafe_static_forms() {
             "einops",
             "kernels-community/einops",
             1,
+            true,
         )
         .unwrap_err()
         .to_string();

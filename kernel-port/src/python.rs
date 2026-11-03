@@ -893,9 +893,12 @@ fn kernelize_from_import(
     if target.first() != Some(&package) {
         return Ok(None);
     }
-    if import.lpar.is_some() || import.rpar.is_some() {
+    // A parenthesized import is rewritten like a one-line one, but a comment
+    // inside its parentheses would be dropped. Import statements hold no
+    // strings, so a `#` in the rendered text is always a comment.
+    if (import.lpar.is_some() || import.rpar.is_some()) && render(import).contains('#') {
         bail!(
-            "{path}: parenthesized import from `{}` is not supported by kernelize_imports; split it into a one-line import",
+            "{path}: parenthesized import from `{}` contains a comment, which kernelize_imports would drop; move the comment out of the import",
             target.join(".")
         );
     }
@@ -1106,6 +1109,7 @@ pub fn kernelize_imports_source(
     binding: &str,
     kernel: &str,
     version: usize,
+    check_arch: bool,
 ) -> Result<Option<(String, usize)>> {
     for (what, name) in [("package", package), ("binding", binding)] {
         let parsed: DottedPath = name.parse()?;
@@ -1173,8 +1177,9 @@ pub fn kernelize_imports_source(
 
     let insert_at = binding_insert_point(path, module, src, &rewrites)?;
     let kernel = serde_json::to_string(kernel).unwrap();
+    let check_arch = if check_arch { "" } else { ", check_arch=False" };
     let preamble = format!(
-        "import kernels{newline}{binding} = kernels.get_kernel({kernel}, version={version}){newline}"
+        "import kernels{newline}{binding} = kernels.get_kernel({kernel}, version={version}{check_arch}){newline}"
     );
 
     let count = rewrites.iter().map(|r| r.nodes).sum();

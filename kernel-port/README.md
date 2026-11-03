@@ -459,7 +459,7 @@ from .ops import hello
 
 ```kdl
 kernelize_imports in="<glob>" package="<top-level-name>" \
-    kernel="<org/name>" version=N [binding="<name>"] [changes=N]
+    kernel="<org/name>" version=N [binding="<name>"] [check_arch=#false] [changes=N]
 ```
 
 Resolve static imports rooted at `package` through `kernels.get_kernel`, in the
@@ -500,11 +500,14 @@ def test_a():
   tests need one that nothing loads, import it from a `_private_for_testing`
   module that `__init__.py` imports; otherwise the rewritten line raises
   `AttributeError`.
+- `check_arch=#false` passes `check_arch=False` to `get_kernel`, for kernels
+  built only for devices the test runner may not have; the tests then gate
+  themselves on the device.
 
 After rewriting, the op parses the result again and verifies that no matching
 static import remains.
 
-Wildcard imports, parenthesized imports, mixed multi-name `import`
+Wildcard imports, parenthesized imports with a comment inside the parentheses, mixed multi-name `import`
 statements, and `import pkg` sharing a line with other statements are
 rejected rather than approximated. Split those statements with a reviewed `replace` first. Dynamic
 imports through `__import__` or `importlib.import_module` are outside this

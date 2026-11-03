@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::Path;
 
 use base64::prelude::{BASE64_STANDARD, Engine as _};
@@ -117,9 +117,15 @@ impl Digest {
             let mut hasher: Box<dyn DynDigest> = digest_algorithm.into();
             let mut buffer = [0_u8; 64 * 1024];
             loop {
-                let count = file
-                    .read(&mut buffer)
-                    .wrap_err_with(|| format!("Cannot read `{}` for hashing", path.display()))?;
+                let count = match file.read(&mut buffer) {
+                    Ok(count) => count,
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(error) => {
+                        return Err(error).wrap_err_with(|| {
+                            format!("Cannot read `{}` for hashing", path.display())
+                        });
+                    }
+                };
                 if count == 0 {
                     break;
                 }
@@ -254,15 +260,17 @@ mod tests {
         let dir = TempDir::new()?;
         let path = dir.path().join("large.so");
         let mut file = fs::File::create(&path)?;
-        let chunk = [0x5a_u8; 64 * 1024];
         let mut sha256 = Sha256::new();
         let mut sha512 = Sha512::new();
 
-        for _ in 0..256 {
-            file.write_all(&chunk)?;
-            digest::Digest::update(&mut sha256, chunk);
-            digest::Digest::update(&mut sha512, chunk);
-        }
+        // Exercise multiple read-buffer-sized chunks and a non-aligned tail.
+        let content_len = 3 * 64 * 1024 + 12_347;
+        let content = (0..content_len)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        file.write_all(&content)?;
+        digest::Digest::update(&mut sha256, &content);
+        digest::Digest::update(&mut sha512, &content);
         drop(file);
 
         for (algorithm, expected) in [

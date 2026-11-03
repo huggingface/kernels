@@ -389,6 +389,12 @@ Rust CUDA kernels are built with
   every lower one, so `#[cfg(cuda_arch = "90")]` works like
   `__CUDA_ARCH__ >= 900`.
 
+Rust CUDA kernels require CUDA 13.0 or later, so they are only built for
+CUDA 13.0+ build variants (a lower `general.cuda.minver` is raised to 13.0). The CUDA
+bindings are generated with bindgen during the build, so building outside of
+Nix requires a CUDA 13 toolkit (found via `CUDA_TOOLKIT_PATH` or `CUDA_HOME`)
+and libclang.
+
 An extension can have only one `rust-cuda` component. Use the cuda-rust
 revision pinned in
 [`cuda-oxide`](https://github.com/huggingface/kernels/blob/main/nix-builder/pkgs/cuda-oxide/default.nix)

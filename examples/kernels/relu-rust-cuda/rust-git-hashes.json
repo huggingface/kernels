@@ -1,6 +1,6 @@
 {
   "cuda-artifact-finalizer-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
-  "cuda-bindings-0.4.0": "sha256-ZfLWDaBRaZVrPFYUui9GhbL0z38DcJqfECDm/rvpJq8=",
+  "cuda-bindings-0.4.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "cuda-core-0.4.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "cuda-core-derive-0.4.0": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",
   "cuda-device-0.2.1": "sha256-cz53C3hB3dxVrVLgX+KtZ4WGT+jjoazNsBSedODCFrg=",

@@ -138,6 +138,16 @@ let
 
   rustSupport = cargoLock != null;
 
+  # cuda-bindings runs bindgen against a single CUDA include directory that
+  # must provide both `cuda.h` and `curand.h`.
+  rustCudaToolkit = pkgs.symlinkJoin {
+    name = "rust-cuda-toolkit";
+    paths = with cudaPackages; [
+      (lib.getInclude cuda_cudart)
+      (lib.getInclude libcurand)
+    ];
+  };
+
   # rpaths are stripped from kernels to make them portable, but that
   # also means that in a Nix environment the CUDA/ROCm/oneAPI dependencies
   # cannot be located anymore, so pass them to hooks that load the kernel.
@@ -260,7 +270,11 @@ stdenv.mkDerivation (
       rustc
     ]
     # Rust CUDA kernels are built with cuda-oxide and its matching rustc.
-    ++ lib.optionals (rustSupport && cudaSupport) [ cuda-oxide.toolchain ];
+    ++ lib.optionals (rustSupport && cudaSupport) [
+      cuda-oxide.toolchain
+      # libclang for the cuda-bindings build script.
+      rustPlatform.bindgenHook
+    ];
 
     buildInputs = [
       python3.pkgs.tvm-ffi
@@ -309,6 +323,9 @@ stdenv.mkDerivation (
     }
     // lib.optionalAttrs cudaSupport {
       CUDAToolkit_ROOT = "${lib.getDev cudaPackages.cuda_nvcc}";
+    }
+    // lib.optionalAttrs (rustSupport && cudaSupport) {
+      CUDA_TOOLKIT_PATH = "${rustCudaToolkit}";
     }
     // lib.optionalAttrs xpuSupport {
       MKLROOT = oneapi-torch-dev;

@@ -48,7 +48,13 @@ rec {
       # Step 1: build sets within the given bounds.
       buildSetsWithinBounds =
         let
-          minCuda = kernelConfig.toml.general.cuda.minver or "11.8";
+          # Rust CUDA kernels generate their CUDA bindings with bindgen, which
+          # requires CUDA 13.0 or later headers.
+          minCuda =
+            let
+              minver = kernelConfig.toml.general.cuda.minver or "11.8";
+            in
+            if kernelConfig.usesRustCuda && lib.versionOlder minver "13.0" then "13.0" else minver;
           maxCuda = kernelConfig.toml.general.cuda.maxver or "99.9";
           minTorch = kernelConfig.toml.torch.minver or "2.0";
           maxTorch = kernelConfig.toml.torch.maxver or "99.9";

@@ -77,5 +77,10 @@ in
     in
     lib.foldl (backends: kernel: backends // { ${kernelBackend kernel} = true; }) init kernels;
 
+  # Does the kernel have Rust CUDA (cuda-oxide) components.
+  usesRustCuda = lib.any (kernel: kernelLanguage kernel == "rust" && kernelBackend kernel == "cuda") (
+    lib.attrValues (toml.kernel or { })
+  );
+
   name = toml.general.name;
 }

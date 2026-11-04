@@ -17,6 +17,7 @@ use crate::pyproject::FileSet;
 static BUILD_VARIANTS_UTILS: &str = include_str!("../templates/tvm_ffi/build-variants.cmake");
 static CMAKE_KERNEL: &str = include_str!("../templates/kernel.cmake");
 static CMAKE_RUST: &str = include_str!("../templates/rust.cmake");
+static CMAKE_RUST_FATBIN: &str = include_str!("../templates/rust-fatbin.cpp.in");
 static CMAKE_UTILS: &str = include_str!("../templates/utils.cmake");
 static HIPIFY: &str = include_str!("../templates/tvm_ffi/hipify.py");
 static OPS_PY_IN: &str = include_str!("../templates/tvm_ffi/_ops.py.in");
@@ -27,6 +28,7 @@ fn write_cmake_helpers(file_set: &mut FileSet) {
     write_cmake_file(file_set, "utils.cmake", CMAKE_UTILS.as_bytes());
     write_cmake_file(file_set, "kernel.cmake", CMAKE_KERNEL.as_bytes());
     write_cmake_file(file_set, "rust.cmake", CMAKE_RUST.as_bytes());
+    write_cmake_file(file_set, "rust-fatbin.cpp.in", CMAKE_RUST_FATBIN.as_bytes());
     write_cmake_file(
         file_set,
         "build-variants.cmake",

@@ -356,6 +356,14 @@ pub enum Kernel {
         depends: Vec<Dependency>,
         src: Vec<String>,
     },
+    RustCuda {
+        /// Path of the host crate's `Cargo.toml`, relative to the kernel directory.
+        /// cuda-oxide device crates are read from its `[package.metadata.cuda-oxide]`.
+        cargo_manifest: String,
+        cuda_capabilities: Option<Vec<String>>,
+        depends: Vec<Dependency>,
+        src: Vec<String>,
+    },
     CppCuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
@@ -396,7 +404,7 @@ impl Kernel {
             | Kernel::CppMetal { cxx_flags, .. }
             | Kernel::CppRocm { cxx_flags, .. }
             | Kernel::CppXpu { cxx_flags, .. } => cxx_flags.as_deref(),
-            Kernel::RustCpu { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
         }
     }
 
@@ -407,7 +415,7 @@ impl Kernel {
             | Kernel::CppMetal { include, .. }
             | Kernel::CppRocm { include, .. }
             | Kernel::CppXpu { include, .. } => include.as_deref(),
-            Kernel::RustCpu { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
         }
     }
 
@@ -421,7 +429,7 @@ impl Kernel {
     pub fn backend(&self) -> Backend {
         match self {
             Kernel::CppCpu { .. } | Kernel::RustCpu { .. } => Backend::Cpu,
-            Kernel::CppCuda { .. } => Backend::Cuda,
+            Kernel::CppCuda { .. } | Kernel::RustCuda { .. } => Backend::Cuda,
             Kernel::CppMetal { .. } => Backend::Metal,
             Kernel::CppRocm { .. } => Backend::Rocm,
             Kernel::CppXpu { .. } => Backend::Xpu,
@@ -435,7 +443,7 @@ impl Kernel {
             | Kernel::CppMetal { .. }
             | Kernel::CppRocm { .. }
             | Kernel::CppXpu { .. } => Language::Cpp,
-            Kernel::RustCpu { .. } => Language::Rust,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => Language::Rust,
         }
     }
 
@@ -443,6 +451,7 @@ impl Kernel {
         match self {
             Kernel::CppCpu { depends, .. }
             | Kernel::RustCpu { depends, .. }
+            | Kernel::RustCuda { depends, .. }
             | Kernel::CppCuda { depends, .. }
             | Kernel::CppMetal { depends, .. }
             | Kernel::CppRocm { depends, .. }
@@ -454,6 +463,7 @@ impl Kernel {
         match self {
             Kernel::CppCpu { src, .. }
             | Kernel::RustCpu { src, .. }
+            | Kernel::RustCuda { src, .. }
             | Kernel::CppCuda { src, .. }
             | Kernel::CppMetal { src, .. }
             | Kernel::CppRocm { src, .. }
@@ -738,6 +748,12 @@ mod tests {
     #[test]
     fn v6_rust_kernel_rejects_invalid_config() {
         let cases = [
+            (
+                "[torch]\nsrc = []",
+                "rust-cuda",
+                "",
+                "require a `[tvm-ffi]` framework",
+            ),
             (
                 "[tvm-ffi]",
                 "rust-cpu",

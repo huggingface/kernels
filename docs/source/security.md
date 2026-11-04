@@ -194,8 +194,8 @@ itself:
 Signature verification is only performed for kernels downloaded from the Hub.
 At this time, a signature verification error will only result in a warning.
 Moreover, signature verification is only performed when the `sigstore` Python
-package is installed. However, we will make signature verification mandatory in
-the future.
+package is installed, which you can do with `pip install "kernels[sigstore]"`.
+However, we will make signature verification mandatory in the future.
 
 Both checks can be performed on demand with the
 [`kernels verify-signature`](cli-verify-signature.md) command.

@@ -3,16 +3,20 @@ from dataclasses import is_dataclass
 from pathlib import Path
 
 import pytest
-from sigstore.verify import policy
 
-import kernels.verify as verify_module
-from kernels import install_kernel
-from kernels._rust import DigestViolation, KernelLocation, Metadata, Oid, SignatureReceiptStore
-from kernels._versions import resolve_revision_or_version
-from kernels.digest import DigestVerificationResult, verify_digest
-from kernels.hf_hub import _get_cache_dir, _get_hf_api
-from kernels.resolver import _BYTECODE_IGNORE_PATTERNS
-from kernels.verify import SignatureVerificationResult, verify_signature
+# sigstore is an optional dependency.
+pytest.importorskip("sigstore")
+
+from sigstore.verify import policy  # noqa: E402
+
+import kernels.verify as verify_module  # noqa: E402
+from kernels import install_kernel  # noqa: E402
+from kernels._rust import DigestViolation, KernelLocation, Metadata, Oid, SignatureReceiptStore  # noqa: E402
+from kernels._versions import resolve_revision_or_version  # noqa: E402
+from kernels.digest import DigestVerificationResult, verify_digest  # noqa: E402
+from kernels.hf_hub import _get_cache_dir, _get_hf_api  # noqa: E402
+from kernels.resolver import _BYTECODE_IGNORE_PATTERNS  # noqa: E402
+from kernels.verify import SignatureVerificationResult, verify_signature  # noqa: E402
 
 TEST_POLICY: policy.VerificationPolicy = policy.Identity(
     identity="me@danieldk.eu", issuer="https://github.com/login/oauth"

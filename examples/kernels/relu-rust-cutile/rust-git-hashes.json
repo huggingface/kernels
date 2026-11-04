@@ -1,0 +1,11 @@
+{
+  "cuda-async-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cuda-bindings-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cuda-core-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cuda-core-derive-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cuda-repr-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cutile-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cutile-compiler-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cutile-ir-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "cutile-macro-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs="
+}

@@ -12,7 +12,15 @@ let
 
   # Edition 6 tags kernels with `language = "<language>-<backend>"`.
   kernelLanguage = kernel: lib.head (lib.splitString "-" kernel.language);
-  kernelBackend = kernel: lib.last (lib.splitString "-" kernel.language);
+  kernelBackend =
+    kernel:
+    let
+      backendPart = lib.last (lib.splitString "-" kernel.language);
+    in
+    {
+      cutile = "cuda";
+    }
+    .${backendPart} or backendPart;
 
   toml = validate (readToml (path + "/build.toml"));
 
@@ -78,7 +86,10 @@ in
     lib.foldl (backends: kernel: backends // { ${kernelBackend kernel} = true; }) init kernels;
 
   # Does the kernel have Rust CUDA (cuda-oxide) components.
-  usesRustCuda = lib.any (kernel: kernelLanguage kernel == "rust" && kernelBackend kernel == "cuda") (
+  usesRustCuda = lib.any (kernel: kernel.language == "rust-cuda") (
+    lib.attrValues (toml.kernel or { })
+  );
+  usesRustCutile = lib.any (kernel: kernel.language == "rust-cutile") (
     lib.attrValues (toml.kernel or { })
   );
 

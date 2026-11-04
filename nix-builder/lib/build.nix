@@ -54,7 +54,12 @@ rec {
             let
               minver = kernelConfig.toml.general.cuda.minver or "11.8";
             in
-            if kernelConfig.usesRustCuda && lib.versionOlder minver "13.0" then "13.0" else minver;
+            if kernelConfig.usesRustCuda && lib.versionOlder minver "13.0" then
+              "13.0"
+            else if kernelConfig.usesRustCutile && lib.versionOlder minver "13.2" then
+              "13.2"
+            else
+              minver;
           maxCuda = kernelConfig.toml.general.cuda.maxver or "99.9";
           minTorch = kernelConfig.toml.torch.minver or "2.0";
           maxTorch = kernelConfig.toml.torch.maxver or "99.9";
@@ -125,6 +130,13 @@ rec {
   applicableBuildSets =
     { path, buildSets }: filterApplicableBuildSets (readKernelConfig path) buildSets;
 
+  # cuTile JIT-compiles its kernels with `tileiras` on first launch.
+  cutileEnv =
+    kernelConfig: buildSet:
+    lib.optionalAttrs (kernelConfig.usesRustCutile && buildSet.buildConfig.backend == "cuda") {
+      CUTILE_TILEIRAS_PATH = "${buildSet.pkgs.cudaPackages.cuda_tileiras}/bin/tileiras";
+    };
+
   # Build a single extension.
   mkExtension =
     {
@@ -152,12 +164,15 @@ rec {
       );
       extraDeps =
         let
-          kernelDeps = lib.unique (lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends) kernels));
+          kernelDeps = lib.unique (
+            lib.flatten (lib.mapAttrsToList (_: kernel: kernel.depends or [ ]) kernels)
+          );
         in
         extension.resolveCppDeps kernelDeps;
       hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
         lib.attrValues kernels
       );
+      usesCudaOxide = lib.any (kernel: kernel.language == "rust-cuda") (lib.attrValues kernels);
 
       # Use the mkSourceSet function to get the source
       src = mkSourceSet path;
@@ -209,6 +224,7 @@ rec {
           ;
 
         cargoLock = if hasRustKernels then src + "/Cargo.lock" else null;
+        cudaOxide = usesCudaOxide;
         rustGitHashes =
           if hasRustKernels && builtins.pathExists (src + "/rust-git-hashes.json") then
             builtins.fromJSON (builtins.readFile (src + "/rust-git-hashes.json"))
@@ -359,6 +375,8 @@ rec {
           value = mkShell {
             nativeBuildInputs = pythonNativeCheckInputs buildSet.python3.pkgs;
 
+            env = cutileEnv kernelConfig buildSet;
+
             buildInputs = [
               (buildSet.python3.withPackages (
                 ps:
@@ -445,6 +463,11 @@ rec {
             pkgs.writeShellScriptBin "ci-test" ''
               if [ -d ${extension.src}/tests ]; then
                 unset LD_LIBRARY_PATH
+                ${lib.concatStrings (
+                  lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}\n") (
+                    cutileEnv kernelConfig buildSet
+                  )
+                )}
                 export PYTHONPATH=${extension}/${buildSet.variants.kernelVariant kernelConfig}
                 ${lib.optionalString (repoId != null) ''
                   export LOCAL_KERNELS="${repoId}=${extension}"
@@ -519,9 +542,11 @@ rec {
               ++ (pythonNativeCheckInputs buildSet.python3.pkgs);
             buildInputs = [ python ];
             inputsFrom = [ extension ];
-            env = lib.optionalAttrs rocmSupport {
-              HIP_PATH = pkgs.rocmPackages.clr;
-            };
+            env =
+              lib.optionalAttrs rocmSupport {
+                HIP_PATH = pkgs.rocmPackages.clr;
+              }
+              // cutileEnv kernelConfig buildSet;
 
             venvDir = "./.venv";
 

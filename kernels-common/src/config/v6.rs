@@ -174,6 +174,11 @@ pub enum Kernel {
         src: Vec<String>,
     },
     #[serde(rename_all = "kebab-case")]
+    RustCutile {
+        cargo_manifest: String,
+        src: Vec<String>,
+    },
+    #[serde(rename_all = "kebab-case")]
     CppCuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
@@ -231,7 +236,9 @@ impl TryFrom<Build> for super::Build {
             .kernels
             .into_iter()
             .map(|(name, kernel)| match kernel {
-                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } if !tvm_ffi => {
+                Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. }
+                    if !tvm_ffi =>
+                {
                     Err(ConfigError::InvalidKernel {
                         name,
                         reason: "Rust kernels require a `[tvm-ffi]` framework".into(),
@@ -400,6 +407,13 @@ impl From<Kernel> for super::Kernel {
                 cargo_manifest,
                 cuda_capabilities,
                 depends,
+                src,
+            },
+            Kernel::RustCutile {
+                cargo_manifest,
+                src,
+            } => super::Kernel::RustCutile {
+                cargo_manifest,
                 src,
             },
             Kernel::RustCpu {
@@ -646,6 +660,13 @@ impl From<super::Kernel> for Kernel {
                 cargo_manifest,
                 cuda_capabilities,
                 depends,
+                src,
+            },
+            super::Kernel::RustCutile {
+                cargo_manifest,
+                src,
+            } => Kernel::RustCutile {
+                cargo_manifest,
                 src,
             },
             super::Kernel::CppCuda {

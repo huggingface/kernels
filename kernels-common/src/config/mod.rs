@@ -364,6 +364,11 @@ pub enum Kernel {
         depends: Vec<Dependency>,
         src: Vec<String>,
     },
+    RustCutile {
+        /// Path of the crate's `Cargo.toml`, relative to the kernel directory.
+        cargo_manifest: String,
+        src: Vec<String>,
+    },
     CppCuda {
         cuda_capabilities: Option<Vec<String>>,
         cuda_flags: Option<Vec<String>>,
@@ -404,7 +409,7 @@ impl Kernel {
             | Kernel::CppMetal { cxx_flags, .. }
             | Kernel::CppRocm { cxx_flags, .. }
             | Kernel::CppXpu { cxx_flags, .. } => cxx_flags.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => None,
         }
     }
 
@@ -415,7 +420,7 @@ impl Kernel {
             | Kernel::CppMetal { include, .. }
             | Kernel::CppRocm { include, .. }
             | Kernel::CppXpu { include, .. } => include.as_deref(),
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => None,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => None,
         }
     }
 
@@ -429,7 +434,9 @@ impl Kernel {
     pub fn backend(&self) -> Backend {
         match self {
             Kernel::CppCpu { .. } | Kernel::RustCpu { .. } => Backend::Cpu,
-            Kernel::CppCuda { .. } | Kernel::RustCuda { .. } => Backend::Cuda,
+            Kernel::CppCuda { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => {
+                Backend::Cuda
+            }
             Kernel::CppMetal { .. } => Backend::Metal,
             Kernel::CppRocm { .. } => Backend::Rocm,
             Kernel::CppXpu { .. } => Backend::Xpu,
@@ -443,7 +450,9 @@ impl Kernel {
             | Kernel::CppMetal { .. }
             | Kernel::CppRocm { .. }
             | Kernel::CppXpu { .. } => Language::Cpp,
-            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } => Language::Rust,
+            Kernel::RustCpu { .. } | Kernel::RustCuda { .. } | Kernel::RustCutile { .. } => {
+                Language::Rust
+            }
         }
     }
 
@@ -456,6 +465,8 @@ impl Kernel {
             | Kernel::CppMetal { depends, .. }
             | Kernel::CppRocm { depends, .. }
             | Kernel::CppXpu { depends, .. } => depends,
+            // All dependencies are C++ dependencies, which cuTile kernels cannot use.
+            Kernel::RustCutile { .. } => &[],
         }
     }
 
@@ -464,6 +475,7 @@ impl Kernel {
             Kernel::CppCpu { src, .. }
             | Kernel::RustCpu { src, .. }
             | Kernel::RustCuda { src, .. }
+            | Kernel::RustCutile { src, .. }
             | Kernel::CppCuda { src, .. }
             | Kernel::CppMetal { src, .. }
             | Kernel::CppRocm { src, .. }
@@ -743,6 +755,88 @@ mod tests {
         let build = Build::try_from(toml::from_str::<v6::Build>(&serialized).unwrap()).unwrap();
 
         assert_eq!(build.kernels["cpu_kernel"].language(), Language::Rust);
+    }
+
+    #[test]
+    fn v6_rust_cutile_round_trip() {
+        let config = r#"
+            [general]
+            name = "rust-cutile"
+            version = 1
+            edition = 6
+            license = "Apache-2.0"
+            backends = ["cuda"]
+
+            [tvm-ffi]
+
+            [kernel.cutile_kernel]
+            language = "rust-cutile"
+            cargo-manifest = "Cargo.toml"
+            src = ["Cargo.toml", "src/lib.rs"]
+        "#;
+
+        let parsed: v6::Build = toml::from_str(config).unwrap();
+        let serialized = toml::to_string(&parsed).unwrap();
+        assert!(
+            serialized.contains("language = \"rust-cutile\""),
+            "{serialized}"
+        );
+        let build = Build::try_from(toml::from_str::<v6::Build>(&serialized).unwrap()).unwrap();
+
+        let kernel = &build.kernels["cutile_kernel"];
+        assert!(matches!(kernel, Kernel::RustCutile { .. }));
+        assert_eq!(kernel.backend(), Backend::Cuda);
+        assert_eq!(kernel.language(), Language::Rust);
+        assert!(kernel.depends().is_empty());
+        assert_eq!(kernel.src(), ["Cargo.toml", "src/lib.rs"]);
+    }
+
+    #[test]
+    fn v6_rust_cutile_rejects_invalid_config() {
+        let cases = [
+            ("[torch]\nsrc = []", "", "require a `[tvm-ffi]` framework"),
+            (
+                "[tvm-ffi]",
+                r#"cuda-capabilities = ["9.0"]"#,
+                "unknown field `cuda-capabilities`",
+            ),
+            (
+                "[tvm-ffi]",
+                r#"cxx-flags = ["-O3"]"#,
+                "unknown field `cxx-flags`",
+            ),
+            ("[tvm-ffi]", "depends = []", "unknown field `depends`"),
+        ];
+
+        for (framework, extra, expected) in cases {
+            let config = format!(
+                r#"
+                [general]
+                name = "rust-cutile"
+                version = 1
+                edition = 6
+                license = "Apache-2.0"
+                backends = ["cuda"]
+
+                {framework}
+
+                [kernel.cutile_kernel]
+                language = "rust-cutile"
+                cargo-manifest = "Cargo.toml"
+                src = []
+                {extra}
+            "#
+            );
+
+            let err = match toml::from_str::<v6::Build>(&config) {
+                Ok(build) => Build::try_from(build)
+                    .err()
+                    .expect("conversion should fail")
+                    .to_string(),
+                Err(err) => err.to_string(),
+            };
+            assert!(err.contains(expected), "{err}");
+        }
     }
 
     #[test]

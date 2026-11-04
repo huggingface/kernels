@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
@@ -196,6 +197,22 @@ class SignatureValidator:
                 assert_never(unreachable)
 
 
+_DIGEST_VALIDATION_MODES = ("error", "warn")
+
+
+def _digest_validation_mode() -> str:
+    """Read the digest validation mode from `KERNELS_DIGEST_VALIDATION`."""
+    value = os.environ.get("KERNELS_DIGEST_VALIDATION", "").strip().lower()
+    if value == "":
+        return "error"
+    if value not in _DIGEST_VALIDATION_MODES:
+        raise ValueError(
+            f"Invalid value {value!r} for KERNELS_DIGEST_VALIDATION, "
+            f"expected one of: {', '.join(_DIGEST_VALIDATION_MODES)}"
+        )
+    return value
+
+
 @dataclass
 class DigestValidator:
     """Verify that the files of a kernel build variant match the digest in its metadata.
@@ -204,8 +221,11 @@ class DigestValidator:
     verification receipt. Local kernels are hashed on every load, since their
     files may change.
 
-    Raises an exception when the files do not match the digest. A kernel without
-    a digest is loaded with a warning, since its integrity cannot be verified."""
+    By default, raises an exception when the files do not match the digest.
+    This can be changed with the `KERNELS_DIGEST_VALIDATION` environment
+    variable: `error` (the default) raises, `warn` logs a warning and loads
+    the kernel anyway. A kernel without a digest is loaded with a warning,
+    since its integrity cannot be verified."""
 
     def validate_kernel(self, *, kernel: "LocalKernel") -> None:
         location = (
@@ -218,6 +238,8 @@ class DigestValidator:
             else None
         )
 
+        mode = _digest_validation_mode()
+
         result = digest.verify_digest(kernel.variant_path, metadata=kernel.metadata, location=location)
 
         kernel_str = f"Kernel '{kernel.metadata.name}' variant '{kernel.variant_str}'"
@@ -228,7 +250,14 @@ class DigestValidator:
             case digest.DigestVerificationResult.DigestMissing():
                 logger.warning(f"{kernel_str}: {result}", stacklevel=3)
             case digest.DigestVerificationResult.DigestVerificationFailure():
-                raise RuntimeError(f"{kernel_str}: {result}")
+                if mode == "warn":
+                    logger.warning(
+                        f"{kernel_str}: {result}\n"
+                        f"Loading the kernel anyway, because KERNELS_DIGEST_VALIDATION=warn is set.",
+                        stacklevel=3,
+                    )
+                else:
+                    raise RuntimeError(f"{kernel_str}: {result}")
             case _ as unreachable:
                 assert_never(unreachable)
 

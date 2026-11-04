@@ -125,7 +125,7 @@
           name = "relu-rust-cuda-kernel";
           path = ./relu-rust-cuda;
           drv =
-            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cudaVersion}-${sys}"};
+            sys: out: out.packages.${sys}.redistributable.${"tvm-ffi${tvmFfiVersion}-${cuda13Version}-${sys}"};
         }
         {
           name = "relu-kernel-cpu";

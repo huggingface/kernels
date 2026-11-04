@@ -1521,13 +1521,15 @@ def test_get_kernelized_layers_func(stub_kernel):
 
 @pytest.fixture
 def heterogeneous_gpus(monkeypatch):
-    """Pretend that device 0 has capability 7.5, device 1 has 9.0, and the current device is 0."""
+    """Pretend that we are on CUDA, device 0 has capability 7.5, device 1 has 9.0, and the current device is 0."""
     state = {"current": 0}
     capabilities = {0: (7, 5), 1: (9, 0)}
 
     def get_device_capability(device=None):
         return capabilities[state["current"] if device is None else device]
 
+    monkeypatch.setattr(torch.version, "hip", None)
+    monkeypatch.setattr(torch.version, "cuda", "12.8")
     monkeypatch.setattr(torch.cuda, "get_device_capability", get_device_capability)
     return state
 
@@ -1577,6 +1579,23 @@ def test_kernelize_device_index(stub_kernel, heterogeneous_gpus):
         with use_kernel_mapping(mapping, inherit_mapping=False):
             kernelize(model, mode=Mode.INFERENCE, device=torch.device("cuda", index))
         assert model[0]._kernel_repo == expected
+
+
+@pytest.mark.parametrize("is_rocm", [False, True])
+def test_kernelize_torch_device_rocm(stub_kernel, monkeypatch, is_rocm):
+    monkeypatch.setattr(torch.version, "hip", "7.0" if is_rocm else None)
+    monkeypatch.setattr(torch.version, "cuda", None if is_rocm else "12.8")
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: (9, 4))
+
+    repo_cuda = LayerRepository(repo_id="kernels-test/cuda", layer_name="StubLayer", version=1)
+    repo_rocm = LayerRepository(repo_id="kernels-test/rocm", layer_name="StubLayer", version=1)
+    mapping = {"StubLayer": {"cuda": repo_cuda, "rocm": repo_rocm}}
+
+    # ROCm devices use the `cuda` device type in Torch.
+    model = nn.Sequential(StubLayer())
+    with use_kernel_mapping(mapping, inherit_mapping=False):
+        kernelize(model, mode=Mode.INFERENCE, device=torch.device("cuda", 0))
+    assert model[0]._kernel_repo == (repo_rocm if is_rocm else repo_cuda)
 
 
 def test_locked_repositories_are_picklable():

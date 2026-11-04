@@ -10,14 +10,25 @@ else:
 
 from kernels._rust import KernelLocation, Metadata
 from kernels._versions import resolve_revision_or_version
+from kernels.compat import has_sigstore
 from kernels.digest import DigestVerificationResult, verify_digest
 from kernels.install import install_kernel, install_kernel_all_variants
 from kernels.variants import get_variants_local
-from kernels.verify import SignatureVerificationResult
-from kernels.verify import verify_signature as verify_variant_signature
 
 
 def verify_signature(args: argparse.Namespace) -> None:
+    if not has_sigstore:
+        print(
+            "❌ Verifying signatures requires the `sigstore` package, "
+            'install it with: pip install "kernels[sigstore]"',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Lazily import optional dependency.
+    from kernels.verify import SignatureVerificationResult
+    from kernels.verify import verify_signature as verify_variant_signature
+
     revision = resolve_revision_or_version(
         args.repo_id,
         revision=None,

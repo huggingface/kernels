@@ -316,11 +316,23 @@ jobs:
           merge-multiple: true
       - name: Install wheel
         shell: bash
-        # Use `--only-binary` to never fall back to building the sdist.
+        # Install `kernels` itself strictly from `dist` (no index, and
+        # `--only-binary` to never fall back to building the sdist), so that a
+        # missing or mis-tagged wheel cannot be masked. Then install its
+        # dependencies from the index, since importing `kernels` needs them.
         run: |
           python -m pip install --upgrade pip
           python -m pip --version
           python -m pip install --pre --no-deps --no-index --only-binary :all: --find-links dist kernels
+          python - <<'EOF' > requirements.txt
+          import importlib.metadata
+
+          for req in importlib.metadata.requires("kernels") or []:
+              if "extra ==" not in req:
+                  print(req)
+          EOF
+          cat requirements.txt
+          python -m pip install -r requirements.txt
       - name: Check wheel tag and import extension
         shell: bash
         env:

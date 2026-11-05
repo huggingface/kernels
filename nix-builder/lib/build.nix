@@ -492,12 +492,26 @@ rec {
     let
       kernelConfig = readKernelConfig path;
       repoId = lib.attrByPath [ "toml" "general" "hub" "repo-id" ] null kernelConfig;
+      hasRustKernels = lib.any (kernel: kernelConfig.kernelLanguage kernel == "rust") (
+        lib.attrValues (kernelConfig.toml.kernel or { })
+      );
       shellForBuildSet =
         buildSet:
         let
           pkgs = buildSet.pkgs;
           rocmSupport = pkgs.config.rocmSupport or false;
           xpuSupport = pkgs.config.xpuSupport or false;
+          # Specify the linker explicitly, so that build scripts and compiler
+          # macros are linked with the native compiler and not the manylinux
+          # linker. Using the manylinux linker will set the rpath of the plugin
+          # to manylinux glibc and then tries to dynamically link libpthread
+          # from the manylinux glibc against the already loaded native nixpkgs
+          # gcc. This should have no ramifications for linkage of the kernel
+          # itself, which is not done by Rust.
+          rustLinkerEnv = lib.optionalAttrs (hasRustKernels && pkgs.stdenv.hostPlatform.isLinux) {
+            "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_LINKER" =
+              "${pkgs.buildPackages.stdenv.cc}/bin/cc";
+          };
           mkShell = pkgs.mkShell.override { inherit (buildSet.extension) stdenv; };
           extension = mkExtension buildSet {
             inherit
@@ -546,7 +560,8 @@ rec {
               lib.optionalAttrs rocmSupport {
                 HIP_PATH = pkgs.rocmPackages.clr;
               }
-              // cutileEnv kernelConfig buildSet;
+              // cutileEnv kernelConfig buildSet
+              // rustLinkerEnv;
 
             venvDir = "./.venv";
 

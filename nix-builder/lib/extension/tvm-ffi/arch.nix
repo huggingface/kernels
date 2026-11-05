@@ -413,6 +413,9 @@ stdenv.mkDerivation (
       inherit dependencies;
       inherit (python3.pkgs.tvm-ffi) variant;
       archVariant = python3.pkgs.tvm-ffi.variant;
+    }
+    // lib.optionalAttrs (rustSupport && cudaSupport) {
+      inherit rustCudaToolkit;
     };
   }
   // lib.optionalAttrs rustSupport {

@@ -523,6 +523,9 @@ rec {
             # Dev/test shells do not record build provenance.
             kernelProvenance = null;
           };
+          rustCudaToolkitEnv = lib.optionalAttrs (extension ? rustCudaToolkit) {
+            CUDA_TOOLKIT_PATH = "${extension.rustCudaToolkit}";
+          };
           python = (
             buildSet.python3.withPackages (
               ps:
@@ -561,7 +564,8 @@ rec {
                 HIP_PATH = pkgs.rocmPackages.clr;
               }
               // cutileEnv kernelConfig buildSet
-              // rustLinkerEnv;
+              // rustLinkerEnv
+              // rustCudaToolkitEnv;
 
             venvDir = "./.venv";
 

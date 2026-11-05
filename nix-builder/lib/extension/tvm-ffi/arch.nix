@@ -144,10 +144,11 @@ let
   cudaOxideSupport = rustSupport && cudaSupport && cudaOxide;
 
   # cuda-bindings runs bindgen against a single CUDA include directory that
-  # must provide both `cuda.h` and `curand.h`.
+  # must provide both `cuda.h` and `curand.h` (and include crt headers).
   rustCudaToolkit = pkgs.symlinkJoin {
     name = "rust-cuda-toolkit";
     paths = with cudaPackages; [
+      (lib.getInclude cuda_crt)
       (lib.getInclude cuda_cudart)
       (lib.getInclude libcurand)
     ];

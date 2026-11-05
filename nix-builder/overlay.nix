@@ -205,6 +205,20 @@ final: prev:
           };
         });
 
+        etils = python-super.etils.overridePythonAttrs {
+          # Torch is only a test dependency and is not available in the
+          # shared package set, which breaks kernels that depend on etils.
+          doCheck = false;
+          nativeCheckInputs = [ ];
+        };
+
+        flax = python-super.flax.overridePythonAttrs {
+          # Torch is only a test dependency and is not available in the
+          # shared package set, which breaks kernels that depend on flax.
+          doCheck = false;
+          nativeCheckInputs = [ ];
+        };
+
         hipify-torch = python-self.callPackage ./pkgs/python-modules/hipify-torch { };
 
         helion = python-super.helion.overrideAttrs (
@@ -253,6 +267,13 @@ final: prev:
         pyclibrary = python-self.callPackage ./pkgs/python-modules/pyclibrary { };
 
         mkTorch = callPackage ./pkgs/python-modules/torch/binary { };
+
+        orbax-checkpoint = python-super.orbax-checkpoint.overridePythonAttrs {
+          # Torch is only a test dependency and is not available in the
+          # shared package set, which breaks kernels that depend on orbax.
+          doCheck = false;
+          nativeCheckInputs = [ ];
+        };
 
         opentelemetry-instrumentation-requests =
           python-super.opentelemetry-instrumentation-requests.overrideAttrs
@@ -342,6 +363,13 @@ final: prev:
           triton-rocm = triton-rocm_3_9_0;
           triton-xpu = triton-xpu_3_9_0;
           xpuPackages = final.xpuPackages_2026_1_2;
+        };
+
+        treescope = python-super.treescope.overridePythonAttrs {
+          # Torch is only a test dependency and is not available in the
+          # shared package set, which breaks kernels that depend on treescope.
+          doCheck = false;
+          nativeCheckInputs = [ ];
         };
 
         transformers = python-super.transformers.overridePythonAttrs (prevAttrs: rec {

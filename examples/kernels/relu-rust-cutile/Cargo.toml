@@ -12,7 +12,6 @@ name = "relu_rust_cutile"
 
 # cuTile Rust JIT-compiles the kernels through CUDA Tile IR on first launch.
 [dependencies]
-cuda-core = { git = "https://github.com/NVIDIA/cuda-rust.git", rev = "2378e98bfb24010258f7ec8c7227b957d376f5bb" }
 cutile = { git = "https://github.com/NVIDIA/cuda-rust.git", rev = "2378e98bfb24010258f7ec8c7227b957d376f5bb" }
+kernels-cutile = { git = "https://github.com/huggingface/kernels.git", rev = "07ea092547541a03a172d8510039f8c53ec66f08" }
 tvm-ffi = "=0.1.14-post1"
-tvm-ffi-sys = "=0.1.14-post1"

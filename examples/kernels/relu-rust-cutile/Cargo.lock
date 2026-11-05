@@ -547,6 +547,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernels-cutile"
+version = "0.1.0"
+source = "git+https://github.com/huggingface/kernels.git?rev=07ea092547541a03a172d8510039f8c53ec66f08#07ea092547541a03a172d8510039f8c53ec66f08"
+dependencies = [
+ "cuda-core",
+ "cutile",
+ "tvm-ffi",
+ "tvm-ffi-sys",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -799,10 +810,9 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "relu-rust-cutile"
 version = "0.1.0"
 dependencies = [
- "cuda-core",
  "cutile",
+ "kernels-cutile",
  "tvm-ffi",
- "tvm-ffi-sys",
 ]
 
 [[package]]

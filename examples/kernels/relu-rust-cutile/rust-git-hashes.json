@@ -7,5 +7,6 @@
   "cutile-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
   "cutile-compiler-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
   "cutile-ir-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
-  "cutile-macro-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs="
+  "cutile-macro-0.5.0": "sha256-vnRDKyQFnzkMhA9rMf1KZV6mZ3LZ9/xCFvVkHoxSCPs=",
+  "kernels-cutile-0.1.0": "sha256-+NlkMjKqqa3jFjnhv9lFMGPlHh5DfwBJnItHuqJm7sQ="
 }

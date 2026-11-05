@@ -1,16 +1,48 @@
 {
   "general": {
+    "absl-py": {
+      "nix": ["absl-py"],
+      "python": [{ "pkg": "absl-py", "import": "absl" }]
+    },
     "einops": {
       "nix": ["einops"],
       "python": [{ "pkg": "einops", "import": "einops" }]
+    },
+    "einshape": {
+      "nix": ["einshape"],
+      "python": [{ "pkg": "einshape", "import": "einshape" }]
     },
     "helion": {
       "nix": ["helion"],
       "python": [{ "pkg": "helion", "import": "helion" }]
     },
+    "immutabledict": {
+      "nix": ["immutabledict"],
+      "python": [{ "pkg": "immutabledict", "import": "immutabledict" }]
+    },
+    "jaxtyping": {
+      "nix": ["jaxtyping"],
+      "python": [{ "pkg": "jaxtyping", "import": "jaxtyping" }]
+    },
+    "pydantic": {
+      "nix": ["pydantic"],
+      "python": [{ "pkg": "pydantic", "import": "pydantic" }]
+    },
+    "qwix": {
+      "nix": ["qwix"],
+      "python": [{ "pkg": "qwix", "import": "qwix" }]
+    },
+    "tqdm": {
+      "nix": ["tqdm"],
+      "python": [{ "pkg": "tqdm", "import": "tqdm" }]
+    },
     "tvm-ffi": {
       "nix": ["tvm-ffi"],
       "python": [{ "pkg": "apache-tvm-ffi", "import": "tvm_ffi" }]
+    },
+    "xprof": {
+      "nix": ["xprof"],
+      "python": [{ "pkg": "xprof", "import": "xprof" }]
     }
   },
   "backends": {

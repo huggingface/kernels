@@ -205,6 +205,8 @@ final: prev:
           };
         });
 
+        einshape = python-self.callPackage ./pkgs/python-modules/einshape { };
+
         etils = python-super.etils.overridePythonAttrs {
           # Torch is only a test dependency and is not available in the
           # shared package set, which breaks kernels that depend on etils.
@@ -285,6 +287,8 @@ final: prev:
             );
 
         pyzes = callPackage ./pkgs/python-modules/pyzes { };
+
+        qwix = python-self.callPackage ./pkgs/python-modules/qwix { };
 
         scipy = python-super.scipy.overrideAttrs (
           _: prevAttrs: {
@@ -387,6 +391,8 @@ final: prev:
 
         tvm-ffi = callPackage ./pkgs/python-modules/tvm-ffi {
         };
+
+        xprof = python-self.callPackage ./pkgs/python-modules/xprof { };
       }
     )
     (import ./pkgs/python-modules/hooks)

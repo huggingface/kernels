@@ -35,31 +35,32 @@ rec {
 
   # Filter buildsets that are applicable to a given kernel build config.
   #
-  # Filtering consists of two steps:
+  # Filtering consists of three steps:
   #
   # 1. Filter out sets that do not correspond to the given constraints
   #    (e.g. CUDA version, Pytorch version).
   # 2. For backends that use the Torch stable ABI, we only need a build set
   #    for the latest Torch for a given backend + backend version combination.
   #    Backends without the stable ABI keep every supported Torch version.
+  # 3. When all kernel components are cutile, we only need the oldest CUDA
+  #    minor version per CUDA major version.
   filterApplicableBuildSets =
     kernelConfig: buildSets:
     let
       # Step 1: build sets within the given bounds.
       buildSetsWithinBounds =
         let
-          # Rust CUDA kernels generate their CUDA bindings with bindgen, which
-          # requires CUDA 13.0 or later headers.
-          minCuda =
-            let
-              minver = kernelConfig.toml.general.cuda.minver or "11.8";
-            in
-            if kernelConfig.usesRustCuda && lib.versionOlder minver "13.0" then
-              "13.0"
-            else if kernelConfig.usesRustCutile && lib.versionOlder minver "13.2" then
+          maxVersion = a: b: if lib.versionOlder a b then b else a;
+          # Additional CUDA requirements:
+          # - rust-cuda requires CUDA 13.0.
+          # - cutile requires the tileiras the kernel needs, but at least 13.2.
+          minCuda = lib.foldl maxVersion (kernelConfig.toml.general.cuda.minver or "11.8") (
+            lib.optionals kernelConfig.usesRustCuda [ "13.0" ]
+            ++ lib.optionals kernelConfig.usesRustCutile [
               "13.2"
-            else
-              minver;
+              kernelConfig.tileirasMinver
+            ]
+          );
           maxCuda = kernelConfig.toml.general.cuda.maxver or "99.9";
           minTorch = kernelConfig.toml.torch.minver or "2.0";
           maxTorch = kernelConfig.toml.torch.maxver or "99.9";
@@ -124,8 +125,37 @@ rec {
         buildSet:
         kernelConfig.torchCoversStableAbi buildSet.buildConfig.backend buildSet.buildConfig.torchVersion
       ) (buildSetsWithinBounds buildSets);
+
+      # Step 3: cutile kernels are JIT-compiled at runtime, so we do not need
+      #         to build for all CUDA versions. Just the lowest version per
+      #         major version that is compatible with the tileiras version
+      #         requested by the kernel.
+      oldestCudaMinorForCutile =
+        buildSets:
+        let
+          byCuda = lib.partition (buildSet: buildSet.buildConfig.backend == "cuda") buildSets;
+          groupKey =
+            buildSet:
+            let
+              inherit (buildSet) buildConfig;
+            in
+            "${buildConfig.system}-${
+              buildConfig.tvmFfiVersion or ""
+            }-${lib.versions.major buildConfig.cudaVersion}";
+          # Groups contain one build set per CUDA version, since tvm-ffi
+          # variants must be unique (see `validateUniqueTvmFfiVariants`).
+          oldestInGroup =
+            group:
+            lib.head (
+              lib.sort (a: b: lib.versionOlder a.buildConfig.cudaVersion b.buildConfig.cudaVersion) group
+            );
+        in
+        if kernelConfig.cutileOnlyCuda then
+          map oldestInGroup (lib.attrValues (lib.groupBy groupKey byCuda.right)) ++ byCuda.wrong
+        else
+          buildSets;
     in
-    deduplicateForStableAbi byStableAbi.right ++ byStableAbi.wrong;
+    oldestCudaMinorForCutile (deduplicateForStableAbi byStableAbi.right ++ byStableAbi.wrong);
 
   applicableBuildSets =
     { path, buildSets }: filterApplicableBuildSets (readKernelConfig path) buildSets;
